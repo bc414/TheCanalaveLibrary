@@ -10,6 +10,8 @@
 
     <ItemGroup>
         <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="9.5.2" />
+        <ProjectReference Include="..\..\TheCanalaveLibrary.Core\TheCanalaveLibrary.Core.csproj" />
+        <ProjectReference Include="..\..\TheCanalaveLibrary.SharedUI\TheCanalaveLibrary.SharedUI.csproj" />
         <ProjectReference Include="..\TheCanalaveLibrary.Client\TheCanalaveLibrary.Client.csproj" />
         <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0-rc.2.25502.107" />
         <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.0-rc.2.25502.107" />

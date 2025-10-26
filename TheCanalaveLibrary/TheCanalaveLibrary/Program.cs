@@ -67,7 +67,8 @@ app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
     .AddInteractiveWebAssemblyRenderMode()
-    .AddAdditionalAssemblies(typeof(TheCanalaveLibrary.Client._Imports).Assembly);
+    .AddAdditionalAssemblies(typeof(TheCanalaveLibrary.Client._Imports).Assembly)
+    .AddAdditionalAssemblies((typeof(TheCanalaveLibrary.SharedUI.Component1).Assembly));
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
