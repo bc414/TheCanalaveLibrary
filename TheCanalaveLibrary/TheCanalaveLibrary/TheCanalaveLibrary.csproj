@@ -9,6 +9,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="Aspire.Microsoft.EntityFrameworkCore.SqlServer" Version="9.5.2" />
         <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="9.5.2" />
         <ProjectReference Include="..\..\TheCanalaveLibrary.Core\TheCanalaveLibrary.Core.csproj" />
         <ProjectReference Include="..\..\TheCanalaveLibrary.SharedUI\TheCanalaveLibrary.SharedUI.csproj" />
