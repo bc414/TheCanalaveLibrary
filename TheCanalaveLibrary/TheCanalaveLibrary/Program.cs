@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using TheCanalaveLibrary.Components;
 using TheCanalaveLibrary.Components.Account;
 using TheCanalaveLibrary.Data;
+using TheCanalaveLibrary.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,7 +29,7 @@ builder.Services.AddAuthentication(options =>
 builder.AddSqlServerDbContext<ApplicationDbContext>("DefaultConnection");
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
+builder.Services.AddIdentity<User, ApplicationRole>(options =>
     {
         options.SignIn.RequireConfirmedAccount = true;
         options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
@@ -36,7 +37,7 @@ builder.Services.AddIdentity<ApplicationUser, ApplicationRole>(options =>
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddDefaultTokenProviders();
 
-builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
+builder.Services.AddSingleton<IEmailSender<User>, IdentityNoOpEmailSender>();
 
 var app = builder.Build();
 

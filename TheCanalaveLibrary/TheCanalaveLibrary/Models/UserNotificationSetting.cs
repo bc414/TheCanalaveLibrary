@@ -1,0 +1,17 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace TheCanalaveLibrary.Models;
+
+public partial class UserNotificationSetting
+{
+    public int UserId { get; set; }
+
+    public byte NotificationTypeId { get; set; }
+
+    public bool EmailEnabled { get; set; }
+
+    public virtual NotificationType NotificationType { get; set; } = null!;
+
+    public virtual User User { get; set; } = null!;
+}

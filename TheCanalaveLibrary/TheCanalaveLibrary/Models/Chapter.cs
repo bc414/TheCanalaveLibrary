@@ -1,0 +1,29 @@
+﻿using System;
+using System.Collections.Generic;
+
+namespace TheCanalaveLibrary.Models;
+
+public partial class Chapter
+{
+    public int ChapterId { get; set; }
+
+    public int StoryId { get; set; }
+
+    public int ChapterNumber { get; set; }
+
+    public string? Title { get; set; }
+
+    public long PrimaryContentId { get; set; }
+
+    public bool IsPublished { get; set; }
+
+    public virtual ICollection<ChapterComment> ChapterComments { get; set; } = new List<ChapterComment>();
+
+    public virtual ICollection<ChapterContent> ChapterContents { get; set; } = new List<ChapterContent>();
+
+    public virtual ChapterContent PrimaryContent { get; set; } = null!;
+
+    public virtual Story Story { get; set; } = null!;
+
+    public virtual ICollection<UserChapterInteraction> UserChapterInteractions { get; set; } = new List<UserChapterInteraction>();
+}

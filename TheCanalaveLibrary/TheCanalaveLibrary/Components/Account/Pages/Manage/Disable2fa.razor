@@ -2,8 +2,9 @@
 
 @using Microsoft.AspNetCore.Identity
 @using TheCanalaveLibrary.Data
+@using TheCanalaveLibrary.Models
 
-@inject UserManager<ApplicationUser> UserManager
+@inject UserManager<User> UserManager
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<Disable2fa> Logger
 
@@ -30,7 +31,7 @@
 </div>
 
 @code {
-    private ApplicationUser? user;
+    private User? user;
 
     [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
 
