@@ -3,16 +3,13 @@ using System.Collections.Generic;
 
 namespace TheCanalaveLibrary.Models;
 
-public partial class BlogPost
+/// <summary>
+/// A blog post can be just for a user, or can it be attached to a story or a group
+/// </summary>
+public abstract class BaseBlogPost
 {
     public int BlogPostId { get; set; }
-
     public int? AuthorId { get; set; }
-
-    public int? StoryId { get; set; }
-
-    public int? GroupId { get; set; }
-
     public string Title { get; set; } = null!;
 
     public string Content { get; set; } = null!;
@@ -28,6 +25,7 @@ public partial class BlogPost
     public DateTime LastUpdatedDate { get; set; }
 
     public int ActiveReportCount { get; set; }
+    public Rating Rating { get; set; }
 
     public virtual User? Author { get; set; }
 
@@ -37,7 +35,7 @@ public partial class BlogPost
 
     public virtual ICollection<FeatureContribution> FeatureContributions { get; set; } = new List<FeatureContribution>();
 
-    public virtual Group? Group { get; set; }
+    
 
-    public virtual Story? Story { get; set; }
+    
 }

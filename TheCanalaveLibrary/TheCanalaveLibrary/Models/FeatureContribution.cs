@@ -17,7 +17,7 @@ public partial class FeatureContribution
 
     public DateTime DateAwarded { get; set; }
 
-    public virtual BlogPost? BlogPost { get; set; }
+    public virtual BaseBlogPost? BlogPost { get; set; }
 
     public virtual BaseComment? Comment { get; set; }
 

@@ -11,7 +11,7 @@ public partial class StoryCharacter
 
     public int CharacterTagId { get; set; }
 
-    public byte Priority { get; set; }
+    public TagPriority Priority { get; set; }
 
     public bool IsOc { get; set; }
 

@@ -9,7 +9,7 @@ public partial class Tag
 
     public string TagName { get; set; } = null!;
 
-    public byte TagTypeId { get; set; }
+    public TagTypeEnum TagTypeId { get; set; }
 
     public bool IsFanon { get; set; }
 
@@ -21,7 +21,7 @@ public partial class Tag
 
     public string? AnimatedSpriteUrl { get; set; }
 
-    public bool AllowOcdetails { get; set; }
+    public bool AllowOCDetails { get; set; }
 
     public virtual ICollection<Tag> InverseParentTag { get; set; } = new List<Tag>();
 

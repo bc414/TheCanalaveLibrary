@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -8,20 +9,24 @@ public partial class Story
     public int StoryId { get; set; }
 
     public int? AuthorId { get; set; }
-
+    
+    [Required]
+    [MaxLength(255)]
     public string StoryTitle { get; set; } = null!;
 
+    [MaxLength(255)]
     public string? Slug { get; set; }
 
+    [MaxLength(500)]
     public string? ShortDescription { get; set; }
 
     public string? LongDescription { get; set; }
 
-    public byte Rating { get; set; }
+    public Rating Rating { get; set; }
 
-    public byte StoryStatusId { get; set; }
+    public StoryStatusEnum StoryStatusId { get; set; }
 
-    public string? PostApprovalStatus { get; set; }
+    public StoryStatusEnum PostApprovalStatus { get; set; }
 
     public int WordCount { get; set; }
 
@@ -43,7 +48,7 @@ public partial class Story
 
     public virtual ICollection<BetaReader> BetaReaders { get; set; } = new List<BetaReader>();
 
-    public virtual ICollection<BlogPost> BlogPosts { get; set; } = new List<BlogPost>();
+    public virtual ICollection<BaseBlogPost> BlogPosts { get; set; } = new List<BaseBlogPost>();
 
     public virtual ICollection<Chapter> Chapters { get; set; } = new List<Chapter>();
 

@@ -11,6 +11,9 @@ public partial class GroupMember
 
     public byte Role { get; set; }
 
+    public bool NotifyForNewStory { get; set; } = true;
+    public bool NotifyForNewBlogPost { get; set; } = false;
+
     public DateTime DateJoined { get; set; }
 
     public virtual Group Group { get; set; } = null!;

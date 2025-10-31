@@ -5,7 +5,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class NotificationType
 {
-    public byte NotificationTypeId { get; set; }
+    public NotificationTypeEnum NotificationTypeId { get; set; }
 
     public string NotificationKey { get; set; } = null!;
 
@@ -14,6 +14,9 @@ public partial class NotificationType
     public string Description { get; set; } = null!;
 
     public bool DefaultEmailEnabled { get; set; }
+    public bool DefaultCollapsed { get; set; }
+    
+    public NotificationCategoryEnum NotificationCategory { get; set; }
 
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 

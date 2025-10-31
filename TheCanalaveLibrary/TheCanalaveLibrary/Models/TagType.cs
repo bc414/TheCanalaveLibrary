@@ -5,7 +5,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class TagType
 {
-    public byte TagTypeId { get; set; }
+    public TagTypeEnum TagTypeId { get; set; }
 
     public string TypeName { get; set; } = null!;
 

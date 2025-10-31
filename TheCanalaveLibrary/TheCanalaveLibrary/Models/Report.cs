@@ -9,7 +9,7 @@ public partial class Report
 
     public int? ReporterUserId { get; set; }
 
-    public byte ReportedEntityTypeId { get; set; }
+    public ReportedEntityType ReportedEntityType { get; set; }
 
     public int ReportedEntityId { get; set; }
 
@@ -17,7 +17,7 @@ public partial class Report
 
     public string? Notes { get; set; }
 
-    public byte ReportStatusId { get; set; }
+    public ReportStatusEnum ReportStatusId { get; set; }
 
     public int? ModeratorUserId { get; set; }
 

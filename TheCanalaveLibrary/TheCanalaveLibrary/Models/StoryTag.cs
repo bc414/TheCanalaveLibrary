@@ -9,7 +9,7 @@ public partial class StoryTag
 
     public int TagId { get; set; }
 
-    public byte Priority { get; set; }
+    public TagPriority Priority { get; set; }
 
     public virtual Story Story { get; set; } = null!;
 

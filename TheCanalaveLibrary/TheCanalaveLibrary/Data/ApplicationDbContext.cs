@@ -7,132 +7,175 @@ namespace TheCanalaveLibrary.Data;
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
     : IdentityDbContext<User, ApplicationRole, int>(options)
 {
-    public virtual DbSet<AcknowledgmentRole> AcknowledgmentRoles { get; set; }
+    //The fundamentals
+    //Users is in base class
+    public DbSet<Story> Stories { get; set; }
+    public DbSet<StoryStatus> StoryStatuses { get; set; }
+    public DbSet<Chapter> Chapters { get; set; }
+    public DbSet<ChapterContent> ChapterContents { get; set; }
     
-    public virtual DbSet<User> Users { get; set; }
+    //User relationships
+    public DbSet<FollowedUser> FollowedUsers { get; set; }
+    
+    //Recommendations
+    public DbSet<Recommendation> Recommendations { get; set; }
+    public DbSet<RecommendationStatus> RecommendationStatuses { get; set; }
+    public DbSet<RecommendationSuccess> RecommendationSuccesses { get; set; }
+    
+    //Tags
+    public DbSet<TagType> TagTypes { get; set; }
+    public DbSet<Tag> Tags { get; set; } //The tags must be prepopulated here by site staff
+    public DbSet<StoryTag> StoryTags { get; set; } //Contains the tags on a story which are not character or setting
+    public DbSet<StoryCharacter> StoryCharacters { get; set; } //Contains the characters in a story
+    public DbSet<StoryCharacterRelationship> StoryCharacterRelationships { get; set; }
+    public DbSet<SettingDetail> SettingDetails { get; set; } //For specifying what setting the story is in, as well as original settings
+    
+    //Groups
+    public DbSet<Group> Groups { get; set; }
+    public DbSet<GroupMember> GroupMembers { get; set; }
+    public DbSet<GroupStory> GroupStories { get; set; }
+    
+    //Story Lists
+    public DbSet<CustomList> CustomLists { get; set; }
+    public DbSet<CustomListEntry> CustomListEntries { get; set; }
+    
+    //Blogs
+    public DbSet<BaseBlogPost> BlogPosts { get; set; }
+    public DbSet<BlogPostLike> BlogPostLikes { get; set; }
+    
+    //Advanced Search
+    public DbSet<SearchMode> SearchModes { get; set; } //ways to search on the site, like Random Search, Tree Search, Also Favorited
+    public DbSet<UserInteractionFilter> UserInteractionFilters { get; set; } //ways to enable exclusion criteria based on your past history
+    
+    public DbSet<DefaultSearchSetting> DefaultSearchSettings { get; set; } //a matrix of search modes and interaction filters
+    public DbSet<UserSearchSetting> UserSearchSettings { get; set; } //user overrides for the default matrix
+    
+    public DbSet<UserCustomFilter> UserCustomFilters { get; set; } //User can designate a list or group to use as a custom exclusion filter
+    
+    //massive table that stores interaction history - ignored, favorited, followed, read it later, completed/in progress
+    public DbSet<UserStoryInteraction> UserStoryInteractions { get; set; }
+    //stores which chapters have been read and read progress for returning to last read portion
+    public DbSet<UserChapterInteraction> UserChapterInteractions { get; set; }
+    
+    //Comments
+    //TODO: set up as inheritance
+    public DbSet<BaseComment> BaseComments { get; set; }
+    public DbSet<BlogPostComment> BlogPostComments { get; set; }
+    public DbSet<ChapterComment> ChapterComments { get; set; }
+    public DbSet<GroupComment> GroupComments { get; set; }
+    
+    public DbSet<CommentLike> CommentLikes { get; set; }
+    
+    //Notifications
+    public DbSet<Notification> Notifications { get; set; }
+    public DbSet<NotificationType> NotificationTypes { get; set; }
+    public DbSet<UserNotificationSetting> UserNotificationSettings { get; set; } //user specific override for a setting
+    
+    //Private Messaging
+    public DbSet<Conversation> Conversations { get; set; }
+    public DbSet<ConversationParticipant> ConversationParticipants { get; set; }
+    public DbSet<PrivateMessage> PrivateMessages { get; set; }
+    
+    //User Settings
+    
+    
+    //Reporting
+    public DbSet<Report> Reports { get; set; }
+    public DbSet<ReportReason> ReportReasons { get; set; }
+    public DbSet<ReportStatus> ReportStatuses { get; set; }
+    
+    //Badges and badge metrics
+    public DbSet<Badge> Badges { get; set; }
+    public DbSet<UserBadge> UserBadges { get; set; }
+    public DbSet<FeatureContribution> FeatureContributions { get; set; }
+    
+    //Advanced story customization
+    public DbSet<Series> Series { get; set; } //Series are for splitting a concept across multiple stories
+    public DbSet<SeriesEntry> SeriesEntries { get; set; }
+    public DbSet<StoryArc> StoryArcs { get; set; } //StoryArcs are the opposite of using series; when the story is too long and needs to be broken down within the story
+    public DbSet<StoryImport> StoryImports { get; set; }
+    
+    //Collaboration
+    public DbSet<StoryAcknowledgment> StoryAcknowledgments { get; set; }
+    public DbSet<AcknowledgmentRole> AcknowledgmentRoles { get; set; }
+    public DbSet<BetaReader> BetaReaders { get; set; }
+    public DbSet<CoAuthor> CoAuthors { get; set; }
+    public DbSet<StoryRelationship> StoryRelationships { get; set; }
+    public DbSet<StoryRelationshipType> StoryRelationshipTypes { get; set; }
+    
+    //Statistics
+    public DbSet<DailyStoryStat> DailyStoryStats { get; set; }
+    public DbSet<SiteDailyStat> SiteDailyStats { get; set; }
+    public DbSet<UserStat> UserStats { get; set; }
 
-    public virtual DbSet<Badge> Badges { get; set; }
+    //Other
+    public DbSet<CommunitySpotlight> CommunitySpotlights { get; set; }
 
-    public virtual DbSet<BaseComment> BaseComments { get; set; }
-
-    public virtual DbSet<BetaReader> BetaReaders { get; set; }
-
-    public virtual DbSet<BlogPost> BlogPosts { get; set; }
-
-    public virtual DbSet<BlogPostComment> BlogPostComments { get; set; }
-
-    public virtual DbSet<BlogPostLike> BlogPostLikes { get; set; }
-
-    public virtual DbSet<Chapter> Chapters { get; set; }
-
-    public virtual DbSet<ChapterComment> ChapterComments { get; set; }
-
-    public virtual DbSet<ChapterContent> ChapterContents { get; set; }
-
-    public virtual DbSet<CoAuthor> CoAuthors { get; set; }
-
-    public virtual DbSet<CommentLike> CommentLikes { get; set; }
-
-    public virtual DbSet<CommunitySpotlight> CommunitySpotlights { get; set; }
-
-    public virtual DbSet<Conversation> Conversations { get; set; }
-
-    public virtual DbSet<ConversationParticipant> ConversationParticipants { get; set; }
-
-    public virtual DbSet<CustomList> CustomLists { get; set; }
-
-    public virtual DbSet<CustomListEntry> CustomListEntries { get; set; }
-
-    public virtual DbSet<DailyStoryStat> DailyStoryStats { get; set; }
-
-    public virtual DbSet<DefaultSearchSetting> DefaultSearchSettings { get; set; }
-
-    public virtual DbSet<FeatureContribution> FeatureContributions { get; set; }
-
-    public virtual DbSet<FollowedUser> FollowedUsers { get; set; }
-
-    public virtual DbSet<Group> Groups { get; set; }
-
-    public virtual DbSet<GroupComment> GroupComments { get; set; }
-
-    public virtual DbSet<GroupMember> GroupMembers { get; set; }
-
-    public virtual DbSet<GroupStory> GroupStories { get; set; }
-
-    public virtual DbSet<Notification> Notifications { get; set; }
-
-    public virtual DbSet<NotificationType> NotificationTypes { get; set; }
-
-    public virtual DbSet<PrivateMessage> PrivateMessages { get; set; }
-
-    public virtual DbSet<Recommendation> Recommendations { get; set; }
-
-    public virtual DbSet<RecommendationStatus> RecommendationStatuses { get; set; }
-
-    public virtual DbSet<RecommendationSuccess> RecommendationSuccesses { get; set; }
-
-    public virtual DbSet<Report> Reports { get; set; }
-
-    public virtual DbSet<ReportReason> ReportReasons { get; set; }
-
-    public virtual DbSet<ReportStatus> ReportStatuses { get; set; }
-
-    public virtual DbSet<SearchMode> SearchModes { get; set; }
-
-    public virtual DbSet<Series> Series { get; set; }
-
-    public virtual DbSet<SeriesEntry> SeriesEntries { get; set; }
-
-    public virtual DbSet<SettingDetail> SettingDetails { get; set; }
-
-    public virtual DbSet<SiteDailyStat> SiteDailyStats { get; set; }
-
-    public virtual DbSet<Story> Stories { get; set; }
-
-    public virtual DbSet<StoryAcknowledgment> StoryAcknowledgments { get; set; }
-
-    public virtual DbSet<StoryArc> StoryArcs { get; set; }
-
-    public virtual DbSet<StoryCharacter> StoryCharacters { get; set; }
-
-    public virtual DbSet<StoryCharacterRelationship> StoryCharacterRelationships { get; set; }
-
-    public virtual DbSet<StoryImport> StoryImports { get; set; }
-
-    public virtual DbSet<StoryRelationship> StoryRelationships { get; set; }
-
-    public virtual DbSet<StoryRelationshipType> StoryRelationshipTypes { get; set; }
-
-    public virtual DbSet<StoryStatus> StoryStatuses { get; set; }
-
-    public virtual DbSet<StoryTag> StoryTags { get; set; }
-
-    public virtual DbSet<Tag> Tags { get; set; }
-
-    public virtual DbSet<TagType> TagTypes { get; set; }
-
-    public virtual DbSet<UserBadge> UserBadges { get; set; }
-
-    public virtual DbSet<UserChapterInteraction> UserChapterInteractions { get; set; }
-
-    public virtual DbSet<UserCustomFilter> UserCustomFilters { get; set; }
-
-    public virtual DbSet<UserInteractionFilter> UserInteractionFilters { get; set; }
-
-    public virtual DbSet<UserNotificationSetting> UserNotificationSettings { get; set; }
-
-    public virtual DbSet<UserProfileComment> UserProfileComments { get; set; }
-
-    public virtual DbSet<UserSearchSetting> UserSearchSettings { get; set; }
-
-    public virtual DbSet<UserStat> UserStats { get; set; }
-
-    public virtual DbSet<UserStoryInteraction> UserStoryInteractions { get; set; }
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    public DbSet<UserProfileComment> UserProfileComments { get; set; }
+    
+    protected override void OnModelCreating(ModelBuilder m)
     {
-        base.OnModelCreating(modelBuilder);
+        base.OnModelCreating(m);
         
-        modelBuilder.Entity<AcknowledgmentRole>(entity =>
+        //1. Enum to TINYINT conversions
+        
+        //1.1 magic bytes
+        m.Entity<Story>().Property(e => e.Rating).HasConversion<byte>();
+        m.Entity<ChapterContent>().Property(e => e.Rating).HasConversion<byte>();
+        m.Entity<Group>().Property(e => e.Rating).HasConversion<byte>();
+        m.Entity<Group>().Property(e => e.MaxContentRating).HasConversion<byte>();
+        m.Entity<BaseBlogPost>().Property(e => e.Rating).HasConversion<byte>();
+        m.Entity<GroupFolder>().Property(e => e.MaxRating).HasConversion<byte>();
+        
+        m.Entity<Report>().Property(e => e.ReportedEntityType).HasConversion<byte>();
+        
+        m.Entity<UserStoryInteraction>().Property(e => e.ReadStatus).HasConversion<byte>();
+        
+        m.Entity<UserStoryInteraction>().Property(e => e.FavoriteStatus).HasConversion<byte>();
+
+        m.Entity<UserCustomFilter>().Property(e => e.FilterEntityType).HasConversion<byte>();
+
+        m.Entity<StoryTag>().Property(e => e.Priority).HasConversion<byte>();
+        m.Entity<StoryCharacter>().Property(e => e.Priority).HasConversion<byte>();
+        m.Entity<StoryCharacterRelationship>().Property(e => e.Priority).HasConversion<byte>();
+        m.Entity<StoryCharacterRelationship>().Property(e => e.RelationshipType).HasConversion<byte>();
+
+        m.Entity<StoryRelationship>().Property(e => e.StatusId).HasConversion<byte>();
+        
+        //1.2 Hybrid - lookup table for UI/description + enum foreign key for application logic
+        
+        m.Entity<StoryStatus>().Property(e => e.StoryStatusId).HasConversion<byte>();
+        m.Entity<Story>().Property(e => e.StoryStatusId).HasConversion<byte>();
+        m.Entity<Story>().Property(e => e.PostApprovalStatus).HasConversion<byte>();
+        
+        m.Entity<TagType>().Property(e => e.TagTypeId).HasConversion<byte>();
+        m.Entity<Tag>().Property(e => e.TagTypeId).HasConversion<byte>();
+
+        m.Entity<ReportStatus>().Property(e => e.ReportStatusId).HasConversion<byte>();
+        m.Entity<Report>().Property(e => e.ReportStatusId).HasConversion<byte>();
+        
+        m.Entity<NotificationCategory>().Property(e => e.NotificationCategoryId).HasConversion<byte>();
+        m.Entity<NotificationType>().Property(e => e.NotificationCategory).HasConversion<byte>();
+        m.Entity<NotificationType>().Property(e => e.NotificationTypeId).HasConversion<byte>();
+        m.Entity<Notification>().Property(e => e.NotificationTypeId).HasConversion<byte>();
+        m.Entity<UserNotificationSetting>().Property(e => e.NotificationTypeId).HasConversion<byte>();
+
+        //2. 
+        
+        // --- THIS IS THE GLOBAL RULE ---
+        // This loop finds EVERY 'DateTime' property in your entire model
+        // and sets its default column type to 'datetime2(2)'.
+        // This is much cleaner than setting it 20+ times.
+
+        foreach (var property in m.Model.GetEntityTypes()
+                     .SelectMany(e => e.GetProperties())
+                     .Where(p => p.ClrType == typeof(DateTime) || p.ClrType == typeof(DateTime?)))
+        {
+            property.SetColumnType("datetime2(2)");
+        }
+        
+        //Scaffolding artifacts, delete later
+        m.Entity<AcknowledgmentRole>(entity =>
         {
             entity.HasKey(e => e.AcknowledgmentRoleId).HasName("PK__Acknowle__BFE746B6F9FA6285");
 
@@ -144,7 +187,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.RoleName).HasMaxLength(100);
         });
 
-        modelBuilder.Entity<User>(entity =>
+        m.Entity<User>(entity =>
         {
             entity.Property(e => e.ProfilePictureUrl).HasMaxLength(500);
             entity.Property(e => e.Tagline).HasMaxLength(256);
@@ -152,7 +195,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.UserName).HasMaxLength(256);
         });
 
-        modelBuilder.Entity<Badge>(entity =>
+        m.Entity<Badge>(entity =>
         {
             entity.HasKey(e => e.BadgeKey).HasName("PK__Badges__F2F51BC6CA3A6C82");
 
@@ -164,7 +207,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.Name).HasMaxLength(100);
         });
 
-        modelBuilder.Entity<BaseComment>(entity =>
+        m.Entity<BaseComment>(entity =>
         {
             entity.HasKey(e => e.CommentId).HasName("PK__BaseComm__C3B4DFAA9FDEA9D3");
 
@@ -184,7 +227,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_Comments_Users");
         });
 
-        modelBuilder.Entity<BetaReader>(entity =>
+        m.Entity<BetaReader>(entity =>
         {
             entity.HasKey(e => new { e.StoryId, e.BetaReaderUserId }).HasName("PK_StoryBetaReaders");
 
@@ -201,35 +244,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_StoryBetaReaders_Story");
         });
 
-        modelBuilder.Entity<BlogPost>(entity =>
-        {
-            entity.HasKey(e => e.BlogPostId).HasName("PK__BlogPost__32174149FA338561");
 
-            entity.Property(e => e.BlogPostId).HasColumnName("BlogPostID");
-            entity.Property(e => e.AuthorId).HasColumnName("AuthorID");
-            entity.Property(e => e.DateCreated).HasDefaultValueSql("(getutcdate())");
-            entity.Property(e => e.GroupId).HasColumnName("GroupID");
-            entity.Property(e => e.LastUpdatedDate).HasDefaultValueSql("(getutcdate())");
-            entity.Property(e => e.StoryId).HasColumnName("StoryID");
-            entity.Property(e => e.Title).HasMaxLength(255);
-
-            entity.HasOne(d => d.Author).WithMany(p => p.BlogPosts)
-                .HasForeignKey(d => d.AuthorId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("FK_BlogPosts_Users");
-
-            entity.HasOne(d => d.Group).WithMany(p => p.BlogPosts)
-                .HasForeignKey(d => d.GroupId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("FK_BlogPosts_Groups");
-
-            entity.HasOne(d => d.Story).WithMany(p => p.BlogPosts)
-                .HasForeignKey(d => d.StoryId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("FK_BlogPosts_Stories");
-        });
-
-        modelBuilder.Entity<BlogPostComment>(entity =>
+        m.Entity<BlogPostComment>(entity =>
         {
             entity.HasKey(e => e.CommentId).HasName("PK__BlogPost__C3B4DFAAC4B32034");
 
@@ -238,7 +254,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasColumnName("CommentID");
             entity.Property(e => e.BlogPostId).HasColumnName("BlogPostID");
 
-            entity.HasOne(d => d.BlogPost).WithMany(p => p.BlogPostComments)
+            entity.HasOne(d => d.BaseBlogPost).WithMany(p => p.BlogPostComments)
                 .HasForeignKey(d => d.BlogPostId)
                 .HasConstraintName("FK_BlogPostComments_BlogPost");
 
@@ -247,7 +263,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_BlogPostComments_BaseComment");
         });
 
-        modelBuilder.Entity<BlogPostLike>(entity =>
+        m.Entity<BlogPostLike>(entity =>
         {
             entity.HasKey(e => new { e.UserId, e.BlogPostId });
 
@@ -255,7 +271,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.BlogPostId).HasColumnName("BlogPostID");
             entity.Property(e => e.DateLiked).HasDefaultValueSql("(getutcdate())");
 
-            entity.HasOne(d => d.BlogPost).WithMany(p => p.BlogPostLikes)
+            entity.HasOne(d => d.BaseBlogPost).WithMany(p => p.BlogPostLikes)
                 .HasForeignKey(d => d.BlogPostId)
                 .HasConstraintName("FK_BlogPostLikes_BlogPosts");
 
@@ -264,7 +280,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_BlogPostLikes_Users");
         });
 
-        modelBuilder.Entity<Chapter>(entity =>
+        m.Entity<Chapter>(entity =>
         {
             entity.HasKey(e => e.ChapterId).HasName("PK__Chapters__0893A34AB53A2A7A");
 
@@ -285,7 +301,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_Chapters_Stories");
         });
 
-        modelBuilder.Entity<ChapterComment>(entity =>
+        m.Entity<ChapterComment>(entity =>
         {
             entity.HasKey(e => e.CommentId).HasName("PK__ChapterC__C3B4DFAA36BF489D");
 
@@ -303,7 +319,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_ChapterComments_BaseComment");
         });
 
-        modelBuilder.Entity<ChapterContent>(entity =>
+        m.Entity<ChapterContent>(entity =>
         {
             entity.HasKey(e => e.ChapterContentId).HasName("PK__ChapterC__09DC5F277A7A4B24");
 
@@ -323,7 +339,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_ChapterVersions_Chapter");
         });
 
-        modelBuilder.Entity<CoAuthor>(entity =>
+        m.Entity<CoAuthor>(entity =>
         {
             entity.HasKey(e => new { e.StoryId, e.CoAuthorUserId }).HasName("PK_StoryCoAuthors");
 
@@ -340,7 +356,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_StoryCoAuthors_Story");
         });
 
-        modelBuilder.Entity<CommentLike>(entity =>
+        m.Entity<CommentLike>(entity =>
         {
             entity.HasKey(e => new { e.UserId, e.CommentId });
 
@@ -357,7 +373,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_CommentLikes_User");
         });
 
-        modelBuilder.Entity<CommunitySpotlight>(entity =>
+        m.Entity<CommunitySpotlight>(entity =>
         {
             entity.HasKey(e => e.SpotlightId).HasName("PK__Communit__FFC7D012B2915523");
 
@@ -382,7 +398,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_CommunitySpotlight_Stories");
         });
 
-        modelBuilder.Entity<Conversation>(entity =>
+        m.Entity<Conversation>(entity =>
         {
             entity.HasKey(e => e.ConversationId).HasName("PK__Conversa__C050D8979E7D93C9");
 
@@ -391,7 +407,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.Subject).HasMaxLength(255);
         });
 
-        modelBuilder.Entity<ConversationParticipant>(entity =>
+        m.Entity<ConversationParticipant>(entity =>
         {
             entity.HasKey(e => new { e.ConversationId, e.UserId });
 
@@ -407,7 +423,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_ConversationParticipants_User");
         });
 
-        modelBuilder.Entity<CustomList>(entity =>
+        m.Entity<CustomList>(entity =>
         {
             entity.HasKey(e => e.ListId).HasName("PK__CustomLi__E3832865FB7AA699");
 
@@ -423,7 +439,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_UserLists_Users");
         });
 
-        modelBuilder.Entity<CustomListEntry>(entity =>
+        m.Entity<CustomListEntry>(entity =>
         {
             entity.HasKey(e => new { e.ListId, e.StoryId }).HasName("PK_UserListEntries");
 
@@ -440,7 +456,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_UserListEntries_Stories");
         });
 
-        modelBuilder.Entity<DailyStoryStat>(entity =>
+        m.Entity<DailyStoryStat>(entity =>
         {
             entity.HasKey(e => new { e.StoryId, e.StatDate });
 
@@ -451,7 +467,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_DailyStoryStats_Stories");
         });
 
-        modelBuilder.Entity<DefaultSearchSetting>(entity =>
+        m.Entity<DefaultSearchSetting>(entity =>
         {
             entity.HasKey(e => new { e.SearchModeKey, e.InteractionFilterKey });
 
@@ -468,7 +484,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_DefaultSearchSettings_Mode");
         });
 
-        modelBuilder.Entity<FeatureContribution>(entity =>
+        m.Entity<FeatureContribution>(entity =>
         {
             entity.HasKey(e => e.ContributionId).HasName("PK__FeatureC__6EDA21E482690BF0");
 
@@ -495,7 +511,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_FeatureContributions_User");
         });
 
-        modelBuilder.Entity<FollowedUser>(entity =>
+        m.Entity<FollowedUser>(entity =>
         {
             entity.HasKey(e => new { e.UserId, e.FollowedUserId });
 
@@ -514,7 +530,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_FollowedUsers_Follower");
         });
 
-        modelBuilder.Entity<Group>(entity =>
+        m.Entity<Group>(entity =>
         {
             entity.HasKey(e => e.GroupId).HasName("PK__Groups__149AF30AB0C72705");
 
@@ -532,7 +548,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_Groups_Users_Creator");
         });
 
-        modelBuilder.Entity<GroupComment>(entity =>
+        m.Entity<GroupComment>(entity =>
         {
             entity.HasKey(e => e.CommentId).HasName("PK__GroupCom__C3B4DFAA6B4480C0");
 
@@ -550,7 +566,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_GroupComments_Group");
         });
 
-        modelBuilder.Entity<GroupMember>(entity =>
+        m.Entity<GroupMember>(entity =>
         {
             entity.HasKey(e => new { e.UserId, e.GroupId });
 
@@ -567,7 +583,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_GroupMembers_Users");
         });
 
-        modelBuilder.Entity<GroupStory>(entity =>
+        m.Entity<GroupStory>(entity =>
         {
             entity.HasKey(e => new { e.GroupId, e.StoryId });
 
@@ -589,8 +605,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasForeignKey(d => d.StoryId)
                 .HasConstraintName("FK_GroupStories_Stories");
         });
-
-        modelBuilder.Entity<Notification>(entity =>
+        
+        m.Entity<Notification>(entity =>
         {
             entity.HasKey(e => e.NotificationId).HasName("PK__Notifica__20CF2E32F0D59736");
 
@@ -614,7 +630,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_Notifications_SourceUser");
         });
 
-        modelBuilder.Entity<NotificationType>(entity =>
+        m.Entity<NotificationType>(entity =>
         {
             entity.HasKey(e => e.NotificationTypeId).HasName("PK__Notifica__299002A1316B19D1");
 
@@ -628,7 +644,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.NotificationKey).HasMaxLength(50);
         });
 
-        modelBuilder.Entity<PrivateMessage>(entity =>
+        m.Entity<PrivateMessage>(entity =>
         {
             entity.HasKey(e => e.MessageId).HasName("PK__PrivateM__C87C037C5A08F781");
 
@@ -647,7 +663,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_PrivateMessages_SenderUser");
         });
 
-        modelBuilder.Entity<Recommendation>(entity =>
+        m.Entity<Recommendation>(entity =>
         {
             entity.HasKey(e => e.RecommendationId).HasName("PK__Recommen__AA15BEC4A5154F02");
 
@@ -677,7 +693,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_Recommendations_Story");
         });
 
-        modelBuilder.Entity<RecommendationStatus>(entity =>
+        m.Entity<RecommendationStatus>(entity =>
         {
             entity.HasKey(e => e.StatusId).HasName("PK__Recommen__C8EE2043FD94E2C8");
 
@@ -690,7 +706,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.StatusName).HasMaxLength(50);
         });
 
-        modelBuilder.Entity<RecommendationSuccess>(entity =>
+        m.Entity<RecommendationSuccess>(entity =>
         {
             entity.HasKey(e => new { e.UserId, e.RecommendationId }).HasName("PK_RecommendationLikes");
 
@@ -707,7 +723,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_RecommendationLikes_Users");
         });
 
-        modelBuilder.Entity<Report>(entity =>
+        m.Entity<Report>(entity =>
         {
             entity.HasKey(e => e.ReportId).HasName("PK__Reports__D5BD48E5DAF97383");
 
@@ -721,7 +737,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasDefaultValue((byte)1)
                 .HasColumnName("ReportStatusID");
             entity.Property(e => e.ReportedEntityId).HasColumnName("ReportedEntityID");
-            entity.Property(e => e.ReportedEntityTypeId).HasColumnName("ReportedEntityTypeID");
+            entity.Property(e => e.ReportedEntityType).HasColumnName("ReportedEntityTypeID");
             entity.Property(e => e.ReporterUserId).HasColumnName("ReporterUserID");
 
             entity.HasOne(d => d.ModeratorUser).WithMany(p => p.ReportModeratorUsers)
@@ -744,7 +760,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_Reports_ReporterUser");
         });
 
-        modelBuilder.Entity<ReportReason>(entity =>
+        m.Entity<ReportReason>(entity =>
         {
             entity.HasKey(e => e.ReportReasonId).HasName("PK__ReportRe__20581B8E6278EE05");
 
@@ -757,7 +773,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.ReasonName).HasMaxLength(100);
         });
 
-        modelBuilder.Entity<ReportStatus>(entity =>
+        m.Entity<ReportStatus>(entity =>
         {
             entity.HasKey(e => e.ReportStatusId).HasName("PK__ReportSt__9683C126DD1A262B");
 
@@ -769,7 +785,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.StatusName).HasMaxLength(50);
         });
 
-        modelBuilder.Entity<SearchMode>(entity =>
+        m.Entity<SearchMode>(entity =>
         {
             entity.HasKey(e => e.SearchModeKey).HasName("PK__SearchMo__E4FB3A97846B77B8");
 
@@ -777,7 +793,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.Name).HasMaxLength(100);
         });
 
-        modelBuilder.Entity<Series>(entity =>
+        m.Entity<Series>(entity =>
         {
             entity.HasKey(e => e.SeriesId).HasName("PK__Series__F3A1C101E30376F6");
 
@@ -793,7 +809,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_Series_AspNetUsers");
         });
 
-        modelBuilder.Entity<SeriesEntry>(entity =>
+        m.Entity<SeriesEntry>(entity =>
         {
             entity.HasKey(e => new { e.SeriesId, e.StoryId });
 
@@ -809,7 +825,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_SeriesEntries_Stories");
         });
 
-        modelBuilder.Entity<SettingDetail>(entity =>
+        m.Entity<SettingDetail>(entity =>
         {
             entity.HasKey(e => e.SettingDetailId).HasName("PK__SettingD__30C3B74C6FC953CC");
 
@@ -830,12 +846,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_SettingDetails_Story");
         });
 
-        modelBuilder.Entity<SiteDailyStat>(entity =>
+        m.Entity<SiteDailyStat>(entity =>
         {
             entity.HasKey(e => e.StatDate).HasName("PK__SiteDail__255A932C4D3FD608");
         });
 
-        modelBuilder.Entity<Story>(entity =>
+        m.Entity<Story>(entity =>
         {
             entity.HasKey(e => e.StoryId).HasName("PK__Stories__3E82C028CCB92BA7");
 
@@ -870,7 +886,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_Stories_StoryStatus");
         });
 
-        modelBuilder.Entity<StoryAcknowledgment>(entity =>
+        m.Entity<StoryAcknowledgment>(entity =>
         {
             entity.HasKey(e => new { e.StoryId, e.AcknowledgedUserId, e.AcknowledgmentRoleId });
 
@@ -893,7 +909,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_StoryAcknowledgments_Story");
         });
 
-        modelBuilder.Entity<StoryArc>(entity =>
+        m.Entity<StoryArc>(entity =>
         {
             entity.HasKey(e => e.StoryArcId).HasName("PK__StoryArc__2DA1A084F45F43E5");
 
@@ -906,7 +922,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_StoryArcs_Story");
         });
 
-        modelBuilder.Entity<StoryCharacter>(entity =>
+        m.Entity<StoryCharacter>(entity =>
         {
             entity.HasKey(e => e.StoryCharacterId).HasName("PK__StoryCha__241D2E22DD4B8658");
 
@@ -934,7 +950,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_StoryCharacters_Story");
         });
 
-        modelBuilder.Entity<StoryCharacterRelationship>(entity =>
+        m.Entity<StoryCharacterRelationship>(entity =>
         {
             entity.HasKey(e => e.StoryCharacterRelationshipId).HasName("PK__StoryCha__C9328EC700D331A7");
 
@@ -964,7 +980,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                     });
         });
 
-        modelBuilder.Entity<StoryImport>(entity =>
+        m.Entity<StoryImport>(entity =>
         {
             entity.HasKey(e => e.ImportId).HasName("PK__StoryImp__8697678AA5B82205");
 
@@ -983,7 +999,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_StoryImports_Story");
         });
 
-        modelBuilder.Entity<StoryRelationship>(entity =>
+        m.Entity<StoryRelationship>(entity =>
         {
             entity.HasKey(e => new { e.SourceStoryId, e.TargetStoryId, e.RelationshipTypeId });
 
@@ -1010,7 +1026,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_StoryRelationships_ChildStory");
         });
 
-        modelBuilder.Entity<StoryRelationshipType>(entity =>
+        m.Entity<StoryRelationshipType>(entity =>
         {
             entity.HasKey(e => e.RelationshipTypeId).HasName("PK__StoryRel__20FE5F6141F68546");
 
@@ -1022,7 +1038,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.TypeName).HasMaxLength(50);
         });
 
-        modelBuilder.Entity<StoryStatus>(entity =>
+        m.Entity<StoryStatus>(entity =>
         {
             entity.HasKey(e => e.StoryStatusId).HasName("PK__StorySta__4D3117367BBF5BDF");
 
@@ -1033,7 +1049,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.StatusName).HasMaxLength(50);
         });
 
-        modelBuilder.Entity<StoryTag>(entity =>
+        m.Entity<StoryTag>(entity =>
         {
             entity.HasKey(e => new { e.StoryId, e.TagId });
 
@@ -1051,14 +1067,14 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_StoryTags_Tag");
         });
 
-        modelBuilder.Entity<Tag>(entity =>
+        m.Entity<Tag>(entity =>
         {
             entity.HasKey(e => e.TagId).HasName("PK__Tags__657CFA4C49577C66");
 
             entity.HasIndex(e => new { e.TagName, e.TagTypeId }, "UK_Tags_Name_Type").IsUnique();
 
             entity.Property(e => e.TagId).HasColumnName("TagID");
-            entity.Property(e => e.AllowOcdetails).HasColumnName("AllowOCDetails");
+            entity.Property(e => e.AllowOCDetails).HasColumnName("AllowOCDetails");
             entity.Property(e => e.AnimatedSpriteUrl)
                 .HasMaxLength(500)
                 .HasColumnName("AnimatedSpriteURL");
@@ -1080,7 +1096,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_Tags_TagType");
         });
 
-        modelBuilder.Entity<TagType>(entity =>
+        m.Entity<TagType>(entity =>
         {
             entity.HasKey(e => e.TagTypeId).HasName("PK__TagTypes__BEE8E8CB7CFEA1F8");
 
@@ -1092,7 +1108,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.TypeName).HasMaxLength(50);
         });
 
-        modelBuilder.Entity<UserBadge>(entity =>
+        m.Entity<UserBadge>(entity =>
         {
             entity.HasKey(e => new { e.UserId, e.BadgeKey });
 
@@ -1109,7 +1125,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_UserBadges_User");
         });
 
-        modelBuilder.Entity<UserChapterInteraction>(entity =>
+        m.Entity<UserChapterInteraction>(entity =>
         {
             entity.HasKey(e => new { e.UserId, e.ChapterId });
 
@@ -1126,13 +1142,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_UserChapterInteractions_Users");
         });
 
-        modelBuilder.Entity<UserCustomFilter>(entity =>
+        m.Entity<UserCustomFilter>(entity =>
         {
             entity.HasKey(e => e.UserCustomFilterId).HasName("PK__UserCust__0EFEF340DCC6B614");
 
             entity.Property(e => e.UserCustomFilterId).HasColumnName("UserCustomFilterID");
             entity.Property(e => e.EntityId).HasColumnName("EntityID");
-            entity.Property(e => e.FilterTypeId).HasColumnName("FilterTypeID");
             entity.Property(e => e.Include).HasDefaultValue(true);
             entity.Property(e => e.SearchModeKey).HasMaxLength(50);
             entity.Property(e => e.UserId).HasColumnName("UserID");
@@ -1146,7 +1161,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_UserCustomFilters_User");
         });
 
-        modelBuilder.Entity<UserInteractionFilter>(entity =>
+        m.Entity<UserInteractionFilter>(entity =>
         {
             entity.HasKey(e => e.InteractionFilterKey).HasName("PK__UserInte__623CCDF96E2E3748");
 
@@ -1155,7 +1170,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.Name).HasMaxLength(100);
         });
 
-        modelBuilder.Entity<UserNotificationSetting>(entity =>
+        m.Entity<UserNotificationSetting>(entity =>
         {
             entity.HasKey(e => new { e.UserId, e.NotificationTypeId });
 
@@ -1171,7 +1186,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_UserNotificationSettings_User");
         });
 
-        modelBuilder.Entity<UserProfileComment>(entity =>
+        m.Entity<UserProfileComment>(entity =>
         {
             entity.HasKey(e => e.CommentId).HasName("PK__UserProf__C3B4DFAA54D9BD04");
 
@@ -1189,7 +1204,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_UserProfileComments_User");
         });
 
-        modelBuilder.Entity<UserSearchSetting>(entity =>
+        m.Entity<UserSearchSetting>(entity =>
         {
             entity.HasKey(e => e.UserSearchSettingId).HasName("PK__UserSear__DBC2857F71BD56A2");
 
@@ -1214,7 +1229,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_UserSearchSettings_User");
         });
 
-        modelBuilder.Entity<UserStat>(entity =>
+        m.Entity<UserStat>(entity =>
         {
             entity.HasKey(e => e.UserId).HasName("PK__UserStat__1788CCACF82F3157");
 
@@ -1227,7 +1242,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasConstraintName("FK_UserStats_User");
         });
 
-        modelBuilder.Entity<UserStoryInteraction>(entity =>
+        m.Entity<UserStoryInteraction>(entity =>
         {
             entity.HasKey(e => new { e.UserId, e.StoryId });
 

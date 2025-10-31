@@ -5,7 +5,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class StoryStatus
 {
-    public byte StoryStatusId { get; set; }
+    public StoryStatusEnum StoryStatusId { get; set; }
 
     public string StatusName { get; set; } = null!;
 

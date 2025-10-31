@@ -9,7 +9,7 @@ public partial class BlogPostComment
 
     public int BlogPostId { get; set; }
 
-    public virtual BlogPost BlogPost { get; set; } = null!;
+    public virtual BaseBlogPost BaseBlogPost { get; set; } = null!;
 
     public virtual BaseComment Comment { get; set; } = null!;
 }

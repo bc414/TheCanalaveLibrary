@@ -5,7 +5,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class ReportStatus
 {
-    public byte ReportStatusId { get; set; }
+    public ReportStatusEnum ReportStatusId { get; set; }
 
     public string StatusName { get; set; } = null!;
 

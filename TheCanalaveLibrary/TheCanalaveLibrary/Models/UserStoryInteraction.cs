@@ -9,11 +9,11 @@ public partial class UserStoryInteraction
 
     public int StoryId { get; set; }
 
-    public byte ReadStatus { get; set; }
+    public ReadStatus ReadStatus { get; set; }
 
     public bool IsActivelyReading { get; set; }
 
-    public byte FavoriteStatus { get; set; }
+    public FavoriteStatus FavoriteStatus { get; set; }
 
     public bool IsFollowed { get; set; }
 

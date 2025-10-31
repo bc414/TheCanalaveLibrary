@@ -27,7 +27,7 @@ public class User : IdentityUser<int>
 
     public virtual ICollection<BlogPostLike> BlogPostLikes { get; set; } = new List<BlogPostLike>();
 
-    public virtual ICollection<BlogPost> BlogPosts { get; set; } = new List<BlogPost>();
+    public virtual ICollection<BaseBlogPost> BlogPosts { get; set; } = new List<BaseBlogPost>();
 
     public virtual ICollection<ChapterContent> ChapterContents { get; set; } = new List<ChapterContent>();
 

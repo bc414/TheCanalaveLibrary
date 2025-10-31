@@ -11,7 +11,7 @@ public partial class BlogPostLike
 
     public DateTime DateLiked { get; set; }
 
-    public virtual BlogPost BlogPost { get; set; } = null!;
+    public virtual BaseBlogPost BaseBlogPost { get; set; } = null!;
 
     public virtual User User { get; set; } = null!;
 }

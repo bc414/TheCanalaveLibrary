@@ -11,7 +11,7 @@ public partial class UserCustomFilter
 
     public string SearchModeKey { get; set; } = null!;
 
-    public byte FilterTypeId { get; set; }
+    public FilterEntityType FilterEntityType { get; set; }
 
     public int EntityId { get; set; }
 

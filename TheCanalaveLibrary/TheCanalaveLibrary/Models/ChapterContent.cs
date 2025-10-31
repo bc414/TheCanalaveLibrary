@@ -23,7 +23,7 @@ public partial class ChapterContent
 
     public int ViewCount { get; set; }
 
-    public byte? Rating { get; set; }
+    public Rating Rating { get; set; }
 
     public DateTime PublishDate { get; set; }
 
