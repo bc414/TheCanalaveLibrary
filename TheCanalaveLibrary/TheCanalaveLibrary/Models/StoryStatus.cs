@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -7,9 +8,11 @@ public partial class StoryStatus
 {
     public StoryStatusEnum StoryStatusId { get; set; }
 
+    [Required]
+    [MaxLength(20)]
     public string StatusName { get; set; } = null!;
 
-    public string? Description { get; set; }
+    [Required] [MaxLength(255)] public string Description { get; set; } = null!;
 
     public virtual ICollection<Story> Stories { get; set; } = new List<Story>();
 }

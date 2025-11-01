@@ -11,6 +11,8 @@ public class NotificationCategory
     [MaxLength(100)]
     public string CategoryName { get; set; } = null!;
 
+    [Required]
+    [MaxLength(512)]
     public string Description { get; set; } = null!;
 
     public int SortOrder { get; set; }

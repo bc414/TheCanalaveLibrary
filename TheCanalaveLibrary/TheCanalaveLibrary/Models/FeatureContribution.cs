@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -13,6 +14,8 @@ public partial class FeatureContribution
 
     public int? BlogPostId { get; set; }
 
+    [Required]
+    [MaxLength(256)]
     public string FeatureName { get; set; } = null!;
 
     public DateTime DateAwarded { get; set; }

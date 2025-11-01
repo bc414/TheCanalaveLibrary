@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -9,8 +10,12 @@ public partial class StoryImport
 
     public int StoryId { get; set; }
 
+    [Required]
+    [MaxLength(255)]
     public string SourcePlatform { get; set; } = null!;
 
+    [Required]
+    [MaxLength(2048)]
     public string SourceUrl { get; set; } = null!;
 
     public byte VerificationStatus { get; set; }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -9,6 +10,8 @@ public partial class StoryArc
 
     public int StoryId { get; set; }
 
+    [Required]
+    [MaxLength(255)]
     public string Title { get; set; } = null!;
 
     public int SortOrder { get; set; }

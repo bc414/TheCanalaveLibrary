@@ -32,7 +32,8 @@ public partial class Story
 
     public int ViewCount { get; set; }
 
-    public string? CoverArtUrl { get; set; }
+    [MaxLength(512)]
+    public string? CoverArtRelativeUrl { get; set; }
 
     public DateTime PublishedDate { get; set; }
 

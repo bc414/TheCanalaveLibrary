@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -15,12 +16,14 @@ public partial class Report
 
     public byte ReportReasonId { get; set; }
 
+    [MaxLength(2048)]
     public string? Notes { get; set; }
 
     public ReportStatusEnum ReportStatusId { get; set; }
 
     public int? ModeratorUserId { get; set; }
-
+    
+    [MaxLength(1024)]
     public string? ActionTaken { get; set; }
 
     public DateTime DateReported { get; set; }

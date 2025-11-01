@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -7,19 +8,21 @@ public partial class Tag
 {
     public int TagId { get; set; }
 
+    [Required]
+    [MaxLength(100)]
     public string TagName { get; set; } = null!;
 
     public TagTypeEnum TagTypeId { get; set; }
 
     public bool IsFanon { get; set; }
 
+    [MaxLength(512)]
     public string? Description { get; set; }
 
     public int? ParentTagId { get; set; }
 
-    public string? SpriteUrl { get; set; }
-
-    public string? AnimatedSpriteUrl { get; set; }
+    [MaxLength(50)]
+    public string? SpriteIdentifier { get; set; }
 
     public bool AllowOCDetails { get; set; }
 

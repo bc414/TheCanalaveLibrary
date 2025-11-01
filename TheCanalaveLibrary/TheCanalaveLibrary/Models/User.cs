@@ -7,8 +7,8 @@ namespace TheCanalaveLibrary.Models;
 // Add profile data for application users by adding properties to the ApplicationUser class
 public class User : IdentityUser<int>
 {
-    [StringLength(500)]
-    public string? ProfilePictureUrl { get; set; }
+    [StringLength(512)]
+    public string? ProfilePictureRelativeUrl { get; set; }
     [StringLength(256)]
     public string? Tagline { get; set; }
     public string? ProfileText { get; set; }
@@ -16,16 +16,18 @@ public class User : IdentityUser<int>
     // 'Role' is handled by Identity Roles, so you can remove it.
     
     public bool ShowMatureContent { get; set; } = false;
-    [StringLength(50)]
-    public string? ThemeName { get; set; }
+    
     public bool PrefersDataSaverMode { get; set; } = false;
     public bool PrefersAnimatedSprites { get; set; } = true;
+    
+    public int ThemeId { get; set; }
+    public Theme Theme { get; set; }
     
     public virtual ICollection<BaseComment> BaseComments { get; set; } = new List<BaseComment>();
 
     public virtual ICollection<BetaReader> BetaReaders { get; set; } = new List<BetaReader>();
 
-    public virtual ICollection<BlogPostLike> BlogPostLikes { get; set; } = new List<BlogPostLike>();
+    public virtual ICollection<BaseBlogPost> LikedBlogPosts { get; set; } = new List<BaseBlogPost>();
 
     public virtual ICollection<BaseBlogPost> BlogPosts { get; set; } = new List<BaseBlogPost>();
 
@@ -33,7 +35,7 @@ public class User : IdentityUser<int>
 
     public virtual ICollection<CoAuthor> CoAuthors { get; set; } = new List<CoAuthor>();
 
-    public virtual ICollection<CommentLike> CommentLikes { get; set; } = new List<CommentLike>();
+    public virtual ICollection<BaseComment> LikedComments { get; set; } = new List<BaseComment>();
 
     public virtual ICollection<CommunitySpotlight> CommunitySpotlights { get; set; } = new List<CommunitySpotlight>();
 

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -9,6 +10,8 @@ public partial class CustomList
 
     public int UserId { get; set; }
 
+    [Required]
+    [MaxLength(256)]
     public string ListName { get; set; } = null!;
 
     public bool IsPublic { get; set; }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -10,13 +11,15 @@ public partial class CommunitySpotlight
     public int StoryId { get; set; }
 
     public int? SponsoringUserId { get; set; }
-
+    
+    [MaxLength(512)]
     public string? SponsorComment { get; set; }
 
     public DateTime StartDate { get; set; }
 
     public DateTime EndDate { get; set; }
 
+    [MaxLength(2048)]
     public string? PaymentId { get; set; }
 
     public DateTime DateCreated { get; set; }

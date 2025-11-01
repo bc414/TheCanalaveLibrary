@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -9,8 +10,11 @@ public partial class Group
 
     public int? CreatorId { get; set; }
 
+    [Required]
+    [MaxLength(256)]
     public string GroupName { get; set; } = null!;
 
+    [MaxLength(2048)]
     public string? Description { get; set; }
     
     public Rating Rating { get; set; }

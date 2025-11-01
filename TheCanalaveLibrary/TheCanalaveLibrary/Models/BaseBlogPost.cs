@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -10,8 +11,12 @@ public abstract class BaseBlogPost
 {
     public int BlogPostId { get; set; }
     public int? AuthorId { get; set; }
+    
+    [Required]
+    [MaxLength(256)]
     public string Title { get; set; } = null!;
 
+    [Required]
     public string Content { get; set; } = null!;
 
     public int ViewCount { get; set; }
@@ -31,9 +36,11 @@ public abstract class BaseBlogPost
 
     public virtual ICollection<BlogPostComment> BlogPostComments { get; set; } = new List<BlogPostComment>();
 
-    public virtual ICollection<BlogPostLike> BlogPostLikes { get; set; } = new List<BlogPostLike>();
+    public virtual ICollection<User> LikedByUsers { get; set; } = new List<User>();
 
     public virtual ICollection<FeatureContribution> FeatureContributions { get; set; } = new List<FeatureContribution>();
+    
+    public ICollection<BasePoll> Polls { get; set; } = new List<BasePoll>();
 
     
 

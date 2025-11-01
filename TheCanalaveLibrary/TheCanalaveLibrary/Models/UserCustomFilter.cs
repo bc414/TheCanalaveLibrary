@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -9,6 +10,8 @@ public partial class UserCustomFilter
 
     public int UserId { get; set; }
 
+    [Required]
+    [MaxLength(50)]
     public string SearchModeKey { get; set; } = null!;
 
     public FilterEntityType FilterEntityType { get; set; }

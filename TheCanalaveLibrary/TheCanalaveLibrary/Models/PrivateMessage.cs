@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -11,6 +12,7 @@ public partial class PrivateMessage
 
     public int? SenderUserId { get; set; }
 
+    [Required]
     public string MessageText { get; set; } = null!;
 
     public DateTime DateSent { get; set; }

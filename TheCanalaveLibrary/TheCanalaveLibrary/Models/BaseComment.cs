@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -11,6 +12,7 @@ public partial class BaseComment
 
     public long? ParentCommentId { get; set; }
 
+    [Required]
     public string CommentText { get; set; } = null!;
 
     public int LikeCount { get; set; }
@@ -19,13 +21,11 @@ public partial class BaseComment
 
     public int ActiveReportCount { get; set; }
 
-    public string CommentType { get; set; } = null!;
-
     public virtual BlogPostComment? BlogPostComment { get; set; }
 
     public virtual ChapterComment? ChapterComment { get; set; }
 
-    public virtual ICollection<CommentLike> CommentLikes { get; set; } = new List<CommentLike>();
+    public virtual ICollection<User> LikedByUsers { get; set; } = new List<User>();
 
     public virtual ICollection<FeatureContribution> FeatureContributions { get; set; } = new List<FeatureContribution>();
 
@@ -35,7 +35,7 @@ public partial class BaseComment
 
     public virtual BaseComment? ParentComment { get; set; }
 
-    public virtual User? User { get; set; }
+    public virtual User? Author { get; set; }
 
     public virtual UserProfileComment? UserProfileComment { get; set; }
 }

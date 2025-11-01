@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -7,10 +8,15 @@ public partial class NotificationType
 {
     public NotificationTypeEnum NotificationTypeId { get; set; }
 
+    [Key]
+    [Required]
+    [MaxLength(128)]
     public string NotificationKey { get; set; } = null!;
 
+    [MaxLength(128)]
     public string DisplayName { get; set; } = null!;
 
+    [MaxLength(512)]
     public string Description { get; set; } = null!;
 
     public bool DefaultEmailEnabled { get; set; }

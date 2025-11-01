@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -15,8 +16,10 @@ public partial class StoryCharacter
 
     public bool IsOc { get; set; }
 
+    [MaxLength(128)]
     public string? OcName { get; set; }
 
+    [MaxLength(2048)]
     public string? OcBio { get; set; }
 
     public virtual Tag CharacterTag { get; set; } = null!;

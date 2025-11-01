@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -11,7 +12,7 @@ public partial class Chapter
 
     public int ChapterNumber { get; set; }
 
-    public string? Title { get; set; }
+    [Required] [MaxLength(255)] public string Title { get; set; } = null!;
 
     public long PrimaryContentId { get; set; }
 

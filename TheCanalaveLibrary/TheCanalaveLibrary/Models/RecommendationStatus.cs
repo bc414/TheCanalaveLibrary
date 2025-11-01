@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -7,9 +8,11 @@ public partial class RecommendationStatus
 {
     public byte StatusId { get; set; }
 
+    [Required]
+    [MaxLength(50)]
     public string StatusName { get; set; } = null!;
 
-    public string? Description { get; set; }
+    [Required] [MaxLength(255)] public string Description { get; set; } = null!;
 
     public virtual ICollection<Recommendation> Recommendations { get; set; } = new List<Recommendation>();
 }

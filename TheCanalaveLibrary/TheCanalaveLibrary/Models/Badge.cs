@@ -1,17 +1,25 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Models;
 
 public partial class Badge
 {
+    [Key]
+    [Required]
+    [MaxLength(128)]
     public string BadgeKey { get; set; } = null!;
 
-    public string Name { get; set; } = null!;
+    [Required]
+    [MaxLength(128)]
+    public string DisplayName { get; set; } = null!;
 
+    [MaxLength(2048)]
     public string? Description { get; set; }
-
-    public string IconUrl { get; set; } = null!;
+    
+    [MaxLength(512)]
+    public string IconBaseUrl { get; set; } = null!;
 
     public int SortOrder { get; set; }
 
