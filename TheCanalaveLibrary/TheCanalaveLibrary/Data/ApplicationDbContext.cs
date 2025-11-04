@@ -10,16 +10,24 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 {
     //The fundamentals
     //Users is in base class
-    public DbSet<Story> Stories { get; set; }
-    public DbSet<StoryStatus> StoryStatuses { get; set; }
-    public DbSet<Chapter> Chapters { get; set; }
-    public DbSet<ChapterContent> ChapterContents { get; set; }
+    public DbSet<UserProfile> UserProfiles { get; set; }
+    
+    //Stories
+    public DbSet<Story> Stories { get; set; } //Metadata table
+    public DbSet<StoryListing> StoryListings { get; set; } //Warm table for paginated projections on search results
+    public DbSet<StoryDetail> StoryDetails { get; set; } //Content table, vertically partitioned
+    public DbSet<StoryStatus> StoryStatuses { get; set; } //Enum lookup table
+    
+    //Chapters
+    public DbSet<Chapter> Chapters { get; set; } //Metadata table
+    public DbSet<ChapterContent> ChapterContents { get; set; } //Content, multiple versions, and vertically partitioned
     
     //User relationships
     public DbSet<FollowedUser> FollowedUsers { get; set; }
     
     //Recommendations
     public DbSet<Recommendation> Recommendations { get; set; }
+    public DbSet<RecommendationDetail> RecommendationDetails { get; set; }
     public DbSet<RecommendationStatus> RecommendationStatuses { get; set; }
     public DbSet<RecommendationSuccess> RecommendationSuccesses { get; set; }
     
@@ -149,7 +157,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         
         modelBuilder.Entity<StoryStatus>().Property(e => e.StoryStatusId).HasConversion<byte>();
         modelBuilder.Entity<Story>().Property(e => e.StoryStatusId).HasConversion<byte>();
-        modelBuilder.Entity<Story>().Property(e => e.PostApprovalStatus).HasConversion<byte>();
+        modelBuilder.Entity<StoryDetail>().Property(e => e.PostApprovalStatus).HasConversion<byte>();
         
         modelBuilder.Entity<TagType>().Property(e => e.TagTypeId).HasConversion<byte>();
         modelBuilder.Entity<Tag>().Property(e => e.TagTypeId).HasConversion<byte>();
@@ -748,15 +756,21 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
 
-        modelBuilder.Entity<BaseComment>(entity =>
+        modelBuilder.Entity<BetaReader>(entity =>
+        {
+            entity.Property(e => e.DateAdded)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+        
+        modelBuilder.Entity<BlogPostComment>(entity =>
         {
             entity.Property(e => e.DatePosted)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
-
-        modelBuilder.Entity<BetaReader>(entity =>
+        
+        modelBuilder.Entity<ChapterComment>(entity =>
         {
-            entity.Property(e => e.DateAdded)
+            entity.Property(e => e.DatePosted)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
 
@@ -799,6 +813,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<Group>(entity =>
         {
             entity.Property(e => e.DateCreated)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+        
+        modelBuilder.Entity<GroupComment>(entity =>
+        {
+            entity.Property(e => e.DatePosted)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
         
@@ -871,6 +891,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<UserBadge>(entity =>
         {
             entity.Property(e => e.DateEarned)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+        
+        modelBuilder.Entity<UserProfileComment>(entity =>
+        {
+            entity.Property(e => e.DatePosted)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
 
@@ -1123,6 +1149,18 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         {
             // Future indexes for querying (e.g., by StoryId, RecommenderId, StatusId)...
         });
+        
+        modelBuilder.Entity<RecommendationDetail>(entity =>
+        {
+            // Configure the 1-to-1 relationship.
+            // RecommendationDetail is the dependent, its PK is also the FK to Recommendation.
+            entity.HasOne(d => d.Recommendation)
+                .WithOne(r => r.RecommendationDetail)
+                .HasForeignKey<RecommendationDetail>(d => d.RecommendationId)
+                .OnDelete(DeleteBehavior.Cascade); // Deleting a Recommendation deletes its text
+
+            // Future indexes for full-text search on the 'Text' column...
+        });
 
         modelBuilder.Entity<RecommendationStatus>(entity =>
         {
@@ -1190,13 +1228,34 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         modelBuilder.Entity<Story>(entity =>
         {
-            // A story slug must be unique, but can also be null.
-            // A filtered index is perfect for this.
-            entity.HasIndex(e => e.Slug).IsUnique()
-                .HasFilter("\"Slug\" IS NOT NULL");
-            
             // This table will have MANY indexes for searching.
-            // Future indexes for querying (e.g., by AuthorId, Rating, StatusId, Dates)...
+            // Future indexes for querying (e.g., by author_id, rating, story_status_id, dates)...
+        });
+
+        modelBuilder.Entity<StoryDetail>(entity =>
+        {
+            // Configure the 1-to-1 relationship with Story
+            entity.HasOne(d => d.Story)
+                .WithOne(s => s.StoryDetail)
+                .HasForeignKey<StoryDetail>(d => d.StoryId)
+                .OnDelete(DeleteBehavior.Cascade); // Deleting a Story deletes its details
+
+            // A story slug must be unique, but can also be null.
+            entity.HasIndex(e => e.Slug).IsUnique()
+                .HasFilter("\"slug\" IS NOT NULL");
+    
+            // Future indexes for querying (e.g., Full-Text on long_description)...
+        });
+
+        modelBuilder.Entity<StoryListing>(entity =>
+        {
+            // Configure the 1-to-1 relationship with Story
+            entity.HasOne(p => p.Story)
+                .WithOne(s => s.StoryListing)
+                .HasForeignKey<StoryListing>(p => p.StoryId)
+                .OnDelete(DeleteBehavior.Cascade); // Deleting a Story deletes its listing data
+
+            // Future indexes for querying...
         });
 
         modelBuilder.Entity<StoryAcknowledgment>(entity =>
@@ -1276,10 +1335,50 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         modelBuilder.Entity<User>(entity =>
         {
-            // Identity handles these, but good to be explicit
+            // Identity indexes
             entity.HasIndex(e => e.NormalizedUserName).IsUnique();
             entity.HasIndex(e => e.NormalizedEmail).IsUnique();
-            // Future indexes for querying...
+    
+            // Future indexes for querying (e.g., on show_mature_content)...
+
+            // --- JSON Column Configuration ---
+    
+            // Configure ReaderSettings as a 'jsonb' column
+            entity.OwnsOne(u => u.ReaderSettings, settings =>
+            {
+                settings.ToJson(); // This maps it to a 'jsonb' column
+                settings.Property(s => s.DefaultSearchSort).HasConversion<short>();
+            });
+
+            // Configure PrivacySettings as a 'jsonb' column
+            entity.OwnsOne(u => u.PrivacySettings, settings =>
+            {
+                settings.ToJson();
+        
+                // Convert the enums inside the JSON to 'smallint'
+                settings.Property(s => s.ProfileVisibility).HasConversion<short>();
+                settings.Property(s => s.AllowProfileComments).HasConversion<short>();
+                settings.Property(s => s.AllowPrivateMessages).HasConversion<short>();
+            });
+
+            // Configure AuthorSettings as a 'jsonb' column
+            entity.OwnsOne(u => u.AuthorSettings, settings =>
+            {
+                settings.ToJson();
+                settings.Property(s => s.DefaultStoryRating).HasConversion<short>();
+            });
+        });
+
+        // This block is for the "cold" vertical partition
+        modelBuilder.Entity<UserProfile>(entity =>
+        {
+            // Configure the 1-to-1 relationship with User
+            entity.HasOne(p => p.User)
+                .WithOne(u => u.UserProfile)
+                .HasForeignKey<UserProfile>(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade); // Deleting a User deletes their profile
+
+            // Future indexes for full-text search on 'profile_text'...
         });
 
         modelBuilder.Entity<UserBadge>(entity =>

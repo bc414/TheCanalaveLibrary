@@ -17,8 +17,6 @@ public partial class BaseComment
 
     public int LikeCount { get; set; }
 
-    public DateTime DatePosted { get; set; }
-
     public int ActiveReportCount { get; set; }
 
     public virtual BlogPostComment? BlogPostComment { get; set; }

@@ -154,3 +154,31 @@ public enum NotificationTypeEnum : short
     TagUpdateSuggestion, //One of your OC tag names matches a newly fanonized tag. Do you want to update it?
     
 }
+
+// ... (Keep all existing enums from Part 1 and Part 2) ...
+
+//Part 3: Enums for User Settings
+public enum ProfileVisibility : short
+{
+    Public = 0,
+    UsersOnly = 1,
+    Private = 2
+}
+
+public enum AllowInteractions : short
+{
+    Public = 0,
+    UsersOnly = 1,
+    Following = 2,
+    Nobody = 3
+}
+
+public enum DefaultSortOrder : short
+{
+    LastUpdated = 0,
+    PublishDate = 1,
+    Favorites = 2,
+    ViewCount = 3,
+    Relevance = 4,
+    Random = 5, //Discovery!
+}

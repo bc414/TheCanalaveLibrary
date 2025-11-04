@@ -11,8 +11,6 @@ public partial class Recommendation
 
     public int? RecommenderId { get; set; }
 
-    public string Text { get; set; } = null!;
-
     public byte StatusId { get; set; }
 
     public bool IsHiddenGem { get; set; }
@@ -24,6 +22,8 @@ public partial class Recommendation
     public DateTime DatePosted { get; set; }
 
     public int ActiveReportCount { get; set; }
+
+    public RecommendationDetail RecommendationDetail { get; set; } = null!;
 
     public virtual ICollection<RecommendationSuccess> RecommendationSuccesses { get; set; } = new List<RecommendationSuccess>();
 
