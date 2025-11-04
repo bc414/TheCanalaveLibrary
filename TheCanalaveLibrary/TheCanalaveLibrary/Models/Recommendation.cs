@@ -19,7 +19,7 @@ public partial class Recommendation
 
     public bool IsHighlightedByAuthor { get; set; }
 
-    public int LikeCount { get; set; }
+    public int SuccessfulRecCount { get; set; }
 
     public DateTime DatePosted { get; set; }
 

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Models;
@@ -53,7 +54,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<UserCustomFilter> UserCustomFilters { get; set; } //User can designate a list or group to use as a custom exclusion filter
     
     //massive table that stores interaction history - ignored, favorited, followed, read it later, completed/in progress
-    public DbSet<UserStoryInteraction> UserStoryInteractions { get; set; }
+    public virtual DbSet<UserStoryInteraction> UserStoryInteractions { get; set; }
+    public virtual DbSet<UserStoryInteractionDate> UserStoryInteractionDates { get; set; }
+    public virtual DbSet<UserStoryRecommendationSource> UserStoryRecommendationSources { get; set; }
+    
     //stores which chapters have been read and read progress for returning to last read portion
     public DbSet<UserChapterInteraction> UserChapterInteractions { get; set; }
     
@@ -115,336 +119,1283 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     //Other
     public DbSet<CommunitySpotlight> CommunitySpotlights { get; set; }
     
-    protected override void OnModelCreating(ModelBuilder m)
+    [SuppressMessage("ReSharper", "UnusedParameter.Local")]
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(m);
+        base.OnModelCreating(modelBuilder);
         
-        //1. Enum to TINYINT conversions
         
-        //1.1 magic bytes
-        m.Entity<Story>().Property(e => e.Rating).HasConversion<byte>();
-        m.Entity<ChapterContent>().Property(e => e.Rating).HasConversion<byte>();
-        m.Entity<Group>().Property(e => e.Rating).HasConversion<byte>();
-        m.Entity<Group>().Property(e => e.MaxContentRating).HasConversion<byte>();
-        m.Entity<BaseBlogPost>().Property(e => e.Rating).HasConversion<byte>();
-        m.Entity<GroupFolder>().Property(e => e.MaxRating).HasConversion<byte>();
+        #region Enums
+        //1. Enum to SMALLINT conversions
+        modelBuilder.Entity<Story>().Property(e => e.Rating).HasConversion<byte>();
+        modelBuilder.Entity<ChapterContent>().Property(e => e.Rating).HasConversion<byte>();
+        modelBuilder.Entity<Group>().Property(e => e.Rating).HasConversion<byte>();
+        modelBuilder.Entity<Group>().Property(e => e.MaxContentRating).HasConversion<byte>();
+        modelBuilder.Entity<BaseBlogPost>().Property(e => e.Rating).HasConversion<byte>();
+        modelBuilder.Entity<GroupFolder>().Property(e => e.MaxRating).HasConversion<byte>();
         
-        m.Entity<Report>().Property(e => e.ReportedEntityType).HasConversion<byte>();
-        
-        m.Entity<UserStoryInteraction>().Property(e => e.ReadStatus).HasConversion<byte>();
-        
-        m.Entity<UserStoryInteraction>().Property(e => e.FavoriteStatus).HasConversion<byte>();
+        modelBuilder.Entity<Report>().Property(e => e.ReportedEntityType).HasConversion<byte>();
 
-        m.Entity<UserCustomFilter>().Property(e => e.FilterEntityType).HasConversion<byte>();
+        modelBuilder.Entity<UserCustomFilter>().Property(e => e.FilterEntityType).HasConversion<byte>();
 
-        m.Entity<StoryTag>().Property(e => e.Priority).HasConversion<byte>();
-        m.Entity<StoryCharacter>().Property(e => e.Priority).HasConversion<byte>();
-        m.Entity<StoryCharacterRelationship>().Property(e => e.Priority).HasConversion<byte>();
-        m.Entity<StoryCharacterRelationship>().Property(e => e.RelationshipType).HasConversion<byte>();
+        modelBuilder.Entity<StoryTag>().Property(e => e.Priority).HasConversion<byte>();
+        modelBuilder.Entity<StoryCharacter>().Property(e => e.Priority).HasConversion<byte>();
+        modelBuilder.Entity<StoryCharacterRelationship>().Property(e => e.Priority).HasConversion<byte>();
+        modelBuilder.Entity<StoryCharacterRelationship>().Property(e => e.RelationshipType).HasConversion<byte>();
 
-        m.Entity<StoryRelationship>().Property(e => e.StatusId).HasConversion<byte>();
+        modelBuilder.Entity<StoryRelationship>().Property(e => e.StatusId).HasConversion<byte>();
         
         //1.2 Hybrid - lookup table for UI/description + enum foreign key for application logic
         
-        m.Entity<StoryStatus>().Property(e => e.StoryStatusId).HasConversion<byte>();
-        m.Entity<Story>().Property(e => e.StoryStatusId).HasConversion<byte>();
-        m.Entity<Story>().Property(e => e.PostApprovalStatus).HasConversion<byte>();
+        modelBuilder.Entity<StoryStatus>().Property(e => e.StoryStatusId).HasConversion<byte>();
+        modelBuilder.Entity<Story>().Property(e => e.StoryStatusId).HasConversion<byte>();
+        modelBuilder.Entity<Story>().Property(e => e.PostApprovalStatus).HasConversion<byte>();
         
-        m.Entity<TagType>().Property(e => e.TagTypeId).HasConversion<byte>();
-        m.Entity<Tag>().Property(e => e.TagTypeId).HasConversion<byte>();
+        modelBuilder.Entity<TagType>().Property(e => e.TagTypeId).HasConversion<byte>();
+        modelBuilder.Entity<Tag>().Property(e => e.TagTypeId).HasConversion<byte>();
 
-        m.Entity<ReportStatus>().Property(e => e.ReportStatusId).HasConversion<byte>();
-        m.Entity<Report>().Property(e => e.ReportStatusId).HasConversion<byte>();
+        modelBuilder.Entity<ReportStatus>().Property(e => e.ReportStatusId).HasConversion<byte>();
+        modelBuilder.Entity<Report>().Property(e => e.ReportStatusId).HasConversion<byte>();
         
-        m.Entity<NotificationCategory>().Property(e => e.NotificationCategoryId).HasConversion<byte>();
-        m.Entity<NotificationType>().Property(e => e.NotificationCategory).HasConversion<byte>();
-        m.Entity<NotificationType>().Property(e => e.NotificationTypeId).HasConversion<byte>();
-        m.Entity<Notification>().Property(e => e.NotificationTypeId).HasConversion<byte>();
-        m.Entity<UserNotificationSetting>().Property(e => e.NotificationTypeId).HasConversion<byte>();
-
-        //2. 
+        modelBuilder.Entity<NotificationCategory>().Property(e => e.NotificationCategoryId).HasConversion<byte>();
+        modelBuilder.Entity<NotificationType>().Property(e => e.NotificationCategory).HasConversion<byte>();
+        modelBuilder.Entity<NotificationType>().Property(e => e.NotificationTypeId).HasConversion<byte>();
+        modelBuilder.Entity<Notification>().Property(e => e.NotificationTypeId).HasConversion<byte>();
+        modelBuilder.Entity<UserNotificationSetting>().Property(e => e.NotificationTypeId).HasConversion<byte>();
+        #endregion
         
-        // --- THIS IS THE GLOBAL RULE ---
-        // This loop finds EVERY 'DateTime' property in your entire model
-        // and sets its default column type to 'datetime2(2)'.
-        // This is much cleaner than setting it 20+ times.
+        #region Foreign Keys and Delete Policies
+        
+            // --- USER (The most complex entity) ---
+        
+        // 1-to-1 Cascade (Personal data that MUST be deleted with the user)
+        modelBuilder.Entity<User>()
+            .HasOne(u => u.UserStat)
+            .WithOne(s => s.User)
+            .HasForeignKey<UserStat>(s => s.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
 
-        foreach (var property in m.Model.GetEntityTypes()
+        // 1-to-Many Cascade (Personal data owned by the user)
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.CustomLists)
+            .WithOne(l => l.User)
+            .HasForeignKey(l => l.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+        
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.UserBadges)
+            .WithOne(b => b.User)
+            .HasForeignKey(b => b.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.UserNotificationSettings)
+            .WithOne(s => s.User)
+            .HasForeignKey(s => s.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.ConversationParticipants)
+            .WithOne(p => p.User)
+            .HasForeignKey(p => p.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.UserChapterInteractions)
+            .WithOne(i => i.User)
+            .HasForeignKey(i => i.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.UserStoryInteractions)
+            .WithOne(i => i.User)
+            .HasForeignKey(i => i.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.GroupMembers)
+            .WithOne(m => m.User)
+            .HasForeignKey(m => m.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.UserCustomFilters)
+            .WithOne(f => f.User)
+            .HasForeignKey(f => f.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.UserSearchSettings)
+            .WithOne(s => s.User)
+            .HasForeignKey(s => s.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.RecommendationSuccesses)
+            .WithOne(r => r.User)
+            .HasForeignKey(r => r.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.StoryAcknowledgments)
+            .WithOne(a => a.AcknowledgedUser)
+            .HasForeignKey(a => a.AcknowledgedUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.CoAuthors)
+            .WithOne(c => c.CoAuthorUser)
+            .HasForeignKey(c => c.CoAuthorUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.BetaReaders)
+            .WithOne(b => b.BetaReaderUser)
+            .HasForeignKey(b => b.BetaReaderUserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // 1-to-Many SetNull (Anonymize created content)
+        // This policy is CRITICAL for breaking all "diamond" conflicts.
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.Stories)
+            .WithOne(s => s.Author)
+            .HasForeignKey(s => s.AuthorId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.BaseComments)
+            .WithOne(c => c.Author)
+            .HasForeignKey(c => c.UserId)
+            .OnDelete(DeleteBehavior.SetNull);
+            
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.BlogPosts)
+            .WithOne(b => b.Author)
+            .HasForeignKey(b => b.AuthorId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.Recommendations)
+            .WithOne(r => r.Recommender)
+            .HasForeignKey(r => r.RecommenderId)
+            .OnDelete(DeleteBehavior.SetNull);
+            
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.Series)
+            .WithOne(s => s.Author)
+            .HasForeignKey(s => s.AuthorId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.Groups)
+            .WithOne(g => g.Creator)
+            .HasForeignKey(g => g.CreatorId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.GroupStories)
+            .WithOne(gs => gs.AddedByUser)
+            .HasForeignKey(gs => gs.AddedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.PrivateMessages)
+            .WithOne(p => p.SenderUser)
+            .HasForeignKey(p => p.SenderUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.CommunitySpotlights)
+            .WithOne(cs => cs.SponsoringUser)
+            .HasForeignKey(cs => cs.SponsoringUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.ChapterContents)
+            .WithOne(cc => cc.Author)
+            .HasForeignKey(cc => cc.AuthorId)
+            .OnDelete(DeleteBehavior.SetNull);
+            
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.FeatureContributions)
+            .WithOne(fc => fc.User)
+            .HasForeignKey(fc => fc.UserId)
+            .OnDelete(DeleteBehavior.SetNull);
+            
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.ReportReporterUsers)
+            .WithOne(r => r.ReporterUser)
+            .HasForeignKey(r => r.ReporterUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+            
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.ReportModeratorUsers)
+            .WithOne(r => r.ModeratorUser)
+            .HasForeignKey(r => r.ModeratorUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // 1-to-Many Restrict (Lookup tables or conflicts)
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.UserProfileComments)
+            .WithOne(c => c.ProfileUser)
+            .HasForeignKey(c => c.ProfileUserId)
+            .OnDelete(DeleteBehavior.Restrict); // CONFLICT: Solved with C# code.
+
+        modelBuilder.Entity<Theme>()
+            .HasMany<User>() // A Theme can have many Users
+            .WithOne(u => u.Theme) // A User has one Theme
+            .HasForeignKey(u => u.ThemeId)
+            .OnDelete(DeleteBehavior.Restrict); // Don't delete a theme in use.
+
+        // --- DIRECT CONFLICTS (require C# code) ---
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.FollowedUserUsers)
+            .WithOne(f => f.User)
+            .HasForeignKey(f => f.UserId)
+            .OnDelete(DeleteBehavior.Cascade); // The "follower"
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.FollowedUserFollowedUserNavigations)
+            .WithOne(f => f.FollowedUserNavigation)
+            .HasForeignKey(f => f.FollowedUserId)
+            .OnDelete(DeleteBehavior.Restrict); // CONFLICT: The "followed"
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.NotificationRecipientUsers)
+            .WithOne(n => n.RecipientUser)
+            .HasForeignKey(n => n.RecipientUserId)
+            .OnDelete(DeleteBehavior.Cascade); // Required FK
+
+        modelBuilder.Entity<User>()
+            .HasMany(u => u.NotificationSourceUsers)
+            .WithOne(n => n.SourceUser)
+            .HasForeignKey(n => n.SourceUserId)
+            .OnDelete(DeleteBehavior.Restrict); // CONFLICT: Nullable FK
+
+        // --- STORY ---
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.Chapters)
+            .WithOne(c => c.Story)
+            .HasForeignKey(c => c.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.StoryTags)
+            .WithOne(st => st.Story)
+            .HasForeignKey(st => st.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.StoryArcs)
+            .WithOne(sa => sa.Story)
+            .HasForeignKey(sa => sa.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.StoryCharacters)
+            .WithOne(sc => sc.Story)
+            .HasForeignKey(sc => sc.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.CoAuthors)
+            .WithOne(c => c.Story)
+            .HasForeignKey(c => c.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.BetaReaders)
+            .WithOne(b => b.Story)
+            .HasForeignKey(b => b.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.StoryAcknowledgments)
+            .WithOne(a => a.Story)
+            .HasForeignKey(a => a.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.Recommendations)
+            .WithOne(r => r.Story)
+            .HasForeignKey(r => r.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.CommunitySpotlights)
+            .WithOne(cs => cs.Story)
+            .HasForeignKey(cs => cs.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.DailyStoryStats)
+            .WithOne(dss => dss.Story)
+            .HasForeignKey(dss => dss.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.SeriesEntries)
+            .WithOne(se => se.Story)
+            .HasForeignKey(se => se.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.CustomListEntries)
+            .WithOne(cle => cle.Story)
+            .HasForeignKey(cle => cle.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.GroupStories)
+            .WithOne(gs => gs.Story)
+            .HasForeignKey(gs => gs.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.UserStoryInteractions)
+            .WithOne(usi => usi.Story)
+            .HasForeignKey(usi => usi.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Story>()
+            .HasOne(s => s.StoryImport)
+            .WithOne(si => si.Story)
+            .HasForeignKey<StoryImport>(si => si.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.SettingDetails)
+            .WithOne(sd => sd.Story)
+            .HasForeignKey(sd => sd.StoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.StoryRelationshipSourceStories)
+            .WithOne(sr => sr.SourceStory)
+            .HasForeignKey(sr => sr.SourceStoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.StoryRelationshipTargetStories)
+            .WithOne(sr => sr.TargetStory)
+            .HasForeignKey(sr => sr.TargetStoryId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Story>()
+            .HasMany(s => s.BlogPosts) // From ProfileBlogPost inheritance
+            .WithOne(pbp => (pbp as ProfileBlogPost)!.Story)
+            .HasForeignKey(pbp => (pbp as ProfileBlogPost)!.StoryId)
+            .OnDelete(DeleteBehavior.SetNull); // A blog post can exist without a story
+
+        // Story -> Lookup Tables (Restrict)
+        modelBuilder.Entity<Story>()
+            .HasOne(s => s.StoryStatus)
+            .WithMany(ss => ss.Stories)
+            .HasForeignKey(s => s.StoryStatusId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // --- CHAPTER ---
+        modelBuilder.Entity<Chapter>()
+            .HasMany(c => c.ChapterContents)
+            .WithOne(cc => cc.Chapter)
+            .HasForeignKey(cc => cc.ChapterId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Chapter>()
+            .HasMany(c => c.ChapterComments)
+            .WithOne(cc => cc.Chapter)
+            .HasForeignKey(cc => cc.ChapterId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Chapter>()
+            .HasMany(c => c.UserChapterInteractions)
+            .WithOne(uci => uci.Chapter)
+            .HasForeignKey(uci => uci.ChapterId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        // --- BASE HIERARCHIES & SELF-REFERENCES ---
+        modelBuilder.Entity<BaseComment>()
+            .HasMany(c => c.InverseParentComment)
+            .WithOne(c => c.ParentComment)
+            .HasForeignKey(c => c.ParentCommentId)
+            .OnDelete(DeleteBehavior.SetNull); // Keep replies as top-level comments
+
+        modelBuilder.Entity<Tag>()
+            .HasMany(t => t.InverseParentTag)
+            .WithOne(t => t.ParentTag)
+            .HasForeignKey(t => t.ParentTagId)
+            .OnDelete(DeleteBehavior.SetNull); // Keep child tags as top-level tags
+
+        modelBuilder.Entity<BasePoll>()
+            .HasMany(p => p.PollOptions)
+            .WithOne(o => o.Poll)
+            .HasForeignKey(o => o.PollId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // --- GROUP & LISTS ---
+        modelBuilder.Entity<Group>()
+            .HasMany(g => g.GroupMembers)
+            .WithOne(m => m.Group)
+            .HasForeignKey(m => m.GroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Group>()
+            .HasMany(g => g.GroupStories)
+            .WithOne(gs => gs.Group)
+            .HasForeignKey(gs => gs.GroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Group>()
+            .HasMany(g => g.GroupComments)
+            .WithOne(gc => gc.Group)
+            .HasForeignKey(gc => gc.GroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Group>()
+            .HasMany(g => g.GroupFolders)
+            .WithOne(f => f.Group)
+            .HasForeignKey(f => f.GroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Group>()
+            .HasMany(g => g.BlogPosts)
+            .WithOne(gbp => (gbp as GroupBlogPost)!.Group)
+            .HasForeignKey(gbp => (gbp as GroupBlogPost)!.GroupId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<CustomList>()
+            .HasMany(l => l.CustomListEntries)
+            .WithOne(e => e.List)
+            .HasForeignKey(e => e.ListId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        // --- CONVERSATION ---
+        modelBuilder.Entity<Conversation>()
+            .HasMany(c => c.ConversationParticipants)
+            .WithOne(p => p.Conversation)
+            .HasForeignKey(p => p.ConversationId)
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        modelBuilder.Entity<Conversation>()
+            .HasMany(c => c.PrivateMessages)
+            .WithOne(m => m.Conversation)
+            .HasForeignKey(m => m.ConversationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // --- VERTICAL PARTITIONS (1-to-1) ---
+        modelBuilder.Entity<UserStoryInteraction>()
+            .HasOne(usi => usi.InteractionDate)
+            .WithOne(d => d.UserStoryInteraction)
+            .HasForeignKey<UserStoryInteractionDate>(d => new { d.UserId, d.StoryId })
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<UserStoryInteraction>()
+            .HasOne(usi => usi.RecommendationSource)
+            .WithOne(r => r.UserStoryInteraction)
+            .HasForeignKey<UserStoryRecommendationSource>(r => new { r.UserId, r.StoryId })
+            .OnDelete(DeleteBehavior.Cascade);
+            
+        // --- LOOKUP TABLES (All Restrict) ---
+        modelBuilder.Entity<Badge>()
+            .HasMany(b => b.UserBadges)
+            .WithOne(ub => ub.BadgeKeyNavigation)
+            .HasForeignKey(ub => ub.BadgeKey)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        modelBuilder.Entity<ReportReason>()
+            .HasMany(rr => rr.Reports)
+            .WithOne(r => r.ReportReason)
+            .HasForeignKey(r => r.ReportReasonId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ReportStatus>()
+            .HasMany(rs => rs.Reports)
+            .WithOne(r => r.ReportStatus)
+            .HasForeignKey(r => r.ReportStatusId)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        modelBuilder.Entity<NotificationType>()
+            .HasMany(nt => nt.Notifications)
+            .WithOne(n => n.NotificationType)
+            .HasForeignKey(n => n.NotificationTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        modelBuilder.Entity<NotificationType>()
+            .HasMany(nt => nt.UserNotificationSettings)
+            .WithOne(uns => uns.NotificationType)
+            .HasForeignKey(uns => uns.NotificationTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<NotificationCategory>()
+            .HasMany(nc => nc.NotificationTypes)
+            .WithOne() // Assuming no nav property on NotificationType
+            .HasForeignKey(nt => nt.NotificationCategory)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        modelBuilder.Entity<SearchMode>()
+            .HasMany(sm => sm.UserSearchSettings)
+            .WithOne(us => us.SearchModeKeyNavigation)
+            .HasForeignKey(us => us.SearchModeKey)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        modelBuilder.Entity<SearchMode>()
+            .HasMany(sm => sm.UserCustomFilters)
+            .WithOne(ucf => ucf.SearchModeKeyNavigation)
+            .HasForeignKey(ucf => ucf.SearchModeKey)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        modelBuilder.Entity<SearchMode>()
+            .HasMany(sm => sm.DefaultSearchSettings)
+            .WithOne(dss => dss.SearchModeKeyNavigation)
+            .HasForeignKey(dss => dss.SearchModeKey)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        modelBuilder.Entity<UserInteractionFilter>()
+            .HasMany(uif => uif.UserSearchSettings)
+            .WithOne(us => us.InteractionFilterKeyNavigation)
+            .HasForeignKey(us => us.InteractionFilterKey)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        modelBuilder.Entity<UserInteractionFilter>()
+            .HasMany(uif => uif.DefaultSearchSettings)
+            .WithOne(dss => dss.InteractionFilterKeyNavigation)
+            .HasForeignKey(dss => dss.InteractionFilterKey)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<RecommendationStatus>()
+            .HasMany(rs => rs.Recommendations)
+            .WithOne(r => r.Status)
+            .HasForeignKey(r => r.StatusId)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        modelBuilder.Entity<StoryRelationshipType>()
+            .HasMany(srt => srt.StoryRelationships)
+            .WithOne(sr => sr.RelationshipType)
+            .HasForeignKey(sr => sr.RelationshipTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AcknowledgmentRole>()
+            .HasMany(ar => ar.StoryAcknowledgments)
+            .WithOne(sa => sa.AcknowledgmentRole)
+            .HasForeignKey(sa => sa.AcknowledgmentRoleId)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        modelBuilder.Entity<TagType>()
+            .HasMany(tt => tt.Tags)
+            .WithOne(t => t.TagType)
+            .HasForeignKey(t => t.TagTypeId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Tag>()
+            .HasMany(t => t.StoryTags)
+            .WithOne(st => st.Tag)
+            .HasForeignKey(st => st.TagId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Tag>()
+            .HasMany(t => t.StoryCharacters)
+            .WithOne(sc => sc.CharacterTag)
+            .HasForeignKey(sc => sc.CharacterTagId)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        modelBuilder.Entity<Tag>()
+            .HasMany(t => t.SettingDetails)
+            .WithOne(sd => sd.BaseTag)
+            .HasForeignKey(sd => sd.BaseTagId)
+            .OnDelete(DeleteBehavior.Restrict);
+            
+        // --- Many-to-Many Join Tables (using EF default Cascade) ---
+        // User <-> BaseComment (Likes)
+        modelBuilder.Entity<BaseComment>()
+            .HasMany(c => c.LikedByUsers)
+            .WithMany(u => u.LikedComments);
+            
+        // User <-> BaseBlogPost (Likes)
+        modelBuilder.Entity<BaseBlogPost>()
+            .HasMany(b => b.LikedByUsers)
+            .WithMany(u => u.LikedBlogPosts);
+
+        // User <-> PollOption (Voters)
+        modelBuilder.Entity<PollOption>()
+            .HasMany(o => o.Voters)
+            .WithMany(); // Assuming no nav property on User
+            
+        // --- Diamond-Breaking SetNulls (Already covered by User SetNull) ---
+        // Example: FeatureContribution.BlogPostId -> BaseBlogPost
+        modelBuilder.Entity<BaseBlogPost>()
+            .HasMany(b => b.FeatureContributions)
+            .WithOne(fc => fc.BlogPost)
+            .HasForeignKey(fc => fc.BlogPostId)
+            .OnDelete(DeleteBehavior.SetNull); // Breaks diamond
+
+        // Example: FeatureContribution.CommentId -> BaseComment
+        modelBuilder.Entity<BaseComment>()
+            .HasMany(c => c.FeatureContributions)
+            .WithOne(fc => fc.Comment)
+            .HasForeignKey(fc => fc.CommentId)
+            .OnDelete(DeleteBehavior.SetNull); // Breaks diamond
+        
+        #endregion
+
+        #region Date and Time - Make the database create them
+
+        // --- PART 1: Specific Default Value Configurations ---
+        // Set default for "creation" or "posted" timestamps.
+        
+        modelBuilder.Entity<BaseBlogPost>(entity =>
+        {
+            entity.Property(e => e.DateCreated)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<BaseComment>(entity =>
+        {
+            entity.Property(e => e.DatePosted)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<BetaReader>(entity =>
+        {
+            entity.Property(e => e.DateAdded)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<CoAuthor>(entity =>
+        {
+            entity.Property(e => e.DateAdded)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<CommunitySpotlight>(entity =>
+        {
+            entity.Property(e => e.DateCreated)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+        
+        modelBuilder.Entity<Conversation>(entity =>
+        {
+            entity.Property(e => e.DateCreated)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<CustomList>(entity =>
+        {
+            entity.Property(e => e.DateCreated)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<CustomListEntry>(entity =>
+        {
+            entity.Property(e => e.DateAdded)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<FollowedUser>(entity =>
+        {
+            entity.Property(e => e.DateFollowed)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<Group>(entity =>
+        {
+            entity.Property(e => e.DateCreated)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+        
+        modelBuilder.Entity<GroupMember>(entity =>
+        {
+            entity.Property(e => e.DateJoined)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+        
+        modelBuilder.Entity<GroupStory>(entity =>
+        {
+            entity.Property(e => e.DateAdded)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<Notification>(entity =>
+        {
+            entity.Property(e => e.DateCreated)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<PrivateMessage>(entity =>
+        {
+            entity.Property(e => e.DateSent)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+        
+        modelBuilder.Entity<Recommendation>(entity =>
+        {
+            entity.Property(e => e.DatePosted)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+        
+        modelBuilder.Entity<RecommendationSuccess>(entity =>
+        {
+            entity.Property(e => e.DateRecorded)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<Report>(entity =>
+        {
+            entity.Property(e => e.DateReported)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<Series>(entity =>
+        {
+            entity.Property(e => e.DateCreated)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        modelBuilder.Entity<StoryAcknowledgment>(entity =>
+        {
+            entity.Property(e => e.DateAcknowledged)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+        
+        modelBuilder.Entity<StoryImport>(entity =>
+        {
+            entity.Property(e => e.DateImported)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+        
+        modelBuilder.Entity<StoryRelationship>(entity =>
+        {
+            entity.Property(e => e.DateCreated)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+        
+        modelBuilder.Entity<UserBadge>(entity =>
+        {
+            entity.Property(e => e.DateEarned)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+
+        // --- PART 2: Global Type Configuration Loops ---
+
+        // This loop sets all DateTime properties to 'timestamp with time zone'
+        // for proper PostgreSQL handling.
+        foreach (var property in modelBuilder.Model.GetEntityTypes()
                      .SelectMany(e => e.GetProperties())
                      .Where(p => p.ClrType == typeof(DateTime) || p.ClrType == typeof(DateTime?)))
         {
-            property.SetColumnType("datetime2(2)");
+            // Using timestamp(2) for a reasonable precision of 2 decimal places
+            property.SetColumnType("timestamp(2) with time zone");
         }
         
-
-        m.Entity<BaseComment>(entity =>
+        // This loop explicitly sets all DateOnly properties to 'date',
+        // which is the correct PostgreSQL type.
+        foreach (var property in modelBuilder.Model.GetEntityTypes()
+                     .SelectMany(e => e.GetProperties())
+                     .Where(p => p.ClrType == typeof(DateOnly) || p.ClrType == typeof(DateOnly?)))
         {
-            entity.Property(e => e.DatePosted).HasDefaultValueSql("(getutcdate())");
+            property.SetColumnType("date");
+        }
 
-            entity.HasOne(d => d.Author).WithMany(p => p.BaseComments)
-                .HasForeignKey(d => d.UserId)
-                .OnDelete(DeleteBehavior.SetNull);
+        #endregion
+
+        #region Composite Keys, Unique constraints, Table Per Type, and Indexes (to be added by query need)
+
+        modelBuilder.Entity<AcknowledgmentRole>(entity =>
+        {
+            // Future indexes for querying...
         });
 
-        m.Entity<ChapterContent>(entity =>
+        modelBuilder.Entity<AlsoFavoritedScore>(entity =>
         {
-            entity.Property(e => e.PublishDate).HasDefaultValueSql("(getutcdate())");
-
-            entity.HasOne(d => d.Author).WithMany(p => p.ChapterContents)
-                .HasForeignKey(d => d.AuthorId)
-                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasKey(e => new { e.StoryId, e.AlsoFavoritedStoryId });
+            // Future indexes for querying...
         });
 
-        m.Entity<CoAuthor>(entity =>
+        modelBuilder.Entity<AlsoRecommendedScore>(entity =>
         {
-            entity.Property(e => e.DateAdded).HasDefaultValueSql("(getutcdate())");
+            entity.HasKey(e => new { e.StoryId, e.AlsoRecommendedStoryId });
+            // Future indexes for querying...
         });
 
-        m.Entity<CommunitySpotlight>(entity =>
+        modelBuilder.Entity<ApplicationRole>(entity =>
         {
-            entity.Property(e => e.DateCreated).HasDefaultValueSql("(getutcdate())");
-
-            entity.HasOne(d => d.SponsoringUser).WithMany(p => p.CommunitySpotlights)
-                .HasForeignKey(d => d.SponsoringUserId)
-                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(e => e.NormalizedName).IsUnique();
+            // Future indexes for querying...
         });
 
-        m.Entity<Conversation>(entity =>
+        modelBuilder.Entity<Badge>(entity =>
         {
-            entity.Property(e => e.DateCreated).HasDefaultValueSql("(getutcdate())");
+            entity.HasIndex(e => e.DisplayName).IsUnique();
+            // Future indexes for querying...
         });
 
-        m.Entity<CustomList>(entity =>
+        modelBuilder.Entity<BaseBlogPost>(entity =>
         {
-            entity.HasIndex(e => new { e.UserId, e.ListName }, "UQ_User_ListName").IsUnique();
+            entity.ToTable("base_blog_posts");
+            // Future indexes for querying (e.g., by AuthorId, DateCreated)...
         });
 
-        m.Entity<CustomListEntry>(entity =>
+        modelBuilder.Entity<BaseComment>(entity =>
         {
-            entity.Property(e => e.DateAdded).HasDefaultValueSql("(getutcdate())");
+            // TPT Inheritance setup
+            entity.ToTable("base_comments");
+            
+            // Future indexes for querying (e.g., by AuthorId, DatePosted)...
         });
 
-        m.Entity<FeatureContribution>(entity =>
+        modelBuilder.Entity<BasePoll>(entity =>
         {
-            entity.Property(e => e.DateAwarded).HasDefaultValueSql("(getutcdate())");
-
-            entity.HasOne(d => d.BlogPost).WithMany(p => p.FeatureContributions)
-                .HasForeignKey(d => d.BlogPostId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(d => d.Comment).WithMany(p => p.FeatureContributions)
-                .HasForeignKey(d => d.CommentId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(d => d.User).WithMany(p => p.FeatureContributions)
-                .HasForeignKey(d => d.UserId)
-                .OnDelete(DeleteBehavior.SetNull);
+            // TPT Inheritance setup
+            entity.ToTable("base_polls");
+            
+            // Future indexes for querying...
         });
 
-        m.Entity<FollowedUser>(entity =>
+        modelBuilder.Entity<BetaReader>(entity =>
         {
-            entity.Property(e => e.DateFollowed).HasDefaultValueSql("(getutcdate())");
-            entity.HasOne(d => d.FollowedUserNavigation).WithMany(p => p.FollowedUserFollowedUserNavigations)
-                .HasForeignKey(d => d.FollowedUserId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("FK_FollowedUsers_Following");
+            entity.HasKey(e => new { e.StoryId, e.BetaReaderUserId });
+            // Future indexes for querying (e.g., by BetaReaderUserId)...
         });
 
-        m.Entity<Group>(entity =>
+        modelBuilder.Entity<BlogPostComment>(entity =>
         {
-            entity.Property(e => e.DateCreated).HasDefaultValueSql("(getutcdate())");
-
-            entity.HasOne(d => d.Creator).WithMany(p => p.Groups)
-                .HasForeignKey(d => d.CreatorId)
-                .OnDelete(DeleteBehavior.SetNull);
+            entity.ToTable("blog_post_comments");
+            // Future indexes for querying (e.g., by BlogPostId)...
         });
 
-        m.Entity<GroupMember>(entity =>
+        modelBuilder.Entity<BlogPostPoll>(entity =>
         {
-            entity.Property(e => e.DateJoined).HasDefaultValueSql("(getutcdate())");
+            entity.ToTable("blog_post_polls");
+            // Future indexes for querying (e.g., by BlogPostId)...
         });
 
-        m.Entity<GroupStory>(entity =>
+        modelBuilder.Entity<Chapter>(entity =>
         {
-            entity.Property(e => e.DateAdded).HasDefaultValueSql("(getutcdate())");
-
-            entity.HasOne(d => d.AddedByUser).WithMany(p => p.GroupStories)
-                .HasForeignKey(d => d.AddedByUserId)
-                .OnDelete(DeleteBehavior.SetNull);
-        });
-        
-        m.Entity<Notification>(entity =>
-        {
-            entity.Property(e => e.DateCreated).HasDefaultValueSql("(getutcdate())");
+            // A story cannot have two chapters with the same number
+            entity.HasIndex(e => new { e.StoryId, e.ChapterNumber }).IsUnique();
+            // Future indexes for querying...
         });
 
-        //TODO: Need to specify primary key here or not?
-        m.Entity<NotificationType>(entity =>
+        modelBuilder.Entity<ChapterComment>(entity =>
         {
-            entity.HasIndex(e => e.NotificationKey, "UQ__Notifica__BEEDDC564E587A3F").IsUnique();
+            entity.ToTable("chapter_comments");
+            // Future indexes for querying (e.g., by ChapterId, DatePosted)...
         });
 
-        m.Entity<PrivateMessage>(entity =>
+        modelBuilder.Entity<ChapterContent>(entity =>
         {
-            entity.Property(e => e.DateSent).HasDefaultValueSql("(getutcdate())");
-
-            entity.HasOne(d => d.SenderUser).WithMany(p => p.PrivateMessages)
-                .HasForeignKey(d => d.SenderUserId)
-                .OnDelete(DeleteBehavior.SetNull);
+            // Future indexes for querying (e.g., by AuthorId)...
         });
 
-        m.Entity<Recommendation>(entity =>
+        modelBuilder.Entity<CoAuthor>(entity =>
         {
-            entity.Property(e => e.DatePosted).HasDefaultValueSql("(getutcdate())");
-            entity.HasOne(d => d.Recommender).WithMany(p => p.Recommendations)
-                .HasForeignKey(d => d.RecommenderId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("FK_Recommendations_User");
-
-            entity.HasOne(d => d.Status).WithMany(p => p.Recommendations)
-                .HasForeignKey(d => d.StatusId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("FK_Recommendations_Status");
+            entity.HasKey(e => new { e.StoryId, e.CoAuthorUserId });
+            // Future indexes for querying (e.g., by CoAuthorUserId)...
         });
 
-        m.Entity<RecommendationStatus>(entity =>
+        modelBuilder.Entity<CommunitySpotlight>(entity =>
         {
-            entity.HasIndex(e => e.StatusName, "UQ__Recommen__05E7698A13C66F32").IsUnique();
+            // Future indexes for querying (e.g., by StoryId, EndDate)...
         });
 
-        m.Entity<RecommendationSuccess>(entity =>
+        modelBuilder.Entity<Conversation>(entity =>
         {
-            entity.Property(e => e.DateRecorded).HasDefaultValueSql("(getutcdate())");
+            // Future indexes for querying...
         });
 
-        m.Entity<Report>(entity =>
+        modelBuilder.Entity<ConversationParticipant>(entity =>
         {
-            entity.Property(e => e.DateReported).HasDefaultValueSql("(getutcdate())");
-
-            entity.HasOne(d => d.ReportReason).WithMany(p => p.Reports)
-                .HasForeignKey(d => d.ReportReasonId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Reports_Reason");
-
-            entity.HasOne(d => d.ReportStatus).WithMany(p => p.Reports)
-                .HasForeignKey(d => d.ReportStatusId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Reports_Status");
-
-            entity.HasOne(d => d.ReporterUser).WithMany(p => p.ReportReporterUsers)
-                .HasForeignKey(d => d.ReporterUserId)
-                .OnDelete(DeleteBehavior.SetNull)
-                .HasConstraintName("FK_Reports_ReporterUser");
+            entity.HasKey(e => new { e.ConversationId, e.UserId });
+            // Future indexes for querying (e.g., by UserId, IsArchived)...
         });
 
-        m.Entity<ReportReason>(entity =>
+        modelBuilder.Entity<CustomList>(entity =>
         {
-            entity.HasIndex(e => e.ReasonName, "UQ__ReportRe__9D4D92B5B755151C").IsUnique();
+            // A user cannot have two custom lists with the same name
+            entity.HasIndex(e => new { e.UserId, e.ListName }).IsUnique();
+            // Future indexes for querying (e.g., by IsPublic)...
         });
 
-        m.Entity<ReportStatus>(entity =>
+        modelBuilder.Entity<CustomListEntry>(entity =>
         {
-            entity.HasIndex(e => e.StatusName, "UQ__ReportSt__05E7698AF4224429").IsUnique();
+            entity.HasKey(e => new { e.ListId, e.StoryId });
+            // Future indexes for querying (e.g., by StoryId)...
         });
 
-        m.Entity<Series>(entity =>
+        modelBuilder.Entity<DailyStoryStat>(entity =>
         {
-            entity.Property(e => e.DateCreated).HasDefaultValueSql("(getutcdate())");
-
-            entity.HasOne(d => d.Author).WithMany(p => p.Series)
-                .HasForeignKey(d => d.AuthorId)
-                .OnDelete(DeleteBehavior.SetNull);
+            entity.HasKey(e => new { e.StoryId, e.StatDate });
+            // Future indexes for querying (e.g., by StatDate)...
         });
 
-        m.Entity<Story>(entity =>
+        modelBuilder.Entity<DefaultSearchSetting>(entity =>
         {
-            entity.HasIndex(e => e.Slug, "IX_Stories_Slug")
-                .IsUnique()
-                .HasFilter("([Slug] IS NOT NULL)");
-            entity.Property(e => e.LastUpdatedDate).HasDefaultValueSql("(getutcdate())");
-            entity.Property(e => e.PublishedDate).HasDefaultValueSql("(getutcdate())");
-
-            entity.HasOne(d => d.Author).WithMany(p => p.Stories)
-                .HasForeignKey(d => d.AuthorId)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasOne(d => d.StoryStatus).WithMany(p => p.Stories)
-                .HasForeignKey(d => d.StoryStatusId)
-                .OnDelete(DeleteBehavior.ClientSetNull);
+            entity.HasKey(e => new { e.SearchModeKey, e.InteractionFilterKey });
+            // Future indexes for querying...
         });
 
-        m.Entity<StoryAcknowledgment>(entity =>
+        modelBuilder.Entity<FeatureContribution>(entity =>
         {
-            entity.Property(e => e.DateAcknowledged).HasDefaultValueSql("(getutcdate())");
-
-            entity.HasOne(d => d.AcknowledgmentRole).WithMany(p => p.StoryAcknowledgments)
-                .HasForeignKey(d => d.AcknowledgmentRoleId)
-                .OnDelete(DeleteBehavior.ClientSetNull);
+            // Future indexes for querying (e.g., on UserId, CommentId, BlogPostId)...
         });
 
-        m.Entity<StoryCharacter>(entity =>
+        modelBuilder.Entity<FollowedUser>(entity =>
         {
-            entity.HasIndex(e => new { e.StoryId, e.CharacterTagId }, "UQ_StoryCharacters_StoryTag").IsUnique();
+            entity.HasKey(e => new { e.UserId, e.FollowedUserId });
+            // Future indexes for querying (e.g., by FollowedUserId)...
         });
 
-        m.Entity<StoryImport>(entity =>
+        modelBuilder.Entity<Group>(entity =>
         {
-            entity.HasIndex(e => e.StoryId, "UQ_StoryImports_StoryID").IsUnique();
+            // Group names must be unique across the site
+            entity.HasIndex(e => e.GroupName).IsUnique();
+            // Future indexes for querying (e.g., by CreatorId, Rating)...
         });
 
-        m.Entity<StoryRelationship>(entity =>
+        modelBuilder.Entity<GroupBlogPost>(entity =>
         {
-            entity.Property(e => e.DateCreated).HasDefaultValueSql("(getutcdate())");
-
-            entity.HasOne(d => d.RelationshipType).WithMany(p => p.StoryRelationships)
-                .HasForeignKey(d => d.RelationshipTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StoryRelationships_Type");
-
-            entity.HasOne(d => d.TargetStory).WithMany(p => p.StoryRelationshipTargetStories)
-                .HasForeignKey(d => d.TargetStoryId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StoryRelationships_ChildStory");
+            entity.ToTable("group_blog_posts");
+            // Future indexes for querying (e.g., by GroupId)...
         });
 
-        m.Entity<StoryRelationshipType>(entity =>
+        modelBuilder.Entity<GroupComment>(entity =>
         {
-            entity.HasIndex(e => e.TypeName, "UQ__StoryRel__D4E7DFA8777A2359").IsUnique();
+            entity.ToTable("group_comments");
+            // Future indexes for querying (e.g., by GroupId)...
         });
 
-        m.Entity<StoryTag>(entity =>
+        modelBuilder.Entity<GroupFolder>(entity =>
         {
-            entity.ToTable(tb => tb.HasTrigger("TR_StoryTags_EnforcePriorityLogic"));
+            // A folder's name must be unique within its parent folder (or at the root)
+            entity.HasIndex(e => new { e.GroupId, e.ParentFolderId, e.Name }).IsUnique();
+            // Future indexes for querying...
         });
 
-        m.Entity<Tag>(entity =>
+        modelBuilder.Entity<GroupMember>(entity =>
         {
-            entity.HasIndex(e => new { e.TagName, e.TagTypeId }, "UK_Tags_Name_Type").IsUnique();
-
-            entity.HasOne(d => d.TagType).WithMany(p => p.Tags)
-                .HasForeignKey(d => d.TagTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Tags_TagType");
+            entity.HasKey(e => new { e.UserId, e.GroupId });
+            // Future indexes for querying (e.g., by GroupId, Role)...
         });
 
-        m.Entity<TagType>(entity =>
+        modelBuilder.Entity<GroupStory>(entity =>
         {
-            entity.HasIndex(e => e.TypeName, "UQ__TagTypes__D4E7DFA871A634EE").IsUnique();
+            // Future indexes for querying (e.g., by GroupId, StoryId, DateAdded)...
         });
 
-        m.Entity<UserBadge>(entity =>
+        modelBuilder.Entity<Notification>(entity =>
         {
-            entity.Property(e => e.DateEarned).HasDefaultValueSql("(getutcdate())");
+            // Future indexes for querying (e.g., by RecipientUserId, IsRead, DateCreated)...
         });
 
-        m.Entity<UserChapterInteraction>(entity =>
+        modelBuilder.Entity<NotificationCategory>(entity =>
         {
-            entity.Property(e => e.LastInteractionDate).HasDefaultValueSql("(getutcdate())");
+            entity.HasIndex(e => e.CategoryName).IsUnique();
+            // Future indexes for querying...
         });
-        
-        m.Entity<UserSearchSetting>(entity =>
+
+        modelBuilder.Entity<NotificationType>(entity =>
         {
-            entity.HasIndex(e => new { e.UserId, e.SearchModeKey, e.InteractionFilterKey }, "UK_UserSearchSettings").IsUnique();
+            entity.HasIndex(e => e.DisplayName).IsUnique();
+            // Future indexes for querying (e.g., by NotificationCategory)...
         });
+
+        modelBuilder.Entity<PollOption>(entity =>
+        {
+            // An option's text must be unique within that poll
+            entity.HasIndex(e => new { e.PollId, e.Text }).IsUnique();
+            // An option's sort order must be unique within that poll
+            entity.HasIndex(e => new { e.PollId, e.SortOrder }).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<PrivateMessage>(entity =>
+        {
+            // Future indexes for querying (e.g., by ConversationId, DateSent)...
+        });
+
+        modelBuilder.Entity<ProfileBlogPost>(entity =>
+        {
+            entity.ToTable("profile_blog_posts");
+            // Future indexes for querying (e.g., by StoryId)...
+        });
+
+        modelBuilder.Entity<Recommendation>(entity =>
+        {
+            // Future indexes for querying (e.g., by StoryId, RecommenderId, StatusId)...
+        });
+
+        modelBuilder.Entity<RecommendationStatus>(entity =>
+        {
+            entity.HasIndex(e => e.StatusName).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<RecommendationSuccess>(entity =>
+        {
+            entity.HasKey(e => new { e.UserId, e.RecommendationId });
+            // Future indexes for querying (e.g., by RecommendationId)...
+        });
+
+        modelBuilder.Entity<Report>(entity =>
+        {
+            // Future indexes for querying (e.g., by StatusId, ReportedEntityId)...
+        });
+
+        modelBuilder.Entity<ReportReason>(entity =>
+        {
+            entity.HasIndex(e => e.ReasonName).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<ReportStatus>(entity =>
+        {
+            entity.HasIndex(e => e.StatusName).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<SearchMode>(entity =>
+        {
+            entity.HasIndex(e => e.Name).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<Series>(entity =>
+        {
+            // An author cannot have two series with the same name
+            entity.HasIndex(e => new { e.AuthorId, e.Name }).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<SeriesEntry>(entity =>
+        {
+            entity.HasKey(e => new { e.SeriesId, e.StoryId });
+            // Future indexes for querying (e.g., by StoryId)...
+        });
+
+        modelBuilder.Entity<SettingDetail>(entity =>
+        {
+            // Future indexes for querying (e.g., by StoryId, BaseTagId)...
+        });
+
+        modelBuilder.Entity<SiteDailyStat>(entity =>
+        {
+            // This table's PK is the date, so it's already indexed for time-series.
+        });
+
+        modelBuilder.Entity<SitePoll>(entity =>
+        {
+            entity.ToTable("site_polls");
+            // Future indexes for querying (e.g., by IsArchived)...
+        });
+
+        modelBuilder.Entity<Story>(entity =>
+        {
+            // A story slug must be unique, but can also be null.
+            // A filtered index is perfect for this.
+            entity.HasIndex(e => e.Slug).IsUnique()
+                .HasFilter("\"Slug\" IS NOT NULL");
+            
+            // This table will have MANY indexes for searching.
+            // Future indexes for querying (e.g., by AuthorId, Rating, StatusId, Dates)...
+        });
+
+        modelBuilder.Entity<StoryAcknowledgment>(entity =>
+        {
+            entity.HasKey(e => new { e.StoryId, e.AcknowledgedUserId, e.AcknowledgmentRoleId });
+            // Future indexes for querying (e.g., by AcknowledgedUserId)...
+        });
+
+        modelBuilder.Entity<StoryArc>(entity =>
+        {
+            // A story cannot have two arcs with the same title
+            entity.HasIndex(e => new { e.StoryId, e.Title }).IsUnique();
+            // A story cannot have two arcs with the same sort order
+            entity.HasIndex(e => new { e.StoryId, e.SortOrder }).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<StoryCharacter>(entity =>
+        {
+            // Future indexes for querying (e.g., by StoryId, CharacterTagId)...
+        });
+
+        modelBuilder.Entity<StoryCharacterRelationship>(entity =>
+        {
+            // Future indexes for querying (e.g., by StoryId)...
+        });
+
+        modelBuilder.Entity<StoryImport>(entity =>
+        {
+            // A story can only be imported once (1-to-1)
+            entity.HasIndex(e => e.StoryId).IsUnique();
+            // A specific URL can only be imported once
+            entity.HasIndex(e => e.SourceUrl).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<StoryRelationship>(entity =>
+        {
+            entity.HasKey(e => new { e.SourceStoryId, e.TargetStoryId, e.RelationshipTypeId });
+            // Future indexes for querying (e.g., by TargetStoryId)...
+        });
+
+        modelBuilder.Entity<StoryRelationshipType>(entity =>
+        {
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<StoryStatus>(entity =>
+        {
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<StoryTag>(entity =>
+        {
+            entity.HasKey(e => new { e.StoryId, e.TagId });
+            // Future indexes for querying (e.g., by TagId)...
+        });
+
+        modelBuilder.Entity<Tag>(entity =>
+        {
+            // Tag names must be unique across the site
+            entity.HasIndex(e => e.TagName).IsUnique();
+            // Future indexes for querying (e.g., by TagTypeId, IsFanon)...
+        });
+
+        modelBuilder.Entity<TagType>(entity =>
+        {
+            entity.HasIndex(e => e.TypeName).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<Theme>(entity =>
+        {
+            entity.HasIndex(e => e.Name).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<User>(entity =>
+        {
+            // Identity handles these, but good to be explicit
+            entity.HasIndex(e => e.NormalizedUserName).IsUnique();
+            entity.HasIndex(e => e.NormalizedEmail).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<UserBadge>(entity =>
+        {
+            entity.HasKey(e => new { e.UserId, e.BadgeKey });
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<UserChapterInteraction>(entity =>
+        {
+            entity.HasKey(e => new { e.UserId, e.ChapterId });
+            // Future indexes for querying (e.g., by ChapterId, IsRead)...
+        });
+
+        modelBuilder.Entity<UserCustomFilter>(entity =>
+        {
+            // Future indexes for querying (e.g., by UserId)...
+        });
+
+        modelBuilder.Entity<UserInteractionFilter>(entity =>
+        {
+            entity.HasIndex(e => e.Name).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<UserNotificationSetting>(entity =>
+        {
+            entity.HasKey(e => new { e.UserId, e.NotificationTypeId });
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<UserProfileComment>(entity =>
+        {
+            entity.ToTable("user_profile_comments");
+            // Future indexes for querying (e.g., by ProfileUserId)...
+        });
+
+        modelBuilder.Entity<UserSearchSetting>(entity =>
+        {
+            // A user can only have one setting for a specific filter/mode
+            entity.HasIndex(e => new { e.UserId, e.SearchModeKey, e.InteractionFilterKey }).IsUnique();
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<UserStat>(entity =>
+        {
+            entity.HasKey(e => e.UserId);
+            // Future indexes for querying...
+        });
+
+        modelBuilder.Entity<UserStoryInteraction>(entity =>
+        {
+            entity.HasKey(e => new { e.UserId, e.StoryId });
+            // This table will have MANY filtered indexes on the boolean flags.
+            // Future indexes for querying (e.g., by StoryId, IsFavorite, IsFollowed)...
+            
+            // Filtered, Covered Indexes for User-centric filtering
+            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
+                .HasFilter("\"is_ignored\" = true").HasDatabaseName("ix_user_story_interactions_ignored");
+            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
+                .HasFilter("\"is_favorite\" = true").HasDatabaseName("ix_user_story_interactions_favorite");
+            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
+                .HasFilter("\"is_hidden_favorite\" = true").HasDatabaseName("ix_user_story_interactions_hidden_favorite");
+            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
+                .HasFilter("\"is_followed\" = true").HasDatabaseName("ix_user_story_interactions_followed");
+            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
+                .HasFilter("\"is_read_it_later\" = true").HasDatabaseName("ix_user_story_interactions_read_it_later");
+            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
+                .HasFilter("\"is_completed\" = true").HasDatabaseName("ix_user_story_interactions_completed");
+            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
+                .HasFilter("\"is_in_progress\" = true").HasDatabaseName("ix_user_story_interactions_in_progress");
+        });
+
+        modelBuilder.Entity<UserStoryInteractionDate>(entity =>
+        {
+            entity.HasKey(e => new { e.UserId, e.StoryId });
+            // This table will have filtered indexes on each date column for sorting.
+        });
+
+        modelBuilder.Entity<UserStoryRecommendationSource>(entity =>
+        {
+            entity.HasKey(e => new { e.UserId, e.StoryId });
+            // Future indexes for querying (e.Full
+        });
+
+        modelBuilder.Entity<UserStoryTreeSearchEntry>(entity =>
+        {
+            entity.HasKey(e => new { e.UserId, e.StoryId });
+            // This is a data mart. Indexes are critical.
+            // Future indexes for querying (e.g., by UserId, by StoryId)...
+            // --- Mirrored Graph Indexes (Corrected for snake_case) ---
+            // Pattern 1: User -> Stories
+            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
+                .HasFilter("\"is_authored_by_user\" = true").HasDatabaseName("ix_user_tree_user_authored");
+            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
+                .HasFilter("\"is_public_favorite\" = true").HasDatabaseName("ix_user_tree_user_public_favorite");
+            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
+                .HasFilter("\"is_recommendation\" = true").HasDatabaseName("ix_user_tree_user_recommendation");
+            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
+                .HasFilter("\"is_hidden_gem\" = true").HasDatabaseName("ix_user_tree_user_hidden_gem");
+            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
+                .HasFilter("\"is_hidden_favorite\" = true").HasDatabaseName("ix_user_tree_user_hidden_favorite");
+
+            // Pattern 2: Story -> Users
+            entity.HasIndex(e => e.StoryId).IncludeProperties(e => e.UserId)
+                .HasFilter("\"is_authored_by_user\" = true").HasDatabaseName("ix_user_tree_story_authored");
+            entity.HasIndex(e => e.StoryId).IncludeProperties(e => e.UserId)
+                .HasFilter("\"is_public_favorite\" = true").HasDatabaseName("ix_user_tree_story_public_favorite");
+            entity.HasIndex(e => e.StoryId).IncludeProperties(e => e.UserId)
+                .HasFilter("\"is_recommendation\" = true").HasDatabaseName("ix_user_tree_story_recommendation");
+            entity.HasIndex(e => e.StoryId).IncludeProperties(e => e.UserId)
+                .HasFilter("\"is_author_spotlighted\" = true").HasDatabaseName("ix_user_tree_story_spotlighted");
+            entity.HasIndex(e => e.StoryId).IncludeProperties(e => e.UserId)
+                .HasFilter("\"is_hidden_favorite\" = true").HasDatabaseName("ix_user_tree_story_hidden_favorite");
+        });
+
+        #endregion
     }
 }

@@ -1,14 +1,14 @@
 namespace TheCanalaveLibrary.Models;
 
-//Part 1: Pure Magic Byte enums
-public enum Rating : byte
+//Part 1: Pure Magic short enums
+public enum Rating : short
 {
     E = 0,
     T = 1,
     M = 2
 }
 
-public enum ReportedEntityType : byte
+public enum ReportedEntityType : short
 {
     User = 0,
     Story = 1,
@@ -17,21 +17,21 @@ public enum ReportedEntityType : byte
     Recommendation = 4
 }
 
-public enum ReadStatus : byte
+public enum ReadStatus : short
 {
     Unread = 0,
     InProgress = 1,
     Completed = 2
 }
 
-public enum FavoriteStatus : byte
+public enum FavoriteStatus : short
 {
     None = 0,
     Favorite = 1,
     PrivateFavorite = 2
 }
 
-public enum FilterEntityType : byte
+public enum FilterEntityType : short
 {
     PersonalList = 0,
     PublicList = 1,
@@ -39,19 +39,19 @@ public enum FilterEntityType : byte
     GroupFolder = 3
 }
 
-public enum TagPriority : byte
+public enum TagPriority : short
 {
     Primary = 0,
     Supporting = 1
 }
 
-public enum CharacterRelationshipType : byte
+public enum CharacterRelationshipType : short
 {
     Romantic = 0,
     Platonic = 1
 }
 
-public enum StoryRelationshipStatus : byte
+public enum StoryRelationshipStatus : short
 {
     Pending = 0,
     Approved = 1,
@@ -64,8 +64,8 @@ public enum StoryRelationshipStatus : byte
 
 // This enum is a C# "mirror" of the 'StoryStatuses' table.
 // The values MUST match the IDs in the SQL script.
-// We use 'byte' to match the 'TINYINT' SQL data type.
-public enum StoryStatusEnum : byte
+// We use 'short' to match the 'TINYINT' SQL data type.
+public enum StoryStatusEnum : short
 {
     Draft = 0,
     PendingApproval = 1,
@@ -78,7 +78,7 @@ public enum StoryStatusEnum : byte
     Rejected = 8
 }
 
-public enum TagTypeEnum : byte
+public enum TagTypeEnum : short
 {
     Character = 0,
     Setting = 1,
@@ -88,7 +88,7 @@ public enum TagTypeEnum : byte
     Relationship = 5
 }
 
-public enum ReportStatusEnum : byte
+public enum ReportStatusEnum : short
 {
     Open = 0,
     UnderReview = 1,
@@ -96,7 +96,7 @@ public enum ReportStatusEnum : byte
     ResolvedActionTaken = 3
 }
 
-public enum NotificationCategoryEnum : byte
+public enum NotificationCategoryEnum : short
 {
     SiteNews,
     YourFollows,
@@ -108,7 +108,7 @@ public enum NotificationCategoryEnum : byte
     Moderation,
 }
 
-public enum NotificationTypeEnum : byte
+public enum NotificationTypeEnum : short
 {
     SiteAnnouncement = 0,
     

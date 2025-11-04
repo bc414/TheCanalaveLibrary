@@ -19,6 +19,7 @@ public class User : IdentityUser<int>
     
     public bool PrefersDataSaverMode { get; set; } = false;
     public bool PrefersAnimatedSprites { get; set; } = true;
+    public bool AllowDiscoveryFromHiddenFavorites { get; set; } = false;
     
     public int ThemeId { get; set; }
     public Theme Theme { get; set; }
