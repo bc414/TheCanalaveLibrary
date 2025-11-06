@@ -1729,7 +1729,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<UserStoryRecommendationSource>(entity =>
         {
             entity.HasKey(e => new { e.UserId, e.StoryId });
-            // Future indexes for querying (e.Full
+            // Future indexes for querying
         });
 
         modelBuilder.Entity<UserStoryTreeSearchEntry>(entity =>
