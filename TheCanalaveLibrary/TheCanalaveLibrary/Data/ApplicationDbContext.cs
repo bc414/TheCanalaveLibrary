@@ -8,6 +8,9 @@ namespace TheCanalaveLibrary.Data;
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
     : IdentityDbContext<User, ApplicationRole, int>(options)
 {
+    #region DbSets
+
+    
     //The fundamentals
     //Users is in base class
     public DbSet<UserProfile> UserProfiles { get; set; }
@@ -38,6 +41,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<StoryCharacter> StoryCharacters { get; set; } //Contains the characters in a story
     public DbSet<StoryCharacterRelationship> StoryCharacterRelationships { get; set; }
     public DbSet<SettingDetail> SettingDetails { get; set; } //For specifying what setting the story is in, as well as original settings
+    public DbSet<SavedTagSelection> SavedTagSelections { get; set; }
+    public DbSet<SavedTagSelectionEntry> SavedTagSelectionEntries { get; set; }
     
     //Groups
     public DbSet<Group> Groups { get; set; }
@@ -127,49 +132,235 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     //Other
     public DbSet<CommunitySpotlight> CommunitySpotlights { get; set; }
     
+    #endregion
+    
     [SuppressMessage("ReSharper", "UnusedParameter.Local")]
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
         
         
-        #region Enums
+        #region Enums, Lookup Tables, and non-content Seed Data
         //1. Enum to SMALLINT conversions
-        modelBuilder.Entity<Story>().Property(e => e.Rating).HasConversion<byte>();
-        modelBuilder.Entity<ChapterContent>().Property(e => e.Rating).HasConversion<byte>();
-        modelBuilder.Entity<Group>().Property(e => e.Rating).HasConversion<byte>();
-        modelBuilder.Entity<Group>().Property(e => e.MaxContentRating).HasConversion<byte>();
-        modelBuilder.Entity<BaseBlogPost>().Property(e => e.Rating).HasConversion<byte>();
-        modelBuilder.Entity<GroupFolder>().Property(e => e.MaxRating).HasConversion<byte>();
+        modelBuilder.Entity<Story>().Property(e => e.Rating).HasConversion<short>();
+        modelBuilder.Entity<ChapterContent>().Property(e => e.Rating).HasConversion<short>();
+        modelBuilder.Entity<Group>().Property(e => e.Rating).HasConversion<short>();
+        modelBuilder.Entity<Group>().Property(e => e.MaxContentRating).HasConversion<short>();
+        modelBuilder.Entity<BaseBlogPost>().Property(e => e.Rating).HasConversion<short>();
+        modelBuilder.Entity<GroupFolder>().Property(e => e.MaxRating).HasConversion<short>();
         
-        modelBuilder.Entity<Report>().Property(e => e.ReportedEntityType).HasConversion<byte>();
+        modelBuilder.Entity<Report>().Property(e => e.ReportedEntityType).HasConversion<short>();
 
-        modelBuilder.Entity<UserCustomFilter>().Property(e => e.FilterEntityType).HasConversion<byte>();
+        modelBuilder.Entity<UserCustomFilter>().Property(e => e.FilterEntityType).HasConversion<short>();
 
-        modelBuilder.Entity<StoryTag>().Property(e => e.Priority).HasConversion<byte>();
-        modelBuilder.Entity<StoryCharacter>().Property(e => e.Priority).HasConversion<byte>();
-        modelBuilder.Entity<StoryCharacterRelationship>().Property(e => e.Priority).HasConversion<byte>();
-        modelBuilder.Entity<StoryCharacterRelationship>().Property(e => e.RelationshipType).HasConversion<byte>();
+        modelBuilder.Entity<StoryTag>().Property(e => e.Priority).HasConversion<short>();
+        modelBuilder.Entity<StoryCharacter>().Property(e => e.Priority).HasConversion<short>();
+        modelBuilder.Entity<StoryCharacterRelationship>().Property(e => e.Priority).HasConversion<short>();
+        modelBuilder.Entity<StoryCharacterRelationship>().Property(e => e.RelationshipType).HasConversion<short>();
 
-        modelBuilder.Entity<StoryRelationship>().Property(e => e.StatusId).HasConversion<byte>();
+        modelBuilder.Entity<StoryRelationship>().Property(e => e.StatusId).HasConversion<short>();
         
-        //1.2 Hybrid - lookup table for UI/description + enum foreign key for application logic
+        //1.2 Hybrid - lookup table for UI/description + enum foreign key for application logic. Seed data must match enums
         
-        modelBuilder.Entity<StoryStatus>().Property(e => e.StoryStatusId).HasConversion<byte>();
-        modelBuilder.Entity<Story>().Property(e => e.StoryStatusId).HasConversion<byte>();
-        modelBuilder.Entity<StoryDetail>().Property(e => e.PostApprovalStatus).HasConversion<byte>();
+        modelBuilder.Entity<StoryStatus>().Property(e => e.StoryStatusId).HasConversion<short>();
+        modelBuilder.Entity<Story>().Property(e => e.StoryStatusId).HasConversion<short>();
+        modelBuilder.Entity<StoryDetail>().Property(e => e.PostApprovalStatus).HasConversion<short>();
         
-        modelBuilder.Entity<TagType>().Property(e => e.TagTypeId).HasConversion<byte>();
-        modelBuilder.Entity<Tag>().Property(e => e.TagTypeId).HasConversion<byte>();
+        modelBuilder.Entity<TagType>().Property(e => e.TagTypeId).HasConversion<short>();
+        modelBuilder.Entity<Tag>().Property(e => e.TagTypeId).HasConversion<short>();
 
-        modelBuilder.Entity<ReportStatus>().Property(e => e.ReportStatusId).HasConversion<byte>();
-        modelBuilder.Entity<Report>().Property(e => e.ReportStatusId).HasConversion<byte>();
+        modelBuilder.Entity<ReportStatus>().Property(e => e.ReportStatusId).HasConversion<short>();
+        modelBuilder.Entity<Report>().Property(e => e.ReportStatusId).HasConversion<short>();
         
-        modelBuilder.Entity<NotificationCategory>().Property(e => e.NotificationCategoryId).HasConversion<byte>();
-        modelBuilder.Entity<NotificationType>().Property(e => e.NotificationCategory).HasConversion<byte>();
-        modelBuilder.Entity<NotificationType>().Property(e => e.NotificationTypeId).HasConversion<byte>();
-        modelBuilder.Entity<Notification>().Property(e => e.NotificationTypeId).HasConversion<byte>();
-        modelBuilder.Entity<UserNotificationSetting>().Property(e => e.NotificationTypeId).HasConversion<byte>();
+        modelBuilder.Entity<NotificationCategory>().Property(e => e.NotificationCategoryId).HasConversion<short>();
+        modelBuilder.Entity<NotificationType>().Property(e => e.NotificationCategory).HasConversion<short>();
+        modelBuilder.Entity<NotificationType>().Property(e => e.NotificationTypeId).HasConversion<short>();
+        modelBuilder.Entity<Notification>().Property(e => e.NotificationTypeId).HasConversion<short>();
+        modelBuilder.Entity<UserNotificationSetting>().Property(e => e.NotificationTypeId).HasConversion<short>();
+        
+        
+        
+        #region Seed Data - Enum-Backed Lookup Tables
+
+        modelBuilder.Entity<NotificationCategory>().HasData(
+            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.SiteNews, CategoryName = "Site News", Description = "Announcements and updates from the site staff.", SortOrder = 1 },
+            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.YourFollows, CategoryName = "Followed Content", Description = "Updates from authors, stories, and recommendations you follow.", SortOrder = 2 },
+            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.YourStories, CategoryName = "Your Stories", Description = "Interactions with stories you have written.", SortOrder = 3 },
+            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.YourProfile, CategoryName = "Your Profile", Description = "Interactions with your user profile.", SortOrder = 4 },
+            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.YourRecommendations, CategoryName = "Your Recommendations", Description = "Updates on recommendations you have written.", SortOrder = 5 },
+            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.Collaborations, CategoryName = "Collaborations", Description = "Updates related to co-authoring and beta reading.", SortOrder = 6 },
+            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.Groups, CategoryName = "Groups", Description = "Notifications from groups you are a member of.", SortOrder = 7 },
+            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.Warnings, CategoryName = "Warnings", Description = "Alerts related to your account or content.", SortOrder = 8 },
+            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.YourReports, CategoryName = "Your Reports", Description = "Updates on reports you have submitted.", SortOrder = 9 }
+        );
+
+        modelBuilder.Entity<NotificationType>().HasData(
+            // Site News (Category 0)
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.SiteAnnouncement, NotificationKey = "SiteAnnouncement", DisplayName = "Site Announcement", Description = "A new announcement from site staff.", NotificationCategory = NotificationCategoryEnum.SiteNews },
+            
+            // Followed Content (Category 1)
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewChapterOnFollowedStory, NotificationKey = "NewChapterOnFollowedStory", DisplayName = "New Chapter", Description = "A story you follow has a new chapter.", NotificationCategory = NotificationCategoryEnum.YourFollows, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewStoryByFollowedUser, NotificationKey = "NewStoryByFollowedUser", DisplayName = "New Story", Description = "An author you follow posted a new story.", NotificationCategory = NotificationCategoryEnum.YourFollows, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewRecommendationByFollowedUser, NotificationKey = "NewRecommendationByFollowedUser", DisplayName = "New Recommendation", Description = "An author you follow posted a new recommendation.", NotificationCategory = NotificationCategoryEnum.YourFollows },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewBlogPostByFollowedUser, NotificationKey = "NewBlogPostByFollowedUser", DisplayName = "New Blog Post", Description = "An author you follow posted a new blog post.", NotificationCategory = NotificationCategoryEnum.YourFollows },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewBlogPostOnFollowedStory, NotificationKey = "NewBlogPostOnFollowedStory", DisplayName = "New Story Blog Post", Description = "A story you follow has a new blog post.", NotificationCategory = NotificationCategoryEnum.YourFollows },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewBlogPostOnFavoritedStory, NotificationKey = "NewBlogPostOnFavoritedStory", DisplayName = "Blog Post on Favorited Story", Description = "A story you favorited has a new blog post.", NotificationCategory = NotificationCategoryEnum.YourFollows },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewBlogPostOnReadItLaterStory, NotificationKey = "NewBlogPostOnReadItLaterStory", DisplayName = "Blog Post on 'Read Later' Story", Description = "A story on your 'Read Later' list has a new blog post.", NotificationCategory = NotificationCategoryEnum.YourFollows },
+
+            // Your Stories (Category 2)
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewStoryFavorite, NotificationKey = "NewStoryFavorite", DisplayName = "New Favorite", Description = "Someone favorited one of your stories.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewStoryFollower, NotificationKey = "NewStoryFollower", DisplayName = "New Follower", Description = "Someone followed one of your stories.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewRecommendationOnYourStory, NotificationKey = "NewRecommendationOnYourStory", DisplayName = "New Recommendation", Description = "Someone recommended one of your stories.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.HiddenGem, NotificationKey = "HiddenGem", DisplayName = "Hidden Gem", Description = "A recommendation on your story was designated as a 'Hidden Gem'.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewStoryComment, NotificationKey = "NewStoryComment", DisplayName = "New Story Comment", Description = "You received a new comment on one of your story chapters.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.YourStoryAddedToGroup, NotificationKey = "YourStoryAddedToGroup", DisplayName = "Story Added to Group", Description = "Your story was added to a group's collection.", NotificationCategory = NotificationCategoryEnum.YourStories },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.TagUpdateSuggestion, NotificationKey = "TagUpdateSuggestion", DisplayName = "Tag Update Suggestion", Description = "One of your OC tags matches a new fanon tag.", NotificationCategory = NotificationCategoryEnum.YourStories },
+
+            // Your Profile (Category 3)
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewFollowerOnYou, NotificationKey = "NewFollowerOnYou", DisplayName = "New Follower", Description = "A new user is following you.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewCommentOnYourProfile, NotificationKey = "NewCommentOnYourProfile", DisplayName = "New Profile Comment", Description = "You received a new comment on your profile.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewVouchOnYou, NotificationKey = "NewVouchOnYou", DisplayName = "New Vouch", Description = "A user you follow vouched for you.", NotificationCategory = NotificationCategoryEnum.YourProfile },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewCommentOnBlog, NotificationKey = "NewCommentOnBlog", DisplayName = "New Blog Comment", Description = "You received a new comment on your blog post.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.CommentReply, NotificationKey = "CommentReply", DisplayName = "New Reply", Description = "Someone replied to your comment.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = true },
+
+            // Your Recommendations (Category 4)
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.RecommendationApproved, NotificationKey = "RecommendationApproved", DisplayName = "Recommendation Approved", Description = "An author approved your recommendation.", NotificationCategory = NotificationCategoryEnum.YourRecommendations, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.RecommendationHighlighted, NotificationKey = "RecommendationHighlighted", DisplayName = "Recommendation Highlighted", Description = "An author highlighted your recommendation.", NotificationCategory = NotificationCategoryEnum.YourRecommendations, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.SuccessfulRec, NotificationKey = "SuccessfulRec", DisplayName = "Successful Recommendation", Description = "A user marked your recommendation as helpful.", NotificationCategory = NotificationCategoryEnum.YourRecommendations, DefaultEmailEnabled = true },
+
+            // Collaborations (Category 5)
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.StoryRelationshipRequested, NotificationKey = "StoryRelationshipRequested", DisplayName = "New Story Relationship Request", Description = "An author wants to link their story to yours.", NotificationCategory = NotificationCategoryEnum.Collaborations, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.StoryRelationshipApproved, NotificationKey = "StoryRelationshipApproved", DisplayName = "Story Relationship Approved", Description = "Your request to link to another story was approved.", NotificationCategory = NotificationCategoryEnum.Collaborations, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewStoryAcknowledgement, NotificationKey = "NewStoryAcknowledgement", DisplayName = "New Acknowledgment", Description = "You were acknowledged as a contributor on a new story.", NotificationCategory = NotificationCategoryEnum.Collaborations, DefaultEmailEnabled = true },
+
+            // Groups (Category 6)
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewGroupStory, NotificationKey = "NewGroupStory", DisplayName = "New Group Story", Description = "A new story was added to a group you're in.", NotificationCategory = NotificationCategoryEnum.Groups },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewGroupBlogPost, NotificationKey = "NewGroupBlogPost", DisplayName = "New Group Blog Post", Description = "A new blog post was made in a group you're in.", NotificationCategory = NotificationCategoryEnum.Groups },
+
+            // Moderation Warnings (Category 7)
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.ContentRemoved, NotificationKey = "ContentRemoved", DisplayName = "Content Removed", Description = "Your content was removed for a ToS violation.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.StoryRejected, NotificationKey = "StoryRejected", DisplayName = "Story Rejected", Description = "Your story submission was rejected.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.AccountWarning, NotificationKey = "AccountWarning", DisplayName = "Account Warning", Description = "You have received an official warning.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.AccountSuspended, NotificationKey = "AccountSuspended", DisplayName = "Account Suspended", Description = "Your account has been temporarily suspended.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.AccountBanned, NotificationKey = "AccountBanned", DisplayName = "Account Banned", Description = "Your account has been permanently banned.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true },
+
+            // Your Reports (Category 8)
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.ReportReceived, NotificationKey = "ReportReceived", DisplayName = "Report Received", Description = "Thank you, we have received your report.", NotificationCategory = NotificationCategoryEnum.YourReports },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.ReportResolved, NotificationKey = "ReportResolved", DisplayName = "Report Resolved (Action Taken)", Description = "Your report has been resolved and action was taken.", NotificationCategory = NotificationCategoryEnum.YourReports },
+            new NotificationType { NotificationTypeId = NotificationTypeEnum.ReportResolvedNoAction, NotificationKey = "ReportResolvedNoAction", DisplayName = "Report Resolved (No Action)", Description = "Your report was reviewed, but no action was deemed necessary.", NotificationCategory = NotificationCategoryEnum.YourReports }
+        );
+
+        modelBuilder.Entity<ReportStatus>().HasData(
+            new ReportStatus { ReportStatusId = ReportStatusEnum.Open, StatusName = "Open" },
+            new ReportStatus { ReportStatusId = ReportStatusEnum.UnderReview, StatusName = "Under Review" },
+            new ReportStatus { ReportStatusId = ReportStatusEnum.ResolvedNoAction, StatusName = "Resolved - No Action" },
+            new ReportStatus { ReportStatusId = ReportStatusEnum.ResolvedActionTaken, StatusName = "Resolved - Action Taken" }
+        );
+
+        modelBuilder.Entity<StoryStatus>().HasData(
+            new StoryStatus { StoryStatusId = StoryStatusEnum.Draft, StatusName = "Draft", Description = "Story is a work in progress and not visible to the public." },
+            new StoryStatus { StoryStatusId = StoryStatusEnum.PendingApproval, StatusName = "Pending Approval", Description = "Story has been submitted and is awaiting moderator approval." },
+            new StoryStatus { StoryStatusId = StoryStatusEnum.InProgress, StatusName = "In Progress", Description = "Story is approved, public, and actively being updated." },
+            new StoryStatus { StoryStatusId = StoryStatusEnum.Completed, StatusName = "Completed", Description = "The story is finished." },
+            new StoryStatus { StoryStatusId = StoryStatusEnum.OnHiatus, StatusName = "On Hiatus", Description = "The author is taking a break from updating." },
+            new StoryStatus { StoryStatusId = StoryStatusEnum.Cancelled, StatusName = "Cancelled", Description = "The story will not be continued." },
+            new StoryStatus { StoryStatusId = StoryStatusEnum.Rewriting, StatusName = "Rewriting", Description = "The story is undergoing major revisions." },
+            new StoryStatus { StoryStatusId = StoryStatusEnum.OpenBeta, StatusName = "Open Beta", Description = "Story is visible to beta readers for feedback." },
+            new StoryStatus { StoryStatusId = StoryStatusEnum.Rejected, StatusName = "Rejected", Description = "Story was submitted but did not pass moderation." }
+        );
+
+        modelBuilder.Entity<TagType>().HasData(
+            new TagType { TagTypeId = TagTypeEnum.Character, TypeName = "Character" },
+            new TagType { TagTypeId = TagTypeEnum.Setting, TypeName = "Setting" },
+            new TagType { TagTypeId = TagTypeEnum.Genre, TypeName = "Genre" },
+            new TagType { TagTypeId = TagTypeEnum.ContentWarning, TypeName = "Content Warning" },
+            new TagType { TagTypeId = TagTypeEnum.CrossoverFandom, TypeName = "Crossover Fandom" },
+            new TagType { TagTypeId = TagTypeEnum.Relationship, TypeName = "Relationship" }
+        );
+
+        #endregion
+
+        #region Seed Data - Non-Enum Lookup Tables
+        //Pure lookup tables for UI/description. No enum needed for application logic, but seed data needed
+
+        modelBuilder.Entity<AcknowledgmentRole>().HasData(
+            new AcknowledgmentRole { AcknowledgmentRoleId = 1, RoleName = "Beta Reader" },
+            new AcknowledgmentRole { AcknowledgmentRoleId = 2, RoleName = "Planner" },
+            new AcknowledgmentRole { AcknowledgmentRoleId = 3, RoleName = "Cover Artist" },
+            new AcknowledgmentRole { AcknowledgmentRoleId = 4, RoleName = "Editor" },
+            new AcknowledgmentRole { AcknowledgmentRoleId = 5, RoleName = "Inspiration" }
+        );
+
+        modelBuilder.Entity<ApplicationRole>().HasData(
+            new ApplicationRole { Id = (int)SiteRoles.User, Name = "User", NormalizedName = "USER" },
+            new ApplicationRole { Id = (int)SiteRoles.Moderator, Name = "Moderator", NormalizedName = "MODERATOR" },
+            new ApplicationRole { Id = (int)SiteRoles.Admin, Name = "Admin", NormalizedName = "ADMIN" }
+        );
+
+        modelBuilder.Entity<Badge>().HasData(
+            new Badge { BadgeKey = SiteBadges.BetaReader, DisplayName = "Beta Reader", Description = "Acknowledged as a Beta Reader on stories.", IconBaseUrl = "icons/badges/beta.png", SortOrder = 1 },
+            new Badge { BadgeKey = SiteBadges.Patron, DisplayName = "Patron", Description = "Supported the site through Community Spotlight.", IconBaseUrl = "icons/badges/patron.png", SortOrder = 2 },
+            new Badge { BadgeKey = SiteBadges.Recommender, DisplayName = "Recommender", Description = "Has many successful recs", IconBaseUrl = "icons/badges/recommender.png", SortOrder = 3 },
+            new Badge { BadgeKey = SiteBadges.Architect, DisplayName = "Architect", Description = "Helped develop a site feature", IconBaseUrl = "icons/badges/architect.png", SortOrder = 4 },
+            new Badge { BadgeKey = SiteBadges.Artist, DisplayName = "Artist", Description = "Made cover art for others", IconBaseUrl = "icons/badges/artist.png", SortOrder = 5 }
+            // ... add other badges
+        );
+        
+        // Note: DefaultSearchSetting requires SearchMode and UserInteractionFilter to be seeded first.
+        modelBuilder.Entity<DefaultSearchSetting>().HasData(
+            new DefaultSearchSetting { SearchModeKey = "TreeSearch", InteractionFilterKey = "Ignored", IsEnabled = true },
+            new DefaultSearchSetting { SearchModeKey = "TreeSearch", InteractionFilterKey = "Completed", IsEnabled = true },
+            new DefaultSearchSetting { SearchModeKey = "TreeSearch", InteractionFilterKey = "ReadItLater", IsEnabled = false },
+            new DefaultSearchSetting { SearchModeKey = "RandomSearch", InteractionFilterKey = "Ignored", IsEnabled = true },
+            new DefaultSearchSetting { SearchModeKey = "RandomSearch", InteractionFilterKey = "Completed", IsEnabled = false }
+            // ... etc. for all combinations
+        );
+
+        modelBuilder.Entity<RecommendationStatus>().HasData(
+            new RecommendationStatus { StatusId = 1, StatusName = "Pending Approval", Description = "Submitted by user, awaiting author review." },
+            new RecommendationStatus { StatusId = 2, StatusName = "Approved", Description = "Publicly visible." },
+            new RecommendationStatus { StatusId = 3, StatusName = "Rejected", Description = "Rejected by author, not visible." },
+            new RecommendationStatus { StatusId = 4, StatusName = "Under Review", Description = "An approved recommendation that was reported and is under review." }
+        );
+
+        modelBuilder.Entity<ReportReason>().HasData(
+            new ReportReason { ReportReasonId = 1, ReasonName = "Other", Description = "A reason not covered by other categories." },
+            new ReportReason { ReportReasonId = 2, ReasonName = "Spam", Description = "Unsolicited advertising or repeated, low-effort content." },
+            new ReportReason { ReportReasonId = 3, ReasonName = "Hate Speech", Description = "Content that attacks a person or group based on race, ethnicity, religion, etc." },
+            new ReportReason { ReportReasonId = 4, ReasonName = "Harassment", Description = "Targeted abuse, bullying, or intimidation of a user." },
+            new ReportReason { ReportReasonId = 5, ReasonName = "Illegal Content", Description = "Content violating laws, such as child pornography or piracy." },
+            new ReportReason { ReportReasonId = 6, ReasonName = "Plagiarism", Description = "Posting content that is not your own without attribution." }
+        );
+
+        modelBuilder.Entity<SearchMode>().HasData(
+            new SearchMode { SearchModeKey = SiteSearchModes.DefaultSearch, Name = "Default Search", Description = "The regular search mode with tags and search result orders." },
+            new SearchMode { SearchModeKey = SiteSearchModes.TreeSearch, Name = "Tree Search", Description = "Discover stories through connections: favorites, recommendations, and author follows." },
+            new SearchMode { SearchModeKey = SiteSearchModes.RandomSearch, Name = "Random Search", Description = "Find a random story based on your filters." },
+            new SearchMode { SearchModeKey = SiteSearchModes.AlsoFavorited, Name = "Also Favorited", Description = "Find stories favorited by users who also favorited your selection." }
+        );
+
+        modelBuilder.Entity<StoryRelationshipType>().HasData(
+            new StoryRelationshipType { RelationshipTypeId = 1, TypeName = "Inspired By" },
+            new StoryRelationshipType { RelationshipTypeId = 2, TypeName = "Prequel" },
+            new StoryRelationshipType { RelationshipTypeId = 3, TypeName = "Sequel" },
+            new StoryRelationshipType { RelationshipTypeId = 4, TypeName = "Companion Piece" }
+        );
+
+        modelBuilder.Entity<Theme>().HasData(
+            new Theme { ThemeId = 1, Name = "Pokémon", Description = "The default Pokémon theme!" }
+        );
+        
+        modelBuilder.Entity<UserInteractionFilter>().HasData(
+            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.Ignored, Name = "Ignored", Description = "Exclude stories you have marked as 'Ignored'." },
+            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.Completed, Name = "Completed", Description = "Exclude stories you have already finished." },
+            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.InProgress, Name = "In Progress", Description = "Exclude stories on your 'In Progress' list." },
+            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.ReadItLater, Name = "Read It Later", Description = "Exclude stories on your 'Read It Later' list." },
+            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.Favorited, Name = "Favorited", Description = "Exclude stories on your 'Favorite' list." },
+            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.HiddenFavorited, Name = "Hidden Favorite", Description = "Exclude stories on your 'Hidden Favorite' list." },
+            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.Followed, Name = "Followed", Description = "Exclude stories you are 'Following'." }
+        );
+
+        #endregion
         #endregion
         
         #region Foreign Keys and Delete Policies
@@ -755,6 +946,12 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.Property(e => e.DateCreated)
                 .HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
+        
+        modelBuilder.Entity<BasePoll>(entity =>
+        {
+            entity.Property(e => e.DateOpened)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
 
         modelBuilder.Entity<BetaReader>(entity =>
         {
@@ -999,6 +1196,20 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         {
             // A story cannot have two chapters with the same number
             entity.HasIndex(e => new { e.StoryId, e.ChapterNumber }).IsUnique();
+            
+            // 1. Define the 1-to-many for "all versions"
+            entity.HasMany(c => c.ChapterContents)
+                .WithOne(cc => cc.Chapter)
+                .HasForeignKey(cc => cc.ChapterId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // 2. Define the separate 1-to-1 for "primary version"
+            // This tells EF Core that PrimaryContentId is a special
+            // required link to one of the ChapterContents.
+            entity.HasOne(c => c.PrimaryContent)
+                .WithMany() // No inverse navigation property
+                .HasForeignKey(c => c.PrimaryContentId)
+                .OnDelete(DeleteBehavior.Restrict); // Don't let a "primary" version be deleted
             // Future indexes for querying...
         });
 
@@ -1010,6 +1221,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         modelBuilder.Entity<ChapterContent>(entity =>
         {
+            //sort order can't be duplicated for a chapter
+            entity.HasIndex(e => new { e.ChapterId, e.SortOrder }).IsUnique();
             // Future indexes for querying (e.g., by AuthorId)...
         });
 
@@ -1190,6 +1403,46 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasIndex(e => e.StatusName).IsUnique();
             // Future indexes for querying...
         });
+        
+        // ... (after ReportStatus)
+
+        modelBuilder.Entity<SavedTagSelection>(entity =>
+        {
+            // A user cannot have two selections with the same name
+            entity.HasIndex(e => new { e.UserId, e.Nickname }).IsUnique();
+
+            // When a User is deleted, delete their saved selections
+            entity.HasOne(e => e.User)
+                .WithMany() // No nav property on User
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // When a selection is deleted, delete all its tag entries
+            entity.HasMany(e => e.Entries)
+                .WithOne(e => e.SavedTagSelection)
+                .HasForeignKey(e => e.SavedTagSelectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Set default timestamp for creation
+            entity.Property(e => e.DateCreated)
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
+                  
+            // Future indexes for querying (e.g., by is_public, user_id)...
+        });
+
+        modelBuilder.Entity<SavedTagSelectionEntry>(entity =>
+        {
+            // A selection cannot have the same tag twice
+            entity.HasIndex(e => new { e.SavedTagSelectionId, e.TagId }).IsUnique();
+
+            // Don't allow a Tag to be deleted if it's in a saved selection
+            entity.HasOne(e => e.Tag)
+                .WithMany() // No nav property on Tag
+                .HasForeignKey(e => e.TagId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Future indexes for querying (e.g., by tag_id)...
+        });
 
         modelBuilder.Entity<SearchMode>(entity =>
         {
@@ -1255,6 +1508,21 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasForeignKey<StoryListing>(p => p.StoryId)
                 .OnDelete(DeleteBehavior.Cascade); // Deleting a Story deletes its listing data
 
+            // 1. Configure the SearchVector as a "generated" column.
+            // This tells PostgreSQL to automatically build the vector from
+            // the title and description, handling tokenization for you.
+            entity.Property(e => e.SearchVector)
+                .HasComputedColumnSql(
+                    // Combines title and description, using 'english' rules for tokenizing
+                    // and `coalesce` to handle nulls safely.
+                    "to_tsvector('english', coalesce(\"story_title\", '') || ' ' || coalesce(\"short_description\", ''))", 
+                    stored: true); // 'stored: true' is required so we can index it.
+
+            // 2. Create a GIN index on the new vector column.
+            // This is the "magic" that makes FTS incredibly fast.
+            entity.HasIndex(e => e.SearchVector)
+                .HasMethod("gin")
+                .HasDatabaseName("ix_story_listing_search_vector");
             // Future indexes for querying...
         });
 

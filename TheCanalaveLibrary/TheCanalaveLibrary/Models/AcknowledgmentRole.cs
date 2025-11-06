@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class AcknowledgmentRole
 {
-    public byte AcknowledgmentRoleId { get; set; }
+    public short AcknowledgmentRoleId { get; set; }
 
     [Required]
     [MaxLength(256)]

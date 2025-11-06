@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using NpgsqlTypes;
 
 namespace TheCanalaveLibrary.Models;
 
@@ -25,6 +26,13 @@ public class StoryListing
 
     [MaxLength(512)]
     public string? CoverArtRelativeUrl { get; set; }
+    
+    // --- 2. Add the new FTS column ---
+    /// <summary>
+    /// The auto-generated search vector for Full-Text Search.
+    /// This column is populated and indexed by the database.
+    /// </summary>
+    public NpgsqlTsVector SearchVector { get; set; } = null!;
 
     // --- Navigation Property ---
     public virtual Story Story { get; set; } = null!;

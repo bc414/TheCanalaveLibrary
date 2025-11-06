@@ -17,6 +17,8 @@ public partial class Chapter
     public long PrimaryContentId { get; set; }
 
     public bool IsPublished { get; set; }
+    
+    public int VersionCount { get; set; }
 
     public virtual ICollection<ChapterComment> ChapterComments { get; set; } = new List<ChapterComment>();
 

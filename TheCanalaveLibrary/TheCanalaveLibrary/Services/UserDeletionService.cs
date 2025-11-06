@@ -9,11 +9,11 @@ namespace TheCanalaveLibrary.Services;
 using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Models;
 
-public class UserService
+public class UserDeletionService
 {
     private readonly ApplicationDbContext _context;
 
-    public UserService(ApplicationDbContext context)
+    public UserDeletionService(ApplicationDbContext context)
     {
         _context = context;
     }

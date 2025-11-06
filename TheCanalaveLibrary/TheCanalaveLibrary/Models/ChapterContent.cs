@@ -25,6 +25,8 @@ public partial class ChapterContent
     public int WordCount { get; set; }
 
     public int ViewCount { get; set; }
+    
+    public int SortOrder { get; set; }
 
     public Rating Rating { get; set; }
 
@@ -35,6 +37,4 @@ public partial class ChapterContent
     public virtual User? Author { get; set; }
 
     public virtual Chapter Chapter { get; set; } = null!;
-
-    public virtual ICollection<Chapter> Chapters { get; set; } = new List<Chapter>();
 }

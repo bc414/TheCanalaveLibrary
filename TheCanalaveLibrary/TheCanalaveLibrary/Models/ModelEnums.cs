@@ -98,14 +98,15 @@ public enum ReportStatusEnum : short
 
 public enum NotificationCategoryEnum : short
 {
-    SiteNews,
-    YourFollows,
-    YourStories,
-    YourProfile,
-    YourRecommendations,
-    Collaborations,
-    Groups,
-    Moderation,
+    SiteNews = 0,
+    YourFollows = 1,
+    YourStories = 2,
+    YourProfile = 3,
+    YourRecommendations = 4,
+    Collaborations = 5,
+    Groups = 6,
+    Warnings = 7,
+    YourReports = 8
 }
 
 public enum NotificationTypeEnum : short
@@ -121,38 +122,55 @@ public enum NotificationTypeEnum : short
     NewBlogPostOnFavoritedStory = 15,
     NewBlogPostOnReadItLaterStory = 16,
     
-    //Notifications for interactions on you
-    NewFollowerOnYou = 23,
-    NewCommentOnYourProfile,
-    NewVouchOnYou,
-    NewCommentOnBlog,
-    
     //Notifications for interactions on your stories
-    NewReview = 20,
-    NewStoryFavorite = 21,
-    NewStoryFollower = 22,
-    NewRecommendationOnYourStory = 24,
-    HiddenGem, //A recommendation on your story was designated as a hidden gem
-    NewStoryComment = 25,
-    NewBlogPostComment = 26,
+    NewStoryFavorite = 20,
+    NewStoryFollower = 21,
+    NewRecommendationOnYourStory = 22,
+    HiddenGem = 23, //A recommendation on your story was designated as a hidden gem
+    NewStoryComment = 24,
+    YourStoryAddedToGroup = 25,
+    TagUpdateSuggestion = 26, //One of your OC tag names matches a newly fanonized tag. Do you want to update it?
+    
+    //Notifications for interactions on you
+    NewFollowerOnYou = 30,
+    NewCommentOnYourProfile = 31,
+    NewVouchOnYou = 32,
+    NewCommentOnBlog = 33,
+    CommentReply = 34,
     
     //Notifications about your recommendations
-    RecommendationApproved,
-    RecommendationSpotlighted,
-    SuccessfulRec,
+    RecommendationApproved = 40,
+    RecommendationHighlighted = 41,
+    SuccessfulRec = 42,
     
-    //Story relationships
-    StoryRelationshipRequested, //someone else is asking to cite your story
-    StoryRelationshipApproved, //your request to cite someone else's story was approved by them
-    NewStoryAcknowledgement, //you were acknowleged for helping with a story
+    //Collaborations
+    StoryRelationshipRequested = 50, //someone else is asking to cite your story
+    StoryRelationshipApproved = 51, //your request to cite someone else's story was approved by them
+    NewStoryAcknowledgement = 52, //you were acknowleged for helping with a story
     
     //Groups
-    NewGroupStory,
-    NewGroupBlogPost,
+    NewGroupStory = 60,
+    NewGroupBlogPost = 61,
     
-    //Fanon
-    TagUpdateSuggestion, //One of your OC tag names matches a newly fanonized tag. Do you want to update it?
-    
+    //Moderation
+    //Notifications for the user *receiving* a moderation action
+    ContentRemoved = 70, // Your story/comment/etc. was removed for a ToS violation
+    StoryRejected = 71,  // Your story submission (from 'PendingApproval') was rejected
+    AccountWarning = 72, // You have received an official warning from a moderator
+    AccountSuspended = 73, // Your account has been temporarily suspended
+    AccountBanned = 74,    // Your account has been permanently banned
+
+    //Notifications for the user who *sent* a report
+    ReportReceived = 80, // "Thank you, we have received your report."
+    ReportResolved = 81,  // "Your report about '...' has been resolved."
+    ReportResolvedNoAction = 82,  // "Your report about '...' has been resolved."
+}
+
+public enum SiteRoles : int
+{
+    User = 0,
+    Moderator = 1,
+    Admin = 2,
 }
 
 // ... (Keep all existing enums from Part 1 and Part 2) ...
