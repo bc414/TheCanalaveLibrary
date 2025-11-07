@@ -9,7 +9,7 @@ public partial class GroupMember
 
     public int GroupId { get; set; }
 
-    public byte Role { get; set; }
+    public short Role { get; set; }
 
     public bool NotifyForNewStory { get; set; } = true;
     public bool NotifyForNewBlogPost { get; set; } = false;

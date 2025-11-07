@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class CustomList
 {
-    public int ListId { get; set; }
+    public int CustomListId { get; set; }
 
     public int UserId { get; set; }
 

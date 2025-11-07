@@ -9,6 +9,7 @@ namespace TheCanalaveLibrary.Models;
 /// </summary>
 public abstract class BaseBlogPost
 {
+    [Key]
     public int BlogPostId { get; set; }
     public int? AuthorId { get; set; }
     

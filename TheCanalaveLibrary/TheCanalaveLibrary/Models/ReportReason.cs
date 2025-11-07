@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class ReportReason
 {
-    public byte ReportReasonId { get; set; }
+    public short ReportReasonId { get; set; }
 
     [Required]
     [MaxLength(128)]

@@ -6,6 +6,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class PrivateMessage
 {
+    [Key]
     public long MessageId { get; set; }
 
     public int ConversationId { get; set; }

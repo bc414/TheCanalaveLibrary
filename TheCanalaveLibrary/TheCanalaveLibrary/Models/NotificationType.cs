@@ -6,9 +6,9 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class NotificationType
 {
+    [Key]
     public NotificationTypeEnum NotificationTypeId { get; set; }
 
-    [Key]
     [Required]
     [MaxLength(128)]
     public string NotificationKey { get; set; } = null!;

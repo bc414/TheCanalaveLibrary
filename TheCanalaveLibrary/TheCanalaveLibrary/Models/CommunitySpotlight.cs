@@ -6,6 +6,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class CommunitySpotlight
 {
+    [Key]
     public int SpotlightId { get; set; }
 
     public int StoryId { get; set; }

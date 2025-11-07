@@ -22,7 +22,7 @@ public partial class Group
 
     public DateTime DateCreated { get; set; }
 
-    public virtual ICollection<BaseBlogPost> BlogPosts { get; set; } = new List<BaseBlogPost>();
+    public virtual ICollection<GroupBlogPost> GroupBlogPosts { get; set; } = new List<GroupBlogPost>();
 
     public virtual User? Creator { get; set; }
 

@@ -14,7 +14,7 @@ public partial class Report
 
     public int ReportedEntityId { get; set; }
 
-    public byte ReportReasonId { get; set; }
+    public short ReportReasonId { get; set; }
 
     [MaxLength(2048)]
     public string? Notes { get; set; }

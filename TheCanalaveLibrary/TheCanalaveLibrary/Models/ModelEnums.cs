@@ -168,9 +168,9 @@ public enum NotificationTypeEnum : short
 
 public enum SiteRoles : int
 {
-    User = 0,
-    Moderator = 1,
-    Admin = 2,
+    User = 1,
+    Moderator = 2,
+    Admin = 3,
 }
 
 // ... (Keep all existing enums from Part 1 and Part 2) ...

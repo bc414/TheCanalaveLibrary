@@ -6,6 +6,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class StoryImport
 {
+    [Key]
     public int ImportId { get; set; }
 
     public int StoryId { get; set; }
@@ -18,7 +19,7 @@ public partial class StoryImport
     [MaxLength(2048)]
     public string SourceUrl { get; set; } = null!;
 
-    public byte VerificationStatus { get; set; }
+    public short VerificationStatus { get; set; }
 
     public DateTime DateImported { get; set; }
 

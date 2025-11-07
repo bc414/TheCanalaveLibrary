@@ -6,7 +6,8 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class StoryRelationshipType
 {
-    public byte RelationshipTypeId { get; set; }
+    [Key]
+    public short RelationshipTypeId { get; set; }
 
     [Required]
     [MaxLength(256)]

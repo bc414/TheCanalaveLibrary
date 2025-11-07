@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class RecommendationStatus
 {
-    public byte StatusId { get; set; }
+    public short RecommendationStatusId { get; set; }
 
     [Required]
     [MaxLength(50)]

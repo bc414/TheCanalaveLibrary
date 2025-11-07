@@ -35,7 +35,7 @@ public partial class Story
     public virtual User? Author { get; set; }
     public virtual StoryStatus StoryStatus { get; set; } = null!;
     public virtual ICollection<BetaReader> BetaReaders { get; set; } = new List<BetaReader>();
-    public virtual ICollection<BaseBlogPost> BlogPosts { get; set; } = new List<BaseBlogPost>();
+    public virtual ICollection<ProfileBlogPost> ProfileBlogPosts { get; set; } = new List<ProfileBlogPost>();
     public virtual ICollection<Chapter> Chapters { get; set; } = new List<Chapter>();
     public virtual ICollection<CoAuthor> CoAuthors { get; set; } = new List<CoAuthor>();
     public virtual ICollection<CommunitySpotlight> CommunitySpotlights { get; set; } = new List<CommunitySpotlight>();

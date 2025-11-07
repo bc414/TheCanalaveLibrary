@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class FeatureContribution
 {
-    public int ContributionId { get; set; }
+    public int FeatureContributionId { get; set; }
 
     public int? UserId { get; set; }
 

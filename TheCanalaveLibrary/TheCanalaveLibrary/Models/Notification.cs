@@ -9,7 +9,7 @@ public partial class Notification
 
     public int RecipientUserId { get; set; }
 
-    public byte NotificationTypeId { get; set; }
+    public NotificationTypeEnum NotificationTypeId { get; set; }
 
     public int? SourceUserId { get; set; }
 

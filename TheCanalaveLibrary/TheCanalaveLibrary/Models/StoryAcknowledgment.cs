@@ -9,7 +9,7 @@ public partial class StoryAcknowledgment
 
     public int AcknowledgedUserId { get; set; }
 
-    public byte AcknowledgmentRoleId { get; set; }
+    public short AcknowledgmentRoleId { get; set; }
 
     public DateTime DateAcknowledged { get; set; }
 

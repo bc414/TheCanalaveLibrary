@@ -12,7 +12,7 @@ public partial class StoryRelationship
 
     public int TargetStoryId { get; set; }
 
-    public byte RelationshipTypeId { get; set; }
+    public short RelationshipTypeId { get; set; }
 
     public StoryRelationshipStatus StatusId { get; set; }
 

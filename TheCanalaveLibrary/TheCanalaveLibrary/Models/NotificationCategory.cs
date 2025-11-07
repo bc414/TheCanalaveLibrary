@@ -5,7 +5,7 @@ namespace TheCanalaveLibrary.Models;
 public class NotificationCategory
 {
     [Key]
-    public byte NotificationCategoryId { get; set; }
+    public NotificationCategoryEnum NotificationCategoryId { get; set; }
 
     [Required]
     [MaxLength(100)]

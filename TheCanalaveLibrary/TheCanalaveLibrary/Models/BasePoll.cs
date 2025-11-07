@@ -4,6 +4,7 @@ namespace TheCanalaveLibrary.Models;
 
 public abstract class BasePoll
 {
+    [Key]
     public int PollId { get; set; }
     
     public int OwnerId { get; set; }

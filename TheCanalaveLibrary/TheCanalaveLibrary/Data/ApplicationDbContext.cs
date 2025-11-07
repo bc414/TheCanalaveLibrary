@@ -183,99 +183,99 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         #region Seed Data - Enum-Backed Lookup Tables
 
         modelBuilder.Entity<NotificationCategory>().HasData(
-            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.SiteNews, CategoryName = "Site News", Description = "Announcements and updates from the site staff.", SortOrder = 1 },
-            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.YourFollows, CategoryName = "Followed Content", Description = "Updates from authors, stories, and recommendations you follow.", SortOrder = 2 },
-            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.YourStories, CategoryName = "Your Stories", Description = "Interactions with stories you have written.", SortOrder = 3 },
-            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.YourProfile, CategoryName = "Your Profile", Description = "Interactions with your user profile.", SortOrder = 4 },
-            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.YourRecommendations, CategoryName = "Your Recommendations", Description = "Updates on recommendations you have written.", SortOrder = 5 },
-            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.Collaborations, CategoryName = "Collaborations", Description = "Updates related to co-authoring and beta reading.", SortOrder = 6 },
-            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.Groups, CategoryName = "Groups", Description = "Notifications from groups you are a member of.", SortOrder = 7 },
-            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.Warnings, CategoryName = "Warnings", Description = "Alerts related to your account or content.", SortOrder = 8 },
-            new NotificationCategory { NotificationCategoryId = (byte)NotificationCategoryEnum.YourReports, CategoryName = "Your Reports", Description = "Updates on reports you have submitted.", SortOrder = 9 }
+            new { NotificationCategoryId = NotificationCategoryEnum.SiteNews, CategoryName = "Site News", Description = "Announcements and updates from the site staff.", SortOrder = 1 },
+            new { NotificationCategoryId = NotificationCategoryEnum.YourFollows, CategoryName = "Followed Content", Description = "Updates from authors, stories, and recommendations you follow.", SortOrder = 2 },
+            new { NotificationCategoryId = NotificationCategoryEnum.YourStories, CategoryName = "Your Stories", Description = "Interactions with stories you have written.", SortOrder = 3 },
+            new { NotificationCategoryId = NotificationCategoryEnum.YourProfile, CategoryName = "Your Profile", Description = "Interactions with your user profile.", SortOrder = 4 },
+            new { NotificationCategoryId = NotificationCategoryEnum.YourRecommendations, CategoryName = "Your Recommendations", Description = "Updates on recommendations you have written.", SortOrder = 5 },
+            new { NotificationCategoryId = NotificationCategoryEnum.Collaborations, CategoryName = "Collaborations", Description = "Updates related to co-authoring and beta reading.", SortOrder = 6 },
+            new { NotificationCategoryId = NotificationCategoryEnum.Groups, CategoryName = "Groups", Description = "Notifications from groups you are a member of.", SortOrder = 7 },
+            new { NotificationCategoryId = NotificationCategoryEnum.Warnings, CategoryName = "Warnings", Description = "Alerts related to your account or content.", SortOrder = 8 },
+            new { NotificationCategoryId = NotificationCategoryEnum.YourReports, CategoryName = "Your Reports", Description = "Updates on reports you have submitted.", SortOrder = 9 }
         );
 
         modelBuilder.Entity<NotificationType>().HasData(
             // Site News (Category 0)
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.SiteAnnouncement, NotificationKey = "SiteAnnouncement", DisplayName = "Site Announcement", Description = "A new announcement from site staff.", NotificationCategory = NotificationCategoryEnum.SiteNews },
+            new { NotificationTypeId = NotificationTypeEnum.SiteAnnouncement, NotificationKey = "SiteAnnouncement", DisplayName = "Site Announcement", Description = "A new announcement from site staff.", NotificationCategory = NotificationCategoryEnum.SiteNews, DefaultEmailEnabled = false, DefaultCollapsed = false },
             
             // Followed Content (Category 1)
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewChapterOnFollowedStory, NotificationKey = "NewChapterOnFollowedStory", DisplayName = "New Chapter", Description = "A story you follow has a new chapter.", NotificationCategory = NotificationCategoryEnum.YourFollows, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewStoryByFollowedUser, NotificationKey = "NewStoryByFollowedUser", DisplayName = "New Story", Description = "An author you follow posted a new story.", NotificationCategory = NotificationCategoryEnum.YourFollows, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewRecommendationByFollowedUser, NotificationKey = "NewRecommendationByFollowedUser", DisplayName = "New Recommendation", Description = "An author you follow posted a new recommendation.", NotificationCategory = NotificationCategoryEnum.YourFollows },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewBlogPostByFollowedUser, NotificationKey = "NewBlogPostByFollowedUser", DisplayName = "New Blog Post", Description = "An author you follow posted a new blog post.", NotificationCategory = NotificationCategoryEnum.YourFollows },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewBlogPostOnFollowedStory, NotificationKey = "NewBlogPostOnFollowedStory", DisplayName = "New Story Blog Post", Description = "A story you follow has a new blog post.", NotificationCategory = NotificationCategoryEnum.YourFollows },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewBlogPostOnFavoritedStory, NotificationKey = "NewBlogPostOnFavoritedStory", DisplayName = "Blog Post on Favorited Story", Description = "A story you favorited has a new blog post.", NotificationCategory = NotificationCategoryEnum.YourFollows },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewBlogPostOnReadItLaterStory, NotificationKey = "NewBlogPostOnReadItLaterStory", DisplayName = "Blog Post on 'Read Later' Story", Description = "A story on your 'Read Later' list has a new blog post.", NotificationCategory = NotificationCategoryEnum.YourFollows },
+            new { NotificationTypeId = NotificationTypeEnum.NewChapterOnFollowedStory, NotificationKey = "NewChapterOnFollowedStory", DisplayName = "New Chapter", Description = "A story you follow has a new chapter.", NotificationCategory = NotificationCategoryEnum.YourFollows, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewStoryByFollowedUser, NotificationKey = "NewStoryByFollowedUser", DisplayName = "New Story", Description = "An author you follow posted a new story.", NotificationCategory = NotificationCategoryEnum.YourFollows, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewRecommendationByFollowedUser, NotificationKey = "NewRecommendationByFollowedUser", DisplayName = "New Recommendation by Followed User", Description = "An author you follow posted a new recommendation.", NotificationCategory = NotificationCategoryEnum.YourFollows, DefaultEmailEnabled = false, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewBlogPostByFollowedUser, NotificationKey = "NewBlogPostByFollowedUser", DisplayName = "New Blog Post", Description = "An author you follow posted a new blog post.", NotificationCategory = NotificationCategoryEnum.YourFollows, DefaultEmailEnabled = false, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewBlogPostOnFollowedStory, NotificationKey = "NewBlogPostOnFollowedStory", DisplayName = "New Story Blog Post", Description = "A story you follow has a new blog post.", NotificationCategory = NotificationCategoryEnum.YourFollows, DefaultEmailEnabled = false, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewBlogPostOnFavoritedStory, NotificationKey = "NewBlogPostOnFavoritedStory", DisplayName = "Blog Post on Favorited Story", Description = "A story you favorited has a new blog post.", NotificationCategory = NotificationCategoryEnum.YourFollows, DefaultEmailEnabled = false, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewBlogPostOnReadItLaterStory, NotificationKey = "NewBlogPostOnReadItLaterStory", DisplayName = "Blog Post on 'Read Later' Story", Description = "A story on your 'Read Later' list has a new blog post.", NotificationCategory = NotificationCategoryEnum.YourFollows, DefaultEmailEnabled = false, DefaultCollapsed = false },
 
             // Your Stories (Category 2)
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewStoryFavorite, NotificationKey = "NewStoryFavorite", DisplayName = "New Favorite", Description = "Someone favorited one of your stories.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewStoryFollower, NotificationKey = "NewStoryFollower", DisplayName = "New Follower", Description = "Someone followed one of your stories.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewRecommendationOnYourStory, NotificationKey = "NewRecommendationOnYourStory", DisplayName = "New Recommendation", Description = "Someone recommended one of your stories.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.HiddenGem, NotificationKey = "HiddenGem", DisplayName = "Hidden Gem", Description = "A recommendation on your story was designated as a 'Hidden Gem'.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewStoryComment, NotificationKey = "NewStoryComment", DisplayName = "New Story Comment", Description = "You received a new comment on one of your story chapters.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.YourStoryAddedToGroup, NotificationKey = "YourStoryAddedToGroup", DisplayName = "Story Added to Group", Description = "Your story was added to a group's collection.", NotificationCategory = NotificationCategoryEnum.YourStories },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.TagUpdateSuggestion, NotificationKey = "TagUpdateSuggestion", DisplayName = "Tag Update Suggestion", Description = "One of your OC tags matches a new fanon tag.", NotificationCategory = NotificationCategoryEnum.YourStories },
+            new { NotificationTypeId = NotificationTypeEnum.NewStoryFavorite, NotificationKey = "NewStoryFavorite", DisplayName = "New Favorite", Description = "Someone favorited one of your stories.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewStoryFollower, NotificationKey = "NewStoryFollower", DisplayName = "New Story Follower", Description = "Someone followed one of your stories.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewRecommendationOnYourStory, NotificationKey = "NewRecommendationOnYourStory", DisplayName = "New Recommendation on Your Story", Description = "Someone recommended one of your stories.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.HiddenGem, NotificationKey = "HiddenGem", DisplayName = "Hidden Gem", Description = "A recommendation on your story was designated as a 'Hidden Gem'.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewStoryComment, NotificationKey = "NewStoryComment", DisplayName = "New Story Comment", Description = "You received a new comment on one of your story chapters.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.YourStoryAddedToGroup, NotificationKey = "YourStoryAddedToGroup", DisplayName = "Story Added to Group", Description = "Your story was added to a group's collection.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = false, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.TagUpdateSuggestion, NotificationKey = "TagUpdateSuggestion", DisplayName = "Tag Update Suggestion", Description = "One of your OC tags matches a new fanon tag.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = false, DefaultCollapsed = false },
 
             // Your Profile (Category 3)
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewFollowerOnYou, NotificationKey = "NewFollowerOnYou", DisplayName = "New Follower", Description = "A new user is following you.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewCommentOnYourProfile, NotificationKey = "NewCommentOnYourProfile", DisplayName = "New Profile Comment", Description = "You received a new comment on your profile.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewVouchOnYou, NotificationKey = "NewVouchOnYou", DisplayName = "New Vouch", Description = "A user you follow vouched for you.", NotificationCategory = NotificationCategoryEnum.YourProfile },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewCommentOnBlog, NotificationKey = "NewCommentOnBlog", DisplayName = "New Blog Comment", Description = "You received a new comment on your blog post.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.CommentReply, NotificationKey = "CommentReply", DisplayName = "New Reply", Description = "Someone replied to your comment.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = true },
+            new { NotificationTypeId = NotificationTypeEnum.NewFollowerOnYou, NotificationKey = "NewFollowerOnYou", DisplayName = "New Profile Follower", Description = "A new user is following you.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewCommentOnYourProfile, NotificationKey = "NewCommentOnYourProfile", DisplayName = "New Profile Comment", Description = "You received a new comment on your profile.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewVouchOnYou, NotificationKey = "NewVouchOnYou", DisplayName = "New Vouch", Description = "A user you follow vouched for you.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = false, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewCommentOnBlog, NotificationKey = "NewCommentOnBlog", DisplayName = "New Blog Comment", Description = "You received a new comment on your blog post.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.CommentReply, NotificationKey = "CommentReply", DisplayName = "New Reply", Description = "Someone replied to your comment.", NotificationCategory = NotificationCategoryEnum.YourProfile, DefaultEmailEnabled = true, DefaultCollapsed = false },
 
             // Your Recommendations (Category 4)
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.RecommendationApproved, NotificationKey = "RecommendationApproved", DisplayName = "Recommendation Approved", Description = "An author approved your recommendation.", NotificationCategory = NotificationCategoryEnum.YourRecommendations, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.RecommendationHighlighted, NotificationKey = "RecommendationHighlighted", DisplayName = "Recommendation Highlighted", Description = "An author highlighted your recommendation.", NotificationCategory = NotificationCategoryEnum.YourRecommendations, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.SuccessfulRec, NotificationKey = "SuccessfulRec", DisplayName = "Successful Recommendation", Description = "A user marked your recommendation as helpful.", NotificationCategory = NotificationCategoryEnum.YourRecommendations, DefaultEmailEnabled = true },
+            new { NotificationTypeId = NotificationTypeEnum.RecommendationApproved, NotificationKey = "RecommendationApproved", DisplayName = "Recommendation Approved", Description = "An author approved your recommendation.", NotificationCategory = NotificationCategoryEnum.YourRecommendations, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.RecommendationHighlighted, NotificationKey = "RecommendationHighlighted", DisplayName = "Recommendation Highlighted", Description = "An author highlighted your recommendation.", NotificationCategory = NotificationCategoryEnum.YourRecommendations, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.SuccessfulRec, NotificationKey = "SuccessfulRec", DisplayName = "Successful Recommendation", Description = "A user marked your recommendation as helpful.", NotificationCategory = NotificationCategoryEnum.YourRecommendations, DefaultEmailEnabled = true, DefaultCollapsed = false },
 
             // Collaborations (Category 5)
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.StoryRelationshipRequested, NotificationKey = "StoryRelationshipRequested", DisplayName = "New Story Relationship Request", Description = "An author wants to link their story to yours.", NotificationCategory = NotificationCategoryEnum.Collaborations, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.StoryRelationshipApproved, NotificationKey = "StoryRelationshipApproved", DisplayName = "Story Relationship Approved", Description = "Your request to link to another story was approved.", NotificationCategory = NotificationCategoryEnum.Collaborations, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewStoryAcknowledgement, NotificationKey = "NewStoryAcknowledgement", DisplayName = "New Acknowledgment", Description = "You were acknowledged as a contributor on a new story.", NotificationCategory = NotificationCategoryEnum.Collaborations, DefaultEmailEnabled = true },
+            new { NotificationTypeId = NotificationTypeEnum.StoryRelationshipRequested, NotificationKey = "StoryRelationshipRequested", DisplayName = "New Story Relationship Request", Description = "An author wants to link their story to yours.", NotificationCategory = NotificationCategoryEnum.Collaborations, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.StoryRelationshipApproved, NotificationKey = "StoryRelationshipApproved", DisplayName = "Story Relationship Approved", Description = "Your request to link to another story was approved.", NotificationCategory = NotificationCategoryEnum.Collaborations, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewStoryAcknowledgement, NotificationKey = "NewStoryAcknowledgement", DisplayName = "New Acknowledgment", Description = "You were acknowledged as a contributor on a new story.", NotificationCategory = NotificationCategoryEnum.Collaborations, DefaultEmailEnabled = true, DefaultCollapsed = false },
 
             // Groups (Category 6)
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewGroupStory, NotificationKey = "NewGroupStory", DisplayName = "New Group Story", Description = "A new story was added to a group you're in.", NotificationCategory = NotificationCategoryEnum.Groups },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.NewGroupBlogPost, NotificationKey = "NewGroupBlogPost", DisplayName = "New Group Blog Post", Description = "A new blog post was made in a group you're in.", NotificationCategory = NotificationCategoryEnum.Groups },
+            new { NotificationTypeId = NotificationTypeEnum.NewGroupStory, NotificationKey = "NewGroupStory", DisplayName = "New Group Story", Description = "A new story was added to a group you're in.", NotificationCategory = NotificationCategoryEnum.Groups, DefaultEmailEnabled = false, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.NewGroupBlogPost, NotificationKey = "NewGroupBlogPost", DisplayName = "New Group Blog Post", Description = "A new blog post was made in a group you're in.", NotificationCategory = NotificationCategoryEnum.Groups, DefaultEmailEnabled = false, DefaultCollapsed = false },
 
             // Moderation Warnings (Category 7)
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.ContentRemoved, NotificationKey = "ContentRemoved", DisplayName = "Content Removed", Description = "Your content was removed for a ToS violation.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.StoryRejected, NotificationKey = "StoryRejected", DisplayName = "Story Rejected", Description = "Your story submission was rejected.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.AccountWarning, NotificationKey = "AccountWarning", DisplayName = "Account Warning", Description = "You have received an official warning.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.AccountSuspended, NotificationKey = "AccountSuspended", DisplayName = "Account Suspended", Description = "Your account has been temporarily suspended.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.AccountBanned, NotificationKey = "AccountBanned", DisplayName = "Account Banned", Description = "Your account has been permanently banned.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true },
+            new { NotificationTypeId = NotificationTypeEnum.ContentRemoved, NotificationKey = "ContentRemoved", DisplayName = "Content Removed", Description = "Your content was removed for a ToS violation.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.StoryRejected, NotificationKey = "StoryRejected", DisplayName = "Story Rejected", Description = "Your story submission was rejected.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.AccountWarning, NotificationKey = "AccountWarning", DisplayName = "Account Warning", Description = "You have received an official warning.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.AccountSuspended, NotificationKey = "AccountSuspended", DisplayName = "Account Suspended", Description = "Your account has been temporarily suspended.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.AccountBanned, NotificationKey = "AccountBanned", DisplayName = "Account Banned", Description = "Your account has been permanently banned.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true, DefaultCollapsed = false },
 
             // Your Reports (Category 8)
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.ReportReceived, NotificationKey = "ReportReceived", DisplayName = "Report Received", Description = "Thank you, we have received your report.", NotificationCategory = NotificationCategoryEnum.YourReports },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.ReportResolved, NotificationKey = "ReportResolved", DisplayName = "Report Resolved (Action Taken)", Description = "Your report has been resolved and action was taken.", NotificationCategory = NotificationCategoryEnum.YourReports },
-            new NotificationType { NotificationTypeId = NotificationTypeEnum.ReportResolvedNoAction, NotificationKey = "ReportResolvedNoAction", DisplayName = "Report Resolved (No Action)", Description = "Your report was reviewed, but no action was deemed necessary.", NotificationCategory = NotificationCategoryEnum.YourReports }
+            new { NotificationTypeId = NotificationTypeEnum.ReportReceived, NotificationKey = "ReportReceived", DisplayName = "Report Received", Description = "Thank you, we have received your report.", NotificationCategory = NotificationCategoryEnum.YourReports, DefaultEmailEnabled = false, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.ReportResolved, NotificationKey = "ReportResolved", DisplayName = "Report Resolved (Action Taken)", Description = "Your report has been resolved and action was taken.", NotificationCategory = NotificationCategoryEnum.YourReports, DefaultEmailEnabled = false, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.ReportResolvedNoAction, NotificationKey = "ReportResolvedNoAction", DisplayName = "Report Resolved (No Action)", Description = "Your report was reviewed, but no action was deemed necessary.", NotificationCategory = NotificationCategoryEnum.YourReports, DefaultEmailEnabled = false, DefaultCollapsed = false }
         );
 
         modelBuilder.Entity<ReportStatus>().HasData(
-            new ReportStatus { ReportStatusId = ReportStatusEnum.Open, StatusName = "Open" },
-            new ReportStatus { ReportStatusId = ReportStatusEnum.UnderReview, StatusName = "Under Review" },
-            new ReportStatus { ReportStatusId = ReportStatusEnum.ResolvedNoAction, StatusName = "Resolved - No Action" },
-            new ReportStatus { ReportStatusId = ReportStatusEnum.ResolvedActionTaken, StatusName = "Resolved - Action Taken" }
+            new { ReportStatusId = ReportStatusEnum.Open, StatusName = "Open" },
+            new { ReportStatusId = ReportStatusEnum.UnderReview, StatusName = "Under Review" },
+            new { ReportStatusId = ReportStatusEnum.ResolvedNoAction, StatusName = "Resolved - No Action" },
+            new { ReportStatusId = ReportStatusEnum.ResolvedActionTaken, StatusName = "Resolved - Action Taken" }
         );
 
         modelBuilder.Entity<StoryStatus>().HasData(
-            new StoryStatus { StoryStatusId = StoryStatusEnum.Draft, StatusName = "Draft", Description = "Story is a work in progress and not visible to the public." },
-            new StoryStatus { StoryStatusId = StoryStatusEnum.PendingApproval, StatusName = "Pending Approval", Description = "Story has been submitted and is awaiting moderator approval." },
-            new StoryStatus { StoryStatusId = StoryStatusEnum.InProgress, StatusName = "In Progress", Description = "Story is approved, public, and actively being updated." },
-            new StoryStatus { StoryStatusId = StoryStatusEnum.Completed, StatusName = "Completed", Description = "The story is finished." },
-            new StoryStatus { StoryStatusId = StoryStatusEnum.OnHiatus, StatusName = "On Hiatus", Description = "The author is taking a break from updating." },
-            new StoryStatus { StoryStatusId = StoryStatusEnum.Cancelled, StatusName = "Cancelled", Description = "The story will not be continued." },
-            new StoryStatus { StoryStatusId = StoryStatusEnum.Rewriting, StatusName = "Rewriting", Description = "The story is undergoing major revisions." },
-            new StoryStatus { StoryStatusId = StoryStatusEnum.OpenBeta, StatusName = "Open Beta", Description = "Story is visible to beta readers for feedback." },
-            new StoryStatus { StoryStatusId = StoryStatusEnum.Rejected, StatusName = "Rejected", Description = "Story was submitted but did not pass moderation." }
+            new { StoryStatusId = StoryStatusEnum.Draft, StatusName = "Draft", Description = "Story is a work in progress and not visible to the public." },
+            new { StoryStatusId = StoryStatusEnum.PendingApproval, StatusName = "Pending Approval", Description = "Story has been submitted and is awaiting moderator approval." },
+            new { StoryStatusId = StoryStatusEnum.InProgress, StatusName = "In Progress", Description = "Story is approved, public, and actively being updated." },
+            new { StoryStatusId = StoryStatusEnum.Completed, StatusName = "Completed", Description = "The story is finished." },
+            new { StoryStatusId = StoryStatusEnum.OnHiatus, StatusName = "On Hiatus", Description = "The author is taking a break from updating." },
+            new { StoryStatusId = StoryStatusEnum.Cancelled, StatusName = "Cancelled", Description = "The story will not be continued." },
+            new { StoryStatusId = StoryStatusEnum.Rewriting, StatusName = "Rewriting", Description = "The story is undergoing major revisions." },
+            new { StoryStatusId = StoryStatusEnum.OpenBeta, StatusName = "Open Beta", Description = "Story is visible to beta readers for feedback." },
+            new { StoryStatusId = StoryStatusEnum.Rejected, StatusName = "Rejected", Description = "Story was submitted but did not pass moderation." }
         );
 
         modelBuilder.Entity<TagType>().HasData(
-            new TagType { TagTypeId = TagTypeEnum.Character, TypeName = "Character" },
-            new TagType { TagTypeId = TagTypeEnum.Setting, TypeName = "Setting" },
-            new TagType { TagTypeId = TagTypeEnum.Genre, TypeName = "Genre" },
-            new TagType { TagTypeId = TagTypeEnum.ContentWarning, TypeName = "Content Warning" },
-            new TagType { TagTypeId = TagTypeEnum.CrossoverFandom, TypeName = "Crossover Fandom" },
-            new TagType { TagTypeId = TagTypeEnum.Relationship, TypeName = "Relationship" }
+            new { TagTypeId = TagTypeEnum.Character, TypeName = "Character" },
+            new { TagTypeId = TagTypeEnum.Setting, TypeName = "Setting" },
+            new { TagTypeId = TagTypeEnum.Genre, TypeName = "Genre" },
+            new { TagTypeId = TagTypeEnum.ContentWarning, TypeName = "Content Warning" },
+            new { TagTypeId = TagTypeEnum.CrossoverFandom, TypeName = "Crossover Fandom" },
+            new { TagTypeId = TagTypeEnum.Relationship, TypeName = "Relationship" }
         );
 
         #endregion
@@ -284,80 +284,80 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         //Pure lookup tables for UI/description. No enum needed for application logic, but seed data needed
 
         modelBuilder.Entity<AcknowledgmentRole>().HasData(
-            new AcknowledgmentRole { AcknowledgmentRoleId = 1, RoleName = "Beta Reader" },
-            new AcknowledgmentRole { AcknowledgmentRoleId = 2, RoleName = "Planner" },
-            new AcknowledgmentRole { AcknowledgmentRoleId = 3, RoleName = "Cover Artist" },
-            new AcknowledgmentRole { AcknowledgmentRoleId = 4, RoleName = "Editor" },
-            new AcknowledgmentRole { AcknowledgmentRoleId = 5, RoleName = "Inspiration" }
+            new { AcknowledgmentRoleId = (short)1, RoleName = "Beta Reader" },
+            new { AcknowledgmentRoleId = (short)2, RoleName = "Planner" },
+            new { AcknowledgmentRoleId = (short)3, RoleName = "Cover Artist" },
+            new { AcknowledgmentRoleId = (short)4, RoleName = "Editor" },
+            new { AcknowledgmentRoleId = (short)5, RoleName = "Inspiration" }
         );
 
         modelBuilder.Entity<ApplicationRole>().HasData(
-            new ApplicationRole { Id = (int)SiteRoles.User, Name = "User", NormalizedName = "USER" },
-            new ApplicationRole { Id = (int)SiteRoles.Moderator, Name = "Moderator", NormalizedName = "MODERATOR" },
-            new ApplicationRole { Id = (int)SiteRoles.Admin, Name = "Admin", NormalizedName = "ADMIN" }
+            new { Id = (int)SiteRoles.User, Name = "User", NormalizedName = "USER", ConcurrencyStamp = "1" },
+            new { Id = (int)SiteRoles.Moderator, Name = "Moderator", NormalizedName = "MODERATOR", ConcurrencyStamp = "2" },
+            new { Id = (int)SiteRoles.Admin, Name = "Admin", NormalizedName = "ADMIN", ConcurrencyStamp = "3" }
         );
 
         modelBuilder.Entity<Badge>().HasData(
-            new Badge { BadgeKey = SiteBadges.BetaReader, DisplayName = "Beta Reader", Description = "Acknowledged as a Beta Reader on stories.", IconBaseUrl = "icons/badges/beta.png", SortOrder = 1 },
-            new Badge { BadgeKey = SiteBadges.Patron, DisplayName = "Patron", Description = "Supported the site through Community Spotlight.", IconBaseUrl = "icons/badges/patron.png", SortOrder = 2 },
-            new Badge { BadgeKey = SiteBadges.Recommender, DisplayName = "Recommender", Description = "Has many successful recs", IconBaseUrl = "icons/badges/recommender.png", SortOrder = 3 },
-            new Badge { BadgeKey = SiteBadges.Architect, DisplayName = "Architect", Description = "Helped develop a site feature", IconBaseUrl = "icons/badges/architect.png", SortOrder = 4 },
-            new Badge { BadgeKey = SiteBadges.Artist, DisplayName = "Artist", Description = "Made cover art for others", IconBaseUrl = "icons/badges/artist.png", SortOrder = 5 }
+            new { BadgeKey = SiteBadges.BetaReader, DisplayName = "Beta Reader", Description = "Acknowledged as a Beta Reader on stories.", IconBaseUrl = "icons/badges/beta.png", SortOrder = 1 },
+            new { BadgeKey = SiteBadges.Patron, DisplayName = "Patron", Description = "Supported the site through Community Spotlight.", IconBaseUrl = "icons/badges/patron.png", SortOrder = 2 },
+            new { BadgeKey = SiteBadges.Recommender, DisplayName = "Recommender", Description = "Has many successful recs", IconBaseUrl = "icons/badges/recommender.png", SortOrder = 3 },
+            new { BadgeKey = SiteBadges.Architect, DisplayName = "Architect", Description = "Helped develop a site feature", IconBaseUrl = "icons/badges/architect.png", SortOrder = 4 },
+            new { BadgeKey = SiteBadges.Artist, DisplayName = "Artist", Description = "Made cover art for others", IconBaseUrl = "icons/badges/artist.png", SortOrder = 5 }
             // ... add other badges
         );
         
         // Note: DefaultSearchSetting requires SearchMode and UserInteractionFilter to be seeded first.
         modelBuilder.Entity<DefaultSearchSetting>().HasData(
-            new DefaultSearchSetting { SearchModeKey = "TreeSearch", InteractionFilterKey = "Ignored", IsEnabled = true },
-            new DefaultSearchSetting { SearchModeKey = "TreeSearch", InteractionFilterKey = "Completed", IsEnabled = true },
-            new DefaultSearchSetting { SearchModeKey = "TreeSearch", InteractionFilterKey = "ReadItLater", IsEnabled = false },
-            new DefaultSearchSetting { SearchModeKey = "RandomSearch", InteractionFilterKey = "Ignored", IsEnabled = true },
-            new DefaultSearchSetting { SearchModeKey = "RandomSearch", InteractionFilterKey = "Completed", IsEnabled = false }
+            new { SearchModeKey = "TreeSearch", InteractionFilterKey = "Ignored", IsEnabled = true },
+            new { SearchModeKey = "TreeSearch", InteractionFilterKey = "Completed", IsEnabled = true },
+            new { SearchModeKey = "TreeSearch", InteractionFilterKey = "ReadItLater", IsEnabled = false },
+            new { SearchModeKey = "RandomSearch", InteractionFilterKey = "Ignored", IsEnabled = true },
+            new { SearchModeKey = "RandomSearch", InteractionFilterKey = "Completed", IsEnabled = false }
             // ... etc. for all combinations
         );
 
         modelBuilder.Entity<RecommendationStatus>().HasData(
-            new RecommendationStatus { StatusId = 1, StatusName = "Pending Approval", Description = "Submitted by user, awaiting author review." },
-            new RecommendationStatus { StatusId = 2, StatusName = "Approved", Description = "Publicly visible." },
-            new RecommendationStatus { StatusId = 3, StatusName = "Rejected", Description = "Rejected by author, not visible." },
-            new RecommendationStatus { StatusId = 4, StatusName = "Under Review", Description = "An approved recommendation that was reported and is under review." }
+            new { RecommendationStatusId = (short)1, StatusName = "Pending Approval", Description = "Submitted by user, awaiting author review." },
+            new { RecommendationStatusId = (short)2, StatusName = "Approved", Description = "Publicly visible." },
+            new { RecommendationStatusId = (short)3, StatusName = "Rejected", Description = "Rejected by author, not visible." },
+            new { RecommendationStatusId = (short)4, StatusName = "Under Review", Description = "An approved recommendation that was reported and is under review." }
         );
 
         modelBuilder.Entity<ReportReason>().HasData(
-            new ReportReason { ReportReasonId = 1, ReasonName = "Other", Description = "A reason not covered by other categories." },
-            new ReportReason { ReportReasonId = 2, ReasonName = "Spam", Description = "Unsolicited advertising or repeated, low-effort content." },
-            new ReportReason { ReportReasonId = 3, ReasonName = "Hate Speech", Description = "Content that attacks a person or group based on race, ethnicity, religion, etc." },
-            new ReportReason { ReportReasonId = 4, ReasonName = "Harassment", Description = "Targeted abuse, bullying, or intimidation of a user." },
-            new ReportReason { ReportReasonId = 5, ReasonName = "Illegal Content", Description = "Content violating laws, such as child pornography or piracy." },
-            new ReportReason { ReportReasonId = 6, ReasonName = "Plagiarism", Description = "Posting content that is not your own without attribution." }
+            new { ReportReasonId = (short)1, ReasonName = "Other", Description = "A reason not covered by other categories." },
+            new { ReportReasonId = (short)2, ReasonName = "Spam", Description = "Unsolicited advertising or repeated, low-effort content." },
+            new { ReportReasonId = (short)3, ReasonName = "Hate Speech", Description = "Content that attacks a person or group based on race, ethnicity, religion, etc." },
+            new { ReportReasonId = (short)4, ReasonName = "Harassment", Description = "Targeted abuse, bullying, or intimidation of a user." },
+            new { ReportReasonId = (short)5, ReasonName = "Illegal Content", Description = "Content violating laws, such as child pornography or piracy." },
+            new { ReportReasonId = (short)6, ReasonName = "Plagiarism", Description = "Posting content that is not your own without attribution." }
         );
 
         modelBuilder.Entity<SearchMode>().HasData(
-            new SearchMode { SearchModeKey = SiteSearchModes.DefaultSearch, Name = "Default Search", Description = "The regular search mode with tags and search result orders." },
-            new SearchMode { SearchModeKey = SiteSearchModes.TreeSearch, Name = "Tree Search", Description = "Discover stories through connections: favorites, recommendations, and author follows." },
-            new SearchMode { SearchModeKey = SiteSearchModes.RandomSearch, Name = "Random Search", Description = "Find a random story based on your filters." },
-            new SearchMode { SearchModeKey = SiteSearchModes.AlsoFavorited, Name = "Also Favorited", Description = "Find stories favorited by users who also favorited your selection." }
+            new { SearchModeKey = SiteSearchModes.DefaultSearch, Name = "Default Search", Description = "The regular search mode with tags and search result orders." },
+            new { SearchModeKey = SiteSearchModes.TreeSearch, Name = "Tree Search", Description = "Discover stories through connections: favorites, recommendations, and author follows." },
+            new { SearchModeKey = SiteSearchModes.RandomSearch, Name = "Random Search", Description = "Find a random story based on your filters." },
+            new { SearchModeKey = SiteSearchModes.AlsoFavorited, Name = "Also Favorited", Description = "Find stories favorited by users who also favorited your selection." }
         );
 
         modelBuilder.Entity<StoryRelationshipType>().HasData(
-            new StoryRelationshipType { RelationshipTypeId = 1, TypeName = "Inspired By" },
-            new StoryRelationshipType { RelationshipTypeId = 2, TypeName = "Prequel" },
-            new StoryRelationshipType { RelationshipTypeId = 3, TypeName = "Sequel" },
-            new StoryRelationshipType { RelationshipTypeId = 4, TypeName = "Companion Piece" }
+            new { RelationshipTypeId = (short)1, TypeName = "Inspired By" },
+            new { RelationshipTypeId = (short)2, TypeName = "Prequel" },
+            new { RelationshipTypeId = (short)3, TypeName = "Sequel" },
+            new { RelationshipTypeId = (short)4, TypeName = "Companion Piece" }
         );
 
         modelBuilder.Entity<Theme>().HasData(
-            new Theme { ThemeId = 1, Name = "Pokémon", Description = "The default Pokémon theme!" }
+            new { ThemeId = 1, Name = "Pokémon", Description = "The default Pokémon theme!" }
         );
         
         modelBuilder.Entity<UserInteractionFilter>().HasData(
-            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.Ignored, Name = "Ignored", Description = "Exclude stories you have marked as 'Ignored'." },
-            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.Completed, Name = "Completed", Description = "Exclude stories you have already finished." },
-            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.InProgress, Name = "In Progress", Description = "Exclude stories on your 'In Progress' list." },
-            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.ReadItLater, Name = "Read It Later", Description = "Exclude stories on your 'Read It Later' list." },
-            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.Favorited, Name = "Favorited", Description = "Exclude stories on your 'Favorite' list." },
-            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.HiddenFavorited, Name = "Hidden Favorite", Description = "Exclude stories on your 'Hidden Favorite' list." },
-            new UserInteractionFilter { InteractionFilterKey = UserStoryInteractionFilters.Followed, Name = "Followed", Description = "Exclude stories you are 'Following'." }
+            new { InteractionFilterKey = UserStoryInteractionFilters.Ignored, Name = "Ignored", Description = "Exclude stories you have marked as 'Ignored'." },
+            new { InteractionFilterKey = UserStoryInteractionFilters.Completed, Name = "Completed", Description = "Exclude stories you have already finished." },
+            new { InteractionFilterKey = UserStoryInteractionFilters.InProgress, Name = "In Progress", Description = "Exclude stories on your 'In Progress' list." },
+            new { InteractionFilterKey = UserStoryInteractionFilters.ReadItLater, Name = "Read It Later", Description = "Exclude stories on your 'Read It Later' list." },
+            new { InteractionFilterKey = UserStoryInteractionFilters.Favorited, Name = "Favorited", Description = "Exclude stories on your 'Favorite' list." },
+            new { InteractionFilterKey = UserStoryInteractionFilters.HiddenFavorited, Name = "Hidden Favorite", Description = "Exclude stories on your 'Hidden Favorite' list." },
+            new { InteractionFilterKey = UserStoryInteractionFilters.Followed, Name = "Followed", Description = "Exclude stories you are 'Following'." }
         );
 
         #endregion
@@ -681,7 +681,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .OnDelete(DeleteBehavior.Cascade);
             
         modelBuilder.Entity<Story>()
-            .HasMany(s => s.BlogPosts) // From ProfileBlogPost inheritance
+            .HasMany(s => s.ProfileBlogPosts) // From ProfileBlogPost inheritance
             .WithOne(pbp => (pbp as ProfileBlogPost)!.Story)
             .HasForeignKey(pbp => (pbp as ProfileBlogPost)!.StoryId)
             .OnDelete(DeleteBehavior.SetNull); // A blog post can exist without a story
@@ -757,7 +757,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<Group>()
-            .HasMany(g => g.BlogPosts)
+            .HasMany(g => g.GroupBlogPosts)
             .WithOne(gbp => (gbp as GroupBlogPost)!.Group)
             .HasForeignKey(gbp => (gbp as GroupBlogPost)!.GroupId)
             .OnDelete(DeleteBehavior.Cascade);
@@ -939,185 +939,30 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         #region Date and Time - Make the database create them
 
         // --- PART 1: Specific Default Value Configurations ---
-        // Set default for "creation" or "posted" timestamps.
-        
-        modelBuilder.Entity<BaseBlogPost>(entity =>
-        {
-            entity.Property(e => e.DateCreated)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<BasePoll>(entity =>
-        {
-            entity.Property(e => e.DateOpened)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        modelBuilder.Entity<BetaReader>(entity =>
-        {
-            entity.Property(e => e.DateAdded)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<BlogPostComment>(entity =>
-        {
-            entity.Property(e => e.DatePosted)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<ChapterComment>(entity =>
-        {
-            entity.Property(e => e.DatePosted)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        modelBuilder.Entity<CoAuthor>(entity =>
-        {
-            entity.Property(e => e.DateAdded)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        modelBuilder.Entity<CommunitySpotlight>(entity =>
-        {
-            entity.Property(e => e.DateCreated)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<Conversation>(entity =>
-        {
-            entity.Property(e => e.DateCreated)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        modelBuilder.Entity<CustomList>(entity =>
-        {
-            entity.Property(e => e.DateCreated)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        modelBuilder.Entity<CustomListEntry>(entity =>
-        {
-            entity.Property(e => e.DateAdded)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        modelBuilder.Entity<FollowedUser>(entity =>
-        {
-            entity.Property(e => e.DateFollowed)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        modelBuilder.Entity<Group>(entity =>
-        {
-            entity.Property(e => e.DateCreated)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<GroupComment>(entity =>
-        {
-            entity.Property(e => e.DatePosted)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<GroupMember>(entity =>
-        {
-            entity.Property(e => e.DateJoined)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<GroupStory>(entity =>
-        {
-            entity.Property(e => e.DateAdded)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        modelBuilder.Entity<Notification>(entity =>
-        {
-            entity.Property(e => e.DateCreated)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        modelBuilder.Entity<PrivateMessage>(entity =>
-        {
-            entity.Property(e => e.DateSent)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<Recommendation>(entity =>
-        {
-            entity.Property(e => e.DatePosted)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<RecommendationSuccess>(entity =>
-        {
-            entity.Property(e => e.DateRecorded)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        modelBuilder.Entity<Report>(entity =>
-        {
-            entity.Property(e => e.DateReported)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        modelBuilder.Entity<Series>(entity =>
-        {
-            entity.Property(e => e.DateCreated)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-        modelBuilder.Entity<StoryAcknowledgment>(entity =>
-        {
-            entity.Property(e => e.DateAcknowledged)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<StoryImport>(entity =>
-        {
-            entity.Property(e => e.DateImported)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<StoryRelationship>(entity =>
-        {
-            entity.Property(e => e.DateCreated)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<UserBadge>(entity =>
-        {
-            entity.Property(e => e.DateEarned)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-        
-        modelBuilder.Entity<UserProfileComment>(entity =>
-        {
-            entity.Property(e => e.DatePosted)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-        });
-
-
-        // --- PART 2: Global Type Configuration Loops ---
-
-        // This loop sets all DateTime properties to 'timestamp with time zone'
-        // for proper PostgreSQL handling.
-        foreach (var property in modelBuilder.Model.GetEntityTypes()
-                     .SelectMany(e => e.GetProperties())
-                     .Where(p => p.ClrType == typeof(DateTime) || p.ClrType == typeof(DateTime?)))
-        {
-            // Using timestamp(2) for a reasonable precision of 2 decimal places
-            property.SetColumnType("timestamp(2) with time zone");
-        }
-        
-        // This loop explicitly sets all DateOnly properties to 'date',
-        // which is the correct PostgreSQL type.
-        foreach (var property in modelBuilder.Model.GetEntityTypes()
-                     .SelectMany(e => e.GetProperties())
-                     .Where(p => p.ClrType == typeof(DateOnly) || p.ClrType == typeof(DateOnly?)))
-        {
-            property.SetColumnType("date");
-        }
+        // Set default for "creation" or "posted" timestamps to be generated by the database.
+        modelBuilder.Entity<BaseBlogPost>().Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<BasePoll>().Property(e => e.DateOpened).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<BetaReader>().Property(e => e.DateAdded).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<CoAuthor>().Property(e => e.DateAdded).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<CommunitySpotlight>().Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<Conversation>().Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<CustomList>().Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<CustomListEntry>().Property(e => e.DateAdded).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<FollowedUser>().Property(e => e.DateFollowed).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<Group>().Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<GroupMember>().Property(e => e.DateJoined).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<GroupStory>().Property(e => e.DateAdded).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<Notification>().Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<PrivateMessage>().Property(e => e.DateSent).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<Recommendation>().Property(e => e.DatePosted).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<RecommendationSuccess>().Property(e => e.DateRecorded).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<Report>().Property(e => e.DateReported).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<SavedTagSelection>().Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<Series>().Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<StoryAcknowledgment>().Property(e => e.DateAcknowledged).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<StoryImport>().Property(e => e.DateImported).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<StoryRelationship>().Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        modelBuilder.Entity<UserBadge>().Property(e => e.DateEarned).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
         #endregion
 
@@ -1183,6 +1028,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<BlogPostComment>(entity =>
         {
             entity.ToTable("blog_post_comments");
+            entity.Property(e => e.DatePosted) // This configuration maps the column to this table
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
             // Future indexes for querying (e.g., by BlogPostId)...
         });
 
@@ -1216,6 +1063,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<ChapterComment>(entity =>
         {
             entity.ToTable("chapter_comments");
+            entity.Property(e => e.DatePosted) // This configuration maps the column to this table
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
             // Future indexes for querying (e.g., by ChapterId, DatePosted)...
         });
 
@@ -1300,6 +1149,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<GroupComment>(entity =>
         {
             entity.ToTable("group_comments");
+            entity.Property(e => e.DatePosted) // This configuration maps the column to this table
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
             // Future indexes for querying (e.g., by GroupId)...
         });
 
@@ -1423,10 +1274,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
                 .HasForeignKey(e => e.SavedTagSelectionId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            // Set default timestamp for creation
-            entity.Property(e => e.DateCreated)
-                .HasDefaultValueSql("CURRENT_TIMESTAMP");
-                  
             // Future indexes for querying (e.g., by is_public, user_id)...
         });
 
@@ -1471,6 +1318,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<SiteDailyStat>(entity =>
         {
             // This table's PK is the date, so it's already indexed for time-series.
+            entity.HasKey(e => e.StatDate);
         });
 
         modelBuilder.Entity<SitePoll>(entity =>
@@ -1681,6 +1529,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
         modelBuilder.Entity<UserProfileComment>(entity =>
         {
             entity.ToTable("user_profile_comments");
+            entity.Property(e => e.DatePosted) // This configuration maps the column to this table
+                .HasDefaultValueSql("CURRENT_TIMESTAMP");
             // Future indexes for querying (e.g., by ProfileUserId)...
         });
 

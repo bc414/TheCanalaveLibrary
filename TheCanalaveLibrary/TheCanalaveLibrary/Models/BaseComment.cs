@@ -6,6 +6,7 @@ namespace TheCanalaveLibrary.Models;
 
 public partial class BaseComment
 {
+    [Key]
     public long CommentId { get; set; }
 
     public int? UserId { get; set; }
@@ -14,6 +15,9 @@ public partial class BaseComment
 
     [Required]
     public string CommentText { get; set; } = null!;
+
+    [Required]
+    public DateTime DatePosted { get; set; }
 
     public int LikeCount { get; set; }
 

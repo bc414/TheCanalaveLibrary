@@ -11,7 +11,7 @@ public partial class Recommendation
 
     public int? RecommenderId { get; set; }
 
-    public byte StatusId { get; set; }
+    public short StatusId { get; set; }
 
     public bool IsHiddenGem { get; set; }
 
