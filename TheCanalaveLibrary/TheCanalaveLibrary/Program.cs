@@ -35,6 +35,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
             .UseSnakeCaseNamingConvention() // <-- Add this line
 );
 
+// Register the dedicated read-only DbContext for high-performance queries
+builder.Services.AddDbContext<ReadOnlyApplicationDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
+        .UseSnakeCaseNamingConvention());
+
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
 builder.Services.AddIdentity<User, ApplicationRole>(options =>

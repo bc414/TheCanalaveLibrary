@@ -65,7 +65,7 @@ public class User : IdentityUser<int>
     public bool AllowDiscoveryFromHiddenFavorites { get; set; } = false;
     
     public int ThemeId { get; set; }
-    public Theme Theme { get; set; }
+    public Theme Theme { get; set; } = null!;
     
     // --- "COLD" PARTITION ---
     // 1-to-1 Navigation to the "cold" blob
