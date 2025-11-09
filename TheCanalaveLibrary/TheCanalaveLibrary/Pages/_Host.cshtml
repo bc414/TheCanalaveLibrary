@@ -1,0 +1,9 @@
+@page "/_Host"
+@using TheCanalaveLibrary.Components
+@namespace TheCanalaveLibrary.Pages
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    Layout = "_Layout";
+}
+
+<component type="typeof(App)" render-mode="WebAssembly" />

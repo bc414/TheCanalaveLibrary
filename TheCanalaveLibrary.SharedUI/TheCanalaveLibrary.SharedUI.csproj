@@ -6,10 +6,6 @@
         <ImplicitUsings>enable</ImplicitUsings>
     </PropertyGroup>
 
-    <ItemGroup>
-        <FrameworkReference Include="Microsoft.AspNetCore.App" />
-    </ItemGroup>
-
 
     <ItemGroup>
         <SupportedPlatform Include="browser"/>
@@ -17,6 +13,10 @@
 
     <ItemGroup>
       <Folder Include="Layout\" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0-rc.2.25502.107" />
     </ItemGroup>
 
 </Project>

@@ -15,6 +15,9 @@ builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents()
     .AddAuthenticationStateSerialization();
 
+// Add services for Razor Pages, which are required for the _Host.cshtml fallback.
+builder.Services.AddRazorPages();
+
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
@@ -137,11 +140,12 @@ app.UseAntiforgery();
 app.MapStaticAssets();
 
 app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode()
+    .AddInteractiveWebAssemblyRenderMode()
     .AddAdditionalAssemblies(
         typeof(TheCanalaveLibrary.Client.WasmClientAssemblyIdentifier).Assembly,
         typeof(TheCanalaveLibrary.SharedUI.SharedUIAssemblyIdentifier).Assembly
-    )
-    /* Render modes will be specified on a per-page or per-component basis */;
+    );
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
