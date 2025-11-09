@@ -7,7 +7,6 @@ namespace TheCanalaveLibrary.Services;
 // (Assuming your context is named ApplicationDbContext)
 
 using Microsoft.EntityFrameworkCore;
-using TheCanalaveLibrary.Models;
 
 public class UserDeletionService
 {
