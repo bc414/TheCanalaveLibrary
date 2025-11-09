@@ -15,4 +15,10 @@
         <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.0-rc.2.25502.107"/>
     </ItemGroup>
 
+    <ItemGroup>
+      <AdditionalFiles Include="Layout\MainLayout.razor" />
+      <AdditionalFiles Include="Pages\Home.razor" />
+      <AdditionalFiles Include="Pages\NotFound.razor" />
+    </ItemGroup>
+
 </Project>
