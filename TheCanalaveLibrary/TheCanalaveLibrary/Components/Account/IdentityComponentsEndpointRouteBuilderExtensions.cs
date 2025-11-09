@@ -9,8 +9,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
 using TheCanalaveLibrary.Components.Account.Pages;
 using TheCanalaveLibrary.Components.Account.Pages.Manage;
-using TheCanalaveLibrary.Data;
-using TheCanalaveLibrary.Models;
+using TheCanalaveLibrary.Core.Models;
 
 namespace Microsoft.AspNetCore.Routing;
 

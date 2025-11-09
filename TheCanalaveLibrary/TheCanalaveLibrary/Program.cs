@@ -4,11 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Components;
 using TheCanalaveLibrary.Components.Account;
 using TheCanalaveLibrary.Data;
-using TheCanalaveLibrary.Models;
-using Npgsql.EntityFrameworkCore.PostgreSQL; // Make sure this is present
+using TheCanalaveLibrary.Core.Models; // Make sure this is present
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
-
 builder.AddRedisDistributedCache("cache");
 
 // Add services to the container.

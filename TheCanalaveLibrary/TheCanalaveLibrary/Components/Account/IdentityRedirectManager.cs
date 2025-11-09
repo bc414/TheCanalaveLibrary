@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
-using TheCanalaveLibrary.Data;
-using TheCanalaveLibrary.Models;
+using TheCanalaveLibrary.Core.Models;
 
 namespace TheCanalaveLibrary.Components.Account;
 

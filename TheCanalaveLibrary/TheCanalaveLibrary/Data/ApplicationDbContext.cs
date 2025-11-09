@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using TheCanalaveLibrary.Models;
+using TheCanalaveLibrary.Core.Models;
 
 namespace TheCanalaveLibrary.Data;
 
@@ -1359,7 +1359,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             // 1. Configure the SearchVector as a "generated" column.
             // This tells PostgreSQL to automatically build the vector from
             // the title and description, handling tokenization for you.
-            entity.Property(e => e.SearchVector)
+            entity.Property<NpgsqlTypes.NpgsqlTsVector>("SearchVector")
                 .HasComputedColumnSql(
                     // Combines title and description, using 'english' rules for tokenizing
                     // and `coalesce` to handle nulls safely.
@@ -1368,7 +1368,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
             // 2. Create a GIN index on the new vector column.
             // This is the "magic" that makes FTS incredibly fast.
-            entity.HasIndex(e => e.SearchVector)
+            entity.HasIndex("SearchVector")
                 .HasMethod("gin")
                 .HasDatabaseName("ix_story_listing_search_vector");
             // Future indexes for querying...
