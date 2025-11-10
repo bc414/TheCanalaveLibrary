@@ -4,7 +4,9 @@ using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Components;
 using TheCanalaveLibrary.Components.Account;
 using TheCanalaveLibrary.Data;
-using TheCanalaveLibrary.Core.Models; // Make sure this is present
+using TheCanalaveLibrary.Core.Models;
+using TheCanalaveLibrary.Core.ServiceInterfaces;
+using TheCanalaveLibrary.Services; // Make sure this is present
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddRedisDistributedCache("cache");
@@ -14,6 +16,9 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents()
     .AddAuthenticationStateSerialization();
+
+// Add HttpContextAccessor to access the HttpContext from services.
+builder.Services.AddHttpContextAccessor();
 
 // Add services for Razor Pages, which are required for the _Host.cshtml fallback.
 builder.Services.AddRazorPages();
@@ -78,12 +83,13 @@ builder.Services.AddIdentityCore<User>(options =>
 
 builder.Services.AddSingleton<IEmailSender<User>, IdentityNoOpEmailSender>();
 
-WebApplication app = builder.Build();
-
-/*
-
 // Add your custom development data seeder
 builder.Services.AddScoped<DataSeeder>();
+
+// Services for dependency injection for the server
+builder.Services.AddScoped<IDeviceDetectionService, ServerDeviceDetectionService>();
+
+WebApplication app = builder.Build();
 
 // --- START: Seeding Logic (from our discussion) ---
 
@@ -104,7 +110,7 @@ if (app.Environment.IsDevelopment())
         }
     }
 }
-
+/*
 // Run production admin seeder (safe to run in all environments)
 try
 {
