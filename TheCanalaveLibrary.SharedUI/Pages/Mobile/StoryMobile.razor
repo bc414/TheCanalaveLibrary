@@ -1,0 +1,16 @@
+@using TheCanalaveLibrary.Core.DTOs
+
+@if (Story is not null)
+{
+    <div class="story-mobile-container">
+        <h2>@Story.StoryTitle</h2>
+        <p class="author-mobile">Author: @Story.AuthorName</p>
+        <p>@Story.ShortDescription</p>
+    </div>
+}
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public StoryDetailsDTO? Story { get; set; }
+}
