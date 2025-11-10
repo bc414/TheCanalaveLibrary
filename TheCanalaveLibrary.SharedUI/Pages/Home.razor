@@ -1,28 +1,16 @@
 ﻿@page "/"
+@using TheCanalaveLibrary.SharedUI.Pages.Desktop
+@using TheCanalaveLibrary.SharedUI.Pages.Mobile
 @using TheCanalaveLibrary.Core.ServiceInterfaces
 @inject IDeviceDetectionService DeviceService
 
 <PageTitle>Home</PageTitle>
 
-@if (_isMobile.HasValue)
+@if (DeviceService.IsMobile())
 {
-    if (_isMobile.Value)
-    {
-        <h1>Hello, Mobile User!</h1>
-        <p>This is the mobile view.</p>
-    }
-    else
-    {
-        <h1>Hello, Desktop User!</h1>
-        <p>This is the desktop view.</p>
-    }
+    <HomeMobile />
 }
-
-@code {
-    private bool? _isMobile;
-
-    protected override void OnInitialized()
-    {
-        _isMobile = DeviceService.IsMobile();
-    }
+else
+{
+    <HomeDesktop />
 }
