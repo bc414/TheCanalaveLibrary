@@ -1,0 +1,12 @@
+@inherits LayoutComponentBase
+@using TheCanalaveLibrary.Core.ServiceInterfaces
+@inject IDeviceDetectionService DeviceService
+
+@if (DeviceService.IsMobile())
+{
+    <MobileLayout Body="Body" />
+}
+else
+{
+    <DesktopLayout Body="Body" />
+}

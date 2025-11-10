@@ -2,13 +2,14 @@
 @using TheCanalaveLibrary.Client
 @using Microsoft.AspNetCore.Components.Authorization
 @using TheCanalaveLibrary.Components.Layout
+@using TheCanalaveLibrary.SharedUI.Layout
 
 <Router AppAssembly="typeof(Program).Assembly"
         AdditionalAssemblies="new[] { typeof(WasmClientAssemblyIdentifier).Assembly, typeof(SharedUIAssemblyIdentifier).Assembly }"
         NotFoundPage="typeof(TheCanalaveLibrary.SharedUI.Pages.NotFound)">
     <Found Context="routeData">
         <CascadingAuthenticationState>
-            <RouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+            <RouteView RouteData="routeData" DefaultLayout="typeof(DeviceLayout)" />
         </CascadingAuthenticationState>
         <FocusOnNavigate RouteData="routeData" Selector="h1"/>
     </Found>
