@@ -11,6 +11,7 @@ builder.Services.AddAuthenticationStateDeserialization();
 //Client side service registration for dependency injection
 builder.Services.AddScoped<IDeviceDetectionService, WasmDeviceDetectionService>();
 builder.Services.AddScoped<IStoryOverviewService, HttpStoryOverviewService>();
+builder.Services.AddScoped<ISpriteService, OptimisticSpriteService>();
 
 // Register HttpClient for dependency injection into services like HttpStoryOverviewService
 // The base address is configured to point to the server application.

@@ -91,6 +91,7 @@ builder.Services.AddScoped<DataSeeder>();
 // Services for dependency injection for the server
 builder.Services.AddScoped<IDeviceDetectionService, ServerDeviceDetectionService>();
 builder.Services.AddScoped<IStoryOverviewService, StoryOverviewService>();
+builder.Services.AddScoped<ISpriteService, FileSystemSpriteService>();
 
 WebApplication app = builder.Build();
 

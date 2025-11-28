@@ -1,0 +1,17 @@
+@if (Story is not null)
+{
+    <div class="story-desktop-container">
+        <h1>@Story.StoryTitle</h1>
+        <p class="author">by @Story.AuthorName</p>
+        <p>@Story.ShortDescription</p>
+        <hr />
+
+        <RandomNumberGenerator />
+    </div>
+}
+
+@code {
+    [Parameter]
+    [EditorRequired]
+    public required StoryDetailsDTO? Story { get; set; }
+}

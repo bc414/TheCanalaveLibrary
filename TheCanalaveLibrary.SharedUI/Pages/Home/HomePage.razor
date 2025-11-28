@@ -1,6 +1,4 @@
-﻿@page "/"
-@using TheCanalaveLibrary.SharedUI.Pages.Desktop
-@using TheCanalaveLibrary.SharedUI.Pages.Mobile
+@page "/"
 @using TheCanalaveLibrary.Core.ServiceInterfaces
 @inject IDeviceDetectionService DeviceService
 
@@ -8,9 +6,9 @@
 
 @if (DeviceService.IsMobile())
 {
-    <HomeMobile />
+    <HomeMobile/>
 }
 else
 {
-    <HomeDesktop />
+    <HomeDesktop/>
 }

@@ -1,8 +1,4 @@
 @page "/story/{StoryId:int}/{Slug?}"
-@using TheCanalaveLibrary.Core.ServiceInterfaces
-@using TheCanalaveLibrary.Core.DTOs
-@using TheCanalaveLibrary.SharedUI.Pages.Desktop
-@using TheCanalaveLibrary.SharedUI.Pages.Mobile
 
 @inject IDeviceDetectionService DeviceService
 @inject IStoryOverviewService StoryOverviewService
@@ -26,11 +22,6 @@ else if (_story is not null)
         <StoryDesktop Story="_story" />
     }
 }
-else
-{
-    <PageTitle>Story Not Found</PageTitle>
-    <p>Sorry, we couldn't find the story you were looking for.</p>
-}
 
 @code {
     [Parameter]
@@ -46,5 +37,10 @@ else
     {
         _story = await StoryOverviewService.GetStoryByIdAsync(StoryId);
         _isLoading = false;
+
+        if (_story is null)
+        {
+            NavigationManager.NavigateTo("/not-found");
+        }
     }
 }
