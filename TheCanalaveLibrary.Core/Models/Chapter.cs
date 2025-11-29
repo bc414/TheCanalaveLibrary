@@ -24,7 +24,7 @@ public partial class Chapter
 
     public virtual ChapterContent PrimaryContent { get; set; } = null!;
 
-    public virtual Story Story { get; set; } = null!;
+    public virtual Story.Story Story { get; set; } = null!;
 
     public virtual ICollection<UserChapterInteraction> UserChapterInteractions { get; set; } = new List<UserChapterInteraction>();
 }

@@ -1,0 +1,20 @@
+using TheCanalaveLibrary.Core.Models;
+using TheCanalaveLibrary.Core.Tags;
+
+namespace TheCanalaveLibrary.Core.Story;
+
+/// <summary>
+/// Data Transfer Object for fetching a story's properties for editing and sending the new values back to the server.
+/// </summary>
+public class StoryUpdateDTO : IEditableStoryProperties
+{
+    public int StoryId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string? ShortDescription { get; set; } = string.Empty;
+    public Rating Rating { get; set; }
+    public StoryStatusEnum StoryStatusId { get; set; }
+    public string? CoverArtRelativeUrl { get; set; }
+    public string? LongDescription { get; set; }
+    public StoryStatusEnum PostApprovalStatus { get; set; }
+    public List<IStoryTag> StoryTags { get; set; } = new();
+}

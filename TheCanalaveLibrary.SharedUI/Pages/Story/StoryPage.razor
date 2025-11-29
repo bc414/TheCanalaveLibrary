@@ -1,9 +1,9 @@
 @page "/story/{StoryId:int}/{Slug?}"
 
-@inject IDeviceDetectionService DeviceService
-@inject IStoryOverviewService StoryOverviewService
-@inject NavigationManager NavigationManager
 
+@inject IDeviceDetectionService DeviceService
+@inject IStoryReadService StoryReadService
+@inject NavigationManager NavigationManager
 @if (_isLoading)
 {
     <PageTitle>Loading...</PageTitle>
@@ -35,7 +35,7 @@ else if (_story is not null)
 
     protected override async Task OnInitializedAsync()
     {
-        _story = await StoryOverviewService.GetStoryByIdAsync(StoryId);
+        _story = await StoryReadService.GetStoryByIdAsync(StoryId);
         _isLoading = false;
 
         if (_story is null)

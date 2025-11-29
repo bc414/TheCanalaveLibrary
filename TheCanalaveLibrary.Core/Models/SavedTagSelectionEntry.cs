@@ -1,3 +1,5 @@
+using TheCanalaveLibrary.Core.Tags;
+
 namespace TheCanalaveLibrary.Core.Models;
 
 /// <summary>

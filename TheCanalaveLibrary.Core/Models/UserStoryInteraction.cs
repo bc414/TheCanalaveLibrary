@@ -23,7 +23,7 @@ public partial class UserStoryInteraction
     public bool IsIgnored { get; set; }
 
     // --- Navigation Properties ---
-    public virtual Story Story { get; set; } = null!;
+    public virtual Story.Story Story { get; set; } = null!;
     public virtual User User { get; set; } = null!;
     
     //For the vertical partitions of related metadata

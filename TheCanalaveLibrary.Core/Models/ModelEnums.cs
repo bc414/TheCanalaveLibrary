@@ -39,11 +39,7 @@ public enum FilterEntityType : short
     GroupFolder = 3
 }
 
-public enum TagPriority : short
-{
-    Primary = 0,
-    Supporting = 1
-}
+
 
 public enum CharacterRelationshipType : short
 {
@@ -78,15 +74,7 @@ public enum StoryStatusEnum : short
     Rejected = 8
 }
 
-public enum TagTypeEnum : short
-{
-    Character = 0,
-    Setting = 1,
-    Genre = 2,
-    ContentWarning = 3,
-    CrossoverFandom = 4,
-    Relationship = 5
-}
+
 
 public enum ReportStatusEnum : short
 {

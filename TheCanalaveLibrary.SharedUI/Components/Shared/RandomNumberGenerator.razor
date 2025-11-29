@@ -1,6 +1,5 @@
-@rendermode RenderMode.InteractiveWebAssembly
-@inject IStoryOverviewService StoryOverviewService
-
+@rendermode RenderMode.InteractiveServer
+@inject IStoryReadService StoryOverviewService
 <div>
     <p>@_randomNumberMessage</p>
 
@@ -15,9 +14,9 @@
 
     private async Task GenerateRandomNumber()
     {
-        _isGenerating = true;
+        /*_isGenerating = true;
         int number = await StoryOverviewService.GetRandomNumber();
         _randomNumberMessage = $"Your random number is: {number}";
-        _isGenerating = false;
+        _isGenerating = false;*/
     }
 }

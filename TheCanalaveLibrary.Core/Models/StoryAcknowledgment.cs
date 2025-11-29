@@ -14,5 +14,5 @@ public partial class StoryAcknowledgment
 
     public virtual AcknowledgmentRole AcknowledgmentRole { get; set; } = null!;
 
-    public virtual Story Story { get; set; } = null!;
+    public virtual Story.Story Story { get; set; } = null!;
 }

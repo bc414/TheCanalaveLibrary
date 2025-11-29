@@ -21,5 +21,5 @@ public partial class StoryImport
 
     public DateTime DateImported { get; set; }
 
-    public virtual Story Story { get; set; } = null!;
+    public virtual Story.Story Story { get; set; } = null!;
 }

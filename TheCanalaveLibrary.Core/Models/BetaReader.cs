@@ -10,5 +10,5 @@ public partial class BetaReader
 
     public virtual User BetaReaderUser { get; set; } = null!;
 
-    public virtual Story Story { get; set; } = null!;
+    public virtual Story.Story Story { get; set; } = null!;
 }

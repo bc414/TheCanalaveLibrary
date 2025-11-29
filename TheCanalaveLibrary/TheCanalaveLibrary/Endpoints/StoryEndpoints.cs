@@ -1,5 +1,5 @@
-using TheCanalaveLibrary.Core.DTOs;
 using TheCanalaveLibrary.Core.ServiceInterfaces;
+using TheCanalaveLibrary.Core.Story;
 
 namespace TheCanalaveLibrary.Endpoints;
 
@@ -9,16 +9,16 @@ public static class StoryEndpoints
     {
         RouteGroupBuilder storiesApi = app.MapGroup("/api/stories");
 
-        storiesApi.MapGet("/{storyId:int}", async (int storyId, IStoryOverviewService storyService) =>
+        storiesApi.MapGet("/{storyId:int}", async (int storyId, IStoryReadService storyService) =>
         {
             StoryDetailsDTO? story = await storyService.GetStoryByIdAsync(storyId);
             return story is not null ? Results.Ok(story) : Results.NotFound();
         });
 
-        storiesApi.MapGet("/random-number", async (IStoryOverviewService storyService) =>
+        /*storiesApi.MapGet("/random-number", async (IStoryReadService storyService) =>
         {
             int number = await storyService.GetRandomNumber();
             return Results.Ok(number);
-        });
+        });*/
     }
 }

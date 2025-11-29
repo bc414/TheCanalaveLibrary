@@ -94,7 +94,7 @@ public class User : IdentityUser<int>
     public virtual ICollection<Report> ReportModeratorUsers { get; set; } = new List<Report>();
     public virtual ICollection<Report> ReportReporterUsers { get; set; } = new List<Report>();
     public virtual ICollection<Series> Series { get; set; } = new List<Series>();
-    public virtual ICollection<Story> Stories { get; set; } = new List<Story>();
+    public virtual ICollection<Story.Story> Stories { get; set; } = new List<Story.Story>();
     public virtual ICollection<StoryAcknowledgment> StoryAcknowledgments { get; set; } = new List<StoryAcknowledgment>();
     public virtual ICollection<UserBadge> UserBadges { get; set; } = new List<UserBadge>();
     public virtual ICollection<UserChapterInteraction> UserChapterInteractions { get; set; } = new List<UserChapterInteraction>();

@@ -1,4 +1,4 @@
-namespace TheCanalaveLibrary.Core.DTOs;
+namespace TheCanalaveLibrary.Core.Story;
 
 /// <summary>
 /// Contains all the details needed to display a story's summary page. Too dense for search results, but good for

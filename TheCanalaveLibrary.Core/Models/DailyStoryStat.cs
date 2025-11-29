@@ -10,5 +10,5 @@ public partial class DailyStoryStat
 
     public int Favorites { get; set; }
 
-    public virtual Story Story { get; set; } = null!;
+    public virtual Story.Story Story { get; set; } = null!;
 }

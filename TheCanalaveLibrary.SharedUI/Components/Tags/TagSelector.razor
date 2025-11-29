@@ -1,0 +1,126 @@
+@using TheCanalaveLibrary.Core.Tags
+@inject ITagRetrievalService TagRetrievalService
+
+<div class="tag-selector mb-4">
+    <label class="form-label fw-bold">@Label</label>
+
+    @if (_isLoading)
+    {
+        <div class="spinner-border spinner-border-sm" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    }
+    else
+    {
+        <div class="selected-tags-container mb-2">
+            @foreach (IStoryTag selectedTag in SelectedStoryTags)
+            {
+                var tagInfo = _availableTags.FirstOrDefault(t => t.TagId == selectedTag.TagId);
+                if (tagInfo != null)
+                {
+                    <span class="badge bg-primary me-1">
+                        @tagInfo.TagName
+                        <button type="button" class="btn-close btn-close-white ms-1" @onclick="() => RemoveTag(selectedTag)" aria-label="Remove"></button>
+                    </span>
+                }
+            }
+        </div>
+
+        @if (_useAutocomplete)
+        {
+            <div class="input-group">
+                <input type="text"
+                       class="form-control"
+                       list="@_dataListId"
+                       placeholder="Type to search for a tag..."
+                       @bind="_searchText"
+                       @bind:event="oninput"
+                       @onchange="HandleAutocompleteSelection" />
+
+                <datalist id="@_dataListId">
+                    @foreach (TagDropDownDTO tag in FilteredAvailableTags)
+                    {
+                        <option value="@tag.TagName">@tag.TagId</option>
+                    }
+                </datalist>
+            </div>
+        }
+        else
+        {
+            <div class="tag-checkbox-group">
+                @foreach (TagDropDownDTO tag in _availableTags)
+                {
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="tag-@tag.TagId"
+                               checked="@(SelectedStoryTags.Any(st => st.TagId == tag.TagId))"
+                               @onchange="() => HandleCheckboxToggle(tag)" />
+                        <label class="form-check-label" for="tag-@tag.TagId">@tag.TagName</label>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public List<IStoryTag> AllSelectedStoryTags { get; set; } = null!;
+
+    [Parameter, EditorRequired]
+    public TagTypeEnum TagType { get; set; }
+
+    [Parameter]
+    public string Label { get; set; } = "Tags";
+
+    [Parameter]
+    public int DisplayThreshold { get; set; } = 25;
+
+    private bool _isLoading = true;
+    private bool _useAutocomplete => _availableTags.Count > DisplayThreshold;
+    private string _searchText = string.Empty;
+    private List<TagDropDownDTO> _availableTags = new();
+    private readonly string _dataListId = $"tags-{Guid.NewGuid()}";
+
+    private List<IStoryTag> SelectedStoryTags => AllSelectedStoryTags.Where(t => t.TagTypeEnum == TagType).ToList();
+
+    private IEnumerable<TagDropDownDTO> FilteredAvailableTags =>
+        string.IsNullOrWhiteSpace(_searchText)
+            ? _availableTags.Where(t => !SelectedStoryTags.Any(st => st.TagId == t.TagId)).Take(10)
+            : _availableTags.Where(t =>
+                t.TagName.Contains(_searchText, StringComparison.OrdinalIgnoreCase) &&
+                !SelectedStoryTags.Any(st => st.TagId == t.TagId));
+
+    protected override async Task OnInitializedAsync()
+    {
+        _availableTags = await TagRetrievalService.GetTagsByTypeAsync(TagType);
+        _isLoading = false;
+    }
+
+    private void HandleAutocompleteSelection(ChangeEventArgs e)
+    {
+        string? selectedTagName = e.Value?.ToString();
+        if (string.IsNullOrWhiteSpace(selectedTagName)) return;
+
+        TagDropDownDTO? selectedTag = _availableTags.FirstOrDefault(t => t.TagName.Equals(selectedTagName, StringComparison.OrdinalIgnoreCase));
+        if (selectedTag != null) { AddTag(selectedTag); }
+        _searchText = string.Empty;
+    }
+
+    private void HandleCheckboxToggle(TagDropDownDTO tag)
+    {
+        IStoryTag? existingTag = SelectedStoryTags.FirstOrDefault(st => st.TagId == tag.TagId);
+        if (existingTag != null) { RemoveTag(existingTag); }
+        else { AddTag(tag); }
+    }
+
+    private void AddTag(TagDropDownDTO tag)
+    {
+        if (AllSelectedStoryTags.Any(st => st.TagId == tag.TagId)) return;
+        AllSelectedStoryTags.Add(new StoryTagDTO { TagId = tag.TagId, TagTypeEnum = this.TagType, Priority = TagPriority.Supporting });
+    }
+
+    private void RemoveTag(IStoryTag tagToRemove)
+    {
+        AllSelectedStoryTags.Remove(tagToRemove);
+    }
+}

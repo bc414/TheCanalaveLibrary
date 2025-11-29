@@ -1,0 +1,65 @@
+@using TheCanalaveLibrary.Core.Tags
+@inject ITagRetrievalService TagRetrievalService
+
+<EditForm Model="@ViewModel" OnValidSubmit="OnValidSubmit" FormName="story-properties-form">
+    <DataAnnotationsValidator />
+
+    @if (ViewModel.ServerValidationErrors.Any())
+    {
+        <div class="alert alert-danger" role="alert">
+            <ul>
+                @foreach (string error in ViewModel.ServerValidationErrors)
+                {
+                    <li>@error</li>
+                }
+            </ul>
+        </div>
+    }
+
+    <div class="mb-3">
+        <label for="title" class="form-label">Title</label>
+        <InputText id="title" class="form-control" @bind-Value="ViewModel.Title" />
+        <ValidationMessage For="@(() => ViewModel.Title)" />
+    </div>
+
+    <div class="mb-3">
+        <label for="short-desc" class="form-label">Short Description</label>
+        <InputTextArea id="short-desc" class="form-control" @bind-Value="ViewModel.ShortDescription" />
+        <ValidationMessage For="@(() => ViewModel.ShortDescription)" />
+    </div>
+    
+    <div class="mb-3">
+        <label for="long-desc" class="form-label">Long Description / Summary</label>
+        <InputTextArea id="long-desc" class="form-control" rows="5" @bind-Value="ViewModel.LongDescription" />
+        <ValidationMessage For="@(() => ViewModel.LongDescription)" />
+    </div>
+
+    <div class="mb-3">
+        <label for="rating" class="form-label">Rating</label>
+        <InputSelect id="rating" class="form-select" @bind-Value="ViewModel.Rating">
+            @foreach (Rating rating in Enum.GetValues<Rating>())
+            {
+                <option value="@rating">@rating.ToString()</option>
+            }
+        </InputSelect>
+    </div>
+
+    @* TODO: Add components for Tag selection, Cover Art upload, etc. *@
+
+</EditForm>
+
+@code {
+    [Parameter, EditorRequired]
+    public StoryPropertiesViewModel ViewModel { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback OnValidSubmit { get; set; }
+
+    public List<TagDropDownDTO> CharacterTags;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CharacterTags = await TagRetrievalService.GetAllCharacterTagsAsync();
+    }
+
+}

@@ -1,6 +1,9 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+using TheCanalaveLibrary.Core.Models;
+using TheCanalaveLibrary.Core.Story;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core.Tags;
 
 public partial class Tag
 {

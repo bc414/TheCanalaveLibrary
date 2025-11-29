@@ -2,6 +2,8 @@ using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Core.Models;
+using TheCanalaveLibrary.Core.Story;
+using TheCanalaveLibrary.Core.Tags;
 
 namespace TheCanalaveLibrary.Data;
 

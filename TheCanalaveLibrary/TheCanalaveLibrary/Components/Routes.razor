@@ -9,7 +9,7 @@
         NotFoundPage="typeof(TheCanalaveLibrary.SharedUI.Pages.NotFound)">
     <Found Context="routeData">
         <CascadingAuthenticationState>
-            <RouteView RouteData="routeData" DefaultLayout="typeof(DeviceLayout)" />
+            <RouteView RouteData="routeData" DefaultLayout="typeof(DeviceLayout)" @rendermode="RenderMode.InteractiveServer" />
         </CascadingAuthenticationState>
         <FocusOnNavigate RouteData="routeData" Selector="h1"/>
     </Found>

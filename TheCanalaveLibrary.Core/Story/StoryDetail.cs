@@ -1,7 +1,8 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using TheCanalaveLibrary.Core.Models;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core.Story;
 
 /// <summary>
 /// The "cold" table. Contains large or rarely-accessed data
@@ -23,5 +24,5 @@ public partial class StoryDetail
     public StoryStatusEnum PostApprovalStatus { get; set; }
 
     // --- Navigation Properties ---
-    public virtual Story Story { get; set; } = null!;
+    public virtual Core.Story.Story Story { get; set; } = null!;
 }

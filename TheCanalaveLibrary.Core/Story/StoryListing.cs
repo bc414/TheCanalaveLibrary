@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core.Story;
 
 /// <summary>
 /// The "warm" table. Contains projection data needed for displaying
@@ -26,5 +26,5 @@ public class StoryListing
     [MaxLength(512)] public string? CoverArtRelativeUrl { get; set; }
 
     // --- Navigation Property ---
-    public virtual Story Story { get; set; } = null!;
+    public virtual Core.Story.Story Story { get; set; } = null!;
 }

@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Core.Models;
+using TheCanalaveLibrary.Core.Story;
 
 namespace TheCanalaveLibrary.Data;
 

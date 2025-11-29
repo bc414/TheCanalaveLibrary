@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using TheCanalaveLibrary.Client.Services;
 using TheCanalaveLibrary.Core.ServiceInterfaces;
+using TheCanalaveLibrary.Core.Story;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 
@@ -10,8 +11,9 @@ builder.Services.AddAuthenticationStateDeserialization();
 
 //Client side service registration for dependency injection
 builder.Services.AddScoped<IDeviceDetectionService, WasmDeviceDetectionService>();
-builder.Services.AddScoped<IStoryOverviewService, HttpStoryOverviewService>();
 builder.Services.AddScoped<ISpriteService, OptimisticSpriteService>();
+builder.Services.AddScoped<IStoryReadService, HttpStoryReadService>();
+builder.Services.AddScoped<IStoryWriteService, HttpStoryWriteService>();
 
 // Register HttpClient for dependency injection into services like HttpStoryOverviewService
 // The base address is configured to point to the server application.

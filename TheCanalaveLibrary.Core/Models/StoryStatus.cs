@@ -12,5 +12,5 @@ public partial class StoryStatus
 
     [Required] [MaxLength(255)] public string Description { get; set; } = null!;
 
-    public virtual ICollection<Story> Stories { get; set; } = new List<Story>();
+    public virtual ICollection<Story.Story> Stories { get; set; } = new List<Story.Story>();
 }

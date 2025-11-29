@@ -3,10 +3,10 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Components;
 using TheCanalaveLibrary.Components.Account;
-using TheCanalaveLibrary.Core.DTOs;
 using TheCanalaveLibrary.Data;
 using TheCanalaveLibrary.Core.Models;
 using TheCanalaveLibrary.Core.ServiceInterfaces;
+using TheCanalaveLibrary.Core.Story;
 using TheCanalaveLibrary.Endpoints;
 using TheCanalaveLibrary.Services; // Make sure this is present
 
@@ -90,7 +90,8 @@ builder.Services.AddScoped<DataSeeder>();
 
 // Services for dependency injection for the server
 builder.Services.AddScoped<IDeviceDetectionService, ServerDeviceDetectionService>();
-builder.Services.AddScoped<IStoryOverviewService, StoryOverviewService>();
+builder.Services.AddScoped<IStoryReadService, DbStoryReadService>();
+builder.Services.AddScoped<IStoryWriteService, DbStoryWriteService>();
 builder.Services.AddScoped<ISpriteService, FileSystemSpriteService>();
 
 WebApplication app = builder.Build();
