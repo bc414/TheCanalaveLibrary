@@ -3,3 +3,13 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+
+# Visual Studio / Rider IDE state and caches
+.vs/
+.idea/
+
+# MSBuild user-specific files (active launch profile, debug prefs)
+*.user
+
+# Claude Code per-developer settings (shared settings.json stays tracked)
+.claude/settings.local.json
