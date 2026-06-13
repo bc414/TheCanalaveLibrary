@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(**)",
+      "Glob(**)",
+      "Grep(**)",
+      "Bash(dotnet build *)",
+      "Bash(dotnet test *)",
+      "Bash(git status)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(find *)",
+      "Bash(cat *)",
+      "Write(features/**)",
+      "Write(status.md)",
+      "Write(workplan.md)",
+      "Write(audit-summary.md)",
+      "Write(.claude/skills/**)"
+    ],
+    "deny": [
+      "Write(**.cs)",
+      "Write(**.csproj)",
+      "Write(**.razor)",
+      "Edit(**.cs)",
+      "Edit(**.csproj)",
+      "Edit(**.razor)"
+    ]
+  }
+}
