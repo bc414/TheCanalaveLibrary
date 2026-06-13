@@ -51,7 +51,7 @@ alternatives to these** — encode them, build on them.
 |---|---|---|
 | **Core** | POCOs, service interfaces, enums, DTOs, constants | NO EF Core packages except `Microsoft.EntityFrameworkCore.Abstractions`. Shared by server + WASM. |
 | **SharedUI** | All `.razor` components/pages, layouts, `_Imports.razor` | NO WASM-specific NuGet. Render-mode directives are metadata only. References Core only. |
-| **TheCanalaveLibrary** (server) | `App.razor`, both DbContexts, server service impls, workers, API controllers, Identity components | Identity components MUST stay here (`UserManager`/`SignInManager`/`HttpContext`). |
+| **TheCanalaveLibrary.Server** (server) | `App.razor`, both DbContexts, server service impls, workers, API controllers, Identity components | Identity components MUST stay here (`UserManager`/`SignInManager`/`HttpContext`). |
 | **Client** (WASM) | Client `Program.cs`, HTTP-based service impls | Service impls inject `HttpClient`, call API endpoints. |
 | **AppHost** | Aspire orchestrator | Dev only, never deployed. |
 

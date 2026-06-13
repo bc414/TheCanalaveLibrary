@@ -148,7 +148,7 @@ The Canalave Library is a Pokémon-fandom fanfiction website. The name reference
 
 ```
 TheCanalaveLibrary (Solution)
-├── TheCanalaveLibrary              — Main server project (ASP.NET Core, Blazor Server host)
+├── TheCanalaveLibrary.Server       — Main server project (ASP.NET Core, Blazor Server host)
 │                                     Contains: ApplicationDbContext, ReadOnlyApplicationDbContext,
 │                                     concrete service implementations (ServerStoryService, etc.),
 │                                     background workers, API controllers, Identity components,
@@ -174,7 +174,7 @@ TheCanalaveLibrary (Solution)
 | Project | References |
 |---|---|
 | AppHost | Main server, Client, ServiceDefaults |
-| Main server (TheCanalaveLibrary) | Core, SharedUI, Client, ServiceDefaults |
+| Main server (TheCanalaveLibrary.Server) | Core, SharedUI, Client, ServiceDefaults |
 | Client | Core, SharedUI |
 | SharedUI | Core |
 

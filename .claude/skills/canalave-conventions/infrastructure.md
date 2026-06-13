@@ -29,7 +29,7 @@ var postgres = builder.AddPostgres("postgres").AddDatabase("canalavedb");
 var redis = builder.AddRedis("redis");
 var minio = builder.AddMinIO("minio");           // local S3 emulator
 
-builder.AddProject<Projects.TheCanalaveLibrary>("web")
+builder.AddProject<Projects.TheCanalaveLibrary_Server>("web")
     .WithReference(postgres)
     .WithReference(redis)
     .WithReference(minio);
