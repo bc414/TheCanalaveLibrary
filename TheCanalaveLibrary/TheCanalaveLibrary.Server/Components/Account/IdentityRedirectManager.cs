@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Identity;
 using TheCanalaveLibrary.Core.Models;
 
-namespace TheCanalaveLibrary.Components.Account;
+namespace TheCanalaveLibrary.Server.Components.Account;
 
 internal sealed class IdentityRedirectManager(NavigationManager navigationManager)
 {

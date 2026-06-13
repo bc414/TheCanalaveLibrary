@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Core.Models;
 using TheCanalaveLibrary.Core.Story;
 
-namespace TheCanalaveLibrary.Data;
+namespace TheCanalaveLibrary.Server.Data;
 
 public class DataSeeder
 {

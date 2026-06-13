@@ -1,6 +1,6 @@
-using TheCanalaveLibrary.Data;
+using TheCanalaveLibrary.Server.Data;
 
-namespace TheCanalaveLibrary.Services;
+namespace TheCanalaveLibrary.Server.Services;
 
 // This would be in a service class, e.g., UserService.cs
 // You would inject your DbContext via the constructor.

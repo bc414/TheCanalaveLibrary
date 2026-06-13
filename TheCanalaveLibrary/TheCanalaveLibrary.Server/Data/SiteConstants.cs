@@ -1,6 +1,6 @@
 // In a new file, e.g., Data/SiteConstants.cs
 
-namespace TheCanalaveLibrary.Data;
+namespace TheCanalaveLibrary.Server.Data;
 
 public static class SiteBadges
 {

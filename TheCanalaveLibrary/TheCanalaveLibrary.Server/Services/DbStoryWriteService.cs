@@ -2,9 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Core.Models;
 using TheCanalaveLibrary.Core.ServiceInterfaces;
 using TheCanalaveLibrary.Core.Story;
-using TheCanalaveLibrary.Data;
+using TheCanalaveLibrary.Server.Data;
 
-namespace TheCanalaveLibrary.Services;
+namespace TheCanalaveLibrary.Server.Services;
 
 public class DbStoryWriteService : IStoryWriteService
 {

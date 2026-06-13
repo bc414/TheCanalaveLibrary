@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Http;
 using TheCanalaveLibrary.Core.ServiceInterfaces;
 
-namespace TheCanalaveLibrary.Services;
+namespace TheCanalaveLibrary.Server.Services;
 
 /// <summary>
 /// Detects the device type on the server by inspecting the User-Agent header.

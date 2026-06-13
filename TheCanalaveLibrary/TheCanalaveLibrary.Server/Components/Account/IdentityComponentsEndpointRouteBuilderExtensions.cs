@@ -7,8 +7,8 @@ using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Primitives;
-using TheCanalaveLibrary.Components.Account.Pages;
-using TheCanalaveLibrary.Components.Account.Pages.Manage;
+using TheCanalaveLibrary.Server.Components.Account.Pages;
+using TheCanalaveLibrary.Server.Components.Account.Pages.Manage;
 using TheCanalaveLibrary.Core.Models;
 
 namespace Microsoft.AspNetCore.Routing;

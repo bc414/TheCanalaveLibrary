@@ -1,6 +1,6 @@
 using TheCanalaveLibrary.Core.ServiceInterfaces;
 
-namespace TheCanalaveLibrary.Services;
+namespace TheCanalaveLibrary.Server.Services;
 
 public class FileSystemSpriteService : ISpriteService
 {

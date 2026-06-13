@@ -5,7 +5,7 @@ using TheCanalaveLibrary.Core.Models;
 using TheCanalaveLibrary.Core.Story;
 using TheCanalaveLibrary.Core.Tags;
 
-namespace TheCanalaveLibrary.Data;
+namespace TheCanalaveLibrary.Server.Data;
 
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
     : IdentityDbContext<User, ApplicationRole, int>(options)
