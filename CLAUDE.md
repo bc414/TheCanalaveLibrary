@@ -2,68 +2,60 @@
 
 ## Project Identity
 
-The Canalave Library is a Pokémon-fandom fanfiction website built with Blazor (.NET), EF Core (Code-First), PostgreSQL, Redis, and .NET Aspire for local orchestration. The full design history lives in `canalave_library_spec.md` — an unchanging ~1600-line snapshot covering mission/philosophy, tech stack, architecture, database schema, features, and implementation roadmap.
+Pokémon-fandom fanfiction website. Blazor (.NET 10), EF Core (Code-First), PostgreSQL, Redis, .NET Aspire.
 
 ## Stage Definitions
 
-Each cell in the tracking system (a Feature × Layer intersection) holds exactly one Stage value. Stages encode both a **state** (what's true now) and a **directive** (what happens next). Stages are not strictly monotonic — a Stage 4 cell may resolve to Stage 2, 1, or 5.
+Each cell in the Feature × Layer grid holds a Stage or N/A. Stages encode state + directive.
 
 | Stage | State | Directive | Tool |
 |-------|-------|-----------|------|
-| **1** | Intent has a gap too fundamental to proceed | Iterate to clarify intent | Sonnet in chat or Claude Code (see cell's note for which) |
-| **2** | Intent is settled, but no plan or code exists (or what existed was not confirmed) | Plan and build | opusplan (Opus plans, Sonnet executes, one review checkpoint) |
-| **3** | Intent settled AND a validated plan/spec already exists | Build directly from the existing spec | Sonnet in Claude Code |
-| **4** | Code/plan exists but disagrees with the determined-correct architecture | Diagnose and reconcile | Opus 4.8 diagnoses; resolution routes to opusplan (Stage 2) or Sonnet (Stage 3) per outcome |
-| **5** | Aligned with intent, technically sound, compiles | Dormant — awaiting human/runtime verification | — |
+| **1** | Gap too fundamental to proceed | Clarify intent | Sonnet in chat or Claude Code (per cell note) |
+| **2** | Intent settled, no plan/code | Plan and build | opusplan |
+| **3** | Intent settled + validated spec exists | Build from spec | Sonnet in Claude Code |
+| **4** | Code/plan disagrees with correct architecture | Diagnose and reconcile | Opus diagnoses → opusplan (Stage 2) or Sonnet (Stage 3) |
+| **5** | Aligned, sound, compiles | Dormant — awaiting verification | — |
 | **6** | Human-verified and frozen | Do not touch | — |
+| **N/A** | Layer does not apply to this feature | Skip | — |
 
-## The SLF Table
+Grid columns: `L1 | L2 | L3-Logic | L3.5-Structure | L4-Style | L5 | L6 | L7 | L8`
 
-A 2D grid: **Layers** as columns (bounded set), **Features** as rows (dependency-ordered, foundational at top). Each cell holds a Stage value.
+## Project Files
 
-## File Schema
+All process artifacts live under `.claude/`. The spec and this file live at repo root.
 
 | File | Purpose | Updated by |
 |------|---------|------------|
-| `status.md` | Feature × Layer → Stage grid. Dashboard only — no prose, no dependencies. | Any session completing work on a cell |
-| `workplan.md` | Ordered list of work-units. Each names its cell(s), tool, pointer to `features/<name>.md`, and position = sequencing. Grouping expressed as multi-cell entries. | Any session completing a work-unit |
-| `features/<name>.md` | Per-feature notes across all layers, plus current file locations in the repo. | Initially by audit; working sessions as they resolve cells |
-| `conventions.md` | Cross-cutting code patterns: naming, EF Core/Npgsql, Blazor render-mode, service/DTO shape, code organization. Authoritative paradigm-correctness reference. | Initially from spec + current framework docs; refined through implementation |
-| `audit-summary.md` | Write-once human-facing overview: stage distribution, surprising findings, reconciliation index, Stage-1 landscape. | Written once during audit (never updated afterward) |
+| `canalave_library_unified_spec.md` | Single authoritative specification (read-only) | Never (historical snapshot) |
+| `.claude/status.md` | Feature × Layer → Stage grid. Dashboard only — no prose. | Any session completing work on a cell |
+| `.claude/workplan.md` | Ordered work-units. Each names cell(s), tool, audit file pointer, position. | Any session completing a work-unit |
+| `.claude/audit-summary.md` | Write-once audit overview: stage distribution, surprises, reconciliation index, Stage-1 landscape, UI component inventory. | Written once during audit |
+| `.claude/audit/<FolderName>.md` | Per-folder-cluster notes. Shared context header, then per-feature sections with per-layer stages. | Audit creates; working sessions update |
+| `.claude/skills/canalave-conventions/SKILL.md` | Authoritative code conventions (hub file + layer files). Loaded as a skill when writing code. | Refined through implementation |
 
-### What goes in `features/<name>.md` per stage
+### Audit file content per stage
 
 | Stage | Note contains |
 |-------|--------------|
-| **1** | Gap description, whether conceptual or code-relationship, and whether to resolve in chat or Claude Code |
-| **2** | Which constraints are settled (do not revisit) vs. genuinely open for opusplan to resolve |
-| **3** | Pointer to the specific section of `canalave_library_spec.md` that serves as the validated spec |
-| **4** | Diagnosis: what exists, what correct looks like, the nature of the gap, and the implied resolution stage |
-| **5** | Confirmation note — how verified (build, tests, audit inspection) |
+| **1** | Gap description (conceptual / code-relationship / blocked), resolution venue (chat / Claude Code) |
+| **2** | Settled constraints (do not revisit) vs. open for opusplan |
+| **3** | Pointer to spec section serving as validated plan |
+| **4** | What exists, what's correct, nature of gap, implied resolution stage |
+| **5** | How verified (build, tests, audit inspection) |
+| **N/A** | Why the layer doesn't apply |
 
-### Relationship to `canalave_library_spec.md`
+### Spec relationship
 
-The spec is an unchanging historical snapshot. Feature files point into it (section references, not copies) and add a status layer on top. For cells where code was determined more authoritative than the spec, the feature file carries both: a pointer to what the spec said, and the narrative of what changed and why. The spec's text doesn't change.
+The spec is a read-only snapshot. Audit files point into it (section references, not copies). When code is more authoritative than the spec, the audit file carries both: what the spec said, and what changed and why.
 
 ## Per-Stage Process Guidance
 
-**Stage 2 (opusplan).** Before approving the plan, check it against this cell's settled-vs-open note in `features/<name>.md`. If the plan proposes changing something marked "settled," stop and flag — this cell may actually be Stage 4. Include settled constraints as explicit "do not revisit" context, not ambient background.
+**Stage 2 (opusplan).** Check the cell's settled-vs-open note in `.claude/audit/<FolderName>.md` before approving the plan. If the plan changes something marked "settled," stop and flag — may be Stage 4.
 
-**Stage 3 (Sonnet direct).** Build from the spec section pointed to in `features/<name>.md`. If the code doesn't compile in a way that suggests more than a typo — an actual design gap — stop and flag. This may be a misclassification (should be Stage 2 or 4).
+**Stage 3 (Sonnet direct).** Build from the spec section in the audit file. If a design gap surfaces (not just a typo), stop — may be Stage 2 or 4.
 
-**Stage 4 (Opus reconcile).** Use the diagnosis note in `features/<name>.md` as the starting point. The diagnosis describes the gap; resolution determines a resulting stage. If code needs to change → the cell becomes Stage 2 (plan and rebuild via opusplan). If intent needs updating to match code → update the feature file and the cell may reach Stage 5. If deeper ambiguity surfaces → the cell becomes Stage 1. Update both `status.md` and `features/<name>.md`.
+**Stage 4 (Opus reconcile).** Start from the diagnosis note. Resolution determines resulting stage: code must change → Stage 2; intent updates to match code → may reach Stage 5; deeper ambiguity → Stage 1. Update both `.claude/status.md` and the audit file.
 
-**Stage 1 encountered as a dependency.** If a cell you need depends on a Stage-1 cell, surface it to the user rather than guessing past it.
+**Unresolved dependency encountered.** If a cell you need depends on another cell that hasn't reached Stage 5, surface it to the user. This applies regardless of the dependency's current stage — don't assume any unresolved dependency's outcome. Name it, state its stage, let the user decide.
 
-**After completing any work-unit.** Update `status.md` (cell's stage value) and `workplan.md` (mark entry complete). This is part of finishing the work, not separate bookkeeping.
-
-## Reference Documents
-
-| Document | Role | Location |
-|----------|------|----------|
-| `canalave_library_spec.md` | Unchanging design-history snapshot | Repo root |
-| `conventions.md` | Authoritative code patterns (loaded as a skill when writing code) | `.claude/skills/canalave-conventions/SKILL.md` |
-| `status.md` | Stage dashboard | Repo root or docs/ |
-| `workplan.md` | Ordered work-units | Repo root or docs/ |
-| `features/<name>.md` | Per-feature notes | `features/` directory |
-| `audit-summary.md` | Write-once audit overview | Repo root or docs/ |
+**After completing any work-unit.** Update `.claude/status.md` and `.claude/workplan.md`. This is part of finishing the work, not separate bookkeeping.

@@ -18,7 +18,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\TheCanalaveLibrary\TheCanalaveLibrary.Server\TheCanalaveLibrary.Server.csproj" />
+      <ProjectReference Include="..\TheCanalaveLibrary.Server\TheCanalaveLibrary.Server.csproj" />
     </ItemGroup>
 
 </Project>

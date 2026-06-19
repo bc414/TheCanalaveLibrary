@@ -1,0 +1,286 @@
+# Layer 3 — UI Logic (Contract + Behavior)
+
+The `@code` block of Razor components: what the component needs from outside (Contract) and
+what it does in response to events and lifecycle (Behavior). Pure C# — decidable entirely
+from the spec and data model with no visual design dependency.
+
+## Contract: Parameters, Services, Events
+
+Every component's public API consists of three kinds of declarations:
+
+```razor
+@code {
+    // What it receives from its parent
+    [Parameter] public StoryListingDto Story { get; set; } = default!;
+    [Parameter] public bool IsCompact { get; set; }
+
+    // What it raises back to its parent
+    [Parameter] public EventCallback<int> OnFavoriteToggled { get; set; }
+
+    // What it fetches independently (pages and cross-cutting components only)
+    @inject IStoryReadService StoryService
+}
+```
+
+**Leaf components:** Parameters and EventCallbacks only. No service injection.
+
+**Composite components:** Parameters flowing through, plus coordination state. Service injection
+only for genuinely independent concerns (typeahead queries, self-contained writes).
+
+**Page/dispatcher components:** Service injection, route `[Parameter]`s, `IDeviceDetectionService`.
+
+### Service Injection Principle
+
+Inject a service when the component has a genuinely independent concern that cannot or should
+not be coordinated from above. The constraint that IS rigid: **pure display components that show
+pre-loaded data must never inject read services** (prevents N+1 in lists).
+
+Legitimate non-page injection:
+- Cross-cutting layout elements (notification bell — no parent dispatcher owns this data)
+- User-input-driven queries (tag typeahead — bubbling keystrokes to parent is absurd)
+- Self-contained writes (follow button, comment like — parent doesn't need the result)
+
+## State Persistence: `[PersistentState]` (.NET 10)
+
+.NET 10 replaces the manual `PersistentComponentState` dance with a **declarative attribute**:
+
+```razor
+@code {
+    [PersistentState]
+    public StoryListingDto[]? Stories { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Stories ??= await StoryService.GetListingsAsync();
+    }
+}
+```
+
+**Rules:**
+- Property must be **`public`** (framework uses reflection for trimming/source-gen).
+- The `??=` guard is the key pattern — set only when not already restored from prerender state.
+- **Security:** persisted state is exposed to the browser under `InteractiveAuto`. **Never persist
+  sensitive/private data** this way.
+- For multiple instances of the same component, pair with `@key`.
+
+### Persisting Service State Across the Handoff
+
+For state held in a scoped DI service (not a component), annotate the service property and register:
+
+```csharp
+public class CounterTracker
+{
+    [PersistentState]
+    public int CurrentCount { get; set; }
+}
+
+builder.Services.AddScoped<CounterTracker>();
+builder.Services.AddRazorComponents()
+    .RegisterPersistentService<CounterTracker>(RenderMode.InteractiveAuto);
+```
+
+## The Component @code IS the ViewModel
+
+For display components, the component's `@code` block serves the ViewModel role: computed display
+properties, ephemeral UI state, and display enrichment on top of DTO data.
+
+```razor
+@code {
+    [Parameter] public StoryListingDto Story { get; set; } = default!;
+
+    private string WordCountDisplay => Story.WordCount switch {
+        < 1_000     => $"{Story.WordCount} words",
+        < 1_000_000 => $"{Story.WordCount / 1000.0:F0}K words",
+        _           => $"{Story.WordCount / 1_000_000.0:F1}M words"
+    };
+
+    private bool _synopsisExpanded = false;
+}
+```
+
+None of this crosses the service boundary. No separate class needed.
+
+## When a Separate ViewModel Class IS Needed
+
+1. **EditForm binding.** `EditForm` requires a bound model. `DataAnnotations` need a class.
+   Applies to: story create/edit, profile tagline, account management text fields.
+2. **Shared form shape.** Two pages share the same editable fields.
+3. **Complex testable logic.** Computed properties worth unit testing without rendering.
+4. **Service-owned persisted state.** `RegisterPersistentService<T>` requires a class for DI.
+
+### What does NOT need a ViewModel class
+
+WYSIWYG editor surfaces (Quill doesn't use `InputText`), toggle interactions (booleans in `@code`),
+selection state (`List<Tag>` in `@code`), navigation controls, settings toggles, `ResultsFilterPanel`
+coordination state. For all of these the component's `@code` is the model.
+
+## Forms (When ViewModels Apply)
+
+```razor
+<EditForm Model="viewModel" OnValidSubmit="HandleSubmit">
+    <DataAnnotationsValidator />
+    <InputText @bind-Value="viewModel.Title" />
+    <ValidationMessage For="() => viewModel.Title" />
+    <button type="submit">Save</button>
+</EditForm>
+
+@code {
+    private StoryEditViewModel _viewModel = new();
+    private bool _isSubmitting;
+
+    // Read-path data for dropdowns — NOT in the ViewModel
+    private ContentRatingEnum[] _ratingOptions = Enum.GetValues<ContentRatingEnum>();
+}
+```
+
+Dropdown/selection options are separate `@code` fields, not in the ViewModel.
+
+### Nested Validation with `[ValidatableType]` (.NET 10)
+
+.NET 10 supports nested object validation without custom validators. Mark a complex type with
+`[ValidatableType]` and `DataAnnotationsValidator` validates it recursively:
+
+```csharp
+[ValidatableType]
+public class StoryEditViewModel
+{
+    [Required, StringLength(200)]
+    public string Title { get; set; } = "";
+
+    [ValidatableType]
+    public StoryMetadataViewModel Metadata { get; set; } = new();
+}
+```
+
+Useful for ViewModels containing grouped settings or multi-section forms. Simplifies the
+three-tiered validation strategy at Tier 1.
+
+### When to Drop to the Manual PersistentComponentState Service
+
+The imperative `PersistentComponentState` service (`RegisterOnPersisting` / `PersistAsJson` /
+`TryTakeFromJson`) is the escape hatch for complex serialization, runtime-computed keys, or
+conditional persistence. .NET 10 adds `RegisterOnRestoring` for imperative control over how
+state is restored (complementing `RegisterOnPersisting` for persistence). Use `[PersistentState]`
+by default; drop to the service only when the attribute's behavior doesn't fit.
+
+## Optimistic Updates & Debounce
+
+For high-frequency interactions (Favorite/Follow/Ignore buttons):
+
+1. **Optimistic local update** on click — toggle the bool, re-render immediately.
+2. **2-second per-component debounce** (`SiteConstants.InteractionDebounceMs`, default 2000ms).
+3. When the timer fires, one API call for that one story.
+
+The debounce timer lives in the coordination composite (`StoryInteractionPanel`), not in
+individual leaf buttons.
+
+## UserStoryInteractionButton — EventCallback-Driven Behavior
+
+No mode enum. The presence or absence of `OnToggle` determines behavior:
+
+```razor
+@code {
+    [Parameter] public bool IsActive { get; set; }
+    [Parameter] public EventCallback<bool> OnToggle { get; set; }
+    [Parameter] public string IconIdentifier { get; set; } = "";
+    private bool IsReadOnly => !OnToggle.HasDelegate;
+}
+@if (!IsReadOnly || IsActive)
+{
+    <button @onclick="HandleClick" ...>...</button>
+}
+```
+
+**Two presentation contexts:**
+- **Listing context** (StoryCard): Ignore and ReadItLater receive `OnToggle` (clickable).
+  Favorite, Followed, HiddenFavorite receive no `OnToggle` (read-only, visible only when true).
+- **Detail context** (story page): all receive `OnToggle` (all clickable).
+
+**Visibility rules:** Ignore and ReadItLater are visible only when the story is a blank slate
+(no positive engagement) OR when already active.
+
+**Own story:** The author's own story replaces the interaction panel with an Edit Story button.
+The panel composite receives `IsOwnStory` parameter.
+
+## Spoiler Comment State
+
+`IsSpoiler` on `ChapterComment` — completion-gated reveal:
+
+```razor
+@code {
+    // Passed from ChapterPage dispatcher (already loaded for interaction panel)
+    [Parameter] public bool UserHasCompletedStory { get; set; }
+
+    // Ephemeral — re-hides on every page load
+    private bool _isRevealed = false;
+
+    private void HandleRevealClick()
+    {
+        if (UserHasCompletedStory)
+            _isRevealed = true;
+        else
+            _showConfirmDialog = true; // "You haven't finished. Are you sure?"
+    }
+}
+```
+
+## Component Injection Rules
+
+- **Inject interfaces, never `DbContext` or concrete services.**
+- **Components are render-mode agnostic.** A component in SharedUI must work under both server and WASM.
+- Use `RendererInfo.IsInteractive` only when genuinely needed:
+
+```razor
+@if (!RendererInfo.IsInteractive)
+{
+    <p>Loading...</p>
+}
+else
+{
+    @ChildContent
+}
+```
+
+## Page Dispatcher: Entity Not Found (.NET 10)
+
+Use `NavigationManager.NotFound()` in page dispatchers when the requested entity doesn't exist:
+
+```csharp
+@inject NavigationManager Nav
+
+protected override async Task OnInitializedAsync()
+{
+    var story = await StoryService.GetDetailAsync(StoryId);
+    if (story is null)
+    {
+        Nav.NotFound();
+        return;
+    }
+    Story = story;
+}
+```
+
+Replaces manual navigation to error pages. The framework routes to the designated Not Found page.
+
+## Parameters: DTOs and Primitives
+
+**Pass the DTO** when a component renders multiple fields from it:
+```razor
+[Parameter] public StoryListingDto Story { get; set; } = default!;
+```
+
+**Pass primitives** when a component only needs one value:
+```razor
+[Parameter] public bool IsActive { get; set; }
+[Parameter] public EventCallback<bool> OnToggle { get; set; }
+```
+
+Don't decompose a DTO into individual primitive parameters — that defeats the stable contract.
+
+## Component Tier × Logic Summary
+
+| Tier | Service Injection | Parameters | State | Lifecycle |
+|---|---|---|---|---|
+| Leaf | Never | DTOs for multi-field display, primitives for single values, EventCallbacks | Computed display properties from DTOs, trivial internal fields | None |
+| Composite | Rarely (independent concerns only) | DTOs flowing through, configuration primitives | Coordination state (debounce, mode, dropdown open) | Rarely |
+| Page | Always (primary data loading) | Route `[Parameter]`s only | Loaded DTOs with `[PersistentState]`, ViewModels for EditForm | `OnInitializedAsync`, loading/error states |

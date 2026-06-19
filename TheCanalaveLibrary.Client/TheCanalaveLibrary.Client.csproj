@@ -16,8 +16,8 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\TheCanalaveLibrary.Core\TheCanalaveLibrary.Core.csproj" />
-      <ProjectReference Include="..\..\TheCanalaveLibrary.SharedUI\TheCanalaveLibrary.SharedUI.csproj" />
+      <ProjectReference Include="..\TheCanalaveLibrary.Core\TheCanalaveLibrary.Core.csproj" />
+      <ProjectReference Include="..\TheCanalaveLibrary.SharedUI\TheCanalaveLibrary.SharedUI.csproj" />
     </ItemGroup>
 
 </Project>

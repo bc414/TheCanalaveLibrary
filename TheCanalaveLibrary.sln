@@ -1,8 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheCanalaveLibrary.Server", "TheCanalaveLibrary\TheCanalaveLibrary.Server\TheCanalaveLibrary.Server.csproj", "{4227F1AE-D3BD-40B7-B611-76F6823B02E6}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheCanalaveLibrary.Server", "TheCanalaveLibrary.Server\TheCanalaveLibrary.Server.csproj", "{4227F1AE-D3BD-40B7-B611-76F6823B02E6}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheCanalaveLibrary.Client", "TheCanalaveLibrary\TheCanalaveLibrary.Client\TheCanalaveLibrary.Client.csproj", "{05688E06-B8C9-4F46-976B-36C25C404D96}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheCanalaveLibrary.Client", "TheCanalaveLibrary.Client\TheCanalaveLibrary.Client.csproj", "{05688E06-B8C9-4F46-976B-36C25C404D96}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheCanalaveLibrary.Core", "TheCanalaveLibrary.Core\TheCanalaveLibrary.Core.csproj", "{9294BDF8-3AAA-4994-81DB-78FD094B20BD}"
 EndProject
