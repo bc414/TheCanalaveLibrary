@@ -11,9 +11,10 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Hosting.AppHost" Version="9.5.2" />
-        <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="9.5.2" />
-        <PackageReference Include="Aspire.Hosting.Redis" Version="9.5.2" />
+        <PackageReference Include="Aspire.Hosting.AppHost" Version="13.4.5" />
+        <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.4.5" />
+        <PackageReference Include="Aspire.Hosting.Redis" Version="13.4.5" />
+        <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.9" />
     </ItemGroup>
 
     <ItemGroup>
