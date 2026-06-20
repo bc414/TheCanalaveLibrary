@@ -1,14 +1,8 @@
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using TheCanalaveLibrary.Server.Components;
-using TheCanalaveLibrary.Server.Components.Account;
-using TheCanalaveLibrary.Server.Data;
-using TheCanalaveLibrary.Core.Models;
-using TheCanalaveLibrary.Core.ServiceInterfaces;
-using TheCanalaveLibrary.Core.Story;
-using TheCanalaveLibrary.Server.Endpoints;
-using TheCanalaveLibrary.Server.Services; // Make sure this is present
+using TheCanalaveLibrary.Server;
+using TheCanalaveLibrary.Core;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddRedisDistributedCache("cache");

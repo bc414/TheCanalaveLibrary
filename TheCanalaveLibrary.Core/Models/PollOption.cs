@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public class PollOption
 {
@@ -14,5 +14,5 @@ public class PollOption
 
     public BasePoll Poll { get; set; } = null!;
 
-    public ICollection<User> Voters = new List<User>();
+    public virtual ICollection<PollVote> Votes { get; set; } = new List<PollVote>();
 }

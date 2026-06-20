@@ -1,4 +1,4 @@
-namespace TheCanalaveLibrary.Core.ServiceInterfaces;
+namespace TheCanalaveLibrary.Core;
 
 public interface ISpriteService
 {

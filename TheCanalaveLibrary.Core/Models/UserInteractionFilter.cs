@@ -1,6 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// A user interaction filter represents a set of stories that a user may want to exclude from search results

@@ -1,7 +1,7 @@
-﻿using System.ComponentModel.DataAnnotations;
-using TheCanalaveLibrary.Core.Tags;
+using System.ComponentModel.DataAnnotations;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public partial class SettingDetail
 {
@@ -19,5 +19,5 @@ public partial class SettingDetail
 
     public virtual Tag BaseTag { get; set; } = null!;
 
-    public virtual Story.Story Story { get; set; } = null!;
+    public virtual Story Story { get; set; } = null!;
 }

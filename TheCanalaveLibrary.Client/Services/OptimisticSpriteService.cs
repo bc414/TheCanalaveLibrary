@@ -1,6 +1,6 @@
-using TheCanalaveLibrary.Core.ServiceInterfaces;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Client.Services;
+namespace TheCanalaveLibrary.Client;
 
 /// <summary>
 /// This service runs in the browser, so it cannot access the file system to see if a sprite exists.

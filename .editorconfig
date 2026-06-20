@@ -1,0 +1,8 @@
+root = true
+
+[*.{cs,razor}]
+# This project uses one flat namespace per project (Core/Server/SharedUI/Client) regardless of
+# folder depth — see .claude/skills/canalave-conventions/SKILL.md "Code Organization". Disable the
+# built-in "namespace does not match folder structure" analyzer; it actively fights this convention
+# and will otherwise prompt "fix namespace" suggestions that re-introduce folder-based namespaces.
+dotnet_diagnostic.IDE0130.severity = none

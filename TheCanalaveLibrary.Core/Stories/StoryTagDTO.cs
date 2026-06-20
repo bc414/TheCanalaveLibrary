@@ -1,6 +1,6 @@
-using TheCanalaveLibrary.Core.Tags;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Core.Story;
+namespace TheCanalaveLibrary.Core;
 
 public class StoryTagDTO : IStoryTag
 {

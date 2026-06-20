@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Identity;
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 // --- SETTINGS CLASSES (to be stored as JSON) ---
 
@@ -18,7 +18,7 @@ public class ReaderSettings
     public bool AutoLoadNextChapter { get; set; } = false;
     public bool CollapseCommentThreads { get; set; } = true;
     public int DefaultPaginationSize { get; set; } = 20;
-    public DefaultSortOrder DefaultSearchSort { get; set; } = DefaultSortOrder.LastUpdated;
+    public DefaultSortOrder DefaultSearchSort { get; set; } = DefaultSortOrder.DatePublished;
 }
 
 public class PrivacySettings
@@ -72,17 +72,20 @@ public class User : IdentityUser<int>
     // --- NAVIGATION PROPERTIES ---
     public virtual ICollection<BaseComment> BaseComments { get; set; } = new List<BaseComment>();
     public virtual ICollection<BetaReader> BetaReaders { get; set; } = new List<BetaReader>();
-    public virtual ICollection<BaseBlogPost> LikedBlogPosts { get; set; } = new List<BaseBlogPost>();
+    public virtual ICollection<BlogPostLike> BlogPostLikes { get; set; } = new List<BlogPostLike>();
+    public virtual ICollection<PollVote> PollVotes { get; set; } = new List<PollVote>();
     public virtual ICollection<BaseBlogPost> BlogPosts { get; set; } = new List<BaseBlogPost>();
     public virtual ICollection<ChapterContent> ChapterContents { get; set; } = new List<ChapterContent>();
     public virtual ICollection<CoAuthor> CoAuthors { get; set; } = new List<CoAuthor>();
-    public virtual ICollection<BaseComment> LikedComments { get; set; } = new List<BaseComment>();
+    public virtual ICollection<CommentLike> CommentLikes { get; set; } = new List<CommentLike>();
     public virtual ICollection<CommunitySpotlight> CommunitySpotlights { get; set; } = new List<CommunitySpotlight>();
     public virtual ICollection<ConversationParticipant> ConversationParticipants { get; set; } = new List<ConversationParticipant>();
     public virtual ICollection<CustomList> CustomLists { get; set; } = new List<CustomList>();
     public virtual ICollection<FeatureContribution> FeatureContributions { get; set; } = new List<FeatureContribution>();
     public virtual ICollection<FollowedUser> FollowedUserFollowedUserNavigations { get; set; } = new List<FollowedUser>();
     public virtual ICollection<FollowedUser> FollowedUserUsers { get; set; } = new List<FollowedUser>();
+    public virtual ICollection<Vouch> VouchesGiven { get; set; } = new List<Vouch>();
+    public virtual ICollection<Vouch> VouchesReceived { get; set; } = new List<Vouch>();
     public virtual ICollection<GroupMember> GroupMembers { get; set; } = new List<GroupMember>();
     public virtual ICollection<GroupStory> GroupStories { get; set; } = new List<GroupStory>();
     public virtual ICollection<Group> Groups { get; set; } = new List<Group>();
@@ -94,7 +97,7 @@ public class User : IdentityUser<int>
     public virtual ICollection<Report> ReportModeratorUsers { get; set; } = new List<Report>();
     public virtual ICollection<Report> ReportReporterUsers { get; set; } = new List<Report>();
     public virtual ICollection<Series> Series { get; set; } = new List<Series>();
-    public virtual ICollection<Story.Story> Stories { get; set; } = new List<Story.Story>();
+    public virtual ICollection<Story> Stories { get; set; } = new List<Story>();
     public virtual ICollection<StoryAcknowledgment> StoryAcknowledgments { get; set; } = new List<StoryAcknowledgment>();
     public virtual ICollection<UserBadge> UserBadges { get; set; } = new List<UserBadge>();
     public virtual ICollection<UserChapterInteraction> UserChapterInteractions { get; set; } = new List<UserChapterInteraction>();

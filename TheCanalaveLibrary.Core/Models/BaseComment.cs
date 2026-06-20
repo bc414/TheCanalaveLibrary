@@ -1,6 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public partial class BaseComment
 {
@@ -25,7 +25,7 @@ public partial class BaseComment
 
     public virtual ChapterComment? ChapterComment { get; set; }
 
-    public virtual ICollection<User> LikedByUsers { get; set; } = new List<User>();
+    public virtual ICollection<CommentLike> Likes { get; set; } = new List<CommentLike>();
 
     public virtual ICollection<FeatureContribution> FeatureContributions { get; set; } = new List<FeatureContribution>();
 

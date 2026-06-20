@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// A user-created, saved selection of tags for reuse in searching.

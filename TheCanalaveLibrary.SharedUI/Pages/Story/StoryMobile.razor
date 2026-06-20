@@ -1,4 +1,4 @@
-@using TheCanalaveLibrary.Core.Story
+@namespace TheCanalaveLibrary.SharedUI
 @if (Story is not null)
 {
     <div class="story-mobile-container">
@@ -6,8 +6,6 @@
         <p class="author-mobile">Author: @Story.AuthorName</p>
         <p>@Story.ShortDescription</p>
         <hr />
-
-        <RandomNumberGenerator />
     </div>
 }
 

@@ -1,7 +1,6 @@
-using TheCanalaveLibrary.Core.Models;
-using TheCanalaveLibrary.Core.Tags;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Core.Story;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// Data Transfer Object for fetching a story's properties for editing and sending the new values back to the server.

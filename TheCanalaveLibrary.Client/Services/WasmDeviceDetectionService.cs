@@ -1,7 +1,7 @@
 using Microsoft.JSInterop;
-using TheCanalaveLibrary.Core.ServiceInterfaces;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Client.Services;
+namespace TheCanalaveLibrary.Client;
 
 /// <summary>
 /// Detects the device type on the client (WebAssembly) by using JS interop.

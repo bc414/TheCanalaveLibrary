@@ -1,7 +1,6 @@
-using TheCanalaveLibrary.Core.ServiceInterfaces;
-using TheCanalaveLibrary.Core.Story;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Server.Endpoints;
+namespace TheCanalaveLibrary.Server;
 
 public static class StoryEndpoints
 {

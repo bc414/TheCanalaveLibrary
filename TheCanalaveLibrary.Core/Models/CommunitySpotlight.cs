@@ -1,6 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public partial class CommunitySpotlight
 {
@@ -25,5 +25,5 @@ public partial class CommunitySpotlight
 
     public virtual User? SponsoringUser { get; set; }
 
-    public virtual Story.Story Story { get; set; } = null!;
+    public virtual Story Story { get; set; } = null!;
 }

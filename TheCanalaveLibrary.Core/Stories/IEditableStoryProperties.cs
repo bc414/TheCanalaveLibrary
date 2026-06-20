@@ -1,7 +1,6 @@
-using TheCanalaveLibrary.Core.Models;
-using TheCanalaveLibrary.Core.Tags;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Core.Story;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// Defines a common set of properties for story-like objects

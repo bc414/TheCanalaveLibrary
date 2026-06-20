@@ -1,6 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// A SearchMode represents a way to search for stories on the site. Examples are RandomSearch, TreeSearch.

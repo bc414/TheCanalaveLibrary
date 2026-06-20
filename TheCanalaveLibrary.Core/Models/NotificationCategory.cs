@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public class NotificationCategory
 {

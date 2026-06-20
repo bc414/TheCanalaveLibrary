@@ -1,6 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// A blog post can be just for a user, or can it be attached to a story or a group
@@ -35,7 +35,7 @@ public abstract class BaseBlogPost
 
     public virtual ICollection<BlogPostComment> BlogPostComments { get; set; } = new List<BlogPostComment>();
 
-    public virtual ICollection<User> LikedByUsers { get; set; } = new List<User>();
+    public virtual ICollection<BlogPostLike> Likes { get; set; } = new List<BlogPostLike>();
 
     public virtual ICollection<FeatureContribution> FeatureContributions { get; set; } = new List<FeatureContribution>();
     

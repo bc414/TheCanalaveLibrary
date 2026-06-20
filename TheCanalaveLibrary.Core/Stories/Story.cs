@@ -1,8 +1,7 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
-using TheCanalaveLibrary.Core.Models;
-using TheCanalaveLibrary.Core.Tags;
+using System.ComponentModel.DataAnnotations.Schema;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Core.Story;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// The "hot" table. Contains only data for filtering, sorting,
@@ -45,7 +44,6 @@ public partial class Story : IEditableStoryProperties
     public virtual ICollection<CoAuthor> CoAuthors { get; set; } = new List<CoAuthor>();
     public virtual ICollection<CommunitySpotlight> CommunitySpotlights { get; set; } = new List<CommunitySpotlight>();
     public virtual ICollection<CustomListEntry> CustomListEntries { get; set; } = new List<CustomListEntry>();
-    public virtual ICollection<DailyStoryStat> DailyStoryStats { get; set; } = new List<DailyStoryStat>();
     public virtual ICollection<GroupStory> GroupStories { get; set; } = new List<GroupStory>();
     public virtual ICollection<Recommendation> Recommendations { get; set; } = new List<Recommendation>();
     public virtual ICollection<SeriesEntry> SeriesEntries { get; set; } = new List<SeriesEntry>();

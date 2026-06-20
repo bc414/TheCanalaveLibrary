@@ -1,4 +1,4 @@
-namespace TheCanalaveLibrary.Core.Tags;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// Used to populate the list of all tags for a user to select when choosing tags for a story or choosing tags

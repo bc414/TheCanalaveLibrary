@@ -190,6 +190,69 @@ Email: `IdentityNoOpEmailSender` (dev), SendGrid (prod, conditionally registered
 - Settings route (`/settings`) follows the standard Blazor component pattern (separate from
   Identity's `/account` routes).
 
+### Authorization Has Two Enforcement Surfaces — Neither Substitutes for the Other
+
+**Page-level (UX gate):** `AuthorizeRouteView` in `Routes.razor` reads `[Authorize]`/`[AllowAnonymous]`
+on the matched `@page` component and decides whether to render it. **`Routes.razor` must use
+`AuthorizeRouteView`, never plain `RouteView`** — `RouteView` silently ignores authorization
+attributes entirely, making any `[Authorize]` declared anywhere in the app a no-op.
+
+**Endpoint-level (the actual security boundary):** minimal-API route groups (`StoryEndpoints.cs` and
+similar) need their own `.RequireAuthorization(...)`, independent of whatever the Blazor router does.
+The WASM Client calls these endpoints directly over HTTP — gating a page never gates the data it
+fetches. Every endpoint group's authorization must be set deliberately; it does not inherit from the
+page that happens to call it.
+
+`[Authorize]`/`[AllowAnonymous]` are not gates on non-routable child components — they only affect
+the type matched by the router. To gate part of an otherwise-public page (e.g., a moderator-only
+edit button on a public `StoryPage`), use `<AuthorizeView Roles="...">` around just that markup, not
+a page-level attribute.
+
+### Default-Deny for MVP, Default-Allow Post-Launch
+
+**MVP posture (everything requires login):**
+```csharp
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+});
+```
+This makes login the default for every page and endpoint with no explicit attribute. The
+pre-authentication Identity flow (`Login`, `Register`, `ForgotPassword`, `ResetPassword`,
+`ConfirmEmail`, `ExternalLogin`, etc. — everything under `Identity/Pages` excluding `Manage`) must
+opt out via a single `@attribute [AllowAnonymous]` on `Identity/Pages/_Imports.razor`, which cascades
+to the whole pre-auth flow at once. `Identity/Pages/Manage/_Imports.razor`'s existing `[Authorize]`
+becomes redundant under the fallback policy but is harmless to keep — it documents intent.
+
+**Post-MVP posture (public browsing, gated actions):** remove the fallback policy (flips the default
+back to allow) and add `[Authorize]` explicitly only where login is actually required (`Bookshelves`,
+`Messaging`, mod pages, posting/writing flows). For pages that mix public viewing with login-gated
+actions, keep the page open and use `<AuthorizeView>` around the gated controls instead of gating the
+whole route. This is a posture flip, not an additive patch — re-audit every endpoint's
+`.RequireAuthorization()` at the same time, since the two surfaces must move together.
+
+### Role-Based (Moderator) Gating
+
+Same `[Authorize]` mechanism, parameterized:
+```razor
+@* On a _Imports.razor at the root of a mod-only folder, e.g. mod/_Imports.razor *@
+@attribute [Authorize(Roles = "Moderator,Admin")]
+```
+Prefer a named policy over repeating role lists once more than one or two pages need it:
+```csharp
+options.AddPolicy("RequireModerator", p => p.RequireRole("Moderator", "Admin"));
+```
+`[Authorize(Policy = "RequireModerator")]` / `.RequireAuthorization("RequireModerator")` then apply
+uniformly to mod pages and their backing endpoints. Distinct from `<AuthorizeView Roles="...">`
+(layer3.5-structure.md) — that's for moderator-only controls embedded in an otherwise-public page,
+not for gating the dedicated `/mod/*` routes.
+
+**Gap — role infrastructure is not yet real:** `ApplicationRole` is currently a bare
+`IdentityRole<int>` with nothing added, and `DataSeeder.cs` only ever assigns `"Admin"` (with a
+comment merely *assuming* it's been seeded, not guaranteeing it). No `"Moderator"` role exists yet.
+Role-based gating above is the intended pattern but is not functional until roles are actually
+created and assigned (`RoleManager.CreateAsync`, `UserManager.AddToRoleAsync`).
+
 ## Rich Text & Sanitization
 
 All user-submitted HTML is sanitized **server-side** with `HtmlSanitizer` (allow-list) before saving.

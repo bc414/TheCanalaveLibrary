@@ -1,6 +1,6 @@
-using TheCanalaveLibrary.Core.Tags;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.SharedUI.Components.Tags;
+namespace TheCanalaveLibrary.SharedUI;
 
 public class TagViewModel
 {

@@ -1,4 +1,4 @@
-﻿namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public partial class Recommendation
 {
@@ -28,7 +28,7 @@ public partial class Recommendation
 
     public virtual RecommendationStatus Status { get; set; } = null!;
 
-    public virtual Story.Story Story { get; set; } = null!;
+    public virtual Story Story { get; set; } = null!;
 
     public virtual ICollection<UserStoryInteraction> UserStoryInteractions { get; set; } = new List<UserStoryInteraction>();
 }

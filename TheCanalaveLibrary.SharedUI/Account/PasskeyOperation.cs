@@ -1,4 +1,4 @@
-namespace TheCanalaveLibrary.SharedUI.Account;
+namespace TheCanalaveLibrary.SharedUI;
 
 public enum PasskeyOperation
 {

@@ -1,9 +1,8 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using TheCanalaveLibrary.Core.Models;
-using TheCanalaveLibrary.Core.Story;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Server.Data;
+namespace TheCanalaveLibrary.Server;
 
 public class DataSeeder
 {

@@ -1,7 +1,7 @@
-﻿using System.ComponentModel.DataAnnotations;
-using TheCanalaveLibrary.Core.Tags;
+using System.ComponentModel.DataAnnotations;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public partial class StoryCharacter
 {
@@ -23,7 +23,7 @@ public partial class StoryCharacter
 
     public virtual Tag CharacterTag { get; set; } = null!;
 
-    public virtual Story.Story Story { get; set; } = null!;
+    public virtual Story Story { get; set; } = null!;
 
     public virtual ICollection<StoryCharacterRelationship> StoryCharacterRelationships { get; set; } = new List<StoryCharacterRelationship>();
 }

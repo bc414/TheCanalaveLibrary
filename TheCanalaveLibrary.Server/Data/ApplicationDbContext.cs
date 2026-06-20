@@ -1,11 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
-using TheCanalaveLibrary.Core.Models;
-using TheCanalaveLibrary.Core.Story;
-using TheCanalaveLibrary.Core.Tags;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Server.Data;
+namespace TheCanalaveLibrary.Server;
 
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
     : IdentityDbContext<User, ApplicationRole, int>(options)
@@ -29,7 +27,13 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     
     //User relationships
     public DbSet<FollowedUser> FollowedUsers { get; set; }
-    
+    public DbSet<Vouch> Vouches { get; set; } //Scarce endorsement w/ optional VouchText (was a bool on FollowedUser)
+
+    //Likes / votes — explicit junctions (no DateLiked; denormalized counts on the parent)
+    public DbSet<CommentLike> CommentLikes { get; set; }
+    public DbSet<BlogPostLike> BlogPostLikes { get; set; }
+    public DbSet<PollVote> PollVotes { get; set; }
+
     //Recommendations
     public DbSet<Recommendation> Recommendations { get; set; }
     public DbSet<RecommendationDetail> RecommendationDetails { get; set; }
@@ -76,11 +80,10 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     //stores which chapters have been read and read progress for returning to last read portion
     public DbSet<UserChapterInteraction> UserChapterInteractions { get; set; }
     
-    //Tables that get recalculated by a background worker. Uses SYNONYMS
-    public DbSet<AlsoFavoritedScore> AlsoFavoritedScores { get; set; }
-    public DbSet<AlsoRecommendedScore> AlsoRecommendedScores { get; set; }
-    public DbSet<UserStoryTreeSearchEntry> UserStoryTreeSearchEntries { get; set; }
-    
+    // NOTE: Data-mart / cache tables (AlsoFavoritedScore, AlsoRecommendedScore, UserStoryTreeSearchEntry,
+    // SiteDailyStat) are NOT EF-modeled — raw-SQL, worker-built tables with no DbSets or migrations
+    // (spec §"Cache / Data Mart Tables"). DailyStoryStat was dropped entirely.
+
     //Comments
     public DbSet<BaseComment> BaseComments { get; set; }
     
@@ -127,8 +130,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<StoryRelationshipType> StoryRelationshipTypes { get; set; }
     
     //Statistics
-    public DbSet<DailyStoryStat> DailyStoryStats { get; set; }
-    public DbSet<SiteDailyStat> SiteDailyStats { get; set; }
     public DbSet<UserStat> UserStats { get; set; }
 
     //Other
@@ -308,14 +309,16 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             // ... add other badges
         );
         
-        // Note: DefaultSearchSetting requires SearchMode and UserInteractionFilter to be seeded first.
+        // DefaultSearchSetting requires SearchMode and UserInteractionFilter seeded first.
+        // Minimal sane defaults: exclude already-Ignored stories on every discovery surface. Profile
+        // surfaces intentionally have no default exclusions (they show the user's full lists).
+        // TODO(user): flesh out the full SearchMode × InteractionFilter default matrix when desired.
         modelBuilder.Entity<DefaultSearchSetting>().HasData(
-            new { SearchModeKey = "TreeSearch", InteractionFilterKey = "Ignored", IsEnabled = true },
-            new { SearchModeKey = "TreeSearch", InteractionFilterKey = "Completed", IsEnabled = true },
-            new { SearchModeKey = "TreeSearch", InteractionFilterKey = "ReadItLater", IsEnabled = false },
-            new { SearchModeKey = "RandomSearch", InteractionFilterKey = "Ignored", IsEnabled = true },
-            new { SearchModeKey = "RandomSearch", InteractionFilterKey = "Completed", IsEnabled = false }
-            // ... etc. for all combinations
+            new { SearchModeKey = SiteSearchModes.SearchPage, InteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
+            new { SearchModeKey = SiteSearchModes.TreeSearch, InteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
+            new { SearchModeKey = SiteSearchModes.AutoTreeSearch, InteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
+            new { SearchModeKey = SiteSearchModes.AlsoFavorited, InteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
+            new { SearchModeKey = SiteSearchModes.AlsoRecommended, InteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true }
         );
 
         modelBuilder.Entity<RecommendationStatus>().HasData(
@@ -334,11 +337,17 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             new { ReportReasonId = (short)6, ReasonName = "Plagiarism", Description = "Posting content that is not your own without attribution." }
         );
 
+        // Search modes are discovery surfaces (§5.3) — NOT sources/sorts. "Random" is Source=All+Sort=Random
+        // on the SearchPage surface, so it is not a mode.
         modelBuilder.Entity<SearchMode>().HasData(
-            new { SearchModeKey = SiteSearchModes.DefaultSearch, Name = "Default Search", Description = "The regular search mode with tags and search result orders." },
+            new { SearchModeKey = SiteSearchModes.SearchPage, Name = "Search Page", Description = "The main discovery surface (Source=All) with tags, text search, and result ordering." },
             new { SearchModeKey = SiteSearchModes.TreeSearch, Name = "Tree Search", Description = "Discover stories through connections: favorites, recommendations, and author follows." },
-            new { SearchModeKey = SiteSearchModes.RandomSearch, Name = "Random Search", Description = "Find a random story based on your filters." },
-            new { SearchModeKey = SiteSearchModes.AlsoFavorited, Name = "Also Favorited", Description = "Find stories favorited by users who also favorited your selection." }
+            new { SearchModeKey = SiteSearchModes.AutoTreeSearch, Name = "Automatic Tree Search", Description = "Automatically surfaced connections from the tree-search data mart." },
+            new { SearchModeKey = SiteSearchModes.AlsoFavorited, Name = "Also Favorited", Description = "Stories favorited by users who also favorited your selection." },
+            new { SearchModeKey = SiteSearchModes.AlsoRecommended, Name = "Also Recommended", Description = "Stories recommended by users who also recommended your selection." },
+            new { SearchModeKey = SiteSearchModes.ProfilePublishedStories, Name = "Profile: Published Stories", Description = "A profile's authored-stories tab." },
+            new { SearchModeKey = SiteSearchModes.ProfileFavorites, Name = "Profile: Favorites", Description = "A profile's public-favorites tab." },
+            new { SearchModeKey = SiteSearchModes.ProfileRecommendations, Name = "Profile: Recommendations", Description = "A profile's recommendations tab." }
         );
 
         modelBuilder.Entity<StoryRelationshipType>().HasData(
@@ -352,10 +361,11 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             new { ThemeId = 1, Name = "Pokémon", Description = "The default Pokémon theme!" }
         );
         
+        // One filter per UserStoryInteraction boolean column (1:1, no compounds).
         modelBuilder.Entity<UserInteractionFilter>().HasData(
             new { InteractionFilterKey = UserStoryInteractionFilters.Ignored, Name = "Ignored", Description = "Exclude stories you have marked as 'Ignored'." },
             new { InteractionFilterKey = UserStoryInteractionFilters.Completed, Name = "Completed", Description = "Exclude stories you have already finished." },
-            new { InteractionFilterKey = UserStoryInteractionFilters.InProgress, Name = "In Progress", Description = "Exclude stories on your 'In Progress' list." },
+            new { InteractionFilterKey = UserStoryInteractionFilters.HasStarted, Name = "Started", Description = "Exclude stories you have already started reading." },
             new { InteractionFilterKey = UserStoryInteractionFilters.ReadItLater, Name = "Read It Later", Description = "Exclude stories on your 'Read It Later' list." },
             new { InteractionFilterKey = UserStoryInteractionFilters.Favorited, Name = "Favorited", Description = "Exclude stories on your 'Favorite' list." },
             new { InteractionFilterKey = UserStoryInteractionFilters.HiddenFavorited, Name = "Hidden Favorite", Description = "Exclude stories on your 'Hidden Favorite' list." },
@@ -629,12 +639,6 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .OnDelete(DeleteBehavior.Cascade);
             
         modelBuilder.Entity<Story>()
-            .HasMany(s => s.DailyStoryStats)
-            .WithOne(dss => dss.Story)
-            .HasForeignKey(dss => dss.StoryId)
-            .OnDelete(DeleteBehavior.Cascade);
-            
-        modelBuilder.Entity<Story>()
             .HasMany(s => s.SeriesEntries)
             .WithOne(se => se.Story)
             .HasForeignKey(se => se.StoryId)
@@ -905,21 +909,44 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             .HasForeignKey(sd => sd.BaseTagId)
             .OnDelete(DeleteBehavior.Restrict);
             
-        // --- Many-to-Many Join Tables (using EF default Cascade) ---
-        // User <-> BaseComment (Likes)
-        modelBuilder.Entity<BaseComment>()
-            .HasMany(c => c.LikedByUsers)
-            .WithMany(u => u.LikedComments);
-            
-        // User <-> BaseBlogPost (Likes)
-        modelBuilder.Entity<BaseBlogPost>()
-            .HasMany(b => b.LikedByUsers)
-            .WithMany(u => u.LikedBlogPosts);
+        // --- Explicit like / vote junctions + Vouch (replace EF implicit many-to-many) ---
+        modelBuilder.Entity<CommentLike>(entity =>
+        {
+            entity.HasKey(e => new { e.CommentId, e.UserId });
+            entity.HasOne(cl => cl.Comment).WithMany(c => c.Likes)
+                .HasForeignKey(cl => cl.CommentId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(cl => cl.User).WithMany(u => u.CommentLikes)
+                .HasForeignKey(cl => cl.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
 
-        // User <-> PollOption (Voters)
-        modelBuilder.Entity<PollOption>()
-            .HasMany(o => o.Voters)
-            .WithMany(); // Assuming no nav property on User
+        modelBuilder.Entity<BlogPostLike>(entity =>
+        {
+            entity.HasKey(e => new { e.BlogPostId, e.UserId });
+            entity.HasOne(bl => bl.BlogPost).WithMany(b => b.Likes)
+                .HasForeignKey(bl => bl.BlogPostId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(bl => bl.User).WithMany(u => u.BlogPostLikes)
+                .HasForeignKey(bl => bl.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PollVote>(entity =>
+        {
+            entity.HasKey(e => new { e.PollOptionId, e.UserId });
+            entity.HasOne(pv => pv.PollOption).WithMany(o => o.Votes)
+                .HasForeignKey(pv => pv.PollOptionId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(pv => pv.User).WithMany(u => u.PollVotes)
+                .HasForeignKey(pv => pv.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Vouch>(entity =>
+        {
+            entity.HasKey(e => new { e.VouchingUserId, e.VouchedUserId });
+            entity.Property(e => e.DateVouched).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            // Voucher-side cascades on delete; vouched-side is RESTRICT (incoming vouches cleared in C# DeleteUserService).
+            entity.HasOne(v => v.VouchingUser).WithMany(u => u.VouchesGiven)
+                .HasForeignKey(v => v.VouchingUserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(v => v.VouchedUser).WithMany(u => u.VouchesReceived)
+                .HasForeignKey(v => v.VouchedUserId).OnDelete(DeleteBehavior.Restrict);
+        });
             
         // --- Diamond-Breaking SetNulls (Already covered by User SetNull) ---
         // Example: FeatureContribution.BlogPostId -> BaseBlogPost
@@ -975,17 +1002,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             // Future indexes for querying...
         });
 
-        modelBuilder.Entity<AlsoFavoritedScore>(entity =>
-        {
-            entity.HasKey(e => new { e.StoryId, e.AlsoFavoritedStoryId });
-            // Future indexes for querying...
-        });
-
-        modelBuilder.Entity<AlsoRecommendedScore>(entity =>
-        {
-            entity.HasKey(e => new { e.StoryId, e.AlsoRecommendedStoryId });
-            // Future indexes for querying...
-        });
+        // AlsoFavoritedScore / AlsoRecommendedScore removed — raw-SQL data marts, no EF model (spec §"Cache / Data Mart Tables").
 
         modelBuilder.Entity<ApplicationRole>(entity =>
         {
@@ -1112,11 +1129,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             // Future indexes for querying (e.g., by StoryId)...
         });
 
-        modelBuilder.Entity<DailyStoryStat>(entity =>
-        {
-            entity.HasKey(e => new { e.StoryId, e.StatDate });
-            // Future indexes for querying (e.g., by StatDate)...
-        });
+        // DailyStoryStat removed entirely (not in spec; per-story analytics deferred as a future Layer-8 mart).
 
         modelBuilder.Entity<DefaultSearchSetting>(entity =>
         {
@@ -1317,11 +1330,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             // Future indexes for querying (e.g., by StoryId, BaseTagId)...
         });
 
-        modelBuilder.Entity<SiteDailyStat>(entity =>
-        {
-            // This table's PK is the date, so it's already indexed for time-series.
-            entity.HasKey(e => e.StatDate);
-        });
+        // SiteDailyStat removed — raw-SQL data mart, no EF model (spec §"Cache / Data Mart Tables").
 
         modelBuilder.Entity<SitePoll>(entity =>
         {
@@ -1459,31 +1468,25 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     
             // Future indexes for querying (e.g., on show_mature_content)...
 
-            // --- JSON Column Configuration ---
-    
-            // Configure ReaderSettings as a 'jsonb' column
-            entity.OwnsOne(u => u.ReaderSettings, settings =>
+            // --- JSON complex types (EF Core 10 ComplexProperty + ToJson) ---
+            entity.ComplexProperty(u => u.ReaderSettings, b =>
             {
-                settings.ToJson(); // This maps it to a 'jsonb' column
-                settings.Property(s => s.DefaultSearchSort).HasConversion<short>();
+                b.ToJson();
+                b.Property(s => s.DefaultSearchSort).HasConversion<short>();
             });
 
-            // Configure PrivacySettings as a 'jsonb' column
-            entity.OwnsOne(u => u.PrivacySettings, settings =>
+            entity.ComplexProperty(u => u.PrivacySettings, b =>
             {
-                settings.ToJson();
-        
-                // Convert the enums inside the JSON to 'smallint'
-                settings.Property(s => s.ProfileVisibility).HasConversion<short>();
-                settings.Property(s => s.AllowProfileComments).HasConversion<short>();
-                settings.Property(s => s.AllowPrivateMessages).HasConversion<short>();
+                b.ToJson();
+                b.Property(s => s.ProfileVisibility).HasConversion<short>();
+                b.Property(s => s.AllowProfileComments).HasConversion<short>();
+                b.Property(s => s.AllowPrivateMessages).HasConversion<short>();
             });
 
-            // Configure AuthorSettings as a 'jsonb' column
-            entity.OwnsOne(u => u.AuthorSettings, settings =>
+            entity.ComplexProperty(u => u.AuthorSettings, b =>
             {
-                settings.ToJson();
-                settings.Property(s => s.DefaultStoryRating).HasConversion<short>();
+                b.ToJson();
+                b.Property(s => s.DefaultStoryRating).HasConversion<short>();
             });
         });
 
@@ -1569,7 +1572,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
                 .HasFilter("\"is_completed\" = true").HasDatabaseName("ix_user_story_interactions_completed");
             entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
-                .HasFilter("\"is_in_progress\" = true").HasDatabaseName("ix_user_story_interactions_in_progress");
+                .HasFilter("\"has_started\" = true").HasDatabaseName("ix_user_story_interactions_has_started");
         });
 
         modelBuilder.Entity<UserStoryInteractionDate>(entity =>
@@ -1584,36 +1587,9 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
             // Future indexes for querying
         });
 
-        modelBuilder.Entity<UserStoryTreeSearchEntry>(entity =>
-        {
-            entity.HasKey(e => new { e.UserId, e.StoryId });
-            // This is a data mart. Indexes are critical.
-            // Future indexes for querying (e.g., by UserId, by StoryId)...
-            // --- Mirrored Graph Indexes (Corrected for snake_case) ---
-            // Pattern 1: User -> Stories
-            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
-                .HasFilter("\"is_authored_by_user\" = true").HasDatabaseName("ix_user_tree_user_authored");
-            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
-                .HasFilter("\"is_public_favorite\" = true").HasDatabaseName("ix_user_tree_user_public_favorite");
-            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
-                .HasFilter("\"is_recommendation\" = true").HasDatabaseName("ix_user_tree_user_recommendation");
-            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
-                .HasFilter("\"is_hidden_gem\" = true").HasDatabaseName("ix_user_tree_user_hidden_gem");
-            entity.HasIndex(e => e.UserId).IncludeProperties(e => e.StoryId)
-                .HasFilter("\"is_hidden_favorite\" = true").HasDatabaseName("ix_user_tree_user_hidden_favorite");
-
-            // Pattern 2: Story -> Users
-            entity.HasIndex(e => e.StoryId).IncludeProperties(e => e.UserId)
-                .HasFilter("\"is_authored_by_user\" = true").HasDatabaseName("ix_user_tree_story_authored");
-            entity.HasIndex(e => e.StoryId).IncludeProperties(e => e.UserId)
-                .HasFilter("\"is_public_favorite\" = true").HasDatabaseName("ix_user_tree_story_public_favorite");
-            entity.HasIndex(e => e.StoryId).IncludeProperties(e => e.UserId)
-                .HasFilter("\"is_recommendation\" = true").HasDatabaseName("ix_user_tree_story_recommendation");
-            entity.HasIndex(e => e.StoryId).IncludeProperties(e => e.UserId)
-                .HasFilter("\"is_author_spotlighted\" = true").HasDatabaseName("ix_user_tree_story_spotlighted");
-            entity.HasIndex(e => e.StoryId).IncludeProperties(e => e.UserId)
-                .HasFilter("\"is_hidden_favorite\" = true").HasDatabaseName("ix_user_tree_story_hidden_favorite");
-        });
+        // UserStoryTreeSearchEntry removed — raw-SQL data mart with mirrored graph indexes, no EF model
+        // (spec §"Cache / Data Mart Tables"). Built/swapped by the Layer-8 tree-search worker; the full
+        // table + index design is preserved in .claude/audit/Discovery.md ("Layer-8 data-mart impl notes").
 
         #endregion
     }

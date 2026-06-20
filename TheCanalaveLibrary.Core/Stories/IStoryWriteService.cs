@@ -1,4 +1,4 @@
-namespace TheCanalaveLibrary.Core.Story;
+namespace TheCanalaveLibrary.Core;
 
 public interface IStoryWriteService
 {

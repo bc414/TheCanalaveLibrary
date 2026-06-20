@@ -1,4 +1,4 @@
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 //Part 1: Pure Magic short enums
 public enum Rating : short
@@ -17,19 +17,10 @@ public enum ReportedEntityType : short
     Recommendation = 4
 }
 
-public enum ReadStatus : short
-{
-    Unread = 0,
-    InProgress = 1,
-    Completed = 2
-}
-
-public enum FavoriteStatus : short
-{
-    None = 0,
-    Favorite = 1,
-    PrivateFavorite = 2
-}
+// NOTE: The vestigial ReadStatus and FavoriteStatus enums were removed. They predated the
+// boolean-column interaction model (Settled Axiom #3); reading status is now expressed by the
+// HasStarted/IsCompleted/IsIgnored flags on UserStoryInteraction (§4, §5.12), and favorite status
+// by IsFavorite/IsHiddenFavorite.
 
 public enum FilterEntityType : short
 {
@@ -179,12 +170,12 @@ public enum AllowInteractions : short
     Nobody = 3
 }
 
+// The Sort axis of the three-axis search model (§5.3). Deliberately excludes favorites / last-updated /
+// view-count / rec-count sorts (§5.3.3) — popularity-style ordering is not a sanctioned surface.
 public enum DefaultSortOrder : short
 {
-    LastUpdated = 0,
-    PublishDate = 1,
-    Favorites = 2,
-    ViewCount = 3,
-    Relevance = 4,
-    Random = 5, //Discovery!
+    Random = 0,         // Discovery default (Source=All preload)
+    DatePublished = 1,
+    Relevance = 2,      // Only available when the FTS filter is active
+    Score = 3,          // Recommendation / co-occurrence score (specific surfaces)
 }

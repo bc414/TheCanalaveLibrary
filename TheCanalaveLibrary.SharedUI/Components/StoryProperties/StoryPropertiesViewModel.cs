@@ -1,9 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using TheCanalaveLibrary.Core.Models;
-using TheCanalaveLibrary.Core.Story;
-using TheCanalaveLibrary.Core.Tags;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.SharedUI.Components.StoryProperties;
+namespace TheCanalaveLibrary.SharedUI;
 
 /// <summary>
 /// A view model that represents the editable properties of a story,

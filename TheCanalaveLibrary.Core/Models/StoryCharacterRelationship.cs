@@ -1,6 +1,6 @@
-﻿using TheCanalaveLibrary.Core.Tags;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public partial class StoryCharacterRelationship
 {
@@ -12,7 +12,7 @@ public partial class StoryCharacterRelationship
 
     public TagPriority Priority { get; set; }
 
-    public virtual Story.Story Story { get; set; } = null!;
+    public virtual Story Story { get; set; } = null!;
 
     public virtual ICollection<StoryCharacter> StoryCharacters { get; set; } = new List<StoryCharacter>();
 }

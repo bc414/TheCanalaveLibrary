@@ -1,10 +1,9 @@
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
-using TheCanalaveLibrary.Core.ServiceInterfaces;
-using TheCanalaveLibrary.Core.Story;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Client.Services;
+namespace TheCanalaveLibrary.Client;
 
 /// <summary>
 /// Client-side implementation of the story write service that communicates with the server's API.

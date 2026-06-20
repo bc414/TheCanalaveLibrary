@@ -1,7 +1,6 @@
-using TheCanalaveLibrary.Core.Models;
-using TheCanalaveLibrary.Core.Tags;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Core.Story;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// Data Transfer Object for creating a new story. This can be expanded

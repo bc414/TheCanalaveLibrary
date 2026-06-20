@@ -1,4 +1,4 @@
-﻿namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public partial class CoAuthor
 {
@@ -10,5 +10,5 @@ public partial class CoAuthor
 
     public virtual User CoAuthorUser { get; set; } = null!;
 
-    public virtual Story.Story Story { get; set; } = null!;
+    public virtual Story Story { get; set; } = null!;
 }

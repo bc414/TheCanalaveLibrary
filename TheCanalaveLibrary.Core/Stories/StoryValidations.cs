@@ -1,7 +1,6 @@
-using TheCanalaveLibrary.Core.Models;
-using TheCanalaveLibrary.Core.Tags;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Core.Story;
+namespace TheCanalaveLibrary.Core;
 
 public static class StoryValidations
 {

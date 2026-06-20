@@ -55,6 +55,28 @@ These have documented rationale and rejected alternatives. **Do not propose alte
 not by technical layer. One flat namespace per project regardless of folder depth:
 `TheCanalaveLibrary.Core`, `.Server`, `.Client`, `.SharedUI`.
 
+### Enforcing the Flat Namespace on Razor Files
+
+Razor's default namespace is folder-path-based (`RootNamespace + folder path`), which silently
+diverges from the flat-namespace policy the instant a `.razor` file moves folders — there is no
+compiler error until some unrelated file's reference happens to break, if ever.
+
+- **Every `.razor` file MUST start with an explicit `@namespace` directive** matching its project
+  (`@namespace TheCanalaveLibrary.Server`, `.SharedUI`, or `.Client`) — first line, or second line
+  right after `@page` if the file has one. `_Imports.razor` files are the only exception (they hold
+  `@using` directives, not a namespace).
+- **When moving or renaming a folder that contains `.razor` files**, grep the whole repo for the old
+  dotted-path namespace string (e.g. `TheCanalaveLibrary.Server.OldFolderName`) to catch stale
+  `@using` directives and fully-qualified `typeof(...)` references. This is exactly how namespace
+  drift went unnoticed after a past `Components` → `Identity` folder rename.
+- **`_Imports.razor` cascades to subfolders only, never to siblings.** Each top-level folder branch
+  (e.g. `Identity/Pages`, `Identity/Pages/Manage`, `Identity/Shared`) needs its own `_Imports.razor`
+  for cross-project usings (`TheCanalaveLibrary.Core`, `TheCanalaveLibrary.SharedUI`), even though
+  every component in the project ultimately shares one flat namespace.
+- **Co-located component assets** (`Component.razor.js`, `Component.razor.css`) are referenced via
+  `@Assets["PhysicalFolderPath/Component.razor.js"]` — the *physical* folder path, not the
+  namespace. Folder renames break these silently (404 at runtime, no compile error).
+
 ## Layer Files — Read Before Working
 
 Each file covers one layer of the 8-layer architecture plus cross-cutting concerns. Read the relevant

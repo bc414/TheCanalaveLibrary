@@ -1,4 +1,4 @@
-namespace TheCanalaveLibrary.Core.Story;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// Provides static extension methods for mapping between different story representations.

@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
-using TheCanalaveLibrary.Client.Services;
-using TheCanalaveLibrary.Core.ServiceInterfaces;
-using TheCanalaveLibrary.Core.Story;
+using TheCanalaveLibrary.Client;
+using TheCanalaveLibrary.Core;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 

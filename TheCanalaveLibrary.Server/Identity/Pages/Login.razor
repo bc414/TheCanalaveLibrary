@@ -1,9 +1,10 @@
-﻿@page "/Account/Login"
+@page "/Account/Login"
+@namespace TheCanalaveLibrary.Server
 
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.AspNetCore.Authentication
 @using Microsoft.AspNetCore.Identity
-@using TheCanalaveLibrary.SharedUI.Account
+@using TheCanalaveLibrary.SharedUI
 
 @inject UserManager<User> UserManager
 @inject SignInManager<User> SignInManager

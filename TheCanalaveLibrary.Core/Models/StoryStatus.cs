@@ -1,6 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public partial class StoryStatus
 {
@@ -12,5 +12,5 @@ public partial class StoryStatus
 
     [Required] [MaxLength(255)] public string Description { get; set; } = null!;
 
-    public virtual ICollection<Story.Story> Stories { get; set; } = new List<Story.Story>();
+    public virtual ICollection<Story> Stories { get; set; } = new List<Story>();
 }

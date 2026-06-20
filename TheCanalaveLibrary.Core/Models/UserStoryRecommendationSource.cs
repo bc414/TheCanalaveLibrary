@@ -1,4 +1,4 @@
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// A sparse table that gets an entry whenever someone uses the read it later button specifically from a recommendation.

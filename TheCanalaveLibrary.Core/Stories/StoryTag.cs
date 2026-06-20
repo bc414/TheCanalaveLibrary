@@ -1,7 +1,7 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
-using TheCanalaveLibrary.Core.Tags;
+using System.ComponentModel.DataAnnotations.Schema;
+using TheCanalaveLibrary.Core;
 
-namespace TheCanalaveLibrary.Core.Story;
+namespace TheCanalaveLibrary.Core;
 
 public partial class StoryTag : IStoryTag
 {

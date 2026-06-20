@@ -1,4 +1,4 @@
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// A table that has a one-to-one relationship with UserStoryInteractions. It is a vertical partition so that

@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 
-namespace TheCanalaveLibrary.Server.Data;
+namespace TheCanalaveLibrary.Server;
 
 /// <summary>
 /// A DbContext specifically for read-only operations. It disables the change

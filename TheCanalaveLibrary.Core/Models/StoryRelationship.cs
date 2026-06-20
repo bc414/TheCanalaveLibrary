@@ -1,4 +1,4 @@
-﻿namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// A relationship between two stories, such as InspiredBy or Sequel
@@ -17,7 +17,7 @@ public partial class StoryRelationship
 
     public virtual StoryRelationshipType RelationshipType { get; set; } = null!;
 
-    public virtual Story.Story SourceStory { get; set; } = null!;
+    public virtual Story SourceStory { get; set; } = null!;
 
-    public virtual Story.Story TargetStory { get; set; } = null!;
+    public virtual Story TargetStory { get; set; } = null!;
 }

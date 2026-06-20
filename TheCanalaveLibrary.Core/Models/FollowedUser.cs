@@ -1,4 +1,4 @@
-ï»¿namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public partial class FollowedUser
 {
@@ -10,7 +10,7 @@ public partial class FollowedUser
 
     public bool ReceiveAlerts { get; set; } = true;
 
-    public bool IsVouched { get; set; } = false;
+    // NOTE: vouching was promoted out of this table into its own Vouch entity (with optional VouchText, §8.13).
 
     public virtual User FollowedUserNavigation { get; set; } = null!;
 

@@ -1,4 +1,4 @@
-namespace TheCanalaveLibrary.Core.Tags;
+namespace TheCanalaveLibrary.Core;
 
 public enum TagPriority : short
 {

@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Identity;
 
-namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public class ApplicationRole : IdentityRole<int>
 {

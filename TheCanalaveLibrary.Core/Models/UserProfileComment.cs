@@ -1,4 +1,4 @@
-﻿namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public partial class UserProfileComment : BaseComment
 {

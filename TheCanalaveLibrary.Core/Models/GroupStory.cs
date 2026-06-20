@@ -1,4 +1,4 @@
-﻿namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 public partial class GroupStory
 {
@@ -15,7 +15,7 @@ public partial class GroupStory
 
     public virtual Group Group { get; set; } = null!;
 
-    public virtual Story.Story Story { get; set; } = null!;
+    public virtual Story Story { get; set; } = null!;
     
     public virtual ICollection<GroupFolder> GroupFolders { get; set; } = new List<GroupFolder>();
 }

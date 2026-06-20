@@ -1,35 +1,38 @@
-﻿namespace TheCanalaveLibrary.Core.Models;
+namespace TheCanalaveLibrary.Core;
 
 /// <summary>
-/// This class packs interaction history for a user and all stories they interact with into 8-bits. It will be used
-/// for filtering on search results based on the user's personal interaction history. There will be a filtered index
-/// on each boolean column to achieve this in a highly performant manner. The rest of the related metadata is
-/// separated into other tables for vertical partitioning so that the core use case of this table, personal filtering,
-/// is as performant as possible by making the rows as tiny as possible so that more rows can fit onto an 8KB data page.
+/// The high-frequency interaction table: one tiny row per (user, story) pair the user has interacted with.
+/// Sparse — no row means every flag is false. Kept deliberately small so many rows fit on an 8 KB page,
+/// because its core job is fast personal filtering of search results (one filtered index per flag).
+/// Related metadata is vertically partitioned into <see cref="UserStoryInteractionDate"/> and
+/// <see cref="UserStoryRecommendationSource"/>.
 /// </summary>
 public partial class UserStoryInteraction
 {
     public int UserId { get; set; }
     public int StoryId { get; set; }
 
-    // --- 8 Bit-Packed Columns (1 Byte Total) ---
-    public bool IsInProgress { get; set; }
+    // --- Reading-status flags (§4, §5.12) ---
+    // HasStarted: permanent past event (Has- prefix). Reading began; set at 90% scroll of Chapter 1.
+    public bool HasStarted { get; set; }
+    // IsCompleted: current mutable state (Is- prefix). Caught up with everything published, or "marked read elsewhere".
     public bool IsCompleted { get; set; }
-    public bool IsActivelyReading { get; set; }
-    public bool IsFavorite { get; set; } // Public, on-profile
-    public bool IsHiddenFavorite { get; set; } // Private, off-profile
+    // NOTE: "Actively reading" / "in progress" is DERIVED (HasStarted && !IsCompleted && !IsIgnored) — never stored.
+
+    // --- Other interaction flags ---
+    public bool IsFavorite { get; set; }        // Public, on-profile
+    public bool IsHiddenFavorite { get; set; }  // Private, off-profile
     public bool IsFollowed { get; set; }
     public bool IsReadItLater { get; set; }
     public bool IsIgnored { get; set; }
 
+    // Zero-coupling: no flag drives another. The service layer rejects impossible combinations but never cascades.
+
     // --- Navigation Properties ---
-    public virtual Story.Story Story { get; set; } = null!;
+    public virtual Story Story { get; set; } = null!;
     public virtual User User { get; set; } = null!;
-    
-    //For the vertical partitions of related metadata
-    
-    //There won't be an entry if the user only has the story as in progress.
-    //There will be an entry if it is completed, favorited
+
+    // Vertical partitions of related metadata (sparse — only present when relevant)
     public virtual UserStoryInteractionDate? InteractionDate { get; set; }
     public virtual UserStoryRecommendationSource? RecommendationSource { get; set; }
 }

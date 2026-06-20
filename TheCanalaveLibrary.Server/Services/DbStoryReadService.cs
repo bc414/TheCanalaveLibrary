@@ -1,9 +1,8 @@
 using Microsoft.EntityFrameworkCore;
-using TheCanalaveLibrary.Core.ServiceInterfaces;
-using TheCanalaveLibrary.Core.Story;
-using TheCanalaveLibrary.Server.Data;
+using TheCanalaveLibrary.Core;
+using TheCanalaveLibrary.Server;
 
-namespace TheCanalaveLibrary.Server.Services;
+namespace TheCanalaveLibrary.Server;
 
 public class DbStoryReadService : IStoryReadService
 {
