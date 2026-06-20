@@ -5,23 +5,37 @@ interactions.
 
 ## Shared Context
 **Entity:** `FollowedUser` (Core/Models/) — composite PK `(UserId, FollowedUserId)`, `ReceiveAlerts`,
-`DateFollowed` (DB default), `IsVouched`. Fluent config: the follower edge is Cascade, the followed edge
-is `Restrict` ("CONFLICT: resolved in C#"). Self-referential M:N through the explicit entity. No services,
-no components built.
+`DateFollowed` (DB default). Fluent config: the follower edge is Cascade, the followed edge is `Restrict`
+("CONFLICT: resolved in C#"). Self-referential M:N through the explicit entity. Vouching does **not**
+live on this entity — see Feature 19 below; it was promoted to its own `Vouch` table during Phase A. No
+services, no components built.
 
 ## Feature 18 — User Following
 - **L1 — Stage 5.** `FollowedUser` matches §5.8 (follow/unfollow, bell `ReceiveAlerts`, date). The
-  asymmetric delete behavior is deliberate. Awaiting migration.
+  asymmetric delete behavior is deliberate. Migration-verified (`InitialSchema`).
 - **L2 — Stage 2** (follow/unfollow write + "Followed Users" read; not author-specific).
 - **L3-Logic — Stage 2** (bell toggles `ReceiveAlerts`; self-contained-write injection is legitimate).
 - **L3.5-Structure — Stage 2** (`UserCard` leaf, §5.30.7, unbuilt). **L4 — Stage 1. L5 — Stage 2.**
 - **L6 — Stage 2** (filtered index `(followed_user_id)` for reverse lookups).
 
 ## Feature 19 — Vouches
-- **L1 — Stage 1 (conceptual, §8.13).** `IsVouched` bool exists on `FollowedUser`, but the spec leaves an
-  **open Layer-1 decision**: keep the bool, or promote Vouch to its own junction table with optional
-  `VouchText`. This decision gates the feature's downstream layers and the filtered indexes
-  (`WHERE is_vouched = true`). Resolve in chat before building.
+- **L1 — Stage 5 (reconciled Phase B, 2026-06-20; was mis-marked Stage 1).** `Vouch` is a dedicated
+  table (`Core/Models/Vouch.cs`): composite PK `(VouchingUserId, VouchedUserId)`, optional `VouchText`
+  (`[MaxLength(1000)]`), `DateVouched` (DB default). `FollowedUser.IsVouched` was dropped. FK: voucher
+  edge Cascade, vouched edge Restrict (incoming vouches cleared in C# `DeleteUserService`). Migration
+  `20260620145246_InitialSchema` ships this shape; `dotnet build` and `has-pending-model-changes` are
+  clean. **Superseded-spec note:** spec §5.8 and §8 Open Question #13 still present this as an open
+  bool-vs-table choice with `VouchText MaxLength(280)` — that's the historical snapshot (spec is
+  read-only). The user resolved the decision Phase B session 2026-06-20: ratify the dedicated table,
+  and keep `VouchText` at **1000** (not 280) — code is authoritative, spec is not edited.
 - **L2 — Stage 2** (5-vouch limit enforced in C#; display asymmetry: outgoing public, incoming private).
+  **Settled constraints for the opusplan/build pass — do not revisit:** dedicated `Vouch` table;
+  `VouchText` max length 1000; display asymmetry (outgoing public / incoming private, §5.8, decided
+  independently of the schema-shape question); 5-per-user limit, C#-enforced; FK delete behavior as
+  above.
 - **L3/L3.5 — Stage 2** (vouch button visible only if already followed). **L4 — Stage 1. L5 — Stage 2.**
-- **L6 — Stage 2** (the two filtered vouch indexes — pending the L1 shape decision).
+- **L6 — Stage 5 (reconciled Phase B).** The migration-verified indexes for the new shape: the
+  composite PK `(vouching_user_id, vouched_user_id)` covers outgoing-vouch lookups, and
+  `ix_vouches_vouched_user_id` covers incoming-vouch lookups. The spec's old filtered-index pair on
+  `followed_users` (`WHERE is_vouched = true`) no longer applies — see
+  `skills/canalave-conventions/layer6-indexes.md` "Vouch Indexes" (updated to match).

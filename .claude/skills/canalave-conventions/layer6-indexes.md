@@ -108,15 +108,21 @@ ix_story_tags_tag_id_story_id
 
 Enables efficient "all stories with tag X" queries.
 
-## FollowedUser Vouch Indexes
+## Vouch Indexes
+
+Vouch was promoted from a boolean (`IsVouched` on `FollowedUser`) to its own table (§5.8, §8#13,
+resolved Phase B — see `audit/Following.md`). The old filtered-index pair on `followed_users` no longer
+applies; the dedicated `vouches` table covers both directions instead:
 
 ```
-ix_followed_users_user_id_vouched
-  ON followed_users (user_id) WHERE (is_vouched = true)
+pk_vouches  -- composite PK (vouching_user_id, vouched_user_id) — covers outgoing-vouch lookups
 
-ix_followed_users_followed_user_id_vouched
-  ON followed_users (followed_user_id) WHERE (is_vouched = true)
+ix_vouches_vouched_user_id
+  ON vouches (vouched_user_id)  -- covers incoming-vouch lookups
 ```
+
+No `WHERE` filter is needed — the table holds only vouch rows now, not a boolean flag on every
+`followed_users` row.
 
 ## Notification Index
 

@@ -172,11 +172,18 @@ Guardrails:
 
 | Decision | Default (per spec/§0) | Why it's yours |
 |----------|----------------------|----------------|
-| **Vouches L1 shape** (§8.13) | — (genuinely open) | bool on `FollowedUser` vs. own table with `VouchText`. Blocks Following. |
-| **`SiteDailyStat`/`DailyStoryStat`** | lean: raw-SQL marts (no EF model) | The skill is self-inconsistent (layer8 lists it as a mart; layer1's exclusion list omits it). Pick one. |
-| **JSON settings mapping** | `ComplexProperty().ToJson()` (newer) | Code uses the older `OwnsOne().ToJson()`. Migrate, or leave working code alone (it works → §0 exception applies)? |
+| *(none currently open)* | | |
 
 **Resolved:**
+
+- **`SiteDailyStat`/`DailyStoryStat`** — resolved: raw-SQL marts, no EF model, matching the other three
+  Layer-8 marts (`AlsoFavoritedScore`, `AlsoRecommendedScore`, `UserStoryTreeSearchEntry`). `DailyStoryStat`
+  was dropped entirely. See [audit/Moderation.md](audit/Moderation.md) Feature 62 and
+  [audit/Discovery.md](audit/Discovery.md)'s Layer-8 implementation notes (schema preserved there for all
+  four marts together).
+- **JSON settings mapping** — resolved: `ComplexProperty(...).ToJson()`, migrated off the older
+  `OwnsOne(...).ToJson()` approach. See [audit/Identity.md](audit/Identity.md) Feature 1 and
+  [layer1-data-model.md](skills/canalave-conventions/layer1-data-model.md) §"JSON Complex Types."
 
 - **`IEntityTypeConfiguration<T>` extraction** — resolved: extracted now (before the first migration),
   not deferred. One `{Entity}Configuration` class per entity, files grouped one-per-folder-cluster, but
@@ -184,6 +191,13 @@ Guardrails:
   cluster folders — that's reserved for service impls, a different edit-locality concern). See
   [layer1-data-model.md](skills/canalave-conventions/layer1-data-model.md) §"Fluent API Organization" and
   [audit/Lookups.md](audit/Lookups.md) item 6.
+- **Vouches L1 shape** (§8.13) — resolved Phase B (2026-06-20): dedicated `Vouch` table with optional
+  `VouchText`, `MaxLength(1000)` (not the spec's proposed 280 — code is authoritative, spec not edited).
+  Was already implemented in Phase A's migration; the audit/status framing was stale, not the decision
+  itself. See [audit/Following.md](audit/Following.md) Feature 19.
+- **Hidden Gem at-limit behavior** (§8#4) — resolved Phase B (2026-06-20): reject + remove-first at the
+  5-item limit; no atomic swap, no auto-evict. See [audit/Recommendations.md](audit/Recommendations.md)
+  Feature 29.
 
 ---
 

@@ -22,9 +22,15 @@ built.**
   L5 — Stage 2.**
 
 ## Feature 29 — Hidden Gem Management
-- **L1 — Stage 5** (`IsHiddenGem`). **L2 — Stage 2** (5-per-user limit in C#). **L3-Logic — Stage 1
-  (conceptual, §8.4):** behavior at the limit is unresolved — resolve in chat. **L3.5 — Stage 2.
-  L4 — Stage 1. L5 — Stage 2.**
+- **L1 — Stage 5** (`IsHiddenGem`). **L2 — Stage 2** (5-per-user limit in C#).
+- **L3-Logic — Stage 2 (reconciled Phase B, 2026-06-20; was Stage 1).** Spec §8 Open Question #4
+  ("what happens at the 5-item limit") is resolved: **reject + remove-first.** When a user already has
+  5 Hidden Gems and designates a 6th, the write fails (e.g. "you have 5 Hidden Gems — remove one before
+  adding another"); no atomic swap, no auto-evict. Mirrors the Vouches 5-limit pattern (§5.8). **Settled
+  constraint — do not revisit:** the write method checks the count against `writeDb` and fails the
+  request when `count == 5`; the user must explicitly un-designate before designating a new story. (Spec
+  itself is not edited — read-only snapshot; this note carries the resolution.)
+- **L3.5 — Stage 2. L4 — Stage 1. L5 — Stage 2.**
 
 ## Feature 30 — Recommendation Attribution
 - **L1 — Stage 5** (`UserStoryRecommendationSource` sparse; `RecommendationSuccess`). **L2 — Stage 2.**

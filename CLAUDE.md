@@ -27,7 +27,7 @@ All process artifacts live under `.claude/`. The spec and this file live at repo
 | File | Purpose | Updated by |
 |------|---------|------------|
 | `canalave_library_unified_spec.md` | Single authoritative specification (read-only) | Never (historical snapshot) |
-| `.claude/status.md` | Feature × Layer → Stage grid. Dashboard only — no prose. | Any session completing work on a cell |
+| `.claude/status.md` | Feature × Layer → Stage grid, plus a "Global conditions" note section above it for cross-cutting facts that don't change any single cell's Stage (e.g. a build/tooling verification, a blocked layer). No other prose. | Any session completing work on a cell, or recording a cross-cutting condition |
 | `.claude/workplan.md` | Ordered work-units. Each names cell(s), tool, audit file pointer, position. | Any session completing a work-unit |
 | `.claude/audit-summary.md` | Write-once audit overview: stage distribution, surprises, reconciliation index, Stage-1 landscape, UI component inventory. | Written once during audit |
 | `.claude/audit/<FolderName>.md` | Per-folder-cluster notes. Shared context header, then per-feature sections with per-layer stages. | Audit creates; working sessions update |
@@ -51,14 +51,13 @@ The spec is a read-only snapshot. Audit files point into it (section references,
 
 ## Doc-Touch Timing
 
-Three distinct moments touch process docs. Keep them separate — don't fold moment 1 into moment 3, and
-don't defer it past the start of implementation:
+Three distinct moments touch process docs. Keep them separate — don't fold moment 1 into moment 3, and don't defer moment 1 past the start of implementation. If a task spans multiple folder clusters, make sure all audit files that are relevant to the task are reviewed and edited.
 
 | Moment | Trigger | Action | Files touched |
 |---|---|---|---|
 | **1. Pre-implementation** | Plan resolves a `forward_plan.md` "Decisions that need you" row, would contradict a "settled" audit note, or needs a convention not yet recorded anywhere | Settle it (ask the user if genuinely open), then update every doc that states or defers it — as an explicit first phase of the plan, completed before any code change | Skill file(s); audit file's settled-vs-open note; `forward_plan.md` (move row to "Resolved", point at the doc) |
 | **2. Mid-implementation** | Building reveals a convention should change | Update the skill file in the same work-unit — conventions are living; don't silently diverge | Skill file(s) |
-| **3. Post-implementation** | A work-unit completes | Record the new Stage and how it was verified | `status.md`, `workplan.md`, audit Stage note |
+| **3. Post-implementation** | A work-unit completes | Record the new Stage and how it was verified — if no single cell's Stage changed, record the verification as a Global Conditions note in `status.md` instead | `status.md`, `workplan.md`, audit Stage note |
 
 Audit files appear in both 1 and 3: a settled-vs-open note is an *input* checked before a plan is
 approved; a Stage note is an *output* recorded after the work lands.

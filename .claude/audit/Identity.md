@@ -39,10 +39,12 @@ Stage 2/3 — normalize namespaces + the `App.razor` asset path, then verify bui
 ---
 
 ## Feature 1 — Identity & Auth
-- **L1 — Stage 5.** `User`/`ApplicationRole` with `int` keys (Axiom #4); JSON settings via `OwnsOne`
-  + `ToJson` with enum→short; role seeding (User/Moderator/Admin) via `HasData`. Sound; awaiting
-  migration. *Minor:* `ReaderSettings.DefaultSearchSort` is typed `DefaultSortOrder`, which is itself a
-  divergent enum (see Lookups audit) — a thread to pull when the sort model is reconciled.
+- **L1 — Stage 5.** `User`/`ApplicationRole` with `int` keys (Axiom #4); JSON settings via
+  `ComplexProperty(...).ToJson()` with enum→short conversions (migrated from the older `OwnsOne` approach
+  — see `layer1-data-model.md` §"JSON Complex Types"); role seeding (User/Moderator/Admin) via `HasData`.
+  Sound; migration-verified (2026-06-20). *Minor:* `ReaderSettings.DefaultSearchSort` is typed
+  `DefaultSortOrder`, which is itself a divergent enum (see Lookups audit) — a thread to pull when the sort
+  model is reconciled.
 - **L2 — Stage 4.** Cookie auth configured for 401/403 (correct, §1), `RequireConfirmedAccount`, password
   policy, `AddIdentityCore<User>().AddRoles().AddApiEndpoints()`. Reconcile post-move references; verify
   `AddIdentityCore` (vs `AddIdentity`) is the intended choice for the scaffolded UI flow.

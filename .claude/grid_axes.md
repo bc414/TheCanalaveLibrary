@@ -426,11 +426,11 @@ narrowing within a bookshelf (management, not discovery).
 **18. User Following** — `FollowedUser` table: follow/unfollow users, `ReceiveAlerts` toggle (bell
 icon), `DateFollowed`. Not author-specific — "Followed Users" reflects that not everyone is an author.
 
-**19. Vouches** — `IsVouched` boolean on `FollowedUser`. Scarce personal endorsement: 5-per-user limit
-enforced in C# service layer. Filtered indexes on `(user_id) WHERE (is_vouched = true)` and
-`(followed_user_id) WHERE (is_vouched = true)`. Display asymmetry: outgoing vouches public, incoming
-vouches private to owner. *Spec §8.13: consider promoting Vouch to its own junction table with optional
-`VouchText` — a Layer 1 decision needing resolution.*
+**19. Vouches** — dedicated `Vouch` table (promoted off `FollowedUser`, resolved Phase B — see
+`audit/Following.md`), with optional `VouchText` (`MaxLength(1000)`). Scarce personal endorsement:
+5-per-user limit enforced in C# service layer. Indexes: composite PK covers outgoing lookups,
+`ix_vouches_vouched_user_id` covers incoming. Display asymmetry: outgoing vouches public, incoming
+vouches private to owner.
 
 
 ### User Profile

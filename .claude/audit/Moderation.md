@@ -7,9 +7,11 @@ dispatcher pattern** (§3.10).
 ## Shared Context
 **Entities (Core/Models/):** `Report` (`ReportReasonId`/`ReportStatusId` Restrict, polymorphic
 `ReportedEntityType`→short + `ReportedEntityId`, `DateReported` default), `ReportReason`/`ReportStatus`
-(seeded), `StoryImport` (unique `StoryId`, unique `SourceUrl`), `SiteDailyStat` (PK `StatDate`),
-`DailyStoryStat` (PK `(StoryId,StatDate)`). `Story.ActiveReportCount` for auto-flagging. **No services or
-components built.**
+(seeded), `StoryImport` (unique `StoryId`, unique `SourceUrl`). `Story.ActiveReportCount` for
+auto-flagging. **No services or components built.**
+
+**Not EF entities:** `SiteDailyStat` (PK `StatDate`) is a raw-SQL data mart (no `DbSet`, no migration —
+see Feature 62 below); `DailyStoryStat` was dropped entirely, never modeled.
 
 ## Feature 46 — Content Reporting
 - **L1 — Stage 5** (`Report` + seeded reason/status lookups). **L2 — Stage 2.** **L3/L3.5 — Stage 2.
@@ -31,10 +33,8 @@ components built.**
   verification; MVP manual mod verification). **L3/L3.5 — Stage 2. L4 — Stage 1. L5 — N/A.**
 
 ## Feature 62 — SiteDailyStat Worker (below the line)
-- **L1 — Stage 4.** `SiteDailyStat` is EF-modeled (`DbSet`, `HasKey(StatDate)`) — but `layer8-data-marts.md`
-  lists it among data-mart tables that should have **no EF model class**. Same divergence as features
-  59–61. (Note: `layer1-data-model.md`'s migration-exclusion list names only the three Discovery marts,
-  not `SiteDailyStat`, so the skill is mildly self-inconsistent here — worth a user decision on whether
-  `SiteDailyStat`/`DailyStoryStat` are EF-modeled aggregates or raw-SQL marts.)
+- **L1 — N/A** (Phase A removed the EF model; `site_daily_stats` is a raw-SQL mart — divergence resolved,
+  matching `AlsoFavoritedScore`/`AlsoRecommendedScore`/`UserStoryTreeSearchEntry`; schema preserved in
+  `Discovery.md`'s Layer-8 implementation notes). `DailyStoryStat` was dropped entirely, not modeled at all.
 - **L8 — Stage 2** (daily aggregation; no user-facing UI in MVP; naturally sorts late — nothing to
   aggregate yet). All other layers **N/A**.
