@@ -17,7 +17,7 @@
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
-        <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.9" />
+        <ProjectReference Include="..\ServiceDefaults\ServiceDefaults.csproj" />
         <ProjectReference Include="..\TheCanalaveLibrary.Core\TheCanalaveLibrary.Core.csproj" />
         <ProjectReference Include="..\TheCanalaveLibrary.SharedUI\TheCanalaveLibrary.SharedUI.csproj" />
         <ProjectReference Include="..\TheCanalaveLibrary.Client\TheCanalaveLibrary.Client.csproj" />

@@ -8,7 +8,7 @@ namespace TheCanalaveLibrary.Server;
 /// </summary>
 public class ReadOnlyApplicationDbContext : ApplicationDbContext
 {
-    public ReadOnlyApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
+    public ReadOnlyApplicationDbContext(DbContextOptions<ReadOnlyApplicationDbContext> options) : base(options)
     {
         ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
     }

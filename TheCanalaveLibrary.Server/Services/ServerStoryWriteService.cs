@@ -1,18 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Core;
-using TheCanalaveLibrary.Server;
 
 namespace TheCanalaveLibrary.Server;
 
-public class DbStoryWriteService : IStoryWriteService
+public class ServerStoryWriteService(ReadOnlyApplicationDbContext readDb, ApplicationDbContext writeDb)
+    : ServerStoryReadService(readDb), IStoryWriteService
 {
-    private readonly IDbContextFactory<ApplicationDbContext> _dbContextFactory;
-
-    public DbStoryWriteService(IDbContextFactory<ApplicationDbContext> dbContextFactory)
-    {
-        _dbContextFactory = dbContextFactory;
-    }
-
     public async Task<int> CreateStoryAsync(CreateStoryDTO newStoryDTO)
     {
         List<string> validationErrors = newStoryDTO.CanSave();
@@ -21,18 +14,16 @@ public class DbStoryWriteService : IStoryWriteService
             throw new StoryValidationException(validationErrors);
         }
 
-        await using ApplicationDbContext context = await _dbContextFactory.CreateDbContextAsync();
-
         Story newStoryDB = newStoryDTO.ToStory();
         newStoryDB.AuthorId = newStoryDTO.AuthorId;
 
         // The ToStory() mapper should create the related entities.
         // We need to ensure they are attached to the context.
-        context.Attach(newStoryDB.StoryListing);
-        context.Attach(newStoryDB.StoryDetail);
+        writeDb.Attach(newStoryDB.StoryListing);
+        writeDb.Attach(newStoryDB.StoryDetail);
 
-        context.Stories.Add(newStoryDB);
-        await context.SaveChangesAsync();
+        writeDb.Stories.Add(newStoryDB);
+        await writeDb.SaveChangesAsync();
 
         return newStoryDB.StoryId;
     }
@@ -45,10 +36,8 @@ public class DbStoryWriteService : IStoryWriteService
             throw new StoryValidationException(validationErrors);
         }
 
-        await using ApplicationDbContext context = await _dbContextFactory.CreateDbContextAsync();
-
         // Include related data that needs to be updated. This is crucial.
-        Story? storyToUpdate = await context.Stories
+        Story? storyToUpdate = await writeDb.Stories
             .Include(s => s.StoryListing)
             .Include(s => s.StoryDetail)
             .Include(s => s.StoryTags)
@@ -63,6 +52,6 @@ public class DbStoryWriteService : IStoryWriteService
 
         storyToUpdate.UpdateStoryEditableProperties(dto);
 
-        await context.SaveChangesAsync();
+        await writeDb.SaveChangesAsync();
     }
 }

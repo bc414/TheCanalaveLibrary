@@ -238,6 +238,15 @@ Guardrails:
   only; `RichTextView`/`RichTextEditor` (all user-generated content) use the user's `ReaderSettings`
   font instead. See [layer4-style.md](skills/canalave-conventions/layer4-style.md) §"Prerequisite:
   Design Tokens" and §"Reader Settings as CSS."
+- **Aspire orchestration during MVP dev** — resolved (2026-06-20): not used day-to-day while the MVP
+  stays `InteractiveServer`-only with no Redis/WASM (matches spec's MVP boundary, Layers 1–4 only —
+  Layers 5–8 including Redis write-behind are post-MVP). Run `TheCanalaveLibrary.Server` directly;
+  `ConnectionStrings:canalavedb` in `appsettings.Development.json` points at a local Postgres instance.
+  `builder.AddRedisDistributedCache("cache")` is removed from `Program.cs` (nothing consumed
+  `IDistributedCache` yet) with a comment marking where to re-add it. `AppHost.cs` keeps its
+  `AddPostgres("postgres").AddDatabase("canalavedb")` wiring dormant in the tree — `AddNpgsqlDbContext<T>`
+  reads `ConnectionStrings:canalavedb` from plain config either way, so there's no Aspire-specific
+  coupling to undo when Aspire-orchestrated dev (or Redis/WASM) comes back post-MVP.
 
 ---
 

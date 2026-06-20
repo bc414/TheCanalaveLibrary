@@ -10,11 +10,11 @@
     <link rel="stylesheet" href="@Assets["app.css"]"/>
     <link rel="stylesheet" href="@Assets["TheCanalaveLibrary.styles.css"]"/>
     <ImportMap/>
-    <HeadOutlet/>
+    <HeadOutlet @rendermode="PageRenderMode"/>
 </head>
 
 <body>
-<Routes/>
+<Routes @rendermode="PageRenderMode"/>
 <ReconnectModal/>
 <script src="@Assets["_framework/blazor.web.js"]"></script>
 
@@ -25,3 +25,14 @@
 </body>
 
 </html>
+
+@code {
+    // Identity/Pages/_Imports.razor marks Identity pages [ExcludeFromInteractiveRouting] (they need a
+    // real per-request HttpContext for SignInManager/cookie auth). AcceptsInteractiveRouting() reads
+    // that metadata so those pages stay static SSR while the rest of the app is InteractiveServer.
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    private IComponentRenderMode? PageRenderMode
+        => HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
+}

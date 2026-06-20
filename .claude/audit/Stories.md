@@ -16,9 +16,10 @@ edit contract. Also here: `StoryArc`, `Series`/`SeriesEntry`, `StoryRelationship
 **DTOs/contracts (Core/Stories/):** `CreateStoryDTO`, `StoryUpdateDTO`, `StoryDetailsDTO`, `StoryTagDTO`,
 `IEditableStoryProperties`, `IStoryTag`, `StoryMappers`, `StoryValidations`, `StoryValidationException`.
 
-**Services:** `IStoryReadService` / `IStoryWriteService` (Core) + `DbStoryReadService` /
-`DbStoryWriteService` (Server) + `HttpStoryReadService` / `HttpStoryWriteService` /
-`HttpStoryOverviewService` (Client). `StoryEndpoints` (Server) maps the API.
+**Services:** `IStoryReadService` / `IStoryWriteService` (Core) + `ServerStoryReadService` /
+`ServerStoryWriteService` (Server, direct-injection pattern per spec §6.6 — see RESOLVED note below) +
+`HttpStoryReadService` / `HttpStoryWriteService` / `HttpStoryOverviewService` (Client). `StoryEndpoints`
+(Server) maps the API.
 
 **Components (SharedUI):** `StoryPage` (dispatcher, `/story/{StoryId:int}/{Slug?}`),
 `StoryDesktop`/`StoryMobile` (stubs), `StoryPropertiesForm` + `StoryPropertiesViewModel`.
@@ -34,10 +35,17 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
 - **L1 — Stage 5.** Partition trio + `IEditableStoryProperties` plumbing is sound and matches spec §4/§7.
   Awaiting migration + build verification (no migrations exist). *Settled:* three-table vertical split;
   slug server-generated; explicit-interface edit contract.
-- **L2 — Stage 5.** `DbStoryWriteService.CreateStoryAsync`/`UpdateStoryAsync` use the tracked
-  `ApplicationDbContext`, validate via `CanSave()`, throw `StoryValidationException`/`KeyNotFoundException`,
-  `Include` the partitions on update. DTO firewall intact. Matches `layer2-services.md`. *Open:* cover-art
-  upload to R2/MinIO not implemented; slug generation not visible in the write path.
+- **L2 — Stage 5.** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
+  wrong — `DbStoryWriteService`/`DbStoryReadService` injected `IDbContextFactory<T>`, which was never
+  registered in `Program.cs` (only plain `AddDbContext<T>` existed), so DI container validation failed at
+  app startup. Surfaced by actually running the Aspire AppHost end-to-end. Per spec §6.6 ("Why Direct
+  DbContext Injection over IDbContextFactory" — superseded for thread-safety reasons that don't apply
+  under scoped DI), rewrote as `ServerStoryReadService(ReadOnlyApplicationDbContext readDb)` and
+  `ServerStoryWriteService(ReadOnlyApplicationDbContext readDb, ApplicationDbContext writeDb) :
+  ServerStoryReadService(readDb), IStoryWriteService` — primary-constructor injection, `readDb` private or
+  base. Registered via `AddScoped<>` in `Program.cs` (already scoped; only the implementation type names
+  changed). *Open:* cover-art upload to R2/MinIO not implemented; slug generation not visible in the write
+  path.
 - **L3-Logic — Stage 4.** `StoryPropertiesForm` is a correct `EditForm` + `DataAnnotationsValidator` +
   ViewModel + server-error surfacing pattern, but: injects `ITagRetrievalService` (no impl, unregistered),
   has a `@* TODO: tags, cover art *@`, no slug/AdminControls handling. *Disagrees with:* completeness, not
@@ -52,11 +60,13 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
 ## Feature 5 — Story Browsing & Display
 
 - **L1 — Stage 5.** `StoryListing` warm partition is the projection anchor; sound.
-- **L2 — Stage 2** (reclassified from 4). `DbStoryReadService` has `GetStoryByIdAsync` (→ `StoryDetailsDTO`)
-  and `GetStoryForEditAsync`, both correct `ReadOnlyApplicationDbContext` `.Select()` projections — they
-  *work* and match spec/conventions. The gap is unbuilt extension, not divergence: no `StoryListingDto`
-  listing/browse/search projection exists, and the content-rating master filter ("mature disabled ⇒ no
-  trace anywhere," §5) is absent. Add the listing read path; nothing here to reconcile.
+- **L2 — Stage 2** (reclassified from 4). `ServerStoryReadService` (renamed from `DbStoryReadService` —
+  see Feature 4's L2 RESOLVED note for the `IDbContextFactory` → direct-injection fix, same cell) has
+  `GetStoryByIdAsync` (→ `StoryDetailsDTO`) and `GetStoryForEditAsync`, both correct
+  `ReadOnlyApplicationDbContext` `.Select()` projections — they *work* and match spec/conventions. The gap
+  is unbuilt extension, not divergence: no `StoryListingDto` listing/browse/search projection exists, and
+  the content-rating master filter ("mature disabled ⇒ no trace anywhere," §5) is absent. Add the listing
+  read path; nothing here to reconcile.
 - **L3-Logic — Stage 4.** `StoryPage` is a real dispatcher (device detection + `IStoryReadService`,
   loads `StoryDetailsDTO`, redirects to `/not-found`). Gaps: no `[PersistentState]` ⇒ prerender→interactive
   double-fetch flicker; route is `{Slug?}` not the spec's hybrid catch-all `{*StorySlug}`.

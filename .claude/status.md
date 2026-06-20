@@ -31,11 +31,48 @@ notes may stand alone):
 - **Phase B (2026-06-20):** rows 19 and 29 reclassified — see `audit/Following.md` and
   `audit/Recommendations.md` for resolution detail. Four leaf Stage-1 gaps (rows 8, 37, 51, 55) remain
   deferred to the Phase-D workplan; confirmed no dependents.
+- **RESOLVED (2026-06-20) — First real app run surfaced and fixed three runtime bugs; pivoted dev
+  workflow away from Aspire for the MVP.** Running the app for the first time (Phase A's deferred
+  runtime-verification step) found:
+  1. **DI startup failure** — `DbStoryReadService`/`DbStoryWriteService` injected `IDbContextFactory<T>`,
+     never registered. Fixed per spec §6.6 (direct DbContext injection supersedes the factory) —
+     renamed to `ServerStoryReadService`/`ServerStoryWriteService`, primary-constructor injection,
+     `AddScoped<>`. See `audit/Stories.md` row 4/5 L2 RESOLVED notes — also corrects those cells' prior
+     "Stage 5/2, nothing to reconcile" audit language, which had not been runtime-checked.
+  2. **`System.Type` serialization crash on first page render** — `Routes.razor` had `@rendermode` on
+     `<RouteView>`, whose built-in `PageType` parameter (`System.Type`) can't cross the SSR→interactive
+     serialization boundary. Moved to `<Routes>`/`<HeadOutlet>` in `App.razor`. That alone broke
+     `/Account/Login` (briefly renders, then bounces to not-found): Identity pages carry
+     `@attribute [ExcludeFromInteractiveRouting]` (`Identity/Pages/_Imports.razor`) because they need a
+     real per-request `HttpContext` for `SignInManager`/cookie auth, but a hardcoded
+     `@rendermode="InteractiveServer"` on `<Routes>` ignores that and drags them into an interactive
+     circuit anyway. Fixed per current (.NET 9/10/11) `render-modes.md` guidance, verified directly
+     against the live Microsoft Learn page (not just training data): `App.razor`'s `PageRenderMode` now
+     reads `HttpContext.AcceptsInteractiveRouting()` and returns `null` (static SSR) for excluded pages,
+     `InteractiveServer` otherwise. `cross-cutting.md`'s "Render Mode" section corrected to match (it had
+     the incomplete/wrong pattern).
+  3. **`ReadOnlyApplicationDbContext` constructor type mismatch** — took `DbContextOptions<ApplicationDbContext>`
+     instead of its own `DbContextOptions<ReadOnlyApplicationDbContext>`; worked by DI accident under
+     plain `AddDbContext`, would break under pooled registration. Fixed (`ApplicationDbContext` now takes
+     non-generic `DbContextOptions`, `ReadOnlyApplicationDbContext` takes its own generic).
+  Also: added the missing `builder.AddServiceDefaults()`/`MapDefaultEndpoints()` call and the
+  `ServiceDefaults` project reference (never wired into Server), and gave `AppHost.cs` a real
+  `AddPostgres("postgres").AddDatabase("canalavedb")` resource (was previously just
+  `AddConnectionString("DefaultConnection")` — no container, plus both `appsettings.json` files still had
+  the ASP.NET template's SQL Server LocalDB string).
+  **Then scope changed:** MVP is `InteractiveServer`-only, no Redis/WASM (matches spec's MVP boundary —
+  see `forward_plan.md` "Aspire orchestration during MVP dev" Resolved entry). Dev workflow is now
+  running `TheCanalaveLibrary.Server` directly against a local Postgres via
+  `ConnectionStrings:canalavedb` in `appsettings.Development.json`, not via the AppHost. `AppHost.cs`'s
+  Postgres/Redis wiring stays in the tree, dormant, for when Aspire-orchestrated dev or Redis/WASM comes
+  back post-MVP — `AddNpgsqlDbContext<T>` reads config the same way regardless of source, so nothing
+  needs to be undone later. Full end-to-end (migrated + seeded Postgres, Identity pages loading) via the
+  direct-run path is not yet confirmed — that's the next step.
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L5 | L6 | L7 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|----|----|----|----|
 | 1 | Identity & Auth | Identity | 5 | 4 | 4 | 4 | 1 | N/A | N/A | N/A | N/A |
-| 2 | Lookup Tables & Seed Data | Lookups | 4 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 3 | Sprite & Theme System | Sprites | 5 | 4 | 2 | 2 | 1 | 4 | N/A | N/A | N/A |
 | 4 | Story Creation & Editing | Stories | 5 | 5 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
 | 5 | Story Browsing & Display | Stories | 5 | 2 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
@@ -49,8 +86,8 @@ notes may stand alone):
 | 13 | Tag Display & Sprites | Tags | 5 | 4 | 4 | 4 | 1 | 2 | N/A | N/A | N/A |
 | 14 | Tag Filtering & Selection UI | Tags | N/A | 4 | 4 | 4 | 1 | 2 | N/A | N/A | N/A |
 | 15 | Saved Tag Selections | Tags | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 16 | Story Interaction State Writes | UserStoryInteractions | 4 | 2 | 2 | 2 | 1 | 2 | 4 | 2 | N/A |
-| 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 4 | 2 | 2 | 2 | 1 | 2 | 4 | N/A | N/A |
+| 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 2 | 2 | 2 | 1 | 2 | 4 | 2 | N/A |
+| 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 2 | 2 | 2 | 1 | 2 | 4 | N/A | N/A |
 | 18 | User Following | Following | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 19 | Vouches | Following | 5 | 2 | 2 | 2 | 1 | 2 | 5 | N/A | N/A |
 | 20 | User Profile Editing | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
@@ -58,7 +95,7 @@ notes may stand alone):
 | 22 | User Stats | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 23 | Comment Posting | Comments | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 24 | Comment Display & Pagination | Comments | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
-| 25 | Comment Likes | Comments | 4 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
+| 25 | Comment Likes | Comments | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 26 | Spoiler Comments | Comments | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 27 | Recommendation Submission | Recommendations | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 28 | Recommendation Display | Recommendations | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |

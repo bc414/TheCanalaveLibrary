@@ -1,22 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Core;
-using TheCanalaveLibrary.Server;
 
 namespace TheCanalaveLibrary.Server;
 
-public class DbStoryReadService : IStoryReadService
+public class ServerStoryReadService(ReadOnlyApplicationDbContext readDb) : IStoryReadService
 {
-    private readonly IDbContextFactory<ReadOnlyApplicationDbContext> _dbContextFactory;
-
-    public DbStoryReadService(IDbContextFactory<ReadOnlyApplicationDbContext> dbContextFactory)
-    {
-        _dbContextFactory = dbContextFactory;
-    }
-
     public async Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId)
     {
-        await using ReadOnlyApplicationDbContext context = await _dbContextFactory.CreateDbContextAsync();
-        return await context.Stories.Where(s => s.StoryId == storyId)
+        return await readDb.Stories.Where(s => s.StoryId == storyId)
             .Select(s => new StoryDetailsDTO
             {
                 StoryId = s.StoryId,
@@ -36,8 +27,7 @@ public class DbStoryReadService : IStoryReadService
 
     public async Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId)
     {
-        await using ReadOnlyApplicationDbContext context = await _dbContextFactory.CreateDbContextAsync();
-        return await context.Stories // Using a direct projection for optimal query generation
+        return await readDb.Stories // Using a direct projection for optimal query generation
             .Where(s => s.StoryId == storyId)
             .Select(s => new StoryUpdateDTO
             {

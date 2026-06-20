@@ -5,11 +5,32 @@ Also covers global architectural decisions that span multiple layers.
 
 ## Render Mode: Global InteractiveAuto
 
-Set the render mode **once**, on `<RouteView>` in `Routes.razor` — not per-component:
+Set the render mode **once**, on `<Routes>` and `<HeadOutlet>` in `App.razor` — not on `<RouteView>` in
+`Routes.razor`, and not per-component:
 
 ```razor
-<RouteView RouteData="routeData" DefaultLayout="typeof(DeviceLayout)"
-           @rendermode="RenderMode.InteractiveAuto" />
+@* Routes.razor — no @rendermode here *@
+<RouteView RouteData="routeData" DefaultLayout="typeof(DeviceLayout)" />
+```
+
+Identity pages (`Identity/Pages/_Imports.razor`) carry `@attribute [ExcludeFromInteractiveRouting]` —
+they need a real per-request `HttpContext` for `SignInManager`/cookie auth, which an interactive
+circuit doesn't have. `App.razor` must read that via `HttpContext.AcceptsInteractiveRouting()`, not
+hardcode the render mode — confirmed current for .NET 9/10/11 against `render-modes.md`:
+
+```razor
+@* App.razor *@
+<HeadOutlet @rendermode="PageRenderMode" />
+...
+<Routes @rendermode="PageRenderMode" />
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+
+    private IComponentRenderMode? PageRenderMode
+        => HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
+}
 ```
 
 **Dev shortcut (spec-sanctioned):** during active development, use `InteractiveServer` globally

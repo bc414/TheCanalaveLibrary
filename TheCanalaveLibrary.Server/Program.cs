@@ -5,7 +5,9 @@ using TheCanalaveLibrary.Server;
 using TheCanalaveLibrary.Core;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
-builder.AddRedisDistributedCache("cache");
+builder.AddServiceDefaults();
+// Redis (write-behind cache, Layer 7) is post-MVP — no feature reads/writes IDistributedCache yet.
+// Re-add builder.AddRedisDistributedCache("cache") when the first Redis-backed feature is built.
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -24,15 +26,12 @@ builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 
 // --- Database Contexts ---
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
-        .UseSnakeCaseNamingConvention()
-);
+builder.AddNpgsqlDbContext<ApplicationDbContext>("canalavedb", configureDbContextOptions: options =>
+    options.UseSnakeCaseNamingConvention());
 
 // Register the dedicated read-only DbContext for high-performance queries
-builder.Services.AddDbContext<ReadOnlyApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"))
-        .UseSnakeCaseNamingConvention()
+builder.AddNpgsqlDbContext<ReadOnlyApplicationDbContext>("canalavedb", configureDbContextOptions: options =>
+    options.UseSnakeCaseNamingConvention()
         .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)); // Good practice for a read-only context
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
@@ -84,8 +83,8 @@ builder.Services.AddScoped<DataSeeder>();
 
 // Services for dependency injection for the server
 builder.Services.AddScoped<IDeviceDetectionService, ServerDeviceDetectionService>();
-builder.Services.AddScoped<IStoryReadService, DbStoryReadService>();
-builder.Services.AddScoped<IStoryWriteService, DbStoryWriteService>();
+builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
+builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
 builder.Services.AddScoped<ISpriteService, FileSystemSpriteService>();
 
 WebApplication app = builder.Build();
@@ -135,6 +134,8 @@ else
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }
+
+app.MapDefaultEndpoints();
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();

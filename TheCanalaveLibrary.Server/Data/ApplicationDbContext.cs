@@ -5,7 +5,7 @@ using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
 
-public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
+public class ApplicationDbContext(DbContextOptions options)
     : IdentityDbContext<User, ApplicationRole, int>(options)
 {
     #region DbSets

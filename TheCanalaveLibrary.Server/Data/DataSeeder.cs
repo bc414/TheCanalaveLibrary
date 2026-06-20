@@ -20,7 +20,7 @@ public class DataSeeder
     public async Task SeedDevelopmentDataAsync()
     {
         // 1. Ensure the database is created and migrations are applied
-        //await _context.Database.MigrateAsync();
+        await _context.Database.MigrateAsync();
 
         // 2. Check if data already exists. If so, do nothing.
         // We check for Users, but you could also check for Stories.
