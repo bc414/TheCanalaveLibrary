@@ -8,8 +8,12 @@ features from `grid_axes.md`, grouped by folder cluster. Columns:
 Global conditions affecting many cells (see `audit-summary.md` for detail):
 - **Spec supersedes stale code** — the spec is the recent consolidation; the ~7-month-old code is mostly non-working. Where they disagree and the code isn't working, the spec wins. Most **Stage 4** cells here are therefore *stale-code traps* (resolution direction known: build to spec; existing code is salvage), not two-way adjudications. The only genuine reconciliations are mechanical: Identity post-move references and Story L5 endpoint wiring (audit-summary §3a).
 - **L4-Style is Stage 1 everywhere it applies** — Tailwind is not installed (no `package.json`/`tailwind.config.js`); existing UI is Bootstrap. Blocked on design tokens.
-- **No migrations exist** — every L1 marked Stage 5 is "sound, awaiting migration + build verification."
-- **Build not verified** — leftover template stubs + Identity post-folder-move references.
+- **RESOLVED (2026-06-20) — Migration generated, build verified.** L1 fluent config was extracted from
+  the single inline `OnModelCreating` into `IEntityTypeConfiguration<T>` classes under
+  `TheCanalaveLibrary.Server/Data/Configurations/` (see `layer1-data-model.md` §"Fluent API
+  Organization"). `InitialSchema`, the project's first migration, was generated from the resulting model;
+  `dotnet build` and `dotnet ef migrations has-pending-model-changes` both pass clean. Every L1 marked
+  Stage 5 below is therefore now migration-verified, not just "sound, awaiting verification."
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L5 | L6 | L7 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|----|----|----|----|

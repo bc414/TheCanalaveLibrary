@@ -174,8 +174,16 @@ Guardrails:
 |----------|----------------------|----------------|
 | **Vouches L1 shape** (§8.13) | — (genuinely open) | bool on `FollowedUser` vs. own table with `VouchText`. Blocks Following. |
 | **`SiteDailyStat`/`DailyStoryStat`** | lean: raw-SQL marts (no EF model) | The skill is self-inconsistent (layer8 lists it as a mart; layer1's exclusion list omits it). Pick one. |
-| **`IEntityTypeConfiguration<T>` extraction** | spec/skill prefer per-entity config classes | All config is currently inline in one 1600-line `OnModelCreating`. Extract now, or defer as tech-debt? |
 | **JSON settings mapping** | `ComplexProperty().ToJson()` (newer) | Code uses the older `OwnsOne().ToJson()`. Migrate, or leave working code alone (it works → §0 exception applies)? |
+
+**Resolved:**
+
+- **`IEntityTypeConfiguration<T>` extraction** — resolved: extracted now (before the first migration),
+  not deferred. One `{Entity}Configuration` class per entity, files grouped one-per-folder-cluster, but
+  **all colocated** in `TheCanalaveLibrary.Server/Data/Configurations/` (not split into the feature
+  cluster folders — that's reserved for service impls, a different edit-locality concern). See
+  [layer1-data-model.md](skills/canalave-conventions/layer1-data-model.md) §"Fluent API Organization" and
+  [audit/Lookups.md](audit/Lookups.md) item 6.
 
 ---
 

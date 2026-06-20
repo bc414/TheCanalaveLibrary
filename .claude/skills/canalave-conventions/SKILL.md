@@ -113,7 +113,9 @@ file(s) before writing code.
 - **Service interfaces (read):** `I{Feature}ReadService`. **(write):** `I{Feature}WriteService`.
 - **Server impls:** `Server{Feature}ReadService`. **Client impls:** `Client{Feature}ReadService`.
 - **DTOs:** `{Entity}{Purpose}Dto`. **ViewModels:** `{Feature}ViewModel`.
-- **EF configs:** `{Entity}Configuration : IEntityTypeConfiguration<T>`.
+- **EF configs:** `{Entity}Configuration : IEntityTypeConfiguration<T>`, colocated (all clusters) in
+  `TheCanalaveLibrary.Server/Data/Configurations/`, grouped one file per folder-cluster — see
+  [layer1-data-model.md](layer1-data-model.md) §"Fluent API Organization".
 - **API endpoints:** `{Feature}Endpoints.Map{Feature}Endpoints(this WebApplication app)`.
 - **Indexes:** `ix_{table}_{columns}` via `HasDatabaseName()`.
 - **User model:** `User` (NOT `ApplicationUser`). **Role:** `ApplicationRole`.

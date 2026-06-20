@@ -31,8 +31,10 @@ protected override void OnConfiguring(DbContextOptionsBuilder options)
     => options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
 ```
 
-Both map the same model. Keep `OnModelCreating` in one place — use `IEntityTypeConfiguration<T>` classes
-with `ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly())` for vertical-slice organization.
+Both map the same model. Keep `OnModelCreating` in one place — it contains only `base.OnModelCreating(...)`
+followed by `modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly())`. All actual
+configuration lives in `IEntityTypeConfiguration<T>` classes (location and grouping rules in
+§"Fluent API Organization" below).
 
 ## TPT Inheritance (Settled — Not TPH)
 
@@ -207,8 +209,37 @@ Hot/warm/cold splits are deliberate — keep them. Don't merge a cold blob back 
 
 ## Fluent API Organization
 
-Use `IEntityTypeConfiguration<T>` classes, one per entity or cluster, with
-`ApplyConfigurationsFromAssembly()` in `OnModelCreating`.
+One `IEntityTypeConfiguration<T>` class per entity, named `{Entity}Configuration`. Files are grouped
+**one per folder-cluster** (per `folder_clusters.md`'s `Lookups/`, `Stories/`, `Identity/`, etc.), each
+file holding the config classes for that cluster's entities — e.g. `StoryConfigurations.cs` contains
+`StoryConfiguration`, `StoryListingConfiguration`, `StoryDetailConfiguration`, `SeriesConfiguration`, etc.
+
+**All config files are colocated in `TheCanalaveLibrary.Server/Data/Configurations/`** — *not* in the
+feature cluster folders, even though the files are grouped by cluster name. This is deliberately
+**unlike** service implementations (`Server{Feature}ReadService`, etc.), which live in their cluster
+folders to optimize per-feature edit-locality. EF configuration is a different kind of artifact: it's one
+cross-cluster *graph* — foreign keys, delete behaviors, the diamond-breaking `SetNull`s — that is edited at
+*migration time*, not per-feature. Keeping it in one location preserves the ability to reason about the
+whole delete-cascade graph at once, which is the dominant activity when touching this code. Scattering it
+into cluster folders would force a tree-walk to answer "what happens to X's children when X is deleted?"
+
+`OnModelCreating` is reduced to:
+
+```csharp
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    base.OnModelCreating(modelBuilder); // first — sets up the Identity model
+    modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+}
+```
+
+**Relationship ownership:** each relationship is configured exactly **once** — on whichever side groups
+it with the principal/aggregate-root's delete-policy reasoning (e.g. `User`'s `Configure` declares its
+`HasMany(...).OnDelete(...)` for owned/authored content). Never configure the same relationship from both
+sides.
+
+**Seed data placement:** each entity's `HasData(...)` call lives inside that entity's own
+`{Entity}Configuration.Configure` method (see "Seed Data" below for the `HasData` rules themselves).
 
 ## Seed Data
 

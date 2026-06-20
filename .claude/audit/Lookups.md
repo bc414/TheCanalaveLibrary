@@ -49,12 +49,17 @@ resolution direction below is fixed (conform to spec), i.e. effectively Stage 2 
    `// ... etc. for all combinations`; `SiteBadges`/`Badge` seed ends with `// ... add other badges`. The
    SearchMode × InteractionFilter matrix is not fully populated.
 
-6. **No `IEntityTypeConfiguration<T>` classes.** `folder_clusters.md` describes this folder as containing
-   "lookup `IEntityTypeConfiguration<T>` classes," and the conventions name them
-   `{Entity}Configuration`. In reality **all** configuration is inline in one 1600-line
-   `OnModelCreating`. This is a project-wide organizational divergence (noted here because Lookups is where
-   the convention was asserted) — see skill-file refinement note below.
+6. **RESOLVED — `IEntityTypeConfiguration<T>` extraction.** Previously: `folder_clusters.md` described
+   this folder as containing "lookup `IEntityTypeConfiguration<T>` classes," and the conventions named them
+   `{Entity}Configuration`, while in reality **all** configuration was inline in one 1600-line
+   `OnModelCreating`. The user has now made the organizational decision (see `forward_plan.md`'s former
+   open item, now resolved): config classes are extracted into `IEntityTypeConfiguration<T>` files grouped
+   one-per-folder-cluster, but **colocated in `TheCanalaveLibrary.Server/Data/Configurations/`** —
+   *not* in this folder. `folder_clusters.md`'s `Lookups/` row has been corrected accordingly. See
+   [layer1-data-model.md](../skills/canalave-conventions/layer1-data-model.md) §"Fluent API Organization"
+   for the authoritative rule and rationale (EF config is a cross-cluster delete-graph kept together for
+   migration-time reasoning, unlike service impls which live in cluster folders).
 
 **Implied resolution:** Stage 2 — re-derive `SearchMode`/sort vocabulary from §5.3, retire vestigial
-enums, complete the seed matrix. (Whether to also extract `IEntityTypeConfiguration` classes is a separate
-organizational decision for the user — see `audit-summary.md`.)
+enums, complete the seed matrix. (The `IEntityTypeConfiguration` extraction itself is no longer open — see
+item 6 above.)

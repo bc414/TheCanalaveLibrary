@@ -1,0 +1,119 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using TheCanalaveLibrary.Core;
+
+namespace TheCanalaveLibrary.Server.Data.Configurations;
+
+public sealed class BaseBlogPostConfiguration : IEntityTypeConfiguration<BaseBlogPost>
+{
+    public void Configure(EntityTypeBuilder<BaseBlogPost> builder)
+    {
+        builder.Property(e => e.Rating).HasConversion<short>();
+        builder.Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        // --- Diamond-Breaking SetNulls (Already covered by User SetNull) ---
+        // Example: FeatureContribution.BlogPostId -> BaseBlogPost
+        builder.HasMany(b => b.FeatureContributions)
+            .WithOne(fc => fc.BlogPost)
+            .HasForeignKey(fc => fc.BlogPostId)
+            .OnDelete(DeleteBehavior.SetNull); // Breaks diamond
+
+        builder.ToTable("base_blog_posts");
+        // Future indexes for querying (e.g., by AuthorId, DateCreated)...
+    }
+}
+
+public sealed class ProfileBlogPostConfiguration : IEntityTypeConfiguration<ProfileBlogPost>
+{
+    public void Configure(EntityTypeBuilder<ProfileBlogPost> builder)
+    {
+        builder.ToTable("profile_blog_posts");
+        // Future indexes for querying (e.g., by StoryId)...
+    }
+}
+
+public sealed class GroupBlogPostConfiguration : IEntityTypeConfiguration<GroupBlogPost>
+{
+    public void Configure(EntityTypeBuilder<GroupBlogPost> builder)
+    {
+        builder.ToTable("group_blog_posts");
+        // Future indexes for querying (e.g., by GroupId)...
+    }
+}
+
+public sealed class BasePollConfiguration : IEntityTypeConfiguration<BasePoll>
+{
+    public void Configure(EntityTypeBuilder<BasePoll> builder)
+    {
+        builder.Property(e => e.DateOpened).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        builder.HasMany(p => p.PollOptions)
+            .WithOne(o => o.Poll)
+            .HasForeignKey(o => o.PollId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // TPT Inheritance setup
+        builder.ToTable("base_polls");
+        // Future indexes for querying...
+    }
+}
+
+public sealed class SitePollConfiguration : IEntityTypeConfiguration<SitePoll>
+{
+    public void Configure(EntityTypeBuilder<SitePoll> builder)
+    {
+        builder.ToTable("site_polls");
+        // Future indexes for querying (e.g., by IsArchived)...
+    }
+}
+
+public sealed class BlogPostPollConfiguration : IEntityTypeConfiguration<BlogPostPoll>
+{
+    public void Configure(EntityTypeBuilder<BlogPostPoll> builder)
+    {
+        builder.ToTable("blog_post_polls");
+        // Future indexes for querying (e.g., by BlogPostId)...
+    }
+}
+
+public sealed class PollOptionConfiguration : IEntityTypeConfiguration<PollOption>
+{
+    public void Configure(EntityTypeBuilder<PollOption> builder)
+    {
+        // An option's text must be unique within that poll
+        builder.HasIndex(e => new { e.PollId, e.Text }).IsUnique();
+        // An option's sort order must be unique within that poll
+        builder.HasIndex(e => new { e.PollId, e.SortOrder }).IsUnique();
+        // Future indexes for querying...
+    }
+}
+
+// --- Explicit like / vote junctions (replace EF implicit many-to-many) ---
+public sealed class BlogPostLikeConfiguration : IEntityTypeConfiguration<BlogPostLike>
+{
+    public void Configure(EntityTypeBuilder<BlogPostLike> builder)
+    {
+        builder.HasKey(e => new { e.BlogPostId, e.UserId });
+        builder.HasOne(bl => bl.BlogPost).WithMany(b => b.Likes)
+            .HasForeignKey(bl => bl.BlogPostId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(bl => bl.User).WithMany(u => u.BlogPostLikes)
+            .HasForeignKey(bl => bl.UserId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class PollVoteConfiguration : IEntityTypeConfiguration<PollVote>
+{
+    public void Configure(EntityTypeBuilder<PollVote> builder)
+    {
+        builder.HasKey(e => new { e.PollOptionId, e.UserId });
+        builder.HasOne(pv => pv.PollOption).WithMany(o => o.Votes)
+            .HasForeignKey(pv => pv.PollOptionId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne(pv => pv.User).WithMany(u => u.PollVotes)
+            .HasForeignKey(pv => pv.UserId).OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+// NOTE: FeatureContribution has no FeatureContributionConfiguration class. Its delete-breaking
+// relationships are configured from the principal side: BaseBlogPostConfiguration (above) and
+// BaseCommentConfiguration (CommentConfigurations.cs) declare the SetNull FKs to it. It carries no
+// configuration of its own (no composite key, no indexes beyond convention) — only a DbSet mapping.
