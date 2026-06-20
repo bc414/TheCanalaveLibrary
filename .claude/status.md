@@ -8,7 +8,20 @@ features from `grid_axes.md`, grouped by folder cluster. Columns:
 Global conditions affecting many cells (see `audit-summary.md` for detail on pre-existing items; newer
 notes may stand alone):
 - **Spec supersedes stale code** — the spec is the recent consolidation; the ~7-month-old code is mostly non-working. Where they disagree and the code isn't working, the spec wins. Most **Stage 4** cells here are therefore *stale-code traps* (resolution direction known: build to spec; existing code is salvage), not two-way adjudications. The only genuine reconciliations are mechanical: Identity post-move references and Story L5 endpoint wiring (audit-summary §3a).
-- **L4-Style is Stage 1 everywhere it applies** — Tailwind is not installed (no `package.json`/`tailwind.config.js`); existing UI is Bootstrap. Blocked on design tokens.
+- **RESOLVED (2026-06-20) — Phase C: Tailwind v4 installed, tokens locked.** `package.json` +
+  MSBuild targets build a CSS-first Tailwind v4 pipeline (`Styles/app.css` → generated
+  `wwwroot/app.css`); `dotnet build` verified the pipeline runs and emits compiled utilities/tokens.
+  Palette: green, rooted in Pokémon Gen 4/5 (Torterra, GBA/DS-era grass textures), not blue. Fonts:
+  warm/readable, scoped to site chrome only (RichTextView/RichTextEditor keep the reader's own font
+  for all user-generated content). Dead Bootstrap `<link>` in `_Layout.cshtml` removed. See
+  `layer4-style.md` §"Prerequisite: Design Tokens" + `forward_plan.md` Phase C "Resolved." **This
+  clears the L4-Style blocker. `layer4-style.md`'s tokens + Leaf/Composite/Page tier rules now
+  constitute a validated generic spec, so L4-Style cells are intent-settled and non-blocking — nothing
+  downstream depends on one resolving. They are not deferred and not independently sequenced; each
+  rides along inside the same Phase-E work-unit as its feature's L3/L3.5 build.** Per-row grid values
+  below stay at Stage 1 for now and flip to Stage 5 (or 4, if visual review finds a mismatch) as each
+  work-unit actually completes — see `forward_plan.md` Phase D/E (existing Bootstrap class names in the
+  Identity scaffold, `StoryPropertiesForm`, `TagSelector` are untouched by this pass).
 - **RESOLVED (2026-06-20) — Migration generated, build verified.** L1 fluent config was extracted from
   the single inline `OnModelCreating` into `IEntityTypeConfiguration<T>` classes under
   `TheCanalaveLibrary.Server/Data/Configurations/` (see `layer1-data-model.md` §"Fluent API

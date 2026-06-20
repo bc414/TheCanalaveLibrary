@@ -83,6 +83,13 @@ note the resolution in the relevant `.claude/audit/<Folder>.md`.
 **Gate before moving on:** `dotnet build` is green; the migration applies cleanly; the seeder runs; the app
 starts and Identity pages load. This is the moment every "Stage 5 at L1, awaiting verification" becomes real.
 
+**Addendum (2026-06-20):** Phase A is code/schema-complete — `InitialSchema` is generated, `dotnet build`
+is green, template debris is cleared, Identity namespaces are normalized. It is **not yet
+runtime-verified**: the migration hasn't been applied to a live Aspire-orchestrated Postgres,
+`DataSeeder` hasn't run, app boot and Identity-page load aren't confirmed, and the NuGet package set
+hasn't been audited. This is your own next action — close it before treating Phase D's "work-unit zero
+already executed" framing (below) as fully proven.
+
 ---
 
 ## Phase B — Resolve the blocking Stage-1 gaps (only)
@@ -106,14 +113,16 @@ resolved conceptual gap becomes Stage 2 (or Stage 3 if the conversation produced
 **Goal:** unblock the entire L4-Style column (currently 100% Stage 1 — Tailwind isn't even installed).
 **Tool:** Claude Code + your design input on tokens. **Runs in parallel with A/B.**
 
-- Install Tailwind into the build (`package.json` + `tailwind.config.js` + the SharedUI/Server pipeline).
+- Install Tailwind v4 into the build (`package.json` + npm dev deps + an MSBuild target invoking the
+  v4 CLI; CSS-first config — tokens in `Styles/app.css`'s `@theme` block, not `tailwind.config.js`).
 - Lock the design tokens (palette, type scale, spacing, the Pokémon theme) — this is the human-driven
   decision the whole Style column waits on.
 - Decide the Bootstrap exit: existing components (`StoryPropertiesForm`, `TagSelector`, Identity scaffold)
-  are Bootstrap and will be **restyled, not just styled**, when their L4 cells come up.
+  are Bootstrap and will be **restyled, not just styled**, when their L4 cells come up. Phase C itself
+  removes only the dead `_Layout.cshtml` Bootstrap `<link>`, not component class names.
 
-**Gate:** `tailwind.config.js` tokens are locked and the build emits Tailwind CSS. Until then, every L4 cell
-stays Stage 1 — and that's expected.
+**Gate:** tokens are locked in `Styles/app.css`'s `@theme` block and the build emits Tailwind CSS. Until
+then, every L4 cell stays Stage 1 — and that's expected.
 
 ---
 
@@ -138,8 +147,15 @@ Ordering rules (corrected from the last-gen step5):
 - **Stage 3 is minted here-and-after, not found.** Expect ~0 Stage-3 cells at the start; opusplan passes in
   Phase E *create* them by locking atom contracts, after which consumers flip 2→3.
 - **Foundational re-models already done in Phase A** lead the plan's data dependencies; the migration/build
-  pass is effectively work-unit zero (already executed).
-- Remaining unresolved Stage-1 cells go in a "blocked/deferred" section with no sequence number.
+  pass is effectively work-unit zero (already executed) — schema/build-wise. Runtime verification (migration
+  applied live, seeder run, app boots) is still open; see Phase A's addendum.
+- **Genuine intent-gap Stage-1 cells** (rows 8, 37, 51, 55 — Story Arcs, Polls, Custom Lists, Spotlight) go
+  in a "blocked/deferred" section with no sequence number.
+- **L4-Style Stage-1 cells are a different case — do not defer them.** `layer4-style.md`'s locked tokens +
+  Leaf/Composite/Page tier rules already constitute a validated generic spec, and nothing downstream
+  depends on a component's styling resolving. So these cells don't get a sequence number of their own at
+  all: each one folds into the same work-unit as its feature's L3/L3.5 cell (see Phase E). Only the four
+  rows above (where the underlying feature's UI isn't designed yet) keep their L4 cell genuinely deferred.
 
 **Gate:** read the preamble — the ordering should put atoms before composites before consumers, with nothing
 depending on something later.
@@ -158,13 +174,29 @@ build + verify (`dotnet build`, and run the relevant slice) → update `.claude/
 and `.claude/workplan.md` (entry complete). The conventions skill loads automatically as the
 paradigm-correctness guardrail.
 
+**L4-Style within a work-unit:** per Phase D, a feature's L4-Style cell is not sequenced separately — when
+a work-unit's L3/L3.5 build is Stage 3 (or implied-Stage-3 per a resolved Stage-4 direction) and tokens are
+locked (the post-Phase-C default), Sonnet writes the component's markup and its Tailwind classes in the
+same pass, from `layer4-style.md`'s tier rules and tokens, not as a later or separately-invoked step. For
+the four rows still genuinely Stage-1 (8, 37, 51, 55), leave L4 untouched until that feature's gap resolves
+elsewhere.
+
+"Build + verify" for any cell touching L4-Style means more than `dotnet build` green — run the app and
+visually inspect the rendered component. If the render doesn't match `layer4-style.md`'s tier/token rules,
+that's a Stage 4 moment (diagnose and reconcile, not a build failure): fix and re-render. If the fix reveals
+a new convention, write it into `layer4-style.md`'s "Pattern Accumulation" section in the same work-unit.
+Mark the cell Stage 5, not Stage 6, until you've personally looked at the rendered result — Stage 6
+("human-verified and frozen") needs your visual sign-off, not just the agent's self-assessment that it
+compiles.
+
 Guardrails:
 - **opusplan:** feed the audit file's settled constraints as explicit "do not revisit." If the plan proposes
   changing a settled constraint, that's a misclassification signal — stop and flag.
 - **Spec supersedes:** for any Stage-4 entry, the existing code is reference-for-what-to-replace, not a
   design to preserve.
 - **Conventions are living:** if implementation reveals a convention that should change, update the skill
-  file rather than silently diverging.
+  file rather than silently diverging — this is exactly what happens when L4-Style's "Pattern Accumulation"
+  step above fires.
 
 ---
 
@@ -198,6 +230,14 @@ Guardrails:
 - **Hidden Gem at-limit behavior** (§8#4) — resolved Phase B (2026-06-20): reject + remove-first at the
   5-item limit; no atomic swap, no auto-evict. See [audit/Recommendations.md](audit/Recommendations.md)
   Feature 29.
+- **Tailwind version + build tooling** (Phase C) — resolved Phase C (2026-06-20): **Tailwind v4**,
+  CSS-first config (`@theme` block in `TheCanalaveLibrary.Server/Styles/app.css`), not the spec
+  §2.1-era `tailwind.config.js` model. Build via **npm + an MSBuild target** invoking the v4 CLI
+  (`Bash(npm *)` needed going forward). Color palette: green, rooted in Pokémon Gen 4/5 (Torterra,
+  GBA/DS-era grass textures) — explicitly not blue. Font-scope rule: Tailwind fonts cover site chrome
+  only; `RichTextView`/`RichTextEditor` (all user-generated content) use the user's `ReaderSettings`
+  font instead. See [layer4-style.md](skills/canalave-conventions/layer4-style.md) §"Prerequisite:
+  Design Tokens" and §"Reader Settings as CSS."
 
 ---
 
@@ -219,7 +259,8 @@ Guardrails:
 }
 ```
 For Phases A/C/E, also allow `Write`/`Edit` on `**/*.cs`, `**/*.razor`, `**/*.csproj`, `package.json`,
-`tailwind.config.js`. Keep them denied during B/D if you want a hard read-only-on-code guarantee.
+`Styles/app.css`, plus `Bash(npm *)`. Keep them denied during B/D if you want a hard read-only-on-code
+guarantee.
 
 **Platform notes (this machine):**
 - Shell is **PowerShell**, not bash — `$env:ANTHROPIC_API_KEY` (not `echo $VAR`), `New-Item`/`Remove-Item`

@@ -36,7 +36,8 @@ These have documented rationale and rejected alternatives. **Do not propose alte
 6. **CQRS-lite with a DTO firewall** — UI never sees EF Core model classes.
 7. **Write-behind Redis queue** — high-frequency writes go to Redis, drained by background worker.
 8. **Global `InteractiveAuto`** — SSR prerender → SPA via WASM. Set on `<RouteView>` in `Routes.razor`.
-9. **Tailwind CSS** — utility-first, no component library. Design tokens in `tailwind.config.js`.
+9. **Tailwind CSS v4** — utility-first, no component library. Design tokens in an `@theme` block
+   (CSS-first config; see `layer4-style.md`), not `tailwind.config.js`.
 10. **Three-axis search** — Source × Filter × Sort. FTS is a filter, not a source.
 
 ## Project Boundaries (enforced by references)

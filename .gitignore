@@ -13,3 +13,7 @@ riderModule.iml
 
 # Claude Code per-developer settings (shared settings.json stays tracked)
 .claude/settings.local.json
+
+# Tailwind CSS build pipeline (Phase C) — npm deps and generated output, not source
+node_modules/
+TheCanalaveLibrary.Server/wwwroot/app.css

@@ -26,4 +26,16 @@
         <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
     </ItemGroup>
 
+    <!-- Tailwind CSS v4 build pipeline (Phase C). Input: Styles/app.css. Output: wwwroot/app.css
+         (generated, gitignored). See .claude/skills/canalave-conventions/layer4-style.md. -->
+    <Target Name="NpmInstall" BeforeTargets="TailwindBuild"
+            Inputs="package.json" Outputs="node_modules/.install-stamp">
+        <Exec Command="npm install" />
+        <Touch Files="node_modules/.install-stamp" AlwaysCreate="true" />
+    </Target>
+
+    <Target Name="TailwindBuild" BeforeTargets="BeforeBuild">
+        <Exec Command="npm run css:build" />
+    </Target>
+
 </Project>

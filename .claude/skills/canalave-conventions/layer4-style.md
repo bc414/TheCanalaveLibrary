@@ -1,23 +1,40 @@
 # Layer 4 — UI Style (Visual + Layout)
 
 Tailwind utility classes, sprite resolution, responsive variants, images, conditional class
-expressions. Blocked on design tokens being locked in `tailwind.config.js`.
+expressions. Blocked on design tokens being locked.
 
-## Prerequisite: Design Tokens
+> **Tailwind version note:** the project uses **Tailwind v4, CSS-first configuration** — tokens live
+> in an `@theme {}` block inside `TheCanalaveLibrary.Server/Styles/app.css` (the input stylesheet),
+> not in a `tailwind.config.js`. Spec §2.1 and the original Axiom 9 phrasing describe the older v3
+> `tailwind.config.js` model; the spec is a read-only historical snapshot and is not edited — this is
+> the resolved, authoritative convention. See `forward_plan.md` Phase C "Resolved."
 
-Before any Style work begins, the `tailwind.config.js` must define:
+## Prerequisite: Design Tokens (LOCKED — Phase C, 2026-06-20)
 
-- **Color palette:** named semantic colors (e.g., `bg-surface`, `text-primary`, `accent`)
-- **Type scale:** font families for display and body, size scale, weight conventions
-- **Spacing:** whether to use default Tailwind spacing or a custom scale
-- **Border radii:** conventions per component type (cards, inputs, chips, full-round for avatars)
-- **Shadow levels:** elevation hierarchy (subtle, medium, prominent)
+Tokens are defined in `TheCanalaveLibrary.Server/Styles/app.css` inside an `@theme {}` block:
+
+- **Color palette:** a green palette rooted in Pokémon Gen 4/5 — Torterra (the Sinnoh grass-starter
+  mascot) and the natural, slightly-muted grass-texture greens of the GBA/DS era (Gens 3–5).
+  Explicitly **not** neon green and **not** a blue theme. Semantic names: `--color-surface`,
+  `--color-surface-raised`, `--color-primary` (deep grass green), `--color-primary-strong`,
+  `--color-accent` (warm amber/earth), `--color-text`, `--color-text-muted`, `--color-border`,
+  `--color-success`, `--color-danger`, `--color-warning`.
+- **Type scale:** `--font-display` (warm, characterful — e.g. Fraunces) and `--font-body` (warm,
+  readable humanist sans — e.g. Mulish). Deliberately **not** the games' pixelated font. **Scope:**
+  these tokens apply to site chrome only (nav, labels, buttons, cards, headings, page structure) —
+  see "Reader Settings as CSS" below for why they do not apply inside `RichTextView`/`RichTextEditor`.
+- **Spacing:** Tailwind's default scale (no custom override).
+- **Border radii:** `rounded-xl` for card surfaces, `rounded-md` for inputs, `rounded-full` for chips
+  and avatars.
+- **Shadow levels:** `--shadow-subtle` / `--shadow-medium` / `--shadow-prominent` (elevation tiers).
 
 This config is the first act of code generation, not a spec task.
 
-**Design intent:** Non-corporate, warm community feel. Pokémon-fandom identity. Engaging visual
-design with cover art (Fimfiction reference, not AO3 plainness). Not predatory, not generic. Themes
-support different visual flavors without database changes.
+**Design intent:** Non-corporate, warm community feel. Pokémon-fandom identity, anchored specifically
+in Gen 4/5 (the generation with the most prolific fanfiction and the strongest in-game storytelling).
+Engaging visual design with cover art (Fimfiction reference, not AO3 plainness). Not predatory, not
+generic. Themes (the `Theme` entity / sprite system) support different visual flavors without
+database changes — distinct from this Tailwind color palette, which is the one fixed site look.
 
 ## Outer Margin Rule (Non-Negotiable)
 
@@ -135,7 +152,13 @@ interact unexpectedly with Quill's element selectors. Test the editor early in a
 with full CSS applied. Override Quill styles via CSS custom properties or a scoped stylesheet
 rather than fighting specificity.
 
-## Reader Settings as CSS
+## Reader Settings as CSS (font-scope boundary)
+
+**Tailwind's `--font-display`/`--font-body` tokens stop at `RichTextView`/`RichTextEditor`.** Those
+two components render *all* user-generated content — chapter text, comments, recommendation blurbs,
+profile bios, private messages — and own their own font via the user's `ReaderSettings` override, not
+the site token. Do not apply `font-*` Tailwind utilities to content rendered inside them; site chrome
+(nav, labels, buttons, headings, page structure) uses the Tailwind font tokens as normal.
 
 Reader settings (font, size, line height, text width, justify) are applied as CSS on the
 `RichTextView` container element. The component receives settings as parameters and maps them
