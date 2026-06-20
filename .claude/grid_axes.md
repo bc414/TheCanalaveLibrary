@@ -1,6 +1,6 @@
 # Grid Axes — Layers and Features for the SLF Table
 
-Companion to `step3_classify_v4.md`. Defines the columns (layers) and rows (features) of the
+Companion to `step3_classify.md`. Defines the columns (layers) and rows (features) of the
 Feature × Layer grid. Each cell holds a Stage value (1–6) or N/A per CLAUDE.md's definitions.
 
 ---

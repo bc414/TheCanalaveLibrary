@@ -13,8 +13,8 @@ Features requiring real user data are deferred past beta.
 
 | Worker | Schedule | Purpose | Folder |
 |---|---|---|---|
-| TreeSearch data mart rebuild | Daily off-hours | Rebuild `UserStoryTreeSearchEntries` | `Searches/` |
-| AlsoFavorited/AlsoRecommended rebuild | Daily off-hours | Rebuild collaborative-filter caches | `Searches/` |
+| TreeSearch data mart rebuild | Daily off-hours | Rebuild `UserStoryTreeSearchEntries` | `Discovery/` |
+| AlsoFavorited/AlsoRecommended rebuild | Daily off-hours | Rebuild collaborative-filter caches | `Discovery/` |
 | SiteDailyStat aggregation | Daily | Aggregate into `SiteDailyStat` | `Moderation/` |
 
 All are `IHostedService` / `BackgroundService` in the server project.

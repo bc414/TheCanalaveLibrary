@@ -172,13 +172,13 @@ legitimate axis is device — desktop shows full toolbar, mobile shows compact t
 |---|---|---|
 | `EditorView` | Third-party wrapper composite | Chapters, Comments, Recommendations, BlogPosts, Profiles, Messaging |
 | `RichTextView` | Leaf | Chapters (reading), Comments (display), Recommendations, BlogPosts, Profiles, Messaging |
-| `TagChip` | Leaf | Tags (display), Stories (cards), Searches (results), Tag Directory |
-| `TagSelector` | Coordination composite | Stories (tagging), Searches (filtering), ResultsFilterPanel |
+| `TagChip` | Leaf | Tags (display), Stories (cards), Discovery (results), Tag Directory |
+| `TagSelector` | Coordination composite | Stories (tagging), Discovery (filtering), ResultsFilterPanel |
 | `UserStoryInteractionButton` | Leaf | UserStoryInteractions (panel), Following |
-| `StoryCard` | Leaf | Stories, Searches (all types), Bookshelves, Groups, Profiles, Also Favorited |
+| `StoryCard` | Leaf | Stories, Discovery (all types), Bookshelves, Groups, Profiles, Also Favorited |
 | `StoryDeck` | Pass-through layout composite | Search page, Bookshelves, Profile tabs, Also Favorited/Recommended, Group story listing. NOT manual tree search (graph visualization). |
 | `ResultsFilterPanel` | Coordination composite | Search page, Profile page tabs, Tree search page, Also Favorited section |
-| `PaginationControls` | Leaf | Comments, Searches, StoryDeck |
+| `PaginationControls` | Leaf | Comments, Discovery, StoryDeck |
 | `UserCard` | Leaf | Following (vouch display), Profiles, Groups, Comments, Recommendations, Messaging, Users search, Tree search nodes |
 | `ConfirmDialog` | Container composite | Spoiler reveal, account deletion, leaving group, deleting list, unpublishing story |
 
