@@ -9,9 +9,11 @@ CLAUDE.md defines the Stage framework and file schemas. It is already loaded.
 
 ## Codebase Context
 
-The codebase was started approximately 7 months ago, then paused. It reflects decisions made *during*
-implementation that may not appear in the spec — the spec captures the end of the design-conversation
-arc, while code embodies earlier refinements.
+The codebase was started approximately 7 months ago, then paused. The spec is the *later* artifact — it
+captures the end of the design-conversation arc — while the code embodies *earlier* implementation
+decisions, some of which the spec deliberately revised or dropped. Plausible-looking code is therefore
+often superseded rather than authoritative; treat it as such unless it is demonstrably working (see the
+Intent-alignment lens below).
 
 The developer was transitioning from .NET 4.5/WPF/WCF to modern Blazor/EF Core. Gemini 2.5 Pro (the
 AI model used during implementation) sometimes produced outdated patterns. Both factors mean code may be
@@ -55,9 +57,12 @@ Each cell holds one of: **Stage 1**, **Stage 2**, **Stage 3**, **Stage 4**, **St
 
 Evaluate each cell through two independent lenses. A cell failing either lens is not Stage 5.
 
-**Intent-alignment.** Does what exists match the project's design intent? When spec and code disagree,
-code is the more likely authority on intent (it's the later artifact), but this is a default, not a
-rule — adjudicate case by case.
+**Intent-alignment.** Does what exists match the project's design intent? The spec is the *recent*
+consolidation and refinement; the codebase is ~7 months old, was paused, and is largely non-working below
+Layer 1. So when spec and code disagree, **the spec is authoritative — unless the relevant code is
+demonstrably working and matches intent**, in which case the working code is evidence of a deliberate later
+decision the spec may not have captured. Default to the spec; adjudicate the working-code exception case by
+case.
 
 **Paradigm-correctness.** Is the code idiomatic and sound? Use the skill files as the reference.
 Code can match intent perfectly and still be technically unsound.
