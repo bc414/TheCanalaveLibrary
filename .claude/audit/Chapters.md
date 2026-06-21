@@ -11,25 +11,69 @@ active version), `ChapterContent` (versioned body — "live alternates" not revi
 setup separating "all versions" (Cascade) from "primary version" (`PrimaryContentId`, Restrict — can't
 delete the primary). Reader settings live in `User.ReaderSettings` (JSON, see Identity).
 
-**As of WU5 (2026-06-21), `RichTextView` (the universal display leaf, see Feature 7 Stage note) is
-built — it lives in the new cross-cutting `SharedUI/RichText/` cluster, not under Chapters; this
-folder doesn't own it, it's one of its consumers.** Everything else in Layers 2–8 remains unbuilt
-here: no `EditorView`/Quill (no Blazored TextEditor or Quill package), no `HtmlSanitizer` package, no
-chapter service.
+**As of WU6 (2026-06-21), both universal rich-text atoms — `RichTextView` (WU5) and `EditorView`
+(WU6) — are built. Neither lives under Chapters**; both sit in the cross-cutting `SharedUI/RichText/`
+cluster (this folder doesn't own them, it's one of their consumers), alongside the server-side
+`IHtmlSanitizationService` allow-list (`Core/RichText/` + `Server/RichText/`, minted in WU6). No
+chapter write/read service exists yet — that's still unbuilt here, and is the first intended caller
+of both `EditorView`'s output and the sanitizer.
 
 ---
 
 ## Feature 6 — Chapter Writing & Versioning
 - **L1 — Stage 5.** `Chapter`/`ChapterContent` with the live-alternate versioning model and
   `PrimaryContentId` primary-version link. Sound; matches §6.9. Awaiting migration.
-- **L2 — Stage 2.** No chapter write service. Server-side HTML sanitization (`HtmlSanitizer` allow-list,
-  §3.21) and word-count-on-stripped-text are unimplemented and the package isn't referenced.
-- **L3-Logic — Stage 2.** Universal `EditorView` (Quill wrapper) logic unbuilt — and is a Phase-1 atom
-  shared with BlogPosts/Messaging/Recommendations.
-- **L3.5-Structure — Stage 2.** `EditorView` (third-party wrapper composite), `RichTextView` leaf,
-  version indicators — unbuilt.
-- **L4-Style — Stage 1** (editor toolbar, Quill stylesheet interaction; blocked on tokens).
+- **L2 — Stage 2.** No chapter write service. The `IHtmlSanitizationService` allow-list (§3.21) is
+  minted in WU6 (DI-registered, `Server/RichText/`) but has no call site yet — this chapter write
+  service is its first intended caller. Word-count-on-stripped-text also unimplemented.
+- **L3-Logic — Stage 5 (WU6, see Stage note below).** `EditorView`'s coordination logic (preview
+  capture/popup state, `GetHtmlAsync()` pull-on-submit contract) — Phase-1 atom shared with
+  BlogPosts/Messaging/Recommendations/Comments/Profiles. Version indicators (live-alternate switcher
+  UI) remain unbuilt — that's `ChapterPage`/`ChapterNavigation` (WU18/WU26), not this atom.
+- **L3.5-Structure — Stage 5 (WU6, see Stage note below).** `EditorView` (third-party wrapper
+  composite) built. `RichTextView` leaf was WU5.
+- **L4-Style — Stage 5 (WU6, see Stage note below).** Toolbar + preview-popup visual treatment built
+  and visually confirmed (tokens locked Phase C; the global blocker is cleared — the earlier "Stage 1,
+  blocked on tokens" note was stale, same correction as Feature 7's L4).
 - **L5 — Stage 2. L6 — Stage 2.**
+
+**WU6 Stage note (2026-06-21) — `EditorView` composite + sanitizer allow-list, DONE ✓.** Built
+`EditorView` (`SharedUI/RichText/EditorView.razor`) — a third-party wrapper composite around
+Blazored TextEditor (Quill.js, v1.1.3, netstandard2.0 — consumes cleanly on net10.0). Settled during
+the build, superseding the original spec/skill sketch:
+- **No `Compact` runtime toggle.** Tried first, then discarded: Quill binds toolbar-button listeners
+  once at construction, so changing the `ToolbarContent` RenderFragment later doesn't rewire them —
+  forcing a real rebuild needs `@key`-driven destroy/recreate, which duplicates the device-axis
+  problem `layer4-style.md` Responsive Breakpoints already settles ("structurally different → separate
+  components"). **MVP ships the desktop toolbar only; the mobile-compact variant is deferred**
+  (not MVP-blocking — build it as a separate composition when a mobile EditorView consumer is needed,
+  mirroring `HomeDesktop`/`HomeMobile`).
+- **Preview is an overlay popup, not an in-place swap.** Quill stays mounted continuously (cursor/
+  scroll position preserved); preview renders `RichTextView` in a dimmed-backdrop popup instead of
+  replacing the editor in the tree — an in-place swap reflowed the surrounding page on every toggle.
+- Sanitizer allow-list minted alongside: `IHtmlSanitizationService` (`Core/RichText/`) /
+  `ServerHtmlSanitizationService` (`Server/RichText/`, wraps a configured `Ganss.Xss.HtmlSanitizer`
+  9.0.892, `AddSingleton` in `Server/Program.cs`) — permits exactly the toolbar's output set (`p, br,
+  strong, em, u, s, h2, h3, blockquote, ul, ol, li, a`), normalizes link `rel`/`target` itself rather
+  than trusting client-supplied values. **No call site wired** — first intended caller is this
+  feature's own chapter write service (WU17), so L2 stays Stage 2.
+- Doc-Touch (moment 1, before the build): `layer2-services.md` "The allow-list is the inverse of the
+  toolbar"; `layer3.5-structure.md` "Third-Party Wrapper Composite" (corrected the snippet's
+  `@bind-Value` — doesn't exist on Blazored TextEditor — to the real `ToolbarContent`/`EditorContent`/
+  `GetHTML()`/`LoadHTMLContent()` API, and replaced the in-place-swap sketch with the popup pattern);
+  `layer4-style.md` "Reader Settings as CSS" (fixed a stale `RichTextEditor` → `EditorView` naming
+  mismatch); `cross-cutting.md` "Rich Text & Sanitization" (flagged mobile toolbar as deferred).
+- Inline Pokémon-sprite Quill blot (spec §5.30.2) remains explicitly out of scope — its own future
+  work-unit.
+- **Verified:** `dotnet build` green (4 projects, 0 warnings/errors); live server run, homepage `200`;
+  `Blazored.TextEditor`/`HtmlSanitizer` NuGet restore + build confirmed on net10.0; throwaway harness
+  on `HomeDesktop.razor` plus a throwaway `/dev/test-html-sanitizer` diagnostic endpoint confirmed the
+  sanitizer strips `<script>`/event-handler attributes/`javascript:` hrefs while preserving allowed
+  formatting; user-confirmed visual check against the live server (toolbar renders and is functional,
+  preview popup opens/closes without page reflow, `GetHtmlAsync()` captures edited content). Harness
+  and diagnostic endpoint removed after confirmation.
+- **Feeds WU17 (chapter write service):** inject `IHtmlSanitizationService`, call `Sanitize()` on
+  `EditorView.GetHtmlAsync()`'s output before persisting `ChapterContent`.
 
 ## Feature 7 — Chapter Reading
 - **L1 — Stage 5.** `UserChapterInteraction` supports progress + read state.

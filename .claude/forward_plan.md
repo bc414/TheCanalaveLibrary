@@ -255,6 +255,15 @@ Guardrails:
   `AddPostgres("postgres").AddDatabase("canalavedb")` wiring dormant in the tree — `AddNpgsqlDbContext<T>`
   reads `ConnectionStrings:canalavedb` from plain config either way, so there's no Aspire-specific
   coupling to undo when Aspire-orchestrated dev (or Redis/WASM) comes back post-MVP.
+- **Interaction-icon design** (Feature 16 L4, previously Stage-1 blocked) — resolved WU7 (2026-06-21):
+  inline SVG shapes, not theme-swappable sprite URLs — a permanent, deliberate carve-out from the
+  "never inline SVG" rule (which still governs tags/covers/avatars). Square button, three visual
+  states (gray inactive → accent-fill-on-hover → inverted accent-background/white-shape when active).
+  `UserStoryInteractionButton` takes `IconPath`/`AccentColor` `[Parameter]`s and stays dumb; the
+  `InteractionTypeEnum → (IconPath, AccentColor)` mapping is left for the owning composite (WU16).
+  Supersedes the WU2-era `GetInteractionIcon`/sprite-key plan. See
+  [layer4-style.md](skills/canalave-conventions/layer4-style.md) §"Interaction Icons Are Inline SVG"
+  and [audit/UserStoryInteractions.md](audit/UserStoryInteractions.md) Feature 16.
 
 ---
 

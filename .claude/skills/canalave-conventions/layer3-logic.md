@@ -182,14 +182,22 @@ No mode enum. The presence or absence of `OnToggle` determines behavior:
 @code {
     [Parameter] public bool IsActive { get; set; }
     [Parameter] public EventCallback<bool> OnToggle { get; set; }
-    [Parameter] public string IconIdentifier { get; set; } = "";
+    [Parameter, EditorRequired] public string IconPath { get; set; } = "";    // SVG path d-attribute
+    [Parameter, EditorRequired] public string AccentColor { get; set; } = ""; // CSS color
+    [Parameter] public string Label { get; set; } = "";                       // aria-label + title
     private bool IsReadOnly => !OnToggle.HasDelegate;
 }
 @if (!IsReadOnly || IsActive)
 {
-    <button @onclick="HandleClick" ...>...</button>
+    <button @onclick="HandleClick" aria-label="@Label" title="@Label" ...>
+        <svg ...><path d="@IconPath" /></svg>
+    </button>
 }
 ```
+
+**Icon delivery (WU7):** `IconPath`/`AccentColor` are inline SVG — not a sprite URL, see
+`layer4-style.md` "Interaction Icons Are Inline SVG." The owning composite maps
+`InteractionTypeEnum` → `(IconPath, AccentColor)`, not the sprite service.
 
 **Two presentation contexts:**
 - **Listing context** (StoryCard): Ignore and ReadItLater receive `OnToggle` (clickable).

@@ -1,0 +1,63 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Leaf, tied to the UserStoryInteraction domain (verbose name is deliberate — spec §5.30.5).
+   EventCallback-driven, no mode enum: absence of OnToggle means read-only, and a read-only button
+   renders only when IsActive (a passive indicator). Icon is inline SVG (IconPath/AccentColor), not
+   a sprite URL — settled WU7, see layer4-style.md "Interaction Icons Are Inline SVG". The owning
+   composite (StoryInteractionPanel, WU16) maps InteractionTypeEnum -> (IconPath, AccentColor); this
+   leaf has no domain knowledge and injects no service. *@
+@if (!IsReadOnly || IsActive)
+{
+    @if (IsReadOnly)
+    {
+        <span class="@ButtonClasses" style="@AccentStyle" aria-label="@Label" title="@Label">
+            <svg viewBox="0 0 24 24" class="@IconClasses" aria-hidden="true">
+                <path d="@IconPath" />
+            </svg>
+        </span>
+    }
+    else
+    {
+        <button type="button" class="@ButtonClasses group" style="@AccentStyle"
+                @onclick="HandleClick" aria-label="@Label" title="@Label" aria-pressed="@IsActive">
+            <svg viewBox="0 0 24 24" class="@IconClasses" aria-hidden="true">
+                <path d="@IconPath" />
+            </svg>
+        </button>
+    }
+}
+
+@code {
+    [Parameter] public bool IsActive { get; set; }
+    [Parameter] public EventCallback<bool> OnToggle { get; set; }
+
+    [Parameter, EditorRequired] public string IconPath { get; set; } = "";
+    [Parameter, EditorRequired] public string AccentColor { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "";
+
+    private bool IsReadOnly => !OnToggle.HasDelegate;
+
+    private string AccentStyle => $"--accent:{AccentColor}";
+
+    private string ButtonClasses =>
+        (IsActive
+            ? "bg-[var(--accent)]"
+            : "bg-gray-200") +
+        " size-9 rounded-md grid place-items-center transition-colors";
+
+    private string IconClasses =>
+        (IsActive
+            ? "size-5 fill-white"
+            : IsReadOnly
+                ? "size-5 fill-gray-500"
+                : "size-5 fill-gray-500 group-hover:fill-[var(--accent)]") +
+        " transition-colors";
+
+    private async Task HandleClick()
+    {
+        if (OnToggle.HasDelegate)
+        {
+            await OnToggle.InvokeAsync(!IsActive);
+        }
+    }
+}

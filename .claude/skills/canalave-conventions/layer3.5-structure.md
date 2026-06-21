@@ -105,10 +105,18 @@ No child Razor components. Only raw HTML elements. `@if`/`@foreach` driven by pa
 <div class="...layout...">
     @if (!IsOwnStory)
     {
+        @* IconPath/AccentColor are inline SVG, mapped from InteractionTypeEnum by this composite —
+           not a sprite URL; see layer4-style.md "Interaction Icons Are Inline SVG" *@
         <UserStoryInteractionButton IsActive="State.IsFavorite"
-                           OnToggle="() => Toggle(InteractionType.Favorite)" ... />
+                           OnToggle="() => Toggle(InteractionType.Favorite)"
+                           IconPath="@IconFor(InteractionType.Favorite)"
+                           AccentColor="@ColorFor(InteractionType.Favorite)"
+                           Label="Favorite" />
         <UserStoryInteractionButton IsActive="State.IsFollowed"
-                           OnToggle="() => Toggle(InteractionType.Follow)" ... />
+                           OnToggle="() => Toggle(InteractionType.Follow)"
+                           IconPath="@IconFor(InteractionType.Follow)"
+                           AccentColor="@ColorFor(InteractionType.Follow)"
+                           Label="Follow" />
         @* ... more buttons *@
     }
     else
@@ -155,22 +163,73 @@ No child Razor components. Only raw HTML elements. `@if`/`@foreach` driven by pa
 
 ### Third-Party Wrapper Composite
 
+Blazored TextEditor has no `@bind-Value`. `<ToolbarContent>` is a `RenderFragment` of raw `ql-*`-class
+markup (Quill reads the classes, not Blazor bindings); `<EditorContent>` is a `RenderFragment` that
+seeds the **initial** DOM only — Quill parses it once at construction (`OnAfterRenderAsync(firstRender)`
+inside the package), it is not a live two-way binding. Reading the edited HTML back out is
+`Task<string> GetHTML()` via `@ref`; setting it programmatically after construction is
+`Task LoadHTMLContent(string)`. There's no change event, so `EditorView` exposes a public
+`GetHtmlAsync()` that the consuming form's `@ref` calls at submit time — pull-on-submit, not
+push-on-change.
+
+A boolean `Compact` toolbar parameter was tried (WU6) and discarded for two reasons: Quill binds
+toolbar-button listeners once, at construction, so changing the `ToolbarContent` RenderFragment later
+doesn't retroactively rewire anything — forcing a real rebuild needs `@key`-driven destroy/recreate,
+which is exactly the device-axis problem `layer4-style.md` Responsive Breakpoints already settles
+("when desktop and mobile are structurally different, use separate components instead"). So the
+device axis is a **separate composition**, the same way `HomeDesktop`/`HomeMobile` and
+`StoryDesktop`/`StoryMobile` are — not a runtime toggle inside one `EditorView`. **MVP ships the
+desktop toolbar only; the mobile-compact variant is deferred** (not MVP-blocking).
+
+Preview is an **overlay popup**, not an in-place swap of the editor out of the tree — swapping
+reflows the surrounding page every toggle (confusing) and would destroy/recreate Quill (losing
+cursor/scroll position) for no reason. Quill stays mounted continuously; the popup renders
+`RichTextView` on top of a dimmed backdrop:
+
 ```razor
 @* EditorView.razor — wraps Quill.js *@
+<BlazoredTextEditor @ref="_quill">
+    <ToolbarContent>
+        @* desktop toolbar only for MVP — see note above *@
+    </ToolbarContent>
+    <EditorContent>@((MarkupString)(Html ?? string.Empty))</EditorContent>
+</BlazoredTextEditor>
+
+<button @onclick="OpenPreview">Preview</button>
+
 @if (_isPreviewMode)
 {
-    <RichTextView HtmlContent="@CurrentHtml" />
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @onclick="ClosePreview">
+        <div class="max-h-full max-w-2xl overflow-y-auto rounded-xl bg-surface p-6 shadow-lg"
+             @onclick:stopPropagation="true">
+            <RichTextView HtmlContent="@_previewHtml" />
+            <button @onclick="ClosePreview">Close</button>
+        </div>
+    </div>
 }
-else
-{
-    <BlazoredTextEditor @bind-Value="CurrentHtml" ... />
+
+@code {
+    [Parameter] public string? Html { get; set; }
+    private BlazoredTextEditor? _quill;
+    private bool _isPreviewMode;
+    private string? _previewHtml;
+
+    public async Task<string> GetHtmlAsync() => await _quill!.GetHTML();
+
+    private async Task OpenPreview()
+    {
+        _previewHtml = await _quill!.GetHTML();
+        _isPreviewMode = true;
+    }
+
+    private void ClosePreview() => _isPreviewMode = false;
 }
-<button @onclick="TogglePreview">@(_isPreviewMode ? "Edit" : "Preview")</button>
 ```
 
 **EditorView is universal** across ALL text surfaces: chapters, comments, author notes,
-descriptions, recommendations, profile bios, blog posts, AND private messages. The only
-legitimate axis is device — desktop shows full toolbar, mobile shows compact toolbar with overflow.
+descriptions, recommendations, profile bios, blog posts, AND private messages. `EditorView` never
+sanitizes its own output — see `layer2-services.md` "User HTML Is Sanitized Once, On Save — Never On
+Display" and "The allow-list is the inverse of the toolbar".
 
 ### Ambient Viewer Settings via Cascading Slim Bags
 

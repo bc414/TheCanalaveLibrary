@@ -38,8 +38,8 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 2 | 2 | 1 | 4 | N/A | N/A | N/A |
 | 4 | Story Creation & Editing | Stories | 5 | 5 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
 | 5 | Story Browsing & Display | Stories | 5 | 2 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
-| 6 | Chapter Writing & Versioning | Chapters | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
-| 7 | Chapter Reading | Chapters | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
+| 6 | Chapter Writing & Versioning | Chapters | 5 | 2 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
+| 7 | Chapter Reading | Chapters | 5 | 2 | 2 | 2 | 2 | 2 | 2 | N/A | N/A |
 | 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
 | 9 | Series & Ordering | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
@@ -48,7 +48,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
 | 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 4 | 4 | 1 | 2 | N/A | N/A | N/A |
 | 15 | Saved Tag Selections | Tags | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 2 | 2 | 2 | 1 | 2 | 4 | 2 | N/A |
+| 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 2 | 2 | 2 | 2 | 2 | 4 | 2 | N/A |
 | 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 2 | 2 | 2 | 1 | 2 | 4 | N/A | N/A |
 | 18 | User Following | Following | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 19 | Vouches | Following | 5 | 2 | 2 | 2 | 1 | 2 | 5 | N/A | N/A |

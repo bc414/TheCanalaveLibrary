@@ -88,6 +88,10 @@ builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
 builder.Services.AddScoped<ISpriteReadService, ServerSpriteReadService>();
 builder.Services.AddScoped<ITagReadService, ServerTagReadService>();
+// Configuration happens once at construction and Sanitize() is thread-safe thereafter, so this is a
+// singleton rather than scoped (see ServerHtmlSanitizationService). No call site yet — chapter/comment/
+// etc. write services inject it when they land (WU17, WU19, ...).
+builder.Services.AddSingleton<IHtmlSanitizationService, ServerHtmlSanitizationService>();
 
 WebApplication app = builder.Build();
 

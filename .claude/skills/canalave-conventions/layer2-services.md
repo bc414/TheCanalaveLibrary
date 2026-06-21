@@ -138,6 +138,16 @@ service, doesn't inject one, and re-sanitizing on every render would be redundan
 every display site. If a future write path produces HTML that bypasses the allow-list step, that's a
 bug in that write service, not something `RichTextView` should compensate for.
 
+**The allow-list is the inverse of the toolbar.** What `EditorView`'s toolbar can produce is exactly
+what the sanitizer must permit — the two are one contract, not two independently-maintained lists.
+Minted together in WU6: `IHtmlSanitizationService` (`Core/RichText/`) /
+`ServerHtmlSanitizationService` (`Server/RichText/`, wraps a configured `HtmlSanitizer`, registered
+`AddSingleton` — config is immutable and thread-safe) permits exactly `p, br, strong, em, u, s, h2, h3,
+blockquote, ul, ol, li, a` (+ `a[href]` with safe schemes, normalized `rel`/`target`) — no `style`,
+`class`, `id`, script, or event-handler attributes beyond what the toolbar emits. Every write service
+that persists `EditorView` output injects `IHtmlSanitizationService` and calls it before persisting;
+if the toolbar ever gains a button, extend the allow-list in the same change.
+
 ## Service Composition
 
 Feature services that span domains inject foundational services, not duplicate query logic:

@@ -37,6 +37,13 @@ rename to `WasmSpriteReadService` is Post-MVP L5 work). Registered in each proje
   service stays a single generic `GetSpriteUrl` resolver; it never learns about `InteractionTypeEnum`.
   Spec §5.30.5's `ISpriteService.GetInteractionIcon(...)` line is superseded by this note (spec is a
   read-only historical snapshot; this audit file is the current authority).
+  **Further settled (WU7) — interaction icons don't route through this service at all, even via the
+  generic `GetSpriteUrl`.** The WU2-era plan was "map `InteractionTypeEnum` → sprite key → resolve via
+  `GetSpriteUrl`"; WU7 replaced that with inline SVG (`IconPath`/`AccentColor` parameters on
+  `UserStoryInteractionButton`, mapped by the owning composite — no sprite asset, no theme folder, no
+  `GetSpriteUrl` call). `GetSpriteUrl` is otherwise unaffected — still the resolver for tags, covers,
+  avatars, and any future theme-swappable art. See `audit/UserStoryInteractions.md` Feature 16 L4 note
+  and `layer4-style.md` "Interaction Icons Are Inline SVG."
   **How verified:** `dotnet build` green across all four projects (zero warnings/errors introduced);
   grepped the repo for `ISpriteService`/`FileSystemSpriteService` — zero remaining code references;
   live server run (`TheCanalaveLibrary.Server`, direct, not AppHost) booted clean with DI resolving

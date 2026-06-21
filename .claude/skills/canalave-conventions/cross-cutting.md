@@ -281,7 +281,8 @@ Never trust client sanitization, never persist raw user HTML.
 
 **EditorView** (universal across all text surfaces): chapters, comments, author notes, descriptions,
 recommendations, profile bios, blog posts, AND private messages. Desktop shows full toolbar; mobile
-shows compact toolbar with overflow for less-used formatting.
+shows compact toolbar with overflow for less-used formatting **(deferred — WU6 shipped desktop only;
+not MVP-blocking, see `layer3.5-structure.md` "Third-Party Wrapper Composite")**.
 
 ## .NET Aspire 13 Configuration
 

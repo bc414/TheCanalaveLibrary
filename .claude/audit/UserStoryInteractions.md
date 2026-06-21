@@ -51,19 +51,38 @@ regenerate the filtered indexes — i.e. proceed as Stage 2 build-to-spec, no di
   all false; date row only when completed/favorited") are sound and should survive the re-model.
 - **L2 — Stage 2.** No interaction write service (MVP: direct EF; Layer-7: Redis `LPUSH`). Interface not
   yet defined.
-- **L3-Logic — Stage 2.** `UserStoryInteractionButton` leaf (EventCallback-driven; read-only when no
-  `OnToggle`; rendered only when `IsActive`) and the 2-second debounce are unbuilt.
-- **L3.5-Structure — Stage 2.** `StoryInteractionPanel` coordination composite (owns debounce VM,
-  `IsOwnStory` swap to Edit button) unbuilt.
-- **L4-Style — Stage 1** (blocked; icon concept Star/Staryu, Heart/Luvdisc).
-  Theme-swappable interaction icons are resolved **in this cluster**, not in
-  Sprites. `Sprites/ISpriteReadService` stays a single generic `GetSpriteUrl(theme, key, animated)`
-  resolver with no interaction-domain knowledge. This cluster (the interaction L2 service, or
-  `StoryInteractionPanel` at build time — WU16) mints an `InteractionTypeEnum` here and maps each value
-  to a constant sprite key (e.g. `Followed` → `"follow"`, `Favorite` → `"favorite"`), then calls the
-  generic `GetSpriteUrl` to resolve the URL per the active theme. Spec §5.30.5's
-  `ISpriteService.GetInteractionIcon(InteractionTypeEnum, theme)` is superseded by this split — see
-  `audit/Sprites.md` Feature 3 L2 note.
+- **L3-Logic — Stage 2 (button slice Stage 5, WU7; panel slice + 2-second debounce remain Stage 2).**
+  `UserStoryInteractionButton` leaf built (EventCallback-driven; read-only when no `OnToggle`;
+  rendered only when `IsActive`). The 2-second debounce and the panel's coordination state are
+  unbuilt — **WU16**.
+- **L3.5-Structure — Stage 2 (button slice Stage 5, WU7; panel slice remains Stage 2).**
+  `UserStoryInteractionButton`'s markup/render-guard built. `StoryInteractionPanel` coordination
+  composite (owns debounce VM, `IsOwnStory` swap to Edit button, maps `InteractionTypeEnum` →
+  `(IconPath, AccentColor)`) unbuilt — **WU16**.
+- **L4-Style — Stage 2 (Stage-1 block resolved, WU7; button styling Stage 5, panel's icon mapping
+  remains Stage 2).** **Resolution (settled WU7, supersedes the sprite-key plan below):** interaction
+  icons are **inline SVG shapes**, not theme-swappable sprite URLs — `Sprites/ISpriteReadService` is
+  not involved at all. `UserStoryInteractionButton` takes `IconPath` (SVG `d` string) + `AccentColor`
+  `[Parameter]`s and renders one inline `<svg>`; it has no domain knowledge. Three-state square button
+  (gray inactive → accent-fill-on-hover → inverted accent-bg/white-shape when active) — full pattern
+  in `layer4-style.md` "Interaction Icons Are Inline SVG." **Still open for WU16:** the
+  `InteractionTypeEnum → (IconPath, AccentColor)` mapping table itself (which shape, which color, per
+  interaction type) — the owning composite or a shared constants helper mints this when
+  `InteractionTypeEnum` is minted (WU15/16). Superseded: spec §5.30.5's
+  `ISpriteService.GetInteractionIcon(InteractionTypeEnum, theme)` and the WU2-era
+  sprite-key/`GetSpriteUrl` plan that used to live in this note — see `audit/Sprites.md` Feature 3.
+
+  **Settled / do-not-revisit (minted button contract, WU7):** `UserStoryInteractionButton`'s
+  parameters are `IsActive` (bool), `OnToggle` (`EventCallback<bool>`, absence ⇒ read-only),
+  `IconPath` (string, SVG `d`), `AccentColor` (string, CSS color), `Label` (string, drives
+  `aria-label`/`title`). Read-only renders as a `<span>` (not a `<button>`) and only when `IsActive`.
+  This contract is locked for WU16 to consume — do not redesign it when building the panel; only the
+  `(IconPath, AccentColor)` *values* per interaction type are open.
+  **How verified (WU7, 2026-06-21):** `dotnet build` green (4 projects, zero new warnings); live
+  server run, homepage `200`; user-confirmed visual check of all three states (gray inactive, hover
+  accent-fill, inverted accent-bg/white-shape active) plus the read-only-renders-only-when-active
+  rule, via a throwaway harness on `HomeDesktop.razor` (heart + star sample shapes, removed after
+  confirmation). No real consumer exists yet (`StoryInteractionPanel` is WU16).
 - **L5 — Stage 2.**
 - **L6 — Stage 4.** The seven filtered indexes are written but target `is_in_progress`/`is_completed`
   etc.; they must be regenerated against the revised columns (`has_started`). Follows L1.

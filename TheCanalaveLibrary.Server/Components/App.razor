@@ -9,6 +9,10 @@
     <ResourcePreloader/>
     <link rel="stylesheet" href="@Assets["app.css"]"/>
     <link rel="stylesheet" href="@Assets["TheCanalaveLibrary.styles.css"]"/>
+    <!-- Quill.js (via Blazored.TextEditor, SharedUI/RichText/EditorView) — CDN per the package's own
+         setup instructions; it ships no bundled Quill copy of its own. Test against Tailwind's
+         Preflight resets early (layer4-style.md "Quill.js Stylesheet Interaction"). -->
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet"/>
     <ImportMap/>
     <HeadOutlet @rendermode="PageRenderMode"/>
 </head>
@@ -20,6 +24,11 @@
 
 <!-- Reference the device detection script from the SharedUI class library -->
 <script src="_content/TheCanalaveLibrary.SharedUI/js/device.js"></script>
+
+<!-- Quill.js + Blazored.TextEditor's interop (EditorView, SharedUI/RichText/) -->
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+<script src="_content/Blazored.TextEditor/quill-blot-formatter.min.js"></script>
+<script src="_content/Blazored.TextEditor/Blazored-BlazorQuill.js"></script>
 
 <script src="@Assets["Identity/Shared/PasskeySubmit.razor.js"]" type="module"></script>
 </body>

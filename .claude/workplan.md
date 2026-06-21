@@ -91,10 +91,11 @@ Phase E.
   `canalave-conventions/SKILL.md` "Code Organization"); updated both `Program.cs` DI registrations.
   **`GetInteractionIcon()` was dropped from scope** (settled WU2 — see `audit/Sprites.md` Feature 3 L2
   and `audit/UserStoryInteractions.md` Feature 16: theme-swappable interaction icons are a
-  UserStoryInteraction-domain concept, resolved there via the generic `GetSpriteUrl`, not minted on the
-  sprite service). Contract feeds TagChip, StoryCard — and UserStoryInteractionButton **indirectly**, via
-  the panel resolving a URL through `GetSpriteUrl` and passing it down as `IconIdentifier`, not via
-  direct injection. Also hardened `canalave-conventions/SKILL.md` "Code Organization" (vertical clusters
+  UserStoryInteraction-domain concept). At WU2 time the intent was to resolve them via the generic
+  `GetSpriteUrl` instead; **WU7 superseded that** — interaction icons are inline SVG
+  (`IconPath`/`AccentColor`), not a sprite URL at all, so `UserStoryInteractionButton` has no
+  relationship to this service, direct or indirect. Contract feeds TagChip and StoryCard. Also
+  hardened `canalave-conventions/SKILL.md` "Code Organization" (vertical clusters
   are now a stated rule, legacy folders named, Endpoints colocation settled) and `layer2-services.md`
   Naming, as Doc-Touch moment 1, before the code change.
 - **Verified:** `dotnet build` green across all four projects; zero remaining `ISpriteService`/
@@ -162,21 +163,53 @@ Phase E.
   confirmation. Detail in `audit/Chapters.md` Feature 7 WU5 Stage note.
 - **Tool:** opusplan. **Pointer:** `audit/Chapters.md` Feature 7. **Deps:** WU0.
 
-### WU6 — `EditorView` composite *(third-party Quill wrapper)*
-- **Cells:** 6 L3.5 (EditorView slice).
-- **Do:** Blazored TextEditor / Quill adapter + server-side `HtmlSanitizer` allow-list integration on save.
-  Universal — consumed by Chapters, BlogPosts, Recommendations, Messaging, Comments.
-- **Tool:** opusplan. **Pointer:** `audit/Chapters.md`. **Deps:** WU0 (+ add Blazored.TextEditor NuGet).
+### WU6 — `EditorView` composite *(third-party Quill wrapper)* — DONE ✓ (2026-06-21)
+- **Cells:** 6 L3-Logic, L3.5-Structure, L4-Style — now Stage 5 (6 L2 stays Stage 2 — sanitizer minted,
+  no call site yet).
+- **Done:** `EditorView` (`SharedUI/RichText/EditorView.razor`) wrapping Blazored TextEditor 1.1.3
+  (Quill.js); minted `IHtmlSanitizationService`/`ServerHtmlSanitizationService` (`HtmlSanitizer`
+  9.0.892, allow-list = exactly the toolbar's output set, `AddSingleton`). Two settled deviations from
+  the original sketch: **no `Compact` runtime toggle** — Quill binds toolbar listeners once at
+  construction, so a later `ToolbarContent` change doesn't rewire them; the device axis is deferred to
+  a future separate desktop/mobile composition instead (MVP ships desktop toolbar only, not
+  MVP-blocking), matching how the rest of the codebase handles desktop/mobile. **Preview is a popup
+  overlay, not an in-place swap** — swapping reflowed the page every toggle; Quill now stays mounted
+  continuously and `RichTextView` renders on top of a dimmed backdrop. Inline Pokémon-sprite Quill
+  blot (spec §5.30.2) stays out of scope, its own future work-unit. Doc-Touch (moment 1, before the
+  build): `layer2-services.md` "The allow-list is the inverse of the toolbar"; `layer3.5-structure.md`
+  "Third-Party Wrapper Composite" (corrected the snippet's nonexistent `@bind-Value` to the real
+  Blazored API and the popup pattern); `layer4-style.md` (fixed a stale `RichTextEditor`→`EditorView`
+  naming mismatch); `cross-cutting.md` (flagged mobile toolbar deferred).
+- **Verified:** `dotnet build` green (4 projects, 0 warnings); live server run, homepage `200`; NuGet
+  restore + build confirmed both `Blazored.TextEditor` and `HtmlSanitizer` work on net10.0; throwaway
+  harness + a throwaway dev-diagnostics endpoint confirmed the sanitizer strips
+  `<script>`/event-handlers/`javascript:` hrefs while preserving allowed formatting; user-confirmed
+  visual check against the live server (toolbar functional, preview popup opens/closes without page
+  reflow, content captured correctly). Harness and diagnostic endpoint removed after confirmation.
+  Detail in `audit/Chapters.md` Feature 6 WU6 Stage note.
+- **Tool:** opusplan. **Pointer:** `audit/Chapters.md` Feature 6. **Deps:** WU0.
 
-### WU7 — `UserStoryInteractionButton` leaf
-- **Cells:** 16 L3/L3.5/L4 (button slice).
-- **Do:** EventCallback-driven (absence of `OnToggle` ⇒ read-only, rendered only when active); icon
-  comes in as a resolved URL `[Parameter]` (an `IconIdentifier`/URL string) — the button itself injects
-  no service. The owning `StoryInteractionPanel` (WU16) maps `InteractionTypeEnum` → sprite key and
-  resolves it via the generic `Sprites.ISpriteReadService.GetSpriteUrl` (see WU2 correction —
-  `GetInteractionIcon()` does not exist on the sprite service; `audit/UserStoryInteractions.md` Feature
-  16 owns this mapping). Two contexts (listing vs detail).
-- **Tool:** opusplan. **Pointer:** `audit/UserStoryInteractions.md` Feature 16. **Deps:** WU2.
+### WU7 — `UserStoryInteractionButton` leaf — DONE ✓ (2026-06-21)
+- **Cells:** 16 L3/L3.5/L4 — now Stage 5 (button slice only; panel slice + debounce remain Stage 2,
+  owned by WU16).
+- **Done:** EventCallback-driven (absence of `OnToggle` ⇒ read-only, rendered only when `IsActive`);
+  built as a square 3-state button (gray inactive → accent-fill-on-hover → inverted accent-bg/white-
+  shape when active). Icon comes in as **inline SVG**, not a resolved sprite URL — `IconPath` (SVG
+  `d` string) + `AccentColor` `[Parameter]`s, plus `Label` for `aria-label`/`title` (a11y gap the
+  spec's 3-param contract didn't cover). The button itself injects no service and has no
+  `InteractionTypeEnum` knowledge. Settled (WU7, Doc-Touch moment 1 before the build, supersedes the
+  WU2-era sprite-key plan): interaction icons are inline SVG, permanently — carved out of the "never
+  inline SVG" rule, which still governs tags/covers/avatars. The owning `StoryInteractionPanel`
+  (WU16) maps `InteractionTypeEnum` → `(IconPath, AccentColor)` — that mapping table is the one
+  remaining open item, left for WU16. `Sprites.ISpriteReadService.GetSpriteUrl` is not involved.
+  Updated `layer3-logic.md`, `layer3.5-structure.md`, `layer4-style.md` (new "Interaction Icons Are
+  Inline SVG" section + Pattern Accumulation entry), `audit/UserStoryInteractions.md`, `audit/Sprites.md`.
+- **Verified:** `dotnet build` green (4 projects); user-confirmed visual check against the live
+  server (all 3 states, hover fill, read-only visibility-when-active-only) via a throwaway harness
+  on `HomeDesktop.razor` (removed after confirmation). Detail in `audit/UserStoryInteractions.md`
+  Feature 16 Stage notes.
+- **Tool:** opusplan. **Pointer:** `audit/UserStoryInteractions.md` Feature 16. **Deps:** none (the
+  original WU2 dependency assumed sprite-based icons; inline SVG removed that coupling).
 
 ### WU8 — `PaginationControls`
 - **Cells:** 31 L3.5/L4 (pagination slice).
@@ -236,7 +269,9 @@ Phase E.
 ### WU16 — `StoryInteractionPanel` composite
 - **Cells:** 16 L3/L3.5/L4, 17 L3.5 (panel slice).
 - **Do:** coordination composite owning the 2-second debounce across UserStoryInteractionButtons; detail
-  context (all clickable). Consumed by story detail + listings.
+  context (all clickable). Mints `InteractionTypeEnum` and maps each value to `(IconPath, AccentColor)`
+  — inline SVG, not a sprite key (WU7 settled icons as inline SVG; `GetSpriteUrl` is not involved).
+  Consumed by story detail + listings.
 - **Tool:** opusplan. **Pointer:** `audit/UserStoryInteractions.md`. **Deps:** WU7, WU15.
 
 ### WU17 — Chapters L2 (writing/versioning + reading)

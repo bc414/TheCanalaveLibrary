@@ -125,15 +125,40 @@ Sprites live at `wwwroot/sprites/themes/{theme}/static/{key}.png` or `animated/{
 `layer2-services.md` §"Sprite URLs Are Resolved Server-Side, At Projection Time" for the full rule and
 the request-scoping consequence (never cache a sprite-bearing DTO across users/themes).
 
-## Theme-Swappable Interaction Icons
+## Interaction Icons Are Inline SVG (superseded the sprite-URL design — WU7)
 
-**Settled (WU2):** `ISpriteReadService` does not have a `GetInteractionIcon` method — it stays a single
-generic `GetSpriteUrl` resolver. Theme-swappable interaction icons are a `UserStoryInteraction`-domain
-concept: the owning composite maps `InteractionTypeEnum` → sprite key, then resolves the URL the same
-way as any other sprite (server-side, in the read service, per the rule above) and passes the resolved
-URL down as an `IconIdentifier`/URL string `[Parameter]`. See `audit/UserStoryInteractions.md` Feature
-16 and `audit/Sprites.md` Feature 3. Default icons: star (follow), heart (favorite); Pokémon theme:
-Staryu, Luvdisc, etc. — still `wwwroot` assets, never inline SVG.
+**Settled (WU7), supersedes the WU2-era plan below `GetInteractionIcon` line:** interaction icons
+(Favorite, Followed, Ignore, ReadItLater, HiddenFavorite, …) are **inline SVG shapes**, not
+theme-swappable sprite URLs. This is a deliberate, permanent carve-out from the "never inline SVG"
+rule above — that rule still governs everything else (tags, covers, avatars, profile pictures: those
+stay `wwwroot` sprite/image assets resolved via `GetSpriteUrl`). The reason for the split: interaction
+icons are small, single-color glyphs the site itself owns and styles per-state (gray/hover/active),
+not theme-swappable art assets a Theme pack provides — they don't belong in `wwwroot/sprites/`.
+
+**Leaf stays dumb (panel supplies, leaf renders):** `UserStoryInteractionButton` takes `IconPath`
+(an SVG `<path d>` string) + `AccentColor` (a CSS color) as `[Parameter]`s and renders one inline
+`<svg><path d="@IconPath" /></svg>`. It has no knowledge of `InteractionTypeEnum` and injects no
+service. The `InteractionTypeEnum → (IconPath, AccentColor)` mapping lives in the owning composite
+(`StoryInteractionPanel`, WU16) or a shared constants helper it calls — mirroring the
+"owning composite maps the domain enum" pattern the sprite-key design used, just without
+`ISpriteReadService` in the chain. `ISpriteReadService.GetSpriteUrl` is unaffected and unused here.
+See `audit/UserStoryInteractions.md` Feature 16 and `audit/Sprites.md` Feature 3.
+
+**Three-state square button (WU7 pattern):** `size-9 rounded-md grid place-items-center
+transition-colors`, no outer margin (internal padding only, per the Outer Margin Rule). Accent comes
+in as an inline CSS custom property — `style="--accent:@AccentColor"` — so Tailwind's JIT compiler
+never has to see a dynamic class name; classes consume it via arbitrary-value syntax:
+
+| State | Background | Shape `fill` |
+|---|---|---|
+| Inactive | `bg-gray-200` | `fill-gray-500` |
+| Hover (interactive, not active) | `bg-gray-200` (unchanged) | `fill-[var(--accent)]` (via `group-hover:`) |
+| Active (clicked, or `IsActive` true on load) | `bg-[var(--accent)]` | `fill-white` |
+
+Read-only buttons (no `OnToggle`) render only when active and use the static active/inverted
+look — no `group-hover` (nothing to hover toward). Extract the state-dependent class strings to a
+computed property per "Conditional Classes" above. `Label` (`[Parameter]`) drives `aria-label` +
+`title` — required because an icon-only control has no visible text.
 
 ## Layout Tailwind (Composites and Parents)
 
@@ -174,7 +199,7 @@ rather than fighting specificity.
 
 ## Reader Settings as CSS (font-scope boundary)
 
-**Tailwind's `--font-display`/`--font-body` tokens stop at `RichTextView`/`RichTextEditor`.** Those
+**Tailwind's `--font-display`/`--font-body` tokens stop at `RichTextView`/`EditorView`.** Those
 two components render *all* user-generated content — chapter text, comments, recommendation blurbs,
 profile bios, private messages — and own their own font via the user's `ReaderSettings` override, not
 the site token. Do not apply `font-*` Tailwind utilities to content rendered inside them; site chrome
