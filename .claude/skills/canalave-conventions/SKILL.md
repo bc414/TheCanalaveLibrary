@@ -61,7 +61,10 @@ project; moving a file between them is a folder move only, never a namespace edi
 `Core/Tags/` are the model to follow: entity, DTOs, validation, and service interface all live together.
 `Lookups/` is a legitimate cluster too — it deliberately holds cross-cutting seeded/enum-mirror data
 that every other cluster queries by FK, not feature-specific code; it isn't an exception to vertical
-organization, it's a cluster whose feature *is* "shared reference data."
+organization, it's a cluster whose feature *is* "shared reference data." `RichText/` is the same kind
+of exception, for the opposite-tier reason: `RichTextView` (and its consumer, `EditorView`) are
+universal rendering/editing atoms consumed by Chapters, Comments, Recommendations, BlogPosts, Profiles,
+and Messaging — no single feature owns them, so their cluster's feature *is* "rich-text rendering."
 
 API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
 cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/SpriteEndpoints.cs`

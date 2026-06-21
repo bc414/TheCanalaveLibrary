@@ -139,11 +139,28 @@ Phase E.
 - **Tool:** opusplan. **Pointer:** `audit/Tags.md` Feature 13 + `layer2-services.md`
   §"Sprite URLs Are Resolved Server-Side, At Projection Time". **Deps:** WU2, WU3.
 
-### WU5 — `RichTextView` leaf
-- **Cells:** 7 L3.5/L4 (RichTextView slice).
-- **Do:** pure display of sanitized chapter HTML; **user `ReaderSettings` font**, not the Tailwind chrome
-  font (`layer4-style.md` §"Reader Settings as CSS"). Consumed by chapter reading + previews.
-- **Tool:** opusplan. **Pointer:** `audit/Chapters.md`. **Deps:** WU0.
+### WU5 — `RichTextView` leaf — DONE ✓ (2026-06-21)
+- **Cells:** 7 L3.5/L4 (RichTextView slice only — `ChapterPage`/`ChapterNavigation` remain, WU18/WU26;
+  cell numbers in `status.md` unchanged).
+- **Done:** built `RichTextView` (`SharedUI/RichText/`, a new cross-cutting cluster like `Lookups/` —
+  not filed under Chapters, since it's universal across Chapters/Comments/Recommendations/BlogPosts/
+  Profiles/Messaging). Pure leaf, no service injection, no sanitization (trusts stored HTML;
+  sanitize-on-save is WU6/L2's job, §3.21). Reader display settings arrive via a cascaded slim
+  property bag, `ReaderDisplaySettings` (`SharedUI/RichText/`, deliberately not a `*Dto` — never
+  crosses the service boundary), with built-in defaults when no cascade provider is present.
+  `ReaderSettings` (Core) is unchanged — settled as a deliberate non-split (separation happens at the
+  consumption layer, not storage). No border/background on the leaf (Container Composite/`Card`
+  concern, owned by the composing context). Doc-Touch moment 1 (before the build): `SKILL.md` Code
+  Organization (new `RichText/` cluster rule), `layer3.5-structure.md` ("Ambient Viewer Settings via
+  Cascading Slim Bags" pattern), `layer4-style.md` ("Reader Settings as CSS" rewritten for the
+  cascaded bag + Pattern Accumulation entry), `layer2-services.md` (sanitize-once-on-save trust
+  boundary). The layout-level cascade *provider* (reading the real viewer's `User.ReaderSettings`) is
+  deferred to its first real consumer (WU26/WU30), not wired here.
+- **Verified:** `dotnet build` green (4 projects); live server run, homepage `200`; throwaway harness
+  on `HomeDesktop.razor` confirmed both a non-default cascaded `ReaderDisplaySettings` and the
+  no-cascade default path render correct inline styles + unescaped HTML; harness removed after
+  confirmation. Detail in `audit/Chapters.md` Feature 7 WU5 Stage note.
+- **Tool:** opusplan. **Pointer:** `audit/Chapters.md` Feature 7. **Deps:** WU0.
 
 ### WU6 — `EditorView` composite *(third-party Quill wrapper)*
 - **Cells:** 6 L3.5 (EditorView slice).

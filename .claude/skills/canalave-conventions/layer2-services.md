@@ -127,6 +127,17 @@ service" rule in `SKILL.md`'s Component Taxonomy).
 **Consequence:** because the resolved URL depends on the requesting user's theme/animation prefs, any
 DTO carrying one is **per-user and request-scoped — never cache it across users or themes.**
 
+### User HTML Is Sanitized Once, On Save — Never On Display
+
+Any write path that accepts user-authored rich text (chapters, comments, recommendations, blog posts,
+profile bios, messages — everywhere `EditorView` is used) runs it through `HtmlSanitizer`'s allow-list
+(§3.21) **in the write service, before persisting.** Stored HTML is therefore already trusted.
+`RichTextView` (the universal display leaf, see `layer3.5-structure.md` "Universal Components") renders
+that stored HTML directly via `MarkupString` and performs **no sanitization of its own** — it isn't a
+service, doesn't inject one, and re-sanitizing on every render would be redundant work duplicated across
+every display site. If a future write path produces HTML that bypasses the allow-list step, that's a
+bug in that write service, not something `RichTextView` should compensate for.
+
 ## Service Composition
 
 Feature services that span domains inject foundational services, not duplicate query logic:

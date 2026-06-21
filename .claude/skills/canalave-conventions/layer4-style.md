@@ -181,13 +181,16 @@ the site token. Do not apply `font-*` Tailwind utilities to content rendered ins
 (nav, labels, buttons, headings, page structure) uses the Tailwind font tokens as normal.
 
 Reader settings (font, size, line height, text width, justify) are applied as CSS on the
-`RichTextView` container element. The component receives settings as parameters and maps them
-to inline styles or CSS custom properties:
+`RichTextView` container element. The component receives them as a single `[CascadingParameter]
+ReaderDisplaySettings? Display` (see `layer3.5-structure.md` "Ambient Viewer Settings via Cascading
+Slim Bags" for why it's cascaded rather than threaded as individual parameters, and why
+`ReaderDisplaySettings` is a slim property bag rather than a `*Dto` — it never crosses the service
+boundary) and maps the fields to inline styles, falling back to defaults when no provider is present:
 
 ```razor
-<div style="font-family: @FontName; font-size: @FontSize;
-            line-height: @LineHeight; max-width: @TextWidth;
-            text-align: @(JustifyText ? "justify" : "left")">
+<div style="font-family: @(Display?.FontName ?? "Georgia"); font-size: @((Display?.FontSize ?? 16))px;
+            line-height: @(Display?.LineHeight ?? 1.5f); max-width: @((Display?.TextWidth ?? 800))px;
+            text-align: @((Display?.JustifyText ?? false) ? "justify" : "left")">
     @((MarkupString)HtmlContent)
 </div>
 ```
@@ -212,3 +215,12 @@ no outer margin; parents space chips with `gap-`/`flex flex-wrap gap-2`). Tag-ty
 | `ContentWarning` | `bg-rose-100 text-rose-800` |
 | `CrossoverFandom` | `bg-amber-100 text-amber-900` |
 | `Relationship` | `bg-pink-100 text-pink-800` |
+
+**`RichTextView` (WU5, 2026-06-21):** root is a single `<div>` carrying only typography inline
+styles (`font-family`/`font-size`/`line-height`/`max-width`/`text-align`, from the cascaded
+`ReaderDisplaySettings`, defaulting to `ReaderSettings`' own defaults when no provider is present) —
+**no border, no background, no padding.** Borders/surfaces are a Container Composite concern
+(`Card`), owned by whichever context composes the leaf, not the leaf itself — a chapter-reading page
+wants bare content, a `CommentItem` already provides its own card and would double-box, and an
+`EditorView` preview pane that wants a bordered look wraps `RichTextView` in `Card` rather than the
+leaf growing one. Renders nothing when `HtmlContent` is null/empty.

@@ -172,6 +172,42 @@ else
 descriptions, recommendations, profile bios, blog posts, AND private messages. The only
 legitimate axis is device — desktop shows full toolbar, mobile shows compact toolbar with overflow.
 
+### Ambient Viewer Settings via Cascading Slim Bags
+
+Some settings are ambient and viewer-scoped — they apply to every instance of a component on the
+page, regardless of which feature embeds it, and threading them through every intermediate composite's
+`[Parameter]` list would pollute contracts that have nothing to do with the setting (e.g. `StoryCard`,
+`CommentItem` shouldn't carry reader-display params just to relay them to a nested `RichTextView`).
+The pattern: a layout-level ancestor reads the viewer's full settings object once, converts it to a
+**slim property bag** holding only the fields the leaf needs, and provides that bag via
+`<CascadingValue Value="@displaySettings">`. The leaf consumes it as a `[CascadingParameter]`,
+nullable, with sensible defaults when no provider is present (anonymous viewers, or pages that haven't
+wired the provider yet):
+
+```razor
+@* RichTextView.razor — leaf *@
+<div style="font-family: @(Display?.FontName ?? "Georgia"); font-size: @((Display?.FontSize ?? 16))px;
+            line-height: @(Display?.LineHeight ?? 1.5f); max-width: @((Display?.TextWidth ?? 800))px;
+            text-align: @((Display?.JustifyText ?? false) ? "justify" : "left")">
+    @((MarkupString)HtmlContent)
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string? HtmlContent { get; set; }
+    [CascadingParameter] public ReaderDisplaySettings? Display { get; set; }
+}
+```
+
+The slim bag is **not** a DTO — it never crosses the service boundary (the read service or page
+loads the full settings object, e.g. `User.ReaderSettings`, and converts in-process). Naming carries
+the distinction: `*Dto` types are minted for service-boundary transfer; slim bags fed to components
+get a plain descriptive name (`ReaderDisplaySettings`, not `ReaderDisplaySettingsDto`). The full
+settings object itself is not split to produce the bag — it stays one cohesive unit at the storage/
+service layer; only the presentation layer narrows it. Each ambient concern gets its own bag sized to
+its consumers — `ReaderDisplaySettings` (font/size/line-height/width/justify) feeds `RichTextView`;
+a future behavior-settings bag (auto-load-next, collapse-threads, pagination size) would feed whatever
+component owns that behavior, not get bolted onto the display bag.
+
 ## Universal Components (Cross-Feature)
 
 | Component | Type | Used By |

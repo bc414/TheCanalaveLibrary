@@ -1,0 +1,24 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Universal read-only renderer for user-authored HTML (chapters, comments, recommendations, blog
+   posts, profile bios, messages, and EditorView's own preview mode). Pure leaf: no service
+   injection, no sanitization — sanitization happens once, server-side, on the save path
+   (layer2-services.md "User HTML Is Sanitized Once, On Save — Never On Display"). Font tokens are
+   deliberately NOT applied here; the font comes from the viewer's reader settings
+   (layer4-style.md "Reader Settings as CSS"). *@
+@if (!string.IsNullOrEmpty(HtmlContent))
+{
+    <div style="font-family: @(Display?.FontName ?? "Georgia"); font-size: @((Display?.FontSize ?? 16))px;
+                line-height: @(Display?.LineHeight ?? 1.5f); max-width: @((Display?.TextWidth ?? 800))px;
+                text-align: @((Display?.JustifyText ?? false) ? "justify" : "left")">
+        @((MarkupString)HtmlContent)
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public string? HtmlContent { get; set; }
+
+    [CascadingParameter]
+    public ReaderDisplaySettings? Display { get; set; }
+}
