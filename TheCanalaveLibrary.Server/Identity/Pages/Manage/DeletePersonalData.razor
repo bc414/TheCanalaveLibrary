@@ -6,6 +6,7 @@
 
 @inject UserManager<User> UserManager
 @inject SignInManager<User> SignInManager
+@inject UserDeletionService DeletionService
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<DeletePersonalData> Logger
 
@@ -74,15 +75,16 @@
             return;
         }
 
-        var result = await UserManager.DeleteAsync(user);
-        if (!result.Succeeded)
+        var userId = await UserManager.GetUserIdAsync(user);
+        var deleted = await DeletionService.DeleteUserAsync(user.Id);
+        if (!deleted)
         {
-            throw new InvalidOperationException("Unexpected error occurred deleting user.");
+            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
+            return;
         }
 
         await SignInManager.SignOutAsync();
 
-        var userId = await UserManager.GetUserIdAsync(user);
         Logger.LogInformation("User with ID '{UserId}' deleted themselves.", userId);
 
         RedirectManager.RedirectToCurrentPage();

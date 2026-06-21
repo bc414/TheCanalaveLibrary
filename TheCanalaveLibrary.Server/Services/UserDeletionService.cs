@@ -1,13 +1,13 @@
-using TheCanalaveLibrary.Server;
+using Microsoft.EntityFrameworkCore;
+using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
 
-// This would be in a service class, e.g., UserService.cs
-// You would inject your DbContext via the constructor.
-// (Assuming your context is named ApplicationDbContext)
-
-using Microsoft.EntityFrameworkCore;
-
+/// <summary>
+/// Resolves the User-rooted Restrict conflicts in OnModelCreating (see IdentityConfigurations.cs and
+/// FollowingConfigurations.cs) before deleting a user. Every other FK rooted at User is Cascade or
+/// SetNull and is handled by the database once the user row is removed.
+/// </summary>
 public class UserDeletionService
 {
     private readonly ApplicationDbContext _context;
@@ -25,29 +25,28 @@ public class UserDeletionService
     /// <returns>True if the user was deleted, false if not found.</returns>
     public async Task<bool> DeleteUserAsync(int userId)
     {
-        // Use a transaction to ensure all operations succeed or fail together.
-        await using var transaction = await _context.Database.BeginTransactionAsync();
+        // AddNpgsqlDbContext enables Npgsql's retrying execution strategy, which refuses
+        // user-initiated transactions started directly via BeginTransactionAsync — the whole
+        // retriable unit (including the transaction) must run through CreateExecutionStrategy().
+        var strategy = _context.Database.CreateExecutionStrategy();
 
-        try
+        return await strategy.ExecuteAsync(async () =>
         {
-            var user = await _context.Users
-                .Include(u => u.UserStat) // Include 1-to-1 to delete it
-                .FirstOrDefaultAsync(u => u.Id == userId);
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == userId);
 
             if (user == null)
             {
                 return false; // User not found
             }
-            /*
 
             // --- 1. HANDLE 'UserProfileComment' CONFLICT ---
             // Rule: UserProfileComment.ProfileUserId is set to 'Restrict'.
-            // Action: Manually delete all comments on the user's profile.
-            var commentsOnProfile = _context.UserProfileComments
+            // Action: delete all comments left on this user's profile (TPT — no direct DbSet).
+            var commentsOnProfile = _context.BaseComments.OfType<UserProfileComment>()
                 .Where(c => c.ProfileUserId == userId);
-            _context.UserProfileComments.RemoveRange(commentsOnProfile);
-            
-            */
+            _context.BaseComments.RemoveRange(commentsOnProfile);
 
             // --- 2. HANDLE 'Notification' CONFLICT ---
             // Rule: Notification.SourceUserId is set to 'Restrict'.
@@ -55,7 +54,7 @@ public class UserDeletionService
             await _context.Notifications
                 .Where(n => n.SourceUserId == userId)
                 .ExecuteUpdateAsync(s => s.SetProperty(n => n.SourceUserId, (int?)null));
-            
+
             // --- 3. HANDLE 'FollowedUser' CONFLICT ---
             // Rule: FollowedUser.FollowedUserId is set to 'Restrict'.
             // Action: Manually delete all 'Follow' entries where this user *is the one being followed*.
@@ -63,29 +62,23 @@ public class UserDeletionService
                 .Where(f => f.FollowedUserId == userId);
             _context.FollowedUsers.RemoveRange(followsOnUser);
 
-            // --- 4. DELETE THE USER AND 1-to-1 DATA ---
-            // The database will now handle all 'Cascade' and 'SetNull' rules.
-            
-            // Delete associated UserStat (1-to-1)
-            if (user.UserStat != null)
-            {
-                _context.UserStats.Remove(user.UserStat);
-            }
-            
-            // Delete the user
+            // --- 4. HANDLE 'Vouch' CONFLICT ---
+            // Rule: Vouch.VouchedUserId is set to 'Restrict' (VouchingUserId side is Cascade).
+            // Action: Manually delete vouches received by this user.
+            var vouchesReceived = _context.Vouches
+                .Where(v => v.VouchedUserId == userId);
+            _context.Vouches.RemoveRange(vouchesReceived);
+
+            // --- 5. DELETE THE USER ---
+            // The database now handles every remaining 'Cascade'/'SetNull' rule, including the
+            // UserStat 1-to-1 Cascade.
             _context.Users.Remove(user);
 
-            // --- 5. SAVE AND COMMIT ---
+            // --- 6. SAVE AND COMMIT ---
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
-            
+
             return true;
-        }
-        catch (Exception)
-        {
-            // Something went wrong, roll back all changes.
-            await transaction.RollbackAsync();
-            throw; 
-        }
+        });
     }
 }

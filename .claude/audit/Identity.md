@@ -21,20 +21,15 @@ enum→short conversions. Cold `UserProfile` partition is 1-to-1.
 
 ---
 
-## The post-move reconciliation (drives Stage 4 across L2/L3/L3.5)
+## The post-move reconciliation — RESOLVED (2026-06-20, WU1)
 
-The Identity folder was physically relocated (`Components/Account` → `Identity/`, per recent git
-commits), but several references still point at the old location:
-- `IdentityRedirectManager`, `IdentityNoOpEmailSender`, `IdentityRevalidatingAuthenticationStateProvider`
-  still declare `namespace TheCanalaveLibrary.Server.Components.Account`.
-- `IdentityComponentsEndpointRouteBuilderExtensions` `using`s `...Components.Account.Pages[.Manage]`.
-- `App.razor` loads `@Assets["Components/Account/Shared/PasskeySubmit.razor.js"]` — that disk path no
-  longer exists (the file is at `Identity/Shared/PasskeySubmit.razor.js`).
-- `Program.cs` `using TheCanalaveLibrary.Server.Components.Account;`.
-
-C# namespaces need not match folders, so this **may compile**; the asset path is a runtime 404 and the
-whole area is mid-refactor. **Nature of gap:** code-relationship (mechanical). **Implied resolution:**
-Stage 2/3 — normalize namespaces + the `App.razor` asset path, then verify build.
+The Identity folder was physically relocated (`Components/Account` → `Identity/`). Namespaces
+(`IdentityRedirectManager`, `IdentityNoOpEmailSender`, `IdentityRevalidatingAuthenticationStateProvider`,
+all Identity `.razor` pages) now declare `TheCanalaveLibrary.Server` consistently; the
+`App.razor` asset path reads `Identity/Shared/PasskeySubmit.razor.js`; the endpoint extensions'
+`using`s already resolved without changes (page classes share the flat `TheCanalaveLibrary.Server`
+namespace). Only a stale comment remained (fixed). `dotnet build` green; `/Account/Login` and
+`/Account/Register` confirmed 200 against the live app.
 
 ---
 
@@ -45,14 +40,19 @@ Stage 2/3 — normalize namespaces + the `App.razor` asset path, then verify bui
   Sound; migration-verified (2026-06-20). *Minor:* `ReaderSettings.DefaultSearchSort` is typed
   `DefaultSortOrder`, which is itself a divergent enum (see Lookups audit) — a thread to pull when the sort
   model is reconciled.
-- **L2 — Stage 4.** Cookie auth configured for 401/403 (correct, §1), `RequireConfirmedAccount`, password
-  policy, `AddIdentityCore<User>().AddRoles().AddApiEndpoints()`. Reconcile post-move references; verify
-  `AddIdentityCore` (vs `AddIdentity`) is the intended choice for the scaffolded UI flow.
-- **L3-Logic — Stage 4.** Scaffold uses form-POST-to-endpoint + `SignInManager` cookie writes (matches
-  §9.5). Missing: login/logout as triggers on the persistent layout (§3.19); layout is still template
-  default.
-- **L3.5-Structure — Stage 4.** Pages present and structurally standard; reconcile with the move.
-- **L4-Style — Stage 1.** Default Identity/Bootstrap styling; blocked on tokens.
+- **L2 — Stage 5.** Cookie auth configured for 401/403 (correct, §1), `RequireConfirmedAccount`, password
+  policy, `AddIdentityCore<User>().AddRoles().AddApiEndpoints()`. Post-move references resolved (see
+  above). `AddIdentityCore` (vs `AddIdentity`) confirmed as the intended choice for the scaffolded UI flow.
+- **L3-Logic — Stage 5.** Scaffold uses form-POST-to-endpoint + `SignInManager` cookie writes (matches
+  §9.5). §3.19 login/logout triggers added as a minimal `LoginDisplay.razor` leaf (SharedUI/Layout) — an
+  `<AuthorizeView>` showing the username + a logout form-POST when authenticated, a "Log in" link to
+  `/account/login` when not — composed into `DesktopLayout`/`MobileLayout` and the Identity `MainLayout`
+  (the Manage section's nested `@layout`, found live via `ManageLayout` → `MainLayout` chaining, not
+  debris). **Scope note:** this is the minimal trigger only — full nav links, notification bell, and
+  profile avatar dropdown are deferred to WU22/WU30/WU33 per §3.19's fuller spec.
+- **L3.5-Structure — Stage 5.** Pages present and structurally standard; reconciled with the move.
+  Verified live: anonymous home page renders `<a href="Account/Login">Log in</a>`.
+- **L4-Style — Stage 1.** Default Identity/Bootstrap styling; blocked on tokens (unchanged by WU1).
 - **L5 — N/A** (Identity is permanently server-only). **L6 — N/A** (framework + `NormalizedName`/
   `NormalizedEmail` unique already configured). **L7/L8 — N/A.**
 
@@ -61,8 +61,25 @@ Stage 2/3 — normalize namespaces + the `App.razor` asset path, then verify bui
   personal data, `SetNull` to anonymize authored content (breaking diamond conflicts), `Restrict` where C#
   must intervene (profile comments, followed-user, notification source). Comments explicitly flag
   "CONFLICT: Solved with C# code."
-- **L2 — Stage 4.** `UserDeletionService` exists to resolve the `Restrict` conflicts before deletion, but
-  its correctness against the full conflict map is unverified in this read-only pass. Resolution → verify
-  it covers every `Restrict` edge, then Stage 5.
-- **L3-Logic / L3.5-Structure — Stage 4.** Surfaced through the scaffolded `Manage/DeletePersonalData`
-  page; inherits the post-move reconciliation. **L4 — Stage 1. L5 — N/A.**
+- **L2 — Stage 5 (2026-06-20, WU1).** `UserDeletionService` now resolves all four User-rooted `Restrict`
+  edges before deleting: `Notification.SourceUserId` (SetNull, pre-existing), `FollowedUser.FollowedUserId`
+  (delete, pre-existing), `UserProfileComment.ProfileUserId` (delete — was dead/commented-out code
+  referencing a non-existent `_context.UserProfileComments` DbSet; fixed to
+  `_context.BaseComments.OfType<UserProfileComment>()`, the correct TPT access pattern), and
+  `Vouch.VouchedUserId` (delete — previously unhandled entirely). Registered in DI
+  (`AddScoped<UserDeletionService>()`).
+  **Bug found by running it for real:** `AddNpgsqlDbContext` enables Npgsql's retrying execution
+  strategy, which rejects a manually-`BeginTransactionAsync`'d transaction unless the whole retriable
+  unit runs through `_context.Database.CreateExecutionStrategy().ExecuteAsync(...)`. Fixed. No other
+  code in the tree uses explicit transactions yet, but any future direct `BeginTransactionAsync()` call
+  against `ApplicationDbContext`/`ReadOnlyApplicationDbContext` must use this pattern.
+  **Verified:** exercised twice end-to-end via the new `DevDiagnosticsEndpoints.MapDevDiagnosticsEndpoints`
+  (`/dev/test-delete-user/{id}`, Development-only — see `.claude/skills/run-server/SKILL.md` "Dev
+  diagnostics endpoints") against throwaway fixture users (each given a profile comment, a received
+  vouch, an inbound follow, and a sourced notification via direct `psql` inserts) — confirmed all four
+  edges resolved and the user row gone, both runs.
+- **L3-Logic / L3.5-Structure — Stage 5.** `DeletePersonalData.razor` rewired from the old direct
+  `UserManager.DeleteAsync(user)` (which would throw on the `Restrict` FKs) to
+  `DeletionService.DeleteUserAsync(user.Id)`; a `false` return (not found) now redirects to the existing
+  invalid-user path instead of throwing. Inherits the resolved post-move reconciliation. **L4 — Stage 1
+  (unchanged). L5 — N/A.**

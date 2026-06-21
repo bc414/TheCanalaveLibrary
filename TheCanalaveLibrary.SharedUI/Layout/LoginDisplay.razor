@@ -1,0 +1,25 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject NavigationManager Nav
+
+<AuthorizeView>
+    <Authorized>
+        <span>@context.User.Identity?.Name</span>
+        <form action="Account/Logout" method="post">
+            <AntiforgeryToken />
+            <input type="hidden" name="ReturnUrl" value="@_currentUrl" />
+            <button type="submit">Log out</button>
+        </form>
+    </Authorized>
+    <NotAuthorized>
+        <a href="Account/Login">Log in</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private string? _currentUrl;
+
+    protected override void OnInitialized()
+    {
+        _currentUrl = Nav.ToBaseRelativePath(Nav.Uri);
+    }
+}

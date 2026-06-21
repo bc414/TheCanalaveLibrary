@@ -5,73 +5,30 @@ features from `grid_axes.md`, grouped by folder cluster. Columns:
 
 `L1 | L2 | L3-Logic | L3.5-Structure | L4-Style | L5 | L6 | L7 | L8`
 
-Global conditions affecting many cells (see `audit-summary.md` for detail on pre-existing items; newer
-notes may stand alone):
-- **Spec supersedes stale code** — the spec is the recent consolidation; the ~7-month-old code is mostly non-working. Where they disagree and the code isn't working, the spec wins. Most **Stage 4** cells here are therefore *stale-code traps* (resolution direction known: build to spec; existing code is salvage), not two-way adjudications. The only genuine reconciliations are mechanical: Identity post-move references and Story L5 endpoint wiring (audit-summary §3a).
-- **RESOLVED (2026-06-20) — Phase C: Tailwind v4 installed, tokens locked.** `package.json` +
-  MSBuild targets build a CSS-first Tailwind v4 pipeline (`Styles/app.css` → generated
-  `wwwroot/app.css`); `dotnet build` verified the pipeline runs and emits compiled utilities/tokens.
-  Palette: green, rooted in Pokémon Gen 4/5 (Torterra, GBA/DS-era grass textures), not blue. Fonts:
-  warm/readable, scoped to site chrome only (RichTextView/RichTextEditor keep the reader's own font
-  for all user-generated content). Dead Bootstrap `<link>` in `_Layout.cshtml` removed. See
-  `layer4-style.md` §"Prerequisite: Design Tokens" + `forward_plan.md` Phase C "Resolved." **This
-  clears the L4-Style blocker. `layer4-style.md`'s tokens + Leaf/Composite/Page tier rules now
-  constitute a validated generic spec, so L4-Style cells are intent-settled and non-blocking — nothing
-  downstream depends on one resolving. They are not deferred and not independently sequenced; each
-  rides along inside the same Phase-E work-unit as its feature's L3/L3.5 build.** Per-row grid values
-  below stay at Stage 1 for now and flip to Stage 5 (or 4, if visual review finds a mismatch) as each
-  work-unit actually completes — see `forward_plan.md` Phase D/E (existing Bootstrap class names in the
-  Identity scaffold, `StoryPropertiesForm`, `TagSelector` are untouched by this pass).
-- **RESOLVED (2026-06-20) — Migration generated, build verified.** L1 fluent config was extracted from
-  the single inline `OnModelCreating` into `IEntityTypeConfiguration<T>` classes under
-  `TheCanalaveLibrary.Server/Data/Configurations/` (see `layer1-data-model.md` §"Fluent API
-  Organization"). `InitialSchema`, the project's first migration, was generated from the resulting model;
-  `dotnet build` and `dotnet ef migrations has-pending-model-changes` both pass clean. Every L1 marked
-  Stage 5 below is therefore now migration-verified, not just "sound, awaiting verification."
-- **Phase B (2026-06-20):** rows 19 and 29 reclassified — see `audit/Following.md` and
-  `audit/Recommendations.md` for resolution detail. Four leaf Stage-1 gaps (rows 8, 37, 51, 55) remain
-  deferred to the Phase-D workplan; confirmed no dependents.
-- **RESOLVED (2026-06-20) — First real app run surfaced and fixed three runtime bugs; pivoted dev
-  workflow away from Aspire for the MVP.** Running the app for the first time (Phase A's deferred
-  runtime-verification step) found:
-  1. **DI startup failure** — `DbStoryReadService`/`DbStoryWriteService` injected `IDbContextFactory<T>`,
-     never registered. Fixed per spec §6.6 (direct DbContext injection supersedes the factory) —
-     renamed to `ServerStoryReadService`/`ServerStoryWriteService`, primary-constructor injection,
-     `AddScoped<>`. See `audit/Stories.md` row 4/5 L2 RESOLVED notes — also corrects those cells' prior
-     "Stage 5/2, nothing to reconcile" audit language, which had not been runtime-checked.
-  2. **`System.Type` serialization crash on first page render** — `Routes.razor` had `@rendermode` on
-     `<RouteView>`, whose built-in `PageType` parameter (`System.Type`) can't cross the SSR→interactive
-     serialization boundary. Moved to `<Routes>`/`<HeadOutlet>` in `App.razor`. That alone broke
-     `/Account/Login` (briefly renders, then bounces to not-found): Identity pages carry
-     `@attribute [ExcludeFromInteractiveRouting]` (`Identity/Pages/_Imports.razor`) because they need a
-     real per-request `HttpContext` for `SignInManager`/cookie auth, but a hardcoded
-     `@rendermode="InteractiveServer"` on `<Routes>` ignores that and drags them into an interactive
-     circuit anyway. Fixed per current (.NET 9/10/11) `render-modes.md` guidance, verified directly
-     against the live Microsoft Learn page (not just training data): `App.razor`'s `PageRenderMode` now
-     reads `HttpContext.AcceptsInteractiveRouting()` and returns `null` (static SSR) for excluded pages,
-     `InteractiveServer` otherwise. `cross-cutting.md`'s "Render Mode" section corrected to match (it had
-     the incomplete/wrong pattern).
-  3. **`ReadOnlyApplicationDbContext` constructor type mismatch** — took `DbContextOptions<ApplicationDbContext>`
-     instead of its own `DbContextOptions<ReadOnlyApplicationDbContext>`; worked by DI accident under
-     plain `AddDbContext`, would break under pooled registration. Fixed (`ApplicationDbContext` now takes
-     non-generic `DbContextOptions`, `ReadOnlyApplicationDbContext` takes its own generic).
-  Also: added the missing `builder.AddServiceDefaults()`/`MapDefaultEndpoints()` call and the
-  `ServiceDefaults` project reference (never wired into Server), and gave `AppHost.cs` a real
-  `AddPostgres("postgres").AddDatabase("canalavedb")` resource (was previously just
-  `AddConnectionString("DefaultConnection")` — no container, plus both `appsettings.json` files still had
-  the ASP.NET template's SQL Server LocalDB string).
-  **Then scope changed:** MVP is `InteractiveServer`-only, no Redis/WASM (matches spec's MVP boundary —
-  see `forward_plan.md` "Aspire orchestration during MVP dev" Resolved entry). Dev workflow is now
-  running `TheCanalaveLibrary.Server` directly against a local Postgres via
-  `ConnectionStrings:canalavedb` in `appsettings.Development.json`, not via the AppHost. `AppHost.cs`'s
-  Postgres/Redis wiring stays in the tree, dormant, for when Aspire-orchestrated dev or Redis/WASM comes
-  back post-MVP — `AddNpgsqlDbContext<T>` reads config the same way regardless of source, so nothing
-  needs to be undone later. Full end-to-end (migrated + seeded Postgres, Identity pages loading) via the
-  direct-run path is not yet confirmed — that's the next step.
+Global conditions affecting many cells — kept terse; detail lives at the pointer, not here:
+- **Spec supersedes stale code.** Most Stage-4 cells are stale-code traps (build to spec, code is
+  salvage), not two-way adjudications. Detail: `audit-summary.md` §0/§3.
+- **L4-Style blocker cleared (Tailwind v4 tokens locked).** L4-Style cells are intent-settled,
+  non-blocking; each rides along inside its feature's Phase-E work-unit rather than being
+  sequenced separately. Detail: `layer4-style.md` §"Prerequisite: Design Tokens",
+  `forward_plan.md` Phase C "Resolved."
+- **L1 migration-verified.** Fluent config lives in `IEntityTypeConfiguration<T>` classes;
+  `InitialSchema` generated clean. Every L1 Stage 5 below is migration-verified. Detail:
+  `layer1-data-model.md` §"Fluent API Organization."
+- **Rows 19, 29 reclassified (Phase B).** Detail: `audit/Following.md`, `audit/Recommendations.md`.
+- **Workplan exists.** `.claude/workplan.md` sequences the build (WU0 → atoms → composites →
+  pages); rows 8/37/51/55 blocked/deferred (confirmed no dependents); Layers 5–8 batched post-MVP.
+  Planning artifact — no cell Stage changed by this.
+- **First real app run (WU0) found and fixed 3 startup bugs, pivoted dev off Aspire for MVP.**
+  Detail split by where each fix lives: Stories L2 DI-registration fix → `audit/Stories.md` row
+  4/5; render-mode/interactive-routing fix → `cross-cutting.md` "Render Mode" (current pattern);
+  Aspire-off-for-MVP decision → `forward_plan.md` "Aspire orchestration during MVP dev" Resolved
+  entry; start/stop + verification procedure → `.claude/skills/run-server/SKILL.md`. WU0 itself is
+  closed — see `workplan.md` WU0.
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L5 | L6 | L7 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|----|----|----|----|
-| 1 | Identity & Auth | Identity | 5 | 4 | 4 | 4 | 1 | N/A | N/A | N/A | N/A |
+| 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | N/A | N/A | N/A | N/A |
 | 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 3 | Sprite & Theme System | Sprites | 5 | 4 | 2 | 2 | 1 | 4 | N/A | N/A | N/A |
 | 4 | Story Creation & Editing | Stories | 5 | 5 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
@@ -122,7 +79,7 @@ notes may stand alone):
 | 49 | Private Messaging | Messaging | 5 | 2 | 2 | 2 | 1 | N/A | 2 | N/A | N/A |
 | 50 | Badge System | Badges | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 51 | Custom Lists | CustomLists | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
-| 52 | User Account Deletion | Identity | 5 | 4 | 4 | 4 | 1 | N/A | N/A | N/A | N/A |
+| 52 | User Account Deletion | Identity | 5 | 5 | 5 | 5 | 1 | N/A | N/A | N/A | N/A |
 | 53 | Story Import & Verification | Moderation | 5 | 2 | 2 | 2 | 1 | N/A | N/A | N/A | N/A |
 | 54 | Content Download/Export | Export | N/A | 2 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 55 | Community Spotlight | Spotlight | 1 | 1 | 1 | 1 | 1 | N/A | N/A | N/A | N/A |

@@ -1,11 +1,11 @@
 {
+  "model": "opusplan",
   "permissions": {
     "allow": [
       "Read(**)", "Glob(**)", "Grep(**)",
       "Bash(dotnet build*)", "Bash(dotnet test*)", "Bash(dotnet ef*)", "Bash(dotnet run*)",
       "Write(.claude/**)", "Edit(.claude/**)"
     ],
-    "deny": [],
-    "model": "opusplan"
+    "deny": []
   }
 }

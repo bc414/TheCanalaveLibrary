@@ -160,6 +160,14 @@ Ordering rules (corrected from the last-gen step5):
 **Gate:** read the preamble — the ordering should put atoms before composites before consumers, with nothing
 depending on something later.
 
+**Addendum (2026-06-20):** Phase D complete — `.claude/workplan.md` written. 38 numbered work-units across
+three phases (Phase 1 atoms WU1–11, Phase 2 composites WU12–22, Phase 3 pages WU23–38), plus WU0
+(Phase A foundation, runtime verification still open), a blocked/deferred section (rows 8/37/51/55), and a
+post-MVP Layers-5–8 batched section. Scope call recorded in the preamble: per `grid_axes.md` §"The Two
+Boundaries" + the resolved MVP/Aspire decision, the **numbered sequence is Layers 1–4 only**; L5–L8 are
+gathered post-MVP, not dropped. Read the workplan preamble before starting Phase E — if that scoping is
+wrong it reshapes the sequence.
+
 ---
 
 ## Phase E — Build per workplan

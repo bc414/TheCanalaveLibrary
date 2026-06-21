@@ -13,6 +13,7 @@
 
     <ItemGroup>
       <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.9" />
+      <PackageReference Include="Microsoft.AspNetCore.Components.Authorization" Version="10.0.9" />
       <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.9" />
     </ItemGroup>
 

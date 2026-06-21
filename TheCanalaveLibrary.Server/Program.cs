@@ -24,6 +24,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
+builder.Services.AddScoped<UserDeletionService>();
 
 // --- Database Contexts ---
 builder.AddNpgsqlDbContext<ApplicationDbContext>("canalavedb", configureDbContextOptions: options =>
@@ -128,6 +129,7 @@ if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
     app.UseMigrationsEndPoint();
+    app.MapDevDiagnosticsEndpoints();
 }
 else
 {

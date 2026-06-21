@@ -319,6 +319,24 @@ after a write rather than immediately re-reading.
 - **Lookup tables** (tags, themes, statuses): RESTRICT → cannot delete if in use.
 - **Self-references** (parent comments, parent tags, parent folders): SET NULL → children become top-level.
 
+## Dev-Only Diagnostic Endpoints
+
+When a code path is hard to exercise through the real UI/auth flow during local verification
+(e.g. an operation scoped to "the currently authenticated user," which would otherwise require
+logging in as a throwaway fixture user), add a Development-only minimal-API endpoint that calls
+the service method directly instead of reaching for a one-off temporary endpoint inline in
+`Program.cs`.
+
+**Home:** `TheCanalaveLibrary.Server/Endpoints/DevDiagnosticsEndpoints.cs`
+(`MapDevDiagnosticsEndpoints`), same `{Feature}Endpoints.Map{Feature}Endpoints` shape as
+`StoryEndpoints`. Mapped exactly once, inside the existing `if (app.Environment.IsDevelopment())`
+block in `Program.cs` — never reachable outside local dev. Add new diagnostic routes to this one
+file rather than creating new ad-hoc endpoint files or inlining lambdas in `Program.cs`; it's the
+single auditable place reviewers (and future agents) check for "what dev-only backdoors exist."
+
+See `.claude/skills/run-server/SKILL.md` "Dev diagnostics endpoints" for the verification workflow
+(pairs with direct `psql` fixture setup/assertions).
+
 ## Error Handling Strategy (Gap — Not Yet Designed)
 
 Three dimensions identified but not fully designed:
