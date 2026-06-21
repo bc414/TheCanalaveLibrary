@@ -1,6 +1,6 @@
 namespace TheCanalaveLibrary.Core;
 
-public interface ITagRetrievalService
+public interface ITagReadService
 {
     Task<List<TagDropDownDTO>> GetTagsByTypeAsync(TagTypeEnum type);
     Task<List<TagDropDownDTO>> GetAllCharacterTagsAsync();

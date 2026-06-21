@@ -9,6 +9,20 @@ expressions. Blocked on design tokens being locked.
 > `tailwind.config.js` model; the spec is a read-only historical snapshot and is not edited — this is
 > the resolved, authoritative convention. See `forward_plan.md` Phase C "Resolved."
 
+> **Bootstrap debris warning:** the original ASP.NET template and the Identity scaffold left
+> Bootstrap/template classnames throughout the tree — `top-row`, `page`, `sidebar`, `bottom-nav`,
+> `nav-pills`, `btn-lg`, `btn-danger`, `form-floating`, `alert alert-warning`, `text-danger`,
+> `row`/`col-lg-*`, etc. Bootstrap's stylesheet was removed in Phase C, so **most of these classes
+> render nothing** — they look like real, working markup but apply zero style. **Never copy a
+> classname from a neighboring element or an existing file without verifying it's an actual Tailwind
+> utility or a token defined in `app.css`'s `@theme` block.** This applies even to "just wire up the
+> markup, no styling needed" work — that phrase means *no new visual design decisions*, not *license
+> to paste whatever classname is already on the nearest `<div>`*. Use real Tailwind layout utilities
+> (`flex`, `gap-`, `px-`/`py-`, …) for the skeleton instead. The one deliberate exception is Identity's
+> own scaffolded pages (`Identity/Pages/**`), which intentionally keep their Bootstrap classes until
+> that scaffold's own L4-Style unblocks (Stage 1, see `audit/Identity.md`) — don't extend that
+> exception to any other file, including the persistent layout that wraps those pages.
+
 ## Prerequisite: Design Tokens (LOCKED — Phase C, 2026-06-20)
 
 Tokens are defined in `TheCanalaveLibrary.Server/Styles/app.css` inside an `@theme {}` block:

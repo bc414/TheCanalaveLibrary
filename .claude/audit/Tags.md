@@ -36,17 +36,22 @@ mirror `TagTypeEnum`: Character/Setting/Genre/ContentWarning/CrossoverFandom/Rel
 
 ## Feature 13 — Tag Display & Sprites
 - **L1 — Stage 5.** `SpriteIdentifier` URL-builder key on `Tag`.
-- **L2 — Stage 4.** `ITagRetrievalService` exists (`GetTagsByTypeAsync`, `GetAllCharacterTagsAsync`,
-  …) but **no implementation** and **not registered in DI** — a runtime failure for any component that
-  injects it. Also interface naming diverges from the `I{Feature}ReadService` convention
-  (`ITagRetrievalService` vs `ITagReadService`). Resolution → Stage 2/3: implement + rename + register.
+- **L2 — Stage 5 (WU3, 2026-06-20).** Renamed `ITagRetrievalService` → `ITagReadService`
+  (`Core/Tags/`); added `ServerTagReadService` (`Server/Tags/`, primary-constructor DI over
+  `ReadOnlyApplicationDbContext`, `.Select()` projection to `TagDropDownDTO`); registered
+  `AddScoped<ITagReadService, ServerTagReadService>()` in `Server/Program.cs`. Updated the two
+  existing injectors (`TagSelector.razor`, `StoryPropertiesForm.razor`) to the new type. No Client/L5
+  impl yet — server-only per the MVP InteractiveServer-only decision; deferred to post-MVP L5 batch.
+  **Verified:** `dotnet build` green (4 projects); zero remaining `ITagRetrievalService` references;
+  live server boot clean (DI resolved, no startup throw), `/`, `/Account/Login`, `/Account/Register`
+  all `200`.
 - **L3-Logic / L3.5-Structure — Stage 4.** No `TagChip` leaf; tags are rendered as inline Bootstrap
   `badge bg-primary` spans inside `TagSelector`, with no sprite resolution and no type-based coloring.
 - **L4-Style — Stage 1** (blocked).
 
 ## Feature 14 — Tag Filtering & Selection UI
 - **L1 — N/A.**
-- **L2 — Stage 4.** Same `ITagRetrievalService` gap as Feature 13.
+- **L2 — Stage 5 (WU3, 2026-06-20).** Same fix as Feature 13 — shared `ITagReadService` contract.
 - **L3-Logic — Stage 4.** `TagSelector` diverges from §5.30.4 on several counts: uses a native HTML
   `<datalist>` autocomplete instead of **Blazored.Typeahead** (not referenced anywhere); **mutates the
   passed `AllSelectedStoryTags` list directly** instead of raising
@@ -65,12 +70,14 @@ mirror `TagTypeEnum`: Character/Setting/Genre/ContentWarning/CrossoverFandom/Rel
 ---
 
 ### Cluster-level reconciliation
-Per audit-summary §0: this is **stale code, not a design to adjudicate**. `TagSelector` is non-working
-(its `ITagRetrievalService` has no impl and isn't registered, so it throws at runtime) — so the "unless the
-code is working" exception does not apply, and the spec (§5.30.4) wins outright. The Stage-4 flags here are
-trap-warnings, not open questions; treat the existing component as discardable scaffolding.
+Per audit-summary §0: this was **stale code, not a design to adjudicate**. `TagSelector` was
+non-working (its `ITagRetrievalService` had no impl and wasn't registered, so it threw at runtime) —
+so the "unless the code is working" exception didn't apply, and the spec (§5.30.4) won outright. The
+remaining Stage-4 flags below are trap-warnings, not open questions; treat the existing component as
+discardable scaffolding.
 
 `TagSelector` is the clearest example of a Gemini-era component that compiles but won't compose: native
 datalist, list mutation, inline badges, outer margin. The build-to-spec path is (a) build the
-`ITagReadService` impl + register it, (b) extract a `TagChip` leaf, (c) rebuild `TagSelector` around
-Blazored.Typeahead + `OnSelectionChanged`. That makes it the Phase-1 atom several other features wait on.
+`ITagReadService` impl + register it — **done, WU3** — (b) extract a `TagChip` leaf (WU4), (c) rebuild
+`TagSelector` around Blazored.Typeahead + `OnSelectionChanged` (WU11). That makes it the Phase-1 atom
+several other features wait on.

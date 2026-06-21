@@ -49,6 +49,14 @@ All process artifacts live under `.claude/`. The spec and this file live at repo
 
 The spec is a read-only snapshot. Audit files point into it (section references, not copies). When code is more authoritative than the spec, the audit file carries both: what the spec said, and what changed and why.
 
+### No session-relative language in persistent docs
+
+`status.md`, `workplan.md`, and `audit/<FolderName>.md` are read in later sessions with no memory of
+this one. Never write "this session," "just now," "recently," or similar — by the next read it's
+meaningless or actively misleading. Use the absolute date (`YYYY-MM-DD`, from the session's `currentDate`)
+or the work-unit ID (`WU2`) instead — both already the convention in `workplan.md` (e.g. "DONE ✓
+(2026-06-20)").
+
 ## Doc-Touch Timing
 
 Three distinct moments touch process docs. Keep them separate — don't fold moment 1 into moment 3, and don't defer moment 1 past the start of implementation. If a task spans multiple folder clusters, make sure all audit files that are relevant to the task are reviewed and edited.

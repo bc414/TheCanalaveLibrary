@@ -1,19 +1,19 @@
 @namespace TheCanalaveLibrary.SharedUI
 @inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
+<div class="flex min-h-screen">
+    <div class="w-64 shrink-0">
         <!-- You can have a NavMenu here -->
     </div>
 
-    <main>
-        <div class="top-row px-4">
+    <main class="flex flex-1 flex-col">
+        <div class="flex items-center justify-between gap-4 px-4 py-3">
             <!-- DESKTOP TOP BAR CONTENT -->
             <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
             <LoginDisplay />
         </div>
 
-        <article class="content px-4">
+        <article class="flex-1 px-4 py-4">
             @Body
         </article>
     </main>

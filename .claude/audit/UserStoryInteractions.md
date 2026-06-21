@@ -56,6 +56,14 @@ regenerate the filtered indexes — i.e. proceed as Stage 2 build-to-spec, no di
 - **L3.5-Structure — Stage 2.** `StoryInteractionPanel` coordination composite (owns debounce VM,
   `IsOwnStory` swap to Edit button) unbuilt.
 - **L4-Style — Stage 1** (blocked; icon concept Star/Staryu, Heart/Luvdisc).
+  Theme-swappable interaction icons are resolved **in this cluster**, not in
+  Sprites. `Sprites/ISpriteReadService` stays a single generic `GetSpriteUrl(theme, key, animated)`
+  resolver with no interaction-domain knowledge. This cluster (the interaction L2 service, or
+  `StoryInteractionPanel` at build time — WU16) mints an `InteractionTypeEnum` here and maps each value
+  to a constant sprite key (e.g. `Followed` → `"follow"`, `Favorite` → `"favorite"`), then calls the
+  generic `GetSpriteUrl` to resolve the URL per the active theme. Spec §5.30.5's
+  `ISpriteService.GetInteractionIcon(InteractionTypeEnum, theme)` is superseded by this split — see
+  `audit/Sprites.md` Feature 3 L2 note.
 - **L5 — Stage 2.**
 - **L6 — Stage 4.** The seven filtered indexes are written but target `is_in_progress`/`is_completed`
   etc.; they must be regenerated against the revised columns (`has_started`). Follows L1.

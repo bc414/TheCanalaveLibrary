@@ -25,12 +25,17 @@ Global conditions affecting many cells — kept terse; detail lives at the point
   Aspire-off-for-MVP decision → `forward_plan.md` "Aspire orchestration during MVP dev" Resolved
   entry; start/stop + verification procedure → `.claude/skills/run-server/SKILL.md`. WU0 itself is
   closed — see `workplan.md` WU0.
+- **Legacy technical-layer folders are being retired to vertical feature clusters, just-in-time
+  (WU2).** `Core/Models/`, `Core/ServiceInterfaces/`, `Server/Services/`, `Client/Services/`,
+  `Server/Endpoints/` are deprecated — no new file is added to them, and each work-unit moves the
+  files it touches into that feature's cluster folder as part of finishing the work. Detail:
+  `canalave-conventions/SKILL.md` "Code Organization".
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L5 | L6 | L7 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|----|----|----|----|
 | 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | N/A | N/A | N/A | N/A |
 | 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| 3 | Sprite & Theme System | Sprites | 5 | 4 | 2 | 2 | 1 | 4 | N/A | N/A | N/A |
+| 3 | Sprite & Theme System | Sprites | 5 | 5 | 2 | 2 | 1 | 4 | N/A | N/A | N/A |
 | 4 | Story Creation & Editing | Stories | 5 | 5 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
 | 5 | Story Browsing & Display | Stories | 5 | 2 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
 | 6 | Chapter Writing & Versioning | Chapters | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
@@ -40,8 +45,8 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 11 | Tag Administration | Tags | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 12 | Story Tagging | Tags | 5 | 2 | 4 | 4 | 1 | 2 | 2 | N/A | N/A |
-| 13 | Tag Display & Sprites | Tags | 5 | 4 | 4 | 4 | 1 | 2 | N/A | N/A | N/A |
-| 14 | Tag Filtering & Selection UI | Tags | N/A | 4 | 4 | 4 | 1 | 2 | N/A | N/A | N/A |
+| 13 | Tag Display & Sprites | Tags | 5 | 5 | 4 | 4 | 1 | 2 | N/A | N/A | N/A |
+| 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 4 | 4 | 1 | 2 | N/A | N/A | N/A |
 | 15 | Saved Tag Selections | Tags | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 2 | 2 | 2 | 1 | 2 | 4 | 2 | N/A |
 | 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 2 | 2 | 2 | 1 | 2 | 4 | N/A | N/A |

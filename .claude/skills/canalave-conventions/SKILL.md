@@ -52,9 +52,35 @@ These have documented rationale and rejected alternatives. **Do not propose alte
 
 ## Code Organization
 
-**Vertical (folder-per-feature) is the target.** Group by feature (`Stories/`, `Tags/`, `UserStoryInteractions/`),
-not by technical layer. One flat namespace per project regardless of folder depth:
-`TheCanalaveLibrary.Core`, `.Server`, `.Client`, `.SharedUI`.
+**Vertical (folder-per-feature) is a hard rule, not an aspiration.** Group by feature (`Stories/`,
+`Tags/`, `UserStoryInteractions/`, `Sprites/`, …) per `folder_clusters.md`, never by technical layer.
+One flat namespace per project regardless of folder depth: `TheCanalaveLibrary.Core`, `.Server`,
+`.Client`, `.SharedUI`. A feature's cluster is parallel across projects — e.g. `Core/Sprites/`,
+`Server/Sprites/`, `Client/Sprites/`, `SharedUI/Sprites/` each hold that feature's files in their
+project; moving a file between them is a folder move only, never a namespace edit. `Core/Stories/` and
+`Core/Tags/` are the model to follow: entity, DTOs, validation, and service interface all live together.
+`Lookups/` is a legitimate cluster too — it deliberately holds cross-cutting seeded/enum-mirror data
+that every other cluster queries by FK, not feature-specific code; it isn't an exception to vertical
+organization, it's a cluster whose feature *is* "shared reference data."
+
+API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
+cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/SpriteEndpoints.cs`
+beside `Server/Sprites/ServerSpriteReadService.cs`), **not** flattened into one `Endpoints/` folder.
+This is deliberately the opposite of EF configuration's rule below: a route is normally edited in
+lockstep with the service method it calls (same edit-locality argument that places service impls in
+cluster folders), whereas EF configuration is a cross-feature delete-cascade *graph* edited as a whole
+at migration time. `Server/Endpoints/` and `Server/Data/Configurations/` look structurally similar
+(flat, one file per feature) but exist for opposite reasons — don't generalize one into the other.
+
+**Legacy technical-layer folders are deprecated:** `Core/Models/` (entities), `Core/ServiceInterfaces/`
+(service interfaces), `Server/Services/` and `Client/Services/` (service impls), `Server/Endpoints/`
+(route mapping). These pre-date the vertical convention and aggregate many unrelated features by
+technical kind instead of by feature. No new file is ever added to one. Any work-unit that touches a
+file still living in one of them **moves it into its feature cluster as part of that work-unit** — not
+optional polish, part of finishing the work. Do not pre-create empty cluster-folder skeletons ahead of
+need (SDK-style projects drop empty folders from the build anyway, and placeholder files invite drift);
+clusters appear just-in-time, one work-unit at a time, as files migrate into them. If a work-unit's plan
+leaves a touched file behind in a legacy folder, that's a plan defect — fix the plan, not just the code.
 
 ### Enforcing the Flat Namespace on Razor Files
 
@@ -81,7 +107,10 @@ compiler error until some unrelated file's reference happens to break, if ever.
 ## Layer Files — Read Before Working
 
 Each file covers one layer of the 8-layer architecture plus cross-cutting concerns. Read the relevant
-file(s) before writing code.
+file(s) before writing code. **Writing or touching any `class="..."` attribute counts as "writing
+code" for `layer4-style.md`, even on a one-line wrapper `<div>` for "functional only, no styling"
+work** — see that file's "Bootstrap debris warning." Skipping it because the change feels small is
+exactly how Bootstrap-template classnames (`top-row`, `nav-pills`, …) get copied into new markup.
 
 | File | Layer | Scope |
 |---|---|---|

@@ -1,6 +1,6 @@
 namespace TheCanalaveLibrary.Core;
 
-public interface ISpriteService
+public interface ISpriteReadService
 {
     string GetSpriteUrl(string theme, string spriteIdentifier, bool userPrefersAnimatedSprites);
 }

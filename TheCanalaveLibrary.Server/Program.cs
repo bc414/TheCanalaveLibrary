@@ -86,7 +86,8 @@ builder.Services.AddScoped<DataSeeder>();
 builder.Services.AddScoped<IDeviceDetectionService, ServerDeviceDetectionService>();
 builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
-builder.Services.AddScoped<ISpriteService, FileSystemSpriteService>();
+builder.Services.AddScoped<ISpriteReadService, ServerSpriteReadService>();
+builder.Services.AddScoped<ITagReadService, ServerTagReadService>();
 
 WebApplication app = builder.Build();
 

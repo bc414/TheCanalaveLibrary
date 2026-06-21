@@ -2,15 +2,8 @@ using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
 
-public class FileSystemSpriteService : ISpriteService
+public class ServerSpriteReadService(IWebHostEnvironment env) : ISpriteReadService
 {
-    private readonly IWebHostEnvironment _env;
-
-    public FileSystemSpriteService(IWebHostEnvironment env)
-    {
-        _env = env;
-    }
-    
     public string GetSpriteUrl(string theme, string spriteIdentifier, bool userPrefersAnimatedSprites)
     {
         if (!userPrefersAnimatedSprites)
@@ -20,7 +13,7 @@ public class FileSystemSpriteService : ISpriteService
         else
         {
             string animatedRelativePath = $"/sprites/themes/{theme}/animated/{spriteIdentifier}.webp";
-            if (File.Exists(Path.Combine(_env.WebRootPath, "sprites", "themes", theme, "animated", $"{spriteIdentifier}.webp")))
+            if (File.Exists(Path.Combine(env.WebRootPath, "sprites", "themes", theme, "animated", $"{spriteIdentifier}.webp")))
             {
                 return animatedRelativePath;
             }
@@ -34,7 +27,7 @@ public class FileSystemSpriteService : ISpriteService
     private string GetStaticPath(string theme, string spriteIdentifier)
     {
         string staticPath = $"/sprites/themes/{theme}/static/{spriteIdentifier}.png";
-        if (File.Exists(Path.Combine(_env.WebRootPath, "sprites", "themes", theme, "static", $"{spriteIdentifier}.png")))
+        if (File.Exists(Path.Combine(env.WebRootPath, "sprites", "themes", theme, "static", $"{spriteIdentifier}.png")))
         {
             return staticPath;
         }

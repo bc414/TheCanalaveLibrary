@@ -175,3 +175,8 @@ ViewModel and EF model. Validation in **static extension methods** in Core.
 - Server impl prefix `Server...`, client impl prefix `Client...`.
 - Async methods end in `Async`.
 - Method names express query/command intent, not storage (`GetListingsAsync`, not `QueryStoriesFromDb`).
+- **Location:** interfaces, server impls, and client impls each live in their feature's cluster folder
+  in their respective project (`Core/{Feature}/I{Feature}ReadService.cs`,
+  `Server/{Feature}/Server{Feature}ReadService.cs`, `Client/{Feature}/Client{Feature}ReadService.cs`) —
+  never in a shared `ServiceInterfaces/`/`Services/` folder. See `SKILL.md` "Code Organization" for the
+  legacy-folder migration rule.

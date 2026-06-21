@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Client;
 /// This service runs in the browser, so it cannot access the file system to see if a sprite exists.
 /// Just make the optimistically construct the url and hope that it works.
 /// </summary>
-public class OptimisticSpriteService : ISpriteService
+public class OptimisticSpriteService : ISpriteReadService
 {
     public string GetSpriteUrl(string theme, string spriteIdentifier, bool userPrefersAnimatedSprites)
     {

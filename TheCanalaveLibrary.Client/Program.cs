@@ -10,7 +10,7 @@ builder.Services.AddAuthenticationStateDeserialization();
 
 //Client side service registration for dependency injection
 builder.Services.AddScoped<IDeviceDetectionService, WasmDeviceDetectionService>();
-builder.Services.AddScoped<ISpriteService, OptimisticSpriteService>();
+builder.Services.AddScoped<ISpriteReadService, OptimisticSpriteService>();
 builder.Services.AddScoped<IStoryReadService, HttpStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, HttpStoryWriteService>();
 

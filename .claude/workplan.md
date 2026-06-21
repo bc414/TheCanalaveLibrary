@@ -83,17 +83,39 @@ Phase E.
 - **Tool:** Opus (reconcile). **Pointer:** `audit/Identity.md` Features 1, 52 (+ audit-summary §3a).
 - **Deps:** WU0 runtime gate.
 
-### WU2 — Sprites L2 service *(Stage-4, code works — light rename)*
-- **Cells:** 3 L2.
-- **Do:** rename `ISpriteService`→`ISpriteReadService`, impl→`ServerSpriteReadService`; add
-  `GetInteractionIcon()`; register in DI. Contract feeds TagChip, StoryCard, UserStoryInteractionButton.
+### WU2 — Sprites L2 service *(Stage-4, code works — light rename + cluster move)* — DONE ✓ (2026-06-20)
+- **Cells:** 3 L2 — now Stage 5.
+- **Done:** renamed `ISpriteService`→`ISpriteReadService`, impl→`ServerSpriteReadService` (now
+  primary-constructor DI); moved all three files (interface, server impl, client impl) out of the legacy
+  `ServiceInterfaces/`/`Services/` folders into their `Sprites/` cluster folder (Core/Server/Client — see
+  `canalave-conventions/SKILL.md` "Code Organization"); updated both `Program.cs` DI registrations.
+  **`GetInteractionIcon()` was dropped from scope** (settled WU2 — see `audit/Sprites.md` Feature 3 L2
+  and `audit/UserStoryInteractions.md` Feature 16: theme-swappable interaction icons are a
+  UserStoryInteraction-domain concept, resolved there via the generic `GetSpriteUrl`, not minted on the
+  sprite service). Contract feeds TagChip, StoryCard — and UserStoryInteractionButton **indirectly**, via
+  the panel resolving a URL through `GetSpriteUrl` and passing it down as `IconIdentifier`, not via
+  direct injection. Also hardened `canalave-conventions/SKILL.md` "Code Organization" (vertical clusters
+  are now a stated rule, legacy folders named, Endpoints colocation settled) and `layer2-services.md`
+  Naming, as Doc-Touch moment 1, before the code change.
+- **Verified:** `dotnet build` green across all four projects; zero remaining `ISpriteService`/
+  `FileSystemSpriteService` references repo-wide; live server run booted clean, DI resolved,
+  `/`, `/Account/Login`, `/Account/Register` all `200`. Detail in `audit/Sprites.md` Feature 3 L2
+  Stage-5 note.
 - **Tool:** Opus (reconcile, mechanical). **Pointer:** `audit/Sprites.md` Feature 3 (+ audit-summary §3b).
 - **Deps:** WU0.
 
-### WU3 — Tags L2 read service *(Stage-4 trap → build to spec)*
-- **Cells:** 13 L2, 14 L2.
-- **Do:** implement `ITagReadService` (rename from `ITagRetrievalService`), register in DI. The interface
-  exists with no impl and isn't registered — runtime throw today.
+### WU3 — Tags L2 read service *(Stage-4 trap → build to spec)* — DONE ✓ (2026-06-20)
+- **Cells:** 13 L2, 14 L2 — now Stage 5.
+- **Done:** renamed `ITagRetrievalService`→`ITagReadService` (`Core/Tags/`); added
+  `ServerTagReadService` (`Server/Tags/`, primary-constructor DI over `ReadOnlyApplicationDbContext`,
+  `.Select()` projection); registered `AddScoped<ITagReadService, ServerTagReadService>()` in
+  `Server/Program.cs`; updated both existing injectors (`TagSelector.razor`,
+  `StoryPropertiesForm.razor`). Server-only — no Client/L5 impl (MVP is InteractiveServer-only;
+  deferred to post-MVP L5 batch alongside Sprites/Stories L5).
+- **Verified:** `dotnet build` green across all four projects; zero remaining
+  `ITagRetrievalService` references repo-wide; live server run booted clean, DI resolved,
+  `/`, `/Account/Login`, `/Account/Register` all `200`. Detail in `audit/Tags.md` Features 13, 14
+  Stage-5 notes.
 - **Tool:** opusplan. **Pointer:** `audit/Tags.md` Features 13, 14 + cluster reconciliation note.
 - **Deps:** WU0.
 
