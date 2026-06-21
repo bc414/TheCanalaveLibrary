@@ -119,12 +119,25 @@ Phase E.
 - **Tool:** opusplan. **Pointer:** `audit/Tags.md` Features 13, 14 + cluster reconciliation note.
 - **Deps:** WU0.
 
-### WU4 — `TagChip` leaf
-- **Cells:** 13 L3/L3.5/L4.
-- **Do:** extract leaf (Tag DTO param, no service injection); sprite via Sprites L2; type-based coloring;
-  tooltip from `Description`. Mints the chip contract consumed by StoryCard, story detail, TagSelector
-  dropdown, Tag Directory.
-- **Tool:** opusplan. **Pointer:** `audit/Tags.md` Feature 13. **Deps:** WU2, WU3.
+### WU4 — `TagChip` leaf — DONE ✓ (2026-06-21)
+- **Cells:** 13 L3/L3.5/L4 — now Stage 5.
+- **Done:** minted `TagChipDto` (Core/Tags/ — `TagId`, `TagName`, `TagTypeId`, `Description`,
+  `SpriteUrl`); built `TagChip` (`SharedUI/Tags/`) as a pure leaf taking `Tag` (the DTO) +
+  `EventCallback OnRemove`, no service injection. Settled (doc-touched into `layer2-services.md`
+  before the build, per Doc-Touch moment 1): sprite URLs are resolved **server-side, in the
+  producing read service's projection** via `ISpriteReadService.GetSpriteUrl`, mirroring
+  `StoryListingDto.CoverArtRelativeUrl` — `TagChipDto.SpriteUrl` is a resolved relative path, not the
+  raw `SpriteIdentifier` key, and is request-scoped (never cached cross-user/theme). Also fixed stale
+  examples found along the way: `layer4-style.md`'s "Sprite Resolution" (wrong `GetSpriteUrl` arg
+  order/path, referenced the dropped `GetInteractionIcon`) and `layer3.5-structure.md`'s canonical
+  `TagChip` snippet (now takes `TagChipDto Tag`); added the tag-type color table to `layer4-style.md`
+  Pattern Accumulation. No producing read service/consumer exists yet — verified via a throwaway demo
+  harness on `HomeDesktop.razor` (removed once WU11/WU13 land).
+- **Verified:** `dotnet build` green (4 projects); user-confirmed visual check against the live server
+  (all six tag-type colors, sprite render, tooltip, conditional X button, no doubled spacing). Detail
+  in `audit/Tags.md` Feature 13 Stage-5 note.
+- **Tool:** opusplan. **Pointer:** `audit/Tags.md` Feature 13 + `layer2-services.md`
+  §"Sprite URLs Are Resolved Server-Side, At Projection Time". **Deps:** WU2, WU3.
 
 ### WU5 — `RichTextView` leaf
 - **Cells:** 7 L3.5/L4 (RichTextView slice).

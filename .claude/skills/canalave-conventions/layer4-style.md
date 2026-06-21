@@ -107,27 +107,33 @@ For complex conditional classes, extract to a computed property:
 
 ## Sprite Resolution
 
+**Leaves never inject `ISpriteReadService`.** A sprite URL is resolved once, upstream, by whichever
+**read service** is producing the display DTO — during its `.Select()`/mapping step, via
+`ISpriteReadService.GetSpriteUrl(theme, spriteIdentifier, animated)` (note the real signature: theme
+first, then key, then the animated flag) — using the current user's theme + animated-sprite
+preference. The DTO carries the already-resolved relative URL; the leaf just renders it:
+
 ```razor
-@* Inside a leaf component *@
-@if (SpriteIdentifier is not null)
+@* Inside a leaf component — Tag.SpriteUrl was set server-side, not here *@
+@if (Tag.SpriteUrl is not null)
 {
-    <img src="@SpriteService.GetSpriteUrl(SpriteIdentifier, Theme, PrefersAnimated)"
-         alt="@TagName" class="w-5 h-5 inline-block" loading="lazy" />
+    <img src="@Tag.SpriteUrl" alt="" class="w-5 h-5 inline-block" loading="lazy" />
 }
 ```
 
-Sprites are `wwwroot/images/themes/{theme}/static/` or `animated/` (Animated WebP).
-`ISpriteReadService` resolves the full path; the component just renders the URL.
+Sprites live at `wwwroot/sprites/themes/{theme}/static/{key}.png` or `animated/{key}.webp`. See
+`layer2-services.md` §"Sprite URLs Are Resolved Server-Side, At Projection Time" for the full rule and
+the request-scoping consequence (never cache a sprite-bearing DTO across users/themes).
 
 ## Theme-Swappable Interaction Icons
 
-```razor
-<img src="@SpriteService.GetInteractionIcon(InteractionType.Favorite, Theme)"
-     alt="Favorite" class="w-6 h-6" />
-```
-
-Default icons: star (follow), heart (favorite). With Pokémon theme: Staryu, Luvdisc, etc.
-Icons are `wwwroot` assets resolved by the sprite service, not inline SVG.
+**Settled (WU2):** `ISpriteReadService` does not have a `GetInteractionIcon` method — it stays a single
+generic `GetSpriteUrl` resolver. Theme-swappable interaction icons are a `UserStoryInteraction`-domain
+concept: the owning composite maps `InteractionTypeEnum` → sprite key, then resolves the URL the same
+way as any other sprite (server-side, in the read service, per the rule above) and passes the resolved
+URL down as an `IconIdentifier`/URL string `[Parameter]`. See `audit/UserStoryInteractions.md` Feature
+16 and `audit/Sprites.md` Feature 3. Default icons: star (follow), heart (favorite); Pokémon theme:
+Staryu, Luvdisc, etc. — still `wwwroot` assets, never inline SVG.
 
 ## Layout Tailwind (Composites and Parents)
 
@@ -192,3 +198,17 @@ As components are built, visual conventions emerge (e.g., "we use `rounded-xl` f
 `rounded-md` for inputs, `rounded-full` for chips and avatars"). These must be captured in this
 file after each implementation session. Without written conventions, future sessions will make
 fresh choices that drift from established patterns.
+
+**`TagChip` (WU4, 2026-06-21):** root is `rounded-full`, internal padding only (`px-2 py-0.5` —
+no outer margin; parents space chips with `gap-`/`flex flex-wrap gap-2`). Tag-type → color mapping
+(light bg / dark text pairs from Tailwind's default palette, deliberately distinct from the green
+`@theme` chrome tokens — tag types need mutually distinguishable hues, not site-brand color):
+
+| `TagTypeEnum` | Classes |
+|---|---|
+| `Character` | `bg-emerald-100 text-emerald-800` |
+| `Setting` | `bg-violet-100 text-violet-800` |
+| `Genre` | `bg-sky-100 text-sky-800` |
+| `ContentWarning` | `bg-rose-100 text-rose-800` |
+| `CrossoverFandom` | `bg-amber-100 text-amber-900` |
+| `Relationship` | `bg-pink-100 text-pink-800` |

@@ -45,7 +45,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 11 | Tag Administration | Tags | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 12 | Story Tagging | Tags | 5 | 2 | 4 | 4 | 1 | 2 | 2 | N/A | N/A |
-| 13 | Tag Display & Sprites | Tags | 5 | 5 | 4 | 4 | 1 | 2 | N/A | N/A | N/A |
+| 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
 | 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 4 | 4 | 1 | 2 | N/A | N/A | N/A |
 | 15 | Saved Tag Selections | Tags | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 2 | 2 | 2 | 1 | 2 | 4 | 2 | N/A |

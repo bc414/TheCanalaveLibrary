@@ -112,6 +112,21 @@ Prefer `record` types for DTOs (value equality, concise, immutable):
 public record StoryListingDto(int Id, string Title, string? CoverArtRelativeUrl, int WordCount);
 ```
 
+### Sprite URLs Are Resolved Server-Side, At Projection Time
+
+Display DTOs that include a sprite (`TagChipDto.SpriteUrl`, and any future sprite-bearing DTO) follow
+the same pattern as `CoverArtRelativeUrl` above: the **read service** calls
+`ISpriteReadService.GetSpriteUrl(theme, spriteIdentifier, animated)` inside its `.Select()`/mapping
+step — using the current user's theme + animated-sprite preference — and the DTO carries the
+**resolved relative path** (e.g. `/sprites/themes/pokemon/static/bulbasaur.png`), not the raw
+`SpriteIdentifier` key. The browser fetches that path in its own request (Cloudflare/MinIO-cacheable);
+the DTO itself is never cached. Components never inject `ISpriteReadService` to resolve a sprite for
+display — only services do (consistent with the DTO Firewall and the Leaf-tier "never inject a
+service" rule in `SKILL.md`'s Component Taxonomy).
+
+**Consequence:** because the resolved URL depends on the requesting user's theme/animation prefs, any
+DTO carrying one is **per-user and request-scoped — never cache it across users or themes.**
+
 ## Service Composition
 
 Feature services that span domains inject foundational services, not duplicate query logic:

@@ -13,7 +13,10 @@ mirror `TagTypeEnum`: Character/Setting/Genre/ContentWarning/CrossoverFandom/Rel
 `SavedTagSelectionEntry`.
 
 **Contracts:** `ITagReadService` (Core/Tags/ — renamed from `ITagRetrievalService` in WU3), `TagDropDownDTO`,
-`StoryTagDTO`, `IStoryTag`, `TagPriority`.
+`StoryTagDTO`, `IStoryTag`, `TagPriority`, `TagChipDto` (Core/Tags/, minted WU4 — render-ready tag data
+for the `TagChip` leaf; `SpriteUrl` is a server-resolved relative path, not the raw `SpriteIdentifier`
+key — see `layer2-services.md` §"Sprite URLs Are Resolved Server-Side, At Projection Time"; request-scoped,
+never cached cross-user/theme).
 **Components:** `TagSelector` (`SharedUI/Tags/` — moved out of the legacy `Components/` folder; see
 `canalave-conventions/SKILL.md` "Code Organization"). The empty, unused `TagViewModel.cs` that sat
 alongside it was deleted in the same move. **The relocation is folder-only — `TagSelector`'s content is
@@ -49,9 +52,22 @@ unchanged and remains the discardable scaffolding described below, scheduled for
   **Verified:** `dotnet build` green (4 projects); zero remaining `ITagRetrievalService` references;
   live server boot clean (DI resolved, no startup throw), `/`, `/Account/Login`, `/Account/Register`
   all `200`.
-- **L3-Logic / L3.5-Structure — Stage 4.** No `TagChip` leaf; tags are rendered as inline Bootstrap
-  `badge bg-primary` spans inside `TagSelector`, with no sprite resolution and no type-based coloring.
-- **L4-Style — Stage 1** (blocked).
+- **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU4, 2026-06-21).** Built `TagChip`
+  (`SharedUI/Tags/TagChip.razor`) as a pure leaf: `[Parameter, EditorRequired] TagChipDto Tag` +
+  `[Parameter] EventCallback OnRemove` (display-only when `OnRemove` has no delegate, per §5.30.4).
+  Injects no service — `SpriteUrl` arrives pre-resolved on the DTO. Visual: `rounded-full`, internal
+  padding only (`px-2 py-0.5`, Outer Margin Rule honored — parent spaces chips via `gap-`),
+  type-based background/text color per `TagTypeEnum` (table in `layer4-style.md` Pattern
+  Accumulation), `title` tooltip from `Tag.Description`, optional sprite `<img>`, X button gated on
+  `OnRemove.HasDelegate`. No producing read service exists yet (lands WU11/WU12-13), so no real
+  caller — superseded the old inline Bootstrap `badge bg-primary` rendering inside `TagSelector`
+  conceptually, but `TagSelector` itself is untouched (its WU11 rebuild is what will actually call
+  `TagChip`).
+  **Verified:** `dotnet build` green (4 projects); manual visual check via a throwaway demo harness
+  on `HomeDesktop.razor` (all six `TagTypeEnum` colors distinguishable, Bulbasaur sprite renders via
+  `ISpriteReadService.GetSpriteUrl("pokemon", "bulbasaur", false)`, tooltip on hover, X button only on
+  the two chips given `OnRemove` and removes correctly, no doubled spacing) — user-confirmed working
+  against the live server. Demo harness is throwaway, to be removed once WU11/WU13 wire a real caller.
 
 ## Feature 14 — Tag Filtering & Selection UI
 - **L1 — N/A.**

@@ -1,0 +1,32 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+<span class="@TypeClasses inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-sm" title="@Tag.Description">
+    @if (Tag.SpriteUrl is not null)
+    {
+        <img src="@Tag.SpriteUrl" alt="" class="w-4 h-4" loading="lazy" />
+    }
+    @Tag.TagName
+    @if (OnRemove.HasDelegate)
+    {
+        <button type="button" @onclick="() => OnRemove.InvokeAsync()" aria-label="Remove tag" class="leading-none">✕</button>
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public TagChipDto Tag { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback OnRemove { get; set; }
+
+    private string TypeClasses => Tag.TagTypeId switch
+    {
+        TagTypeEnum.Character => "bg-emerald-100 text-emerald-800",
+        TagTypeEnum.Setting => "bg-violet-100 text-violet-800",
+        TagTypeEnum.Genre => "bg-sky-100 text-sky-800",
+        TagTypeEnum.ContentWarning => "bg-rose-100 text-rose-800",
+        TagTypeEnum.CrossoverFandom => "bg-amber-100 text-amber-900",
+        TagTypeEnum.Relationship => "bg-pink-100 text-pink-800",
+        _ => "bg-surface text-text"
+    };
+}

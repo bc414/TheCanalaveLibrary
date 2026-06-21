@@ -76,18 +76,24 @@ User Management (`/mod/users`).
 ### Leaf (no children)
 
 ```razor
-@* TagChip.razor *@
+@* TagChip.razor — Tag is a TagChipDto (Core/Tags/); SpriteUrl arrives pre-resolved by the
+   producing read service (layer2-services.md "Sprite URLs Are Resolved Server-Side") *@
 <span class="...tag type styling...">
-    @if (SpriteUrl is not null)
+    @if (Tag.SpriteUrl is not null)
     {
-        <img src="@SpriteUrl" alt="" class="..." />
+        <img src="@Tag.SpriteUrl" alt="" class="..." />
     }
-    @TagName
+    @Tag.TagName
     @if (OnRemove.HasDelegate)
     {
         <button @onclick="() => OnRemove.InvokeAsync()" class="...">✕</button>
     }
 </span>
+
+@code {
+    [Parameter, EditorRequired] public TagChipDto Tag { get; set; } = null!;
+    [Parameter] public EventCallback OnRemove { get; set; }
+}
 ```
 
 No child Razor components. Only raw HTML elements. `@if`/`@foreach` driven by parameters.
