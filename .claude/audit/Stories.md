@@ -22,7 +22,11 @@ edit contract. Also here: `StoryArc`, `Series`/`SeriesEntry`, `StoryRelationship
 (Server) maps the API.
 
 **Components (SharedUI):** `StoryPage` (dispatcher, `/story/{StoryId:int}/{Slug?}`),
-`StoryDesktop`/`StoryMobile` (stubs), `StoryPropertiesForm` + `StoryPropertiesViewModel`.
+`StoryDesktop`/`StoryMobile` (stubs), `StoryPropertiesForm` + `StoryPropertiesViewModel` (now
+`SharedUI/Stories/` — moved out of the legacy `Components/StoryProperties/` folder ahead of the
+cluster's actual build; see `canalave-conventions/SKILL.md` "Code Organization"). **The relocation is
+folder-only — content is unchanged and remains the Stage-4 build-to-spec scaffolding described in
+Feature 4 below; do not treat the new location as endorsement of the existing content.**
 
 **Fluent config:** inline in `ApplicationDbContext.OnModelCreating` — Story FK fan-out (Cascade to owned
 collections, Restrict to `StoryStatus`, `SetNull` author anonymization), partition 1-to-1s, FTS computed
@@ -47,9 +51,10 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
   changed). *Open:* cover-art upload to R2/MinIO not implemented; slug generation not visible in the write
   path.
 - **L3-Logic — Stage 4.** `StoryPropertiesForm` is a correct `EditForm` + `DataAnnotationsValidator` +
-  ViewModel + server-error surfacing pattern, but: injects `ITagRetrievalService` (no impl, unregistered),
-  has a `@* TODO: tags, cover art *@`, no slug/AdminControls handling. *Disagrees with:* completeness, not
-  architecture. Resolution → Stage 2/3 to finish.
+  ViewModel + server-error surfacing pattern, but: has a `@* TODO: tags, cover art *@`, no
+  slug/AdminControls handling. (Its `ITagRetrievalService` injection was fixed to `ITagReadService` in
+  WU3 — see `audit/Tags.md` Feature 13 — that part of this note is stale and superseded.) *Disagrees
+  with:* completeness, not architecture. Resolution → Stage 2/3 to finish.
 - **L3.5-Structure — Stage 4.** Form skeleton exists; missing `TagSelector` wiring, cover-art upload,
   `AdminControls`. Shared create/edit usage (routes `/stories/new`, `/story/{id}/edit`) not yet realized.
 - **L4-Style — Stage 1.** Bootstrap (`mb-3`, `form-control`). Blocked on Tailwind/design tokens.

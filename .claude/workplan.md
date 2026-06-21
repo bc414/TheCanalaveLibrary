@@ -140,9 +140,12 @@ Phase E.
 
 ### WU7 — `UserStoryInteractionButton` leaf
 - **Cells:** 16 L3/L3.5/L4 (button slice).
-- **Do:** EventCallback-driven (absence of `OnToggle` ⇒ read-only, rendered only when active); icon via
-  Sprites `GetInteractionIcon()`; no service injection (debounce lives in the panel, WU16). Two contexts
-  (listing vs detail).
+- **Do:** EventCallback-driven (absence of `OnToggle` ⇒ read-only, rendered only when active); icon
+  comes in as a resolved URL `[Parameter]` (an `IconIdentifier`/URL string) — the button itself injects
+  no service. The owning `StoryInteractionPanel` (WU16) maps `InteractionTypeEnum` → sprite key and
+  resolves it via the generic `Sprites.ISpriteReadService.GetSpriteUrl` (see WU2 correction —
+  `GetInteractionIcon()` does not exist on the sprite service; `audit/UserStoryInteractions.md` Feature
+  16 owns this mapping). Two contexts (listing vs detail).
 - **Tool:** opusplan. **Pointer:** `audit/UserStoryInteractions.md` Feature 16. **Deps:** WU2.
 
 ### WU8 — `PaginationControls`
@@ -166,7 +169,10 @@ Phase E.
 - **Do:** discard the datalist/list-mutation/inline-badge component; rebuild around **Blazored.Typeahead**
   (300ms debounce) + `TagChip` selected chips + lightweight dropdown rows (dot+sprite+name); raise
   `EventCallback<IReadOnlyList<Tag>> OnSelectionChanged` (no list mutation); fix the `mb-4` outer-margin
-  violation.
+  violation. The existing `TagSelector.razor` already lives at `SharedUI/Tags/` (moved out of the legacy
+  `Components/Tags/` folder ahead of this build — see `audit/Tags.md` Shared Context); that move is
+  folder-only and is **not** a head start on the rebuild — treat the file's content as discardable
+  scaffolding exactly as the Stage-4 note describes.
 - **Tool:** opusplan. **Pointer:** `audit/Tags.md` Feature 14 + cluster note. **Deps:** WU3, WU4
   (+ add Blazored.Typeahead NuGet).
 
@@ -250,7 +256,12 @@ Phase E.
 - **Cells:** 4 L3/L3.5/L4 *(Stage-4 → finish to spec)*.
 - **Do:** complete the EditForm+ViewModel: TagSelector wiring, cover-art upload, slug (server-only),
   `AdminControls` (wraps `AuthorizeView`, author-only — universal, minted here, reused by WU25);
-  shared create/edit routes. **Tool:** opusplan (Stage-4 build-to-spec; Sonnet for parts now Stage-3).
+  shared create/edit routes. `StoryPropertiesForm.razor`/`StoryPropertiesViewModel.cs` already live at
+  `SharedUI/Stories/` (moved out of the legacy `Components/StoryProperties/` folder ahead of this build
+  — see `audit/Stories.md` Shared Context); that move is folder-only and is **not** a head start on the
+  finish-to-spec work — the content is still the old-convention scaffolding the Stage-4 note describes
+  (Bootstrap classes, no `TagSelector`/cover-art/slug/`AdminControls` wiring).
+  **Tool:** opusplan (Stage-4 build-to-spec; Sonnet for parts now Stage-3).
   **Pointer:** `audit/Stories.md` Feature 4. **Deps:** WU11, WU14.
 
 ### WU25 — Story detail page (`StoryPage` + desktop/mobile) *(Stage-4 → build spec §5.28)*

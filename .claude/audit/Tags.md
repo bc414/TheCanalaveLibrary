@@ -12,8 +12,12 @@ mirror `TagTypeEnum`: Character/Setting/Genre/ContentWarning/CrossoverFandom/Rel
 `StoryCharacterRelationship` (romantic/platonic), `SettingDetail`, `SavedTagSelection` /
 `SavedTagSelectionEntry`.
 
-**Contracts:** `ITagRetrievalService` (Core), `TagDropDownDTO`, `StoryTagDTO`, `IStoryTag`, `TagPriority`.
-**Components:** `TagSelector` + `TagViewModel` (SharedUI).
+**Contracts:** `ITagReadService` (Core/Tags/ — renamed from `ITagRetrievalService` in WU3), `TagDropDownDTO`,
+`StoryTagDTO`, `IStoryTag`, `TagPriority`.
+**Components:** `TagSelector` (`SharedUI/Tags/` — moved out of the legacy `Components/` folder; see
+`canalave-conventions/SKILL.md` "Code Organization"). The empty, unused `TagViewModel.cs` that sat
+alongside it was deleted in the same move. **The relocation is folder-only — `TagSelector`'s content is
+unchanged and remains the discardable scaffolding described below, scheduled for the WU11 rebuild.**
 
 **Fluent config:** `Tag.TagName` unique; self-ref `ParentTagId` SetNull; `TagType`/`Tag` Restrict;
 `SavedTagSelection` cascade + unique `(UserId,Nickname)`; `SavedTagSelectionEntry` unique
