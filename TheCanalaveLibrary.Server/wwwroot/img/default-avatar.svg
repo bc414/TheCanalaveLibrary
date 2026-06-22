@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="Default avatar">
+  <circle cx="24" cy="24" r="24" fill="#cbd5e1" />
+  <circle cx="24" cy="19" r="8" fill="#f8fafc" />
+  <path d="M24 30c-9 0-16 4.5-16 10v2a2 2 0 0 0 2 2h28a2 2 0 0 0 2-2v-2c0-5.5-7-10-16-10Z" fill="#f8fafc" />
+</svg>

@@ -13,6 +13,10 @@
          setup instructions; it ships no bundled Quill copy of its own. Test against Tailwind's
          Preflight resets early (layer4-style.md "Quill.js Stylesheet Interaction"). -->
     <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet"/>
+    <!-- Blazored.Typeahead (SharedUI/Tags/TagSelector) — package-provided positioning skeleton,
+         see layer4-style.md "Blazored.Typeahead Stylesheet". No DI registration exists for this
+         package (confirmed: no AddBlazoredTypeahead extension in the assembly). -->
+    <link href="_content/Blazored.Typeahead/blazored-typeahead.css" rel="stylesheet"/>
     <ImportMap/>
     <HeadOutlet @rendermode="PageRenderMode"/>
 </head>
@@ -29,6 +33,9 @@
 <script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
 <script src="_content/Blazored.TextEditor/quill-blot-formatter.min.js"></script>
 <script src="_content/Blazored.TextEditor/Blazored-BlazorQuill.js"></script>
+
+<!-- Blazored.Typeahead's JS interop (TagSelector, SharedUI/Tags/) -->
+<script src="_content/Blazored.Typeahead/blazored-typeahead.js"></script>
 
 <script src="@Assets["Identity/Shared/PasskeySubmit.razor.js"]" type="module"></script>
 </body>

@@ -71,17 +71,41 @@ unchanged and remains the discardable scaffolding described below, scheduled for
 
 ## Feature 14 — Tag Filtering & Selection UI
 - **L1 — N/A.**
-- **L2 — Stage 5 (WU3, 2026-06-20).** Same fix as Feature 13 — shared `ITagReadService` contract.
-- **L3-Logic — Stage 4.** `TagSelector` diverges from §5.30.4 on several counts: uses a native HTML
-  `<datalist>` autocomplete instead of **Blazored.Typeahead** (not referenced anywhere); **mutates the
-  passed `AllSelectedStoryTags` list directly** instead of raising
-  `EventCallback<IReadOnlyList<Tag>> OnSelectionChanged`; no 300ms debounce; switches to a checkbox grid
-  under a threshold (its own invention). It is a coordination composite injecting a read service for
-  user-input-driven queries (legitimate), but the contract is wrong.
-- **L3.5-Structure — Stage 4.** Dropdown rows should be lightweight (color dot + sprite + name), not
-  full chips; selected chips should be `TagChip` leaves. Also carries `mb-4` on its root `<div>` —
-  **outer-margin-rule violation** (`layer4-style.md`).
-- **L4-Style — Stage 1** (blocked). **L5 — Stage 2.**
+- **L2 — Stage 5 (WU3, 2026-06-20; extended WU11, 2026-06-21/22).** Shared `ITagReadService`
+  contract. WU11 added `SearchTagChipsAsync(TagTypeEnum type, string term)` — a capped (`Take(10)`),
+  per-keystroke search method on `ServerTagReadService`, filtering via `EF.Functions.ILike` (Npgsql
+  doesn't translate the `string.Contains(string, StringComparison)` overload — caught at build/runtime,
+  not assumed), returning `List<TagChipDto>` with sprites resolved post-materialization via
+  `ISpriteReadService.GetSpriteUrl` (see `layer2-services.md` §"Per-keystroke typeahead search…").
+  Additive — `GetTagsByTypeAsync` and friends unchanged for non-chip callers.
+- **L3-Logic / L3.5-Structure — Stage 5 (WU11, 2026-06-21/22).** Rebuilt around single-select
+  **Blazored.Typeahead** 4.7.0 (not the package's multi-select — chips sit *above* the input per
+  §5.30.4, the package renders them inside), sourced by `SearchTagChipsAsync`. Selected chips are
+  `TagChip` leaves; dropdown rows are lightweight (color dot + sprite + name). Contract is
+  `EventCallback<IReadOnlyList<TagChipDto>> OnSelectionChanged` — **not** the spec's literal
+  `IReadOnlyList<Tag>` (DTO Firewall forbids the EF entity crossing into UI). Selector stays
+  type-scoped (one `TagTypeEnum` per instance); `Priority`/`StoryTag` mapping is the consuming form's
+  job (WU24). Canonical snippet in `layer3.5-structure.md` "Third-Party Wrapper Composite".
+  **Real bug found and fixed during verification:** `BlazoredTypeahead` requires a `SelectedTemplate`
+  parameter — omitting it throws `InvalidOperationException` in `OnInitialized()`, which terminates
+  the Blazor Server circuit immediately (symptom: page frozen on the SSR-prerendered markup forever,
+  field permanently unresponsive — *not* a typing/focus bug). A secondary `NullReferenceException` in
+  `BlazoredTypeahead.Dispose()` was a downstream symptom of the same half-initialized state, not a
+  separate prerendering incompatibility — disappeared entirely once `SelectedTemplate` was supplied.
+  Detail and the corrected canonical snippet are in `layer3.5-structure.md` "Third-Party Wrapper
+  Composite" (an earlier mid-build note misdiagnosed this as a prerender-incompatibility issue
+  requiring an `IsInteractive` guard; that guard was removed once the real cause was found).
+- **L4-Style — Stage 5 (WU11, 2026-06-21/22).** No outer margin (the discarded `mb-4` was the
+  violation that motivated the rule); dot-color table in `layer4-style.md` Pattern Accumulation;
+  package's own CSS skeleton kept as-is (see `layer4-style.md` "Blazored.Typeahead Stylesheet").
+  **L5 — Stage 2.**
+- **Verified:** `dotnet build` green (4 projects, 0 errors); live server run (`run-server` skill),
+  homepage `200`, no exceptions in server log across multiple boot/request cycles. User-confirmed
+  visual + interactive check against the live server via a throwaway `HomeDesktop.razor` harness
+  (two `TagSelector` instances, Character + Genre, backed by 7 throwaway fixture `Tag` rows inserted
+  directly via `psql`): debounced dropdown with dot+sprite+name rows, selecting clears the input and
+  adds a chip, already-selected tags excluded from further results, chip X removes and updates the
+  selection callback, no doubled spacing. Harness and fixture rows removed after confirmation.
 
 ## Feature 15 — Saved Tag Selections
 - **L1 — Stage 5.** `SavedTagSelection`/`Entry` with unique constraints and Restrict-on-Tag; copy-on-write

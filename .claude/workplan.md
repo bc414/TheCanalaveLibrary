@@ -211,33 +211,102 @@ Phase E.
 - **Tool:** opusplan. **Pointer:** `audit/UserStoryInteractions.md` Feature 16. **Deps:** none (the
   original WU2 dependency assumed sprite-based icons; inline SVG removed that coupling).
 
-### WU8 — `PaginationControls`
-- **Cells:** 31 L3.5/L4 (pagination slice).
-- **Do:** generic paged-listing controls (offset mode). Consumed by any StoryDeck-backed listing.
+### WU8 — `PaginationControls` — DONE ✓ (2026-06-21)
+- **Cells:** 31 L3.5/L4 (pagination slice) — built; cell numbers in `status.md` unchanged (slice
+  only, rest of Feature 31 remains Stage 2/1 — see audit note).
+- **Done:** built as a leaf (`SharedUI/Pagination/PaginationControls.razor`) per spec §3.11.1 —
+  the `audit-summary.md` "Composite" tag is stale, superseded. Greenfield contract:
+  `CurrentPage`/`PageSize`/`TotalCount` (primitives only) + `EventCallback<int> OnPageChanged`;
+  stateless offset pagination (§5.3.4) — raises the requested page, never queries. Fixed 7-slot
+  sliding window (first/last always shown, ellipsis fills gaps at `TotalPages > 7`; all pages shown,
+  centered in the same reserved width, at `TotalPages <= 7`) so the control's total width never
+  shifts between listings. Not used in random-discovery mode ("give me more" + interaction buttons
+  remain the mechanism there). Two rounds of user-driven visual refinement after the initial build:
+  summary text moved below the button row, buttons made into bordered solid blocks with hover
+  shading (the active-page "doesn't look active" note traced to the demo not updating on click, not
+  a styling gap), and the fixed-width windowing added to stop the footprint shifting page-to-page.
+- **Verified:** `dotnet build` green (4 projects); user-confirmed visual check against the live
+  server via a throwaway harness on `HomeDesktop.razor` (12-page sliding window, 3-page no-ellipsis/
+  centered, single-page renders nothing, active highlight follows clicks) — harness removed after
+  confirmation. Detail in `audit/Discovery.md` Feature 31 WU8 Stage note and `layer4-style.md`
+  Pattern Accumulation.
 - **Tool:** opusplan. **Pointer:** `audit/Discovery.md`. **Deps:** WU0.
 
-### WU9 — `ConfirmDialog` *(universal container, §5.30.9)*
-- **Cells:** 26 L3.5 (dialog slice).
-- **Do:** `@ChildContent` confirm/cancel container for spoiler reveal + destructive actions site-wide.
-- **Tool:** opusplan. **Pointer:** `audit/Comments.md`. **Deps:** WU0.
+### WU9 — `ConfirmDialog` *(universal container, §5.30.9)* — DONE ✓ (2026-06-21)
+- **Cells:** 26 L3.5 — now Stage 5 (26 L4 stays Stage 1 — spoiler blur/cover styling, owned by WU20).
+- **Done:** built `ConfirmDialog` (new `SharedUI/Dialogs/` cross-cutting cluster — no owning feature,
+  mirrors `RichText/`/`Lookups/`). Contract settled (confirmed with user before build): `@bind-IsOpen`
+  (two-way `IsOpen`/`IsOpenChanged`) rather than an imperative `@ref`-driven `ShowAsync()`, matching the
+  `_showConfirmDialog` bool in the spec's spoiler example (`layer3-logic.md` "Spoiler Comment State").
+  `Title`/`Message` for simple bodies, `ChildContent` for rich bodies (wins over `Message`),
+  `ConfirmText`/`CancelText`, `IsDestructive` (red `bg-danger` confirm button vs. green `bg-primary`),
+  `OnConfirm`/`OnCancel` EventCallbacks. Renders nothing when `!IsOpen`; backdrop click cancels, panel
+  uses `@onclick:stopPropagation`. Overlay shell reuses the convention `EditorView`'s preview popup
+  already established (backdrop `bg-black/50` + `rounded-xl bg-surface shadow-lg` panel) — not
+  refactored into a further shared `Modal` primitive (only two consumers, two different flows; deferred
+  until a third clarifies the shared part). Doc-Touch moment 1 (before the build):
+  `canalave-conventions/SKILL.md` Code Organization (new `Dialogs/` cluster rule);
+  `layer3.5-structure.md` (second Container Composite worked example + updated `EditorView` cross-ref);
+  `layer4-style.md` Pattern Accumulation (modal shell convention recorded once).
+- **Verified:** `dotnet build` green (4 projects, 0 new warnings); `npm run css:build` picked up
+  `bg-danger` (theme token pre-existed, just unused until now); live server run, homepage `200`;
+  user-confirmed visual check via a throwaway harness on `HomeDesktop.razor` (message-only dialog,
+  `ChildContent` dialog, `IsDestructive` variant, backdrop-click + Confirm/Cancel all round-tripping
+  `@bind-IsOpen`) — harness removed immediately after confirmation (self-contained, unlike WU4's
+  TagChip harness which stood in for an unbuilt producer). Detail in `audit/Comments.md` Feature 26
+  WU9 Stage-5 note.
+- **Tool:** opusplan. **Pointer:** `audit/Comments.md` Feature 26. **Deps:** WU0.
 
-### WU10 — `UserCard` leaf
-- **Cells:** 18 L3.5/L4 (UserCard slice).
-- **Do:** display-only user summary (avatar/name/tagline) from a user-summary DTO; mint that DTO here.
-  Consumed by vouch display + member lists.
-- **Tool:** opusplan. **Pointer:** `audit/Following.md` + `audit/Profiles.md`. **Deps:** WU2 (sprite/avatar).
+### WU10 — `UserCard` leaf — DONE ✓ (2026-06-21)
+- **Cells:** 18 L3.5/L4 — now Stage 5.
+- **Done:** minted `UserCardDto`/`UserCardBadgeDto` (`Core/Users/`) and built `UserCard`
+  (`SharedUI/Users/`) as a pure leaf, in a new cross-cutting `Users/` cluster (same `RichText/`-shaped
+  exception as `Dialogs/` — no single feature owns the atom; doc-touched into `SKILL.md` "Code
+  Organization" before the build). Settled and built per spec §5.30.7: View Profile is a plain
+  always-on link; the remaining caret actions (Discover from this User, Copy link, Report, Send PM)
+  are optional `EventCallback`s gated by `HasDelegate` — Report (WU34)/Send PM (WU35) stay dark until
+  those features land. Badge collection minted on the DTO now, rendered conditionally (empty until
+  WU36). Avatar is `User.ProfilePictureRelativeUrl` copied verbatim by the producing read service, not
+  `ISpriteReadService.GetSpriteUrl` — corrected a stale overgeneralization in `layer4-style.md`
+  (Doc-Touch before the build); added a static `wwwroot/img/default-avatar.svg` fallback. Contract
+  feeds vouch display (WU21), profiles (WU30), and other listed consumers.
+- **Verified:** `dotnet build` green (4 projects, 0 warnings); live server run, homepage `200`;
+  user-confirmed visual check against the live server (avatar fallback, linked username, conditional
+  tagline/badges, caret open/close, HasDelegate-gated menu items, no doubled spacing) via a throwaway
+  harness on `HomeDesktop.razor` (removed after confirmation). Detail in `audit/Following.md`
+  Feature 18 Stage-5 note. Consumers (WU21/WU30/…) remain Stage 2 — the DTO contract alone doesn't
+  flip them, same as WU4's `TagChip`.
+- **Tool:** opusplan. **Pointer:** `audit/Following.md` Feature 18 + `audit/Profiles.md`.
+  **Deps:** WU2 (sprite/avatar).
 
-### WU11 — `TagSelector` composite rebuild *(Stage-4 trap → spec §5.30.4)*
-- **Cells:** 14 L3/L3.5/L4.
-- **Do:** discard the datalist/list-mutation/inline-badge component; rebuild around **Blazored.Typeahead**
-  (300ms debounce) + `TagChip` selected chips + lightweight dropdown rows (dot+sprite+name); raise
-  `EventCallback<IReadOnlyList<Tag>> OnSelectionChanged` (no list mutation); fix the `mb-4` outer-margin
-  violation. The existing `TagSelector.razor` already lives at `SharedUI/Tags/` (moved out of the legacy
-  `Components/Tags/` folder ahead of this build — see `audit/Tags.md` Shared Context); that move is
-  folder-only and is **not** a head start on the rebuild — treat the file's content as discardable
-  scaffolding exactly as the Stage-4 note describes.
-- **Tool:** opusplan. **Pointer:** `audit/Tags.md` Feature 14 + cluster note. **Deps:** WU3, WU4
-  (+ add Blazored.Typeahead NuGet).
+### WU11 — `TagSelector` composite rebuild *(Stage-4 trap → spec §5.30.4)* — DONE ✓ (2026-06-22)
+- **Cells:** 14 L3/L3.5/L4 — now Stage 5 (14 L2 was already Stage 5 from WU3, extended additively).
+- **Done:** discarded the datalist/list-mutation/inline-badge component entirely; rebuilt around
+  single-select **Blazored.Typeahead** 4.7.0 (300ms debounce, `MinimumLength=2`) sourced by a new,
+  additive `ITagReadService.SearchTagChipsAsync(type, term)` (capped per-keystroke server search via
+  `EF.Functions.ILike`, sprites resolved post-materialization through `ISpriteReadService` — Npgsql
+  doesn't translate the `string.Contains(string, StringComparison)` overload, caught at build time).
+  Selected chips render as `TagChip` leaves above the input; dropdown rows are lightweight (color dot +
+  sprite + name). Settled (Doc-Touch moment 1, before the build): the typeahead sources per-keystroke
+  from the server rather than loading a type's full tag set upfront; `OnSelectionChanged` emits
+  `IReadOnlyList<TagChipDto>`, not the spec's literal `IReadOnlyList<Tag>` (DTO Firewall forbids the EF
+  entity crossing into UI). Fixed the `mb-4` outer-margin violation. **Real bug found and fixed during
+  verification, not anticipated in the plan:** `BlazoredTypeahead` requires a `SelectedTemplate`
+  parameter — omitting it throws in `OnInitialized()`, which kills the Blazor Server circuit
+  immediately (symptom: field permanently unresponsive, page frozen on prerendered markup — looked
+  exactly like "can't type into the box," not like a missing-parameter exception). A secondary
+  `Dispose()` `NullReferenceException` was a downstream symptom of that same half-init state, not a
+  separate prerendering incompatibility — an earlier mid-build doc note misdiagnosed it as one and
+  added an unnecessary `RendererInfo.IsInteractive` guard, since removed once the real cause was found.
+  Updated `layer2-services.md`, `layer3-logic.md`, `layer3.5-structure.md` (canonical snippet +
+  the SelectedTemplate pitfall), `layer4-style.md` (dot-color table + package CSS-skeleton note),
+  `audit/Tags.md` Feature 14.
+- **Verified:** `dotnet build` green (4 projects, 0 errors); live server run, homepage `200`, clean
+  boot/request cycles with no exceptions. User-confirmed visual + interactive check on the live server
+  via a throwaway `HomeDesktop.razor` harness (two `TagSelector` instances, Character + Genre, backed
+  by 7 throwaway fixture `Tag` rows inserted via `psql`): debounced dropdown rows, chip add/remove,
+  already-selected exclusion, no doubled spacing. Harness and fixture rows removed after confirmation.
+- **Tool:** opusplan. **Pointer:** `audit/Tags.md` Feature 14 + cluster note. **Deps:** WU3, WU4.
 
 ---
 

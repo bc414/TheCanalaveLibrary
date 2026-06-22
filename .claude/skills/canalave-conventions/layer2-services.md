@@ -127,6 +127,24 @@ service" rule in `SKILL.md`'s Component Taxonomy).
 **Consequence:** because the resolved URL depends on the requesting user's theme/animation prefs, any
 DTO carrying one is **per-user and request-scoped — never cache it across users or themes.**
 
+**Per-keystroke typeahead search is the one case where sprite resolution can't live inside `.Select()`**
+(settled WU11): `ISpriteReadService.GetSpriteUrl` is plain C# string-building, not a SQL-translatable
+expression, so a method backing a Blazored.Typeahead `SearchMethod` — e.g.
+`Task<List<TagChipDto>> SearchTagChipsAsync(TagTypeEnum type, string term)` — must `.Select()` into a
+**lean intermediate projection** (id/name/type/description/sprite-identifier only), `Take()`-cap it,
+materialize with `.ToListAsync()`, and only then map each row to the display DTO in-memory, calling
+`GetSpriteUrl` per row. The "resolved at projection time" rule still holds in spirit — the read
+service resolves it before the DTO leaves the service, never the component — it's just that
+"projection" here is the in-memory mapping step that follows materialization, not the EF `.Select()`
+itself. The same per-user/never-cache consequence below still applies.
+
+**Avatars are a related but distinct case (settled WU10):** `UserCardDto.AvatarUrl` is *not* produced
+by `GetSpriteUrl` — it's the producing read service copying `User.ProfilePictureRelativeUrl` (a
+user-uploaded blob path stored verbatim on the entity) into the DTO, or substituting a service-chosen
+default when null. No theme/animation resolution is involved, but the request-scoping discipline still
+applies the same way: the DTO is per-user and isn't cached across users. See `layer4-style.md`
+§"Avatars Are Stored URLs, Not Sprite Keys".
+
 ### User HTML Is Sanitized Once, On Save — Never On Display
 
 Any write path that accepts user-authored rich text (chapters, comments, recommendations, blog posts,

@@ -29,9 +29,11 @@
 
    Inline Pokémon-sprite Quill blot is explicitly out of scope (spec §5.30.2 flags it as its own
    non-trivial task) — deferred to a future work-unit. The overlay below is a self-contained popup, not
-   a pull from the (unbuilt) ConfirmDialog atom — it isn't a confirm/cancel flow, and depending on an
-   unbuilt WU9 would block this work-unit; a shared modal/overlay composite may emerge later if more
-   consumers need one (layer4-style.md Pattern Accumulation is where that gets recorded if it does). *@
+   a pull from `ConfirmDialog` (built WU9, `SharedUI/Dialogs/`) — it isn't a confirm/cancel flow, it's
+   a content preview, so it stays its own thing rather than being forced through ConfirmDialog's
+   confirm/cancel contract. Both share the same overlay shell convention (backdrop + panel), recorded
+   once in layer3.5-structure.md's ConfirmDialog example — see that note for why the shell isn't
+   further extracted into a shared Modal primitive yet. *@
 
 <BlazoredTextEditor @ref="_quill" Placeholder="@Placeholder" EditorCssStyle="@FontStyle">
     <ToolbarContent>

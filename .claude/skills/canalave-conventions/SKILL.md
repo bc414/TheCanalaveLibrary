@@ -65,6 +65,14 @@ organization, it's a cluster whose feature *is* "shared reference data." `RichTe
 of exception, for the opposite-tier reason: `RichTextView` (and its consumer, `EditorView`) are
 universal rendering/editing atoms consumed by Chapters, Comments, Recommendations, BlogPosts, Profiles,
 and Messaging — no single feature owns them, so their cluster's feature *is* "rich-text rendering."
+`Dialogs/` (WU9) is the same kind of exception again: `ConfirmDialog` is a universal confirm/cancel
+modal with no owning feature — its cluster's feature *is* "modal/overlay dialogs," consumed by spoiler
+reveal, account deletion, leaving a group, deleting a list, and unpublishing a story. `Users/` (WU10)
+is the same kind of exception once more: `UserCardDto` and the `UserCard` leaf are a universal
+user-summary atom consumed by Following (vouch display), Profiles, Groups, Comments, Recommendations,
+Messaging, Users search, and tree search nodes — no single feature owns the atom, so `Core/Users/` and
+`SharedUI/Users/` are its cluster, distinct from `Core/Identity/` (which holds the `User` entity
+itself), the same way `Core/Sprites/` is distinct from the entities it projects.
 
 API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
 cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/SpriteEndpoints.cs`

@@ -161,6 +161,61 @@ No child Razor components. Only raw HTML elements. `@if`/`@foreach` driven by pa
 }
 ```
 
+`ConfirmDialog` (WU9, universal — spec §5.30.9) is the same subtype with a `@bind-IsOpen` contract
+instead of always-rendered `ChildContent`, since a dialog's defining behavior is *whether it renders at
+all*:
+
+```razor
+@* ConfirmDialog.razor — SharedUI/Dialogs/ (cross-cutting cluster, no owning feature) *@
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @onclick="Cancel">
+        <div class="max-w-md rounded-xl bg-surface p-6 shadow-lg" @onclick:stopPropagation="true">
+            @if (Title is not null) { <h2 class="...">@Title</h2> }
+            @if (ChildContent is not null) { @ChildContent } else { <p>@Message</p> }
+            <div class="flex justify-end gap-2">
+                <button @onclick="Cancel">@CancelText</button>
+                <button class="@(IsDestructive ? "bg-danger" : "bg-primary")" @onclick="Confirm">@ConfirmText</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }  // enables @bind-IsOpen
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }       // wins over Message when set
+    [Parameter] public string ConfirmText { get; set; } = "Confirm";
+    [Parameter] public string CancelText { get; set; } = "Cancel";
+    [Parameter] public bool IsDestructive { get; set; }
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private async Task Confirm() { await OnConfirm.InvokeAsync(); await Close(); }
+    private async Task Cancel() { await OnCancel.InvokeAsync(); await Close(); }
+    private async Task Close() { IsOpen = false; await IsOpenChanged.InvokeAsync(false); }
+}
+```
+
+Consumer side mirrors the spec's spoiler example (`layer3-logic.md` "Spoiler Comment State"):
+
+```razor
+<ConfirmDialog @bind-IsOpen="_showConfirmDialog"
+               Message="You haven't finished the story. Are you sure?"
+               ConfirmText="Reveal"
+               OnConfirm="() => _isRevealed = true" />
+```
+
+Backdrop click cancels (safe default before a destructive action); `@onclick:stopPropagation` on the
+panel keeps clicks inside the dialog from bubbling to the backdrop. No escape-key dismissal in MVP —
+backdrop + Cancel button cover it; deferred, not blocking. The overlay shell (`fixed inset-0 z-50 ...
+bg-black/50` backdrop, `rounded-xl bg-surface ... shadow-lg` panel) is the same shell EditorView's
+preview popup uses (see below) — reused, not reinvented, but **not extracted into a shared `Modal`
+primitive** with only two consumers and two different flows (confirm/cancel vs. content-preview); that
+extraction is deferred until a third consumer's shape clarifies what the shared part actually is.
+
 ### Third-Party Wrapper Composite
 
 Blazored TextEditor has no `@bind-Value`. `<ToolbarContent>` is a `RenderFragment` of raw `ql-*`-class
@@ -230,6 +285,86 @@ cursor/scroll position) for no reason. Quill stays mounted continuously; the pop
 descriptions, recommendations, profile bios, blog posts, AND private messages. `EditorView` never
 sanitizes its own output — see `layer2-services.md` "User HTML Is Sanitized Once, On Save — Never On
 Display" and "The allow-list is the inverse of the toolbar".
+
+**`TagSelector` is the same composite subtype with a different third-party wrapper (WU11):**
+single-select `BlazoredTypeahead` sourced by a per-keystroke `SearchMethod`, with the selector's own
+chip list rendered *above* the input (the package's built-in multi-select renders chips *inside* the
+input — wrong layout per spec §5.30.4, so it's not used). Selecting a result adds to the chip list and
+resets the bound value to `null`, clearing the input for the next pick:
+
+```razor
+@* TagSelector.razor — wraps a single-select BlazoredTypeahead *@
+<div class="flex flex-col gap-2">
+    <label class="...">@Label</label>
+
+    <div class="flex flex-wrap gap-2">
+        @foreach (var tag in _selected)
+        {
+            <TagChip Tag="tag" OnRemove="@(() => Remove(tag))" />
+        }
+    </div>
+
+    <BlazoredTypeahead TValue="TagChipDto" TItem="TagChipDto"
+                       SearchMethod="SearchMethod" Debounce="300" MinimumLength="2"
+                       ValueChanged="OnPicked" ValueExpression="@(() => _picked)">
+        <ResultTemplate Context="tag">
+            <span class="inline-flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full @DotClass(tag.TagTypeId)"></span>
+                @if (tag.SpriteUrl is not null) { <img src="@tag.SpriteUrl" class="w-4 h-4" alt="" /> }
+                @tag.TagName
+            </span>
+        </ResultTemplate>
+        <SelectedTemplate Context="tag">@tag.TagName</SelectedTemplate>
+        <NotFoundTemplate>No tags found</NotFoundTemplate>
+    </BlazoredTypeahead>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TagTypeEnum TagType { get; set; }
+    [Parameter] public IReadOnlyList<TagChipDto> SelectedTags { get; set; } = [];
+    [Parameter] public EventCallback<IReadOnlyList<TagChipDto>> OnSelectionChanged { get; set; }
+
+    private List<TagChipDto> _selected = [];
+    private TagChipDto? _picked;
+
+    private async Task<IEnumerable<TagChipDto>> SearchMethod(string term) =>
+        (await TagService.SearchTagChipsAsync(TagType, term))
+            .Where(t => _selected.All(s => s.TagId != t.TagId));
+
+    private async Task OnPicked(TagChipDto? tag)
+    {
+        if (tag is not null && _selected.All(s => s.TagId != tag.TagId))
+        {
+            _selected.Add(tag);
+            await OnSelectionChanged.InvokeAsync(_selected);
+        }
+        _picked = null; // clears the input for the next pick
+    }
+}
+```
+
+**`SelectedTemplate` is mandatory, not optional (WU11).** `BlazoredTypeahead.OnInitialized()` throws
+`InvalidOperationException: ... requires a SelectedTemplate parameter` if it's omitted — unlike
+`ResultTemplate`/`NotFoundTemplate`, which the package defaults sensibly. Omitting it doesn't fail
+quietly: in single-select mode it's barely visible (the bound value resets to `null` immediately
+after each pick, per `OnPicked` above), which makes it tempting to assume it's decorative and skip
+it — it isn't. First symptom looked like a **prerender incompatibility**: the missing-parameter
+exception killed `OnInitialized()` mid-init, which left the component's internal state (its debounce
+timer) never constructed, so when the half-initialized instance was later torn down —
+either the prerendered copy at the end of the static-render request, or the interactive copy when
+its circuit hit the same `OnInitialized` exception and got torn down — `Dispose()` threw a *second*,
+unrelated-looking `NullReferenceException` on that timer field. Chasing the Dispose symptom first is
+a dead end; the real fault is always upstream, at `OnInitialized()`. Once `SelectedTemplate` is
+supplied, both the prerendered and interactive lifecycles complete and dispose cleanly — there is
+**no actual prerendering incompatibility** in this package; the disposal trace was a downstream
+symptom, not a separate bug.
+
+**Contract deviation from the spec's literal wording, deliberate:** §5.30.4 says
+`EventCallback<IReadOnlyList<Tag>> OnSelectionChanged` — `Tag` is the EF entity. The DTO Firewall
+(`layer2-services.md` axiom 6) forbids that crossing the service boundary into UI, so the real
+contract emits `IReadOnlyList<TagChipDto>` — the render-ready type already minted for this cluster
+(WU4). `TagSelector` stays type-scoped (one `TagTypeEnum` per instance) and knows nothing of
+`Priority`/`StoryTag`; the consuming form maps `TagChipDto` → `StoryTagDTO` with a priority.
 
 ### Ambient Viewer Settings via Cascading Slim Bags
 

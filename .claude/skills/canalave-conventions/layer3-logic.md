@@ -174,6 +174,12 @@ For high-frequency interactions (Favorite/Follow/Ignore buttons):
 The debounce timer lives in the coordination composite (`StoryInteractionPanel`), not in
 individual leaf buttons.
 
+**Distinct from typeahead debounce.** `TagSelector`'s `Debounce="300"` on `BlazoredTypeahead` (WU11)
+governs input responsiveness for a third-party widget's own search-as-you-type — the package manages
+that timer internally. `InteractionDebounceMs` (2000ms) governs batching optimistic writes in a
+coordination composite we own. Same word, two unrelated concerns, two different homes — don't
+conflate them or try to unify the constants.
+
 ## UserStoryInteractionButton — EventCallback-Driven Behavior
 
 No mode enum. The presence or absence of `OnToggle` determines behavior:

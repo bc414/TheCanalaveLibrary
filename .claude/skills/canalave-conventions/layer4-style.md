@@ -125,13 +125,33 @@ Sprites live at `wwwroot/sprites/themes/{theme}/static/{key}.png` or `animated/{
 `layer2-services.md` §"Sprite URLs Are Resolved Server-Side, At Projection Time" for the full rule and
 the request-scoping consequence (never cache a sprite-bearing DTO across users/themes).
 
+## Avatars Are Stored URLs, Not Sprite Keys (settled WU10)
+
+**Settled (WU10), corrects an earlier overgeneralization below (Interaction Icons section):** a
+user's profile picture is **not** theme-pack art resolved via `GetSpriteUrl`. `User.ProfilePictureRelativeUrl`
+is a user-uploaded blob path stored directly on the entity — the producing read service copies it into
+the display DTO verbatim (e.g. `UserCardDto.AvatarUrl`), the same DTO-firewall shape as a sprite URL but
+a different resolution mechanism. `ISpriteReadService.GetSpriteUrl` plays no role for a user's own
+avatar; it would only apply if a feature ever needed a **themed default placeholder** for users with no
+upload, and that's the producing service's call to make, not the leaf's. The leaf (`UserCard`) just
+renders whatever `AvatarUrl` it's given, falling back to a static `wwwroot` placeholder asset when null:
+
+```razor
+@* Inside UserCard — AvatarUrl is a stored path or null, never resolved here *@
+<img src="@(User.AvatarUrl ?? "/img/default-avatar.png")" alt="" class="size-10 rounded-full" loading="lazy" />
+```
+
+Still governed by the "never inline SVG" rule (avatars are image assets) and the `rounded-full` radius
+convention below.
+
 ## Interaction Icons Are Inline SVG (superseded the sprite-URL design — WU7)
 
 **Settled (WU7), supersedes the WU2-era plan below `GetInteractionIcon` line:** interaction icons
 (Favorite, Followed, Ignore, ReadItLater, HiddenFavorite, …) are **inline SVG shapes**, not
 theme-swappable sprite URLs. This is a deliberate, permanent carve-out from the "never inline SVG"
 rule above — that rule still governs everything else (tags, covers, avatars, profile pictures: those
-stay `wwwroot` sprite/image assets resolved via `GetSpriteUrl`). The reason for the split: interaction
+stay `wwwroot` image assets, though avatars resolve via a stored URL, not `GetSpriteUrl` — see
+"Avatars Are Stored URLs, Not Sprite Keys" above). The reason for the split: interaction
 icons are small, single-color glyphs the site itself owns and styles per-state (gray/hover/active),
 not theme-swappable art assets a Theme pack provides — they don't belong in `wwwroot/sprites/`.
 
@@ -197,6 +217,18 @@ interact unexpectedly with Quill's element selectors. Test the editor early in a
 with full CSS applied. Override Quill styles via CSS custom properties or a scoped stylesheet
 rather than fighting specificity.
 
+## Blazored.Typeahead Stylesheet (same category as Quill, WU11)
+
+`Blazored.Typeahead`'s package CSS (`_content/Blazored.Typeahead/blazored-typeahead.css`) provides
+the input/dropdown **positioning skeleton** (`.blazored-typeahead` relative-positioned wrapper,
+`.blazored-typeahead__results` absolute-positioned dropdown with its own `box-shadow`/`z-index`) —
+keep it for the behavior it implements, but it also ships hardcoded brand colors (`#007bff` hover,
+grey borders) that read as foreign next to the site's Tailwind tokens. `TagSelector`'s `ResultTemplate`
+content (dot/sprite/name) is fully ours and already token-driven; the *chrome* around it (input border,
+hover highlight, focus ring) is the package's — leave it as-is for MVP rather than fighting its
+specificity with `!important` overrides. Revisit only if a future visual pass calls for full skeleton
+replacement, the same way Quill's CSS is flagged for later scrutiny, not solved now.
+
 ## Reader Settings as CSS (font-scope boundary)
 
 **Tailwind's `--font-display`/`--font-body` tokens stop at `RichTextView`/`EditorView`.** Those
@@ -249,3 +281,61 @@ styles (`font-family`/`font-size`/`line-height`/`max-width`/`text-align`, from t
 wants bare content, a `CommentItem` already provides its own card and would double-box, and an
 `EditorView` preview pane that wants a bordered look wraps `RichTextView` in `Card` rather than the
 leaf growing one. Renders nothing when `HtmlContent` is null/empty.
+
+**`PaginationControls` (WU8, 2026-06-21):** root is `flex flex-col gap-2` — button row, then a
+"Showing X–Y of Z" summary (`text-sm text-[--color-text-muted]`) stacked *below* the row, not beside
+it. **Fixed 7-slot window for page numbers:** the numbered cells live in an inner
+`flex items-center justify-center gap-1 min-w-[17.25rem]` wrapper between Prev/Next
+(`17.25rem` = 7 × `size-9` + 6 × `gap-1`) — at `TotalPages > 7` the window always yields exactly 7
+slots (first/last always shown, ellipsis fills gaps, slides with `CurrentPage`); at
+`TotalPages <= 7` every page renders with no ellipsis, centered in that same reserved width. Net
+effect: **the control's total width never changes**, whether it backs a 3-page or 300-page listing —
+established as the fix for an early review where the footprint visibly shifted between pages.
+Buttons (Prev/Next + page numbers) are bordered solid blocks, not bare text/hover-only —
+`size-9 rounded-md border grid place-items-center transition-colors`, `bg-[--color-surface-raised]`
+at rest with `hover:bg-[--color-primary]/20`; current page is a flat `bg-[--color-primary]
+text-white border-[--color-primary]` fill (no ring/outline variant — flat fill was correct,
+an earlier "doesn't look active" review note traced to the demo not being wired to update on click,
+not a styling gap). Disabled Prev/Next: muted bg/text + `cursor-not-allowed`, no hover. No outer
+margin; renders nothing when `TotalPages <= 1`. Page size is supplied by the caller
+(`User.ReaderSettings.DefaultPaginationSize`), never read by the leaf itself.
+
+**`ConfirmDialog` (WU9, 2026-06-21):** modal overlay shell — backdrop `fixed inset-0 z-50 flex
+items-center justify-center bg-black/50 p-4` (click-to-cancel), panel `max-w-md rounded-xl bg-surface
+p-6 shadow-lg` (`@onclick:stopPropagation` so inner clicks don't bubble to the backdrop). This is the
+same shell `EditorView`'s preview popup already used inline — now the one written-down convention both
+follow, rather than two independent copies drifting apart. Confirm button is `bg-primary
+hover:bg-primary-strong` by default, `bg-danger` when `IsDestructive` (destructive actions: account
+deletion, leaving a group, unpublishing a story). Cancel button stays neutral (`bg-surface`, bordered).
+Renders nothing when `!IsOpen` — no `display:none` div sitting in the DOM.
+
+**`UserCard` (WU10, 2026-06-21):** root is `relative inline-flex items-center gap-2 rounded-xl
+bg-surface px-3 py-2` — no outer margin; parents space cards with `gap-`. Avatar is `size-10
+rounded-full`, `src` falling back to a static `/img/default-avatar.svg` when `AvatarUrl` is null
+(an image asset, not inline SVG markup — see "Avatars Are Stored URLs, Not Sprite Keys" above).
+Username is a `block truncate font-bold` link; tagline (when present) is `block truncate text-sm
+text-muted` directly beneath it; badges (when present) are a `flex items-center gap-1` row of
+`size-4` icons with `title` tooltips. Caret button (`▾`) sits `ml-auto self-start`; its dropdown is
+`absolute right-0 top-full z-10 min-w-40 rounded-md bg-surface py-1 shadow-medium`, items
+`block px-3 py-1.5 text-sm hover:bg-surface-hover`. View Profile is always the first item (a plain
+link, not gated); the rest render only when their `EventCallback` `HasDelegate`.
+
+**`TagSelector` (WU11, 2026-06-21):** root is `flex flex-col gap-2` — **no outer margin** (the
+discarded version's `mb-4` is exactly the violation this rule exists to prevent; parents space the
+whole selector with `gap-`/`space-y-` like any other composite). Selected-chips row is
+`flex flex-wrap gap-2` of `TagChip` leaves, sitting *above* the typeahead input per spec §5.30.4.
+Typeahead dropdown rows are intentionally lighter than a chip — a solid accent dot
+(`w-2 h-2 rounded-full`, not the chip's light bg/dark text pairing) + optional `w-4 h-4` sprite + name,
+so the scannable list format stays visually distinct from "this is already selected":
+
+| `TagTypeEnum` | Dot class |
+|---|---|
+| `Character` | `bg-emerald-500` |
+| `Setting` | `bg-violet-500` |
+| `Genre` | `bg-sky-500` |
+| `ContentWarning` | `bg-rose-500` |
+| `CrossoverFandom` | `bg-amber-500` |
+| `Relationship` | `bg-pink-500` |
+
+(Same hue family as the `TagChip` table above, solid `-500` instead of light `-100`/dark text — keeps
+dot and chip visually associated as "the same tag type" without making the dot a tiny chip.)

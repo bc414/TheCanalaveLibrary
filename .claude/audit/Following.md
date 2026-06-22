@@ -15,7 +15,25 @@ services, no components built.
   asymmetric delete behavior is deliberate. Migration-verified (`InitialSchema`).
 - **L2 — Stage 2** (follow/unfollow write + "Followed Users" read; not author-specific).
 - **L3-Logic — Stage 2** (bell toggles `ReceiveAlerts`; self-contained-write injection is legitimate).
-- **L3.5-Structure — Stage 2** (`UserCard` leaf, §5.30.7, unbuilt). **L4 — Stage 1. L5 — Stage 2.**
+- **L3.5-Structure — Stage 5 (WU10, 2026-06-21). L4-Style — Stage 5 (WU10, rode inline with L3.5).**
+  Built the `UserCard` leaf per §5.30.7: `Core/Users/UserCardDto.cs` (+ `UserCardBadgeDto.cs`) and
+  `SharedUI/Users/UserCard.razor`, in a new cross-cutting `Users/` cluster (no single feature owns
+  the atom — see `SKILL.md` "Code Organization"); cell number stays 18. Pure leaf, no service
+  injection, one `[Parameter, EditorRequired] UserCardDto User`. View Profile is a plain always-on
+  `<a>`; the other caret actions (Discover from this User, Copy link, Report, Send PM) are optional
+  `EventCallback`s gated by `HasDelegate` — Report (WU34)/Send PM (WU35) stay dark until those
+  features land. Badge collection field minted on the DTO now, rendered conditionally (empty until
+  WU36 populates it). Avatar is `User.ProfilePictureRelativeUrl` copied verbatim by the producing
+  read service — not resolved via `ISpriteReadService.GetSpriteUrl` (settled + doc-touched into
+  `layer4-style.md` "Avatars Are Stored URLs, Not Sprite Keys" and `layer2-services.md`, ahead of
+  the build); added a static `wwwroot/img/default-avatar.svg` fallback asset for the null case.
+  **Verified:** `dotnet build` green (4 projects, 0 warnings); live server run, homepage `200`;
+  throwaway harness on `HomeDesktop.razor` (full avatar+tagline+caret, minimal/no-avatar-no-caret,
+  badges+partial-caret variants) user-confirmed visually correct (avatar `rounded-full` +
+  default-fallback, linked bold username, conditional tagline/badges, caret open/close, only wired
+  menu items render, no doubled spacing); harness removed after confirmation; no real consumer
+  exists yet (lands in WU21/WU30/…), so those stay Stage 2 — the DTO contract alone doesn't flip
+  them, same as WU4's `TagChip`. **L5 — Stage 2.**
 - **L6 — Stage 2** (filtered index `(followed_user_id)` for reverse lookups).
 
 ## Feature 19 — Vouches

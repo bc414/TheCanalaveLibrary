@@ -40,6 +40,20 @@ resolution direction (build to spec).
 - **L1 — N/A** (queries Story/USI/StoryListing). **L2 — Stage 2** (Source=All query, random preload,
   "give me more" where interaction buttons *are* pagination). **L3/L3.5 — Stage 2** (`ResultsFilterPanel`
   + `StoryDeck`). **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
+- **WU8 Stage note (2026-06-21):** the **pagination slice** of this feature's L3.5/L4 is built —
+  `PaginationControls` (`SharedUI/Pagination/`), a leaf settled per spec §3.11.1/
+  `layer3.5-structure.md` (the `audit-summary.md` "Composite" classification is stale, superseded).
+  Contract: `CurrentPage`/`PageSize`/`TotalCount` (primitives only — no `StoryListingDto` or
+  paged-result type dependency) + `EventCallback<int> OnPageChanged`; fully stateless per §5.3.4 —
+  raises the requested page, never queries itself. Fixed 7-slot sliding window, no outer margin;
+  detail in `layer4-style.md` Pattern Accumulation. **Not used in random/discovery mode** — "give me
+  more" + interaction buttons remain the pagination mechanism there (unchanged from the L2 note
+  above); this control targets Date Published / Relevance (sorted) modes, plus Comments. This is a
+  *slice*, not the whole feature — the rest of Feature 31 (ResultsFilterPanel, StoryDeck, the actual
+  search query) remains Stage 2/1 as recorded above; cell numbers in `status.md` are unchanged.
+  Verified: `dotnet build` green (4 projects); user-confirmed visual check via a throwaway harness on
+  `HomeDesktop.razor` (12-page sliding window, 3-page no-ellipsis/centered, single-page renders
+  nothing, active highlight follows clicks) — harness removed after confirmation.
 
 ## Feature 32 — Full-Text Search
 - **L1 — Stage 5.** `StoryListing.SearchVector` as a stored generated column from `to_tsvector('english',

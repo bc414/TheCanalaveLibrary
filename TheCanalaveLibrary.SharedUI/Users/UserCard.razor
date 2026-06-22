@@ -1,0 +1,90 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Leaf, spec §5.30.7. Universal user-summary atom (Users/ cluster — owned by no single feature,
+   consumed by Following/vouch display, Profiles, Groups, Comments, Recommendations, Messaging,
+   Users search, tree search nodes). Pure leaf: takes a UserCardDto, injects no service.
+   View Profile is a plain link, always present. The remaining caret actions (Discover from this
+   User, Copy link, Report, Send PM) are optional EventCallbacks gated by HasDelegate — a consumer
+   wires only what it has; Report (WU34) and Send PM (WU35) stay dark until those features land.
+   Avatar is a stored relative URL (User.ProfilePictureRelativeUrl copied verbatim by the producing
+   read service), not a sprite key — see layer4-style.md "Avatars Are Stored URLs, Not Sprite Keys".
+   Badges render only when present (empty until WU36 populates the field). *@
+
+<div class="relative inline-flex items-center gap-2 rounded-xl bg-surface px-3 py-2">
+    <img src="@(User.AvatarUrl ?? DefaultAvatarUrl)" alt="" class="size-10 rounded-full shrink-0" loading="lazy" />
+
+    <div class="flex min-w-0 flex-col">
+        <a href="@ProfileHref" class="block truncate font-bold text-text hover:underline">@User.Username</a>
+        @if (User.Tagline is not null)
+        {
+            <span class="block truncate text-sm text-muted">@User.Tagline</span>
+        }
+        @if (User.Badges.Count > 0)
+        {
+            <div class="flex items-center gap-1">
+                @foreach (var badge in User.Badges)
+                {
+                    <img src="@badge.IconUrl" alt="" title="@badge.Name" class="size-4" loading="lazy" />
+                }
+            </div>
+        }
+    </div>
+
+    <button type="button" class="ml-auto self-start text-muted hover:text-text"
+            @onclick="ToggleMenu" aria-label="More options" aria-expanded="@_menuOpen">
+        ▾
+    </button>
+
+    @if (_menuOpen)
+    {
+        <div class="absolute right-0 top-full z-10 min-w-40 rounded-md bg-surface py-1 shadow-medium">
+            <a href="@ProfileHref" class="block px-3 py-1.5 text-sm hover:bg-surface-hover" @onclick="CloseMenu">View Profile</a>
+            @if (OnDiscoverFromUser.HasDelegate)
+            {
+                <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
+                        @onclick="() => InvokeAndClose(OnDiscoverFromUser)">Discover from this User</button>
+            }
+            @if (OnCopyLink.HasDelegate)
+            {
+                <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
+                        @onclick="() => InvokeAndClose(OnCopyLink)">Copy link</button>
+            }
+            @if (OnReport.HasDelegate)
+            {
+                <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
+                        @onclick="() => InvokeAndClose(OnReport)">Report</button>
+            }
+            @if (OnSendMessage.HasDelegate)
+            {
+                <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
+                        @onclick="() => InvokeAndClose(OnSendMessage)">Send PM</button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private const string DefaultAvatarUrl = "/img/default-avatar.svg";
+
+    [Parameter, EditorRequired]
+    public UserCardDto User { get; set; } = null!;
+
+    [Parameter] public EventCallback OnDiscoverFromUser { get; set; }
+    [Parameter] public EventCallback OnCopyLink { get; set; }
+    [Parameter] public EventCallback OnReport { get; set; }
+    [Parameter] public EventCallback OnSendMessage { get; set; }
+
+    private bool _menuOpen;
+
+    private string ProfileHref => $"/user/{User.UserId}";
+
+    private void ToggleMenu() => _menuOpen = !_menuOpen;
+
+    private void CloseMenu() => _menuOpen = false;
+
+    private async Task InvokeAndClose(EventCallback callback)
+    {
+        _menuOpen = false;
+        await callback.InvokeAsync();
+    }
+}

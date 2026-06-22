@@ -1,0 +1,135 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Leaf, universal across Comments/Discovery/StoryDeck (layer3.5-structure.md Universal Components).
+   Standard offset pagination (spec §5.3.4): fully stateless — holds no data and runs no queries,
+   just raises the requested page number via OnPageChanged so the owning page/composite re-runs its
+   query with the new page. Not used in random-discovery mode ("give me more" + interaction buttons
+   are the pagination there, spec §5.28). Page size is resolved upstream (User.ReaderSettings.
+   DefaultPaginationSize) and passed in — this leaf injects no service.
+
+   The page-number cells always occupy a fixed 7-slot window (min-w-[17.25rem], centered) so the
+   control's total width never changes as CurrentPage/TotalPages vary — at >7 pages the slots slide;
+   at <=7 pages every page shows, centered in the same reserved width, with no placeholder boxes. *@
+@if (TotalPages > 1)
+{
+    <div class="flex flex-col gap-2">
+        <div class="flex items-center gap-1">
+            <button type="button" class="@NavButtonClasses(IsFirst)" disabled="@IsFirst"
+                    aria-label="Previous page" @onclick="() => HandlePage(CurrentPage - 1)">
+                &lsaquo;
+            </button>
+
+            <div class="flex items-center justify-center gap-1 min-w-[17.25rem]">
+                @foreach (var page in PageWindow())
+                {
+                    @if (page is null)
+                    {
+                        <span class="size-9 grid place-items-center text-[--color-text-muted]">&hellip;</span>
+                    }
+                    else
+                    {
+                        var p = page.Value;
+                        <button type="button" class="@PageButtonClasses(p)"
+                                aria-current="@(p == CurrentPage ? "page" : null)"
+                                @onclick="() => HandlePage(p)">
+                            @p
+                        </button>
+                    }
+                }
+            </div>
+
+            <button type="button" class="@NavButtonClasses(IsLast)" disabled="@IsLast"
+                    aria-label="Next page" @onclick="() => HandlePage(CurrentPage + 1)">
+                &rsaquo;
+            </button>
+        </div>
+
+        <span class="text-sm text-[--color-text-muted]">
+            Showing @RangeStart&ndash;@RangeEnd of @TotalCount
+        </span>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public int CurrentPage { get; set; }
+    [Parameter, EditorRequired] public int PageSize { get; set; }
+    [Parameter, EditorRequired] public int TotalCount { get; set; }
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+
+    private int TotalPages => PageSize <= 0 ? 0 : (int)Math.Ceiling((double)TotalCount / PageSize);
+
+    private bool IsFirst => CurrentPage <= 1;
+    private bool IsLast => CurrentPage >= TotalPages;
+
+    private int RangeStart => TotalCount == 0 ? 0 : (CurrentPage - 1) * PageSize + 1;
+    private int RangeEnd => Math.Min(CurrentPage * PageSize, TotalCount);
+
+    // Fixed 7-slot window (null = ellipsis), so the control's width never changes:
+    //  - TotalPages <= 7: every page, no ellipsis.
+    //  - otherwise: first & last always shown, plus 5 more slots that slide with CurrentPage.
+    private IEnumerable<int?> PageWindow()
+    {
+        if (TotalPages <= 7)
+        {
+            for (var p = 1; p <= TotalPages; p++)
+            {
+                yield return p;
+            }
+            yield break;
+        }
+
+        if (CurrentPage <= 4)
+        {
+            yield return 1;
+            yield return 2;
+            yield return 3;
+            yield return 4;
+            yield return 5;
+            yield return null;
+            yield return TotalPages;
+        }
+        else if (CurrentPage >= TotalPages - 3)
+        {
+            yield return 1;
+            yield return null;
+            yield return TotalPages - 4;
+            yield return TotalPages - 3;
+            yield return TotalPages - 2;
+            yield return TotalPages - 1;
+            yield return TotalPages;
+        }
+        else
+        {
+            yield return 1;
+            yield return null;
+            yield return CurrentPage - 1;
+            yield return CurrentPage;
+            yield return CurrentPage + 1;
+            yield return null;
+            yield return TotalPages;
+        }
+    }
+
+    private string NavButtonClasses(bool disabled) =>
+        (disabled
+            ? "bg-[--color-surface-raised]/50 border-[--color-border] text-[--color-text-muted] cursor-not-allowed"
+            : "bg-[--color-surface-raised] border-[--color-border] text-[--color-text] hover:bg-[--color-primary]/20") +
+        " size-9 rounded-md border grid place-items-center transition-colors";
+
+    private string PageButtonClasses(int page) =>
+        (page == CurrentPage
+            ? "bg-[--color-primary] border-[--color-primary] text-white"
+            : "bg-[--color-surface-raised] border-[--color-border] hover:bg-[--color-primary]/20 text-[--color-text]") +
+        " size-9 rounded-md border grid place-items-center transition-colors";
+
+    private async Task HandlePage(int page)
+    {
+        page = Math.Clamp(page, 1, TotalPages);
+        if (page == CurrentPage || !OnPageChanged.HasDelegate)
+        {
+            return;
+        }
+
+        await OnPageChanged.InvokeAsync(page);
+    }
+}

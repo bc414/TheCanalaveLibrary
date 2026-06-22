@@ -33,5 +33,23 @@ TPT is Settled Axiom #2. **No services or components built.**
 - **L1 — Stage 5.** `IsSpoiler` is on `ChapterComment` only (chapter-scoped, not `BaseComment`) — exactly
   §5.9.1. **L2 — Stage 2.** **L3-Logic — Stage 2** — completion-gated reveal (`IsCompleted=true` ⇒ single
   click; `false` ⇒ `ConfirmDialog`); `IsRevealed` ephemeral; dispatcher passes `UserHasCompletedStory`.
-  *Depends on* the universal `ConfirmDialog` composite (§5.30.9). **L3.5 — Stage 2. L4 — Stage 1.
-  L5 — Stage 2.**
+  *Depends on* the universal `ConfirmDialog` composite (§5.30.9). **L3.5 — Stage 5** (WU9, 2026-06-21 —
+  see note below). **L4 — Stage 1** (spoiler blur/cover styling — `ConfirmDialog`'s own visuals are a
+  separate, already-built concern; this stage covers the blur/cover markup around the comment itself,
+  owned by WU20). **L5 — Stage 2.**
+- **WU9 Stage-5 note (2026-06-21):** built the universal `ConfirmDialog` container composite at
+  `SharedUI/Dialogs/ConfirmDialog.razor` (new cross-cutting cluster — no owning feature, mirrors
+  `RichText/`/`Lookups/`). Contract: `@bind-IsOpen` (two-way `IsOpen`/`IsOpenChanged`), `Title`/
+  `Message` for simple bodies, `ChildContent` for rich bodies (wins over `Message` when set),
+  `ConfirmText`/`CancelText`, `IsDestructive` (red confirm button vs. green), `OnConfirm`/`OnCancel`
+  EventCallbacks. Renders nothing when `!IsOpen`. Backdrop click cancels; panel uses
+  `@onclick:stopPropagation`. Overlay shell (backdrop + panel) reuses the convention `EditorView`'s
+  preview popup already established — recorded once in `layer3.5-structure.md`'s Container Composite
+  section, not duplicated. This flips only `26 L3.5-Structure` — the spoiler-specific consumer wiring
+  (blur/cover, completion-gated reveal calling this dialog) is WU20's job, not this work-unit's; flips
+  `26 L3-Logic`/`L4` are unaffected. **Verified:** `dotnet build` green (4 projects, 0 new warnings);
+  Tailwind JIT picked up `bg-danger` (theme token already existed, just unused) on `npm run css:build`;
+  live server run, homepage `200`; user-confirmed visual check via a throwaway harness on
+  `HomeDesktop.razor` (message-only dialog, `ChildContent` dialog, `IsDestructive` variant, backdrop
+  click and Confirm/Cancel all round-tripping `@bind-IsOpen` correctly) — harness removed immediately
+  after confirmation (self-contained, no missing-producer dependency, unlike WU4's TagChip harness).

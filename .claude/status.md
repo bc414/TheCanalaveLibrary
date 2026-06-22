@@ -46,11 +46,11 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 11 | Tag Administration | Tags | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 12 | Story Tagging | Tags | 5 | 2 | 4 | 4 | 1 | 2 | 2 | N/A | N/A |
 | 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
-| 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 4 | 4 | 1 | 2 | N/A | N/A | N/A |
+| 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
 | 15 | Saved Tag Selections | Tags | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 2 | 2 | 2 | 2 | 2 | 4 | 2 | N/A |
 | 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 2 | 2 | 2 | 1 | 2 | 4 | N/A | N/A |
-| 18 | User Following | Following | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
+| 18 | User Following | Following | 5 | 2 | 2 | 5 | 5 | 2 | 2 | N/A | N/A |
 | 19 | Vouches | Following | 5 | 2 | 2 | 2 | 1 | 2 | 5 | N/A | N/A |
 | 20 | User Profile Editing | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 21 | User Profile Display | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
@@ -58,7 +58,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 23 | Comment Posting | Comments | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 24 | Comment Display & Pagination | Comments | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 25 | Comment Likes | Comments | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 26 | Spoiler Comments | Comments | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
+| 26 | Spoiler Comments | Comments | 5 | 2 | 2 | 5 | 1 | 2 | N/A | N/A | N/A |
 | 27 | Recommendation Submission | Recommendations | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 28 | Recommendation Display | Recommendations | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 29 | Hidden Gem Management | Recommendations | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
