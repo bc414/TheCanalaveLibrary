@@ -178,9 +178,11 @@ Stage 3 (once minted), Opus for any residual Stage 4. **Relax permissions first*
 `.csproj` writes — see config below).
 
 Loop: pick the next entry → read its `.claude/audit/<Folder>.md` pointer → invoke the entry's tool →
-build + verify (`dotnet build`, and run the relevant slice) → update `.claude/status.md` (cell → Stage 5)
-and `.claude/workplan.md` (entry complete). The conventions skill loads automatically as the
-paradigm-correctness guardrail.
+build + verify (`dotnet build` + `dotnet test` green; add asserted tests for any new testable surface per
+`canalave-conventions/testing.md`'s tier rules; run the relevant slice) → update `.claude/status.md`
+(cell → Stage 5) and `.claude/workplan.md` (entry complete). Record the covering test tier (Unit /
+Integration / RazorComponents) or state why none applies in the audit Stage note. The conventions skill
+loads automatically as the paradigm-correctness guardrail.
 
 **L4-Style within a work-unit:** per Phase D, a feature's L4-Style cell is not sequenced separately — when
 a work-unit's L3/L3.5 build is Stage 3 (or implied-Stage-3 per a resolved Stage-4 direction) and tokens are
@@ -252,9 +254,38 @@ Guardrails:
   `ConnectionStrings:canalavedb` in `appsettings.Development.json` points at a local Postgres instance.
   `builder.AddRedisDistributedCache("cache")` is removed from `Program.cs` (nothing consumed
   `IDistributedCache` yet) with a comment marking where to re-add it. `AppHost.cs` keeps its
-  `AddPostgres("postgres").AddDatabase("canalavedb")` wiring dormant in the tree — `AddNpgsqlDbContext<T>`
-  reads `ConnectionStrings:canalavedb` from plain config either way, so there's no Aspire-specific
-  coupling to undo when Aspire-orchestrated dev (or Redis/WASM) comes back post-MVP.
+  `AddPostgres("postgres").AddDatabase("canalavedb")` wiring dormant in the tree — this part is
+  genuinely additive/swappable, like Redis/L6 indexes: no application service knows or cares whether
+  AppHost orchestrated the Postgres it's talking to, so there's nothing to undo when Aspire-orchestrated
+  dev comes back post-MVP.
+  **Narrower correction (WU12, 2026-06-22):** "Aspire" is not one decision — the line above only ever
+  examined AppHost/orchestration, which stays correctly deferred. It separately assumed the *client
+  integration package* (`Aspire.Npgsql.EntityFrameworkCore.PostgreSQL`'s `AddNpgsqlDbContext<T>`, called
+  directly in `Server/Program.cs`) was equally inert plumbing — "reads `ConnectionStrings:canalavedb`
+  from plain config either way." That assumption was wrong: `AddNpgsqlDbContext<T>` registers the
+  DbContext via EF Core's `DbContextPool` with no opt-out (confirmed against the package's own settings
+  type — no `DbContextPooling` property exists), and pooled contexts are constructed from the *root*
+  provider, so they cannot take a Scoped constructor dependency. This directly broke `IActiveUserContext`
+  (WU12's content-rating query filter, itself sourced into `ApplicationDbContext`'s constructor) and
+  directly contradicts spec §6.6's already-resolved "plain `AddScoped<>`, DI manages DbContext lifetime"
+  decision. Unlike orchestration, this is a composition-root choice every DbContext-consuming service is
+  written against — **architectural, not swappable**, the same category as `IActiveUserContext` itself.
+  Resolved: the Aspire Npgsql *client* package is removed from `TheCanalaveLibrary.Server`; both
+  DbContexts register via plain `AddDbContext<T>` + `UseNpgsql(...)` (retries preserved explicitly via
+  `EnableRetryOnFailure()` — WU0's audit note already relies on retry behavior existing). See
+  `layer2-services.md` for the registration pattern. This does **not** reopen the orchestration
+  question above, and does not affect the Postgres primary/read-replica axis (a connection-string
+  concern, orthogonal to whether the *.NET-side DbContext object* is pooled).
+  **Durability — holds in production too, not just MVP.** Unlike the orchestration question (genuinely
+  MVP-scoped, AppHost is meant to return post-MVP), this one doesn't expire: `IActiveUserContext`/the
+  content-rating filter is permanent functional architecture, not an MVP shortcut, so the
+  pooling-vs-Scoped-dependency incompatibility never goes away on its own. Actual production (DigitalOcean
+  Droplet + Managed Postgres, spec's resolved hosting decision) never runs AppHost either — it's the same
+  plain `AddDbContext` registration in both environments, not a dev-only stand-in. What's genuinely lost
+  (not reopened, just no longer free): Aspire's auto-registered DB health check and Npgsql-specific OTel
+  command tracing — both addable independently later if wanted, never bundled-or-nothing. Re-check this
+  decision only if a future version of the Aspire package adds a pooling opt-out to its settings type
+  (none exists today).
 - **Interaction-icon design** (Feature 16 L4, previously Stage-1 blocked) — resolved WU7 (2026-06-21):
   inline SVG shapes, not theme-swappable sprite URLs — a permanent, deliberate carve-out from the
   "never inline SVG" rule (which still governs tags/covers/avatars). Square button, three visual
@@ -264,6 +295,29 @@ Guardrails:
   Supersedes the WU2-era `GetInteractionIcon`/sprite-key plan. See
   [layer4-style.md](skills/canalave-conventions/layer4-style.md) §"Interaction Icons Are Inline SVG"
   and [audit/UserStoryInteractions.md](audit/UserStoryInteractions.md) Feature 16.
+- **Test strategy** — resolved (2026-06-22, post-WU12 post-mortem): the project had zero automated
+  tests; WU12's create-path bugs were caught only by manual reading of `/dev/wu12/*` probe output,
+  which asserts nothing. Two-layer regime: a **unit** test project (`TheCanalaveLibrary.Tests.Unit`,
+  Core-only, no DB/host) for pure logic (`StoryValidations`, `StoryMappers`, slug `Slugify`); an
+  **integration** test project (`TheCanalaveLibrary.Tests.Integration`, references Server) against a
+  **real Testcontainers Postgres** — never EF InMemory/SQLite, because the invariants worth protecting
+  (the `"ContentRating"` named query filter's SQL translation, the slug unique-filtered index, snake-
+  case naming, FTS) are Postgres-specific and a different provider would give false confidence on
+  exactly those. Integration tests drive a `WebApplicationFactory` with `IActiveUserContext` swapped
+  for a settable fake — sidesteps the one genuinely manual-only band (auth-cookie claim baking,
+  `SecurityStampValidator` timing, SignalR circuit init), which stays Playwright/manual. Dev-
+  diagnostics endpoints (`DevDiagnosticsEndpoints.cs`) remain **interactive probes, not the regression
+  net** — they're `Development`-only, never run in CI, and assert nothing; the WU12 fixtures/endpoints
+  stay in place per prior user instruction but are no longer the source of truth once these tests
+  exist. See [canalave-conventions/testing.md](skills/canalave-conventions/testing.md).
+  **Updated (2026-06-22, post-WU12.5-evaluation):** The two-tier model is now three tiers by *kind*:
+  Unit (directly-constructed, no host/DB — references Core **and** Server), Integration
+  (`WebApplicationFactory`/Testcontainers Postgres), and RazorComponents (bUnit component render tests,
+  references SharedUI/Client). Unit's "Core-only reference" proxy is replaced by a behavioral rule:
+  if you can `new` the type without a real host or DB it's Unit, even if it lives in Server. The
+  Phase E loop and per-unit loop in `workplan.md` now name `dotnet test` as a required verification
+  step. Obligation remains advisory ("should add tests") — no Stage-5 gate. `Tests.RazorComponents`
+  (bUnit) added to the sln for SharedUI/Client component render tests.
 
 ---
 

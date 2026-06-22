@@ -74,6 +74,17 @@ the build, superseding the original spec/skill sketch:
   and diagnostic endpoint removed after confirmation.
 - **Feeds WU17 (chapter write service):** inject `IHtmlSanitizationService`, call `Sanitize()` on
   `EditorView.GetHtmlAsync()`'s output before persisting `ChapterContent`.
+- **2026-06-22 (WU12.5 backfill):** WU6's throwaway diagnostic endpoint was the only automated check;
+  verification migrated into asserted tests — `HtmlSanitizationServiceTests` in
+  `TheCanalaveLibrary.Tests.Unit` (tier: **Unit**). `ServerHtmlSanitizationService` is constructed
+  directly (no host, no DB). Covers: `<script>` stripping (the WU6 regression); all 11 allowed tags
+  survive (`p/strong/em/u/s/h2/h3/blockquote/ul/ol/li/a`); disallowed tags stripped; anchor
+  href-only survival + `target=_blank`/`rel="noopener noreferrer"` injection; scheme filtering
+  (`javascript:` dropped); CSS/class attribute stripping; plain text preserved; null/empty/whitespace
+  → `string.Empty`. One production fix discovered: the guard was `IsNullOrEmpty` — whitespace-only
+  input bypassed it and the sanitizer returned it unchanged; corrected to `IsNullOrWhiteSpace`.
+  Mutation-sanity confirmed: adding `"script"` to the allow-list → `Sanitize_ScriptTag_IsStrippedCompletely`
+  fails. `dotnet test` green.
 
 ## Feature 7 — Chapter Reading
 - **L1 — Stage 5.** `UserChapterInteraction` supports progress + read state.

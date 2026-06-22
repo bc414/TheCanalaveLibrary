@@ -48,5 +48,5 @@ public class ServerHtmlSanitizationService : IHtmlSanitizationService
     }
 
     public string Sanitize(string? html) =>
-        string.IsNullOrEmpty(html) ? string.Empty : _sanitizer.Sanitize(html);
+        string.IsNullOrWhiteSpace(html) ? string.Empty : _sanitizer.Sanitize(html);
 }

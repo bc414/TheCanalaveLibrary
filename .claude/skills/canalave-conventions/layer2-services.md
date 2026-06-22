@@ -51,7 +51,51 @@ builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
 ```
 
+### DbContext Registration: Plain `AddDbContext`, Never `AddNpgsqlDbContext`/Pooled
+
+Settled WU12 (`forward_plan.md` "Aspire orchestration during MVP dev" — narrower correction): register
+both DbContexts with the plain EF Core API, never the `Aspire.Npgsql.EntityFrameworkCore.PostgreSQL`
+package's `AddNpgsqlDbContext<T>` helper:
+
+```csharp
+string connectionString = builder.Configuration.GetConnectionString("canalavedb")!;
+builder.Services.AddDbContext<ApplicationDbContext>(options => options
+    .UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure())
+    .UseSnakeCaseNamingConvention());
+builder.Services.AddDbContext<ReadOnlyApplicationDbContext>(options => options
+    .UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure())
+    .UseSnakeCaseNamingConvention()
+    .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
+```
+
+**Why:** `AddNpgsqlDbContext<T>` always registers via EF Core's `DbContextPool` — its settings type has
+no pooling opt-out (confirmed against the package source). Pooled contexts are constructed from the
+*root* service provider (instances are rented/returned across scopes, not built per-scope), so they
+cannot take a Scoped constructor dependency. `ApplicationDbContext` takes `IActiveUserContext` (Scoped)
+for the content-rating filter — pooling and that dependency are simply incompatible, and this also
+contradicts spec §6.6's resolved "plain `AddScoped<>`, DI manages DbContext lifetime" decision (pooling
+is a *stronger*, different lifetime model than "one instance per scope"). `EnableRetryOnFailure()` is
+written explicitly to preserve the resilience behavior the Aspire helper used to provide for free (see
+WU0's audit note on a retrying-execution-strategy/manual-transaction interaction `UserDeletionService`
+already had to account for — retries are relied upon, not optional).
+
+This is unrelated to the Aspire *orchestration* question (AppHost, deferred post-MVP) — that's
+genuinely additive/swappable dev infra; this is a composition-root lifetime choice every
+DbContext-consuming service is written against, architectural in the same sense `IActiveUserContext`
+is. It's also unrelated to the Postgres primary/read-replica axis: which connection string a context
+points at is orthogonal to whether the .NET-side object is pooled.
+
 **Client side:** `ClientStoryWriteService : ClientStoryReadService` mirrors the inheritance.
+
+### Content-Rating Filtering Lives on the DbContext, Not in Each Service
+
+Read services do **not** add a `.Where(s => s.Rating <= ...)` clause themselves. The ceiling is a global
+EF Core named query filter on `Story`, sourced from a scoped `IActiveUserContext` injected into
+`ApplicationDbContext`'s constructor (settled WU12) — see `cross-cutting.md` "Content Rating Filtering"
+and "Active-User Context" for the full mechanism and rationale (model invariant vs. per-method
+vigilance). A read service projecting `Story` rows gets the filter automatically; it never re-derives
+it. The one place a service deliberately bypasses it is a mod/admin/author path that needs all ratings —
+that calls `.IgnoreQueryFilters(["ContentRating"])` explicitly, a visible opt-out.
 
 ## The DTO Firewall (Non-Negotiable)
 
@@ -112,6 +156,26 @@ Prefer `record` types for DTOs (value equality, concise, immutable):
 public record StoryListingDto(int Id, string Title, string? CoverArtRelativeUrl, int WordCount);
 ```
 
+### Id-Batch Parameters Use `IReadOnlyList<T>`, Never `List<T>`
+
+Settled WU12 (`GetListingsByIdsAsync`, spec §6.6's building-block pattern): when a parameter is a
+read-only batch of ids (or any opaque values the method will only enumerate/`.Contains()`-check, never
+mutate or grow), declare it `IReadOnlyList<T>` — not `List<T>`, not `T[]`.
+
+- **Never `List<T>` in a public signature.** Microsoft's Framework Design Guidelines say this flatly,
+  not as a preference: `List<T>` is a concrete, mutable implementation type. Requiring it forces every
+  caller to materialize that *specific* class even when they're holding an array, a `Span`, or any other
+  `IEnumerable<T>` — and it exposes `Add`/`Remove`/`Capacity` the method has no business calling.
+- **`IReadOnlyList<T>` beats `T[]` too**, for the same reason one level up: an array is still one
+  concrete type. `IReadOnlyList<T>` accepts an array, a `List<T>`, an `ImmutableArray<T>` — anything —
+  with zero copying at the call site, while still giving the method `Count`/indexed access. It says
+  exactly what's true ("read-only, indexable, known count") and nothing more.
+- EF Core translates `someParam.Contains(x)` (via `Enumerable.Contains`) into a SQL `IN (...)` the same
+  way regardless of the parameter's declared collection-interface type — this costs nothing in the
+  `.Where(s => storyIds.Contains(s.StoryId))` pattern.
+- The natural *producer* of an id batch is usually `.Select(x => x.Id).ToArrayAsync()` — that array
+  satisfies `IReadOnlyList<T>` with no allocation, so this rule never costs a caller anything.
+
 ### Sprite URLs Are Resolved Server-Side, At Projection Time
 
 Display DTOs that include a sprite (`TagChipDto.SpriteUrl`, and any future sprite-bearing DTO) follow
@@ -144,6 +208,15 @@ user-uploaded blob path stored verbatim on the entity) into the DTO, or substitu
 default when null. No theme/animation resolution is involved, but the request-scoping discipline still
 applies the same way: the DTO is per-user and isn't cached across users. See `layer4-style.md`
 §"Avatars Are Stored URLs, Not Sprite Keys".
+
+**Cover art is the same pattern as avatars, produced by a different write-side source (settled WU12):**
+`StoryListingDto.CoverArtRelativeUrl` is also copied verbatim, never resolved through
+`ISpriteReadService`. The difference from sprites/tags is *how the relative path got there in the first
+place* — `IImageStorageService.SaveAsync` (Core/Images/) is the write-side counterpart that turns an
+uploaded file into the relative key stored on the entity, distinct from `ISpriteReadService` which only
+*resolves* keys that already exist as git-managed static assets. `LocalImageStorageService` (MVP) writes
+under `wwwroot/uploads/`; the interface is the seam for the Post-MVP `S3ImageStorageService` swap
+(MinIO/R2). See `audit/ImageStorage.md` for the full contract and URL conventions.
 
 ### User HTML Is Sanitized Once, On Save — Never On Display
 

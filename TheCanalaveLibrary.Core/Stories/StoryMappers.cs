@@ -68,7 +68,15 @@ public static class StoryMappers
 
     public static Story ToStory(this IEditableStoryProperties tempStory)
     {
-        return new Story().UpdateStoryEditableProperties(tempStory);
+        // Settled WU12 fix: a bare `new Story()` leaves StoryListing/StoryDetail null! — the very next
+        // line (UpdateStoryEditableProperties) dereferences both, so this threw an NRE on every create.
+        // Both partitions must exist before mapping into them.
+        Story actualStory = new Story
+        {
+            StoryListing = new StoryListing(),
+            StoryDetail = new StoryDetail()
+        };
+        return actualStory.UpdateStoryEditableProperties(tempStory);
     }
 
     public static Story UpdateStoryEditableProperties(this Story actualStory, IEditableStoryProperties tempStory)

@@ -5,7 +5,9 @@ description: >
   Use when writing, reviewing, or planning code in this project.
   Covers EF Core (TPT, Npgsql, migrations), Blazor (InteractiveAuto,
   component design, [PersistentState]), CQRS-lite (services, DTOs),
-  Redis, Aspire, naming, and code organization.
+  Redis, Aspire, naming, code organization, and automated testing
+  (Unit / Integration / RazorComponents-bUnit tiers, Testcontainers-Postgres,
+  fake IActiveUserContext).
 paths: "*.cs, *.razor, *.csproj"
 ---
 
@@ -72,7 +74,14 @@ is the same kind of exception once more: `UserCardDto` and the `UserCard` leaf a
 user-summary atom consumed by Following (vouch display), Profiles, Groups, Comments, Recommendations,
 Messaging, Users search, and tree search nodes — no single feature owns the atom, so `Core/Users/` and
 `SharedUI/Users/` are its cluster, distinct from `Core/Identity/` (which holds the `User` entity
-itself), the same way `Core/Sprites/` is distinct from the entities it projects.
+itself), the same way `Core/Sprites/` is distinct from the entities it projects. `Core/Identity/`
+(WU12) also holds `IActiveUserContext` — the read-side "who is the current viewer" companion to the
+`User` entity, consumed by the content-rating query filter and sprite-resolution projections across
+every feature; its Server impl lives in `Server/Identity/`. `Images/` (WU12) is the same shape of
+exception again: `IImageStorageService` (Core/Images/, Server impl `Server/Images/`) is a universal
+user-upload-blob write op with no owning feature — covers (Stories) and profile pictures (Profiles)
+both call it — so its cluster's feature *is* "user-upload image storage," distinct from `Sprites/`
+(read-only resolution of git-managed static assets, not uploads).
 
 API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
 cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/SpriteEndpoints.cs`
@@ -135,6 +144,7 @@ exactly how Bootstrap-template classnames (`top-row`, `nav-pills`, …) get copi
 | [layer7-redis.md](layer7-redis.md) | 7 | Write-behind buffer, ephemeral store, read-side cache |
 | [layer8-data-marts.md](layer8-data-marts.md) | 8 | Non-EF background workers, raw SQL, table swap |
 | [cross-cutting.md](cross-cutting.md) | All | Render mode, device detection, Identity, Aspire, notifications, badges, UserStats, content rating filtering, delete policies |
+| [testing.md](testing.md) | All | Three test tiers by *kind* (Unit = directly-constructed, no host/DB; Integration = `WebApplicationFactory`/Testcontainers Postgres; RazorComponents = bUnit render tests); Testcontainers-Postgres rule; fake `IActiveUserContext`; what dev-diagnostics endpoints are/aren't for |
 
 ## Component Taxonomy Quick Reference
 

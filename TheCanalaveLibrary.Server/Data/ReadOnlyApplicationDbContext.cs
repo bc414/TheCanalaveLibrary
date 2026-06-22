@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
 
@@ -8,7 +9,8 @@ namespace TheCanalaveLibrary.Server;
 /// </summary>
 public class ReadOnlyApplicationDbContext : ApplicationDbContext
 {
-    public ReadOnlyApplicationDbContext(DbContextOptions<ReadOnlyApplicationDbContext> options) : base(options)
+    public ReadOnlyApplicationDbContext(DbContextOptions<ReadOnlyApplicationDbContext> options, IActiveUserContext activeUser)
+        : base(options, activeUser)
     {
         ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
     }

@@ -50,6 +50,26 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
   base. Registered via `AddScoped<>` in `Program.cs` (already scoped; only the implementation type names
   changed). *Open:* cover-art upload to R2/MinIO not implemented; slug generation not visible in the write
   path.
+  **WU12 (2026-06-22) closed the open item, partially:** slug generation built (server-only,
+  `ServerStoryWriteService.GenerateUniqueSlugAsync` — slugify `Title`, Tier-3 uniqueness check against
+  `StoryDetails.Slug`, suffix-disambiguate on collision; never on any DTO, never client-editable). A
+  real NRE was found and fixed in `StoryMappers.ToStory()` — a fresh `new Story()` had null
+  `StoryListing`/`StoryDetail` navs, dereferenced one line later by
+  `UpdateStoryEditableProperties()`; now both partitions are initialized before mapping. The original
+  `CreateStoryAsync`'s `writeDb.Attach(...)` calls on those navs were also a second, compounding bug
+  (`Attach` marks Unchanged — would have skipped inserting the listing/detail rows entirely) — removed;
+  `Stories.Add(newStoryDB)` alone correctly cascades the connected graph as Added. Cover-art upload is
+  **not** stubbed away — `IImageStorageService`/`LocalImageStorageService` now exist (see
+  `audit/ImageStorage.md`); the write path still takes `CoverArtRelativeUrl` as a pass-through string
+  (no upload UI wired here — that's WU24, which now has a ready service to call).
+  **How verified:** `dotnet build` green (0 warnings/errors, all 4 projects); live server boot clean;
+  via `/dev/wu12/*` diagnostics (kept as standing dev tools, not removed) — `CreateStoryAsync` called
+  twice with the same title produced `wu12-mature-story` then `wu12-mature-story-2` (confirmed via
+  `psql`), no NRE on either call. **WU12.5 (2026-06-22)** migrated this verification into asserted,
+  CI-runnable tests — `StoryWriteServiceTests` in `TheCanalaveLibrary.Tests.Integration` covers the
+  same NRE/`Attach`-vs-`Add`/slug-disambiguation regressions against a real Postgres; the dev-
+  diagnostics endpoints are no longer the source of truth for this behavior (see
+  `canalave-conventions/testing.md`).
 - **L3-Logic — Stage 4.** `StoryPropertiesForm` is a correct `EditForm` + `DataAnnotationsValidator` +
   ViewModel + server-error surfacing pattern, but: has a `@* TODO: tags, cover art *@`, no
   slug/AdminControls handling. (Its `ITagRetrievalService` injection was fixed to `ITagReadService` in
@@ -65,19 +85,39 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
 ## Feature 5 — Story Browsing & Display
 
 - **L1 — Stage 5.** `StoryListing` warm partition is the projection anchor; sound.
-- **L2 — Stage 2** (reclassified from 4). `ServerStoryReadService` (renamed from `DbStoryReadService` —
-  see Feature 4's L2 RESOLVED note for the `IDbContextFactory` → direct-injection fix, same cell) has
-  `GetStoryByIdAsync` (→ `StoryDetailsDTO`) and `GetStoryForEditAsync`, both correct
-  `ReadOnlyApplicationDbContext` `.Select()` projections — they *work* and match spec/conventions. The gap
-  is unbuilt extension, not divergence: no `StoryListingDto` listing/browse/search projection exists, and
-  the content-rating master filter ("mature disabled ⇒ no trace anywhere," §5) is absent. Add the listing
-  read path; nothing here to reconcile.
+- **L2 — Stage 5** (was Stage 2, reclassified from 4 before that). `ServerStoryReadService` (renamed
+  from `DbStoryReadService` — see Feature 4's L2 RESOLVED note for the `IDbContextFactory` →
+  direct-injection fix, same cell) has `GetStoryByIdAsync` (→ `StoryDetailsDTO`) and
+  `GetStoryForEditAsync`, both correct `ReadOnlyApplicationDbContext` `.Select()` projections — they
+  *work* and match spec/conventions. **WU12 (2026-06-22) closed the listing gap:** the content-rating
+  filter is a global EF named query filter (`ApplicationDbContext.OnModelCreating`, named
+  `"ContentRating"`) sourced from a new `IActiveUserContext` (see `cross-cutting.md` "Content Rating
+  Filtering"/"Active-User Context"), not a per-method `.Where` — so it applies automatically to every
+  `Stories` query, including these listing methods, with no per-call vigilance required. Listing scope
+  landed minimal as planned: `StoryListingDto` minted, plus `GetListingsByIdsAsync(int[])` (the §6.6
+  building block, reorders results to match input id order, silently drops ids the filter excludes) and
+  `GetRecentListingsAsync(page, pageSize)` (one unfiltered-by-criteria browse projection, ordered by
+  `LastUpdatedDate DESC`). `GetListingsAsync(StoryFilterDto)` remains explicitly deferred to WU23 — its
+  filter shape isn't real until `ResultsFilterPanel` exists, and adding it later is purely additive.
+  **How verified:** via `/dev/wu12/listings/recent` and `/dev/wu12/listings/by-ids` (kept as standing
+  dev tools, not removed) against fixture stories (ids 5/6/7, fixture tags 10/11, kept per explicit user
+  instruction for later analysis rather than deleted as the original plan's step 4 specified) —
+  confirmed the content filter both directions: anonymous (`/dev/wu12/whoami` unauthenticated) saw only
+  the Teen-rated fixture story, while `TestUser` (claims `ShowMatureContent=true`, via
+  `/dev/wu12/login-as/TestUser`) saw all 4 stories including the Mature-rated ones.
+  `GetListingsByIdsAsync` confirmed reordering a shuffled id list back to input order and silently
+  dropping an id excluded by the active filter, per spec. **WU12.5 (2026-06-22)** migrated this
+  verification into asserted, CI-runnable tests — `ContentRatingFilterTests` and `RecentListingsTests`
+  in `TheCanalaveLibrary.Tests.Integration` cover the same both-directions filter check and
+  reorder/drop behavior against a real Postgres; the dev-diagnostics endpoints are no longer the
+  source of truth for this behavior (see `canalave-conventions/testing.md`).
 - **L3-Logic — Stage 4.** `StoryPage` is a real dispatcher (device detection + `IStoryReadService`,
   loads `StoryDetailsDTO`, redirects to `/not-found`). Gaps: no `[PersistentState]` ⇒ prerender→interactive
   double-fetch flicker; route is `{Slug?}` not the spec's hybrid catch-all `{*StorySlug}`.
-- **L3.5-Structure — Stage 4.** `StoryDesktop`/`StoryMobile` render title + author + short desc + a
-  `<RandomNumberGenerator />` placeholder. None of the spec layout (cover → long desc → chapter selection →
-  recommendations, §5.28), `StoryCard`, or `StoryDeck` exists.
+- **L3.5-Structure — Stage 4.** `StoryDesktop`/`StoryMobile` render only title + author + short desc.
+  (This note previously described a `<RandomNumberGenerator />` placeholder in these components — stale;
+  no such component exists in code as of this update.) None of the spec layout (cover → long desc →
+  chapter selection → recommendations, §5.28), `StoryCard`, or `StoryDeck` exists.
 - **L4-Style — Stage 1.** Bootstrap-ish; blocked on tokens.
 - **L5 — Stage 4.** Only `GET /api/stories/{id}` mapped; `HttpStoryReadService.GetStoryForEditAsync`
   calls `/{id}/edit` which is unmapped. Listing endpoints absent.

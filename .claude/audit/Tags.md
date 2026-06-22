@@ -17,6 +17,12 @@ mirror `TagTypeEnum`: Character/Setting/Genre/ContentWarning/CrossoverFandom/Rel
 for the `TagChip` leaf; `SpriteUrl` is a server-resolved relative path, not the raw `SpriteIdentifier`
 key — see `layer2-services.md` §"Sprite URLs Are Resolved Server-Side, At Projection Time"; request-scoped,
 never cached cross-user/theme).
+**WU12 follow-on:** `ServerTagReadService.SearchTagChipsAsync`'s WU4/WU11-era hardcoded
+`"pokemon"`/`false` theme placeholder (the per-keystroke typeahead's in-memory sprite-resolution step,
+`layer2-services.md` §"Per-keystroke typeahead search...") is replaced with the real
+`IActiveUserContext.Theme`/`PrefersAnimatedSprites`, now that that context exists. Small, low-risk
+follow-on found while building WU12's `IActiveUserContext` — not a re-opened Feature 14 cell.
+
 **Components:** `TagSelector` (`SharedUI/Tags/` — moved out of the legacy `Components/` folder; see
 `canalave-conventions/SKILL.md` "Code Organization"). The empty, unused `TagViewModel.cs` that sat
 alongside it was deleted in the same move. **The relocation is folder-only — `TagSelector`'s content is
@@ -52,6 +58,12 @@ unchanged and remains the discardable scaffolding described below, scheduled for
   **Verified:** `dotnet build` green (4 projects); zero remaining `ITagRetrievalService` references;
   live server boot clean (DI resolved, no startup throw), `/`, `/Account/Login`, `/Account/Register`
   all `200`.
+  **2026-06-22 (WU12.5 backfill):** verification migrated into asserted tests — `TagReadServiceTests`
+  in `TheCanalaveLibrary.Tests.Integration` (tier: **Integration**). Seeds Guid-suffixed `Tag` rows;
+  all assertions relative (shared-accumulating-state safe). Covers: `SearchTagChipsAsync` — empty/
+  whitespace → `[]`; ILike case-insensitive match; alphabetical order; `MaxSearchResults` cap (10);
+  `SpriteUrl` null when `SpriteIdentifier` null; type-filter exclusion. Also covers
+  `GetAllGenreTagsAsync` relative order and type exclusion. `dotnet test` green.
 - **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU4, 2026-06-21).** Built `TagChip`
   (`SharedUI/Tags/TagChip.razor`) as a pure leaf: `[Parameter, EditorRequired] TagChipDto Tag` +
   `[Parameter] EventCallback OnRemove` (display-only when `OnRemove` has no delegate, per §5.30.4).
@@ -68,6 +80,11 @@ unchanged and remains the discardable scaffolding described below, scheduled for
   `ISpriteReadService.GetSpriteUrl("pokemon", "bulbasaur", false)`, tooltip on hover, X button only on
   the two chips given `OnRemove` and removes correctly, no doubled spacing) — user-confirmed working
   against the live server. Demo harness is throwaway, to be removed once WU11/WU13 wire a real caller.
+  **2026-06-22 (WU12.5 backfill):** verification migrated into asserted tests — `TagChipTests` in
+  `TheCanalaveLibrary.Tests.RazorComponents` (tier: **RazorComponents**). Covers: tag name renders;
+  all six `TagTypeEnum` background classes (Theory); sprite `<img>` present/absent; `Description` as
+  `title`; remove button present only with `OnRemove` delegate; click invokes callback. `dotnet test`
+  green.
 
 ## Feature 14 — Tag Filtering & Selection UI
 - **L1 — N/A.**
@@ -106,6 +123,15 @@ unchanged and remains the discardable scaffolding described below, scheduled for
   directly via `psql`): debounced dropdown with dot+sprite+name rows, selecting clears the input and
   adds a chip, already-selected tags excluded from further results, chip X removes and updates the
   selection callback, no doubled spacing. Harness and fixture rows removed after confirmation.
+  **2026-06-22 (WU12.5 backfill):** verification migrated into asserted tests — `TagSelectorTests` in
+  `TheCanalaveLibrary.Tests.RazorComponents` (tier: **RazorComponents**). Uses `FakeTagReadService`
+  (empty results) + `JSInterop.Mode = Loose` (Blazored.Typeahead makes JS focus calls). Covers: label
+  renders; pre-selected chips render; empty initial → no chips; removing a chip fires
+  `OnSelectionChanged` with updated list; removed chip disappears from markup. The add-via-typeahead
+  flow (keyboard input → debounce → server search → selection) requires JS simulation beyond bUnit's
+  scope — that path is covered by `TagReadServiceTests` (Integration tier) + manual interactive check;
+  the circuit-killing SelectedTemplate bug is covered by `TagSelector` rendering at all in these tests.
+  `dotnet test` green.
 
 ## Feature 15 — Saved Tag Selections
 - **L1 — Stage 5.** `SavedTagSelection`/`Entry` with unique constraints and Restrict-on-Tag; copy-on-write

@@ -25,9 +25,10 @@ public class UserDeletionService
     /// <returns>True if the user was deleted, false if not found.</returns>
     public async Task<bool> DeleteUserAsync(int userId)
     {
-        // AddNpgsqlDbContext enables Npgsql's retrying execution strategy, which refuses
-        // user-initiated transactions started directly via BeginTransactionAsync — the whole
-        // retriable unit (including the transaction) must run through CreateExecutionStrategy().
+        // EnableRetryOnFailure() (Program.cs DbContext registration — settled WU12, see
+        // layer2-services.md "DbContext Registration") enables Npgsql's retrying execution strategy,
+        // which refuses user-initiated transactions started directly via BeginTransactionAsync — the
+        // whole retriable unit (including the transaction) must run through CreateExecutionStrategy().
         var strategy = _context.Database.CreateExecutionStrategy();
 
         return await strategy.ExecuteAsync(async () =>

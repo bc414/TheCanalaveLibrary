@@ -5,9 +5,30 @@ using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
 
-public class ApplicationDbContext(DbContextOptions options)
-    : IdentityDbContext<User, ApplicationRole, int>(options)
+// Explicit constructors, not primary-constructor syntax — settled WU12. This is the official EF Core
+// pattern for a DbContext that is BOTH directly registered (AddDbContext<ApplicationDbContext>) AND a
+// base class another registered context inherits from (ReadOnlyApplicationDbContext): a PUBLIC ctor
+// typed to DbContextOptions<ApplicationDbContext> (what DI uses when constructing this type directly —
+// without it, multiple registered DbContext types make the *non-generic* DbContextOptions an ambiguous
+// "last AddDbContext<T> call wins" mapping), plus a PROTECTED ctor taking the non-generic DbContextOptions
+// (invisible to DI's constructor selection, so it can't create ambiguity) that only a subclass can reach,
+// letting ReadOnlyApplicationDbContext pass its OWN DbContextOptions<ReadOnlyApplicationDbContext> up
+// through it. A primary constructor can't be declared protected, hence the explicit form here.
+public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int>
 {
+    private readonly IActiveUserContext _activeUser;
+
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options, IActiveUserContext activeUser)
+        : this((DbContextOptions)options, activeUser)
+    {
+    }
+
+    protected ApplicationDbContext(DbContextOptions options, IActiveUserContext activeUser)
+        : base(options)
+    {
+        _activeUser = activeUser;
+    }
+
     #region DbSets
 
 
@@ -145,5 +166,19 @@ public class ApplicationDbContext(DbContextOptions options)
         // grouped one file per folder-cluster but all colocated here (not split into feature cluster
         // folders) — see skills/canalave-conventions/layer1-data-model.md §"Fluent API Organization".
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+
+        // Content-rating master filter ("mature off ⇒ no trace anywhere", spec §5) — settled WU12.
+        // Deliberately inline here, NOT in Data/Configurations/: the filter must close over THIS
+        // DbContext instance's `_activeUser` field, so EF re-evaluates `_activeUser.ShowMatureContent`
+        // against whichever instance is actually running a query — never a value precomputed once into
+        // a local variable, which EF's model caching would freeze forever across every future DbContext
+        // instance (the canonical EF Core multi-tenant-filter pitfall). A separate parameterless
+        // IEntityTypeConfiguration<T> class (instantiated via Activator.CreateInstance, no DI) has no
+        // DbContext instance to close over, so it structurally cannot express this filter — that's why
+        // it lives here instead of there.
+        // See cross-cutting.md "Content Rating Filtering" for the IgnoreQueryFilters(["ContentRating"])
+        // escape hatch used by mod/author/admin paths that must see every rating.
+        modelBuilder.Entity<Story>().HasQueryFilter("ContentRating",
+            s => s.Rating <= (_activeUser.ShowMatureContent ? Rating.M : Rating.T));
     }
 }

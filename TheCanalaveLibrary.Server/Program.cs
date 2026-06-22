@@ -26,14 +26,27 @@ builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 builder.Services.AddScoped<UserDeletionService>();
 
+// Scoped "who is the current viewer" companion to User — settled WU12. Must be registered before the
+// DbContexts below resolve it as a constructor dependency for the content-rating query filter.
+builder.Services.AddScoped<IActiveUserContext, ServerActiveUserContext>();
+
 // --- Database Contexts ---
-builder.AddNpgsqlDbContext<ApplicationDbContext>("canalavedb", configureDbContextOptions: options =>
-    options.UseSnakeCaseNamingConvention());
+// Plain AddDbContext, never the Aspire Npgsql package's AddNpgsqlDbContext — settled WU12
+// (forward_plan.md "Aspire orchestration during MVP dev" narrower correction; layer2-services.md
+// "DbContext Registration"). AddNpgsqlDbContext always registers via EF Core's DbContextPool with no
+// opt-out, and pooled contexts are built from the root provider — incompatible with ApplicationDbContext
+// taking the Scoped IActiveUserContext above as a constructor dependency for the content-rating filter.
+string canalaveConnectionString = builder.Configuration.GetConnectionString("canalavedb")!;
+
+builder.Services.AddDbContext<ApplicationDbContext>(options => options
+    .UseNpgsql(canalaveConnectionString, npgsql => npgsql.EnableRetryOnFailure())
+    .UseSnakeCaseNamingConvention());
 
 // Register the dedicated read-only DbContext for high-performance queries
-builder.AddNpgsqlDbContext<ReadOnlyApplicationDbContext>("canalavedb", configureDbContextOptions: options =>
-    options.UseSnakeCaseNamingConvention()
-        .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)); // Good practice for a read-only context
+builder.Services.AddDbContext<ReadOnlyApplicationDbContext>(options => options
+    .UseNpgsql(canalaveConnectionString, npgsql => npgsql.EnableRetryOnFailure())
+    .UseSnakeCaseNamingConvention()
+    .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)); // Good practice for a read-only context
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
@@ -75,6 +88,12 @@ builder.Services.AddIdentityCore<User>(options =>
     .AddApiEndpoints() // Add the new .NET 8 Identity API endpoints
     .AddDefaultTokenProviders(); // Add token providers for email, 2FA, etc.
 
+// Override the default IUserClaimsPrincipalFactory<User> (registered above via AddRoles, TryAddScoped)
+// with one that also bakes ShowMatureContent/Theme/PrefersAnimatedSprites into the auth cookie's claims
+// at sign-in — settled WU12, see ApplicationUserClaimsPrincipalFactory. Must come AFTER the Identity
+// chain above: the last registration for a given service type wins on single-instance resolution.
+builder.Services.AddScoped<IUserClaimsPrincipalFactory<User>, ApplicationUserClaimsPrincipalFactory>();
+
 // --- END: Corrected Identity Configuration ---
 
 builder.Services.AddSingleton<IEmailSender<User>, IdentityNoOpEmailSender>();
@@ -88,6 +107,9 @@ builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
 builder.Services.AddScoped<ISpriteReadService, ServerSpriteReadService>();
 builder.Services.AddScoped<ITagReadService, ServerTagReadService>();
+// MVP impl writes under wwwroot/uploads/ — settled WU12. Post-MVP swap target: S3ImageStorageService
+// (MinIO dev / R2 prod), behind this same interface — see workplan.md Post-MVP section.
+builder.Services.AddScoped<IImageStorageService, LocalImageStorageService>();
 // Configuration happens once at construction and Sanitize() is thread-safe thereafter, so this is a
 // singleton rather than scoped (see ServerHtmlSanitizationService). No call site yet — chapter/comment/
 // etc. write services inject it when they land (WU17, WU19, ...).
@@ -166,3 +188,8 @@ app.MapAdditionalIdentityEndpoints();
 app.MapStoryEndpoints();
 
 app.Run();
+
+// Top-level statements generate an internal `Program` class by default — making it `public partial`
+// is the standard ASP.NET Core pattern that lets `WebApplicationFactory<Program>` (a different
+// assembly, TheCanalaveLibrary.Tests.Integration) reference this type. See testing.md.
+public partial class Program;

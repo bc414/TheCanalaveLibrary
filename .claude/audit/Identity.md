@@ -78,6 +78,16 @@ namespace). Only a stale comment remained (fixed). `dotnet build` green; `/Accou
   diagnostics endpoints") against throwaway fixture users (each given a profile comment, a received
   vouch, an inbound follow, and a sourced notification via direct `psql` inserts) — confirmed all four
   edges resolved and the user row gone, both runs.
+  **2026-06-22 (WU12.5 backfill):** verification migrated into asserted tests — `UserDeletionServiceTests`
+  in `TheCanalaveLibrary.Tests.Integration` (tier: **Integration**). Tests create throwaway users via
+  `UserManager<User>` (ThemeId=1, migration-seeded) and verify: unknown userId → false; existing user
+  → true with user row and cascade-deleted `UserStat` gone; `Notification.SourceUserId` nulled (not the
+  notification deleted — recipient history preserved); `FollowedUser` (FollowedUserId=target) removed;
+  `Vouch` (VouchedUserId=target) removed; `UserProfileComment` (ProfileUserId=target) removed — all
+  without FK violation against a real Testcontainers Postgres. Auth/claims band (cookie/claims paths
+  through `AccountController`) remains manual-only. Mutation-sanity confirmed: commenting out the
+  `Notification` SetNull step → `DeleteUserAsync_NullsOutSourceUserId_OnNotificationsSentByThisUser`
+  fails with an FK violation. `dotnet test` green.
 - **L3-Logic / L3.5-Structure — Stage 5.** `DeletePersonalData.razor` rewired from the old direct
   `UserManager.DeleteAsync(user)` (which would throw on the `Restrict` FKs) to
   `DeletionService.DeleteUserAsync(user.Id)`; a `false` return (not found) now redirects to the existing

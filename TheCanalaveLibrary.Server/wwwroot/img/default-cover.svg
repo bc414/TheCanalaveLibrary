@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 280" role="img" aria-label="Default story cover">
+  <rect width="200" height="280" rx="8" fill="#cbd5e1" />
+  <rect x="16" y="16" width="168" height="248" rx="4" fill="#f8fafc" />
+  <path d="M40 60h120M40 92h120M40 124h80" stroke="#cbd5e1" stroke-width="8" stroke-linecap="round" />
+</svg>

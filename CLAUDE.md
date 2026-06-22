@@ -42,7 +42,7 @@ All process artifacts live under `.claude/`. The spec and this file live at repo
 | **2** | Settled constraints (do not revisit) vs. open for opusplan |
 | **3** | Pointer to spec section serving as validated plan |
 | **4** | What exists, what's correct, nature of gap, implied resolution stage |
-| **5** | How verified (build, tests, audit inspection) |
+| **5** | How verified: `dotnet build` green; `dotnet test` green (or a note stating which tier covers the behavior — Unit / Integration / RazorComponents — and, for cells where no automated test applies, why: e.g. purely visual L4, auth-cookie/claims manual band per `canalave-conventions/testing.md`) |
 | **N/A** | Why the layer doesn't apply |
 
 ### Spec relationship
@@ -65,7 +65,7 @@ Three distinct moments touch process docs. Keep them separate — don't fold mom
 |---|---|---|---|
 | **1. Pre-implementation** | Plan resolves a `forward_plan.md` "Decisions that need you" row, would contradict a "settled" audit note, or needs a convention not yet recorded anywhere | Settle it (ask the user if genuinely open), then update every doc that states or defers it — as an explicit first phase of the plan, completed before any code change | Skill file(s); audit file's settled-vs-open note; `forward_plan.md` (move row to "Resolved", point at the doc) |
 | **2. Mid-implementation** | Building reveals a convention should change | Update the skill file in the same work-unit — conventions are living; don't silently diverge | Skill file(s) |
-| **3. Post-implementation** | A work-unit completes | Flip the affected cell(s)' number(s) in `status.md`'s grid (no narrative there); write the "how it was verified" / "what changed" detail into each affected cell's audit file Stage note. Only write a `status.md` Global Conditions note when the fact is genuinely cross-cutting and doesn't attach to any single cell — and keep that note short, a pointer to the skill/audit file for detail, not the detail itself. | `status.md` (grid number only), `workplan.md`, audit Stage note (the narrative) |
+| **3. Post-implementation** | A work-unit completes | Run `dotnet test` (should be green). Flip the affected cell(s)' number(s) in `status.md`'s grid (no narrative there); write the "how it was verified" / "what changed" detail into each affected cell's audit file Stage note — include which test tier covers the behavior (Unit / Integration / RazorComponents) or state why none applies. Only write a `status.md` Global Conditions note when the fact is genuinely cross-cutting and doesn't attach to any single cell — and keep that note short, a pointer to the skill/audit file for detail, not the detail itself. | `status.md` (grid number only), `workplan.md`, audit Stage note (the narrative) |
 
 Audit files appear in both 1 and 3: a settled-vs-open note is an *input* checked before a plan is
 approved; a Stage note is an *output* recorded after the work lands.
@@ -80,4 +80,4 @@ approved; a Stage note is an *output* recorded after the work lands.
 
 **Unresolved dependency encountered.** If a cell you need depends on another cell that hasn't reached Stage 5, surface it to the user. This applies regardless of the dependency's current stage — don't assume any unresolved dependency's outcome. Name it, state its stage, let the user decide.
 
-**After completing any work-unit.** Flip the grid number(s) in `.claude/status.md`, write the verification narrative in the affected audit file's Stage note, and update `.claude/workplan.md`. This is part of finishing the work, not separate bookkeeping.
+**After completing any work-unit.** Run `dotnet test` (should be green; add tests for any new testable surface per `canalave-conventions/testing.md`'s tier rules). Flip the grid number(s) in `.claude/status.md`, write the verification narrative — including which test tier covers the behavior or why none applies — in the affected audit file's Stage note, and update `.claude/workplan.md`. This is part of finishing the work, not separate bookkeeping.

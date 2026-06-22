@@ -17,3 +17,7 @@ riderModule.iml
 # Tailwind CSS build pipeline (Phase C) — npm deps and generated output, not source
 node_modules/
 TheCanalaveLibrary.Server/wwwroot/app.css
+
+# LocalImageStorageService (WU12) — user-uploaded blobs, runtime content, not source.
+# Post-MVP these move to R2/MinIO (S3ImageStorageService); this folder only exists for local dev.
+TheCanalaveLibrary.Server/wwwroot/uploads/

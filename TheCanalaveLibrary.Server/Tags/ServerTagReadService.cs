@@ -3,8 +3,10 @@ using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
 
-public class ServerTagReadService(ReadOnlyApplicationDbContext readDb, ISpriteReadService spriteReadService)
-    : ITagReadService
+public class ServerTagReadService(
+    ReadOnlyApplicationDbContext readDb,
+    ISpriteReadService spriteReadService,
+    IActiveUserContext activeUser) : ITagReadService
 {
     private const int MaxSearchResults = 10;
 
@@ -19,8 +21,8 @@ public class ServerTagReadService(ReadOnlyApplicationDbContext readDb, ISpriteRe
             .Select(t => new { t.TagId, t.TagName, t.TagTypeId, t.Description, t.SpriteIdentifier })
             .ToListAsync();
 
-        // No per-user theme cascade exists yet (deferred to WU30/Profiles) — "pokemon"/non-animated
-        // is the same MVP-default seam WU4's TagChip demo harness used.
+        // IActiveUserContext (minted WU12) replaces the WU4/WU11-era "pokemon"/non-animated literal
+        // placeholder — this resolves the real signed-in viewer's theme/animation preference now.
         return rows.Select(t => new TagChipDto
         {
             TagId = t.TagId,
@@ -29,7 +31,7 @@ public class ServerTagReadService(ReadOnlyApplicationDbContext readDb, ISpriteRe
             Description = t.Description,
             SpriteUrl = t.SpriteIdentifier is null
                 ? null
-                : spriteReadService.GetSpriteUrl("pokemon", t.SpriteIdentifier, false)
+                : spriteReadService.GetSpriteUrl(activeUser.Theme, t.SpriteIdentifier, activeUser.PrefersAnimatedSprites)
         }).ToList();
     }
 

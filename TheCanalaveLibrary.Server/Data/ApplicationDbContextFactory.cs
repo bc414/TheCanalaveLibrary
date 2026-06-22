@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
+using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
 
@@ -21,6 +22,22 @@ public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Ap
             .UseNpgsql("Host=localhost;Database=canalavedb;Username=postgres;Password=postgres")
             .UseSnakeCaseNamingConvention();
 
-        return new ApplicationDbContext(optionsBuilder.Options);
+        // Design-time only — this runs outside the DI/auth pipeline for `dotnet ef` tooling, so there's
+        // no real viewer. The content-rating query filter (settled WU12, cross-cutting.md "Content
+        // Rating Filtering") gets the same safe anonymous/Teen-ceiling default ServerActiveUserContext
+        // falls back to at runtime — irrelevant here, since migration generation only inspects model
+        // shape, never query results.
+        return new ApplicationDbContext(optionsBuilder.Options, new DesignTimeActiveUserContext());
+    }
+
+    private sealed class DesignTimeActiveUserContext : IActiveUserContext
+    {
+        public int? UserId => null;
+        public bool IsAuthenticated => false;
+        public bool ShowMatureContent => false;
+        public string Theme => "Pokémon";
+        public bool PrefersAnimatedSprites => true;
+        public bool IsModerator => false;
+        public bool IsAdmin => false;
     }
 }

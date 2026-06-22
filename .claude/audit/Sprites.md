@@ -50,6 +50,13 @@ rename to `WasmSpriteReadService` is Post-MVP L5 work). Registered in each proje
   `ISpriteReadService → ServerSpriteReadService`, `/`, `/Account/Login`, `/Account/Register` all `200`.
   No sprite-rendering consumer exists yet, so this was a contract/DI-correctness verification, not a
   visual one (no L4 work in this unit).
+  **2026-06-22 (WU12.5 backfill):** verification migrated into asserted tests — `SpriteReadServiceTests`
+  in `TheCanalaveLibrary.Tests.Unit` (tier: **Unit**). `ServerSpriteReadService` is constructed
+  directly (`new ServerSpriteReadService(fakeEnv)` with a `FakeWebHostEnvironment` pointing at a
+  per-test temp dir — no host, no DB). Covers: animated `.webp` path when the file exists; static
+  `.png` fallback when animated is missing or `prefersAnimated=false`; `unknown.png` when neither
+  exists; correct theme sub-path. Mutation-sanity confirmed (removing `unknown.png` fallback → test
+  fails). `dotnet test` green.
 - **L3-Logic — Stage 2.** Theme-selection UI logic (`User.ThemeId` write, live re-render) unbuilt.
 - **L3.5-Structure — Stage 2.** Theme-selection component unbuilt; sprite consumption is via injection
   into other folders' components (no component *in* this folder).

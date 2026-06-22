@@ -45,8 +45,10 @@ verify" for any unit touching L4 means render-and-look, not just `dotnet build` 
 Phase E.
 
 **Per-unit loop (Phase E).** pick next → read its audit pointer → feed audit "settled" notes to the tool as
-"do not revisit" → build → `dotnet build` + run the slice (+ visual check if L4) → update `status.md`
-(cell → 5) and this file (unit ✓). Conventions skill auto-loads as guardrail.
+"do not revisit" → build → `dotnet build` + `dotnet test` (should be green; add asserted tests for any new
+testable surface per `canalave-conventions/testing.md`'s tier rules) + run the slice (+ visual check if L4)
+→ update `status.md` (cell → 5) and this file (unit ✓). Record the covering test tier (Unit / Integration /
+RazorComponents) — or why none applies — in the audit Stage note. Conventions skill auto-loads as guardrail.
 
 ---
 
@@ -211,7 +213,7 @@ Phase E.
 - **Tool:** opusplan. **Pointer:** `audit/UserStoryInteractions.md` Feature 16. **Deps:** none (the
   original WU2 dependency assumed sprite-based icons; inline SVG removed that coupling).
 
-### WU8 — `PaginationControls` — DONE ✓ (2026-06-21)
+### WU8 — `PaginationControls` — DONE ✓ (2026-06-21; markup-level regression test added 2026-06-22). Note: visual box for active page (CSS custom property rendering) not verified in bUnit — requires human sign-off against live app for Stage 6.
 - **Cells:** 31 L3.5/L4 (pagination slice) — built; cell numbers in `status.md` unchanged (slice
   only, rest of Feature 31 remains Stage 2/1 — see audit note).
 - **Done:** built as a leaf (`SharedUI/Pagination/PaginationControls.razor`) per spec §3.11.1 —
@@ -312,11 +314,132 @@ Phase E.
 
 ## Phase 2 — Integration Points
 
-### WU12 — Stories L2 (listing + write completion)
-- **Cells:** 5 L2 (Stage 2 — add `StoryListingDto` + listing/browse projection + content-rating master
-  filter "mature off ⇒ no trace"), 4 L2 (slug generation in write path; cover-art upload to R2/MinIO —
-  *flag as open infra; may stub for MVP*).
-- **Tool:** opusplan. **Pointer:** `audit/Stories.md` Features 4, 5. **Deps:** WU1.
+### WU12 — Stories L2 (listing + write completion) — DONE ✓ (2026-06-22)
+- **Cells:** 5 L2 — now Stage 5 (was Stage 2 — minted `StoryListingDto` + listing/browse projection +
+  content-rating master filter "mature off ⇒ no trace"). 4 L2 — stays Stage 5 (slug generation built;
+  create-path NRE fixed; cover-art *storage* infra built, upload UI still open → WU24).
+- **Done:** content-rating filter landed as a global EF named query filter on `Story`
+  (`ApplicationDbContext.OnModelCreating`, named `"ContentRating"`), sourced from a new scoped
+  `IActiveUserContext` (`Core/Identity/` + `Server/Identity/ServerActiveUserContext.cs` — claims-only,
+  `IHttpContextAccessor` primary / `AuthenticationStateProvider` fallback, lazy-resolved property to
+  dodge `SecurityStampValidator`'s early-middleware DbContext resolution — see the class's own XML doc
+  for the full reasoning). Listing scope landed exactly as settled: `StoryListingDto` +
+  `GetListingsByIdsAsync(int[])` (the §6.6 building block) + `GetRecentListingsAsync(page, pageSize)`
+  (one unfiltered-by-criteria browse projection); `GetListingsAsync(StoryFilterDto)` stays deferred to
+  WU23. **Cover-art storage infra built, not stubbed:** minted `IImageStorageService` +
+  `LocalImageStorageService` (wwwroot-backed, host-relative URLs) — see `audit/ImageStorage.md` — so
+  `StoryCard` (WU13) has a real cover URL. The write path still treats `CoverArtRelativeUrl` as a
+  pass-through string (no upload UI yet — that's WU24); the cloud backend (`S3ImageStorageService`,
+  R2/MinIO) is the Post-MVP item below, an additive swap behind the same interface. **Two real bugs
+  found and fixed in the write path, not anticipated in the plan:** a NRE in `StoryMappers.ToStory()` (a
+  fresh `new Story()` had null `StoryListing`/`StoryDetail` navs, dereferenced before the partitions
+  were attached — fixed by initializing both navs on create) and a compounding bug in
+  `CreateStoryAsync`'s use of `writeDb.Attach(...)` on those same navs (`Attach` marks the graph
+  Unchanged — would have silently skipped inserting the listing/detail rows even after the NRE was
+  fixed; removed, `Stories.Add(newStoryDB)` alone correctly cascades as Added). Also removed the Aspire
+  Npgsql EF Core *client* package from `TheCanalaveLibrary.Server` — pooled DbContexts are incompatible
+  with `IActiveUserContext`'s Scoped lifetime; plain `AddDbContext` is now the standing registration for
+  both DbContexts (see `status.md` Global Conditions, `forward_plan.md`).
+- **Verified:** `dotnet build` green (4 projects, 0 warnings/errors); live server boot clean. Via
+  `/dev/wu12/*` diagnostics (`DevDiagnosticsEndpoints.cs`) against fixture data (`TestUser`, fixture
+  tags 10/11, test stories 5/6/7) — content filter confirmed both directions (anonymous + non-mature
+  user saw only the Teen-rated fixture story; `TestUser` with `ShowMatureContent=true` saw all 4
+  including Mature); `GetListingsByIdsAsync` confirmed reorder-to-input-order + silent-drop of
+  filtered ids; `CreateStoryAsync` called twice with the same title produced disambiguated slugs
+  (`wu12-mature-story`, `wu12-mature-story-2`), no NRE; `LocalImageStorageService.SaveAsync` round-
+  tripped a 1x1 PNG to `/uploads/stories/999/cover-{uuid}.png`, served back `200 image/png`
+  byte-identical. **Deviation from plan, deliberate, user-instructed:** the plan's step 4 ("remove the
+  diagnostic endpoint + fixtures after confirmation") was *not* done — the user explicitly said to keep
+  the `/dev/wu12/*` endpoints standing and keep all fixture data (test stories, fixture tags, the
+  uploaded test image) for later analysis. These are not real seeded content; future sessions should
+  not mistake story ids 5/6/7/999 or tag ids 10/11 for production seed data.
+- **Tool:** opusplan. **Pointer:** `audit/Stories.md` Features 4, 5 + `audit/ImageStorage.md`.
+  **Deps:** WU1.
+
+### WU12.5 — Test Foundation (unit + integration test projects) — DONE ✓ (2026-06-22)
+- **Cells:** none directly — cross-cutting tooling, not a feature cell. Follows directly from a
+  post-WU12 post-mortem: WU12's two create-path bugs were caught only by a human reading
+  `/dev/wu12/*` probe output, which asserts nothing.
+- **Done:** minted `TheCanalaveLibrary.Tests.Unit` (xUnit, references Core only — no DB/host) and
+  `TheCanalaveLibrary.Tests.Integration` (xUnit + `Testcontainers.PostgreSql` +
+  `Microsoft.AspNetCore.Mvc.Testing`, references Server), both added to the `.sln`. See
+  `canalave-conventions/testing.md` for the convention (two test tiers, why integration tests use a
+  real Postgres container rather than EF InMemory/SQLite, the fake-`IActiveUserContext` pattern).
+  Extracted the pure `Slugify` transform out of `ServerStoryWriteService` into
+  `Core/Stories/StorySlug.cs` (unit-testable, no DbContext) — `GenerateUniqueSlugAsync` still owns the
+  DB uniqueness scan. Added `public partial class Program;` to `Server/Program.cs` so
+  `WebApplicationFactory<Program>` can reference it from the test assembly. Integration infra:
+  `PostgresFixture` (one Testcontainers Postgres per collection, migrated via `Database.MigrateAsync()`
+  — not `EnsureCreated()`), `TestAppFactory` (boots the real `Program.cs` host, swaps the real
+  `ServerActiveUserContext` registration for a settable `FakeActiveUserContext`, redirects
+  `IWebHostEnvironment.WebRootPath` to a per-factory temp folder so image tests never touch the real
+  `wwwroot/uploads/`). Migrated the WU12 dev-diagnostics probes into asserted tests: content-rating
+  filter both directions + `GetListingsByIdsAsync` reorder/drop (`ContentRatingFilterTests`), the
+  create-path NRE/Attach-vs-Add/slug-disambiguation regressions (`StoryWriteServiceTests`),
+  `GetRecentListingsAsync` ordering (`RecentListingsTests`), the image round-trip + delete +
+  path-traversal guard (`ImageStorageServiceTests`), and a DI-resolution sanity check
+  (`HostBootTests`). The `/dev/wu12/*` endpoints and their fixtures stay in place (per the WU12 user
+  instruction) but are no longer the source of truth for these behaviors — see testing.md "Dev-
+  diagnostics endpoints are probes, not the regression net."
+- **Real bug found and fixed while building this, not anticipated in the plan:** the first version of
+  `RecentListingsTests` dated its fixture rows "now + 10 years" expecting them to sort to the top of
+  `GetRecentListingsAsync`'s unfiltered listing regardless of other accumulated rows in the shared
+  Postgres container. That isn't isolation-proof: a leftover row from an *earlier, separate*
+  `dotnet test` process invocation against the same container computes its own "+10 years" from an
+  earlier wall-clock instant, and the test failed intermittently when re-run because two
+  relatively-dated fixtures from different runs can land in either order relative to each other.
+  Fixed by never asserting absolute top-N position against shared/accumulating state — instead fetch
+  enough rows to be sure this test's own two known ids are present, then assert only their order
+  *relative to each other*. Confirmed stable across three consecutive `dotnet test` invocations after
+  the fix.
+- **Verified:** `dotnet build` on the full `.sln` green (8 projects, 0 warnings/errors). `dotnet test`
+  on the full `.sln` green: 25 unit tests (no DB), 15 integration tests (real Testcontainers Postgres,
+  ~4s). Sanity check that the tests actually guard the invariant, not vacuously green: temporarily
+  changed the `"ContentRating"` query filter in `ApplicationDbContext.OnModelCreating` to ignore
+  `ShowMatureContent` (`s => s.Rating <= Rating.M` unconditionally) — 3 of 5 `ContentRatingFilterTests`
+  failed as expected; reverted, full suite green again. No Docker containers left running after any
+  run (Testcontainers' Ryuk reaper cleans up correctly).
+- **2026-06-22 backfill addendum — methodology tightening + test taxonomy overhaul + service + component
+  backfill.** Post-evaluation of WU12.5 found two gaps: (1) testing was never woven into the governing
+  methodology (CLAUDE.md loops, Doc-Touch moment 3, audit Stage-5 rows all silent about tests); (2) the
+  Unit/Integration tier boundary was mis-modeled as a reference-graph proxy ("Unit = Core refs only")
+  that barred host-free Server services. Both fixed in one pass:
+  - **Methodology docs updated (advisory — no Stage gate):** CLAUDE.md Doc-Touch moment 3 now runs
+    `dotnet test` and records the covering tier (Unit/Integration/RazorComponents) or states why none
+    applies; Per-Stage "After completing any work-unit" now names `dotnet test`; audit Stage-5 row
+    strengthened to require tier name or rationale. `workplan.md` per-unit loop and `forward_plan.md`
+    Phase E loop now include `dotnet test` and the tier-recording step (both identical so they don't
+    drift). `testing.md` rewritten: three tiers by *kind* (Unit = directly-constructed, no host/DB,
+    refs Core + Server; Integration = WebApplicationFactory/Testcontainers Postgres; RazorComponents =
+    bUnit render tests — no host, no DB). `Tests.Unit.csproj` now references Server (enabling
+    host-free Server-service unit tests; "no DbContext in Unit" is a convention guardrail, not a
+    reference-graph constraint). `SKILL.md` description updated to surface testing.
+  - **New test project:** `TheCanalaveLibrary.Tests.RazorComponents` (bUnit 1.33.3 + xUnit + FluentAssertions,
+    references SharedUI; added to `.sln`). JSInterop.Loose for Blazored.Typeahead.
+  - **Test backfill — Unit tier (`Tests.Unit`):** `HtmlSanitizationServiceTests` (WU5/WU6 —
+    `ServerHtmlSanitizationService` directly constructed; covers all 11 allowed tags, `<script>`
+    stripping, anchor normalization, scheme filtering, CSS/class stripping, whitespace guard); one
+    production fix found: guard was `IsNullOrEmpty` — changed to `IsNullOrWhiteSpace`. `SpriteReadServiceTests`
+    (WU2 — `ServerSpriteReadService` with `FakeWebHostEnvironment`; covers animated/static/unknown
+    fallback, theme path).
+  - **Test backfill — Integration tier (`Tests.Integration`):** `TagReadServiceTests` (WU3/WU11 —
+    `ITagReadService` via `TestAppFactory` scope; covers ILike, alphabetical order, cap, SpriteUrl null,
+    type filter, relative assertions). `UserDeletionServiceTests` (WU1 Feature 52 — highest-value
+    FK-invariant test: all four Restrict edges verified against real Postgres via `UserManager<User>`;
+    covers null SourceUserId, cascade-deleted UserStat, FollowedUser/Vouch/UserProfileComment cleanup,
+    FK-violation-free execution).
+  - **Test backfill — RazorComponents tier (`Tests.RazorComponents`):** `PaginationControlsTests` (WU8 —
+    page-window math, active-page markup `aria-current`/CSS token, Prev/Next disabled, range summary,
+    callback; CSS custom property rendering remains manual-only for Stage 6); `TagChipTests` (WU4);
+    `TagSelectorTests` (WU11 — pre-selected chip render/remove, `OnSelectionChanged`; add-via-typeahead
+    is manual-only per bUnit JS limitation); `UserCardTests` (WU10).
+  - **Mutation sanity confirmed for all three new suites:** (1) `<script>` added to allow-list →
+    `Sanitize_ScriptTag_IsStrippedCompletely` fails; (2) Notification SetNull commented out →
+    `DeleteUserAsync_NullsOutSourceUserId_OnNotificationsSentByThisUser` fails; (3) `aria-current`
+    condition inverted → 3 `PaginationControlsTests` fail. All reverted; suite green.
+  - **Final counts:** 62 Unit + 33 Integration + 41 RazorComponents = **136 tests total**, all passing.
+- **Tool:** opusplan. **Pointer:** `canalave-conventions/testing.md`, `forward_plan.md` "Test
+  strategy" Resolved entry. **Deps:** WU12.
 
 ### WU13 — `StoryCard` leaf
 - **Cells:** 5 L3/L3.5/L4 (card slice).
@@ -335,7 +458,7 @@ Phase E.
   17 L2 (derived-tab list reads: Actively Reading / Abandoned, etc.).
 - **Tool:** opusplan. **Pointer:** `audit/UserStoryInteractions.md` Features 16, 17. **Deps:** WU12.
 
-### WU16 — `StoryInteractionPanel` composite
+### WU16 — `UserStoryInteractionPanel` composite
 - **Cells:** 16 L3/L3.5/L4, 17 L3.5 (panel slice).
 - **Do:** coordination composite owning the 2-second debounce across UserStoryInteractionButtons; detail
   context (all clickable). Mints `InteractionTypeEnum` and maps each value to `(IconPath, AccentColor)`
@@ -527,3 +650,8 @@ behind the contracts frozen in Layers 1–4. Batch by pattern when the MVP slice
   `audit/Discovery.md` L8 notes, `audit/Moderation.md` Feature 62. Governed by `layer8-data-marts.md`.
 - **Deferred workers (nothing to operate on yet — `grid_axes.md` horizontal note).** 57 Notification
   Cleanup Worker (nothing 60 days old), 58 UserStat Recalculation Worker (real-time counters carry MVP).
+- **Image storage cloud backend.** `IImageStorageService` (minted WU12, MVP impl
+  `LocalImageStorageService` writing under `wwwroot/uploads/`) gets a second implementation,
+  `S3ImageStorageService` (`AWSSDK.S3`), swapped in behind the same frozen interface — MinIO endpoint
+  via Aspire in dev, Cloudflare R2 endpoint in prod (same SDK code, different endpoint config — spec
+  §3.17 / `cross-cutting.md`). Additive, no Layer 1–4 change. Pointer: `audit/ImageStorage.md`.

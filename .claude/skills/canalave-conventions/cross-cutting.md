@@ -118,27 +118,79 @@ Mobile hamburger menu. Notification bell injects `INotificationReadService` dire
 legitimate cross-cutting injection. Login/logout are triggers on the persistent layout,
 not separate navigation targets.
 
-## Content Rating Filtering
+## Active-User Context
 
-Every read service returning story data must filter by content rating:
+`IActiveUserContext` (Core/Identity/) is the scoped "who is the current viewer" companion to the `User`
+entity — minted WU12, because the content-rating filter below needs a per-request source and no such
+abstraction existed yet. Holds only hot scalar fields, never the full entity (defeats the hot/cold
+partition design and the DTO Firewall):
 
 ```csharp
-.Where(s => s.Rating <= (currentUser.ShowMatureContent
-    ? Rating.Mature
-    : Rating.Teen))
+public interface IActiveUserContext
+{
+    int? UserId { get; }              // null = anonymous
+    bool IsAuthenticated { get; }
+    bool ShowMatureContent { get; }    // feeds the content-rating filter below
+    string Theme { get; }              // feeds ISpriteReadService.GetSpriteUrl
+    bool PrefersAnimatedSprites { get; }
+    bool IsModerator { get; }          // query-shaping hint only — NOT the auth authority
+    bool IsAdmin { get; }
+}
 ```
 
-`User.ShowMatureContent` is a hot boolean on the User table — direct column, not in jsonb.
-This is the most frequently evaluated filter in the system.
+`ServerActiveUserContext` (Server/Identity/) is scoped, populated once per circuit from
+`AuthenticationState`/claims. `IsModerator`/`IsAdmin` exist only to decide when a query legitimately
+calls `IgnoreQueryFilters` or shows admin/author UI — real access control stays with `AuthorizeView`/
+policies, not this context.
 
-**Named query filters (EF Core 10)** are a natural fit:
+**What stays out, deliberately:** display name/avatar URL (presentation — comes via `UserCardDto` per
+view); `ReaderDisplaySettings` (already a separate cascading slim bag, a UI-layer concern — see
+`layer3.5-structure.md` "Ambient Viewer Settings via Cascading Slim Bags"); notification/messaging
+prefs (feature-local, read where needed). Collapsing those back into this context would make it grow
+without bound.
+
+Two consumers justify the abstraction independently: the content-rating query filter (below) and
+sprite resolution's `theme`/`animated` arguments (`layer2-services.md` "Sprite URLs Are Resolved
+Server-Side") — both previously had no defined source for "the current user."
+
+## Content Rating Filtering
+
+Every read service returning story data must filter by content rating. **Settled (WU12): this is a
+global EF Core named query filter, sourced from `IActiveUserContext` — not a per-method `.Where`.**
+A per-method filter only holds "no trace anywhere" as strong as every future read method remembering to
+add it; a model-level filter makes it a property of the model. `ApplicationDbContext` takes
+`IActiveUserContext` in its constructor and closes over the resulting ceiling:
 
 ```csharp
-modelBuilder.Entity<Story>()
-    .HasQueryFilter("ContentRating", s => s.Rating <= maxRating);
+public class ApplicationDbContext : DbContext
+{
+    private readonly Rating _maxRating;
 
-// Admin query that needs to see all ratings:
-var allStories = await context.Stories
+    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options, IActiveUserContext activeUser)
+        : base(options)
+    {
+        _maxRating = activeUser.ShowMatureContent ? Rating.M : Rating.T;
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<Story>()
+            .HasQueryFilter("ContentRating", s => s.Rating <= _maxRating);
+    }
+}
+```
+
+Anonymous viewers get the `Rating.T` ceiling (never `IsAuthenticated` ⇒ never `ShowMatureContent`).
+`User.ShowMatureContent` is a hot boolean on the User table — direct column, not in jsonb. This is the
+most frequently evaluated filter in the system.
+
+Mod/author/admin read paths that must see all ratings call `IgnoreQueryFilters` **by name** — EF Core 10
+named filters let this opt-out target only the content-rating filter, leaving any other named filter
+(e.g. a future soft-delete filter) intact on the same query:
+
+```csharp
+// Mod queue / author viewing their own unpublished mature story:
+var allRatings = await context.Stories
     .IgnoreQueryFilters(["ContentRating"])
     .ToListAsync();
 ```

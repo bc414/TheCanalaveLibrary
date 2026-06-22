@@ -9,7 +9,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Npgsql.EntityFrameworkCore.PostgreSQL" Version="13.4.5" />
+        <!-- Aspire.Npgsql.EntityFrameworkCore.PostgreSQL removed WU12 — its AddNpgsqlDbContext<T>
+             always registers via EF Core's DbContextPool with no opt-out, incompatible with
+             ApplicationDbContext's Scoped IActiveUserContext constructor dependency. Plain
+             AddDbContext + UseNpgsql is used instead (Program.cs); see layer2-services.md
+             "DbContext Registration". Npgsql.EntityFrameworkCore.PostgreSQL below is the provider
+             that registration actually needs. -->
         <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.4.5" />
         <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">

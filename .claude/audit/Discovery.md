@@ -54,6 +54,17 @@ resolution direction (build to spec).
   Verified: `dotnet build` green (4 projects); user-confirmed visual check via a throwaway harness on
   `HomeDesktop.razor` (12-page sliding window, 3-page no-ellipsis/centered, single-page renders
   nothing, active highlight follows clicks) — harness removed after confirmation.
+  **2026-06-22 (WU12.5 backfill):** verification migrated into asserted tests — `PaginationControlsTests`
+  in `TheCanalaveLibrary.Tests.RazorComponents` (tier: **RazorComponents**). Covers: nothing rendered
+  at TotalPages ≤ 1; ≤7-page window (all shown, no ellipsis); near-start window (one trailing
+  ellipsis); middle window (two ellipses); active page `aria-current="page"` set correctly; inactive
+  buttons carry no `aria-current`; active-page CSS token `text-white` vs. inactive; Prev/Next disabled
+  on first/last page; range summary text (`11–20 of 47`); `OnPageChanged` callback fires with correct
+  page. Mutation-sanity confirmed: inverting the `aria-current` condition (`!=` instead of `==`) →
+  three tests fail (`aria-current` value wrong, inactive button `text-white`, `aria-current` on wrong
+  button). CSS custom property rendering (`--color-primary` box fill) is NOT testable in bUnit —
+  markup-level evidence is correct; the visual rendering still requires human sign-off for Stage 6.
+  `dotnet test` green.
 
 ## Feature 32 — Full-Text Search
 - **L1 — Stage 5.** `StoryListing.SearchVector` as a stored generated column from `to_tsvector('english',

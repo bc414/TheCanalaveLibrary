@@ -34,6 +34,13 @@ services, no components built.
   menu items render, no doubled spacing); harness removed after confirmation; no real consumer
   exists yet (lands in WU21/WU30/…), so those stay Stage 2 — the DTO contract alone doesn't flip
   them, same as WU4's `TagChip`. **L5 — Stage 2.**
+  **2026-06-22 (WU12.5 backfill):** verification migrated into asserted tests — `UserCardTests` in
+  `TheCanalaveLibrary.Tests.RazorComponents` (tier: **RazorComponents**). Covers: username renders;
+  profile link `href` correct (`/user/{UserId}`); tagline shown/hidden; avatar URL vs. default
+  `/img/default-avatar.svg`; menu closed by default; caret click opens menu (`div.absolute` appears);
+  no optional callbacks → no buttons in menu; `OnReport` delegate → Report button appears and invokes
+  callback. CSS visual rendering (avatar `rounded-full`, caret shape, spacing) remains human sign-off
+  for Stage 6. `dotnet test` green.
 - **L6 — Stage 2** (filtered index `(followed_user_id)` for reverse lookups).
 
 ## Feature 19 — Vouches

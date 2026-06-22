@@ -30,6 +30,21 @@ Global conditions affecting many cells — kept terse; detail lives at the point
   `Server/Endpoints/` are deprecated — no new file is added to them, and each work-unit moves the
   files it touches into that feature's cluster folder as part of finishing the work. Detail:
   `canalave-conventions/SKILL.md` "Code Organization".
+- **Cross-cutting infra minted (WU12): `IActiveUserContext`, the content-rating named query filter,
+  `IImageStorageService`.** All three are now load-bearing for every future read service touching
+  `Story` or user-uploaded images, not Stories-specific. Also: the Aspire Npgsql EF Core *client*
+  package is removed from `TheCanalaveLibrary.Server` (pooled DbContexts are incompatible with
+  `IActiveUserContext`'s Scoped lifetime) — plain `AddDbContext` is now the standing registration
+  pattern for both DbContexts. Detail: `cross-cutting.md` "Active-User Context"/"Content Rating
+  Filtering", `layer2-services.md` "DbContext Registration", `audit/ImageStorage.md`,
+  `forward_plan.md` "Aspire orchestration during MVP dev" narrower correction.
+- **Three-tier automated test suite in place (WU12.5 + 2026-06-22 backfill).** Three test projects in
+  the `.sln` — `dotnet test` runs all. Organized by *kind* (not production project): `Tests.Unit`
+  (directly-constructed, no host/DB — refs Core + Server), `Tests.Integration` (real Testcontainers
+  Postgres + `WebApplicationFactory`), `Tests.RazorComponents` (bUnit component render tests). Per-unit
+  loop and Phase E loop now name `dotnet test`; obligation is advisory ("should add tests") — no Stage
+  gate. No cell Stage changes from this; it's tooling every future work-unit should add tests to.
+  Detail: `canalave-conventions/testing.md`, `workplan.md` WU12.5.
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L5 | L6 | L7 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|----|----|----|----|
@@ -37,7 +52,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 2 | 2 | 1 | 4 | N/A | N/A | N/A |
 | 4 | Story Creation & Editing | Stories | 5 | 5 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
-| 5 | Story Browsing & Display | Stories | 5 | 2 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
+| 5 | Story Browsing & Display | Stories | 5 | 5 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
 | 6 | Chapter Writing & Versioning | Chapters | 5 | 2 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
 | 7 | Chapter Reading | Chapters | 5 | 2 | 2 | 2 | 2 | 2 | 2 | N/A | N/A |
 | 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
