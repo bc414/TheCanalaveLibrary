@@ -1,0 +1,160 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Coordination composite — chapter navigation bar (spec §5.30.3, layer3.5-structure.md
+   "Pass-Through Layout Composite"). Encompasses: prev/next chapter links, chapter-jump
+   dropdown (with alt-version indicator per entry), and a version picker (visible only when the
+   current chapter has >1 accessible version). No service injection — all data arrives as
+   parameters; the dispatcher (WU26) loads the TOC + version list once and passes them to both
+   the top and bottom instances.
+
+   Navigation is anchor <a href> links — Blazor's Router intercepts internal-link clicks in
+   both InteractiveServer and InteractiveWasm modes (no full page reload; no NavigationManager
+   needed here). URL structure: /story/{storyId}/{chapterNumber} for the primary version,
+   /story/{storyId}/{chapterNumber}/{versionOrder} for alternate versions.
+
+   The chapter-select dropdown uses <details>/<summary> (CSS disclosure, no JS/Blazor state) so
+   all links are always present in the DOM and testable by bUnit regardless of open state. *@
+
+<nav class="flex flex-wrap items-center gap-2" aria-label="Chapter navigation">
+
+    @* Prev chapter — link when available, disabled span at the start of the story. *@
+    @if (PreviousChapterNumber.HasValue)
+    {
+        <a href="@ChapterUrl(PreviousChapterNumber.Value)"
+           class="@NavLinkClasses(false)"
+           aria-label="Previous chapter">&lsaquo;</a>
+    }
+    else
+    {
+        <span class="@NavLinkClasses(true)"
+              aria-disabled="true"
+              aria-label="Previous chapter">&lsaquo;</span>
+    }
+
+    @* Chapter-select dropdown: each TOC entry is a link to that chapter's primary version.
+       Current chapter highlighted with aria-current="page"; chapters that have viewer-accessible
+       alternate versions carry a small indicator in their row. *@
+    <details class="relative">
+        <summary class="flex cursor-pointer list-none items-center gap-1 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-1.5 text-sm transition-colors hover:bg-[--color-primary]/20">
+            Chapter @CurrentChapterNumber@(CurrentChapterTitle is not null ? $": {CurrentChapterTitle}" : string.Empty)
+            <span aria-hidden="true" class="text-[--color-text-muted]">&#9662;</span>
+        </summary>
+        <div class="absolute left-0 top-full z-10 mt-1 max-h-64 min-w-48 overflow-y-auto rounded-md border border-[--color-border] bg-[--color-surface] py-1 shadow-md">
+            @foreach (var entry in Toc)
+            {
+                <a href="@ChapterUrl(entry.ChapterNumber)"
+                   class="@TocEntryClasses(entry)"
+                   aria-current="@(entry.ChapterNumber == CurrentChapterNumber ? "page" : null)">
+                    <span>@entry.ChapterNumber. @entry.Title</span>
+                    @if (entry.HasAlternateVersions)
+                    {
+                        <span class="ml-auto text-xs text-[--color-text-muted]"
+                              title="Has alternate versions">&#8942;</span>
+                    }
+                </a>
+            }
+        </div>
+    </details>
+
+    @* Version picker — only rendered when the current chapter exposes >1 accessible version.
+       The primary version links to the clean chapter URL (no versionOrder segment); alternates
+       link with their SortOrder (ChapterVersionDto.VersionOrder) in the path. *@
+    @if (Versions.Count > 1)
+    {
+        <details class="relative">
+            <summary class="flex cursor-pointer list-none items-center gap-1 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-1.5 text-sm transition-colors hover:bg-[--color-primary]/20">
+                @CurrentVersionLabel
+                <span aria-hidden="true" class="text-[--color-text-muted]">&#9662;</span>
+            </summary>
+            <div class="absolute left-0 top-full z-10 mt-1 max-h-48 min-w-40 overflow-y-auto rounded-md border border-[--color-border] bg-[--color-surface] py-1 shadow-md">
+                @foreach (var version in Versions)
+                {
+                    bool isCurrent = version.VersionOrder == CurrentVersionOrder;
+                    <a href="@VersionUrl(version)"
+                       class="@VersionEntryClasses(isCurrent)"
+                       aria-current="@(isCurrent ? "page" : null)">
+                        @VersionLabel(version)
+                    </a>
+                }
+            </div>
+        </details>
+    }
+
+    @* Next chapter — link when available, disabled span at the end of the story. *@
+    @if (NextChapterNumber.HasValue)
+    {
+        <a href="@ChapterUrl(NextChapterNumber.Value)"
+           class="@NavLinkClasses(false)"
+           aria-label="Next chapter">&rsaquo;</a>
+    }
+    else
+    {
+        <span class="@NavLinkClasses(true)"
+              aria-disabled="true"
+              aria-label="Next chapter">&rsaquo;</span>
+    }
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public int StoryId { get; set; }
+    [Parameter, EditorRequired] public int CurrentChapterNumber { get; set; }
+    /// <summary>
+    /// The <c>SortOrder</c> of the currently displayed <c>ChapterContent</c> (maps to
+    /// <c>ChapterReadingDto.VersionOrder</c>). 0 = primary version.
+    /// </summary>
+    [Parameter] public int CurrentVersionOrder { get; set; }
+    [Parameter] public int? PreviousChapterNumber { get; set; }
+    [Parameter] public int? NextChapterNumber { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<ChapterTocEntryDto> Toc { get; set; } = [];
+    /// <summary>
+    /// The versions accessible to the current viewer for this chapter, from
+    /// <c>IChapterReadService.GetChapterVersionsAsync</c>. Empty or single-element → version
+    /// picker not rendered.
+    /// </summary>
+    [Parameter] public IReadOnlyList<ChapterVersionDto> Versions { get; set; } = [];
+
+    private string? CurrentChapterTitle =>
+        Toc.FirstOrDefault(e => e.ChapterNumber == CurrentChapterNumber)?.Title;
+
+    private string CurrentVersionLabel
+    {
+        get
+        {
+            ChapterVersionDto? current = Versions.FirstOrDefault(v => v.VersionOrder == CurrentVersionOrder);
+            return current is not null ? VersionLabel(current) : "Version";
+        }
+    }
+
+    // URL helpers — mirror the dispatcher's @page route structure (spec §5.30.3).
+    private string ChapterUrl(int chapterNumber) => $"/story/{StoryId}/{chapterNumber}";
+
+    private string VersionUrl(ChapterVersionDto version) =>
+        version.IsPrimary
+            ? $"/story/{StoryId}/{CurrentChapterNumber}"
+            : $"/story/{StoryId}/{CurrentChapterNumber}/{version.VersionOrder}";
+
+    private static string VersionLabel(ChapterVersionDto version) =>
+        version.VersionName ?? (version.IsPrimary ? "Primary" : $"Version {version.VersionOrder}");
+
+    // Shared style helpers — mirrors PaginationControls' Prev/Next button convention.
+    private static string NavLinkClasses(bool disabled) =>
+        (disabled
+            ? "bg-[--color-surface-raised]/50 border-[--color-border] text-[--color-text-muted] cursor-not-allowed"
+            : "bg-[--color-surface-raised] border-[--color-border] text-[--color-text] hover:bg-[--color-primary]/20") +
+        " inline-grid size-9 place-items-center rounded-md border transition-colors";
+
+    private string TocEntryClasses(ChapterTocEntryDto entry) =>
+        (entry.ChapterNumber == CurrentChapterNumber
+            ? "bg-[--color-primary]/10 font-semibold text-[--color-primary]"
+            : (entry.IsPublished
+                ? "text-[--color-text] hover:bg-[--color-surface-hover]"
+                : "pointer-events-none text-[--color-text-muted]")) +
+        " flex items-center justify-between gap-2 px-3 py-1.5 text-sm";
+
+    private static string VersionEntryClasses(bool isCurrent) =>
+        (isCurrent
+            ? "bg-[--color-primary]/10 font-semibold text-[--color-primary]"
+            : "text-[--color-text] hover:bg-[--color-surface-hover]") +
+        " block px-3 py-1.5 text-sm";
+}

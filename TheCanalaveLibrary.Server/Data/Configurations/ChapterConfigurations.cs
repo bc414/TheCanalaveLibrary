@@ -18,13 +18,17 @@ public sealed class ChapterConfiguration : IEntityTypeConfiguration<Chapter>
             .HasForeignKey(cc => cc.ChapterId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // 2. Define the separate 1-to-1 for "primary version"
-        // This tells EF Core that PrimaryContentId is a special
-        // required link to one of the ChapterContents.
+        // 2. Define the separate 1-to-1 for "primary version".
+        // PrimaryContentId is nullable (long?) so the Chapter row can be inserted before its first
+        // ChapterContent, breaking the circular FK dependency (see Chapter.PrimaryContentId doc).
+        // IsRequired(false) generates nullable: true in the migration (WU17).
+        // OnDelete Restrict: once a primary version is set, it cannot be deleted until another
+        // version is promoted first (SetPrimaryVersionAsync).
         builder.HasOne(c => c.PrimaryContent)
             .WithMany() // No inverse navigation property
             .HasForeignKey(c => c.PrimaryContentId)
-            .OnDelete(DeleteBehavior.Restrict); // Don't let a "primary" version be deleted
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(c => c.ChapterComments)
             .WithOne(cc => cc.Chapter)

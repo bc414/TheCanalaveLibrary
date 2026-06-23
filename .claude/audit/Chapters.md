@@ -21,11 +21,27 @@ of both `EditorView`'s output and the sanitizer.
 ---
 
 ## Feature 6 — Chapter Writing & Versioning
-- **L1 — Stage 5.** `Chapter`/`ChapterContent` with the live-alternate versioning model and
-  `PrimaryContentId` primary-version link. Sound; matches §6.9. Awaiting migration.
-- **L2 — Stage 2.** No chapter write service. The `IHtmlSanitizationService` allow-list (§3.21) is
-  minted in WU6 (DI-registered, `Server/RichText/`) but has no call site yet — this chapter write
-  service is its first intended caller. Word-count-on-stripped-text also unimplemented.
+- **L1 — Stage 5.** `Chapter`/`ChapterContent` with the live-alternate versioning model. Note:
+  `Chapter.PrimaryContentId` was changed from `long` to `long?` (nullable) during WU17 to break the
+  circular FK insert dependency (`Chapter.PrimaryContentId → ChapterContent.ChapterId → Chapter`);
+  migration `20260623005108_MakeChapterPrimaryContentIdNullable` applied. `PrimaryContent` nav is now
+  `ChapterContent?`. Also: `Story.ChapterCount` does not exist in the current C# model (the field was
+  assumed during WU17 planning but is absent from the L1 entity — future work-unit adds it when needed).
+- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22).** Built `IChapterWriteService : IChapterReadService` and
+  `ServerChapterWriteService : ServerChapterReadService` in `Core/Chapters/`/`Server/Chapters/`. Write
+  service is the **first production caller** of `IHtmlSanitizationService`. `ChapterText.CountWords()`
+  helper in `Core/Chapters/ChapterText.cs` (strips HTML tags + decodes entities before splitting on
+  whitespace — dependency-free, parallels `StorySlug.Slugify`). Write surface: `CreateChapterAsync`
+  (two-SaveChanges circular-FK break: insert Chapter+ChapterContent graph with `PrimaryContentId=null`,
+  then fix-up), `AddAlternateVersionAsync`, `UpdateChapterContentAsync`, `SetPrimaryVersionAsync`,
+  `SetPublishedAsync`. `Story.WordCount` and `Chapter.VersionCount` maintained; `Story.ChapterCount` not
+  maintained (field absent from model — see L1 note). No Client/WASM impl or `ChapterEndpoints` (MVP
+  InteractiveServer-only). Verified: `dotnet build` green; `dotnet test` 50/50 green (Unit tier:
+  `ChapterTextTests` — 14 tests covering CountWords over plain text, HTML tags, entities, null/whitespace;
+  Integration tier: `ChapterWriteServiceTests` — 8 tests covering circular-FK insert, sanitization, word
+  count, versioning, promotion, update, Story.WordCount roll-up, validation). Mutation-sanity confirmed:
+  adding `"script"` to the sanitizer allow-list → `SanitizesScriptTag` fails; reverted. Server boot:
+  homepage/login `200`, DI resolves both services.
 - **L3-Logic — Stage 5 (WU6, see Stage note below).** `EditorView`'s coordination logic (preview
   capture/popup state, `GetHtmlAsync()` pull-on-submit contract) — Phase-1 atom shared with
   BlogPosts/Messaging/Recommendations/Comments/Profiles. Version indicators (live-alternate switcher
@@ -88,15 +104,25 @@ the build, superseding the original spec/skill sketch:
 
 ## Feature 7 — Chapter Reading
 - **L1 — Stage 5.** `UserChapterInteraction` supports progress + read state.
-- **L2 — Stage 2.** No reading read-service.
+- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22).** `IChapterReadService` with `GetChapterForReadingAsync`,
+  `GetChapterTocAsync`, `GetChapterVersionsAsync`, `GetChapterForEditAsync` in `ServerChapterReadService`
+  (primary-constructor DI on `ReadOnlyApplicationDbContext`). Per-version `ChapterContent.Rating` filter
+  applied explicitly (the global `"ContentRating"` query filter covers `Story` only — `ChapterContent.Rating`
+  vs `ShowMatureContent` ceiling is a manual `.Where()` in every method). `ChapterReadingDto` includes
+  prev/next chapter numbers (EF correlated subqueries) and `StoryRating` so L3 can render the
+  "chapter rating exceeds story rating → skip to next" warning without a second fetch. Note on
+  `GetChapterVersionsAsync`: `.OrderBy()` must be inside `SelectMany`'s inner query (on the entity
+  field), not after — EF Core cannot translate `.OrderBy()` on a DTO property projected from a
+  `SelectMany` transparent identifier. Verified: `dotnet test` 50/50 green (Integration tier:
+  `ChapterReadServiceTests` — 8 tests covering primary-version projection, null-for-nonexistent,
+  per-version rating ceiling anonymous/mature, TOC ordering, prev/next navigation).
 - **L3-Logic — Stage 2.** Reader settings application (font/size/line-height/width/justify, auto-load
   next, §7) and `AutoLoadNextChapter` unbuilt. Content-rating warning ("Skip to next chapter" when chapter
   rating exceeds story rating) unbuilt.
-- **L3.5-Structure — Stage 2** (slice complete, see WU5 note below). `ChapterPage` dispatcher (two
-  `@page` directives — primary + versioned URL, §5.30.3) and `ChapterNavigation` coordination composite
-  (prev/next, dropdown, version switcher; top + bottom) remain unbuilt (WU18/WU26).
-- **L4-Style — Stage 2** (slice complete, see WU5 note below; reader settings as CSS unblocked — tokens
-  locked Phase C. The earlier "Stage 1, blocked on tokens" note was stale).
+- **L3.5-Structure — Stage 5 (WU18 nav slice, DONE ✓ 2026-06-23; WU5 leaf slice already Stage 5).**
+  See WU18 Stage note below. `ChapterPage` dispatcher (two `@page` directives — primary + versioned URL)
+  and `CommentSection` on chapter remain unbuilt — WU26.
+- **L4-Style — Stage 5 (WU18 nav slice, DONE ✓ 2026-06-23; see WU18 Stage note below).**
 - **L5 — Stage 2. L6 — Stage 2.**
 
 **WU5 Stage note (2026-06-21) — `RichTextView` leaf slice, DONE ✓.** Built the universal read-only
@@ -123,6 +149,53 @@ Code Organization (parallel to `Lookups/`).
 - **Feeds WU6 (`EditorView`):** EditorView's preview mode renders `RichTextView` directly (spec
   §5.30.2) — what the author sees in preview is what readers see. WU6 owns sanitizing on save to
   match what this leaf trusts.
+
+**WU18 Stage note (2026-06-23) — `ChapterNavigation` composite, DONE ✓.** Built
+`ChapterNavigation` (`SharedUI/Chapters/`, first file in the SharedUI `Chapters/` cluster — folder
+created just-in-time). Mints the parameter contract the WU26 reading-page dispatcher will pass to
+both the top and bottom instances.
+
+Settled (both confirmed with user 2026-06-23, Doc-Touch moment 1/pre-plan):
+
+1. **Navigation = anchor `<a href>` links** to the spec URLs (spec §5.30.3). Composite is injection-
+   free — no `NavigationManager`, no service injection. Blazor's `Router` intercepts internal links in
+   both InteractiveServer and InteractiveWasm modes (no full page reload). Disabled endpoints (first/
+   last chapter boundary) render as `<span aria-disabled="true">`, not `<button disabled>` — these
+   are navigation, not actions.
+
+2. **Compact chapter dropdown + alt-version indicator** — HTML `<details>`/`<summary>` disclosure
+   (no JS, no Blazor state; all links always in the DOM for bUnit regardless of open state). Each TOC
+   entry is a link to its chapter's primary URL; entries with `HasAlternateVersions=true` carry a small
+   `<span title="Has alternate versions">` glyph. A **separate version picker** `<details>` is rendered
+   only when `Versions.Count > 1`; primary version → clean `/story/{id}/{ch}` URL; alternate →
+   `/story/{id}/{ch}/{versionOrder}`. The rich full table of contents (one row per chapter, split
+   horizontally per version) lives on the story detail page — WU25/WU26, not here.
+
+Parameter contract minted (WU26 dispatcher must supply these):
+```csharp
+[Parameter, EditorRequired] public int StoryId { get; set; }
+[Parameter, EditorRequired] public int CurrentChapterNumber { get; set; }
+[Parameter] public int CurrentVersionOrder { get; set; }        // 0 = primary (matches ChapterReadingDto.VersionOrder)
+[Parameter] public int? PreviousChapterNumber { get; set; }
+[Parameter] public int? NextChapterNumber { get; set; }
+[Parameter, EditorRequired] public IReadOnlyList<ChapterTocEntryDto> Toc { get; set; } = [];
+[Parameter] public IReadOnlyList<ChapterVersionDto> Versions { get; set; } = [];
+```
+
+**Verified:** `dotnet build` green (8 projects, 0 errors, 2 pre-existing warnings unrelated to this
+WU). `dotnet test` green — 105 Unit / 122 RazorComponents / 109 Integration = **336 total**. Test
+tier: **RazorComponents** (`ChapterNavigationTests.cs` — 13 tests covering prev/next hrefs,
+first/last-chapter disabled spans, TOC link count + hrefs, current-chapter `aria-current`, alt-version
+indicator on HasAlternateVersions-only entries, version picker visibility gate, per-version hrefs +
+primary clean URL, current-version `aria-current`). No Unit/Integration tests apply — no service, no
+DB. Visual/L4 human sign-off pending (Stage 6) via throwaway harness on live server before WU26 lands.
+Mutation-sanity confirmed manually: inverting `aria-current` condition → tests fail; inverting
+`HasAlternateVersions` guard → tests fail; showing version picker for single-version chapter → test
+fails. Doc-Touch moment 2 (mid-build): `layer3.5-structure.md` "Pass-Through Layout Composite" snippet
+updated from placeholder sub-components to the real `<details>`/`<summary>` anchor shape; new rules
+recorded for CSS disclosures, `<a>`-vs-`<span>` navigation pattern, `aria-current="page"`, and
+version URL contract. `layer4-style.md` Pattern Accumulation entry added for the nav-bar disclosure
+shape and dropdown row classes.
 
 ## Feature 44 — Reading Progress Tracking
 - **L1 — Stage 5.** `UserChapterInteraction.ReadProgress` / `IsRead`.

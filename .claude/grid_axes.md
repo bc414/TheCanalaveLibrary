@@ -102,7 +102,7 @@ design dependency.
 
 **Component tiers** determine Logic weight:
 - **Leaf** (TagChip, UserStoryInteractionButton, StoryCard): Parameters and EventCallbacks only. No service injection.
-- **Composite** (ChapterNavigation, StoryInteractionPanel, ResultsFilterPanel): Pass-through parameters plus coordination
+- **Composite** (ChapterNavigation, UserStoryInteractionPanel, ResultsFilterPanel): Pass-through parameters plus coordination
   state (debounce, mode toggles). Service injection only for genuinely independent concerns.
 - **Page/Dispatcher** (StoryPage, ChapterPage, SearchPage): Service injection, route parameters, data loading,
   device detection, `[PersistentState]` on loaded DTOs, event coordination for child writes.
@@ -138,7 +138,7 @@ design.
 
 **Composite subtypes:**
 1. Pass-through layout (StoryDesktop, StoryDeck) — arranges children, thin logic.
-2. Coordination (StoryInteractionPanel, ResultsFilterPanel) — owns state spanning children.
+2. Coordination (UserStoryInteractionPanel, ResultsFilterPanel) — owns state spanning children.
 3. Container (Card, Panel) — provides visual vessel via `@ChildContent`.
 4. Third-party wrapper (EditorView) — adapts Quill/Typeahead to Blazor model.
 
@@ -413,7 +413,7 @@ independently. The service layer rejects logically impossible write combinations
 **`UserStoryInteractionButton` (leaf):** EventCallback-driven behavior — absence of `OnToggle` means
 read-only (rendered only when `IsActive`). When `OnToggle` is provided, button is always rendered and
 clickable. Two presentation contexts: listing context (Ignore/ReadItLater clickable, others read-only)
-and detail context (all clickable). Debounce managed by `StoryInteractionPanel` coordination composite.
+and detail context (all clickable). Debounce managed by `UserStoryInteractionPanel` coordination composite.
 
 **17. Story Interaction Lists & Bookshelves** — **Bookshelves** (`/bookshelves/{Tab}`) are the personal
 reading management dashboard. Active user only. Not a discovery surface — no SearchMode entries.

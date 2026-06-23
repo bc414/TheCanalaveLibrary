@@ -1,0 +1,206 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Leaf, spec §5.30.6. Universal story-summary atom (Stories/ cluster — consumed by StoryDeck,
+   Bookshelves, Profiles, Discovery, Groups, Also-Favorited). Pure leaf: takes StoryListingDto +
+   optional InteractionState (batch-loaded by parent via GetStatesByStoryIdsAsync) + optional
+   gated caret EventCallbacks. Injects no service — UserStoryInteractionPanel owns its own write.
+   Author byline is a plain hyperlink, NOT UserCard (spec §5.30.7 — card is too compact).
+   Cover art: CoverArtRelativeUrl is a stored relative URL, used verbatim (same discipline as
+   avatars; never resolved through a service). _coverArtFailed fallback guards broken URLs.
+   Outer Margin Rule: root has padding but no outer margin — parent owns spacing via gap. *@
+
+<div class="relative flex flex-col gap-3 rounded-xl bg-surface p-4 shadow-medium">
+
+    @* Cover art *@
+    @if (Story.CoverArtRelativeUrl is not null && !_coverArtFailed)
+    {
+        <img src="@Story.CoverArtRelativeUrl" alt=""
+             class="w-full h-36 rounded-lg object-cover object-top shrink-0"
+             loading="lazy" @onerror="HandleCoverArtError" />
+    }
+    else
+    {
+        <div class="w-full h-36 rounded-lg bg-surface-hover flex items-center justify-center shrink-0">
+            <span class="text-4xl text-muted select-none">@(Story.Title.Length > 0 ? Story.Title[0] : '?')</span>
+        </div>
+    }
+
+    @* Title row + caret *@
+    <div class="flex items-start gap-2 min-w-0">
+        <a href="@StoryHref" class="flex-1 font-bold text-text hover:underline min-w-0 truncate leading-snug">
+            @Story.Title
+        </a>
+        <button type="button" class="shrink-0 ml-auto text-muted hover:text-text leading-none"
+                @onclick="ToggleMenu" aria-label="Story options" aria-expanded="@_menuOpen">▾</button>
+    </div>
+
+    @* Caret dropdown *@
+    @if (_menuOpen)
+    {
+        <div class="absolute right-4 top-12 z-10 min-w-44 rounded-md bg-surface py-1 shadow-medium">
+            <a href="@StoryHref" class="block px-3 py-1.5 text-sm hover:bg-surface-hover"
+               @onclick="CloseMenu">View Story</a>
+            @if (OnDiscoverFromStory.HasDelegate)
+            {
+                <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
+                        @onclick="() => InvokeAndClose(OnDiscoverFromStory)">Discover from this Story</button>
+            }
+            @if (OnCopyLink.HasDelegate)
+            {
+                <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
+                        @onclick="() => InvokeAndClose(OnCopyLink)">Copy link</button>
+            }
+            @if (OnReport.HasDelegate)
+            {
+                <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
+                        @onclick="() => InvokeAndClose(OnReport)">Report</button>
+            }
+            @if (OnDownload.HasDelegate)
+            {
+                <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
+                        @onclick="() => InvokeAndClose(OnDownload)">Download/Export</button>
+            }
+        </div>
+    }
+
+    @* Author byline — plain hyperlink, NOT UserCard (spec §5.30.7) *@
+    @if (Story.AuthorId is not null)
+    {
+        <a href="@AuthorHref" class="text-sm text-muted hover:underline truncate min-w-0 -mt-1">
+            by @Story.AuthorName
+        </a>
+    }
+    else
+    {
+        <span class="text-sm text-muted truncate -mt-1">by @Story.AuthorName</span>
+    }
+
+    @* Status, rating, word-count badges *@
+    <div class="flex flex-wrap items-center gap-1.5">
+        <span class="@StatusBadgeClass px-2 py-0.5 rounded-full text-xs font-medium">@StatusLabel</span>
+        <span class="@RatingBadgeClass px-2 py-0.5 rounded-full text-xs font-medium">@RatingLabel</span>
+        <span class="text-xs text-muted">@WordCountDisplay</span>
+    </div>
+
+    @* Short description — truncated preview, full text as tooltip *@
+    @if (Story.ShortDescription is not null)
+    {
+        <p class="text-sm text-muted line-clamp-3 leading-snug" title="@Story.ShortDescription">
+            @Story.ShortDescription
+        </p>
+    }
+
+    @* Tags — sprite-resolved TagChipDtos, read-only (no OnRemove) *@
+    @if (Story.Tags.Count > 0)
+    {
+        <div class="flex flex-wrap gap-1">
+            @foreach (var tag in Story.Tags)
+            {
+                <TagChip Tag="@tag" />
+            }
+        </div>
+    }
+
+    @* Interaction panel — listing context; state batch-loaded by parent *@
+    <UserStoryInteractionPanel StoryId="@Story.StoryId"
+                               State="@InteractionState"
+                               Context="InteractionDisplayContext.Listing"
+                               IsOwnStory="@IsOwnStory" />
+
+</div>
+
+@code {
+    private const string DefaultCoverArtFallback = "/img/default-cover.svg";
+
+    [Parameter, EditorRequired]
+    public StoryListingDto Story { get; set; } = null!;
+
+    /// <summary>
+    /// Per-viewer interaction state, batch-loaded by the parent via GetStatesByStoryIdsAsync.
+    /// Forwarded to UserStoryInteractionPanel; null is treated as all-false (no interaction).
+    /// </summary>
+    [Parameter] public UserStoryInteractionStateDto? InteractionState { get; set; }
+
+    /// <summary>
+    /// True when the current viewer is the story's author. Forwarded to the panel, which renders
+    /// an Edit Story link instead of interaction buttons.
+    /// </summary>
+    [Parameter] public bool IsOwnStory { get; set; }
+
+    // Optional caret-menu actions — consumers wire only what exists (HasDelegate gating).
+    [Parameter] public EventCallback OnDiscoverFromStory { get; set; }
+    [Parameter] public EventCallback OnCopyLink { get; set; }
+    [Parameter] public EventCallback OnReport { get; set; }
+    [Parameter] public EventCallback OnDownload { get; set; }
+
+    private bool _menuOpen;
+    private bool _coverArtFailed;
+
+    private string StoryHref => $"/story/{Story.StoryId}";
+    private string AuthorHref => $"/user/{Story.AuthorId}";
+
+    // ── Computed display properties ──────────────────────────────────────────────
+
+    private string WordCountDisplay => Story.WordCount switch
+    {
+        < 1_000 => $"{Story.WordCount} words",
+        < 1_000_000 => $"{Story.WordCount / 1000.0:F0}K words",
+        _ => $"{Story.WordCount / 1_000_000.0:F1}M words"
+    };
+
+    private string StatusLabel => Story.StoryStatusId switch
+    {
+        StoryStatusEnum.Draft => "Draft",
+        StoryStatusEnum.PendingApproval => "Pending Approval",
+        StoryStatusEnum.InProgress => "In Progress",
+        StoryStatusEnum.Completed => "Complete",
+        StoryStatusEnum.OnHiatus => "On Hiatus",
+        StoryStatusEnum.Cancelled => "Cancelled",
+        StoryStatusEnum.Rewriting => "Rewriting",
+        StoryStatusEnum.OpenBeta => "Open Beta",
+        StoryStatusEnum.Rejected => "Rejected",
+        _ => "Unknown"
+    };
+
+    private string StatusBadgeClass => Story.StoryStatusId switch
+    {
+        StoryStatusEnum.InProgress => "bg-blue-100 text-blue-800",
+        StoryStatusEnum.Completed => "bg-green-100 text-green-800",
+        StoryStatusEnum.OnHiatus => "bg-yellow-100 text-yellow-800",
+        StoryStatusEnum.Cancelled => "bg-red-100 text-red-800",
+        StoryStatusEnum.Rewriting => "bg-purple-100 text-purple-800",
+        _ => "bg-surface-hover text-muted"   // Draft, PendingApproval, OpenBeta, Rejected
+    };
+
+    private string RatingLabel => Story.Rating switch
+    {
+        Rating.E => "Everyone",
+        Rating.T => "Teen",
+        Rating.M => "Mature",
+        _ => "Unknown"
+    };
+
+    private string RatingBadgeClass => Story.Rating switch
+    {
+        Rating.E => "bg-green-100 text-green-800",
+        Rating.T => "bg-yellow-100 text-yellow-800",
+        Rating.M => "bg-red-100 text-red-800",
+        _ => "bg-surface-hover text-muted"
+    };
+
+    // ── Caret menu helpers ───────────────────────────────────────────────────────
+
+    private void ToggleMenu() => _menuOpen = !_menuOpen;
+    private void CloseMenu() => _menuOpen = false;
+
+    private async Task InvokeAndClose(EventCallback callback)
+    {
+        _menuOpen = false;
+        await callback.InvokeAsync();
+    }
+
+    // ── Cover art fallback ───────────────────────────────────────────────────────
+
+    private void HandleCoverArtError() => _coverArtFailed = true;
+}

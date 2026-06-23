@@ -99,7 +99,10 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
   `GetRecentListingsAsync(page, pageSize)` (one unfiltered-by-criteria browse projection, ordered by
   `LastUpdatedDate DESC`). `GetListingsAsync(StoryFilterDto)` remains explicitly deferred to WU23 — its
   filter shape isn't real until `ResultsFilterPanel` exists, and adding it later is purely additive.
-  **How verified:** via `/dev/wu12/listings/recent` and `/dev/wu12/listings/by-ids` (kept as standing
+  **WU13 (2026-06-23) additive DTO extension:** `StoryListingDto` gains `ShortDescription (string?)`
+  projected from `StoryListing.ShortDescription` (warm partition, already stored, MaxLength 500).
+  No migration. Additive — does not contradict the WU12 contract; L2 remains Stage 5.
+  **How verified (DTO extension):** via `/dev/wu12/listings/recent` and `/dev/wu12/listings/by-ids` (kept as standing
   dev tools, not removed) against fixture stories (ids 5/6/7, fixture tags 10/11, kept per explicit user
   instruction for later analysis rather than deleted as the original plan's step 4 specified) —
   confirmed the content filter both directions: anonymous (`/dev/wu12/whoami` unauthenticated) saw only
@@ -111,6 +114,31 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
   in `TheCanalaveLibrary.Tests.Integration` cover the same both-directions filter check and
   reorder/drop behavior against a real Postgres; the dev-diagnostics endpoints are no longer the
   source of truth for this behavior (see `canalave-conventions/testing.md`).
+  **WU13 (2026-06-23) StoryCard slice complete (Stage 5 for this slice):** `SharedUI/Stories/StoryCard.razor`
+  built as a pure leaf (no service injection). Contract: `[EditorRequired] StoryListingDto Story`,
+  `UserStoryInteractionStateDto? InteractionState` (batch-loaded by parent, forwarded to
+  `UserStoryInteractionPanel`), `bool IsOwnStory`, 4 gated `EventCallback`s (OnDiscoverFromStory,
+  OnCopyLink, OnReport, OnDownload). Composes `TagChip` (read-only) + `UserStoryInteractionPanel` in
+  Listing context. Author byline is a plain hyperlink — NOT `UserCard` (spec §5.30.7). Cover art uses
+  stored `CoverArtRelativeUrl` verbatim with `_coverArtFailed` `@onerror` fallback placeholder. Computed
+  display: `WordCountDisplay` (3-tier K/M suffix), `StatusLabel`/`StatusBadgeClass` (switch over all 9
+  `StoryStatusEnum` values), `RatingLabel`/`RatingBadgeClass` (switch over `Rating` E/T/M). Caret: always-
+  present "View Story" link + `HasDelegate`-gated optional items, `InvokeAndClose` helper (mirrors
+  `UserCard`). Root is `relative flex flex-col` with internal padding, no outer margin (Outer Margin Rule).
+  *This slice only*: L3-Logic / L3.5-Structure / L4-Style cells for Feature 5 stay at 4/4/1 because
+  `StoryPage` dispatcher (flicker, catch-all route), `StoryDesktop`/`StoryMobile` layout, and `StoryDeck`
+  still hold those cells. The StoryCard contract is now minted, so WU14 (`StoryDeck`) and all listing
+  consumers have their key dep satisfied. Step 0 of WU13 also renamed the WU16 component from
+  `StoryInteractionPanel` to `UserStoryInteractionPanel` (all references updated repo-wide before any
+  StoryCard work, so the card references the final name from the start).
+  **How verified (WU13 slice):** `dotnet build` green (8 projects, 0 errors, 2 pre-existing warnings).
+  `dotnet test` green: 105 Unit + 107 RazorComponents + 109 Integration = 321 total. RazorComponents tier
+  (`StoryCardTests.cs`, 30 tests, JSInterop.Loose, registers `FakeUserStoryInteractionWriteService`):
+  title link, author byline link/plain-text null-author, tag count + read-only, ShortDescription
+  tooltip/null, WordCountDisplay theory (8 InlineData cases), cover-art fallback/lazy-loading, status/
+  rating badge theories, panel composition (blank-slate + IsOwnStory), caret HasDelegate gating.
+  L4-Style visual sign-off pending — requires live server check (fixture stories 5/6/7; cover art with/
+  without; with/without tags/ShortDescription; one IsOwnStory; caret; gap spacing in a grid parent).
 - **L3-Logic — Stage 4.** `StoryPage` is a real dispatcher (device detection + `IStoryReadService`,
   loads `StoryDetailsDTO`, redirects to `/not-found`). Gaps: no `[PersistentState]` ⇒ prerender→interactive
   double-fetch flicker; route is `{Slug?}` not the spec's hybrid catch-all `{*StorySlug}`.

@@ -25,7 +25,7 @@ so they're at Stage 5 when reached. Phases:
   feature-specific. Building these *mints contracts*: once a leaf's parameter/event contract is locked,
   its consumers flip from Stage 2 to Stage 3.
 - **Phase 2 — Integration points.** Composites that consume atoms and produce surfaces pages embed
-  (`StoryCard`/`StoryDeck`, `StoryInteractionPanel`, `ChapterNavigation`, `CommentSection`, …).
+  (`StoryCard`/`StoryDeck`, `UserStoryInteractionPanel`, `ChapterNavigation`, `CommentSection`, …).
 - **Phase 3 — Consumers / pages.** Dispatchers and feature pages aggregating Phase-2 output. Internal
   order is loose; deps still hold.
 
@@ -201,7 +201,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   spec's 3-param contract didn't cover). The button itself injects no service and has no
   `InteractionTypeEnum` knowledge. Settled (WU7, Doc-Touch moment 1 before the build, supersedes the
   WU2-era sprite-key plan): interaction icons are inline SVG, permanently — carved out of the "never
-  inline SVG" rule, which still governs tags/covers/avatars. The owning `StoryInteractionPanel`
+  inline SVG" rule, which still governs tags/covers/avatars. The owning `UserStoryInteractionPanel`
   (WU16) maps `InteractionTypeEnum` → `(IconPath, AccentColor)` — that mapping table is the one
   remaining open item, left for WU16. `Sprites.ISpriteReadService.GetSpriteUrl` is not involved.
   Updated `layer3-logic.md`, `layer3.5-structure.md`, `layer4-style.md` (new "Interaction Icons Are
@@ -441,11 +441,58 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Tool:** opusplan. **Pointer:** `canalave-conventions/testing.md`, `forward_plan.md` "Test
   strategy" Resolved entry. **Deps:** WU12.
 
-### WU13 — `StoryCard` leaf
-- **Cells:** 5 L3/L3.5/L4 (card slice).
-- **Do:** warm-partition projection display; composes TagChip + UserStoryInteractionButton (listing
-  context). Mints the StoryCard contract → flips StoryDeck + every listing consumer toward Stage 3.
-- **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 5 + audit-summary §5. **Deps:** WU4, WU7, WU12.
+### WU15 — UserStoryInteractions L2 (writes + per-viewer state reads) *(reordered before WU13 — 2026-06-22)* — DONE ✓ (2026-06-22)
+- **Cells:** 16 L2 → Stage 5; 16 L6 → Stage 5 (indexes already correct, verified during WU15);
+  17 L6 → Stage 5 (same index file). **17 L2 stays Stage 2 — deferred to WU27**.
+- **Done:** `Core/UserStoryInteractions/` cluster (enum, constants, DTOs, interfaces);
+  `Server/UserStoryInteractions/` (read + write impls, CQRS-lite inheritance); DI in `Program.cs`.
+  15 integration tests (`UserStoryInteractionServiceTests`, Testcontainers Postgres): upsert, date
+  partition stamping/clearing, HasStarted preservation, sparse cleanup + cascade, `GetStatesByStoryIdsAsync`
+  user-scoping, all-false default, anonymous context empty-read + write guard.
+- **Verified:** `dotnet build` green (8 projects, 0 errors). `dotnet test` green: 236 total
+  (93 Integration / 79 Unit / 64 RazorComponents). Detail in `audit/UserStoryInteractions.md` Feature 16 L2 Stage-5 note.
+- **Tool:** opusplan. **Pointer:** `audit/UserStoryInteractions.md` Feature 16. **Deps:** WU12.
+
+### WU16 — `UserStoryInteractionPanel` composite *(reordered before WU13 — 2026-06-22)* — DONE ✓ (2026-06-22)
+- **Cells:** 16 L3/L3.5/L4 → Stage 5. 17 L3.5 stays Stage 2.
+- **Done:** `Core/UserStoryInteractions/InteractionDisplayContext.cs` (enum: `Listing|Detail`);
+  `SharedUI/UserStoryInteractions/InteractionVisuals.cs` (static class, inner `Info` record, verbatim
+  audit table transcription); `SharedUI/UserStoryInteractions/UserStoryInteractionPanel.razor` (iterates
+  `Enum.GetValues<InteractionTypeEnum>()` for locked button order; debounce via CTS + Task.Delay;
+  optimistic local state; `IDisposable`; listing visibility rule: blank-slate OR already active for
+  ReadLater/Ignore). `Tests.RazorComponents/FakeUserStoryInteractionWriteService.cs` +
+  `UserStoryInteractionPanelTests.cs` (13 tests). `Tests.Unit/InteractionVisualsTests.cs` (26 tests).
+  **Discovery**: Blazor renders bool `aria-pressed="@bool"` as a boolean HTML attribute (absent when
+  false, empty string when true) — tests use `HasAttribute("aria-pressed")` not string comparison.
+- **Verified:** `dotnet build` green (8 projects, 0 errors). `dotnet test` green: 275 total
+  (105 Unit / 77 RazorComponents / 93 Integration). Detail in `audit/UserStoryInteractions.md`
+  Feature 16 L3/L3.5/L4 Stage-5 notes.
+- **Tool:** opusplan. **Pointer:** `audit/UserStoryInteractions.md` Feature 16. **Deps:** WU7, WU15.
+
+### WU13 — `StoryCard` leaf *(moved after WU15+WU16 — 2026-06-22)* — DONE ✓ (2026-06-23)
+- **Cells:** 5 L3/L3.5/L4 (card slice only — cells stay 4/4/1; StoryPage dispatcher, StoryDesktop/Mobile,
+  and StoryDeck still hold those cells).
+- **Done:** Step 0 — renamed `StoryInteractionPanel` → `UserStoryInteractionPanel` (component file,
+  test file, `FakeUserStoryInteractionWriteService` xref, all doc/skill/audit references). Step 1 —
+  additive `StoryListingDto.ShortDescription (string?)` extension (warm-partition projection, no migration;
+  `StoryListingRow` + `ProjectListingRows` + `ToDto` updated in `ServerStoryReadService`). Step 2 —
+  built `SharedUI/Stories/StoryCard.razor` as a pure leaf: `[EditorRequired] StoryListingDto Story` +
+  `UserStoryInteractionStateDto? InteractionState` + `bool IsOwnStory` + 4 gated `EventCallback`s
+  (Discover, CopyLink, Report, Download). Composes `TagChip` (read-only) + `UserStoryInteractionPanel`
+  in Listing context. Author byline is a plain hyperlink — NOT `UserCard` (spec §5.30.7). Cover art uses
+  stored URL verbatim with `_coverArtFailed` `@onerror` fallback. Status/rating/word-count computed
+  display properties; caret with always-present "View Story" link + `HasDelegate`-gated optional items.
+  Step 3 — `StoryCardTests.cs` (30 bUnit tests, JSInterop.Loose, registers
+  `FakeUserStoryInteractionWriteService`): title link, author link/plain-text, tags, ShortDescription
+  tooltip/null, word-count theory (8 cases), cover-art fallback, status/rating badge theories, panel
+  composition (blank-slate + IsOwnStory), caret gating.
+- **Verified:** `dotnet build` green (8 projects, 0 errors). `dotnet test` green: 105 Unit + 107
+  RazorComponents + 109 Integration = 321 total. RazorComponents tier covers the StoryCard surface
+  (30 new tests); L4-Style visual sign-off pending (requires live server check per the plan — see
+  audit/Stories.md Feature 5 WU13 slice note). Mints the StoryCard contract → WU14 (`StoryDeck`) now
+  has its key dep satisfied. Detail in `audit/Stories.md` Feature 5 WU13 slice note.
+- **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 5 + audit-summary §5.
+  **Deps:** WU4, WU7, WU12, WU16.
 
 ### WU14 — `StoryDeck` composite *(pass-through)*
 - **Cells:** 5 L3.5/L4 (deck slice).
@@ -453,28 +500,39 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   Search, Bookshelves, Profiles, Groups, Also-Favorited.
 - **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 5. **Deps:** WU8, WU13.
 
-### WU15 — UserStoryInteractions L2 (writes + bookshelf reads)
-- **Cells:** 16 L2 (direct-EF write path; reject impossible combos; zero auto-cascade between bits),
-  17 L2 (derived-tab list reads: Actively Reading / Abandoned, etc.).
-- **Tool:** opusplan. **Pointer:** `audit/UserStoryInteractions.md` Features 16, 17. **Deps:** WU12.
-
-### WU16 — `UserStoryInteractionPanel` composite
-- **Cells:** 16 L3/L3.5/L4, 17 L3.5 (panel slice).
-- **Do:** coordination composite owning the 2-second debounce across UserStoryInteractionButtons; detail
-  context (all clickable). Mints `InteractionTypeEnum` and maps each value to `(IconPath, AccentColor)`
-  — inline SVG, not a sprite key (WU7 settled icons as inline SVG; `GetSpriteUrl` is not involved).
-  Consumed by story detail + listings.
-- **Tool:** opusplan. **Pointer:** `audit/UserStoryInteractions.md`. **Deps:** WU7, WU15.
-
-### WU17 — Chapters L2 (writing/versioning + reading)
-- **Cells:** 6 L2 (versioning, `PrimaryContentId`, sanitize, word count on stripped text), 7 L2 (read
-  + next/prev + TOC).
+### WU17 — Chapters L2 (writing/versioning + reading) — DONE ✓ (2026-06-22)
+- **Cells:** 6 L2, 7 L2 — both now Stage 5.
+- **Done:** Minted `Core/Chapters/` cluster (moved `Chapter`/`ChapterContent` from `Core/Models/`) and
+  `Server/Chapters/`. New files: `ChapterText.cs` (word-count helper, strips HTML+decodes entities
+  before whitespace-split), 5 DTOs, `ChapterValidations/ChapterValidationException`, `IChapterReadService`,
+  `IChapterWriteService : IChapterReadService`, `ServerChapterReadService` (primary-ctor, `ReadOnlyApplicationDbContext`),
+  `ServerChapterWriteService : ServerChapterReadService` (two-SaveChanges circular-FK break for create).
+  Migration `20260623005108_MakeChapterPrimaryContentIdNullable` (made `PrimaryContentId` a `long?`).
+  Two bugs found during implementation: (1) async-scope bug in test helpers (`using IServiceScope` +
+  `return Task<>` without `await` → "reader is closed"; fixed to `async`/`await`); (2) `SelectMany`
+  + outer `OrderBy` on projected DTO can't be translated by EF Core — fixed by moving `OrderBy` inside
+  the inner query on the entity field.
+- **Verified:** `dotnet build` green; `dotnet test` 50/50 green (Unit: `ChapterTextTests` 14 tests;
+  Integration: `ChapterWriteServiceTests` 8 tests + `ChapterReadServiceTests` 8 tests). Mutation-sanity:
+  `"script"` added to allow-list → `SanitizesScriptTag` fails; reverted. Server boot: `200` on homepage
+  and `/Account/Login`. Detail in `audit/Chapters.md` Features 6, 7 Stage-5 notes.
 - **Tool:** opusplan. **Pointer:** `audit/Chapters.md` Features 6, 7. **Deps:** WU12.
 
-### WU18 — `ChapterNavigation` composite
-- **Cells:** 7 L3.5/L4 (nav slice).
-- **Do:** top+bottom coordination composite (prev/next, TOC). **Tool:** opusplan.
-  **Pointer:** `audit/Chapters.md` Feature 7. **Deps:** WU17.
+### WU18 — `ChapterNavigation` composite — DONE ✓ (2026-06-23)
+- **Cells:** 7 L3.5/L4 (nav slice) — now Stage 5.
+- **Done:** `SharedUI/Chapters/ChapterNavigation.razor` — injection-free coordination composite
+  (spec §5.30.3). Four concerns inline (no sub-components): prev/next `<a>`/`<span aria-disabled>`
+  links; chapter-select `<details>` disclosure with per-entry alt-version indicator
+  (`HasAlternateVersions`); version picker `<details>` (rendered only when `Versions.Count > 1`);
+  current chapter/version highlighted via `aria-current="page"`. Navigation is anchor hrefs (Blazor
+  Router intercepts — no full page reload; no NavigationManager injection). Minted parameter contract
+  for WU26 dispatcher. Doc-Touch: `layer3.5-structure.md` Pass-Through snippet updated to real shape;
+  `layer4-style.md` Pattern Accumulation entry added.
+- **Verified:** `dotnet build` green; `dotnet test` 336 total (105 Unit / 122 RazorComponents /
+  109 Integration). Covering tier: **RazorComponents** (13 tests in `ChapterNavigationTests.cs`).
+  Visual/L4 sign-off pending (Stage 6), human check against live server via throwaway harness before
+  or during WU26. Detail in `audit/Chapters.md` Feature 7 WU18 Stage note.
+- **Tool:** opusplan. **Pointer:** `audit/Chapters.md` Feature 7. **Deps:** WU17.
 
 ### WU19 — Comments L2 (posting / display / likes / spoiler)
 - **Cells:** 23 L2, 24 L2, 25 L2, 26 L2 (chapter context first; other TPT contexts follow in their
@@ -487,17 +545,39 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   (completion-gated reveal — `ChapterPage` passes `UserHasCompletedStory`), compose EditorView.
 - **Tool:** opusplan. **Pointer:** `audit/Comments.md`. **Deps:** WU6, WU9, WU19.
 
-### WU21 — Following + Vouches
-- **Cells:** 18 L2/L3/L3.5/L4, 19 L2/L3/L3.5/L4 (Vouch L1 done; 5-per-user limit in service).
-- **Do:** follow/unfollow (+ReceiveAlerts bell), vouch create with optional `VouchText`; display via
-  UserCard (outgoing public / incoming private).
+### WU21 — Following + Vouches — DONE ✓ (2026-06-22)
+- **Cells:** 18 L2/L3/L3.5/L4 → Stage 5; 19 L1/L2/L3/L3.5/L4 → Stage 5 (L1 re-verified: `MakeVouchTextUnlimited` migration).
+- **Done:** `Core/Following/` + `Server/Following/` CQRS-lite cluster; `IFollowingReadService` /
+  `IFollowingWriteService`; `ServerFollowingReadService` (read-replica) + `ServerFollowingWriteService`
+  (inherits read, adds write + sanitizer). DTOs: `UserRelationshipStateDto`, `VouchDisplayDto`.
+  `FollowingConstants.MaxVouchesPerUser = 5`, `VouchLimitException`. `SharedUI/Following/`:
+  `FollowButton.razor`, `VouchButton.razor`, `VouchList.razor` (owner-conditional `IsEditable`).
+  Notification seams `// TODO(WU22)`. DI registered in `Program.cs`.
+- **Verified:** `dotnet test` green — 79 Unit / 64 RazorComponents / 78 Integration (221 total).
+  Integration: `FollowingWriteServiceTests` + `FollowingReadServiceTests`. RazorComponents:
+  `FollowButtonTests`, `VouchButtonTests`, `VouchListTests`. Visual/L4 human sign-off pending (WU30).
 - **Tool:** opusplan. **Pointer:** `audit/Following.md` Features 18, 19. **Deps:** WU10.
 
-### WU22 — Notifications L2 (generation + service)
-- **Cells:** 41 L2 (generation hooks), 42 L2, 43 L2.
-- **Do:** notification creation on high-effort events (NOT likes), sparse-override settings read/write.
-  Generation hooks are *called from* other features' write paths — implement the service now; wire calls as
-  those features land. **Tool:** opusplan. **Pointer:** `audit/Notifications.md`. **Deps:** WU1.
+### WU22 — Notifications L2 (generation + service) — DONE ✓ (2026-06-23)
+- **Cells:** 41 L2, 42 L2, 43 L2 — all now Stage 5.
+- **Done:** Deliberated and settled the notification generation mechanism (direct injected call +
+  semantic per-event methods + best-effort post-commit + in-app always-on). Minted
+  `Core/Notifications/` (`NotificationDto`, `NotificationSettingDto`, `INotificationReadService`,
+  `INotificationWriteService`) and `Server/Notifications/` (`ServerNotificationReadService`,
+  `ServerNotificationWriteService`). Private `CreateCoreAsync` owns drop-self + dedup invariants.
+  Settings are sparse (upsert when differing from defaults; delete row when returning to defaults).
+  Wired `// TODO(WU22)` seams in `ServerFollowingWriteService` (`FollowAsync`/`VouchAsync`).
+  Corrected two spec deviations: `SourceUserId` is SET NULL (not RESTRICT); §5.18 in-app toggle
+  dropped (in-app always-on). Detail in `audit/Notifications.md`, `cross-cutting.md`,
+  `layer2-services.md`, `forward_plan.md` Resolved.
+- **Verified:** `dotnet build` green (0 errors). `dotnet test` green: 105 Unit + 77 RazorComponents +
+  109 Integration = 291 tests total. Integration tier (`Tests.Integration/NotificationServiceTests.cs`,
+  Testcontainers Postgres, 16 tests): generation correctness; drop-self; dedup; read/mark/settings
+  coverage; end-to-end `FollowAsync` → notification row. Mutation sanity confirmed (drop-self line
+  disabled → test fails; reverted).
+- **Deferred semantic methods:** `NotifyNewChapterAsync`, `NotifyNewCommentAsync`, etc. — each lands
+  co-delivered with its triggering work-unit. The create-core + DAG pattern are in place.
+- **Tool:** opusplan. **Pointer:** `audit/Notifications.md`. **Deps:** WU1.
 
 ---
 

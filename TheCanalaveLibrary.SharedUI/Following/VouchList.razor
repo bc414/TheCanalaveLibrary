@@ -1,0 +1,67 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Pass-through display composite (layer3.5-structure.md "Owner-Conditional Edit Affordances").
+   Renders a list of vouches, each showing a UserCard + optional rich-text VouchText + date.
+   When IsEditable is true (the active viewer owns this list), each row shows a remove control —
+   the OnRemoveVouch EventCallback bubbles the vouched user's id up to the dispatcher.
+   The IsEditable gate is driven by the hosting dispatcher (WU30 sets it on the outgoing list);
+   the incoming vouch list is always read-only and fetched only for the owner at the service layer.
+   Authorization is enforced in IFollowingWriteService.RemoveVouchAsync — this component only
+   controls visibility. *@
+
+@if (Vouches.Count == 0)
+{
+    <p class="text-sm text-muted">@EmptyMessage</p>
+}
+else
+{
+    <ul class="flex flex-col gap-4">
+        @foreach (var vouch in Vouches)
+        {
+            <li class="rounded-xl bg-surface p-4 shadow-sm">
+                <div class="flex items-start justify-between gap-2">
+                    <UserCard User="vouch.User" />
+                    <div class="flex shrink-0 items-center gap-2">
+                        <span class="text-xs text-muted">@vouch.DateVouched.ToString("MMM d, yyyy")</span>
+                        @if (IsEditable)
+                        {
+                            <button type="button"
+                                    class="text-xs text-danger hover:underline"
+                                    @onclick="() => OnRemoveVouch.InvokeAsync(vouch.User.UserId)"
+                                    aria-label="Remove vouch for @vouch.User.Username">
+                                Remove
+                            </button>
+                        }
+                    </div>
+                </div>
+                @if (!string.IsNullOrEmpty(vouch.VouchText))
+                {
+                    <div class="mt-3 text-sm">
+                        <RichTextView HtmlContent="@vouch.VouchText" />
+                    </div>
+                }
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<VouchDisplayDto> Vouches { get; set; } = [];
+
+    /// <summary>
+    /// True only when the active viewer owns this vouch list. Drives per-row remove controls.
+    /// Set by the hosting profile dispatcher — this component has no service injection and no
+    /// knowledge of the current user.
+    /// </summary>
+    [Parameter] public bool IsEditable { get; set; }
+
+    /// <summary>
+    /// Raised when the viewer clicks "Remove" on a row. The value is the vouched user's id.
+    /// The hosting page calls IFollowingWriteService.RemoveVouchAsync with this id.
+    /// </summary>
+    [Parameter] public EventCallback<int> OnRemoveVouch { get; set; }
+
+    [Parameter] public string EmptyMessage { get; set; } = "No vouches yet.";
+}

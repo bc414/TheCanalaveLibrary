@@ -158,11 +158,15 @@ not theme-swappable art assets a Theme pack provides — they don't belong in `w
 **Leaf stays dumb (panel supplies, leaf renders):** `UserStoryInteractionButton` takes `IconPath`
 (an SVG `<path d>` string) + `AccentColor` (a CSS color) as `[Parameter]`s and renders one inline
 `<svg><path d="@IconPath" /></svg>`. It has no knowledge of `InteractionTypeEnum` and injects no
-service. The `InteractionTypeEnum → (IconPath, AccentColor)` mapping lives in the owning composite
-(`StoryInteractionPanel`, WU16) or a shared constants helper it calls — mirroring the
-"owning composite maps the domain enum" pattern the sprite-key design used, just without
-`ISpriteReadService` in the chain. `ISpriteReadService.GetSpriteUrl` is unaffected and unused here.
-See `audit/UserStoryInteractions.md` Feature 16 and `audit/Sprites.md` Feature 3.
+service. The `InteractionTypeEnum → (IconPath, AccentColor, Label)` mapping is **locked** in
+`audit/UserStoryInteractions.md` Feature 16 (table dated 2026-06-22) and transcribed verbatim into
+`InteractionVisuals` (`SharedUI/UserStoryInteractions/InteractionVisuals.cs`, WU16). All six
+interaction types are represented; `PrivateFavorite` reuses `Favorite`'s `IconPath` — color alone
+signals privacy. **`InteractionTypeEnum` declaration order is the canonical left-to-right button
+order** — the panel iterates `Enum.GetValues<InteractionTypeEnum>()` and the order is Favorite →
+PrivateFavorite → Follow → Complete → ReadLater → Ignore. `ISpriteReadService.GetSpriteUrl` is
+unaffected and unused here. See `audit/UserStoryInteractions.md` Feature 16 and `audit/Sprites.md`
+Feature 3.
 
 **Three-state square button (WU7 pattern):** `size-9 rounded-md grid place-items-center
 transition-colors`, no outer margin (internal padding only, per the Outer Margin Rule). Accent comes
@@ -339,3 +343,22 @@ so the scannable list format stays visually distinct from "this is already selec
 
 (Same hue family as the `TagChip` table above, solid `-500` instead of light `-100`/dark text — keeps
 dot and chip visually associated as "the same tag type" without making the dot a tiny chip.)
+
+**`ChapterNavigation` (WU18, 2026-06-23):** root `<nav>` is `flex flex-wrap items-center gap-2 `—
+no outer margin; the composing page spaces instances with its own `gap-`/`space-y-` (outer-margin
+rule). **Prev/Next:** same bordered-block shape as `PaginationControls`' Prev/Next —
+`inline-grid size-9 place-items-center rounded-md border transition-colors`, using
+`bg-[--color-surface-raised]`/`hover:bg-[--color-primary]/20` when available and
+`bg-[--color-surface-raised]/50 text-[--color-text-muted] cursor-not-allowed` when disabled (no
+hover). Disabled endpoints render as `<span aria-disabled="true">`, not `<button disabled>` —
+these are navigation, not actions. **Disclosure dropdowns** (chapter-select + version picker):
+`<details class="relative">` + `<summary class="flex ... rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-1.5 text-sm hover:bg-[--color-primary]/20 transition-colors">`.
+The `flex` class on `<summary>` suppresses the default browser triangle marker (sets `display: flex`,
+overriding the UA `display: list-item`). Dropdown panel: `absolute left-0 top-full z-10 mt-1
+max-h-{N} min-w-{N} overflow-y-auto rounded-md border border-[--color-border] bg-[--color-surface]
+py-1 shadow-md`. Rows inside: `block px-3 py-1.5 text-sm`; highlighted row (current chapter/version)
+`bg-[--color-primary]/10 font-semibold text-[--color-primary]`; normal row
+`text-[--color-text] hover:bg-[--color-surface-hover]`; unpublished/unavailable row
+`pointer-events-none text-[--color-text-muted]`. Alt-version indicator in the chapter dropdown:
+a `<span title="Has alternate versions">` with a small glyph (&#8942;) — visually subtle,
+semantically distinguishable, testable via `title` attribute in bUnit.

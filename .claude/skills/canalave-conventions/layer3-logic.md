@@ -168,10 +168,13 @@ by default; drop to the service only when the attribute's behavior doesn't fit.
 For high-frequency interactions (Favorite/Follow/Ignore buttons):
 
 1. **Optimistic local update** on click — toggle the bool, re-render immediately.
-2. **2-second per-component debounce** (`SiteConstants.InteractionDebounceMs`, default 2000ms).
+2. **2-second per-component debounce** (`InteractionConstants.InteractionDebounceMs` in
+   `Core/UserStoryInteractions/`, default 2000ms — lives in **Core**, not Server's `SiteConstants`,
+   because `SharedUI` cannot reference Server; spec's literal `SiteConstants.InteractionDebounceMs`
+   wording is a historical artifact).
 3. When the timer fires, one API call for that one story.
 
-The debounce timer lives in the coordination composite (`StoryInteractionPanel`), not in
+The debounce timer lives in the coordination composite (`UserStoryInteractionPanel`), not in
 individual leaf buttons.
 
 **Distinct from typeahead debounce.** `TagSelector`'s `Debounce="300"` on `BlazoredTypeahead` (WU11)
@@ -205,13 +208,16 @@ No mode enum. The presence or absence of `OnToggle` determines behavior:
 `layer4-style.md` "Interaction Icons Are Inline SVG." The owning composite maps
 `InteractionTypeEnum` → `(IconPath, AccentColor)`, not the sprite service.
 
-**Two presentation contexts:**
-- **Listing context** (StoryCard): Ignore and ReadItLater receive `OnToggle` (clickable).
-  Favorite, Followed, HiddenFavorite receive no `OnToggle` (read-only, visible only when true).
-- **Detail context** (story page): all receive `OnToggle` (all clickable).
+**Two presentation contexts (6 buttons total — enum declaration order is the canonical left-to-right
+order: `Favorite → PrivateFavorite → Follow → Complete → ReadLater → Ignore`):**
+- **Listing context** (StoryCard): `ReadLater` and `Ignore` receive `OnToggle` (clickable).
+  `Favorite`, `PrivateFavorite`, `Follow`, `Complete` receive no `OnToggle` (read-only, visible only
+  when true — so story deck cards show favorited/followed/**completed** as status badges).
+- **Detail context** (story page): all 6 receive `OnToggle` (all clickable).
 
-**Visibility rules:** Ignore and ReadItLater are visible only when the story is a blank slate
-(no positive engagement) OR when already active.
+**Visibility rules:** `ReadLater` and `Ignore` are visible only when the story is a blank slate
+(not favorited, not hidden-favorited, not followed, **not completed**, not actively reading) OR when
+already active.
 
 **Own story:** The author's own story replaces the interaction panel with an Edit Story button.
 The panel composite receives `IsOwnStory` parameter.

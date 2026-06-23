@@ -197,18 +197,53 @@ var allRatings = await context.Stories
 
 ## Notification Creation
 
-Every user-facing action that produces a notification calls `INotificationService.CreateAsync()`
-at the end of the service method. The notification service is injected into the feature service.
+### Generation mechanism (settled WU22)
 
-Pattern: feature write method completes its primary work, then fires notification creation.
-Notification logic does NOT block the primary operation.
+Every user-facing action that triggers a notification calls a **semantic per-event method** on
+`INotificationWriteService` — injected into the feature write service just like
+`IHtmlSanitizationService`. The semantic method (not a generic `CreateAsync`) is the only public
+generation surface; the invariants (drop-self, dedup) live inside the service's private create-core and
+can't be bypassed per-caller. This is the same principle as the content-rating filter: make it a
+property of the model, not per-method vigilance.
 
-9 categories, ~35 types with gap-based numbering. `default_collapsed` is required non-nullable
-on all types.
+```csharp
+// Feature write service wires it after its primary save (best-effort post-commit):
+await writeDb.SaveChangesAsync();   // durable — committed before we notify
+try { await notifications.NotifyNewFollowerAsync(actorId, targetUserId); }
+catch (Exception ex) { logger.LogError(ex, "Notification failed (non-fatal)"); }
+```
 
-**Sparse override model:** `UserNotificationSetting` only stores rows where the user differs
-from `NotificationType.DefaultEmailEnabled`. Query: LEFT JOIN settings onto types;
-NULL means "use default."
+**Best-effort post-commit** — primary `SaveChangesAsync` first, notification call in `try/catch`.
+Notification failure is logged and swallowed; it never rolls back the primary action. The primary
+`SaveChanges` *must* precede the notify call, because the feature service and notification service
+share the same scoped `ApplicationDbContext` instance — after the primary commit the change tracker is
+clean, so the notification service's own `SaveChangesAsync` is a separate transaction that covers only
+the notification rows.
+
+**DAG rule — recipient resolution composes read services only.** Fan-out methods (e.g. "notify all
+`ReceiveAlerts` followers of this author") call `IFollowingReadService` or similar *read* services to
+resolve recipients. Notification write → feature read is fine; feature write → notification write →
+feature write would be a cycle.
+
+### Filtering semantics
+
+**In-app delivery is always-on.** The private create-core applies exactly two universal rules: **drop
+self** (`recipient == sourceUser`) and **dedup**. No per-type in-app mute exists in the model.
+
+**Fan-out eligibility (relationship-level gate):** follow-driven notification types (new chapter on a
+followed story, new story by a followed user, etc.) are sent only to followers where
+`FollowedUser.ReceiveAlerts == true`. That filter is part of the recipient-resolution query for each
+semantic method — not a per-type setting.
+
+**`UserNotificationSetting` governs email and display, not in-app generation.** The sparse-override
+table stores exactly two user-settable fields per type — `EmailEnabled` (post-MVP email side-channel)
+and `Collapsed` (display override for the panel — a per-user override of
+`NotificationType.DefaultCollapsed`). NULL for either field means "use the type's default."
+No in-app mute column exists; that toggle was deliberately dropped from spec §5.18 (recorded in
+`audit/Notifications.md`).
+
+9 categories, ~35 types with gap-based numbering. `DefaultEmailEnabled` and `DefaultCollapsed` are
+required non-nullable on all types.
 
 ## Badge Checks
 

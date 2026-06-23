@@ -196,8 +196,8 @@ From spec §5.30. These are the integration points the workplan should prioritiz
 | `StoryCard` | Leaf | Stories | StoryDeck → Stories, Discovery, Bookshelves, Profiles |
 | `StoryDeck` | Composite (pass-through) | Stories | Search page, Bookshelves, Profile tabs, Also-Favorited, Group listing |
 | `TagChip` | Leaf | Tags | StoryCard, story detail, TagSelector dropdown, Tag Directory |
-| `UserStoryInteractionButton` | Leaf | UserStoryInteractions | StoryInteractionPanel, StoryCard caret menu |
-| `StoryInteractionPanel` | Composite (coordination) | UserStoryInteractions | Story detail, listings |
+| `UserStoryInteractionButton` | Leaf | UserStoryInteractions | UserStoryInteractionPanel, StoryCard caret menu |
+| `UserStoryInteractionPanel` | Composite (coordination) | UserStoryInteractions | Story detail, listings |
 | `ResultsFilterPanel` | Composite (coordination) | Discovery | Search page, Profile tabs, Bookshelves |
 | `EditorView` | Composite (third-party wrapper, Quill) | Chapters | Chapters, BlogPosts, Messaging, Recommendations |
 | `RichTextView` | Leaf | Chapters | Chapter reading, previews |

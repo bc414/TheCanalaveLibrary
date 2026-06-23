@@ -45,6 +45,50 @@ public class ServerStoryWriteService(ReadOnlyApplicationDbContext readDb, Applic
 Read methods can't accidentally use the write context; write methods can't accidentally hit the
 read replica. Misuse requires a visible, reviewable act.
 
+### CS9107/CS9124: shared constructor parameters in inherited primary-constructor pairs
+
+When the read and write service use C# primary constructors and the write service passes a shared
+parameter (e.g. `IActiveUserContext activeUser`) to the base constructor, the compiler emits
+CS9107 ("parameter captured in the derived class is also passed to the base constructor") and
+CS9124 (if the base class also captures it in both a field/property and the constructor itself).
+The fix is a `protected` property on the base class initialised from the constructor parameter:
+
+```csharp
+// Base read service — exposes the shared dep as a protected property
+public class ServerChapterReadService(
+    ReadOnlyApplicationDbContext readDb,
+    IActiveUserContext activeUser) : IChapterReadService
+{
+    // Initialiser-only property breaks the double-capture: the compiler sees one owner.
+    protected IActiveUserContext ActiveUser { get; } = activeUser;
+
+    public async Task<ChapterReadingDto?> GetChapterForReadingAsync(...)
+    {
+        Rating ceiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T; // use the property
+        ...
+    }
+}
+
+// Derived write service — uses ActiveUser (property), never activeUser (parameter)
+public class ServerChapterWriteService(
+    ReadOnlyApplicationDbContext readDb,
+    ApplicationDbContext writeDb,
+    IActiveUserContext activeUser,
+    IHtmlSanitizationService sanitizer)
+    : ServerChapterReadService(readDb, activeUser), IChapterWriteService
+{
+    public async Task<int> CreateChapterAsync(CreateChapterDto dto)
+    {
+        var contentRow = new ChapterContent { AuthorId = ActiveUser.UserId, ... }; // not activeUser.UserId
+        ...
+    }
+}
+```
+
+The rule is: **the base class owns the shared dep via its property; the derived class uses the
+property, never the constructor parameter.** Referencing `activeUser.X` in the derived class body
+re-triggers CS9107 because `activeUser` is now captured in two scopes.
+
 **DI registration:**
 ```csharp
 builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
@@ -220,8 +264,9 @@ under `wwwroot/uploads/`; the interface is the seam for the Post-MVP `S3ImageSto
 
 ### User HTML Is Sanitized Once, On Save — Never On Display
 
-Any write path that accepts user-authored rich text (chapters, comments, recommendations, blog posts,
-profile bios, messages — everywhere `EditorView` is used) runs it through `HtmlSanitizer`'s allow-list
+Any write path that accepts user-authored rich text (chapters, **vouch text**, comments, recommendations,
+blog posts, profile bios, messages — everywhere `EditorView` is used) runs it through `HtmlSanitizer`'s
+allow-list
 (§3.21) **in the write service, before persisting.** Stored HTML is therefore already trusted.
 `RichTextView` (the universal display leaf, see `layer3.5-structure.md` "Universal Components") renders
 that stored HTML directly via `MarkupString` and performs **no sanitization of its own** — it isn't a
@@ -238,6 +283,70 @@ blockquote, ul, ol, li, a` (+ `a[href]` with safe schemes, normalized `rel`/`tar
 `class`, `id`, script, or event-handler attributes beyond what the toolbar emits. Every write service
 that persists `EditorView` output injects `IHtmlSanitizationService` and calls it before persisting;
 if the toolbar ever gains a button, extend the allow-list in the same change.
+
+### Word Count Is Computed Server-Side, On Save — From Stripped Text
+
+Any write path that persists a content body with a `WordCount` column (chapters, and any future
+feature with a word-count display) computes the count **in the write service, before persisting, on
+the already-sanitized HTML.** Never count on raw editor output (markup inflates the count) and never
+count on display (redundant work on every render).
+
+The strip+count helper lives in **Core** — dependency-free, no NuGet beyond the standard library,
+unit-testable with no host or DbContext — parallel to `StorySlug.Slugify` in `Core/Stories/`. The
+canonical example is `ChapterText.CountWords(string?)` in `Core/Chapters/`. The three-step sequence:
+
+1. `sanitizedHtml = sanitizer.Sanitize(rawHtml)`
+2. `wordCount = ChapterText.CountWords(sanitizedHtml)`
+3. Persist both.
+
+`WordCount` therefore always reflects *readable* words — what `RichTextView` would render — not a
+count of markup tokens.
+
+## Notification Generation (settled WU22)
+
+Feature write services that trigger notifications inject `INotificationWriteService` as a standard
+scoped dependency and call a **semantic per-event method** after their primary `SaveChangesAsync`:
+
+```csharp
+public class ServerFollowingWriteService(
+    ReadOnlyApplicationDbContext readDb,
+    ApplicationDbContext writeDb,
+    IActiveUserContext activeUser,
+    IHtmlSanitizationService sanitizer,
+    INotificationWriteService notifications)   // ← ordinary scoped dep
+    : ServerFollowingReadService(readDb, activeUser), IFollowingWriteService
+{
+    public async Task FollowAsync(int targetUserId)
+    {
+        // ... primary work ...
+        await writeDb.SaveChangesAsync();   // primary commit first
+
+        try { await notifications.NotifyNewFollowerAsync(ActorId, targetUserId); }
+        catch (Exception ex) { logger.LogError(ex, "Notification failed"); }
+    }
+}
+```
+
+**Why best-effort post-commit:** the feature service and notification service share the same scoped
+`ApplicationDbContext`. By committing the primary work first, the change tracker is clean when
+`INotificationWriteService` runs its own `SaveChangesAsync` (covering only notification rows). A
+notification failure then can't roll back the already-durable primary action.
+
+**Why semantic methods (not a generic `CreateAsync`):** recipient resolution, drop-self, and dedup
+must never be accidentally bypassed. A public generic `CreateAsync(recipientId, type, sourceId,
+relatedId)` would require every caller to re-implement filtering. Semantic methods (`NotifyNewFollowerAsync`,
+`NotifyNewChapterAsync`, etc.) are thin wrappers over one private create-core that owns all invariants
+— the same "property of the model" principle behind the content-rating named query filter.
+
+**`INotificationWriteService` is a fully independent service** with its own injected contexts. It
+composes *read* services for recipient resolution (e.g. `IFollowingReadService.GetFollowedUsersAsync`),
+keeping the DAG acyclic — see "The DAG rule" below.
+
+**Semantic methods land incrementally** — each method is co-delivered with the work-unit that builds
+its triggering feature. WU22 delivers the service infra + the two single-recipient methods
+(`NotifyNewFollowerAsync`, `NotifyNewVouchAsync`) and wires them into the Following seams. Fan-out
+methods (new chapter, new story, etc.) land with their respective work-units when the recipient-source
+service is Stage 5.
 
 ## Service Composition
 

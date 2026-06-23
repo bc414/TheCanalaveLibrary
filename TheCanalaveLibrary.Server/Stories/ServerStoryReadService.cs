@@ -89,6 +89,7 @@ public class ServerStoryReadService(
         query.Select(s => new StoryListingRow(
             s.StoryId,
             s.StoryListing != null ? s.StoryListing.StoryTitle : string.Empty,
+            s.StoryListing != null ? s.StoryListing.ShortDescription : null,
             s.StoryListing != null ? s.StoryListing.CoverArtRelativeUrl : null,
             s.AuthorId,
             s.Author != null ? s.Author.UserName : null,
@@ -102,6 +103,7 @@ public class ServerStoryReadService(
     private StoryListingDto ToDto(StoryListingRow row) => new(
         row.StoryId,
         row.Title,
+        row.ShortDescription,
         row.CoverArtRelativeUrl,
         row.AuthorId,
         row.AuthorName ?? "Unknown",
@@ -123,7 +125,8 @@ public class ServerStoryReadService(
     };
 
     private sealed record StoryListingRow(
-        int StoryId, string Title, string? CoverArtRelativeUrl, int? AuthorId, string? AuthorName,
+        int StoryId, string Title, string? ShortDescription, string? CoverArtRelativeUrl,
+        int? AuthorId, string? AuthorName,
         int WordCount, StoryStatusEnum StoryStatusId, Rating Rating, DateTime LastUpdatedDate,
         List<TagListingRow> Tags);
 

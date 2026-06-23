@@ -1,0 +1,109 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@inject IFollowingWriteService FollowingService
+
+@* Self-contained-write composite (layer3-logic.md "Self-contained writes"). Owns the follow/unfollow
+   toggle and the per-follow alert-bell toggle for TargetUserId. Injects IFollowingWriteService —
+   legitimate because the parent (profile dispatcher) does not need the result. Renders nothing for
+   the active user viewing their own profile (same TargetUserId as the acting user is prevented at the
+   service layer, but hiding the button is the correct UX). *@
+
+<div class="inline-flex items-center gap-2">
+    <button type="button"
+            class="@FollowButtonClass"
+            @onclick="HandleFollowClick"
+            disabled="@_busy"
+            aria-pressed="@_isFollowing">
+        @(_isFollowing ? "Following" : "Follow")
+    </button>
+
+    @if (_isFollowing)
+    {
+        <button type="button"
+                class="@BellButtonClass"
+                @onclick="HandleBellClick"
+                disabled="@_busy"
+                title="@(_receiveAlerts ? "Disable new-content alerts" : "Enable new-content alerts")"
+                aria-label="@(_receiveAlerts ? "Disable alerts" : "Enable alerts")"
+                aria-pressed="@_receiveAlerts">
+            @* Bell icon: filled when alerts on, outline when off *@
+            @if (_receiveAlerts)
+            {
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-4" aria-hidden="true">
+                    <path d="M10 2a6 6 0 0 0-6 6v3.586l-.707.707A1 1 0 0 0 4 14h12a1 1 0 0 0 .707-1.707L16 11.586V8a6 6 0 0 0-6-6ZM10 18a3 3 0 0 1-2.83-2h5.66A3 3 0 0 1 10 18Z" />
+                </svg>
+            }
+            else
+            {
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                </svg>
+            }
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int TargetUserId { get; set; }
+    [Parameter] public bool IsFollowing { get; set; }
+    [Parameter] public bool ReceiveAlerts { get; set; }
+
+    private bool _isFollowing;
+    private bool _receiveAlerts;
+    private bool _busy;
+
+    protected override void OnParametersSet()
+    {
+        _isFollowing = IsFollowing;
+        _receiveAlerts = ReceiveAlerts;
+    }
+
+    private async Task HandleFollowClick()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            if (_isFollowing)
+            {
+                await FollowingService.UnfollowAsync(TargetUserId);
+                _isFollowing = false;
+                _receiveAlerts = false;
+            }
+            else
+            {
+                await FollowingService.FollowAsync(TargetUserId);
+                _isFollowing = true;
+                _receiveAlerts = true; // service default
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task HandleBellClick()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            bool next = !_receiveAlerts;
+            await FollowingService.SetReceiveAlertsAsync(TargetUserId, next);
+            _receiveAlerts = next;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private string FollowButtonClass => _isFollowing
+        ? "rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/80 disabled:opacity-50"
+        : "rounded-lg border border-primary px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50";
+
+    private string BellButtonClass => _receiveAlerts
+        ? "text-accent hover:text-accent/70 disabled:opacity-50"
+        : "text-muted hover:text-text disabled:opacity-50";
+}

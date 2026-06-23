@@ -13,8 +13,26 @@ services, no components built.
 ## Feature 18 — User Following
 - **L1 — Stage 5.** `FollowedUser` matches §5.8 (follow/unfollow, bell `ReceiveAlerts`, date). The
   asymmetric delete behavior is deliberate. Migration-verified (`InitialSchema`).
-- **L2 — Stage 2** (follow/unfollow write + "Followed Users" read; not author-specific).
-- **L3-Logic — Stage 2** (bell toggles `ReceiveAlerts`; self-contained-write injection is legitimate).
+- **L2 — Stage 5 (WU21, 2026-06-22).** `IFollowingReadService` / `IFollowingWriteService` (inherits
+  read) built in `Core/Following/`. `ServerFollowingReadService` (`ReadOnlyApplicationDbContext` +
+  `IActiveUserContext`) and `ServerFollowingWriteService` (adds `ApplicationDbContext` +
+  `IHtmlSanitizationService`) in `Server/Following/`; both DI-registered in `Program.cs`. Idempotent
+  follow/unfollow with self-follow guard; bell toggle via `SetReceiveAlertsAsync`; `VouchAsync`
+  sanitizes via `IHtmlSanitizationService.Sanitize` before persist; 5-limit enforced in C# (count
+  on `writeDb`) throwing `VouchLimitException`. Notification seams deferred: `// TODO(WU22)`.
+  **Verified:** tier **Integration** — `FollowingWriteServiceTests` + `FollowingReadServiceTests`
+  (78 integration tests total, including: follow/unfollow idempotency, self-follow guard, bell toggle,
+  vouch with/without text, 5-limit, 6th call throws `VouchLimitException`, remove-vouch frees slot,
+  outgoing/incoming asymmetry, `GetIncomingVouchesAsync` scoped to active user, avatar default fallback,
+  `VouchText` sanitization strips XSS payload while preserving allowed HTML, long text exceeds old
+  1000-char cap). `dotnet test` green (78/78).
+- **L3-Logic — Stage 5 (WU21, 2026-06-22).** Bell toggles `ReceiveAlerts` via `SetReceiveAlertsAsync`;
+  `FollowButton` and `VouchButton` are self-contained-write composites injecting `IFollowingWriteService`
+  (legitimate per `layer3-logic.md`). Optimistic toggle on follow/unfollow click. `VouchButton` opens
+  `ConfirmDialog` hosting `EditorView` for optional rich note; disabled+tooltip at 5-limit. `VouchList`
+  is pass-through (no service injection); owner-conditional edit affordances via `IsEditable` parameter.
+  **Verified:** tier **RazorComponents** — `FollowButtonTests`, `VouchButtonTests`, `VouchListTests`
+  (see Feature 19 L3/L3.5 note for shared coverage). `dotnet test` green (64/64).
 - **L3.5-Structure — Stage 5 (WU10, 2026-06-21). L4-Style — Stage 5 (WU10, rode inline with L3.5).**
   Built the `UserCard` leaf per §5.30.7: `Core/Users/UserCardDto.cs` (+ `UserCardBadgeDto.cs`) and
   `SharedUI/Users/UserCard.razor`, in a new cross-cutting `Users/` cluster (no single feature owns
@@ -53,12 +71,32 @@ services, no components built.
   bool-vs-table choice with `VouchText MaxLength(280)` — that's the historical snapshot (spec is
   read-only). The user resolved the decision Phase B session 2026-06-20: ratify the dedicated table,
   and keep `VouchText` at **1000** (not 280) — code is authoritative, spec is not edited.
-- **L2 — Stage 2** (5-vouch limit enforced in C#; display asymmetry: outgoing public, incoming private).
-  **Settled constraints for the opusplan/build pass — do not revisit:** dedicated `Vouch` table;
-  `VouchText` max length 1000; display asymmetry (outgoing public / incoming private, §5.8, decided
-  independently of the schema-shape question); 5-per-user limit, C#-enforced; FK delete behavior as
-  above.
-- **L3/L3.5 — Stage 2** (vouch button visible only if already followed). **L4 — Stage 1. L5 — Stage 2.**
+- **L1 — Stage 5 (re-verified WU21, 2026-06-22).** `MakeVouchTextUnlimited` migration removes
+  `[MaxLength(1000)]` from `VouchText` — column is now unbounded `text` (widening, safe). Supersedes
+  Phase B's 1000-char ruling and spec §5.8's original 280; code is authoritative. Applied via
+  Testcontainers `Database.MigrateAsync` in the integration suite. `has-pending-model-changes` clean.
+- **L2 — Stage 5 (WU21, 2026-06-22).** Covered by shared `IFollowingWriteService` /
+  `IFollowingReadService` cluster above (Feature 18 L2 note). Vouch-specific: `VouchAsync` sanitizes
+  `VouchText` before persist; 5-limit C#-enforced; `VouchLimitException` thrown on 6th. Integration
+  tests include long-text (exceeds old 1000-char cap), XSS sanitization, limit enforcement.
+  **Settled constraints — do not revisit:** dedicated `Vouch` table; outgoing public / incoming private
+  asymmetry (§5.8); 5-per-user cap (anti-snowball scarcity lever); FK delete behavior (see Shared
+  Context); `VouchText` is rich HTML sanitized-once-on-save (EditorView/RichTextView/sanitize path).
+- **L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4-Style — Stage 5 (all WU21, 2026-06-22).**
+  `SharedUI/Following/` cluster: `FollowButton.razor` (follow/unfollow + bell; self-contained-write
+  inject `IFollowingWriteService`), `VouchButton.razor` (follow-gated; `ConfirmDialog` + `EditorView`
+  for rich note; disabled+tooltip at 5-limit; `JSInterop.Loose` in tests), `VouchList.razor`
+  (pass-through; `UserCard` + `RichTextView` per row; owner-conditional remove controls via
+  `IsEditable` — see `layer3.5-structure.md` "Owner-Conditional Edit Affordances"). Tailwind tokens
+  only; `hover:underline`, `text-danger`, `text-muted` etc. Applied `@namespace TheCanalaveLibrary.SharedUI`
+  on all three files (flat-namespace rule). **Verified:** tier **RazorComponents** —
+  `FollowButtonTests` (7 tests: follow/unfollow labels, bell visibility, aria-label states, click
+  callbacks), `VouchButtonTests` (6 tests: visibility gate, enabled/disabled states, dialog opens;
+  `JSInterop.Loose`), `VouchListTests` (8 tests: empty message, per-row count, usernames, VouchText
+  render, null VouchText omits RichTextView div, IsEditable gate, OnRemoveVouch callback).
+  CSS visual rendering (avatar layout, spacing, disabled tooltip appearance) is human sign-off
+  for Stage 6. `dotnet test` green (64/64).
+- **L5 — Stage 2. L6 — Stage 5** (see above; existing composite PK + `ix_vouches_vouched_user_id`).
 - **L6 — Stage 5 (reconciled Phase B).** The migration-verified indexes for the new shape: the
   composite PK `(vouching_user_id, vouched_user_id)` covers outgoing-vouch lookups, and
   `ix_vouches_vouched_user_id` covers incoming-vouch lookups. The spec's old filtered-index pair on

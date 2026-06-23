@@ -111,9 +111,23 @@ builder.Services.AddScoped<ITagReadService, ServerTagReadService>();
 // (MinIO dev / R2 prod), behind this same interface — see workplan.md Post-MVP section.
 builder.Services.AddScoped<IImageStorageService, LocalImageStorageService>();
 // Configuration happens once at construction and Sanitize() is thread-safe thereafter, so this is a
-// singleton rather than scoped (see ServerHtmlSanitizationService). No call site yet — chapter/comment/
-// etc. write services inject it when they land (WU17, WU19, ...).
+// singleton rather than scoped (see ServerHtmlSanitizationService). First call site: WU17 chapter
+// write service. Future: WU19 comments, WU29 recommendations, WU31 blog posts, WU35 messaging.
 builder.Services.AddSingleton<IHtmlSanitizationService, ServerHtmlSanitizationService>();
+// Chapters (WU17) — L2 read/write services.
+builder.Services.AddScoped<IChapterReadService, ServerChapterReadService>();
+builder.Services.AddScoped<IChapterWriteService, ServerChapterWriteService>();
+// Following/Vouches (WU21) — L2 read/write services.
+builder.Services.AddScoped<IFollowingReadService, ServerFollowingReadService>();
+builder.Services.AddScoped<IFollowingWriteService, ServerFollowingWriteService>();
+// UserStoryInteractions (WU15) — L2 read/write services.
+builder.Services.AddScoped<IUserStoryInteractionReadService, ServerUserStoryInteractionReadService>();
+builder.Services.AddScoped<IUserStoryInteractionWriteService, ServerUserStoryInteractionWriteService>();
+// Notifications (WU22) — L2 read/write services (Features 41/42/43).
+// WU22 delivers: service infra + NotifyNewFollowerAsync/NotifyNewVouchAsync + Following seam wiring.
+// Fan-out notify methods land incrementally with their triggering work-units (workplan.md WU22).
+builder.Services.AddScoped<INotificationReadService, ServerNotificationWriteService>();
+builder.Services.AddScoped<INotificationWriteService, ServerNotificationWriteService>();
 
 WebApplication app = builder.Build();
 

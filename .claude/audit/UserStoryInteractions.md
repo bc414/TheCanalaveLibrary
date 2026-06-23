@@ -14,91 +14,151 @@ trap, not an intent contest — see audit-summary §0).
 
 ---
 
-## The reading-status divergence (drives Stage 4 on L1 + L6)
+## The reading-status divergence (resolved in WU0 / InitialSchema — L1 Stage 5)
 
-`UserStoryInteraction` currently has these booleans:
-`IsInProgress, IsCompleted, IsActivelyReading, IsFavorite, IsHiddenFavorite, IsFollowed, IsReadItLater,
-IsIgnored`.
+**Historical note (do not apply to current code — already resolved).** When the audit ran, the
+pre-revision `UserStoryInteraction` had these booleans: `IsInProgress, IsCompleted, IsActivelyReading,
+IsFavorite, IsHiddenFavorite, IsFollowed, IsReadItLater, IsIgnored`. The resolved model (per spec §4/§5.12
+and `layer1-data-model.md`) instead has:
+- **`HasStarted`** (`Has-` prefix, permanent past event, set at 90% scroll of Ch.1) — permanent,
+  never cleared.
+- `IsCompleted`, `IsIgnored`, `IsFavorite`, `IsHiddenFavorite`, `IsFollowed`, `IsReadItLater` (`Is-`
+  mutable) — 6 mutable bits.
+- "Actively Reading" / "In Progress" is **derived** (`HasStarted AND NOT IsCompleted AND NOT IsIgnored`),
+  not a stored column.
+- Zero-coupling: no bit drives another; the service rejects impossible combos but never auto-cascades.
 
-The revised spec model (§4, §5.12; conventions `layer1-data-model.md` naming) requires:
-- **`HasStarted`** (`Has-` prefix, permanent past event, set at 90% of Ch.1) — **absent**.
-- `IsCompleted`, `IsIgnored` (`Is-` mutable) — present.
-- "Actively Reading" / "In Progress" is a **derived** state
-  (`HasStarted AND NOT IsCompleted AND NOT IsIgnored`), **not a stored column** — yet the code stores both
-  `IsInProgress` and `IsActivelyReading`.
-- Zero-coupling rule (no bit drives another) — cannot be expressed because the foundational bit
-  (`HasStarted`) is missing.
-
-Supporting evidence of pre-revision design elsewhere: `ModelEnums.cs` still defines vestigial
-`ReadStatus { Unread, InProgress, Completed }` and `FavoriteStatus { None, Favorite, PrivateFavorite }`
-enums — the enum/junction model that the boolean-column axiom (Settled Axiom #3) was meant to replace.
-
-**What's correct:** the partition strategy (tiny hot row, warm dates table, sparse rec-source), the
-filtered-index *pattern*, and the favorite/follow/read-it-later/ignore bits.
-
-**Nature of the gap:** stale code, not an intent contest. The stored columns implement a *superseded*
-reading-status design; the spec is the recent, authoritative artifact and the code is non-working here (no
-service, no UI, not migrated). **Direction is not open — the spec wins.** This is Stage-4-as-trap-warning
-(see audit-summary §0/§3b): the misleading columns will be copied if a building session isn't told to
-discard them. **Resolution (predetermined):** re-model the booleans (add `HasStarted`, drop
-`IsInProgress`/`IsActivelyReading`, retire the vestigial `ReadStatus`/`FavoriteStatus` enums), then
-regenerate the filtered indexes — i.e. proceed as Stage 2 build-to-spec, no diagnosis needed.
+**Resolution completed (WU0/InitialSchema, 2026-06-20):** `IsInProgress`/`IsActivelyReading` dropped;
+`HasStarted` added; vestigial `ReadStatus`/`FavoriteStatus` enums retired. Seven filtered/covering indexes
+in `UserStoryInteractionConfigurations.cs` target the revised columns. L1 is Stage 5. L6 still needs index
+regeneration (see L6 below). This section is kept as a historical reference — do not use it as a
+description of current code.
 
 ---
 
 ## Feature 16 — Story Interaction State Writes
-- **L1 — Stage 4.** See above. `UserStoryInteractionDate` warm partition and sparse semantics ("no row =
-  all false; date row only when completed/favorited") are sound and should survive the re-model.
-- **L2 — Stage 2.** No interaction write service (MVP: direct EF; Layer-7: Redis `LPUSH`). Interface not
-  yet defined.
-- **L3-Logic — Stage 2 (button slice Stage 5, WU7; panel slice + 2-second debounce remain Stage 2).**
-  `UserStoryInteractionButton` leaf built (EventCallback-driven; read-only when no `OnToggle`;
-  rendered only when `IsActive`). The 2-second debounce and the panel's coordination state are
-  unbuilt — **WU16**.
-- **L3.5-Structure — Stage 2 (button slice Stage 5, WU7; panel slice remains Stage 2).**
-  `UserStoryInteractionButton`'s markup/render-guard built. `StoryInteractionPanel` coordination
-  composite (owns debounce VM, `IsOwnStory` swap to Edit button, maps `InteractionTypeEnum` →
-  `(IconPath, AccentColor)`) unbuilt — **WU16**.
-- **L4-Style — Stage 2 (Stage-1 block resolved, WU7; button styling Stage 5, panel's icon mapping
-  remains Stage 2).** **Resolution (settled WU7, supersedes the sprite-key plan below):** interaction
-  icons are **inline SVG shapes**, not theme-swappable sprite URLs — `Sprites/ISpriteReadService` is
-  not involved at all. `UserStoryInteractionButton` takes `IconPath` (SVG `d` string) + `AccentColor`
-  `[Parameter]`s and renders one inline `<svg>`; it has no domain knowledge. Three-state square button
-  (gray inactive → accent-fill-on-hover → inverted accent-bg/white-shape when active) — full pattern
-  in `layer4-style.md` "Interaction Icons Are Inline SVG." **Still open for WU16:** the
-  `InteractionTypeEnum → (IconPath, AccentColor)` mapping table itself (which shape, which color, per
-  interaction type) — the owning composite or a shared constants helper mints this when
-  `InteractionTypeEnum` is minted (WU15/16). Superseded: spec §5.30.5's
-  `ISpriteService.GetInteractionIcon(InteractionTypeEnum, theme)` and the WU2-era
-  sprite-key/`GetSpriteUrl` plan that used to live in this note — see `audit/Sprites.md` Feature 3.
+- **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** See "The reading-status
+  divergence" section above. `UserStoryInteractionDate` warm partition and sparse semantics ("no row =
+  all false; date row only when relevant") survived intact.
+- **L2 — Stage 5 (WU15, 2026-06-22).** Read/write service implemented and tested.
 
-  **Settled / do-not-revisit (minted button contract, WU7):** `UserStoryInteractionButton`'s
-  parameters are `IsActive` (bool), `OnToggle` (`EventCallback<bool>`, absence ⇒ read-only),
-  `IconPath` (string, SVG `d`), `AccentColor` (string, CSS color), `Label` (string, drives
-  `aria-label`/`title`). Read-only renders as a `<span>` (not a `<button>`) and only when `IsActive`.
-  This contract is locked for WU16 to consume — do not redesign it when building the panel; only the
-  `(IconPath, AccentColor)` *values* per interaction type are open.
+  **Settled for WU15 (2026-06-22, do not revisit):**
+  - WU15 is **trimmed to the panel-critical slice** — Feature 16 L2 only (write path + per-viewer state
+    reads). Feature 17 L2 (bookshelf tab reads) is deferred to WU27 (`status.md` 17 L2 stays Stage 2).
+  - **`InteractionTypeEnum` uses imperative-verb identifiers**: `Favorite, PrivateFavorite, Follow,
+    Complete, ReadLater, Ignore`. This resolves the code-identifier noun/verb mix introduced by the
+    entity columns (`IsFavorite`/`IsHiddenFavorite`/…) and the server `UserStoryInteractionFilters`
+    constants. **Scope: the new enum only** — the migrated `Is*` entity columns and the Server filter
+    constants are **left as-is** (no migration here); their mix and the `Favorited`/`IsFavorite`
+    mismatch are noted for a later L1 reconcile. Display labels (Favorite / Private Favorite / Following
+    / Completed / Read It Later / Ignored) are user-facing strings and may stay mixed.
+  - **Panel manages 6 bits via `InteractionStateUpdate`**: `IsFavorite, IsHiddenFavorite, IsFollowed,
+    IsCompleted, IsReadItLater, IsIgnored`. `HasStarted` is intentionally absent (reading path owns it,
+    set at 90% scroll Ch.1, WU26) — the write preserves it. `IsCompleted` is included so users can mark
+    stories read on other sites, toggle it off, and see completion in story decks.
+  - **Zero-coupling**: each bit is set/cleared independently; the service rejects impossible combos per
+    the §4 table but never auto-cascades between bits.
+  - **Sparse semantics**: no row = all false; create row on first true bit; delete row when all bits
+    go false (date partition cascades). Date partition stamped when bit goes true, nulled when false.
+  - **Write guard**: anonymous caller ⇒ throw (real gating is `AuthorizeView` at UI level).
+  - `GetStatesByStoryIdsAsync(IReadOnlyList<int>)` is the N+1-safe batch method (one query, missing
+    rows ⇒ absent key ⇒ caller treats as all-false). `IReadOnlyList<T>` per the WU12 id-batch rule.
+
+  **How verified (WU15, 2026-06-22):** `dotnet build` green (8 projects, 0 errors, 2 pre-existing
+  warnings). `dotnet test` green: 93 Integration / 79 Unit / 64 RazorComponents = 236 total.
+  Integration tier (`UserStoryInteractionServiceTests`, 15 tests, Testcontainers Postgres):
+  upsert creates row when absent; updates existing row; FavoriteDate stamped on true / cleared on false;
+  CompletedDate stamped (panel-writable "read elsewhere" use case); HasStarted preserved across write;
+  all-bits-false → row removed + date partition cascade-deleted; all-false with HasStarted=true → row
+  survives; all-false + no row → no row created; `GetStatesByStoryIdsAsync` scoped to active user;
+  absent key in result treated as all-false; anonymous context → empty reads; anonymous write throws.
+  Files: `Core/UserStoryInteractions/InteractionTypeEnum.cs`,
+  `Core/UserStoryInteractions/InteractionConstants.cs`,
+  `Core/UserStoryInteractions/UserStoryInteractionStateDto.cs`,
+  `Core/UserStoryInteractions/InteractionStateUpdate.cs`,
+  `Core/UserStoryInteractions/IUserStoryInteractionReadService.cs`,
+  `Core/UserStoryInteractions/IUserStoryInteractionWriteService.cs`,
+  `Server/UserStoryInteractions/ServerUserStoryInteractionReadService.cs`,
+  `Server/UserStoryInteractions/ServerUserStoryInteractionWriteService.cs`,
+  DI in `Server/Program.cs`.
+
+- **L3-Logic — Stage 5 (panel slice, WU16, 2026-06-22).** `UserStoryInteractionButton` leaf
+  (WU7, Stage 5) + `UserStoryInteractionPanel` coordination composite (WU16). Panel owns the 2-second
+  debounce via `CancellationTokenSource` + `Task.Delay`; applies optimistic local state update before
+  the debounce fires; calls `SetInteractionStateAsync` on flush. `InteractionConstants.InteractionDebounceMs
+  = 2000` in `Core/UserStoryInteractions/InteractionConstants.cs` (not Server's `SiteConstants` —
+  SharedUI cannot reference Server). Panel injects only `IUserStoryInteractionWriteService` (no read
+  service; N+1 rule). State flows in as a `[Parameter]` from the batch-loading parent.
+
+  **How verified (WU16, 2026-06-22):** `dotnet test` green, 275 total. Unit:
+  `InteractionVisualsTests` (26 tests — 6 non-empty IconPath + 6 AccentColor + 6 Label; locked 6
+  AccentColors; PrivateFavorite reuses Favorite's IconPath; 6 distinct colors). RazorComponents:
+  `UserStoryInteractionPanelTests` (13 tests — detail renders all 6 in locked enum order; listing
+  blank-slate shows ReadLater+Ignore; listing IsFavorite=true hides ReadLater+Ignore; listing
+  Favorite active renders as `<span>`; listing IsReadLater=true Ignore still shown (ReadLater
+  doesn't break blank-slate); listing IsCompleted=true hides ReadLater+Ignore + shows Complete span;
+  IsOwnStory renders Edit link + no buttons; optimistic toggle adds/removes aria-pressed before debounce).
+
+- **L3.5-Structure — Stage 5 (panel slice, WU16, 2026-06-22).** `UserStoryInteractionPanel` iterates
+  `Enum.GetValues<InteractionTypeEnum>()` (declaration order = locked button order). Parameters:
+  `StoryId` (EditorRequired int), `State` (`UserStoryInteractionStateDto?`; null = all-false),
+  `Context` (`InteractionDisplayContext`: `Listing|Detail`), `IsOwnStory` (bool). `InteractionDisplayContext`
+  is a new Core enum in `Core/UserStoryInteractions/`. Blank-slate condition for listing ReadLater/Ignore
+  visibility: NOT (IsFavorite OR IsHiddenFavorite OR IsFollowed OR IsCompleted OR ActivelyReading) — the
+  IsReadItLater/IsIgnored bits intentionally do not break blank-slate.
+
+- **L4-Style — Stage 5 (panel icon/color/label mapping, WU16, 2026-06-22).** `InteractionVisuals` static
+  class in `SharedUI/UserStoryInteractions/` transcribes the locked audit table verbatim. Inner `Info`
+  record carries `(IconPath, AccentColor, Label)`. `PrivateFavorite` reuses `Favorite`'s `HeartPath`
+  constant; color signals privacy. All 6 AccentColors match the palette exactly.
+  **Button-leaf contract (locked WU7, do-not-revisit):** `UserStoryInteractionButton`
+  takes `IsActive` / `OnToggle` / `IconPath` / `AccentColor` / `Label`. Read-only (no `OnToggle`)
+  renders as `<span>` and only when `IsActive`.
   **How verified (WU7, 2026-06-21):** `dotnet build` green (4 projects, zero new warnings); live
   server run, homepage `200`; user-confirmed visual check of all three states (gray inactive, hover
   accent-fill, inverted accent-bg/white-shape active) plus the read-only-renders-only-when-active
   rule, via a throwaway harness on `HomeDesktop.razor` (heart + star sample shapes, removed after
-  confirmation). No real consumer exists yet (`StoryInteractionPanel` is WU16).
+  confirmation). No real consumer exists yet (`UserStoryInteractionPanel` is WU16).
+
+  **`InteractionTypeEnum → (IconPath, AccentColor, Label)` mapping — locked 2026-06-22, consumed by
+  WU16.** Keys below use the **imperative-verb identifiers** (`PrivateFavorite` / `Follow` / `Complete`
+  / `ReadLater` / `Ignore`) settled for the enum. All paths use the default SVG `nonzero` fill rule (no
+  `fill-rule` attribute change needed). Compound paths use winding direction deliberately: CW subpaths
+  fill positively; a CCW subpath inside a CW outer path cancels winding to 0 (transparent = cutout).
+  Visually verified via `wwwroot/icon-preview.html` (throwaway — remove before Stage 6). Color palette
+  is Gen 4/5 Pokémon-grounded: warm tones for personal attachment, cool for discovery/relationship
+  actions, rust for dismissal.
+
+  | `InteractionTypeEnum` | Label | `AccentColor` | Icon concept | `IconPath` (`d=""`) |
+  |---|---|---|---|---|
+  | `Favorite` | Favorite | `#E8507A` Fairy Pink | Filled heart | `M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z` |
+  | `PrivateFavorite` | Private Favorite | `#C040A8` Mismagius Magenta | Filled heart — same shape, color alone signals privacy | same `d` as Favorite |
+  | `Follow` | Following | `#4A9B52` Eterna Green | Award ribbon: circle badge + two-tailed fork; Gen 4 ribbon = earned commitment | `M6 8A6 6 0 0 1 18 8A6 6 0 0 1 6 8Z M9 14L6 22L9.5 20L12 21.5L14.5 20L18 22L15 14Z` |
+  | `Complete` | Completed | `#E8B84B` Arceus Gold | Filled circle; CCW checkmark polygon inside cancels winding → transparent cutout | `M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M6 12.5L5 14L10 19L20 7L18.5 5.5L10 16Z` |
+  | `ReadLater` | Read It Later | `#2E6FBF` Azurite Blue | Open Pokéball (bottom D + raised lid = 2 px gap, center clasp dot) with 3 page-lines entering from top — capturing a story from the discovery stream | `M5 16A7 7 0 0 1 19 16Z M5 14A7 7 0 0 0 19 14Z M10.5 15A1.5 1.5 0 0 1 13.5 15A1.5 1.5 0 0 1 10.5 15Z M9 1L15 1L15 2L9 2Z M9 3L15 3L15 4L9 4Z M9 5L15 5L15 6L9 6Z` |
+  | `Ignore` | Ignored | `#C04030` Cinnabar Rust | Ban circle: CW outer disk + CCW inner circle (ring hole) + CW diagonal bar | `M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M5 12A7 7 0 0 0 19 12A7 7 0 0 0 5 12Z M5.5 7.5L7.5 5.5L18.5 16.5L16.5 18.5Z` |
+
 - **L5 — Stage 2.**
-- **L6 — Stage 4.** The seven filtered indexes are written but target `is_in_progress`/`is_completed`
-  etc.; they must be regenerated against the revised columns (`has_started`). Follows L1.
+- **L6 — Stage 5 (verified during WU15, 2026-06-22).** The seven filtered indexes in
+  `UserStoryInteractionConfigurations.cs` already target the post-re-model columns (`has_started`,
+  `is_completed`, `is_favorite`, `is_hidden_favorite`, `is_followed`, `is_read_it_later`, `is_ignored`)
+  — they were regenerated as part of WU0/InitialSchema. No migration or index change needed.
 - **L7 — Stage 2.** Write-behind buffer (pattern 1): `LPUSH interaction-queue` → 5s drain →
-  consolidate `Dictionary<(UserId,StoryId),LatestState>` → batch raw SQL. The branch decision (swap the
-  MVP service body vs. parallel path) is the real Stage-2 content.
+  consolidate `Dictionary<(UserId,StoryId),LatestState>` → batch raw SQL.
+
+**Future Design Work, post MVP:** Pokeball needs to be side view
+Hidden favorite should have a mystery texture to it
+Perhaps need to go more texture/color detail instead of totally flat svg, or use dual colors
 
 ## Feature 17 — Story Interaction Lists & Bookshelves
-- **L1 — Stage 4.** Depends directly on the reading-status re-model: derived tabs "Actively Reading"
-  (`HasStarted AND NOT IsCompleted AND NOT IsIgnored`) and "Abandoned" (`IsIgnored AND HasStarted`)
-  cannot be computed without `HasStarted`.
+- **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** `HasStarted` is present;
+  derived tabs "Actively Reading" (`HasStarted AND NOT IsCompleted AND NOT IsIgnored`) and "Abandoned"
+  (`IsIgnored AND HasStarted`) are now computable from stored columns.
 - **L2 — Stage 2.** Tab-backing read queries unbuilt.
 - **L3-Logic / L3.5-Structure — Stage 2.** `BookshelvesPage` dispatcher (`/bookshelves/{Tab}`,
   active-user-only, each tab composing `StoryDeck`) unbuilt. Not a discovery surface — no SearchMode
   entries (correctly so).
-- **L4-Style — Stage 1.** **L5 — Stage 2.** **L6 — Stage 4** (same index re-model).
+- **L4-Style — Stage 1.** **L5 — Stage 2.** **L6 — Stage 5** (same indexes; verified during WU15, 2026-06-22 — see Feature 16 L6 note above).
 
 ---
 

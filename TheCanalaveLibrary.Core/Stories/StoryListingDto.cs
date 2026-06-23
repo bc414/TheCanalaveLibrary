@@ -7,6 +7,8 @@ namespace TheCanalaveLibrary.Core;
 /// service) — same discipline as avatars, see layer2-services.md "Avatars are a related but distinct
 /// case" / "Cover art is the same pattern as avatars." <see cref="Tags"/> are already sprite-resolved
 /// TagChipDtos (the producing read service called ISpriteReadService.GetSpriteUrl during projection).
+/// <see cref="ShortDescription"/> is the warm-partition synopsis (nullable, MaxLength 500) shown
+/// on the card as a truncated preview with a full-text tooltip — added WU13 (additive, no migration).
 ///
 /// Deliberately excludes per-viewer interaction state (IsFavorited, etc.) — that's cross-partition
 /// (UserStoryInteraction), resolved by a sibling merge at the listing call site (WU15/WU16), per §3.8 +
@@ -17,6 +19,7 @@ namespace TheCanalaveLibrary.Core;
 public record StoryListingDto(
     int StoryId,
     string Title,
+    string? ShortDescription,
     string? CoverArtRelativeUrl,
     int? AuthorId,
     string AuthorName,

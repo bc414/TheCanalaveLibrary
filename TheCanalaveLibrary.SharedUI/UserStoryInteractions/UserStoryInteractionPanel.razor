@@ -1,0 +1,146 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@inject IUserStoryInteractionWriteService WriteService
+@implements IDisposable
+
+@* Coordination composite (layer3-logic.md "Self-contained writes"; layer3.5-structure.md example).
+   Owns the 2-second debounce across the six UserStoryInteractionButton leaves. State flows in from
+   the parent (batch-loaded via GetStatesByStoryIdsAsync or single GetStateAsync) — this component
+   does NOT inject the read service (N+1 rule). Null State is treated as all-false.
+   IsOwnStory true renders an Edit link instead of buttons per spec §5.30.5.
+   Button order = InteractionTypeEnum declaration order (Favorite → PrivateFavorite → Follow →
+   Complete → ReadLater → Ignore) per the locked audit table (2026-06-22). *@
+
+<div class="flex items-center gap-2">
+    @if (IsOwnStory)
+    {
+        <a href="/story/@StoryId/edit">Edit Story</a>
+    }
+    else
+    {
+        @foreach (var loopType in Enum.GetValues<InteractionTypeEnum>())
+        {
+            var type = loopType;
+            var visuals = InteractionVisuals.For(type);
+            bool isActive = GetIsActive(type);
+
+            if (Context == InteractionDisplayContext.Detail || ListingShouldShow(type, isActive))
+            {
+                <UserStoryInteractionButton IsActive="@isActive"
+                    OnToggle="@(IsClickable(type) ? MakeToggleCallback(type) : default)"
+                    IconPath="@visuals.IconPath"
+                    AccentColor="@visuals.AccentColor"
+                    Label="@visuals.Label" />
+            }
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int StoryId { get; set; }
+    [Parameter] public UserStoryInteractionStateDto? State { get; set; }
+    [Parameter] public InteractionDisplayContext Context { get; set; }
+    [Parameter] public bool IsOwnStory { get; set; }
+
+    private UserStoryInteractionStateDto? _localState;
+    private CancellationTokenSource? _debounce;
+
+    protected override void OnParametersSet()
+    {
+        if (_localState is null)
+            _localState = State;
+    }
+
+    private bool GetIsActive(InteractionTypeEnum type) => type switch
+    {
+        InteractionTypeEnum.Favorite => _localState?.IsFavorite ?? false,
+        InteractionTypeEnum.PrivateFavorite => _localState?.IsHiddenFavorite ?? false,
+        InteractionTypeEnum.Follow => _localState?.IsFollowed ?? false,
+        InteractionTypeEnum.Complete => _localState?.IsCompleted ?? false,
+        InteractionTypeEnum.ReadLater => _localState?.IsReadItLater ?? false,
+        InteractionTypeEnum.Ignore => _localState?.IsIgnored ?? false,
+        _ => false
+    };
+
+    private bool IsClickable(InteractionTypeEnum type) =>
+        Context == InteractionDisplayContext.Detail ||
+        type is InteractionTypeEnum.ReadLater or InteractionTypeEnum.Ignore;
+
+    private bool IsBlankSlate
+    {
+        get
+        {
+            bool activelyReading = (_localState?.HasStarted ?? false)
+                && !(_localState?.IsCompleted ?? false)
+                && !(_localState?.IsIgnored ?? false);
+            return !(_localState?.IsFavorite ?? false)
+                && !(_localState?.IsHiddenFavorite ?? false)
+                && !(_localState?.IsFollowed ?? false)
+                && !(_localState?.IsCompleted ?? false)
+                && !activelyReading;
+        }
+    }
+
+    private bool ListingShouldShow(InteractionTypeEnum type, bool isActive)
+    {
+        if (type is InteractionTypeEnum.ReadLater or InteractionTypeEnum.Ignore)
+            return IsBlankSlate || isActive;
+        return true; // leaf renders as read-only and only when active; no extra gate needed here
+    }
+
+    private EventCallback<bool> MakeToggleCallback(InteractionTypeEnum type) =>
+        EventCallback.Factory.Create<bool>(this, (bool v) => HandleToggleAsync(type, v));
+
+    private async Task HandleToggleAsync(InteractionTypeEnum type, bool newValue)
+    {
+        var current = _localState ?? UserStoryInteractionStateDto.AllFalse(StoryId);
+        _localState = ApplyToggle(current, type, newValue);
+        StateHasChanged();
+
+        _debounce?.Cancel();
+        _debounce?.Dispose();
+        _debounce = new CancellationTokenSource();
+        var token = _debounce.Token;
+
+        try
+        {
+            await Task.Delay(InteractionConstants.InteractionDebounceMs, token);
+            await FlushAsync();
+        }
+        catch (OperationCanceledException)
+        {
+            // Debounce reset by a subsequent toggle; next HandleToggleAsync fires the flush.
+        }
+    }
+
+    private async Task FlushAsync()
+    {
+        var state = _localState ?? UserStoryInteractionStateDto.AllFalse(StoryId);
+        await WriteService.SetInteractionStateAsync(StoryId, new InteractionStateUpdate(
+            IsFavorite: state.IsFavorite,
+            IsHiddenFavorite: state.IsHiddenFavorite,
+            IsFollowed: state.IsFollowed,
+            IsCompleted: state.IsCompleted,
+            IsReadItLater: state.IsReadItLater,
+            IsIgnored: state.IsIgnored));
+    }
+
+    private static UserStoryInteractionStateDto ApplyToggle(
+        UserStoryInteractionStateDto current, InteractionTypeEnum type, bool value) =>
+        type switch
+        {
+            InteractionTypeEnum.Favorite => current with { IsFavorite = value },
+            InteractionTypeEnum.PrivateFavorite => current with { IsHiddenFavorite = value },
+            InteractionTypeEnum.Follow => current with { IsFollowed = value },
+            InteractionTypeEnum.Complete => current with { IsCompleted = value },
+            InteractionTypeEnum.ReadLater => current with { IsReadItLater = value },
+            InteractionTypeEnum.Ignore => current with { IsIgnored = value },
+            _ => current
+        };
+
+    public void Dispose()
+    {
+        _debounce?.Cancel();
+        _debounce?.Dispose();
+    }
+}

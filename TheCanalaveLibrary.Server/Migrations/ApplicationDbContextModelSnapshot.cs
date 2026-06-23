@@ -637,7 +637,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_published");
 
-                    b.Property<long>("PrimaryContentId")
+                    b.Property<long?>("PrimaryContentId")
                         .HasColumnType("bigint")
                         .HasColumnName("primary_content_id");
 
@@ -3847,8 +3847,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<string>("VouchText")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)")
+                        .HasColumnType("text")
                         .HasColumnName("vouch_text");
 
                     b.HasKey("VouchingUserId", "VouchedUserId")
@@ -4195,7 +4194,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .WithMany()
                         .HasForeignKey("PrimaryContentId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_chapters_chapter_contents_primary_content_id");
 
                     b.HasOne("TheCanalaveLibrary.Core.Story", "Story")

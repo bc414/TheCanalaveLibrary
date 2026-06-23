@@ -101,51 +101,131 @@ No child Razor components. Only raw HTML elements. `@if`/`@foreach` driven by pa
 ### Coordination Composite (manages state across children)
 
 ```razor
-@* StoryInteractionPanel.razor *@
-<div class="...layout...">
+@* UserStoryInteractionPanel.razor *@
+@* Parameters:
+     StoryId (int, EditorRequired)
+     State (UserStoryInteractionStateDto?, flows in from batch-loading parent — panel does NOT inject
+            the read service; null treated as all-false. N+1 rule: page/deck loads state in one batch
+            query and passes each card its slice.)
+     Context (InteractionDisplayContext enum: Listing|Detail — controls clickable vs read-only)
+     IsOwnStory (bool — renders Edit link instead of interaction buttons)
+   Injects: IUserStoryInteractionWriteService (self-contained write, no read service) *@
+<div class="flex items-center gap-2">
     @if (!IsOwnStory)
     {
-        @* IconPath/AccentColor are inline SVG, mapped from InteractionTypeEnum by this composite —
-           not a sprite URL; see layer4-style.md "Interaction Icons Are Inline SVG" *@
-        <UserStoryInteractionButton IsActive="State.IsFavorite"
-                           OnToggle="() => Toggle(InteractionType.Favorite)"
-                           IconPath="@IconFor(InteractionType.Favorite)"
-                           AccentColor="@ColorFor(InteractionType.Favorite)"
-                           Label="Favorite" />
-        <UserStoryInteractionButton IsActive="State.IsFollowed"
-                           OnToggle="() => Toggle(InteractionType.Follow)"
-                           IconPath="@IconFor(InteractionType.Follow)"
-                           AccentColor="@ColorFor(InteractionType.Follow)"
-                           Label="Follow" />
-        @* ... more buttons *@
+        @* Iterate in enum declaration order — that IS the locked button order:
+           Favorite → PrivateFavorite → Follow → Complete → ReadLater → Ignore
+           IconPath/AccentColor/Label come from InteractionVisuals (SharedUI); values are transcribed
+           verbatim from the locked table in audit/UserStoryInteractions.md (2026-06-22).
+           Inline SVG, not a sprite URL — see layer4-style.md "Interaction Icons Are Inline SVG". *@
+        @foreach (var type in Enum.GetValues<InteractionTypeEnum>())
+        {
+            var visuals = InteractionVisuals.For(type);
+            <UserStoryInteractionButton IsActive="@GetIsActive(type)"
+                               OnToggle="@(IsClickable(type) ? HandleToggle(type) : default)"
+                               IconPath="@visuals.IconPath"
+                               AccentColor="@visuals.AccentColor"
+                               Label="@visuals.Label" />
+        }
     }
     else
     {
-        <EditStoryButton StoryId="StoryId" />
+        <a href="/story/@StoryId/edit">Edit Story</a>
     }
 </div>
 ```
 
 ### Pass-Through Layout Composite (arranges children)
 
+`ChapterNavigation` (WU18) is the canonical example. It is **injection-free** — all data arrives
+as parameters; the dispatcher (WU26) loads the TOC + version list once and passes them to both
+the top and bottom instances. Navigation is plain `<a href>` links (Blazor's Router intercepts
+internal links in both InteractiveServer and InteractiveWasm — no full page reload, no
+`NavigationManager` injection needed here). The chapter-select and version-picker disclosures
+use HTML `<details>`/`<summary>` (no Blazor state, no JS) so all links are always present in
+the DOM for bUnit testing regardless of the native open/close state. No sub-components —
+everything is inline anchors and disclosure panels:
+
 ```razor
-@* ChapterNavigation.razor *@
-<nav class="...layout...">
-    @if (HasPreviousChapter)
+@* ChapterNavigation.razor — SharedUI/Chapters/ *@
+<nav class="flex flex-wrap items-center gap-2" aria-label="Chapter navigation">
+    @if (PreviousChapterNumber.HasValue)
     {
-        <PrevChapterButton Chapter="PreviousChapter" />
+        <a href="/story/@StoryId/@PreviousChapterNumber" class="@NavLinkClasses(false)"
+           aria-label="Previous chapter">&lsaquo;</a>
     }
-    <ChapterSelector Chapters="AllChapters" CurrentChapter="CurrentChapter" />
-    @if (HasVersions)
+    else
     {
-        <VersionSwitcher Versions="AvailableVersions" Current="CurrentVersion" />
+        <span class="@NavLinkClasses(true)" aria-disabled="true"
+              aria-label="Previous chapter">&lsaquo;</span>
     }
-    @if (HasNextChapter)
+
+    <details class="relative">
+        <summary class="flex cursor-pointer list-none items-center gap-1 ...">
+            Chapter @CurrentChapterNumber
+        </summary>
+        <div class="absolute left-0 top-full z-10 ...">
+            @foreach (var entry in Toc)
+            {
+                <a href="/story/@StoryId/@entry.ChapterNumber"
+                   class="@TocEntryClasses(entry)"
+                   aria-current="@(entry.ChapterNumber == CurrentChapterNumber ? "page" : null)">
+                    @entry.ChapterNumber. @entry.Title
+                    @if (entry.HasAlternateVersions)
+                    {
+                        <span title="Has alternate versions">&#8942;</span>
+                    }
+                </a>
+            }
+        </div>
+    </details>
+
+    @if (Versions.Count > 1)
     {
-        <NextChapterButton Chapter="NextChapter" />
+        <details class="relative">
+            <summary class="...">@CurrentVersionLabel</summary>
+            <div class="absolute ...">
+                @foreach (var version in Versions)
+                {
+                    <a href="@VersionUrl(version)"
+                       aria-current="@(version.VersionOrder == CurrentVersionOrder ? "page" : null)">
+                        @VersionLabel(version)
+                    </a>
+                }
+            </div>
+        </details>
     }
+
+    @if (NextChapterNumber.HasValue) { ... } else { <span aria-disabled="true" ...> }
 </nav>
+
+@code {
+    [Parameter, EditorRequired] public int StoryId { get; set; }
+    [Parameter, EditorRequired] public int CurrentChapterNumber { get; set; }
+    [Parameter] public int CurrentVersionOrder { get; set; }    // 0 = primary
+    [Parameter] public int? PreviousChapterNumber { get; set; }
+    [Parameter] public int? NextChapterNumber { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<ChapterTocEntryDto> Toc { get; set; } = [];
+    [Parameter] public IReadOnlyList<ChapterVersionDto> Versions { get; set; } = [];
+    // URL helpers, style helpers — no lifecycle hooks, no IDisposable, no service injection.
+    private string VersionUrl(ChapterVersionDto v) =>
+        v.IsPrimary ? $"/story/{StoryId}/{CurrentChapterNumber}"
+                    : $"/story/{StoryId}/{CurrentChapterNumber}/{v.VersionOrder}";
+}
 ```
+
+**Key rules this example establishes:**
+- **`<details>`/`<summary>` for CSS disclosures** — native open/close, no JS/Blazor state.
+  Apply `display: flex` to `<summary>` (via `flex` Tailwind class) to suppress the default
+  browser marker triangle without needing `list-none` alone.
+- **`<a>` for link variants; `<span aria-disabled>` for unavailable endpoints** — not
+  `<button disabled>`, because these are navigation, not actions.
+- **`aria-current="page"` on the currently-selected entry** in both the chapter dropdown and
+  the version picker. Blazor renders `aria-current="@(condition ? "page" : null)"` as either
+  the attribute (present, value `"page"`) or absent (not `aria-current=""`), matching
+  the W3C pattern and making bUnit assertions on the attribute straightforward.
+- **Version URL contract (spec §5.30.3):** primary version → clean URL (no versionOrder
+  segment); alternate → append `/{VersionOrder}` (the ChapterContent's `SortOrder`).
 
 ### Container Composite (provides a visual vessel)
 
@@ -215,6 +295,48 @@ bg-black/50` backdrop, `rounded-xl bg-surface ... shadow-lg` panel) is the same 
 preview popup uses (see below) — reused, not reinvented, but **not extracted into a shared `Modal`
 primitive** with only two consumers and two different flows (confirm/cancel vs. content-preview); that
 extraction is deferred until a third consumer's shape clarifies what the shared part actually is.
+
+### Owner-Conditional Edit Affordances on a Display Composite (settled WU21)
+
+A display composite that renders a list of items owned by a user — but is also consumed read-only by
+non-owners — gates per-row mutation controls behind an `IsEditable` parameter rather than duplicating
+the component into owner/viewer variants:
+
+```razor
+@* VouchList.razor — SharedUI/Following/ *@
+@foreach (var vouch in Vouches)
+{
+    <div class="...">
+        <UserCard User="vouch.User" />
+        @if (vouch.VouchText is not null)
+        {
+            <RichTextView Content="vouch.VouchText" />
+        }
+        @if (IsEditable)
+        {
+            <button @onclick="() => OnRemoveVouch.InvokeAsync(vouch.User.UserId)">Remove vouch</button>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<VouchDisplayDto> Vouches { get; set; } = [];
+    [Parameter] public bool IsEditable { get; set; }
+    [Parameter] public EventCallback<int> OnRemoveVouch { get; set; }
+}
+```
+
+The **hosting page (WU30, the profile dispatcher)** sets `IsEditable = (targetUserId == currentUserId)` for the
+outgoing-vouches list; the incoming-vouches list is always read-only and is only fetched at all for the owner (the
+`GetIncomingVouchesAsync` service method is scoped to the active user — no `userId` param). The composite itself
+has no service injection and no knowledge of "is the current user the owner" — that decision belongs to the
+dispatcher. The same pattern extends to any list whose items carry mutation controls only for their owner
+(bookmark notes, custom-list entries, etc.).
+
+**`IsEditable` is distinct from auth.** Setting it to `true` does not grant the service call — `OnRemoveVouch`
+bubbles the `targetUserId` up to the dispatcher, which calls `IFollowingWriteService.RemoveVouchAsync`. The
+button's *visibility* is `IsEditable`; the *authorization* to remove is enforced in the service
+(`IActiveUserContext.UserId` must match the voucher).
 
 ### Third-Party Wrapper Composite
 
@@ -420,10 +542,26 @@ component owns that behavior, not get bolted onto the display bag.
 
 ## StoryCard and StoryDeck
 
-**StoryCard** (leaf): takes `StoryListingDto`, renders with computed display properties. Composes
-`TagChip` instances. Includes caret dropdown for secondary options (View Story, Discover from this
-Story, Copy link, Report, Download/Export). StoryCard should NOT contain UserCard — only a
-username hyperlink.
+**StoryCard** (leaf, WU13): pure leaf, no service injection. Contract:
+- `[Parameter, EditorRequired] StoryListingDto Story` — warm-partition projection; includes
+  `ShortDescription` (nullable, tooltip + synopsis) and `Tags` (sprite-resolved `TagChipDto` list).
+- `[Parameter] UserStoryInteractionStateDto? InteractionState` — batch-loaded by the parent via
+  `GetStatesByStoryIdsAsync`; forwarded to the nested `UserStoryInteractionPanel`. Null = all-false.
+- `[Parameter] bool IsOwnStory` — forwarded to the panel (renders Edit link instead of buttons).
+- Optional gated caret `EventCallback`s: `OnDiscoverFromStory`, `OnCopyLink`, `OnReport`,
+  `OnDownload` — gated by `.HasDelegate`; consumers wire only what exists.
+- Private state: `bool _menuOpen`, `bool _coverArtFailed`.
+
+Composes: `TagChip` (read-only, no `OnRemove`) + `UserStoryInteractionPanel` in Listing context.
+Author byline is a **plain hyperlink, NOT `UserCard`** — spec §5.30.7, StoryCard is too compact.
+Cover art: stored URL (`CoverArtRelativeUrl`) used verbatim (same discipline as avatars); `_coverArtFailed`
+fallback on `@onerror`. Outer Margin Rule on root: `rounded-xl bg-surface` padding, no `m-*`.
+
+Caret: always-present "View Story" link + optional items per `HasDelegate` (mirror of `UserCard`).
+
+**StoryDeck** (pass-through layout composite): the container holding StoryCards. Three-state
+pattern (loading/empty/populated). Grid layout. Named "Deck" because a deck is a curated ordered
+set of cards — avoids confusion with `StoryListingDto`.
 
 **StoryDeck** (pass-through layout composite): the container holding StoryCards. Three-state
 pattern (loading/empty/populated). Grid layout. Named "Deck" because a deck is a curated ordered

@@ -139,7 +139,7 @@ Ordering rules (corrected from the last-gen step5):
   yet.
 - **Phase by §9.2:** universal leaf atoms first (`TagChip`, `StoryCard`, `UserStoryInteractionButton`,
   `RichTextView`), then composites (`StoryDeck`, `EditorView`, `ResultsFilterPanel`,
-  `StoryInteractionPanel`, `ChapterNavigation`, `CommentSection`, `ConfirmDialog`), then page/dispatchers and
+  `UserStoryInteractionPanel`, `ChapterNavigation`, `CommentSection`, `ConfirmDialog`), then page/dispatchers and
   consumers.
 - **Stage 4 → use the resolved direction.** Per §0, Stage-4 cells are stale-code traps resolving to Stage 2
   (build to spec); sequence them by that implied stage, and flag the code as discard-not-reuse so a building
@@ -217,6 +217,29 @@ Guardrails:
 | *(none currently open)* | | |
 
 **Resolved:**
+
+- **Notification generation mechanism** — resolved (2026-06-23, WU22): **direct injected call +
+  semantic per-event methods + best-effort post-commit.** Feature write services inject
+  `INotificationWriteService` and call a semantic method (e.g. `NotifyNewFollowerAsync`) after their
+  primary `SaveChangesAsync`; the semantic method is the only public generation surface; a private
+  create-core owns drop-self + dedup + bulk-insert, unbypassable per-caller (same "property of the
+  model" principle as the content-rating named query filter). In-process domain events, EF interceptors,
+  and outbox rejected (infra cost, inconsistency with Badges/UserStats, MediatR commercial-license).
+  See `cross-cutting.md` "Notification Creation" and `layer2-services.md` "Notification Generation."
+
+- **Notification in-app toggle dropped (§5.18 deviation)** — resolved (2026-06-23, WU22): the spec
+  §5.18 "in-app toggle" is not implemented. `UserNotificationSetting` stores only `EmailEnabled` and
+  `Collapsed`; in-app delivery is always-on (after drop-self, dedup). No `InAppEnabled` column will be
+  added. Deviation recorded in `audit/Notifications.md` (both what the spec said and what changed/why).
+
+- **`Story.ChapterCount`** — resolved (2026-06-22, WU17): **not a denormalized column.** A count of
+  published chapters is computable via `c.Chapters.Count(ch => ch.IsPublished)` in any EF projection,
+  translating to a correlated `COUNT(*) WHERE is_published` subquery Postgres handles efficiently.
+  Denormalizing would require maintenance in `CreateChapterAsync`, `SetPublishedAsync` (both directions),
+  and any future delete — with no accuracy benefit. `Chapter.IsPublished` already captures the
+  published/unpublished distinction; the filter is free at query time. If the subquery becomes a hotspot
+  in listing queries, the remedy is an L6 partial index on `(story_id) WHERE is_published`, not a
+  counter column. See `audit/Chapters.md` Feature 6 L2 Stage note.
 
 - **`SiteDailyStat`/`DailyStoryStat`** — resolved: raw-SQL marts, no EF model, matching the other three
   Layer-8 marts (`AlsoFavoritedScore`, `AlsoRecommendedScore`, `UserStoryTreeSearchEntry`). `DailyStoryStat`

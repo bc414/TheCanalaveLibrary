@@ -1,8 +1,100 @@
 @namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
 
-<h1>Hello, Desktop User!</h1>
-<p>This is the dedicated desktop view of the home page.</p>
+@* WU13 throwaway harness — remove after visual sign-off *@
 
-@* You can add complex, desktop-only components and logic here *@
+<div class="p-8">
+    <h1 class="text-2xl font-bold mb-6">WU13 StoryCard Harness</h1>
 
-<PaginationControls CurrentPage="1" PageSize="20" TotalCount="100"/>
+    @* Grid parent — StoryCard must not leak outer margin (gap-4 owns spacing) *@
+    <div class="grid grid-cols-3 gap-4">
+
+        @* Card 1: InProgress, Teen, with ShortDescription + tags, no cover art (fallback) *@
+        <StoryCard Story="@_card1" InteractionState="null" IsOwnStory="false"
+                   OnReport="@OnReport" />
+
+        @* Card 2: Completed, Everyone, with cover art, no ShortDescription, no tags *@
+        <StoryCard Story="@_card2" InteractionState="null" IsOwnStory="false" />
+
+        @* Card 3: OnHiatus, Mature, IsOwnStory=true → should show Edit Story link, no buttons *@
+        <StoryCard Story="@_card3" InteractionState="null" IsOwnStory="true" />
+
+        @* Card 4: Long title truncation test, 999K word count, all caret items wired *@
+        <StoryCard Story="@_card4" InteractionState="@_activeState"
+                   OnDiscoverFromStory="@OnDiscoverFromStory"
+                   OnCopyLink="@OnCopyLink"
+                   OnReport="@OnReport"
+                   OnDownload="@OnDownload" />
+
+        @* Card 5: Cancelled, no author (deleted/anonymous) *@
+        <StoryCard Story="@_card5" InteractionState="null" IsOwnStory="false" />
+
+    </div>
+
+    @if (_lastAction is not null)
+    {
+        <p class="mt-4 text-sm text-muted">Last caret action: <strong>@_lastAction</strong></p>
+    }
+</div>
+
+@code {
+    private string? _lastAction;
+
+    private readonly TagChipDto _tagA = new() { TagId = 10, TagName = "Ash Ketchum", TagTypeId = TagTypeEnum.Character, Description = null, SpriteUrl = null };
+    private readonly TagChipDto _tagB = new() { TagId = 11, TagName = "Adventure", TagTypeId = TagTypeEnum.Genre, Description = null, SpriteUrl = null };
+
+    private StoryListingDto _card1 = new(
+        5, "The Last Journey Through Sinnoh",
+        "A breathtaking odyssey across every corner of Sinnoh, from the windswept Summit of Mt. Coronet to the sunlit shores of Sunyshore City.",
+        null,    // no cover art → fallback
+        42, "Ash_Fanatic99",
+        12_345, StoryStatusEnum.InProgress, Rating.T,
+        DateTime.UtcNow.AddDays(-3),
+        new[] { new TagChipDto { TagId = 10, TagName = "Ash Ketchum", TagTypeId = TagTypeEnum.Character }, new TagChipDto { TagId = 11, TagName = "Adventure", TagTypeId = TagTypeEnum.Genre } });
+
+    private StoryListingDto _card2 = new(
+        6, "Pikachu's Quiet Days",
+        null,   // no short description
+        "/uploads/stories/999/cover-abc.png",   // cover art (may 404 — @onerror fallback should handle it)
+        7, "MistyForever",
+        3_200, StoryStatusEnum.Completed, Rating.E,
+        DateTime.UtcNow.AddDays(-14),
+        []);
+
+    private StoryListingDto _card3 = new(
+        7, "Dark Days in Unova (IsOwnStory demo)",
+        "A gritty retelling of the Team Plasma conflict from N's perspective.",
+        null,
+        42, "Ash_Fanatic99",   // same author as card1 so IsOwnStory makes sense
+        88_000, StoryStatusEnum.OnHiatus, Rating.M,
+        DateTime.UtcNow.AddDays(-60),
+        []);
+
+    private StoryListingDto _card4 = new(
+        8, "An Extremely Long Title That Should Definitely Be Truncated On The Card Because It Is Far Too Long For A Single Line",
+        "All four caret items wired. InteractionState has ReadLater active.",
+        null,
+        99, "VeryLongUsernameAuthor",
+        999_123, StoryStatusEnum.Rewriting, Rating.T,
+        DateTime.UtcNow.AddDays(-1),
+        []);
+
+    private StoryListingDto _card5 = new(
+        9, "Abandoned Chronicle",
+        "An author-deleted story — AuthorId is null so the byline should be plain text.",
+        null,
+        null,  // deleted/anonymous author
+        "Unknown Author",
+        500, StoryStatusEnum.Cancelled, Rating.E,
+        DateTime.UtcNow.AddDays(-365),
+        []);
+
+    // InteractionState for card 4 (StoryId=8), ReadLater=true
+    private UserStoryInteractionStateDto _activeState = new(
+        8, false, false, false, false, false, true, false);
+
+    private void OnDiscoverFromStory() => _lastAction = "DiscoverFromStory";
+    private void OnCopyLink() => _lastAction = "CopyLink";
+    private void OnReport() => _lastAction = "Report";
+    private void OnDownload() => _lastAction = "Download";
+}

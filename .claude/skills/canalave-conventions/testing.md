@@ -14,7 +14,7 @@ project the type-under-test lives in.
 |---|---|---|---|
 | **Unit** | `TheCanalaveLibrary.Tests.Unit` (references Core **and** Server) | Any type constructed directly — no `WebApplicationFactory`, no Testcontainers, no `DbContext` | Pure logic: `StoryValidations`, `StoryMappers`, `StorySlug.Slugify`; **and** host-free Server services: `ServerHtmlSanitizationService` (no deps), `ServerSpriteReadService` (fake `IWebHostEnvironment`) |
 | **Integration** | `TheCanalaveLibrary.Tests.Integration` (references Server) | `WebApplicationFactory<Program>` + Testcontainers Postgres | `Server{Feature}{Read,Write}Service` impls, content-rating query filter, EF projections, unique indexes, `IImageStorageService`, `UserDeletionService` |
-| **RazorComponents** | `TheCanalaveLibrary.Tests.RazorComponents` (references SharedUI, Client) | bUnit `TestContext` — renders Razor components without a real host or DB | SharedUI/Client component render output, parameter→markup, event-callback wiring, computed display logic |
+| **RazorComponents** | `TheCanalaveLibrary.Tests.RazorComponents` (references SharedUI, Client) | bUnit `TestContext` — renders Razor components without a real host or DB | **L3 `@code` logic only:** EventCallback invocations with correct arg values, service method calls triggered by interaction, non-trivial computed state. Not L3.5 markup structure or L4 style. |
 
 **The placement rule is behavioral, not by production project.** If you can `new` the
 type (or small fakes of its deps) and assert without a real host or DB, it is a Unit test
@@ -69,14 +69,38 @@ fragility the lazy-read pattern in `ServerActiveUserContext` exists to avoid.
 
 ## What belongs in RazorComponents (bUnit)
 
-Use bUnit's `TestContext` to render components into a queryable DOM (via `IRenderedComponent`).
-Target: render output, parameter→markup contracts, event-callback wiring (simulated clicks,
-input changes), and computed display properties visible in markup (e.g. active-page styling in
-`PaginationControls`, tag-cap enforcement in `TagSelector`).
+**Scope = Layer 3 (`@code` logic) only.** bUnit tests cover what *cannot be verified by reading
+the Razor file* — C# computation that produces a behavioral outcome. They do not cover Layer 3.5
+(markup structure) or Layer 4 (style), both of which are declarative and human-verified.
+
+**Test these — they involve `@code` computation:**
+- EventCallback invocations with the correct argument values (e.g. `OnRemoveVouch` fires with
+  the vouched user's id — the caller must pick the right field from the DTO).
+- Service method calls triggered by interaction (e.g. `FollowAsync(targetUserId)` called on
+  click — the component must resolve the right id from its parameters).
+- `disabled` attribute or other state computed in `@code` from a non-trivial condition (e.g.
+  a property derived from multiple parameters, not a direct pass-through).
+
+**Do not test these — they are readable from the Razor file:**
+- `@if (IsEditable)` / `@if (IsFollowing)` blocks where the condition is a bare `[Parameter]`
+  pass-through. The logic is one line; reading it is faster than a test and the test adds no
+  new information.
+- `@foreach` producing one item per input element — that's declarative markup.
+- Presence of static text, placeholder messages, or aria-label values set by string interpolation.
+- Any Tailwind class presence — Layer 4, human sign-off only.
+
+**The deciding question:** does the test require running C# code to know what will happen, or
+can you determine the answer by reading the `.razor` file? If the latter, skip the test.
+
+**Note on AngleSharp CSS selector fragility:** bUnit uses AngleSharp, which silently ignores
+compound selectors when the qualifier is a hyphenated class name (`.text-danger`) or an
+attribute-value filter (`[attr^='...']`) — it falls back to matching only the element-type
+prefix. Use markup string assertions (`cut.Markup.Contains(...)`) or direct index access
+(`cut.FindAll("button")[n]`) instead of compound CSS selectors. Prefer `[aria-label]` presence
+selectors or element-type-only selectors when finding elements to click.
 
 **Does not belong here:** full auth flows, real service calls, or anything requiring a real
-server circuit (SignalR). Keep components thin (push pure logic down to Core so Unit covers
-it); bUnit covers what's left — the render contract.
+server circuit (SignalR). Keep components thin (push pure logic down to Core so Unit covers it).
 
 ## Integration test data isolation: assert relative order, not absolute position
 
@@ -96,6 +120,39 @@ state.** Instead, seed your own fixtures with identifiable values (a `Guid`-suff
 enough), fetch enough of the result set to be sure your own known ids are present, and assert
 only their order or presence *relative to each other* — correct regardless of what else, past
 or present, surrounds them.
+
+## Integration test helper pitfall: async methods that create a scope must `await` the call inside it
+
+Any helper method that opens a `using IServiceScope scope` and calls a service **must be `async` and
+must `await` the service call** — do not return the bare `Task<T>`:
+
+```csharp
+// WRONG — scope disposed before the query finishes streaming
+private Task<ChapterReadingDto?> GetForReadingAsync(int storyId, int chapterNumber)
+{
+    using IServiceScope scope = _factory.Services.CreateScope();
+    IChapterReadService svc = scope.ServiceProvider.GetRequiredService<IChapterReadService>();
+    return svc.GetChapterForReadingAsync(storyId, chapterNumber); // scope tears down here!
+}
+
+// CORRECT
+private async Task<ChapterReadingDto?> GetForReadingAsync(int storyId, int chapterNumber)
+{
+    using IServiceScope scope = _factory.Services.CreateScope();
+    IChapterReadService svc = scope.ServiceProvider.GetRequiredService<IChapterReadService>();
+    return await svc.GetChapterForReadingAsync(storyId, chapterNumber);
+}
+```
+
+When the bare `Task` is returned, the C# compiler exits the method body (and therefore the `using`
+block) at the `return` statement — before any `await` suspends execution and before the async
+database query runs. The `IServiceScope` is disposed, which disposes the `DbContext`, which closes
+the Postgres connection. Npgsql then throws `InvalidOperationException: The reader is closed` when
+the deferred query eventually tries to stream results. The symptom looks like a data or type error,
+not a lifetime error, which makes it easy to misdiagnose.
+
+This applies to any async method with a `using`-scoped resource: `IServiceScope`, `HttpClient`, or
+any other `IDisposable` that owns resources the async operation needs.
 
 ## Dev-diagnostics endpoints are probes, not the regression net
 

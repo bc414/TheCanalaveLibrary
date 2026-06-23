@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Interaction Icon Preview</title>
+  <style>
+    body { font-family: Georgia, serif; background: #f0f0ec; padding: 2rem; }
+    h1 { font-size: 1.1rem; color: #333; margin-bottom: 2rem; }
+    .grid { display: flex; flex-direction: column; gap: 2rem; }
+    .row { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
+    .label { width: 14rem; font-size: 0.85rem; color: #555; }
+    .label strong { display: block; color: #222; font-size: 0.95rem; }
+    .label code { font-size: 0.7rem; color: #888; }
+
+    /* The three button states, matching UserStoryInteractionButton.razor exactly */
+    .btn {
+      width: 36px; height: 36px;
+      border-radius: 6px;
+      display: grid; place-items: center;
+      cursor: pointer;
+      transition: background-color 0.15s;
+      border: none;
+      position: relative;
+    }
+    .btn svg { width: 20px; height: 20px; transition: fill 0.15s; }
+
+    /* Inactive state: bg-gray-200, fill-gray-500 */
+    .btn-inactive { background: #e5e7eb; }
+    .btn-inactive svg { fill: #6b7280; }
+
+    /* Hover state: bg-gray-200 + fill accent */
+    .btn-hover { background: #e5e7eb; }
+
+    /* Active state: bg-accent, fill-white */
+    .btn-active { }
+    .btn-active svg { fill: white; }
+
+    .state-label {
+      font-size: 0.7rem;
+      color: #999;
+      text-align: center;
+      margin-top: 4px;
+    }
+    .state-group { display: flex; flex-direction: column; align-items: center; gap: 0; }
+
+    hr { border: none; border-top: 1px solid #ccc; margin: 1rem 0; }
+  </style>
+</head>
+<body>
+<h1>Interaction Button Icon Preview — The Canalave Library (2026-06-22)</h1>
+<p style="font-size:0.8rem;color:#888;margin-bottom:2rem;">
+  Three states per icon: inactive (gray bg / gray fill) · hover (gray bg / accent fill) · active (accent bg / white fill).
+  Throwaway — remove before Stage 6.
+</p>
+
+<div class="grid" id="icons"></div>
+
+<script>
+const icons = [
+  {
+    enum: "Favorite",
+    label: "Favorite",
+    color: "#E8507A",
+    colorName: "Fairy Pink",
+    concept: "Filled heart",
+    d: "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+  },
+  {
+    enum: "HiddenFavorite",
+    label: "Private Favorite",
+    color: "#C040A8",
+    colorName: "Mismagius Magenta",
+    concept: "Filled heart (same path, different color)",
+    d: "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+  },
+  {
+    enum: "Followed",
+    label: "Following",
+    color: "#4A9B52",
+    colorName: "Eterna Green",
+    concept: "Award ribbon — circle badge + two-tailed fork",
+    d: "M6 8A6 6 0 0 1 18 8A6 6 0 0 1 6 8Z M9 14L6 22L9.5 20L12 21.5L14.5 20L18 22L15 14Z"
+  },
+  {
+    enum: "ReadItLater",
+    label: "Read It Later",
+    color: "#2E6FBF",
+    colorName: "Azurite Blue",
+    concept: "Open Pokéball + 3 page lines entering",
+    d: "M5 16A7 7 0 0 1 19 16Z M5 14A7 7 0 0 0 19 14Z M10.5 15A1.5 1.5 0 0 1 13.5 15A1.5 1.5 0 0 1 10.5 15Z M9 1L15 1L15 2L9 2Z M9 3L15 3L15 4L9 4Z M9 5L15 5L15 6L9 6Z"
+  },
+  {
+    enum: "Completed",
+    label: "Completed",
+    color: "#E8B84B",
+    colorName: "Arceus Gold",
+    concept: "Filled circle with check cutout",
+    d: "M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M6 12.5L5 14L10 19L20 7L18.5 5.5L10 16Z"
+  },
+  {
+    enum: "Ignored",
+    label: "Ignored",
+    color: "#C04030",
+    colorName: "Cinnabar Rust",
+    concept: "Ban circle — ring + diagonal bar",
+    d: "M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M5 12A7 7 0 0 0 19 12A7 7 0 0 0 5 12Z M5.5 7.5L7.5 5.5L18.5 16.5L16.5 18.5Z"
+  }
+];
+
+function makeBtn(d, bgColor, fillColor) {
+  return `
+    <button class="btn" style="background:${bgColor}">
+      <svg viewBox="0 0 24 24" style="fill:${fillColor}">
+        <path d="${d}" />
+      </svg>
+    </button>`;
+}
+
+const container = document.getElementById('icons');
+icons.forEach(icon => {
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = `
+    <div class="label">
+      <strong>${icon.label}</strong>
+      <span>${icon.enum}</span><br>
+      <code style="color:${icon.color}">■</code>
+      <code>${icon.color} — ${icon.colorName}</code><br>
+      <em style="font-size:0.72rem;color:#aaa">${icon.concept}</em>
+    </div>
+    <div class="state-group">
+      ${makeBtn(icon.d, '#e5e7eb', '#6b7280')}
+      <div class="state-label">inactive</div>
+    </div>
+    <div class="state-group">
+      ${makeBtn(icon.d, '#e5e7eb', icon.color)}
+      <div class="state-label">hover</div>
+    </div>
+    <div class="state-group">
+      ${makeBtn(icon.d, icon.color, 'white')}
+      <div class="state-label">active</div>
+    </div>
+    <div class="state-group">
+      ${makeBtn(icon.d, icon.color, 'white')}
+      ${makeBtn(icon.d, icon.color, 'white')}
+      <div class="state-label">side-by-side</div>
+    </div>`;
+  container.appendChild(row);
+
+  const hr = document.createElement('hr');
+  container.appendChild(hr);
+});
+</script>
+</body>
+</html>

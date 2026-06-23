@@ -1,0 +1,108 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@inject IFollowingWriteService FollowingService
+
+@* Self-contained-write composite. Visible only when the viewer already follows TargetUserId
+   (settled WU21 — vouching is a follow-gated action). The vouch note is rich HTML authored in
+   EditorView; VouchAsync sanitizes it on save. At the 5-vouch limit (AtVouchLimit = true) and not
+   already vouched, the button renders disabled with an explanatory tooltip (settled UX, WU21).
+   ConfirmDialog is reused (WU9) with ChildContent holding the EditorView for the note. *@
+
+@if (IsFollowing)
+{
+    @if (_isVouched)
+    {
+        <button type="button"
+                class="rounded-lg border border-accent px-3 py-1.5 text-sm font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
+                @onclick="HandleRemoveVouch"
+                disabled="@_busy">
+            ✓ Vouched
+        </button>
+    }
+    else if (AtVouchLimit)
+    {
+        <span title="You've used all @FollowingConstants.MaxVouchesPerUser vouches. Remove one to add another.">
+            <button type="button"
+                    class="rounded-lg border border-muted px-3 py-1.5 text-sm font-medium text-muted cursor-not-allowed opacity-50"
+                    disabled="true"
+                    aria-disabled="true">
+                Vouch
+            </button>
+        </span>
+    }
+    else
+    {
+        <button type="button"
+                class="rounded-lg border border-accent px-3 py-1.5 text-sm font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
+                @onclick="() => _dialogOpen = true"
+                disabled="@_busy">
+            Vouch
+        </button>
+    }
+}
+
+<ConfirmDialog @bind-IsOpen="_dialogOpen"
+               Title="Vouch for this user"
+               ConfirmText="Submit vouch"
+               CancelText="Cancel"
+               OnConfirm="HandleSubmitVouch"
+               OnCancel="() => _editorRef = null!">
+    <p class="mb-2 text-sm text-muted">
+        Vouch to publicly endorse this user. Your vouch will appear on their profile.
+        You have @(FollowingConstants.MaxVouchesPerUser - OutgoingVouchCount) vouch
+        @(FollowingConstants.MaxVouchesPerUser - OutgoingVouchCount == 1 ? "slot" : "slots") remaining.
+    </p>
+    <p class="mb-2 text-sm text-muted">Add an optional note (rich text supported):</p>
+    <EditorView @ref="_editorRef" Placeholder="Why are you vouching for this user? (optional)" />
+</ConfirmDialog>
+
+@code {
+    [Parameter, EditorRequired] public int TargetUserId { get; set; }
+    [Parameter] public bool IsFollowing { get; set; }
+    [Parameter] public bool IsVouched { get; set; }
+    [Parameter] public bool AtVouchLimit { get; set; }
+    [Parameter] public int OutgoingVouchCount { get; set; }
+
+    private bool _isVouched;
+    private bool _busy;
+    private bool _dialogOpen;
+    private EditorView? _editorRef;
+
+    protected override void OnParametersSet()
+    {
+        _isVouched = IsVouched;
+    }
+
+    private async Task HandleSubmitVouch()
+    {
+        _dialogOpen = false;
+        _busy = true;
+        try
+        {
+            string? html = _editorRef is not null ? await _editorRef.GetHtmlAsync() : null;
+            // Treat empty editor output as no note.
+            if (string.IsNullOrWhiteSpace(html) || html is "<p><br></p>") html = null;
+            await FollowingService.VouchAsync(TargetUserId, html);
+            _isVouched = true;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task HandleRemoveVouch()
+    {
+        if (_busy) return;
+        _busy = true;
+        try
+        {
+            await FollowingService.RemoveVouchAsync(TargetUserId);
+            _isVouched = false;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
