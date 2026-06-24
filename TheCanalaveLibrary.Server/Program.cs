@@ -117,6 +117,9 @@ builder.Services.AddSingleton<IHtmlSanitizationService, ServerHtmlSanitizationSe
 // Chapters (WU17) — L2 read/write services.
 builder.Services.AddScoped<IChapterReadService, ServerChapterReadService>();
 builder.Services.AddScoped<IChapterWriteService, ServerChapterWriteService>();
+// Comments (WU19) — L2 read/write services (Features 23/24/25/26, chapter context only for MVP).
+builder.Services.AddScoped<ICommentReadService, ServerCommentReadService>();
+builder.Services.AddScoped<ICommentWriteService, ServerCommentWriteService>();
 // Following/Vouches (WU21) — L2 read/write services.
 builder.Services.AddScoped<IFollowingReadService, ServerFollowingReadService>();
 builder.Services.AddScoped<IFollowingWriteService, ServerFollowingWriteService>();

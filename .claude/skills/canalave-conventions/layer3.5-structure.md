@@ -559,29 +559,84 @@ fallback on `@onerror`. Outer Margin Rule on root: `rounded-xl bg-surface` paddi
 
 Caret: always-present "View Story" link + optional items per `HasDelegate` (mirror of `UserCard`).
 
-**StoryDeck** (pass-through layout composite): the container holding StoryCards. Three-state
-pattern (loading/empty/populated). Grid layout. Named "Deck" because a deck is a curated ordered
-set of cards — avoids confusion with `StoryListingDto`.
+**StoryDeck** (pass-through layout composite, WU14): the container holding StoryCards. Owns the
+three-state pattern internally (`Stories is null` → loading, `Count == 0` → empty, populated → grid
++ `PaginationControls`). Grid layout (`grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6`). Named
+"Deck" because a deck is a curated ordered set of cards — avoids confusion with `StoryListingDto`.
 
-**StoryDeck** (pass-through layout composite): the container holding StoryCards. Three-state
-pattern (loading/empty/populated). Grid layout. Named "Deck" because a deck is a curated ordered
-set of cards — avoids confusion with `StoryListingDto`.
+Contract: `[EditorRequired] IReadOnlyList<StoryListingDto>? Stories` (nullable — null means loading),
+`IReadOnlyDictionary<int, UserStoryInteractionStateDto>? InteractionStates` (batch-loaded by parent,
+keyed by StoryId), `int? CurrentUserId` (deck computes `IsOwnStory` per card), `string EmptyMessage`
+(defaults to "No stories found."), plus pagination forwards (`CurrentPage`, `PageSize`, `TotalCount`,
+`EventCallback<int> OnPageChanged`). No service injection. Caret callbacks deferred — additive when
+the first consumer (Discovery/Report/Export) needs them.
 
-## ResultsFilterPanel
+## Filter-Axis Component Pattern
 
-Coordination composite. Owner configures visible sections via parameters:
+**The unit of reuse is the individual filter axis, not the assembled panel.** Manual tree search
+reuses tag + interaction-exclusion filtering but has no `StoryDeck`, no sort, and no FTS. The
+assembled `ResultsFilterPanel` is one *assembler* of the axes; the tree page assembles its own
+subset directly.
+
+Axis components: **emit on every change; never know about `StoryFilterDto`, sort, decks, or graphs.**
+The assembler (panel or tree page) buffers each axis's emitted slice in `@code` and fires one batched
+apply (via an "Apply Filters" button). Live re-filtering is never correct for the tree search —
+changing edge counts cause wild graph relayout — so both paths use an Apply button.
+
+### `TagFilter` (SharedUI/Tags/)
+
+Include/exclude grouping over one or more `TagSelector` instances. Params:
+- `IReadOnlyList<TagTypeEnum> TagTypes` — which tag types to expose (default = filterable set)
+- `bool AllowExclude = true`
+- `IReadOnlyList<int> IncludedTagIds` (seed)
+- `IReadOnlyList<int> ExcludedTagIds` (seed)
+- `EventCallback<TagFilterSelection> OnChanged` — emits `(IncludedTagIds, ExcludedTagIds)`
+
+Owns the two id-sets and **cross-dedup** (a tag present in included cannot also be excluded and
+vice versa). Composes one include + one optional exclude `TagSelector` per type. (`TagSelector`
+injects `ITagReadService` itself — `TagFilter` is injection-free.)
+
+### `UserStoryInteractionFilter` (SharedUI/UserStoryInteractions/)
+
+Toggles over the filterable `UserStoryInteractionTypeEnum` kinds. Params:
+- `IReadOnlyList<UserStoryInteractionTypeEnum> AvailableKinds` (default subset)
+- `IReadOnlyList<UserStoryInteractionTypeEnum> ExcludedKinds` (seed)
+- `EventCallback<IReadOnlyList<UserStoryInteractionTypeEnum>> OnChanged` — emits kinds to exclude
+
+Injection-free — the server-side query applies exclusions against the active viewer. Distinct from
+`UserStoryInteractionPanel` (per-story action buttons); this component is purely a discovery filter.
+
+### `ResultsFilterPanel` (SharedUI/Discovery/)
+
+Coordination composite. **Injection-free. No ViewModel** — `@code` holds buffered axis selections.
+
+Params:
+- `bool ShowTagFilter`, `bool ShowTextSearch`, `bool ShowInteractionFilters`
+- `IReadOnlyList<DefaultSortOrder> AvailableSorts` — owner-supplied; never the §5.3.3-excluded
+  sorts; include `Relevance` only when `TextQuery` is non-empty
+- `StoryFilterDto? InitialFilter` — seeds all axes on first render
+- `EventCallback<StoryFilterDto> OnSearch` — raised on Apply with the assembled DTO
+
+Assembles `TagFilter` + `UserStoryInteractionFilter` + a debounced FTS `<input>` + a
+`DefaultSortOrder` `<select>` + an **"Apply Filters"** button (label never "Search" — misleading
+when the source is already determined by the parent). Each child axis raises `OnChanged`; the panel
+buffers the emitted slice. On Apply, panel builds `StoryFilterDto` and raises `OnSearch`.
+
+Usage:
 
 ```razor
 <ResultsFilterPanel ShowTagFilter="true"
                     ShowTextSearch="true"
                     ShowInteractionFilters="true"
                     AvailableSorts="@_sorts"
+                    InitialFilter="@_filter"
                     OnSearch="HandleSearch" />
 ```
 
-Contains: `TagSelector`, FTS text input (debounced), interaction filter toggles, sort selector.
-Button label: "Apply Filters" (not "Search" — misleading when source is already determined).
-Does NOT need a ViewModel class — `@code` holds current selections.
+The panel does **not** know which source the parent is querying — it raises a DTO and stops there.
+Page-level composition: `ResultsFilterPanel` + `StoryDeck` are kept separate and wired at the
+page/dispatcher level. Do **not** bundle them into a shared composite (spec §5.27 explicitly
+rejected a bundled `UserListPage`; `StoryDeck` is also used without any panel at all).
 
 ## Conditional Rendering Patterns
 
@@ -597,22 +652,39 @@ Does NOT need a ViewModel class — `@code` holds current selections.
 
 ### Loading States
 
+**`StoryDeck` owns its three-state internally** — the hosting page passes nullable `Stories`
+(null = loading, empty list = no results, populated = grid) and the deck branches:
+
 ```razor
-@if (Stories is null)
+@* Page / dispatcher — pass Stories? directly; StoryDeck branches internally *@
+<StoryDeck Stories="@_stories"
+           InteractionStates="@_interactionStates"
+           CurrentUserId="@_currentUserId"
+           CurrentPage="@_page"
+           PageSize="@_pageSize"
+           TotalCount="@_totalCount"
+           OnPageChanged="HandlePageChanged" />
+```
+
+For other data-driven surfaces where a purpose-built deck component doesn't exist (e.g. a simple
+comment list, a single-column notification feed), the three-state is expressed inline at the page:
+
+```razor
+@if (_items is null)
 {
-    <LoadingSkeleton />
+    <p class="text-muted">Loading…</p>
 }
-else if (Stories.Length == 0)
+else if (_items.Count == 0)
 {
-    <EmptyState Message="No stories found." />
+    <p class="text-muted">Nothing here yet.</p>
 }
 else
 {
-    <StoryDeck Stories="Stories" />
+    @foreach (var item in _items) { ... }
 }
 ```
 
-The three-state pattern (loading / empty / populated) appears on every data-driven page.
+The three-state pattern (loading / empty / populated) appears on every data-driven surface.
 
 ## Composite Introduction Criteria
 

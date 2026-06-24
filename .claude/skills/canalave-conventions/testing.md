@@ -99,6 +99,18 @@ prefix. Use markup string assertions (`cut.Markup.Contains(...)`) or direct inde
 (`cut.FindAll("button")[n]`) instead of compound CSS selectors. Prefer `[aria-label]` presence
 selectors or element-type-only selectors when finding elements to click.
 
+**BlazoredTextEditor button collision (WU20 lesson):** Components that embed `EditorView` /
+`BlazoredTextEditor` have an extra risk — the editor package renders its own buttons into the same
+DOM subtree (toolbar buttons with empty text, and potentially others). Both index-based (`[n]`) and
+text-content-based (`First(b => b.TextContent.Trim() == "Save")`) selection can hit editor-package
+buttons instead of the host component's buttons. Those editor buttons have no Blazor `@onclick`
+binding, so any click test targeting them will throw `MissingEventHandlerException`, and any
+attribute check (`HasAttribute("disabled")`) returns false. **Rule: any button on a component that
+wraps `EditorView` MUST carry a unique `aria-label` attribute; tests find it with
+`cut.Find("button[aria-label='…']")`** — this is the only collision-free selector in that subtree.
+(See `CommentEditor.razor` for the pattern: `aria-label="@SaveLabel"` on the save button,
+`aria-label="Cancel"` on the cancel button.)
+
 **Does not belong here:** full auth flows, real service calls, or anything requiring a real
 server circuit (SignalR). Keep components thin (push pure logic down to Core so Unit covers it).
 

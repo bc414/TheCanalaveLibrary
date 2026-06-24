@@ -362,3 +362,14 @@ py-1 shadow-md`. Rows inside: `block px-3 py-1.5 text-sm`; highlighted row (curr
 `pointer-events-none text-[--color-text-muted]`. Alt-version indicator in the chapter dropdown:
 a `<span title="Has alternate versions">` with a small glyph (&#8942;) — visually subtle,
 semantically distinguishable, testable via `title` attribute in bUnit.
+
+**`StoryDeck` (WU14, 2026-06-23):** three-state composite — `Stories is null` ⇒ inline loading text
+(`flex items-center justify-center py-12 text-muted`); `Count == 0` ⇒ same shell with `EmptyMessage`
+text; populated ⇒ outer `flex flex-col gap-6` containing a grid and `PaginationControls`. Grid is
+`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6` (canonical story-listing grid; responsive 1→2→3
+columns, `gap-6` between cards — `StoryCard` carries its own padding, so `gap-6` is the only spacer).
+**No outer margin** — parent spaces the deck via `gap-` / `space-y-`. `PaginationControls` is always
+embedded unconditionally — it self-hides when `TotalPages <= 1`, so consumers that don't paginate
+simply leave `PageSize` at its zero default. Loading-skeleton upgrade (gray placeholder cards matching
+the final grid layout) is deferred as a future *additive* swap behind the unchanged `Stories is null`
+branch — no contract change, no consumer impact.

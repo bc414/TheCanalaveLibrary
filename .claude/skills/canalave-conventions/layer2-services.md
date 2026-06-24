@@ -380,6 +380,56 @@ is correct. `ServerStoryReadService` → `IInteractionReadService` is a design s
 composition is permitted as a documented exception. Interface and DTO don't change; only the method
 body does. This is the same "body swap behind a stable interface" principle that governs Layers 5–7.
 
+## `StoryFilterDto` + `GetListingsAsync` (WU23)
+
+**`StoryFilterDto`** (`Core/Discovery/`) is the source-agnostic filter criteria that `ResultsFilterPanel`
+emits and `GetListingsAsync` accepts:
+
+```csharp
+public record StoryFilterDto(
+    string? TextQuery,                                       // FTS — Matches(); enables Relevance sort
+    IReadOnlyList<int> IncludedTagIds,                      // must have all (AND join)
+    IReadOnlyList<int> ExcludedTagIds,                      // must have none
+    IReadOnlyList<UserStoryInteractionTypeEnum> ExcludedInteractions, // viewer-relative exclusions
+    DefaultSortOrder Sort,
+    int Page,
+    int PageSize);
+```
+
+**Excluded by design:**
+- Content rating — applied automatically by `ApplicationDbContext`'s named query filter (`IActiveUserContext`); not a caller concern.
+- The per-`SearchMode` default-settings matrix (§8.7, `DefaultUserStoryInteractionFilterSetting`/`UserStoryInteractionFilterSetting`) — deferred post-WU23.
+- The **Source** axis — `GetListingsAsync` is `Source=All` only. Narrowed sources (bookshelves, profiles, groups) pass pre-selected IDs to `GetListingsByIdsAsync` instead.
+
+**`GetListingsAsync` two-step (mirrors `GetRecentListingsAsync`):**
+
+```csharp
+// Step 1 — build filtered IQueryable<Story>, page on scalar IDs, capture TotalCount.
+IQueryable<Story> q = readDb.Stories.AsQueryable();
+if (filter.IncludedTagIds.Count > 0)
+    foreach (var tagId in filter.IncludedTagIds)
+        q = q.Where(s => s.StoryTags.Any(st => st.TagId == tagId));
+if (filter.ExcludedTagIds.Count > 0)
+    q = q.Where(s => !s.StoryTags.Any(st => filter.ExcludedTagIds.Contains(st.TagId)));
+if (!string.IsNullOrWhiteSpace(filter.TextQuery))
+    q = q.Where(s => s.StoryListing!.SearchVector.Matches(filter.TextQuery));
+// viewer-relative interaction exclusions scoped to IActiveUserContext.UserId
+// ... sort by DefaultSortOrder; Relevance only when TextQuery is set (Rank()) ...
+int totalCount = await q.CountAsync();
+int[] ids = await q.Select(s => s.StoryId).Skip(...).Take(filter.PageSize).ToArrayAsync();
+
+// Step 2 — delegate presentation projection to the building-block method.
+StoryListingDto[] items = await GetListingsByIdsAsync(ids);
+return (items, totalCount);
+```
+
+**Npgsql traps to avoid (already hit in earlier WUs):**
+- `string.Contains(string, StringComparison)` — untranslatable overload; use `Matches()` for FTS or
+  `EF.Functions.ILike()` for simple LIKE.
+- `OrderBy` on a projected DTO field after a `SelectMany` — keep `OrderBy` on entity fields before
+  the projection step.
+- `Relevance` sort via `Rank()` only when `TextQuery` is non-empty — guard this or the SQL fails.
+
 ## Write-Side Reads — Four Cases
 
 | Case | Example | Context used |
@@ -387,7 +437,7 @@ body does. This is the same "body swap behind a stable interface" principle that
 | Constraint check | Hidden Gem ≤5 count | `writeDb` (primary, consistency) |
 | Edit form loads read DTO | Editor needs current title | `readDb` (via inherited read method) |
 | Edit-only fields | `OriginalPublishedDate` | `writeDb` via dedicated `GetStoryForEditAsync()` |
-| Display hint | `CommentDto.IsLikedByCurrentUser` | N/A — flows as `[Parameter]` from parent |
+| Display hint | `CommentDto.IsLikedByCurrentUser` | Computed by the **read service** in its projection (per-viewer EXISTS subquery on `CommentLike`, always false for anonymous); the result then flows *down* to the `CommentItem` leaf as a `[Parameter]`. The leaf never injects a service. |
 
 ## Self-Referential Editing Exception
 

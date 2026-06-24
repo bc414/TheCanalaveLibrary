@@ -36,6 +36,35 @@ description of current code.
 
 ---
 
+## WU23 Nomenclature Sweep (2026-06-23)
+
+All identifiers meaning *user×story interaction* are renamed to spell out `UserStoryInteraction…`.
+The rule and the deliberate-leave list are now in `canalave-conventions/SKILL.md` "UserStoryInteraction
+prefix rule". Summary of changes applied in WU23 Phase 0:
+
+**Tier 1 — Types/enums (C#-only; stored as `short` where applicable):**
+- `InteractionTypeEnum` → `UserStoryInteractionTypeEnum` (file: `…/UserStoryInteractionTypeEnum.cs`)
+- `InteractionDisplayContext` → `UserStoryInteractionDisplayContext`
+- `InteractionStateUpdate` → `UserStoryInteractionStateUpdate`
+- `InteractionVisuals` → `UserStoryInteractionVisuals` (SharedUI)
+- `InteractionConstants` → `UserStoryInteractionConstants`
+
+**Tier 2 — Member renames (Tier 3 in the plan; no column change except nav prop):**
+- `InteractionConstants.InteractionDebounceMs` → `UserStoryInteractionConstants.UserStoryInteractionDebounceMs`
+- `IUserStoryInteractionWriteService.SetInteractionStateAsync` → `SetUserStoryInteractionStateAsync`
+- `UserStoryInteraction.InteractionDate` nav prop → `InteractionDatePartition` (no column; avoids shadowing the type `UserStoryInteractionDate`)
+- `StoryCard.[Parameter] InteractionState` → `UserStoryInteractionState`
+- `StoryDeck.[Parameter] InteractionStates` → `UserStoryInteractionStates`
+- Test helpers: `SeedInteractionRowAsync` → `SeedUserStoryInteractionRowAsync`; `CallSetStateAsync` → `CallSetUserStoryInteractionStateAsync`
+
+**Deliberately NOT renamed:**
+- `UserChapterInteraction` / `LastInteractionDate` — chapter-reading domain, already fully qualified.
+- Prose in comments / seed-data description strings.
+
+The §8.7 entity/column renames (`UserInteractionFilter→UserStoryInteractionFilterType` etc.) and the
+`AllowInteractions→SocialInteractionPermission` enum are recorded in `audit/Discovery.md` (they belong
+to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on User) respectively.
+
 ## Feature 16 — Story Interaction State Writes
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** See "The reading-status
   divergence" section above. `UserStoryInteractionDate` warm partition and sparse semantics ("no row =

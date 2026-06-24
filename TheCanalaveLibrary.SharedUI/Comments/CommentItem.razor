@@ -1,0 +1,177 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Leaf — renders a single CommentDto in any comment context (chapter, profile, group, blog post).
+   Context-agnostic: spoiler handling keys only off CommentDto.IsSpoiler + UserHasCompletedStory
+   (inert when IsSpoiler=false — profile/blog/group comments are never spoilers). All affordances
+   are EventCallback-driven (.HasDelegate idiom): like, reply, edit, and delete render only when
+   the owning composite wires the callback. Edit and delete are additionally gated on IsOwnComment.
+   Edit mode is section-owned (_editingId in CommentSection), passed in as IsEditing; in edit mode
+   CommentEditor swaps in for RichTextView in-place. No service injection — the section owns all
+   writes. See §5.9 (comments), §5.9.1 (spoiler reveal). *@
+
+<div class="rounded-lg bg-[--color-surface] p-4 flex flex-col gap-3">
+
+    @* ── Author block ─────────────────────────────────────────────────────────── *@
+    <div class="flex items-center gap-3">
+        <img src="@(Comment.AuthorAvatarUrl ?? DefaultAvatarUrl)"
+             alt=""
+             class="size-10 rounded-full object-cover flex-shrink-0"
+             loading="lazy"
+             onerror="this.src='@DefaultAvatarUrl'" />
+
+        <div class="flex flex-col leading-tight">
+            @if (Comment.AuthorId is not null)
+            {
+                <a href="/user/@Comment.AuthorId"
+                   class="font-medium text-[--color-text] hover:underline">
+                    @Comment.AuthorUsername
+                </a>
+            }
+            else
+            {
+                <span class="text-sm text-[--color-text-muted]">[deleted user]</span>
+            }
+            <time class="text-xs text-[--color-text-muted]"
+                  datetime="@Comment.DatePosted.ToString("O")">
+                @Comment.DatePosted.ToString("MMM d, yyyy")
+            </time>
+        </div>
+    </div>
+
+    @* ── Body — edit mode swaps CommentEditor for RichTextView in-place ─────── *@
+    @if (IsEditing)
+    {
+        <CommentEditor Html="@Comment.CommentText"
+                       ShowSpoilerToggle="false"
+                       SaveLabel="Save"
+                       OnSave="OnEditSave"
+                       OnCancel="OnEditCancel" />
+    }
+    else if (Comment.IsSpoiler && !_isRevealed)
+    {
+        @* Spoiler: blurred content with an overlay reveal button (§5.9.1) *@
+        <div class="relative select-none">
+            <div class="pointer-events-none blur-md">
+                <RichTextView HtmlContent="@Comment.CommentText" />
+            </div>
+            <div class="absolute inset-0 flex items-center justify-center">
+                <button type="button"
+                        class="rounded-md bg-[--color-surface] px-4 py-2 text-sm font-medium text-[--color-text] shadow-md"
+                        @onclick="HandleRevealClick"
+                        aria-label="Reveal spoiler">
+                    ⚠ Reveal spoiler
+                </button>
+            </div>
+        </div>
+
+        @* Completion-gated confirm dialog — only shown when user hasn't finished the story *@
+        <ConfirmDialog @bind-IsOpen="_showSpoilerConfirm"
+                       Title="Spoiler warning"
+                       Message="You haven't finished the story yet. Are you sure you want to see this spoiler?"
+                       ConfirmText="Reveal"
+                       CancelText="Back"
+                       OnConfirm="() => _isRevealed = true" />
+    }
+    else
+    {
+        <RichTextView HtmlContent="@Comment.CommentText" />
+    }
+
+    @* ── Action bar (hidden while editing — Save/Cancel take over) ─────────── *@
+    @if (!IsEditing)
+    {
+        <div class="flex items-center gap-4 text-sm" role="group" aria-label="Comment actions">
+
+            @* Like — clickable when callback is wired; read-only count otherwise *@
+            @if (OnToggleLike.HasDelegate)
+            {
+                <button type="button"
+                        class="@(Comment.IsLikedByCurrentUser
+                            ? "text-[--color-accent]"
+                            : "text-[--color-text-muted] hover:text-[--color-accent]") transition-colors"
+                        @onclick="() => OnToggleLike.InvokeAsync(Comment.CommentId)"
+                        aria-label="@(Comment.IsLikedByCurrentUser ? "Unlike comment" : "Like comment")"
+                        aria-pressed="@Comment.IsLikedByCurrentUser">
+                    ♥ @Comment.LikeCount
+                </button>
+            }
+            else if (Comment.LikeCount > 0)
+            {
+                <span class="text-[--color-text-muted]">♥ @Comment.LikeCount</span>
+            }
+
+            @* Reply *@
+            @if (OnReply.HasDelegate)
+            {
+                <button type="button"
+                        class="text-[--color-text-muted] hover:text-[--color-text] transition-colors"
+                        @onclick="() => OnReply.InvokeAsync(Comment.CommentId)"
+                        aria-label="Reply to comment">
+                    Reply
+                </button>
+            }
+
+            @* Edit — author only *@
+            @if (IsOwnComment && OnEdit.HasDelegate)
+            {
+                <button type="button"
+                        class="text-[--color-text-muted] hover:text-[--color-text] transition-colors"
+                        @onclick="() => OnEdit.InvokeAsync(Comment.CommentId)"
+                        aria-label="Edit comment">
+                    Edit
+                </button>
+            }
+
+            @* Delete — author only; raises OnDelete; section owns the ConfirmDialog *@
+            @if (IsOwnComment && OnDelete.HasDelegate)
+            {
+                <button type="button"
+                        class="text-[--color-text-muted] hover:text-[--color-danger] transition-colors"
+                        @onclick="() => OnDelete.InvokeAsync(Comment.CommentId)"
+                        aria-label="Delete comment">
+                    Delete
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private const string DefaultAvatarUrl = "/img/default-avatar.svg";
+
+    [Parameter, EditorRequired] public CommentDto Comment { get; set; } = default!;
+
+    /// <summary>True when Comment.AuthorId == the viewing user's ID. Gated on author for edit/delete.</summary>
+    [Parameter] public bool IsOwnComment { get; set; }
+
+    /// <summary>
+    /// From the future ChapterPage dispatcher (§5.9.1). When false, revealing a spoiler opens a
+    /// ConfirmDialog warning. Defaults false (no page host yet — standalone build).
+    /// </summary>
+    [Parameter] public bool UserHasCompletedStory { get; set; }
+
+    /// <summary>Section-owned edit flag (_editingId == Comment.CommentId). Swaps body to CommentEditor.</summary>
+    [Parameter] public bool IsEditing { get; set; }
+
+    [Parameter] public EventCallback<long> OnToggleLike { get; set; }
+    [Parameter] public EventCallback<long> OnReply { get; set; }
+    [Parameter] public EventCallback<long> OnEdit { get; set; }
+    [Parameter] public EventCallback<long> OnDelete { get; set; }
+
+    /// <summary>Raised with new HTML when the user saves an edit (CommentEditor.OnSave bubbles here).</summary>
+    [Parameter] public EventCallback<string> OnEditSave { get; set; }
+
+    [Parameter] public EventCallback OnEditCancel { get; set; }
+
+    // Ephemeral — re-hides on every page load (spec §5.9.1)
+    private bool _isRevealed;
+    private bool _showSpoilerConfirm;
+
+    private void HandleRevealClick()
+    {
+        if (UserHasCompletedStory)
+            _isRevealed = true;
+        else
+            _showSpoilerConfirm = true;
+    }
+}

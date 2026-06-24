@@ -81,7 +81,13 @@ every feature; its Server impl lives in `Server/Identity/`. `Images/` (WU12) is 
 exception again: `IImageStorageService` (Core/Images/, Server impl `Server/Images/`) is a universal
 user-upload-blob write op with no owning feature — covers (Stories) and profile pictures (Profiles)
 both call it — so its cluster's feature *is* "user-upload image storage," distinct from `Sprites/`
-(read-only resolution of git-managed static assets, not uploads).
+(read-only resolution of git-managed static assets, not uploads). `Discovery/` (WU23) follows the
+same rule: `SharedUI/Discovery/` holds `ResultsFilterPanel` (the coordination composite that assembles
+filter axes for search/profile/bookshelf consumers); `SharedUI/Tags/TagFilter.razor` is the include/exclude
+tag-filter axis (reused by tree search directly); `SharedUI/UserStoryInteractions/UserStoryInteractionFilter.razor`
+is the USI-exclusion axis. `Core/Discovery/` holds `StoryFilterDto` plus the three §8.7 renamed
+entities (`UserStoryInteractionFilterType`, `DefaultUserStoryInteractionFilterSetting`,
+`UserStoryInteractionFilterSetting`) — none of these belong to a single consuming feature.
 
 API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
 cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/SpriteEndpoints.cs`
@@ -173,6 +179,13 @@ exactly how Bootstrap-template classnames (`top-row`, `nav-pills`, …) get copi
 - **Namespaces:** One per project (`TheCanalaveLibrary.Core`, `.Server`, `.Client`, `.SharedUI`).
 - **Container components:** `StoryDeck` (NOT `StoryList`). `TagChip` (NOT pill/token/badge).
 - **Interaction button:** `UserStoryInteractionButton` (verbose — deliberate).
+- **`UserStoryInteraction` prefix rule:** Every identifier meaning *user×story interaction* must be
+  spelled `UserStoryInteraction…` — never the bare prefix `Interaction…`. "Interaction" is too generic;
+  `UserStoryInteraction` is the site's primary feature. This applies to types, enums, constants, params,
+  method names, and file names. **Deliberately NOT renamed** (different domain or prose):
+  - `UserChapterInteraction`/`LastInteractionDate` — chapter-reading domain, already fully qualified
+    (User + Chapter + Interaction); leave unchanged.
+  - Bare `Interaction`/`Interactions` inside prose comments and seed-data description strings — not identifiers.
 
 ## Key Domain Terms
 

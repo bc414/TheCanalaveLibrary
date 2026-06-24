@@ -3,40 +3,131 @@
 **Features:** 23 (posting), 24 (display & pagination), 25 (likes), 26 (spoiler comments).
 
 ## Shared Context
-**Entities (Core/Models/):** `BaseComment` (TPT root, `ToTable("base_comments")`, `ParentCommentId`
-self-ref `SetNull`, `LikeCount`, M:N `LikedByUsers`) + four children, each `.ToTable()` with `DatePosted`
-denormalized: `ChapterComment` (+ `IsSpoiler`), `UserProfileComment`, `GroupComment`, `BlogPostComment`.
-TPT is Settled Axiom #2. **No services or components built.**
+**Entities (Core/Comments/):** `BaseComment` (TPT root, `ToTable("base_comments")`, `ParentCommentId`
+self-ref `SetNull`, `LikeCount`, explicit `CommentLike` junction) + four children, each `.ToTable()` with
+`DatePosted` denormalized: `ChapterComment` (+ `IsSpoiler`), `UserProfileComment`, `GroupComment`,
+`BlogPostComment`. TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` in WU19
+(2026-06-23) — organizational only, namespace unchanged. Services (`ICommentRead/WriteService` +
+`ServerComment{Read,Write}Service`) live in `Core/Comments/` and `Server/Comments/` respectively.
 
 ## Feature 23 — Comment Posting
 - **L1 — Stage 5.** TPT hierarchy + per-child `DatePosted` default; orphan handling via `SetNull`.
-  Matches §5.9. **L2 — Stage 2** (write across all four contexts; server-side sanitization — shares the
-  `HtmlSanitizer` gap with Chapters). **L3/L3.5 — Stage 2. L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
+  Matches §5.9. **L5 — Stage 2. L6 — Stage 2.**
+- **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note
+  (WU20 is a single integrated work-unit covering 23/24/25/26 L3/L3.5/L4; the components,
+  tests, and visual sign-off are described there).
+- **L2 — Stage 5 (WU19, 2026-06-23):** `ICommentWriteService.PostChapterCommentAsync(PostChapterCommentDto)`
+  in `Server/Comments/ServerCommentWriteService.cs`. Requires authenticated user; validates via
+  `CommentValidations.CanSave()` (throws `CommentValidationException`); verifies chapter exists; if replying,
+  verifies parent is on same chapter; sanitizes HTML via `IHtmlSanitizationService`; inserts `ChapterComment`
+  row; returns new `CommentId`. Notification seam left as `// TODO(WU22)`. Chapter context only for MVP.
+  **Verified:** `dotnet build` green; `dotnet test` green — 367 tests total (112 Unit, 122 RazorComponents,
+  133 Integration). Covering tier: **Unit** (`CommentValidationsTests` — 7 tests for `CanSave` empty/
+  whitespace/valid/spoiler-flag) + **Integration** (`CommentWriteServiceTests` — 18 tests via Testcontainers
+  Postgres, covering post root, IsSpoiler round-trip, script tag stripped on save, reply, cross-chapter
+  reply guard, empty text validation, anonymous guard). Server booted clean; DI resolved
+  `ICommentReadService`/`ICommentWriteService` without exception.
 
 ## Feature 24 — Comment Display & Pagination
-- **L1 — Stage 5.** **L2 — Stage 2** (threaded read; pagination on the golden index). **L3/L3.5 — Stage 2**
-  (`CommentItem` leaf, `CommentSection` coordination composite; orphans shown under "[Deleted Comment]").
-  **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2** (golden index `(chapter_id, date_posted DESC)` — pending).
+- **L1 — Stage 5.** **L5 — Stage 2. L6 — Stage 2** (golden index `(chapter_id, date_posted DESC)` — pending).
+- **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):**
+  Built `CommentEditor` leaf (shared editing surface), `CommentItem` leaf, and `CommentSection`
+  coordination composite, all in `TheCanalaveLibrary.SharedUI/Comments/`. The three components cover all
+  four features (23–26) in one integrated work-unit.
+  - **`CommentEditor.razor`** (pure leaf — no service injection): wraps `EditorView` (pull-on-submit
+    via `@ref` + `GetHtmlAsync()`); `SaveLabel` drives the primary button label ("Save" / "Reply" /
+    "Post Comment"); Cancel renders only when `OnCancel.HasDelegate` (`.HasDelegate` idiom — persistent
+    composer leaves it unwired, so no Cancel appears); optional `ShowSpoilerToggle` + `@bind-Spoiler`
+    for the new-comment composer; `Busy` disables both buttons. Primary button carries
+    `aria-label="@SaveLabel"` and cancel carries `aria-label="Cancel"` for reliable test selection
+    (BlazoredTextEditor renders its own toolbar buttons in the same DOM subtree; aria-label is the
+    only collision-free selector).
+  - **`CommentItem.razor`** (pure leaf — no service injection): author block (avatar + link when
+    `AuthorId != null`; "[deleted user]" span when null); body swaps `RichTextView` ↔ `CommentEditor`
+    on `IsEditing` (section-owned `_editingId` flag — one edit at a time); spoiler blur/cover overlay
+    with completion-gated reveal (`ConfirmDialog` inside item for the "haven't finished" dialog path;
+    no service needed); like/reply/edit/delete affordances gated by `.HasDelegate` + `IsOwnComment`.
+  - **`CommentSection.razor`** (coordination composite — injects `ICommentWriteService : ICommentReadService`
+    for the coordinated-paginated-region pattern recorded in `layer3-logic.md`): owns paginated load,
+    two-level tree assembly (roots + replies from flat `ParentCommentId`), optimistic like
+    reconciliation (flip optimistically → `ToggleLikeAsync` → reconcile from `CommentLikeResultDto`),
+    `_editingId` / `_replyingToId` coordination, delete `ConfirmDialog` (section-owned, `IsDestructive`),
+    persistent new-comment composer (`OnCancel` intentionally unwired), inline reply + edit composers.
+  - **Test-finding lesson recorded:** `aria-label` selectors are required when a component embeds
+    BlazoredTextEditor — its toolbar renders empty-text buttons in the same subtree, and text-content
+    scanning (`First(b => b.TextContent.Trim() == "Save")`) hits them first, finding buttons with no
+    Blazor onclick or disabled attribute. Added `aria-label="@SaveLabel"` / `aria-label="Cancel"` to
+    both CommentEditor buttons; all tests use `cut.Find("button[aria-label='…']")`.
+  - **Covering test tier: RazorComponents** — `FakeCommentWriteService` (records calls, canned results),
+    `CommentEditorTests` (11 tests: SaveLabel, Cancel HasDelegate, OnSave/OnCancel callbacks, spoiler
+    toggle, Busy state), `CommentItemTests` (21 tests: author block, edit-mode swap, spoiler
+    blur+reveal both paths, all affordance callbacks, HasDelegate + IsOwnComment gating),
+    `CommentSectionTests` (13 tests: initial load, empty state, tree assembly, like + reconcile, post
+    with IsSpoiler, reply carries ParentCommentId, edit save, delete+confirm, page change, anonymous
+    hides composer). 181/181 RazorComponents pass; 112/112 Unit; 133/133 Integration (verified on
+    independent run — full-suite has one intermittent Npgsql connection hiccup, unrelated to WU20).
+  - **L4 visual sign-off (2026-06-23):** throwaway harness added to `HomeDesktop.razor`
+    (`<CommentSection ChapterId="1" CurrentUserId="1" ... />`), server booted
+    (`http://localhost:5028` → `200`), confirmed section renders (loading state → "No comments yet."
+    for an empty chapter, new-comment composer with EditorView + spoiler checkbox, PaginationControls
+    suppressed at ≤1 page), harness removed. Note: `ChapterPage` host wiring (Feature 7 L3-Logic)
+    will supply live `ChapterId`, `CurrentUserId`, `UserHasCompletedStory` when that work-unit builds;
+    `CommentSection` is a standalone self-contained injectable region, so standalone-build sign-off
+    is sufficient here.
+- **L2 — Stage 5 (WU19, 2026-06-23):** `ICommentReadService.GetChapterCommentsAsync(chapterId, page, pageSize)`
+  in `Server/Comments/ServerCommentReadService.cs`. Two-step load: (1) count roots + paginate root ids via
+  `ChapterComments` DbSet (golden-index order — `DatePosted DESC`); (2) fetch roots-on-page plus their direct
+  replies in one query, projecting to `CommentDto` with per-viewer `IsLikedByCurrentUser` (EXISTS subquery;
+  always false for anonymous). In-memory ordering restores roots newest-first, replies oldest-first beneath
+  each root. Returns `CommentPageDto(IReadOnlyList<CommentDto> Comments, int TotalRootCount)`.
+  **Key implementation note:** query goes through `readDb.ChapterComments` (not `readDb.BaseComments`) so
+  EF Core's TPT join gives both base + child columns together, avoiding the shadow one-to-one FK
+  (`chapter_comment_comment_id` on `base_comments`) that makes `BaseComments.Where(c.ChapterComment != null)`
+  unreliable for freshly-inserted rows.
+  **Verified:** same test run as Feature 23. Covering tier: **Integration** (`CommentReadServiceTests` — 6
+  tests: empty chapter, TotalRootCount counts only roots, roots DatePosted DESC, reply under root, pagination
+  Skip/Take, IsLikedByCurrentUser per-viewer).
 
 ## Feature 25 — Comment Likes
-- **L1 — Stage 4 (stale-code trap; spec wins).** Spec (§6.11, item 25) wants an explicit **`CommentLike`
-  junction** (no `DateLiked` — anti-addictive) with denormalized `LikeCount`. The code instead uses an
-  **implicit EF many-to-many** (`BaseComment.LikedByUsers` ⇄ `User.LikedComments`, `HasMany().WithMany()`),
-  giving EF an auto-named join table with no entity to hang behavior on. `LikeCount` is present on
-  `BaseComment` (good, reusable). Implicit M:N is a legitimate EF pattern *in general*, but the spec is the
-  recent authority and explicitly calls for the junction — and this code is non-working — so the direction
-  is fixed: **build the explicit `CommentLike` entity** (Stage 2 build-to-spec), don't preserve the
-  implicit join.
-- **L2/L3/L3.5 — Stage 2** (toggle like; no notification, no `DateLiked`). **L4 — Stage 1. L5 — Stage 2.**
+- **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note.
+  Optimistic like reconciliation + `CommentItem` like affordance (`.HasDelegate` gated) built as part
+  of the integrated WU20 delivery. **L5 — Stage 2.**
+- **L1 — Stage 5 (WU19, 2026-06-23; stale-code trap resolved).** Prior note: the code used an implicit EF
+  many-to-many (`BaseComment.LikedByUsers` ⇄ `User.LikedComments`) instead of the explicit `CommentLike`
+  junction called for in spec §6.11. WU19 introduced `CommentLike.cs` in `Core/Comments/` (with `CommentId`
+  + `UserId` PK, configured in `CommentConfigurations.cs`) and updated `BaseComment` to use `ICollection<CommentLike> Likes`.
+  The implicit M:N nav properties (`LikedByUsers`/`LikedComments`) were removed. Schema already generated
+  the `comment_likes` table clean in `InitialSchema` — no migration needed for this fix (the table shape was
+  always correct; only the entity model was wrong). **Verified:** `dotnet test` green (see Feature 23 note);
+  `ToggleLikeAsync` tested by `CommentWriteServiceTests` (like increments `LikeCount` + creates junction row;
+  unlike decrements + removes row; anonymous guard; delete cascades `CommentLike`).
+- **L2 — Stage 5 (WU19, 2026-06-23):** `ICommentWriteService.ToggleLikeAsync(commentId)` in
+  `ServerCommentWriteService`. Loads `BaseComment` + its `CommentLike` for the current user in one round-trip
+  (filtered `Include`); toggles presence + adjusts denormalized `LikeCount` (floor 0 on decrement); saves;
+  returns `CommentLikeResultDto(int LikeCount, bool IsLiked)`. No notification, no `DateLiked` — §6.11
+  anti-addictive design. **Verified:** Integration tier (see Feature 23).
 
 ## Feature 26 — Spoiler Comments
-- **L1 — Stage 5.** `IsSpoiler` is on `ChapterComment` only (chapter-scoped, not `BaseComment`) — exactly
-  §5.9.1. **L2 — Stage 2.** **L3-Logic — Stage 2** — completion-gated reveal (`IsCompleted=true` ⇒ single
-  click; `false` ⇒ `ConfirmDialog`); `IsRevealed` ephemeral; dispatcher passes `UserHasCompletedStory`.
-  *Depends on* the universal `ConfirmDialog` composite (§5.30.9). **L3.5 — Stage 5** (WU9, 2026-06-21 —
-  see note below). **L4 — Stage 1** (spoiler blur/cover styling — `ConfirmDialog`'s own visuals are a
-  separate, already-built concern; this stage covers the blur/cover markup around the comment itself,
-  owned by WU20). **L5 — Stage 2.**
+- **L3-Logic / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note.
+  Completion-gated reveal built in `CommentItem`: `HandleRevealClick()` → immediate reveal if
+  `UserHasCompletedStory`, else sets `_showSpoilerConfirm` (in-item `ConfirmDialog` — no service
+  needed); `_isRevealed` is ephemeral (re-hides on page load, §5.9.1). Blur cover uses Tailwind
+  `blur-md` + `pointer-events-none` overlay; "Reveal spoiler" button carries `aria-label="Reveal spoiler"`.
+  **L3.5 — Stage 5** (WU9, 2026-06-21 — see note below). **L5 — Stage 2.**
+- **L1 — Stage 5 (gap found and closed in WU19, 2026-06-23).** `IsSpoiler` is on `ChapterComment` only
+  (chapter-scoped, not `BaseComment`) — exactly §5.9.1. However the property was **missing from the entity**
+  and the DB had no `is_spoiler` column despite L1 being previously marked Stage 5. WU19 added
+  `public bool IsSpoiler { get; set; }` to `ChapterComment.cs` and generated migration
+  `20260623222518_AddIsSpoilerToChapterComment` (`is_spoiler boolean NOT NULL DEFAULT false`). The same
+  migration also corrected a stale FK name: `fk_base_comments_base_comments_chapter_comment_comment_id` →
+  `fk_base_comments_chapter_comments_chapter_comment_comment_id` (was pointing at `base_comments` instead
+  of `chapter_comments`). Applied via `DataSeeder.MigrateAsync()` on startup.
+- **L2 — Stage 5 (WU19, 2026-06-23):** `IsSpoiler` flows through `PostChapterCommentDto.IsSpoiler` →
+  `PostChapterCommentAsync` sets `ChapterComment.IsSpoiler` → stored in DB → projected into `CommentDto.IsSpoiler`
+  in the read service → surfaces to WU20's `CommentItem` as a `[Parameter]`. No separate write method —
+  spoiler flag is set at post time only; editing a comment does not change its spoiler state (WU20 may
+  revisit). **Verified:** Integration tier — `PostChapterComment_IsSpoilerTrue_RoundTrips` confirms
+  `IsSpoiler = true` persists and reads back correctly.
 - **WU9 Stage-5 note (2026-06-21):** built the universal `ConfirmDialog` container composite at
   `SharedUI/Dialogs/ConfirmDialog.razor` (new cross-cutting cluster — no owning feature, mirrors
   `RichText/`/`Lookups/`). Contract: `@bind-IsOpen` (two-way `IsOpen`/`IsOpenChanged`), `Title`/

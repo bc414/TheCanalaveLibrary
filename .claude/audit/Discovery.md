@@ -36,10 +36,66 @@ resolution direction (build to spec).
 
 ---
 
+## WU23 Shared Context — §8.7 Entity Renames + AllowInteractions (2026-06-23)
+
+The three §8.7 entities are renamed in WU23 Phase 0. A **data-preserving rename migration**
+(`RenameTable`/`RenameColumn` ops only — no drop/recreate) carries all three. Schema aligned with
+C# names:
+
+| Old name | New name | File moved to |
+|---|---|---|
+| `UserInteractionFilter` | `UserStoryInteractionFilterType` | `Core/Discovery/UserStoryInteractionFilterType.cs` |
+| `DefaultSearchSetting` | `DefaultUserStoryInteractionFilterSetting` | `Core/Discovery/DefaultUserStoryInteractionFilterSetting.cs` |
+| `UserSearchSetting` | `UserStoryInteractionFilterSetting` | `Core/Discovery/UserStoryInteractionFilterSetting.cs` |
+
+Field rename: `InteractionFilterKey` → `UserStoryInteractionFilterKey` on all three entities
+(column `interaction_filter_key` → `user_story_interaction_filter_key`).
+Nav property: `InteractionFilterKeyNavigation` → `UserStoryInteractionFilterType`.
+DbSet renames in `ApplicationDbContext` match.
+Config class renames in `DiscoveryConfigurations.cs` match.
+
+`AllowInteractions` (enum in `Core/Lookups/ModelEnums.cs`) → `SocialInteractionPermission`.
+Stored as `short`; C#-only rename (no column change on `users.allow_profile_comments` /
+`users.allow_private_messages`). `User.AllowProfileComments` / `User.AllowPrivateMessages`
+property types updated.
+
+**Still open (deferred post-WU23):** the per-`SearchMode` default-settings matrix
+(`DefaultUserStoryInteractionFilterSetting` ×`UserStoryInteractionFilterSetting`) — §8.7, out of
+scope for WU23. Random-preload / "give me more" discovery pagination → WU28.
+Narrowing-within-fixed-source query → WU27/WU30.
+
 ## Feature 31 — Search Page (`/discover`)
-- **L1 — N/A** (queries Story/USI/StoryListing). **L2 — Stage 2** (Source=All query, random preload,
-  "give me more" where interaction buttons *are* pagination). **L3/L3.5 — Stage 2** (`ResultsFilterPanel`
-  + `StoryDeck`). **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
+- **L1 — N/A** (queries Story/USI/StoryListing). **L2 — Stage 2** (Source=All query; random preload /
+  "give me more" remains WU28). **L3/L3.5 — Stage 5 (WU23, 2026-06-23, pending test verification).**
+  **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
+
+  **Settled for WU23 (2026-06-23, do not revisit):**
+  - **Filter axes are the unit of reuse, not the panel.** `TagFilter` and `UserStoryInteractionFilter`
+    are standalone axis components — the tree search page (WU28) reuses them directly without the panel.
+    `ResultsFilterPanel` is one assembler of those axes, not the reusable unit.
+  - **Both consumers use a batched Apply button** (live re-filtering would cause graph relayout in tree
+    search as edge counts change).
+  - **`StoryFilterDto`** (`Core/Discovery/`) shape: `TextQuery`, `IncludedTagIds`, `ExcludedTagIds`,
+    `ExcludedInteractions (UserStoryInteractionTypeEnum list)`, `Sort (DefaultSortOrder)`, `Page`,
+    `PageSize`. Content rating excluded (global EF filter). Source axis excluded (`GetListingsAsync`
+    is Source=All; other sources use `GetListingsByIdsAsync`).
+  - **`GetListingsAsync(StoryFilterDto)`** added to `IStoryReadService` / `ServerStoryReadService`
+    as a two-step (filtered IQueryable → scalar ID page → delegate to `GetListingsByIdsAsync`).
+    Mirrors `GetRecentListingsAsync`'s shape. "Deferred to WU23" note removed from the interface XML.
+  - **`ResultsFilterPanel`** (`SharedUI/Discovery/`): coordination composite, injection-free, no
+    ViewModel. Params: `ShowTagFilter`, `ShowTextSearch`, `ShowInteractionFilters`,
+    `IReadOnlyList<DefaultSortOrder> AvailableSorts`, `StoryFilterDto? InitialFilter`,
+    `EventCallback<StoryFilterDto> OnSearch`. Assembles `TagFilter` + `UserStoryInteractionFilter`
+    + FTS input + sort select + "Apply Filters" button. Outer Margin Rule applies.
+  - **Composition is page-level** — `ResultsFilterPanel` and `StoryDeck` are NOT bundled into a single
+    composite. Spec §5.27 explicitly rejected a bundled `UserListPage`.
+
+  **Still open (not settled in WU23):** random-preload / "give me more" pagination (WU28);
+  narrowing-within-fixed-source queries (WU27/WU30); per-`SearchMode` default-settings matrix (§8.7).
+
+  **L2 note:** partially advanced — `GetListingsAsync(StoryFilterDto)` (Source=All filtered query)
+  is built. The random-preload and "give me more" interaction-button pagination remain Stage 2 (WU28).
+
 - **WU8 Stage note (2026-06-21):** the **pagination slice** of this feature's L3.5/L4 is built —
   `PaginationControls` (`SharedUI/Pagination/`), a leaf settled per spec §3.11.1/
   `layer3.5-structure.md` (the `audit-summary.md` "Composite" classification is stale, superseded).

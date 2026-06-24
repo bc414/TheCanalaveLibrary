@@ -1,0 +1,318 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@inject ICommentWriteService Comments
+
+@* Coordination composite — owns the chapter comment section: paginated load, two-level tree
+   (roots + their direct replies), optimistic like reconciliation, delete-confirm dialog,
+   reply and edit CommentEditor coordination, and the persistent new-comment composer.
+   Injects ICommentWriteService (which :ICommentReadService) — one injection gives both read
+   and write. This is not an N+1 violation: CommentSection is a single independent paginated
+   region per page, the sanctioned case for composite injection (layer3-logic.md
+   §"Service Injection Principle" — "Coordinated paginated regions").
+   No like callback, edit callback, or delete callback bubbles above this composite — all writes
+   resolve here. The future ChapterPage dispatcher wires ChapterId + UserHasCompletedStory +
+   CurrentUserId; standalone build defaults to ChapterId required, others optional. *@
+
+@if (_page is null)
+{
+    <p class="text-[--color-text-muted] text-sm">Loading comments…</p>
+}
+else if (_totalRootCount == 0 && _comments.Count == 0)
+{
+    <p class="text-[--color-text-muted] text-sm">No comments yet. Be the first!</p>
+}
+else
+{
+    <div class="flex flex-col gap-4">
+
+        @* ── Comment tree ─────────────────────────────────────────────────────── *@
+        @foreach (var r in Roots)
+        {
+            var root = r;
+
+            <CommentItem Comment="root"
+                         IsOwnComment="@(root.AuthorId is not null && root.AuthorId == CurrentUserId)"
+                         IsEditing="@(_editingId == root.CommentId)"
+                         UserHasCompletedStory="@UserHasCompletedStory"
+                         OnToggleLike="HandleLike"
+                         OnReply="HandleReplyClick"
+                         OnEdit="HandleEditClick"
+                         OnEditSave="HandleEditSaveAsync"
+                         OnEditCancel="HandleEditCancel"
+                         OnDelete="HandleDeleteClick" />
+
+            @* Replies — indented; no OnReply (one level only) *@
+            @foreach (var rep in RepliesOf(root.CommentId))
+            {
+                var reply = rep;
+                <div class="ml-8">
+                    <CommentItem Comment="reply"
+                                 IsOwnComment="@(reply.AuthorId is not null && reply.AuthorId == CurrentUserId)"
+                                 IsEditing="@(_editingId == reply.CommentId)"
+                                 UserHasCompletedStory="@UserHasCompletedStory"
+                                 OnToggleLike="HandleLike"
+                                 OnEdit="HandleEditClick"
+                                 OnEditSave="HandleEditSaveAsync"
+                                 OnEditCancel="HandleEditCancel"
+                                 OnDelete="HandleDeleteClick" />
+                </div>
+            }
+
+            @* Inline reply composer (shown when the viewer clicked Reply on this root) *@
+            @if (_replyingToId == root.CommentId)
+            {
+                <div class="ml-8 mt-1">
+                    <CommentEditor ShowSpoilerToggle="false"
+                                   SaveLabel="Reply"
+                                   Busy="@_busy"
+                                   OnSave="html => HandleReplySaveAsync(root.CommentId, html)"
+                                   OnCancel="HandleReplyCancel" />
+                </div>
+            }
+        }
+
+        @* ── Pagination ───────────────────────────────────────────────────────── *@
+        <PaginationControls CurrentPage="@_currentPage"
+                            PageSize="@PageSize"
+                            TotalCount="@_totalRootCount"
+                            OnPageChanged="HandlePageChanged" />
+    </div>
+}
+
+@* ── New-comment composer (authenticated viewers only) ───────────────────────── *@
+@if (CurrentUserId is not null)
+{
+    <div class="mt-6">
+        <h3 class="mb-2 text-sm font-semibold text-[--color-text]">Leave a comment</h3>
+        <CommentEditor ShowSpoilerToggle="true"
+                       @bind-Spoiler="_composeSpoiler"
+                       SaveLabel="Post Comment"
+                       Busy="@_busy"
+                       OnSave="HandlePostAsync" />
+        @* OnCancel intentionally not wired — persistent composer has nothing to cancel back to *@
+    </div>
+}
+
+@* ── Delete confirmation dialog ──────────────────────────────────────────────── *@
+<ConfirmDialog @bind-IsOpen="_showDeleteConfirm"
+               Title="Delete comment"
+               Message="Are you sure you want to delete this comment? This cannot be undone."
+               ConfirmText="Delete"
+               CancelText="Cancel"
+               IsDestructive="true"
+               OnConfirm="HandleDeleteConfirmAsync" />
+
+@* ── Inline error feedback ───────────────────────────────────────────────────── *@
+@if (_error is not null)
+{
+    <p class="mt-2 text-sm text-[--color-danger]">@_error</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public int ChapterId { get; set; }
+
+    /// <summary>From the future ChapterPage dispatcher (§5.9.1). Defaults false for standalone build.</summary>
+    [Parameter] public bool UserHasCompletedStory { get; set; }
+
+    /// <summary>Null = anonymous viewer — hides post/like/edit/delete affordances.</summary>
+    [Parameter] public int? CurrentUserId { get; set; }
+
+    [Parameter] public int PageSize { get; set; } = 20;
+
+    // ── Load state ────────────────────────────────────────────────────────────────
+    private CommentPageDto? _page;
+    private List<CommentDto> _comments = [];
+    private int _totalRootCount;
+    private int _currentPage = 1;
+
+    // ── Coordination state ────────────────────────────────────────────────────────
+    private long? _editingId;
+    private long? _replyingToId;
+    private bool _composeSpoiler;
+    private bool _showDeleteConfirm;
+    private long _pendingDeleteId;
+    private bool _busy;
+    private string? _error;
+
+    // ── Tree helpers ──────────────────────────────────────────────────────────────
+    private IEnumerable<CommentDto> Roots => _comments.Where(c => c.ParentCommentId is null);
+    private IEnumerable<CommentDto> RepliesOf(long rootId) => _comments.Where(c => c.ParentCommentId == rootId);
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _error = null;
+        _page = await Comments.GetChapterCommentsAsync(ChapterId, _currentPage, PageSize);
+        _comments = _page.Comments.ToList();
+        _totalRootCount = _page.TotalRootCount;
+    }
+
+    // ── Pagination ────────────────────────────────────────────────────────────────
+    private async Task HandlePageChanged(int page)
+    {
+        _currentPage = page;
+        await LoadAsync();
+    }
+
+    // ── Like (optimistic) ─────────────────────────────────────────────────────────
+    private async Task HandleLike(long id)
+    {
+        int idx = _comments.FindIndex(c => c.CommentId == id);
+        if (idx < 0) return;
+
+        CommentDto original = _comments[idx];
+        bool newLiked = !original.IsLikedByCurrentUser;
+        _comments[idx] = original with
+        {
+            IsLikedByCurrentUser = newLiked,
+            LikeCount = newLiked ? original.LikeCount + 1 : Math.Max(0, original.LikeCount - 1)
+        };
+        StateHasChanged();
+
+        try
+        {
+            CommentLikeResultDto result = await Comments.ToggleLikeAsync(id);
+            idx = _comments.FindIndex(c => c.CommentId == id);
+            if (idx >= 0)
+            {
+                _comments[idx] = _comments[idx] with { LikeCount = result.LikeCount, IsLikedByCurrentUser = result.IsLiked };
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Rollback
+            idx = _comments.FindIndex(c => c.CommentId == id);
+            if (idx >= 0) _comments[idx] = original;
+            _error = ex.Message;
+            StateHasChanged();
+        }
+    }
+
+    // ── Reply ─────────────────────────────────────────────────────────────────────
+    private void HandleReplyClick(long id)
+    {
+        _replyingToId = id;
+        _editingId = null; // close any open edit
+        _error = null;
+    }
+
+    private void HandleReplyCancel() => _replyingToId = null;
+
+    private async Task HandleReplySaveAsync(long parentId, string html)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Comments.PostChapterCommentAsync(new PostChapterCommentDto
+            {
+                ChapterId = ChapterId,
+                ParentCommentId = parentId,
+                CommentText = html,
+                IsSpoiler = false  // replies don't carry a spoiler flag for MVP
+            });
+            _replyingToId = null;
+            _currentPage = 1;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is CommentValidationException or KeyNotFoundException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ── Edit ──────────────────────────────────────────────────────────────────────
+    private void HandleEditClick(long id)
+    {
+        _editingId = id;
+        _replyingToId = null; // close any open reply composer
+        _error = null;
+    }
+
+    private void HandleEditCancel() => _editingId = null;
+
+    private async Task HandleEditSaveAsync(string html)
+    {
+        if (_editingId is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Comments.EditCommentAsync(new UpdateCommentDto
+            {
+                CommentId = _editingId.Value,
+                CommentText = html
+            });
+            _editingId = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is CommentValidationException or UnauthorizedAccessException or KeyNotFoundException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ── Delete ────────────────────────────────────────────────────────────────────
+    private void HandleDeleteClick(long id)
+    {
+        _pendingDeleteId = id;
+        _showDeleteConfirm = true;
+        _error = null;
+    }
+
+    private async Task HandleDeleteConfirmAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Comments.DeleteCommentAsync(_pendingDeleteId);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or KeyNotFoundException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ── Post new comment ──────────────────────────────────────────────────────────
+    private async Task HandlePostAsync(string html)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Comments.PostChapterCommentAsync(new PostChapterCommentDto
+            {
+                ChapterId = ChapterId,
+                CommentText = html,
+                IsSpoiler = _composeSpoiler
+            });
+            _composeSpoiler = false;
+            _currentPage = 1;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is CommentValidationException or KeyNotFoundException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

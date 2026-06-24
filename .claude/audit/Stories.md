@@ -139,6 +139,29 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
   rating badge theories, panel composition (blank-slate + IsOwnStory), caret HasDelegate gating.
   L4-Style visual sign-off pending — requires live server check (fixture stories 5/6/7; cover art with/
   without; with/without tags/ShortDescription; one IsOwnStory; caret; gap spacing in a grid parent).
+  **WU14 (2026-06-23) StoryDeck deck-slice built (Stage 5 for this slice — cells stay 4/4/1):**
+  `SharedUI/Stories/StoryDeck.razor` built as a pass-through layout composite. Three-state
+  internally: `Stories is null` → loading (inline text, skeleton-card upgrade is additive); `Count == 0`
+  → customisable `EmptyMessage`; populated → `grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6`
+  of `StoryCard` leaves + unconditional `PaginationControls` (self-hides at `TotalPages ≤ 1`).
+  Contract: `[EditorRequired] IReadOnlyList<StoryListingDto>? Stories`, `IReadOnlyDictionary<int,
+  UserStoryInteractionStateDto>? InteractionStates` (batch-loaded by parent, keyed by `StoryId`),
+  `int? CurrentUserId` (deck computes `IsOwnStory` per card), `string EmptyMessage`, pagination
+  forwards (`CurrentPage`, `PageSize`, `TotalCount`, `EventCallback<int> OnPageChanged`). No service
+  injection. Caret callbacks deferred — additive when first consumer (WU28/34/38) needs them.
+  Pre-implementation doc-touch (moment 1): fixed two stale areas in `layer3.5-structure.md` —
+  deleted a duplicate StoryDeck paragraph; corrected the "Loading States" code example (old example
+  showed the *page* doing the null/empty branch and passing only a populated array into `<StoryDeck>`,
+  contradicting the plan; new example shows the page passing nullable `Stories` to the deck, which
+  branches internally). **Test tier:** RazorComponents — `StoryDeckTests.cs` (14 tests): null →
+  loading/no-card; empty → default+custom EmptyMessage/no-card; populated → N cards + grid; IsOwnStory
+  match/non-match/null CurrentUserId; InteractionStates IsFavorite forwarding (active span appears);
+  null states → no active span; PaginationControls shown/hidden/self-hidden; OnPageChanged bubbles.
+  Mutation sanity confirmed: inverting the populated branch (`Count >= 0`) → 6 tests fail; reverted,
+  suite green. L4 visual sign-off pending (Stage-6 gate): bUnit cannot verify Tailwind responsive
+  breakpoints or the loading visual; requires live-server render check (1→2→3-col grid, empty message,
+  loading state, pager shown/hidden). **How verified:** `dotnet build` green (8 projects, 0
+  warnings/errors). `dotnet test` green: 112 Unit + 136 RazorComponents + 133 Integration = 381 total.
 - **L3-Logic — Stage 4.** `StoryPage` is a real dispatcher (device detection + `IStoryReadService`,
   loads `StoryDetailsDTO`, redirects to `/not-found`). Gaps: no `[PersistentState]` ⇒ prerender→interactive
   double-fetch flicker; route is `{Slug?}` not the spec's hybrid catch-all `{*StorySlug}`.

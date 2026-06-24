@@ -1,0 +1,83 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Leaf — shared editing surface for all comment contexts (edit-in-place, reply, new comment).
+   Wraps EditorView (pull-on-submit via @ref + GetHtmlAsync()) plus a Save/Cancel row and an
+   optional spoiler checkbox. No service injection; the owning composite (CommentSection) sanitizes
+   and persists via its write service. SaveLabel drives the primary button label: "Save" for edits,
+   "Reply" for replies, "Post Comment" for the persistent new-comment composer.
+   Cancel renders only when OnCancel is wired (.HasDelegate idiom — same pattern as the like/edit
+   affordances on CommentItem): editing and reply wire it; the persistent composer deliberately
+   leaves it unwired so no Cancel button appears. The spoiler checkbox appears only when
+   ShowSpoilerToggle is true (chapter-context new comments only, §5.9.1). *@
+
+<div class="flex flex-col gap-3">
+    <EditorView @ref="_editor" Html="@Html" />
+
+    @if (ShowSpoilerToggle)
+    {
+        <label class="flex cursor-pointer items-center gap-2 text-sm text-[--color-text]">
+            <input type="checkbox"
+                   checked="@Spoiler"
+                   class="h-4 w-4 rounded border-[--color-border] accent-[--color-primary]"
+                   @onchange="async e => await SpoilerChanged.InvokeAsync((bool)e.Value!)" />
+            Contains spoilers for future chapters
+        </label>
+    }
+
+    <div class="flex items-center gap-2">
+        <button type="button"
+                class="rounded-md bg-[--color-primary] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50"
+                disabled="@Busy"
+                aria-label="@SaveLabel"
+                @onclick="HandleSaveAsync">
+            @SaveLabel
+        </button>
+
+        @if (OnCancel.HasDelegate)
+        {
+            <button type="button"
+                    class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-1.5 text-sm text-[--color-text] transition-colors hover:bg-[--color-primary]/20 disabled:opacity-50"
+                    disabled="@Busy"
+                    aria-label="Cancel"
+                    @onclick="() => OnCancel.InvokeAsync()">
+                Cancel
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Seed HTML for the editor — set for edit-in-place, null/empty for new/reply compose.</summary>
+    [Parameter] public string? Html { get; set; }
+
+    /// <summary>Primary button label: "Save" for edit, "Reply" for reply, "Post Comment" for new.</summary>
+    [Parameter] public string SaveLabel { get; set; } = "Save";
+
+    /// <summary>When true, renders the "Contains spoilers for future chapters" checkbox (§5.9.1).</summary>
+    [Parameter] public bool ShowSpoilerToggle { get; set; }
+
+    /// <summary>Two-way spoiler flag (use @bind-Spoiler on the owning composite).</summary>
+    [Parameter] public bool Spoiler { get; set; }
+
+    [Parameter] public EventCallback<bool> SpoilerChanged { get; set; }
+
+    /// <summary>Raised with the raw editor HTML when the user clicks Save/Reply/Post. The owning
+    /// composite (never this leaf) passes it to the write service, which sanitizes before persisting.</summary>
+    [Parameter] public EventCallback<string> OnSave { get; set; }
+
+    /// <summary>When wired, a Cancel button appears. Deliberately left unwired on the persistent
+    /// new-comment composer (nothing to cancel back to).</summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>Disables both buttons while the owning composite is performing a write.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    private EditorView? _editor;
+
+    private async Task HandleSaveAsync()
+    {
+        if (_editor is null) return;
+        string html = await _editor.GetHtmlAsync();
+        await OnSave.InvokeAsync(html);
+    }
+}

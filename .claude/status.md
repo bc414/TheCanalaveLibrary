@@ -70,10 +70,10 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 20 | User Profile Editing | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 21 | User Profile Display | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 22 | User Stats | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 23 | Comment Posting | Comments | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
-| 24 | Comment Display & Pagination | Comments | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
-| 25 | Comment Likes | Comments | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 26 | Spoiler Comments | Comments | 5 | 2 | 2 | 5 | 1 | 2 | N/A | N/A | N/A |
+| 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
+| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
+| 25 | Comment Likes | Comments | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
+| 26 | Spoiler Comments | Comments | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
 | 27 | Recommendation Submission | Recommendations | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 28 | Recommendation Display | Recommendations | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 29 | Hidden Gem Management | Recommendations | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |

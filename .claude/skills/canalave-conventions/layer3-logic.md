@@ -39,6 +39,10 @@ Legitimate non-page injection:
 - Cross-cutting layout elements (notification bell — no parent dispatcher owns this data)
 - User-input-driven queries (tag typeahead — bubbling keystrokes to parent is absurd)
 - Self-contained writes (follow button, comment like — parent doesn't need the result)
+- **Coordinated paginated regions** (`CommentSection` pattern — the composite injects
+  `ICommentWriteService : ICommentReadService` to own its own paginated load + all writes
+  in one independent region; this is not an N+1 violation because the component is a single
+  per-page self-contained region, not an item in a list).
 
 ## State Persistence: `[PersistentState]` (.NET 10)
 

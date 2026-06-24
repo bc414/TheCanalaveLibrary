@@ -494,10 +494,28 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 5 + audit-summary §5.
   **Deps:** WU4, WU7, WU12, WU16.
 
-### WU14 — `StoryDeck` composite *(pass-through)*
-- **Cells:** 5 L3.5/L4 (deck slice).
-- **Do:** arrange StoryCards + PaginationControls + three-state (loading/empty/populated). Consumed by
-  Search, Bookshelves, Profiles, Groups, Also-Favorited.
+### WU14 — `StoryDeck` composite *(pass-through)* — DONE ✓ (2026-06-23)
+- **Cells:** 5 L3.5/L4 (deck slice only — cells remain Stage 4/1 because `StoryPage`
+  dispatcher + `StoryDesktop`/`StoryMobile` still hold them → WU25; narrative in
+  `audit/Stories.md` Feature 5 WU14 note).
+- **Done:** built `SharedUI/Stories/StoryDeck.razor` as a pass-through layout composite (no service
+  injection). Three-state internally: `null` → loading text, empty list → customisable `EmptyMessage`,
+  populated → `grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6` of `StoryCard` + unconditional
+  `PaginationControls` (self-hides at `TotalPages ≤ 1`). Contract: `[EditorRequired]
+  IReadOnlyList<StoryListingDto>? Stories`, `IReadOnlyDictionary<int, UserStoryInteractionStateDto>?
+  InteractionStates` (keyed by StoryId, batch-loaded by parent), `int? CurrentUserId` (deck computes
+  `IsOwnStory` per card), `string EmptyMessage` (default "No stories found."), pagination forwards.
+  Caret callbacks deferred — additive when first consumer (WU28/34/38) needs them.
+  Pre-implementation doc-touch (moment 1/2): fixed duplicate StoryDeck paragraph and contradictory
+  Loading States example in `layer3.5-structure.md`; added StoryDeck Pattern Accumulation entry to
+  `layer4-style.md`. **Real insight during verification:** in Listing context, non-ReadLater/Ignore
+  active buttons render as `<span>` (read-only, no `OnToggle` delegate) rather than `<button>` with
+  `aria-pressed` — so the forwarding test asserts `span[aria-label="Favorite"]` appears when
+  `IsFavorite=true`, not `aria-pressed`.
+- **Verified:** `dotnet build` green (8 projects, 0 warnings/errors). `dotnet test` green: 381 total
+  (112 Unit + 136 RazorComponents + 133 Integration). Mutation sanity: inverted populated-branch
+  condition → 6 `StoryDeckTests` fail; reverted. L4 visual sign-off pending live-server check
+  (Stage-6 gate). Test tier: RazorComponents (`StoryDeckTests.cs`, 14 tests).
 - **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 5. **Deps:** WU8, WU13.
 
 ### WU17 — Chapters L2 (writing/versioning + reading) — DONE ✓ (2026-06-22)
@@ -534,16 +552,30 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   or during WU26. Detail in `audit/Chapters.md` Feature 7 WU18 Stage note.
 - **Tool:** opusplan. **Pointer:** `audit/Chapters.md` Feature 7. **Deps:** WU17.
 
-### WU19 — Comments L2 (posting / display / likes / spoiler)
-- **Cells:** 23 L2, 24 L2, 25 L2, 26 L2 (chapter context first; other TPT contexts follow in their
-  feature units). Comment Likes L1 (`CommentLike` junction) already done in Phase A.
+### WU19 — Comments L2 (posting / display / likes / spoiler) — DONE ✓ (2026-06-23)
+- **Cells:** 23 L2, 24 L2, 25 L2, 26 L2 → Stage 5. Also closed: 25 L1 → Stage 5 (stale-code trap;
+  explicit `CommentLike` entity built) and 26 L1 gap (added `IsSpoiler` property + migration).
+- **Done:** `Core/Comments/` cluster (entities moved from `Core/Models/`, DTOs, interfaces, validations);
+  `Server/Comments/ServerCommentReadService` (golden-index pagination, TPT via `ChapterComments` DbSet,
+  per-viewer EXISTS subquery for `IsLikedByCurrentUser`) + `ServerCommentWriteService` (Post/Edit/Delete/
+  ToggleLike, author-only, sanitize-once-on-save, hard delete + FK cascade). DI registered in `Program.cs`.
+  Migration `20260623222518_AddIsSpoilerToChapterComment` applied. `layer2-services.md` stale doc line
+  corrected (Moment 1). Tests: 7 Unit (`CommentValidationsTests`), 18 Integration (`CommentWriteServiceTests`),
+  6 Integration (`CommentReadServiceTests`) — 367 total green. Server booted clean.
 - **Tool:** opusplan. **Pointer:** `audit/Comments.md`. **Deps:** WU17.
 
-### WU20 — `CommentItem` leaf + `CommentSection` composite
-- **Cells:** 23/24/25/26 L3/L3.5/L4.
-- **Do:** threaded display (golden-index pagination), like toggle, spoiler flow via ConfirmDialog
-  (completion-gated reveal — `ChapterPage` passes `UserHasCompletedStory`), compose EditorView.
-- **Tool:** opusplan. **Pointer:** `audit/Comments.md`. **Deps:** WU6, WU9, WU19.
+### WU20 — `CommentItem` leaf + `CommentSection` composite — DONE ✓ (2026-06-23)
+- **Cells:** 23/24/25/26 L3-Logic/L3.5-Structure/L4-Style → Stage 5.
+- **Done:** `CommentEditor` leaf (shared editing surface, `SaveLabel`/`OnCancel.HasDelegate`/`Busy`),
+  `CommentItem` leaf (author block, RichTextView↔CommentEditor edit swap, spoiler blur+confirm,
+  like/reply/edit/delete affordances gated by `.HasDelegate`+`IsOwnComment`), `CommentSection`
+  coordination composite (coordinated-paginated-region injection, paginated load, two-level tree,
+  optimistic like reconciliation, delete ConfirmDialog, reply/edit/post composers). 45 new
+  RazorComponents tests (11 CommentEditor, 21 CommentItem, 13 CommentSection) + `FakeCommentWriteService`.
+  Key lesson: BlazoredTextEditor toolbar renders same-subtree buttons — all CommentEditor button
+  selectors use `aria-label` not text-content scanning. L4 sign-off via throwaway harness on
+  `HomeDesktop.razor` (server → `200`, harness removed). All 426 tests pass.
+- **Tool:** opusplan. **Pointer:** `audit/Comments.md` Feature 24 Stage-5 note. **Deps:** WU6, WU9, WU19.
 
 ### WU21 — Following + Vouches — DONE ✓ (2026-06-22)
 - **Cells:** 18 L2/L3/L3.5/L4 → Stage 5; 19 L1/L2/L3/L3.5/L4 → Stage 5 (L1 re-verified: `MakeVouchTextUnlimited` migration).

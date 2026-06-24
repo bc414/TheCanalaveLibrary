@@ -107,6 +107,7 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
 
     //Comments
     public DbSet<BaseComment> BaseComments { get; set; }
+    public DbSet<ChapterComment> ChapterComments { get; set; }
 
     //Polls
     public DbSet<BasePoll> Polls { get; set; }
