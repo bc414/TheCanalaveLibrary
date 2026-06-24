@@ -82,7 +82,7 @@ public abstract class IntegrationTestBase(PostgresFixture postgres) : IAsyncLife
     /// <paramref name="authorId"/> is optional; pass the seeded user's id when a test needs
     /// author-owned story semantics (e.g. Hidden-Gem notification, highlight-ownership guard).
     /// </summary>
-    protected async Task<int> SeedStoryAsync(int? authorId = null)
+    protected async Task<int> SeedStoryAsync(int? authorId = null, Rating rating = Rating.E)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -91,7 +91,7 @@ public abstract class IntegrationTestBase(PostgresFixture postgres) : IAsyncLife
         Story story = new()
         {
             AuthorId        = authorId,
-            Rating          = Rating.E,
+            Rating          = rating,
             StoryStatusId   = StoryStatusEnum.InProgress,
             PublishedDate   = DateTime.UtcNow,
             LastUpdatedDate = DateTime.UtcNow,

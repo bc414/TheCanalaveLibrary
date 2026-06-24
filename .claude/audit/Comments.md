@@ -4,15 +4,27 @@
 
 ## Shared Context
 **Entities (Core/Comments/):** `BaseComment` (TPT root, `ToTable("base_comments")`, `ParentCommentId`
-self-ref `SetNull`, `LikeCount`, explicit `CommentLike` junction) + four children, each `.ToTable()` with
-`DatePosted` denormalized: `ChapterComment` (+ `IsSpoiler`), `UserProfileComment`, `GroupComment`,
-`BlogPostComment`. TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` in WU19
+self-ref `SetNull`, `LikeCount`, explicit `CommentLike` junction) + four children, each `.ToTable()`:
+`ChapterComment` (+ `IsSpoiler`, `DatePosted`), `UserProfileComment` (`DatePosted`), `GroupComment`
+(`DatePosted`), `BlogPostComment` (`DatePosted`). `DatePosted` is declared on each derived class (not
+`BaseComment`) so it physically lands on the child table, enabling the golden index
+`(chapter_id, date_posted DESC)` on `chapter_comments`. **WU31.5 (2026-06-24):** this denormalization
+was retrofitted — before WU31.5, `DatePosted` was on `base_comments` despite the spec and derived
+Fluent config comments implying otherwise (spec §4.3 prescribed a "configure on derived to override"
+technique that does not work in EF Core 10; see `layer1-data-model.md` §"Denormalization with TPT").
+TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` in WU19
 (2026-06-23) — organizational only, namespace unchanged. Services (`ICommentRead/WriteService` +
 `ServerComment{Read,Write}Service`) live in `Core/Comments/` and `Server/Comments/` respectively.
 
 ## Feature 23 — Comment Posting
-- **L1 — Stage 5.** TPT hierarchy + per-child `DatePosted` default; orphan handling via `SetNull`.
-  Matches §5.9. **L5 — Stage 2. L6 — Stage 2.**
+- **L1 — Stage 5.** TPT hierarchy + per-child `DatePosted` (declared on each derived class, lands on
+  child table — denormalized per §1117); orphan handling via `SetNull`. Matches §5.9.
+  **WU31.5 Stage-5 note (2026-06-24):** `DatePosted` moved from `BaseComment` → each derived class
+  (`ChapterComment`, `BlogPostComment`, `GroupComment`, `UserProfileComment`); migration
+  `WU31_5_DenormalizeTptDiscoveryColumns` copies data (base→child) before dropping base column;
+  `dotnet test` 691/691 green — Integration tier confirms write + read round-trip.
+  **L5 — Stage 2. L6 — Stage 2** (golden index `(chapter_id, date_posted DESC)` on `chapter_comments`
+  now possible — column is on the child table).
 - **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note
   (WU20 is a single integrated work-unit covering 23/24/25/26 L3/L3.5/L4; the components,
   tests, and visual sign-off are described there).
@@ -74,19 +86,18 @@ self-ref `SetNull`, `LikeCount`, explicit `CommentLike` junction) + four childre
     will supply live `ChapterId`, `CurrentUserId`, `UserHasCompletedStory` when that work-unit builds;
     `CommentSection` is a standalone self-contained injectable region, so standalone-build sign-off
     is sufficient here.
-- **L2 — Stage 5 (WU19, 2026-06-23):** `ICommentReadService.GetChapterCommentsAsync(chapterId, page, pageSize)`
-  in `Server/Comments/ServerCommentReadService.cs`. Two-step load: (1) count roots + paginate root ids via
-  `ChapterComments` DbSet (golden-index order — `DatePosted DESC`); (2) fetch roots-on-page plus their direct
-  replies in one query, projecting to `CommentDto` with per-viewer `IsLikedByCurrentUser` (EXISTS subquery;
-  always false for anonymous). In-memory ordering restores roots newest-first, replies oldest-first beneath
-  each root. Returns `CommentPageDto(IReadOnlyList<CommentDto> Comments, int TotalRootCount)`.
-  **Key implementation note:** query goes through `readDb.ChapterComments` (not `readDb.BaseComments`) so
-  EF Core's TPT join gives both base + child columns together, avoiding the shadow one-to-one FK
-  (`chapter_comment_comment_id` on `base_comments`) that makes `BaseComments.Where(c.ChapterComment != null)`
-  unreliable for freshly-inserted rows.
-  **Verified:** same test run as Feature 23. Covering tier: **Integration** (`CommentReadServiceTests` — 6
-  tests: empty chapter, TotalRootCount counts only roots, roots DatePosted DESC, reply under root, pagination
-  Skip/Take, IsLikedByCurrentUser per-viewer).
+- **L2 — Stage 5 (WU19, 2026-06-23; column placement verified WU31.5):**
+  `ICommentReadService.GetChapterCommentsAsync(chapterId, page, pageSize)` in
+  `Server/Comments/ServerCommentReadService.cs`. Two-step load: (1) count roots + paginate root ids via
+  `ChapterComments` DbSet (`DatePosted DESC`); (2) fetch roots-on-page + direct replies in one query,
+  projecting to `CommentDto` with per-viewer `IsLikedByCurrentUser`. In-memory ordering restores
+  roots newest-first, replies oldest-first beneath each root.
+  **WU31.5 (2026-06-24):** `DatePosted` is now physically on `chapter_comments` — the Step-1
+  pagination order is child-table-served (no join to `base_comments` for sorting). Queries through
+  typed child DbSets (`ChapterComments`, `BlogPostComments`) are unchanged in code; the column
+  just comes from the right table now. `dotnet test` 691/691 green.
+  **Verified:** Integration tier (`CommentReadServiceTests` — 6 tests: empty chapter, TotalRootCount,
+  DatePosted DESC order, reply under root, pagination, IsLikedByCurrentUser per-viewer).
 
 ## Feature 25 — Comment Likes
 - **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note.

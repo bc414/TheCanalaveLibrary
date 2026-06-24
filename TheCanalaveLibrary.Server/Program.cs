@@ -114,9 +114,10 @@ builder.Services.AddScoped<IImageStorageService, LocalImageStorageService>();
 // singleton rather than scoped (see ServerHtmlSanitizationService). First call site: WU17 chapter
 // write service. Future: WU19 comments, WU29 recommendations, WU31 blog posts, WU35 messaging.
 builder.Services.AddSingleton<IHtmlSanitizationService, ServerHtmlSanitizationService>();
-// Chapters (WU17) — L2 read/write services.
+// Chapters (WU17/WU26) — L2 read/write services + reading-progress tracker.
 builder.Services.AddScoped<IChapterReadService, ServerChapterReadService>();
 builder.Services.AddScoped<IChapterWriteService, ServerChapterWriteService>();
+builder.Services.AddScoped<IReadingProgressWriteService, ServerReadingProgressWriteService>();
 // Comments (WU19) — L2 read/write services (Features 23/24/25/26, chapter context only for MVP).
 builder.Services.AddScoped<ICommentReadService, ServerCommentReadService>();
 builder.Services.AddScoped<ICommentWriteService, ServerCommentWriteService>();
@@ -129,6 +130,10 @@ builder.Services.AddScoped<IFollowingWriteService, ServerFollowingWriteService>(
 // UserStoryInteractions (WU15) — L2 read/write services.
 builder.Services.AddScoped<IUserStoryInteractionReadService, ServerUserStoryInteractionReadService>();
 builder.Services.AddScoped<IUserStoryInteractionWriteService, ServerUserStoryInteractionWriteService>();
+// Blog Posts (WU31) — L2 read/write services (Features 35/36). Profile blog posts only for MVP;
+// GroupBlogPost UI → WU32. Feature 56 (feature contributions) deferred post-MVP.
+builder.Services.AddScoped<IBlogPostReadService, ServerBlogPostWriteService>();
+builder.Services.AddScoped<IBlogPostWriteService, ServerBlogPostWriteService>();
 // Notifications (WU22) — L2 read/write services (Features 41/42/43).
 // WU22 delivers: service infra + NotifyNewFollowerAsync/NotifyNewVouchAsync + Following seam wiring.
 // Fan-out notify methods land incrementally with their triggering work-units (workplan.md WU22).

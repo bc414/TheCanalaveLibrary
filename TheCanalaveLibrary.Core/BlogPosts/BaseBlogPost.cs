@@ -3,14 +3,17 @@ using System.ComponentModel.DataAnnotations;
 namespace TheCanalaveLibrary.Core;
 
 /// <summary>
-/// A blog post can be just for a user, or can it be attached to a story or a group
+/// TPT root for profile and group blog posts. Shared identity + display payload + shared counters.
+/// Discovery columns (<c>DateCreated</c>, <c>LastUpdatedDate</c>, <c>Rating</c>,
+/// <c>IsPublished</c>) live on the child tables — declared on each derived class so EF Core 10
+/// maps them to the child table, not here.
 /// </summary>
 public abstract class BaseBlogPost
 {
     [Key]
     public int BlogPostId { get; set; }
     public int? AuthorId { get; set; }
-    
+
     [Required]
     [MaxLength(256)]
     public string Title { get; set; } = null!;
@@ -22,14 +25,7 @@ public abstract class BaseBlogPost
 
     public int LikeCount { get; set; }
 
-    public bool IsPublished { get; set; }
-
-    public DateTime DateCreated { get; set; }
-
-    public DateTime LastUpdatedDate { get; set; }
-
     public int ActiveReportCount { get; set; }
-    public Rating Rating { get; set; }
 
     public virtual User? Author { get; set; }
 
@@ -38,10 +34,6 @@ public abstract class BaseBlogPost
     public virtual ICollection<BlogPostLike> Likes { get; set; } = new List<BlogPostLike>();
 
     public virtual ICollection<FeatureContribution> FeatureContributions { get; set; } = new List<FeatureContribution>();
-    
+
     public ICollection<BasePoll> Polls { get; set; } = new List<BasePoll>();
-
-    
-
-    
 }

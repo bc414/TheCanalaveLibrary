@@ -101,4 +101,24 @@ public class ServerRecommendationReadService(
             .Distinct()
             .ToListAsync();
     }
+
+    public async Task<int?> GetHelpfulPromptRecommendationIdAsync(int storyId)
+    {
+        int? userId = ActiveUser.UserId;
+        if (userId is null) return null;
+
+        // Find the source recommendation this user opened the story from.
+        int? recId = await ReadDb.UserStoryRecommendationSources
+            .Where(src => src.UserId == userId && src.StoryId == storyId)
+            .Select(src => (int?)src.SourceRecommendationId)
+            .FirstOrDefaultAsync();
+
+        if (recId is null) return null;
+
+        // Gate: only show the prompt if no success has already been recorded.
+        bool alreadyRecorded = await ReadDb.RecommendationSuccesses
+            .AnyAsync(s => s.UserId == userId && s.RecommendationId == recId);
+
+        return alreadyRecorded ? null : recId;
+    }
 }

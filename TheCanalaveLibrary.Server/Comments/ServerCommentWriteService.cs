@@ -61,6 +61,52 @@ public class ServerCommentWriteService(
         return comment.CommentId;
     }
 
+    public async Task<long> PostBlogPostCommentAsync(PostBlogPostCommentDto dto)
+    {
+        if (ActiveUser.UserId is not int userId)
+            throw new InvalidOperationException("Posting a comment requires an authenticated user.");
+
+        List<string> errors = dto.CanSave();
+        if (errors.Count > 0) throw new CommentValidationException(errors);
+
+        // Verify the blog post exists.
+        bool postExists = await writeDb.BlogPosts.AnyAsync(p => p.BlogPostId == dto.BlogPostId);
+        if (!postExists)
+            throw new KeyNotFoundException($"Blog post {dto.BlogPostId} not found.");
+
+        // If replying, verify the parent belongs to the same blog post.
+        if (dto.ParentCommentId.HasValue)
+        {
+            bool parentOnSamePost = await writeDb.BlogPostComments
+                .AnyAsync(bc =>
+                    bc.CommentId == dto.ParentCommentId.Value
+                    && bc.BlogPostId == dto.BlogPostId);
+            if (!parentOnSamePost)
+                throw new KeyNotFoundException(
+                    $"Parent comment {dto.ParentCommentId} not found on blog post {dto.BlogPostId}.");
+        }
+
+        string sanitizedText = sanitizer.Sanitize(dto.CommentText);
+
+        // Note: BlogPostComment has no IsSpoiler property — spoiler lives on the post itself
+        // (ProfileBlogPost.HasSpoilers). Only ChapterComment extends BaseComment with IsSpoiler.
+        BlogPostComment comment = new()
+        {
+            BlogPostId      = dto.BlogPostId,
+            ParentCommentId = dto.ParentCommentId,
+            UserId          = userId,
+            CommentText     = sanitizedText,
+            DatePosted      = DateTime.UtcNow
+        };
+
+        writeDb.BlogPostComments.Add(comment);
+        await writeDb.SaveChangesAsync();
+
+        // TODO(WU33): notify blog post author of new comment, and parent-comment author of reply.
+
+        return comment.CommentId;
+    }
+
     public async Task EditCommentAsync(UpdateCommentDto dto)
     {
         if (ActiveUser.UserId is not int userId)

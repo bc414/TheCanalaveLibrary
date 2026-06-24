@@ -38,6 +38,11 @@ Global conditions affecting many cells — kept terse; detail lives at the point
   pattern for both DbContexts. Detail: `cross-cutting.md` "Active-User Context"/"Content Rating
   Filtering", `layer2-services.md` "DbContext Registration", `audit/ImageStorage.md`,
   `forward_plan.md` "Aspire orchestration during MVP dev" narrower correction.
+- **TPT denormalization retrofitted (WU31.5, 2026-06-24).** Discovery columns (`DateCreated`,
+  `LastUpdatedDate`, `Rating`, `IsPublished` on blog-post children; `DatePosted` on comment children)
+  moved from base tables to child tables. Named filter removed from `BaseBlogPost`. F35/F36/F23–F26
+  L1/L2 momentarily reopened and re-closed to Stage 5 on green `dotnet test`. Detail:
+  `layer1-data-model.md` §"Denormalization with TPT", `audit/BlogPosts.md`, `audit/Comments.md`.
 - **Three-tier automated test suite in place (WU12.5 + 2026-06-22 backfill).** Three test projects in
   the `.sln` — `dotnet test` runs all. Organized by *kind* (not production project): `Tests.Unit`
   (directly-constructed, no host/DB — refs Core + Server), `Tests.Integration` (real Testcontainers
@@ -62,8 +67,8 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 2 | 2 | 1 | 4 | N/A | N/A | N/A |
 | 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 4 | 2 | N/A | N/A |
 | 5 | Story Browsing & Display | Stories | 5 | 5 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
-| 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
-| 7 | Chapter Reading | Chapters | 5 | 5 | 2 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
 | 9 | Series & Ordering | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
@@ -91,8 +96,8 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 32 | Full-Text Search | Discovery | 5 | 2 | 2 | 2 | 1 | 2 | 5 | N/A | N/A |
 | 33 | Manual Tree Search | Discovery | N/A | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 34 | Tag Directory | Discovery | N/A | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 35 | Blog Post Writing | BlogPosts | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
-| 36 | Blog Post Display | BlogPosts | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
+| 35 | Blog Post Writing | BlogPosts | 5 | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
+| 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 2 | N/A | N/A | N/A |
 | 37 | Polls | BlogPosts | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
 | 38 | Group Management | Groups | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 39 | Group Content & Folders | Groups | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
@@ -100,7 +105,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 41 | Notification Generation | Notifications | 5 | 5 | N/A | N/A | N/A | N/A | 2 | N/A | N/A |
 | 42 | Notification Display | Notifications | 5 | 5 | 2 | 2 | 1 | 5 | 2 | N/A | N/A |
 | 43 | Notification Settings | Notifications | 5 | 5 | 2 | 2 | 1 | 5 | N/A | N/A | N/A |
-| 44 | Reading Progress Tracking | Chapters | 5 | 2 | 2 | 2 | N/A | N/A | N/A | 2 | N/A |
+| 44 | Reading Progress Tracking | Chapters | 5 | 5 | 5 | 5 | N/A | N/A | N/A | 2 | N/A |
 | 45 | View Count Tracking | Stories | 5 | 2 | 2 | N/A | N/A | 2 | N/A | 2 | N/A |
 | 46 | Content Reporting | Moderation | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 47 | Moderation Queue & Actions | Moderation | 5 | 2 | 2 | 2 | 1 | N/A | 2 | N/A | N/A |

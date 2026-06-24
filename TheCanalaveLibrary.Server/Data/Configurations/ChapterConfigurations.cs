@@ -48,7 +48,7 @@ public sealed class ChapterContentConfiguration : IEntityTypeConfiguration<Chapt
 {
     public void Configure(EntityTypeBuilder<ChapterContent> builder)
     {
-        builder.Property(e => e.Rating).HasConversion<short>();
+        builder.Property(e => e.Rating).HasConversion<short?>();
 
         //sort order can't be duplicated for a chapter
         builder.HasIndex(e => new { e.ChapterId, e.SortOrder }).IsUnique();

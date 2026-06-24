@@ -21,6 +21,7 @@ public class ServerChapterReadService(
 
         // Build a query that resolves to the target ChapterContent. Both branches produce
         // IQueryable<ChapterContent> so the final projection stays unified.
+        // Rating ceiling uses COALESCE(cc.rating, story.rating) — null rating inherits story rating.
         IQueryable<ChapterContent> contentQuery = versionOrder.HasValue
             // Specific version by SortOrder — respect the viewer's rating ceiling.
             ? readDb.ChapterContents.Where(cc =>
@@ -28,10 +29,12 @@ public class ServerChapterReadService(
                 cc.Chapter.ChapterNumber == chapterNumber &&
                 cc.Chapter.IsPublished &&
                 cc.SortOrder == versionOrder.Value &&
-                cc.Rating <= ratingCeiling)
+                (cc.Rating ?? cc.Chapter.Story.Rating) <= ratingCeiling)
             // Primary version (Chapter.PrimaryContentId, nullable during create).
             // Filter out chapters where PrimaryContentId is null (never-committed draft);
             // then navigate to the PrimaryContent row and apply the viewer's rating ceiling.
+            // The primary invariant guarantees effective(primary) == story.Rating, so a visible
+            // story never returns null on its primary for any ShowMatureContent ceiling.
             : readDb.Chapters
                 .Where(c =>
                     c.StoryId == storyId &&
@@ -39,10 +42,10 @@ public class ServerChapterReadService(
                     c.IsPublished &&
                     c.PrimaryContentId != null)
                 .Select(c => c.PrimaryContent!)
-                .Where(cc => cc.Rating <= ratingCeiling);
+                .Where(cc => (cc.Rating ?? cc.Chapter.Story.Rating) <= ratingCeiling);
 
         // Single projection including correlated subqueries for prev/next and story rating.
-        // EF Core translates c.Chapter.Story.Chapters sub-collections into correlated SQL subqueries.
+        // Rating = effective (COALESCE); RawRating = null (reading page doesn't need raw form value).
         return await contentQuery
             .Select(cc => new ChapterReadingDto(
                 cc.ChapterId,
@@ -53,7 +56,7 @@ public class ServerChapterReadService(
                 cc.TopAuthorsNote,
                 cc.BottomAuthorsNote,
                 cc.WordCount,
-                cc.Rating,
+                cc.Rating ?? cc.Chapter.Story.Rating,
                 cc.AuthorId,
                 cc.Author != null ? (cc.Author.UserName ?? "Unknown") : "Unknown",
                 cc.SortOrder,
@@ -89,10 +92,10 @@ public class ServerChapterReadService(
                 c.PrimaryContent != null ? c.PrimaryContent.WordCount : 0,
                 c.IsPublished,
                 // HasAlternateVersions: at least one ChapterContent row other than the primary that
-                // the current viewer's rating ceiling permits. Version picker will only show these.
+                // the current viewer's rating ceiling permits. Effective rating = COALESCE(cc.rating, story.rating).
                 c.ChapterContents.Any(cc =>
                     cc.ChapterContentId != c.PrimaryContentId &&
-                    cc.Rating <= ratingCeiling)))
+                    (cc.Rating ?? c.Story.Rating) <= ratingCeiling)))
             .ToListAsync();
     }
 
@@ -108,13 +111,13 @@ public class ServerChapterReadService(
         return await readDb.Chapters
             .Where(c => c.StoryId == storyId && c.ChapterNumber == chapterNumber)
             .SelectMany(c => c.ChapterContents
-                .Where(cc => cc.Rating <= ratingCeiling)
+                .Where(cc => (cc.Rating ?? c.Story.Rating) <= ratingCeiling)
                 .OrderBy(cc => cc.SortOrder)
                 .Select(cc => new ChapterVersionDto(
                     cc.ChapterContentId,
                     cc.SortOrder,
                     cc.VersionName,
-                    cc.Rating,
+                    cc.Rating,  // raw nullable — null means inherit
                     cc.WordCount,
                     cc.ChapterContentId == c.PrimaryContentId)))
             .ToListAsync();
@@ -138,7 +141,7 @@ public class ServerChapterReadService(
                 cc.TopAuthorsNote,
                 cc.BottomAuthorsNote,
                 cc.WordCount,
-                cc.Rating,
+                cc.Rating ?? cc.Chapter.Story.Rating,  // effective rating
                 cc.AuthorId,
                 cc.Author != null ? (cc.Author.UserName ?? "Unknown") : "Unknown",
                 cc.SortOrder,
@@ -146,7 +149,8 @@ public class ServerChapterReadService(
                 cc.PublishDate,
                 null,  // prev/next not needed for the editing surface
                 null,
-                cc.Chapter.Story.Rating))
+                cc.Chapter.Story.Rating,
+                cc.Rating))  // RawRating — null means inherit; needed by the edit form
             .FirstOrDefaultAsync();
     }
 }

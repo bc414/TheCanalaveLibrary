@@ -263,6 +263,86 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
         await act.Should().ThrowAsync<ChapterValidationException>();
     }
 
+    // --- Rating invariants (Phase 0.5, WU26) ---
+
+    [Fact]
+    public async Task CreateChapterAsync_NullRating_IsAllowedAsPrimary()
+    {
+        // null = inherit story rating; primary invariant passes (effective = story rating).
+        int chapterId = await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId     = _storyId,  // E-rated story
+            ChapterText = "<p>Content with inherited rating.</p>",
+            Rating      = null       // inherit
+        });
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Chapter? chapter = await db.Chapters.FirstOrDefaultAsync(c => c.ChapterId == chapterId);
+        ChapterContent? content = await db.ChapterContents
+            .FirstOrDefaultAsync(cc => cc.ChapterContentId == chapter!.PrimaryContentId);
+
+        content!.Rating.Should().BeNull("null rating is stored as-is (inherit from story)");
+    }
+
+    [Fact]
+    public async Task CreateChapterAsync_ExplicitRatingBelowStoryRating_ThrowsFloorViolation()
+    {
+        // Story is E-rated; floor check: E >= E ✓. But we need a T/M-rated story to test the floor.
+        int tRatedStoryId = await SeedStoryAsync(rating: Rating.T);
+
+        Func<Task> act = async () => await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId     = tRatedStoryId,
+            ChapterText = "<p>Content.</p>",
+            Rating      = Rating.E  // E < T → floor violation
+        });
+
+        await act.Should().ThrowAsync<ChapterValidationException>("E-rated version in T-rated story violates floor");
+    }
+
+    [Fact]
+    public async Task CreateChapterAsync_ExplicitRatingAboveStoryRating_ThrowsPrimaryViolation()
+    {
+        // First version is always primary. M in T story: floor passes (M >= T), but primary invariant fails (M != T).
+        int tRatedStoryId = await SeedStoryAsync(rating: Rating.T);
+
+        Func<Task> act = async () => await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId     = tRatedStoryId,
+            ChapterText = "<p>Content.</p>",
+            Rating      = Rating.M  // M > T → primary invariant violation
+        });
+
+        await act.Should().ThrowAsync<ChapterValidationException>("M-rated first version in T story violates primary invariant");
+    }
+
+    [Fact]
+    public async Task SetPrimaryVersionAsync_ExplicitRatingAboveStoryRating_ThrowsPrimaryViolation()
+    {
+        // Promote an M-rated alternate in a T-rated story → primary invariant rejects it.
+        int tRatedStoryId = await SeedStoryAsync(rating: Rating.T);
+        int chapterId = await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId     = tRatedStoryId,
+            ChapterText = "<p>Primary (null/inherit = T).</p>",
+            Rating      = null  // inherit = T = story rating ✓
+        });
+
+        long altId = await CallAddAlternateAsync(chapterId, new CreateChapterDto
+        {
+            StoryId     = tRatedStoryId,
+            ChapterText = "<p>M alternate.</p>",
+            Rating      = Rating.M  // M > T — valid as alternate (floor passes), but cannot be primary
+        });
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IChapterWriteService svc = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
+        Func<Task> act = async () => await svc.SetPrimaryVersionAsync(chapterId, altId);
+
+        await act.Should().ThrowAsync<ChapterValidationException>("M-rated version cannot be made primary in a T story");
+    }
+
     // --- Helpers ---
 
     private async Task<int> CallCreateAsync(CreateChapterDto dto)

@@ -26,7 +26,8 @@ public partial class ChapterContent
     
     public int SortOrder { get; set; }
 
-    public Rating Rating { get; set; }
+    /// <summary>Nullable — null inherits the parent story's rating (spec §5.2).</summary>
+    public Rating? Rating { get; set; }
 
     public DateTime PublishDate { get; set; }
 

@@ -238,13 +238,47 @@ pattern 2; the "separate pages" rule applies only to pattern 1.
 
 The two renderers do not co-exist **because they are on different routes**, not because of a global rule.
 Story: `/story/{id}/edit` (WU24) vs `/story/{id}/{slug}` (WU25).
-Chapter: `/story/{id}/chapter/{cid}/edit` vs `/story/{id}/chapter/{cid}` (WU26).
+Chapter routes (WU26):
+
+| Purpose | Route |
+|---|---|
+| Read primary (public) | `/story/{StoryId:int}/{ChapterNumber:int}` |
+| Read alternate (public) | `/story/{StoryId:int}/{ChapterNumber:int}/{VersionOrder:int}` |
+| New chapter (author) | `/story/{StoryId:int}/chapter/new` |
+| Edit primary (author) | `/story/{StoryId:int}/chapter/{ChapterNumber:int}/edit` |
+| Edit alternate (author) | `/story/{StoryId:int}/chapter/{ChapterNumber:int}/{VersionOrder:int}/edit` |
+
+Reading routes have no `/chapter/` literal segment (fixed by spec §5.30.3 + shipped `ChapterNavigation` URLs).
+The `/chapter/` literal on edit routes prevents collision with the int-constrained reading routes.
+`VersionOrder` = `ChapterContent.SortOrder` (readable 0/1/2…); omitting it selects the primary version.
 
 **Pattern 2 — Lightweight embedded content (comments, recs, vouch text): in-place inline edit.**
 One page; edit mode is parent-owned (e.g. `CommentSection._editingId`). The item being edited swaps
 `EditorView` (via `CommentEditor`) in place; siblings render `RichTextView`. Both renderers co-exist
 by design. No dedicated edit route. [`CommentItem`](../../../../TheCanalaveLibrary.SharedUI/Comments/CommentItem.razor#L42-L78)
 is the reference.
+
+## Chapter Versioning — Progressive Disclosure (WU26)
+
+`ChapterContent` rows are **live alternates**, not revision history — one is the reader's default
+(`Chapter.PrimaryContentId`). The guiding principle: **the version concept is invisible until a
+second version exists** (settled WU26).
+
+**Edit page (author):**
+- Single-version (or new): the editor is a plain chapter form with one low-emphasis
+  **"Add an alternate version"** link as the only versioning affordance.
+- Multi-version (`VersionCount > 1`): reveals a compact **version switcher** (which version you're
+  editing + links to per-version edit routes) plus per-version controls: rename, **set as primary**,
+  delete (disabled for the primary — enforced by the Restrict FK), add another.
+
+**"Primary" badge driven by `IsPrimary` DTO field, never by `SortOrder == 0`.** The primary can
+change; SortOrder is stable identity within a chapter's version list and should not carry semantic load.
+
+**Rating floor invariant (WU26):** a version's effective rating must be ≥ the story rating. An M story
+is mature throughout; a T story allows T or M versions, not E. NULL = inherit story rating (always
+passes the floor). The **primary** version's effective rating must equal the story rating (naturally
+satisfied by NULL/inherit) — guarantees any reader who can see the story can always read its primary
+chapters without a content-gate block.
 
 ## Content Rating Filtering
 
@@ -287,6 +321,15 @@ var allRatings = await context.Stories
     .IgnoreQueryFilters(["ContentRating"])
     .ToListAsync();
 ```
+
+**Named filter applies to non-TPT root entities only (`Story`).** Placing `HasQueryFilter` on a TPT
+root (`BaseBlogPost`) forces `IgnoreQueryFilters()` on derived DbSets — which generates broken SQL on
+entity materialization in EF Core 10 — and `ExecuteDeleteAsync` is unsupported on TPT base-type DbSets
+entirely. Blog-post content rating is therefore checked via an explicit `.Where(p => p.Rating <= max)`
+in each service read projection; the rating ceiling is enforced per-method rather than model-level.
+Blog-post delete uses the change-tracker stub (not raw SQL): `writeDb.Remove(new ProfileBlogPost {
+BlogPostId = id }); await writeDb.SaveChangesAsync();` — EF issues child-then-base DELETE in one
+transaction. See `audit/BlogPosts.md` §Feature 35 Stage-5 note (WU31.5) for full rationale.
 
 ## Notification Creation
 

@@ -1,0 +1,357 @@
+@namespace TheCanalaveLibrary.SharedUI
+@page "/story/{StoryId:int}/chapter/new"
+@page "/story/{StoryId:int}/chapter/{ChapterNumber:int}/edit"
+@page "/story/{StoryId:int}/chapter/{ChapterNumber:int}/{VersionOrder:int}/edit"
+@attribute [Authorize]
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IChapterWriteService ChapterService
+@inject IStoryReadService StoryReadService
+@inject NavigationManager NavigationManager
+
+@* Chapter create/edit page — Pattern 1 edit side (cross-cutting.md "Two content-editing patterns").
+   Reading side is ChapterReadingPage (WU26). Three route patterns:
+     new:          /story/{id}/chapter/new
+     edit primary: /story/{id}/chapter/{ch}/edit
+     edit version: /story/{id}/chapter/{ch}/{versionOrder}/edit
+   Dispatcher: resolves ChapterContentId from route params, loads chapter data, maps ViewModel.
+   ChapterPropertiesForm is a bUnit-testable presentational child (no inject). *@
+
+<PageTitle>@(_isNew ? "New Chapter" : $"Edit Chapter {ChapterNumber}")</PageTitle>
+
+@if (_isLoading)
+{
+    <p class="text-[--color-text-muted]"><em>Loading…</em></p>
+}
+else if (_forbidden)
+{
+    <p class="text-[--color-danger]">You don't have permission to edit this chapter.</p>
+}
+else
+{
+    <div class="mx-auto max-w-2xl px-4 py-8">
+        <div class="mb-6 flex items-center justify-between gap-4">
+            <h1 class="text-2xl font-bold text-[--color-text]">
+                @(_isNew ? "New Chapter" : $"Edit Chapter {ChapterNumber}")
+            </h1>
+            @if (!_isNew)
+            {
+                <a href="/story/@StoryId/@ChapterNumber"
+                   class="text-sm text-[--color-primary] hover:underline">
+                    ← Back to reading
+                </a>
+            }
+        </div>
+
+        @* ── Version switcher (progressive — only when VersionCount > 1) ─────── *@
+        @if (_versionCount > 1 && !_isNew)
+        {
+            <div class="mb-6 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4">
+                <h2 class="mb-2 text-sm font-semibold text-[--color-text]">Versions</h2>
+                <div class="flex flex-wrap gap-2">
+                    @foreach (ChapterVersionDto version in _versions)
+                    {
+                        bool isCurrent = version.ChapterContentId == _contentId;
+                        string versionLabel = version.VersionName ?? (version.IsPrimary ? "Primary" : $"Version {version.VersionOrder}");
+                        <a href="@VersionEditUrl(version)"
+                           class="@(isCurrent
+                               ? "rounded-md bg-[--color-primary]/10 px-3 py-1.5 text-sm font-semibold text-[--color-primary] ring-1 ring-[--color-primary]"
+                               : "rounded-md border border-[--color-border] px-3 py-1.5 text-sm text-[--color-text] hover:bg-[--color-surface-hover]")">
+                            @versionLabel
+                            @if (version.IsPrimary)
+                            {
+                                <span class="ml-1 text-xs text-[--color-text-muted]">(default)</span>
+                            }
+                        </a>
+                    }
+                </div>
+                @if (_currentVersion is not null)
+                {
+                    <div class="mt-3 flex flex-wrap gap-2 border-t border-[--color-border] pt-3">
+                        @if (!_currentVersion.IsPrimary)
+                        {
+                            <button type="button"
+                                    class="text-sm text-[--color-primary] hover:underline"
+                                    @onclick="SetAsPrimaryAsync">
+                                Set as default
+                            </button>
+                        }
+                        else
+                        {
+                            <span class="text-sm text-[--color-text-muted]">This is the default version</span>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        @* ── Publish toggle ──────────────────────────────────────────────────── *@
+        @if (!_isNew)
+        {
+            <div class="mb-4 flex items-center gap-3">
+                <span class="text-sm font-semibold text-[--color-text]">Status:</span>
+                @if (_isPublished)
+                {
+                    <span class="text-sm text-[--color-text-muted]">Published</span>
+                    <button type="button" class="text-sm text-[--color-danger] hover:underline"
+                            @onclick="() => SetPublishedAsync(false)">Unpublish</button>
+                }
+                else
+                {
+                    <span class="text-sm text-[--color-text-muted]">Draft</span>
+                    <button type="button" class="text-sm text-[--color-primary] hover:underline"
+                            @onclick="() => SetPublishedAsync(true)">Publish</button>
+                }
+            </div>
+        }
+
+        @* ── Main form ───────────────────────────────────────────────────────── *@
+        <ChapterPropertiesForm @ref="_form"
+                               ViewModel="_viewModel"
+                               StoryRating="@_storyRating"
+                               IsPrimary="@_isPrimary"
+                               VersionCount="@_versionCount"
+                               SubmitLabel="@(_isNew ? "Create Chapter" : "Save Changes")"
+                               OnValidSubmit="HandleValidSubmit" />
+
+        @* ── "Add alternate version" — progressive; hidden for new chapters ─── *@
+        @if (!_isNew && _chapterId.HasValue)
+        {
+            <div class="mt-4 border-t border-[--color-border] pt-4">
+                <button type="button"
+                        class="text-sm text-[--color-text-muted] hover:text-[--color-text] hover:underline"
+                        @onclick="AddAlternateAsync">
+                    + Add alternate version
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int StoryId { get; set; }
+    [Parameter] public int? ChapterNumber { get; set; }
+    [Parameter] public int? VersionOrder { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private ChapterPropertiesForm? _form;
+    private ChapterEditorViewModel _viewModel = new();
+    private bool _isNew;
+    private bool _isLoading = true;
+    private bool _forbidden;
+    private Rating _storyRating = Rating.E;
+    private bool _isPrimary = true;
+    private int _versionCount = 1;
+    private bool _isPublished;
+    private int? _chapterId;
+    private long? _contentId;
+    private IReadOnlyList<ChapterVersionDto> _versions = [];
+    private ChapterVersionDto? _currentVersion;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isNew = !ChapterNumber.HasValue;
+
+        // Load story rating for the form's floor/primary invariant UI.
+        StoryUpdateDTO? story = await StoryReadService.GetStoryForEditAsync(StoryId);
+        if (story is null)
+        {
+            NavigationManager.NavigateTo("/not-found");
+            return;
+        }
+        _storyRating = story.Rating;
+
+        if (!_isNew)
+        {
+            // Resolve the ChapterContentId from (ChapterNumber, VersionOrder).
+            IReadOnlyList<ChapterVersionDto> allVersions =
+                await ChapterService.GetChapterVersionsAsync(StoryId, ChapterNumber!.Value);
+
+            long resolvedContentId;
+            if (VersionOrder.HasValue)
+            {
+                ChapterVersionDto? v = allVersions.FirstOrDefault(v => v.VersionOrder == VersionOrder.Value);
+                resolvedContentId = v?.ChapterContentId
+                    ?? allVersions.FirstOrDefault(v => v.IsPrimary)?.ChapterContentId ?? 0;
+            }
+            else
+            {
+                resolvedContentId = allVersions.FirstOrDefault(v => v.IsPrimary)?.ChapterContentId ?? 0;
+            }
+
+            if (resolvedContentId == 0)
+            {
+                NavigationManager.NavigateTo("/not-found");
+                return;
+            }
+
+            _contentId = resolvedContentId;
+            _versions   = allVersions;
+            _versionCount = allVersions.Count;
+            _currentVersion = allVersions.FirstOrDefault(v => v.ChapterContentId == resolvedContentId);
+            _isPrimary = _currentVersion?.IsPrimary ?? false;
+
+            // Load chapter content for the form (no rating ceiling — authors see their own).
+            ChapterReadingDto? chapterDto = await ChapterService.GetChapterForEditAsync(resolvedContentId);
+            if (chapterDto is null)
+            {
+                NavigationManager.NavigateTo("/not-found");
+                return;
+            }
+
+            // Author gate — UX only; the write service is the real authority.
+            int? currentUserId = null;
+            if (AuthStateTask is not null)
+            {
+                AuthenticationState auth = await AuthStateTask;
+                string? idStr = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (int.TryParse(idStr, out int parsedId)) currentUserId = parsedId;
+            }
+            if (chapterDto.AuthorId.HasValue && currentUserId.HasValue && chapterDto.AuthorId != currentUserId)
+            {
+                _forbidden = true;
+                _isLoading = false;
+                return;
+            }
+
+            _chapterId = chapterDto.ChapterId;
+
+            // Publish state from TOC (GetChapterForEditAsync doesn't carry IsPublished).
+            IReadOnlyList<ChapterTocEntryDto> toc = await ChapterService.GetChapterTocAsync(StoryId);
+            _isPublished = toc.FirstOrDefault(e => e.ChapterNumber == ChapterNumber!.Value)?.IsPublished ?? false;
+
+            // Populate the ViewModel. RawRating = null means "Same as story (inherit)".
+            _viewModel.Title             = chapterDto.Title;
+            _viewModel.ChapterText       = chapterDto.ChapterText;
+            _viewModel.TopAuthorsNote    = chapterDto.TopAuthorsNote;
+            _viewModel.BottomAuthorsNote = chapterDto.BottomAuthorsNote;
+            _viewModel.Rating            = chapterDto.RawRating;
+            _viewModel.VersionName       = chapterDto.VersionName;
+        }
+
+        _isLoading = false;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        _viewModel.IsLoading = true;
+        _viewModel.ServerValidationErrors.Clear();
+        try
+        {
+            string chapterText = _form is not null ? await _form.GetChapterTextAsync() : string.Empty;
+            string? topNote    = _form is not null ? await _form.GetTopNoteAsync()     : null;
+            string? bottomNote = _form is not null ? await _form.GetBottomNoteAsync()  : null;
+
+            if (_isNew)
+            {
+                int newChapterId = await ChapterService.CreateChapterAsync(new CreateChapterDto
+                {
+                    StoryId           = StoryId,
+                    Title             = string.IsNullOrWhiteSpace(_viewModel.Title) ? null : _viewModel.Title,
+                    ChapterText       = chapterText,
+                    TopAuthorsNote    = topNote,
+                    BottomAuthorsNote = bottomNote,
+                    Rating            = _viewModel.Rating,
+                    VersionName       = _viewModel.VersionName
+                });
+                // Navigate to the story's TOC / first chapter reading route after create.
+                NavigationManager.NavigateTo($"/story/{StoryId}/chapter/{newChapterId}/edit");
+            }
+            else if (_contentId.HasValue)
+            {
+                await ChapterService.UpdateChapterContentAsync(new UpdateChapterContentDto
+                {
+                    ChapterContentId  = _contentId.Value,
+                    Title             = string.IsNullOrWhiteSpace(_viewModel.Title) ? null : _viewModel.Title,
+                    ChapterText       = chapterText,
+                    TopAuthorsNote    = topNote,
+                    BottomAuthorsNote = bottomNote,
+                    Rating            = _viewModel.Rating,
+                    VersionName       = _viewModel.VersionName
+                });
+                // Return to the reading page for this version.
+                string readUrl = _isPrimary || !VersionOrder.HasValue
+                    ? $"/story/{StoryId}/{ChapterNumber}"
+                    : $"/story/{StoryId}/{ChapterNumber}/{VersionOrder}";
+                NavigationManager.NavigateTo(readUrl);
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _forbidden = true;
+        }
+        catch (ChapterValidationException ex)
+        {
+            _viewModel.ServerValidationErrors.AddRange(ex.Errors);
+        }
+        catch (Exception)
+        {
+            _viewModel.ServerValidationErrors.Add("An unexpected error occurred. Please try again.");
+        }
+        finally
+        {
+            _viewModel.IsLoading = false;
+        }
+    }
+
+    private async Task SetPublishedAsync(bool publish)
+    {
+        if (_chapterId is null) return;
+        try
+        {
+            await ChapterService.SetPublishedAsync(_chapterId.Value, publish);
+            _isPublished = publish;
+        }
+        catch (Exception)
+        {
+            _viewModel.ServerValidationErrors.Add("Could not update publish status. Please try again.");
+        }
+    }
+
+    private async Task SetAsPrimaryAsync()
+    {
+        if (_chapterId is null || _contentId is null || _currentVersion is null) return;
+        try
+        {
+            await ChapterService.SetPrimaryVersionAsync(_chapterId.Value, _contentId.Value);
+            _isPrimary = true;
+            _versions = await ChapterService.GetChapterVersionsAsync(StoryId, ChapterNumber!.Value);
+            _currentVersion = _versions.FirstOrDefault(v => v.ChapterContentId == _contentId.Value);
+        }
+        catch (ChapterValidationException ex)
+        {
+            _viewModel.ServerValidationErrors.AddRange(ex.Errors);
+        }
+    }
+
+    private async Task AddAlternateAsync()
+    {
+        if (_chapterId is null) return;
+        try
+        {
+            long altContentId = await ChapterService.AddAlternateVersionAsync(_chapterId.Value, new CreateChapterDto
+            {
+                StoryId     = StoryId,
+                ChapterText = "<p></p>",
+                Rating      = null  // inherit by default
+            });
+            // Find the new version's SortOrder to build its edit URL.
+            IReadOnlyList<ChapterVersionDto> updated =
+                await ChapterService.GetChapterVersionsAsync(StoryId, ChapterNumber!.Value);
+            ChapterVersionDto? newVer = updated.FirstOrDefault(v => v.ChapterContentId == altContentId);
+            if (newVer is not null)
+                NavigationManager.NavigateTo($"/story/{StoryId}/chapter/{ChapterNumber}/{newVer.VersionOrder}/edit");
+        }
+        catch (Exception)
+        {
+            _viewModel.ServerValidationErrors.Add("Could not add alternate version. Please try again.");
+        }
+    }
+
+    private string VersionEditUrl(ChapterVersionDto version) =>
+        version.IsPrimary
+            ? $"/story/{StoryId}/chapter/{ChapterNumber}/edit"
+            : $"/story/{StoryId}/chapter/{ChapterNumber}/{version.VersionOrder}/edit";
+}

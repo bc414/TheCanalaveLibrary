@@ -33,8 +33,7 @@ public sealed class ChapterCommentConfiguration : IEntityTypeConfiguration<Chapt
     public void Configure(EntityTypeBuilder<ChapterComment> builder)
     {
         builder.ToTable("chapter_comments");
-        builder.Property(e => e.DatePosted) // This configuration maps the column to this table
-            .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        builder.Property(e => e.DatePosted).HasDefaultValueSql("CURRENT_TIMESTAMP");
         // Future indexes for querying (e.g., by ChapterId, DatePosted)...
     }
 }
@@ -44,8 +43,7 @@ public sealed class BlogPostCommentConfiguration : IEntityTypeConfiguration<Blog
     public void Configure(EntityTypeBuilder<BlogPostComment> builder)
     {
         builder.ToTable("blog_post_comments");
-        builder.Property(e => e.DatePosted) // This configuration maps the column to this table
-            .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        builder.Property(e => e.DatePosted).HasDefaultValueSql("CURRENT_TIMESTAMP");
         // Future indexes for querying (e.g., by BlogPostId)...
     }
 }
@@ -55,8 +53,7 @@ public sealed class GroupCommentConfiguration : IEntityTypeConfiguration<GroupCo
     public void Configure(EntityTypeBuilder<GroupComment> builder)
     {
         builder.ToTable("group_comments");
-        builder.Property(e => e.DatePosted) // This configuration maps the column to this table
-            .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        builder.Property(e => e.DatePosted).HasDefaultValueSql("CURRENT_TIMESTAMP");
         // Future indexes for querying (e.g., by GroupId)...
     }
 }
@@ -66,8 +63,7 @@ public sealed class UserProfileCommentConfiguration : IEntityTypeConfiguration<U
     public void Configure(EntityTypeBuilder<UserProfileComment> builder)
     {
         builder.ToTable("user_profile_comments");
-        builder.Property(e => e.DatePosted) // This configuration maps the column to this table
-            .HasDefaultValueSql("CURRENT_TIMESTAMP");
+        builder.Property(e => e.DatePosted).HasDefaultValueSql("CURRENT_TIMESTAMP");
         // Future indexes for querying (e.g., by ProfileUserId)...
     }
 }

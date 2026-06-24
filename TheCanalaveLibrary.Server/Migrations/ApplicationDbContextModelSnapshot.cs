@@ -406,27 +406,9 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("text")
                         .HasColumnName("content");
 
-                    b.Property<DateTime>("DateCreated")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("date_created")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<bool>("IsPublished")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_published");
-
-                    b.Property<DateTime>("LastUpdatedDate")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_updated_date");
-
                     b.Property<int>("LikeCount")
                         .HasColumnType("integer")
                         .HasColumnName("like_count");
-
-                    b.Property<short>("Rating")
-                        .HasColumnType("smallint")
-                        .HasColumnName("rating");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -473,12 +455,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("comment_text");
-
-                    b.Property<DateTime>("DatePosted")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("date_posted")
-                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<long?>("GroupCommentCommentId")
                         .HasColumnType("bigint")
@@ -702,7 +678,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("publish_date");
 
-                    b.Property<short>("Rating")
+                    b.Property<short?>("Rating")
                         .HasColumnType("smallint")
                         .HasColumnName("rating");
 
@@ -3889,9 +3865,27 @@ namespace TheCanalaveLibrary.Server.Migrations
                 {
                     b.HasBaseType("TheCanalaveLibrary.Core.BaseBlogPost");
 
+                    b.Property<DateTime>("DateCreated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_created")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
                     b.Property<int>("GroupId")
                         .HasColumnType("integer")
                         .HasColumnName("group_id");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_published");
+
+                    b.Property<DateTime>("LastUpdatedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_updated_date");
+
+                    b.Property<short>("Rating")
+                        .HasColumnType("smallint")
+                        .HasColumnName("rating");
 
                     b.HasIndex("GroupId")
                         .HasDatabaseName("ix_group_blog_posts_group_id");
@@ -3903,9 +3897,27 @@ namespace TheCanalaveLibrary.Server.Migrations
                 {
                     b.HasBaseType("TheCanalaveLibrary.Core.BaseBlogPost");
 
+                    b.Property<DateTime>("DateCreated")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_created")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
                     b.Property<bool>("HasSpoilers")
                         .HasColumnType("boolean")
                         .HasColumnName("has_spoilers");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_published");
+
+                    b.Property<DateTime>("LastUpdatedDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_updated_date");
+
+                    b.Property<short>("Rating")
+                        .HasColumnType("smallint")
+                        .HasColumnName("rating");
 
                     b.Property<int?>("StoryId")
                         .HasColumnType("integer")
@@ -3925,6 +3937,12 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("blog_post_id");
 
+                    b.Property<DateTime>("DatePosted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_posted")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
                     b.HasIndex("BlogPostId")
                         .HasDatabaseName("ix_blog_post_comments_blog_post_id");
 
@@ -3938,6 +3956,12 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Property<int>("ChapterId")
                         .HasColumnType("integer")
                         .HasColumnName("chapter_id");
+
+                    b.Property<DateTime>("DatePosted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_posted")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<bool>("IsSpoiler")
                         .HasColumnType("boolean")
@@ -3953,6 +3977,12 @@ namespace TheCanalaveLibrary.Server.Migrations
                 {
                     b.HasBaseType("TheCanalaveLibrary.Core.BaseComment");
 
+                    b.Property<DateTime>("DatePosted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_posted")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
                     b.Property<int>("GroupId")
                         .HasColumnType("integer")
                         .HasColumnName("group_id");
@@ -3966,6 +3996,12 @@ namespace TheCanalaveLibrary.Server.Migrations
             modelBuilder.Entity("TheCanalaveLibrary.Core.UserProfileComment", b =>
                 {
                     b.HasBaseType("TheCanalaveLibrary.Core.BaseComment");
+
+                    b.Property<DateTime>("DatePosted")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_posted")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
                     b.Property<int>("ProfileUserId")
                         .HasColumnType("integer")
@@ -4117,7 +4153,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasOne("TheCanalaveLibrary.Core.BlogPostComment", "BlogPostComment")
                         .WithMany()
                         .HasForeignKey("BlogPostCommentCommentId")
-                        .HasConstraintName("fk_base_comments_base_comments_blog_post_comment_comment_id");
+                        .HasConstraintName("fk_base_comments_blog_post_comments_blog_post_comment_comment_");
 
                     b.HasOne("TheCanalaveLibrary.Core.ChapterComment", "ChapterComment")
                         .WithMany()
@@ -5290,7 +5326,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasForeignKey("BlogPostId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_blog_post_comments_base_blog_posts_blog_post_id");
+                        .HasConstraintName("fk_blog_post_comments_blog_posts_blog_post_id");
 
                     b.HasOne("TheCanalaveLibrary.Core.BaseComment", null)
                         .WithOne()

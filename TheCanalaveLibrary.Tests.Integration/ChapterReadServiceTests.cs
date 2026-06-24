@@ -139,6 +139,32 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IntegrationTest
         _ = ch1; _ = ch2; _ = ch3; // suppress unused-variable warnings
     }
 
+    // --- Rating: NULL→story inheritance (Phase 0.5, WU26) ---
+
+    [Fact]
+    public async Task GetChapterForReadingAsync_NullRatedVersion_InheritsStoryRatingAsEffective()
+    {
+        // Seed a T-rated story with a null-rated chapter (inherits T). Reading it as anonymous
+        // (ceiling T): effective = null ?? T = T <= T → visible. DTO.Rating must equal T.
+        int freshStoryId = await SeedStoryAsync(rating: Rating.T);
+        using IServiceScope seedScope = Factory.Services.CreateScope();
+        ApplicationDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        ChapterContent content = new() { SortOrder = 0, ChapterText = "<p>inherit</p>", WordCount = 1, Rating = null, PublishDate = DateTime.UtcNow };
+        Chapter chapter = new() { StoryId = freshStoryId, ChapterNumber = 1, Title = "Ch 1", PrimaryContentId = null, IsPublished = true, VersionCount = 1, ChapterContents = [content] };
+        seedDb.Chapters.Add(chapter);
+        await seedDb.SaveChangesAsync();
+        chapter.PrimaryContentId = content.ChapterContentId;
+        await seedDb.SaveChangesAsync();
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        ChapterReadingDto? dto = await GetForReadingAsync(freshStoryId, chapterNumber: 1);
+
+        dto.Should().NotBeNull("null rating inherits story's T rating and is within anonymous ceiling");
+        dto!.Rating.Should().Be(Rating.T, "effective rating is null ?? T = T");
+    }
+
     // --- Prev/next navigation ---
 
     [Fact]

@@ -19,6 +19,18 @@ public interface ICommentWriteService : ICommentReadService
     Task<long> PostChapterCommentAsync(PostChapterCommentDto dto);
 
     /// <summary>
+    /// Posts a new comment (or reply) on a blog post. Requires an authenticated user. Sanitizes
+    /// <c>dto.CommentText</c> before persisting. If <c>dto.ParentCommentId</c> is set, verifies
+    /// the parent comment belongs to the same blog post. No spoiler flag (spoiler lives on the
+    /// post itself via <see cref="ProfileBlogPost.HasSpoilers"/>).
+    /// </summary>
+    /// <returns>The new <c>BaseComment.CommentId</c>.</returns>
+    /// <exception cref="CommentValidationException">Thrown when text is empty.</exception>
+    /// <exception cref="KeyNotFoundException">Blog post or parent comment not found.</exception>
+    /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
+    Task<long> PostBlogPostCommentAsync(PostBlogPostCommentDto dto);
+
+    /// <summary>
     /// Edits the text of an existing comment. Author-only: throws
     /// <see cref="UnauthorizedAccessException"/> if the caller is not the comment's author.
     /// Re-sanitizes the new text before persisting.

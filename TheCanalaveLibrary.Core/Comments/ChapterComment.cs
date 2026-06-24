@@ -2,6 +2,8 @@ namespace TheCanalaveLibrary.Core;
 
 public partial class ChapterComment : BaseComment
 {
+    public DateTime DatePosted { get; set; }
+
     public int ChapterId { get; set; }
 
     /// <summary>

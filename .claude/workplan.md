@@ -689,19 +689,29 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   **Pointer:** `audit/Stories.md` Feature 5. **Deps:** WU13, WU14, WU24, WU29 (recommendations section),
   WU26 (chapter selection list).
 
-### WU26 — Chapter reading + writing pages *(two-route Pattern 1 split)*
-- **Cells:** 6 L3/L3.5/L4, 7 L3/L3.5/L4, 44 L2/L3/L3.5 (reading-progress MVP: client JS scroll %, direct
-  DB write; `HasStarted` at 90% of Ch.1).
-- **Architecture (settled WU24):** content-editing Pattern 1 — two separate routes:
-  - **Reading page** `/story/{id}/chapter/{cid}` — `RichTextView` + `ChapterNavigation` top+bottom +
-    `CommentSection` + scroll % tracking + reader settings. Public (content-rating filter applies).
+### WU26 — Chapter reading + writing pages — DONE ✓ (2026-06-24)
+*(Pattern 1 split; rating model reconciliation; reading-progress)*
+- **Cells:** 6 L3/L3.5/L4 → Stage 5, 7 L3/L3.5/L4 → Stage 5, 44 L2/L3/L3.5 → Stage 5;
+  Feature 6/7 L1+L2 rating reconciliation (ChapterContent.Rating → nullable, floor + primary invariants).
+- **Architecture (settled WU26):** content-editing Pattern 1 — two separate routes:
+  - **Reading page** `/story/{StoryId:int}/{ChapterNumber:int}[/{VersionOrder:int}]` — `RichTextView` +
+    `ChapterNavigation` top+bottom + `CommentSection` + JS scroll-% tracking + reader settings cascade
+    + `RecommendationHelpfulPrompt` gate. Public (content-rating filter applies).
     Author-only inline `@if` link to chapter edit page.
-  - **Edit/write page** `/story/{id}/chapter/{cid}/edit` + `/story/{id}/chapter/new` — `EditorView` +
-    versioning UI. `[Authorize]` + ownership gate. No comments, no scroll tracking.
-  - The two renderers (`RichTextView` / `EditorView`) never co-exist here because they are on different routes.
-- **Do:** reading page (ChapterNavigation top+bottom, RichTextView, reader settings, rating warning +
-  "skip to next", CommentSection); writing page (EditorView + versioning); inline author link between them.
-  **Tool:** opusplan. **Pointer:** `audit/Chapters.md`. **Deps:** WU5, WU6, WU18, WU20.
+  - **Edit/write page** `/story/{id}/chapter/new` + `/story/{id}/chapter/{ch}/edit[/{versionOrder}/]`
+    — `EditorView` + progressive-disclosure versioning UI. `[Authorize]` + ownership gate.
+  - The two renderers (`RichTextView` / `EditorView`) never co-exist (different routes).
+  - See `cross-cutting.md` "Chapter Versioning — Progressive Disclosure" for the full route table and
+    rating-floor/primary invariants.
+- **Phases:**
+  - Phase 0: doc-touch (route docs, versioning rule, WU29 reconcile).
+  - Phase 0.5: rating model reconciliation (nullable `ChapterContent.Rating`, migration, DTOs, read/write
+    service floor + primary invariants).
+  - Phase 1: Feature 44 `IReadingProgressWriteService` + `MarkStartedAsync` + rec prompt-gate read.
+  - Phase 2: `ChapterReadingPage` dispatcher.
+  - Phase 3: `ChapterEditorPage` + `ChapterPropertiesForm`.
+- **Tool:** Sonnet in Claude Code (plan exists). **Pointer:** `audit/Chapters.md`.
+  **Deps:** WU5, WU6, WU18, WU20, WU29.
 
 ### WU27 — Bookshelves page — DONE ✓ (2026-06-24)
 - **Cells:** 17 L2/L3/L3.5/L4 → Stage 5.
@@ -742,11 +752,33 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   ResultsFilterPanel; UserCard vouches; badges), UserStats real-time counters. **Tool:** opusplan.
   **Pointer:** `audit/Profiles.md`, `audit/Sprites.md` Feature 3. **Deps:** WU10, WU14, WU21, WU23.
 
-### WU31 — Blog posts + Feature contributions
-- **Cells:** 35/36 L2/L3/L3.5/L4, 56 L2/L3/L3.5.
-- **Do:** TPT blog write (EditorView) + display in profile/story/group contexts + comments; admin
-  feature-contribution attribution. **Tool:** opusplan. **Pointer:** `audit/BlogPosts.md`.
-  **Deps:** WU6, WU20.
+### WU31 — Blog posts (profile only; Feature 56 deferred post-MVP) — DONE ✓ (2026-06-24)
+- **Cells:** 35/36 L2/L3/L3.5 → Stage 5. L4 → Stage 1 (visual sign-off pending, same as WU13/WU24).
+  Feature 56 stays Stage 2 (deferred post-MVP).
+- **Completed:** Profile blog-post write + read (`ServerBlogPostReadService` / `ServerBlogPostWriteService`
+  with two-query scalar split to work around EF Core 10 TPT + `IgnoreQueryFilters()` entity-materialization
+  bug), likes, `CommentSection` generalized for blog-post context, `BlogPostPropertiesForm` +
+  `BlogPostEditorPage` + `BlogPostPage` + `BlogPostCard`, content-rating filter on `BaseBlogPost`.
+  `ExecuteDeleteAsync` on TPT base type replaced with raw SQL + CASCADE FK.
+- **Verified:** `dotnet test` 691/691 green — Unit (205), Integration (215 incl. 20 BlogPostWriteServiceTests),
+  RazorComponents (271 incl. 10 BlogPostPropertiesFormTests). L4 visual + server smoke still required.
+- **Pointer:** `audit/BlogPosts.md`. **Deps:** WU6, WU20.
+
+### WU31.5 — TPT denormalization retrofit (BlogPosts + Comments) — DONE ✓ (2026-06-24)
+- **Cells:** F35/F36 L1/L2 + F23–F26 L1/L2 — momentarily reopened, returned to Stage 5 on green tests.
+- **Completed:** (1) Discovery columns (`DateCreated`, `LastUpdatedDate`, `Rating`, `IsPublished`) moved
+  from `BaseBlogPost` → `ProfileBlogPost`/`GroupBlogPost`. `DatePosted` moved from `BaseComment` →
+  `ChapterComment`/`BlogPostComment`/`GroupComment`/`UserProfileComment`. (2) Named query filter
+  removed from `BaseBlogPost`; content-rating ceiling checked via explicit `.Where(p => p.Rating <= max)`
+  projection checks in `ServerBlogPostReadService`. (3) Two-query scalar split + raw-SQL delete
+  removed; `GetByIdAsync`/`GetForEditAsync` now single projection on `ProfileBlogPosts`. Delete now
+  uses change-tracker stub (`writeDb.Remove(new ProfileBlogPost { BlogPostId = id })`). (4) Migration
+  `WU31_5_DenormalizeTptDiscoveryColumns` with manual data-copy SQL (base→child before drop).
+  (5) Spec §4.3 denormalization technique corrected in `layer1-data-model.md`.
+- **Verified:** `dotnet test` 691/691 green — Unit (205), Integration (215), RazorComponents (271).
+  Content-rating projection path covered by existing `GetById_MaturePost_HiddenFromNonMatureViewer`,
+  `GetById_MaturePost_VisibleToMatureViewer`, `GetById_MaturePost_VisibleToAuthorRegardlessOfMatureSetting`.
+- **Pointer:** `audit/BlogPosts.md`, `audit/Comments.md`. **Deps:** WU31.
 
 ### WU32 — Groups
 - **Cells:** 38/39/40 L2/L3/L3.5/L4.

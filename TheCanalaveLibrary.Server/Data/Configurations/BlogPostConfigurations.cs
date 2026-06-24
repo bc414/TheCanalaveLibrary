@@ -8,9 +8,6 @@ public sealed class BaseBlogPostConfiguration : IEntityTypeConfiguration<BaseBlo
 {
     public void Configure(EntityTypeBuilder<BaseBlogPost> builder)
     {
-        builder.Property(e => e.Rating).HasConversion<short>();
-        builder.Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
-
         // --- Diamond-Breaking SetNulls (Already covered by User SetNull) ---
         // Example: FeatureContribution.BlogPostId -> BaseBlogPost
         builder.HasMany(b => b.FeatureContributions)
@@ -19,7 +16,6 @@ public sealed class BaseBlogPostConfiguration : IEntityTypeConfiguration<BaseBlo
             .OnDelete(DeleteBehavior.SetNull); // Breaks diamond
 
         builder.ToTable("base_blog_posts");
-        // Future indexes for querying (e.g., by AuthorId, DateCreated)...
     }
 }
 
@@ -27,8 +23,10 @@ public sealed class ProfileBlogPostConfiguration : IEntityTypeConfiguration<Prof
 {
     public void Configure(EntityTypeBuilder<ProfileBlogPost> builder)
     {
+        builder.Property(e => e.Rating).HasConversion<short>();
+        builder.Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
         builder.ToTable("profile_blog_posts");
-        // Future indexes for querying (e.g., by StoryId)...
     }
 }
 
@@ -36,8 +34,10 @@ public sealed class GroupBlogPostConfiguration : IEntityTypeConfiguration<GroupB
 {
     public void Configure(EntityTypeBuilder<GroupBlogPost> builder)
     {
+        builder.Property(e => e.Rating).HasConversion<short>();
+        builder.Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
         builder.ToTable("group_blog_posts");
-        // Future indexes for querying (e.g., by GroupId)...
     }
 }
 

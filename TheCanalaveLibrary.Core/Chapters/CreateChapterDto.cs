@@ -25,7 +25,8 @@ public class CreateChapterDto
     public string? TopAuthorsNote { get; set; }
     public string? BottomAuthorsNote { get; set; }
 
-    public Rating Rating { get; set; } = Rating.E;
+    /// <summary>Nullable — null means inherit the story's rating (spec §5.2).</summary>
+    public Rating? Rating { get; set; }
 
     [MaxLength(100)]
     public string? VersionName { get; set; }

@@ -28,4 +28,13 @@ public interface IRecommendationReadService
     /// recommendation for. Anonymous → empty. Used by the Hidden Gems bookshelf tab.
     /// </summary>
     Task<IReadOnlyList<int>> GetHiddenGemStoryIdsAsync();
+
+    /// <summary>
+    /// Returns the <c>RecommendationId</c> from the viewer's
+    /// <see cref="UserStoryRecommendationSource"/> for <paramref name="storyId"/> — but only when
+    /// no <see cref="RecommendationSuccess"/> already exists for (viewer, that recommendation).
+    /// Used by the reading page to gate the "found this helpful?" prompt (WU26, spec §5.6).
+    /// Anonymous → null. No source row → null. Success already recorded → null.
+    /// </summary>
+    Task<int?> GetHelpfulPromptRecommendationIdAsync(int storyId);
 }

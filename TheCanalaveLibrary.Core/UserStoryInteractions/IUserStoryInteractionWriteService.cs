@@ -18,4 +18,11 @@ public interface IUserStoryInteractionWriteService : IUserStoryInteractionReadSe
     /// Throws <see cref="InvalidOperationException"/> when the viewer is anonymous.
     /// </summary>
     Task SetUserStoryInteractionStateAsync(int storyId, UserStoryInteractionStateUpdate update);
+
+    /// <summary>
+    /// Idempotent upsert that flips <c>HasStarted = true</c> for the current viewer on
+    /// <paramref name="storyId"/>. Called by the reading page when Ch.1 reaches ≥90% scroll
+    /// (WU26). Never clears other interaction flags. Anonymous viewers are silently ignored.
+    /// </summary>
+    Task MarkStartedAsync(int storyId);
 }

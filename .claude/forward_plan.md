@@ -369,6 +369,16 @@ Guardrails:
   Supersedes the WU2-era `GetInteractionIcon`/sprite-key plan. See
   [layer4-style.md](skills/canalave-conventions/layer4-style.md) §"Interaction Icons Are Inline SVG"
   and [audit/UserStoryInteractions.md](audit/UserStoryInteractions.md) Feature 16.
+- **WU26 chapter routes, versioning UX, and rating model** — resolved (2026-06-24, WU26 planning):
+  Reading routes: `/story/{id}/{ch}` + optional `/{versionOrder}` (no `/chapter/` literal; fixed by
+  spec §5.30.3 + shipped ChapterNavigation). Edit/new: `/story/{id}/chapter/new`,
+  `/story/{id}/chapter/{ch}/edit[/{versionOrder}/]`. Version token = `SortOrder`, not ContentId.
+  Versioning UX: progressive disclosure (plain editor + one "Add alternate version" link until
+  `VersionCount > 1`). Rating: `ChapterContent.Rating → Rating?` (nullable, NULL=inherit); floor
+  invariant (version ≥ story); primary invariant (primary's effective rating = story rating, via NULL).
+  HasStarted blocker resolved: column + property exist from WU15/InitialSchema.
+  See `cross-cutting.md` "Chapter Versioning — Progressive Disclosure" and "Two content-editing patterns."
+
 - **Integration test isolation foundation** — resolved (2026-06-24, post-WU29): **Respawn
   reset between every test.** The integration suite had no reset mechanism; tests shared one
   Postgres container with accumulating state, making absolute-count and absolute-emptiness
@@ -384,6 +394,33 @@ Guardrails:
   `Core/Lookups/ModelEnums.cs` (missing enum mirror). Magic literals replaced with named enums.
   See [canalave-conventions/testing.md](skills/canalave-conventions/testing.md)
   §"Integration tests reset between every test."
+
+- **WU31.5 TPT denormalization + blog-post content-rating refactor** — resolved (2026-06-24,
+  WU31.5 planning): (1) Spec §4.3 line 839's "configure on derived to override base-table mapping"
+  technique does not work in EF Core 10 — a property on the base type always maps to the base table.
+  Correct technique: declare the property on each derived class, remove from base. (2) Blog posts:
+  `DateCreated`, `LastUpdatedDate`, `Rating`, `IsPublished` moved base→child; comments: `DatePosted`
+  moved base→child. Child-only, no duplication. (3) Named query filter removed from `BaseBlogPost`;
+  content rating enforced via explicit `.Where(p => p.Rating <= max)` projection checks (TPT +
+  named-filter generates broken EF Core 10 SQL on derived entity materialization). (4) Change-tracker
+  stub delete replaces raw-SQL workaround (`ExecuteDeleteAsync` unsupported on TPT base-type DbSets).
+  See `layer1-data-model.md` §"Denormalization with TPT", `cross-cutting.md` §"Content Rating
+  Filtering", `audit/BlogPosts.md` §Feature 35, `audit/Comments.md`.
+
+- **WU31 Blog Post settled decisions** — resolved (2026-06-24, WU31 planning):
+  (1) **Feature 56 (admin feature-contribution attribution) deferred post-MVP** — not in WU31;
+  stays Stage 2 in `audit/BlogPosts.md`; `FeatureContribution` entity/FKs/DbSet unchanged.
+  (2) **Content-editing Pattern 1 for blog posts:** `/blog/new` + `/blog/{id}/edit` (form/auth),
+  `/blog/{id}/{*slug}` (read-only view) — overrides spec §5 line ~1585 "in-place editing" because
+  a blog post is a multi-field form, not lightweight embedded content. See `cross-cutting.md`
+  "Two content-editing patterns."
+  (3) **Profile blog posts only in WU31;** `GroupBlogPost` UI → WU32 (Groups).
+  (4) **Optional story-link picker** via `IStoryReadService.GetStoryIdsByAuthorAsync(int authorId)`
+  (`IgnoreQueryFilters` — author always sees own mature stories). Method confirmed present
+  (parallel session delivered it; [IStoryReadService.cs:55](TheCanalaveLibrary.Core/Stories/IStoryReadService.cs)).
+  (5) **Content-rating filter extended to `BaseBlogPost`** (same "no trace" rule as Story, WU12).
+  (6) `{*slug}` URL segment is cosmetic — no `Slug` column on `BaseBlogPost`; `BlogPostId` (int) is
+  the sole key. See `audit/BlogPosts.md` Features 35/36/56.
 
 - **Test strategy** — resolved (2026-06-22, post-WU12 post-mortem): the project had zero automated
   tests; WU12's create-path bugs were caught only by manual reading of `/dev/wu12/*` probe output,

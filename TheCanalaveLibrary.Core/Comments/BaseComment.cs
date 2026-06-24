@@ -14,9 +14,6 @@ public partial class BaseComment
     [Required]
     public string CommentText { get; set; } = null!;
 
-    [Required]
-    public DateTime DatePosted { get; set; }
-
     public int LikeCount { get; set; }
 
     public int ActiveReportCount { get; set; }

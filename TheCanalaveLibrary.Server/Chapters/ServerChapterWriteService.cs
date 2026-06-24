@@ -12,7 +12,14 @@ public class ServerChapterWriteService(
 {
     public async Task<int> CreateChapterAsync(CreateChapterDto dto)
     {
-        List<string> errors = dto.CanSave();
+        // Load story rating for invariant checks before validation.
+        Rating? storyRating = await writeDb.Stories
+            .Where(s => s.StoryId == dto.StoryId)
+            .Select(s => (Rating?)s.Rating)
+            .FirstOrDefaultAsync();
+
+        // First version is always the primary — enforce both floor and primary invariants.
+        List<string> errors = dto.CanSave(storyRating, isPrimary: true);
         if (errors.Count > 0) throw new ChapterValidationException(errors);
 
         // Sanitize all user HTML before persisting (layer2-services.md §"User HTML Is Sanitized
@@ -82,7 +89,13 @@ public class ServerChapterWriteService(
 
     public async Task<long> AddAlternateVersionAsync(int chapterId, CreateChapterDto dto)
     {
-        List<string> errors = dto.CanSave();
+        // Load story rating for floor invariant (alternate versions are not primary — no primary invariant).
+        Rating? storyRating = await writeDb.Chapters
+            .Where(c => c.ChapterId == chapterId)
+            .Select(c => (Rating?)c.Story.Rating)
+            .FirstOrDefaultAsync();
+
+        List<string> errors = dto.CanSave(storyRating, isPrimary: false);
         if (errors.Count > 0) throw new ChapterValidationException(errors);
 
         string sanitizedText    = sanitizer.Sanitize(dto.ChapterText);
@@ -124,14 +137,17 @@ public class ServerChapterWriteService(
 
     public async Task UpdateChapterContentAsync(UpdateChapterContentDto dto)
     {
-        List<string> errors = dto.CanSave();
-        if (errors.Count > 0) throw new ChapterValidationException(errors);
-
         ChapterContent? content = await writeDb.ChapterContents
             .Include(cc => cc.Chapter)
+                .ThenInclude(c => c.Story)
             .FirstOrDefaultAsync(cc => cc.ChapterContentId == dto.ChapterContentId);
         if (content is null)
             throw new KeyNotFoundException($"ChapterContent {dto.ChapterContentId} not found.");
+
+        bool isPrimary = content.ChapterContentId == content.Chapter.PrimaryContentId;
+        Rating storyRating = content.Chapter.Story.Rating;
+        List<string> errors = dto.CanSave(storyRating, isPrimary);
+        if (errors.Count > 0) throw new ChapterValidationException(errors);
 
         string sanitizedText    = sanitizer.Sanitize(dto.ChapterText);
         string? sanitizedTop    = string.IsNullOrWhiteSpace(dto.TopAuthorsNote)    ? null : sanitizer.Sanitize(dto.TopAuthorsNote);
@@ -157,14 +173,22 @@ public class ServerChapterWriteService(
     public async Task SetPrimaryVersionAsync(int chapterId, long chapterContentId)
     {
         Chapter? chapter = await writeDb.Chapters
+            .Include(c => c.Story)
             .FirstOrDefaultAsync(c => c.ChapterId == chapterId);
         if (chapter is null) throw new KeyNotFoundException($"Chapter {chapterId} not found.");
 
-        bool contentExists = await writeDb.ChapterContents
-            .AnyAsync(cc => cc.ChapterContentId == chapterContentId && cc.ChapterId == chapterId);
-        if (!contentExists)
+        ChapterContent? targetContent = await writeDb.ChapterContents
+            .FirstOrDefaultAsync(cc => cc.ChapterContentId == chapterContentId && cc.ChapterId == chapterId);
+        if (targetContent is null)
             throw new KeyNotFoundException(
                 $"ChapterContent {chapterContentId} does not belong to chapter {chapterId}.");
+
+        // Primary invariant: effective rating of the new primary must equal story rating.
+        Rating storyRating = chapter.Story.Rating;
+        Rating effectiveRating = targetContent.Rating ?? storyRating;
+        if (effectiveRating != storyRating)
+            throw new ChapterValidationException(
+                [$"To make this the default version, the story must be rated {effectiveRating} first, or change the version's rating to inherit/match the story's rating ({storyRating})."]);
 
         chapter.PrimaryContentId = chapterContentId;
         await writeDb.SaveChangesAsync();

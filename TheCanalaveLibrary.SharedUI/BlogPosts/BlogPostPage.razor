@@ -1,0 +1,182 @@
+@page "/blog/{BlogPostId:int}/{*Slug}"
+@namespace TheCanalaveLibrary.SharedUI
+@inject IBlogPostWriteService BlogPostService
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Read-only blog-post view page. Slug is cosmetic — only BlogPostId (int) is the key.
+   Pattern 1: separate view and edit pages (cross-cutting.md "Two content-editing patterns").
+   Injects IBlogPostWriteService (which : IBlogPostReadService) so the authenticated like-toggle
+   can call ToggleLikeAsync. Author-only affordances (Edit link) are controlled by @if (isAuthor);
+   the server gate is the real authority (layer3.5-structure.md §"Author-Conditional Rendering").
+   Anonymous visitors can view published posts — no @attribute [Authorize] here. *@
+
+@if (_isLoading)
+{
+    <p class="text-[--color-text-muted]"><em>Loading…</em></p>
+}
+else if (_notFound || _post is null)
+{
+    <p class="text-[--color-danger]">Post not found.</p>
+}
+else
+{
+    bool isAuthor = _currentUserId.HasValue && _currentUserId == _post.AuthorId;
+
+    <article class="mx-auto max-w-2xl px-4 py-8 flex flex-col gap-6">
+
+        @* ── Title ─────────────────────────────────────────────────────────── *@
+        <h1 class="text-3xl font-bold text-[--color-text]">@_post.Title</h1>
+
+        @* ── Meta row ──────────────────────────────────────────────────────── *@
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[--color-text-muted]">
+            @if (_post.AuthorDisplayName is not null)
+            {
+                <a href="/profile/@_post.AuthorId"
+                   class="text-[--color-primary] hover:underline">@_post.AuthorDisplayName</a>
+                <span>·</span>
+            }
+            <span>@_post.DateCreated.ToString("MMMM d, yyyy")</span>
+            <span>·</span>
+            <span>@_post.Rating</span>
+            @if (_post.HasSpoilers)
+            {
+                <span>·</span>
+                <span class="font-medium text-[--color-warning]">⚠ Spoilers</span>
+            }
+            @if (!_post.IsPublished && isAuthor)
+            {
+                <span>·</span>
+                <span class="rounded bg-[--color-surface] px-1.5 py-0.5 text-xs font-medium text-[--color-text-muted] ring-1 ring-[--color-border]">Draft</span>
+            }
+        </div>
+
+        @* ── Linked story ──────────────────────────────────────────────────── *@
+        @if (_post.LinkedStoryTitle is not null && _post.StoryId.HasValue)
+        {
+            <div class="text-sm text-[--color-text-muted]">
+                About:
+                <a href="/story/@_post.StoryId"
+                   class="text-[--color-primary] hover:underline">@_post.LinkedStoryTitle</a>
+            </div>
+        }
+
+        @* ── Content ───────────────────────────────────────────────────────── *@
+        <div class="prose prose-sm max-w-none text-[--color-text]">
+            <RichTextView HtmlContent="@_post.Content" />
+        </div>
+
+        @* ── Like button + author Edit link ─────────────────────────────────── *@
+        <div class="flex items-center gap-4">
+            @if (_currentUserId is not null)
+            {
+                <button type="button"
+                        disabled="@_likeBusy"
+                        @onclick="HandleLikeAsync"
+                        class="flex items-center gap-1.5 text-sm transition-colors disabled:opacity-50 @(_isLiked ? "text-[--color-primary]" : "text-[--color-text-muted] hover:text-[--color-primary]")">
+                    @(_isLiked ? "♥" : "♡") @_likeCount
+                </button>
+            }
+            else
+            {
+                <span class="text-sm text-[--color-text-muted]">♡ @_likeCount</span>
+            }
+
+            @if (isAuthor)
+            {
+                <a href="/blog/@_post.BlogPostId/edit"
+                   class="text-sm text-[--color-primary] hover:underline">Edit</a>
+            }
+        </div>
+
+        @if (_likeError is not null)
+        {
+            <p class="text-sm text-[--color-danger]">@_likeError</p>
+        }
+
+    </article>
+
+    @* ── Comments ─────────────────────────────────────────────────────────────── *@
+    <div class="mx-auto max-w-2xl px-4 pb-8">
+        <CommentSection BlogPostId="@((int?)BlogPostId)"
+                        CurrentUserId="@_currentUserId" />
+    </div>
+}
+
+@code {
+    [Parameter] public int BlogPostId { get; set; }
+
+    /// <summary>Cosmetic catch-all — ignored on load; only BlogPostId is the key.</summary>
+    [Parameter] public string? Slug { get; set; }
+
+    /// <summary>Provided by the router/layout auth cascade. Null on anonymous render.</summary>
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private BlogPostDto? _post;
+    private bool _isLoading = true;
+    private bool _notFound;
+
+    // Current viewer (null = anonymous).
+    private int? _currentUserId;
+
+    // Like state — initialised from _post, then updated optimistically.
+    private int _likeCount;
+    private bool _isLiked;
+    private bool _likeBusy;
+    private string? _likeError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Resolve current user first — GetByIdAsync uses it for IsLikedByCurrentUser.
+        if (AuthState is not null)
+        {
+            AuthenticationState state = await AuthState;
+            string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            _currentUserId = int.TryParse(idStr, out int parsedId) ? parsedId : null;
+        }
+
+        _post = await BlogPostService.GetByIdAsync(BlogPostId);
+        if (_post is null)
+        {
+            _notFound = true;
+        }
+        else
+        {
+            _likeCount = _post.LikeCount;
+            _isLiked   = _post.IsLikedByCurrentUser;
+        }
+        _isLoading = false;
+    }
+
+    private async Task HandleLikeAsync()
+    {
+        if (_likeBusy || _currentUserId is null) return;
+
+        // Optimistic update.
+        bool newLiked = !_isLiked;
+        _isLiked   = newLiked;
+        _likeCount = newLiked ? _likeCount + 1 : Math.Max(0, _likeCount - 1);
+        _likeError = null;
+        _likeBusy  = true;
+        StateHasChanged();
+
+        try
+        {
+            BlogPostLikeResultDto result = await BlogPostService.ToggleLikeAsync(BlogPostId);
+            _likeCount = result.LikeCount;
+            _isLiked   = result.IsLiked;
+        }
+        catch (Exception ex)
+        {
+            // Rollback optimistic update.
+            _isLiked   = !newLiked;
+            _likeCount = newLiked ? Math.Max(0, _likeCount - 1) : _likeCount + 1;
+            _likeError = ex.Message;
+        }
+        finally
+        {
+            _likeBusy = false;
+            StateHasChanged();
+        }
+    }
+}

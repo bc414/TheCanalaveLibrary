@@ -56,10 +56,15 @@ the NOT NULL guarantee is the point of choosing TPT.
 **ChapterComment additional column:** `IsSpoiler` (bool, default false). Spoilers are a
 chapter-discussion concept — NOT on `BaseComment`.
 
-**Denormalization with TPT:** `DatePosted` is duplicated from base into each child table to enable
-composite "golden indexes" like `(chapter_id, date_posted DESC)` on the small child table.
-EF Core config: define the property on the base C# model, then provide explicit Fluent API on
-**each derived entity** to override the default base-table mapping.
+**Denormalization with TPT:** To land a sort/filter column on a TPT child table (enabling golden
+indexes like `(chapter_id, date_posted DESC)` on `chapter_comments`), declare the property on
+**each derived class** — not the base. A property declared on the base C# type always maps to the
+base table in EF Core 10; a `builder.Property()` call on a derived entity for an *inherited*
+property only sets facets (default value, conversion) — it does not relocate the column.
+This corrects spec §4.3 line 839, which describes a "configure on derived to override base-table
+mapping" technique that does not work in EF Core 10. The implemented pattern: remove the property
+from the base class, declare it independently on each derived class, and provide Fluent config
+(e.g. `.HasDefaultValueSql("CURRENT_TIMESTAMP")`) in each derived entity's config class.
 
 ## Enum / Lookup Table Decision Framework
 

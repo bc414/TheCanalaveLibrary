@@ -84,6 +84,8 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
 
     //Blogs
     public DbSet<BaseBlogPost> BlogPosts { get; set; }
+    public DbSet<ProfileBlogPost> ProfileBlogPosts { get; set; }
+    public DbSet<GroupBlogPost> GroupBlogPosts { get; set; }
 
     //Advanced Search
     public DbSet<SearchMode> SearchModes { get; set; } //discovery surfaces (SearchPage, TreeSearch, etc.)
@@ -109,6 +111,7 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     //Comments
     public DbSet<BaseComment> BaseComments { get; set; }
     public DbSet<ChapterComment> ChapterComments { get; set; }
+    public DbSet<BlogPostComment> BlogPostComments { get; set; }
 
     //Polls
     public DbSet<BasePoll> Polls { get; set; }
@@ -182,5 +185,6 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
         // escape hatch used by mod/author/admin paths that must see every rating.
         modelBuilder.Entity<Story>().HasQueryFilter("ContentRating",
             s => s.Rating <= (_activeUser.ShowMatureContent ? Rating.M : Rating.T));
+
     }
 }

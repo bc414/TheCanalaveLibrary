@@ -1,0 +1,52 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Leaf component — displays a single blog-post listing in the profile feed.
+   No @inject. Data comes from BlogPostListingDto (title, snippet, date, rating, spoilers).
+   Navigates to the full blog-post view page on click.
+   WU30 (Profile page) embeds this in its blog-posts tab. *@
+
+<a href="/blog/@Post.BlogPostId/@SlugFromTitle(Post.Title)"
+   class="block rounded-lg border border-[--color-border] bg-[--color-surface] p-4 transition-shadow hover:shadow-sm">
+    <div class="flex flex-col gap-1.5">
+
+        @* ── Title ─────────────────────────────────────────────────────────── *@
+        <h3 class="font-semibold text-[--color-text] leading-snug">@Post.Title</h3>
+
+        @* ── Meta chips (rating + spoilers) ─────────────────────────────────── *@
+        <div class="flex flex-wrap items-center gap-2 text-xs text-[--color-text-muted]">
+            <span>@Post.Rating</span>
+            @if (Post.HasSpoilers)
+            {
+                <span class="font-medium text-[--color-warning]">⚠ Spoilers</span>
+            }
+            <span>@Post.DateCreated.ToString("MMM d, yyyy")</span>
+        </div>
+
+        @* ── Content snippet ─────────────────────────────────────────────────── *@
+        @if (!string.IsNullOrEmpty(Post.ContentSnippet))
+        {
+            <p class="text-sm text-[--color-text-muted] leading-relaxed line-clamp-3">@Post.ContentSnippet</p>
+        }
+
+    </div>
+</a>
+
+@code {
+    [Parameter, EditorRequired] public BlogPostListingDto Post { get; set; } = null!;
+
+    /// <summary>
+    /// Generates a URL-safe slug from the post title for cosmetic routing — the server ignores
+    /// it and uses <see cref="BlogPostListingDto.BlogPostId"/> only. Mirrors the slug generation
+    /// convention for StoryPage (also cosmetic).
+    /// </summary>
+    private static string SlugFromTitle(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return string.Empty;
+        // Lowercase, collapse non-alphanum runs to a hyphen, trim leading/trailing hyphens.
+        return System.Text.RegularExpressions.Regex.Replace(
+                   title.ToLowerInvariant().Replace('\'', '-'),
+                   @"[^a-z0-9]+", "-")
+               .Trim('-');
+    }
+}

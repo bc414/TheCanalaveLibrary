@@ -83,6 +83,23 @@ public class ServerUserStoryInteractionWriteService(
         update.IsFavorite || update.IsHiddenFavorite || update.IsFollowed
         || update.IsCompleted || update.IsReadItLater || update.IsIgnored;
 
+    public async Task MarkStartedAsync(int storyId)
+    {
+        if (CurrentUserId is not int userId) return;  // anonymous: no-op
+
+        UserStoryInteraction? row = await writeDb.UserStoryInteractions
+            .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
+
+        if (row is null)
+        {
+            row = new UserStoryInteraction { UserId = userId, StoryId = storyId };
+            writeDb.UserStoryInteractions.Add(row);
+        }
+
+        row.HasStarted = true;
+        await writeDb.SaveChangesAsync();
+    }
+
     private static void ValidateCombination(UserStoryInteractionStateUpdate update)
     {
         // Per spec §4: all 8 (HasStarted × IsCompleted × IsIgnored) combos are valid —

@@ -539,6 +539,7 @@ component owns that behavior, not get bolted onto the display bag.
 | `PaginationControls` | Leaf | Comments, Discovery, StoryDeck |
 | `UserCard` | Leaf | Following (vouch display), Profiles, Groups, Comments, Recommendations, Messaging, Users search, Tree search nodes |
 | `ConfirmDialog` | Container composite | Spoiler reveal, account deletion, leaving group, deleting list, unpublishing story |
+| `CommentSection` | Coordination composite | Chapter reading pages (WU20), Blog post view pages (WU31) — see "CommentSection — Multi-Context Dispatch" |
 
 ## StoryCard and StoryDeck
 
@@ -592,6 +593,29 @@ shells prove identical to one of the above, extract then — not now.
 **Pull-on-submit** is the correct interaction across all shells: hold an `@ref` to the nested
 `EditorView` and call `await _editor.GetHtmlAsync()` in the submit handler. Never bind two-way.
 The owning composite (never the shell leaf) sanitizes and persists.
+
+## CommentSection — Multi-Context Dispatch (WU31)
+
+`CommentSection` (SharedUI/Comments/) is a coordination composite that dispatches to either a chapter
+or a blog-post comment thread. Exactly one of `ChapterId` and `BlogPostId` must be set — validated via
+a guard in `OnInitializedAsync` (compile-time enforcement is impractical for optional int parameters).
+A small private `CommentTarget` union (enum or discriminated record) encapsulates "which target" so
+that `LoadAsync`, post, and edit calls dispatch cleanly without per-call `if/else` chains.
+
+```csharp
+// CommentSection @code — target dispatch
+private enum CommentTarget { Chapter, BlogPost }
+
+private CommentTarget Target =>
+    BlogPostId.HasValue ? CommentTarget.BlogPost : CommentTarget.Chapter;
+```
+
+**Backward compatibility:** existing WU20 chapter-context call sites pass only `ChapterId` — no
+change required. `UserHasCompletedStory` and the spoiler toggle remain chapter-only parameters;
+they are ignored (have no effect) when `Target == BlogPost`.
+
+**Service dispatch:** `ICommentReadService.GetBlogPostCommentsAsync` / `ICommentWriteService.PostBlogPostCommentAsync`
+are the blog-post analogues of the chapter methods, added in WU31.
 
 ## Filter-Axis Component Pattern
 

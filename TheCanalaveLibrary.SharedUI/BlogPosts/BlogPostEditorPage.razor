@@ -1,0 +1,184 @@
+@page "/blog/new"
+@page "/blog/{BlogPostId:int}/edit"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@inject IBlogPostWriteService BlogPostService
+@inject IStoryReadService StoryService
+@inject NavigationManager NavigationManager
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Blog-post create/edit page — Pattern 1 edit side (cross-cutting.md "Two content-editing patterns").
+   View side is BlogPostPage. This page owns routing, auth, data-load, and DTO-mapping.
+   BlogPostPropertiesForm is a presentational child (no inject, bUnit-testable). *@
+
+<PageTitle>@(BlogPostId.HasValue ? "Edit Post" : "New Post")</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        @if (_isLoading)
+        {
+            <p class="text-[--color-text-muted]"><em>Loading…</em></p>
+        }
+        else if (_forbidden)
+        {
+            <p class="text-[--color-danger]">You don't have permission to edit this post.</p>
+        }
+        else
+        {
+            <div class="mx-auto max-w-2xl px-4 py-8">
+                <h1 class="mb-6 text-2xl font-bold text-[--color-text]">
+                    @(BlogPostId.HasValue ? "Edit Post" : "New Post")
+                </h1>
+
+                <BlogPostPropertiesForm @ref="_form"
+                                        ViewModel="_viewModel"
+                                        AuthorStories="_authorStories"
+                                        SubmitLabel="@(BlogPostId.HasValue ? "Save Changes" : "Create Post")"
+                                        OnValidSubmit="HandleValidSubmit" />
+            </div>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <p class="text-[--color-danger]">You must be signed in to write a blog post.</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public int? BlogPostId { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private BlogPostPropertiesForm? _form;
+    private BlogPostPropertiesViewModel _viewModel = new();
+
+    /// <summary>Null suppresses the story-link picker (should not happen once loaded — author always gets at least an empty list).</summary>
+    private IReadOnlyList<(int Id, string Title)>? _authorStories;
+
+    private bool _isLoading = true;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Resolve the current user's numeric id so we can load their stories for the picker.
+        int? currentUserId = await ResolveCurrentUserIdAsync();
+
+        if (currentUserId is null)
+        {
+            _isLoading = false;
+            return;
+        }
+
+        // Populate the story picker in parallel with loading the edit data.
+        Task<IReadOnlyList<(int Id, string Title)>> storiesTask = LoadAuthorStoriesAsync(currentUserId.Value);
+
+        if (BlogPostId.HasValue)
+        {
+            BlogPostEditDto? editData = await BlogPostService.GetForEditAsync(BlogPostId.Value);
+
+            if (editData is null)
+            {
+                NavigationManager.NavigateTo("/not-found");
+                return;
+            }
+
+            // UX-level owner pre-check (the real gate is in ServerBlogPostWriteService).
+            if (editData.AuthorId.HasValue && editData.AuthorId != currentUserId)
+            {
+                _forbidden = true;
+                _isLoading = false;
+                return;
+            }
+
+            PopulateViewModelFromEdit(editData);
+        }
+
+        _authorStories = await storiesTask;
+        _isLoading = false;
+    }
+
+    private async Task<IReadOnlyList<(int Id, string Title)>> LoadAuthorStoriesAsync(int authorId)
+    {
+        IReadOnlyList<int> storyIds = await StoryService.GetStoryIdsByAuthorAsync(authorId);
+        if (storyIds.Count == 0) return [];
+
+        StoryListingDto[] listings = await StoryService.GetListingsByIdsAsync(storyIds);
+        return listings.Select(l => (l.StoryId, l.Title)).ToArray();
+    }
+
+    private void PopulateViewModelFromEdit(BlogPostEditDto dto)
+    {
+        _viewModel.Title        = dto.Title;
+        _viewModel.Content      = dto.Content;
+        _viewModel.Rating       = dto.Rating;
+        _viewModel.HasSpoilers  = dto.HasSpoilers;
+        _viewModel.StoryId      = dto.StoryId;
+        _viewModel.IsPublished  = dto.IsPublished;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        _viewModel.IsLoading = true;
+        _viewModel.ServerValidationErrors.Clear();
+
+        try
+        {
+            // Pull content from the EditorView (pull-on-submit — layer3-logic.md §"EditorView Pull-on-Submit").
+            string content = _form is not null ? await _form.GetContentAsync() : string.Empty;
+            _viewModel.Content = content;
+
+            if (BlogPostId.HasValue)
+            {
+                await BlogPostService.UpdateBlogPostAsync(new UpdateBlogPostDto
+                {
+                    BlogPostId  = BlogPostId.Value,
+                    Title       = _viewModel.Title,
+                    Content     = _viewModel.Content,
+                    Rating      = _viewModel.Rating,
+                    HasSpoilers = _viewModel.HasSpoilers,
+                    StoryId     = _viewModel.StoryId,
+                    IsPublished = _viewModel.IsPublished
+                });
+                NavigationManager.NavigateTo($"/blog/{BlogPostId.Value}/edit");
+            }
+            else
+            {
+                int newId = await BlogPostService.CreateProfileBlogPostAsync(new CreateProfileBlogPostDto
+                {
+                    Title       = _viewModel.Title,
+                    Content     = _viewModel.Content,
+                    Rating      = _viewModel.Rating,
+                    HasSpoilers = _viewModel.HasSpoilers,
+                    StoryId     = _viewModel.StoryId
+                });
+                // Navigate to the view page after creation; slug is cosmetic (derived from title at link time).
+                NavigationManager.NavigateTo($"/blog/{newId}");
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _forbidden = true;
+        }
+        catch (BlogPostValidationException ex)
+        {
+            _viewModel.ServerValidationErrors.AddRange(ex.Errors);
+        }
+        catch (Exception)
+        {
+            _viewModel.ServerValidationErrors.Add("An unexpected error occurred. Please try again.");
+        }
+        finally
+        {
+            _viewModel.IsLoading = false;
+        }
+    }
+
+    private async Task<int?> ResolveCurrentUserIdAsync()
+    {
+        if (AuthState is null) return null;
+        AuthenticationState state = await AuthState;
+        string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        return int.TryParse(idStr, out int id) ? id : null;
+    }
+}

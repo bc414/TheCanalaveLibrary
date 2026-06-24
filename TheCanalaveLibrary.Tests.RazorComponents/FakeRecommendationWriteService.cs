@@ -32,6 +32,11 @@ public class FakeRecommendationWriteService : IRecommendationWriteService
     public Task<IReadOnlyList<int>> GetHiddenGemStoryIdsAsync() =>
         Task.FromResult<IReadOnlyList<int>>([]);
 
+    private int? _helpfulPromptRecId;
+    public void SetHelpfulPromptRecommendationId(int? recId) => _helpfulPromptRecId = recId;
+    public Task<int?> GetHelpfulPromptRecommendationIdAsync(int storyId) =>
+        Task.FromResult(_helpfulPromptRecId);
+
     // ── Write tracking ────────────────────────────────────────────────────────────
 
     public List<RecommendationSubmitDto> SubmitCalls { get; } = [];

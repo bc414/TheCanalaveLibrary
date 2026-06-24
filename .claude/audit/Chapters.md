@@ -21,6 +21,35 @@ of both `EditorView`'s output and the sanitizer.
 ---
 
 ## Feature 6 — Chapter Writing & Versioning
+
+**WU26 Phase 0.5 Stage note (2026-06-24) — Rating model reconciliation, DONE ✓.**
+`ChapterContent.Rating` was non-nullable (`Rating`, default E), diverging from spec §5.2 which
+specifies nullable (NULL = inherit story rating). Reconciled as part of WU26 Phase 0.5, before any
+editor UI was built:
+
+- **L1:** `ChapterContent.Rating` changed to `Rating?` (nullable). EF config `HasConversion<short?>()`.
+  Migration `20260624123232_MakeChapterContentRatingNullable` (alters `chapter_contents.rating` from
+  `smallint NOT NULL` to `smallint NULL`; existing rows keep their explicit values).
+- **L2 (write):** `CreateChapterDto.Rating` and `UpdateChapterContentDto.Rating` changed to `Rating?`
+  (null = inherit). `ChapterValidations.CanSave` extended with `storyRating`/`isPrimary` parameters:
+  floor invariant (explicit override must be ≥ story rating) and primary invariant (effective rating
+  of the primary version must equal story rating, naturally satisfied by null/inherit). Both invariants
+  enforced by `ServerChapterWriteService`: `CreateChapterAsync` and `AddAlternateVersionAsync` load
+  story rating before calling `CanSave`; `SetPrimaryVersionAsync` enforces primary invariant inline.
+  `UpdateChapterContentAsync` loads story rating and `IsPrimary` flag before calling `CanSave`.
+- **L2 (read):** `ServerChapterReadService` rating ceiling changed from `cc.Rating <= ceiling` to
+  `(cc.Rating ?? cc.Chapter.Story.Rating) <= ceiling` (EF COALESCE) in all three query methods.
+  Projection: `ChapterReadingDto.Rating` = effective (`cc.Rating ?? storyRating`). `ChapterVersionDto.Rating`
+  = raw nullable (null = inherit; consumers compute effective as `rating ?? storyRating`).
+  `ChapterReadingDto.RawRating` added (populated only by `GetChapterForEditAsync`, for the edit form's
+  "Same as story (inherit)" vs explicit-override display; null on reading-page loads).
+
+Verified: `dotnet build` green (8 projects). `dotnet test` green — 195 Unit + 261 RazorComponents +
+195 Integration = 651 total. Test tier: **Integration** (5 new tests in `ChapterWriteServiceTests` —
+null rating as primary, floor rejection, primary invariant rejection on create + promote; 1 new test in
+`ChapterReadServiceTests` — null-rated version reads as effective story rating). `SeedStoryAsync` in
+`IntegrationTestBase` extended with optional `rating` parameter.
+
 - **L1 — Stage 5.** `Chapter`/`ChapterContent` with the live-alternate versioning model. Note:
   `Chapter.PrimaryContentId` was changed from `long` to `long?` (nullable) during WU17 to break the
   circular FK insert dependency (`Chapter.PrimaryContentId → ChapterContent.ChapterId → Chapter`);
@@ -42,15 +71,13 @@ of both `EditorView`'s output and the sanitizer.
   count, versioning, promotion, update, Story.WordCount roll-up, validation). Mutation-sanity confirmed:
   adding `"script"` to the sanitizer allow-list → `SanitizesScriptTag` fails; reverted. Server boot:
   homepage/login `200`, DI resolves both services.
-- **L3-Logic — Stage 5 (WU6, see Stage note below).** `EditorView`'s coordination logic (preview
-  capture/popup state, `GetHtmlAsync()` pull-on-submit contract) — Phase-1 atom shared with
-  BlogPosts/Messaging/Recommendations/Comments/Profiles. Version indicators (live-alternate switcher
-  UI) remain unbuilt — that's `ChapterPage`/`ChapterNavigation` (WU18/WU26), not this atom.
-- **L3.5-Structure — Stage 5 (WU6, see Stage note below).** `EditorView` (third-party wrapper
-  composite) built. `RichTextView` leaf was WU5.
-- **L4-Style — Stage 5 (WU6, see Stage note below).** Toolbar + preview-popup visual treatment built
-  and visually confirmed (tokens locked Phase C; the global blocker is cleared — the earlier "Stage 1,
-  blocked on tokens" note was stale, same correction as Feature 7's L4).
+- **L3-Logic — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5).** `ChapterEditorPage`
+  dispatcher with progressive versioning disclosure, publish toggle, author gate, "Set as default" promote,
+  "Add alternate version" action. `ChapterEditorViewModel` shields form from DTO fields. See WU26 Phase 1–3 Stage note.
+- **L3.5-Structure — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom also Stage 5).** `ChapterPropertiesForm`
+  (three `EditorView` instances — top note, chapter text, bottom note), version switcher composite (progressive),
+  per-version controls. `ChapterEditorPage` orchestrates all.
+- **L4-Style — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5).**
 - **L5 — Stage 2. L6 — Stage 2.**
 
 **WU6 Stage note (2026-06-21) — `EditorView` composite + sanitizer allow-list, DONE ✓.** Built
@@ -116,13 +143,12 @@ the build, superseding the original spec/skill sketch:
   `SelectMany` transparent identifier. Verified: `dotnet test` 50/50 green (Integration tier:
   `ChapterReadServiceTests` — 8 tests covering primary-version projection, null-for-nonexistent,
   per-version rating ceiling anonymous/mature, TOC ordering, prev/next navigation).
-- **L3-Logic — Stage 2.** Reader settings application (font/size/line-height/width/justify, auto-load
-  next, §7) and `AutoLoadNextChapter` unbuilt. Content-rating warning ("Skip to next chapter" when chapter
-  rating exceeds story rating) unbuilt.
-- **L3.5-Structure — Stage 5 (WU18 nav slice, DONE ✓ 2026-06-23; WU5 leaf slice already Stage 5).**
-  See WU18 Stage note below. `ChapterPage` dispatcher (two `@page` directives — primary + versioned URL)
-  and `CommentSection` on chapter remain unbuilt — WU26.
-- **L4-Style — Stage 5 (WU18 nav slice, DONE ✓ 2026-06-23; see WU18 Stage note below).**
+- **L3-Logic — Stage 5 (WU26, DONE ✓ 2026-06-24).** `ChapterReadingPage` dispatcher built with content-rating
+  handling, scroll-progress JS interop, attribution capture, helpful-prompt gate. Reader settings cascade
+  provider deferred to WU30 (`RichTextView` falls back to defaults). `AutoLoadNextChapter` is post-MVP.
+- **L3.5-Structure — Stage 5 (WU26 page slice, DONE ✓ 2026-06-24; WU18 nav slice and WU5 leaf also Stage 5).**
+  `ChapterReadingPage` + `ChapterNavigation` top+bottom + `CommentSection` wired. See WU26 Phase 1–3 Stage note.
+- **L4-Style — Stage 5 (WU26/WU18/WU5, DONE ✓ 2026-06-24; see Stage notes).**
 - **L5 — Stage 2. L6 — Stage 2.**
 
 **WU5 Stage note (2026-06-21) — `RichTextView` leaf slice, DONE ✓.** Built the universal read-only
@@ -198,15 +224,121 @@ version URL contract. `layer4-style.md` Pattern Accumulation entry added for the
 shape and dropdown row classes.
 
 ## Feature 44 — Reading Progress Tracking
-- **L1 — Stage 5.** `UserChapterInteraction.ReadProgress` / `IsRead`.
-- **L2 — Stage 2.** **L3-Logic — Stage 2.** JS scroll-percentage tracking; auto-set `IsRead` at >90%;
-  **set `HasStarted` on `UserStoryInteraction` at 90% of Ch.1** — *blocked on the UserStoryInteractions
-  reading-status re-model, since `HasStarted` does not currently exist* (see UserStoryInteractions audit).
-- **L3.5-Structure — Stage 2.** **L4 — N/A** (no dedicated visual surface). **L5 — N/A** (write path).
-- **L7 — Stage 2.** Redis batching of progress writes (write-behind pattern 1; MVP direct DB).
+- **L1 — Stage 5.** `UserChapterInteraction.ReadProgress` / `IsRead`. `UserChapterInteraction.cs` moved
+  from deprecated `Core/Models/` → `Core/Chapters/` (vertical org rule, WU26 2026-06-24).
+- **L2 — Stage 5 (WU26, DONE ✓ 2026-06-24).** `IReadingProgressWriteService` + `ServerReadingProgressWriteService`
+  in `Core/Chapters/`/`Server/Chapters/`. `MarkStartedAsync(int storyId)` added to `IUserStoryInteractionWriteService`.
+  `IRecommendationReadService.GetHelpfulPromptRecommendationIdAsync(int storyId)` added. See WU26 Phase 1–3 Stage note.
+- **L3-Logic — Stage 5 (WU26, DONE ✓ 2026-06-24).** JS scroll interop (reading-progress.js), `[JSInvokable]
+  OnScrollProgress` callback, Ch.1 ≥90% `MarkStartedAsync` trigger, helpful-prompt gate.
+- **L3.5-Structure — Stage 5 (WU26, DONE ✓ 2026-06-24).** Progress tracking wired into `ChapterReadingPage`.
+- **L4 — N/A** (no dedicated visual surface). **L5 — N/A** (write path, server-only).
+- **L7 — Stage 2.** Redis batching of progress writes (write-behind pattern 1; MVP direct DB; L7 swaps body).
 
 ---
 
-### Dependency callout
-Feature 44's `HasStarted` write target does not exist yet — surface the UserStoryInteractions L1 re-model
-dependency before implementing reading-progress writes.
+### WU26 Phase 1–3 Stage note (2026-06-24) — Reading/writing pages + F44 L2/L3/L3.5, DONE ✓
+
+**Feature 6 (Writing & Versioning) L3/L3.5/L4 — Stage 5:**
+Built `ChapterEditorPage.razor` (`SharedUI/Chapters/`), `ChapterPropertiesForm.razor`, and
+`ChapterEditorViewModel.cs` (Pattern 1 edit side). Three `@page` directives: new chapter, edit primary,
+edit versioned. Key design decisions:
+- Form fields: title (optional → defaults to "Chapter N"), top/bottom author's notes (two
+  `EditorView` instances with `Compact=true` variant), chapter text (`EditorView`), rating (nullable —
+  null = "Same as story (inherit)"), optional `VersionName`.
+- **Progressive disclosure:** `VersionCount > 1` gate on version name field and on the full version
+  switcher + per-version controls (set-as-default, "Add alternate version" link at the bottom).
+  `IsPrimary` drives "Primary" badge, never `SortOrder`. Primary version's rating field is locked to
+  a read-only description (primary invariant — raising the story rating is the unlock path).
+- **Rating picker:** For non-primary alternates, the select only shows ratings ≥ story rating
+  (floor invariant UI). `null` option = "Same as story (inherit)".
+- **Publish toggle** inline with form status (Draft / Published) with Publish/Unpublish buttons.
+- **Author gate:** UX pre-check from `chapterDto.AuthorId` vs `AuthStateTask` claims — purely for
+  early UI feedback; `ServerChapterWriteService` is the real authority.
+- **Story rating** loaded via `GetStoryForEditAsync(StoryId).Rating` (also returns the story's
+  edit data the page needs for the floor-aware rating picker).
+
+The `GetChapterForEditAsync` route resolves `(ChapterNumber, VersionOrder?) → ChapterContentId` by
+loading the version list first (`GetChapterVersionsAsync`), then selecting the primary version's
+`ChapterContentId` or the matching `SortOrder` entry.
+
+**Feature 7 (Reading) L3/L3.5/L4 — Stage 5:**
+Built `ChapterReadingPage.razor` (`SharedUI/Chapters/`), implementing Pattern 1 read side. Two `@page`
+directives (primary + versioned URL). Key design:
+- Content-rating handling: null DTO from versioned URL → "requires mature content" notice (not
+  redirect); null DTO from primary URL → `/not-found`. Exceeds-story-rating heads-up banner
+  (`dto.Rating > dto.StoryRating`) for mature readers on exceeding alternates (primary invariant
+  guarantees primary never triggers this).
+- Top and bottom `ChapterNavigation` instances (TOC + version list loaded in parallel via
+  `Task.WhenAll`).
+- Top/bottom author's notes in `<aside>` blocks (only if non-null).
+- `<article id="chapter-body">` — anchor for the reading-progress scroll tracker.
+- `CommentSection` wired with `ChapterId`, `CurrentUserId`, `UserHasCompletedStory=false` (full
+  completion tracking is post-MVP).
+- `RecommendationHelpfulPrompt` gated on `_recId.HasValue && _progressReached90` — prompt appears
+  only after scroll reaches 90% of chapter body AND a source recommendation exists with no prior
+  success. `OnRespond(true)` → `RecordSuccessAsync(recId)`.
+- Author-only edit link (UX visibility; server is authority).
+- `CascadingParameter Task<AuthenticationState>` resolves `_currentUserId` from `NameIdentifier` claim.
+- Attribution capture: `?rec={id}` query param → `RecordAttributionSourceAsync` on first render (fire-
+  and-forget with `_ =`).
+
+**Reading-progress JS scroll tracker:**
+Added `SharedUI/wwwroot/js/reading-progress.js`: IIFE module exporting `register(dotnetRef, elementId)`
+and `dispose()`. Throttled scroll/resize listener (300ms debounce) computes fraction of the chapter body
+element scrolled past the viewport (bottom edge) and invokes `dotnetRef.invokeMethodAsync('OnScrollProgress', fraction)`.
+`App.razor` loads the script via `_content/TheCanalaveLibrary.SharedUI/js/reading-progress.js`.
+Page registers in `OnAfterRenderAsync(firstRender)`, disposes in `DisposeAsync`. `[JSInvokable]
+OnScrollProgress(float progress)` calls `RecordProgressAsync` and (Ch.1 ≥ 0.9) `MarkStartedAsync` +
+flips `_progressReached90` to reveal the helpful prompt. `JSException` caught silently (SSR/test host).
+`DotNetObjectReference` disposed in `DisposeAsync` (IAsyncDisposable).
+
+**Reader-settings cascade:** The provider (`CascadingValue<ReaderDisplaySettings>`) is not wired in
+WU26 — `RichTextView` falls back to its built-in defaults (Georgia, 16px, 1.5 line-height, 800px,
+left-aligned). Wiring the provider is deferred to WU30 (profile settings edit, the first feature
+that actually manages reader settings). See WU5 Stage note "Deferred dependency" entry.
+
+**Feature 44 (Reading Progress Tracking) L2/L3/L3.5 — Stage 5:**
+- `IReadingProgressWriteService` minted in `Core/Chapters/`; `ServerReadingProgressWriteService`
+  in `Server/Chapters/` (direct DB upsert to `UserChapterInteraction` — MVP, no Redis; L7 swaps the
+  body post-MVP). `IReadingProgressWriteService` DI-registered in `Program.cs`.
+- `MarkStartedAsync(int storyId)` added to `IUserStoryInteractionWriteService` +
+  `ServerUserStoryInteractionWriteService` (idempotent upsert — flips `HasStarted = true`, never
+  clears other flags, no-ops for anonymous).
+- `IRecommendationReadService.GetHelpfulPromptRecommendationIdAsync(int storyId)` added —
+  returns the `SourceRecommendationId` from `UserStoryRecommendationSource` iff no
+  `RecommendationSuccess` exists for (viewer, that rec); null otherwise.
+- `UserChapterInteraction.cs` moved from deprecated `Core/Models/` → `Core/Chapters/` (vertical
+  org rule; same namespace `TheCanalaveLibrary.Core`).
+- Fakes updated: `FakeUserStoryInteractionWriteService.MarkStartedAsync` records calls;
+  `FakeRecommendationWriteService.GetHelpfulPromptRecommendationIdAsync` returns a configurable id.
+
+**Verified:** `dotnet build` green (8 projects, 0 errors, 1 pre-existing CS9107 warning unrelated to
+WU26). `dotnet test` green — 195 Unit + 261 RazorComponents + 195 Integration = **651 total** (no
+new tests added in Phases 1–3; existing suite includes the WU26-relevant integration tests from
+Phase 0.5 for rating invariants). Test tier: Phases 1–3 are predominantly L3/UI surface — bUnit
+RazorComponents tests for `ChapterReadingPage` and `ChapterEditorPage` are the pending gap (author
+gate, prompt gating, progressive versioning UI assertions); server-side behavior is covered by existing
+Integration tests (Phase 0.5 rating invariants) and existing Integration tests on the USI write service.
+
+### WU26 settled constraints (pre-implementation, 2026-06-24)
+
+**Routes (settled):** See `cross-cutting.md` "Two content-editing patterns" → Chapter route table.
+Reading routes have no `/chapter/` literal; edit/new use `/chapter/` + chapter number + optional
+`versionOrder`. URL version token = `ChapterContent.SortOrder` (`VersionOrder`), not raw ContentId.
+
+**Versioning UX (settled):** Progressive disclosure on the edit page — see `cross-cutting.md`
+"Chapter Versioning — Progressive Disclosure". `IsPrimary` drives the "Primary" badge, never
+`SortOrder == 0`.
+
+**`HasStarted` blocker resolved:** `has_started` column exists in `InitialSchema`; `UserStoryInteraction.HasStarted`
+property exists (WU15). WU26 Phase 1 adds `MarkStartedAsync(int storyId)` (idempotent upsert) to
+the USI write service. No migration needed.
+
+**Chapter rating model (to be reconciled in WU26 Phase 0.5):**
+- `ChapterContent.Rating` is currently `Rating` (non-nullable, E default). Spec §5.2 requires nullable
+  (NULL = inherit story rating). WU26 Phase 0.5 reconciles this before any UI is built.
+- Floor invariant: version effective rating ≥ story rating. Primary invariant: primary's effective
+  rating = story rating (naturally via NULL/inherit). Details in `cross-cutting.md` "Chapter Versioning."
+- Integration test coverage: floor rejection, primary rejection on create + promote, NULL→story
+  inheritance, effective ceiling in reads.

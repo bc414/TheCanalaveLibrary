@@ -3,6 +3,7 @@ namespace TheCanalaveLibrary.Core;
 /// <summary>
 /// Explicit junction for a user liking a blog post. Anti-addictive: no DateLiked, no notification.
 /// The denormalized count lives on <see cref="BaseBlogPost.LikeCount"/>.
+/// Composite PK (BlogPostId, UserId) configured in BlogPostLikeConfiguration.
 /// </summary>
 public class BlogPostLike
 {

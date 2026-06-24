@@ -1,0 +1,243 @@
+@page "/story/{StoryId:int}/{ChapterNumber:int}"
+@page "/story/{StoryId:int}/{ChapterNumber:int}/{VersionOrder:int}"
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IChapterReadService ChapterReadService
+@inject IReadingProgressWriteService ReadingProgress
+@inject IRecommendationReadService RecommendationReadService
+@inject IRecommendationWriteService RecommendationWriteService
+@inject IUserStoryInteractionWriteService UserStoryInteractionWriteService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+
+@* Chapter reading page — Pattern 1 read side (cross-cutting.md "Two content-editing patterns").
+   Edit side is ChapterEditorPage (WU26). Dispatcher: loads chapter DTO, TOC, version list,
+   prompt-gate recommendation id, and wires reading-progress scroll JS.
+   Scroll progress → RecordProgressAsync; Ch.1 ≥90% → MarkStartedAsync + reveal helpful prompt. *@
+
+<PageTitle>@(_dto is not null ? $"{_dto.Title} – Chapter {ChapterNumber}" : "Chapter")</PageTitle>
+
+@if (_isLoading)
+{
+    <p class="text-[--color-text-muted]"><em>Loading…</em></p>
+}
+else if (_gatedByRating)
+{
+    <div class="mx-auto max-w-2xl px-4 py-8">
+        <p class="text-[--color-text-muted]">This version of the chapter requires mature content to be enabled in your account settings.</p>
+        <a href="/story/@StoryId/@ChapterNumber" class="mt-4 inline-block text-[--color-primary] hover:underline">Read the default version instead</a>
+    </div>
+}
+else if (_dto is null)
+{
+    <p class="text-[--color-text-muted]">Chapter not found.</p>
+}
+else
+{
+    <div class="mx-auto max-w-2xl px-4 py-6">
+
+        <h1 class="mb-1 text-xl font-bold text-[--color-text]">@_dto.Title</h1>
+        <p class="mb-4 text-sm text-[--color-text-muted]">
+            Chapter @_dto.ChapterNumber
+            @if (_dto.VersionName is not null)
+            {
+                <span> — @_dto.VersionName</span>
+            }
+        </p>
+
+        @* Exceeds-story-rating heads-up: mature reader on an alternate that exceeds the story's
+           floor rating. The primary invariant guarantees the primary never triggers this. *@
+        @if (_dto.Rating > _dto.StoryRating)
+        {
+            <div class="mb-4 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-3 text-sm text-[--color-text-muted]">
+                This version is rated @_dto.Rating and exceeds the story's @_dto.StoryRating rating.
+                @if (_dto.NextChapterNumber.HasValue)
+                {
+                    <a href="/story/@StoryId/@_dto.NextChapterNumber.Value" class="ml-1 text-[--color-primary] hover:underline">Skip to the next chapter</a>
+                }
+            </div>
+        }
+
+        @* Top navigation *@
+        <div class="mb-6">
+            <ChapterNavigation StoryId="@StoryId"
+                               CurrentChapterNumber="@_dto.ChapterNumber"
+                               CurrentVersionOrder="@_dto.VersionOrder"
+                               PreviousChapterNumber="@_dto.PreviousChapterNumber"
+                               NextChapterNumber="@_dto.NextChapterNumber"
+                               Toc="@_toc"
+                               Versions="@_versions" />
+        </div>
+
+        @* Chapter body — chapter-body id is the scroll-tracking anchor for reading-progress.js *@
+        @if (_dto.TopAuthorsNote is not null)
+        {
+            <aside class="mb-4 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4 text-sm">
+                <RichTextView HtmlContent="@_dto.TopAuthorsNote" />
+            </aside>
+        }
+
+        <article id="chapter-body" class="mb-6">
+            <RichTextView HtmlContent="@_dto.ChapterText" />
+        </article>
+
+        @if (_dto.BottomAuthorsNote is not null)
+        {
+            <aside class="mb-6 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4 text-sm">
+                <RichTextView HtmlContent="@_dto.BottomAuthorsNote" />
+            </aside>
+        }
+
+        @* Bottom navigation *@
+        <div class="mb-8">
+            <ChapterNavigation StoryId="@StoryId"
+                               CurrentChapterNumber="@_dto.ChapterNumber"
+                               CurrentVersionOrder="@_dto.VersionOrder"
+                               PreviousChapterNumber="@_dto.PreviousChapterNumber"
+                               NextChapterNumber="@_dto.NextChapterNumber"
+                               Toc="@_toc"
+                               Versions="@_versions" />
+        </div>
+
+        @* Author-only edit link — visibility only; the write service is the real gate. *@
+        @if (_isAuthor)
+        {
+            <div class="mb-6 text-sm">
+                <a href="@EditUrl" class="text-[--color-primary] hover:underline">Edit this chapter</a>
+            </div>
+        }
+
+        @* Comments *@
+        <section aria-label="Comments">
+            <CommentSection ChapterId="@_dto.ChapterId"
+                            CurrentUserId="@_currentUserId"
+                            UserHasCompletedStory="false" />
+        </section>
+
+        @* Recommendation helpful-prompt gate: source present + no prior success + Ch.1 scroll ≥90% *@
+        @if (_recId.HasValue && _progressReached90)
+        {
+            <RecommendationHelpfulPrompt RecommendationId="@_recId.Value"
+                                         OnRespond="HandleHelpfulPromptResponse" />
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int StoryId { get; set; }
+    [Parameter] public int ChapterNumber { get; set; }
+    [Parameter] public int? VersionOrder { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private ChapterReadingDto? _dto;
+    private IReadOnlyList<ChapterTocEntryDto> _toc = [];
+    private IReadOnlyList<ChapterVersionDto> _versions = [];
+    private int? _currentUserId;
+    private bool _isAuthor;
+    private int? _recId;
+    private bool _progressReached90;
+    private bool _isLoading = true;
+    private bool _gatedByRating;
+
+    private DotNetObjectReference<ChapterReadingPage>? _dotnetRef;
+    private bool _jsRegistered;
+
+    private string EditUrl =>
+        _dto is null ? "#"
+        : _dto.VersionOrder == 0
+            ? $"/story/{StoryId}/chapter/{ChapterNumber}/edit"
+            : $"/story/{StoryId}/chapter/{ChapterNumber}/{_dto.VersionOrder}/edit";
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Resolve current user from the cascading AuthenticationState.
+        if (AuthStateTask is not null)
+        {
+            AuthenticationState auth = await AuthStateTask;
+            string? idStr = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(idStr, out int parsedId))
+                _currentUserId = parsedId;
+        }
+
+        _dto = await ChapterReadService.GetChapterForReadingAsync(StoryId, ChapterNumber, VersionOrder);
+
+        if (_dto is null)
+        {
+            // Distinguish: versioned URL (non-mature reader blocked) vs truly absent chapter.
+            _gatedByRating = VersionOrder.HasValue;
+            _isLoading = false;
+            if (!_gatedByRating)
+                NavigationManager.NavigateTo("/not-found");
+            return;
+        }
+
+        _isAuthor = _dto.AuthorId.HasValue && _dto.AuthorId == _currentUserId;
+
+        // Load TOC and accessible versions for ChapterNavigation (top + bottom), in parallel.
+        Task<IReadOnlyList<ChapterTocEntryDto>> tocTask     = ChapterReadService.GetChapterTocAsync(StoryId);
+        Task<IReadOnlyList<ChapterVersionDto>> versionsTask = ChapterReadService.GetChapterVersionsAsync(StoryId, ChapterNumber);
+        await Task.WhenAll(tocTask, versionsTask);
+        _toc      = tocTask.Result;
+        _versions = versionsTask.Result;
+
+        // Prompt gate — null when: anonymous, no source, or success already recorded.
+        if (_currentUserId.HasValue)
+            _recId = await RecommendationReadService.GetHelpfulPromptRecommendationIdAsync(StoryId);
+
+        // Attribution capture from ?rec= query param.
+        var uri = new Uri(NavigationManager.Uri);
+        var qs = System.Web.HttpUtility.ParseQueryString(uri.Query);
+        if (int.TryParse(qs["rec"], out int queryRecId) && _currentUserId.HasValue)
+            _ = RecommendationWriteService.RecordAttributionSourceAsync(StoryId, queryRecId);
+
+        _isLoading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _jsRegistered || _dto is null) return;
+        _jsRegistered = true;
+        _dotnetRef = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("readingProgress.register", _dotnetRef, "chapter-body");
+        }
+        catch (JSException)
+        {
+            // JS not available (SSR or test host). Progress tracking silently skipped.
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnScrollProgress(float progress)
+    {
+        if (_dto is null) return;
+        await ReadingProgress.RecordProgressAsync(_dto.ChapterId, progress);
+        if (ChapterNumber == 1 && progress >= 0.9f && !_progressReached90)
+        {
+            _progressReached90 = true;
+            await UserStoryInteractionWriteService.MarkStartedAsync(StoryId);
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task HandleHelpfulPromptResponse(bool wasHelpful)
+    {
+        if (wasHelpful && _recId.HasValue)
+            await RecommendationWriteService.RecordSuccessAsync(_recId.Value);
+        _recId = null;  // dismiss regardless of response
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_jsRegistered)
+        {
+            try { await JS.InvokeVoidAsync("readingProgress.dispose"); } catch { /* page already gone */ }
+        }
+        _dotnetRef?.Dispose();
+    }
+}

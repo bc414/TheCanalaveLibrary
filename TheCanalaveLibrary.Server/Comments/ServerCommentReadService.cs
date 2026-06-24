@@ -4,13 +4,13 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Server;
 
 /// <summary>
-/// Server-side read implementation for Comments. Chapter-context only for MVP.
-/// Uses a two-step load: paginate root ids from the golden index
-/// (<c>(chapter_id, date_posted DESC)</c>, L6/post-MVP), then fetch roots + their direct replies
-/// in one EF query. In-memory ordering restores roots newest-first and replies oldest-first.
-/// Queries go through the <c>ChapterComments</c> DbSet (not <c>BaseComments</c>) so that EF Core
-/// uses the TPT join automatically and all inherited <c>BaseComment</c> properties are accessible
-/// without navigating through the shadow <c>chapter_comment_comment_id</c> FK.
+/// Server-side read implementation for Comments. Chapter context shipped WU19; blog-post context
+/// added WU31. Both contexts use the same two-step load pattern: paginate root ids (golden-index
+/// order, L6/post-MVP DDL), then fetch roots + their direct replies in one EF query; in-memory
+/// ordering restores roots newest-first and replies oldest-first.
+/// Queries go through the typed TPT DbSet (<c>ChapterComments</c>, <c>BlogPostComments</c>) so
+/// EF Core uses the TPT join automatically and all inherited <c>BaseComment</c> columns are
+/// accessible without navigating through the shadow one-to-one FK on <c>base_comments</c>.
 /// </summary>
 public class ServerCommentReadService(
     ReadOnlyApplicationDbContext readDb,
@@ -80,6 +80,62 @@ public class ServerCommentReadService(
                 ? rootOrder.GetValueOrDefault(c.ParentCommentId.Value, int.MaxValue)
                 : rootOrder.GetValueOrDefault(c.CommentId, int.MaxValue))
             .ThenBy(c => c.ParentCommentId.HasValue)   // roots (false) before their replies (true)
+            .ThenBy(c => c.ParentCommentId.HasValue ? c.DatePosted : DateTime.MinValue)
+            .ToList();
+
+        return new CommentPageDto(ordered, totalRootCount);
+    }
+
+    public async Task<CommentPageDto> GetBlogPostCommentsAsync(int blogPostId, int page, int pageSize)
+    {
+        // Mirrors GetChapterCommentsAsync exactly — same two-step load and in-memory ordering,
+        // over BlogPostComments instead of ChapterComments. No spoiler flag on blog-post comments.
+        int totalRootCount = await readDb.BlogPostComments
+            .Where(c => c.BlogPostId == blogPostId && c.ParentCommentId == null)
+            .CountAsync();
+
+        if (totalRootCount == 0)
+            return new CommentPageDto([], 0);
+
+        List<long> rootIds = await readDb.BlogPostComments
+            .Where(c => c.BlogPostId == blogPostId && c.ParentCommentId == null)
+            .OrderByDescending(c => c.DatePosted)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(c => c.CommentId)
+            .ToListAsync();
+
+        if (rootIds.Count == 0)
+            return new CommentPageDto([], totalRootCount);
+
+        int? currentUserId = ActiveUser.UserId;
+
+        List<CommentDto> comments = await readDb.BlogPostComments
+            .Where(c => rootIds.Contains(c.CommentId)
+                        || (c.ParentCommentId != null && rootIds.Contains(c.ParentCommentId.Value)))
+            .Select(c => new CommentDto(
+                c.CommentId,
+                c.ParentCommentId,
+                c.UserId,
+                c.Author != null ? c.Author.UserName : null,
+                c.Author != null ? c.Author.ProfilePictureRelativeUrl : null,
+                c.CommentText,
+                c.DatePosted,
+                c.LikeCount,
+                // Blog-post comments have no spoiler flag — always false (IsSpoiler is BaseComment).
+                false,
+                currentUserId != null && c.Likes.Any(l => l.UserId == currentUserId)))
+            .ToListAsync();
+
+        Dictionary<long, int> rootOrder = rootIds
+            .Select((id, idx) => (id, idx))
+            .ToDictionary(t => t.id, t => t.idx);
+
+        List<CommentDto> ordered = comments
+            .OrderBy(c => c.ParentCommentId.HasValue
+                ? rootOrder.GetValueOrDefault(c.ParentCommentId.Value, int.MaxValue)
+                : rootOrder.GetValueOrDefault(c.CommentId, int.MaxValue))
+            .ThenBy(c => c.ParentCommentId.HasValue)
             .ThenBy(c => c.ParentCommentId.HasValue ? c.DatePosted : DateTime.MinValue)
             .ToList();
 

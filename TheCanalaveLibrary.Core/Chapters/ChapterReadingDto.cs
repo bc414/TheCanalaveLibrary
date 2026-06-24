@@ -15,6 +15,10 @@ public record ChapterReadingDto(
     string? TopAuthorsNote,
     string? BottomAuthorsNote,
     int WordCount,
+    /// <summary>
+    /// Effective rating — resolved as <c>RawRating ?? StoryRating</c>. Always non-nullable;
+    /// used by the reading page for warning display.
+    /// </summary>
     Rating Rating,
     int? AuthorId,
     string AuthorName,
@@ -28,5 +32,11 @@ public record ChapterReadingDto(
     /// The parent story's rating — used by the reader page to decide whether to show a
     /// content-rating warning when this chapter's rating exceeds the story's ceiling.
     /// </summary>
-    Rating StoryRating
+    Rating StoryRating,
+    /// <summary>
+    /// Raw nullable rating from the DB — null means this version inherits the story's rating.
+    /// Populated only by <see cref="IChapterReadService.GetChapterForEditAsync"/> for the
+    /// edit-form's "Same as story" vs explicit-override display. Null on reading-page loads.
+    /// </summary>
+    Rating? RawRating = null
 );

@@ -28,4 +28,11 @@ public class FakeUserStoryInteractionWriteService : IUserStoryInteractionWriteSe
 
     public Task<IReadOnlyList<int>> GetBookshelfStoryIdsAsync(BookshelfTab tab) =>
         Task.FromResult<IReadOnlyList<int>>([]);
+
+    public List<int> MarkStartedCalls { get; } = [];
+    public Task MarkStartedAsync(int storyId)
+    {
+        MarkStartedCalls.Add(storyId);
+        return Task.CompletedTask;
+    }
 }
