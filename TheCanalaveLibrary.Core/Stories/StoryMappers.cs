@@ -46,13 +46,13 @@ public static class StoryMappers
     }
     
     /// <summary>
-    /// Maps any object implementing IStoryProperties to a StoryCreateDTO.
+    /// Maps any object implementing IStoryProperties to a CreateStoryDTO.
+    /// AuthorId is omitted — the server service stamps it from IActiveUserContext.UserId.
     /// </summary>
-    public static CreateStoryDTO ToCreateStoryDTO(this IEditableStoryProperties story, int authorId)
+    public static CreateStoryDTO ToCreateStoryDTO(this IEditableStoryProperties story)
     {
         return new CreateStoryDTO
         {
-            AuthorId = authorId,
             Title = story.Title,
             ShortDescription = story.ShortDescription,
             Rating = story.Rating,
@@ -60,8 +60,6 @@ public static class StoryMappers
             CoverArtRelativeUrl = story.CoverArtRelativeUrl,
             LongDescription = story.LongDescription,
             PostApprovalStatus = story.PostApprovalStatus,
-            // The source is already a List<IStoryTag>. We create a new list
-            // to avoid sharing the same list instance (defensive copy).
             StoryTags = new List<IStoryTag>(story.StoryTags)
         };
     }

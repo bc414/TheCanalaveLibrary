@@ -165,5 +165,7 @@ public class TagSelectorTests : TestContext
 
         public Task<List<TagDropDownDTO>> GetAllContentWarningTagsAsync() =>
             Task.FromResult(new List<TagDropDownDTO>());
+        public Task<List<TagChipDto>> GetTagChipsByIdsAsync(IReadOnlyList<int> tagIds) =>
+            Task.FromResult(new List<TagChipDto>());
     }
 }

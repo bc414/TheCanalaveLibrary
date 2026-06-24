@@ -24,7 +24,7 @@ public static class UserStoryInteractionVisuals
             [UserStoryInteractionTypeEnum.PrivateFavorite] = new(HeartPath, "#C040A8", "Private Favorite"),
             [UserStoryInteractionTypeEnum.Follow] = new(
                 "M6 8A6 6 0 0 1 18 8A6 6 0 0 1 6 8Z M9 14L6 22L9.5 20L12 21.5L14.5 20L18 22L15 14Z",
-                "#4A9B52",
+                "#2DBBA0", // Manaphy Teal — reskinned WU27 (was #4A9B52 Eterna Green; green reserved for curation tabs)
                 "Following"),
             [UserStoryInteractionTypeEnum.Complete] = new(
                 "M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M6 12.5L5 14L10 19L20 7L18.5 5.5L10 16Z",

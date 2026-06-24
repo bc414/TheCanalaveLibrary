@@ -29,11 +29,12 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
     {
         Directory.CreateDirectory(WebRootPath);
 
-        // Development, not a dedicated "Testing" environment — this is the same environment the real
-        // dev workflow runs in (see run-server/SKILL.md), so Program.cs's `IsDevelopment()` branches
-        // (dev-diagnostics endpoints, the DataSeeder call) behave identically to a real local run. The
-        // DataSeeder is idempotent (checks for "TestUser" before inserting), so re-running it against
-        // an already-seeded container on a later test in the same collection is a no-op.
+        // "Development" environment — needed so appsettings.Development.json (which holds the DB
+        // connection string) is loaded by Program.cs before ConfigureAppConfiguration below can
+        // inject the Testcontainers override. The DataSeeder that runs under IsDevelopment() re-seeds
+        // TestUser/AdminUser on each factory creation, but that is harmless: no test relies on those
+        // users (all tests seed their own identities via IntegrationTestBase.SeedUserAsync), and
+        // Respawn wipes them before the next test starts.
         builder.UseEnvironment(Environments.Development);
 
         // Redirect uploads to a per-factory temp folder — LocalImageStorageService writes under

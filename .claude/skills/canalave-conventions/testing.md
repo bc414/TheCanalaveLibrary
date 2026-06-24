@@ -114,24 +114,52 @@ wraps `EditorView` MUST carry a unique `aria-label` attribute; tests find it wit
 **Does not belong here:** full auth flows, real service calls, or anything requiring a real
 server circuit (SignalR). Keep components thin (push pure logic down to Core so Unit covers it).
 
-## Integration test data isolation: assert relative order, not absolute position
+## Integration tests reset between every test (Respawn)
 
-There is no Respawn/transaction-rollback reset between tests yet — each test class shares one
-Testcontainers Postgres container with every other class in the same xUnit collection, and that
-container persists for the life of one `dotnet test` process. Rows accumulate across test
-classes within a run, and a container can even outlive the run it was built for if the process
-is killed before the collection fixture disposes it.
+Each integration test starts from an identical known baseline — the schema produced by the
+migration plus lookup-table rows seeded by EF's `OnModelCreating HasData` (status enums,
+notification types, ASP.NET role rows). **No application rows survive from one test to the
+next.** `PostgresFixture` holds a `Respawner` (from the `Respawn` NuGet package) that issues
+FK-ordered deletes between tests; the lookup tables listed in `TablesToIgnore` are never wiped.
 
-This broke a first attempt at testing `GetRecentListingsAsync`'s ordering: the test dated its
-fixture rows "now + 10 years," expecting them to sort to the very top. A leftover row from an
-earlier run computes its own "+10 years" from an earlier wall-clock instant, making the order
-non-deterministic across runs.
+Because of this reset, **every test must seed the identities and rows it needs.** Use the
+helpers on `IntegrationTestBase`:
+- `SeedUserAsync(string? name = null, bool showMature = false)` — creates a GUID-suffixed
+  user via `UserManager`, returns the new `UserId`. Never query by username (`"TestUser"`) or
+  by `OrderBy(u => u.Id).Take(2)` or hardcode `userId: 1` — `DataSeeder`'s `TestUser`/`AdminUser`
+  may exist in the DB (factory uses `Environments.Development`) but no test may rely on them;
+  Respawn wipes them before each test and their IDs are non-deterministic.
+- `SeedStoryAsync(int? authorId = null)` — creates a minimal story with a GUID-suffixed
+  title, returns the new `StoryId`.
+- `SetActiveUser(FakeActiveUserContext value)` — swaps the `IActiveUserContext` singleton
+  for this test's factory.
 
-**Don't assert on absolute position (top-N, total count) against this shared, accumulating
-state.** Instead, seed your own fixtures with identifiable values (a `Guid`-suffixed title is
-enough), fetch enough of the result set to be sure your own known ids are present, and assert
-only their order or presence *relative to each other* — correct regardless of what else, past
-or present, surrounds them.
+Because tests reset cleanly, **absolute assertions are allowed and expected**: exact counts,
+ordering from empty, "must be the only row", reject-at-limit. Write the natural test — call
+the service N times to reach the limit, then assert the (N+1)th call throws. No top-up logic,
+no precondition-seeding-via-DB workaround.
+
+**The DB is shared within a single run (one container, one `PostgresFixture`)**, so tests must
+still run serially. This is enforced by `[assembly: CollectionBehavior(DisableTestParallelization
+= true)]` — do not remove. The container is ephemeral: `PostgresFixture` starts it, applies the
+migration, and disposes it at the end of the run.
+
+## Integration test setup: seed FK parents before testing a write
+
+When a service writes to a table that has FK constraints, all parent rows must exist before
+the call. In the real application, prior user navigation creates them (e.g. opening a story
+creates a `UserStoryInteraction` row before `RecordAttributionSourceAsync` is ever called). In
+integration tests, that prior navigation does not run.
+
+**For every integration test that exercises a service write:**
+1. Map every FK on the target table (check the EF configuration file for the cluster).
+2. Determine whether the parent row is produced by `SeedUserAsync` / `SeedStoryAsync` /
+   a prior step in the same test. If not, seed it explicitly via `ApplicationDbContext`.
+3. Add a brief comment on the seed: what real-world flow creates this row and why the test
+   must supply it.
+
+Respawn wipes all rows between tests — each test is self-contained in its FK setup; nothing
+can be assumed to survive from a previous test.
 
 ## Integration test helper pitfall: async methods that create a scope must `await` the call inside it
 
@@ -182,8 +210,11 @@ fixtures without checking the relevant audit file for a note that they were deli
   `Microsoft.NET.Test.Sdk`, `FluentAssertions`, `coverlet.collector`. Project references: Core
   **and** Server (enables host-free Server-service tests; keep no `DbContext` in Unit tests).
 - **`TheCanalaveLibrary.Tests.Integration`**: same xUnit/FluentAssertions packages, plus
-  `Testcontainers.PostgreSql` and `Microsoft.AspNetCore.Mvc.Testing`. Project reference:
-  Server.
+  `Testcontainers.PostgreSql`, `Microsoft.AspNetCore.Mvc.Testing`, and `Respawn`. Project
+  reference: Server. All test classes inherit `IntegrationTestBase` (provides factory
+  lifecycle, `ResetAsync` via `PostgresFixture`, `SeedUserAsync`, `SeedStoryAsync`,
+  `SetActiveUser`). Serial execution enforced by `[assembly: CollectionBehavior(
+  DisableTestParallelization = true)]` in `AssemblyInfo.cs`.
 - **`TheCanalaveLibrary.Tests.RazorComponents`**: `bunit`, `xunit`,
   `xunit.runner.visualstudio`, `Microsoft.NET.Test.Sdk`, `FluentAssertions`, `coverlet.collector`.
   Project references: SharedUI (add Client reference if a tested component lives there).

@@ -45,7 +45,11 @@ public class HttpStoryReadService : IStoryReadService
     }
 
     // Endpoint not yet mapped by StoryEndpoints (L5 is post-MVP — MVP components inject the server
-    // service directly). Stub compiles against the WU23-extended IStoryReadService contract.
-    public Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter)
+    // service directly). Stubs compile against the WU27-extended IStoryReadService contract.
+    public Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(
+        StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null)
         => throw new NotSupportedException("GetListingsAsync is not yet exposed via the client HTTP API.");
+
+    public Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId)
+        => throw new NotSupportedException("GetStoryIdsByAuthorAsync is not yet exposed via the client HTTP API.");
 }

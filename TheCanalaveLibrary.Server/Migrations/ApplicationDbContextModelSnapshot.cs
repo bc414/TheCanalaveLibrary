@@ -1939,6 +1939,12 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_highlighted_by_author");
 
+                    b.Property<int>("LikeCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("like_count");
+
                     b.Property<int?>("RecommenderId")
                         .HasColumnType("integer")
                         .HasColumnName("recommender_id");
@@ -1958,14 +1964,15 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasKey("RecommendationId")
                         .HasName("pk_recommendations");
 
-                    b.HasIndex("RecommenderId")
-                        .HasDatabaseName("ix_recommendations_recommender_id");
-
                     b.HasIndex("StatusId")
                         .HasDatabaseName("ix_recommendations_status_id");
 
                     b.HasIndex("StoryId")
                         .HasDatabaseName("ix_recommendations_story_id");
+
+                    b.HasIndex("RecommenderId", "StoryId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_recommendations_recommender_id_story_id");
 
                     b.ToTable("recommendations", (string)null);
                 });
@@ -1985,6 +1992,25 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasName("pk_recommendation_details");
 
                     b.ToTable("recommendation_details", (string)null);
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.RecommendationLike", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.Property<int>("RecommendationId")
+                        .HasColumnType("integer")
+                        .HasColumnName("recommendation_id");
+
+                    b.HasKey("UserId", "RecommendationId")
+                        .HasName("pk_recommendation_likes");
+
+                    b.HasIndex("RecommendationId")
+                        .HasDatabaseName("ix_recommendation_likes_recommendation_id");
+
+                    b.ToTable("recommendation_likes", (string)null);
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.RecommendationStatus", b =>
@@ -4623,6 +4649,27 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("Recommendation");
                 });
 
+            modelBuilder.Entity("TheCanalaveLibrary.Core.RecommendationLike", b =>
+                {
+                    b.HasOne("TheCanalaveLibrary.Core.Recommendation", "Recommendation")
+                        .WithMany("Likes")
+                        .HasForeignKey("RecommendationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_recommendation_likes_recommendations_recommendation_id");
+
+                    b.HasOne("TheCanalaveLibrary.Core.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_recommendation_likes_users_user_id");
+
+                    b.Navigation("Recommendation");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("TheCanalaveLibrary.Core.RecommendationSuccess", b =>
                 {
                     b.HasOne("TheCanalaveLibrary.Core.Recommendation", "Recommendation")
@@ -5429,6 +5476,8 @@ namespace TheCanalaveLibrary.Server.Migrations
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.Recommendation", b =>
                 {
+                    b.Navigation("Likes");
+
                     b.Navigation("RecommendationDetail")
                         .IsRequired();
 

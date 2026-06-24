@@ -21,4 +21,13 @@ public interface IUserStoryInteractionReadService
     /// </summary>
     Task<IReadOnlyDictionary<int, UserStoryInteractionStateDto>> GetStatesByStoryIdsAsync(
         IReadOnlyList<int> storyIds);
+
+    /// <summary>
+    /// Returns all story IDs in the active user's bookshelf for the given interaction-backed tab.
+    /// Anonymous → empty without a DB hit. Tabs not backed by <see cref="UserStoryInteraction"/>
+    /// (<see cref="BookshelfTab.MyStories"/>, <see cref="BookshelfTab.Recommendations"/>,
+    /// <see cref="BookshelfTab.HiddenGems"/>) throw <see cref="ArgumentOutOfRangeException"/> —
+    /// the dispatcher routes those to the appropriate service instead.
+    /// </summary>
+    Task<IReadOnlyList<int>> GetBookshelfStoryIdsAsync(BookshelfTab tab);
 }

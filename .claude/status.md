@@ -45,16 +45,25 @@ Global conditions affecting many cells — kept terse; detail lives at the point
   loop and Phase E loop now name `dotnet test`; obligation is advisory ("should add tests") — no Stage
   gate. No cell Stage changes from this; it's tooling every future work-unit should add tests to.
   Detail: `canalave-conventions/testing.md`, `workplan.md` WU12.5.
+- **Integration test isolation overhaul (2026-06-24).** Respawn DB reset before every test; all 19
+  integration test classes migrated to `IntegrationTestBase` (Respawn reset, factory lifecycle, GUID-
+  suffixed user seeding via `SeedUserAsync`). `[assembly: CollectionBehavior(DisableTestParallelization
+  = true)]` made deliberate. `RecommendationStatusEnum` added to `Core/Lookups/ModelEnums.cs`. This
+  unlocked reliable L5 Stage-5 verification for F7/16/17/18/19/23/24/25/26/27/28/29/42/43 (all
+  integration tests that existed but had order-dependent shared-state). Detail: `canalave-conventions/
+  testing.md` §"Integration tests reset between every test", `forward_plan.md` "Integration test
+  isolation foundation" Resolved. F4/F5 L5 stay Stage 4 (architectural disagreement pending Opus
+  reconcile; unrelated to this overhaul).
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L5 | L6 | L7 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|----|----|----|----|
 | 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | N/A | N/A | N/A | N/A |
 | 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 2 | 2 | 1 | 4 | N/A | N/A | N/A |
-| 4 | Story Creation & Editing | Stories | 5 | 5 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
+| 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 4 | 2 | N/A | N/A |
 | 5 | Story Browsing & Display | Stories | 5 | 5 | 4 | 4 | 1 | 4 | 2 | N/A | N/A |
 | 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
-| 7 | Chapter Reading | Chapters | 5 | 5 | 2 | 5 | 5 | 2 | 2 | N/A | N/A |
+| 7 | Chapter Reading | Chapters | 5 | 5 | 2 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
 | 9 | Series & Ordering | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
@@ -63,21 +72,21 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
 | 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
 | 15 | Saved Tag Selections | Tags | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 2 | 5 | 2 | N/A |
-| 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 2 | 2 | 2 | 1 | 2 | 5 | N/A | N/A |
-| 18 | User Following | Following | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
-| 19 | Vouches | Following | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A | N/A |
+| 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
+| 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 18 | User Following | Following | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 19 | Vouches | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 20 | User Profile Editing | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 21 | User Profile Display | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 22 | User Stats | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
-| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
-| 25 | Comment Likes | Comments | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
-| 26 | Spoiler Comments | Comments | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
-| 27 | Recommendation Submission | Recommendations | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
-| 28 | Recommendation Display | Recommendations | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 29 | Hidden Gem Management | Recommendations | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 30 | Recommendation Attribution | Recommendations | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
+| 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 25 | Comment Likes | Comments | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
+| 26 | Spoiler Comments | Comments | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
+| 27 | Recommendation Submission | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 28 | Recommendation Display | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
+| 29 | Hidden Gem Management | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
+| 30 | Recommendation Attribution | Recommendations | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
 | 31 | Search Page | Discovery | N/A | 2 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
 | 32 | Full-Text Search | Discovery | 5 | 2 | 2 | 2 | 1 | 2 | 5 | N/A | N/A |
 | 33 | Manual Tree Search | Discovery | N/A | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
@@ -89,8 +98,8 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 39 | Group Content & Folders | Groups | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 40 | Group Display | Groups | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 41 | Notification Generation | Notifications | 5 | 5 | N/A | N/A | N/A | N/A | 2 | N/A | N/A |
-| 42 | Notification Display | Notifications | 5 | 5 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
-| 43 | Notification Settings | Notifications | 5 | 5 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
+| 42 | Notification Display | Notifications | 5 | 5 | 2 | 2 | 1 | 5 | 2 | N/A | N/A |
+| 43 | Notification Settings | Notifications | 5 | 5 | 2 | 2 | 1 | 5 | N/A | N/A | N/A |
 | 44 | Reading Progress Tracking | Chapters | 5 | 2 | 2 | 2 | N/A | N/A | N/A | 2 | N/A |
 | 45 | View Count Tracking | Stories | 5 | 2 | 2 | N/A | N/A | 2 | N/A | 2 | N/A |
 | 46 | Content Reporting | Moderation | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |

@@ -4,10 +4,13 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.SharedUI;
 
 /// <summary>
-/// A view model that represents the editable properties of a story,
-/// designed to be used with a Blazor EditForm.
+/// View model for StoryPropertiesForm. Carries UI-only state (IsLoading, ServerValidationErrors)
+/// and shields the form from the wire DTOs' server-only fields (AuthorId, StoryId, Slug).
+/// SelectedTags uses TagChipDto (the form's native type from TagSelector) — the page maps to
+/// IStoryTag on submit. Does not implement IEditableStoryProperties: the mapping lives at the
+/// page layer so the ViewModel stays a pure UI bag.
 /// </summary>
-public class StoryPropertiesViewModel : IEditableStoryProperties
+public class StoryPropertiesViewModel
 {
     [Required(ErrorMessage = "Title is required")]
     [MaxLength(255, ErrorMessage = "Title cannot exceed 255 characters.")]
@@ -24,14 +27,20 @@ public class StoryPropertiesViewModel : IEditableStoryProperties
     [MaxLength(512)]
     public string? CoverArtRelativeUrl { get; set; }
 
-    [Required(ErrorMessage = "A long description or summary is required.")]
+    /// <summary>
+    /// Populated from EditorView.GetHtmlAsync() by the page before mapping to the DTO.
+    /// Not bound via two-way binding — EditorView uses pull-on-submit.
+    /// </summary>
     public string? LongDescription { get; set; }
 
     public StoryStatusEnum PostApprovalStatus { get; set; }
 
-    public List<IStoryTag> StoryTags { get; set; } = new();
+    /// <summary>
+    /// Live tag selections from TagSelector instances. Updated by the form's OnSelectionChanged
+    /// handlers. Mapped to List&lt;IStoryTag&gt; by the page when building the write DTO.
+    /// </summary>
+    public List<TagChipDto> SelectedTags { get; set; } = new();
 
-    // --- UI-Specific Properties ---
     public bool IsLoading { get; set; }
     public List<string> ServerValidationErrors { get; set; } = new();
 }

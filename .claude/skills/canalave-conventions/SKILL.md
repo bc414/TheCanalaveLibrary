@@ -87,7 +87,14 @@ filter axes for search/profile/bookshelf consumers); `SharedUI/Tags/TagFilter.ra
 tag-filter axis (reused by tree search directly); `SharedUI/UserStoryInteractions/UserStoryInteractionFilter.razor`
 is the USI-exclusion axis. `Core/Discovery/` holds `StoryFilterDto` plus the three §8.7 renamed
 entities (`UserStoryInteractionFilterType`, `DefaultUserStoryInteractionFilterSetting`,
-`UserStoryInteractionFilterSetting`) — none of these belong to a single consuming feature.
+`UserStoryInteractionFilterSetting`) — none of these belong to a single consuming feature. `Core/Bookshelves/`
+(WU27) is the same shape of exception: `BookshelfTab` enum and `BookshelfTabSlug` slug helper are consumed
+by `SharedUI/Bookshelves/` (the page cluster) and `Server/UserStoryInteractions/` (the bookshelf query),
+with no single feature owning the concept. `SharedUI/Bookshelves/` (WU27) holds the page dispatcher
+(`BookshelvesPage`), desktop/mobile composites, and `BookshelfTabVisuals`. `SharedUI/Recommendations/`
+(WU27 icons, WU29 cards) is another cross-cutting SharedUI cluster — WU27 mints the SVG icon constants
+(`RecommendationIcons.cs`), WU29 builds the display components; the cluster owns content that spans
+submission, display, Hidden Gem, and attribution sub-features.
 
 API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
 cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/SpriteEndpoints.cs`

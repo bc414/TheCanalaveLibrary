@@ -1,0 +1,78 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Coordination composite — desktop Bookshelves layout (spec §5.15, layer3.5-structure.md).
+   Desktop: horizontal tab bar across the top (icon + text, 11 tabs); main area = StoryDeck;
+   right sidebar = ResultsFilterPanel. Injection-free — all data arrives as parameters.
+   Outer Margin Rule: root has no m-*; parent/layout controls spacing. *@
+
+<div class="flex flex-col gap-4 px-4 py-4">
+
+    @* ── Tab bar ─────────────────────────────────────────────────────────────────────── *@
+    <nav class="flex flex-wrap gap-1 border-b border-[--color-border] pb-2" aria-label="Bookshelf tabs">
+        @foreach (BookshelfTab tab in BookshelfTabVisuals.AllTabs)
+        {
+            var info = BookshelfTabVisuals.For(tab);
+            bool isActive = tab == Tab;
+            <a href="/bookshelves/@info.Slug"
+               class="@TabClasses(isActive)"
+               style="@(isActive ? $"background-color:{info.AccentColor}22;color:{info.AccentColor};border-bottom:2px solid {info.AccentColor};" : "")"
+               aria-current="@(isActive ? "page" : null)">
+                <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24"
+                     style="fill:@(isActive ? info.AccentColor : "currentColor")" aria-hidden="true">
+                    <path d="@info.IconPath" />
+                </svg>
+                <span>@info.Label</span>
+            </a>
+        }
+    </nav>
+
+    @* ── Main content + right sidebar ────────────────────────────────────────────────── *@
+    <div class="flex gap-6 items-start">
+
+        @* StoryDeck — takes remaining width *@
+        <div class="min-w-0 flex-1">
+            <StoryDeck Stories="@Items"
+                       UserStoryInteractionStates="@InteractionStates"
+                       CurrentUserId="@CurrentUserId"
+                       EmptyMessage="@EmptyMessage"
+                       CurrentPage="@Filter.Page"
+                       PageSize="@Filter.PageSize"
+                       TotalCount="@TotalCount"
+                       OnPageChanged="@OnPageChanged" />
+        </div>
+
+        @* ResultsFilterPanel sidebar *@
+        <aside class="w-72 shrink-0 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4">
+            <h2 class="mb-3 text-sm font-bold text-[--color-text-muted] uppercase tracking-wide">Filters</h2>
+            <ResultsFilterPanel OnSearch="@OnFilterChanged"
+                                InitialFilter="@Filter"
+                                AvailableSorts="@_availableSorts"
+                                ShowTextSearch="true"
+                                ShowTagFilter="true"
+                                ShowInteractionFilters="false" />
+        </aside>
+
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public BookshelfTab Tab { get; set; }
+    [Parameter] public int? CurrentUserId { get; set; }
+    [Parameter, EditorRequired] public StoryListingDto[] Items { get; set; } = [];
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public IReadOnlyDictionary<int, UserStoryInteractionStateDto>? InteractionStates { get; set; }
+    [Parameter, EditorRequired] public StoryFilterDto Filter { get; set; } = new();
+    [Parameter] public EventCallback<StoryFilterDto> OnFilterChanged { get; set; }
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+
+    private static readonly IReadOnlyList<DefaultSortOrder> _availableSorts =
+        [DefaultSortOrder.DatePublished, DefaultSortOrder.Random, DefaultSortOrder.Relevance];
+
+    private string EmptyMessage => $"No stories in {BookshelfTabVisuals.For(Tab).Label}.";
+
+    private static string TabClasses(bool isActive) =>
+        "flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-sm transition-colors " +
+        (isActive
+            ? "font-semibold"
+            : "text-[--color-text-muted] hover:bg-[--color-surface-hover] hover:text-[--color-text]");
+}

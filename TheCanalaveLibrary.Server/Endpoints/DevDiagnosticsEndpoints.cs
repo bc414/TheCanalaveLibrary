@@ -43,9 +43,9 @@ public static class DevDiagnosticsEndpoints
             User? author = await userManager.FindByNameAsync("TestUser");
             if (author is null) return Results.NotFound("seed TestUser first");
 
+            // AuthorId is server-stamped in CreateStoryAsync from IActiveUserContext — not passed here.
             CreateStoryDTO dto = new()
             {
-                AuthorId = author.Id,
                 Title = title,
                 ShortDescription = "WU12 diagnostic story",
                 Rating = Enum.Parse<Rating>(rating),

@@ -52,6 +52,17 @@ public enum StoryRelationshipStatus : short
 // This enum is a C# "mirror" of the 'StoryStatuses' table.
 // The values MUST match the IDs in the SQL script.
 // We use 'short' to match the 'TINYINT' SQL data type.
+// This enum is a C# "mirror" of the 'recommendation_statuses' table.
+// The values MUST match the IDs seeded in RecommendationConfigurations.HasData.
+// Note: 1-indexed (the table uses identity(1,1)).
+public enum RecommendationStatusEnum : short
+{
+    PendingApproval = 1,
+    Approved = 2,
+    Rejected = 3,
+    UnderReview = 4
+}
+
 public enum StoryStatusEnum : short
 {
     Draft = 0,

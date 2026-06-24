@@ -1,65 +1,178 @@
 @namespace TheCanalaveLibrary.SharedUI
-@inject ITagReadService TagRetrievalService
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Forms
 
-<EditForm Model="@ViewModel" OnValidSubmit="OnValidSubmit" FormName="story-properties-form">
+@* Presentational form for story create/edit. No @inject — all I/O lives in StoryEditorPage.
+   Contract:
+     - ViewModel carries field values + tag selections + validation errors (set by the page).
+     - OnValidSubmit fires when EditForm validation passes; the page then calls GetLongDescriptionAsync()
+       and reads SelectedCoverFile before mapping to the write DTO.
+     - InitialTagsByType seeds TagSelectors on first render (edit mode). Null = create mode (empty). *@
+
+@if (ViewModel.ServerValidationErrors.Any())
+{
+    <div class="rounded-lg bg-[--color-danger]/10 p-4 text-sm text-[--color-danger]" role="alert">
+        <ul class="list-disc pl-4 space-y-1">
+            @foreach (string error in ViewModel.ServerValidationErrors)
+            {
+                <li>@error</li>
+            }
+        </ul>
+    </div>
+}
+
+<EditForm Model="@ViewModel" OnValidSubmit="HandleValidSubmit" FormName="story-properties-form"
+          class="flex flex-col gap-6">
     <DataAnnotationsValidator />
 
-    @if (ViewModel.ServerValidationErrors.Any())
-    {
-        <div class="alert alert-danger" role="alert">
-            <ul>
-                @foreach (string error in ViewModel.ServerValidationErrors)
+    @* ── Title ───────────────────────────────────────────────────────────────── *@
+    <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold text-[--color-text]">Title</label>
+        <InputText @bind-Value="ViewModel.Title"
+                   class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                   placeholder="Story title" />
+        <ValidationMessage For="@(() => ViewModel.Title)" class="text-sm text-[--color-danger]" />
+    </div>
+
+    @* ── Short description ────────────────────────────────────────────────────── *@
+    <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold text-[--color-text]">Short Description</label>
+        <InputTextArea @bind-Value="ViewModel.ShortDescription" rows="2"
+                       class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                       placeholder="One-line hook shown in story listings (max 500 chars)" />
+        <ValidationMessage For="@(() => ViewModel.ShortDescription)" class="text-sm text-[--color-danger]" />
+    </div>
+
+    @* ── Rating + Status (side by side on wider screens) ─────────────────────── *@
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div class="flex flex-col gap-1">
+            <label class="text-sm font-semibold text-[--color-text]">Rating</label>
+            <InputSelect @bind-Value="ViewModel.Rating"
+                         class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]">
+                @foreach (Rating r in Enum.GetValues<Rating>())
                 {
-                    <li>@error</li>
+                    <option value="@r">@r.ToString()</option>
                 }
-            </ul>
+            </InputSelect>
         </div>
-    }
-
-    <div class="mb-3">
-        <label for="title" class="form-label">Title</label>
-        <InputText id="title" class="form-control" @bind-Value="ViewModel.Title" />
-        <ValidationMessage For="@(() => ViewModel.Title)" />
+        <div class="flex flex-col gap-1">
+            <label class="text-sm font-semibold text-[--color-text]">Status</label>
+            <InputSelect @bind-Value="ViewModel.StoryStatusId"
+                         class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]">
+                @foreach (StoryStatusEnum s in Enum.GetValues<StoryStatusEnum>())
+                {
+                    <option value="@s">@s.ToString()</option>
+                }
+            </InputSelect>
+        </div>
     </div>
 
-    <div class="mb-3">
-        <label for="short-desc" class="form-label">Short Description</label>
-        <InputTextArea id="short-desc" class="form-control" @bind-Value="ViewModel.ShortDescription" />
-        <ValidationMessage For="@(() => ViewModel.ShortDescription)" />
-    </div>
-    
-    <div class="mb-3">
-        <label for="long-desc" class="form-label">Long Description / Summary</label>
-        <InputTextArea id="long-desc" class="form-control" rows="5" @bind-Value="ViewModel.LongDescription" />
-        <ValidationMessage For="@(() => ViewModel.LongDescription)" />
-    </div>
-
-    <div class="mb-3">
-        <label for="rating" class="form-label">Rating</label>
-        <InputSelect id="rating" class="form-select" @bind-Value="ViewModel.Rating">
-            @foreach (Rating rating in Enum.GetValues<Rating>())
-            {
-                <option value="@rating">@rating.ToString()</option>
-            }
-        </InputSelect>
+    @* ── Cover art ───────────────────────────────────────────────────────────── *@
+    <div class="flex flex-col gap-2">
+        <label class="text-sm font-semibold text-[--color-text]">Cover Art</label>
+        @if (!string.IsNullOrEmpty(ViewModel.CoverArtRelativeUrl))
+        {
+            <img src="@ViewModel.CoverArtRelativeUrl"
+                 alt="Current cover"
+                 class="h-32 w-24 rounded-md object-cover shadow-sm" />
+        }
+        <InputFile OnChange="HandleCoverSelected" accept="image/jpeg,image/png,image/webp"
+                   class="text-sm text-[--color-text-muted] file:mr-3 file:rounded-md file:border-0 file:bg-[--color-primary] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white file:transition-colors hover:file:bg-[--color-primary-strong]" />
+        <p class="text-xs text-[--color-text-muted]">JPEG, PNG, or WebP · max 10 MB</p>
     </div>
 
-    @* TODO: Add components for Tag selection, Cover Art upload, etc. *@
+    @* ── Long description (rich text) ─────────────────────────────────────────── *@
+    <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold text-[--color-text]">Summary / Long Description</label>
+        <EditorView @ref="_editor" Html="@ViewModel.LongDescription" Placeholder="Full story summary…" />
+    </div>
 
+    @* ── Tags ────────────────────────────────────────────────────────────────── *@
+    <div class="flex flex-col gap-4">
+        <p class="text-sm font-semibold text-[--color-text]">Tags</p>
+        <TagSelector TagType="TagTypeEnum.Character"
+                     Label="Characters"
+                     SelectedTags="@GetSelected(TagTypeEnum.Character)"
+                     OnSelectionChanged="@(chips => HandleTagChange(TagTypeEnum.Character, chips))" />
+        <TagSelector TagType="TagTypeEnum.Setting"
+                     Label="Settings"
+                     SelectedTags="@GetSelected(TagTypeEnum.Setting)"
+                     OnSelectionChanged="@(chips => HandleTagChange(TagTypeEnum.Setting, chips))" />
+        <TagSelector TagType="TagTypeEnum.Genre"
+                     Label="Genres"
+                     SelectedTags="@GetSelected(TagTypeEnum.Genre)"
+                     OnSelectionChanged="@(chips => HandleTagChange(TagTypeEnum.Genre, chips))" />
+        <TagSelector TagType="TagTypeEnum.ContentWarning"
+                     Label="Content Warnings"
+                     SelectedTags="@GetSelected(TagTypeEnum.ContentWarning)"
+                     OnSelectionChanged="@(chips => HandleTagChange(TagTypeEnum.ContentWarning, chips))" />
+        <TagSelector TagType="TagTypeEnum.CrossoverFandom"
+                     Label="Crossover Fandoms"
+                     SelectedTags="@GetSelected(TagTypeEnum.CrossoverFandom)"
+                     OnSelectionChanged="@(chips => HandleTagChange(TagTypeEnum.CrossoverFandom, chips))" />
+        <TagSelector TagType="TagTypeEnum.Relationship"
+                     Label="Relationships"
+                     SelectedTags="@GetSelected(TagTypeEnum.Relationship)"
+                     OnSelectionChanged="@(chips => HandleTagChange(TagTypeEnum.Relationship, chips))" />
+    </div>
+
+    @* ── Submit ──────────────────────────────────────────────────────────────── *@
+    <button type="submit"
+            disabled="@ViewModel.IsLoading"
+            class="self-start rounded-md bg-[--color-primary] px-5 py-2 font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50">
+        @(ViewModel.IsLoading ? "Saving…" : SubmitLabel)
+    </button>
 </EditForm>
 
 @code {
-    [Parameter, EditorRequired]
-    public StoryPropertiesViewModel ViewModel { get; set; } = null!;
+    [Parameter, EditorRequired] public StoryPropertiesViewModel ViewModel { get; set; } = null!;
+    [Parameter] public EventCallback OnValidSubmit { get; set; }
 
-    [Parameter]
-    public EventCallback OnValidSubmit { get; set; }
+    /// <summary>
+    /// Pre-populated tag chips per type, used in edit mode to seed TagSelectors on first render.
+    /// Null = create mode (all selectors start empty). Passed in before first render — not reactive.
+    /// </summary>
+    [Parameter] public IReadOnlyDictionary<TagTypeEnum, IReadOnlyList<TagChipDto>>? InitialTagsByType { get; set; }
 
-    public List<TagDropDownDTO> CharacterTags;
+    [Parameter] public string SubmitLabel { get; set; } = "Save";
 
-    protected override async Task OnInitializedAsync()
+    private EditorView? _editor;
+
+    // Per-type selections kept in sync with each TagSelector's OnSelectionChanged.
+    // Seeded from InitialTagsByType (edit mode) or empty (create mode).
+    private readonly Dictionary<TagTypeEnum, IReadOnlyList<TagChipDto>> _tagsByType = new();
+
+    /// <summary>The most recently selected cover file, or null if none was picked this session.</summary>
+    public IBrowserFile? SelectedCoverFile { get; private set; }
+
+    /// <summary>Pull the current editor HTML. Called by the page on submit before building the DTO.</summary>
+    public async Task<string> GetLongDescriptionAsync() =>
+        _editor is not null ? await _editor.GetHtmlAsync() : string.Empty;
+
+    protected override void OnInitialized()
     {
-        CharacterTags = await TagRetrievalService.GetAllCharacterTagsAsync();
+        if (InitialTagsByType is null) return;
+
+        foreach ((TagTypeEnum type, IReadOnlyList<TagChipDto> chips) in InitialTagsByType)
+            _tagsByType[type] = chips;
+
+        RebuildViewModelTags();
     }
 
+    private IReadOnlyList<TagChipDto> GetSelected(TagTypeEnum type) =>
+        _tagsByType.TryGetValue(type, out IReadOnlyList<TagChipDto>? chips) ? chips : [];
+
+    private void HandleTagChange(TagTypeEnum type, IReadOnlyList<TagChipDto> chips)
+    {
+        _tagsByType[type] = chips;
+        RebuildViewModelTags();
+    }
+
+    private void RebuildViewModelTags() =>
+        ViewModel.SelectedTags = [.. _tagsByType.Values.SelectMany(c => c)];
+
+    private void HandleCoverSelected(InputFileChangeEventArgs e) =>
+        SelectedCoverFile = e.File;
+
+    private async Task HandleValidSubmit() => await OnValidSubmit.InvokeAsync();
 }

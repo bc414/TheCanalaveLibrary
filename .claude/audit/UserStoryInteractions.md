@@ -158,14 +158,16 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
   `fill-rule` attribute change needed). Compound paths use winding direction deliberately: CW subpaths
   fill positively; a CCW subpath inside a CW outer path cancels winding to 0 (transparent = cutout).
   Visually verified via `wwwroot/icon-preview.html` (throwaway — remove before Stage 6). Color palette
-  is Gen 4/5 Pokémon-grounded: warm tones for personal attachment, cool for discovery/relationship
-  actions, rust for dismissal.
+  is Gen 4/5 Pokémon-grounded: warm tones for personal attachment (Fairy Pink, Mismagius Magenta, Arceus
+  Gold), cool for lifecycle/relationship actions (Azurite Blue, Manaphy Teal), rust for dismissal (Cinnabar
+  Rust). Green is now reserved for curation-tab icons (My Stories / Recommendations / Hidden Gems) in
+  `BookshelfTabVisuals` — Follow was reskinned to Manaphy Teal in WU27 to free the green family for that.
 
   | `InteractionTypeEnum` | Label | `AccentColor` | Icon concept | `IconPath` (`d=""`) |
   |---|---|---|---|---|
   | `Favorite` | Favorite | `#E8507A` Fairy Pink | Filled heart | `M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z` |
   | `PrivateFavorite` | Private Favorite | `#C040A8` Mismagius Magenta | Filled heart — same shape, color alone signals privacy | same `d` as Favorite |
-  | `Follow` | Following | `#4A9B52` Eterna Green | Award ribbon: circle badge + two-tailed fork; Gen 4 ribbon = earned commitment | `M6 8A6 6 0 0 1 18 8A6 6 0 0 1 6 8Z M9 14L6 22L9.5 20L12 21.5L14.5 20L18 22L15 14Z` |
+  | `Follow` | Following | `#2DBBA0` Manaphy Teal *(reskinned WU27 — was `#4A9B52` Eterna Green; green now reserved for curation tabs: My Stories / Recommendations / Hidden Gems)* | Award ribbon: circle badge + two-tailed fork; Gen 4 ribbon = earned commitment | `M6 8A6 6 0 0 1 18 8A6 6 0 0 1 6 8Z M9 14L6 22L9.5 20L12 21.5L14.5 20L18 22L15 14Z` |
   | `Complete` | Completed | `#E8B84B` Arceus Gold | Filled circle; CCW checkmark polygon inside cancels winding → transparent cutout | `M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M6 12.5L5 14L10 19L20 7L18.5 5.5L10 16Z` |
   | `ReadLater` | Read It Later | `#2E6FBF` Azurite Blue | Open Pokéball (bottom D + raised lid = 2 px gap, center clasp dot) with 3 page-lines entering from top — capturing a story from the discovery stream | `M5 16A7 7 0 0 1 19 16Z M5 14A7 7 0 0 0 19 14Z M10.5 15A1.5 1.5 0 0 1 13.5 15A1.5 1.5 0 0 1 10.5 15Z M9 1L15 1L15 2L9 2Z M9 3L15 3L15 4L9 4Z M9 5L15 5L15 6L9 6Z` |
   | `Ignore` | Ignored | `#C04030` Cinnabar Rust | Ban circle: CW outer disk + CCW inner circle (ring hole) + CW diagonal bar | `M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M5 12A7 7 0 0 0 19 12A7 7 0 0 0 5 12Z M5.5 7.5L7.5 5.5L18.5 16.5L16.5 18.5Z` |
@@ -186,14 +188,84 @@ Perhaps need to go more texture/color detail instead of totally flat svg, or use
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** `HasStarted` is present;
   derived tabs "Actively Reading" (`HasStarted AND NOT IsCompleted AND NOT IsIgnored`) and "Abandoned"
   (`IsIgnored AND HasStarted`) are now computable from stored columns.
-- **L2 — Stage 2.** Tab-backing read queries unbuilt.
-- **L3-Logic / L3.5-Structure — Stage 2.** `BookshelvesPage` dispatcher (`/bookshelves/{Tab}`,
-  active-user-only, each tab composing `StoryDeck`) unbuilt. Not a discovery surface — no SearchMode
-  entries (correctly so).
-- **L4-Style — Stage 1.** **L5 — Stage 2.** **L6 — Stage 5** (same indexes; verified during WU15, 2026-06-22 — see Feature 16 L6 note above).
+- **L2 — Stage 5 (WU27, 2026-06-24).** Tab-backing read queries:
+  - `GetBookshelfStoryIdsAsync(BookshelfTab)` on `IUserStoryInteractionReadService` — all candidate IDs for
+    active user, scoped via `IActiveUserContext`; anonymous → empty; `MyStories`/`Recommendations`/
+    `HiddenGems` throw `ArgumentOutOfRangeException` (routed differently by the dispatcher).
+  - `GetStoryIdsByAuthorAsync(int)` on `IStoryReadService` — `IgnoreQueryFilters("ContentRating")` so
+    authors see own mature stories.
+  - `GetListingsAsync(filter, restrictToStoryIds?)` — additive param on `IStoryReadService`; `restrictToStoryIds`
+    is applied first, before all other predicates and before count; null = unrestricted; existing callers
+    unaffected.
+  - `GetRecommendedStoryIdsAsync()` + `GetHiddenGemStoryIdsAsync()` on `IRecommendationReadService` — added
+    in WU27 (additive, not WU29); own approved recs, scoped by `RecommenderId == userId`.
+  - Verified: Integration tier — `BookshelfStoryIdsTests.cs` (16 tests, Testcontainers Postgres):
+    Favorites/ActivelyReading/Abandoned predicates, user-scoping, anonymous-empty, MyStories-throws,
+    GetStoryIdsByAuthorAsync incl. mature bypass, GetListingsAsync narrowing + content-rating still applies,
+    GetRecommendedStoryIds / GetHiddenGemStoryIds approved-only and hidden-gem narrowing.
+- **L3-Logic / L3.5-Structure — Stage 5 (WU27, 2026-06-24).** `BookshelvesPage` dispatcher
+  (`/bookshelves/{Tab?}`, `[Authorize]`, mirrors StoryPage fetch-then-dispatch); `BookshelvesDesktop`;
+  `BookshelvesMobile`. Not a discovery surface — no SearchMode entries. Composes `StoryDeck` +
+  `ResultsFilterPanel` (narrowing, not discovery); keeps them unbundled per §5.27 convention.
+  `BookshelfTabVisuals` maps `BookshelfTab → (IconPath, AccentColor, Label, Slug)`.
+  Verified: RazorComponents tier — `BookshelvesDesktopTests.cs` (7 tests): tab bar 11 tabs, active
+  `aria-current`, inactive tabs, all hrefs, StoryDeck present, ResultsFilterPanel present, alternate-active
+  assertion. `BookshelvesMobileTests.cs` (10 tests): dropdown 11 tabs, active aria-current, correct hrefs,
+  overlay initially closed, filter button opens overlay, backdrop-click closes, close-button closes,
+  StoryDeck present, open-then-close = no panel.
+- **L4-Style — Stage 5 (WU27, 2026-06-24).** Desktop: horizontal tab bar with dynamic inline accent
+  styles (`background-color:{AccentColor}22;color:{AccentColor};border-bottom:2px solid {AccentColor}` on
+  active tab). Mobile: `<details>` tab dropdown + filter overlay (`fixed inset-0 z-50 bg-black/50`,
+  `@onclick:stopPropagation`, renders nothing when closed). Human visual sign-off pending (browser walk-through
+  of all 11 tabs + teal Following + mobile overlay) — no automated style check; visual → Stage 6.
+- **L5 — Stage 2. L6 — Stage 5** (same indexes; verified during WU15, 2026-06-22 — see Feature 16 L6 note above).
+
+  **Settled design — 11 tabs, in display order (desktop bar + mobile dropdown both use this order):**
+
+  | `BookshelfTab` | AccentColor | Color name | Label | Icon concept |
+  |---|---|---|---|---|
+  | `MyStories` | `#2F7D4F` | Leafeon Green | My Stories | Book body + spine (left ⅔) + diagonal quill/pen nib crossing |
+  | `HiddenGems` | `#1FA37A` | Torterra Emerald | Hidden Gems | Kite diamond gem with CCW crown-facet cutout (Pokémon-gem motif) |
+  | `Recommendations` | `#5BB85A` | Roserade Green | Recommendations | 5-pointed star at top-right + two diagonal streak trails from bottom-left (shooting star) |
+  | `Favorites` | `#E8507A` | Fairy Pink | Favorites | Reuses `UserStoryInteractionVisuals.For(Favorite)` |
+  | `PrivateFavorites` | `#C040A8` | Mismagius Magenta | Private Favorites | Reuses `UserStoryInteractionVisuals.For(PrivateFavorite)` |
+  | `Completed` | `#E8B84B` | Arceus Gold | Completed | Reuses `UserStoryInteractionVisuals.For(Complete)` |
+  | `Following` | `#2DBBA0` | Manaphy Teal | Following | Reuses `UserStoryInteractionVisuals.For(Follow)` (teal after WU27 reskin) |
+  | `ActivelyReading` | `#2E96A8` | Lake Acuity Blue | Actively Reading | Two open-book page rectangles (left + right, spine gap) with page-line fills |
+  | `ReadItLater` | `#2E6FBF` | Azurite Blue | Read It Later | Reuses `UserStoryInteractionVisuals.For(ReadLater)` |
+  | `Abandoned` | `#9A8580` | Wayward Cave Gray | Abandoned | House silhouette (rect body + triangle roof) with CCW door opening cutout |
+  | `Ignored` | `#C04030` | Cinnabar Rust | Ignored | Reuses `UserStoryInteractionVisuals.For(Ignore)` |
+
+  Source of truth for the 5 new icons (My Stories, Hidden Gems, Recommendations, Actively Reading,
+  Abandoned): `SharedUI/Bookshelves/BookshelfTabVisuals.cs`. The 6 interaction-tab icons are a
+  pass-through to `UserStoryInteractionVisuals.For(...)` — single source of truth, picks up the teal
+  Following automatically. The 2 recommendation icons (Hidden Gems, Recommendations) also live as
+  `public const string` in `SharedUI/Recommendations/RecommendationIcons.cs` (owned by WU27, consumed by
+  WU29's `RecommendationCard`).
+
+  **Desktop layout:** horizontal tab bar (icon + label, `<a href>` links, `aria-current="page"` on active);
+  two-column body: `StoryDeck` (main, ~⅔ width) + `ResultsFilterPanel` right sidebar (~⅓ width).
+
+  **Mobile layout:** tab `<details>` dropdown (shows active icon + label; expands to all 11 with
+  icon + label; reuses `ChapterNavigation` `<details>` pattern); filter button opens `ResultsFilterPanel`
+  as an inline backdrop overlay (ConfirmDialog shell convention — `fixed inset-0 z-50 bg-black/50`,
+  `@onclick:stopPropagation`, renders nothing when closed). The overlay IS the "third consumer" the WU9
+  note flagged for deciding whether to extract a shared `Modal` primitive — decision: **do NOT extract**;
+  a slide-in filter drawer is structurally different from the centered ConfirmDialog; build inline.
+
+  **My Stories content-rating**: `IgnoreQueryFilters("ContentRating")` — an author always sees their own
+  stories regardless of maturity. Service gate still enforces that only the author can see unpublished /
+  private drafts (WU24).
+
+  **Recommendations + Hidden Gems tabs** ("My Recommendations" / "My Hidden Gems"): stories the active
+  user wrote an *approved* recommendation for. `GetRecommendedStoryIdsAsync` = any approved rec written by
+  the user; `GetHiddenGemStoryIdsAsync` = same narrowed to `IsHiddenGem == true`. Both methods added to
+  `IRecommendationReadService` and implemented in `ServerRecommendationReadService` as part of WU27
+  (2026-06-24) — additive, server-only, no client stub required.
 
 ---
 
 ### Dependency callout
 Everything in this folder past L1 is blocked on resolving the reading-status re-model **and** on the
-`StoryCard`/`StoryDeck` atoms (owned by Stories/). Surface both to the user before building Bookshelves.
+`StoryCard`/`StoryDeck` atoms (owned by Stories/). Both resolved: `StoryDeck` is WU14 (Stage 5),
+`StoryCard` is WU13 (Stage 5), `ResultsFilterPanel` is WU23 (Stage 5). WU27 proceeds.

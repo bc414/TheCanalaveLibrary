@@ -1,5 +1,4 @@
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
@@ -23,32 +22,22 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// assertions use relative order or presence, never absolute position.
 /// </summary>
 [Collection("Postgres")]
-public class StoryListingsTests(PostgresFixture postgres) : IAsyncLifetime
+public class StoryListingsTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
     private FakeActiveUserContext _fake = null!;
 
     // Fixture tag ids seeded in InitializeAsync.
     private int _genreTagA;
     private int _genreTagB;
 
-    // The DataSeeder creates "TestUser" — we use that user's real id for interaction seeds.
     private int _testUserId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        _ = _factory.Services; // trigger host build + DataSeeder
-        _fake = _factory.Services.GetRequiredService<FakeActiveUserContext>();
-
+        await base.InitializeAsync();
+        _fake = Factory.Services.GetRequiredService<FakeActiveUserContext>();
+        _testUserId = await SeedUserAsync();
         (_genreTagA, _genreTagB) = await SeedTagsAsync();
-        _testUserId = await GetTestUserIdAsync();
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
     }
 
     // ── Tag include (AND semantics) ──────────────────────────────────────────────────
@@ -123,7 +112,7 @@ public class StoryListingsTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task GetListingsAsync_ExcludeFavorited_HidesViewersFavoritedStories()
     {
         // Use the DataSeeder's TestUser — only user guaranteed to exist in the shared container.
-        SetViewer(authenticated: true, userId: _testUserId);
+        SetViewer(authenticated: true);
 
         string suffix = Guid.NewGuid().ToString("N")[..8];
         int favorited   = await SeedStoryAsync($"Fav-{suffix}", Rating.T, []);
@@ -244,10 +233,10 @@ public class StoryListingsTests(PostgresFixture postgres) : IAsyncLifetime
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────
 
-    private void SetViewer(bool authenticated, int userId = 1, bool showMature = true)
+    private void SetViewer(bool authenticated, bool showMature = true)
     {
         _fake.IsAuthenticated = authenticated;
-        _fake.UserId = authenticated ? userId : null;
+        _fake.UserId = authenticated ? _testUserId : null;
         _fake.ShowMatureContent = showMature;
     }
 
@@ -261,21 +250,14 @@ public class StoryListingsTests(PostgresFixture postgres) : IAsyncLifetime
     /// </summary>
     private async Task<T> InvokeSvcAsync<T>(Func<IStoryReadService, Task<T>> call)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IStoryReadService svc = scope.ServiceProvider.GetRequiredService<IStoryReadService>();
         return await call(svc);
     }
 
-    private async Task<int> GetTestUserIdAsync()
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        return await db.Users.Where(u => u.UserName == "TestUser").Select(u => u.Id).FirstAsync();
-    }
-
     private async Task<(int TagA, int TagB)> SeedTagsAsync()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         string suffix = Guid.NewGuid().ToString("N")[..8];
@@ -288,7 +270,7 @@ public class StoryListingsTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<int> SeedStoryAsync(string title, Rating rating, IReadOnlyList<int> tagIds)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         Story story = new()
@@ -311,7 +293,7 @@ public class StoryListingsTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<int> SeedStoryWithDescAsync(string title, string description)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         Story story = new()
@@ -331,7 +313,7 @@ public class StoryListingsTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<int> SeedStoryAtAsync(string title, DateTime publishedDate)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         Story story = new()
@@ -351,7 +333,7 @@ public class StoryListingsTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task SeedInteractionAsync(int userId, int storyId, bool isFavorite = false)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         db.UserStoryInteractions.Add(new UserStoryInteraction

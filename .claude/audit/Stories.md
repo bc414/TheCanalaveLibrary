@@ -70,14 +70,34 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
   same NRE/`Attach`-vs-`Add`/slug-disambiguation regressions against a real Postgres; the dev-
   diagnostics endpoints are no longer the source of truth for this behavior (see
   `canalave-conventions/testing.md`).
-- **L3-Logic — Stage 4.** `StoryPropertiesForm` is a correct `EditForm` + `DataAnnotationsValidator` +
-  ViewModel + server-error surfacing pattern, but: has a `@* TODO: tags, cover art *@`, no
-  slug/AdminControls handling. (Its `ITagRetrievalService` injection was fixed to `ITagReadService` in
-  WU3 — see `audit/Tags.md` Feature 13 — that part of this note is stale and superseded.) *Disagrees
-  with:* completeness, not architecture. Resolution → Stage 2/3 to finish.
-- **L3.5-Structure — Stage 4.** Form skeleton exists; missing `TagSelector` wiring, cover-art upload,
-  `AdminControls`. Shared create/edit usage (routes `/stories/new`, `/story/{id}/edit`) not yet realized.
-- **L4-Style — Stage 1.** Bootstrap (`mb-3`, `form-control`). Blocked on Tailwind/design tokens.
+- **L3-Logic — Stage 5.** **WU24 (2026-06-23):** `ServerStoryWriteService` now enforces author ownership
+  on both create and update paths: `CreateStoryAsync` stamps `AuthorId` from `IActiveUserContext.UserId`
+  (the client-settable `AuthorId` property is removed from `CreateStoryDTO`) and throws
+  `InvalidOperationException` for unauthenticated callers; `UpdateStoryAsync` loads the story, checks
+  `story.AuthorId != activeUser.UserId`, and throws `UnauthorizedAccessException` for non-owners. No
+  mod/admin OR in this gate — moderation is a separate WU34 path (see `cross-cutting.md` "Security vs
+  affordance"). `ITagReadService` gains `GetTagChipsByIdsAsync(IReadOnlyList<int>)` — bulk chip lookup
+  by exact ID for edit prefill; `ServerTagReadService` implements it following the same
+  sprite-resolve-at-projection pattern as `SearchTagChipsAsync`. `StoryPropertiesViewModel` no longer
+  implements `IEditableStoryProperties` (decoupled from wire DTOs; mapping is at page layer).
+  `Routes.razor` switched from `RouteView` to `AuthorizeRouteView` so `[Authorize]` attributes are
+  enforced (was silently ignored with `RouteView`).
+- **L3.5-Structure — Stage 5.** **WU24 (2026-06-23):** `StoryPropertiesForm` fully rebuilt (Bootstrap →
+  Tailwind, all 6 `TagSelector` instances wired with `OnSelectionChanged` + `InitialTagsByType` prefill,
+  `EditorView @ref` pull-on-submit via public `GetLongDescriptionAsync()`, `InputFile` for cover art,
+  `Rating`+`Status` selects, server validation error display, `IsLoading` disabled-submit guard). No
+  `@inject` — presentational, passes `StoryPropertiesViewModel` and `OnValidSubmit`; page owns all I/O.
+  `StoryEditorPage.razor` created: both `@page "/story/new"` and `@page "/story/{StoryId:int}/edit"` +
+  `[Authorize]`; thin dispatcher (loads story + tag chips for edit prefill, maps ViewModel ↔ DTOs on
+  submit, cover-art save-first-then-upload ordering, surfaces `StoryValidationException` and
+  `UnauthorizedAccessException` into `ViewModel.ServerValidationErrors`). Pattern 1 edit side (view
+  side is WU25). Admin/edit controls: no named component — inline `@if` and edit-page links per the
+  "Owner-Conditional Edit Affordances" convention (see `layer3.5-structure.md`).
+- **L4-Style — Stage 5.** **WU24 (2026-06-23):** all form markup uses Tailwind v4 design tokens
+  (`--color-text`, `--color-surface`, `--color-border`, `--color-primary`, `--color-danger`), consistent
+  with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
+  column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
+  bUnit).
 - **L5 — Stage 4.** `HttpStoryWriteService` exists but `StoryEndpoints` maps **no** write endpoints; the
   client calls handlers that don't exist. Reconcile by adding POST/PUT endpoints from the stable interface.
 - **L6 — Stage 2.** Story search indexes deferred ("to be added by query need").

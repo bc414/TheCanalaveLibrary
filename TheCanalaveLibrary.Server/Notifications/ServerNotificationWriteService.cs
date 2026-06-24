@@ -117,6 +117,15 @@ public class ServerNotificationWriteService(
             sourceUserId: voucherUserId,
             targets: [(recipientUserId, voucherUserId)]);
 
+    // ── Semantic generation methods (WU29 slice — single-recipient) ──────────────
+
+    /// <inheritdoc/>
+    public Task NotifyStoryHiddenGemAsync(int recipientStoryAuthorId, int sourceRecommenderId) =>
+        CreateCoreAsync(
+            NotificationTypeEnum.HiddenGem,
+            sourceUserId: sourceRecommenderId,
+            targets: [(recipientStoryAuthorId, sourceRecommenderId)]);
+
     // ── Private create-core ───────────────────────────────────────────────────────
 
     /// <summary>

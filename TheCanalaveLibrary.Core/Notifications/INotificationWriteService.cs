@@ -59,4 +59,13 @@ public interface INotificationWriteService : INotificationReadService
     /// Called by <c>ServerFollowingWriteService.VouchAsync</c> after its primary commit.
     /// </summary>
     Task NotifyNewVouchAsync(int recipientUserId, int voucherUserId);
+
+    // ── Semantic generation methods (WU29 slice) ──────────────────────────────────
+
+    /// <summary>
+    /// Creates a <c>HiddenGem</c> notification for the story author when a recommender designates
+    /// their recommendation as a Hidden Gem. Called by
+    /// <c>ServerRecommendationWriteService.SetHiddenGemAsync</c> after its primary commit.
+    /// </summary>
+    Task NotifyStoryHiddenGemAsync(int recipientStoryAuthorId, int sourceRecommenderId);
 }

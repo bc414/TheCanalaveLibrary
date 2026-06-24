@@ -1,5 +1,4 @@
 using FluentAssertions;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
@@ -16,27 +15,17 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// Tier: <b>Integration</b> (real Testcontainers Postgres via <see cref="PostgresFixture"/>).
 /// </summary>
 [Collection("Postgres")]
-public class FollowingReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
+public class FollowingReadServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
     private int _viewerId;
     private int _targetId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        _ = _factory.Services;
-
-        _viewerId = await CreateThrowawayUserAsync();
-        _targetId = await CreateThrowawayUserAsync();
-
+        await base.InitializeAsync();
+        _viewerId = await SeedUserAsync();
+        _targetId = await SeedUserAsync();
         SetActiveUser(_viewerId);
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
     }
 
     // ── GetRelationshipStateAsync ────────────────────────────────────────────────
@@ -77,8 +66,8 @@ public class FollowingReadServiceTests(PostgresFixture postgres) : IAsyncLifetim
     [Fact]
     public async Task GetRelationshipStateAsync_Anonymous_ReturnsZeroState()
     {
-        _factory.Services.GetRequiredService<FakeActiveUserContext>().UserId = null;
-        _factory.Services.GetRequiredService<FakeActiveUserContext>().IsAuthenticated = false;
+        Factory.Services.GetRequiredService<FakeActiveUserContext>().UserId = null;
+        Factory.Services.GetRequiredService<FakeActiveUserContext>().IsAuthenticated = false;
 
         UserRelationshipStateDto state = await CallGetRelationshipStateAsync(_targetId);
 
@@ -91,7 +80,7 @@ public class FollowingReadServiceTests(PostgresFixture postgres) : IAsyncLifetim
     [Fact]
     public async Task GetFollowedUsersAsync_ReturnsUserCardDtoForEachFollow()
     {
-        int followedId = await CreateThrowawayUserAsync();
+        int followedId = await SeedUserAsync();
         await SeedFollowAsync(_viewerId, followedId);
 
         IReadOnlyList<UserCardDto> cards = await CallGetFollowedUsersAsync(_viewerId);
@@ -135,7 +124,7 @@ public class FollowingReadServiceTests(PostgresFixture postgres) : IAsyncLifetim
     [Fact]
     public async Task GetOutgoingVouchesAsync_IsPublic_CanQueryAnotherUsersVouches()
     {
-        int otherVoucher = await CreateThrowawayUserAsync();
+        int otherVoucher = await SeedUserAsync();
         await SeedVouchAsync(otherVoucher, _targetId, null);
 
         // Active user is _viewerId, but we query otherVoucher's outgoing vouches — should succeed.
@@ -148,8 +137,8 @@ public class FollowingReadServiceTests(PostgresFixture postgres) : IAsyncLifetim
     [Fact]
     public async Task GetIncomingVouchesAsync_ReturnsVouchesForCurrentUser()
     {
-        int voucherA = await CreateThrowawayUserAsync();
-        int voucherB = await CreateThrowawayUserAsync();
+        int voucherA = await SeedUserAsync();
+        int voucherB = await SeedUserAsync();
 
         await SeedVouchAsync(voucherA, _viewerId, null);
         await SeedVouchAsync(voucherB, _viewerId, null);
@@ -165,7 +154,7 @@ public class FollowingReadServiceTests(PostgresFixture postgres) : IAsyncLifetim
     public async Task GetIncomingVouchesAsync_DoesNotRevealOtherUsersIncomingVouches()
     {
         // Seed a vouch targeted at _targetId (not the active user _viewerId).
-        int voucherX = await CreateThrowawayUserAsync();
+        int voucherX = await SeedUserAsync();
         await SeedVouchAsync(voucherX, _targetId, null);
 
         // Active user is _viewerId — should see 0 incoming vouches (the seeded one targets _targetId).
@@ -177,8 +166,8 @@ public class FollowingReadServiceTests(PostgresFixture postgres) : IAsyncLifetim
     [Fact]
     public async Task GetIncomingVouchesAsync_Anonymous_ReturnsEmpty()
     {
-        _factory.Services.GetRequiredService<FakeActiveUserContext>().UserId = null;
-        _factory.Services.GetRequiredService<FakeActiveUserContext>().IsAuthenticated = false;
+        Factory.Services.GetRequiredService<FakeActiveUserContext>().UserId = null;
+        Factory.Services.GetRequiredService<FakeActiveUserContext>().IsAuthenticated = false;
 
         IReadOnlyList<VouchDisplayDto> incoming = await CallGetIncomingVouchesAsync();
         incoming.Should().BeEmpty("anonymous callers have no incoming vouches to show");
@@ -186,37 +175,9 @@ public class FollowingReadServiceTests(PostgresFixture postgres) : IAsyncLifetim
 
     // ── helpers ──────────────────────────────────────────────────────────────────
 
-    private void SetActiveUser(int userId)
-    {
-        FakeActiveUserContext fake = _factory.Services.GetRequiredService<FakeActiveUserContext>();
-        fake.UserId = userId;
-        fake.IsAuthenticated = true;
-    }
-
-    private async Task<int> CreateThrowawayUserAsync()
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        UserManager<User> userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
-
-        string suffix = Guid.NewGuid().ToString("N")[..8];
-        User user = new()
-        {
-            UserName = $"ThrowawayFR-{suffix}",
-            Email = $"throwaway-fr-{suffix}@test.invalid",
-            EmailConfirmed = true,
-            ThemeId = 1
-        };
-
-        IdentityResult result = await userManager.CreateAsync(user, "Password123!");
-        result.Succeeded.Should().BeTrue(
-            $"throwaway user creation failed: {string.Join(", ", result.Errors.Select(e => e.Description))}");
-
-        return user.Id;
-    }
-
     private async Task SeedFollowAsync(int userId, int followedId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         bool exists = await db.FollowedUsers.AnyAsync(f => f.UserId == userId && f.FollowedUserId == followedId);
@@ -234,7 +195,7 @@ public class FollowingReadServiceTests(PostgresFixture postgres) : IAsyncLifetim
 
     private async Task SeedVouchAsync(int vouchingId, int vouchedId, string? text)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         bool exists = await db.Vouches.AnyAsync(v => v.VouchingUserId == vouchingId && v.VouchedUserId == vouchedId);
@@ -253,28 +214,28 @@ public class FollowingReadServiceTests(PostgresFixture postgres) : IAsyncLifetim
 
     private async Task<UserRelationshipStateDto> CallGetRelationshipStateAsync(int targetId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IFollowingReadService svc = scope.ServiceProvider.GetRequiredService<IFollowingReadService>();
         return await svc.GetRelationshipStateAsync(targetId);
     }
 
     private async Task<IReadOnlyList<UserCardDto>> CallGetFollowedUsersAsync(int userId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IFollowingReadService svc = scope.ServiceProvider.GetRequiredService<IFollowingReadService>();
         return await svc.GetFollowedUsersAsync(userId);
     }
 
     private async Task<IReadOnlyList<VouchDisplayDto>> CallGetOutgoingVouchesAsync(int userId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IFollowingReadService svc = scope.ServiceProvider.GetRequiredService<IFollowingReadService>();
         return await svc.GetOutgoingVouchesAsync(userId);
     }
 
     private async Task<IReadOnlyList<VouchDisplayDto>> CallGetIncomingVouchesAsync()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IFollowingReadService svc = scope.ServiceProvider.GetRequiredService<IFollowingReadService>();
         return await svc.GetIncomingVouchesAsync();
     }

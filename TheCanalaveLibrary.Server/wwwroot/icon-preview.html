@@ -2,17 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Interaction Icon Preview</title>
+  <title>Icon Preview — The Canalave Library</title>
   <style>
     body { font-family: Georgia, serif; background: #f0f0ec; padding: 2rem; }
-    h1 { font-size: 1.1rem; color: #333; margin-bottom: 2rem; }
+    h1, h2 { font-size: 1.1rem; color: #333; margin-bottom: 1rem; }
+    h2 { margin-top: 3rem; border-top: 2px solid #ccc; padding-top: 1.5rem; }
     .grid { display: flex; flex-direction: column; gap: 2rem; }
     .row { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; }
     .label { width: 14rem; font-size: 0.85rem; color: #555; }
     .label strong { display: block; color: #222; font-size: 0.95rem; }
     .label code { font-size: 0.7rem; color: #888; }
 
-    /* The three button states, matching UserStoryInteractionButton.razor exactly */
+    /* Interaction button states */
     .btn {
       width: 36px; height: 36px;
       border-radius: 6px;
@@ -23,17 +24,32 @@
       position: relative;
     }
     .btn svg { width: 20px; height: 20px; transition: fill 0.15s; }
-
-    /* Inactive state: bg-gray-200, fill-gray-500 */
     .btn-inactive { background: #e5e7eb; }
     .btn-inactive svg { fill: #6b7280; }
-
-    /* Hover state: bg-gray-200 + fill accent */
     .btn-hover { background: #e5e7eb; }
-
-    /* Active state: bg-accent, fill-white */
     .btn-active { }
     .btn-active svg { fill: white; }
+
+    /* Bookshelf tab chips */
+    .tab-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+    .tab-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 8px;
+      font-size: 0.82rem; font-family: sans-serif;
+      border: 1.5px solid transparent;
+      white-space: nowrap;
+    }
+    .tab-chip svg { width: 16px; height: 16px; flex-shrink: 0; }
+    /* Inactive tab: muted border + gray text */
+    .tab-inactive {
+      background: #f4f4f2; border-color: #d4d4d0; color: #555;
+    }
+    .tab-inactive svg { fill: #888; }
+    /* Active tab: accent bg + white icon + white text */
+    .tab-active { color: white; }
+    .tab-active svg { fill: white; }
+    /* Hover tab: light accent tint on bg */
+    .tab-hover { color: #222; }
 
     .state-label {
       font-size: 0.7rem;
@@ -44,80 +60,72 @@
     .state-group { display: flex; flex-direction: column; align-items: center; gap: 0; }
 
     hr { border: none; border-top: 1px solid #ccc; margin: 1rem 0; }
+
+    .note {
+      font-size: 0.75rem; color: #aaa; margin: 0.5rem 0 1rem;
+    }
   </style>
 </head>
 <body>
-<h1>Interaction Button Icon Preview — The Canalave Library (2026-06-22)</h1>
-<p style="font-size:0.8rem;color:#888;margin-bottom:2rem;">
-  Three states per icon: inactive (gray bg / gray fill) · hover (gray bg / accent fill) · active (accent bg / white fill).
-  Throwaway — remove before Stage 6.
-</p>
 
-<div class="grid" id="icons"></div>
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h1>Section 1 — Interaction Button Icons (WU7/WU16)</h1>
+<p class="note">Three states per icon: inactive (gray bg / gray fill) · hover (gray bg / accent fill) · active (accent bg / white fill). Throwaway — remove before Stage 6.</p>
 
+<div class="grid" id="interaction-icons"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<h2>Section 2 — Bookshelf Tab Icons (WU27)</h2>
+<p class="note">Desktop: icon + label in a horizontal tab chip. Three states shown: inactive · hover (accent border) · active (accent bg/white). Throwaway — remove before Stage 6.</p>
+<p class="note" style="color:#c04030">⚑ NEW: Following is now Manaphy Teal #2DBBA0 (was Eterna Green #4A9B52) — verify the interaction button icon in Section 1 above also looks correct with the new teal.</p>
+
+<div class="grid" id="bookshelf-icons"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
 <script>
-const icons = [
+// ── Section 1: Interaction button icons ─────────────────────────────────
+
+const interactionIcons = [
   {
-    enum: "Favorite",
-    label: "Favorite",
-    color: "#E8507A",
-    colorName: "Fairy Pink",
+    enum: "Favorite", label: "Favorite", color: "#E8507A", colorName: "Fairy Pink",
     concept: "Filled heart",
     d: "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
   },
   {
-    enum: "HiddenFavorite",
-    label: "Private Favorite",
-    color: "#C040A8",
-    colorName: "Mismagius Magenta",
+    enum: "PrivateFavorite", label: "Private Favorite", color: "#C040A8", colorName: "Mismagius Magenta",
     concept: "Filled heart (same path, different color)",
     d: "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
   },
   {
-    enum: "Followed",
-    label: "Following",
-    color: "#4A9B52",
-    colorName: "Eterna Green",
+    enum: "Follow", label: "Following", color: "#2DBBA0", colorName: "Manaphy Teal ★ RESKINNED from #4A9B52",
     concept: "Award ribbon — circle badge + two-tailed fork",
     d: "M6 8A6 6 0 0 1 18 8A6 6 0 0 1 6 8Z M9 14L6 22L9.5 20L12 21.5L14.5 20L18 22L15 14Z"
   },
   {
-    enum: "ReadItLater",
-    label: "Read It Later",
-    color: "#2E6FBF",
-    colorName: "Azurite Blue",
-    concept: "Open Pokéball + 3 page lines entering",
+    enum: "ReadLater", label: "Read It Later", color: "#2E6FBF", colorName: "Azurite Blue",
+    concept: "Open Pokéball + 3 page lines entering from top",
     d: "M5 16A7 7 0 0 1 19 16Z M5 14A7 7 0 0 0 19 14Z M10.5 15A1.5 1.5 0 0 1 13.5 15A1.5 1.5 0 0 1 10.5 15Z M9 1L15 1L15 2L9 2Z M9 3L15 3L15 4L9 4Z M9 5L15 5L15 6L9 6Z"
   },
   {
-    enum: "Completed",
-    label: "Completed",
-    color: "#E8B84B",
-    colorName: "Arceus Gold",
+    enum: "Complete", label: "Completed", color: "#E8B84B", colorName: "Arceus Gold",
     concept: "Filled circle with check cutout",
     d: "M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M6 12.5L5 14L10 19L20 7L18.5 5.5L10 16Z"
   },
   {
-    enum: "Ignored",
-    label: "Ignored",
-    color: "#C04030",
-    colorName: "Cinnabar Rust",
+    enum: "Ignore", label: "Ignored", color: "#C04030", colorName: "Cinnabar Rust",
     concept: "Ban circle — ring + diagonal bar",
     d: "M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M5 12A7 7 0 0 0 19 12A7 7 0 0 0 5 12Z M5.5 7.5L7.5 5.5L18.5 16.5L16.5 18.5Z"
   }
 ];
 
 function makeBtn(d, bgColor, fillColor) {
-  return `
-    <button class="btn" style="background:${bgColor}">
-      <svg viewBox="0 0 24 24" style="fill:${fillColor}">
-        <path d="${d}" />
-      </svg>
+  return `<button class="btn" style="background:${bgColor}">
+      <svg viewBox="0 0 24 24" style="fill:${fillColor}"><path d="${d}" /></svg>
     </button>`;
 }
 
-const container = document.getElementById('icons');
-icons.forEach(icon => {
+const interContainer = document.getElementById('interaction-icons');
+interactionIcons.forEach(icon => {
   const row = document.createElement('div');
   row.className = 'row';
   row.innerHTML = `
@@ -139,17 +147,141 @@ icons.forEach(icon => {
     <div class="state-group">
       ${makeBtn(icon.d, icon.color, 'white')}
       <div class="state-label">active</div>
+    </div>`;
+  interContainer.appendChild(row);
+  interContainer.appendChild(document.createElement('hr'));
+});
+
+// ── Section 2: Bookshelf tab chips ────────────────────────────────────────
+
+const bookshelfTabs = [
+  {
+    tab: "MyStories", label: "My Stories", color: "#2F7D4F", colorName: "Leafeon Green",
+    concept: "Book body + spine + diagonal quill pen",
+    // Book body (left): rect 2..13, 5..21
+    // Spine strip: rect 13..15, 5..21
+    // Quill pen: diagonal parallelogram top-right → bottom-left with nib
+    d: "M2 5H13V21H2Z M13 5H15V21H13Z M17 2L21 6L9 20L5 22L7 18Z"
+  },
+  {
+    tab: "HiddenGems", label: "Hidden Gems", color: "#1FA37A", colorName: "Torterra Emerald",
+    concept: "Kite diamond gem + CCW crown-facet cutout",
+    // Outer kite (CW): wide diamond
+    // Inner crown triangle (CCW): creates transparent upper-right facet
+    d: "M12 2L22 10L12 22L2 10Z M12 4L12 10L20 10Z"
+  },
+  {
+    tab: "Recommendations", label: "Recommendations", color: "#5BB85A", colorName: "Roserade Green",
+    concept: "4-pointed star at top-right + two diagonal streak trails",
+    // Star at top-right (center ~17,7)
+    // Streak 1 + 2 as thin filled parallelograms from bottom-left
+    d: "M17 3L19.2 5.4L22 7L19.2 8.6L17 11L14.8 8.6L12 7L14.8 5.4Z M2 20L4 22L15 9L13 7Z M5 22L7 22L17 11L15 9Z"
+  },
+  {
+    tab: "Favorites", label: "Favorites", color: "#E8507A", colorName: "Fairy Pink",
+    concept: "Reuses Follow interaction icon (filled heart)",
+    d: "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+  },
+  {
+    tab: "PrivateFavorites", label: "Private Favorites", color: "#C040A8", colorName: "Mismagius Magenta",
+    concept: "Reuses PrivateFavorite interaction icon (heart, different color)",
+    d: "M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"
+  },
+  {
+    tab: "Completed", label: "Completed", color: "#E8B84B", colorName: "Arceus Gold",
+    concept: "Reuses Complete interaction icon (circle+check)",
+    d: "M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M6 12.5L5 14L10 19L20 7L18.5 5.5L10 16Z"
+  },
+  {
+    tab: "Following", label: "Following", color: "#2DBBA0", colorName: "Manaphy Teal ★ RESKINNED",
+    concept: "Reuses Follow interaction icon (award ribbon) — now teal",
+    d: "M6 8A6 6 0 0 1 18 8A6 6 0 0 1 6 8Z M9 14L6 22L9.5 20L12 21.5L14.5 20L18 22L15 14Z"
+  },
+  {
+    tab: "ActivelyReading", label: "Actively Reading", color: "#2E96A8", colorName: "Lake Acuity Blue",
+    concept: "Two open-book page halves + page lines",
+    // Left page: rect 1..11, 6..20
+    // Right page: rect 13..23, 6..20
+    // Left text lines (thin filled rects)
+    // Right text lines
+    d: "M1 6H11V20H1Z M13 6H23V20H13Z M3 9.5H9V11H3Z M3 13H9V14.5H3Z M15 9.5H21V11H15Z M15 13H21V14.5H15Z"
+  },
+  {
+    tab: "ReadItLater", label: "Read It Later", color: "#2E6FBF", colorName: "Azurite Blue",
+    concept: "Reuses ReadLater interaction icon (Pokéball + page lines)",
+    d: "M5 16A7 7 0 0 1 19 16Z M5 14A7 7 0 0 0 19 14Z M10.5 15A1.5 1.5 0 0 1 13.5 15A1.5 1.5 0 0 1 10.5 15Z M9 1L15 1L15 2L9 2Z M9 3L15 3L15 4L9 4Z M9 5L15 5L15 6L9 6Z"
+  },
+  {
+    tab: "Abandoned", label: "Abandoned", color: "#9A8580", colorName: "Wayward Cave Gray",
+    concept: "House silhouette (rect body + triangle roof) + CCW door opening",
+    // House body (CW): rect 3..21, 13..22
+    // Door opening (CCW inside body): rect 10..14, 17..22
+    // Roof (CW): triangle peak at (12,3)
+    d: "M3 13H21V22H3Z M10 17V22H14V17Z M2 13L12 3L22 13Z"
+  },
+  {
+    tab: "Ignored", label: "Ignored", color: "#C04030", colorName: "Cinnabar Rust",
+    concept: "Reuses Ignore interaction icon (ban circle)",
+    d: "M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M5 12A7 7 0 0 0 19 12A7 7 0 0 0 5 12Z M5.5 7.5L7.5 5.5L18.5 16.5L16.5 18.5Z"
+  }
+];
+
+function makeTabChip(d, label, bgColor, iconFill, textColor, borderColor) {
+  return `<div class="tab-chip" style="background:${bgColor};border-color:${borderColor};color:${textColor}">
+      <svg viewBox="0 0 24 24" style="fill:${iconFill}"><path d="${d}" /></svg>
+      <span>${label}</span>
+    </div>`;
+}
+
+const bookContainer = document.getElementById('bookshelf-icons');
+bookshelfTabs.forEach((tab, idx) => {
+  const row = document.createElement('div');
+  row.className = 'row';
+  const isLocked = ['Favorites','PrivateFavorites','Completed','Following','ReadItLater','Ignored'].includes(tab.tab);
+  row.innerHTML = `
+    <div class="label">
+      <strong>${tab.label}</strong>
+      <span style="font-size:0.7rem;color:#aaa">${isLocked ? '🔒 reuses interaction icon' : '★ new icon'}</span><br>
+      <code style="color:${tab.color}">■</code>
+      <code>${tab.color} — ${tab.colorName}</code><br>
+      <em style="font-size:0.72rem;color:#aaa">${tab.concept}</em>
     </div>
     <div class="state-group">
-      ${makeBtn(icon.d, icon.color, 'white')}
-      ${makeBtn(icon.d, icon.color, 'white')}
-      <div class="state-label">side-by-side</div>
+      ${makeTabChip(tab.d, tab.label, '#f4f4f2', '#888', '#555', '#d4d4d0')}
+      <div class="state-label">inactive</div>
+    </div>
+    <div class="state-group">
+      ${makeTabChip(tab.d, tab.label, 'white', tab.color, '#222', tab.color)}
+      <div class="state-label">hover</div>
+    </div>
+    <div class="state-group">
+      ${makeTabChip(tab.d, tab.label, tab.color, 'white', 'white', tab.color)}
+      <div class="state-label">active</div>
     </div>`;
-  container.appendChild(row);
-
-  const hr = document.createElement('hr');
-  container.appendChild(hr);
+  bookContainer.appendChild(row);
+  if (idx < bookshelfTabs.length - 1) {
+    bookContainer.appendChild(document.createElement('hr'));
+  }
 });
+
+// Desktop tab bar preview (all 11 in a row)
+const barSection = document.createElement('div');
+barSection.style.cssText = 'margin-top:2rem;padding:1rem;background:#fff;border-radius:8px;border:1px solid #ddd;';
+barSection.innerHTML = '<div style="font-size:0.78rem;color:#888;margin-bottom:0.75rem">Desktop tab bar preview (My Stories active):</div>';
+const barRow = document.createElement('div');
+barRow.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;';
+bookshelfTabs.forEach((tab, idx) => {
+  const isActive = idx === 0;
+  barRow.innerHTML += makeTabChip(
+    tab.d, tab.label,
+    isActive ? tab.color : '#f4f4f2',
+    isActive ? 'white' : '#888',
+    isActive ? 'white' : '#555',
+    isActive ? tab.color : '#d4d4d0'
+  );
+});
+barSection.appendChild(barRow);
+bookContainer.appendChild(barSection);
 </script>
 </body>
 </html>

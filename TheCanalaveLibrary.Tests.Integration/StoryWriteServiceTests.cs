@@ -12,30 +12,23 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// unit level too, but here against the real EF graph-insert behavior) and the <c>Attach</c>-vs-<c>Add</c>
 /// bug, where <c>StoryListing</c>/<c>StoryDetail</c> rows were silently never inserted. Also covers slug
 /// generation and disambiguation (spec §3.7).
+///
+/// WU24 additions: AuthorId stamping (CreateStoryAsync ignores client-supplied value; service stamps
+/// from IActiveUserContext) and the UpdateStoryAsync ownership gate.
+/// Tier: Integration (Testcontainers Postgres via <see cref="PostgresFixture"/>).
 /// </summary>
 [Collection("Postgres")]
-public class StoryWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
+public class StoryWriteServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
     private int _settingTagId;
     private int _genreTagId;
     private int _authorId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        // Forces the host (and Program.cs's DataSeeder) to build now — DataSeeder creates "TestUser",
-        // which this class uses as a real, FK-satisfying author rather than an arbitrary int.
-        _ = _factory.Services;
-
+        await base.InitializeAsync();
+        _authorId = await SeedUserAsync();
         (_settingTagId, _genreTagId) = await SeedRequiredTagsAsync();
-        _authorId = await GetTestUserIdAsync();
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
     }
 
     [Fact]
@@ -48,7 +41,7 @@ public class StoryWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
         string title = $"Create Path Story {Guid.NewGuid():N}";
         int storyId = await CreateStoryAsync(title);
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         StoryListing? listing = await db.StoryListings.FirstOrDefaultAsync(l => l.StoryId == storyId);
@@ -76,7 +69,7 @@ public class StoryWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
         int firstId = await CreateStoryAsync(title);
         int secondId = await CreateStoryAsync(title);
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         string? firstSlug = await db.StoryDetails.Where(d => d.StoryId == firstId).Select(d => d.Slug).FirstAsync();
@@ -88,16 +81,78 @@ public class StoryWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
         secondSlug.Should().StartWith(firstSlug!);
     }
 
+    // --- WU24: AuthorId stamping + update ownership gate ---
+
+    [Fact]
+    public async Task CreateStoryAsync_StampsAuthorIdFromActiveUserContext()
+    {
+        string title = $"Stamping Test {Guid.NewGuid():N}";
+        int storyId = await CreateStoryAsync(title);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        int? storedAuthorId = await db.Stories.Where(s => s.StoryId == storyId).Select(s => s.AuthorId).FirstAsync();
+
+        storedAuthorId.Should().Be(_authorId);
+    }
+
+    [Fact]
+    public async Task UpdateStoryAsync_Owner_CanUpdateTitle()
+    {
+        int storyId = await CreateStoryAsync($"Owner Update Fixture {Guid.NewGuid():N}");
+        SetActiveUser(_authorId);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IStoryWriteService writeService = scope.ServiceProvider.GetRequiredService<IStoryWriteService>();
+
+        string newTitle = $"Updated Title {Guid.NewGuid():N}";
+        await writeService.Invoking(s => s.UpdateStoryAsync(ValidUpdateDto(storyId, newTitle)))
+            .Should().NotThrowAsync();
+    }
+
+    [Fact]
+    public async Task UpdateStoryAsync_NonOwner_ThrowsUnauthorizedAccessException()
+    {
+        int storyId = await CreateStoryAsync($"Non-Owner Gate Fixture {Guid.NewGuid():N}");
+
+        int otherUserId = await SeedUserAsync();
+        SetActiveUser(otherUserId);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IStoryWriteService writeService = scope.ServiceProvider.GetRequiredService<IStoryWriteService>();
+
+        await writeService.Invoking(s => s.UpdateStoryAsync(ValidUpdateDto(storyId, "Spoofed Title")))
+            .Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    private StoryUpdateDTO ValidUpdateDto(int storyId, string title) => new()
+    {
+        StoryId = storyId,
+        Title = title,
+        ShortDescription = "Integration test story",
+        Rating = Rating.T,
+        StoryStatusId = StoryStatusEnum.InProgress,
+        LongDescription = "Integration test long description",
+        PostApprovalStatus = StoryStatusEnum.InProgress,
+        // CanSave() requires at least one Setting and one Genre tag.
+        StoryTags =
+        [
+            new StoryTagDTO { TagId = _settingTagId, Priority = TagPriority.Primary, TagTypeEnum = TagTypeEnum.Setting },
+            new StoryTagDTO { TagId = _genreTagId, Priority = TagPriority.Primary, TagTypeEnum = TagTypeEnum.Genre }
+        ]
+    };
+
     private async Task<int> CreateStoryAsync(string title)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        // AuthorId is server-stamped from IActiveUserContext — not passed via DTO.
+        // Story.AuthorId is a real FK to Users, so we need an existing user's id.
+        Factory.Services.GetRequiredService<FakeActiveUserContext>().UserId = _authorId;
+
+        using IServiceScope scope = Factory.Services.CreateScope();
         IStoryWriteService writeService = scope.ServiceProvider.GetRequiredService<IStoryWriteService>();
 
         CreateStoryDTO dto = new()
         {
-            // Story.AuthorId is a real FK to Users — must be an existing user's id, not an arbitrary
-            // int. Author identity isn't itself under test here, so the DataSeeder's "TestUser" stands in.
-            AuthorId = _authorId,
             Title = title,
             ShortDescription = "Integration test story",
             Rating = Rating.T,
@@ -116,7 +171,7 @@ public class StoryWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<(int SettingTagId, int GenreTagId)> SeedRequiredTagsAsync()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         string suffix = Guid.NewGuid().ToString("N")[..8];
@@ -129,10 +184,4 @@ public class StoryWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
         return (settingTag.TagId, genreTag.TagId);
     }
 
-    private async Task<int> GetTestUserIdAsync()
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        return await db.Users.Where(u => u.UserName == "TestUser").Select(u => u.Id).FirstAsync();
-    }
 }

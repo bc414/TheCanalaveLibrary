@@ -571,6 +571,28 @@ parent, keyed by StoryId), `int? CurrentUserId` (deck computes `IsOwnStory` per 
 `EventCallback<int> OnPageChanged`). No service injection. Caret callbacks deferred — additive when
 the first consumer (Discovery/Report/Export) needs them.
 
+## Rich-Text Editor Shells — Separate Leaves, Not a Shared Abstraction (WU29)
+
+`EditorView` (the raw Quill.js wrapper) is universal — see "Third-Party Wrapper Composite" above and
+the Universal Components table. The **shell** wrapping it (save/cancel row, busy state, context extras)
+is *feature-scoped*, because each rich-text surface adds different extras:
+
+| Shell | Feature | Extras vs. a bare EditorView |
+|---|---|---|
+| `CommentEditor` (WU20) | Comments | `ShowSpoilerToggle` + two-way `@bind-Spoiler`; `SaveLabel` for edit/reply/new |
+| `RecommendationEditor` (WU29) | Recommendations | **No spoiler** (deliberate, §5.6); live **500-char-minimum meter** (`RecommendationConstants.MinLength`); submit disabled until met |
+
+**Why not a shared `EditorForm` abstraction?** WU9 ConfirmDialog established the rule: don't extract
+a shared primitive for two consumers with *different* extras — wait until a third consumer's shape
+clarifies what the shared part actually is. The save/cancel/busy row is the only true overlap; the
+per-feature context extras (spoiler checkbox vs. char meter) are the whole reason the shells exist.
+Candidates for a 3rd consumer: BlogPosts (WU31), Messaging (WU35), Profile bio (WU30). If their
+shells prove identical to one of the above, extract then — not now.
+
+**Pull-on-submit** is the correct interaction across all shells: hold an `@ref` to the nested
+`EditorView` and call `await _editor.GetHtmlAsync()` in the submit handler. Never bind two-way.
+The owning composite (never the shell leaf) sanitizes and persists.
+
 ## Filter-Axis Component Pattern
 
 **The unit of reuse is the individual filter axis, not the assembled panel.** Manual tree search
@@ -638,17 +660,66 @@ Page-level composition: `ResultsFilterPanel` + `StoryDeck` are kept separate and
 page/dispatcher level. Do **not** bundle them into a shared composite (spec §5.27 explicitly
 rejected a bundled `UserListPage`; `StoryDeck` is also used without any panel at all).
 
+**Bookshelf narrowing pattern (WU27):** when `ResultsFilterPanel` is used for *narrowing* (not
+discovery), the dispatcher first computes a **candidate ID set** (e.g. all story IDs the user has
+favorited via `IUserStoryInteractionReadService.GetBookshelfStoryIdsAsync`), then passes
+`restrictToStoryIds` to `IStoryReadService.GetListingsAsync(filter, restrictToStoryIds)`. The panel's
+tag/text/sort selections narrow within that set. The candidate set is the outer constraint; the content-
+rating global filter still applies inside `GetListingsAsync` — never duplicated in the bookshelf query.
+The `ResultsFilterPanel` is unaware of the candidate constraint; the dispatcher owns the two-step
+composition.
+
 ## Conditional Rendering Patterns
 
-### AuthorizeView Gates
+### AuthorizeView Gates (authentication + roles only)
+
+`<AuthorizeView>` is for **authentication and role gates** — "is anyone logged in?" or "is the viewer
+a moderator?". It reads Blazor's cascading `AuthenticationState` and cannot express identity-equality
+against a specific entity's owner id.
 
 ```razor
+@* Role-gated mod section embedded in an otherwise-public page *@
 <AuthorizeView Roles="Moderator,Admin">
     <Authorized>
-        <AdminControls OnDelete="HandleDelete" OnEdit="HandleEdit" />
+        <button @onclick="HandleModAction">Moderator action</button>
     </Authorized>
 </AuthorizeView>
 ```
+
+### Owner-Conditional Edit Affordances (inline @if, no component)
+
+**Ownership is identity-equality, not a role.** The pattern — established by `CommentItem`,
+`UserStoryInteractionPanel`, and `VouchList` — is a **plain `@if` on a page-computed ownership bool**,
+never a named component and never `AuthorizeView`:
+
+```razor
+@* CommentItem — edit/delete wired only when IsOwnComment and callback is present *@
+@if (IsOwnComment && OnEdit.HasDelegate)
+{
+    <button type="button" @onclick="() => OnEdit.InvokeAsync(Comment.CommentId)">Edit</button>
+}
+
+@* On a story/chapter view page — the dispatcher compares its CurrentUserId to the entity AuthorId *@
+@if (_isOwnStory)
+{
+    <a href="/story/@StoryId/edit">Edit story</a>
+}
+```
+
+Rules:
+- The **dispatcher / routable page** resolves `CurrentUserId` from `[CascadingParameter] Task<AuthenticationState>`
+  and compares it to `entity.AuthorId`. Components receive the pre-computed bool (`IsOwnComment`,
+  `IsOwnStory`, `IsEditable`). **SharedUI components never inject `IActiveUserContext`** — it is a
+  server-only service that will not exist in a future WASM client.
+- **Security lives in the write service**, not in the `@if`. The UI affordance is visibility only;
+  the service gate (identity-equality against `IActiveUserContext.UserId`) is the actual control
+  ([`ServerCommentWriteService.EditCommentAsync`](../../../../TheCanalaveLibrary.Server/Comments/ServerCommentWriteService.cs#L77)).
+- **There is no shared "edit button" or `AdminControls` component.** Spec §5.17's `<AdminControls>`
+  reference is stale — that component does not exist and should not be minted. Affordances differ per
+  entity (link to edit page vs in-place swap) and are one-liners.
+- **Moderation is a separate code path** (WU34), never an `OR` branch on the author gate.
+  `IActiveUserContext.IsModerator/IsAdmin` are query-shaping hints and explicit mod pages, not a
+  pass-through into the author's ownership check.
 
 ### Loading States
 

@@ -14,28 +14,19 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// Tier: Integration (real Testcontainers Postgres via <see cref="PostgresFixture"/>).
 /// </summary>
 [Collection("Postgres")]
-public class ChapterWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
+public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
     private int _storyId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        _ = _factory.Services; // force host build + DataSeeder
-
+        await base.InitializeAsync();
         _storyId = await SeedStoryAsync();
 
         // Set the fake user to authenticated so ActiveUser.UserId is non-null.
         // AuthorId on ChapterContent is nullable, but using a real FK value is more realistic.
-        int testUserId = await GetTestUserIdAsync();
+        int testUserId = await SeedUserAsync();
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(testUserId, showMatureContent: true));
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
     }
 
     // --- CreateChapterAsync ---
@@ -51,7 +42,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
             Rating       = Rating.E
         });
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         Chapter? chapter = await db.Chapters.FirstOrDefaultAsync(c => c.ChapterId == chapterId);
@@ -81,7 +72,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
             Rating      = Rating.E
         });
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         Chapter? chapter = await db.Chapters.FirstOrDefaultAsync(c => c.ChapterId == chapterId);
         chapter.Should().NotBeNull();
@@ -101,7 +92,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
             Rating      = Rating.E
         });
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         Chapter? chapter = await db.Chapters.FirstOrDefaultAsync(c => c.ChapterId == chapterId);
         ChapterContent? content = await db.ChapterContents
@@ -123,7 +114,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
             Rating      = Rating.E
         });
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         Chapter? chapter = await db.Chapters.FirstOrDefaultAsync(c => c.ChapterId == chapterId);
         ChapterContent? content = await db.ChapterContents
@@ -152,7 +143,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
             Rating      = Rating.T
         });
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         Chapter? chapter = await db.Chapters.FirstOrDefaultAsync(c => c.ChapterId == chapterId);
@@ -186,11 +177,11 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
             Rating      = Rating.E
         });
 
-        using IServiceScope scope1 = _factory.Services.CreateScope();
+        using IServiceScope scope1 = Factory.Services.CreateScope();
         IChapterWriteService writeService = scope1.ServiceProvider.GetRequiredService<IChapterWriteService>();
         await writeService.SetPrimaryVersionAsync(chapterId, altId);
 
-        using IServiceScope scope2 = _factory.Services.CreateScope();
+        using IServiceScope scope2 = Factory.Services.CreateScope();
         ApplicationDbContext db = scope2.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         Chapter? chapter = await db.Chapters.FirstOrDefaultAsync(c => c.ChapterId == chapterId);
         chapter!.PrimaryContentId.Should().Be(altId);
@@ -209,12 +200,12 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
             Rating      = Rating.E
         });
 
-        using IServiceScope scopeRead = _factory.Services.CreateScope();
+        using IServiceScope scopeRead = Factory.Services.CreateScope();
         ApplicationDbContext dbRead = scopeRead.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         Chapter? chapter = await dbRead.Chapters.FirstOrDefaultAsync(c => c.ChapterId == chapterId);
         long contentId = chapter!.PrimaryContentId!.Value;
 
-        using IServiceScope scopeWrite = _factory.Services.CreateScope();
+        using IServiceScope scopeWrite = Factory.Services.CreateScope();
         IChapterWriteService writeService = scopeWrite.ServiceProvider.GetRequiredService<IChapterWriteService>();
         await writeService.UpdateChapterContentAsync(new UpdateChapterContentDto
         {
@@ -223,7 +214,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
             Rating            = Rating.E
         });
 
-        using IServiceScope scopeVerify = _factory.Services.CreateScope();
+        using IServiceScope scopeVerify = Factory.Services.CreateScope();
         ApplicationDbContext dbVerify = scopeVerify.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         ChapterContent? updated = await dbVerify.ChapterContents.FirstOrDefaultAsync(cc => cc.ChapterContentId == contentId);
         updated!.WordCount.Should().Be(5);
@@ -251,7 +242,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
             Rating      = Rating.E
         });
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         Story? story = await db.Stories.FindAsync(freshStoryId);
         story!.WordCount.Should().Be(5);
@@ -276,50 +267,16 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<int> CallCreateAsync(CreateChapterDto dto)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IChapterWriteService svc = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
         return await svc.CreateChapterAsync(dto);
     }
 
     private async Task<long> CallAddAlternateAsync(int chapterId, CreateChapterDto dto)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IChapterWriteService svc = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
         return await svc.AddAlternateVersionAsync(chapterId, dto);
     }
 
-    private async Task<int> SeedStoryAsync()
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-        string suffix = Guid.NewGuid().ToString("N")[..8];
-        Story story = new()
-        {
-            Rating          = Rating.T,
-            StoryStatusId   = StoryStatusEnum.InProgress,
-            PublishedDate   = DateTime.UtcNow,
-            LastUpdatedDate = DateTime.UtcNow,
-            StoryListing    = new StoryListing { StoryTitle = $"Chapter Write Fixture {suffix}", ShortDescription = "test" },
-            StoryDetail     = new StoryDetail { LongDescription = "test", PostApprovalStatus = StoryStatusEnum.InProgress }
-        };
-        db.Stories.Add(story);
-        await db.SaveChangesAsync();
-        return story.StoryId;
-    }
-
-    private async Task<int> GetTestUserIdAsync()
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        return await db.Users.Where(u => u.UserName == "TestUser").Select(u => u.Id).FirstAsync();
-    }
-
-    private void SetActiveUser(FakeActiveUserContext value)
-    {
-        FakeActiveUserContext fake = _factory.Services.GetRequiredService<FakeActiveUserContext>();
-        fake.UserId           = value.UserId;
-        fake.IsAuthenticated  = value.IsAuthenticated;
-        fake.ShowMatureContent = value.ShowMatureContent;
-    }
 }

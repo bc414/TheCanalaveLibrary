@@ -13,9 +13,9 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// Tier: Integration (real Testcontainers Postgres — per-version rating filtering must translate to SQL).
 /// </summary>
 [Collection("Postgres")]
-public class ChapterReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
+public class ChapterReadServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
+    private int _viewerUserId;
     private int _storyId;
     /// <summary>Chapter number (1-based) shared across all tests in this class.</summary>
     private int _chapterNumber;
@@ -23,18 +23,11 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     private long _altMatureContentId; // M-rated alternate version
     private int _altSortOrder;        // SortOrder of the M-rated alternate
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        _ = _factory.Services;
-
+        await base.InitializeAsync();
+        _viewerUserId = await SeedUserAsync();
         await SeedFixtureChaptersAsync();
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
     }
 
     // --- GetChapterForReadingAsync — primary version ---
@@ -78,7 +71,7 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task GetChapterForReadingAsync_MatureUser_CanAccessMRatedAltVersion()
     {
-        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(userId: 1, showMatureContent: true));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_viewerUserId, showMatureContent: true));
 
         ChapterReadingDto? dto = await GetForReadingAsync(_storyId, _chapterNumber, _altSortOrder);
 
@@ -104,7 +97,7 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task GetChapterVersionsAsync_MatureUser_IncludesMRatedVersions()
     {
-        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(userId: 1, showMatureContent: true));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_viewerUserId, showMatureContent: true));
 
         IReadOnlyList<ChapterVersionDto> versions = await GetVersionsAsync(_storyId, _chapterNumber);
 
@@ -119,10 +112,10 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     {
         // Seed a fresh story with chapters in reverse-insert order to verify ordering is by
         // ChapterNumber, not insert order (relative-order assertion per testing.md discipline).
-        int freshStoryId = await SeedStoryDirectAsync();
+        int freshStoryId = await SeedStoryAsync();
 
         // Insert three chapters via the write service so ChapterNumbers are assigned correctly.
-        await using AsyncServiceScope s1 = _factory.Services.CreateAsyncScope();
+        await using AsyncServiceScope s1 = Factory.Services.CreateAsyncScope();
         IChapterWriteService write = s1.ServiceProvider.GetRequiredService<IChapterWriteService>();
         SetActiveUser(FakeActiveUserContext.Anonymous());
 
@@ -152,10 +145,10 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task GetChapterForReadingAsync_IncludesPrevAndNextChapterNumbers()
     {
         // Seed a fresh story with 3 chapters; verify the middle one returns prev = 1, next = 3.
-        int freshStoryId = await SeedStoryDirectAsync();
+        int freshStoryId = await SeedStoryAsync();
         SetActiveUser(FakeActiveUserContext.Anonymous());
 
-        await using AsyncServiceScope svc = _factory.Services.CreateAsyncScope();
+        await using AsyncServiceScope svc = Factory.Services.CreateAsyncScope();
         IChapterWriteService write = svc.ServiceProvider.GetRequiredService<IChapterWriteService>();
 
         await write.CreateChapterAsync(new CreateChapterDto
@@ -166,14 +159,14 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
             { StoryId = freshStoryId, Title = "Ch 3", ChapterText = "<p>last</p>", Rating = Rating.E });
 
         // Publish all chapters (they're created unpublished; publish to expose them to the reader).
-        await using AsyncServiceScope pub = _factory.Services.CreateAsyncScope();
+        await using AsyncServiceScope pub = Factory.Services.CreateAsyncScope();
         IChapterWriteService pubWrite = pub.ServiceProvider.GetRequiredService<IChapterWriteService>();
         IReadOnlyList<ChapterTocEntryDto> toc = await GetTocAsync(freshStoryId);
         // Find chapter IDs from the TOC (we need ChapterId to call SetPublished — use a fresh scope).
         // Simpler: seed chapters pre-published using direct EF. Already did it via the write service
         // above; chapters are unpublished by default. For GetChapterForReadingAsync the filter is
         // c.IsPublished — so manually publish them here.
-        using IServiceScope dbScope = _factory.Services.CreateScope();
+        using IServiceScope dbScope = Factory.Services.CreateScope();
         ApplicationDbContext db = dbScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         List<Chapter> freshChapters = db.Chapters.Where(c => c.StoryId == freshStoryId).ToList();
         foreach (Chapter c in freshChapters) c.IsPublished = true;
@@ -191,31 +184,23 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<ChapterReadingDto?> GetForReadingAsync(int storyId, int chapterNumber, int? versionOrder = null)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IChapterReadService svc = scope.ServiceProvider.GetRequiredService<IChapterReadService>();
         return await svc.GetChapterForReadingAsync(storyId, chapterNumber, versionOrder);
     }
 
     private async Task<IReadOnlyList<ChapterVersionDto>> GetVersionsAsync(int storyId, int chapterNumber)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IChapterReadService svc = scope.ServiceProvider.GetRequiredService<IChapterReadService>();
         return await svc.GetChapterVersionsAsync(storyId, chapterNumber);
     }
 
     private async Task<IReadOnlyList<ChapterTocEntryDto>> GetTocAsync(int storyId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IChapterReadService svc = scope.ServiceProvider.GetRequiredService<IChapterReadService>();
         return await svc.GetChapterTocAsync(storyId);
-    }
-
-    private void SetActiveUser(FakeActiveUserContext value)
-    {
-        FakeActiveUserContext fake = _factory.Services.GetRequiredService<FakeActiveUserContext>();
-        fake.UserId            = value.UserId;
-        fake.IsAuthenticated   = value.IsAuthenticated;
-        fake.ShowMatureContent = value.ShowMatureContent;
     }
 
     /// <summary>
@@ -224,7 +209,7 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     /// </summary>
     private async Task SeedFixtureChaptersAsync()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         string suffix = Guid.NewGuid().ToString("N")[..8];
@@ -285,23 +270,4 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
         _altSortOrder      = alt.SortOrder;
     }
 
-    private async Task<int> SeedStoryDirectAsync()
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-        string suffix = Guid.NewGuid().ToString("N")[..8];
-        Story story = new()
-        {
-            Rating          = Rating.T,
-            StoryStatusId   = StoryStatusEnum.InProgress,
-            PublishedDate   = DateTime.UtcNow,
-            LastUpdatedDate = DateTime.UtcNow,
-            StoryListing    = new StoryListing { StoryTitle = $"Nav Fixture {suffix}", ShortDescription = "test" },
-            StoryDetail     = new StoryDetail { LongDescription = "test", PostApprovalStatus = StoryStatusEnum.InProgress }
-        };
-        db.Stories.Add(story);
-        await db.SaveChangesAsync();
-        return story.StoryId;
-    }
 }

@@ -7,7 +7,6 @@ public class StoryMappersTests
 {
     private static CreateStoryDTO MakeDto() => new()
     {
-        AuthorId = 1,
         Title = "A New Story",
         ShortDescription = "Short desc",
         Rating = Rating.T,

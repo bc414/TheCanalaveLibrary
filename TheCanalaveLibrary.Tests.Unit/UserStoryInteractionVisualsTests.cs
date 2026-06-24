@@ -56,7 +56,7 @@ public class UserStoryInteractionVisualsTests
     [Theory]
     [InlineData(UserStoryInteractionTypeEnum.Favorite, "#E8507A")]
     [InlineData(UserStoryInteractionTypeEnum.PrivateFavorite, "#C040A8")]
-    [InlineData(UserStoryInteractionTypeEnum.Follow, "#4A9B52")]
+    [InlineData(UserStoryInteractionTypeEnum.Follow, "#2DBBA0")]
     [InlineData(UserStoryInteractionTypeEnum.Complete, "#E8B84B")]
     [InlineData(UserStoryInteractionTypeEnum.ReadLater, "#2E6FBF")]
     [InlineData(UserStoryInteractionTypeEnum.Ignore, "#C04030")]

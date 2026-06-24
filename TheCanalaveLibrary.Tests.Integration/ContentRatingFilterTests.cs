@@ -13,26 +13,17 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// ride on the same filtered query.
 /// </summary>
 [Collection("Postgres")]
-public class ContentRatingFilterTests(PostgresFixture postgres) : IAsyncLifetime
+public class ContentRatingFilterTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
+    private int _viewerUserId;
     private int _teenStoryId;
     private int _matureStoryId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        // Force the host (and Program.cs's DataSeeder/migration check) to build now, so any DI
-        // misconfiguration surfaces here rather than inside the first test assertion.
-        _ = _factory.Services;
-
+        await base.InitializeAsync();
+        _viewerUserId = await SeedUserAsync();
         (_teenStoryId, _matureStoryId) = await SeedFixtureStoriesAsync();
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
     }
 
     [Fact]
@@ -48,7 +39,7 @@ public class ContentRatingFilterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task NonMatureUser_SeesOnlyTeenRatedStories()
     {
-        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(userId: 1, showMatureContent: false));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_viewerUserId, showMatureContent: false));
 
         StoryListingDto[] listings = await GetListingsAsync([_teenStoryId, _matureStoryId]);
 
@@ -58,7 +49,7 @@ public class ContentRatingFilterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task MatureEnabledUser_SeesBothRatings()
     {
-        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(userId: 1, showMatureContent: true));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_viewerUserId, showMatureContent: true));
 
         StoryListingDto[] listings = await GetListingsAsync([_teenStoryId, _matureStoryId]);
 
@@ -68,7 +59,7 @@ public class ContentRatingFilterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task GetListingsByIdsAsync_ReordersToInputOrder_AndDropsFilteredOrMissingIds()
     {
-        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(userId: 1, showMatureContent: true));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_viewerUserId, showMatureContent: true));
         const int nonExistentId = -999;
 
         // Deliberately shuffled input order, plus a nonexistent id mixed in — the result must come
@@ -82,7 +73,7 @@ public class ContentRatingFilterTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task GetListingsByIdsAsync_SilentlyDropsMatureStory_WhenCallerCannotSeeIt()
     {
-        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(userId: 1, showMatureContent: false));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_viewerUserId, showMatureContent: false));
 
         // Mature id requested first, but the caller can't see it — must be dropped, not erred, and the
         // remaining teen id must still come back.
@@ -91,24 +82,16 @@ public class ContentRatingFilterTests(PostgresFixture postgres) : IAsyncLifetime
         listings.Select(l => l.StoryId).Should().Equal(_teenStoryId);
     }
 
-    private void SetActiveUser(FakeActiveUserContext value)
-    {
-        FakeActiveUserContext fake = _factory.Services.GetRequiredService<FakeActiveUserContext>();
-        fake.UserId = value.UserId;
-        fake.IsAuthenticated = value.IsAuthenticated;
-        fake.ShowMatureContent = value.ShowMatureContent;
-    }
-
     private async Task<StoryListingDto[]> GetListingsAsync(IReadOnlyList<int> ids)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IStoryReadService readService = scope.ServiceProvider.GetRequiredService<IStoryReadService>();
         return await readService.GetListingsByIdsAsync(ids);
     }
 
     private async Task<(int TeenStoryId, int MatureStoryId)> SeedFixtureStoriesAsync()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext writeDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         // Direct EF inserts (Add + SaveChanges), not CreateStoryAsync — the content-rating query

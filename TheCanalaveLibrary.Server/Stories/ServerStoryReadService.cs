@@ -83,9 +83,21 @@ public class ServerStoryReadService(
         return (items, totalCount);
     }
 
-    public async Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter)
+    public async Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId) =>
+        await readDb.Stories
+            .IgnoreQueryFilters(["ContentRating"])
+            .Where(s => s.AuthorId == authorId)
+            .Select(s => s.StoryId)
+            .ToListAsync();
+
+    public async Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(
+        StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null)
     {
         IQueryable<Story> query = readDb.Stories;
+
+        // ── Bookshelf candidate narrowing (applied first so count + all filters are scoped to it) ──
+        if (restrictToStoryIds is { Count: > 0 })
+            query = query.Where(s => restrictToStoryIds.Contains(s.StoryId));
 
         // ── Tag include (AND semantics: story must have all included tags) ─────────────────
         foreach (int tagId in filter.IncludedTagIds)

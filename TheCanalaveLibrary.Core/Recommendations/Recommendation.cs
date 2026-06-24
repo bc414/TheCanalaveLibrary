@@ -1,34 +1,24 @@
 namespace TheCanalaveLibrary.Core;
 
-public partial class Recommendation
+public class Recommendation
 {
     public int RecommendationId { get; set; }
-
     public int StoryId { get; set; }
-
     public int? RecommenderId { get; set; }
-
     public short StatusId { get; set; }
-
     public bool IsHiddenGem { get; set; }
-
     public bool IsHighlightedByAuthor { get; set; }
-
     public int SuccessfulRecCount { get; set; }
-
+    public int LikeCount { get; set; }
     public DateTime DatePosted { get; set; }
-
     public int ActiveReportCount { get; set; }
 
     public RecommendationDetail RecommendationDetail { get; set; } = null!;
+    public ICollection<RecommendationLike> Likes { get; set; } = [];
+    public ICollection<RecommendationSuccess> RecommendationSuccesses { get; set; } = [];
 
-    public virtual ICollection<RecommendationSuccess> RecommendationSuccesses { get; set; } = new List<RecommendationSuccess>();
-
-    public virtual User? Recommender { get; set; }
-
-    public virtual RecommendationStatus Status { get; set; } = null!;
-
-    public virtual Story Story { get; set; } = null!;
-
-    public virtual ICollection<UserStoryInteraction> UserStoryInteractions { get; set; } = new List<UserStoryInteraction>();
+    public User? Recommender { get; set; }
+    public RecommendationStatus Status { get; set; } = null!;
+    public Story Story { get; set; } = null!;
+    public ICollection<UserStoryInteraction> UserStoryInteractions { get; set; } = [];
 }

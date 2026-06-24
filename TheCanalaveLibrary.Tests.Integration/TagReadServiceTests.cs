@@ -19,10 +19,8 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// or total count — per the shared-accumulating-state rule in <c>canalave-conventions/testing.md</c>.
 /// </summary>
 [Collection("Postgres")]
-public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
+public class TagReadServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
-
     // Three Genre tags with predictable alphabetical ordering:
     // "Aardvark" < "Beluga" < "Cetacean"
     private int _genreTagAardvarkId;
@@ -32,13 +30,12 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     // One Character tag — used to verify GetTagsByTypeAsync type-filter exclusion.
     private int _characterTagId;
 
-    // Shared suffix keeps all fixture names globally unique across runs (shared-accumulating-state).
+    // Shared suffix keeps all fixture names globally unique within a test run.
     private string _suffix = null!;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        _ = _factory.Services; // trigger host build + DataSeeder
+        await base.InitializeAsync();
 
         _suffix = Guid.NewGuid().ToString("N")[..8];
 
@@ -50,18 +47,12 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
         ) = await SeedFixtureTagsAsync();
     }
 
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
-    }
-
     // ── SearchTagChipsAsync ──────────────────────────────────────────────────────
 
     [Fact]
     public async Task SearchTagChipsAsync_WithEmptyTerm_ReturnsEmptyList()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ITagReadService tagReadService = scope.ServiceProvider.GetRequiredService<ITagReadService>();
 
         List<TagChipDto> result = await tagReadService.SearchTagChipsAsync(TagTypeEnum.Genre, string.Empty);
@@ -72,7 +63,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task SearchTagChipsAsync_WithWhitespaceTerm_ReturnsEmptyList()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ITagReadService tagReadService = scope.ServiceProvider.GetRequiredService<ITagReadService>();
 
         List<TagChipDto> result = await tagReadService.SearchTagChipsAsync(TagTypeEnum.Genre, "   ");
@@ -84,7 +75,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task SearchTagChipsAsync_MatchingTerm_ReturnsChipsForMatchingTags()
     {
         // All three fixture Genre tags contain the suffix — all three should appear.
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ITagReadService tagReadService = scope.ServiceProvider.GetRequiredService<ITagReadService>();
 
         List<TagChipDto> result = await tagReadService.SearchTagChipsAsync(TagTypeEnum.Genre, _suffix);
@@ -96,7 +87,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task SearchTagChipsAsync_MatchingTerm_ReturnsResultsInAlphabeticalOrder()
     {
         // ILike match on suffix: Aardvark... < Beluga... < Cetacean... alphabetically.
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ITagReadService tagReadService = scope.ServiceProvider.GetRequiredService<ITagReadService>();
 
         List<TagChipDto> result = await tagReadService.SearchTagChipsAsync(TagTypeEnum.Genre, _suffix);
@@ -116,7 +107,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task SearchTagChipsAsync_ILikeCaseInsensitive_MatchesRegardlessOfCase()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ITagReadService tagReadService = scope.ServiceProvider.GetRequiredService<ITagReadService>();
 
         // Uppercase the suffix — ILike must still match it.
@@ -129,7 +120,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task SearchTagChipsAsync_OnlyMatchesRequestedTagType()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ITagReadService tagReadService = scope.ServiceProvider.GetRequiredService<ITagReadService>();
 
         // Search for the suffix in the Genre type — the Character tag with the same suffix must NOT appear.
@@ -143,7 +134,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task SearchTagChipsAsync_SpriteUrlIsNull_WhenTagHasNoSpriteIdentifier()
     {
         // All fixture tags are seeded without a SpriteIdentifier (null) — SpriteUrl must be null.
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ITagReadService tagReadService = scope.ServiceProvider.GetRequiredService<ITagReadService>();
 
         List<TagChipDto> result = await tagReadService.SearchTagChipsAsync(TagTypeEnum.Genre, _suffix);
@@ -160,7 +151,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
         string capSuffix = Guid.NewGuid().ToString("N")[..8];
         await SeedGenreTagsAsync(count: 12, namePart: $"Cap-{capSuffix}");
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ITagReadService tagReadService = scope.ServiceProvider.GetRequiredService<ITagReadService>();
 
         List<TagChipDto> result = await tagReadService.SearchTagChipsAsync(TagTypeEnum.Genre, capSuffix);
@@ -173,7 +164,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task GetAllGenreTagsAsync_ReturnsGenreTagsOrderedByName()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ITagReadService tagReadService = scope.ServiceProvider.GetRequiredService<ITagReadService>();
 
         List<TagDropDownDTO> result = await tagReadService.GetAllGenreTagsAsync();
@@ -193,7 +184,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task GetAllGenreTagsAsync_DoesNotIncludeCharacterTags()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ITagReadService tagReadService = scope.ServiceProvider.GetRequiredService<ITagReadService>();
 
         List<TagDropDownDTO> result = await tagReadService.GetAllGenreTagsAsync();
@@ -206,7 +197,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<(int AardvarkId, int BelugaId, int CetaceanId, int CharacterId)> SeedFixtureTagsAsync()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         // Alphabetical prefix determines sort order; suffix ensures global uniqueness.
@@ -223,7 +214,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task SeedGenreTagsAsync(int count, string namePart)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         Tag[] tags = Enumerable.Range(1, count)

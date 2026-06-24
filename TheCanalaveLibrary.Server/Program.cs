@@ -120,6 +120,9 @@ builder.Services.AddScoped<IChapterWriteService, ServerChapterWriteService>();
 // Comments (WU19) — L2 read/write services (Features 23/24/25/26, chapter context only for MVP).
 builder.Services.AddScoped<ICommentReadService, ServerCommentReadService>();
 builder.Services.AddScoped<ICommentWriteService, ServerCommentWriteService>();
+// Recommendations (WU29) — L2 read/write services (Features 27/28/29/30).
+builder.Services.AddScoped<IRecommendationReadService, ServerRecommendationReadService>();
+builder.Services.AddScoped<IRecommendationWriteService, ServerRecommendationWriteService>();
 // Following/Vouches (WU21) — L2 read/write services.
 builder.Services.AddScoped<IFollowingReadService, ServerFollowingReadService>();
 builder.Services.AddScoped<IFollowingWriteService, ServerFollowingWriteService>();

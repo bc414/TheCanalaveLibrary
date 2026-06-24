@@ -60,6 +60,7 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     public DbSet<RecommendationDetail> RecommendationDetails { get; set; }
     public DbSet<RecommendationStatus> RecommendationStatuses { get; set; }
     public DbSet<RecommendationSuccess> RecommendationSuccesses { get; set; }
+    public DbSet<RecommendationLike> RecommendationLikes { get; set; }
 
     //Tags
     public DbSet<TagType> TagTypes { get; set; }

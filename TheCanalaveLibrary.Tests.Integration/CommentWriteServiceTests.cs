@@ -14,26 +14,19 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// Tier: Integration (real Testcontainers Postgres via <see cref="PostgresFixture"/>).
 /// </summary>
 [Collection("Postgres")]
-public class CommentWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
+public class CommentWriteServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
     private int _userId;
     private int _otherUserId;
     private int _chapterId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        _ = _factory.Services; // force host build + DataSeeder + migrations
-
-        (_userId, _otherUserId, _chapterId) = await SeedFixtureAsync();
+        await base.InitializeAsync();
+        _userId = await SeedUserAsync();
+        _otherUserId = await SeedUserAsync();
+        _chapterId = await SeedChapterAsync();
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_userId, showMatureContent: false));
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
     }
 
     // --- PostChapterCommentAsync ---
@@ -116,7 +109,7 @@ public class CommentWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
         });
 
         // Try to reply using the root id but targeting a different chapter id.
-        int differentChapterId = await SeedChapterAsync(_chapterId / 1 + 999_999); // fake
+        int differentChapterId = await FakeChapterId();
         Func<Task> act = async () => await CallPostAsync(new PostChapterCommentDto
         {
             ChapterId       = differentChapterId,
@@ -273,7 +266,7 @@ public class CommentWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
         await CallDeleteAsync(id);
 
         // The CommentLike row must also be gone (CASCADE).
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         bool likeExists = await db.CommentLikes.AnyAsync(l => l.CommentId == id);
         likeExists.Should().BeFalse("CommentLike FK is CASCADE — likes must be removed with the comment");
@@ -327,7 +320,7 @@ public class CommentWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
         result.IsLiked.Should().BeTrue();
         result.LikeCount.Should().Be(1);
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         bool rowExists = await db.CommentLikes.AnyAsync(l => l.CommentId == id && l.UserId == _userId);
         rowExists.Should().BeTrue();
@@ -348,7 +341,7 @@ public class CommentWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
         result.IsLiked.Should().BeFalse();
         result.LikeCount.Should().Be(0);
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         bool rowExists = await db.CommentLikes.AnyAsync(l => l.CommentId == id && l.UserId == _userId);
         rowExists.Should().BeFalse();
@@ -374,101 +367,65 @@ public class CommentWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<long> CallPostAsync(PostChapterCommentDto dto)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ICommentWriteService svc = scope.ServiceProvider.GetRequiredService<ICommentWriteService>();
         return await svc.PostChapterCommentAsync(dto);
     }
 
     private async Task CallEditAsync(UpdateCommentDto dto)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ICommentWriteService svc = scope.ServiceProvider.GetRequiredService<ICommentWriteService>();
         await svc.EditCommentAsync(dto);
     }
 
     private async Task CallDeleteAsync(long commentId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ICommentWriteService svc = scope.ServiceProvider.GetRequiredService<ICommentWriteService>();
         await svc.DeleteCommentAsync(commentId);
     }
 
     private async Task<CommentLikeResultDto> CallToggleLikeAsync(long commentId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ICommentWriteService svc = scope.ServiceProvider.GetRequiredService<ICommentWriteService>();
         return await svc.ToggleLikeAsync(commentId);
     }
 
     private async Task<BaseComment?> LoadBaseCommentAsync(long id)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.BaseComments.FirstOrDefaultAsync(c => c.CommentId == id);
     }
 
     private async Task<ChapterComment?> LoadChapterCommentAsync(long id)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.ChapterComments.FirstOrDefaultAsync(c => c.CommentId == id);
     }
 
-    private async Task<(int userId, int otherUserId, int chapterId)> SeedFixtureAsync()
+    private async Task<int> SeedChapterAsync()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        int storyId = await SeedStoryAsync();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-        // Grab two test user ids (seeded by DataSeeder).
-        List<int> userIds = await db.Users
-            .OrderBy(u => u.Id)
-            .Take(2)
-            .Select(u => u.Id)
-            .ToListAsync();
-
-        if (userIds.Count < 2)
-            throw new InvalidOperationException("Need at least 2 seeded users for CommentWriteServiceTests.");
-
-        int uid = userIds[0];
-        int otherId = userIds[1];
-
-        // Seed a minimal Story + Chapter so we have a valid FK target.
-        string suffix = Guid.NewGuid().ToString("N")[..8];
-        Story story = new()
-        {
-            Rating          = Rating.E,
-            StoryStatusId   = StoryStatusEnum.InProgress,
-            PublishedDate   = DateTime.UtcNow,
-            LastUpdatedDate = DateTime.UtcNow,
-            StoryListing    = new StoryListing { StoryTitle = $"Comment WS Fixture {suffix}", ShortDescription = "test" },
-            StoryDetail     = new StoryDetail { LongDescription = "test", PostApprovalStatus = StoryStatusEnum.InProgress }
-        };
-        db.Stories.Add(story);
-        await db.SaveChangesAsync();
-
         Chapter chapter = new()
         {
-            StoryId      = story.StoryId,
-            ChapterNumber = 1,
-            Title        = "Chapter 1",
+            StoryId          = storyId,
+            ChapterNumber    = 1,
+            Title            = "Chapter 1",
             PrimaryContentId = null,
-            IsPublished  = true,
-            VersionCount = 0
+            IsPublished      = true,
+            VersionCount     = 0
         };
         db.Chapters.Add(chapter);
         await db.SaveChangesAsync();
-
-        return (uid, otherId, chapter.ChapterId);
+        return chapter.ChapterId;
     }
 
-    /// <summary>Returns a non-existent chapterId to test the "chapter not found" guard.</summary>
-    private Task<int> SeedChapterAsync(int _ = 0) => Task.FromResult(int.MaxValue);
-
-    private void SetActiveUser(FakeActiveUserContext value)
-    {
-        FakeActiveUserContext fake = _factory.Services.GetRequiredService<FakeActiveUserContext>();
-        fake.UserId            = value.UserId;
-        fake.IsAuthenticated   = value.IsAuthenticated;
-        fake.ShowMatureContent = value.ShowMatureContent;
-    }
+    /// <summary>Returns a non-existent chapterId (int.MaxValue) to test the "chapter not found" guard.</summary>
+    private static Task<int> FakeChapterId() => Task.FromResult(int.MaxValue);
 }

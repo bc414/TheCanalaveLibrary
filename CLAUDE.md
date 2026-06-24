@@ -81,3 +81,17 @@ approved; a Stage note is an *output* recorded after the work lands.
 **Unresolved dependency encountered.** If a cell you need depends on another cell that hasn't reached Stage 5, surface it to the user. This applies regardless of the dependency's current stage — don't assume any unresolved dependency's outcome. Name it, state its stage, let the user decide.
 
 **After completing any work-unit.** Run `dotnet test` (should be green; add tests for any new testable surface per `canalave-conventions/testing.md`'s tier rules). Flip the grid number(s) in `.claude/status.md`, write the verification narrative — including which test tier covers the behavior or why none applies — in the affected audit file's Stage note, and update `.claude/workplan.md`. This is part of finishing the work, not separate bookkeeping.
+
+**Phase 4 (integration tests) plan completeness.** Integration tests reset between every test
+(Respawn — see `canalave-conventions/testing.md`). Each test seeds what it needs via
+`IntegrationTestBase` helpers; the production `DataSeeder` does not run. Before implementation
+begins, the plan must answer for each integration test class:
+- **Per-test seeding:** which users and stories does each test seed via `SeedUserAsync` /
+  `SeedStoryAsync`? Tests that depend on a shared user across methods seed it in `InitializeAsync`
+  via the base helpers, not by querying seeded names or hardcoding `userId: 1`.
+- **FK parent rows:** for every service call under test that writes to a constrained table, name
+  which parent rows must exist and where they come from — base helper, `SeedStoryAsync`, or an
+  inline `ApplicationDbContext` seed earlier in the same test. Missing parents produce FK violations
+  at runtime. See `canalave-conventions/testing.md` "FK parents" rule.
+- **Count-sensitive tests:** reject-at-limit tests call the service the natural number of times;
+  the reset guarantees a clean count. No top-up logic or direct-insert workarounds are needed.

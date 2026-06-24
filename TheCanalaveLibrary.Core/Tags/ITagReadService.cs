@@ -14,4 +14,11 @@ public interface ITagReadService
     /// rows and selected chips can show type color + sprite without a second round trip.
     /// </summary>
     Task<List<TagChipDto>> SearchTagChipsAsync(TagTypeEnum type, string term);
+
+    /// <summary>
+    /// Bulk chip lookup by exact ID — used by the story editor page to prefill TagSelectors from a
+    /// story's saved tags (which carry TagId but not display data). Order matches the input list.
+    /// IDs not found are silently dropped.
+    /// </summary>
+    Task<List<TagChipDto>> GetTagChipsByIdsAsync(IReadOnlyList<int> tagIds);
 }

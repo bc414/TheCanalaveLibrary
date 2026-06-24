@@ -1,0 +1,208 @@
+@page "/story/new"
+@page "/story/{StoryId:int}/edit"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@inject IStoryReadService StoryReadService
+@inject IStoryWriteService StoryWriteService
+@inject ITagReadService TagReadService
+@inject IImageStorageService ImageStorageService
+@inject NavigationManager NavigationManager
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+
+@* Story create/edit page — Pattern 1 edit side (cross-cutting.md "Two content-editing patterns").
+   View side is StoryPage / WU25. This page owns routing, auth, data-load, cover-upload ordering,
+   and DTO-mapping. StoryPropertiesForm is a presentational child (no inject, bUnit-testable). *@
+
+<PageTitle>@(StoryId.HasValue ? "Edit Story" : "New Story")</PageTitle>
+
+@if (_isLoading)
+{
+    <p class="text-[--color-text-muted]"><em>Loading…</em></p>
+}
+else if (_forbidden)
+{
+    <p class="text-[--color-danger]">You don't have permission to edit this story.</p>
+}
+else
+{
+    <div class="mx-auto max-w-2xl px-4 py-8">
+        <h1 class="mb-6 text-2xl font-bold text-[--color-text]">
+            @(StoryId.HasValue ? "Edit Story" : "New Story")
+        </h1>
+
+        <StoryPropertiesForm @ref="_form"
+                             ViewModel="_viewModel"
+                             InitialTagsByType="_initialTagsByType"
+                             SubmitLabel="@(StoryId.HasValue ? "Save Changes" : "Create Story")"
+                             OnValidSubmit="HandleValidSubmit" />
+    </div>
+}
+
+@code {
+    [Parameter] public int? StoryId { get; set; }
+
+    private StoryPropertiesForm? _form;
+    private StoryPropertiesViewModel _viewModel = new();
+    private IReadOnlyDictionary<TagTypeEnum, IReadOnlyList<TagChipDto>>? _initialTagsByType;
+    private bool _isLoading = true;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (StoryId.HasValue)
+        {
+            StoryUpdateDTO? editData = await StoryReadService.GetStoryForEditAsync(StoryId.Value);
+
+            if (editData is null)
+            {
+                NavigationManager.NavigateTo("/not-found");
+                return;
+            }
+
+            // StoryUpdateDTO doesn't carry AuthorId, so no client-side UX pre-check here — the real
+            // gate lives in ServerStoryWriteService (throws UnauthorizedAccessException on mismatch).
+            // A future enriched GetStoryForEditAsync that includes AuthorId could do the redirect here.
+
+            PopulateViewModelFromEdit(editData);
+
+            // Load chip data for pre-selected tags (TagSelector needs TagName + SpriteUrl).
+            List<int> tagIds = editData.StoryTags.Select(t => t.TagId).ToList();
+            if (tagIds.Count > 0)
+            {
+                List<TagChipDto> chips = await TagReadService.GetTagChipsByIdsAsync(tagIds);
+                _initialTagsByType = chips
+                    .GroupBy(c => c.TagTypeId)
+                    .ToDictionary(g => g.Key, g => (IReadOnlyList<TagChipDto>)[.. g]);
+            }
+        }
+
+        _isLoading = false;
+    }
+
+    private void PopulateViewModelFromEdit(StoryUpdateDTO dto)
+    {
+        _viewModel.Title = dto.Title;
+        _viewModel.ShortDescription = dto.ShortDescription;
+        _viewModel.Rating = dto.Rating;
+        _viewModel.StoryStatusId = dto.StoryStatusId;
+        _viewModel.CoverArtRelativeUrl = dto.CoverArtRelativeUrl;
+        _viewModel.LongDescription = dto.LongDescription;
+        _viewModel.PostApprovalStatus = dto.PostApprovalStatus;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        _viewModel.IsLoading = true;
+        _viewModel.ServerValidationErrors.Clear();
+
+        try
+        {
+            // Pull long description from the EditorView (pull-on-submit — Blazored.TextEditor pattern).
+            string longDescription = _form is not null
+                ? await _form.GetLongDescriptionAsync()
+                : string.Empty;
+            _viewModel.LongDescription = longDescription;
+
+            // Map selected TagChipDtos → IStoryTag (default Priority = Primary; no priority UI in MVP).
+            List<IStoryTag> tags = _viewModel.SelectedTags
+                .Select(c => (IStoryTag)new StoryTagDTO
+                {
+                    TagId = c.TagId,
+                    TagTypeEnum = c.TagTypeId,
+                    Priority = TagPriority.Primary
+                })
+                .ToList();
+
+            if (StoryId.HasValue)
+            {
+                // Edit path.
+                var updateDto = new StoryUpdateDTO
+                {
+                    StoryId = StoryId.Value,
+                    Title = _viewModel.Title,
+                    ShortDescription = _viewModel.ShortDescription,
+                    Rating = _viewModel.Rating,
+                    StoryStatusId = _viewModel.StoryStatusId,
+                    CoverArtRelativeUrl = _viewModel.CoverArtRelativeUrl,
+                    LongDescription = _viewModel.LongDescription,
+                    PostApprovalStatus = _viewModel.PostApprovalStatus,
+                    StoryTags = tags
+                };
+
+                // Upload new cover if selected (id already exists on edit).
+                if (_form?.SelectedCoverFile is { } coverFile)
+                {
+                    const long maxBytes = 10 * 1024 * 1024;
+                    await using Stream stream = coverFile.OpenReadStream(maxBytes);
+                    updateDto.CoverArtRelativeUrl = await ImageStorageService.SaveAsync(
+                        stream, coverFile.ContentType, ImageKind.Cover, StoryId.Value);
+                    _viewModel.CoverArtRelativeUrl = updateDto.CoverArtRelativeUrl;
+                }
+
+                await StoryWriteService.UpdateStoryAsync(updateDto);
+                NavigationManager.NavigateTo($"/story/{StoryId.Value}/edit");
+            }
+            else
+            {
+                // Create path — AuthorId is server-stamped in CreateStoryAsync.
+                var createDto = new CreateStoryDTO
+                {
+                    Title = _viewModel.Title,
+                    ShortDescription = _viewModel.ShortDescription,
+                    Rating = _viewModel.Rating,
+                    StoryStatusId = _viewModel.StoryStatusId,
+                    CoverArtRelativeUrl = null, // set after create if a file was selected
+                    LongDescription = _viewModel.LongDescription,
+                    PostApprovalStatus = _viewModel.PostApprovalStatus,
+                    StoryTags = tags
+                };
+
+                int newStoryId = await StoryWriteService.CreateStoryAsync(createDto);
+
+                // Upload cover now that we have the story id.
+                if (_form?.SelectedCoverFile is { } coverFile)
+                {
+                    const long maxBytes = 10 * 1024 * 1024;
+                    await using Stream stream = coverFile.OpenReadStream(maxBytes);
+                    string coverUrl = await ImageStorageService.SaveAsync(
+                        stream, coverFile.ContentType, ImageKind.Cover, newStoryId);
+
+                    // Patch the cover URL onto the just-created story.
+                    await StoryWriteService.UpdateStoryAsync(new StoryUpdateDTO
+                    {
+                        StoryId = newStoryId,
+                        Title = _viewModel.Title,
+                        ShortDescription = _viewModel.ShortDescription,
+                        Rating = _viewModel.Rating,
+                        StoryStatusId = _viewModel.StoryStatusId,
+                        CoverArtRelativeUrl = coverUrl,
+                        LongDescription = _viewModel.LongDescription,
+                        PostApprovalStatus = _viewModel.PostApprovalStatus,
+                        StoryTags = tags
+                    });
+                }
+
+                NavigationManager.NavigateTo($"/story/{newStoryId}/edit");
+            }
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _forbidden = true;
+        }
+        catch (StoryValidationException ex)
+        {
+            _viewModel.ServerValidationErrors.AddRange(ex.ValidationErrors);
+        }
+        catch (Exception)
+        {
+            _viewModel.ServerValidationErrors.Add("An unexpected error occurred. Please try again.");
+        }
+        finally
+        {
+            _viewModel.IsLoading = false;
+        }
+    }
+
+}

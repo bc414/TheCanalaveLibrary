@@ -10,24 +10,24 @@
     <div class="grid grid-cols-3 gap-4">
 
         @* Card 1: InProgress, Teen, with ShortDescription + tags, no cover art (fallback) *@
-        <StoryCard Story="@_card1" InteractionState="null" IsOwnStory="false"
+        <StoryCard Story="@_card1" UserStoryInteractionState="null" IsOwnStory="false"
                    OnReport="@OnReport" />
 
         @* Card 2: Completed, Everyone, with cover art, no ShortDescription, no tags *@
-        <StoryCard Story="@_card2" InteractionState="null" IsOwnStory="false" />
+        <StoryCard Story="@_card2" UserStoryInteractionState="null" IsOwnStory="false" />
 
         @* Card 3: OnHiatus, Mature, IsOwnStory=true → should show Edit Story link, no buttons *@
-        <StoryCard Story="@_card3" InteractionState="null" IsOwnStory="true" />
+        <StoryCard Story="@_card3" UserStoryInteractionState="null" IsOwnStory="true" />
 
         @* Card 4: Long title truncation test, 999K word count, all caret items wired *@
-        <StoryCard Story="@_card4" InteractionState="@_activeState"
+        <StoryCard Story="@_card4" UserStoryInteractionState="@_activeState"
                    OnDiscoverFromStory="@OnDiscoverFromStory"
                    OnCopyLink="@OnCopyLink"
                    OnReport="@OnReport"
                    OnDownload="@OnDownload" />
 
         @* Card 5: Cancelled, no author (deleted/anonymous) *@
-        <StoryCard Story="@_card5" InteractionState="null" IsOwnStory="false" />
+        <StoryCard Story="@_card5" UserStoryInteractionState="null" IsOwnStory="false" />
 
     </div>
 

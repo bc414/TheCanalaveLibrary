@@ -12,6 +12,10 @@ public class ServerStoryWriteService(
 {
     public async Task<int> CreateStoryAsync(CreateStoryDTO newStoryDTO)
     {
+        // AuthorId is always server-stamped; CreateStoryDTO intentionally has no AuthorId property.
+        if (activeUser.UserId is not int authorId)
+            throw new InvalidOperationException("Creating a story requires an authenticated user.");
+
         List<string> validationErrors = newStoryDTO.CanSave();
         if (validationErrors.Any())
         {
@@ -19,7 +23,7 @@ public class ServerStoryWriteService(
         }
 
         Story newStoryDB = newStoryDTO.ToStory();
-        newStoryDB.AuthorId = newStoryDTO.AuthorId;
+        newStoryDB.AuthorId = authorId;
         // Slug is server-only and never client-editable (not on CreateStoryDTO at all) — settled WU12.
         newStoryDB.StoryDetail.Slug = await GenerateUniqueSlugAsync(newStoryDTO.Title);
 
@@ -42,19 +46,19 @@ public class ServerStoryWriteService(
             throw new StoryValidationException(validationErrors);
         }
 
-        // Include related data that needs to be updated. This is crucial.
         Story? storyToUpdate = await writeDb.Stories
             .Include(s => s.StoryListing)
             .Include(s => s.StoryDetail)
             .Include(s => s.StoryTags)
             .FirstOrDefaultAsync(s => s.StoryId == dto.StoryId);
 
-        if (storyToUpdate == null)
-        {
-            // Throwing an exception is clearer than returning an error string.
-            // The API controller can translate this to a 404 Not Found.
+        if (storyToUpdate is null)
             throw new KeyNotFoundException($"Story with ID {dto.StoryId} not found.");
-        }
+
+        // Author-only gate (cross-cutting.md "Security vs affordance"). Moderation actions (WU34) use
+        // a separate admin service path — they do NOT OR into this ownership check.
+        if (storyToUpdate.AuthorId != activeUser.UserId)
+            throw new UnauthorizedAccessException("You can only edit your own stories.");
 
         storyToUpdate.UpdateStoryEditableProperties(dto);
 

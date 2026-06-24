@@ -1,5 +1,4 @@
 using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
@@ -14,26 +13,18 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// Tier: Integration (real Testcontainers Postgres via <see cref="PostgresFixture"/>).
 /// </summary>
 [Collection("Postgres")]
-public class CommentReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
+public class CommentReadServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
     private int _userId;
     private int _chapterId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        _ = _factory.Services;
-
-        (_userId, _chapterId) = await SeedFixtureAsync();
-        // SeedFixtureAsync ends with SetActiveUser(Authenticated) — leave user authenticated
-        // so subsequent CallPostAsync helpers work without re-setting per test.
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
+        await base.InitializeAsync();
+        _userId = await SeedUserAsync();
+        _chapterId = await SeedChapterAsync();
+        // Leave user authenticated so CallPostAsync helpers work without re-setting per test.
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_userId, showMatureContent: false));
     }
 
     [Fact]
@@ -157,7 +148,7 @@ public class CommentReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
         long id = await CallPostAsync(_chapterId, "<p>Like check</p>");
 
         // Toggle like as the same user.
-        using IServiceScope likeScope = _factory.Services.CreateScope();
+        using IServiceScope likeScope = Factory.Services.CreateScope();
         ICommentWriteService writeSvc = likeScope.ServiceProvider.GetRequiredService<ICommentWriteService>();
         await writeSvc.ToggleLikeAsync(id);
 
@@ -179,14 +170,14 @@ public class CommentReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<CommentPageDto> CallGetAsync(int chapterId, int page, int pageSize)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ICommentReadService svc = scope.ServiceProvider.GetRequiredService<ICommentReadService>();
         return await svc.GetChapterCommentsAsync(chapterId, page, pageSize);
     }
 
     private async Task<long> CallPostAsync(int chapterId, string text, long? parentId = null)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ICommentWriteService svc = scope.ServiceProvider.GetRequiredService<ICommentWriteService>();
         return await svc.PostChapterCommentAsync(new PostChapterCommentDto
         {
@@ -196,57 +187,17 @@ public class CommentReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
         });
     }
 
-    private async Task<(int userId, int chapterId)> SeedFixtureAsync()
+    private async Task<int> SeedChapterAsync()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        int storyId = await SeedStoryAsync();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-        // .Where() + no-arg FirstAsync() — avoids EF Core / BCL AsyncEnumerable ambiguity in .NET 10.
-        int uid = (await db.Users.Where(u => u.Id > 0).FirstAsync()).Id;
-
-        string suffix = Guid.NewGuid().ToString("N")[..8];
-        Story story = new()
-        {
-            Rating          = Rating.E,
-            StoryStatusId   = StoryStatusEnum.InProgress,
-            PublishedDate   = DateTime.UtcNow,
-            LastUpdatedDate = DateTime.UtcNow,
-            StoryListing    = new StoryListing { StoryTitle = $"Comment RS Fixture {suffix}", ShortDescription = "test" },
-            StoryDetail     = new StoryDetail { LongDescription = "test", PostApprovalStatus = StoryStatusEnum.InProgress }
-        };
-        db.Stories.Add(story);
-        await db.SaveChangesAsync();
 
         Chapter chapter = new()
         {
-            StoryId          = story.StoryId,
+            StoryId          = storyId,
             ChapterNumber    = 1,
             Title            = "Chapter 1",
-            PrimaryContentId = null,
-            IsPublished      = true,
-            VersionCount     = 0
-        };
-        db.Chapters.Add(chapter);
-        await db.SaveChangesAsync();
-
-        // Leave the user authenticated so CallPostAsync works without re-setting per test.
-        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(uid, showMatureContent: false));
-        return (uid, chapter.ChapterId);
-    }
-
-    private async Task<int> SeedEmptyChapterAsync()
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-        int anyStoryId = (await db.Stories.Where(s => s.StoryId > 0).FirstAsync()).StoryId;
-        string suffix = Guid.NewGuid().ToString("N")[..6];
-
-        Chapter chapter = new()
-        {
-            StoryId          = anyStoryId,
-            ChapterNumber    = 900 + Math.Abs(suffix.GetHashCode() % 99), // unique-ish
-            Title            = $"Empty chapter {suffix}",
             PrimaryContentId = null,
             IsPublished      = true,
             VersionCount     = 0
@@ -256,11 +207,25 @@ public class CommentReadServiceTests(PostgresFixture postgres) : IAsyncLifetime
         return chapter.ChapterId;
     }
 
-    private void SetActiveUser(FakeActiveUserContext value)
+    private async Task<int> SeedEmptyChapterAsync()
     {
-        FakeActiveUserContext fake = _factory.Services.GetRequiredService<FakeActiveUserContext>();
-        fake.UserId            = value.UserId;
-        fake.IsAuthenticated   = value.IsAuthenticated;
-        fake.ShowMatureContent = value.ShowMatureContent;
+        // Seed a fresh story so no other test's comments can land in this chapter.
+        int storyId = await SeedStoryAsync();
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        string suffix = Guid.NewGuid().ToString("N")[..6];
+        Chapter chapter = new()
+        {
+            StoryId          = storyId,
+            ChapterNumber    = 1,
+            Title            = $"Empty chapter {suffix}",
+            PrimaryContentId = null,
+            IsPublished      = true,
+            VersionCount     = 0
+        };
+        db.Chapters.Add(chapter);
+        await db.SaveChangesAsync();
+        return chapter.ChapterId;
     }
 }

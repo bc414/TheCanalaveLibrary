@@ -1,0 +1,122 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@implements IAsyncDisposable
+
+@* Leaf — rich-text editing shell for recommendations. Separate from CommentEditor: recs forbid
+   spoilers, enforce a 500-char minimum, and have a char-meter that drives the submit gate.
+   Pull-on-submit via @ref + GetHtmlAsync() — EditorView has no change event. Meter is sampled
+   every 500 ms via PeriodicTimer; accurate enough for a "high-effort" UX signal without a live
+   binding. No service injection; the owning RecommendationSection sanitizes and persists. *@
+
+<div class="flex flex-col gap-3">
+    <EditorView @ref="_editor"
+                Html="@Html"
+                Placeholder="@($"Share your thoughts on this story (minimum {RecommendationConstants.MinLength} characters)…")" />
+
+    @* ── Character meter ─────────────────────────────────────────────────────── *@
+    <div class="flex items-center gap-2 text-sm" aria-live="polite">
+        @if (_currentLength >= RecommendationConstants.MinLength)
+        {
+            <svg viewBox="0 0 24 24" class="size-4 shrink-0" aria-hidden="true"
+                 fill="@RecommendationIcons.RecommendationAccentColor">
+                <path d="@RecommendationIcons.RecommendationIconPath" />
+            </svg>
+            <span class="text-[#5BB85A]">@_currentLength characters — minimum met</span>
+        }
+        else
+        {
+            <span class="text-[--color-text-muted]">
+                @_currentLength / @RecommendationConstants.MinLength characters minimum
+                @if (_currentLength > 0)
+                {
+                    <span class="ml-1 text-[--color-text-muted]">(@(RecommendationConstants.MinLength - _currentLength) more needed)</span>
+                }
+            </span>
+        }
+    </div>
+
+    @* ── Action row ──────────────────────────────────────────────────────────── *@
+    <div class="flex items-center gap-2">
+        <button type="button"
+                class="rounded-md bg-[--color-primary] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50"
+                disabled="@(Busy || _currentLength < RecommendationConstants.MinLength)"
+                aria-label="@SaveLabel"
+                @onclick="HandleSaveAsync">
+            @SaveLabel
+        </button>
+
+        @if (OnCancel.HasDelegate)
+        {
+            <button type="button"
+                    class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-1.5 text-sm text-[--color-text] transition-colors hover:bg-[--color-primary]/20 disabled:opacity-50"
+                    disabled="@Busy"
+                    aria-label="Cancel"
+                    @onclick="() => OnCancel.InvokeAsync()">
+                Cancel
+            </button>
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Seed HTML for the editor — set for edit-in-place, empty for a new submission.</summary>
+    [Parameter] public string? Html { get; set; }
+
+    /// <summary>Primary button label: "Submit Recommendation" for new; "Save Changes" for edit.</summary>
+    [Parameter] public string SaveLabel { get; set; } = "Submit Recommendation";
+
+    /// <summary>Raised with raw editor HTML on save. The owning composite sanitizes before persisting.</summary>
+    [Parameter] public EventCallback<string> OnSave { get; set; }
+
+    /// <summary>When wired, a Cancel button appears (edit-in-place only; new-compose has nothing to cancel).</summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>Disables buttons while the owning composite is performing a write.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    private EditorView? _editor;
+    private int _currentLength;
+    private PeriodicTimer? _sampleTimer;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _sampleTimer = new PeriodicTimer(TimeSpan.FromMilliseconds(500));
+        _ = SampleLengthLoopAsync(_sampleTimer);
+    }
+
+    private async Task SampleLengthLoopAsync(PeriodicTimer timer)
+    {
+        while (await timer.WaitForNextTickAsync())
+        {
+            try
+            {
+                if (_editor is null) continue;
+                string html = await _editor.GetHtmlAsync();
+                int len = RecommendationText.CountPlainTextLength(html);
+                if (len != _currentLength)
+                {
+                    _currentLength = len;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+            catch
+            {
+                // Editor not yet initialised or component disposing — swallow.
+            }
+        }
+    }
+
+    private async Task HandleSaveAsync()
+    {
+        if (_editor is null) return;
+        string html = await _editor.GetHtmlAsync();
+        await OnSave.InvokeAsync(html);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _sampleTimer?.Dispose();
+        _sampleTimer = null;
+    }
+}

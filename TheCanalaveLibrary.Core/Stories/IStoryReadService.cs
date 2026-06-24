@@ -39,6 +39,18 @@ public interface IStoryReadService
     ///
     /// <b>Interaction exclusions:</b> applied only when the viewer is authenticated
     /// (<see cref="IActiveUserContext.UserId"/> is non-null); anonymous viewers see everything.
+    ///
+    /// <b>Bookshelf narrowing:</b> when <paramref name="restrictToStoryIds"/> is provided, results
+    /// are pre-filtered to that candidate set before all other filters are applied. The content-rating
+    /// global filter still applies; callers never see stories outside their rating cap.
     /// </summary>
-    Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter);
+    Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(
+        StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null);
+
+    /// <summary>
+    /// Returns the IDs of all stories authored by <paramref name="authorId"/>, bypassing the
+    /// content-rating filter so authors always see their own mature stories. Used by the
+    /// My Stories bookshelf tab.
+    /// </summary>
+    Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId);
 }

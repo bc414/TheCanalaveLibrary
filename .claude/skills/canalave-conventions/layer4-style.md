@@ -373,3 +373,74 @@ embedded unconditionally — it self-hides when `TotalPages <= 1`, so consumers 
 simply leave `PageSize` at its zero default. Loading-skeleton upgrade (gray placeholder cards matching
 the final grid layout) is deferred as a future *additive* swap behind the unchanged `Stories is null`
 branch — no contract change, no consumer impact.
+
+**Bookshelf tab bar and mobile filter overlay (WU27, 2026-06-23):**
+
+*Interaction icon reskin:* `Follow` (the story-follow button) was reskinned from `#4A9B52` Eterna Green
+to `#2DBBA0` Manaphy Teal so the green color family is freed for curation tabs (My Stories /
+Recommendations / Hidden Gems) in `BookshelfTabVisuals`. **Only the story-follow `UserStoryInteractionButton`
+is affected — the user-to-user `FollowButton.razor` bell is unrelated and unchanged.**
+
+*Desktop tab bar:* a `<nav class="flex gap-1 flex-wrap border-b border-[--color-border] pb-2">` of
+`<a href="/bookshelves/{slug}">` links styled as tab chips. Each chip: `inline-flex items-center gap-1.5
+rounded-t-md px-3 py-1.5 text-sm transition-colors`. The active chip (determined by matching the current
+URL slug) gets `aria-current="page"` and an accent-colored background + white icon/text; inactive chips
+get a neutral surface hover. Icon is a `<svg viewBox="0 0 24 24" class="size-4 flex-shrink-0"><path d="…"/></svg>`
+with `fill-current`. No outer margin on the `<nav>` root — page body provides spacing.
+
+*Mobile tab selector:* a `<details>` disclosure following the ChapterNavigation pattern (see above). The
+`<summary>` shows the active tab's icon + label and a chevron; the dropdown panel lists all 11 tabs with
+icon + label. Same `absolute left-0 top-full z-10` positioning as the chapter-select dropdown.
+
+*Mobile filter overlay:* `ResultsFilterPanel` on mobile surfaces from a "Filter" button. When open:
+backdrop `fixed inset-0 z-50 bg-black/50 p-4` (click-to-close); panel `max-w-sm w-full rounded-xl
+bg-[--color-surface] p-4 shadow-lg overflow-y-auto` with `@onclick:stopPropagation`; renders nothing
+when closed. **This is the "third consumer" the WU9 note flagged for deciding on a shared `Modal`
+primitive — decision: do NOT extract.** A slide-in/drawer filter panel is structurally different from
+the centered ConfirmDialog; the `fixed inset-0` shell is the only shared part, too thin to justify a
+wrapper.
+
+*New bookshelf tab icons (all 24×24 viewBox, single-color, nonzero fill rule):*
+
+| `BookshelfTab` | Color | Concept |
+|---|---|---|
+| `MyStories` | `#2F7D4F` Leafeon Green | Book body+spine (left ⅔) + diagonal quill pen crossing |
+| `HiddenGems` | `#1FA37A` Torterra Emerald | Kite diamond with CCW crown-facet cutout |
+| `Recommendations` | `#5BB85A` Roserade Green | 4-pointed star (top-right) + two diagonal streak trails |
+| `ActivelyReading` | `#2E96A8` Lake Acuity Blue | Two open-book page halves + filled text-line rects |
+| `Abandoned` | `#9A8580` Wayward Cave Gray | House silhouette (rect+triangle roof) + CCW door-opening |
+
+The 6 interaction-backed tabs reuse `UserStoryInteractionVisuals.For(…)` verbatim. The gem + shooting
+star constants also live in `SharedUI/Recommendations/RecommendationVisuals.cs` (consumed by WU29's
+`RecommendationCard`). Visual sign-off for all new icons via `wwwroot/icon-preview.html` harness
+(throwaway — remove before Stage 6).
+
+**`RecommendationCard` (WU29, 2026-06-23):** three visual states layered on a base card surface
+(`rounded-xl bg-surface px-4 py-4`) — no outer margin; the composing `RecommendationSection` spaces
+cards via `gap-`.
+
+| State | Visual treatment |
+|---|---|
+| Plain (default) | Base card surface only; no accent |
+| `IsHighlightedByAuthor` (Author's Pick) | Accent border (`border-2 border-[--color-primary]`) + glow (`shadow-[0_0_0_2px_var(--color-primary)/20]`) + an "Author's Pick" ribbon label in `--color-primary` (Roserade Green `#5BB85A` maps to `--color-primary` in this feature's visual register) |
+| `IsHiddenGem` | Gem badge icon (Torterra Emerald `#1FA37A` inline SVG, from `RecommendationVisuals`) pinned `absolute top-2 right-2`, `title="Hidden Gem"` |
+| Both | Accent border/glow from spotlight + gem badge both render |
+
+Like button: same bordered-block shape as `PaginationControls`/`ChapterNavigation` at rest
+(`size-8 rounded-md border grid place-items-center transition-colors`), using Roserade Green
+(`#5BB85A`) as the active-state accent (inline CSS custom property `--accent` pattern from WU7).
+Successful-rec count rendered as a small `text-xs text-[--color-text-muted]` badge beside the like
+button.
+
+**`RecommendationEditor` (WU29, 2026-06-23):** root is `flex flex-col gap-3` — no outer margin.
+Character-count meter: `text-xs text-[--color-text-muted]`, turns `text-[--color-success]` once
+the 500-char minimum is met. Submit button disabled (`opacity-50 cursor-not-allowed`) until met.
+Button row follows `CommentEditor`: primary button `bg-[--color-primary]`, cancel `bg-[--color-surface]
+border`.
+
+**`RecommendationHelpfulPrompt` (WU29, 2026-06-23):** inline non-blocking banner — root is
+`flex items-center justify-between gap-3 rounded-xl border border-[--color-border] bg-[--color-surface]
+p-3 text-sm` — no outer margin; the chapter reading page controls placement. Yes button:
+`rounded-md bg-[--color-primary] px-3 py-1 text-white text-xs`. Dismiss link:
+`text-[--color-text-muted] text-xs underline cursor-pointer`. Renders nothing when dismissed
+(local `_dismissed` bool).

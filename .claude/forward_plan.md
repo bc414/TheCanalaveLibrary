@@ -218,6 +218,18 @@ Guardrails:
 
 **Resolved:**
 
+- **Active-user-conditional handling + two content-editing patterns** — resolved (2026-06-23, WU24
+  planning): `IActiveUserContext` is server-only (query-shaping + server-side authz); SharedUI components
+  never inject it — the dispatcher reads `AuthenticationState` and passes ownership down as a bool.
+  Ownership is identity-equality (`entity.AuthorId == currentUserId`), not a role — plain inline `@if`,
+  no `AdminControls` component (spec §5.17 reference is stale; that component was never built and should
+  not be). Editing is **author-only, server-enforced**; moderation is a separate WU34 path.
+  Two content-editing patterns by content weight: (1) Story/Chapter → **view-page / edit-page split**
+  (separate routes; `RichTextView` on view, `EditorView` on edit); (2) comments/recs/vouch text →
+  **in-place inline edit** (one page, parent-owned edit mode, both renderers co-exist normally).
+  See `cross-cutting.md` "Active-User-Conditional Handling" and
+  `layer3.5-structure.md` "Owner-Conditional Edit Affordances."
+
 - **`UserStoryInteraction` nomenclature rule** — resolved (2026-06-23, WU23 Phase 0): every identifier
   meaning *user×story interaction* must be spelled `UserStoryInteraction…`, never bare `Interaction…`.
   Full codebase sweep ran in WU23 Phase 0 (Tier 1: type/enum/entity renames; Tier 2: DB column
@@ -292,6 +304,16 @@ Guardrails:
 - **Hidden Gem at-limit behavior** (§8#4) — resolved Phase B (2026-06-20): reject + remove-first at the
   5-item limit; no atomic swap, no auto-evict. See [audit/Recommendations.md](audit/Recommendations.md)
   Feature 29.
+- **Recommendation minimum length** — resolved WU29 (2026-06-23): **500 characters**, measured on
+  HTML-stripped, entity-decoded plain text (same strip helper as `ChapterText.CountWords`). No value
+  appeared in the spec (§5.6 only says "substantive, multi-paragraph"); 500 is the standing constant in
+  `RecommendationConstants.MinLength`. See [audit/Recommendations.md](audit/Recommendations.md) Feature 27
+  and [layer2-services.md](skills/canalave-conventions/layer2-services.md) §"Recommendation Write Conventions".
+- **Recommendation approval lifecycle for MVP** — resolved WU29 (2026-06-23): new recommendations are
+  written directly as **Approved** (`StatusId = Approved`) so the display surface is exercisable before
+  the moderation queue is built. Spec §5.6's Pending→author-approval/moderator-review lifecycle is deferred
+  to WU34 (Moderation). Code is authoritative; spec is a read-only snapshot. See
+  [audit/Recommendations.md](audit/Recommendations.md) Feature 27.
 - **Tailwind version + build tooling** (Phase C) — resolved Phase C (2026-06-20): **Tailwind v4**,
   CSS-first config (`@theme` block in `TheCanalaveLibrary.Server/Styles/app.css`), not the spec
   §2.1-era `tailwind.config.js` model. Build via **npm + an MSBuild target** invoking the v4 CLI
@@ -347,6 +369,22 @@ Guardrails:
   Supersedes the WU2-era `GetInteractionIcon`/sprite-key plan. See
   [layer4-style.md](skills/canalave-conventions/layer4-style.md) §"Interaction Icons Are Inline SVG"
   and [audit/UserStoryInteractions.md](audit/UserStoryInteractions.md) Feature 16.
+- **Integration test isolation foundation** — resolved (2026-06-24, post-WU29): **Respawn
+  reset between every test.** The integration suite had no reset mechanism; tests shared one
+  Postgres container with accumulating state, making absolute-count and absolute-emptiness
+  assertions untestable and producing order-dependent failures (e.g. `SetHiddenGem_RejectAtFive`,
+  `GetChapterComments_EmptyChapter`). Fix: `PostgresFixture` holds a `Respawner` (FK-ordered
+  deletes, lookup tables excluded); `IntegrationTestBase.InitializeAsync` calls `ResetAsync`
+  before creating the factory. Each test seeds its own users/stories via base helpers;
+  `DataSeeder` creates `TestUser`/`AdminUser` per-factory (harmless — no test references them;
+  Respawn removes them before the next test); `Environments.Development` is kept so that
+  `appsettings.Development.json` supplies the connection string to `Program.cs`.
+  `[assembly: CollectionBehavior(DisableTestParallelization
+  = true)]` makes serial execution deliberate. `RecommendationStatusEnum` added to
+  `Core/Lookups/ModelEnums.cs` (missing enum mirror). Magic literals replaced with named enums.
+  See [canalave-conventions/testing.md](skills/canalave-conventions/testing.md)
+  §"Integration tests reset between every test."
+
 - **Test strategy** — resolved (2026-06-22, post-WU12 post-mortem): the project had zero automated
   tests; WU12's create-path bugs were caught only by manual reading of `/dev/wu12/*` probe output,
   which asserts nothing. Two-layer regime: a **unit** test project (`TheCanalaveLibrary.Tests.Unit`,

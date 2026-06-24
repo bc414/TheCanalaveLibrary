@@ -20,60 +20,46 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// order *relative to each other* — correct regardless of what else, past or present, surrounds them.
 /// </summary>
 [Collection("Postgres")]
-public class RecentListingsTests(PostgresFixture postgres) : IAsyncLifetime
+public class RecentListingsTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
+    private int _viewerUserId;
 
-    public Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        _ = _factory.Services;
-        return Task.CompletedTask;
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
+        await base.InitializeAsync();
+        _viewerUserId = await SeedUserAsync();
     }
 
     [Fact]
     public async Task GetRecentListingsAsync_OrdersByLastUpdatedDateDescending()
     {
-        SetActiveUser(showMatureContent: true); // see everything; ordering is what's under test here
+        // After reset, DB has only lookup rows — page size == total, so top-N = absolute now.
+        SetActiveUser(_viewerUserId);
 
         DateTime now = DateTime.UtcNow;
-        int olderId = await SeedStoryAsync($"Older Story {Guid.NewGuid():N}", now);
-        int newerId = await SeedStoryAsync($"Newer Story {Guid.NewGuid():N}", now.AddMinutes(1));
+        int olderId = await SeedDatedStoryAsync($"Older Story {Guid.NewGuid():N}", now);
+        int newerId = await SeedDatedStoryAsync($"Newer Story {Guid.NewGuid():N}", now.AddMinutes(1));
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IStoryReadService readService = scope.ServiceProvider.GetRequiredService<IStoryReadService>();
 
-        // A large enough page to be sure both of this test's own ids are present, whatever else has
-        // accumulated in the shared database — see the class doc comment for why this can't rely on
-        // top-N position.
-        int totalCount = (await readService.GetRecentListingsAsync(page: 1, pageSize: 1)).TotalCount;
-        (StoryListingDto[] items, _) = await readService.GetRecentListingsAsync(page: 1, pageSize: totalCount);
+        (StoryListingDto[] items, _) = await readService.GetRecentListingsAsync(page: 1, pageSize: 100);
 
         int newerIndex = Array.FindIndex(items, i => i.StoryId == newerId);
         int olderIndex = Array.FindIndex(items, i => i.StoryId == olderId);
 
-        newerIndex.Should().BeGreaterThanOrEqualTo(0, "the just-seeded newer story must appear in the full listing");
-        olderIndex.Should().BeGreaterThanOrEqualTo(0, "the just-seeded older story must appear in the full listing");
+        newerIndex.Should().BeGreaterThanOrEqualTo(0, "the just-seeded newer story must appear in the listing");
+        olderIndex.Should().BeGreaterThanOrEqualTo(0, "the just-seeded older story must appear in the listing");
         newerIndex.Should().BeLessThan(olderIndex, "a more recently updated story must sort before an older one");
     }
 
-    private void SetActiveUser(bool showMatureContent)
+    /// <summary>
+    /// Custom story seed with explicit <paramref name="lastUpdatedDate"/> — needed here because
+    /// <see cref="IntegrationTestBase.SeedStoryAsync"/> always uses <c>DateTime.UtcNow</c>.
+    /// </summary>
+    private async Task<int> SeedDatedStoryAsync(string title, DateTime lastUpdatedDate)
     {
-        FakeActiveUserContext fake = _factory.Services.GetRequiredService<FakeActiveUserContext>();
-        fake.IsAuthenticated = true;
-        fake.UserId = 1;
-        fake.ShowMatureContent = showMatureContent;
-    }
-
-    private async Task<int> SeedStoryAsync(string title, DateTime lastUpdatedDate)
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         Story story = new()

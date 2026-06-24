@@ -3,12 +3,11 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Core;
 
 /// <summary>
-/// Data Transfer Object for creating a new story. This can be expanded
-/// to be identical to an "Update" DTO if the fields are the same.
+/// Data Transfer Object for creating a new story. AuthorId is intentionally absent —
+/// the server service stamps it from IActiveUserContext.UserId (never trust the client).
 /// </summary>
 public class CreateStoryDTO : IEditableStoryProperties
 {
-    public int AuthorId { get; set; }
     public string Title { get; set; } = string.Empty;
     public string? ShortDescription { get; set; } = string.Empty;
     public Rating Rating { get; set; }

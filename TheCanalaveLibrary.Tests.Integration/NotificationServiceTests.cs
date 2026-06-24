@@ -1,5 +1,4 @@
 using FluentAssertions;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
@@ -28,27 +27,17 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// Tier: <b>Integration</b> (real Testcontainers Postgres via <see cref="PostgresFixture"/>).
 /// </summary>
 [Collection("Postgres")]
-public class NotificationServiceTests(PostgresFixture postgres) : IAsyncLifetime
+public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
     private int _actorId;
     private int _recipientId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        _ = _factory.Services; // force host build + DataSeeder
-
-        _actorId = await CreateThrowawayUserAsync("NS-A");
-        _recipientId = await CreateThrowawayUserAsync("NS-R");
-
+        await base.InitializeAsync();
+        _actorId = await SeedUserAsync();
+        _recipientId = await SeedUserAsync();
         SetActiveUser(_actorId);
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
     }
 
     // ── NotifyNewFollowerAsync ───────────────────────────────────────────────────
@@ -137,7 +126,7 @@ public class NotificationServiceTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task GetUnreadCountAsync_ReflectsUnreadNotifications()
     {
         // Seed two notifications for the recipient by two different actors.
-        int actorB = await CreateThrowawayUserAsync("NS-B");
+        int actorB = await SeedUserAsync("NS-B");
         await CallNotifyNewFollowerAsync(_recipientId, _actorId);
         await CallNotifyNewFollowerAsync(_recipientId, actorB);
 
@@ -151,8 +140,8 @@ public class NotificationServiceTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task GetUnreadCountAsync_Anonymous_ReturnsZero()
     {
-        _factory.Services.GetRequiredService<FakeActiveUserContext>().UserId = null;
-        _factory.Services.GetRequiredService<FakeActiveUserContext>().IsAuthenticated = false;
+        Factory.Services.GetRequiredService<FakeActiveUserContext>().UserId = null;
+        Factory.Services.GetRequiredService<FakeActiveUserContext>().IsAuthenticated = false;
 
         int count = await CallGetUnreadCountAsync();
         count.Should().Be(0);
@@ -163,7 +152,7 @@ public class NotificationServiceTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task GetNotificationsAsync_ReturnsNewestFirst()
     {
-        int actorB = await CreateThrowawayUserAsync("NS-C");
+        int actorB = await SeedUserAsync("NS-C");
 
         // Two notifications for the recipient in quick succession.
         await CallNotifyNewFollowerAsync(_recipientId, _actorId);
@@ -251,7 +240,7 @@ public class NotificationServiceTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task MarkAllAsReadAsync_ClearsAllUnreadForCurrentUser()
     {
-        int actorB = await CreateThrowawayUserAsync("NS-D");
+        int actorB = await SeedUserAsync("NS-D");
         await CallNotifyNewFollowerAsync(_recipientId, _actorId);
         await CallNotifyNewVouchAsync(_recipientId, actorB);
 
@@ -338,95 +327,67 @@ public class NotificationServiceTests(PostgresFixture postgres) : IAsyncLifetime
 
     // ── helpers ──────────────────────────────────────────────────────────────────
 
-    private void SetActiveUser(int userId)
-    {
-        FakeActiveUserContext fake = _factory.Services.GetRequiredService<FakeActiveUserContext>();
-        fake.UserId = userId;
-        fake.IsAuthenticated = true;
-    }
-
-    private async Task<int> CreateThrowawayUserAsync(string prefix)
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        UserManager<User> userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
-
-        string suffix = Guid.NewGuid().ToString("N")[..8];
-        User user = new()
-        {
-            UserName = $"Throwaway{prefix}-{suffix}",
-            Email = $"throwaway-{prefix.ToLower()}-{suffix}@test.invalid",
-            EmailConfirmed = true,
-            ThemeId = 1
-        };
-
-        IdentityResult result = await userManager.CreateAsync(user, "Password123!");
-        result.Succeeded.Should().BeTrue(
-            $"throwaway user creation failed: {string.Join(", ", result.Errors.Select(e => e.Description))}");
-
-        return user.Id;
-    }
-
     // ── Service call wrappers ─────────────────────────────────────────────────────
 
     private async Task CallNotifyNewFollowerAsync(int recipientId, int followerId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         INotificationWriteService svc = scope.ServiceProvider.GetRequiredService<INotificationWriteService>();
         await svc.NotifyNewFollowerAsync(recipientId, followerId);
     }
 
     private async Task CallNotifyNewVouchAsync(int recipientId, int voucherId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         INotificationWriteService svc = scope.ServiceProvider.GetRequiredService<INotificationWriteService>();
         await svc.NotifyNewVouchAsync(recipientId, voucherId);
     }
 
     private async Task<int> CallGetUnreadCountAsync()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         INotificationReadService svc = scope.ServiceProvider.GetRequiredService<INotificationReadService>();
         return await svc.GetUnreadCountAsync();
     }
 
     private async Task<NotificationDto[]> CallGetNotificationsAsync(int page, int pageSize)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         INotificationReadService svc = scope.ServiceProvider.GetRequiredService<INotificationReadService>();
         return await svc.GetNotificationsAsync(page, pageSize);
     }
 
     private async Task CallMarkAsReadAsync(long notificationId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         INotificationWriteService svc = scope.ServiceProvider.GetRequiredService<INotificationWriteService>();
         await svc.MarkAsReadAsync(notificationId);
     }
 
     private async Task CallMarkAllAsReadAsync()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         INotificationWriteService svc = scope.ServiceProvider.GetRequiredService<INotificationWriteService>();
         await svc.MarkAllAsReadAsync();
     }
 
     private async Task<NotificationSettingDto[]> CallGetSettingsAsync()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         INotificationReadService svc = scope.ServiceProvider.GetRequiredService<INotificationReadService>();
         return await svc.GetSettingsAsync();
     }
 
     private async Task CallSetSettingAsync(NotificationTypeEnum type, bool emailEnabled, bool collapsed)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         INotificationWriteService svc = scope.ServiceProvider.GetRequiredService<INotificationWriteService>();
         await svc.SetSettingAsync(type, emailEnabled, collapsed);
     }
 
     private async Task CallFollowAsync(int targetUserId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IFollowingWriteService svc = scope.ServiceProvider.GetRequiredService<IFollowingWriteService>();
         await svc.FollowAsync(targetUserId);
     }
@@ -436,7 +397,7 @@ public class NotificationServiceTests(PostgresFixture postgres) : IAsyncLifetime
     private async Task<Notification?> GetNotificationAsync(
         int recipientId, NotificationTypeEnum type, int sourceUserId, int relatedEntityId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.Notifications.FirstOrDefaultAsync(n =>
             n.RecipientUserId == recipientId &&
@@ -448,7 +409,7 @@ public class NotificationServiceTests(PostgresFixture postgres) : IAsyncLifetime
     private async Task<int> CountNotificationsAsync(
         int recipientId, NotificationTypeEnum type, int sourceUserId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.Notifications.CountAsync(n =>
             n.RecipientUserId == recipientId &&
@@ -458,7 +419,7 @@ public class NotificationServiceTests(PostgresFixture postgres) : IAsyncLifetime
 
     private async Task<bool> IsNotificationUnreadAsync(long notificationId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.Notifications
             .Where(n => n.NotificationId == notificationId)

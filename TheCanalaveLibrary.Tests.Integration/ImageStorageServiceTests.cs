@@ -15,26 +15,11 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// <see cref="IServiceScope"/> rather than the factory's root provider.
 /// </summary>
 [Collection("Postgres")]
-public class ImageStorageServiceTests(PostgresFixture postgres) : IAsyncLifetime
+public class ImageStorageServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
     // Minimal valid 1x1 PNG — same fixture bytes the WU12 dev-diagnostics endpoint used.
     private static readonly byte[] OnePixelPng = Convert.FromBase64String(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
-
-    private TestAppFactory _factory = null!;
-
-    public Task InitializeAsync()
-    {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        _ = _factory.Services;
-        return Task.CompletedTask;
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
-    }
 
     [Fact]
     public async Task SaveAsync_WritesFileUnderWebRoot_AndReturnsAHostRelativePath()
@@ -55,7 +40,7 @@ public class ImageStorageServiceTests(PostgresFixture postgres) : IAsyncLifetime
         string fullPath = ToFullPath(relativePath);
         File.Exists(fullPath).Should().BeTrue("the save in the test's own setup should have succeeded");
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<IImageStorageService>().DeleteAsync(relativePath);
 
         File.Exists(fullPath).Should().BeFalse();
@@ -65,10 +50,10 @@ public class ImageStorageServiceTests(PostgresFixture postgres) : IAsyncLifetime
     public async Task DeleteAsync_OnAPathTraversalAttempt_DoesNotDeleteOutsideUploads()
     {
         // A sentinel file outside wwwroot/uploads/ that a traversal escape would target.
-        string sentinelPath = Path.Combine(_factory.WebRootPath, "sentinel.txt");
+        string sentinelPath = Path.Combine(Factory.WebRootPath, "sentinel.txt");
         await File.WriteAllTextAsync(sentinelPath, "do not delete me");
 
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<IImageStorageService>().DeleteAsync("/uploads/../sentinel.txt");
 
         File.Exists(sentinelPath).Should().BeTrue();
@@ -77,7 +62,7 @@ public class ImageStorageServiceTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public async Task SaveAsync_RejectsAnUnsupportedContentType()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IImageStorageService imageStorage = scope.ServiceProvider.GetRequiredService<IImageStorageService>();
         using MemoryStream content = new(OnePixelPng);
 
@@ -87,11 +72,11 @@ public class ImageStorageServiceTests(PostgresFixture postgres) : IAsyncLifetime
     }
 
     private string ToFullPath(string relativePath) =>
-        Path.Combine(_factory.WebRootPath, relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+        Path.Combine(Factory.WebRootPath, relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
 
     private async Task<string> SaveOnePixelPngAsync(int ownerId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IImageStorageService imageStorage = scope.ServiceProvider.GetRequiredService<IImageStorageService>();
         using MemoryStream content = new(OnePixelPng);
         return await imageStorage.SaveAsync(content, "image/png", ImageKind.Cover, ownerId);

@@ -191,6 +191,8 @@ internal sealed class FakeTagReadService : ITagReadService
     public Task<List<TagDropDownDTO>> GetAllContentWarningTagsAsync() => Empty();
     public Task<List<TagChipDto>> SearchTagChipsAsync(TagTypeEnum type, string term) =>
         Task.FromResult(new List<TagChipDto>());
+    public Task<List<TagChipDto>> GetTagChipsByIdsAsync(IReadOnlyList<int> tagIds) =>
+        Task.FromResult(new List<TagChipDto>());
 
     private static Task<List<TagDropDownDTO>> Empty() => Task.FromResult(new List<TagDropDownDTO>());
 }

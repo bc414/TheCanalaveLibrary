@@ -1,0 +1,78 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Leaf — inline, non-blocking, dismissible "Was this recommendation helpful?" banner.
+   Rendered at the end of chapter content (not a ConfirmDialog overlay — must not interrupt reading).
+   The hosting page (WU26's reading page) owns the gating: show only when a
+   UserStoryRecommendationSource exists, Ch.1 IsRead is true, and no RecommendationSuccess exists.
+   On "Yes", the host calls RecordSuccessAsync. Self-contained: inject no service here. *@
+
+@if (!_dismissed)
+{
+    <div class="mt-6 rounded-xl border border-[#5BB85A] bg-[--color-surface] p-4 shadow-sm"
+         role="region" aria-label="Recommendation feedback">
+        <div class="flex items-start gap-3">
+            <svg viewBox="0 0 24 24" class="mt-0.5 size-5 shrink-0" aria-hidden="true" fill="#5BB85A">
+                <path d="@RecommendationIcons.RecommendationIconPath" />
+            </svg>
+            <div class="flex-1 min-w-0">
+                <p class="mb-3 text-sm text-[--color-text]">
+                    Was the recommendation that brought you here helpful?
+                </p>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button type="button"
+                            class="rounded-md bg-[#5BB85A] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#4aa349]"
+                            aria-label="Yes, this recommendation was helpful"
+                            @onclick="HandleYes">
+                        Yes, it was!
+                    </button>
+                    <button type="button"
+                            class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-1.5 text-sm text-[--color-text-muted] transition-colors hover:bg-[--color-surface-hover]"
+                            aria-label="No, this recommendation was not helpful"
+                            @onclick="HandleNo">
+                        No thanks
+                    </button>
+                </div>
+            </div>
+            <button type="button"
+                    class="shrink-0 text-[--color-text-muted] hover:text-[--color-text]"
+                    aria-label="Dismiss"
+                    @onclick="Dismiss">
+                <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>The recommendation that brought the user to this story (attribution source).</summary>
+    [Parameter, EditorRequired] public int RecommendationId { get; set; }
+
+    /// <summary>Raised when the user responds. True = helpful ("Yes"), false = not helpful ("No thanks").</summary>
+    [Parameter] public EventCallback<bool> OnRespond { get; set; }
+
+    /// <summary>Raised when the user dismisses without responding.</summary>
+    [Parameter] public EventCallback OnDismiss { get; set; }
+
+    private bool _dismissed;
+
+    private async Task HandleYes()
+    {
+        _dismissed = true;
+        await OnRespond.InvokeAsync(true);
+    }
+
+    private async Task HandleNo()
+    {
+        _dismissed = true;
+        await OnRespond.InvokeAsync(false);
+    }
+
+    private async Task Dismiss()
+    {
+        _dismissed = true;
+        await OnDismiss.InvokeAsync();
+    }
+}

@@ -13,28 +13,14 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// purpose-named test to point at instead of being discovered as a confusing failure three tests away.
 /// </summary>
 [Collection("Postgres")]
-public class HostBootTests(PostgresFixture postgres) : IAsyncLifetime
+public class HostBootTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
-
-    public Task InitializeAsync()
-    {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        return Task.CompletedTask;
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
-    }
-
     [Fact]
     public void TheHostBuilds_AndResolvesEveryStoryAndImageService()
     {
         Action act = () =>
         {
-            using IServiceScope scope = _factory.Services.CreateScope();
+            using IServiceScope scope = Factory.Services.CreateScope();
             scope.ServiceProvider.GetRequiredService<IActiveUserContext>();
             scope.ServiceProvider.GetRequiredService<IStoryReadService>();
             scope.ServiceProvider.GetRequiredService<IStoryWriteService>();
@@ -47,7 +33,7 @@ public class HostBootTests(PostgresFixture postgres) : IAsyncLifetime
     [Fact]
     public void TheFakeActiveUserContext_ReplacesTheRealClaimsBasedImplementation()
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IActiveUserContext resolved = scope.ServiceProvider.GetRequiredService<IActiveUserContext>();
 
         resolved.Should().BeOfType<FakeActiveUserContext>();

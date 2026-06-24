@@ -35,6 +35,30 @@ public class ServerTagReadService(
         }).ToList();
     }
 
+    public async Task<List<TagChipDto>> GetTagChipsByIdsAsync(IReadOnlyList<int> tagIds)
+    {
+        if (tagIds.Count == 0) return [];
+
+        var rows = await readDb.Tags
+            .Where(t => tagIds.Contains(t.TagId))
+            .Select(t => new { t.TagId, t.TagName, t.TagTypeId, t.Description, t.SpriteIdentifier })
+            .ToListAsync();
+
+        // Reorder to match the caller's id order (same reorder-to-input convention as GetListingsByIdsAsync).
+        Dictionary<int, TagChipDto> byId = rows.ToDictionary(t => t.TagId, t => new TagChipDto
+        {
+            TagId = t.TagId,
+            TagName = t.TagName,
+            TagTypeId = t.TagTypeId,
+            Description = t.Description,
+            SpriteUrl = t.SpriteIdentifier is null
+                ? null
+                : spriteReadService.GetSpriteUrl(activeUser.Theme, t.SpriteIdentifier, activeUser.PrefersAnimatedSprites)
+        });
+
+        return [.. tagIds.Where(byId.ContainsKey).Select(id => byId[id])];
+    }
+
     public Task<List<TagDropDownDTO>> GetTagsByTypeAsync(TagTypeEnum type) =>
         readDb.Tags
             .Where(t => t.TagTypeId == type)

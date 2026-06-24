@@ -1,5 +1,4 @@
 using FluentAssertions;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
@@ -23,27 +22,17 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// Tier: <b>Integration</b> (real Testcontainers Postgres via <see cref="PostgresFixture"/>).
 /// </summary>
 [Collection("Postgres")]
-public class FollowingWriteServiceTests(PostgresFixture postgres) : IAsyncLifetime
+public class FollowingWriteServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
     private int _actorId;
     private int _targetId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        _ = _factory.Services; // force host build + DataSeeder
-
-        _actorId = await CreateThrowawayUserAsync();
-        _targetId = await CreateThrowawayUserAsync();
-
+        await base.InitializeAsync();
+        _actorId = await SeedUserAsync();
+        _targetId = await SeedUserAsync();
         SetActiveUser(_actorId);
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
     }
 
     // ── FollowAsync ──────────────────────────────────────────────────────────────
@@ -176,14 +165,14 @@ public class FollowingWriteServiceTests(PostgresFixture postgres) : IAsyncLifeti
     public async Task VouchAsync_AtFiveVouches_ThrowsVouchLimitException()
     {
         // Fill the actor's 5 slots with 5 different targets.
-        int[] targets = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => CreateThrowawayUserAsync()));
+        int[] targets = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => SeedUserAsync()));
         foreach (int t in targets)
         {
             await CallVouchAsync(t, null);
         }
 
         // The 6th target must trigger the limit.
-        int sixthTarget = await CreateThrowawayUserAsync();
+        int sixthTarget = await SeedUserAsync();
         Func<Task> act = () => CallVouchAsync(sixthTarget, null);
         await act.Should().ThrowAsync<VouchLimitException>("the 6th vouch must be rejected");
     }
@@ -191,7 +180,7 @@ public class FollowingWriteServiceTests(PostgresFixture postgres) : IAsyncLifeti
     [Fact]
     public async Task RemoveVouchAsync_FreesASlot_AllowingNewVouch()
     {
-        int[] targets = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => CreateThrowawayUserAsync()));
+        int[] targets = await Task.WhenAll(Enumerable.Range(0, 5).Select(_ => SeedUserAsync()));
         foreach (int t in targets)
         {
             await CallVouchAsync(t, null);
@@ -200,7 +189,7 @@ public class FollowingWriteServiceTests(PostgresFixture postgres) : IAsyncLifeti
         // Remove one, then the slot should be free.
         await CallRemoveVouchAsync(targets[0]);
 
-        int newTarget = await CreateThrowawayUserAsync();
+        int newTarget = await SeedUserAsync();
         Func<Task> act = () => CallVouchAsync(newTarget, null);
         await act.Should().NotThrowAsync("freeing a slot must allow a new vouch");
     }
@@ -214,78 +203,51 @@ public class FollowingWriteServiceTests(PostgresFixture postgres) : IAsyncLifeti
 
     // ── helpers ──────────────────────────────────────────────────────────────────
 
-    private void SetActiveUser(int userId)
-    {
-        _factory.Services.GetRequiredService<FakeActiveUserContext>().UserId = userId;
-        _factory.Services.GetRequiredService<FakeActiveUserContext>().IsAuthenticated = true;
-    }
-
-    private async Task<int> CreateThrowawayUserAsync()
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        UserManager<User> userManager = scope.ServiceProvider.GetRequiredService<UserManager<User>>();
-
-        string suffix = Guid.NewGuid().ToString("N")[..8];
-        User user = new()
-        {
-            UserName = $"ThrowawayFW-{suffix}",
-            Email = $"throwaway-fw-{suffix}@test.invalid",
-            EmailConfirmed = true,
-            ThemeId = 1
-        };
-
-        IdentityResult result = await userManager.CreateAsync(user, "Password123!");
-        result.Succeeded.Should().BeTrue(
-            $"throwaway user creation failed: {string.Join(", ", result.Errors.Select(e => e.Description))}");
-
-        return user.Id;
-    }
-
     private async Task CallFollowAsync(int targetUserId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IFollowingWriteService svc = scope.ServiceProvider.GetRequiredService<IFollowingWriteService>();
         await svc.FollowAsync(targetUserId);
     }
 
     private async Task CallUnfollowAsync(int targetUserId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IFollowingWriteService svc = scope.ServiceProvider.GetRequiredService<IFollowingWriteService>();
         await svc.UnfollowAsync(targetUserId);
     }
 
     private async Task CallSetReceiveAlertsAsync(int targetUserId, bool value)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IFollowingWriteService svc = scope.ServiceProvider.GetRequiredService<IFollowingWriteService>();
         await svc.SetReceiveAlertsAsync(targetUserId, value);
     }
 
     private async Task CallVouchAsync(int targetUserId, string? text)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IFollowingWriteService svc = scope.ServiceProvider.GetRequiredService<IFollowingWriteService>();
         await svc.VouchAsync(targetUserId, text);
     }
 
     private async Task CallRemoveVouchAsync(int targetUserId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IFollowingWriteService svc = scope.ServiceProvider.GetRequiredService<IFollowingWriteService>();
         await svc.RemoveVouchAsync(targetUserId);
     }
 
     private async Task<bool> AnyFollowedUserAsync(int userId, int followedId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.FollowedUsers.AnyAsync(f => f.UserId == userId && f.FollowedUserId == followedId);
     }
 
     private async Task<bool> GetReceiveAlertsAsync(int userId, int followedId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.FollowedUsers
             .Where(f => f.UserId == userId && f.FollowedUserId == followedId)
@@ -295,21 +257,21 @@ public class FollowingWriteServiceTests(PostgresFixture postgres) : IAsyncLifeti
 
     private async Task<int> CountFollowedUserRowsAsync(int userId, int followedId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.FollowedUsers.CountAsync(f => f.UserId == userId && f.FollowedUserId == followedId);
     }
 
     private async Task<bool> AnyVouchAsync(int vouchingId, int vouchedId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.Vouches.AnyAsync(v => v.VouchingUserId == vouchingId && v.VouchedUserId == vouchedId);
     }
 
     private async Task<string?> GetVouchTextAsync(int vouchingId, int vouchedId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.Vouches
             .Where(v => v.VouchingUserId == vouchingId && v.VouchedUserId == vouchedId)
@@ -319,7 +281,7 @@ public class FollowingWriteServiceTests(PostgresFixture postgres) : IAsyncLifeti
 
     private async Task<int> CountVouchRowsAsync(int vouchingId, int vouchedId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.Vouches.CountAsync(v => v.VouchingUserId == vouchingId && v.VouchedUserId == vouchedId);
     }

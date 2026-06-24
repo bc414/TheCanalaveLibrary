@@ -46,6 +46,31 @@ public class ServerUserStoryInteractionReadService(
         return rows.ToDictionary(r => r.StoryId, ToDto);
     }
 
+    public async Task<IReadOnlyList<int>> GetBookshelfStoryIdsAsync(BookshelfTab tab)
+    {
+        int? userId = activeUser.UserId;
+        if (userId is null) return [];
+
+        IQueryable<UserStoryInteraction> query = readDb.UserStoryInteractions
+            .Where(i => i.UserId == userId);
+
+        query = tab switch
+        {
+            BookshelfTab.Favorites => query.Where(i => i.IsFavorite),
+            BookshelfTab.PrivateFavorites => query.Where(i => i.IsHiddenFavorite),
+            BookshelfTab.Completed => query.Where(i => i.IsCompleted),
+            BookshelfTab.Following => query.Where(i => i.IsFollowed),
+            BookshelfTab.ReadItLater => query.Where(i => i.IsReadItLater),
+            BookshelfTab.Ignored => query.Where(i => i.IsIgnored),
+            BookshelfTab.ActivelyReading => query.Where(i => i.HasStarted && !i.IsCompleted && !i.IsIgnored),
+            BookshelfTab.Abandoned => query.Where(i => i.IsIgnored && i.HasStarted),
+            _ => throw new ArgumentOutOfRangeException(nameof(tab), tab,
+                "Tab is not backed by UserStoryInteraction; route to the appropriate service.")
+        };
+
+        return await query.Select(i => i.StoryId).ToListAsync();
+    }
+
     private static UserStoryInteractionStateDto ToDto(UserStoryInteraction i) =>
         new(i.StoryId, i.HasStarted, i.IsCompleted, i.IsFavorite,
             i.IsHiddenFavorite, i.IsFollowed, i.IsReadItLater, i.IsIgnored);

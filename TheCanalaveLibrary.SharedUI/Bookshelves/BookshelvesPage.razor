@@ -1,0 +1,122 @@
+@page "/bookshelves/{Tab?}"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@inject IStoryReadService StoryReadService
+@inject IUserStoryInteractionReadService InteractionReadService
+@inject IRecommendationReadService RecommendationReadService
+@inject IDeviceDetectionService DeviceService
+@inject NavigationManager Nav
+
+@if (_isLoading)
+{
+    <PageTitle>My Bookshelves</PageTitle>
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <PageTitle>@BookshelfTabVisuals.For(_tab).Label &mdash; My Bookshelves</PageTitle>
+    @if (DeviceService.IsMobile())
+    {
+        <BookshelvesMobile Tab="_tab"
+                           CurrentUserId="_currentUserId"
+                           Items="_items"
+                           TotalCount="_totalCount"
+                           InteractionStates="_states"
+                           Filter="_filter"
+                           OnFilterChanged="HandleFilterChanged"
+                           OnPageChanged="HandlePageChanged" />
+    }
+    else
+    {
+        <BookshelvesDesktop Tab="_tab"
+                            CurrentUserId="_currentUserId"
+                            Items="_items"
+                            TotalCount="_totalCount"
+                            InteractionStates="_states"
+                            Filter="_filter"
+                            OnFilterChanged="HandleFilterChanged"
+                            OnPageChanged="HandlePageChanged" />
+    }
+}
+
+@code {
+    [Parameter] public string? Tab { get; set; }
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private BookshelfTab _tab;
+    private int? _currentUserId;
+    private StoryFilterDto _filter = new();
+
+    // Candidate IDs for the active tab — computed once per tab switch, reused across page turns.
+    private IReadOnlyList<int> _candidateIds = [];
+
+    private StoryListingDto[] _items = [];
+    private int _totalCount;
+    private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states =
+        new Dictionary<int, UserStoryInteractionStateDto>();
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(Tab))
+        {
+            Nav.NavigateTo($"/bookshelves/{BookshelfTabSlug.For(BookshelfTab.MyStories)}", replace: true);
+            return;
+        }
+
+        BookshelfTab? parsed = BookshelfTabSlug.Parse(Tab);
+        if (parsed is null) { Nav.NotFound(); return; }
+        _tab = parsed.Value;
+
+        var authState = await AuthState;
+        string? idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out int userId)) _currentUserId = userId;
+
+        await LoadPageAsync();
+    }
+
+    // Reloads candidate IDs + listings + states. Called on tab switch and filter change.
+    private async Task LoadPageAsync()
+    {
+        _isLoading = true;
+        _candidateIds = await GetCandidateIdsAsync();
+        await ReloadListingsAsync();
+        _isLoading = false;
+    }
+
+    // Re-paginates within the existing candidate set. Called when page or sort changes.
+    private async Task ReloadListingsAsync()
+    {
+        (_items, _totalCount) = await StoryReadService.GetListingsAsync(_filter, _candidateIds);
+        _states = _items.Length > 0
+            ? await InteractionReadService.GetStatesByStoryIdsAsync([.. _items.Select(i => i.StoryId)])
+            : new Dictionary<int, UserStoryInteractionStateDto>();
+    }
+
+    private Task<IReadOnlyList<int>> GetCandidateIdsAsync() => _tab switch
+    {
+        BookshelfTab.MyStories => GetMyStoriesIdsAsync(),
+        BookshelfTab.Recommendations => RecommendationReadService.GetRecommendedStoryIdsAsync(),
+        BookshelfTab.HiddenGems => RecommendationReadService.GetHiddenGemStoryIdsAsync(),
+        _ => InteractionReadService.GetBookshelfStoryIdsAsync(_tab),
+    };
+
+    private async Task<IReadOnlyList<int>> GetMyStoriesIdsAsync()
+    {
+        if (_currentUserId is null) return [];
+        return await StoryReadService.GetStoryIdsByAuthorAsync(_currentUserId.Value);
+    }
+
+    private async Task HandleFilterChanged(StoryFilterDto filter)
+    {
+        _filter = filter with { Page = 1 };
+        await ReloadListingsAsync();
+    }
+
+    private async Task HandlePageChanged(int page)
+    {
+        _filter = _filter with { Page = page };
+        await ReloadListingsAsync();
+    }
+}

@@ -25,4 +25,7 @@ public class FakeUserStoryInteractionWriteService : IUserStoryInteractionWriteSe
         IReadOnlyList<int> storyIds) =>
         Task.FromResult<IReadOnlyDictionary<int, UserStoryInteractionStateDto>>(
             new Dictionary<int, UserStoryInteractionStateDto>());
+
+    public Task<IReadOnlyList<int>> GetBookshelfStoryIdsAsync(BookshelfTab tab) =>
+        Task.FromResult<IReadOnlyList<int>>([]);
 }

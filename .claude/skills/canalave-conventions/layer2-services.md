@@ -439,6 +439,33 @@ return (items, totalCount);
 | Edit-only fields | `OriginalPublishedDate` | `writeDb` via dedicated `GetStoryForEditAsync()` |
 | Display hint | `CommentDto.IsLikedByCurrentUser` | Computed by the **read service** in its projection (per-viewer EXISTS subquery on `CommentLike`, always false for anonymous); the result then flows *down* to the `CommentItem` leaf as a `[Parameter]`. The leaf never injects a service. |
 
+## Recommendation Write Conventions (WU29)
+
+Three write-side patterns settled for the Recommendations cluster — record them here so future
+sessions don't re-derive them:
+
+**Min-length validation (strip-then-count):** `RecommendationConstants.MinLength = 500`. The write
+service strips HTML and decodes entities before counting characters — same Core helper pattern as
+`ChapterText.CountWords` (strip→decode→whitespace-split). Reject with
+`RecommendationValidationException` if the count is below the threshold. The minimum is enforced on
+the **sanitized** text (after `sanitizer.Sanitize(rawHtml)`) so markup inflation never passes through.
+
+**Auto-approve on submit (MVP):** `SubmitAsync` writes `StatusId = Approved` directly. Spec §5.6's
+Pending→author-approval/moderation lifecycle is deferred to WU34. See `forward_plan.md` Resolved.
+The status enum seed (1=Pending, 2=Approved, 3=Rejected, 4=Under Review) is unchanged; this is a
+write-service choice, not a schema change.
+
+**Count-limit enforcement (Hidden Gem and author-highlight):** Both limits are checked against
+`writeDb` (write-side read, Case 1 — constraint check, for consistency), then rejected via
+`RecommendationValidationException`. `MaxHiddenGemsPerUser = 5`; `MaxHighlightedPerStory = 5`.
+Mirrors the Vouch 5-limit pattern (`FollowingConstants.MaxVouchesPerUser`). No auto-evict, no swap —
+the user must explicitly un-designate first. **Settled — do not revisit** (resolved Phase B,
+`forward_plan.md` "Hidden Gem at-limit behavior").
+
+**Like toggle (no notification):** `ToggleLikeAsync` returns `RecommendationLikeResultDto(int LikeCount,
+bool IsLiked)` so the UI reconciles optimistic state without a re-read. No notification fires on a
+recommendation like — anti-addictive design (§6.11), same as `CommentLike`.
+
 ## Self-Referential Editing Exception
 
 When reader and writer are identical by definition (user editing own settings), a single

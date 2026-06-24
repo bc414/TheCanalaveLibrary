@@ -639,54 +639,101 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   Feature 31 WU23 Stage note.
 - **Tool:** opusplan. **Pointer:** `audit/Discovery.md` Feature 31. **Deps:** WU8, WU11.
 
-### WU24 — Story create/edit (`StoryPropertiesForm` + `AdminControls`)
-- **Cells:** 4 L3/L3.5/L4 *(Stage-4 → finish to spec)*.
-- **Do:** complete the EditForm+ViewModel: TagSelector wiring, cover-art upload, slug (server-only),
-  `AdminControls` (wraps `AuthorizeView`, author-only — universal, minted here, reused by WU25);
-  shared create/edit routes. `StoryPropertiesForm.razor`/`StoryPropertiesViewModel.cs` already live at
-  `SharedUI/Stories/` (moved out of the legacy `Components/StoryProperties/` folder ahead of this build
-  — see `audit/Stories.md` Shared Context); that move is folder-only and is **not** a head start on the
-  finish-to-spec work — the content is still the old-convention scaffolding the Stage-4 note describes
-  (Bootstrap classes, no `TagSelector`/cover-art/slug/`AdminControls` wiring).
-  **Tool:** opusplan (Stage-4 build-to-spec; Sonnet for parts now Stage-3).
-  **Pointer:** `audit/Stories.md` Feature 4. **Deps:** WU11, WU14.
+### WU24 — Story create/edit pages (`StoryEditorPage` + `StoryPropertiesForm` rebuild) — DONE ✓ (2026-06-23)
+- **Cells:** 4 L3/L3.5/L4 — all now Stage 5.
+- **Architecture settled (WU24 planning, 2026-06-23):** no `AdminControls` component — ownership-conditional
+  affordances are inline `@if` on a page-computed bool (settled in `cross-cutting.md`
+  "Owner-Conditional Edit Affordances"). Editing is author-only (identity-equality, server-enforced),
+  never author-or-mod (moderation is a separate WU34 path). Content-editing pattern for Story/Chapter:
+  **view-page / edit-page split** (see `cross-cutting.md` "Two content-editing patterns").
+- **Do:**
+  - **Doc-touch (moment 1, before code):** update `cross-cutting.md` + `layer3.5-structure.md` with the
+    active-user-conditional handling analysis and two-pattern content-editing rule (done pre-WU24 build).
+  - **New `StoryEditorPage.razor`** (Server, both `@page "/story/new"` and `@page "/story/{StoryId:int}/edit"`,
+    single responsive page). Thin dispatcher: resolves auth, data-loads for edit, maps ViewModel ↔ DTOs,
+    hosts `<StoryPropertiesForm>`. On edit: owner redirect/forbidden if `story.AuthorId != currentUserId`
+    (UX pre-check; server gate is the real authority).
+  - **Rebuild `StoryPropertiesForm.razor`** (presentational — no `@inject`; stays bUnit-testable):
+    Bootstrap → Tailwind; `InputTextArea` long-desc → **`EditorView`** (pull-on-submit via `@ref`);
+    add Status field; one `<TagSelector>` per `TagTypeEnum` category; `<InputFile>` for cover art;
+    delete dead `TagDropDownDTO`/`GetAllCharacterTagsAsync` code.
+  - **TagSelector → DTO mapping:** `TagChipDto` ↔ `IStoryTag` with default Priority (no priority UI in MVP).
+  - **Cover-art upload ordering:** on create = save story first (get id), then upload to `IImageStorageService`
+    + patch `CoverArtRelativeUrl`; on edit = id already exists.
+  - **Server-side author gate:** `UpdateStoryAsync` — load story, throw `UnauthorizedAccessException` if
+    `story.AuthorId != activeUser.UserId`. `CreateStoryAsync` — stamp `AuthorId` from
+    `IActiveUserContext.UserId`, not DTO (drop `AuthorId` from the client-settable DTO).
+- **VERIFIED (2026-06-23):** `dotnet build` green (8 projects, 2 pre-existing warnings, 0 new errors).
+  `dotnet test` green: 112 Unit + 208 RazorComponents + 145 Integration = 465 total (13 net-new tests).
+  Covering tiers: **Integration** — `StoryWriteServiceTests` (3 new tests: `CreateStoryAsync_StampsAuthorId`,
+  `UpdateStoryAsync_Owner_CanUpdateTitle`, `UpdateStoryAsync_NonOwner_ThrowsUnauthorizedAccessException`);
+  **Integration** — `CommentReadServiceTests` + `CommentWriteServiceTests` backfill (wired separately; in
+  comment cluster); **RazorComponents** — `StoryPropertiesFormTests.cs` (10 tests: title input, textarea,
+  select, file input, default/custom submit label, valid submit callback, invalid empty-title, server
+  validation errors rendered, IsLoading disables button); **RazorComponents** — `TagSelectorTests`/
+  `ResultsFilterPanelTests` updated (`GetTagChipsByIdsAsync` stub added to `FakeTagReadService`).
+  `Routes.razor` now uses `AuthorizeRouteView` (not `RouteView`) — `[Authorize]` attributes now enforced.
+  L4 visual sign-off pending human review.
+- **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 4. **Deps:** WU11, WU14.
 
-### WU25 — Story detail page (`StoryPage` + desktop/mobile) *(Stage-4 → build spec §5.28)*
+### WU25 — Story view page (`StoryPage` + desktop/mobile) *(Stage-4 → build spec §5.28)*
 - **Cells:** 5 L3/L3.5/L4.
-- **Do:** discard the `RandomNumberGenerator` stubs; add `[PersistentState]` (no flicker), hybrid catch-all
-  route `{*StorySlug}`; layout title→cover→long desc→chapter selection→recommendations; AdminControls for
-  author UI. Delete `RandomNumberGenerator` when done. **Tool:** opusplan/Sonnet.
+- **Architecture (settled WU24):** this is the **read-only view page** (content-editing Pattern 1 — view
+  side). `RichTextView` for long description. Author-only "Edit Story" affordance is an inline `@if` link
+  to `/story/{id}/edit` (no `AdminControls` component — none exists; link already partially in
+  `UserStoryInteractionPanel` line 17, may be surfaced here more visibly). No `EditorView` on this page.
+- **Do:** discard the `RandomNumberGenerator` stubs; add `[PersistentState]` (no flicker), hybrid
+  catch-all route `{*StorySlug}`; layout title→cover→`RichTextView` long desc→chapter selection
+  (composes `ChapterNavigation`)→recommendations section; author-only inline `@if` link to edit page.
+  Delete `RandomNumberGenerator` when done. **Tool:** opusplan/Sonnet.
   **Pointer:** `audit/Stories.md` Feature 5. **Deps:** WU13, WU14, WU24, WU29 (recommendations section),
   WU26 (chapter selection list).
 
-### WU26 — Chapter reading + writing pages
+### WU26 — Chapter reading + writing pages *(two-route Pattern 1 split)*
 - **Cells:** 6 L3/L3.5/L4, 7 L3/L3.5/L4, 44 L2/L3/L3.5 (reading-progress MVP: client JS scroll %, direct
   DB write; `HasStarted` at 90% of Ch.1).
+- **Architecture (settled WU24):** content-editing Pattern 1 — two separate routes:
+  - **Reading page** `/story/{id}/chapter/{cid}` — `RichTextView` + `ChapterNavigation` top+bottom +
+    `CommentSection` + scroll % tracking + reader settings. Public (content-rating filter applies).
+    Author-only inline `@if` link to chapter edit page.
+  - **Edit/write page** `/story/{id}/chapter/{cid}/edit` + `/story/{id}/chapter/new` — `EditorView` +
+    versioning UI. `[Authorize]` + ownership gate. No comments, no scroll tracking.
+  - The two renderers (`RichTextView` / `EditorView`) never co-exist here because they are on different routes.
 - **Do:** reading page (ChapterNavigation top+bottom, RichTextView, reader settings, rating warning +
-  "skip to next"); writing page (EditorView + versioning); CommentSection on chapter.
+  "skip to next", CommentSection); writing page (EditorView + versioning); inline author link between them.
   **Tool:** opusplan. **Pointer:** `audit/Chapters.md`. **Deps:** WU5, WU6, WU18, WU20.
 
-### WU27 — Bookshelves page
-- **Cells:** 17 L3/L3.5/L4.
-- **Do:** `/bookshelves/{Tab}` system tabs (Favorites, Private, Read It Later, Actively Reading, Completed,
-  Ignored, Abandoned, Following, My Stories); each composes StoryDeck + ResultsFilterPanel (narrowing, not
-  discovery). **Tool:** opusplan/Sonnet. **Pointer:** `audit/UserStoryInteractions.md` Feature 17.
-  **Deps:** WU14, WU16, WU23.
+### WU27 — Bookshelves page — DONE ✓ (2026-06-24)
+- **Cells:** 17 L2/L3/L3.5/L4 → Stage 5.
+- **Done:** Full `/bookshelves/{Tab?}` page (11 tabs). New service methods: `GetBookshelfStoryIdsAsync`,
+  `GetStoryIdsByAuthorAsync` (content-rating bypass), `GetListingsAsync(filter, restrictToStoryIds?)`,
+  `GetRecommendedStoryIdsAsync` + `GetHiddenGemStoryIdsAsync` (additive; own approved recs by active user).
+  `BookshelfTabVisuals`, `BookshelvesPage` dispatcher, `BookshelvesDesktop`, `BookshelvesMobile`.
+  Following reskinned teal site-wide (`#2DBBA0`).
+  Tests: Unit (BookshelfTabVisualsTests, 14), Integration (BookshelfStoryIdsTests, 16),
+  RazorComponents (BookshelvesDesktopTests 7 + BookshelvesMobileTests 10). All green.
+  Human visual sign-off pending → Stage 6.
+  **Pointer:** `audit/UserStoryInteractions.md` Feature 17. **Deps:** WU14, WU16, WU23.
 
 ### WU28 — Discovery pages + Tag Directory + Tag Admin
 - **Cells:** 31 L3.5 (page), 32 L2/L3/L3.5 (FTS as filter axis + Rank relevance sort), 33 L2/L3/L3.5
-  (Manual Tree Search, stateless pivots), 34 L3/L3.5 (Tag Directory `/tags`), 11 L2/L3/L3.5 (Tag admin
+  (Manual Tree Search, stateless pivots), 34 L2/L3/L3.5 (Tag Directory `/tags`), 11 L2/L3/L3.5 (Tag admin
   CRUD behind AuthorizeView on the directory).
 - **Do:** SearchPage (`/discover`, random-preloaded, "give me more" = interaction-as-pagination); Tag
-  Directory one-page/two-experiences; manual tree pages. **Tool:** opusplan.
+  Directory one-page/two-experiences — add a browse-by-type read method to `ITagReadService` (all tags
+  grouped by `TagTypeEnum`, with `Description` + resolved `SpriteUrl`, distinct from the existing
+  typeahead/bulk-by-id methods); manual tree pages. **Tool:** opusplan.
   **Pointer:** `audit/Discovery.md`, `audit/Tags.md` Feature 11. **Deps:** WU14, WU23, WU4.
 
-### WU29 — Recommendations
-- **Cells:** 27/28/29/30 L2/L3/L3.5/L4. Hidden-Gem at-limit behavior resolved Phase B (reject +
-  remove-first); 5-per-user in service.
-- **Do:** submission (EditorView, min char count, one-per-user), display (Author Spotlight ≤5,
-  RecommendationLike), attribution popup + RecommendationSuccess. **Tool:** opusplan.
-  **Pointer:** `audit/Recommendations.md`. **Deps:** WU6, WU13.
+### WU29 — Recommendations ✓ DONE (2026-06-23/24)
+- **Cells:** 27/28/29/30 L2/L3/L3.5/L4/L5 (L5 includes integration test isolation overhaul);
+  27 L6 (unique index). F30 L5 stays at 2 (attribution trigger deferred to WU26).
+- **Done:** submission, display (Author Spotlight ≤5, RecommendationLike), attribution surface minted
+  (trigger deferred), RecommendationStatusEnum added to Core. Integration test isolation overhaul
+  (Respawn + IntegrationTestBase + SeedUserAsync GUID-suffix fix) unlocked reliable L5 verification
+  for F7/16/17/18/19/23/24/25/26/27/28/29/42/43. See `audit/Recommendations.md` + `testing.md`.
+- **L4 visual sign-off:** completed 2026-06-23 (manual).
+- **Pointer:** `audit/Recommendations.md`.
 
 ### WU30 — Profiles + Theme selection
 - **Cells:** 20/21/22 L2/L3/L3.5/L4, 3 L3/L3.5 (theme-selection UI in profile settings).

@@ -1,0 +1,290 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@inject IRecommendationWriteService Recommendations
+
+@* Coordination composite — owns the story recommendation section: load, submission composer
+   (gated on auth + not-already-recommended), optimistic like with rollback, Hidden-Gem toggle,
+   author spotlight toggle, and delete-confirm dialog. Injects IRecommendationWriteService
+   (which :IRecommendationReadService) — one injection gives read + write. All writes resolve
+   here; nothing bubbles to the page dispatcher. WU25 (story detail page) embeds this surface. *@
+
+@* ── Section header ───────────────────────────────────────────────────────────── *@
+<div class="flex items-center gap-2 mb-4">
+    <svg viewBox="0 0 24 24" class="size-5 shrink-0" aria-hidden="true" fill="#5BB85A">
+        <path d="@RecommendationIcons.RecommendationIconPath" />
+    </svg>
+    <h2 class="text-base font-semibold text-[--color-text]">
+        Recommendations <span class="text-[--color-text-muted] font-normal text-sm">(@_recs.Count)</span>
+    </h2>
+</div>
+
+@if (_loading)
+{
+    <p class="text-sm text-[--color-text-muted]">Loading recommendations…</p>
+}
+else if (_recs.Count == 0 && !_composing)
+{
+    <p class="text-sm text-[--color-text-muted]">No recommendations yet. Be the first!</p>
+}
+else
+{
+    <div class="flex flex-col gap-4">
+        @foreach (var r in _recs)
+        {
+            var rec = r;
+            <RecommendationCard Rec="rec"
+                                OnLike="@(CurrentUserId is not null ? EventCallback.Factory.Create<int>(this, HandleLike) : default)"
+                                OnEdit="@(rec.IsOwnRecommendation ? EventCallback.Factory.Create<int>(this, HandleEditClick) : default)"
+                                OnDelete="@(rec.IsOwnRecommendation ? EventCallback.Factory.Create<int>(this, HandleDeleteClick) : default)"
+                                OnToggleHiddenGem="@(rec.IsOwnRecommendation ? EventCallback.Factory.Create<int>(this, HandleToggleHiddenGem) : default)"
+                                OnToggleHighlight="@(CurrentUserId == StoryAuthorId ? EventCallback.Factory.Create<int>(this, HandleToggleHighlight) : default)" />
+
+            @* Inline editor for this card (edit-in-place) *@
+            @if (_editingId == rec.RecommendationId)
+            {
+                <div class="ml-4 mt-1">
+                    <RecommendationEditor SaveLabel="Save Changes"
+                                          Html="@rec.BodyHtml"
+                                          Busy="@_busy"
+                                          OnSave="HandleEditSaveAsync"
+                                          OnCancel="HandleEditCancel" />
+                </div>
+            }
+        }
+    </div>
+}
+
+@* ── New-recommendation composer (auth + not-yet-recommended) ─────────────────── *@
+@if (CurrentUserId is not null && !_alreadyRecommended)
+{
+    <div class="mt-6">
+        @if (!_composing)
+        {
+            <button type="button"
+                    class="flex items-center gap-2 rounded-md border border-[#5BB85A] px-4 py-2 text-sm text-[#5BB85A] transition-colors hover:bg-[#5BB85A]/10"
+                    aria-label="Write a recommendation for this story"
+                    @onclick="() => _composing = true">
+                <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true" fill="#5BB85A">
+                    <path d="@RecommendationIcons.RecommendationIconPath" />
+                </svg>
+                Recommend this story
+            </button>
+        }
+        else
+        {
+            <h3 class="mb-2 text-sm font-semibold text-[--color-text]">Write a recommendation</h3>
+            <RecommendationEditor SaveLabel="Submit Recommendation"
+                                   Busy="@_busy"
+                                   OnSave="HandleSubmitAsync"
+                                   OnCancel="HandleComposeCancel" />
+        }
+    </div>
+}
+
+@* ── Delete confirmation dialog ───────────────────────────────────────────────── *@
+<ConfirmDialog @bind-IsOpen="_showDeleteConfirm"
+               Title="Delete recommendation"
+               Message="Are you sure you want to delete your recommendation? This cannot be undone."
+               ConfirmText="Delete"
+               CancelText="Cancel"
+               IsDestructive="true"
+               OnConfirm="HandleDeleteConfirmAsync" />
+
+@* ── Inline error feedback ────────────────────────────────────────────────────── *@
+@if (_error is not null)
+{
+    <p class="mt-2 text-sm text-[--color-danger]">@_error</p>
+}
+
+@code {
+    [Parameter, EditorRequired] public int StoryId { get; set; }
+
+    /// <summary>Used to wire the spotlight toggle to the story author only.</summary>
+    [Parameter] public int? StoryAuthorId { get; set; }
+
+    /// <summary>Null = anonymous viewer — hides submission, like, and owner affordances.</summary>
+    [Parameter] public int? CurrentUserId { get; set; }
+
+    // ── Load state ────────────────────────────────────────────────────────────────
+    private List<RecommendationDto> _recs = [];
+    private bool _loading = true;
+    private bool _alreadyRecommended;
+
+    // ── Coordination state ────────────────────────────────────────────────────────
+    private bool _composing;
+    private int? _editingId;
+    private bool _showDeleteConfirm;
+    private int _pendingDeleteId;
+    private bool _busy;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        _recs = await Recommendations.GetForStoryAsync(StoryId);
+        _alreadyRecommended = CurrentUserId is not null
+            && _recs.Any(r => r.IsOwnRecommendation);
+        _loading = false;
+    }
+
+    // ── Submit new ────────────────────────────────────────────────────────────────
+    private async Task HandleSubmitAsync(string html)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Recommendations.SubmitAsync(new RecommendationSubmitDto(StoryId, html));
+            _composing = false;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is RecommendationValidationException or InvalidOperationException or KeyNotFoundException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void HandleComposeCancel()
+    {
+        _composing = false;
+        _error = null;
+    }
+
+    // ── Like (optimistic) ─────────────────────────────────────────────────────────
+    private async Task HandleLike(int id)
+    {
+        int idx = _recs.FindIndex(r => r.RecommendationId == id);
+        if (idx < 0) return;
+
+        RecommendationDto original = _recs[idx];
+        bool newLiked = !original.IsLikedByCurrentUser;
+        _recs[idx] = original with
+        {
+            IsLikedByCurrentUser = newLiked,
+            LikeCount = newLiked ? original.LikeCount + 1 : Math.Max(0, original.LikeCount - 1)
+        };
+        StateHasChanged();
+
+        try
+        {
+            RecommendationLikeResultDto result = await Recommendations.ToggleLikeAsync(id);
+            idx = _recs.FindIndex(r => r.RecommendationId == id);
+            if (idx >= 0)
+            {
+                _recs[idx] = _recs[idx] with { LikeCount = result.LikeCount, IsLikedByCurrentUser = result.IsLiked };
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            idx = _recs.FindIndex(r => r.RecommendationId == id);
+            if (idx >= 0) _recs[idx] = original;
+            _error = ex.Message;
+            StateHasChanged();
+        }
+    }
+
+    // ── Edit ──────────────────────────────────────────────────────────────────────
+    private void HandleEditClick(int id)
+    {
+        _editingId = id;
+        _composing = false;
+        _error = null;
+    }
+
+    private void HandleEditCancel() => _editingId = null;
+
+    private async Task HandleEditSaveAsync(string html)
+    {
+        if (_editingId is null) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Recommendations.EditAsync(new UpdateRecommendationDto(_editingId.Value, html));
+            _editingId = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is RecommendationValidationException or UnauthorizedAccessException or KeyNotFoundException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ── Delete ────────────────────────────────────────────────────────────────────
+    private void HandleDeleteClick(int id)
+    {
+        _pendingDeleteId = id;
+        _showDeleteConfirm = true;
+        _error = null;
+    }
+
+    private async Task HandleDeleteConfirmAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Recommendations.DeleteAsync(_pendingDeleteId);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or KeyNotFoundException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ── Hidden Gem toggle ─────────────────────────────────────────────────────────
+    private async Task HandleToggleHiddenGem(int id)
+    {
+        _error = null;
+        int idx = _recs.FindIndex(r => r.RecommendationId == id);
+        if (idx < 0) return;
+        bool target = !_recs[idx].IsHiddenGem;
+        try
+        {
+            await Recommendations.SetHiddenGemAsync(id, target);
+            _recs[idx] = _recs[idx] with { IsHiddenGem = target };
+            StateHasChanged();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException or KeyNotFoundException)
+        {
+            _error = ex.Message;
+            StateHasChanged();
+        }
+    }
+
+    // ── Author spotlight ──────────────────────────────────────────────────────────
+    private async Task HandleToggleHighlight(int id)
+    {
+        _error = null;
+        int idx = _recs.FindIndex(r => r.RecommendationId == id);
+        if (idx < 0) return;
+        bool target = !_recs[idx].IsHighlightedByAuthor;
+        try
+        {
+            await Recommendations.SetHighlightedByAuthorAsync(id, target);
+            await LoadAsync(); // re-sort: highlighted-first ordering may change
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException or KeyNotFoundException)
+        {
+            _error = ex.Message;
+            StateHasChanged();
+        }
+    }
+}

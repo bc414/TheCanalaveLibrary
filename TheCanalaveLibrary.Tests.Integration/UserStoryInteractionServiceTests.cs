@@ -17,27 +17,17 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// Tier: Integration (real Testcontainers Postgres via <see cref="PostgresFixture"/>).
 /// </summary>
 [Collection("Postgres")]
-public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsyncLifetime
+public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    private TestAppFactory _factory = null!;
     private int _userId;
     private int _storyId;
 
-    public async Task InitializeAsync()
+    public override async Task InitializeAsync()
     {
-        _factory = new TestAppFactory(postgres.ConnectionString);
-        _ = _factory.Services; // force host build + DataSeeder
-
-        _userId = await GetTestUserIdAsync();
+        await base.InitializeAsync();
+        _userId = await SeedUserAsync();
         _storyId = await SeedStoryAsync();
-
-        SetActiveUser(_userId);
-    }
-
-    public Task DisposeAsync()
-    {
-        _factory.Dispose();
-        return Task.CompletedTask;
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_userId, showMatureContent: true));
     }
 
     // ── GetStateAsync — default when no row ─────────────────────────────────────
@@ -199,7 +189,7 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     [Fact]
     public async Task GetStatesByStoryIdsAsync_ReturnsScopedToActiveUser()
     {
-        int otherUserId = await CreateThrowawayUserIdAsync();
+        int otherUserId = await SeedUserAsync();
         int story2 = await SeedStoryAsync();
 
         // Other user favorited story2; active user favorited _storyId.
@@ -234,7 +224,7 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     [Fact]
     public async Task GetStateAsync_WhenAnonymous_ReturnsAllFalseWithoutHittingDb()
     {
-        SetAnonymous();
+        SetActiveUser(FakeActiveUserContext.Anonymous());
 
         UserStoryInteractionStateDto state = await CallGetStateAsync(_storyId);
 
@@ -245,7 +235,7 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     [Fact]
     public async Task GetStatesByStoryIdsAsync_WhenAnonymous_ReturnsEmptyDictionary()
     {
-        SetAnonymous();
+        SetActiveUser(FakeActiveUserContext.Anonymous());
 
         IReadOnlyDictionary<int, UserStoryInteractionStateDto> states =
             await CallGetStatesByIdsAsync([_storyId]);
@@ -256,7 +246,7 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     [Fact]
     public async Task SetUserStoryInteractionStateAsync_WhenAnonymous_Throws()
     {
-        SetAnonymous();
+        SetActiveUser(FakeActiveUserContext.Anonymous());
 
         Func<Task> act = () => CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: true, IsHiddenFavorite: false, IsFollowed: false,
@@ -267,66 +257,10 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
 
     // ── helpers ──────────────────────────────────────────────────────────────────
 
-    private void SetActiveUser(int userId)
-    {
-        FakeActiveUserContext fake = _factory.Services.GetRequiredService<FakeActiveUserContext>();
-        fake.UserId = userId;
-        fake.IsAuthenticated = true;
-        fake.ShowMatureContent = true;
-    }
-
-    private void SetAnonymous()
-    {
-        FakeActiveUserContext fake = _factory.Services.GetRequiredService<FakeActiveUserContext>();
-        fake.UserId = null;
-        fake.IsAuthenticated = false;
-    }
-
-    private async Task<int> GetTestUserIdAsync()
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        return await db.Users.Where(u => u.UserName == "TestUser").Select(u => u.Id).FirstAsync();
-    }
-
-    private async Task<int> CreateThrowawayUserIdAsync()
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        var userManager = scope.ServiceProvider.GetRequiredService<Microsoft.AspNetCore.Identity.UserManager<User>>();
-        string suffix = Guid.NewGuid().ToString("N")[..8];
-        User user = new()
-        {
-            UserName = $"ThrowawayUSI-{suffix}",
-            Email = $"throwaway-usi-{suffix}@test.invalid",
-            EmailConfirmed = true,
-            ThemeId = 1
-        };
-        await userManager.CreateAsync(user, "Password123!");
-        return user.Id;
-    }
-
-    private async Task<int> SeedStoryAsync()
-    {
-        using IServiceScope scope = _factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        string suffix = Guid.NewGuid().ToString("N")[..8];
-        Story story = new()
-        {
-            Rating = Rating.E,
-            StoryStatusId = StoryStatusEnum.InProgress,
-            PublishedDate = DateTime.UtcNow,
-            LastUpdatedDate = DateTime.UtcNow,
-            StoryListing = new StoryListing { StoryTitle = $"USI Fixture {suffix}", ShortDescription = "test" },
-            StoryDetail = new StoryDetail { LongDescription = "test", PostApprovalStatus = StoryStatusEnum.InProgress }
-        };
-        db.Stories.Add(story);
-        await db.SaveChangesAsync();
-        return story.StoryId;
-    }
 
     private async Task SeedHasStartedAsync(int userId, int storyId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         UserStoryInteraction? existing = await db.UserStoryInteractions
             .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
@@ -344,7 +278,7 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
 
     private async Task SeedUserStoryInteractionRowAsync(int userId, int storyId, bool isFavorite)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         db.UserStoryInteractions.Add(new UserStoryInteraction
             { UserId = userId, StoryId = storyId, IsFavorite = isFavorite });
@@ -353,7 +287,7 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
 
     private async Task CallSetUserStoryInteractionStateAsync(int storyId, UserStoryInteractionStateUpdate update)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IUserStoryInteractionWriteService svc =
             scope.ServiceProvider.GetRequiredService<IUserStoryInteractionWriteService>();
         await svc.SetUserStoryInteractionStateAsync(storyId, update);
@@ -361,7 +295,7 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
 
     private async Task<UserStoryInteractionStateDto> CallGetStateAsync(int storyId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IUserStoryInteractionReadService svc =
             scope.ServiceProvider.GetRequiredService<IUserStoryInteractionReadService>();
         return await svc.GetStateAsync(storyId);
@@ -370,7 +304,7 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     private async Task<IReadOnlyDictionary<int, UserStoryInteractionStateDto>> CallGetStatesByIdsAsync(
         IReadOnlyList<int> storyIds)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         IUserStoryInteractionReadService svc =
             scope.ServiceProvider.GetRequiredService<IUserStoryInteractionReadService>();
         return await svc.GetStatesByStoryIdsAsync(storyIds);
@@ -378,7 +312,7 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
 
     private async Task<UserStoryInteraction?> GetRowAsync(int userId, int storyId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.UserStoryInteractions
             .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
@@ -386,7 +320,7 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
 
     private async Task<UserStoryInteractionDate?> GetDatePartitionAsync(int userId, int storyId)
     {
-        using IServiceScope scope = _factory.Services.CreateScope();
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.UserStoryInteractionDates
             .FirstOrDefaultAsync(d => d.UserId == userId && d.StoryId == storyId);
