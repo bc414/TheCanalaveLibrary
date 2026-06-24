@@ -8,7 +8,7 @@ public sealed class SearchModeConfiguration : IEntityTypeConfiguration<SearchMod
 {
     public void Configure(EntityTypeBuilder<SearchMode> builder)
     {
-        builder.HasMany(sm => sm.UserSearchSettings)
+        builder.HasMany(sm => sm.UserStoryInteractionFilterSettings)
             .WithOne(us => us.SearchModeKeyNavigation)
             .HasForeignKey(us => us.SearchModeKey)
             .OnDelete(DeleteBehavior.Restrict);
@@ -18,7 +18,7 @@ public sealed class SearchModeConfiguration : IEntityTypeConfiguration<SearchMod
             .HasForeignKey(ucf => ucf.SearchModeKey)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasMany(sm => sm.DefaultSearchSettings)
+        builder.HasMany(sm => sm.DefaultUserStoryInteractionFilterSettings)
             .WithOne(dss => dss.SearchModeKeyNavigation)
             .HasForeignKey(dss => dss.SearchModeKey)
             .OnDelete(DeleteBehavior.Restrict);
@@ -41,29 +41,29 @@ public sealed class SearchModeConfiguration : IEntityTypeConfiguration<SearchMod
     }
 }
 
-public sealed class UserInteractionFilterConfiguration : IEntityTypeConfiguration<UserInteractionFilter>
+public sealed class UserStoryInteractionFilterTypeConfiguration : IEntityTypeConfiguration<UserStoryInteractionFilterType>
 {
-    public void Configure(EntityTypeBuilder<UserInteractionFilter> builder)
+    public void Configure(EntityTypeBuilder<UserStoryInteractionFilterType> builder)
     {
-        builder.HasMany(uif => uif.UserSearchSettings)
-            .WithOne(us => us.InteractionFilterKeyNavigation)
-            .HasForeignKey(us => us.InteractionFilterKey)
+        builder.HasMany(uif => uif.UserStoryInteractionFilterSettings)
+            .WithOne(us => us.UserStoryInteractionFilterType)
+            .HasForeignKey(us => us.UserStoryInteractionFilterKey)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasMany(uif => uif.DefaultSearchSettings)
-            .WithOne(dss => dss.InteractionFilterKeyNavigation)
-            .HasForeignKey(dss => dss.InteractionFilterKey)
+        builder.HasMany(uif => uif.DefaultUserStoryInteractionFilterSettings)
+            .WithOne(dss => dss.UserStoryInteractionFilterType)
+            .HasForeignKey(dss => dss.UserStoryInteractionFilterKey)
             .OnDelete(DeleteBehavior.Restrict);
 
         // One filter per UserStoryInteraction boolean column (1:1, no compounds).
         builder.HasData(
-            new { InteractionFilterKey = UserStoryInteractionFilters.Ignored, Name = "Ignored", Description = "Exclude stories you have marked as 'Ignored'." },
-            new { InteractionFilterKey = UserStoryInteractionFilters.Completed, Name = "Completed", Description = "Exclude stories you have already finished." },
-            new { InteractionFilterKey = UserStoryInteractionFilters.HasStarted, Name = "Started", Description = "Exclude stories you have already started reading." },
-            new { InteractionFilterKey = UserStoryInteractionFilters.ReadItLater, Name = "Read It Later", Description = "Exclude stories on your 'Read It Later' list." },
-            new { InteractionFilterKey = UserStoryInteractionFilters.Favorited, Name = "Favorited", Description = "Exclude stories on your 'Favorite' list." },
-            new { InteractionFilterKey = UserStoryInteractionFilters.HiddenFavorited, Name = "Hidden Favorite", Description = "Exclude stories on your 'Hidden Favorite' list." },
-            new { InteractionFilterKey = UserStoryInteractionFilters.Followed, Name = "Followed", Description = "Exclude stories you are 'Following'." }
+            new { UserStoryInteractionFilterKey = UserStoryInteractionFilters.Ignored, Name = "Ignored", Description = "Exclude stories you have marked as 'Ignored'." },
+            new { UserStoryInteractionFilterKey = UserStoryInteractionFilters.Completed, Name = "Completed", Description = "Exclude stories you have already finished." },
+            new { UserStoryInteractionFilterKey = UserStoryInteractionFilters.HasStarted, Name = "Started", Description = "Exclude stories you have already started reading." },
+            new { UserStoryInteractionFilterKey = UserStoryInteractionFilters.ReadItLater, Name = "Read It Later", Description = "Exclude stories on your 'Read It Later' list." },
+            new { UserStoryInteractionFilterKey = UserStoryInteractionFilters.Favorited, Name = "Favorited", Description = "Exclude stories on your 'Favorite' list." },
+            new { UserStoryInteractionFilterKey = UserStoryInteractionFilters.HiddenFavorited, Name = "Hidden Favorite", Description = "Exclude stories on your 'Hidden Favorite' list." },
+            new { UserStoryInteractionFilterKey = UserStoryInteractionFilters.Followed, Name = "Followed", Description = "Exclude stories you are 'Following'." }
         );
 
         builder.HasIndex(e => e.Name).IsUnique();
@@ -71,33 +71,33 @@ public sealed class UserInteractionFilterConfiguration : IEntityTypeConfiguratio
     }
 }
 
-public sealed class DefaultSearchSettingConfiguration : IEntityTypeConfiguration<DefaultSearchSetting>
+public sealed class DefaultUserStoryInteractionFilterSettingConfiguration : IEntityTypeConfiguration<DefaultUserStoryInteractionFilterSetting>
 {
-    public void Configure(EntityTypeBuilder<DefaultSearchSetting> builder)
+    public void Configure(EntityTypeBuilder<DefaultUserStoryInteractionFilterSetting> builder)
     {
-        // DefaultSearchSetting requires SearchMode and UserInteractionFilter seeded first.
+        // DefaultUserStoryInteractionFilterSetting requires SearchMode and UserStoryInteractionFilterType seeded first.
         // Minimal sane defaults: exclude already-Ignored stories on every discovery surface. Profile
         // surfaces intentionally have no default exclusions (they show the user's full lists).
-        // TODO(user): flesh out the full SearchMode × InteractionFilter default matrix when desired.
+        // TODO(user): flesh out the full SearchMode × UserStoryInteractionFilterType default matrix when desired.
         builder.HasData(
-            new { SearchModeKey = SiteSearchModes.SearchPage, InteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
-            new { SearchModeKey = SiteSearchModes.TreeSearch, InteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
-            new { SearchModeKey = SiteSearchModes.AutoTreeSearch, InteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
-            new { SearchModeKey = SiteSearchModes.AlsoFavorited, InteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
-            new { SearchModeKey = SiteSearchModes.AlsoRecommended, InteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true }
+            new { SearchModeKey = SiteSearchModes.SearchPage, UserStoryInteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
+            new { SearchModeKey = SiteSearchModes.TreeSearch, UserStoryInteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
+            new { SearchModeKey = SiteSearchModes.AutoTreeSearch, UserStoryInteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
+            new { SearchModeKey = SiteSearchModes.AlsoFavorited, UserStoryInteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
+            new { SearchModeKey = SiteSearchModes.AlsoRecommended, UserStoryInteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true }
         );
 
-        builder.HasKey(e => new { e.SearchModeKey, e.InteractionFilterKey });
+        builder.HasKey(e => new { e.SearchModeKey, e.UserStoryInteractionFilterKey });
         // Future indexes for querying...
     }
 }
 
-public sealed class UserSearchSettingConfiguration : IEntityTypeConfiguration<UserSearchSetting>
+public sealed class UserStoryInteractionFilterSettingConfiguration : IEntityTypeConfiguration<UserStoryInteractionFilterSetting>
 {
-    public void Configure(EntityTypeBuilder<UserSearchSetting> builder)
+    public void Configure(EntityTypeBuilder<UserStoryInteractionFilterSetting> builder)
     {
         // A user can only have one setting for a specific filter/mode
-        builder.HasIndex(e => new { e.UserId, e.SearchModeKey, e.InteractionFilterKey }).IsUnique();
+        builder.HasIndex(e => new { e.UserId, e.SearchModeKey, e.UserStoryInteractionFilterKey }).IsUnique();
         // Future indexes for querying...
     }
 }

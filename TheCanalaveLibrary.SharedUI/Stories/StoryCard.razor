@@ -104,8 +104,8 @@
 
     @* Interaction panel — listing context; state batch-loaded by parent *@
     <UserStoryInteractionPanel StoryId="@Story.StoryId"
-                               State="@InteractionState"
-                               Context="InteractionDisplayContext.Listing"
+                               State="@UserStoryInteractionState"
+                               Context="UserStoryInteractionDisplayContext.Listing"
                                IsOwnStory="@IsOwnStory" />
 
 </div>
@@ -120,7 +120,7 @@
     /// Per-viewer interaction state, batch-loaded by the parent via GetStatesByStoryIdsAsync.
     /// Forwarded to UserStoryInteractionPanel; null is treated as all-false (no interaction).
     /// </summary>
-    [Parameter] public UserStoryInteractionStateDto? InteractionState { get; set; }
+    [Parameter] public UserStoryInteractionStateDto? UserStoryInteractionState { get; set; }
 
     /// <summary>
     /// True when the current viewer is the story's author. Forwarded to the panel, which renders

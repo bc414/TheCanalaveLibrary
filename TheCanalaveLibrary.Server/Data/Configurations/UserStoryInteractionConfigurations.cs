@@ -9,7 +9,7 @@ public sealed class UserStoryInteractionConfiguration : IEntityTypeConfiguration
     public void Configure(EntityTypeBuilder<UserStoryInteraction> builder)
     {
         // --- VERTICAL PARTITIONS (1-to-1) ---
-        builder.HasOne(usi => usi.InteractionDate)
+        builder.HasOne(usi => usi.InteractionDatePartition)
             .WithOne(d => d.UserStoryInteraction)
             .HasForeignKey<UserStoryInteractionDate>(d => new { d.UserId, d.StoryId })
             .OnDelete(DeleteBehavior.Cascade);

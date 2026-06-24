@@ -22,9 +22,23 @@ public interface IStoryReadService
 
     /// <summary>
     /// One simple unfiltered browse projection (most-recently-updated first), shaped for
-    /// PaginationControls. Settled WU12: <c>GetListingsAsync(StoryFilterDto)</c> is deferred to WU23 —
-    /// its filter shape isn't real until ResultsFilterPanel exists, and adding it later is purely
-    /// additive (see audit/Stories.md Feature 5).
+    /// PaginationControls. Kept for home-page hot-path (no filter overhead); use
+    /// <see cref="GetListingsAsync"/> when the caller has filter criteria.
     /// </summary>
     Task<(StoryListingDto[] Items, int TotalCount)> GetRecentListingsAsync(int page, int pageSize);
+
+    /// <summary>
+    /// Full filtered listing query (WU23, spec §5.27). Source=All (every story visible to the
+    /// current viewer, modulo the global content-rating filter). Two-step: filtered IQueryable →
+    /// scalar id page → <see cref="GetListingsByIdsAsync"/> for the presentation projection.
+    ///
+    /// <b>Sort rules:</b> <see cref="DefaultSortOrder.Relevance"/> falls back to
+    /// <see cref="DefaultSortOrder.DatePublished"/> when <paramref name="filter"/>.TextQuery is
+    /// null/empty. <see cref="DefaultSortOrder.Score"/> is not meaningful on Source=All and
+    /// falls back to DatePublished as well.
+    ///
+    /// <b>Interaction exclusions:</b> applied only when the viewer is authenticated
+    /// (<see cref="IActiveUserContext.UserId"/> is non-null); anonymous viewers see everything.
+    /// </summary>
+    Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter);
 }

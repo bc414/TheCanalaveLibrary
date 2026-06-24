@@ -8,7 +8,7 @@
    the parent (batch-loaded via GetStatesByStoryIdsAsync or single GetStateAsync) — this component
    does NOT inject the read service (N+1 rule). Null State is treated as all-false.
    IsOwnStory true renders an Edit link instead of buttons per spec §5.30.5.
-   Button order = InteractionTypeEnum declaration order (Favorite → PrivateFavorite → Follow →
+   Button order = UserStoryInteractionTypeEnum declaration order (Favorite → PrivateFavorite → Follow →
    Complete → ReadLater → Ignore) per the locked audit table (2026-06-22). *@
 
 <div class="flex items-center gap-2">
@@ -18,13 +18,13 @@
     }
     else
     {
-        @foreach (var loopType in Enum.GetValues<InteractionTypeEnum>())
+        @foreach (var loopType in Enum.GetValues<UserStoryInteractionTypeEnum>())
         {
             var type = loopType;
-            var visuals = InteractionVisuals.For(type);
+            var visuals = UserStoryInteractionVisuals.For(type);
             bool isActive = GetIsActive(type);
 
-            if (Context == InteractionDisplayContext.Detail || ListingShouldShow(type, isActive))
+            if (Context == UserStoryInteractionDisplayContext.Detail || ListingShouldShow(type, isActive))
             {
                 <UserStoryInteractionButton IsActive="@isActive"
                     OnToggle="@(IsClickable(type) ? MakeToggleCallback(type) : default)"
@@ -39,7 +39,7 @@
 @code {
     [Parameter, EditorRequired] public int StoryId { get; set; }
     [Parameter] public UserStoryInteractionStateDto? State { get; set; }
-    [Parameter] public InteractionDisplayContext Context { get; set; }
+    [Parameter] public UserStoryInteractionDisplayContext Context { get; set; }
     [Parameter] public bool IsOwnStory { get; set; }
 
     private UserStoryInteractionStateDto? _localState;
@@ -51,20 +51,20 @@
             _localState = State;
     }
 
-    private bool GetIsActive(InteractionTypeEnum type) => type switch
+    private bool GetIsActive(UserStoryInteractionTypeEnum type) => type switch
     {
-        InteractionTypeEnum.Favorite => _localState?.IsFavorite ?? false,
-        InteractionTypeEnum.PrivateFavorite => _localState?.IsHiddenFavorite ?? false,
-        InteractionTypeEnum.Follow => _localState?.IsFollowed ?? false,
-        InteractionTypeEnum.Complete => _localState?.IsCompleted ?? false,
-        InteractionTypeEnum.ReadLater => _localState?.IsReadItLater ?? false,
-        InteractionTypeEnum.Ignore => _localState?.IsIgnored ?? false,
+        UserStoryInteractionTypeEnum.Favorite => _localState?.IsFavorite ?? false,
+        UserStoryInteractionTypeEnum.PrivateFavorite => _localState?.IsHiddenFavorite ?? false,
+        UserStoryInteractionTypeEnum.Follow => _localState?.IsFollowed ?? false,
+        UserStoryInteractionTypeEnum.Complete => _localState?.IsCompleted ?? false,
+        UserStoryInteractionTypeEnum.ReadLater => _localState?.IsReadItLater ?? false,
+        UserStoryInteractionTypeEnum.Ignore => _localState?.IsIgnored ?? false,
         _ => false
     };
 
-    private bool IsClickable(InteractionTypeEnum type) =>
-        Context == InteractionDisplayContext.Detail ||
-        type is InteractionTypeEnum.ReadLater or InteractionTypeEnum.Ignore;
+    private bool IsClickable(UserStoryInteractionTypeEnum type) =>
+        Context == UserStoryInteractionDisplayContext.Detail ||
+        type is UserStoryInteractionTypeEnum.ReadLater or UserStoryInteractionTypeEnum.Ignore;
 
     private bool IsBlankSlate
     {
@@ -81,17 +81,17 @@
         }
     }
 
-    private bool ListingShouldShow(InteractionTypeEnum type, bool isActive)
+    private bool ListingShouldShow(UserStoryInteractionTypeEnum type, bool isActive)
     {
-        if (type is InteractionTypeEnum.ReadLater or InteractionTypeEnum.Ignore)
+        if (type is UserStoryInteractionTypeEnum.ReadLater or UserStoryInteractionTypeEnum.Ignore)
             return IsBlankSlate || isActive;
         return true; // leaf renders as read-only and only when active; no extra gate needed here
     }
 
-    private EventCallback<bool> MakeToggleCallback(InteractionTypeEnum type) =>
+    private EventCallback<bool> MakeToggleCallback(UserStoryInteractionTypeEnum type) =>
         EventCallback.Factory.Create<bool>(this, (bool v) => HandleToggleAsync(type, v));
 
-    private async Task HandleToggleAsync(InteractionTypeEnum type, bool newValue)
+    private async Task HandleToggleAsync(UserStoryInteractionTypeEnum type, bool newValue)
     {
         var current = _localState ?? UserStoryInteractionStateDto.AllFalse(StoryId);
         _localState = ApplyToggle(current, type, newValue);
@@ -104,7 +104,7 @@
 
         try
         {
-            await Task.Delay(InteractionConstants.InteractionDebounceMs, token);
+            await Task.Delay(UserStoryInteractionConstants.UserStoryInteractionDebounceMs, token);
             await FlushAsync();
         }
         catch (OperationCanceledException)
@@ -116,7 +116,7 @@
     private async Task FlushAsync()
     {
         var state = _localState ?? UserStoryInteractionStateDto.AllFalse(StoryId);
-        await WriteService.SetInteractionStateAsync(StoryId, new InteractionStateUpdate(
+        await WriteService.SetUserStoryInteractionStateAsync(StoryId, new UserStoryInteractionStateUpdate(
             IsFavorite: state.IsFavorite,
             IsHiddenFavorite: state.IsHiddenFavorite,
             IsFollowed: state.IsFollowed,
@@ -126,15 +126,15 @@
     }
 
     private static UserStoryInteractionStateDto ApplyToggle(
-        UserStoryInteractionStateDto current, InteractionTypeEnum type, bool value) =>
+        UserStoryInteractionStateDto current, UserStoryInteractionTypeEnum type, bool value) =>
         type switch
         {
-            InteractionTypeEnum.Favorite => current with { IsFavorite = value },
-            InteractionTypeEnum.PrivateFavorite => current with { IsHiddenFavorite = value },
-            InteractionTypeEnum.Follow => current with { IsFollowed = value },
-            InteractionTypeEnum.Complete => current with { IsCompleted = value },
-            InteractionTypeEnum.ReadLater => current with { IsReadItLater = value },
-            InteractionTypeEnum.Ignore => current with { IsIgnored = value },
+            UserStoryInteractionTypeEnum.Favorite => current with { IsFavorite = value },
+            UserStoryInteractionTypeEnum.PrivateFavorite => current with { IsHiddenFavorite = value },
+            UserStoryInteractionTypeEnum.Follow => current with { IsFollowed = value },
+            UserStoryInteractionTypeEnum.Complete => current with { IsCompleted = value },
+            UserStoryInteractionTypeEnum.ReadLater => current with { IsReadItLater = value },
+            UserStoryInteractionTypeEnum.Ignore => current with { IsIgnored = value },
             _ => current
         };
 

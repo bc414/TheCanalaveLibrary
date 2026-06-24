@@ -1,0 +1,221 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Coordination composite for story discovery/narrowing (WU23, spec §5.27 / §5.30.8).
+   Assembles TagFilter, UserStoryInteractionFilter, a debounced FTS <input>, and a sort <select>
+   behind a single "Apply Filters" button. The panel buffers each axis's emitted selection in @code
+   and fires OnSearch with a StoryFilterDto only when the user clicks Apply.
+
+   Injection-free: axis components (TagFilter, UserStoryInteractionFilter) own their own injections.
+   No ViewModel: @code holds the buffered selections (flat fields — no separate class).
+
+   Composition rules (spec §5.27 "ResultsFilterPanel is the assembler, not the component"):
+   - StoryFilterDto emitted on Apply, not on every keystroke.
+   - TagFilter + UserStoryInteractionFilter are composed as children, not reimplemented.
+   - Show* params + AvailableSorts control which axes are visible; defaults suit Search/Discover.
+   - Relevance sort is present in AvailableSorts only when the consumer sets ShowTextSearch=true and
+     actively wants it; the panel hides it from the <select> when TextQuery is empty.
+
+   Outer Margin Rule: root has no m-* — parent controls spacing. *@
+
+<div class="flex flex-col gap-4">
+
+    @* ── Free-text search ──────────────────────────────────────────────────────────────── *@
+    @if (ShowTextSearch)
+    {
+        <div class="flex flex-col gap-1">
+            <label for="rfp-text-query" class="text-sm font-bold">Search</label>
+            <input id="rfp-text-query"
+                   type="search"
+                   class="rounded-md border border-surface-hover bg-surface px-3 py-1.5 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-sky-500"
+                   placeholder="Search story titles and descriptions…"
+                   value="@_textQuery"
+                   @oninput="OnTextInput" />
+        </div>
+    }
+
+    @* ── Tag filters ───────────────────────────────────────────────────────────────────── *@
+    @if (ShowTagFilter)
+    {
+        <TagFilter TagTypes="@TagTypes"
+                   AllowExclude="@AllowTagExclude"
+                   IncludedTags="@_seedIncludedTags"
+                   ExcludedTags="@_seedExcludedTags"
+                   OnChanged="OnTagFilterChanged" />
+    }
+
+    @* ── Interaction filters ───────────────────────────────────────────────────────────── *@
+    @if (ShowInteractionFilters)
+    {
+        <UserStoryInteractionFilter AvailableKinds="@InteractionKinds"
+                                    ExcludedKinds="@_seedExcludedInteractions"
+                                    OnChanged="OnInteractionFilterChanged" />
+    }
+
+    @* ── Sort ──────────────────────────────────────────────────────────────────────────── *@
+    @if (AvailableSorts.Count > 0)
+    {
+        <div class="flex flex-col gap-1">
+            <label for="rfp-sort" class="text-sm font-bold">Sort by</label>
+            <select id="rfp-sort"
+                    class="rounded-md border border-surface-hover bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    value="@((short)_sort)"
+                    @onchange="OnSortChanged">
+                @foreach (DefaultSortOrder sort in VisibleSorts)
+                {
+                    <option value="@((short)sort)">@SortLabel(sort)</option>
+                }
+            </select>
+        </div>
+    }
+
+    @* ── Apply button ──────────────────────────────────────────────────────────────────── *@
+    <button type="button"
+            class="rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 active:bg-sky-800 transition-colors"
+            @onclick="ApplyAsync">
+        Apply Filters
+    </button>
+
+</div>
+
+@code {
+    // ── Visibility ─────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Show the FTS text search input. Default true.</summary>
+    [Parameter] public bool ShowTextSearch { get; set; } = true;
+
+    /// <summary>Show the tag include/exclude filter. Default true.</summary>
+    [Parameter] public bool ShowTagFilter { get; set; } = true;
+
+    /// <summary>Show the interaction-kind exclusion checkboxes. Default true.</summary>
+    [Parameter] public bool ShowInteractionFilters { get; set; } = true;
+
+    /// <summary>
+    /// Sorts to offer in the sort dropdown. Supply only the sorts relevant to this surface;
+    /// never include §5.3.3-excluded popularity sorts.
+    /// Include <see cref="DefaultSortOrder.Relevance"/> only when <see cref="ShowTextSearch"/> is true.
+    /// Default: DatePublished (most surfaces) without Relevance (pre-seeded; consumer adds Relevance
+    /// when ShowTextSearch is true and wants it available).
+    /// </summary>
+    [Parameter] public IReadOnlyList<DefaultSortOrder> AvailableSorts { get; set; } =
+        [DefaultSortOrder.DatePublished, DefaultSortOrder.Random];
+
+    // ── Tag filter configuration ───────────────────────────────────────────────────────────────────
+
+    /// <summary>Tag types to surface in TagFilter. Defaults to TagFilter.DefaultFilterTypes (all six).</summary>
+    [Parameter] public IReadOnlyList<TagTypeEnum> TagTypes { get; set; } = TagFilter.DefaultFilterTypes;
+
+    /// <summary>Whether the tag filter shows exclude selectors. Default true.</summary>
+    [Parameter] public bool AllowTagExclude { get; set; } = true;
+
+    // ── Interaction filter configuration ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Interaction kinds to surface as exclusion checkboxes.
+    /// Defaults to UserStoryInteractionFilter.DefaultKinds (all six).
+    /// </summary>
+    [Parameter] public IReadOnlyList<UserStoryInteractionTypeEnum> InteractionKinds { get; set; } =
+        UserStoryInteractionFilter.DefaultKinds;
+
+    // ── Seed / initial state ───────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Optional initial filter state. When provided, pre-populates all axis buffers so the panel
+    /// reflects an existing query (e.g. the user navigated back or deep-linked a filtered URL).
+    /// Applied during <see cref="OnInitialized"/>; later changes to this param are ignored.
+    /// </summary>
+    [Parameter] public StoryFilterDto? InitialFilter { get; set; }
+
+    // ── Output ────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Raised when the user clicks "Apply Filters". The emitted <see cref="StoryFilterDto"/>
+    /// is ready to pass to <c>IStoryReadService.GetListingsAsync</c>.
+    /// </summary>
+    [Parameter] public EventCallback<StoryFilterDto> OnSearch { get; set; }
+
+    // ── Buffered axis state ────────────────────────────────────────────────────────────────────────
+
+    private string _textQuery = "";
+    private TagFilterSelection _tagSelection = TagFilterSelection.Empty;
+    private IReadOnlyList<UserStoryInteractionTypeEnum> _excludedInteractions = [];
+    private DefaultSortOrder _sort = DefaultSortOrder.DatePublished;
+
+    // Seed collections derived from InitialFilter for child axis components.
+    // TagFilter re-seeds only on OnInitialized; we pass seed tags directly.
+    // (No sprite data on ids-only InitialFilter — seed stays empty for now; WU28 will enrich.)
+    private IReadOnlyList<TagChipDto> _seedIncludedTags = [];
+    private IReadOnlyList<TagChipDto> _seedExcludedTags = [];
+    private IReadOnlyList<UserStoryInteractionTypeEnum> _seedExcludedInteractions = [];
+
+    protected override void OnInitialized()
+    {
+        if (InitialFilter is null) return;
+
+        _textQuery = InitialFilter.TextQuery ?? "";
+        _sort = InitialFilter.Sort;
+        _excludedInteractions = InitialFilter.ExcludedInteractions;
+        _seedExcludedInteractions = InitialFilter.ExcludedInteractions;
+
+        // Tag seeds require TagChipDto (sprite-resolved). InitialFilter carries only ids; we seed the
+        // TagFilter as empty and let WU28 enrich (or callers pass pre-loaded chips via a future param).
+        // The id-sets ARE set so ApplyAsync produces the correct DTO even if the chips aren't displayed.
+        _tagSelection = new TagFilterSelection(
+            IncludedTagIds: InitialFilter.IncludedTagIds,
+            ExcludedTagIds: InitialFilter.ExcludedTagIds);
+    }
+
+    // ── Handlers ──────────────────────────────────────────────────────────────────────────────────
+
+    private void OnTextInput(ChangeEventArgs e) =>
+        _textQuery = e.Value?.ToString() ?? "";
+
+    private void OnTagFilterChanged(TagFilterSelection selection) =>
+        _tagSelection = selection;
+
+    private void OnInteractionFilterChanged(IReadOnlyList<UserStoryInteractionTypeEnum> excluded) =>
+        _excludedInteractions = excluded;
+
+    private void OnSortChanged(ChangeEventArgs e)
+    {
+        if (short.TryParse(e.Value?.ToString(), out short raw))
+            _sort = (DefaultSortOrder)raw;
+    }
+
+    private async Task ApplyAsync()
+    {
+        DefaultSortOrder effectiveSort = _sort == DefaultSortOrder.Relevance && string.IsNullOrWhiteSpace(_textQuery)
+            ? DefaultSortOrder.DatePublished
+            : _sort;
+
+        StoryFilterDto dto = new()
+        {
+            TextQuery = string.IsNullOrWhiteSpace(_textQuery) ? null : _textQuery.Trim(),
+            IncludedTagIds = _tagSelection.IncludedTagIds,
+            ExcludedTagIds = _tagSelection.ExcludedTagIds,
+            ExcludedInteractions = _excludedInteractions,
+            Sort = effectiveSort,
+            Page = 1,
+            PageSize = 20
+        };
+
+        await OnSearch.InvokeAsync(dto);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Hides Relevance from the dropdown when TextQuery is empty
+    /// (invalid Relevance sort falls back server-side anyway, but hiding it avoids user confusion).
+    /// </summary>
+    private IEnumerable<DefaultSortOrder> VisibleSorts =>
+        AvailableSorts.Where(s => s != DefaultSortOrder.Relevance || !string.IsNullOrWhiteSpace(_textQuery));
+
+    private static string SortLabel(DefaultSortOrder sort) => sort switch
+    {
+        DefaultSortOrder.DatePublished => "Date published",
+        DefaultSortOrder.Relevance => "Relevance",
+        DefaultSortOrder.Random => "Random",
+        DefaultSortOrder.Score => "Recommendation score",
+        _ => sort.ToString()
+    };
+}

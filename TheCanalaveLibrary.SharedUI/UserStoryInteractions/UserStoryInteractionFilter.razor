@@ -1,0 +1,82 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Filter-axis component for excluding stories by the viewer's interaction state (WU23, spec §5.27).
+   Presents checkboxes — one per available interaction kind — to let users exclude stories they've
+   already interacted with (e.g. "hide stories I've completed").
+   Injection-free: the server-side query applies the exclusions via IActiveUserContext; anonymous
+   viewers see no effect (GetListingsAsync skips the predicate when the viewer is anonymous).
+   Distinct from UserStoryInteractionPanel (per-story toggle buttons) — this is a filter, not an action.
+   Emits on every toggle; assembler (ResultsFilterPanel) buffers behind Apply.
+   Outer Margin Rule: root has no m-* — parent controls spacing. *@
+
+<div class="flex flex-col gap-1.5">
+    <span class="text-sm font-bold">Interaction filters</span>
+    @foreach (UserStoryInteractionTypeEnum kind in AvailableKinds)
+    {
+        bool isExcluded = _excluded.Contains(kind);
+        <label class="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox"
+                   checked="@isExcluded"
+                   class="rounded accent-sky-600"
+                   @onchange="@(e => ToggleAsync(kind, (bool)e.Value!))" />
+            <span class="text-sm text-text">@LabelFor(kind)</span>
+        </label>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// Interaction kinds to surface as toggleable exclusions.
+    /// Defaults to all six kinds. Consumers can narrow to a domain-relevant subset.
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<UserStoryInteractionTypeEnum> AvailableKinds { get; set; } = DefaultKinds;
+
+    /// <summary>Seed excluded kinds. Applied on first render only.</summary>
+    [Parameter]
+    public IReadOnlyList<UserStoryInteractionTypeEnum> ExcludedKinds { get; set; } = [];
+
+    /// <summary>
+    /// Raised on every toggle with the current list of excluded kinds.
+    /// </summary>
+    [Parameter]
+    public EventCallback<IReadOnlyList<UserStoryInteractionTypeEnum>> OnChanged { get; set; }
+
+    // ── Defaults ──────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>All six UserStoryInteractionTypeEnum values in their declared order.</summary>
+    public static readonly IReadOnlyList<UserStoryInteractionTypeEnum> DefaultKinds =
+        Enum.GetValues<UserStoryInteractionTypeEnum>();
+
+    // ── State ─────────────────────────────────────────────────────────────────────────────────────
+
+    private HashSet<UserStoryInteractionTypeEnum> _excluded = [];
+
+    protected override void OnInitialized()
+    {
+        _excluded = [.. ExcludedKinds];
+    }
+
+    // ── Handlers ──────────────────────────────────────────────────────────────────────────────────
+
+    private async Task ToggleAsync(UserStoryInteractionTypeEnum kind, bool exclude)
+    {
+        if (exclude) _excluded.Add(kind);
+        else _excluded.Remove(kind);
+
+        await OnChanged.InvokeAsync([.. _excluded]);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────────────────────────
+
+    private static string LabelFor(UserStoryInteractionTypeEnum kind) => kind switch
+    {
+        UserStoryInteractionTypeEnum.Favorite => "Hide stories I've favorited",
+        UserStoryInteractionTypeEnum.PrivateFavorite => "Hide stories I've privately favorited",
+        UserStoryInteractionTypeEnum.Follow => "Hide stories I'm following",
+        UserStoryInteractionTypeEnum.Complete => "Hide stories I've completed",
+        UserStoryInteractionTypeEnum.ReadLater => "Hide stories on my Read It Later list",
+        UserStoryInteractionTypeEnum.Ignore => "Hide stories I've ignored",
+        _ => $"Hide {kind}"
+    };
+}

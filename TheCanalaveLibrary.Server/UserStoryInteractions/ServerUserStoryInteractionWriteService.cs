@@ -14,7 +14,7 @@ public class ServerUserStoryInteractionWriteService(
     IActiveUserContext activeUser)
     : ServerUserStoryInteractionReadService(readDb, activeUser), IUserStoryInteractionWriteService
 {
-    public async Task SetInteractionStateAsync(int storyId, InteractionStateUpdate update)
+    public async Task SetUserStoryInteractionStateAsync(int storyId, UserStoryInteractionStateUpdate update)
     {
         if (CurrentUserId is not int userId)
             throw new InvalidOperationException("This operation requires an authenticated user.");
@@ -24,7 +24,7 @@ public class ServerUserStoryInteractionWriteService(
 
         // Load the tracked row + its date partition, or prepare a new row.
         UserStoryInteraction? row = await writeDb.UserStoryInteractions
-            .Include(i => i.InteractionDate)
+            .Include(i => i.InteractionDatePartition)
             .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
 
         bool isNew = row is null;
@@ -50,7 +50,7 @@ public class ServerUserStoryInteractionWriteService(
         row.IsIgnored = update.IsIgnored;
 
         // Stamp / clear dates on the date partition.
-        if (row.InteractionDate is { } d)
+        if (row.InteractionDatePartition is { } d)
         {
             d.FavoriteDate = update.IsFavorite ? (d.FavoriteDate ?? now) : null;
             d.HiddenFavoriteDate = update.IsHiddenFavorite ? (d.HiddenFavoriteDate ?? now) : null;
@@ -71,19 +71,19 @@ public class ServerUserStoryInteractionWriteService(
 
     // ── helpers ─────────────────────────────────────────────────────────────────
 
-    private static void EnsureDatePartition(UserStoryInteraction row, DateTime now, InteractionStateUpdate update)
+    private static void EnsureDatePartition(UserStoryInteraction row, DateTime now, UserStoryInteractionStateUpdate update)
     {
-        if (row.InteractionDate is not null) return;
+        if (row.InteractionDatePartition is not null) return;
         if (!AnyBitTrue(update)) return;
 
-        row.InteractionDate = new UserStoryInteractionDate { UserId = row.UserId, StoryId = row.StoryId };
+        row.InteractionDatePartition = new UserStoryInteractionDate { UserId = row.UserId, StoryId = row.StoryId };
     }
 
-    private static bool AnyBitTrue(InteractionStateUpdate update) =>
+    private static bool AnyBitTrue(UserStoryInteractionStateUpdate update) =>
         update.IsFavorite || update.IsHiddenFavorite || update.IsFollowed
         || update.IsCompleted || update.IsReadItLater || update.IsIgnored;
 
-    private static void ValidateCombination(InteractionStateUpdate update)
+    private static void ValidateCombination(UserStoryInteractionStateUpdate update)
     {
         // Per spec §4: all 8 (HasStarted × IsCompleted × IsIgnored) combos are valid —
         // including (HasStarted=0, IsCompleted=1), which is the panel's "read elsewhere" use case.

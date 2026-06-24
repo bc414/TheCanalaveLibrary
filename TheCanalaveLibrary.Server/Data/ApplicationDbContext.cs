@@ -85,11 +85,11 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     public DbSet<BaseBlogPost> BlogPosts { get; set; }
 
     //Advanced Search
-    public DbSet<SearchMode> SearchModes { get; set; } //ways to search on the site, like Random Search, Tree Search, Also Favorited
-    public DbSet<UserInteractionFilter> UserInteractionFilters { get; set; } //ways to enable exclusion criteria based on your past history
+    public DbSet<SearchMode> SearchModes { get; set; } //discovery surfaces (SearchPage, TreeSearch, etc.)
+    public DbSet<UserStoryInteractionFilterType> UserStoryInteractionFilterTypes { get; set; } //catalog of filterable interaction kinds
 
-    public DbSet<DefaultSearchSetting> DefaultSearchSettings { get; set; } //a matrix of search modes and interaction filters
-    public DbSet<UserSearchSetting> UserSearchSettings { get; set; } //user overrides for the default matrix
+    public DbSet<DefaultUserStoryInteractionFilterSetting> DefaultUserStoryInteractionFilterSettings { get; set; } //system default matrix: (SearchMode × filter kind) → IsEnabled
+    public DbSet<UserStoryInteractionFilterSetting> UserStoryInteractionFilterSettings { get; set; } //sparse per-user overrides of the default matrix
 
     public DbSet<UserCustomFilter> UserCustomFilters { get; set; } //User can designate a list or group to use as a custom exclusion filter
 

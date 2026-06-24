@@ -4,7 +4,7 @@
 @* Pass-through layout composite, spec §5.30 / layer3.5-structure.md "StoryDeck and StoryCard".
    Owns the three-state: null Stories = loading, empty = empty state, populated = grid.
    Injects NO service — the hosting page batch-loads StoryListingDtos and per-viewer interaction
-   state (GetStatesByStoryIdsAsync) and passes them down; the deck distributes each card its slice.
+   state (GetStatesByStoryIdsAsync) and passes them down via UserStoryInteractionStates; the deck distributes each card its slice.
    N+1 rule: never one query per card. No caret callbacks forwarded at this tier — additive when
    the first real consumer (Discovery/Report/Export) needs them (WU28/34/38).
    Outer Margin Rule: root has no m-*; parent spaces the deck. *@
@@ -29,7 +29,7 @@ else
             @foreach (var story in Stories)
             {
                 <StoryCard Story="story"
-                           InteractionState="@StateFor(story.StoryId)"
+                           UserStoryInteractionState="@StateFor(story.StoryId)"
                            IsOwnStory="@IsOwn(story)" />
             }
         </div>
@@ -53,7 +53,7 @@ else
     /// GetStatesByStoryIdsAsync. Null or missing key ⇒ all-false (no interaction recorded).
     /// </summary>
     [Parameter]
-    public IReadOnlyDictionary<int, UserStoryInteractionStateDto>? InteractionStates { get; set; }
+    public IReadOnlyDictionary<int, UserStoryInteractionStateDto>? UserStoryInteractionStates { get; set; }
 
     /// <summary>
     /// The authenticated user's id. Used to compute IsOwnStory per card. Null = anonymous viewer.
@@ -77,8 +77,8 @@ else
 
     private UserStoryInteractionStateDto? StateFor(int storyId)
     {
-        if (InteractionStates is null) return null;
-        InteractionStates.TryGetValue(storyId, out var state);
+        if (UserStoryInteractionStates is null) return null;
+        UserStoryInteractionStates.TryGetValue(storyId, out var state);
         return state;
     }
 

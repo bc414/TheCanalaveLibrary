@@ -223,7 +223,7 @@ public class StoryCardTests : TestContext
         // Panel in Listing context with null state (all-false) shows ReadLater + Ignore.
         IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(storyId: 3))
-            .Add(c => c.InteractionState, null));
+            .Add(c => c.UserStoryInteractionState, null));
 
         var buttons = cut.FindAll("button[aria-label]");
         buttons.Select(b => b.GetAttribute("aria-label"))

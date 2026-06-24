@@ -43,4 +43,9 @@ public class HttpStoryReadService : IStoryReadService
             $"api/stories/recent?page={page}&pageSize={pageSize}");
         return result is null ? ([], 0) : (result.Items, result.TotalCount);
     }
+
+    // Endpoint not yet mapped by StoryEndpoints (L5 is post-MVP — MVP components inject the server
+    // service directly). Stub compiles against the WU23-extended IStoryReadService contract.
+    public Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter)
+        => throw new NotSupportedException("GetListingsAsync is not yet exposed via the client HTTP API.");
 }

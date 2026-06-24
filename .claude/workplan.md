@@ -615,11 +615,29 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 
 ## Phase 3 — Consumers / Pages
 
-### WU23 — `ResultsFilterPanel` composite
-- **Cells:** 31 L3/L3.5/L4 (filter-panel slice).
-- **Do:** coordination composite (tag filter via TagSelector, interaction filters, source/sort). Consumed
-  by Search, Profiles, Bookshelves — build before them. **Tool:** opusplan.
-  **Pointer:** `audit/Discovery.md` Feature 31. **Deps:** WU8, WU11.
+### WU23 — `ResultsFilterPanel` composite — DONE ✓ (2026-06-23)
+- **Cells:** 31 L3/L3.5 → Stage 5. 31 L4 stays Stage 1 (visual sign-off pending, consistent with
+  WU8/WU13 precedent).
+- **Done:** Six-phase delivery. Phase 0: `UserStoryInteraction` nomenclature sweep — renamed all
+  `Interaction…` identifiers to `UserStoryInteraction…` across Core, SharedUI, Server, and all three
+  test projects; §8.7 entity renames (`UserInteractionFilter→UserStoryInteractionFilterType` etc.)
+  carried by a data-preserving rename migration (`RenameTable`/`RenameColumn`/raw-SQL
+  `RENAME CONSTRAINT` — no drop/recreate). Phase 1: `Core/Discovery/StoryFilterDto.cs` (sealed record)
+  + `Core/Tags/TagFilterSelection.cs` (axis emit contract). Phase 2: `SharedUI/Tags/TagFilter.razor`
+  (include/exclude axis, cross-dedup, injection-free) +
+  `SharedUI/UserStoryInteractions/UserStoryInteractionFilter.razor` (checkbox axis, injection-free).
+  Phase 3: `SharedUI/Discovery/ResultsFilterPanel.razor` (assembler, @code-buffered, Apply emits
+  `StoryFilterDto`; Relevance hidden without text; default sorts `[DatePublished, Random]`). Phase 4:
+  `GetListingsAsync(StoryFilterDto)` added to `IStoryReadService` + implemented in
+  `ServerStoryReadService` (two-step: filtered IQueryable → scalar ID page → `GetListingsByIdsAsync`;
+  tag AND-include; tag exclude; FTS via `PlainToTsQuery`/`SearchVector.Matches`; viewer-scoped
+  interaction exclusion with pre-computed bool constants; sort switch). Phase 5: tests —
+  9 Integration (`StoryListingsTests`), 8 RazorComponents (`ResultsFilterPanelTests`),
+  7 RazorComponents (`UserStoryInteractionFilterTests`).
+- **Verified (2026-06-23):** `dotnet build` green (8 projects, 0 errors). `dotnet test` green:
+  112 Unit + 198 RazorComponents + 142 Integration = 452 total. Detail in `audit/Discovery.md`
+  Feature 31 WU23 Stage note.
+- **Tool:** opusplan. **Pointer:** `audit/Discovery.md` Feature 31. **Deps:** WU8, WU11.
 
 ### WU24 — Story create/edit (`StoryPropertiesForm` + `AdminControls`)
 - **Cells:** 4 L3/L3.5/L4 *(Stage-4 → finish to spec)*.

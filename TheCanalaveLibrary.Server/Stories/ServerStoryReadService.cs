@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using NpgsqlTypes;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
@@ -79,6 +80,100 @@ public class ServerStoryReadService(
             .ToArrayAsync();
 
         StoryListingDto[] items = await GetListingsByIdsAsync(pageStoryIds);
+        return (items, totalCount);
+    }
+
+    public async Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter)
+    {
+        IQueryable<Story> query = readDb.Stories;
+
+        // ── Tag include (AND semantics: story must have all included tags) ─────────────────
+        foreach (int tagId in filter.IncludedTagIds)
+        {
+            int tid = tagId; // local capture so the closure binds the right value
+            query = query.Where(s => s.StoryTags.Any(st => st.TagId == tid));
+        }
+
+        // ── Tag exclude (story must have none of the excluded tags) ───────────────────────
+        if (filter.ExcludedTagIds.Count > 0)
+        {
+            // EF translates IReadOnlyList.Contains(entity_field) to SQL IN (...) correctly.
+            query = query.Where(s => !s.StoryTags.Any(st => filter.ExcludedTagIds.Contains(st.TagId)));
+        }
+
+        // ── FTS ───────────────────────────────────────────────────────────────────────────
+        bool hasFts = !string.IsNullOrWhiteSpace(filter.TextQuery);
+        if (hasFts)
+        {
+            string textQuery = filter.TextQuery!;
+            // PlainToTsQuery is safer than ToTsQuery (no tsquery syntax knowledge required from callers).
+            // SearchVector is a shadow property on StoryListing; EF.Property accesses it in a subquery.
+            query = query.Where(s => s.StoryListing != null &&
+                EF.Property<NpgsqlTsVector>(s.StoryListing, "SearchVector")
+                    .Matches(EF.Functions.PlainToTsQuery("english", textQuery)));
+        }
+
+        // ── Interaction exclusions (authenticated viewer only) ────────────────────────────
+        if (filter.ExcludedInteractions.Count > 0 && activeUser.UserId.HasValue)
+        {
+            int viewerId = activeUser.UserId.Value;
+
+            bool exclFav    = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Favorite);
+            bool exclHidden = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.PrivateFavorite);
+            bool exclFollow = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Follow);
+            bool exclComp   = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Complete);
+            bool exclLater  = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.ReadLater);
+            bool exclIgnore = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Ignore);
+
+            // Exclude stories where the viewer's USI row has any excluded bit set.
+            // The constants (exclFav, etc.) are evaluated at query-compilation time and fold into the
+            // SQL as literal true/false, which Postgres optimises away. Zero SQL overhead for bits that
+            // aren't excluded.
+            query = query.Where(s => !s.UserStoryInteractions
+                .Any(usi => usi.UserId == viewerId &&
+                    (exclFav    && usi.IsFavorite      ||
+                     exclHidden && usi.IsHiddenFavorite ||
+                     exclFollow && usi.IsFollowed       ||
+                     exclComp   && usi.IsCompleted      ||
+                     exclLater  && usi.IsReadItLater    ||
+                     exclIgnore && usi.IsIgnored)));
+        }
+
+        // ── Count (before Skip/Take so it reflects the full filtered set) ─────────────────
+        int totalCount = await query.CountAsync();
+
+        // ── Sort + scalar id page (OrderBy on entity fields — Npgsql trap: keep before Select) ──
+        DefaultSortOrder effectiveSort = filter.Sort == DefaultSortOrder.Relevance && !hasFts
+            ? DefaultSortOrder.DatePublished
+            : filter.Sort;
+
+        int[] pageIds = effectiveSort switch
+        {
+            DefaultSortOrder.Relevance => await query
+                .OrderByDescending(s => EF.Property<NpgsqlTsVector>(s.StoryListing!, "SearchVector")
+                    .Rank(EF.Functions.PlainToTsQuery("english", filter.TextQuery!)))
+                .ThenByDescending(s => s.LastUpdatedDate)
+                .Skip(Math.Max(0, filter.Page - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .Select(s => s.StoryId)
+                .ToArrayAsync(),
+
+            DefaultSortOrder.Random => await query
+                .OrderBy(_ => EF.Functions.Random())
+                .Skip(Math.Max(0, filter.Page - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .Select(s => s.StoryId)
+                .ToArrayAsync(),
+
+            _ /* DatePublished, Score-fallback */ => await query
+                .OrderByDescending(s => s.PublishedDate)
+                .Skip(Math.Max(0, filter.Page - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .Select(s => s.StoryId)
+                .ToArrayAsync()
+        };
+
+        StoryListingDto[] items = await GetListingsByIdsAsync(pageIds);
         return (items, totalCount);
     }
 

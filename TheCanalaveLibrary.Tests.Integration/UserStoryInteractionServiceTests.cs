@@ -59,12 +59,12 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
         state.HasStarted.Should().BeFalse();
     }
 
-    // ── SetInteractionStateAsync — creates row ───────────────────────────────────
+    // ── SetUserStoryInteractionStateAsync — creates row ───────────────────────────────────
 
     [Fact]
-    public async Task SetInteractionStateAsync_WhenNoRow_CreatesInteractionRow()
+    public async Task SetUserStoryInteractionStateAsync_WhenNoRow_CreatesInteractionRow()
     {
-        await CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: true, IsHiddenFavorite: false, IsFollowed: false,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
@@ -74,13 +74,13 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     }
 
     [Fact]
-    public async Task SetInteractionStateAsync_UpdatesExistingRow()
+    public async Task SetUserStoryInteractionStateAsync_UpdatesExistingRow()
     {
-        await CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: true, IsHiddenFavorite: false, IsFollowed: false,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
-        await CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: false, IsHiddenFavorite: false, IsFollowed: true,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
@@ -92,9 +92,9 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     // ── Date partition ───────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task SetInteractionStateAsync_WhenBitGoesTrue_StampsFavoriteDate()
+    public async Task SetUserStoryInteractionStateAsync_WhenBitGoesTrue_StampsFavoriteDate()
     {
-        await CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: true, IsHiddenFavorite: false, IsFollowed: false,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
@@ -104,14 +104,14 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     }
 
     [Fact]
-    public async Task SetInteractionStateAsync_WhenBitGoesFalse_ClearsFavoriteDate()
+    public async Task SetUserStoryInteractionStateAsync_WhenBitGoesFalse_ClearsFavoriteDate()
     {
-        await CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: true, IsHiddenFavorite: false, IsFollowed: false,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
         // Now clear IsFavorite but keep IsFollowed so the row doesn't disappear.
-        await CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: false, IsHiddenFavorite: false, IsFollowed: true,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
@@ -120,9 +120,9 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     }
 
     [Fact]
-    public async Task SetInteractionStateAsync_CompletedBitManagedByPanel_StampsCompletedDate()
+    public async Task SetUserStoryInteractionStateAsync_CompletedBitManagedByPanel_StampsCompletedDate()
     {
-        await CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: false, IsHiddenFavorite: false, IsFollowed: false,
             IsCompleted: true, IsReadItLater: false, IsIgnored: false));
 
@@ -133,12 +133,12 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     // ── HasStarted preserved ─────────────────────────────────────────────────────
 
     [Fact]
-    public async Task SetInteractionStateAsync_PreservesHasStarted_WhenAlreadySet()
+    public async Task SetUserStoryInteractionStateAsync_PreservesHasStarted_WhenAlreadySet()
     {
         // Seed HasStarted = true directly (reading path sets this, not the panel).
         await SeedHasStartedAsync(_userId, _storyId);
 
-        await CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: true, IsHiddenFavorite: false, IsFollowed: false,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
@@ -149,13 +149,13 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     // ── Sparse cleanup ───────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task SetInteractionStateAsync_WhenAllBitsFalse_RemovesRow()
+    public async Task SetUserStoryInteractionStateAsync_WhenAllBitsFalse_RemovesRow()
     {
-        await CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: true, IsHiddenFavorite: false, IsFollowed: false,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
-        await CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: false, IsHiddenFavorite: false, IsFollowed: false,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
@@ -167,12 +167,12 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     }
 
     [Fact]
-    public async Task SetInteractionStateAsync_WhenAllFalse_WithHasStartedTrue_KeepsRow()
+    public async Task SetUserStoryInteractionStateAsync_WhenAllFalse_WithHasStartedTrue_KeepsRow()
     {
         // HasStarted keeps the row alive even when all panel bits go false.
         await SeedHasStartedAsync(_userId, _storyId);
 
-        await CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: false, IsHiddenFavorite: false, IsFollowed: false,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
@@ -182,11 +182,11 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     }
 
     [Fact]
-    public async Task SetInteractionStateAsync_WhenAllFalse_AndNoRow_DoesNotCreateRow()
+    public async Task SetUserStoryInteractionStateAsync_WhenAllFalse_AndNoRow_DoesNotCreateRow()
     {
         int freshStoryId = await SeedStoryAsync();
 
-        await CallSetStateAsync(freshStoryId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(freshStoryId, new UserStoryInteractionStateUpdate(
             IsFavorite: false, IsHiddenFavorite: false, IsFollowed: false,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
@@ -203,12 +203,12 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
         int story2 = await SeedStoryAsync();
 
         // Other user favorited story2; active user favorited _storyId.
-        await CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        await CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: true, IsHiddenFavorite: false, IsFollowed: false,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
         // Directly seed the other user's row so we don't have to swap the fake context.
-        await SeedInteractionRowAsync(otherUserId, story2, isFavorite: true);
+        await SeedUserStoryInteractionRowAsync(otherUserId, story2, isFavorite: true);
 
         IReadOnlyDictionary<int, UserStoryInteractionStateDto> states =
             await CallGetStatesByIdsAsync([_storyId, story2]);
@@ -254,11 +254,11 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
     }
 
     [Fact]
-    public async Task SetInteractionStateAsync_WhenAnonymous_Throws()
+    public async Task SetUserStoryInteractionStateAsync_WhenAnonymous_Throws()
     {
         SetAnonymous();
 
-        Func<Task> act = () => CallSetStateAsync(_storyId, new InteractionStateUpdate(
+        Func<Task> act = () => CallSetUserStoryInteractionStateAsync(_storyId, new UserStoryInteractionStateUpdate(
             IsFavorite: true, IsHiddenFavorite: false, IsFollowed: false,
             IsCompleted: false, IsReadItLater: false, IsIgnored: false));
 
@@ -342,7 +342,7 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
         await db.SaveChangesAsync();
     }
 
-    private async Task SeedInteractionRowAsync(int userId, int storyId, bool isFavorite)
+    private async Task SeedUserStoryInteractionRowAsync(int userId, int storyId, bool isFavorite)
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -351,12 +351,12 @@ public class UserStoryInteractionServiceTests(PostgresFixture postgres) : IAsync
         await db.SaveChangesAsync();
     }
 
-    private async Task CallSetStateAsync(int storyId, InteractionStateUpdate update)
+    private async Task CallSetUserStoryInteractionStateAsync(int storyId, UserStoryInteractionStateUpdate update)
     {
         using IServiceScope scope = _factory.Services.CreateScope();
         IUserStoryInteractionWriteService svc =
             scope.ServiceProvider.GetRequiredService<IUserStoryInteractionWriteService>();
-        await svc.SetInteractionStateAsync(storyId, update);
+        await svc.SetUserStoryInteractionStateAsync(storyId, update);
     }
 
     private async Task<UserStoryInteractionStateDto> CallGetStateAsync(int storyId)

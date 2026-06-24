@@ -5,7 +5,7 @@ namespace TheCanalaveLibrary.Core;
 /// Declaration order is the canonical left-to-right button order:
 /// Favorite → PrivateFavorite → Follow → Complete → ReadLater → Ignore.
 /// </summary>
-public enum InteractionTypeEnum
+public enum UserStoryInteractionTypeEnum
 {
     Favorite,
     PrivateFavorite,

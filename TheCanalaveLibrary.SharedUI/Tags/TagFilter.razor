@@ -1,0 +1,130 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Filter-axis component for tag include/exclude filtering (WU23, spec §5.27).
+   Injection-free: each nested TagSelector injects ITagReadService directly.
+   Emits on every selection change; the assembler (ResultsFilterPanel) buffers behind Apply.
+   Cross-dedup: adding a tag to include removes it from exclude and vice versa.
+   Outer Margin Rule: root has no m-* — parent controls spacing. *@
+
+<div class="flex flex-col gap-4">
+    @foreach (TagTypeEnum type in TagTypes)
+    {
+        <div class="flex flex-col gap-2">
+            <TagSelector TagType="@type"
+                         Label="@("Include " + TypeLabel(type) + " tags")"
+                         SelectedTags="@(_included.GetValueOrDefault(type, []))"
+                         OnSelectionChanged="@(tags => OnIncludeChangedAsync(type, tags))" />
+            @if (AllowExclude)
+            {
+                <TagSelector TagType="@type"
+                             Label="@("Exclude " + TypeLabel(type) + " tags")"
+                             SelectedTags="@(_excluded.GetValueOrDefault(type, []))"
+                             OnSelectionChanged="@(tags => OnExcludeChangedAsync(type, tags))" />
+            }
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// Tag types to surface. Defaults to all six discovery-relevant types.
+    /// Pass a narrower list to restrict axes shown (e.g. Bookshelves may only want Genre).
+    /// </summary>
+    [Parameter]
+    public IReadOnlyList<TagTypeEnum> TagTypes { get; set; } = DefaultFilterTypes;
+
+    /// <summary>When false, the exclude selectors are hidden. Defaults to true.</summary>
+    [Parameter]
+    public bool AllowExclude { get; set; } = true;
+
+    /// <summary>Seed included tags (ids + display data). Applied on first render only.</summary>
+    [Parameter]
+    public IReadOnlyList<TagChipDto> IncludedTags { get; set; } = [];
+
+    /// <summary>Seed excluded tags (ids + display data). Applied on first render only.</summary>
+    [Parameter]
+    public IReadOnlyList<TagChipDto> ExcludedTags { get; set; } = [];
+
+    /// <summary>Raised on every selection change with the current include/exclude id-sets.</summary>
+    [Parameter]
+    public EventCallback<TagFilterSelection> OnChanged { get; set; }
+
+    // ── Defaults ──────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// All six tag types are filterable in a discovery context.
+    /// Consumers supply a narrower <see cref="TagTypes"/> list when needed.
+    /// </summary>
+    public static readonly IReadOnlyList<TagTypeEnum> DefaultFilterTypes =
+    [
+        TagTypeEnum.Genre,
+        TagTypeEnum.Character,
+        TagTypeEnum.Setting,
+        TagTypeEnum.Relationship,
+        TagTypeEnum.ContentWarning,
+        TagTypeEnum.CrossoverFandom,
+    ];
+
+    // ── State ─────────────────────────────────────────────────────────────────────────────────────
+
+    // Mutable working sets, keyed by tag type.
+    private Dictionary<TagTypeEnum, List<TagChipDto>> _included = [];
+    private Dictionary<TagTypeEnum, List<TagChipDto>> _excluded = [];
+
+    protected override void OnInitialized()
+    {
+        // Seed from parameters; each type gets its own list.
+        _included = TagTypes.ToDictionary(t => t, _ => new List<TagChipDto>());
+        _excluded = TagTypes.ToDictionary(t => t, _ => new List<TagChipDto>());
+
+        foreach (TagChipDto tag in IncludedTags)
+            if (_included.TryGetValue(tag.TagTypeId, out List<TagChipDto>? bucket))
+                bucket.Add(tag);
+
+        foreach (TagChipDto tag in ExcludedTags)
+            if (_excluded.TryGetValue(tag.TagTypeId, out List<TagChipDto>? bucket))
+                bucket.Add(tag);
+    }
+
+    // ── Handlers ──────────────────────────────────────────────────────────────────────────────────
+
+    private async Task OnIncludeChangedAsync(TagTypeEnum type, IReadOnlyList<TagChipDto> tags)
+    {
+        _included[type] = [.. tags];
+        // Cross-dedup: remove from excluded any tag now in included
+        HashSet<int> includedIds = [.. tags.Select(t => t.TagId)];
+        _excluded[type].RemoveAll(t => includedIds.Contains(t.TagId));
+        await EmitAsync();
+    }
+
+    private async Task OnExcludeChangedAsync(TagTypeEnum type, IReadOnlyList<TagChipDto> tags)
+    {
+        _excluded[type] = [.. tags];
+        // Cross-dedup: remove from included any tag now in excluded
+        HashSet<int> excludedIds = [.. tags.Select(t => t.TagId)];
+        _included[type].RemoveAll(t => excludedIds.Contains(t.TagId));
+        await EmitAsync();
+    }
+
+    private async Task EmitAsync()
+    {
+        TagFilterSelection selection = new(
+            IncludedTagIds: _included.Values.SelectMany(l => l.Select(t => t.TagId)).ToList(),
+            ExcludedTagIds: _excluded.Values.SelectMany(l => l.Select(t => t.TagId)).ToList());
+
+        await OnChanged.InvokeAsync(selection);
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────────────────────────
+
+    private static string TypeLabel(TagTypeEnum type) => type switch
+    {
+        TagTypeEnum.Character => "character",
+        TagTypeEnum.Setting => "setting",
+        TagTypeEnum.Genre => "genre",
+        TagTypeEnum.ContentWarning => "content warning",
+        TagTypeEnum.CrossoverFandom => "crossover",
+        TagTypeEnum.Relationship => "relationship",
+        _ => type.ToString().ToLowerInvariant()
+    };
+}

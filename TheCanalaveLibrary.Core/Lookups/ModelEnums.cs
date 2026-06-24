@@ -162,7 +162,11 @@ public enum ProfileVisibility : short
     Private = 2
 }
 
-public enum AllowInteractions : short
+/// <summary>
+/// Audience policy for social interactions (profile comments, private messages).
+/// Renamed from AllowInteractions (WU23) to distinguish from UserStoryInteraction.
+/// </summary>
+public enum SocialInteractionPermission : short
 {
     Public = 0,
     UsersOnly = 1,

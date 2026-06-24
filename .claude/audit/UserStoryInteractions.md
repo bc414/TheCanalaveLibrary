@@ -101,10 +101,10 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
   all-bits-false → row removed + date partition cascade-deleted; all-false with HasStarted=true → row
   survives; all-false + no row → no row created; `GetStatesByStoryIdsAsync` scoped to active user;
   absent key in result treated as all-false; anonymous context → empty reads; anonymous write throws.
-  Files: `Core/UserStoryInteractions/InteractionTypeEnum.cs`,
-  `Core/UserStoryInteractions/InteractionConstants.cs`,
+  Files (post-WU23 rename): `Core/UserStoryInteractions/UserStoryInteractionTypeEnum.cs`,
+  `Core/UserStoryInteractions/UserStoryInteractionConstants.cs`,
   `Core/UserStoryInteractions/UserStoryInteractionStateDto.cs`,
-  `Core/UserStoryInteractions/InteractionStateUpdate.cs`,
+  `Core/UserStoryInteractions/UserStoryInteractionStateUpdate.cs`,
   `Core/UserStoryInteractions/IUserStoryInteractionReadService.cs`,
   `Core/UserStoryInteractions/IUserStoryInteractionWriteService.cs`,
   `Server/UserStoryInteractions/ServerUserStoryInteractionReadService.cs`,
@@ -114,8 +114,9 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
 - **L3-Logic — Stage 5 (panel slice, WU16, 2026-06-22).** `UserStoryInteractionButton` leaf
   (WU7, Stage 5) + `UserStoryInteractionPanel` coordination composite (WU16). Panel owns the 2-second
   debounce via `CancellationTokenSource` + `Task.Delay`; applies optimistic local state update before
-  the debounce fires; calls `SetInteractionStateAsync` on flush. `InteractionConstants.InteractionDebounceMs
-  = 2000` in `Core/UserStoryInteractions/InteractionConstants.cs` (not Server's `SiteConstants` —
+  the debounce fires; calls `SetUserStoryInteractionStateAsync` on flush.
+  `UserStoryInteractionConstants.UserStoryInteractionDebounceMs = 2000` in
+  `Core/UserStoryInteractions/UserStoryInteractionConstants.cs` (not Server's `SiteConstants` —
   SharedUI cannot reference Server). Panel injects only `IUserStoryInteractionWriteService` (no read
   service; N+1 rule). State flows in as a `[Parameter]` from the batch-loading parent.
 
@@ -129,17 +130,19 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
   IsOwnStory renders Edit link + no buttons; optimistic toggle adds/removes aria-pressed before debounce).
 
 - **L3.5-Structure — Stage 5 (panel slice, WU16, 2026-06-22).** `UserStoryInteractionPanel` iterates
-  `Enum.GetValues<InteractionTypeEnum>()` (declaration order = locked button order). Parameters:
+  `Enum.GetValues<UserStoryInteractionTypeEnum>()` (declaration order = locked button order). Parameters:
   `StoryId` (EditorRequired int), `State` (`UserStoryInteractionStateDto?`; null = all-false),
-  `Context` (`InteractionDisplayContext`: `Listing|Detail`), `IsOwnStory` (bool). `InteractionDisplayContext`
-  is a new Core enum in `Core/UserStoryInteractions/`. Blank-slate condition for listing ReadLater/Ignore
-  visibility: NOT (IsFavorite OR IsHiddenFavorite OR IsFollowed OR IsCompleted OR ActivelyReading) — the
-  IsReadItLater/IsIgnored bits intentionally do not break blank-slate.
+  `Context` (`UserStoryInteractionDisplayContext`: `Listing|Detail`), `IsOwnStory` (bool).
+  `UserStoryInteractionDisplayContext` is a Core enum in `Core/UserStoryInteractions/`. Blank-slate
+  condition for listing ReadLater/Ignore visibility: NOT (IsFavorite OR IsHiddenFavorite OR IsFollowed
+  OR IsCompleted OR ActivelyReading) — the IsReadItLater/IsIgnored bits intentionally do not break
+  blank-slate.
 
-- **L4-Style — Stage 5 (panel icon/color/label mapping, WU16, 2026-06-22).** `InteractionVisuals` static
-  class in `SharedUI/UserStoryInteractions/` transcribes the locked audit table verbatim. Inner `Info`
-  record carries `(IconPath, AccentColor, Label)`. `PrivateFavorite` reuses `Favorite`'s `HeartPath`
-  constant; color signals privacy. All 6 AccentColors match the palette exactly.
+- **L4-Style — Stage 5 (panel icon/color/label mapping, WU16, 2026-06-22).** `UserStoryInteractionVisuals`
+  static class in `SharedUI/UserStoryInteractions/` (renamed from `InteractionVisuals` in WU23 Phase 0)
+  transcribes the locked audit table verbatim. Inner `Info` record carries `(IconPath, AccentColor, Label)`.
+  `PrivateFavorite` reuses `Favorite`'s `HeartPath` constant; color signals privacy. All 6 AccentColors
+  match the palette exactly.
   **Button-leaf contract (locked WU7, do-not-revisit):** `UserStoryInteractionButton`
   takes `IsActive` / `OnToggle` / `IconPath` / `AccentColor` / `Label`. Read-only (no `OnToggle`)
   renders as `<span>` and only when `IsActive`.
@@ -149,8 +152,8 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
   rule, via a throwaway harness on `HomeDesktop.razor` (heart + star sample shapes, removed after
   confirmation). No real consumer exists yet (`UserStoryInteractionPanel` is WU16).
 
-  **`InteractionTypeEnum → (IconPath, AccentColor, Label)` mapping — locked 2026-06-22, consumed by
-  WU16.** Keys below use the **imperative-verb identifiers** (`PrivateFavorite` / `Follow` / `Complete`
+  **`UserStoryInteractionTypeEnum → (IconPath, AccentColor, Label)` mapping — locked 2026-06-22,
+  consumed by WU16.** Keys below use the **imperative-verb identifiers** (`PrivateFavorite` / `Follow` / `Complete`
   / `ReadLater` / `Ignore`) settled for the enum. All paths use the default SVG `nonzero` fill rule (no
   `fill-rule` attribute change needed). Compound paths use winding direction deliberately: CW subpaths
   fill positively; a CCW subpath inside a CW outer path cancels winding to 0 (transparent = cutout).

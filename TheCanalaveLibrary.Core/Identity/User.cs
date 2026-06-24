@@ -25,8 +25,8 @@ public class PrivacySettings
 {
     public ProfileVisibility ProfileVisibility { get; set; } = ProfileVisibility.Public;
     public bool ShowActivityStatus { get; set; } = true;
-    public AllowInteractions AllowProfileComments { get; set; } = AllowInteractions.Public;
-    public AllowInteractions AllowPrivateMessages { get; set; } = AllowInteractions.UsersOnly;
+    public SocialInteractionPermission AllowProfileComments { get; set; } = SocialInteractionPermission.Public;
+    public SocialInteractionPermission AllowPrivateMessages { get; set; } = SocialInteractionPermission.UsersOnly;
     public bool ShowUserStats { get; set; } = true;
     public bool ShowCurrentlyReading { get; set; } = true;
 }
@@ -104,7 +104,7 @@ public class User : IdentityUser<int>
     public virtual ICollection<UserCustomFilter> UserCustomFilters { get; set; } = new List<UserCustomFilter>();
     public virtual ICollection<UserNotificationSetting> UserNotificationSettings { get; set; } = new List<UserNotificationSetting>();
     public virtual ICollection<UserProfileComment> UserProfileComments { get; set; } = new List<UserProfileComment>();
-    public virtual ICollection<UserSearchSetting> UserSearchSettings { get; set; } = new List<UserSearchSetting>();
+    public virtual ICollection<UserStoryInteractionFilterSetting> UserStoryInteractionFilterSettings { get; set; } = new List<UserStoryInteractionFilterSetting>();
     public virtual UserStat? UserStat { get; set; }
     public virtual ICollection<UserStoryInteraction> UserStoryInteractions { get; set; } = new List<UserStoryInteraction>();
     public virtual ICollection<ApplicationRole> Roles { get; set; } = new List<ApplicationRole>();

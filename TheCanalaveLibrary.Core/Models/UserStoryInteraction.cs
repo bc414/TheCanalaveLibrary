@@ -33,6 +33,7 @@ public partial class UserStoryInteraction
     public virtual User User { get; set; } = null!;
 
     // Vertical partitions of related metadata (sparse — only present when relevant)
-    public virtual UserStoryInteractionDate? InteractionDate { get; set; }
+    // InteractionDatePartition: renamed from InteractionDate (WU23) to avoid shadowing the type UserStoryInteractionDate.
+    public virtual UserStoryInteractionDate? InteractionDatePartition { get; set; }
     public virtual UserStoryRecommendationSource? RecommendationSource { get; set; }
 }

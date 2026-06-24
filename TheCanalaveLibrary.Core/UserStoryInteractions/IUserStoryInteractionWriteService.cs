@@ -17,5 +17,5 @@ public interface IUserStoryInteractionWriteService : IUserStoryInteractionReadSe
     /// </list>
     /// Throws <see cref="InvalidOperationException"/> when the viewer is anonymous.
     /// </summary>
-    Task SetInteractionStateAsync(int storyId, InteractionStateUpdate update);
+    Task SetUserStoryInteractionStateAsync(int storyId, UserStoryInteractionStateUpdate update);
 }

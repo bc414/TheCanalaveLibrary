@@ -56,7 +56,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasForeignKey(f => f.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasMany(u => u.UserSearchSettings)
+        builder.HasMany(u => u.UserStoryInteractionFilterSettings)
             .WithOne(s => s.User)
             .HasForeignKey(s => s.UserId)
             .OnDelete(DeleteBehavior.Cascade);

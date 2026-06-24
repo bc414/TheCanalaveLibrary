@@ -14,7 +14,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// - Populated list → N StoryCards present inside the grid container.
 /// - CurrentUserId match → that card renders the Edit-Story affordance (IsOwnStory path).
 /// - CurrentUserId non-match / null → interaction buttons rendered (not Edit Story).
-/// - InteractionStates keyed lookup → the correct state slice forwarded per card.
+/// - UserStoryInteractionStates keyed lookup → the correct state slice forwarded per card.
 /// - PaginationControls rendered when TotalPages > 1; absent when single page or PageSize unset.
 /// - OnPageChanged callback bubbles when the pager emits a page change.
 ///
@@ -145,7 +145,7 @@ public class StoryDeckTests : TestContext
         cut.Markup.Should().NotContain("Edit Story");
     }
 
-    // ── InteractionStates forwarding ─────────────────────────────────────────────
+    // ── UserStoryInteractionStates forwarding ─────────────────────────────────────────────
     //
     // In Listing context, only clickable buttons (ReadLater/Ignore) render as <button> with
     // aria-pressed; the rest render as read-only <span>s when active, absent when inactive.
@@ -153,7 +153,7 @@ public class StoryDeckTests : TestContext
     // "Favorite" span (active read-only indicator) that would not appear for an all-false state.
 
     [Fact]
-    public void InteractionStates_IsFavorite_RendersActiveFavoriteSpan()
+    public void UserStoryInteractionStates_IsFavorite_RendersActiveFavoriteSpan()
     {
         // Story 1: IsFavorite=true → active Favorite renders as span[aria-label="Favorite"] (read-only)
         // Story 2: all false → no such span
@@ -165,7 +165,7 @@ public class StoryDeckTests : TestContext
 
         IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { story1, story2 })
-            .Add(c => c.InteractionStates, (IReadOnlyDictionary<int, UserStoryInteractionStateDto>)states));
+            .Add(c => c.UserStoryInteractionStates, (IReadOnlyDictionary<int, UserStoryInteractionStateDto>)states));
 
         // Active Favorite renders as a read-only <span> in Listing context (not a clickable button)
         cut.FindAll("span[aria-label='Favorite']").Should().NotBeEmpty(
@@ -173,12 +173,12 @@ public class StoryDeckTests : TestContext
     }
 
     [Fact]
-    public void NullInteractionStates_NoActiveFavoriteSpan()
+    public void NullUserStoryInteractionStates_NoActiveFavoriteSpan()
     {
         // Null state → all-false → Favorite is inactive → leaf guard hides it → no span
         IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory(storyId: 1), MakeStory(storyId: 2) })
-            .Add(c => c.InteractionStates, (IReadOnlyDictionary<int, UserStoryInteractionStateDto>?)null));
+            .Add(c => c.UserStoryInteractionStates, (IReadOnlyDictionary<int, UserStoryInteractionStateDto>?)null));
 
         cut.FindAll("span[aria-label='Favorite']").Should().BeEmpty(
             "null states ⇒ IsFavorite=false ⇒ inactive read-only Favorite does not render");

@@ -1,6 +1,6 @@
 namespace TheCanalaveLibrary.Core;
 
-public enum InteractionDisplayContext
+public enum UserStoryInteractionDisplayContext
 {
     Listing,
     Detail

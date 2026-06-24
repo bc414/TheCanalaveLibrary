@@ -66,8 +66,8 @@ Narrowing-within-fixed-source query → WU27/WU30.
 
 ## Feature 31 — Search Page (`/discover`)
 - **L1 — N/A** (queries Story/USI/StoryListing). **L2 — Stage 2** (Source=All query; random preload /
-  "give me more" remains WU28). **L3/L3.5 — Stage 5 (WU23, 2026-06-23, pending test verification).**
-  **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
+  "give me more" remains WU28). **L3/L3.5 — Stage 5 (WU23, 2026-06-23).** **L4 — Stage 1. L5 — Stage 2.
+  L6 — Stage 2.**
 
   **Settled for WU23 (2026-06-23, do not revisit):**
   - **Filter axes are the unit of reuse, not the panel.** `TagFilter` and `UserStoryInteractionFilter`
@@ -95,6 +95,35 @@ Narrowing-within-fixed-source query → WU27/WU30.
 
   **L2 note:** partially advanced — `GetListingsAsync(StoryFilterDto)` (Source=All filtered query)
   is built. The random-preload and "give me more" interaction-button pagination remain Stage 2 (WU28).
+
+  **WU23 Stage note — L3/L3.5 (2026-06-23):**
+  Built: `Core/Discovery/StoryFilterDto.cs` (sealed record: `TextQuery?`, `IncludedTagIds`,
+  `ExcludedTagIds`, `ExcludedInteractions`, `Sort`, `Page`, `PageSize`); `Core/Tags/TagFilterSelection.cs`
+  (axis emit contract); `SharedUI/Tags/TagFilter.razor` (include/exclude tag axis, cross-dedup,
+  injection-free, emits `EventCallback<TagFilterSelection> OnChanged`);
+  `SharedUI/UserStoryInteractions/UserStoryInteractionFilter.razor` (checkboxes "Hide stories I've…",
+  injection-free, emits `EventCallback<IReadOnlyList<UserStoryInteractionTypeEnum>> OnChanged`);
+  `SharedUI/Discovery/ResultsFilterPanel.razor` (coordination composite, `@code`-buffered,
+  "Apply Filters" emits `EventCallback<StoryFilterDto> OnSearch`; Relevance hidden from dropdown when
+  `_textQuery` is empty; `AvailableSorts` owner-supplied; defaults to `[DatePublished, Random]`).
+
+  **How verified (WU23, 2026-06-23):** `dotnet build` green (8 projects, 0 errors). `dotnet test`
+  green: 112 Unit + 198 RazorComponents + 142 Integration = **452 total**.
+  - **Integration** (`StoryListingsTests.cs`, 9 tests, Testcontainers Postgres): tag include (AND),
+    tag exclude (NONE), FTS text filter, interaction exclusion (authenticated viewer; verifies FK-safe
+    via DataSeeder TestUser), interaction exclusion (anonymous viewer sees all), DatePublished sort
+    order, paging / TotalCount independence from PageSize, content-rating global filter still applied,
+    mutation sanity (exclusion test fails when predicate dropped, reverted).
+  - **RazorComponents** (`ResultsFilterPanelTests.cs`, 8 tests): `ShowTextSearch`/`ShowTagFilter`/
+    `ShowInteractionFilters` hide their axis; Apply emits correct DTO with default state; trimmed
+    TextQuery; Relevance hidden when no text, appears after input; `InitialFilter` seeds sort +
+    excluded-interactions; Apply resets Page to 1 regardless of `InitialFilter.Page`.
+    (`UserStoryInteractionFilterTests.cs`, 7 tests): default render (one checkbox per `DefaultKinds`);
+    no checkboxes pre-checked; toggle Ignore adds to excluded list; toggle two kinds emits both;
+    uncheck removes from list; `ExcludedKinds` seed pre-checks correct checkboxes; `AvailableKinds`
+    restricts rendered checkboxes.
+  - **L4-Style sign-off:** pending live-server visual check (Stage-6 gate, consistent with WU8/WU13
+    precedent). Cells stay Stage 1 in `status.md` until that check is done.
 
 - **WU8 Stage note (2026-06-21):** the **pagination slice** of this feature's L3.5/L4 is built —
   `PaginationControls` (`SharedUI/Pagination/`), a leaf settled per spec §3.11.1/

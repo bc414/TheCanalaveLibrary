@@ -4,14 +4,14 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
 /// In-memory stand-in for <see cref="IUserStoryInteractionWriteService"/> used by
-/// <see cref="UserStoryInteractionPanelTests"/>. Records each SetInteractionStateAsync call so tests
+/// <see cref="UserStoryInteractionPanelTests"/>. Records each SetUserStoryInteractionStateAsync call so tests
 /// can assert what the debounce flush dispatched without needing a host or database.
 /// </summary>
 public class FakeUserStoryInteractionWriteService : IUserStoryInteractionWriteService
 {
-    public List<(int StoryId, InteractionStateUpdate Update)> SetStateCalls { get; } = [];
+    public List<(int StoryId, UserStoryInteractionStateUpdate Update)> SetStateCalls { get; } = [];
 
-    public Task SetInteractionStateAsync(int storyId, InteractionStateUpdate update)
+    public Task SetUserStoryInteractionStateAsync(int storyId, UserStoryInteractionStateUpdate update)
     {
         SetStateCalls.Add((storyId, update));
         return Task.CompletedTask;

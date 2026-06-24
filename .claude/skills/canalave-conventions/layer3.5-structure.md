@@ -545,8 +545,8 @@ component owns that behavior, not get bolted onto the display bag.
 **StoryCard** (leaf, WU13): pure leaf, no service injection. Contract:
 - `[Parameter, EditorRequired] StoryListingDto Story` — warm-partition projection; includes
   `ShortDescription` (nullable, tooltip + synopsis) and `Tags` (sprite-resolved `TagChipDto` list).
-- `[Parameter] UserStoryInteractionStateDto? InteractionState` — batch-loaded by the parent via
-  `GetStatesByStoryIdsAsync`; forwarded to the nested `UserStoryInteractionPanel`. Null = all-false.
+- `[Parameter] UserStoryInteractionStateDto? UserStoryInteractionState` — batch-loaded by the parent
+  via `GetStatesByStoryIdsAsync`; forwarded to the nested `UserStoryInteractionPanel`. Null = all-false.
 - `[Parameter] bool IsOwnStory` — forwarded to the panel (renders Edit link instead of buttons).
 - Optional gated caret `EventCallback`s: `OnDiscoverFromStory`, `OnCopyLink`, `OnReport`,
   `OnDownload` — gated by `.HasDelegate`; consumers wire only what exists.
@@ -565,8 +565,8 @@ three-state pattern internally (`Stories is null` → loading, `Count == 0` → 
 "Deck" because a deck is a curated ordered set of cards — avoids confusion with `StoryListingDto`.
 
 Contract: `[EditorRequired] IReadOnlyList<StoryListingDto>? Stories` (nullable — null means loading),
-`IReadOnlyDictionary<int, UserStoryInteractionStateDto>? InteractionStates` (batch-loaded by parent,
-keyed by StoryId), `int? CurrentUserId` (deck computes `IsOwnStory` per card), `string EmptyMessage`
+`IReadOnlyDictionary<int, UserStoryInteractionStateDto>? UserStoryInteractionStates` (batch-loaded by
+parent, keyed by StoryId), `int? CurrentUserId` (deck computes `IsOwnStory` per card), `string EmptyMessage`
 (defaults to "No stories found."), plus pagination forwards (`CurrentPage`, `PageSize`, `TotalCount`,
 `EventCallback<int> OnPageChanged`). No service injection. Caret callbacks deferred — additive when
 the first consumer (Discovery/Report/Export) needs them.
@@ -658,7 +658,7 @@ rejected a bundled `UserListPage`; `StoryDeck` is also used without any panel at
 ```razor
 @* Page / dispatcher — pass Stories? directly; StoryDeck branches internally *@
 <StoryDeck Stories="@_stories"
-           InteractionStates="@_interactionStates"
+           UserStoryInteractionStates="@_interactionStates"
            CurrentUserId="@_currentUserId"
            CurrentPage="@_page"
            PageSize="@_pageSize"

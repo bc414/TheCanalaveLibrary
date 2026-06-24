@@ -4,7 +4,7 @@
    EventCallback-driven, no mode enum: absence of OnToggle means read-only, and a read-only button
    renders only when IsActive (a passive indicator). Icon is inline SVG (IconPath/AccentColor), not
    a sprite URL — settled WU7, see layer4-style.md "Interaction Icons Are Inline SVG". The owning
-   composite (UserStoryInteractionPanel, WU16) maps InteractionTypeEnum -> (IconPath, AccentColor); this
+   composite (UserStoryInteractionPanel, WU16) maps UserStoryInteractionTypeEnum → (IconPath, AccentColor);
    leaf has no domain knowledge and injects no service. *@
 @if (!IsReadOnly || IsActive)
 {

@@ -39,7 +39,7 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(1))
-            .Add(c => c.Context, InteractionDisplayContext.Detail));
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
 
         cut.FindAll("button[aria-label]").Count.Should().Be(6,
             "all 6 interaction types are clickable in detail context");
@@ -51,14 +51,14 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(1))
-            .Add(c => c.Context, InteractionDisplayContext.Detail));
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
 
         // Enum declaration order = button order:
         // Favorite → PrivateFavorite → Follow → Complete → ReadLater → Ignore
         string[] expectedLabels = ["Favorite", "Private Favorite", "Following", "Completed", "Read It Later", "Ignored"];
         var buttons = cut.FindAll("button[aria-label]");
         buttons.Select(b => b.GetAttribute("aria-label")).Should().Equal(expectedLabels,
-            "the panel must iterate Enum.GetValues<InteractionTypeEnum>() which yields the locked declaration order");
+            "the panel must iterate Enum.GetValues<UserStoryInteractionTypeEnum>() which yields the locked declaration order");
     }
 
     [Fact]
@@ -67,7 +67,7 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(1))
-            .Add(c => c.Context, InteractionDisplayContext.Detail));
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
 
         // Blazor renders aria-pressed="@bool" as a boolean HTML attribute:
         // absent when false, present when true. No button should have it when all bits are false.
@@ -83,7 +83,7 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.State, state)
-            .Add(c => c.Context, InteractionDisplayContext.Detail));
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
 
         // Blazor renders bool true as the attribute being present (empty string value).
         IElement btn = cut.Find("button[aria-label='Favorite']");
@@ -99,7 +99,7 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 2)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(2))
-            .Add(c => c.Context, InteractionDisplayContext.Listing));
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Listing));
 
         // Fav/PrivFav/Follow/Complete are read-only and inactive → leaf renders nothing.
         // ReadLater + Ignore are clickable on blank-slate → rendered as <button>.
@@ -115,7 +115,7 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 2)
             .Add(c => c.State, state)
-            .Add(c => c.Context, InteractionDisplayContext.Listing));
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Listing));
 
         // Story is not blank-slate (IsFavorite=true); ReadLater and Ignore are hidden unless active.
         cut.FindAll("button[aria-label]").Should().BeEmpty(
@@ -129,7 +129,7 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 2)
             .Add(c => c.State, state)
-            .Add(c => c.Context, InteractionDisplayContext.Listing));
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Listing));
 
         // Favorite is active and read-only in listing context → rendered as <span>.
         cut.Find("span[aria-label='Favorite']").Should().NotBeNull(
@@ -143,7 +143,7 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 2)
             .Add(c => c.State, state)
-            .Add(c => c.Context, InteractionDisplayContext.Listing));
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Listing));
 
         // ReadLater is active → aria-pressed present.
         IElement readLater = cut.Find("button[aria-label='Read It Later']");
@@ -163,7 +163,7 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 2)
             .Add(c => c.State, state)
-            .Add(c => c.Context, InteractionDisplayContext.Listing));
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Listing));
 
         // IsCompleted=true → not blank-slate → ReadLater and Ignore hidden.
         cut.FindAll("button[aria-label]").Should().BeEmpty();
@@ -179,7 +179,7 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 7)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(7))
-            .Add(c => c.Context, InteractionDisplayContext.Detail)
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail)
             .Add(c => c.IsOwnStory, true));
 
         cut.Find("a").GetAttribute("href").Should().Contain("/story/7/edit");
@@ -195,7 +195,7 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 3)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(3))
-            .Add(c => c.Context, InteractionDisplayContext.Detail));
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
 
         // Blazor omits aria-pressed when false, so initially the attribute is absent.
         cut.Find("button[aria-label='Favorite']").HasAttribute("aria-pressed").Should().BeFalse();
@@ -215,7 +215,7 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 3)
             .Add(c => c.State, state)
-            .Add(c => c.Context, InteractionDisplayContext.Detail));
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
 
         // Initially active (aria-pressed present).
         cut.Find("button[aria-label='Favorite']").HasAttribute("aria-pressed").Should().BeTrue();
@@ -233,7 +233,7 @@ public class UserStoryInteractionPanelTests : TestContext
         IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 4)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(4))
-            .Add(c => c.Context, InteractionDisplayContext.Listing));
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Listing));
 
         cut.Find("button[aria-label='Read It Later']").HasAttribute("aria-pressed").Should().BeFalse();
 

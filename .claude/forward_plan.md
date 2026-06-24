@@ -218,6 +218,35 @@ Guardrails:
 
 **Resolved:**
 
+- **`UserStoryInteraction` nomenclature rule** — resolved (2026-06-23, WU23 Phase 0): every identifier
+  meaning *user×story interaction* must be spelled `UserStoryInteraction…`, never bare `Interaction…`.
+  Full codebase sweep ran in WU23 Phase 0 (Tier 1: type/enum/entity renames; Tier 2: DB column
+  renames via rename migration; Tier 3: member renames). Deliberate leave-list: `UserChapterInteraction`
+  / `LastInteractionDate` (chapter domain); prose in comments/seeds. See `canalave-conventions/SKILL.md`
+  "UserStoryInteraction prefix rule."
+
+- **`StoryFilterDto` shape + `GetListingsAsync` two-step** — resolved (2026-06-23, WU23): DTO in
+  `Core/Discovery/`; fields: `TextQuery`, `IncludedTagIds`, `ExcludedTagIds`,
+  `ExcludedInteractions (UserStoryInteractionTypeEnum list)`, `Sort`, `Page`, `PageSize`. Content
+  rating and Source axis excluded by design. `GetListingsAsync(StoryFilterDto)` in
+  `IStoryReadService` / `ServerStoryReadService` uses the two-step pattern (filter IQueryable → scalar
+  IDs → `GetListingsByIdsAsync`). See `canalave-conventions/layer2-services.md`
+  "StoryFilterDto + GetListingsAsync."
+
+- **`ResultsFilterPanel` composition + axis extraction** — resolved (2026-06-23, WU23): filter axes
+  (`TagFilter`, `UserStoryInteractionFilter`) are the unit of reuse — extracted as standalone
+  components; `ResultsFilterPanel` is one assembler. Panel + StoryDeck kept separate at page level
+  (spec §5.27 rejected a bundled composite). Both panel and tree search use a batched Apply button.
+  See `canalave-conventions/layer3.5-structure.md` "Filter-Axis Component Pattern."
+
+- **§8.7 entity renames** — resolved (2026-06-23, WU23 Phase 0): `UserInteractionFilter` →
+  `UserStoryInteractionFilterType`, `DefaultSearchSetting` → `DefaultUserStoryInteractionFilterSetting`,
+  `UserSearchSetting` → `UserStoryInteractionFilterSetting`. Real rename migration (no pinning). See
+  `audit/Discovery.md` "WU23 Shared Context."
+
+- **`AllowInteractions` → `SocialInteractionPermission`** — resolved (2026-06-23, WU23 Phase 0):
+  disambiguates from `UserStoryInteraction`. C#-only; column names unchanged. See `audit/Discovery.md`.
+
 - **Notification generation mechanism** — resolved (2026-06-23, WU22): **direct injected call +
   semantic per-event methods + best-effort post-commit.** Feature write services inject
   `INotificationWriteService` and call a semantic method (e.g. `NotifyNewFollowerAsync`) after their

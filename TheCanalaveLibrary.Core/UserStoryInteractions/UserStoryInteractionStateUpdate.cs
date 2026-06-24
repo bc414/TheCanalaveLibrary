@@ -1,11 +1,11 @@
 namespace TheCanalaveLibrary.Core;
 
 /// <summary>
-/// The six panel-managed bits sent to <see cref="IUserStoryInteractionWriteService.SetInteractionStateAsync"/>.
+/// The six panel-managed bits sent to <see cref="IUserStoryInteractionWriteService.SetUserStoryInteractionStateAsync"/>.
 /// HasStarted is deliberately absent — only the reading path (WU26) sets it, and the write service
 /// preserves whatever value is already stored.
 /// </summary>
-public record InteractionStateUpdate(
+public record UserStoryInteractionStateUpdate(
     bool IsFavorite,
     bool IsHiddenFavorite,
     bool IsFollowed,
