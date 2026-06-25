@@ -676,18 +676,32 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   L4 visual sign-off pending human review.
 - **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 4. **Deps:** WU11, WU14.
 
-### WU25 — Story view page (`StoryPage` + desktop/mobile) *(Stage-4 → build spec §5.28)*
-- **Cells:** 5 L3/L3.5/L4.
-- **Architecture (settled WU24):** this is the **read-only view page** (content-editing Pattern 1 — view
-  side). `RichTextView` for long description. Author-only "Edit Story" affordance is an inline `@if` link
-  to `/story/{id}/edit` (no `AdminControls` component — none exists; link already partially in
-  `UserStoryInteractionPanel` line 17, may be surfaced here more visibly). No `EditorView` on this page.
-- **Do:** discard the `RandomNumberGenerator` stubs; add `[PersistentState]` (no flicker), hybrid
-  catch-all route `{*StorySlug}`; layout title→cover→`RichTextView` long desc→chapter selection
-  (composes `ChapterNavigation`)→recommendations section; author-only inline `@if` link to edit page.
-  Delete `RandomNumberGenerator` when done. **Tool:** opusplan/Sonnet.
-  **Pointer:** `audit/Stories.md` Feature 5. **Deps:** WU13, WU14, WU24, WU29 (recommendations section),
-  WU26 (chapter selection list).
+### WU25 — Story view page (`StoryPage` + desktop/mobile) — DONE ✓ (2026-06-24)
+- **Cells:** 5 L3/L3.5/L4 → Stage 5 (L4 stays Stage 1 pending visual sign-off, per WU13/WU14/WU24 precedent).
+- **Architecture (settled WU25, 2026-06-24):** read-only view page (content-editing Pattern 1 — view
+  side). Full detail layout per §5.28: title → cover art → long description →
+  chapter selection → recommendations. Full metadata row (rating, status, word count, dates, tag chips).
+  Author-only "Edit Story" link is an inline `@if` (Owner-Conditional Edit Affordances convention).
+  - **`ChapterNavigation` is NOT used here.** That component (WU18) is reading-context-only
+    (`CurrentChapterNumber` is `[EditorRequired]`; renders prev/next + a "Chapter N" dropdown).
+    The story landing page uses a dedicated **`ChapterList` leaf** (new, `SharedUI/Chapters/`).
+  - **`StoryDetailsDTO` extended:** added `int? AuthorId`, `string? CoverArtRelativeUrl`, `Rating Rating`,
+    `StoryStatusEnum Status`, `IReadOnlyList<TagChipDto> Tags`. `GetStoryByIdAsync` projection uses
+    two-step intermediate row (mirrors listing service) to resolve sprites in memory via `ToTagChip`.
+  - **`GetChapterListAsync(int storyId)`** added to `IChapterReadService` + `ServerChapterReadService`.
+    Returns `IReadOnlyList<ChapterListEntryDto>` — all chapters with non-primary alternate versions
+    as indented sub-rows. Two-step query (chapters + non-primary versions via SelectMany, grouped
+    in memory — mirrors `GetChapterVersionsAsync` pattern).
+  - **`ChapterList` leaf** (`SharedUI/Chapters/`): `Chapters`, `StoryId`, `ShowDrafts`. Primary
+    chapter row → `/story/{id}/{ch}`; non-primary alternates indented beneath as `Title - VersionName`
+    → `/story/{id}/{ch}/{versionOrder}`. Same vertical structure on desktop and mobile.
+  - **`[PersistentState]`** on `Story` and `Chapters` in `StoryPage` (kills prerender flicker).
+  - **Route:** `/story/{StoryId:int}/{*StorySlug}` (catch-all cosmetic slug).
+- **Tests (2026-06-24):** Integration tier — `StoryDetailTests` (15 tests) covering new `StoryDetailsDTO`
+  fields and `GetChapterListAsync` (ordering, alternates, content-rating ceiling, unpublished). RazorComponents
+  tier — `ChapterListTests` (14), `StoryDesktopTests` (22), `StoryMobileTests` (21) = 57 tests. All green.
+- **Tool:** Sonnet in Claude Code. **Pointer:** `audit/Stories.md` Feature 5.
+  **Deps:** WU13, WU14, WU24, WU29, WU26.
 
 ### WU26 — Chapter reading + writing pages — DONE ✓ (2026-06-24)
 *(Pattern 1 split; rating model reconciliation; reading-progress)*

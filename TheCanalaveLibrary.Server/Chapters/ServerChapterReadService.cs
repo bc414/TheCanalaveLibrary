@@ -123,6 +123,74 @@ public class ServerChapterReadService(
             .ToListAsync();
     }
 
+    public async Task<IReadOnlyList<ChapterListEntryDto>> GetChapterListAsync(int storyId)
+    {
+        Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
+
+        // Step 1: All chapters for the story, ordered by ChapterNumber.
+        // PrimaryContent is nullable during the brief post-create window; default WordCount to 0.
+        List<ChapterRow> chapters = await readDb.Chapters
+            .Where(c => c.StoryId == storyId)
+            .OrderBy(c => c.ChapterNumber)
+            .Select(c => new ChapterRow(
+                c.ChapterNumber,
+                c.Title,
+                c.PrimaryContent != null ? c.PrimaryContent.WordCount : 0,
+                c.IsPublished))
+            .ToListAsync();
+
+        if (chapters.Count == 0) return [];
+
+        // Step 2: All non-primary alternate versions accessible to the viewer, across all chapters
+        // of the story in one query. Mirrors the SelectMany pattern from GetChapterVersionsAsync:
+        // the inner OrderBy is on the entity field (cc.SortOrder), not the projected property
+        // (EF Core cannot translate OrderBy on a DTO property outside the SelectMany boundary —
+        // same rule noted in GetChapterVersionsAsync). References c.PrimaryContentId from the
+        // outer scope to exclude the primary — EF Core translates correlated outer-scope refs here
+        // the same way GetChapterVersionsAsync references c.PrimaryContentId for the IsPrimary flag.
+        List<AltVersionRow> altRows = await readDb.Chapters
+            .Where(c => c.StoryId == storyId)
+            .SelectMany(c => c.ChapterContents
+                .Where(cc => cc.ChapterContentId != c.PrimaryContentId
+                          && (cc.Rating ?? c.Story.Rating) <= ratingCeiling)
+                .OrderBy(cc => cc.SortOrder)
+                .Select(cc => new AltVersionRow(
+                    c.ChapterNumber,
+                    cc.ChapterContentId,
+                    cc.SortOrder,
+                    cc.VersionName,
+                    cc.Rating,
+                    cc.WordCount)))
+            .ToListAsync();
+
+        // Step 3: Group alternates by chapter in memory, then combine with the chapter rows.
+        Dictionary<int, List<ChapterVersionDto>> altsByChapter = altRows
+            .GroupBy(r => r.ChapterNumber)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(r => new ChapterVersionDto(
+                    r.ChapterContentId, r.VersionOrder, r.VersionName, r.Rating, r.WordCount,
+                    IsPrimary: false))  // non-primary by definition (excluded above)
+                .ToList());
+
+        return chapters
+            .Select(c => new ChapterListEntryDto(
+                c.ChapterNumber,
+                c.Title,
+                c.WordCount,
+                c.IsPublished,
+                altsByChapter.TryGetValue(c.ChapterNumber, out List<ChapterVersionDto>? alts)
+                    ? alts
+                    : []))
+            .ToList();
+    }
+
+    private sealed record ChapterRow(int ChapterNumber, string Title, int WordCount, bool IsPublished);
+
+    private sealed record AltVersionRow(
+        int ChapterNumber, long ChapterContentId, int VersionOrder,
+        string? VersionName, Rating? Rating, int WordCount);
+
     public async Task<ChapterReadingDto?> GetChapterForEditAsync(long chapterContentId)
     {
         // No ShowMatureContent ceiling — authors must be able to open their own chapters for

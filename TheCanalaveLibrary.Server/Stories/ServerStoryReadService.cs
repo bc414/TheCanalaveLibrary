@@ -11,22 +11,56 @@ public class ServerStoryReadService(
 {
     public async Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId)
     {
-        return await readDb.Stories.Where(s => s.StoryId == storyId)
-            .Select(s => new StoryDetailsDTO
-            {
-                StoryId = s.StoryId,
-                StoryTitle = s.StoryListing != null ? s.StoryListing.StoryTitle : string.Empty,
-                ShortDescription = s.StoryListing != null ? s.StoryListing.ShortDescription ?? string.Empty : string.Empty,
-                LongDescription = s.StoryDetail.LongDescription ?? string.Empty,
-                WordCount = s.WordCount,
-                PublishDate = s.PublishedDate,
-                LastUpdatedDate = s.LastUpdatedDate,
-                OriginalPublishDate = s.OriginalPublishedDate,
-                OriginalLastUpdatedDate = s.OriginalLastUpdatedDate,
-                ChapterNames = s.Chapters.Select(c => c.Title).ToList(),
-                AuthorName = s.Author != null ? s.Author.UserName : "Unknown"
-            })
+        // Two-step: project a lean intermediate row (EF-translatable) then resolve sprites in memory.
+        // ISpriteReadService.GetSpriteUrl is plain C# string-building (not SQL-translatable) — same
+        // pattern as ProjectListingRows / ToDto used for listing queries (layer2-services.md
+        // §"Sprite URLs Are Resolved Server-Side, At Projection Time").
+        StoryDetailRow? row = await readDb.Stories
+            .Where(s => s.StoryId == storyId)
+            .Select(s => new StoryDetailRow(
+                s.StoryId,
+                s.StoryListing != null ? s.StoryListing.StoryTitle : string.Empty,
+                s.StoryListing != null ? s.StoryListing.ShortDescription ?? string.Empty : string.Empty,
+                s.StoryDetail != null ? s.StoryDetail.LongDescription ?? string.Empty : string.Empty,
+                s.WordCount,
+                s.PublishedDate,
+                s.LastUpdatedDate,
+                s.OriginalPublishedDate,
+                s.OriginalLastUpdatedDate,
+                s.AuthorId,
+                s.Author != null ? s.Author.UserName : null,
+                s.StoryListing != null ? s.StoryListing.CoverArtRelativeUrl : null,
+                s.Rating,
+                s.StoryStatusId,
+                s.Chapters.Select(c => c.Title).ToList(),
+                s.StoryTags
+                    .Select(st => new TagListingRow(
+                        st.TagId, st.Tag.TagName, st.Tag.TagTypeId,
+                        st.Tag.Description, st.Tag.SpriteIdentifier))
+                    .ToList()))
             .FirstOrDefaultAsync();
+
+        if (row is null) return null;
+
+        return new StoryDetailsDTO
+        {
+            StoryId              = row.StoryId,
+            StoryTitle           = row.Title,
+            ShortDescription     = row.ShortDescription,
+            LongDescription      = row.LongDescription,
+            WordCount            = row.WordCount,
+            PublishDate          = row.PublishDate,
+            LastUpdatedDate      = row.LastUpdatedDate,
+            OriginalPublishDate  = row.OriginalPublishDate,
+            OriginalLastUpdatedDate = row.OriginalLastUpdatedDate,
+            AuthorId             = row.AuthorId,
+            AuthorName           = row.AuthorName ?? "Unknown",
+            CoverArtRelativeUrl  = row.CoverArtRelativeUrl,
+            Rating               = row.Rating,
+            Status               = row.Status,
+            ChapterNames         = row.ChapterNames,
+            Tags                 = row.Tags.Select(ToTagChip).ToList()
+        };
     }
 
     public async Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId)
@@ -236,6 +270,17 @@ public class ServerStoryReadService(
         int? AuthorId, string? AuthorName,
         int WordCount, StoryStatusEnum StoryStatusId, Rating Rating, DateTime LastUpdatedDate,
         List<TagListingRow> Tags);
+
+    /// <summary>
+    /// Intermediate row for <see cref="GetStoryByIdAsync"/> — holds raw DB scalars so sprite
+    /// resolution can happen in memory after materialization (ISpriteReadService is not EF-translatable).
+    /// </summary>
+    private sealed record StoryDetailRow(
+        int StoryId, string Title, string ShortDescription, string LongDescription,
+        int WordCount, DateTime PublishDate, DateTime LastUpdatedDate,
+        DateOnly? OriginalPublishDate, DateOnly? OriginalLastUpdatedDate,
+        int? AuthorId, string? AuthorName, string? CoverArtRelativeUrl,
+        Rating Rating, StoryStatusEnum Status, List<string> ChapterNames, List<TagListingRow> Tags);
 
     private sealed record TagListingRow(
         int TagId, string TagName, TagTypeEnum TagTypeId, string? Description, string? SpriteIdentifier);

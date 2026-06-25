@@ -131,18 +131,27 @@ the build, superseding the original spec/skill sketch:
 
 ## Feature 7 — Chapter Reading
 - **L1 — Stage 5.** `UserChapterInteraction` supports progress + read state.
-- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22).** `IChapterReadService` with `GetChapterForReadingAsync`,
-  `GetChapterTocAsync`, `GetChapterVersionsAsync`, `GetChapterForEditAsync` in `ServerChapterReadService`
-  (primary-constructor DI on `ReadOnlyApplicationDbContext`). Per-version `ChapterContent.Rating` filter
-  applied explicitly (the global `"ContentRating"` query filter covers `Story` only — `ChapterContent.Rating`
-  vs `ShowMatureContent` ceiling is a manual `.Where()` in every method). `ChapterReadingDto` includes
-  prev/next chapter numbers (EF correlated subqueries) and `StoryRating` so L3 can render the
-  "chapter rating exceeds story rating → skip to next" warning without a second fetch. Note on
-  `GetChapterVersionsAsync`: `.OrderBy()` must be inside `SelectMany`'s inner query (on the entity
-  field), not after — EF Core cannot translate `.OrderBy()` on a DTO property projected from a
-  `SelectMany` transparent identifier. Verified: `dotnet test` 50/50 green (Integration tier:
-  `ChapterReadServiceTests` — 8 tests covering primary-version projection, null-for-nonexistent,
-  per-version rating ceiling anonymous/mature, TOC ordering, prev/next navigation).
+- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; extended WU25, 2026-06-24).** `IChapterReadService` with
+  `GetChapterForReadingAsync`, `GetChapterTocAsync`, `GetChapterVersionsAsync`, `GetChapterForEditAsync`
+  in `ServerChapterReadService` (primary-constructor DI on `ReadOnlyApplicationDbContext`). Per-version
+  `ChapterContent.Rating` filter applied explicitly (the global `"ContentRating"` query filter covers
+  `Story` only — `ChapterContent.Rating` vs `ShowMatureContent` ceiling is a manual `.Where()` in every
+  method). `ChapterReadingDto` includes prev/next chapter numbers (EF correlated subqueries) and
+  `StoryRating` so L3 can render the "chapter rating exceeds story rating → skip to next" warning without
+  a second fetch. Note on `GetChapterVersionsAsync`: `.OrderBy()` must be inside `SelectMany`'s inner
+  query (on the entity field), not after — EF Core cannot translate `.OrderBy()` on a DTO property
+  projected from a `SelectMany` transparent identifier.
+  **WU25 additive extension:** `GetChapterListAsync(int storyId)` → `IReadOnlyList<ChapterListEntryDto>`.
+  Story-landing-page TOC-with-versions (distinct from `GetChapterTocAsync` which stays the reading-page
+  lean TOC). New DTO: `ChapterListEntryDto(int ChapterNumber, string Title, int WordCount, bool IsPublished,
+  IReadOnlyList<ChapterVersionDto> AlternateVersions)` — `AlternateVersions` holds non-primary accessible
+  versions only (empty for the common single-version case; reuses `ChapterVersionDto`).
+  Implementation: two-step — (1) chapter rows via `readDb.Chapters` `OrderBy(ChapterNumber)`, (2)
+  non-primary alternates via `SelectMany` (mirrors `GetChapterVersionsAsync` translatable pattern,
+  references `c.PrimaryContentId` from outer scope), grouped in memory. `ChapterNavigation` (WU18)
+  is **not** used on the story landing page — it is reading-context-only; the story page uses
+  `ChapterList` (WU25 new leaf in `SharedUI/Chapters/`).
+  Verified: see WU25 stage note in `audit/Stories.md` Feature 5 L3-Logic.
 - **L3-Logic — Stage 5 (WU26, DONE ✓ 2026-06-24).** `ChapterReadingPage` dispatcher built with content-rating
   handling, scroll-progress JS interop, attribution capture, helpful-prompt gate. Reader settings cascade
   provider deferred to WU30 (`RichTextView` falls back to defaults). `AutoLoadNextChapter` is post-MVP.

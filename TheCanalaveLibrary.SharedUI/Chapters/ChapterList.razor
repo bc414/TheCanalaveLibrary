@@ -1,0 +1,87 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Chapter list for the story landing page (WU25 / spec §5.28). Pure leaf — no service injection;
+   all data arrives as parameters from StoryPage via StoryDesktop/StoryMobile.
+
+   Layout:
+   - One main row per chapter → links to primary version /story/{StoryId}/{ChapterNumber}.
+   - Non-primary alternates: indented sub-rows labeled "Title - VersionName"
+     → /story/{StoryId}/{ChapterNumber}/{VersionOrder}. Empty for the 95% single-version case.
+   - ShowDrafts=true (author only) reveals unpublished chapters with a "Draft" marker.
+     Filter: entry.IsPublished || ShowDrafts.
+   - Outer Margin Rule: no outer margin on the root element; spacing is the parent's concern.
+
+   NOTE: ChapterNavigation (WU18) is NOT used here — it is reading-context-only (requires a
+   CurrentChapterNumber; shows prev/next arrows and a "Chapter N" dropdown for the reading page).
+   This component is the story-landing-page sibling. *@
+
+@{
+    IEnumerable<ChapterListEntryDto> visible = Chapters.Where(c => c.IsPublished || ShowDrafts);
+}
+
+<div>
+    @foreach (var chapter in visible)
+    {
+        @* Primary chapter row — always links to the primary version (no version segment in URL). *@
+        <div class="border-b border-[--color-border] last:border-b-0">
+            <a href="/story/@StoryId/@chapter.ChapterNumber"
+               class="flex items-center justify-between gap-3 px-3 py-3 text-sm hover:bg-[--color-surface-hover] transition-colors">
+                <span class="flex items-center gap-2 min-w-0">
+                    <span class="shrink-0 w-6 text-right text-[--color-text-muted] tabular-nums text-xs">@chapter.ChapterNumber.</span>
+                    <span class="truncate text-[--color-text]">@chapter.Title</span>
+                    @if (!chapter.IsPublished)
+                    {
+                        <span class="shrink-0 rounded bg-[--color-surface] px-1.5 py-0.5 text-xs font-medium text-[--color-text-muted] ring-1 ring-[--color-border]">Draft</span>
+                    }
+                </span>
+                <span class="shrink-0 text-xs text-[--color-text-muted] tabular-nums">@WordCountDisplay(chapter.WordCount) &rsaquo;</span>
+            </a>
+
+            @* Alternate (non-primary) versions — indented sub-rows, same vertical structure on
+               desktop and mobile. Empty for the common single-version case — no DOM overhead. *@
+            @foreach (var alt in chapter.AlternateVersions)
+            {
+                <a href="/story/@StoryId/@chapter.ChapterNumber/@alt.VersionOrder"
+                   class="flex items-center justify-between gap-3 pl-10 pr-3 py-2 text-sm hover:bg-[--color-surface-hover] transition-colors border-t border-[--color-border]/50">
+                    <span class="flex items-center gap-2 min-w-0">
+                        <span class="shrink-0 text-[--color-text-muted]">&#8627;</span>
+                        <span class="truncate text-[--color-text-muted]">@chapter.Title — @AltVersionLabel(alt)</span>
+                    </span>
+                    <span class="shrink-0 text-xs text-[--color-text-muted] tabular-nums">@WordCountDisplay(alt.WordCount) &rsaquo;</span>
+                </a>
+            }
+        </div>
+    }
+
+    @if (!visible.Any())
+    {
+        <p class="px-3 py-4 text-sm text-[--color-text-muted]">No chapters yet.</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<ChapterListEntryDto> Chapters { get; set; } = [];
+    [Parameter, EditorRequired] public int StoryId { get; set; }
+
+    /// <summary>
+    /// When true (author-only), shows unpublished chapters with a "Draft" marker.
+    /// When false (default, all other viewers), only published chapters are shown.
+    /// </summary>
+    [Parameter] public bool ShowDrafts { get; set; }
+
+    private static string WordCountDisplay(int wordCount) => wordCount switch
+    {
+        < 1_000     => $"{wordCount} words",
+        < 1_000_000 => $"{wordCount / 1000.0:F0}K words",
+        _           => $"{wordCount / 1_000_000.0:F1}M words"
+    };
+
+    /// <summary>
+    /// Label for a non-primary alternate version sub-row.
+    /// Uses VersionName when set; falls back to "Version N" for un-named alternates.
+    /// The primary version is never passed here (AlternateVersions excludes it).
+    /// </summary>
+    private static string AltVersionLabel(ChapterVersionDto alt) =>
+        alt.VersionName ?? $"Version {alt.VersionOrder}";
+}

@@ -144,7 +144,15 @@ internal links in both InteractiveServer and InteractiveWasm — no full page re
 `NavigationManager` injection needed here). The chapter-select and version-picker disclosures
 use HTML `<details>`/`<summary>` (no Blazor state, no JS) so all links are always present in
 the DOM for bUnit testing regardless of the native open/close state. No sub-components —
-everything is inline anchors and disclosure panels:
+everything is inline anchors and disclosure panels.
+
+**`ChapterNavigation` is reading-context-only** — `CurrentChapterNumber` is `[EditorRequired]`; it
+renders prev/next chapter arrows and a "Chapter N: Title" dropdown. It is **not** used on the story
+landing page (`StoryPage`), which instead uses the `ChapterList` leaf (WU25, `SharedUI/Chapters/`).
+`ChapterList` shows the full chapter list as a flat/indented list, not a navigation bar:
+- One row per chapter → links to primary version `/story/{id}/{ch}`
+- Non-primary alternates: indented sub-rows labeled `ChapterTitle - VersionName`
+- `ShowDrafts` param gates unpublished chapters (shown with "Draft" marker for authors)
 
 ```razor
 @* ChapterNavigation.razor — SharedUI/Chapters/ *@

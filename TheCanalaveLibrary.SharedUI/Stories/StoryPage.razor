@@ -1,47 +1,93 @@
-@page "/story/{StoryId:int}/{Slug?}"
+@page "/story/{StoryId:int}/{*StorySlug}"
 @namespace TheCanalaveLibrary.SharedUI
-
-
-@inject IDeviceDetectionService DeviceService
+@using Microsoft.AspNetCore.Components.Authorization
+@using TheCanalaveLibrary.Core
 @inject IStoryReadService StoryReadService
+@inject IChapterReadService ChapterReadService
+@inject IDeviceDetectionService DeviceService
 @inject NavigationManager NavigationManager
+
+@* Read-only story landing page (spec §5.28, content-editing Pattern 1 — view side).
+   StorySlug is cosmetic — only StoryId (int) is the authoritative key.
+   No @attribute [Authorize] — stories are publicly visible; the global "ContentRating" query
+   filter handles maturity gating. Anonymous auth state is handled via nullable CascadingParameter.
+   [PersistentState] on Story and Chapters eliminates the prerender→interactive double-fetch flicker.
+   Author-only affordances (Edit Story link, draft chapters) are controlled by _isAuthor;
+   the server gate in UpdateStoryAsync is the real authority (layer3.5-structure.md §"Author-Conditional Rendering"). *@
+
 @if (_isLoading)
 {
-    <PageTitle>Loading...</PageTitle>
-    <p><em>Loading story...</em></p>
+    <PageTitle>Loading…</PageTitle>
+    <p class="text-[--color-text-muted]"><em>Loading…</em></p>
 }
-else if (_story is not null)
+else if (_notFound || Story is null)
 {
-    <PageTitle>@_story.StoryTitle</PageTitle>
+    <PageTitle>Story not found</PageTitle>
+    <p class="text-[--color-danger]">Story not found.</p>
+}
+else
+{
+    <PageTitle>@Story.StoryTitle</PageTitle>
 
     @if (DeviceService.IsMobile())
     {
-        <StoryMobile Story="_story" />
+        <StoryMobile Story="Story"
+                     Chapters="@(Chapters ?? [])"
+                     CurrentUserId="_currentUserId"
+                     IsAuthor="_isAuthor" />
     }
     else
     {
-        <StoryDesktop Story="_story" />
+        <StoryDesktop Story="Story"
+                      Chapters="@(Chapters ?? [])"
+                      CurrentUserId="_currentUserId"
+                      IsAuthor="_isAuthor" />
     }
 }
 
 @code {
-    [Parameter]
-    public int StoryId { get; set; }
+    [Parameter] public int StoryId { get; set; }
 
-    [Parameter]
-    public string? Slug { get; set; }
+    /// <summary>Cosmetic catch-all — ignored on load; only StoryId is the key.</summary>
+    [Parameter] public string? StorySlug { get; set; }
 
-    private StoryDetailsDTO? _story;
+    /// <summary>Provided by the router/layout auth cascade. Null on anonymous render.</summary>
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    // Persisted across the prerender→interactive handoff — the ??= guard in OnInitializedAsync
+    // ensures the DB is only hit once (server-side render), not again when WASM activates.
+    [PersistentState] public StoryDetailsDTO? Story { get; set; }
+    [PersistentState] public ChapterListEntryDto[]? Chapters { get; set; }
+
     private bool _isLoading = true;
+    private bool _notFound;
+    private int? _currentUserId;
+    private bool _isAuthor;
 
     protected override async Task OnInitializedAsync()
     {
-        _story = await StoryReadService.GetStoryByIdAsync(StoryId);
-        _isLoading = false;
-
-        if (_story is null)
+        // Resolve the viewer's identity first — services use it for content-rating gating.
+        if (AuthState is not null)
         {
-            NavigationManager.NavigateTo("/not-found");
+            AuthenticationState state = await AuthState;
+            string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            _currentUserId = int.TryParse(idStr, out int parsed) ? parsed : null;
         }
+
+        // ??= guard: skip the DB call when [PersistentState] has already restored these from the
+        // prerender payload (the "no flicker" invariant — layer3-logic.md §"State Persistence").
+        Story  ??= await StoryReadService.GetStoryByIdAsync(StoryId);
+        if (Story is null)
+        {
+            _notFound = true;
+            _isLoading = false;
+            NavigationManager.NavigateTo("/not-found");
+            return;
+        }
+
+        Chapters ??= (await ChapterReadService.GetChapterListAsync(StoryId)).ToArray();
+
+        _isAuthor  = _currentUserId.HasValue && Story.AuthorId == _currentUserId;
+        _isLoading = false;
     }
 }

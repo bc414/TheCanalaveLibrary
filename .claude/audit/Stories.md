@@ -182,14 +182,48 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
   breakpoints or the loading visual; requires live-server render check (1→2→3-col grid, empty message,
   loading state, pager shown/hidden). **How verified:** `dotnet build` green (8 projects, 0
   warnings/errors). `dotnet test` green: 112 Unit + 136 RazorComponents + 133 Integration = 381 total.
-- **L3-Logic — Stage 4.** `StoryPage` is a real dispatcher (device detection + `IStoryReadService`,
-  loads `StoryDetailsDTO`, redirects to `/not-found`). Gaps: no `[PersistentState]` ⇒ prerender→interactive
-  double-fetch flicker; route is `{Slug?}` not the spec's hybrid catch-all `{*StorySlug}`.
-- **L3.5-Structure — Stage 4.** `StoryDesktop`/`StoryMobile` render only title + author + short desc.
-  (This note previously described a `<RandomNumberGenerator />` placeholder in these components — stale;
-  no such component exists in code as of this update.) None of the spec layout (cover → long desc →
-  chapter selection → recommendations, §5.28), `StoryCard`, or `StoryDeck` exists.
-- **L4-Style — Stage 1.** Bootstrap-ish; blocked on tokens.
+- **L3-Logic — Stage 5 (WU25, 2026-06-24).** `StoryPage` rebuilt: route `/story/{StoryId:int}/{*StorySlug}`
+  (catch-all cosmetic slug); `[PersistentState]` on `Story` and `Chapters` (kills prerender→interactive
+  double-fetch flicker); anonymous-safe `[CascadingParameter] Task<AuthenticationState>? AuthState`
+  to resolve `_currentUserId`; loads `GetStoryByIdAsync` + `GetChapterListAsync`; computes
+  `_isAuthor = _currentUserId.HasValue && Story.AuthorId == _currentUserId`.
+  `StoryDetailsDTO` extended (additive): `int? AuthorId`, `string? CoverArtRelativeUrl`, `Rating Rating`,
+  `StoryStatusEnum Status`, `IReadOnlyList<TagChipDto> Tags`. `GetStoryByIdAsync` projection updated to
+  two-step intermediate row (mirrors listing service; sprites resolved in memory via existing `ToTagChip`).
+  `GetChapterListAsync(int storyId)` added to `IChapterReadService` + `ServerChapterReadService`:
+  two-step query (chapters + non-primary versions via `SelectMany`, grouped in memory per the
+  `GetChapterVersionsAsync` pattern); returns `IReadOnlyList<ChapterListEntryDto>`.
+  `ChapterListEntryDto` minted in `Core/Chapters/` — `(int ChapterNumber, string Title, int WordCount,
+  bool IsPublished, IReadOnlyList<ChapterVersionDto> AlternateVersions)` (non-primary accessible versions
+  only; reuses existing `ChapterVersionDto`).
+  **How verified (2026-06-24):** `dotnet build` green (0 errors, 0 new warnings). Integration tier:
+  `StoryDetailTests` (15 tests, Testcontainers Postgres) — `GetStoryByIdAsync` new fields (`AuthorId`,
+  `CoverArtRelativeUrl`, `Rating`, `Status`, empty tags, sprite-resolved tags, mature-content filter both
+  directions, null-story); `GetChapterListAsync` (empty list, ordering, single-version empty alternates,
+  non-primary alternate present/absent by rating ceiling, mature viewer vs. non-mature, unpublished chapter
+  `IsPublished=false`). All 15 pass.
+- **L3.5-Structure — Stage 5 (WU25, 2026-06-24).** `StoryDesktop`/`StoryMobile` rebuilt: params
+  `StoryDetailsDTO Story`, `IReadOnlyList<ChapterListEntryDto> Chapters`, `int? CurrentUserId`,
+  `bool IsAuthor`. §5.28 layout: title → metadata row (author link, rating, status, word count,
+  publish/updated dates, tag chips, author-only "Edit Story" link) → cover art (with `@onerror`
+  fallback) → long description (`RichTextView`) → chapter selection (`ChapterList` leaf) →
+  recommendations (`RecommendationSection`).
+  **`ChapterNavigation` is NOT used on the story landing page.** It is reading-context-only
+  (`CurrentChapterNumber` is `[EditorRequired]`; renders prev/next + "Chapter N" dropdown). The story
+  landing page uses the new `ChapterList` leaf (`SharedUI/Chapters/`): one row per chapter linking to
+  the primary version, with non-primary alternates as indented sub-rows labeled `Title - VersionName`.
+  `ShowDrafts=true` for authors (shows unpublished chapter rows with a "Draft" marker).
+  **How verified (2026-06-24):** RazorComponents tier — `ChapterListTests` (14 tests): single-version
+  row + primary URL, multi-version sub-rows with `Title — VersionName` label + version URLs, fallback to
+  `"Version {N}"` when `VersionName=null`, `ShowDrafts=false` hides unpublished / `=true` shows with
+  "Draft" marker, empty list message, word-count display theory (3 cases). `StoryDesktopTests` (22 tests):
+  title in `<h1>`, author link/plain-text, Edit Story link gated by `IsAuthor`, status/rating badge
+  theories (4+3), word-count theory (3), tag chips read-only, cover img vs. null, long description content,
+  chapter list composition, chapters section absent/present by `IsAuthor`, `RecommendationSection`
+  composition (GetForStory called with StoryId; anonymous no CTA). `StoryMobileTests` (21 tests): same
+  coverage as Desktop. All 57 RazorComponents tests pass.
+- **L4-Style — Stage 1.** All Tailwind tokens; visual sign-off pending human review (Stage-6 gate,
+  consistent with WU13/WU14/WU24 precedent — bUnit cannot verify layout/responsive breakpoints).
 - **L5 — Stage 4.** Only `GET /api/stories/{id}` mapped; `HttpStoryReadService.GetStoryForEditAsync`
   calls `/{id}/edit` which is unmapped. Listing endpoints absent.
 - **L6 — Stage 2.** Story-centric filtered indexes pending.
@@ -219,7 +253,6 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
 ---
 
 ### Cluster-level notes
-- Delete `RandomNumberGenerator` once `StoryDesktop` gains real content.
 - The commented-out `[NotMapped] IReadOnlyCollection<IStoryTag> StoryTags => StoryTags.ToList();` in
   `Story.cs` would have been infinitely recursive — correctly left disabled; the explicit-interface version
   is the live one.

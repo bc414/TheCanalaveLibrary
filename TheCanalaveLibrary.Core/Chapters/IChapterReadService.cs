@@ -39,6 +39,17 @@ public interface IChapterReadService
     Task<IReadOnlyList<ChapterVersionDto>> GetChapterVersionsAsync(int storyId, int chapterNumber);
 
     /// <summary>
+    /// Returns the full chapter list for a story's landing page — all chapters (ordered by
+    /// <c>ChapterNumber</c>), each with their viewer-accessible non-primary alternate versions.
+    /// Used by <c>StoryPage</c> (WU25) to feed the <c>ChapterList</c> leaf; distinct from
+    /// <see cref="GetChapterTocAsync"/> which is the lean dropdown TOC for the reading-page
+    /// <c>ChapterNavigation</c> composite.
+    /// <see cref="ChapterListEntryDto.AlternateVersions"/> holds non-primary versions only
+    /// (empty for the common single-version case); the primary version is the main row.
+    /// </summary>
+    Task<IReadOnlyList<ChapterListEntryDto>> GetChapterListAsync(int storyId);
+
+    /// <summary>
     /// Loads a specific <c>ChapterContent</c> row for the author's edit form.
     /// Does not apply the <c>ShowMatureContent</c> ceiling (authors see their own versions
     /// regardless of rating).
