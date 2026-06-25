@@ -1,0 +1,197 @@
+@page "/settings"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@inject IUserSettingsService SettingsService
+@inject IUserProfileReadService ProfileReadService
+@inject IThemeReadService ThemeReadService
+@inject IActiveUserContext ActiveUser
+
+@* Feature 20 (profile editing) + Feature 3 (theme-selection UI), WU30.
+   Self-referential settings page — the active user edits only their own data.
+   Loads once; each sub-form calls the appropriate IUserSettingsService write method on save.
+   Sub-forms are parameter-driven (no @inject) so they remain bUnit-testable in isolation. *@
+
+<PageTitle>Settings</PageTitle>
+
+@if (_isLoading)
+{
+    <p class="text-[--color-text-muted]"><em>Loading settings…</em></p>
+}
+else if (_settings is null)
+{
+    <p class="text-[--color-danger]">Could not load your settings. Please try refreshing the page.</p>
+}
+else
+{
+    <div class="flex flex-col gap-8">
+        <h1 class="text-2xl font-bold text-[--color-text]">Settings</h1>
+
+        @* Success / error banner *@
+        @if (_successMessage is not null)
+        {
+            <div class="rounded-lg bg-[--color-success]/10 px-4 py-3 text-sm text-[--color-success]" role="status">
+                @_successMessage
+            </div>
+        }
+        @if (_errorMessage is not null)
+        {
+            <div class="rounded-lg bg-[--color-danger]/10 px-4 py-3 text-sm text-[--color-danger]" role="alert">
+                @_errorMessage
+            </div>
+        }
+
+        @* Profile sub-form *@
+        <ProfileSettingsForm
+            InitialTagline="@_settings.Tagline"
+            InitialBioHtml="@_bioHtml"
+            InitialPictureUrl="@_pictureUrl"
+            Busy="@_profileBusy"
+            UploadBusy="@_uploadBusy"
+            OnSaveProfile="HandleSaveProfileAsync"
+            OnPictureSelected="HandlePictureSelectedAsync" />
+
+        @* Reader sub-form *@
+        <ReaderSettingsForm
+            Initial="@_settings.Reader"
+            Busy="@_readerBusy"
+            OnSave="HandleSaveReaderAsync" />
+
+        @* Privacy sub-form *@
+        <PrivacySettingsForm
+            Initial="@_settings.Privacy"
+            Busy="@_privacyBusy"
+            OnSave="HandleSavePrivacyAsync" />
+
+        @* Author sub-form *@
+        <AuthorSettingsForm
+            Initial="@_settings.Author"
+            Busy="@_authorBusy"
+            OnSave="HandleSaveAuthorAsync" />
+
+        @* Appearance sub-form (Feature 3 — theme selection) *@
+        <AppearanceSettingsForm
+            Themes="@_themes"
+            InitialThemeId="@_settings.ThemeId"
+            InitialPrefersAnimated="@_settings.PrefersAnimatedSprites"
+            InitialPrefersDataSaver="@_settings.PrefersDataSaverMode"
+            Busy="@_appearanceBusy"
+            OnSave="HandleSaveAppearanceAsync" />
+    </div>
+}
+
+@code {
+    private UserSettingsDto? _settings;
+    private string? _bioHtml;
+    private string? _pictureUrl;
+    private IReadOnlyList<ThemeDto> _themes = [];
+    private bool _isLoading = true;
+
+    // Per-section busy flags so saving one section doesn't disable the others.
+    private bool _profileBusy;
+    private bool _uploadBusy;
+    private bool _readerBusy;
+    private bool _privacyBusy;
+    private bool _authorBusy;
+    private bool _appearanceBusy;
+
+    private string? _successMessage;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await SettingsService.GetMySettingsAsync();
+        _pictureUrl = _settings.ProfilePictureRelativeUrl;
+
+        // Bio text and theme list can be loaded concurrently.
+        if (ActiveUser.UserId is int userId)
+        {
+            Task<string?> bioTask    = ProfileReadService.GetProfileTextAsync(userId);
+            Task<IReadOnlyList<ThemeDto>> themesTask = ThemeReadService.GetThemesAsync();
+            await Task.WhenAll(bioTask, themesTask);
+            _bioHtml = bioTask.Result;
+            _themes  = themesTask.Result;
+        }
+        else
+        {
+            _themes = await ThemeReadService.GetThemesAsync();
+        }
+
+        _isLoading = false;
+    }
+
+    // ── Save handlers ────────────────────────────────────────────────────────────
+
+    private async Task HandleSaveProfileAsync(UpdateProfileDto dto)
+    {
+        await RunWithFeedbackAsync(
+            () => SettingsService.UpdateProfileAsync(dto),
+            v => _profileBusy = v,
+            "Profile saved.");
+    }
+
+    private async Task HandlePictureSelectedAsync(IBrowserFile file)
+    {
+        await RunWithFeedbackAsync(async () =>
+        {
+            const long maxFileSize = 5 * 1024 * 1024; // 5 MB
+            await using Stream stream = file.OpenReadStream(maxAllowedSize: maxFileSize);
+            _pictureUrl = await SettingsService.UploadProfilePictureAsync(stream, file.ContentType);
+        },
+        v => _uploadBusy = v,
+        "Profile picture updated.");
+    }
+
+    private async Task HandleSaveReaderAsync(ReaderSettingsDto dto) =>
+        await RunWithFeedbackAsync(
+            () => SettingsService.UpdateReaderSettingsAsync(dto),
+            v => _readerBusy = v,
+            "Reader preferences saved.");
+
+    private async Task HandleSavePrivacyAsync(PrivacySettingsDto dto) =>
+        await RunWithFeedbackAsync(
+            () => SettingsService.UpdatePrivacySettingsAsync(dto),
+            v => _privacyBusy = v,
+            "Privacy settings saved.");
+
+    private async Task HandleSaveAuthorAsync(AuthorSettingsDto dto) =>
+        await RunWithFeedbackAsync(
+            () => SettingsService.UpdateAuthorSettingsAsync(dto),
+            v => _authorBusy = v,
+            "Author preferences saved.");
+
+    private async Task HandleSaveAppearanceAsync(AppearanceSettingsForm.AppearanceArgs args) =>
+        await RunWithFeedbackAsync(
+            () => SettingsService.UpdateAppearanceAsync(args.ThemeId, args.PrefersAnimated, args.PrefersDataSaver),
+            v => _appearanceBusy = v,
+            "Appearance saved.");
+
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Runs <paramref name="action"/>, manages the <paramref name="setBusy"/> flag, and sets
+    /// the success or error banner. Uses an Action&lt;bool&gt; setter instead of a ref bool
+    /// because async methods cannot have ref parameters.
+    /// </summary>
+    private async Task RunWithFeedbackAsync(
+        Func<Task> action, Action<bool> setBusy, string successMsg)
+    {
+        _successMessage = null;
+        _errorMessage   = null;
+        setBusy(true);
+        try
+        {
+            await action();
+            _successMessage = successMsg;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Save failed: {ex.Message}";
+        }
+        finally
+        {
+            setBusy(false);
+        }
+    }
+}

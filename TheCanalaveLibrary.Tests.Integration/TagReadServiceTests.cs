@@ -224,4 +224,128 @@ public class TagReadServiceTests(PostgresFixture postgres) : IntegrationTestBase
         db.Tags.AddRange(tags);
         await db.SaveChangesAsync();
     }
+
+    // ── GetTagDirectoryAsync ──────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetTagDirectoryAsync_GroupsByType_AllSixTypesPresent()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ITagReadService svc = scope.ServiceProvider.GetRequiredService<ITagReadService>();
+
+        List<TagDirectoryGroupDto> result = await svc.GetTagDirectoryAsync();
+
+        result.Should().HaveCount(6, "there are 6 TagTypeEnum values");
+        result.Select(g => g.TagType)
+            .Should().BeEquivalentTo(Enum.GetValues<TagTypeEnum>(), "all types are represented");
+    }
+
+    [Fact]
+    public async Task GetTagDirectoryAsync_ParentAndChildNested_ChildNotTopLevel()
+    {
+        // Seed a parent Genre and a child Genre. The child must appear under the parent, not as a top-level node.
+        string suffix = Guid.NewGuid().ToString("N")[..8];
+        using IServiceScope setupScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = setupScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        Tag parent = new() { TagName = $"Parent-{suffix}", TagTypeId = TagTypeEnum.Genre };
+        db.Tags.Add(parent);
+        await db.SaveChangesAsync();
+
+        Tag child = new() { TagName = $"Child-{suffix}", TagTypeId = TagTypeEnum.Genre, ParentTagId = parent.TagId };
+        db.Tags.Add(child);
+        await db.SaveChangesAsync();
+
+        using IServiceScope readScope = Factory.Services.CreateScope();
+        ITagReadService svc = readScope.ServiceProvider.GetRequiredService<ITagReadService>();
+        List<TagDirectoryGroupDto> result = await svc.GetTagDirectoryAsync();
+
+        TagDirectoryGroupDto genreGroup = result.Single(g => g.TagType == TagTypeEnum.Genre);
+
+        // Parent must be a top-level node.
+        TagDirectoryNodeDto parentNode = genreGroup.Nodes
+            .Should().Contain(n => n.Tag.TagId == parent.TagId, "parent is top-level")
+            .Which;
+
+        // Child must be nested under the parent node — not a top-level node itself.
+        parentNode.Children.Should().Contain(c => c.TagId == child.TagId, "child is nested under parent");
+        genreGroup.Nodes.Should().NotContain(n => n.Tag.TagId == child.TagId,
+            "child must not appear as a top-level node");
+    }
+
+    [Fact]
+    public async Task GetTagDirectoryAsync_Nodes_OrderedAlphabetically()
+    {
+        string suffix = Guid.NewGuid().ToString("N")[..8];
+        using IServiceScope setupScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = setupScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        // Alpha < Beta < Gamma alphabetically.
+        Tag alpha = new() { TagName = $"Alpha-{suffix}", TagTypeId = TagTypeEnum.Genre };
+        Tag beta  = new() { TagName = $"Beta-{suffix}",  TagTypeId = TagTypeEnum.Genre };
+        Tag gamma = new() { TagName = $"Gamma-{suffix}", TagTypeId = TagTypeEnum.Genre };
+        db.Tags.AddRange(alpha, beta, gamma);
+        await db.SaveChangesAsync();
+
+        using IServiceScope readScope = Factory.Services.CreateScope();
+        ITagReadService svc = readScope.ServiceProvider.GetRequiredService<ITagReadService>();
+        List<TagDirectoryGroupDto> result = await svc.GetTagDirectoryAsync();
+
+        TagDirectoryGroupDto genreGroup = result.Single(g => g.TagType == TagTypeEnum.Genre);
+        List<int> ids = genreGroup.Nodes.Select(n => n.Tag.TagId).ToList();
+
+        int alphaIdx = ids.IndexOf(alpha.TagId);
+        int betaIdx  = ids.IndexOf(beta.TagId);
+        int gammaIdx = ids.IndexOf(gamma.TagId);
+
+        alphaIdx.Should().BeGreaterThan(-1);
+        betaIdx.Should().BeGreaterThan(alphaIdx, "Beta follows Alpha alphabetically");
+        gammaIdx.Should().BeGreaterThan(betaIdx, "Gamma follows Beta alphabetically");
+    }
+
+    [Fact]
+    public async Task GetTagDirectoryAsync_SpriteUrlNull_WhenNoSpriteIdentifier()
+    {
+        string suffix = Guid.NewGuid().ToString("N")[..8];
+        using IServiceScope setupScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = setupScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Tags.Add(new Tag { TagName = $"NoSprite-{suffix}", TagTypeId = TagTypeEnum.Genre, SpriteIdentifier = null });
+        await db.SaveChangesAsync();
+
+        using IServiceScope readScope = Factory.Services.CreateScope();
+        ITagReadService svc = readScope.ServiceProvider.GetRequiredService<ITagReadService>();
+        List<TagDirectoryGroupDto> result = await svc.GetTagDirectoryAsync();
+
+        TagDirectoryGroupDto genreGroup = result.Single(g => g.TagType == TagTypeEnum.Genre);
+        genreGroup.Nodes
+            .Where(n => n.Tag.TagName == $"NoSprite-{suffix}")
+            .Should().AllSatisfy(n => n.Tag.SpriteUrl.Should().BeNull());
+    }
+
+    [Fact]
+    public async Task GetTagDirectoryAsync_AdminFields_PopulatedCorrectly()
+    {
+        string suffix = Guid.NewGuid().ToString("N")[..8];
+        using IServiceScope setupScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = setupScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Tag tag = new()
+        {
+            TagName = $"Fanon-{suffix}",
+            TagTypeId = TagTypeEnum.Character,
+            IsFanon = true,
+            AllowOCDetails = true
+        };
+        db.Tags.Add(tag);
+        await db.SaveChangesAsync();
+
+        using IServiceScope readScope = Factory.Services.CreateScope();
+        ITagReadService svc = readScope.ServiceProvider.GetRequiredService<ITagReadService>();
+        List<TagDirectoryGroupDto> result = await svc.GetTagDirectoryAsync();
+
+        TagChipDto chip = result.Single(g => g.TagType == TagTypeEnum.Character)
+            .Nodes.Single(n => n.Tag.TagId == tag.TagId).Tag;
+
+        chip.IsFanon.Should().BeTrue();
+        chip.AllowOCDetails.Should().BeTrue();
+    }
 }

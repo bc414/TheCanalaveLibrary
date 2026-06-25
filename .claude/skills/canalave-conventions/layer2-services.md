@@ -138,8 +138,44 @@ EF Core named query filter on `Story`, sourced from a scoped `IActiveUserContext
 `ApplicationDbContext`'s constructor (settled WU12) — see `cross-cutting.md` "Content Rating Filtering"
 and "Active-User Context" for the full mechanism and rationale (model invariant vs. per-method
 vigilance). A read service projecting `Story` rows gets the filter automatically; it never re-derives
-it. The one place a service deliberately bypasses it is a mod/admin/author path that needs all ratings —
-that calls `.IgnoreQueryFilters(["ContentRating"])` explicitly, a visible opt-out.
+it. The two cases where a service deliberately bypasses it:
+1. **Mod/admin/author read paths** that must surface content regardless of rating — call
+   `.IgnoreQueryFilters(["ContentRating"])` explicitly.
+2. **Any write-service entity lookup by ID** — e.g. `AddStoryAsync`, `SubmitAsync` (Recommendation).
+   A user should be able to recommend or add an M-rated story to a group even if their own
+   `ShowMatureContent` is false. The *caller's viewer settings* must not prevent the service from
+   confirming the entity exists; the downstream business rule (rating-ceiling check, "story not found"
+   error) applies after the lookup. Always use `.IgnoreQueryFilters(["ContentRating"])` when
+   fetching a specific entity by primary key inside a write path. Omitting it causes the service to
+   throw `KeyNotFoundException` for entities that exist but are filtered, a silent mismatch that is
+   hard to diagnose.
+
+## Scalar projections on nullable FK columns — use anonymous-type, not `(int?)`
+
+When a write service needs to read a single nullable FK column from a row (e.g. `Story.AuthorId`
+to gate a counter update) and also wants to distinguish "row exists, column is null" from "row does
+not exist at all", **project to an anonymous reference type**, not to `(int?)`:
+
+```csharp
+// WRONG — FirstOrDefault<int?> returns null for both "row not found" and "AuthorId IS NULL".
+int? authorId = await writeDb.Stories
+    .Where(s => s.StoryId == id)
+    .Select(s => (int?)s.AuthorId)
+    .FirstOrDefaultAsync();
+if (authorId is null) throw new KeyNotFoundException(...); // fires even for authorless stories!
+
+// CORRECT — reference-type result is null only when no row exists.
+var row = await writeDb.Stories
+    .IgnoreQueryFilters(["ContentRating"])
+    .Where(s => s.StoryId == id)
+    .Select(s => new { s.AuthorId })
+    .FirstOrDefaultAsync();
+if (row is null) throw new KeyNotFoundException(...);
+int? authorId = row.AuthorId; // may still be null (authorless story) — guard before .Value
+```
+
+Also guard any downstream `.Value` access on `authorId` — authorless stories are valid (`AuthorId`
+may be null even when the story exists).
 
 ## The DTO Firewall (Non-Negotiable)
 
@@ -570,11 +606,40 @@ for MVP, load the recipient's `PrivacySettings` navigation and evaluate in C# (s
 not a filter over many rows). The gate check comes **after** the self-message guard and **before**
 validation/sanitization of the message body.
 
-## Self-Referential Editing Exception
+## Self-Referential Editing Exception — `IUserSettingsService` (WU30, spec §3.5)
 
-When reader and writer are identical by definition (user editing own settings), a single
-`IUserSettingsService` with both read and write methods is acceptable. Does NOT apply to
-public profile display (`IUserProfileReadService`).
+When the reader and writer populations are **identical by definition** — a user editing only
+their own settings, never anyone else's — a single integrated read+write service is sanctioned.
+This is a narrow, named exception to the CQRS-lite split:
+
+```csharp
+// Core/Profiles/
+public interface IUserSettingsService
+{
+    Task<UserSettingsDto> GetMySettingsAsync();
+    Task UpdateProfileAsync(UpdateProfileDto dto);
+    Task UpdateReaderSettingsAsync(ReaderSettingsDto dto);
+    Task UpdatePrivacySettingsAsync(PrivacySettingsDto dto);
+    Task UpdateAuthorSettingsAsync(AuthorSettingsDto dto);
+    Task UpdateAppearanceAsync(int themeId, bool prefersAnimated, bool prefersDataSaver);
+    Task<string> UploadProfilePictureAsync(Stream content, string contentType);
+}
+```
+
+**Rules that make this exception safe:**
+1. **No `userId` parameter on any method.** The service resolves the target entirely from
+   `IActiveUserContext` — it is, by contract, "the currently authenticated user's settings."
+2. **Authentication guard is mandatory.** Every method must call `RequireAuthenticatedUser()` (or
+   equivalent) before doing anything — there is no unauthenticated path.
+3. **Self-only scope is the invariant.** The moment a method takes a `userId` it's no longer
+   self-referential and must become a pair of `I{Feature}ReadService` + `I{Feature}WriteService`.
+
+**Contrast with `IUserProfileReadService`** (public display — read-only, separate interface):
+- Returns data about *any* user profile by `int userId`.
+- Own-vs-other visibility differences are expressed as a `bool includePrivate` predicate passed by
+  the dispatcher (who computes `includePrivate = viewerId == profileUserId`), not as a separate
+  service or a source switch.
+- Server impl uses `ReadOnlyApplicationDbContext` (`NoTracking`), never the write DbContext.
 
 ## Three-Tiered Validation
 

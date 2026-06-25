@@ -21,8 +21,11 @@ public interface IActiveUserContext
     bool PrefersAnimatedSprites { get; }
 
     /// <summary>
-    /// Query-shaping hints only (e.g. deciding when a read path calls IgnoreQueryFilters) — NOT the
-    /// auth authority. Real access control stays with AuthorizeView/policies.
+    /// Valid for **server-side authorization** in write services (see <c>cross-cutting.md</c>
+    /// "Active-User Context" table) and for deciding when a read path calls
+    /// <c>IgnoreQueryFilters</c>. UI role gating uses <c>&lt;AuthorizeView Roles="…"&gt;</c>
+    /// instead (SharedUI never injects this interface). <c>IsInRole</c> is literal — Admin does NOT
+    /// inherit Moderator; list both roles wherever either should be accepted.
     /// </summary>
     bool IsModerator { get; }
     bool IsAdmin { get; }

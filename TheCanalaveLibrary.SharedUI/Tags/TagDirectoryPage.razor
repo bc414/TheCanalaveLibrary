@@ -1,0 +1,67 @@
+@page "/tags"
+@namespace TheCanalaveLibrary.SharedUI
+@inject ITagReadService TagReadService
+@inject ITagWriteService TagWriteService
+@inject IDeviceDetectionService DeviceService
+
+@* Tag Directory dispatcher — Pattern 2 dispatcher (layer3.5-structure.md §"Dispatcher Pattern").
+   Public route (no [Authorize]). Injects both read + write services; write calls owned here
+   and triggered via EventCallbacks from TagDirectoryDesktop. Reloads the directory after
+   create/update/delete so state stays fresh without a full page navigation. WU27.5. *@
+
+@if (_isLoading)
+{
+    <PageTitle>Tag Directory</PageTitle>
+    <p class="p-4 text-[--color-text-muted]"><em>Loading…</em></p>
+}
+else
+{
+    <PageTitle>Tag Directory</PageTitle>
+
+    @if (DeviceService.IsMobile())
+    {
+        <TagDirectoryMobile Directory="_directory" />
+    }
+    else
+    {
+        <TagDirectoryDesktop Directory="_directory"
+                             OnTagCreated="HandleTagCreatedAsync"
+                             OnTagUpdated="HandleTagUpdatedAsync"
+                             OnTagDeleted="HandleTagDeletedAsync" />
+    }
+}
+
+@code {
+    private List<TagDirectoryGroupDto> _directory = [];
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDirectoryAsync();
+    }
+
+    private async Task LoadDirectoryAsync()
+    {
+        _isLoading = true;
+        _directory = await TagReadService.GetTagDirectoryAsync();
+        _isLoading = false;
+    }
+
+    private async Task HandleTagCreatedAsync(CreateTagDto dto)
+    {
+        await TagWriteService.CreateTagAsync(dto);
+        await LoadDirectoryAsync();
+    }
+
+    private async Task HandleTagUpdatedAsync(UpdateTagDto dto)
+    {
+        await TagWriteService.UpdateTagAsync(dto);
+        await LoadDirectoryAsync();
+    }
+
+    private async Task HandleTagDeletedAsync(int tagId)
+    {
+        await TagWriteService.DeleteTagAsync(tagId);
+        await LoadDirectoryAsync();
+    }
+}

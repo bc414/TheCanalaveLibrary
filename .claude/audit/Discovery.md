@@ -168,6 +168,49 @@ Narrowing-within-fixed-source query → WU27/WU30.
   mod CRUD behind `AuthorizeView`; mobile browse, desktop-only edit). Depends on the `TagChip` atom owned
   by Tags/. **L4 — Stage 1. L5 — Stage 2.**
 
+  **Settled for WU27.5 (2026-06-24, do not revisit):**
+  - **Browse layout:** sections per type (enum order), parent→child nesting everywhere (TOC-style,
+    mirroring ChapterNavigation alternate-versions disclosure). Bounded types (Setting, Genre,
+    ContentWarning) render expanded; unbounded types (Character, Relationship, CrossoverFandom)
+    additionally get collapsibility + type jump-nav. `TagTypeLayout` static helper classifies which.
+  - **Desktop-only mod controls:** inside `<AuthorizeView Roles="Moderator,Admin">`, hover ✎/✕ per
+    chip and "+ New Tag". Edit/new open a WU9-shell modal with `TagEditorForm`; delete opens
+    `ConfirmDialog`. `TagDirectoryDesktop` emits `EventCallback`s up to the page.
+  - **Mobile:** browse-only, no edit controls, unbounded sections collapsed by default.
+  - **Dispatcher pattern:** `TagDirectoryPage` (public, no `[Authorize]`) injects `ITagReadService` +
+    `IDeviceDetectionService`, owns write calls, branches mobile/desktop.
+
+  **WU27.5 Stage note — L2/L3/L3.5 (2026-06-25):**
+
+  Built: `Core/Tags/ITagReadService.GetTagDirectoryAsync()` (new method — returns
+  `List<TagDirectoryGroupDto>` with all tags, parent→child nesting, per-group alphabetical order);
+  `Core/Tags/TagDirectoryGroupDto.cs`, `Core/Tags/TagDirectoryNodeDto.cs` (one-level tree nodes).
+  `Server/Tags/ServerTagReadService.GetTagDirectoryAsync()`: single EF projection over `readDb.Tags`
+  (including `IsFanon`/`AllowOCDetails`/`ParentTagId`), materialize, resolve sprites post-materialization,
+  build tree in memory; groups emit in `Enum.GetValues<TagTypeEnum>()` order.
+  UI: `SharedUI/Tags/TagDirectoryPage.razor` (dispatcher, `@page "/tags"`, public); `SharedUI/Tags/TagDirectoryDesktop.razor`
+  (browse sections + `<AuthorizeView Roles="Moderator,Admin">` "+ New Tag" button; emits create/update/delete
+  `EventCallback`s to page; hosts editor modal + `ConfirmDialog`; catches `TagValidationException` inline);
+  `SharedUI/Tags/TagDirectoryMobile.razor` (browse only, no create modal); `SharedUI/Tags/TagDirectorySection.razor`
+  (shared parent→child section rendering; `<AuthorizeView>` per-chip ✎/✕ buttons visible to Moderators/Admins).
+
+  **Note on mobile mod controls:** `TagDirectorySection` (shared by desktop + mobile) has per-chip
+  `<AuthorizeView>` edit/delete buttons — these are visible to authenticated Moderators/Admins on mobile too.
+  What mobile suppresses is the "+ New Tag" button (desktop-only) and the modal-wiring (no `OnEditTag`/
+  `OnDeleteTag` callbacks are provided by `TagDirectoryMobile`). This distinction is captured in the mobile
+  test (`Mobile_DoesNotRenderNewTagButton`).
+
+  **How verified (2026-06-25):** `dotnet build` green (8 projects, 3 pre-existing warnings, 0 errors).
+  - **Integration** (extended `TagReadServiceTests.cs`, Testcontainers Postgres, 5 new tests):
+    all 6 `TagTypeEnum` groups present; parent→child nesting (child not top-level); alphabetical ordering
+    (relative assertions — shared-state safe); `SpriteUrl` null when `SpriteIdentifier` null;
+    admin fields (`IsFanon`/`AllowOCDetails`) accurately populated.
+  - **RazorComponents** (`TagDirectoryTests.cs`, 15 tests): section headings render; parent + nested child
+    chips present; unbounded type (Character) renders in `<details>`; bounded type (Genre) renders in
+    `<section>` not `<details>`; anonymous user sees no "New Tag" button or edit/delete buttons; Moderator
+    auth shows "New Tag" button; Admin auth shows "New Tag" button; mobile renders both chips; mobile
+    unbounded in `<details>`; mobile suppresses "New Tag" button.
+
 ## Feature 59 — Automatic Tree Search (below the line)
 - **L1 — N/A** (Phase A removed the EF model; `user_story_tree_search_entries` is a raw-SQL mart — divergence
   resolved). **L2 — Stage 2.** **L3/L3.5 — Stage 2** (unified with manual tree search; degree controls +

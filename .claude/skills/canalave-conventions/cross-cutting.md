@@ -490,7 +490,7 @@ public static class SiteBadges
 ## UserStats Updates
 
 22+ denormalized counter fields. Updated in real-time by application logic within the same
-transaction as the primary write:
+transaction as the primary write (same-transaction `ExecuteUpdateAsync`):
 
 ```csharp
 await writeDb.UserStats
@@ -498,7 +498,74 @@ await writeDb.UserStats
     .ExecuteUpdateAsync(s => s.SetProperty(us => us.StoryCount, us => us.StoryCount + 1));
 ```
 
-Background worker periodically recalculates to correct drift.
+Background worker (F58, post-MVP) periodically recalculates to correct drift.
+
+### Counter ↔ event map (WU30, wired into already-built write services)
+
+| `UserStat` counter | Owning user | Event / write service | Δ |
+|---|---|---|---|
+| `FollowerCount` | target user | `ServerFollowingWriteService.FollowAsync / UnfollowAsync` | ±1 |
+| `AuthorsFollowed` | acting user | `ServerFollowingWriteService.FollowAsync / UnfollowAsync` | ±1 |
+| `StoriesWritten` | author | `ServerStoryWriteService.CreateStoryAsync` | +1 |
+| `WordsWritten` | author | `ServerChapterWriteService` publish / new version | ± word delta |
+| `CommentsWritten` | commenter | `ServerCommentWriteService.Post*/Delete` (all 4 contexts: chapter/blogpost/group/userprofile) | ±1 |
+| `RecommendationsWritten` | recommender | `ServerRecommendationWriteService.SubmitAsync` | +1 |
+| `RecommendationsReceived` | story author | `ServerRecommendationWriteService.SubmitAsync` | +1 |
+| `BlogPostsWritten` | author | `ServerBlogPostWriteService` create/delete | ±1 |
+| `GroupsJoined` | member | `ServerGroupWriteService` join/leave | ±1 |
+| `FavoritesOnStories` | story author | `ServerUserStoryInteractionWriteService` | **transition-delta** |
+| `StoriesRead`, `StoriesInProgress`, `StoriesIgnored` | acting user | `ServerUserStoryInteractionWriteService` | **transition-delta** |
+
+**Counters deferred to their own WU** (source feature not yet built):
+- `ViewsOnStories` — WU38 (story view events)
+- `SpotlightCount` — post-MVP
+- `ActiveReportCount` — WU34 (moderation)
+- Acknowledgment/contribution counters — WU37
+
+### Transition-delta rule for UserStoryInteraction-derived counters
+
+`ServerUserStoryInteractionWriteService` toggles boolean columns (`IsFavorite`, `IsCompleted`,
+`IsIgnored`, etc.) rather than appending records. A simple ±1 on every call would double-count;
+the correct rule is **increment or decrement only when the boolean flips**:
+
+```csharp
+// Before writing:
+bool wasFavorite = existing?.IsFavorite ?? false;
+bool willBeFavorite = dto.IsFavorite;
+
+// After SaveChangesAsync:
+if (willBeFavorite && !wasFavorite)
+    // +1 FavoritesOnStories on story.AuthorId
+else if (!willBeFavorite && wasFavorite)
+    // −1 FavoritesOnStories on story.AuthorId
+```
+
+The same flip-check governs `StoriesRead`/`StoriesInProgress`/`StoriesIgnored` — each maps to one
+boolean column (`IsCompleted`, `HasStarted`+`!IsCompleted`, `IsIgnored`); the counter moves only
+when the effective derived state actually changes. Never increment/decrement if the boolean is being
+written to its current value (idempotent call from an optimistic-UI retry).
+
+## Razor Attribute Quoting
+
+**Inner double-quotes inside `@onchange="..."` terminate the attribute early and cause CS1525.**
+
+If you write `@onchange="e => Cast((e.Value ?? "0"))"` the inner `"0"` closes the attribute — the
+Razor parser sees the attribute end there and treats `))"` as stray characters, producing a cryptic
+CS1525 parse error.
+
+**Fix: use a block lambda and `int.TryParse` instead of a default-fallback literal:**
+
+```razor
+@onchange="e => { if (int.TryParse(e.Value?.ToString(), out int rv)) _myEnum = (MyEnum)rv; }"
+```
+
+This avoids any string literal inside the attribute value. The `int.TryParse` pattern is the canonical
+form for all enum `<select>` onchange handlers in this codebase (`AuthorSettingsForm`, `PrivacySettingsForm`,
+`AppearanceSettingsForm` follow this pattern since WU30, 2026-06-24).
+
+**Why `@bind` doesn't work for enum selects:** `@bind` on a `<select>` requires a string two-way
+binding; enums stored as `int` need an explicit cast, so `@bind` is not idiomatic here. The
+`@onchange` block lambda is correct for this pattern.
 
 ## Identity & Auth
 
@@ -575,11 +642,13 @@ uniformly to mod pages and their backing endpoints. Distinct from `<AuthorizeVie
 (layer3.5-structure.md) — that's for moderator-only controls embedded in an otherwise-public page,
 not for gating the dedicated `/mod/*` routes.
 
-**Gap — role infrastructure is not yet real:** `ApplicationRole` is currently a bare
-`IdentityRole<int>` with nothing added, and `DataSeeder.cs` only ever assigns `"Admin"` (with a
-comment merely *assuming* it's been seeded, not guaranteeing it). No `"Moderator"` role exists yet.
-Role-based gating above is the intended pattern but is not functional until roles are actually
-created and assigned (`RoleManager.CreateAsync`, `UserManager.AddToRoleAsync`).
+**Role infrastructure status (updated WU27.5, 2026-06-24):** Role *rows* (`User`, `Moderator`, `Admin`)
+are seeded via `ApplicationRoleConfiguration.HasData` in `IdentityConfigurations.cs` — they exist at
+migration time. `DataSeeder.cs` previously only assigned `AdminUser` to `"Admin"`; **WU27.5 closes the
+gap by also assigning `AdminUser` to `"Moderator"`**, so the role gate is exercisable end-to-end in
+dev. `IsInRole` is literal — there is no automatic Admin-inherits-Moderator hierarchy, so every gate
+that should accept either role must list both: `Roles="Moderator,Admin"` / `.RequireRole("Moderator",
+"Admin")` / `IsModerator || IsAdmin`.
 
 ## Private Messaging Architecture (settled WU35)
 

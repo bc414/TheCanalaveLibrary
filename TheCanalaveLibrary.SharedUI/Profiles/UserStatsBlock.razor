@@ -1,0 +1,30 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Leaf — renders the UserStatsDto counter snapshot in the profile banner (WU30, Feature 22).
+   No @inject; all data arrives via the Stats parameter.
+   The dispatcher hides this component entirely when Stats is null (owner's ShowUserStats = false
+   and viewer is not the owner); no conditional render needed here. *@
+
+<div class="flex flex-wrap gap-x-5 gap-y-2 text-sm text-[--color-text-muted]">
+    <span><strong class="text-[--color-text]">@Stats.StoriesWritten</strong> stories</span>
+    <span><strong class="text-[--color-text]">@FormatWords(Stats.WordsWritten)</strong> words</span>
+    <span><strong class="text-[--color-text]">@Stats.FollowerCount</strong> followers</span>
+    <span><strong class="text-[--color-text]">@Stats.AuthorsFollowed</strong> following</span>
+    <span><strong class="text-[--color-text]">@Stats.CommentsWritten</strong> comments</span>
+    <span><strong class="text-[--color-text]">@Stats.RecommendationsWritten</strong> recs given</span>
+    <span><strong class="text-[--color-text]">@Stats.RecommendationsReceived</strong> recs received</span>
+    <span><strong class="text-[--color-text]">@Stats.BlogPostsWritten</strong> blog posts</span>
+    <span><strong class="text-[--color-text]">@Stats.GroupsJoined</strong> groups</span>
+    <span><strong class="text-[--color-text]">@Stats.StoriesRead</strong> finished</span>
+    <span><strong class="text-[--color-text]">@Stats.StoriesInProgress</strong> reading</span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public UserStatsDto Stats { get; set; } = null!;
+
+    /// <summary>Formats a word count with a "k" suffix for ≥ 1 000.</summary>
+    private static string FormatWords(long count) =>
+        count >= 1_000_000 ? $"{count / 1_000_000.0:F1}M"
+        : count >= 1_000   ? $"{count / 1_000.0:F1}k"
+        : count.ToString();
+}

@@ -52,11 +52,27 @@ with the actual `InitialSchema` migration (`Database.MigrateAsync()`, not `Ensur
 `ApplicationDbContext`'s query filter closes over an injected `IActiveUserContext` (see
 `cross-cutting.md` "Content Rating Filtering" / "Active-User Context"). Integration tests need
 to flip `ShowMatureContent`/`UserId`/role flags per-test without a real sign-in flow, cookies,
-or `SecurityStampValidator`. Use a `TestAppFactory : WebApplicationFactory<Program>` that
-replaces the real `ServerActiveUserContext` registration with a settable `FakeActiveUserContext`
-in `ConfigureTestServices`. This is the standard "swap one DI registration" pattern — the rest
-of the host (real DbContexts pointed at the Testcontainers connection string, real services)
-stays wired exactly as production.
+or `SecurityStampValidator`. Use a `TestAppFactory : WebApplicationFactory<Program>` that does **two** things in
+`ConfigureWebHost` via `builder.ConfigureServices(...)`:
+
+1. **Re-registers both `DbContext`s** with the Testcontainers connection string:
+   ```csharp
+   services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
+   services.RemoveAll<DbContextOptions<ReadOnlyApplicationDbContext>>();
+   services.AddDbContext<ApplicationDbContext>(opt => opt.UseNpgsql(connectionString)…);
+   services.AddDbContext<ReadOnlyApplicationDbContext>(opt => opt.UseNpgsql(connectionString)…);
+   ```
+   `ConfigureAppConfiguration` is **not** sufficient here: `Program.cs` reads
+   `builder.Configuration.GetConnectionString("canalavedb")` before the
+   `WebApplicationFactory`'s callback fires (a `WebApplicationBuilder` timing quirk), so the
+   in-memory override is too late. Replacing the `DbContextOptions` descriptors directly
+   in `ConfigureServices` is the reliable fix — confirmed 2026-06-25 after the factory
+   was silently hitting the dev DB on `localhost:5432` instead of the Testcontainers
+   container on its ephemeral port.
+
+2. **Replaces `IActiveUserContext`** with `FakeActiveUserContext` (the settable test double).
+
+Everything else (real service registrations, Identity) stays wired as production.
 
 ## What stays manual (out of scope for automated tests)
 

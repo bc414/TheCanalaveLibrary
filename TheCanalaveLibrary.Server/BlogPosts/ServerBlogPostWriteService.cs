@@ -124,6 +124,10 @@ public class ServerBlogPostWriteService(
         // base-type DbSets — change-tracker stub is the clean alternative.
         writeDb.Remove(new ProfileBlogPost { BlogPostId = blogPostId });
         await writeDb.SaveChangesAsync();
+
+        // Decrement BlogPostsWritten counter (cross-cutting.md §"UserStats Updates").
+        await writeDb.UserStats.Where(us => us.UserId == existingAuthorId.Value)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.BlogPostsWritten, us => us.BlogPostsWritten - 1));
     }
 
     public async Task<BlogPostLikeResultDto> ToggleLikeAsync(int blogPostId)

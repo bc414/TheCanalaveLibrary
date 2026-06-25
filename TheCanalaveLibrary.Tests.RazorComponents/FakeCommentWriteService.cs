@@ -15,6 +15,7 @@ public class FakeCommentWriteService : ICommentWriteService
     public List<(int ChapterId, int Page, int PageSize)> GetChapterCommentsCalls { get; } = [];
     public List<(int BlogPostId, int Page, int PageSize)> GetBlogPostCommentsCalls { get; } = [];
     public List<(int GroupId, int Page, int PageSize)> GetGroupCommentsCalls { get; } = [];
+    public List<(int ProfileUserId, int Page, int PageSize)> GetUserProfileCommentsCalls { get; } = [];
 
     private CommentPageDto _getResult = new([], 0);
 
@@ -38,11 +39,18 @@ public class FakeCommentWriteService : ICommentWriteService
         return Task.FromResult(_getResult);
     }
 
+    public Task<CommentPageDto> GetUserProfileCommentsAsync(int profileUserId, int page, int pageSize)
+    {
+        GetUserProfileCommentsCalls.Add((profileUserId, page, pageSize));
+        return Task.FromResult(_getResult);
+    }
+
     // ── Write tracking ────────────────────────────────────────────────────────────
 
     public List<PostChapterCommentDto> PostCalls { get; } = [];
     public List<PostBlogPostCommentDto> PostBlogPostCalls { get; } = [];
     public List<PostGroupCommentDto> PostGroupCalls { get; } = [];
+    public List<PostUserProfileCommentDto> PostUserProfileCalls { get; } = [];
     public List<UpdateCommentDto> EditCalls { get; } = [];
     public List<long> DeleteCalls { get; } = [];
     public List<long> ToggleLikeCalls { get; } = [];
@@ -67,6 +75,12 @@ public class FakeCommentWriteService : ICommentWriteService
     {
         PostGroupCalls.Add(dto);
         return Task.FromResult(3L);
+    }
+
+    public Task<long> PostUserProfileCommentAsync(PostUserProfileCommentDto dto)
+    {
+        PostUserProfileCalls.Add(dto);
+        return Task.FromResult(4L);
     }
 
     public Task EditCommentAsync(UpdateCommentDto dto)

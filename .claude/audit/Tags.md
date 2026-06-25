@@ -28,9 +28,16 @@ follow-on found while building WU12's `IActiveUserContext` — not a re-opened F
 alongside it was deleted in the same move. **The relocation is folder-only — `TagSelector`'s content is
 unchanged and remains the discardable scaffolding described below, scheduled for the WU11 rebuild.**
 
-**Fluent config:** `Tag.TagName` unique; self-ref `ParentTagId` SetNull; `TagType`/`Tag` Restrict;
-`SavedTagSelection` cascade + unique `(UserId,Nickname)`; `SavedTagSelectionEntry` unique
-`(SelectionId,TagId)` + Restrict on Tag.
+**Fluent config:** `Tag.TagName` unique (**WU27.5 changes to composite `(TagName, TagTypeId)` per
+`Tag_Design_Deliberations.md` §3 — so "Paris" can be both a Character and a Setting; migration required**);
+self-ref `ParentTagId` SetNull; `TagType`/`Tag` Restrict; `SavedTagSelection` cascade + unique
+`(UserId,Nickname)`; `SavedTagSelectionEntry` unique `(SelectionId,TagId)` + Restrict on Tag.
+
+**Nav rename (WU27.5):** `Tag.InverseParentTag` → `Tag.ChildTags` (EF scaffold artifact; pure C# rename,
+no migration; `TagConfigurations.cs` `HasMany` call updated to match).
+
+**L1 drift (flag, not fixed in WU27.5):** `Tag.SpriteIdentifier` is `[MaxLength(50)]` but spec says 100;
+`Tag.Description` is 512 vs spec 500. Address in a future L1 pass.
 
 ---
 
@@ -39,13 +46,99 @@ unchanged and remains the discardable scaffolding described below, scheduled for
   tooltip description). Sound. **L2 — Stage 2** (no admin/write service). **L3/L3.5 — Stage 2**
   (mod CRUD behind `AuthorizeView` on Tag Directory). **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
 
+  **Settled for WU27.5 (2026-06-24, do not revisit):**
+  - **Role gate — real now.** `<AuthorizeView Roles="Moderator,Admin">` for UI affordances; server
+    `IActiveUserContext.IsModerator || IsAdmin` guard in `ServerTagWriteService`. Role *rows* already
+    seeded via `ApplicationRoleConfiguration.HasData`; WU27.5 closes the assignment gap in
+    `DataSeeder.cs` (AdminUser also assigned "Moderator"). `IsInRole` is literal — Admin-inheritance
+    expressed by listing both roles.
+  - **Delete — block when in use.** Pre-check `StoryTag` + `SavedTagSelectionEntry` + child-tag
+    counts; throw `TagValidationException` ("in use") so the Restrict FK never fires.
+  - **Uniqueness — composite `(TagName, TagTypeId)`.** From first principles (natural key = name + type)
+    and `Tag_Design_Deliberations.md` §3. Index drop + recreate migration; validation checks uniqueness
+    within type.
+  - **`IsFanon` — plain editable field.** Fanonize notify/migrate flow deferred (seam: existing
+    `NotificationTypeEnum.TagUpdateSuggestion = 26`; workflow lands in its own future WU).
+  - **Edit form — full field set:** TagName, TagType, Description, SpriteIdentifier, IsFanon,
+    AllowOCDetails (Character-type only — hidden + coerced `false` for other types), ParentTag
+    (same-type top-level tags; may not be the tag itself; parent may not itself have a parent).
+  - **Browse layout:** sections per type, parent→child nesting everywhere. Bounded types (Setting,
+    Genre, ContentWarning) render expanded; unbounded types (Character, Relationship, CrossoverFandom)
+    additionally get collapsibility + type jump-nav. `TagTypeLayout` helper classifies which.
+  - **Mod controls:** hover ✎/✕ + WU9-shell modal hosting `TagEditorForm` / `ConfirmDialog`.
+  - **`AllowOCDetails` context:** WU27.5 only sets the gate (which Character tags accept OC details);
+    the OC creation/display flow (StoryCharacters OC_Name/OC_Bio, enforcement trigger) is Feature 12 /
+    WU37.
+
+  **WU27.5 Stage note — L2/L3/L3.5 (2026-06-25):**
+
+  Built: `Core/Tags/ITagWriteService.cs` (CRUD + XML-doc exceptions); `Core/Tags/CreateTagDto.cs`,
+  `Core/Tags/UpdateTagDto.cs`, `Core/Tags/TagValidations.cs` (name required/≤100, unique-within-type,
+  description ≤512, sprite ≤50, parent same-type + no parent of its own + not self), `Core/Tags/TagValidationException.cs`,
+  `Core/Tags/TagEditorFormResult.cs`, `Core/Tags/TagTypeLayout.cs` (bounded/unbounded classification).
+  `Server/Tags/ServerTagWriteService.cs` (inherits `ServerTagReadService`; `RequireMod()` gate first;
+  delete pre-checks `StoryTags`+`SavedTagSelectionEntries`+`ChildTags` count; throws `TagValidationException`
+  if referenced so Restrict FK never fires). DI: `AddScoped<ITagWriteService, ServerTagWriteService>()`.
+  Also extended `TagChipDto` with `IsFanon`/`AllowOCDetails`/`ParentTagId` (non-breaking, default false/null;
+  accurately populated only by `GetTagDirectoryAsync`).
+  UI: `SharedUI/Tags/TagEditorForm.razor` (presentational leaf, no `@inject`, bUnit-testable; `EditForm`
+  over inner `TagEditorFormModel`; parent dropdown filtered to same-type top-level tags excluding self;
+  `AllowOCDetails` checkbox conditional on `TagTypeId == Character`; emits `TagEditorFormResult` via
+  `EventCallback`; renders `ServerError` in `role="alert"`).
+
+  **How verified (2026-06-25):** `dotnet build` green (8 projects, 3 pre-existing warnings, 0 errors).
+  - **Unit** (`TagValidationsTests.cs`, 23 tests): name required/whitespace/length boundary, uniqueness,
+    description length, sprite length, parent-doesn't-exist, cross-type parent, two-level parent rejection,
+    self-reference on update, `CoerceAllowOCDetails` theory (7 type/input/expected combinations).
+  - **Integration** (`TagWriteServiceTests.cs`, Testcontainers Postgres, 11 tests): mod-gate (Create/
+    Update/Delete throw `UnauthorizedAccessException` for non-mod); create happy path persists row; duplicate
+    name in same type throws `TagValidationException`; same name different type succeeds; parent assignment
+    persists `ParentTagId`; two-level parent throws; update persists renamed name + `IsFanon`; delete unused
+    succeeds; delete with `StoryTag` child throws `TagValidationException`; delete with child tags throws;
+    delete missing id throws `KeyNotFoundException`.
+  - **RazorComponents** (`TagEditorFormTests.cs`, 9 tests): all type options present; `AllowOCDetails`
+    visible only for Character type (theory, 6 types); edit mode pre-populates name; parent dropdown
+    shows same-type top-level only; parent dropdown excludes self; submit emits DTO; cancel fires callback;
+    server error renders in `role="alert"`.
+
 ## Feature 12 — Story Tagging
 - **L1 — Stage 5.** `StoryTag`, `StoryCharacter`, `StoryCharacterRelationship`, `SettingDetail` all
   present with priorities and relationship-type conversion. *Note:* OC-detail enforcement is spec'd as a DB
   **trigger** (when `AllowOCDetails`), which is a manual migration edit — not present (no migrations exist).
   Tracked as a Layer-1 follow-up, not a downgrade.
+  **L1 gap (WU37 add):** `AllowSettingDetails` flag (parallel to `AllowOCDetails`) is absent from model +
+  spec but documented in `Tag_Design_Deliberations.md` §7 — Setting/AU tags only; gates `SettingDetail`
+  creation; add in WU37.
 - **L2 — Stage 2.** No tagging write service. **L3/L3.5 — Stage 4** (via `TagSelector`, see Feature 14).
   **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
+
+  **Captured-for-later — design from `Tag_Design_Deliberations.md` (WU37 scope, not WU27.5):**
+
+  - **OC workflow (§2, §6):** Characters split into a dedicated `StoryCharacters`/OCs table (stable
+    per-story character IDs for relationships; OC override secondary). Columns: `IsOC`, `OC_Name`,
+    `OC_Bio`. "OC Bulbasaur \*" display with tooltip when `OC_Name` populated. **Sprite always from
+    the base tag** — users cannot upload custom OC sprites (keeps user images out of site-standard
+    search cards). `IsOC = 1` legal only where `Tag.AllowOCDetails = true` (generic Pokémon, "OC
+    Trainer"/"OC Human" — never named characters like "Ash Ketchum"). Enforcement via DB trigger
+    `TR_StoryCharacters_EnforceOCLogic`. **WU27.5 sets the `AllowOCDetails` gate on Tag (Character-type
+    only in `TagEditorForm`); WU37 consumes it.**
+
+  - **Priority / "Primary vs Supporting" (§5):** `Priority` TINYINT (0=None, 1=Primary, 2=Supporting)
+    on the story↔tag link (already present as `StoryTag.Priority` / `TagPriority`). User-facing labels:
+    "Primary" / "Supporting". Applies to Genre, Character, Relationship — **not** ContentWarning (to be
+    enforced by a trigger in WU37).
+
+  - **SettingDetails (§7, §8):** `SettingDetail` row for custom setting name/description override (already
+    present). Parallel `AllowSettingDetails` gate (Setting/AU tags only — absent from current model +
+    spec; add to `Tag` entity + `TagConfigurations.cs` + migration in WU37). Uniqueness constraint
+    `UNIQUE(StoryId, BaseTagId)` so a story can hold custom details for multiple settings simultaneously.
+
+  - **Fanonize notify/migrate (§14):** when a mod flips a tag to `IsFanon = true`, the
+    `TagUpdateSuggestion` notification (enum value 26, already seeded in `ModelEnums.cs`) fires to
+    authors whose `StoryCharacter.OC_Name` matches the newly-fanonized tag's `TagName`. Authors get a
+    one-click option to migrate their OC to the official fanon tag. **WU27.5 ships `IsFanon` as a plain
+    editable field only; this workflow lands in its own future WU (depends on StoryCharacter.OC_Name +
+    author-facing UI).**
 
 ## Feature 13 — Tag Display & Sprites
 - **L1 — Stage 5.** `SpriteIdentifier` URL-builder key on `Tag`.

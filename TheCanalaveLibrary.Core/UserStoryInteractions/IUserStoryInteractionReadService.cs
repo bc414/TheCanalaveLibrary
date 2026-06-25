@@ -30,4 +30,15 @@ public interface IUserStoryInteractionReadService
     /// the dispatcher routes those to the appropriate service instead.
     /// </summary>
     Task<IReadOnlyList<int>> GetBookshelfStoryIdsAsync(BookshelfTab tab);
+
+    /// <summary>
+    /// Returns the IDs of stories that <paramref name="userId"/> has marked as a favorite,
+    /// for use on a public profile's Favorites tab. When <paramref name="includePrivate"/> is
+    /// <c>false</c> (viewer is not the owner), hidden favorites
+    /// (<see cref="UserStoryInteraction.IsHiddenFavorite"/>) are excluded
+    /// (<c>WHERE is_favorite AND NOT is_hidden_favorite</c>). When <c>true</c> (owner viewing own
+    /// profile), all favorites are returned regardless of the hidden flag. This satisfies §5.27's
+    /// <c>AllowDiscoveryFromHiddenFavorites</c> requirement for the profile display surface.
+    /// </summary>
+    Task<IReadOnlyList<int>> GetFavoriteStoryIdsAsync(int userId, bool includePrivate);
 }

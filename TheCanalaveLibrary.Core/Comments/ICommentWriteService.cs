@@ -63,6 +63,19 @@ public interface ICommentWriteService : ICommentReadService
     Task DeleteCommentAsync(long commentId);
 
     /// <summary>
+    /// Posts a new comment (or reply) on a user profile wall. Requires an authenticated user.
+    /// Sanitizes <c>dto.CommentText</c> before persisting. If <c>dto.ParentCommentId</c> is set,
+    /// verifies the parent comment belongs to the same profile wall. The profile owner's
+    /// <c>AllowProfileComments</c> setting is enforced by the caller (dispatcher), not here.
+    /// No spoiler flag (profile-wall comments have no spoiler concept).
+    /// </summary>
+    /// <returns>The new <c>BaseComment.CommentId</c>.</returns>
+    /// <exception cref="CommentValidationException">Thrown when text is empty.</exception>
+    /// <exception cref="KeyNotFoundException">Profile user or parent comment not found.</exception>
+    /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
+    Task<long> PostUserProfileCommentAsync(PostUserProfileCommentDto dto);
+
+    /// <summary>
     /// Toggles a like on a comment. Requires an authenticated user. Returns the new
     /// <see cref="CommentLikeResultDto"/> with the updated denormalized <c>LikeCount</c> and the
     /// caller's new like state. No notification generated (§6.11 — anti-addictive design).

@@ -142,6 +142,62 @@ public class ServerCommentReadService(
         return new CommentPageDto(ordered, totalRootCount);
     }
 
+    public async Task<CommentPageDto> GetUserProfileCommentsAsync(int profileUserId, int page, int pageSize)
+    {
+        // Mirrors GetGroupCommentsAsync exactly — same two-step load and in-memory ordering,
+        // over UserProfileComments instead of GroupComments. No spoiler flag on profile comments.
+        int totalRootCount = await readDb.UserProfileComments
+            .Where(c => c.ProfileUserId == profileUserId && c.ParentCommentId == null)
+            .CountAsync();
+
+        if (totalRootCount == 0)
+            return new CommentPageDto([], 0);
+
+        List<long> rootIds = await readDb.UserProfileComments
+            .Where(c => c.ProfileUserId == profileUserId && c.ParentCommentId == null)
+            .OrderByDescending(c => c.DatePosted)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(c => c.CommentId)
+            .ToListAsync();
+
+        if (rootIds.Count == 0)
+            return new CommentPageDto([], totalRootCount);
+
+        int? currentUserId = ActiveUser.UserId;
+
+        List<CommentDto> comments = await readDb.UserProfileComments
+            .Where(c => rootIds.Contains(c.CommentId)
+                        || (c.ParentCommentId != null && rootIds.Contains(c.ParentCommentId.Value)))
+            .Select(c => new CommentDto(
+                c.CommentId,
+                c.ParentCommentId,
+                c.UserId,
+                c.Author != null ? c.Author.UserName : null,
+                c.Author != null ? c.Author.ProfilePictureRelativeUrl : null,
+                c.CommentText,
+                c.DatePosted,
+                c.LikeCount,
+                // Profile-wall comments have no spoiler flag — always false.
+                false,
+                currentUserId != null && c.Likes.Any(l => l.UserId == currentUserId)))
+            .ToListAsync();
+
+        Dictionary<long, int> rootOrder = rootIds
+            .Select((id, idx) => (id, idx))
+            .ToDictionary(t => t.id, t => t.idx);
+
+        List<CommentDto> ordered = comments
+            .OrderBy(c => c.ParentCommentId.HasValue
+                ? rootOrder.GetValueOrDefault(c.ParentCommentId.Value, int.MaxValue)
+                : rootOrder.GetValueOrDefault(c.CommentId, int.MaxValue))
+            .ThenBy(c => c.ParentCommentId.HasValue)
+            .ThenBy(c => c.ParentCommentId.HasValue ? c.DatePosted : DateTime.MinValue)
+            .ToList();
+
+        return new CommentPageDto(ordered, totalRootCount);
+    }
+
     public async Task<CommentPageDto> GetBlogPostCommentsAsync(int blogPostId, int page, int pageSize)
     {
         // Mirrors GetChapterCommentsAsync exactly — same two-step load and in-memory ordering,

@@ -26,7 +26,7 @@ public partial class Tag
 
     public bool AllowOCDetails { get; set; }
 
-    public virtual ICollection<Tag> InverseParentTag { get; set; } = new List<Tag>();
+    public virtual ICollection<Tag> ChildTags { get; set; } = new List<Tag>();
 
     public virtual Tag? ParentTag { get; set; }
 

@@ -121,4 +121,18 @@ public class ServerRecommendationReadService(
 
         return alreadyRecorded ? null : recId;
     }
+
+    public async Task<IReadOnlyList<int>> GetRecommendedStoryIdsByUserAsync(int userId)
+    {
+        // Returns the story ids for which the given user has written a recommendation,
+        // for use as the candidate-id set on the Profile page's Recommendations tab.
+        // RecommenderId is nullable (anonymous recs are allowed), so we compare int? == int.
+        // No visibility gating needed — the set only determines which stories appear in the
+        // StoryDeck; the deck applies the global content-rating query filter at listing time.
+        return await ReadDb.Recommendations
+            .Where(r => r.RecommenderId == userId)
+            .Select(r => r.StoryId)
+            .Distinct()
+            .ToListAsync();
+    }
 }

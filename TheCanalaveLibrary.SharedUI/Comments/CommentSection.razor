@@ -2,13 +2,15 @@
 @using TheCanalaveLibrary.Core
 @inject ICommentWriteService Comments
 
-@* Coordination composite — owns a paginated comment section for a chapter, blog post, or group.
-   Exactly one of ChapterId, BlogPostId, or GroupId must be set; the private CommentTarget enum
-   dispatches all load/post/reply calls (WU20 chapter; WU31 blog-post; WU32 group).
+@* Coordination composite — owns a paginated comment section for a chapter, blog post, group,
+   or user profile wall.
+   Exactly one of ChapterId, BlogPostId, GroupId, or ProfileUserId must be set; the private
+   CommentTarget enum dispatches all load/post/reply calls (WU20 chapter; WU31 blog-post;
+   WU32 group; WU30 user profile).
    UserHasCompletedStory and the spoiler toggle on the composer are chapter-only — ignored in the
-   blog-post and group contexts. No like/edit/delete callback bubbles above this composite; all
-   writes resolve here. Injects ICommentWriteService (which :ICommentReadService) — one injection
-   gives both read and write (layer3-logic.md §"Service Injection Principle"). *@
+   blog-post, group, and profile contexts. No like/edit/delete callback bubbles above this
+   composite; all writes resolve here. Injects ICommentWriteService (which :ICommentReadService) —
+   one injection gives both read and write (layer3-logic.md §"Service Injection Principle"). *@
 
 @if (_page is null)
 {
@@ -81,7 +83,7 @@ else
 {
     <div class="mt-6">
         <h3 class="mb-2 text-sm font-semibold text-[--color-text]">Leave a comment</h3>
-        @* Spoiler toggle is chapter-only — hidden for blog-post and group comments *@
+        @* Spoiler toggle is chapter-only — hidden for blog-post, group, and profile comments *@
         <CommentEditor ShowSpoilerToggle="@(_target == CommentTarget.Chapter)"
                        @bind-Spoiler="_composeSpoiler"
                        SaveLabel="Post Comment"
@@ -108,10 +110,12 @@ else
 
 @code {
     /// <summary>
-    /// Exactly one of <see cref="ChapterId"/>, <see cref="BlogPostId"/>, or <see cref="GroupId"/>
-    /// must be set. The component throws <see cref="InvalidOperationException"/> on initialization
-    /// if the constraint is violated, so the error is caught at development time.
-    /// Chapter context (WU20); blog-post context (WU31); group context (WU32).
+    /// Exactly one of <see cref="ChapterId"/>, <see cref="BlogPostId"/>, <see cref="GroupId"/>,
+    /// or <see cref="ProfileUserId"/> must be set. The component throws
+    /// <see cref="InvalidOperationException"/> on initialization if the constraint is violated,
+    /// so the error is caught at development time.
+    /// Chapter context (WU20); blog-post context (WU31); group context (WU32);
+    /// user profile context (WU30).
     /// </summary>
     [Parameter] public int? ChapterId { get; set; }
 
@@ -120,6 +124,9 @@ else
 
     /// <summary>Set to route the component to the group comment thread.</summary>
     [Parameter] public int? GroupId { get; set; }
+
+    /// <summary>Set to route the component to the user-profile comment wall.</summary>
+    [Parameter] public int? ProfileUserId { get; set; }
 
     /// <summary>
     /// From the ChapterPage dispatcher (§5.9.1). Forwarded to CommentItem for spoiler reveal
@@ -133,7 +140,7 @@ else
     [Parameter] public int PageSize { get; set; } = 20;
 
     // ── Private dispatch enum ─────────────────────────────────────────────────────
-    private enum CommentTarget { Chapter, BlogPost, Group }
+    private enum CommentTarget { Chapter, BlogPost, Group, UserProfile }
     private CommentTarget _target;
 
     // ── Load state ────────────────────────────────────────────────────────────────
@@ -157,13 +164,17 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        int setCount = (ChapterId.HasValue ? 1 : 0) + (BlogPostId.HasValue ? 1 : 0) + (GroupId.HasValue ? 1 : 0);
+        int setCount = (ChapterId.HasValue ? 1 : 0)
+                     + (BlogPostId.HasValue ? 1 : 0)
+                     + (GroupId.HasValue ? 1 : 0)
+                     + (ProfileUserId.HasValue ? 1 : 0);
         if (setCount != 1)
             throw new InvalidOperationException(
-                "CommentSection: set exactly one of ChapterId, BlogPostId, or GroupId.");
-        _target = ChapterId.HasValue  ? CommentTarget.Chapter
-                : BlogPostId.HasValue ? CommentTarget.BlogPost
-                                      : CommentTarget.Group;
+                "CommentSection: set exactly one of ChapterId, BlogPostId, GroupId, or ProfileUserId.");
+        _target = ChapterId.HasValue    ? CommentTarget.Chapter
+                : BlogPostId.HasValue   ? CommentTarget.BlogPost
+                : GroupId.HasValue      ? CommentTarget.Group
+                                        : CommentTarget.UserProfile;
         await LoadAsync();
     }
 
@@ -172,10 +183,11 @@ else
         _error = null;
         _page = _target switch
         {
-            CommentTarget.Chapter  => await Comments.GetChapterCommentsAsync(ChapterId!.Value, _currentPage, PageSize),
-            CommentTarget.BlogPost => await Comments.GetBlogPostCommentsAsync(BlogPostId!.Value, _currentPage, PageSize),
-            CommentTarget.Group    => await Comments.GetGroupCommentsAsync(GroupId!.Value, _currentPage, PageSize),
-            _                      => throw new InvalidOperationException("Unknown CommentTarget.")
+            CommentTarget.Chapter     => await Comments.GetChapterCommentsAsync(ChapterId!.Value, _currentPage, PageSize),
+            CommentTarget.BlogPost    => await Comments.GetBlogPostCommentsAsync(BlogPostId!.Value, _currentPage, PageSize),
+            CommentTarget.Group       => await Comments.GetGroupCommentsAsync(GroupId!.Value, _currentPage, PageSize),
+            CommentTarget.UserProfile => await Comments.GetUserProfileCommentsAsync(ProfileUserId!.Value, _currentPage, PageSize),
+            _                         => throw new InvalidOperationException("Unknown CommentTarget.")
         };
         _comments       = _page.Comments.ToList();
         _totalRootCount = _page.TotalRootCount;
@@ -265,6 +277,10 @@ else
                         ParentCommentId = parentId,
                         CommentText     = html
                     });
+                    break;
+                case CommentTarget.UserProfile:
+                    await Comments.PostUserProfileCommentAsync(new PostUserProfileCommentDto(
+                        ProfileUserId!.Value, parentId, html));
                     break;
             }
             _replyingToId = null;
@@ -374,6 +390,10 @@ else
                         GroupId     = GroupId!.Value,
                         CommentText = html
                     });
+                    break;
+                case CommentTarget.UserProfile:
+                    await Comments.PostUserProfileCommentAsync(new PostUserProfileCommentDto(
+                        ProfileUserId!.Value, null, html));
                     break;
             }
             _currentPage = 1;

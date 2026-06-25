@@ -1,0 +1,150 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Reader settings sub-form (WU30). Font/layout preferences + browsing behaviour.
+   No @inject — initial values passed as a parameter; OnSave raises the updated DTO. *@
+
+<section class="flex flex-col gap-4">
+    <div>
+        <h2 class="text-base font-semibold text-[--color-text]">Reader Preferences</h2>
+        <p class="text-sm text-[--color-text-muted]">Customise how chapters are displayed and how you browse.</p>
+    </div>
+
+    <div class="flex flex-col gap-4 rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
+
+        @* Font layout — two per row on wider viewports *@
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div class="flex flex-col gap-1">
+                <label for="font-name" class="text-sm font-medium text-[--color-text]">Font</label>
+                <input id="font-name" type="text"
+                       class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                       value="@_fontName"
+                       @onchange="e => _fontName = (string)(e.Value ?? _fontName)"
+                       placeholder="Georgia" />
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label for="font-size" class="text-sm font-medium text-[--color-text]">Font size (px)</label>
+                <input id="font-size" type="number" min="12" max="32"
+                       class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                       value="@_fontSize"
+                       @onchange="e => _fontSize = int.TryParse((string?)e.Value, out int v) ? v : _fontSize" />
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label for="line-height" class="text-sm font-medium text-[--color-text]">Line height (em)</label>
+                <input id="line-height" type="number" min="1.0" max="3.0" step="0.1"
+                       class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                       value="@_lineHeight"
+                       @onchange="e => _lineHeight = float.TryParse((string?)e.Value, out float v) ? v : _lineHeight" />
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label for="text-width" class="text-sm font-medium text-[--color-text]">Max text width (px)</label>
+                <input id="text-width" type="number" min="400" max="1400" step="50"
+                       class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                       value="@_textWidth"
+                       @onchange="e => _textWidth = int.TryParse((string?)e.Value, out int v) ? v : _textWidth" />
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label for="page-size" class="text-sm font-medium text-[--color-text]">Default page size</label>
+                <select id="page-size"
+                        class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                        value="@_defaultPageSize"
+                        @onchange="e => _defaultPageSize = int.TryParse((string?)e.Value, out int v) ? v : _defaultPageSize">
+                    <option value="10">10</option>
+                    <option value="20">20</option>
+                    <option value="50">50</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col gap-1">
+                <label for="default-sort" class="text-sm font-medium text-[--color-text]">Default search sort</label>
+                <select id="default-sort"
+                        class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                        value="@((int)_defaultSort)"
+                        @onchange="e => _defaultSort = (DefaultSortOrder)(int.TryParse((string?)e.Value, out int v) ? v : (int)_defaultSort)">
+                    @foreach (DefaultSortOrder s in Enum.GetValues<DefaultSortOrder>())
+                    {
+                        <option value="@((int)s)">@s</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @* Boolean toggles *@
+        <div class="flex flex-col gap-2">
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-[--color-text]">
+                <input type="checkbox"
+                       class="h-4 w-4 rounded border-[--color-border] accent-[--color-primary]"
+                       checked="@_justifyText"
+                       @onchange="e => _justifyText = (bool)(e.Value ?? false)" />
+                Justify text
+            </label>
+
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-[--color-text]">
+                <input type="checkbox"
+                       class="h-4 w-4 rounded border-[--color-border] accent-[--color-primary]"
+                       checked="@_autoLoadNext"
+                       @onchange="e => _autoLoadNext = (bool)(e.Value ?? false)" />
+                Auto-load next chapter when reaching the end
+            </label>
+
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-[--color-text]">
+                <input type="checkbox"
+                       class="h-4 w-4 rounded border-[--color-border] accent-[--color-primary]"
+                       checked="@_collapseThreads"
+                       @onchange="e => _collapseThreads = (bool)(e.Value ?? false)" />
+                Collapse comment threads by default
+            </label>
+        </div>
+
+        <button type="button"
+                class="self-start rounded-md bg-[--color-primary] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50"
+                disabled="@Busy"
+                @onclick="HandleSave">
+            @(Busy ? "Saving…" : "Save Reader Preferences")
+        </button>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public ReaderSettingsDto Initial { get; set; } = default!;
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public EventCallback<ReaderSettingsDto> OnSave { get; set; }
+
+    private string _fontName = "Georgia";
+    private int _fontSize = 16;
+    private float _lineHeight = 1.5f;
+    private int _textWidth = 800;
+    private bool _justifyText;
+    private bool _autoLoadNext;
+    private bool _collapseThreads = true;
+    private int _defaultPageSize = 20;
+    private DefaultSortOrder _defaultSort = DefaultSortOrder.DatePublished;
+    private bool _seeded;
+
+    protected override void OnParametersSet()
+    {
+        if (!_seeded)
+        {
+            _fontName        = Initial.FontName;
+            _fontSize        = Initial.FontSize;
+            _lineHeight      = Initial.LineHeight;
+            _textWidth       = Initial.TextWidth;
+            _justifyText     = Initial.JustifyText;
+            _autoLoadNext    = Initial.AutoLoadNextChapter;
+            _collapseThreads = Initial.CollapseCommentThreads;
+            _defaultPageSize = Initial.DefaultPaginationSize;
+            _defaultSort     = Initial.DefaultSearchSort;
+            _seeded = true;
+        }
+    }
+
+    private async Task HandleSave() =>
+        await OnSave.InvokeAsync(new ReaderSettingsDto(
+            _fontName, _fontSize, _lineHeight, _textWidth,
+            _justifyText, _autoLoadNext, _collapseThreads,
+            _defaultPageSize, _defaultSort));
+}

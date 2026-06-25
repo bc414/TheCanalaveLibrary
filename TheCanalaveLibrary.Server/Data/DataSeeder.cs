@@ -52,9 +52,9 @@ public class DataSeeder
         };
         await _userManager.CreateAsync(adminUser, "Password123!");
         
-        // 4. Assign Roles
-        // (This assumes you've seeded "Admin" in OnModelCreating)
+        // 4. Assign Roles — role rows are seeded via ApplicationRoleConfiguration.HasData.
         await _userManager.AddToRoleAsync(adminUser, "Admin");
+        await _userManager.AddToRoleAsync(adminUser, "Moderator");
 
         // 5. Create Test Stories
         var testStory = new Story

@@ -31,4 +31,14 @@ public interface ICommentReadService
     /// No spoiler flag on group comments.
     /// </summary>
     Task<CommentPageDto> GetGroupCommentsAsync(int groupId, int page, int pageSize);
+
+    /// <summary>
+    /// Returns a page of profile-wall comments for a given user, ordered roots-newest-first and
+    /// replies-oldest-first within each root. Mirrors <see cref="GetGroupCommentsAsync"/>. No
+    /// spoiler flag on profile comments. The <paramref name="profileUserId"/> is the wall owner
+    /// (whose profile the comments appear on), not the commenter.
+    /// Visibility gating (AllowProfileComments) is enforced by the dispatcher; this method
+    /// returns comments unconditionally so the owner can always see their own wall.
+    /// </summary>
+    Task<CommentPageDto> GetUserProfileCommentsAsync(int profileUserId, int page, int pageSize);
 }

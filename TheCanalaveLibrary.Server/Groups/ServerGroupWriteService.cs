@@ -104,6 +104,10 @@ public class ServerGroupWriteService(
             DateJoined = DateTime.UtcNow
         });
         await writeDb.SaveChangesAsync();
+
+        // Increment GroupsJoined counter (cross-cutting.md §"UserStats Updates").
+        await writeDb.UserStats.Where(us => us.UserId == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.GroupsJoined, us => us.GroupsJoined + 1));
     }
 
     public async Task LeaveAsync(int groupId)
@@ -117,6 +121,10 @@ public class ServerGroupWriteService(
 
         writeDb.GroupMembers.Remove(member);
         await writeDb.SaveChangesAsync();
+
+        // Decrement GroupsJoined counter (cross-cutting.md §"UserStats Updates").
+        await writeDb.UserStats.Where(us => us.UserId == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.GroupsJoined, us => us.GroupsJoined - 1));
     }
 
     // ── Story management ──────────────────────────────────────────────────────────
@@ -133,10 +141,11 @@ public class ServerGroupWriteService(
             .FirstOrDefaultAsync(g => g.GroupId == dto.GroupId);
         if (group is null) throw new KeyNotFoundException($"Group {dto.GroupId} not found.");
 
-        // Load the story — bypasses ContentRating filter so admins/members can add any story
-        // they have access to; tier 1 waterfall is the user's own site-wide filter already
-        // applied before they could discover the story.
+        // Load the story without the ContentRating filter so that any member can attempt to add
+        // an M-rated story; the tier-2 check below then decides whether the story's rating fits
+        // within the group's MaxContentRating ceiling.
         Story? story = await writeDb.Stories
+            .IgnoreQueryFilters(["ContentRating"])
             .FirstOrDefaultAsync(s => s.StoryId == dto.StoryId);
         if (story is null) throw new KeyNotFoundException($"Story {dto.StoryId} not found.");
 

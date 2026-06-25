@@ -59,12 +59,26 @@ Global conditions affecting many cells — kept terse; detail lives at the point
   testing.md` §"Integration tests reset between every test", `forward_plan.md` "Integration test
   isolation foundation" Resolved. F4/F5 L5 stay Stage 4 (architectural disagreement pending Opus
   reconcile; unrelated to this overhaul).
+- **TestAppFactory DB-wiring fix + TPT phantom-nav fix (2026-06-25, WU31_5b).** `TestAppFactory`
+  was silently connecting to the dev DB (`localhost:5432`) instead of the Testcontainers container
+  because `ConfigureAppConfiguration` fires too late with `WebApplicationBuilder`. Fixed by
+  re-registering both `DbContextOptions` in `ConfigureServices` (doc: `testing.md` §"Driving the
+  content-rating filter"). Separately: four phantom down-navigation properties on `BaseComment`
+  (`BlogPostComment`, `ChapterComment`, `GroupComment`, `UserProfileComment`) caused EF to create
+  phantom FK columns on `base_comments` pointing back to child comment tables — backwards TPT edges
+  that formed FK cycles, breaking Respawn's topological sort and leaving the `groups` table
+  uncleaned between tests. Migration `WU31_5b_DropPhantomBaseCommentFKs` drops the 4 phantom
+  columns/indexes/FKs. Three additional service bugs exposed by the clean DB: `ServerGroupWriteService
+  .AddStoryAsync` missing `IgnoreQueryFilters(["ContentRating"])` on story lookup; `ServerRecommendation
+  WriteService.SubmitAsync` (a) using `Select((int?)s.AuthorId).FirstOrDefault()` which confuses null-
+  author-id with "row not found", (b) unconditional `.Value` on a nullable AuthorId. All fixed; all 298
+  integration tests green. Detail: `audit/Comments.md`, `audit/Groups.md`, `testing.md`.
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L5 | L6 | L7 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|----|----|----|----|
 | 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | N/A | N/A | N/A | N/A |
 | 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| 3 | Sprite & Theme System | Sprites | 5 | 5 | 2 | 2 | 1 | 4 | N/A | N/A | N/A |
+| 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 4 | N/A | N/A | N/A |
 | 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 4 | 2 | N/A | N/A |
 | 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 4 | 2 | N/A | N/A |
 | 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
@@ -72,7 +86,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
 | 9 | Series & Ordering | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 11 | Tag Administration | Tags | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
+| 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
 | 12 | Story Tagging | Tags | 5 | 2 | 4 | 4 | 1 | 2 | 2 | N/A | N/A |
 | 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
 | 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
@@ -81,9 +95,9 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 18 | User Following | Following | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 19 | Vouches | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 20 | User Profile Editing | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 21 | User Profile Display | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 22 | User Stats | Profiles | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
+| 20 | User Profile Editing | Profiles | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
+| 21 | User Profile Display | Profiles | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
+| 22 | User Stats | Profiles | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
 | 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 25 | Comment Likes | Comments | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
@@ -95,13 +109,13 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 31 | Search Page | Discovery | N/A | 2 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
 | 32 | Full-Text Search | Discovery | 5 | 2 | 2 | 2 | 1 | 2 | 5 | N/A | N/A |
 | 33 | Manual Tree Search | Discovery | N/A | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
-| 34 | Tag Directory | Discovery | N/A | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
+| 34 | Tag Directory | Discovery | N/A | 5 | 5 | 5 | 1 | 2 | N/A | N/A | N/A |
 | 35 | Blog Post Writing | BlogPosts | 5 | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
 | 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 2 | N/A | N/A | N/A |
 | 37 | Polls | BlogPosts | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
-| 38 | Group Management | Groups | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
-| 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
-| 40 | Group Display | Groups | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
+| 38 | Group Management | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
+| 40 | Group Display | Groups | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
 | 41 | Notification Generation | Notifications | 5 | 5 | N/A | N/A | N/A | N/A | 2 | N/A | N/A |
 | 42 | Notification Display | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
 | 43 | Notification Settings | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |

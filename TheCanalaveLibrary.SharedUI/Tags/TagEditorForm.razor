@@ -1,0 +1,190 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Presentational leaf — no @inject. bUnit-testable.
+   EditForm for creating/editing a Tag via the mod panel on TagDirectoryDesktop.
+   AllowOCDetails checkbox is only shown/enabled when TagType == Character (Character-domain concept);
+   hidden + coerced false for all other types. Parent dropdown shows same-type top-level tags only,
+   excluding the tag being edited (self-reference guard). WU27.5. *@
+
+<EditForm Model="_model" OnValidSubmit="HandleSubmit">
+    <DataAnnotationsValidator />
+
+    <div class="flex flex-col gap-3">
+        <div>
+            <label class="block text-sm font-medium text-text" for="tag-name">Tag Name</label>
+            <input id="tag-name"
+                   type="text"
+                   class="mt-1 w-full rounded-md border border-[--color-border] bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                   @bind="_model.TagName"
+                   maxlength="100" />
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-text" for="tag-type">Tag Type</label>
+            <select id="tag-type"
+                    class="mt-1 w-full rounded-md border border-[--color-border] bg-surface px-3 py-1.5 text-sm text-text"
+                    @bind="_model.TagTypeId">
+                @foreach (TagTypeEnum type in Enum.GetValues<TagTypeEnum>())
+                {
+                    <option value="@((short)type)">@type</option>
+                }
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-text" for="tag-parent">Parent Tag</label>
+            <select id="tag-parent"
+                    class="mt-1 w-full rounded-md border border-[--color-border] bg-surface px-3 py-1.5 text-sm text-text"
+                    @bind="_model.ParentTagId">
+                <option value="">— none (top-level) —</option>
+                @foreach (var node in EligibleParents)
+                {
+                    <option value="@node.Tag.TagId">@node.Tag.TagName</option>
+                }
+            </select>
+            <p class="mt-1 text-xs text-[--color-text-muted]">
+                Same-type top-level tags only. Hierarchy is one level deep.
+            </p>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-text" for="tag-description">Description</label>
+            <textarea id="tag-description"
+                      class="mt-1 w-full rounded-md border border-[--color-border] bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                      rows="3"
+                      maxlength="512"
+                      @bind="_model.Description">
+            </textarea>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-text" for="tag-sprite">Sprite Identifier</label>
+            <input id="tag-sprite"
+                   type="text"
+                   class="mt-1 w-full rounded-md border border-[--color-border] bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                   @bind="_model.SpriteIdentifier"
+                   maxlength="50" />
+            <p class="mt-1 text-xs text-[--color-text-muted]">e.g. bulbasaur.png — path key, not a URL.</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <input id="tag-is-fanon"
+                   type="checkbox"
+                   class="h-4 w-4 rounded border-[--color-border] accent-[--color-primary]"
+                   @bind="_model.IsFanon" />
+            <label class="text-sm text-text" for="tag-is-fanon">Fanon tag</label>
+        </div>
+
+        @if (_model.TagTypeId == TagTypeEnum.Character)
+        {
+            <div class="flex items-center gap-2">
+                <input id="tag-allow-oc"
+                       type="checkbox"
+                       class="h-4 w-4 rounded border-[--color-border] accent-[--color-primary]"
+                       @bind="_model.AllowOCDetails" />
+                <label class="text-sm text-text" for="tag-allow-oc">Allow OC details</label>
+                <span class="text-xs text-[--color-text-muted]">(generic Pokémon, OC Trainer/OC Human only)</span>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_serverError))
+        {
+            <p class="text-sm text-[--color-danger]" role="alert">@_serverError</p>
+        }
+
+        <div class="flex justify-end gap-2">
+            <button type="button"
+                    class="rounded-md border border-[--color-border] bg-surface px-3 py-1.5 text-sm text-text hover:bg-[--color-primary]/10 transition-colors"
+                    @onclick="() => OnCancel.InvokeAsync()">
+                Cancel
+            </button>
+            <button type="submit"
+                    class="rounded-md bg-[--color-primary] px-3 py-1.5 text-sm text-white hover:bg-[--color-primary-strong] transition-colors"
+                    disabled="@_isSaving">
+                @(_isSaving ? "Saving…" : "Save")
+            </button>
+        </div>
+    </div>
+</EditForm>
+
+@code {
+    /// <summary>All directory groups — used to source the parent dropdown (same-type top-level nodes).</summary>
+    [Parameter, EditorRequired] public List<TagDirectoryGroupDto> Directory { get; set; } = [];
+
+    /// <summary>Tag being edited; null when creating a new tag.</summary>
+    [Parameter] public TagChipDto? EditingTag { get; set; }
+
+    /// <summary>Fired when the form is submitted successfully. Payload is the DTO to send to the write service.</summary>
+    [Parameter] public EventCallback<TagEditorFormResult> OnSave { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>Set externally when the write service returns a validation error.</summary>
+    [Parameter] public string? ServerError { get; set; }
+
+    private TagEditorFormModel _model = new();
+    private bool _isSaving;
+    private string? _serverError;
+
+    // Top-level tags of the current type, excluding the tag being edited.
+    private IEnumerable<TagDirectoryNodeDto> EligibleParents =>
+        Directory
+            .FirstOrDefault(g => g.TagType == _model.TagTypeId)
+            ?.Nodes
+            .Where(n => EditingTag is null || n.Tag.TagId != EditingTag.TagId)
+            ?? [];
+
+    protected override void OnParametersSet()
+    {
+        _serverError = ServerError;
+
+        if (EditingTag is not null)
+        {
+            // TagChipDto carries admin fields (IsFanon, AllowOCDetails, ParentTagId) when populated
+            // by GetTagDirectoryAsync. These fields default to false/null elsewhere (non-directory chips).
+            _model.TagName = EditingTag.TagName;
+            _model.TagTypeId = EditingTag.TagTypeId;
+            _model.Description = EditingTag.Description;
+            _model.IsFanon = EditingTag.IsFanon;
+            _model.AllowOCDetails = EditingTag.AllowOCDetails;
+            _model.ParentTagId = EditingTag.ParentTagId;
+        }
+        else
+        {
+            _model = new TagEditorFormModel();
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        _isSaving = true;
+        _serverError = null;
+
+        // Coerce AllowOCDetails for non-Character types.
+        bool allowOcDetails = _model.TagTypeId == TagTypeEnum.Character && _model.AllowOCDetails;
+
+        await OnSave.InvokeAsync(new TagEditorFormResult
+        {
+            TagName = _model.TagName?.Trim() ?? string.Empty,
+            TagTypeId = _model.TagTypeId,
+            Description = string.IsNullOrWhiteSpace(_model.Description) ? null : _model.Description.Trim(),
+            SpriteIdentifier = string.IsNullOrWhiteSpace(_model.SpriteIdentifier) ? null : _model.SpriteIdentifier.Trim(),
+            IsFanon = _model.IsFanon,
+            AllowOCDetails = allowOcDetails,
+            ParentTagId = _model.ParentTagId
+        });
+
+        _isSaving = false;
+    }
+
+    private sealed class TagEditorFormModel
+    {
+        public string? TagName { get; set; }
+        public TagTypeEnum TagTypeId { get; set; } = TagTypeEnum.Character;
+        public string? Description { get; set; }
+        public string? SpriteIdentifier { get; set; }
+        public bool IsFanon { get; set; }
+        public bool AllowOCDetails { get; set; }
+        public int? ParentTagId { get; set; }
+    }
+}

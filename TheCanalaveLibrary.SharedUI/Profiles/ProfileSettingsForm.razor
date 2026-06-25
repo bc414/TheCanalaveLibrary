@@ -1,0 +1,113 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Profile settings sub-form (WU30). Tagline (hot column), bio via EditorView (cold partition),
+   profile picture upload (IImageStorageService via the page).
+   No @inject — initial values passed as parameters; callbacks let the page call the service.
+   Three distinct save paths:
+     • OnSaveProfile(UpdateProfileDto)  — tagline + bio text (IUserSettingsService.UpdateProfileAsync)
+     • OnPictureSelected(IBrowserFile) — raised immediately when the user picks a file (page calls
+       UploadProfilePictureAsync); separate from the tagline/bio save so the two don't block each other. *@
+
+@if (!string.IsNullOrEmpty(_pictureUrl))
+{
+    <div class="flex items-center gap-3 rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-3">
+        <img src="@_pictureUrl"
+             alt="Your profile picture"
+             class="h-16 w-16 rounded-full object-cover shadow-sm" />
+        <div class="text-sm text-[--color-text-muted]">Current profile picture</div>
+    </div>
+}
+
+<section class="flex flex-col gap-4">
+    <div>
+        <h2 class="text-base font-semibold text-[--color-text]">Profile</h2>
+        <p class="text-sm text-[--color-text-muted]">Your public identity on the site.</p>
+    </div>
+
+    <div class="flex flex-col gap-4 rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
+
+        @* Tagline *@
+        <div class="flex flex-col gap-1">
+            <label for="tagline" class="text-sm font-medium text-[--color-text]">Tagline</label>
+            <input id="tagline" type="text" maxlength="256"
+                   class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                   value="@_tagline"
+                   @onchange="e => _tagline = (string?)e.Value"
+                   placeholder="A short one-liner about yourself (optional)" />
+        </div>
+
+        @* Profile bio (rich text) *@
+        <div class="flex flex-col gap-1">
+            <label class="text-sm font-medium text-[--color-text]">About me</label>
+            <EditorView @ref="_editor" Html="@InitialBioHtml" Placeholder="Write something about yourself…" />
+        </div>
+
+        @* Profile picture *@
+        <div class="flex flex-col gap-1">
+            <label for="profile-picture" class="text-sm font-medium text-[--color-text]">Profile picture</label>
+            <InputFile id="profile-picture"
+                       accept="image/jpeg,image/png,image/webp"
+                       class="text-sm text-[--color-text]"
+                       OnChange="HandlePictureSelected"
+                       disabled="@UploadBusy" />
+            @if (UploadBusy)
+            {
+                <span class="text-xs text-[--color-text-muted]">Uploading…</span>
+            }
+        </div>
+
+        <button type="button"
+                class="self-start rounded-md bg-[--color-primary] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50"
+                disabled="@Busy"
+                @onclick="HandleSaveProfileAsync">
+            @(Busy ? "Saving…" : "Save Profile")
+        </button>
+    </div>
+</section>
+
+@code {
+    [Parameter] public string? InitialTagline { get; set; }
+    [Parameter] public string? InitialBioHtml { get; set; }
+    [Parameter] public string? InitialPictureUrl { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public bool UploadBusy { get; set; }
+
+    /// <summary>Raised when the user saves tagline + bio.</summary>
+    [Parameter] public EventCallback<UpdateProfileDto> OnSaveProfile { get; set; }
+
+    /// <summary>Raised immediately when the user selects a picture file.
+    /// The page calls IUserSettingsService.UploadProfilePictureAsync and updates InitialPictureUrl.</summary>
+    [Parameter] public EventCallback<IBrowserFile> OnPictureSelected { get; set; }
+
+    private string? _tagline;
+    private string? _pictureUrl;
+    private EditorView? _editor;
+    private bool _seeded;
+
+    protected override void OnParametersSet()
+    {
+        if (!_seeded)
+        {
+            _tagline    = InitialTagline;
+            _pictureUrl = InitialPictureUrl;
+            _seeded = true;
+        }
+        else
+        {
+            // Picture URL may update after the upload callback returns — always sync it.
+            _pictureUrl = InitialPictureUrl;
+        }
+    }
+
+    private async Task HandleSaveProfileAsync()
+    {
+        string? bioHtml = _editor is not null ? await _editor.GetHtmlAsync() : null;
+        await OnSaveProfile.InvokeAsync(new UpdateProfileDto(_tagline?.Trim(), bioHtml));
+    }
+
+    private async Task HandlePictureSelected(InputFileChangeEventArgs e)
+    {
+        if (e.File is not null)
+            await OnPictureSelected.InvokeAsync(e.File);
+    }
+}

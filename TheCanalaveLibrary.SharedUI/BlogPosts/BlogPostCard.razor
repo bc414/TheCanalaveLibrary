@@ -1,39 +1,75 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
 
-@* Leaf component — displays a single blog-post listing in the profile feed.
+@* Leaf component — displays a single blog-post listing in the profile feed or group blog section.
    No @inject. Data comes from BlogPostListingDto (title, snippet, date, rating, spoilers).
-   Navigates to the full blog-post view page on click.
-   WU30 (Profile page) embeds this in its blog-posts tab. *@
+   Navigates to the full blog-post view page via the title anchor.
 
-<a href="/blog/@Post.BlogPostId/@SlugFromTitle(Post.Title)"
-   class="block rounded-lg border border-[--color-border] bg-[--color-surface] p-4 transition-shadow hover:shadow-sm">
-    <div class="flex flex-col gap-1.5">
+   Owner affordances (WU30): when IsOwner is true, the card shows a Draft badge
+   (for unpublished posts) and an Edit link in the footer row. The title anchor and Edit link
+   are siblings, not nested (nested <a> is invalid HTML). GroupDesktop/GroupMobile pass no owner
+   params — they get the pure view-only card with IsPublished always true. *@
 
-        @* ── Title ─────────────────────────────────────────────────────────── *@
-        <h3 class="font-semibold text-[--color-text] leading-snug">@Post.Title</h3>
+<div class="flex flex-col gap-1.5 rounded-lg border border-[--color-border] bg-[--color-surface] p-4 transition-shadow hover:shadow-sm">
 
-        @* ── Meta chips (rating + spoilers) ─────────────────────────────────── *@
-        <div class="flex flex-wrap items-center gap-2 text-xs text-[--color-text-muted]">
-            <span>@Post.Rating</span>
-            @if (Post.HasSpoilers)
-            {
-                <span class="font-medium text-[--color-warning]">⚠ Spoilers</span>
-            }
-            <span>@Post.DateCreated.ToString("MMM d, yyyy")</span>
-        </div>
+    @* ── Title row ───────────────────────────────────────────────────────────── *@
+    <div class="flex items-start justify-between gap-2">
+        <a href="/blog/@Post.BlogPostId/@SlugFromTitle(Post.Title)"
+           class="font-semibold text-[--color-text] leading-snug hover:underline hover:text-[--color-primary]">
+            @Post.Title
+        </a>
 
-        @* ── Content snippet ─────────────────────────────────────────────────── *@
-        @if (!string.IsNullOrEmpty(Post.ContentSnippet))
+        @* Draft badge — shown to the owner for unpublished posts *@
+        @if (!Post.IsPublished)
         {
-            <p class="text-sm text-[--color-text-muted] leading-relaxed line-clamp-3">@Post.ContentSnippet</p>
+            <span class="shrink-0 rounded-full bg-[--color-warning]/15 px-2 py-0.5 text-xs font-medium text-[--color-warning]">
+                Draft
+            </span>
         }
-
     </div>
-</a>
+
+    @* ── Meta chips (rating + spoilers + date) ───────────────────────────────── *@
+    <div class="flex flex-wrap items-center gap-2 text-xs text-[--color-text-muted]">
+        <span>@Post.Rating</span>
+        @if (Post.HasSpoilers)
+        {
+            <span class="font-medium text-[--color-warning]">⚠ Spoilers</span>
+        }
+        <span>@Post.DateCreated.ToString("MMM d, yyyy")</span>
+    </div>
+
+    @* ── Content snippet ─────────────────────────────────────────────────────── *@
+    @if (!string.IsNullOrEmpty(Post.ContentSnippet))
+    {
+        <p class="text-sm text-[--color-text-muted] leading-relaxed line-clamp-3">@Post.ContentSnippet</p>
+    }
+
+    @* ── Owner footer controls — Edit link (visible to owner only) ───────────── *@
+    @if (IsOwner && EditHref is not null)
+    {
+        <div class="mt-1 flex gap-3 border-t border-[--color-border] pt-2">
+            <a href="@EditHref"
+               class="text-xs font-medium text-[--color-primary] hover:underline">
+                Edit
+            </a>
+        </div>
+    }
+</div>
 
 @code {
     [Parameter, EditorRequired] public BlogPostListingDto Post { get; set; } = null!;
+
+    /// <summary>
+    /// True when the active viewer owns this post — shows draft badge and footer edit link.
+    /// Defaults to false so existing group-feed usages are unaffected.
+    /// </summary>
+    [Parameter] public bool IsOwner { get; set; }
+
+    /// <summary>
+    /// The edit URL to link to in the footer controls row (e.g. <c>/blog/{id}/edit</c>).
+    /// Only rendered when <see cref="IsOwner"/> is also true — use null to suppress the link.
+    /// </summary>
+    [Parameter] public string? EditHref { get; set; }
 
     /// <summary>
     /// Generates a URL-safe slug from the post title for cosmetic routing — the server ignores

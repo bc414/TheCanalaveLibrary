@@ -1,0 +1,132 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Coordination composite — the persistent identity banner on the profile page (WU30, Feature 21).
+   Rendered above the tab body on every tab switch. Receives ProfileHeaderDto projected by the
+   dispatcher; never re-loads data itself.
+
+   Owner affordances:
+   - IsOwner = true  → shows "Edit Profile" link (→ /settings), hides Follow/Vouch buttons.
+   - IsOwner = false + RelationshipState not null → shows FollowButton + VouchButton.
+   - Anonymous (CurrentUserId null) → no action buttons at all.
+
+   Stats: shown only when Stats is not null (dispatcher omits it when ShowUserStats = false
+   for non-owners). Badges: small icon row from ProfileHeaderDto.Badges (may be empty).
+   Vouches: always shown (collapsed on mobile). *@
+
+<div class="flex flex-col gap-4 px-4 py-5 md:px-6">
+
+    @* ── Top row: avatar + identity + actions ──────────────────────────────────── *@
+    <div class="flex items-start gap-4">
+
+        @* Avatar *@
+        @if (Header.AvatarUrl is not null)
+        {
+            <img src="@Header.AvatarUrl"
+                 alt="@Header.Username"
+                 class="h-20 w-20 shrink-0 rounded-full object-cover shadow-sm md:h-24 md:w-24" />
+        }
+        else
+        {
+            @* Placeholder initial avatar *@
+            <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-[--color-surface-raised] text-3xl font-bold text-[--color-text-muted] shadow-sm md:h-24 md:w-24">
+                @Header.Username[0].ToString().ToUpperInvariant()
+            </div>
+        }
+
+        @* Name, tagline, action buttons *@
+        <div class="flex min-w-0 flex-1 flex-col gap-1">
+            <h1 class="text-xl font-bold text-[--color-text] leading-tight md:text-2xl">
+                @Header.Username
+            </h1>
+
+            @if (!string.IsNullOrEmpty(Header.Tagline))
+            {
+                <p class="text-sm text-[--color-text-muted]">@Header.Tagline</p>
+            }
+
+            @* Badges row *@
+            @if (Header.Badges.Count > 0)
+            {
+                <div class="flex flex-wrap gap-1 pt-0.5" role="list" aria-label="Badges">
+                    @foreach (var badge in Header.Badges)
+                    {
+                        <img src="@badge.IconUrl"
+                             alt="@badge.Name"
+                             title="@badge.Name"
+                             class="h-5 w-5"
+                             role="listitem" />
+                    }
+                </div>
+            }
+
+            @* Action buttons — owner or visitor controls *@
+            <div class="mt-2 flex flex-wrap gap-2">
+                @if (IsOwner)
+                {
+                    <a href="/settings"
+                       class="rounded-md border border-[--color-border] px-3 py-1.5 text-sm font-medium text-[--color-text] hover:bg-[--color-surface-hover]">
+                        Edit Profile
+                    </a>
+                }
+                else if (RelationshipState is not null)
+                {
+                    <FollowButton TargetUserId="@Header.UserId"
+                                  IsFollowing="@RelationshipState.IsFollowing"
+                                  ReceiveAlerts="@RelationshipState.ReceiveAlerts" />
+                    <VouchButton TargetUserId="@Header.UserId"
+                                 IsFollowing="@RelationshipState.IsFollowing"
+                                 IsVouched="@RelationshipState.IsVouched"
+                                 AtVouchLimit="@(RelationshipState.OutgoingVouchCount >= FollowingConstants.MaxVouchesPerUser)"
+                                 OutgoingVouchCount="@RelationshipState.OutgoingVouchCount" />
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── Stats strip (hidden when null — non-owner with ShowUserStats = false) ── *@
+    @if (Header.Stats is not null)
+    {
+        <UserStatsBlock Stats="@Header.Stats" />
+    }
+
+    @* ── Outgoing vouches ──────────────────────────────────────────────────────── *@
+    @if (Header.OutgoingVouches.Count > 0)
+    {
+        <details class="group" open="@(!IsMobile)">
+            <summary class="cursor-pointer list-none text-sm font-medium text-[--color-text] hover:text-[--color-primary]">
+                Vouches (@Header.OutgoingVouches.Count)
+                <span class="group-open:hidden text-[--color-text-muted]">▸</span>
+                <span class="hidden group-open:inline text-[--color-text-muted]">▾</span>
+            </summary>
+            <div class="mt-3">
+                <VouchList Vouches="@Header.OutgoingVouches"
+                           IsEditable="@IsOwner"
+                           OnRemoveVouch="OnRemoveVouch"
+                           EmptyMessage="No vouches given yet." />
+            </div>
+        </details>
+    }
+
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ProfileHeaderDto Header { get; set; } = null!;
+
+    /// <summary>True when the active viewer is the profile owner — drives edit affordances.</summary>
+    [Parameter] public bool IsOwner { get; set; }
+
+    /// <summary>
+    /// Relationship state of the current viewer toward this profile. Null for anonymous viewers
+    /// and for the owner themselves (no Follow/Vouch controls shown in those cases).
+    /// </summary>
+    [Parameter] public UserRelationshipStateDto? RelationshipState { get; set; }
+
+    /// <summary>True when rendered on a mobile viewport — collapses vouches by default.</summary>
+    [Parameter] public bool IsMobile { get; set; }
+
+    /// <summary>
+    /// Raised when the owner clicks Remove on a vouch. Bubbles to the dispatcher which calls
+    /// IFollowingWriteService.RemoveVouchAsync. Only raised when IsOwner = true.
+    /// </summary>
+    [Parameter] public EventCallback<int> OnRemoveVouch { get; set; }
+}

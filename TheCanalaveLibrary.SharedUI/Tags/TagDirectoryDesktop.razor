@@ -1,0 +1,194 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Tag Directory — desktop composite. Renders browse sections for all users plus mod CRUD
+   controls (gated by AuthorizeView) for Moderators and Admins. Emits write EventCallbacks up
+   to TagDirectoryPage, which owns the write-service calls and reloads the directory. WU27.5. *@
+
+<div class="mx-auto max-w-5xl px-4 py-6">
+
+    @* Jump-nav for unbounded sections *@
+    @{
+        var unboundedGroups = Directory.Where(g => TagTypeLayout.IsUnbounded(g.TagType) && g.Nodes.Count > 0).ToList();
+    }
+    @if (unboundedGroups.Count > 0)
+    {
+        <nav class="mb-6 flex flex-wrap gap-2" aria-label="Tag type navigation">
+            @foreach (var g in unboundedGroups)
+            {
+                <a href="#tag-section-@g.TagType.ToString().ToLowerInvariant()"
+                   class="rounded-full border border-[--color-border] px-3 py-1 text-sm text-text hover:bg-[--color-primary]/10 transition-colors">
+                    @TagTypeLayout.Label(g.TagType)
+                </a>
+            }
+        </nav>
+    }
+
+    @* Mod "New Tag" button *@
+    <AuthorizeView Roles="Moderator,Admin">
+        <Authorized>
+            <div class="mb-4 flex justify-end">
+                <button type="button"
+                        class="rounded-md bg-[--color-primary] px-4 py-1.5 text-sm text-white hover:bg-[--color-primary-strong] transition-colors"
+                        @onclick="OpenCreateModal">
+                    + New Tag
+                </button>
+            </div>
+        </Authorized>
+    </AuthorizeView>
+
+    @* Sections per type *@
+    @foreach (var group in Directory)
+    {
+        bool unbounded = TagTypeLayout.IsUnbounded(group.TagType);
+        string sectionId = $"tag-section-{group.TagType.ToString().ToLowerInvariant()}";
+
+        @if (unbounded)
+        {
+            <details id="@sectionId" class="mb-6 group" open="@(group.Nodes.Count <= 20)">
+                <summary class="cursor-pointer list-none">
+                    <h2 class="inline text-lg font-semibold text-text">@TagTypeLayout.Label(group.TagType)</h2>
+                    <span class="ml-2 text-sm text-[--color-text-muted]">(@group.Nodes.Count)</span>
+                </summary>
+                <div class="mt-3">
+                    <TagDirectorySection Group="group" OnEditTag="OpenEditModal" OnDeleteTag="OpenDeleteModal" />
+                </div>
+            </details>
+        }
+        else
+        {
+            <section id="@sectionId" class="mb-6">
+                <h2 class="mb-3 text-lg font-semibold text-text">@TagTypeLayout.Label(group.TagType)</h2>
+                <TagDirectorySection Group="group" OnEditTag="OpenEditModal" OnDeleteTag="OpenDeleteModal" />
+            </section>
+        }
+    }
+</div>
+
+@* Create / Edit modal *@
+@if (_editorOpen)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @onclick="CloseEditor">
+        <div class="max-w-lg w-full rounded-xl bg-surface p-6 shadow-lg" @onclick:stopPropagation="true">
+            <h2 class="mb-4 text-lg font-semibold text-text">
+                @(_editingTag is null ? "New Tag" : $"Edit: {_editingTag.TagName}")
+            </h2>
+            <TagEditorForm Directory="Directory"
+                           EditingTag="_editingTag"
+                           ServerError="_editorError"
+                           OnSave="HandleEditorSaveAsync"
+                           OnCancel="CloseEditor" />
+        </div>
+    </div>
+}
+
+@* Delete confirmation modal *@
+<ConfirmDialog IsOpen="_deleteOpen"
+               IsOpenChanged="v => _deleteOpen = v"
+               Title="Delete Tag"
+               Message="@($"Delete \"{_deletingTag?.TagName}\"? This cannot be undone.")"
+               ConfirmText="Delete"
+               IsDestructive="true"
+               OnConfirm="ConfirmDeleteAsync"
+               OnCancel="() => { _deleteOpen = false; _deletingTag = null; }" />
+
+@code {
+    [Parameter, EditorRequired] public List<TagDirectoryGroupDto> Directory { get; set; } = [];
+
+    [Parameter] public EventCallback<CreateTagDto> OnTagCreated { get; set; }
+    [Parameter] public EventCallback<UpdateTagDto> OnTagUpdated { get; set; }
+    [Parameter] public EventCallback<int> OnTagDeleted { get; set; }
+
+    // ── Editor modal state ────────────────────────────────────────────────────
+    private bool _editorOpen;
+    private TagChipDto? _editingTag;   // null = create mode; carries admin fields when from directory
+    private string? _editorError;
+
+    // ── Delete modal state ────────────────────────────────────────────────────
+    private bool _deleteOpen;
+    private TagChipDto? _deletingTag;
+
+    private void OpenCreateModal()
+    {
+        _editingTag = null;
+        _editorError = null;
+        _editorOpen = true;
+    }
+
+    private void OpenEditModal(TagChipDto chip)
+    {
+        _editingTag = chip;
+        _editorError = null;
+        _editorOpen = true;
+    }
+
+    private void OpenDeleteModal(TagChipDto chip)
+    {
+        _deletingTag = chip;
+        _deleteOpen = true;
+    }
+
+    private void CloseEditor()
+    {
+        _editorOpen = false;
+        _editingTag = null;
+        _editorError = null;
+    }
+
+    private async Task HandleEditorSaveAsync(TagEditorFormResult result)
+    {
+        _editorError = null;
+        try
+        {
+            if (_editingTag is null)
+            {
+                await OnTagCreated.InvokeAsync(new CreateTagDto
+                {
+                    TagName = result.TagName,
+                    TagTypeId = result.TagTypeId,
+                    Description = result.Description,
+                    SpriteIdentifier = result.SpriteIdentifier,
+                    IsFanon = result.IsFanon,
+                    AllowOCDetails = result.AllowOCDetails,
+                    ParentTagId = result.ParentTagId
+                });
+            }
+            else
+            {
+                await OnTagUpdated.InvokeAsync(new UpdateTagDto
+                {
+                    TagId = _editingTag.TagId,
+                    TagName = result.TagName,
+                    TagTypeId = result.TagTypeId,
+                    Description = result.Description,
+                    SpriteIdentifier = result.SpriteIdentifier,
+                    IsFanon = result.IsFanon,
+                    AllowOCDetails = result.AllowOCDetails,
+                    ParentTagId = result.ParentTagId
+                });
+            }
+            CloseEditor();
+        }
+        catch (TagValidationException ex)
+        {
+            _editorError = ex.Message;
+        }
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deletingTag is null) return;
+        try
+        {
+            await OnTagDeleted.InvokeAsync(_deletingTag.TagId);
+        }
+        catch (TagValidationException ex)
+        {
+            // Surface the "in use" error as an editor error for visibility.
+            _editorError = ex.Message;
+            _editorOpen = true;
+        }
+        _deleteOpen = false;
+        _deletingTag = null;
+    }
+}

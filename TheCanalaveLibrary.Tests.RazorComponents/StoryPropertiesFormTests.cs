@@ -169,5 +169,7 @@ file sealed class FakeTagReadServiceForForm : ITagReadService
         Task.FromResult(new List<TagChipDto>());
     public Task<List<TagChipDto>> GetTagChipsByIdsAsync(IReadOnlyList<int> tagIds) =>
         Task.FromResult(new List<TagChipDto>());
+    public Task<List<TagDirectoryGroupDto>> GetTagDirectoryAsync() =>
+        Task.FromResult(new List<TagDirectoryGroupDto>());
     private static Task<List<TagDropDownDTO>> Empty() => Task.FromResult(new List<TagDropDownDTO>());
 }

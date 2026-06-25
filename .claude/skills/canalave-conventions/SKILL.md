@@ -98,6 +98,13 @@ submission, display, Hidden Gem, and attribution sub-features. `Core/Messaging/`
 `SharedUI/Messaging/` (WU35) are the Messaging feature cluster — `EditorView` (consumed here)
 and `UserCard` (used to show conversation participants) remain in their own cross-cutting clusters;
 Messaging's own services, DTOs, page dispatcher, and leaf components live in this cluster.
+`Core/Profiles/`, `Server/Profiles/`, and `SharedUI/Profiles/` (WU30) are the Profiles feature
+cluster. `Core/Identity/` keeps the `User` entity + `IActiveUserContext`; `Core/Profiles/` holds
+the projection and settings-edit services *over* it — same distinction as `Core/Sprites/` (which
+owns `IThemeReadService`/`ISpriteReadService`) vs the entities those services project, or
+`Core/Users/` (the `UserCardDto` atom) vs `Core/Identity/` (the `User` entity itself). The cluster
+boundary is: Identity = the entity + auth plumbing; Profiles = how the entity is read and edited
+by the owner or public viewer.
 
 API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
 cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/SpriteEndpoints.cs`

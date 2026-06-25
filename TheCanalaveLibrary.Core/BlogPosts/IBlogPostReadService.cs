@@ -18,12 +18,15 @@ public interface IBlogPostReadService
     Task<BlogPostDto?> GetByIdAsync(int blogPostId);
 
     /// <summary>
-    /// Returns a page of <see cref="BlogPostListingDto"/> for a given author, ordered
-    /// newest-first. Includes published posts only (for profile feed — use the author-bypass
-    /// overload when the current user is the author and wants to see drafts).
+    /// Returns a page of <see cref="BlogPostListingDto"/> for a given author, ordered newest-first.
+    /// By default includes published posts only (for a public profile feed). When
+    /// <paramref name="includeUnpublished"/> is <c>true</c> (owner viewing their own Blog tab),
+    /// unpublished drafts are included too, with <see cref="BlogPostListingDto.IsPublished"/> set
+    /// accordingly so the card can display a "Draft" badge. Callers pass
+    /// <c>includeUnpublished: includePrivate</c> where <c>includePrivate = viewerId == authorId</c>.
     /// </summary>
     Task<(BlogPostListingDto[] Items, int TotalCount)> GetByAuthorAsync(
-        int authorId, int page, int pageSize);
+        int authorId, int page, int pageSize, bool includeUnpublished = false);
 
     /// <summary>
     /// Returns the edit-form DTO for a given blog post, or <c>null</c> if not found.

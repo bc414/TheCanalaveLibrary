@@ -23,6 +23,18 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   (`ChapterComment`, `BlogPostComment`, `GroupComment`, `UserProfileComment`); migration
   `WU31_5_DenormalizeTptDiscoveryColumns` copies data (base→child) before dropping base column;
   `dotnet test` 691/691 green — Integration tier confirms write + read round-trip.
+  **WU31_5b Stage-5 note (2026-06-25):** Four phantom down-navigation properties remained on
+  `BaseComment` (`BlogPostComment`, `ChapterComment`, `GroupComment`, `UserProfileComment`) — the
+  twin defect to the `DatePosted`-on-base issue WU31.5 fixed. EF materialized each as a
+  separate optional 1-to-many with `base_comments` as the dependent, creating four spurious FK
+  columns (`{type}_comment_comment_id`) plus their indexes on `base_comments`, pointing **base
+  → child** (backwards TPT). These formed FK cycles (`base_comments ↔ {child}_comments`) that
+  broke Respawn's topological sort, leaving `groups` uncleaned between integration tests and
+  causing `GroupServiceTests` to fail with `duplicate key` on `ix_groups_group_name`. Fix:
+  removed the four nav properties from `BaseComment.cs`; migration
+  `WU31_5b_DropPhantomBaseCommentFKs` drops the 4 columns / 4 indexes / 4 FK constraints.
+  Convention recorded in `canalave-conventions/layer1-data-model.md`. Verified: `dotnet test`
+  → 298 integration / 414 unit / 397 RazorComponents = 1,109 total, all green.
   **L5 — Stage 2. L6 — Stage 2** (golden index `(chapter_id, date_posted DESC)` on `chapter_comments`
   now possible — column is on the child table).
 - **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note

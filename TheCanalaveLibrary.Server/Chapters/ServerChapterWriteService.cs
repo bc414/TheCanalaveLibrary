@@ -211,6 +211,7 @@ public class ServerChapterWriteService(
 
     // Recomputes Story.WordCount as the sum of each primary ChapterContent's WordCount.
     // Called after any operation that may change a chapter's primary word count.
+    // Also updates the author's WordsWritten UserStat by the delta (cross-cutting.md §"UserStats Updates").
     private async Task RefreshStoryWordCountAsync(int storyId)
     {
         // Sum word counts of primary ChapterContent rows for this story.
@@ -222,8 +223,16 @@ public class ServerChapterWriteService(
         Story? story = await writeDb.Stories.FindAsync(storyId);
         if (story is not null)
         {
+            int wordDelta = totalWords - story.WordCount;
             story.WordCount = totalWords;
             await writeDb.SaveChangesAsync();
+
+            // Update the author's WordsWritten counter by the word-count delta.
+            if (wordDelta != 0)
+            {
+                await writeDb.UserStats.Where(us => us.UserId == story.AuthorId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(us => us.WordsWritten, us => us.WordsWritten + wordDelta));
+            }
         }
     }
 }

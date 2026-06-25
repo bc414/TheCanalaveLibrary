@@ -739,15 +739,27 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   Human visual sign-off pending → Stage 6.
   **Pointer:** `audit/UserStoryInteractions.md` Feature 17. **Deps:** WU14, WU16, WU23.
 
-### WU28 — Discovery pages + Tag Directory + Tag Admin
+### WU27.5 — Tag Directory + Tag Administration — DONE ✓ (2026-06-25)
+- **Cells:** 34 L2/L3/L3.5 → Stage 5, 11 L2/L3/L3.5 → Stage 5. L4 both features stays Stage 1.
+- **Done:** Phase 0: workplan split, audit repoints, cross-cutting.md role correction, forward_plan.md
+  resolved. Phase 1: `DataSeeder.cs` assigns AdminUser to Moderator+Admin; `Tag.ChildTags` nav rename;
+  composite `(TagName, TagTypeId)` index migration (`20260625032833_WU27_5_TagCompositeUniqueIndex`).
+  Phase 2: `GetTagDirectoryAsync` + `TagDirectoryGroupDto`/`TagDirectoryNodeDto`; `TagChipDto` extended
+  with `IsFanon`/`AllowOCDetails`/`ParentTagId`. Phase 3: `ITagWriteService`, `ServerTagWriteService`,
+  `TagValidations`, `TagValidationException`, `CreateTagDto`/`UpdateTagDto`, `TagTypeLayout`,
+  `TagEditorFormResult`; DI registered. Phase 4: `TagDirectoryPage` + `TagDirectoryDesktop` +
+  `TagDirectoryMobile` + `TagDirectorySection` + `TagEditorForm`. Phase 5: 75 tests green (23 Unit,
+  24 RazorComponents, 28 Integration). Detail in `audit/Tags.md` Feature 11 WU27.5 Stage note +
+  `audit/Discovery.md` Feature 34 WU27.5 Stage note.
+  **Tool:** Sonnet in Claude Code (plan approved 2026-06-24). **Pointer:** `audit/Tags.md` Feature 11,
+  `audit/Discovery.md` Feature 34. **Deps:** WU4, WU9, WU11 (all Stage 5).
+
+### WU28 — Discovery pages
 - **Cells:** 31 L3.5 (page), 32 L2/L3/L3.5 (FTS as filter axis + Rank relevance sort), 33 L2/L3/L3.5
-  (Manual Tree Search, stateless pivots), 34 L2/L3/L3.5 (Tag Directory `/tags`), 11 L2/L3/L3.5 (Tag admin
-  CRUD behind AuthorizeView on the directory).
-- **Do:** SearchPage (`/discover`, random-preloaded, "give me more" = interaction-as-pagination); Tag
-  Directory one-page/two-experiences — add a browse-by-type read method to `ITagReadService` (all tags
-  grouped by `TagTypeEnum`, with `Description` + resolved `SpriteUrl`, distinct from the existing
-  typeahead/bulk-by-id methods); manual tree pages. **Tool:** opusplan.
-  **Pointer:** `audit/Discovery.md`, `audit/Tags.md` Feature 11. **Deps:** WU14, WU23, WU4.
+  (Manual Tree Search, stateless pivots).
+- **Do:** SearchPage (`/discover`, random-preloaded, "give me more" = interaction-as-pagination);
+  manual tree pages. **Tool:** opusplan.
+  **Pointer:** `audit/Discovery.md`. **Deps:** WU14, WU23, WU4.
 
 ### WU29 — Recommendations ✓ DONE (2026-06-23/24)
 - **Cells:** 27/28/29/30 L2/L3/L3.5/L4/L5 (L5 includes integration test isolation overhaul);
@@ -759,12 +771,36 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **L4 visual sign-off:** completed 2026-06-23 (manual).
 - **Pointer:** `audit/Recommendations.md`.
 
-### WU30 — Profiles + Theme selection
-- **Cells:** 20/21/22 L2/L3/L3.5/L4, 3 L3/L3.5 (theme-selection UI in profile settings).
-- **Do:** profile editing (JSON settings groups, `IUserSettingsService` self-edit exception, picture
-  upload), display page (`/user/{UserId}/{*Tab}` — identity half + tabbed StoryDecks via
-  ResultsFilterPanel; UserCard vouches; badges), UserStats real-time counters. **Tool:** opusplan.
-  **Pointer:** `audit/Profiles.md`, `audit/Sprites.md` Feature 3. **Deps:** WU10, WU14, WU21, WU23.
+### WU30 — Profiles + Theme selection — DONE ✓ (2026-06-24)
+- **Cells:** 20/21/22 L2/L3/L3.5/L4 → Stage 5; 3 L3/L3.5 → Stage 5. L4 visual sign-off pending (human
+  run at `/settings` and `/user/{id}`) — Stage 6 gate = human visual approval.
+- **Completed:** `IUserSettingsService` self-edit exception (`GetMySettingsAsync`, `UpdateProfileAsync`,
+  `UpdateReaderSettingsAsync`, `UpdatePrivacySettingsAsync`, `UpdateAuthorSettingsAsync`,
+  `UpdateAppearanceAsync`, `UploadProfilePictureAsync`). `IUserProfileReadService`
+  (`GetProfileHeaderAsync(userId, includePrivate)`, `GetProfileTextAsync`). `IThemeReadService.GetThemesAsync`.
+  Candidate-id queries: `GetFavoriteStoryIdsAsync` (on `IUserStoryInteractionReadService`),
+  `GetRecommendedStoryIdsByUserAsync` (on `IRecommendationReadService`). `IBlogPostReadService.GetByAuthorAsync`
+  extended with `includeUnpublished` flag; `IsPublished` added to `BlogPostListingDto`.
+  `SettingsPage.razor` at `/settings` + 5 injection-free sub-form components (`ProfileSettingsForm`,
+  `ReaderSettingsForm`, `PrivacySettingsForm`, `AuthorSettingsForm`, `AppearanceSettingsForm`).
+  `ProfilePage.razor` at `/user/{UserId:int}/{*Tab}` (dispatcher — banner-once, tab-payload-on-switch;
+  own-vs-other `includePrivate`; device-branch to `ProfileDesktop`/`ProfileMobile`).
+  `ProfileBanner` (avatar, tagline, stats, vouches, relationship actions, Edit Profile link).
+  `ProfileDesktop`/`ProfileMobile` (tab body — Profile tab = bio + `CommentSection` UserProfile context;
+  story tabs = `StoryDeck` + `ResultsFilterPanel`; Blog tab = paginated `BlogPostCard` list).
+  `UserStatsBlock` leaf. `BlogPostCard` de-nested (Edit link sibling of title anchor; `IsOwner`/`EditHref`
+  params; draft badge). `CommentSection` generalized to 4th context (UserProfile) —
+  `ProfileUserId` param, `UserProfile` case in all switches. UserStats real-time counter wiring across
+  8 write services (`FollowerCount`/`AuthorsFollowed`, `StoriesWritten`, `WordsWritten` ± delta,
+  `CommentsWritten` ±1, `RecommendationsWritten`/`RecommendationsReceived`, `BlogPostsWritten` ±1,
+  `GroupsJoined` ±1, `FavoritesOnStories`/`StoriesRead`/`StoriesInProgress`/`StoriesIgnored` via
+  transition-delta).
+- **Verified:** `dotnet build` green (1 pre-existing warning). `dotnet test`: 236 non-Group integration
+  tests pass; 373 RazorComponents tests pass; 44 GroupServiceTests fail (all pre-existing WU32 issue —
+  root cause at `CreateGroupAsync` line 47, unrelated to WU30 counter additions). Integration tests for
+  WU30-specific paths (UserSettings round-trips, counter assertion, UserProfileComments) deferred to
+  Phase 5. L4 visual sign-off pending (human).
+- **Pointer:** `audit/Profiles.md`, `audit/Sprites.md` Feature 3 L3/L3.5. **Deps:** WU10, WU14, WU21, WU23.
 
 ### WU31 — Blog posts (profile only; Feature 56 deferred post-MVP) — DONE ✓ (2026-06-24)
 - **Cells:** 35/36 L2/L3/L3.5 → Stage 5. L4 → Stage 1 (visual sign-off pending, same as WU13/WU24).
@@ -793,6 +829,34 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   Content-rating projection path covered by existing `GetById_MaturePost_HiddenFromNonMatureViewer`,
   `GetById_MaturePost_VisibleToMatureViewer`, `GetById_MaturePost_VisibleToAuthorRegardlessOfMatureSetting`.
 - **Pointer:** `audit/BlogPosts.md`, `audit/Comments.md`. **Deps:** WU31.
+
+### WU31_5b — TPT phantom BaseComment FKs + integration-test DB wiring — DONE ✓ (2026-06-25)
+- **Cells:** F23–F26 L1 (momentarily reopened, returned to Stage 5 on green tests);
+  F38/39/40 L5 (2 → 5, unblocked by this fix).
+- **Completed:**
+  (1) Removed four phantom down-navigation properties from `BaseComment`
+  (`BlogPostComment`, `ChapterComment`, `GroupComment`, `UserProfileComment`). These caused EF to
+  produce backwards FK columns on `base_comments` (`{type}_comment_comment_id`), forming FK cycles
+  that broke Respawn's topological sort and left `groups` rows alive between tests.
+  Migration `WU31_5b_DropPhantomBaseCommentFKs` drops the 4 columns / 4 indexes / 4 FK constraints.
+  Convention added to `canalave-conventions/layer1-data-model.md`.
+  (2) Fixed `TestAppFactory` DB wiring: `ConfigureAppConfiguration` fires too late with
+  `WebApplicationBuilder` — the connection string is read before the override lands. Rewrote to
+  re-register both `DbContextOptions` in `ConfigureServices`. Documented in `testing.md`.
+  (3) Fixed `ServerGroupWriteService.AddStoryAsync`: story lookup was missing
+  `IgnoreQueryFilters(["ContentRating"])` — M-rated stories appeared not-found when `ShowMatureContent`
+  was false, causing `AddStory_Tier2_…_Throws` to throw `KeyNotFoundException` instead of the
+  expected `ContentRatingExceededException`.
+  (4) Fixed `ServerRecommendationWriteService.SubmitAsync`: (a) `Select((int?)s.AuthorId)
+  .FirstOrDefault()` confuses "story not found" with "story has null AuthorId" — fixed with
+  anonymous-type projection; (b) unconditional `.Value` on nullable `storyAuthorId` crashes on
+  authorless stories — fixed with `if (storyAuthorId.HasValue)`.
+  (5) Fixed `GroupServiceTests.CreateGroup_Mature_PersistsCorrectRatingPair`: used `FindAsync`
+  which applies the `GroupAudience` filter — Mature group returned null. Fixed with
+  `IgnoreQueryFilters().FirstOrDefaultAsync(...)`.
+- **Verified:** `dotnet test` → 298 integration / 414 unit / 397 RazorComponents = 1,109 total,
+  all green.
+- **Pointer:** `audit/Comments.md`, `audit/Groups.md`, `canalave-conventions/testing.md`. **Deps:** WU31.5.
 
 ### WU32 — Groups — DONE ✓ (2026-06-24)
 - **Cells:** 38/39/40 L2/L3/L3.5/L4 → Stage 5.
@@ -850,7 +914,12 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 ### WU37 — Remaining Stories/Tags cluster
 - **Cells:** 9 L2/L3/L3.5/L4 (Series), 10 L2/L3/L3.5/L4 (Relationships), 12 L2/L3/L3.5 (Story Tagging
   write), 15 L2/L3/L3.5/L4 (Saved Tag Selections, copy-on-write share).
-- **Tool:** opusplan. **Pointer:** `audit/Stories.md`, `audit/Tags.md` Features 12, 15. **Deps:** WU11, WU24.
+- **Note (Feature 12 + 10):** Full OC workflow, Priority ("Primary"/"Supporting"), and SettingDetails
+  design from `Tag_Design_Deliberations.md` is captured in `audit/Tags.md` Feature 12. Key points:
+  OC enforcement via `TR_StoryCharacters_EnforceOCLogic` (uses `AllowOCDetails` gate set by WU27.5);
+  `Priority` TINYINT enum on story↔tag link; `AllowSettingDetails` gate + `SettingDetails` row
+  (absent from current model — add here); fanonize `TagUpdateSuggestion` notify/migrate seam.
+- **Tool:** opusplan. **Pointer:** `audit/Stories.md`, `audit/Tags.md` Features 12, 15. **Deps:** WU11, WU24, WU27.5.
 
 ### WU38 — Account deletion UI + View Count + Export
 - **Cells:** 52 L3/L3.5 (deletion UI; service in WU1), 45 L2/L3 (view-count MVP direct increment, first

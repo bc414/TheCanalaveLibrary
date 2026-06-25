@@ -1,0 +1,76 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Presentational composite — renders one TagDirectoryGroupDto as a parent→child tag tree.
+   Shared between TagDirectoryDesktop and TagDirectoryMobile. Mod edit/delete buttons are
+   gated by AuthorizeView; callbacks fire up to the desktop (which opens the modal). WU27.5. *@
+
+<div class="flex flex-col gap-2">
+    @foreach (var node in Group.Nodes)
+    {
+        @* Parent chip row *@
+        <div class="group/row flex items-center gap-2">
+            <TagChip Tag="node.Tag" />
+            <AuthorizeView Roles="Moderator,Admin">
+                <Authorized>
+                    <button type="button"
+                            class="hidden group-hover/row:inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[--color-text-muted] hover:bg-[--color-primary]/10 transition-colors"
+                            @onclick="() => OnEditTag.InvokeAsync(node.Tag)"
+                            title="Edit @node.Tag.TagName">
+                        ✎
+                    </button>
+                    <button type="button"
+                            class="hidden group-hover/row:inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[--color-text-muted] hover:bg-[--color-danger]/10 transition-colors"
+                            @onclick="() => OnDeleteTag.InvokeAsync(node.Tag)"
+                            title="Delete @node.Tag.TagName">
+                        ✕
+                    </button>
+                </Authorized>
+            </AuthorizeView>
+        </div>
+
+        @* Children nested beneath their parent *@
+        @if (node.Children.Count > 0)
+        {
+            <div class="ml-6 flex flex-col gap-1.5">
+                @foreach (var child in node.Children)
+                {
+                    <div class="group/row flex items-center gap-2">
+                        <TagChip Tag="child" />
+                        <AuthorizeView Roles="Moderator,Admin">
+                            <Authorized>
+                                <button type="button"
+                                        class="hidden group-hover/row:inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[--color-text-muted] hover:bg-[--color-primary]/10 transition-colors"
+                                        @onclick="() => OnEditTag.InvokeAsync(child)"
+                                        title="Edit @child.TagName">
+                                    ✎
+                                </button>
+                                <button type="button"
+                                        class="hidden group-hover/row:inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[--color-text-muted] hover:bg-[--color-danger]/10 transition-colors"
+                                        @onclick="() => OnDeleteTag.InvokeAsync(child)"
+                                        title="Delete @child.TagName">
+                                    ✕
+                                </button>
+                            </Authorized>
+                        </AuthorizeView>
+                    </div>
+                }
+            </div>
+        }
+    }
+
+    @if (Group.Nodes.Count == 0)
+    {
+        <p class="text-sm text-[--color-text-muted] italic">No tags yet.</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TagDirectoryGroupDto Group { get; set; } = null!;
+
+    /// <summary>Fired when the edit button is clicked. Payload is the chip carrying admin fields.</summary>
+    [Parameter] public EventCallback<TagChipDto> OnEditTag { get; set; }
+
+    /// <summary>Fired when the delete button is clicked.</summary>
+    [Parameter] public EventCallback<TagChipDto> OnDeleteTag { get; set; }
+}

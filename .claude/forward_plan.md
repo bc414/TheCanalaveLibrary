@@ -218,6 +218,12 @@ Guardrails:
 
 **Resolved:**
 
+- **Moderator role assignment in dev seed** — resolved (2026-06-24, WU27.5): role *rows* are already
+  seeded via `ApplicationRoleConfiguration.HasData`. WU27.5 assigns `AdminUser` to both `"Moderator"`
+  and `"Admin"` in `DataSeeder.cs` — role gate is now exercisable end-to-end. Admin-inheritance
+  expressed by listing both roles (IsInRole is literal). See `cross-cutting.md` "Role-Based
+  (Moderator) Gating."
+
 - **WU32 Groups — four design decisions** — resolved (2026-06-24, WU32 planning):
   (1) **Rating model:** `AudienceRating` (group visibility) and `MaxContentRating` (content ceiling)
   are two distinct properties; three `GroupAudienceType` presets (Standard/SfwOnly/Mature) are a
@@ -412,6 +418,39 @@ Guardrails:
   correction #2).
   See `cross-cutting.md` "Notification bell"; `audit/Notifications.md` Feature 42 WU33 additive note;
   `layer3.5-structure.md` "Notification Presentation Model."
+
+- **WU30 Profiles + theme-selection — settled decisions** — resolved (2026-06-24, WU30 planning):
+  (1) **`IUserSettingsService` self-referential exception** (spec §3.5): single integrated
+  read+write service is sanctioned only when reader=writer population; resolves target from
+  `IActiveUserContext`, never takes a `userId`; every method throws if unauthenticated.
+  Contrast with `IUserProfileReadService` (public display, read-only, own-vs-other =
+  `bool includePrivate` predicate). See `layer2-services.md` "Self-Referential Editing Exception."
+  (2) **UserStats counter wiring:** built-event counters wired now into the already-built write
+  services (Following, Stories, Chapters, Comments×4, Recommendations, BlogPosts, Groups,
+  UserStoryInteractions). Transition-delta rule for USI-derived counters (increment/decrement only
+  on boolean flip, not every call). Counters for unbuilt features (ViewsOnStories WU38,
+  acknowledgments WU37, SpotlightCount post-MVP, ActiveReportCount WU34) deferred.
+  See `cross-cutting.md` "UserStats Updates — Counter ↔ event map."
+  (3) **Profile comment wall:** `UserProfileComment` wall rendered inside the Profile tab (not
+  beside story decks). Generalize `CommentSection` to a 4th context (`ProfileUserId` param +
+  `CommentTarget.UserProfile`), gated by `PrivacySettings.AllowProfileComments`.
+  See `layer3.5-structure.md` "CommentSection — Multi-Context Dispatch."
+  (4) **Profile page shape:** persistent metadata banner (avatar/name/tagline/stats/badges/vouches/
+  relationship actions) on top, then a tabbed body. Five tabs: Profile (bio + CommentSection),
+  Favorites, Recommendations, Authored (each a StoryDeck + ResultsFilterPanel), Blog
+  (paginated BlogPostCard list). Comments and StoryDecks never share a view.
+  See `layer3.5-structure.md` "Profile Page Composition."
+  (5) **Blog tab owner/viewer distinction + GetByAuthorAsync extension:** owner sees drafts
+  ("Draft" badge), per-card Edit affordance, and "+ New Post" tab button; viewers see published
+  only. Requires: `bool IsPublished` added to `BlogPostListingDto`; `includeUnpublished` flag on
+  `IBlogPostReadService.GetByAuthorAsync` (default `false`); `BlogPostCard` de-nested anchor +
+  optional owner affordances (gated by `IsOwner` param). `GroupDesktop` usage unaffected.
+  (6) **`IThemeReadService.GetThemesAsync()` in `Core/Sprites/`** (Feature 3 owns Theme); Server
+  impl reading `Themes` table. Surfaced in `/settings` Appearance section.
+  (7) **`Profiles/` cluster** added to Code Organization: `Core/Profiles/`, `Server/Profiles/`,
+  `SharedUI/Profiles/`. `Core/Identity/` keeps the `User` entity + `IActiveUserContext`;
+  `Core/Profiles/` holds the projection/edit services over it.
+  See `canalave-conventions/SKILL.md` "Code Organization" and `layer3.5-structure.md."
 
 - **Integration test isolation foundation** — resolved (2026-06-24, post-WU29): **Respawn
   reset between every test.** The integration suite had no reset mechanism; tests shared one

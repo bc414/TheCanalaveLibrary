@@ -37,4 +37,12 @@ public interface IRecommendationReadService
     /// Anonymous → null. No source row → null. Success already recorded → null.
     /// </summary>
     Task<int?> GetHelpfulPromptRecommendationIdAsync(int storyId);
+
+    /// <summary>
+    /// Returns the IDs of stories that <paramref name="userId"/> has written an Approved
+    /// recommendation for. Used by the profile page's Recommendations tab as the candidate ID
+    /// set, passed to <see cref="IStoryReadService.GetListingsAsync"/> with
+    /// <c>restrictToStoryIds</c>. Public — any viewer may see another user's recommendations.
+    /// </summary>
+    Task<IReadOnlyList<int>> GetRecommendedStoryIdsByUserAsync(int userId);
 }

@@ -38,6 +38,14 @@ public class ServerUserStoryInteractionWriteService(
             writeDb.UserStoryInteractions.Add(row);
         }
 
+        // Capture derived state BEFORE applying the update (transition-delta rule —
+        // cross-cutting.md §"Transition-delta rule for UserStoryInteraction-derived counters").
+        bool wasFavorite    = row?.IsFavorite  ?? false;
+        bool wasCompleted   = row?.IsCompleted ?? false;
+        bool wasIgnored     = row?.IsIgnored   ?? false;
+        bool hadStarted     = row?.HasStarted  ?? false;
+        bool wasInProgress  = hadStarted && !wasCompleted;
+
         // Apply the six panel bits — HasStarted is intentionally untouched.
         DateTime now = DateTime.UtcNow;
         EnsureDatePartition(row!, now, update);
@@ -67,6 +75,51 @@ public class ServerUserStoryInteractionWriteService(
         }
 
         await writeDb.SaveChangesAsync();
+
+        // ── Transition-delta UserStats updates ───────────────────────────────────
+        // Counter moves only when the effective derived state *flips* (cross-cutting.md
+        // §"Transition-delta rule for UserStoryInteraction-derived counters").
+
+        // FavoritesOnStories → story author's stat
+        bool willBeFavorite = update.IsFavorite;
+        if (willBeFavorite != wasFavorite)
+        {
+            int? storyAuthorId = await writeDb.Stories
+                .Where(s => s.StoryId == storyId)
+                .Select(s => (int?)s.AuthorId)
+                .FirstOrDefaultAsync();
+            if (storyAuthorId.HasValue)
+            {
+                int delta = willBeFavorite ? 1 : -1;
+                await writeDb.UserStats.Where(us => us.UserId == storyAuthorId.Value)
+                    .ExecuteUpdateAsync(s => s.SetProperty(us => us.FavoritesOnStories, us => us.FavoritesOnStories + delta));
+            }
+        }
+
+        // StoriesRead / StoriesInProgress / StoriesIgnored → acting user's stat.
+        // HasStarted is unchanged by this method; use captured hadStarted.
+        bool willBeCompleted  = update.IsCompleted;
+        bool willBeIgnored    = update.IsIgnored;
+        bool willBeInProgress = hadStarted && !willBeCompleted;
+
+        if (willBeCompleted != wasCompleted)
+        {
+            int delta = willBeCompleted ? 1 : -1;
+            await writeDb.UserStats.Where(us => us.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(us => us.StoriesRead, us => us.StoriesRead + delta));
+        }
+        if (willBeInProgress != wasInProgress)
+        {
+            int delta = willBeInProgress ? 1 : -1;
+            await writeDb.UserStats.Where(us => us.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(us => us.StoriesInProgress, us => us.StoriesInProgress + delta));
+        }
+        if (willBeIgnored != wasIgnored)
+        {
+            int delta = willBeIgnored ? 1 : -1;
+            await writeDb.UserStats.Where(us => us.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(us => us.StoriesIgnored, us => us.StoriesIgnored + delta));
+        }
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────────

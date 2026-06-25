@@ -39,6 +39,15 @@ public static class CommentValidations
     }
 
     /// <inheritdoc cref="CanSave(PostChapterCommentDto)"/>
+    public static List<string> CanSave(this PostUserProfileCommentDto dto)
+    {
+        var errors = new List<string>();
+        if (string.IsNullOrWhiteSpace(dto.CommentText))
+            errors.Add("Comment text must not be empty.");
+        return errors;
+    }
+
+    /// <inheritdoc cref="CanSave(PostChapterCommentDto)"/>
     public static List<string> CanSave(this UpdateCommentDto dto)
     {
         var errors = new List<string>();

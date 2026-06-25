@@ -37,6 +37,9 @@ public class FakeRecommendationWriteService : IRecommendationWriteService
     public Task<int?> GetHelpfulPromptRecommendationIdAsync(int storyId) =>
         Task.FromResult(_helpfulPromptRecId);
 
+    public Task<IReadOnlyList<int>> GetRecommendedStoryIdsByUserAsync(int userId) =>
+        Task.FromResult<IReadOnlyList<int>>([]);
+
     // ── Write tracking ────────────────────────────────────────────────────────────
 
     public List<RecommendationSubmitDto> SubmitCalls { get; } = [];

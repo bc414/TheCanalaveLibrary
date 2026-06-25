@@ -71,6 +71,18 @@ public class ServerUserStoryInteractionReadService(
         return await query.Select(i => i.StoryId).ToListAsync();
     }
 
+    public async Task<IReadOnlyList<int>> GetFavoriteStoryIdsAsync(int userId, bool includePrivate)
+    {
+        // includePrivate = true when the owner views their own profile; false for visitors.
+        // Hidden favorites (IsHiddenFavorite) are visible only to the owner.
+        return await readDb.UserStoryInteractions
+            .Where(i => i.UserId == userId
+                        && i.IsFavorite
+                        && (includePrivate || !i.IsHiddenFavorite))
+            .Select(i => i.StoryId)
+            .ToListAsync();
+    }
+
     private static UserStoryInteractionStateDto ToDto(UserStoryInteraction i) =>
         new(i.StoryId, i.HasStarted, i.IsCompleted, i.IsFavorite,
             i.IsHiddenFavorite, i.IsFollowed, i.IsReadItLater, i.IsIgnored);

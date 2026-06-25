@@ -48,6 +48,12 @@ public class ServerFollowingWriteService(
 
         await writeDb.SaveChangesAsync();
 
+        // Increment UserStats counters for both sides (cross-cutting.md §"UserStats Updates").
+        await writeDb.UserStats.Where(us => us.UserId == targetUserId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.FollowerCount, us => us.FollowerCount + 1));
+        await writeDb.UserStats.Where(us => us.UserId == actorId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.AuthorsFollowed, us => us.AuthorsFollowed + 1));
+
         // Best-effort post-commit notification (WU22). Primary save already committed above;
         // a notification failure must not roll back the follow. See cross-cutting.md.
         try { await notifications.NotifyNewFollowerAsync(targetUserId, actorId); }
@@ -65,6 +71,12 @@ public class ServerFollowingWriteService(
 
         writeDb.FollowedUsers.Remove(row);
         await writeDb.SaveChangesAsync();
+
+        // Decrement UserStats counters for both sides (cross-cutting.md §"UserStats Updates").
+        await writeDb.UserStats.Where(us => us.UserId == targetUserId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.FollowerCount, us => us.FollowerCount - 1));
+        await writeDb.UserStats.Where(us => us.UserId == actorId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.AuthorsFollowed, us => us.AuthorsFollowed - 1));
     }
 
     public async Task SetReceiveAlertsAsync(int targetUserId, bool receiveAlerts)

@@ -70,12 +70,20 @@ public class ServerBlogPostReadService(
     }
 
     public async Task<(BlogPostListingDto[] Items, int TotalCount)> GetByAuthorAsync(
-        int authorId, int page, int pageSize)
+        int authorId, int page, int pageSize, bool includeUnpublished = false)
     {
         Rating maxRating = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
 
-        IQueryable<ProfileBlogPost> query = readDb.ProfileBlogPosts
-            .Where(p => p.AuthorId == authorId && p.IsPublished && p.Rating <= maxRating);
+        // includeUnpublished is true only when the owner is viewing their own profile (the caller
+        // passes includeUnpublished: includePrivate where includePrivate = viewerId == authorId).
+        // When false: published-only, rating-filtered (the usual public-feed case).
+        // When true:  also include drafts (IsPublished = false), and bypass the rating ceiling so
+        //             the author can see their own mature unpublished posts.
+        IQueryable<ProfileBlogPost> query = includeUnpublished
+            ? readDb.ProfileBlogPosts
+                .Where(p => p.AuthorId == authorId)
+            : readDb.ProfileBlogPosts
+                .Where(p => p.AuthorId == authorId && p.IsPublished && p.Rating <= maxRating);
 
         int totalCount = await query.CountAsync();
 
@@ -84,18 +92,19 @@ public class ServerBlogPostReadService(
 
         // Load raw content server-side; MakeSnippet is computed in-process after projection
         // (SQL has no HTML-stripping function; the snippet is a display concern, not a search one).
-        List<(int BlogPostId, string Title, string Content, DateTime DateCreated, Rating Rating, bool HasSpoilers)> rows
+        List<(int BlogPostId, string Title, string Content, DateTime DateCreated, Rating Rating, bool HasSpoilers, bool IsPublished)> rows
             = await query
                 .OrderByDescending(p => p.DateCreated)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .Select(p => new ValueTuple<int, string, string, DateTime, Rating, bool>(
-                    p.BlogPostId, p.Title, p.Content, p.DateCreated, p.Rating, p.HasSpoilers))
+                .Select(p => new ValueTuple<int, string, string, DateTime, Rating, bool, bool>(
+                    p.BlogPostId, p.Title, p.Content, p.DateCreated, p.Rating, p.HasSpoilers, p.IsPublished))
                 .ToListAsync();
 
         BlogPostListingDto[] items = rows
             .Select(r => new BlogPostListingDto(
-                r.Item1, r.Item2, BlogPostText.MakeSnippet(r.Item3), r.Item4, r.Item5, r.Item6))
+                r.Item1, r.Item2, BlogPostText.MakeSnippet(r.Item3), r.Item4, r.Item5, r.Item6,
+                IsPublished: r.Item7))
             .ToArray();
 
         return (items, totalCount);
@@ -146,7 +155,8 @@ public class ServerBlogPostReadService(
 
         BlogPostListingDto[] items = rows
             .Select(r => new BlogPostListingDto(
-                r.Item1, r.Item2, BlogPostText.MakeSnippet(r.Item3), r.Item4, r.Item5, r.Item6))
+                r.Item1, r.Item2, BlogPostText.MakeSnippet(r.Item3), r.Item4, r.Item5, r.Item6,
+                IsPublished: true))  // group feed always published-only
             .ToArray();
 
         return (items, totalCount);

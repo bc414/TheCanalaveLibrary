@@ -1,0 +1,232 @@
+@page "/user/{UserId:int}/{*Tab}"
+@namespace TheCanalaveLibrary.SharedUI
+@using Microsoft.AspNetCore.Authorization
+@using System.Security.Claims
+@attribute [AllowAnonymous]
+@inject IUserProfileReadService ProfileReadService
+@inject IFollowingReadService FollowingReadService
+@inject IFollowingWriteService FollowingWriteService
+@inject IStoryReadService StoryReadService
+@inject IUserStoryInteractionReadService InteractionReadService
+@inject IRecommendationReadService RecommendationReadService
+@inject IBlogPostReadService BlogPostReadService
+@inject IDeviceDetectionService DeviceService
+@inject NavigationManager Nav
+
+@* Dispatcher — Feature 21 (User Profile Display), WU30.
+   Route: /user/{UserId:int}/{*Tab}  (default tab = "profile").
+   [AllowAnonymous] — public page; ProfileVisibility is enforced by GetProfileHeaderAsync.
+
+   Load model (mirrors BookshelvesPage dispatcher pattern):
+   1. Resolve the current user from AuthState; compute includePrivate = (viewerId == UserId).
+   2. Load GetProfileHeaderAsync once (banner is tab-independent); overlay RelationshipState
+      via IFollowingReadService when authenticated and not the owner.
+   3. Load the tab payload on init, then reload only the payload on tab switch.
+   4. Device-branch to ProfileDesktop / ProfileMobile.
+
+   ProfileBanner always receives RelationshipState = null for anonymous or owner — no Follow/Vouch
+   controls. The owner receives IsOwner = true; no other viewer does. *@
+
+@if (_isLoading)
+{
+    <PageTitle>Profile</PageTitle>
+    <p class="text-[--color-text-muted]"><em>Loading profile…</em></p>
+}
+else if (_header is null)
+{
+    <PageTitle>Not Found</PageTitle>
+    <p class="text-[--color-text-muted]">This profile doesn't exist or isn't visible to you.</p>
+}
+else
+{
+    <PageTitle>@_header.Username &mdash; Profile</PageTitle>
+
+    @if (DeviceService.IsMobile())
+    {
+        <ProfileMobile Header="@_header"
+                       Tab="@_tab"
+                       IsOwner="@_isOwner"
+                       CurrentUserId="@_currentUserId"
+                       RelationshipState="@_relationship"
+                       OnRemoveVouch="HandleRemoveVouchAsync"
+                       BioHtml="@_bioHtml"
+                       StoryItems="@_storyItems"
+                       StoryTotalCount="@_storyTotalCount"
+                       InteractionStates="@_interactionStates"
+                       StoryFilter="@_storyFilter"
+                       OnStoryFilterChanged="HandleStoryFilterChanged"
+                       OnStoryPageChanged="HandleStoryPageChanged"
+                       BlogPosts="@_blogPosts"
+                       BlogTotalCount="@_blogTotalCount"
+                       BlogPage="@_blogPage"
+                       BlogPageSize="@BlogPageSize"
+                       OnBlogPageChanged="HandleBlogPageChanged" />
+    }
+    else
+    {
+        <ProfileDesktop Header="@_header"
+                        Tab="@_tab"
+                        IsOwner="@_isOwner"
+                        CurrentUserId="@_currentUserId"
+                        RelationshipState="@_relationship"
+                        OnRemoveVouch="HandleRemoveVouchAsync"
+                        BioHtml="@_bioHtml"
+                        StoryItems="@_storyItems"
+                        StoryTotalCount="@_storyTotalCount"
+                        InteractionStates="@_interactionStates"
+                        StoryFilter="@_storyFilter"
+                        OnStoryFilterChanged="HandleStoryFilterChanged"
+                        OnStoryPageChanged="HandleStoryPageChanged"
+                        BlogPosts="@_blogPosts"
+                        BlogTotalCount="@_blogTotalCount"
+                        BlogPage="@_blogPage"
+                        BlogPageSize="@BlogPageSize"
+                        OnBlogPageChanged="HandleBlogPageChanged" />
+    }
+}
+
+@code {
+    [Parameter] public int UserId { get; set; }
+    [Parameter] public string? Tab { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private const int BlogPageSize = 20;
+    private const int StoryPageSize = 20;
+
+    private ProfileTab _tab;
+    private ProfileHeaderDto? _header;
+    private bool _isLoading = true;
+
+    private int? _currentUserId;
+    private bool _isOwner;
+    private UserRelationshipStateDto? _relationship; // null = anonymous or owner
+
+    // Profile tab
+    private string? _bioHtml;
+
+    // Story tabs
+    private IReadOnlyList<int> _candidateIds = [];
+    private StoryListingDto[] _storyItems = [];
+    private int _storyTotalCount;
+    private IReadOnlyDictionary<int, UserStoryInteractionStateDto>? _interactionStates;
+    private StoryFilterDto _storyFilter = new StoryFilterDto { PageSize = StoryPageSize };
+
+    // Blog tab
+    private BlogPostListingDto[] _blogPosts = [];
+    private int _blogTotalCount;
+    private int _blogPage = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Resolve current viewer
+        var authState = await AuthState;
+        string? idClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out int id)) _currentUserId = id;
+
+        _isOwner = _currentUserId.HasValue && _currentUserId.Value == UserId;
+
+        // Parse tab
+        ProfileTab? parsed = ProfileTabSlug.Parse(Tab);
+        if (parsed is null) { Nav.NavigateTo("/not-found"); return; }
+        _tab = parsed.Value;
+
+        // Load banner (once — tab-independent)
+        _header = await ProfileReadService.GetProfileHeaderAsync(UserId, includePrivate: _isOwner);
+        if (_header is null) { _isLoading = false; return; }
+
+        // Overlay relationship state for authenticated non-owners
+        if (_currentUserId.HasValue && !_isOwner)
+        {
+            _relationship = await FollowingReadService.GetRelationshipStateAsync(UserId);
+        }
+
+        // Load initial tab payload concurrently with bio text when on the Profile tab,
+        // otherwise just load the tab payload.
+        if (_tab == ProfileTab.Profile)
+        {
+            Task<string?> bioTask = ProfileReadService.GetProfileTextAsync(UserId);
+            await bioTask;
+            _bioHtml = bioTask.Result;
+        }
+        else
+        {
+            await LoadTabPayloadAsync();
+        }
+
+        _isLoading = false;
+    }
+
+    // ── Tab payload loading ───────────────────────────────────────────────────────
+
+    private Task LoadTabPayloadAsync() => _tab switch
+    {
+        ProfileTab.Profile => LoadBioAsync(),
+        ProfileTab.Blog    => LoadBlogAsync(),
+        _                  => LoadStoryTabAsync(),
+    };
+
+    private async Task LoadBioAsync()
+    {
+        _bioHtml = await ProfileReadService.GetProfileTextAsync(UserId);
+    }
+
+    private async Task LoadStoryTabAsync()
+    {
+        _candidateIds = await GetCandidateIdsForTabAsync(_tab);
+        await ReloadStoryListingsAsync();
+    }
+
+    private async Task ReloadStoryListingsAsync()
+    {
+        (_storyItems, _storyTotalCount) = await StoryReadService.GetListingsAsync(_storyFilter, _candidateIds);
+        _interactionStates = _storyItems.Length > 0 && _currentUserId.HasValue
+            ? await InteractionReadService.GetStatesByStoryIdsAsync([.. _storyItems.Select(i => i.StoryId)])
+            : new Dictionary<int, UserStoryInteractionStateDto>();
+    }
+
+    private async Task LoadBlogAsync()
+    {
+        (_blogPosts, _blogTotalCount) = await BlogPostReadService.GetByAuthorAsync(
+            UserId, _blogPage, BlogPageSize, includeUnpublished: _isOwner);
+    }
+
+    private Task<IReadOnlyList<int>> GetCandidateIdsForTabAsync(ProfileTab tab) => tab switch
+    {
+        ProfileTab.Favorites       => InteractionReadService.GetFavoriteStoryIdsAsync(UserId, includePrivate: _isOwner),
+        ProfileTab.Recommendations => RecommendationReadService.GetRecommendedStoryIdsByUserAsync(UserId),
+        ProfileTab.Authored        => StoryReadService.GetStoryIdsByAuthorAsync(UserId),
+        _                          => Task.FromResult<IReadOnlyList<int>>([])
+    };
+
+    // ── Story tab event handlers ──────────────────────────────────────────────────
+
+    private async Task HandleStoryFilterChanged(StoryFilterDto filter)
+    {
+        _storyFilter = filter with { Page = 1 };
+        await ReloadStoryListingsAsync();
+    }
+
+    private async Task HandleStoryPageChanged(int page)
+    {
+        _storyFilter = _storyFilter with { Page = page };
+        await ReloadStoryListingsAsync();
+    }
+
+    // ── Blog tab event handlers ───────────────────────────────────────────────────
+
+    private async Task HandleBlogPageChanged(int page)
+    {
+        _blogPage = page;
+        await LoadBlogAsync();
+    }
+
+    // ── Remove vouch (owner action — bubbled from VouchList) ──────────────────────
+
+    private async Task HandleRemoveVouchAsync(int vouchedUserId)
+    {
+        await FollowingWriteService.RemoveVouchAsync(vouchedUserId);
+        // Reload the banner's vouch list — refresh the header
+        _header = await ProfileReadService.GetProfileHeaderAsync(UserId, includePrivate: _isOwner);
+    }
+}

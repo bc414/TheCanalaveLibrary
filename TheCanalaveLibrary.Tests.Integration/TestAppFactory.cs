@@ -1,10 +1,11 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using TheCanalaveLibrary.Core;
+using TheCanalaveLibrary.Server;
 
 namespace TheCanalaveLibrary.Tests.Integration;
 
@@ -12,11 +13,16 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// Boots the real <c>TheCanalaveLibrary.Server</c> host (the actual <c>Program.cs</c>, not a hand-built
 /// substitute) against a Testcontainers Postgres connection string, with the real claims-based
 /// <see cref="ServerActiveUserContext"/> swapped for a settable <see cref="FakeActiveUserContext"/> —
-/// see testing.md "Driving the content-rating filter." Everything else (both DbContexts, the real
-/// service registrations, Identity) is wired exactly as production; this is the standard "swap one DI
-/// registration" WebApplicationFactory pattern, not a parallel test-only composition root.
+/// see testing.md "Driving the content-rating filter."
 ///
-/// Each test method gets its own instance (xUnit constructs a fresh test-class instance per `[Fact]`),
+/// <b>DbContext wiring:</b> <c>Program.cs</c> resolves the connection string eagerly via
+/// <c>builder.Configuration.GetConnectionString("canalavedb")</c> before the WebApplicationFactory's
+/// <c>ConfigureAppConfiguration</c> callback can override it (a <see cref="WebApplicationBuilder"/>
+/// quirk). Both DbContexts are therefore re-registered here via <c>ConfigureServices</c> using the
+/// Testcontainers connection string directly. Everything else (Identity, real service registrations)
+/// is wired exactly as production.
+///
+/// Each test method gets its own instance (xUnit constructs a fresh test-class instance per <c>[Fact]</c>),
 /// so each test gets its own DI container and therefore its own <see cref="FakeActiveUserContext"/> —
 /// no cross-test contamination from the mutable fake, even though it's registered as a singleton
 /// within any one factory.
@@ -29,28 +35,35 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
     {
         Directory.CreateDirectory(WebRootPath);
 
-        // "Development" environment — needed so appsettings.Development.json (which holds the DB
-        // connection string) is loaded by Program.cs before ConfigureAppConfiguration below can
-        // inject the Testcontainers override. The DataSeeder that runs under IsDevelopment() re-seeds
-        // TestUser/AdminUser on each factory creation, but that is harmless: no test relies on those
-        // users (all tests seed their own identities via IntegrationTestBase.SeedUserAsync), and
-        // Respawn wipes them before the next test starts.
+        // "Development" environment so the DataSeeder runs (harmless — tests seed their own
+        // identities via IntegrationTestBase.SeedUserAsync; Respawn wipes everything before
+        // the next test).
         builder.UseEnvironment(Environments.Development);
 
         // Redirect uploads to a per-factory temp folder — LocalImageStorageService writes under
         // IWebHostEnvironment.WebRootPath, and tests must never touch the real wwwroot/uploads/.
         builder.UseWebRoot(WebRootPath);
 
-        builder.ConfigureAppConfiguration((_, configBuilder) =>
-        {
-            configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["ConnectionStrings:canalavedb"] = connectionString
-            });
-        });
-
         builder.ConfigureServices(services =>
         {
+            // Re-register both DbContexts against the Testcontainers database.
+            // ConfigureAppConfiguration cannot reliably override the connection string because
+            // Program.cs reads it via builder.Configuration.GetConnectionString() before the
+            // WebApplicationFactory's callback fires (WebApplicationBuilder quirk). Removing and
+            // re-adding the DbContextOptions descriptors is the reliable fix.
+            services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
+            services.RemoveAll<DbContextOptions<ReadOnlyApplicationDbContext>>();
+
+            services.AddDbContext<ApplicationDbContext>(options => options
+                .UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure())
+                .UseSnakeCaseNamingConvention());
+
+            services.AddDbContext<ReadOnlyApplicationDbContext>(options => options
+                .UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure())
+                .UseSnakeCaseNamingConvention()
+                .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
+
+            // Swap the real claims-based IActiveUserContext for a settable test double.
             services.RemoveAll<IActiveUserContext>();
             services.AddSingleton<FakeActiveUserContext>();
             services.AddScoped<IActiveUserContext>(sp => sp.GetRequiredService<FakeActiveUserContext>());

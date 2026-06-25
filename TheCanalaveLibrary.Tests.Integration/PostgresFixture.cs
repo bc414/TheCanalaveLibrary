@@ -23,7 +23,7 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     private Respawner _respawner = null!;
 
-    public string ConnectionString => _container.GetConnectionString();
+    public string ConnectionString => _container.GetConnectionString() + ";Include Error Detail=true";
 
     public async Task InitializeAsync()
     {

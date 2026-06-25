@@ -1,0 +1,226 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Coordination composite — mobile profile layout (WU30, Feature 21, layer3.5-structure.md).
+   Mobile: persistent banner (vouches collapsed), then <details> tab dropdown, then tab body.
+   Story tabs use a filter overlay like BookshelvesMobile.
+   Blog tab is full-width stacked (same structure as desktop, no sidebar).
+   Injection-free — all data arrives as parameters from ProfilePage dispatcher.
+   Outer Margin Rule: root has no m-*; parent/layout controls spacing. *@
+
+<div class="flex flex-col">
+
+    @* ── Persistent banner (mobile — vouches collapsed by default) ────────────── *@
+    <div class="border-b border-[--color-border] bg-[--color-surface]">
+        <ProfileBanner Header="@Header"
+                       IsOwner="@IsOwner"
+                       RelationshipState="@RelationshipState"
+                       IsMobile="true"
+                       OnRemoveVouch="@OnRemoveVouch" />
+    </div>
+
+    @* ── Tab selector + filter row ────────────────────────────────────────────── *@
+    <div class="flex items-center gap-2 px-3 py-3">
+
+        @* <details> disclosure tab selector *@
+        <details class="relative flex-1">
+            <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm transition-colors hover:bg-[--color-surface-hover]">
+                <span class="flex-1 font-medium text-[--color-text]">@TabLabel(Tab)</span>
+                <span aria-hidden="true" class="text-[--color-text-muted]">&#9662;</span>
+            </summary>
+            <div class="absolute left-0 top-full z-20 mt-1 w-full overflow-hidden rounded-md border border-[--color-border] bg-[--color-surface] shadow-md">
+                @foreach (ProfileTab tab in Enum.GetValues<ProfileTab>())
+                {
+                    bool isActive = tab == Tab;
+                    <a href="/user/@Header.UserId/@ProfileTabSlug.For(tab)"
+                       class="@DropdownEntryClasses(isActive)"
+                       aria-current="@(isActive ? "page" : null)">
+                        @TabLabel(tab)
+                    </a>
+                }
+            </div>
+        </details>
+
+        @* Filter button — shown only for story tabs *@
+        @if (IsStoryTab)
+        {
+            <button type="button"
+                    class="flex items-center gap-1.5 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm transition-colors hover:bg-[--color-surface-hover]"
+                    @onclick="ToggleFilter"
+                    aria-expanded="@_filterOpen"
+                    aria-controls="mobile-profile-filter-overlay">
+                <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M4 6h16v2H4zm3 5h10v2H7zm3 5h4v2h-4z" />
+                </svg>
+                Filters
+            </button>
+        }
+    </div>
+
+    @* ── Tab body ─────────────────────────────────────────────────────────────── *@
+    <div class="px-3 pb-6">
+
+        @if (Tab == ProfileTab.Profile)
+        {
+            <div class="flex flex-col gap-8">
+                @if (!string.IsNullOrEmpty(BioHtml))
+                {
+                    <section>
+                        <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-[--color-text-muted]">About</h2>
+                        <RichTextView HtmlContent="@BioHtml" />
+                    </section>
+                }
+
+                @if (Header.AllowProfileComments != SocialInteractionPermission.Nobody || IsOwner)
+                {
+                    <section>
+                        <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-[--color-text-muted]">Comments</h2>
+                        <CommentSection ProfileUserId="@Header.UserId"
+                                        CurrentUserId="@CurrentUserId" />
+                    </section>
+                }
+            </div>
+        }
+        else if (Tab == ProfileTab.Blog)
+        {
+            <div class="flex flex-col gap-4">
+                @if (IsOwner)
+                {
+                    <div class="flex justify-end">
+                        <a href="/blog/new"
+                           class="rounded-md bg-[--color-primary] px-4 py-2 text-sm font-medium text-white hover:bg-[--color-primary-strong]">
+                            + New Post
+                        </a>
+                    </div>
+                }
+                @if (BlogPosts.Length == 0)
+                {
+                    <p class="text-sm text-[--color-text-muted]">@(IsOwner ? "You haven't written any blog posts yet." : "No blog posts yet.")</p>
+                }
+                else
+                {
+                    <div class="flex flex-col gap-3">
+                        @foreach (var post in BlogPosts)
+                        {
+                            <BlogPostCard Post="@post"
+                                         IsOwner="@IsOwner"
+                                         EditHref="@(IsOwner ? $"/blog/{post.BlogPostId}/edit" : null)" />
+                        }
+                    </div>
+                    <PaginationControls CurrentPage="@BlogPage"
+                                        PageSize="@BlogPageSize"
+                                        TotalCount="@BlogTotalCount"
+                                        OnPageChanged="@OnBlogPageChanged" />
+                }
+            </div>
+        }
+        else
+        {
+            @* Story tabs — full-width StoryDeck *@
+            <StoryDeck Stories="@StoryItems"
+                       UserStoryInteractionStates="@InteractionStates"
+                       CurrentUserId="@CurrentUserId"
+                       EmptyMessage="@StoryEmptyMessage"
+                       CurrentPage="@StoryFilter.Page"
+                       PageSize="@StoryFilter.PageSize"
+                       TotalCount="@StoryTotalCount"
+                       OnPageChanged="@OnStoryPageChanged" />
+        }
+    </div>
+
+</div>
+
+@* ── Filter overlay for story tabs ─────────────────────────────────────────── *@
+@if (_filterOpen && IsStoryTab)
+{
+    <div class="fixed inset-0 z-50 bg-black/50" @onclick="CloseFilter" id="mobile-profile-filter-overlay"></div>
+    <div class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-[--color-surface] shadow-xl"
+         @onclick:stopPropagation="true">
+        <div class="flex items-center justify-between border-b border-[--color-border] px-4 py-3">
+            <h2 class="text-sm font-bold">Filters</h2>
+            <button type="button"
+                    class="rounded p-1 text-[--color-text-muted] hover:bg-[--color-surface-hover]"
+                    @onclick="CloseFilter"
+                    aria-label="Close filters">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
+            </button>
+        </div>
+        <div class="overflow-y-auto p-4">
+            <ResultsFilterPanel OnSearch="@HandleFilterAndClose"
+                                InitialFilter="@StoryFilter"
+                                AvailableSorts="@_availableSorts"
+                                ShowTextSearch="true"
+                                ShowTagFilter="true"
+                                ShowInteractionFilters="false" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public ProfileHeaderDto Header { get; set; } = null!;
+    [Parameter, EditorRequired] public ProfileTab Tab { get; set; }
+    [Parameter] public bool IsOwner { get; set; }
+    [Parameter] public int? CurrentUserId { get; set; }
+    [Parameter] public UserRelationshipStateDto? RelationshipState { get; set; }
+    [Parameter] public EventCallback<int> OnRemoveVouch { get; set; }
+
+    // Profile tab
+    [Parameter] public string? BioHtml { get; set; }
+
+    // Story tabs (Favorites / Recommendations / Authored)
+    [Parameter] public StoryListingDto[] StoryItems { get; set; } = [];
+    [Parameter] public int StoryTotalCount { get; set; }
+    [Parameter] public IReadOnlyDictionary<int, UserStoryInteractionStateDto>? InteractionStates { get; set; }
+    [Parameter, EditorRequired] public StoryFilterDto StoryFilter { get; set; } = new();
+    [Parameter] public EventCallback<StoryFilterDto> OnStoryFilterChanged { get; set; }
+    [Parameter] public EventCallback<int> OnStoryPageChanged { get; set; }
+
+    // Blog tab
+    [Parameter] public BlogPostListingDto[] BlogPosts { get; set; } = [];
+    [Parameter] public int BlogTotalCount { get; set; }
+    [Parameter] public int BlogPage { get; set; } = 1;
+    [Parameter] public int BlogPageSize { get; set; } = 20;
+    [Parameter] public EventCallback<int> OnBlogPageChanged { get; set; }
+
+    private bool _filterOpen;
+
+    private static readonly IReadOnlyList<DefaultSortOrder> _availableSorts =
+        [DefaultSortOrder.DatePublished, DefaultSortOrder.Random, DefaultSortOrder.Relevance];
+
+    private bool IsStoryTab =>
+        Tab is ProfileTab.Favorites or ProfileTab.Recommendations or ProfileTab.Authored;
+
+    private string StoryEmptyMessage => Tab switch
+    {
+        ProfileTab.Favorites       => "No favorites yet.",
+        ProfileTab.Recommendations => "No recommendations given yet.",
+        ProfileTab.Authored        => "No stories written yet.",
+        _                          => "No stories."
+    };
+
+    private static string TabLabel(ProfileTab tab) => tab switch
+    {
+        ProfileTab.Profile         => "Profile",
+        ProfileTab.Favorites       => "Favorites",
+        ProfileTab.Recommendations => "Recommendations",
+        ProfileTab.Authored        => "Stories",
+        ProfileTab.Blog            => "Blog",
+        _                          => tab.ToString()
+    };
+
+    private void ToggleFilter() => _filterOpen = !_filterOpen;
+    private void CloseFilter()  => _filterOpen = false;
+
+    private async Task HandleFilterAndClose(StoryFilterDto filter)
+    {
+        _filterOpen = false;
+        await OnStoryFilterChanged.InvokeAsync(filter);
+    }
+
+    private static string DropdownEntryClasses(bool isActive) =>
+        "flex items-center gap-2 px-3 py-2 text-sm " +
+        (isActive
+            ? "bg-[--color-surface-hover] font-semibold text-[--color-text]"
+            : "text-[--color-text] hover:bg-[--color-surface-hover]");
+}

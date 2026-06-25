@@ -57,9 +57,18 @@ rename to `WasmSpriteReadService` is Post-MVP L5 work). Registered in each proje
   `.png` fallback when animated is missing or `prefersAnimated=false`; `unknown.png` when neither
   exists; correct theme sub-path. Mutation-sanity confirmed (removing `unknown.png` fallback → test
   fails). `dotnet test` green.
-- **L3-Logic — Stage 2.** Theme-selection UI logic (`User.ThemeId` write, live re-render) unbuilt.
-- **L3.5-Structure — Stage 2.** Theme-selection component unbuilt; sprite consumption is via injection
-  into other folders' components (no component *in* this folder).
+- **L3-Logic — Stage 5 (WU30, 2026-06-24).** Theme-selection control built inside
+  `SharedUI/Profiles/AppearanceSettingsForm.razor` (the Feature-3 theme-selection UI lives in the
+  Profiles settings page Appearance section — this was the settled design). `AppearanceSettingsForm`
+  receives the current `ThemeId`, `PrefersAnimatedSprites`, `PrefersDataSaverMode` from the page and
+  raises them back via callbacks. The save calls `IUserSettingsService.UpdateAppearanceAsync(themeId,
+  prefersAnimated, prefersDataSaver)`. `IThemeReadService.GetThemesAsync()` drives the theme `<select>`.
+  How verified: `dotnet build` green; `dotnet test` 373 RazorComponents tests pass.
+- **L3.5-Structure — Stage 5 (WU30, 2026-06-24).** `AppearanceSettingsForm` is an injection-free
+  leaf-composite with `ThemeId`, `Themes`, `PrefersAnimated`, `PrefersDataSaver` params and
+  `OnSave EventCallback<AppearanceModel>`. Theme dropdown uses `@onchange` with `int.TryParse` block
+  lambda (inner-double-quote limitation in Razor attributes — see `cross-cutting.md` §"Razor attribute
+  quoting"). Visual sign-off pending human run at `/settings`. Stage-6 gate = human visual approval.
 - **L4-Style — Stage 1.** Theme-selection UI visual; blocked on tokens.
 - **L5 — Stage 4.** `OptimisticSpriteService` (Client) is the WASM half and is architecturally sound, but
   carries the same interface-naming divergence as L2 (its own rename to `WasmSpriteReadService` is

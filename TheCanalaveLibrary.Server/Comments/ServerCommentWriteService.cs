@@ -56,6 +56,10 @@ public class ServerCommentWriteService(
         writeDb.ChapterComments.Add(comment);
         await writeDb.SaveChangesAsync();
 
+        // Increment CommentsWritten counter (cross-cutting.md §"UserStats Updates").
+        await writeDb.UserStats.Where(us => us.UserId == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
+
         // TODO(WU22): notify story author of new comment, and parent-comment author of reply.
 
         return comment.CommentId;
@@ -102,6 +106,10 @@ public class ServerCommentWriteService(
         writeDb.BlogPostComments.Add(comment);
         await writeDb.SaveChangesAsync();
 
+        // Increment CommentsWritten counter (cross-cutting.md §"UserStats Updates").
+        await writeDb.UserStats.Where(us => us.UserId == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
+
         // TODO(WU33): notify blog post author of new comment, and parent-comment author of reply.
 
         return comment.CommentId;
@@ -147,6 +155,59 @@ public class ServerCommentWriteService(
         writeDb.GroupComments.Add(comment);
         await writeDb.SaveChangesAsync();
 
+        // Increment CommentsWritten counter (cross-cutting.md §"UserStats Updates").
+        await writeDb.UserStats.Where(us => us.UserId == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
+
+        return comment.CommentId;
+    }
+
+    public async Task<long> PostUserProfileCommentAsync(PostUserProfileCommentDto dto)
+    {
+        if (ActiveUser.UserId is not int userId)
+            throw new InvalidOperationException("Posting a comment requires an authenticated user.");
+
+        List<string> errors = dto.CanSave();
+        if (errors.Count > 0) throw new CommentValidationException(errors);
+
+        // Verify the profile user exists.
+        bool profileUserExists = await writeDb.Users.AnyAsync(u => u.Id == dto.ProfileUserId);
+        if (!profileUserExists)
+            throw new KeyNotFoundException($"Profile user {dto.ProfileUserId} not found.");
+
+        // If replying, verify the parent belongs to the same profile wall.
+        if (dto.ParentCommentId.HasValue)
+        {
+            bool parentOnSameProfile = await writeDb.UserProfileComments
+                .AnyAsync(uc =>
+                    uc.CommentId == dto.ParentCommentId.Value
+                    && uc.ProfileUserId == dto.ProfileUserId);
+            if (!parentOnSameProfile)
+                throw new KeyNotFoundException(
+                    $"Parent comment {dto.ParentCommentId} not found on profile {dto.ProfileUserId}.");
+        }
+
+        string sanitizedText = sanitizer.Sanitize(dto.CommentText);
+
+        // No IsSpoiler on profile-wall comments — spoilers are a chapter-only concept.
+        UserProfileComment comment = new()
+        {
+            ProfileUserId   = dto.ProfileUserId,
+            ParentCommentId = dto.ParentCommentId,
+            UserId          = userId,
+            CommentText     = sanitizedText,
+            DatePosted      = DateTime.UtcNow
+        };
+
+        writeDb.UserProfileComments.Add(comment);
+        await writeDb.SaveChangesAsync();
+
+        // Increment CommentsWritten counter (cross-cutting.md §"UserStats Updates").
+        await writeDb.UserStats.Where(us => us.UserId == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
+
+        // TODO(WU33): notify profile owner of new comment, and parent-comment author of reply.
+
         return comment.CommentId;
     }
 
@@ -189,8 +250,16 @@ public class ServerCommentWriteService(
         //  • ParentCommentId SET NULL  → replies become flat top-level comments.
         //  • CommentLike CASCADE       → likes removed.
         //  • FeatureContribution SET NULL → attribution nulled.
+        int? authorId = comment.UserId;
         writeDb.BaseComments.Remove(comment);
         await writeDb.SaveChangesAsync();
+
+        // Decrement CommentsWritten counter for the comment's author (cross-cutting.md §"UserStats Updates").
+        if (authorId.HasValue)
+        {
+            await writeDb.UserStats.Where(us => us.UserId == authorId.Value)
+                .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten - 1));
+        }
     }
 
     public async Task<CommentLikeResultDto> ToggleLikeAsync(long commentId)

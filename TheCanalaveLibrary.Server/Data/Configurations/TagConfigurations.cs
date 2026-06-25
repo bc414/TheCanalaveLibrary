@@ -35,10 +35,10 @@ public sealed class TagConfiguration : IEntityTypeConfiguration<Tag>
     {
         builder.Property(e => e.TagTypeId).HasConversion<short>();
 
-        builder.HasMany(t => t.InverseParentTag)
+        builder.HasMany(t => t.ChildTags)
             .WithOne(t => t.ParentTag)
             .HasForeignKey(t => t.ParentTagId)
-            .OnDelete(DeleteBehavior.SetNull); // Keep child tags as top-level tags
+            .OnDelete(DeleteBehavior.SetNull); // Keep child tags as top-level tags when parent is deleted
 
         builder.HasMany(t => t.StoryTags)
             .WithOne(st => st.Tag)
@@ -55,8 +55,10 @@ public sealed class TagConfiguration : IEntityTypeConfiguration<Tag>
             .HasForeignKey(sd => sd.BaseTagId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Tag names must be unique across the site
-        builder.HasIndex(e => e.TagName).IsUnique();
+        // Tag names must be unique within a type — (TagName, TagTypeId) is the natural key.
+        // "Paris" can be both a Character and a Setting; a single-column unique on TagName would prevent that.
+        builder.HasIndex(e => new { e.TagName, e.TagTypeId }).IsUnique()
+            .HasDatabaseName("ix_tags_tag_name_tag_type_id");
         // Future indexes for querying (e.g., by TagTypeId, IsFanon)...
     }
 }

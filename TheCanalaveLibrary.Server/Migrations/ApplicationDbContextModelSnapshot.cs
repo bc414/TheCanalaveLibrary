@@ -443,22 +443,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("active_report_count");
 
-                    b.Property<long?>("BlogPostCommentCommentId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("blog_post_comment_comment_id");
-
-                    b.Property<long?>("ChapterCommentCommentId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("chapter_comment_comment_id");
-
                     b.Property<string>("CommentText")
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("comment_text");
-
-                    b.Property<long?>("GroupCommentCommentId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("group_comment_comment_id");
 
                     b.Property<int>("LikeCount")
                         .HasColumnType("integer")
@@ -472,29 +460,13 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("user_id");
 
-                    b.Property<long?>("UserProfileCommentCommentId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("user_profile_comment_comment_id");
-
                     b.HasKey("CommentId");
-
-                    b.HasIndex("BlogPostCommentCommentId")
-                        .HasDatabaseName("ix_base_comments_blog_post_comment_comment_id");
-
-                    b.HasIndex("ChapterCommentCommentId")
-                        .HasDatabaseName("ix_base_comments_chapter_comment_comment_id");
-
-                    b.HasIndex("GroupCommentCommentId")
-                        .HasDatabaseName("ix_base_comments_group_comment_comment_id");
 
                     b.HasIndex("ParentCommentId")
                         .HasDatabaseName("ix_base_comments_parent_comment_id");
 
                     b.HasIndex("UserId")
                         .HasDatabaseName("ix_base_comments_user_id");
-
-                    b.HasIndex("UserProfileCommentCommentId")
-                        .HasDatabaseName("ix_base_comments_user_profile_comment_comment_id");
 
                     b.ToTable("base_comments", (string)null);
 
@@ -3064,12 +3036,12 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasIndex("ParentTagId")
                         .HasDatabaseName("ix_tags_parent_tag_id");
 
-                    b.HasIndex("TagName")
-                        .IsUnique()
-                        .HasDatabaseName("ix_tags_tag_name");
-
                     b.HasIndex("TagTypeId")
                         .HasDatabaseName("ix_tags_tag_type_id");
+
+                    b.HasIndex("TagName", "TagTypeId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tags_tag_name_tag_type_id");
 
                     b.ToTable("tags", (string)null);
                 });
@@ -4158,21 +4130,6 @@ namespace TheCanalaveLibrary.Server.Migrations
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.BaseComment", b =>
                 {
-                    b.HasOne("TheCanalaveLibrary.Core.BlogPostComment", "BlogPostComment")
-                        .WithMany()
-                        .HasForeignKey("BlogPostCommentCommentId")
-                        .HasConstraintName("fk_base_comments_blog_post_comments_blog_post_comment_comment_");
-
-                    b.HasOne("TheCanalaveLibrary.Core.ChapterComment", "ChapterComment")
-                        .WithMany()
-                        .HasForeignKey("ChapterCommentCommentId")
-                        .HasConstraintName("fk_base_comments_chapter_comments_chapter_comment_comment_id");
-
-                    b.HasOne("TheCanalaveLibrary.Core.GroupComment", "GroupComment")
-                        .WithMany()
-                        .HasForeignKey("GroupCommentCommentId")
-                        .HasConstraintName("fk_base_comments_group_comments_group_comment_comment_id");
-
                     b.HasOne("TheCanalaveLibrary.Core.BaseComment", "ParentComment")
                         .WithMany("InverseParentComment")
                         .HasForeignKey("ParentCommentId")
@@ -4185,22 +4142,9 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_base_comments_users_user_id");
 
-                    b.HasOne("TheCanalaveLibrary.Core.UserProfileComment", "UserProfileComment")
-                        .WithMany()
-                        .HasForeignKey("UserProfileCommentCommentId")
-                        .HasConstraintName("fk_base_comments_base_comments_user_profile_comment_comment_id");
-
                     b.Navigation("Author");
 
-                    b.Navigation("BlogPostComment");
-
-                    b.Navigation("ChapterComment");
-
-                    b.Navigation("GroupComment");
-
                     b.Navigation("ParentComment");
-
-                    b.Navigation("UserProfileComment");
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.BasePoll", b =>
@@ -5043,7 +4987,7 @@ namespace TheCanalaveLibrary.Server.Migrations
             modelBuilder.Entity("TheCanalaveLibrary.Core.Tag", b =>
                 {
                     b.HasOne("TheCanalaveLibrary.Core.Tag", "ParentTag")
-                        .WithMany("InverseParentTag")
+                        .WithMany("ChildTags")
                         .HasForeignKey("ParentTagId")
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_tags_tags_parent_tag_id");
@@ -5398,7 +5342,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasForeignKey("ProfileUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
-                        .HasConstraintName("fk_user_profile_comments_asp_net_users_profile_user_id");
+                        .HasConstraintName("fk_user_profile_comments_users_profile_user_id");
 
                     b.Navigation("ProfileUser");
                 });
@@ -5623,7 +5567,7 @@ namespace TheCanalaveLibrary.Server.Migrations
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.Tag", b =>
                 {
-                    b.Navigation("InverseParentTag");
+                    b.Navigation("ChildTags");
 
                     b.Navigation("SettingDetails");
 

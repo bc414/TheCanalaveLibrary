@@ -26,4 +26,12 @@ public class FakeActiveUserContext : IActiveUserContext
         IsAuthenticated = true,
         ShowMatureContent = showMatureContent
     };
+
+    public static FakeActiveUserContext Moderator(int userId) => new()
+    {
+        UserId = userId,
+        IsAuthenticated = true,
+        ShowMatureContent = false,
+        IsModerator = true
+    };
 }

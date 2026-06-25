@@ -66,6 +66,19 @@ mapping" technique that does not work in EF Core 10. The implemented pattern: re
 from the base class, declare it independently on each derived class, and provide Fluent config
 (e.g. `.HasDefaultValueSql("CURRENT_TIMESTAMP")`) in each derived entity's config class.
 
+**No down-navigations on TPT base classes:** A TPT base class must **not** declare reference
+navigation properties pointing at its own derived types (e.g. `BaseComment.GroupComment`). EF Core
+does not interpret these as TPT linkage — it materialises each as a separate optional 1-to-many
+with the **base** table as the dependent, producing spurious nullable FK columns on the base table
+pointing at the child tables. These phantom FKs create circular FK dependencies
+(`base ↔ child` via the phantom FK, plus the correct child→base PK FK), which break Respawn's
+table-deletion ordering and can prevent test-database resets from cleaning all tables.
+
+The correct way to reach the concrete subtype from a base instance is to query the **typed child
+`DbSet<T>`** (`DbSet<ChapterComment>`, `DbSet<GroupComment>`, etc.) — the child table is the
+discriminator (spec §4.3). Reference: `BaseBlogPost` and `BasePoll` are the correct model — they
+carry no navigations to `ProfileBlogPost`/`GroupBlogPost`/`SitePoll`/`BlogPostPoll`.
+
 ## Enum / Lookup Table Decision Framework
 
 | Pattern | When | Examples |

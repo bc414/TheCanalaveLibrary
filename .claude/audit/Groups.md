@@ -65,7 +65,20 @@ conventions. **Do not revisit these.** Pointers:
   Test tier: none applicable (pure layout with Authorize guard; server gate is L2's test responsibility).
 - **L4-Style — Stage 5 (2026-06-24, WU32).** Tailwind design-token classes throughout all group
   components. Visual sign-off is human (Stage 6).
-- L5 — Stage 2. L6 — Stage 2.
+- **L5 — Stage 5 (2026-06-25, WU31_5b).** `GroupServiceTests` (27 tests) — all pass.
+  Blocked until 2026-06-25 by two bugs unmasked once the integration-test DB wiring was
+  corrected (see Global Conditions note in `status.md`):
+  (1) `ServerGroupWriteService.AddStoryAsync` fetched the story without
+  `IgnoreQueryFilters(["ContentRating"])`, so M-rated stories appeared not-found when the active
+  user had `ShowMatureContent=false`, causing `AddStory_Tier2_StoryRatingExceedsGroupMax_Throws`
+  to throw `KeyNotFoundException` instead of `ContentRatingExceededException`.
+  (2) `GroupServiceTests.CreateGroup_Mature_PersistsCorrectRatingPair` used `db.Groups.FindAsync`
+  which applies the `GroupAudience` query filter — Mature groups were invisible to the non-mature
+  test user, returning null and crashing. Fixed by using
+  `IgnoreQueryFilters().FirstOrDefaultAsync(...)`.
+  Verified: `dotnet test --filter "FullyQualifiedName~Group"` → 27/27 green; full
+  `dotnet test` → 298 integration / 414 unit / 397 RazorComponents = 1,109 total, all green.
+- L6 — Stage 2.
 
 ## Feature 39 — Group Content & Folders
 
@@ -87,7 +100,10 @@ conventions. **Do not revisit these.** Pointers:
   to `/group/{GroupId}/folders` (folder management page deferred post-MVP; link is present as
   affordance). Test tier: none applicable (inline rendering in composite; Integration covers the data).
 - **L4-Style — Stage 5 (2026-06-24, WU32).** Tailwind classes. Visual sign-off is human (Stage 6).
-- L5 — Stage 2.
+- **L5 — Stage 5 (2026-06-25, WU31_5b).** Waterfall rejection (both content-rating tiers),
+  admin-only folder ops, story add — all covered by `GroupServiceTests`. See F38 L5 note for
+  the root cause of the prior failures; the `AddStoryAsync` `IgnoreQueryFilters` fix is the
+  direct fix for this feature's test assertions.
 
 ## Feature 40 — Group Display
 
@@ -120,4 +136,6 @@ conventions. **Do not revisit these.** Pointers:
 - **L4-Style — Stage 5 (2026-06-24, WU32).** All group components use design-token CSS variables
   (`--color-primary`, `--color-surface`, etc.) and Tailwind v4 utilities throughout. Visual sign-off
   is human (Stage 6).
-- L5 — Stage 2.
+- **L5 — Stage 5 (2026-06-25, WU31_5b).** Group comments, blog-post create + read, and
+  notification fan-out (NewGroupStory, YourStoryAddedToGroup, NewGroupBlogPost, drop-self rule)
+  covered by `GroupServiceTests`. See F38 L5 note for root cause of the prior failures.

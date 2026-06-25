@@ -112,7 +112,8 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     public DbSet<BaseComment> BaseComments { get; set; }
     public DbSet<ChapterComment> ChapterComments { get; set; }
     public DbSet<BlogPostComment> BlogPostComments { get; set; }
-    public DbSet<GroupComment> GroupComments { get; set; }   // WU32 — typed set for per-context group comment queries
+    public DbSet<GroupComment> GroupComments { get; set; }           // WU32 — typed set for per-context group comment queries
+    public DbSet<UserProfileComment> UserProfileComments { get; set; } // WU30 — typed set for profile-wall comment queries
 
     //Polls
     public DbSet<BasePoll> Polls { get; set; }

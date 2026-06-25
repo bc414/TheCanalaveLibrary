@@ -107,6 +107,7 @@ builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
 builder.Services.AddScoped<ISpriteReadService, ServerSpriteReadService>();
 builder.Services.AddScoped<ITagReadService, ServerTagReadService>();
+builder.Services.AddScoped<ITagWriteService, ServerTagWriteService>();
 // MVP impl writes under wwwroot/uploads/ — settled WU12. Post-MVP swap target: S3ImageStorageService
 // (MinIO dev / R2 prod), behind this same interface — see workplan.md Post-MVP section.
 builder.Services.AddScoped<IImageStorageService, LocalImageStorageService>();
@@ -147,6 +148,13 @@ builder.Services.AddScoped<INotificationWriteService, ServerNotificationWriteSer
 // See cross-cutting.md "Private Messaging Architecture" and layer2-services.md "AllowPrivateMessages Gate".
 builder.Services.AddScoped<IMessagingReadService, ServerMessagingReadService>();
 builder.Services.AddScoped<IMessagingWriteService, ServerMessagingWriteService>();
+// Profiles + Theme Selection (WU30) — L2 services (Features 20/21/22/3).
+// IUserSettingsService: self-edit exception (spec §3.5) — no userId param; resolves from IActiveUserContext.
+// IUserProfileReadService: public display (includePrivate bool, not a source switch).
+// IThemeReadService: Sprites cluster (Feature 3 owns Theme entity).
+builder.Services.AddScoped<IUserSettingsService, ServerUserSettingsService>();
+builder.Services.AddScoped<IUserProfileReadService, ServerUserProfileReadService>();
+builder.Services.AddScoped<IThemeReadService, ServerThemeReadService>();
 
 WebApplication app = builder.Build();
 

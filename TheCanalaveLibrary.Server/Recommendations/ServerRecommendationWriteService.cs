@@ -39,9 +39,18 @@ public class ServerRecommendationWriteService(
     {
         int userId = RequireAuthenticatedUser("Submitting a recommendation");
 
-        bool storyExists = await writeDb.Stories.AnyAsync(s => s.StoryId == dto.StoryId);
-        if (!storyExists)
+        // IgnoreQueryFilters: the ContentRating filter must not prevent recommending M-rated stories;
+        // the story must exist, not be visible to the recommender.
+        // Project to anonymous type so null AuthorId (authorless story) is not confused with "row
+        // not found" — FirstOrDefault<int?> cannot distinguish the two cases.
+        var storyRow = await writeDb.Stories
+            .IgnoreQueryFilters(["ContentRating"])
+            .Where(s => s.StoryId == dto.StoryId)
+            .Select(s => new { s.AuthorId })
+            .FirstOrDefaultAsync();
+        if (storyRow is null)
             throw new KeyNotFoundException($"Story {dto.StoryId} not found.");
+        int? storyAuthorId = storyRow.AuthorId;
 
         string sanitizedText = sanitizer.Sanitize(dto.Text);
 
@@ -67,6 +76,14 @@ public class ServerRecommendationWriteService(
         {
             throw new InvalidOperationException("You have already submitted a recommendation for this story.");
         }
+
+        // Increment UserStats counters (cross-cutting.md §"UserStats Updates").
+        await writeDb.UserStats.Where(us => us.UserId == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.RecommendationsWritten, us => us.RecommendationsWritten + 1));
+        // AuthorId is nullable (stories with no explicit author skip the author-stat update).
+        if (storyAuthorId.HasValue)
+            await writeDb.UserStats.Where(us => us.UserId == storyAuthorId.Value)
+                .ExecuteUpdateAsync(s => s.SetProperty(us => us.RecommendationsReceived, us => us.RecommendationsReceived + 1));
 
         return rec.RecommendationId;
     }

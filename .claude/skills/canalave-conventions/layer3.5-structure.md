@@ -604,28 +604,42 @@ shells prove identical to one of the above, extract then — not now.
 `EditorView` and call `await _editor.GetHtmlAsync()` in the submit handler. Never bind two-way.
 The owning composite (never the shell leaf) sanitizes and persists.
 
-## CommentSection — Multi-Context Dispatch (WU31)
+## CommentSection — Multi-Context Dispatch (WU31 / WU32 / WU30)
 
-`CommentSection` (SharedUI/Comments/) is a coordination composite that dispatches to either a chapter
-or a blog-post comment thread. Exactly one of `ChapterId` and `BlogPostId` must be set — validated via
-a guard in `OnInitializedAsync` (compile-time enforcement is impractical for optional int parameters).
-A small private `CommentTarget` union (enum or discriminated record) encapsulates "which target" so
-that `LoadAsync`, post, and edit calls dispatch cleanly without per-call `if/else` chains.
+`CommentSection` (SharedUI/Comments/) is a coordination composite that dispatches to the correct
+comment thread based on which context parameter is set. Exactly one of `ChapterId`, `BlogPostId`,
+`GroupId`, or `ProfileUserId` must be set — validated via a guard in `OnInitializedAsync`
+(compile-time enforcement is impractical for optional int parameters). A small private
+`CommentTarget` enum encapsulates "which target" so that `LoadAsync`, post, and edit calls dispatch
+cleanly without per-call `if/else` chains.
 
 ```csharp
 // CommentSection @code — target dispatch
-private enum CommentTarget { Chapter, BlogPost }
+private enum CommentTarget { Chapter, BlogPost, Group, UserProfile }
 
 private CommentTarget Target =>
-    BlogPostId.HasValue ? CommentTarget.BlogPost : CommentTarget.Chapter;
+    BlogPostId.HasValue ? CommentTarget.BlogPost
+    : GroupId.HasValue  ? CommentTarget.Group
+    : ProfileUserId.HasValue ? CommentTarget.UserProfile
+    : CommentTarget.Chapter;
 ```
 
 **Backward compatibility:** existing WU20 chapter-context call sites pass only `ChapterId` — no
 change required. `UserHasCompletedStory` and the spoiler toggle remain chapter-only parameters;
-they are ignored (have no effect) when `Target == BlogPost`.
+they are ignored (have no effect) when `Target != Chapter`.
 
-**Service dispatch:** `ICommentReadService.GetBlogPostCommentsAsync` / `ICommentWriteService.PostBlogPostCommentAsync`
-are the blog-post analogues of the chapter methods, added in WU31.
+**Service dispatch per context:**
+- Chapter: `GetChapterCommentsAsync` / `PostChapterCommentAsync` (WU20)
+- BlogPost: `GetBlogPostCommentsAsync` / `PostBlogPostCommentAsync` (WU31)
+- Group: `GetGroupCommentsAsync` / `PostGroupCommentAsync` (WU32)
+- UserProfile: `GetUserProfileCommentsAsync` / `PostUserProfileCommentAsync` (WU30)
+
+**UserProfile context gating (WU30):** the Profile tab enables the comment wall and posting
+per the profile owner's `PrivacySettings.AllowProfileComments`
+(`Public` → any authenticated user; `UsersOnly` → any authenticated user; `Off` → wall hidden).
+The dispatcher passes the resolved `bool AllowComments` as a `[Parameter]` so `CommentSection`
+can suppress the wall entirely when `Off`. `CommentsWritten` increments on each post here too
+(counter map in `cross-cutting.md` "UserStats Updates").
 
 ## Notification Presentation Model — Static Presenter + Per-Type Templates (WU33)
 
@@ -835,6 +849,55 @@ Introduce a composite only when one of these is true:
 
 If something only appears in one place and has no coordination logic, it belongs inline in its
 parent — extracting it adds indirection without value.
+
+## Profile Page Composition (WU30)
+
+Route `/user/{UserId:int}/{*Tab}`. Tab slugs: `profile` (default), `favorites`,
+`recommendations`, `authored`, `blog`. `ProfileTab` enum + `ProfileTabSlug` helper
+(mirrors `BookshelfTab` / `BookshelfTabSlug`).
+
+### Persistent banner (tab-independent, above all tabs)
+
+`ProfileBanner` composite: avatar, username, tagline, relationship actions (`FollowButton` /
+`VouchButton`, non-owner only), owner "Edit Profile" link → `/settings` (inline `@if` per
+"Owner-Conditional Edit Affordances"), `UserStatsBlock` (hidden when `ShowUserStats = false`
+for non-owners), badges row, outgoing `VouchList`.
+
+- *Desktop:* horizontal band — `mx-auto max-w-6xl` container (Groups-header idiom); avatar
+  left; name/tagline/actions beside it; stats strip below; badges + vouches in a row.
+- *Mobile:* centered avatar, name, tagline; full-width action buttons; stats as a compact
+  2-column grid; badges; vouches collapsed in `<details>` to save vertical space.
+
+### Tabbed body
+
+Each tab has a distinct layout — comments and story decks are **never on the same view**:
+
+| Tab | Layout | Components |
+|---|---|---|
+| **Profile** (default) | Full-width stacked (both devices) | `RichTextView` (bio) + `CommentSection` (UserProfile context) — no filter sidebar |
+| **Favorites / Recommendations / Authored** | Bookshelves idiom (deck + filter) | *Desktop:* `StoryDeck` (flex-1) + right `ResultsFilterPanel` sidebar. *Mobile:* "Filters" button → backdrop-overlay `ResultsFilterPanel` + full-width `StoryDeck` |
+| **Blog** | Full-width stacked (both devices) | Paginated `BlogPostCard` list + `PaginationControls` — no filter sidebar |
+
+**Blog tab owner vs. viewer (WU30):**
+- *Viewer* (not owner): published posts only, view-only `BlogPostCard` (no owner params).
+- *Owner* (`includePrivate = true`): `GetByAuthorAsync(..., includeUnpublished: true)` so
+  drafts appear with a **"Draft" badge**; each card shows an **Edit** affordance
+  (→ `/blog/{id}/edit`); tab header carries a **"+ New Post"** button (→ `/blog/new`).
+  `BlogPostCard` is extended with optional owner affordances gated by an `IsOwner`/edit-href
+  parameter — the Edit link is a **sibling** of the title anchor (not nested — invalid HTML).
+  `GroupDesktop`'s existing `<BlogPostCard Post=...>` usage passes no owner params and is
+  unaffected.
+
+### Story-tab candidate-id pattern (mirrors BookshelvesPage)
+
+The dispatcher computes a candidate ID set per tab:
+- **Authored** → `IStoryReadService.GetStoryIdsByAuthorAsync(userId)` (existing).
+- **Favorites** → `IUserStoryInteractionReadService.GetFavoriteStoryIdsAsync(userId, includePrivate)`
+  (`WHERE IsFavorite AND (includePrivate OR NOT IsHiddenFavorite)`).
+- **Recommendations** → `IRecommendationReadService.GetRecommendedStoryIdsByUserAsync(userId)`.
+Listings and states then flow through the existing
+`GetListingsAsync(filter, restrictToStoryIds)` + `GetStatesByStoryIdsAsync`, exactly as
+`BookshelvesPage` does.
 
 ## Page Route Reference
 
