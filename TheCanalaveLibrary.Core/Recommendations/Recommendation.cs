@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace TheCanalaveLibrary.Core;
 
 public class Recommendation
@@ -12,6 +14,12 @@ public class Recommendation
     public int LikeCount { get; set; }
     public DateTime DatePosted { get; set; }
     public int ActiveReportCount { get; set; }
+
+    // Soft-delete (ModeratedVisibility named filter) — WU34
+    public bool IsHidden { get; set; }
+    public DateTime? DateModeratedRemoved { get; set; }
+    [MaxLength(1024)]
+    public string? ModerationRemovalReason { get; set; }
 
     public RecommendationDetail RecommendationDetail { get; set; } = null!;
     public ICollection<RecommendationLike> Likes { get; set; } = [];

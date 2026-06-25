@@ -167,6 +167,53 @@ public class ServerNotificationWriteService(
             await CreateCoreAsync(NotificationTypeEnum.NewGroupBlogPost, authorId, targets);
     }
 
+    // ── Semantic generation methods (WU34 slice — moderation) ────────────────────
+
+    /// <inheritdoc/>
+    public Task NotifyReportReceivedAsync(int reporterUserId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.ReportReceived, moderatorSourceId,
+            [(reporterUserId, 0)]);
+
+    /// <inheritdoc/>
+    public Task NotifyReportResolvedAsync(int reporterUserId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.ReportResolved, moderatorSourceId,
+            [(reporterUserId, 0)]);
+
+    /// <inheritdoc/>
+    public Task NotifyReportResolvedNoActionAsync(int reporterUserId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.ReportResolvedNoAction, moderatorSourceId,
+            [(reporterUserId, 0)]);
+
+    /// <inheritdoc/>
+    public Task NotifyContentRemovedAsync(int contentAuthorUserId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.ContentRemoved, moderatorSourceId,
+            [(contentAuthorUserId, 0)]);
+
+    /// <inheritdoc/>
+    public Task NotifyStoryApprovedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.StoryApproved, moderatorSourceId,
+            [(storyAuthorUserId, storyId)]);
+
+    /// <inheritdoc/>
+    public Task NotifyStoryRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.StoryRejected, moderatorSourceId,
+            [(storyAuthorUserId, storyId)]);
+
+    /// <inheritdoc/>
+    public Task NotifyAccountWarningAsync(int targetUserId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.AccountWarning, moderatorSourceId,
+            [(targetUserId, 0)]);
+
+    /// <inheritdoc/>
+    public Task NotifyAccountSuspendedAsync(int targetUserId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.AccountSuspended, moderatorSourceId,
+            [(targetUserId, 0)]);
+
+    /// <inheritdoc/>
+    public Task NotifyAccountBannedAsync(int targetUserId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.AccountBanned, moderatorSourceId,
+            [(targetUserId, 0)]);
+
     // ── Private create-core ───────────────────────────────────────────────────────
 
     /// <summary>
@@ -210,17 +257,24 @@ public class ServerNotificationWriteService(
         // skipping those who already have an unread notification of this type + source + related.
         IReadOnlyList<int> candidateIds = [.. deduped.Keys];
 
-        HashSet<int> alreadyNotified = (await writeDb.Notifications
+        // Cross-existing dedup: load existing unread notifications of this type + source for the
+        // candidates, then match (recipientId, relatedEntityId) in memory. Including RelatedEntityId
+        // in the key ensures two notifications from the same source about *different* targets
+        // (e.g. two content-removed notifications for different stories) both reach the recipient.
+        var existingPairs = await writeDb.Notifications
             .Where(n =>
                 candidateIds.Contains(n.RecipientUserId) &&
                 n.NotificationTypeId == type &&
                 n.SourceUserId == sourceUserId &&
                 !n.IsRead)
-            .Select(n => n.RecipientUserId)
-            .ToListAsync()).ToHashSet();
+            .Select(n => new { n.RecipientUserId, n.RelatedEntityId })
+            .ToListAsync();
+
+        HashSet<(int recipientId, int relatedEntityId)> alreadyNotified =
+            existingPairs.Select(x => (x.RecipientUserId, x.RelatedEntityId)).ToHashSet();
 
         List<Notification> rows = deduped
-            .Where(kv => !alreadyNotified.Contains(kv.Key))
+            .Where(kv => !alreadyNotified.Contains((kv.Key, kv.Value)))
             .Select(kv => new Notification
             {
                 RecipientUserId = kv.Key,

@@ -198,5 +198,13 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
         modelBuilder.Entity<Group>().HasQueryFilter("GroupAudience",
             g => _activeUser.ShowMatureContent || g.AudienceRating != Rating.M);
 
+        // ModeratedVisibility filter — hides soft-deleted content from public reads (WU34).
+        // Escape hatch: .IgnoreQueryFilters(["ModeratedVisibility"]) for mod and author reads that must see
+        // hidden content. Static predicate (no user-state dependency) but registered inline here alongside
+        // ContentRating/GroupAudience for a single authoritative location for all named filters.
+        modelBuilder.Entity<Story>().HasQueryFilter("ModeratedVisibility", s => !s.IsHidden);
+        modelBuilder.Entity<BaseComment>().HasQueryFilter("ModeratedVisibility", c => !c.IsHidden);
+        modelBuilder.Entity<BaseBlogPost>().HasQueryFilter("ModeratedVisibility", b => !b.IsHidden);
+        modelBuilder.Entity<Recommendation>().HasQueryFilter("ModeratedVisibility", r => !r.IsHidden);
     }
 }

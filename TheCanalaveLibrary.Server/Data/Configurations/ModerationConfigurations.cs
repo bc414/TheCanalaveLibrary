@@ -11,7 +11,26 @@ public sealed class ReportConfiguration : IEntityTypeConfiguration<Report>
         builder.Property(e => e.ReportedEntityType).HasConversion<short>();
         builder.Property(e => e.ReportStatusId).HasConversion<short>();
         builder.Property(e => e.DateReported).HasDefaultValueSql("CURRENT_TIMESTAMP");
-        // Future indexes for querying (e.g., by StatusId, ReportedEntityId)...
+
+        // ReporterUserId / ModeratorUserId both set null on user deletion rather than
+        // cascading (the report record must survive for audit purposes).
+        builder.HasOne(r => r.ReporterUser)
+            .WithMany(u => u.ReportReporterUsers)
+            .HasForeignKey(r => r.ReporterUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(r => r.ModeratorUser)
+            .WithMany(u => u.ReportModeratorUsers)
+            .HasForeignKey(r => r.ModeratorUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // Moderator queue primary sort: open reports ordered by ActiveReportCount desc.
+        builder.HasIndex(e => e.ReportStatusId)
+            .HasDatabaseName("ix_reports_report_status_id");
+
+        // Polymorphic target lookup: find all reports against a given entity.
+        builder.HasIndex(e => new { e.ReportedEntityType, e.ReportedEntityId })
+            .HasDatabaseName("ix_reports_reported_entity_type_reported_entity_id");
     }
 }
 

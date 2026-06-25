@@ -1,0 +1,214 @@
+@page "/mod/users/{UserId:int?}"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize(Roles = "Moderator,Admin")]
+@using Microsoft.AspNetCore.Authorization
+@inject IModerationReadService ModerationService
+@inject IModerationWriteService ModerationWriteService
+
+@* Moderator user lookup page (WU34 Feature 47). View a user's report history + apply
+   account actions (warn/suspend/ban). Desktop-only, server-rendered, no WASM.
+   Account-status login enforcement is deferred to a follow-up slice (see forward_plan.md). *@
+
+<PageTitle>Mod — Users</PageTitle>
+
+<div class="flex flex-col gap-4 px-4 py-4">
+
+    <h1 class="text-xl font-bold text-text">User Reports</h1>
+
+    @if (_loading)
+    {
+        <p class="text-sm text-muted">Loading…</p>
+    }
+    else if (_userReports.Length == 0)
+    {
+        <p class="text-sm text-muted">No reported users.</p>
+    }
+    else
+    {
+        <table class="w-full border-collapse text-sm">
+            <thead>
+                <tr class="border-b border-[--color-border] text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                    <th class="py-2 pr-4">User</th>
+                    <th class="py-2 pr-4">Reports</th>
+                    <th class="py-2 pr-4">Status</th>
+                    <th class="py-2">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _userReports)
+                {
+                    var report = r;
+                    <tr class="border-b border-[--color-border] hover:bg-[--color-surface-raised]">
+                        <td class="py-2 pr-4">
+                            @if (r.TargetUrl is not null)
+                            {
+                                <a href="@r.TargetUrl" class="text-primary hover:underline">@r.TargetLabel</a>
+                            }
+                            else
+                            {
+                                <span>@r.TargetLabel</span>
+                            }
+                        </td>
+                        <td class="py-2 pr-4 font-bold @(r.TargetActiveReportCount > 2 ? "text-danger" : "text-text")">
+                            @r.TargetActiveReportCount
+                        </td>
+                        <td class="py-2 pr-4">
+                            <span class="rounded px-1.5 py-0.5 text-xs font-medium @StatusBadgeClass(r.Status)">
+                                @r.Status
+                            </span>
+                        </td>
+                        <td class="py-2">
+                            @if (r.Status == ReportStatusEnum.UnderReview)
+                            {
+                                <div class="flex gap-2">
+                                    <button type="button"
+                                            class="rounded bg-warning px-2 py-0.5 text-xs text-white"
+                                            @onclick="() => OpenAccountAction(report, ModeratorActionType.WarnUser)">
+                                        Warn
+                                    </button>
+                                    <button type="button"
+                                            class="rounded bg-danger/70 px-2 py-0.5 text-xs text-white"
+                                            @onclick="() => OpenAccountAction(report, ModeratorActionType.SuspendUser)">
+                                        Suspend
+                                    </button>
+                                    <button type="button"
+                                            class="rounded bg-danger px-2 py-0.5 text-xs text-white"
+                                            @onclick="() => OpenAccountAction(report, ModeratorActionType.BanUser)">
+                                        Ban
+                                    </button>
+                                </div>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    @* ── Account action confirmation panel ─────────────────────────────────────── *@
+    @if (_actionReport is not null)
+    {
+        <div class="rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4">
+            <h2 class="mb-2 text-base font-semibold text-text">
+                @_pendingAction on @_actionReport.TargetLabel
+            </h2>
+
+            @if (_pendingAction == ModeratorActionType.SuspendUser)
+            {
+                <div class="mb-2">
+                    <label class="mb-1 block text-sm font-medium text-text" for="suspend-until">Suspended until (UTC)</label>
+                    <input type="datetime-local" id="suspend-until"
+                           class="rounded border border-[--color-border] bg-surface px-3 py-1.5 text-sm text-text"
+                           @bind="_suspendUntil" />
+                </div>
+            }
+
+            <div class="mb-3">
+                <label class="mb-1 block text-sm font-medium text-text" for="action-reason">Reason (required)</label>
+                <textarea id="action-reason" rows="2"
+                          class="w-full rounded-md border border-[--color-border] bg-surface px-3 py-2 text-sm text-text"
+                          @bind="_actionReason"></textarea>
+            </div>
+
+            @if (_actionError is not null)
+            {
+                <p class="mb-2 text-sm text-danger">@_actionError</p>
+            }
+
+            <div class="flex gap-2">
+                <button type="button"
+                        class="rounded bg-danger px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
+                        disabled="@_acting"
+                        @onclick="ConfirmAccountActionAsync">
+                    Confirm
+                </button>
+                <button type="button"
+                        class="rounded border border-[--color-border] bg-surface px-3 py-1 text-sm text-text"
+                        @onclick="CancelAccountAction">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int? UserId { get; set; }
+
+    private ReportQueueItemDto[] _userReports = [];
+    private bool _loading = true;
+
+    private ReportQueueItemDto? _actionReport;
+    private ModeratorActionType _pendingAction;
+    private string? _actionReason;
+    private DateTime? _suspendUntil;
+    private bool _acting;
+    private string? _actionError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Show only user-targeted reports (all statuses to see history).
+        var all = await ModerationService.GetReportQueueAsync(includeResolved: true);
+        _userReports = all.Where(r => r.EntityType == ReportedEntityType.User).ToArray();
+        _loading = false;
+    }
+
+    private void OpenAccountAction(ReportQueueItemDto report, ModeratorActionType action)
+    {
+        _actionReport = report;
+        _pendingAction = action;
+        _actionReason = null;
+        _suspendUntil = null;
+        _actionError = null;
+    }
+
+    private void CancelAccountAction()
+    {
+        _actionReport = null;
+        _actionReason = null;
+        _actionError = null;
+    }
+
+    private async Task ConfirmAccountActionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_actionReason))
+        {
+            _actionError = "A reason is required.";
+            return;
+        }
+
+        if (_pendingAction == ModeratorActionType.SuspendUser && _suspendUntil is null)
+        {
+            _actionError = "Suspension end date is required.";
+            return;
+        }
+
+        _acting = true;
+        _actionError = null;
+
+        try
+        {
+            await ModerationWriteService.ApplyAccountActionAsync(
+                _actionReport!.ReportId,
+                _pendingAction,
+                _actionReason!,
+                _pendingAction == ModeratorActionType.SuspendUser ? _suspendUntil : null);
+
+            CancelAccountAction();
+            // Reload.
+            var all = await ModerationService.GetReportQueueAsync(includeResolved: true);
+            _userReports = all.Where(r => r.EntityType == ReportedEntityType.User).ToArray();
+        }
+        catch (Exception ex) { _actionError = ex.Message; }
+        finally { _acting = false; }
+    }
+
+    private static string StatusBadgeClass(ReportStatusEnum status) => status switch
+    {
+        ReportStatusEnum.Open => "bg-warning/20 text-warning",
+        ReportStatusEnum.UnderReview => "bg-primary/20 text-primary",
+        ReportStatusEnum.ResolvedNoAction => "bg-[--color-surface-raised] text-muted",
+        ReportStatusEnum.ResolvedActionTaken => "bg-success/20 text-success",
+        _ => "bg-[--color-surface-raised] text-muted"
+    };
+}

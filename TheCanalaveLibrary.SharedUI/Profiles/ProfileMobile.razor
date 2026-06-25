@@ -123,7 +123,9 @@
                        CurrentPage="@StoryFilter.Page"
                        PageSize="@StoryFilter.PageSize"
                        TotalCount="@StoryTotalCount"
-                       OnPageChanged="@OnStoryPageChanged" />
+                       OnPageChanged="@OnStoryPageChanged"
+                       OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+            <ReportDialog @ref="_reportDialog" />
         }
     </div>
 
@@ -183,6 +185,7 @@
     [Parameter] public int BlogPageSize { get; set; } = 20;
     [Parameter] public EventCallback<int> OnBlogPageChanged { get; set; }
 
+    private ReportDialog _reportDialog = default!;
     private bool _filterOpen;
 
     private static readonly IReadOnlyList<DefaultSortOrder> _availableSorts =

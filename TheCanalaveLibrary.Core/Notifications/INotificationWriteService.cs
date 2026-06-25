@@ -92,4 +92,60 @@ public interface INotificationWriteService : INotificationReadService
     /// <param name="blogPostId">The new blog post's id (used as <c>RelatedEntityId</c>).</param>
     /// <param name="authorId">The author of the blog post (drop-self source).</param>
     Task NotifyNewGroupBlogPostAsync(int groupId, int blogPostId, int authorId);
+
+    // ── Semantic generation methods (WU34 slice — moderation) ────────────────────
+
+    /// <summary>
+    /// Sends <c>ReportReceived = 80</c> to <paramref name="reporterUserId"/> confirming receipt.
+    /// <c>RelatedEntityId = 0</c> (no navigable target; the report id is not surfaced to reporters).
+    /// </summary>
+    Task NotifyReportReceivedAsync(int reporterUserId, int moderatorSourceId);
+
+    /// <summary>
+    /// Sends <c>ReportResolved = 81</c> (action taken) to <paramref name="reporterUserId"/>.
+    /// <c>RelatedEntityId = 0</c>.
+    /// </summary>
+    Task NotifyReportResolvedAsync(int reporterUserId, int moderatorSourceId);
+
+    /// <summary>
+    /// Sends <c>ReportResolvedNoAction = 82</c> to <paramref name="reporterUserId"/>.
+    /// <c>RelatedEntityId = 0</c>.
+    /// </summary>
+    Task NotifyReportResolvedNoActionAsync(int reporterUserId, int moderatorSourceId);
+
+    /// <summary>
+    /// Sends <c>ContentRemoved = 70</c> to the content author.
+    /// <c>RelatedEntityId = 0</c> (polymorphic target; no single navigable entity kind).
+    /// </summary>
+    Task NotifyContentRemovedAsync(int contentAuthorUserId, int moderatorSourceId);
+
+    /// <summary>
+    /// Sends <c>StoryApproved = 75</c> to the story author.
+    /// <c>RelatedEntityId = storyId</c> (navigates to the story page).
+    /// </summary>
+    Task NotifyStoryApprovedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId);
+
+    /// <summary>
+    /// Sends <c>StoryRejected = 71</c> to the story author.
+    /// <c>RelatedEntityId = storyId</c> (navigates to the story page).
+    /// </summary>
+    Task NotifyStoryRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId);
+
+    /// <summary>
+    /// Sends <c>AccountWarning = 72</c> to <paramref name="targetUserId"/>.
+    /// <c>RelatedEntityId = 0</c>.
+    /// </summary>
+    Task NotifyAccountWarningAsync(int targetUserId, int moderatorSourceId);
+
+    /// <summary>
+    /// Sends <c>AccountSuspended = 73</c> to <paramref name="targetUserId"/>.
+    /// <c>RelatedEntityId = 0</c>.
+    /// </summary>
+    Task NotifyAccountSuspendedAsync(int targetUserId, int moderatorSourceId);
+
+    /// <summary>
+    /// Sends <c>AccountBanned = 74</c> to <paramref name="targetUserId"/>.
+    /// <c>RelatedEntityId = 0</c>.
+    /// </summary>
+    Task NotifyAccountBannedAsync(int targetUserId, int moderatorSourceId);
 }

@@ -44,14 +44,25 @@
         <p class="text-sm text-[--color-text-muted] leading-relaxed line-clamp-3">@Post.ContentSnippet</p>
     }
 
-    @* ── Owner footer controls — Edit link (visible to owner only) ───────────── *@
-    @if (IsOwner && EditHref is not null)
+    @* ── Footer controls — Edit (owner only) + Report (others only) ─────────── *@
+    @if ((IsOwner && EditHref is not null) || OnReport.HasDelegate)
     {
         <div class="mt-1 flex gap-3 border-t border-[--color-border] pt-2">
-            <a href="@EditHref"
-               class="text-xs font-medium text-[--color-primary] hover:underline">
-                Edit
-            </a>
+            @if (IsOwner && EditHref is not null)
+            {
+                <a href="@EditHref"
+                   class="text-xs font-medium text-[--color-primary] hover:underline">
+                    Edit
+                </a>
+            }
+            @if (!IsOwner && OnReport.HasDelegate)
+            {
+                <button type="button"
+                        class="text-xs font-medium text-[--color-text-muted] hover:text-danger hover:underline"
+                        @onclick="() => OnReport.InvokeAsync(Post.BlogPostId)">
+                    Report
+                </button>
+            }
         </div>
     }
 </div>
@@ -70,6 +81,9 @@
     /// Only rendered when <see cref="IsOwner"/> is also true — use null to suppress the link.
     /// </summary>
     [Parameter] public string? EditHref { get; set; }
+
+    /// <summary>Raised when the viewer clicks "Report" — receives the blog post id.</summary>
+    [Parameter] public EventCallback<int> OnReport { get; set; }
 
     /// <summary>
     /// Generates a URL-safe slug from the post title for cosmetic routing — the server ignores

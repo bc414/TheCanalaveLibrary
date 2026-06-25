@@ -148,6 +148,11 @@ builder.Services.AddScoped<INotificationWriteService, ServerNotificationWriteSer
 // See cross-cutting.md "Private Messaging Architecture" and layer2-services.md "AllowPrivateMessages Gate".
 builder.Services.AddScoped<IMessagingReadService, ServerMessagingReadService>();
 builder.Services.AddScoped<IMessagingWriteService, ServerMessagingWriteService>();
+// Moderation (WU34) — Features 46/47/48. Mod pages are server-rendered, no dispatcher/WASM.
+// Write service inherits read (CQRS-lite). Forwarding delegate ensures one instance per scope
+// when either interface is injected.
+builder.Services.AddScoped<IModerationWriteService, ServerModerationWriteService>();
+builder.Services.AddScoped<IModerationReadService>(sp => sp.GetRequiredService<IModerationWriteService>());
 // Profiles + Theme Selection (WU30) — L2 services (Features 20/21/22/3).
 // IUserSettingsService: self-edit exception (spec §3.5) — no userId param; resolves from IActiveUserContext.
 // IUserProfileReadService: public display (includePrivate bool, not a source switch).

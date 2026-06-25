@@ -102,6 +102,9 @@ public sealed class NotificationTypeConfiguration : IEntityTypeConfiguration<Not
             new { NotificationTypeId = NotificationTypeEnum.NewGroupStory, NotificationKey = "NewGroupStory", DisplayName = "New Group Story", Description = "A new story was added to a group you're in.", NotificationCategory = NotificationCategoryEnum.Groups, DefaultEmailEnabled = false, DefaultCollapsed = false },
             new { NotificationTypeId = NotificationTypeEnum.NewGroupBlogPost, NotificationKey = "NewGroupBlogPost", DisplayName = "New Group Blog Post", Description = "A new blog post was made in a group you're in.", NotificationCategory = NotificationCategoryEnum.Groups, DefaultEmailEnabled = false, DefaultCollapsed = false },
 
+            // Your Stories — approval outcomes (Category 2)
+            new { NotificationTypeId = NotificationTypeEnum.StoryApproved, NotificationKey = "StoryApproved", DisplayName = "Story Approved", Description = "Your story submission was approved.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true, DefaultCollapsed = false },
+
             // Moderation Warnings (Category 7)
             new { NotificationTypeId = NotificationTypeEnum.ContentRemoved, NotificationKey = "ContentRemoved", DisplayName = "Content Removed", Description = "Your content was removed for a ToS violation.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true, DefaultCollapsed = false },
             new { NotificationTypeId = NotificationTypeEnum.StoryRejected, NotificationKey = "StoryRejected", DisplayName = "Story Rejected", Description = "Your story submission was rejected.", NotificationCategory = NotificationCategoryEnum.Warnings, DefaultEmailEnabled = true, DefaultCollapsed = false },

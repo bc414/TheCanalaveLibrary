@@ -18,6 +18,12 @@ public partial class BaseComment
 
     public int ActiveReportCount { get; set; }
 
+    // Soft-delete (ModeratedVisibility named filter) — WU34
+    public bool IsHidden { get; set; }
+    public DateTime? DateModeratedRemoved { get; set; }
+    [MaxLength(1024)]
+    public string? ModerationRemovalReason { get; set; }
+
     public virtual ICollection<CommentLike> Likes { get; set; } = new List<CommentLike>();
 
     public virtual ICollection<FeatureContribution> FeatureContributions { get; set; } = new List<FeatureContribution>();

@@ -14,7 +14,8 @@ public enum ReportedEntityType : short
     Story = 1,
     Comment = 2,
     BlogPost = 3,
-    Recommendation = 4
+    Recommendation = 4,
+    Message = 5
 }
 
 // NOTE: The vestigial ReadStatus and FavoriteStatus enums were removed. They predated the
@@ -149,6 +150,7 @@ public enum NotificationTypeEnum : short
     AccountWarning = 72, // You have received an official warning from a moderator
     AccountSuspended = 73, // Your account has been temporarily suspended
     AccountBanned = 74,    // Your account has been permanently banned
+    StoryApproved = 75,    // Your story submission was approved
 
     //Notifications for the user who *sent* a report
     ReportReceived = 80, // "Thank you, we have received your report."
@@ -166,6 +168,16 @@ public enum SiteRoles : int
 // ... (Keep all existing enums from Part 1 and Part 2) ...
 
 //Part 3: Enums for User Settings
+
+// AccountStatus mirrors the User.AccountStatus column (WU34).
+// No Shadowbanned — see cross-cutting.md "Moderation Model."
+public enum AccountStatusEnum : short
+{
+    Active = 0,
+    Warned = 1,
+    Suspended = 2,
+    Banned = 3,
+}
 public enum ProfileVisibility : short
 {
     Public = 0,

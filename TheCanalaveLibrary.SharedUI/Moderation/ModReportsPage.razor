@@ -1,0 +1,262 @@
+@page "/mod/reports"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize(Roles = "Moderator,Admin")]
+@using Microsoft.AspNetCore.Authorization
+@inject IModerationWriteService ModerationService
+
+@* Moderator report queue (WU34 Feature 47). Desktop-only, server-rendered, no WASM.
+   Displays open/under-review reports ordered by TargetActiveReportCount descending.
+   Each row shows the target entity label + link, the reporter, reason, and action buttons.
+   Resolved reports are toggled via the "Show resolved" checkbox. *@
+
+<PageTitle>Mod — Reports</PageTitle>
+
+<div class="flex flex-col gap-4 px-4 py-4">
+
+    <div class="flex items-center justify-between">
+        <h1 class="text-xl font-bold text-text">Report Queue</h1>
+        <label class="flex cursor-pointer items-center gap-2 text-sm text-muted">
+            <input type="checkbox" class="rounded border-[--color-border]"
+                   @bind="_showResolved" @bind:after="LoadAsync" />
+            Show resolved
+        </label>
+    </div>
+
+    @if (_loading)
+    {
+        <p class="text-sm text-muted">Loading…</p>
+    }
+    else if (_reports.Length == 0)
+    {
+        <p class="text-sm text-muted">No open reports.</p>
+    }
+    else
+    {
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse text-sm">
+                <thead>
+                    <tr class="border-b border-[--color-border] text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                        <th class="py-2 pr-4">Target</th>
+                        <th class="py-2 pr-4">Type</th>
+                        <th class="py-2 pr-4">Reports</th>
+                        <th class="py-2 pr-4">Reason</th>
+                        <th class="py-2 pr-4">Reporter</th>
+                        <th class="py-2 pr-4">Reported</th>
+                        <th class="py-2 pr-4">Status</th>
+                        <th class="py-2">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var r in _reports)
+                    {
+                        <tr class="border-b border-[--color-border] align-top hover:bg-[--color-surface-raised]">
+                            <td class="py-2 pr-4 font-medium">
+                                @if (r.TargetUrl is not null)
+                                {
+                                    <a href="@r.TargetUrl" class="text-primary hover:underline" target="_blank">
+                                        @r.TargetLabel
+                                    </a>
+                                }
+                                else
+                                {
+                                    <span>@r.TargetLabel</span>
+                                }
+                            </td>
+                            <td class="py-2 pr-4 text-muted">@r.EntityType</td>
+                            <td class="py-2 pr-4 text-center font-bold @(r.TargetActiveReportCount > 2 ? "text-danger" : "text-text")">
+                                @r.TargetActiveReportCount
+                            </td>
+                            <td class="py-2 pr-4">@r.ReasonName</td>
+                            <td class="py-2 pr-4 text-muted">@(r.ReporterUserName ?? "anonymous")</td>
+                            <td class="py-2 pr-4 text-muted text-xs">@r.DateReported.ToString("yyyy-MM-dd")</td>
+                            <td class="py-2 pr-4">
+                                <span class="rounded px-1.5 py-0.5 text-xs font-medium @StatusBadgeClass(r.Status)">
+                                    @r.Status
+                                </span>
+                            </td>
+                            <td class="py-2">
+                                <div class="flex flex-col gap-1">
+                                    @if (r.Status == ReportStatusEnum.Open)
+                                    {
+                                        <button type="button"
+                                                class="rounded bg-primary px-2 py-0.5 text-xs text-white hover:bg-primary-strong"
+                                                @onclick="() => ClaimAsync(r.ReportId)">
+                                            Claim
+                                        </button>
+                                    }
+                                    @if (r.Status == ReportStatusEnum.UnderReview)
+                                    {
+                                        <button type="button"
+                                                class="rounded bg-success px-2 py-0.5 text-xs text-white hover:opacity-90"
+                                                @onclick="() => OpenActionPanel(r)">
+                                            Act
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @* ── Action panel (shown below table when a report is being actioned) ────────── *@
+    @if (_activeReport is not null)
+    {
+        <div class="rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4">
+            <h2 class="mb-3 text-base font-semibold text-text">
+                Act on: @_activeReport.TargetLabel
+            </h2>
+
+            <div class="mb-3">
+                <label class="mb-1 block text-sm font-medium text-text" for="action-notes">Notes / reason</label>
+                <textarea id="action-notes" rows="3"
+                          class="w-full rounded-md border border-[--color-border] bg-surface px-3 py-2 text-sm text-text"
+                          @bind="_actionNotes"></textarea>
+            </div>
+
+            @if (_actionError is not null)
+            {
+                <p class="mb-2 text-sm text-danger">@_actionError</p>
+            }
+
+            <div class="flex flex-wrap gap-2">
+                <button type="button"
+                        class="rounded bg-primary px-3 py-1 text-sm text-white hover:bg-primary-strong"
+                        disabled="@_acting"
+                        @onclick="() => ResolveNoActionAsync(_activeReport.ReportId)">
+                    No action
+                </button>
+                <button type="button"
+                        class="rounded bg-warning px-3 py-1 text-sm text-white hover:opacity-90"
+                        disabled="@_acting"
+                        @onclick="() => SoftRemoveAsync(_activeReport)">
+                    Hide content
+                </button>
+                <button type="button"
+                        class="rounded bg-danger px-3 py-1 text-sm text-white hover:opacity-90"
+                        disabled="@_acting"
+                        @onclick="() => WarnUserAsync(_activeReport)">
+                    Warn user
+                </button>
+                <button type="button"
+                        class="rounded border border-[--color-border] bg-surface px-3 py-1 text-sm text-text hover:bg-[--color-surface-raised]"
+                        @onclick="CloseActionPanel">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private ReportQueueItemDto[] _reports = [];
+    private bool _loading = true;
+    private bool _showResolved;
+
+    private ReportQueueItemDto? _activeReport;
+    private string? _actionNotes;
+    private bool _acting;
+    private string? _actionError;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _reports = await ModerationService.GetReportQueueAsync(_showResolved);
+        _loading = false;
+    }
+
+    private async Task ClaimAsync(long reportId)
+    {
+        try
+        {
+            await ModerationService.ClaimReportAsync(reportId);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+    }
+
+    private void OpenActionPanel(ReportQueueItemDto report)
+    {
+        _activeReport = report;
+        _actionNotes = null;
+        _actionError = null;
+    }
+
+    private void CloseActionPanel()
+    {
+        _activeReport = null;
+        _actionNotes = null;
+        _actionError = null;
+    }
+
+    private async Task ResolveNoActionAsync(long reportId)
+    {
+        _acting = true;
+        _actionError = null;
+        try
+        {
+            await ModerationService.ResolveNoActionAsync(reportId, _actionNotes);
+            CloseActionPanel();
+            await LoadAsync();
+        }
+        catch (Exception ex) { _actionError = ex.Message; }
+        finally { _acting = false; }
+    }
+
+    private async Task SoftRemoveAsync(ReportQueueItemDto report)
+    {
+        if (string.IsNullOrWhiteSpace(_actionNotes))
+        {
+            _actionError = "A removal reason is required.";
+            return;
+        }
+
+        _acting = true;
+        _actionError = null;
+        try
+        {
+            await ModerationService.ResolveWithRemovalAsync(report.ReportId, _actionNotes);
+            CloseActionPanel();
+            await LoadAsync();
+        }
+        catch (Exception ex) { _actionError = ex.Message; }
+        finally { _acting = false; }
+    }
+
+    private async Task WarnUserAsync(ReportQueueItemDto report)
+    {
+        if (string.IsNullOrWhiteSpace(_actionNotes))
+        {
+            _actionError = "A warning reason is required.";
+            return;
+        }
+
+        _acting = true;
+        _actionError = null;
+        try
+        {
+            await ModerationService.ApplyAccountActionAsync(
+                report.ReportId, ModeratorActionType.WarnUser, _actionNotes);
+            CloseActionPanel();
+            await LoadAsync();
+        }
+        catch (Exception ex) { _actionError = ex.Message; }
+        finally { _acting = false; }
+    }
+
+    private static string StatusBadgeClass(ReportStatusEnum status) => status switch
+    {
+        ReportStatusEnum.Open => "bg-warning/20 text-warning",
+        ReportStatusEnum.UnderReview => "bg-primary/20 text-primary",
+        ReportStatusEnum.ResolvedNoAction => "bg-[--color-surface-raised] text-muted",
+        ReportStatusEnum.ResolvedActionTaken => "bg-success/20 text-success",
+        _ => "bg-[--color-surface-raised] text-muted"
+    };
+}

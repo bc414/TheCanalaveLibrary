@@ -218,6 +218,33 @@ Guardrails:
 
 **Resolved:**
 
+- **WU34 Moderation — eight design decisions** — resolved (2026-06-25, WU34 planning):
+  (1) **Content removal:** soft-delete default (`IsHidden + DateModeratedRemoved + ModerationRemovalReason`,
+  reversible, author notified) across Story/BaseComment/BaseBlogPost/Recommendation; separate explicit
+  hard-delete path for illegal content (CSAM/piracy). Rationale: archive mission — mistakes are reversible,
+  authors deserve a reason. See `cross-cutting.md` "Moderation Model."
+  (2) **No auto-hide.** `ActiveReportCount` is a mod-only triage sort key / queue badge — never an automatic
+  action trigger. Deliberations' "3 distinct reporters in 24h" rule dropped (brigading risk). Report counts
+  are mod-only (no public counter). See `cross-cutting.md` "Moderation Model."
+  (3) **Account actions: state + notify now; login enforcement staged.** Add `AccountStatus` (Active/Warned/
+  Suspended/Banned — **no Shadowbanned**) + `SuspendedUntilUtc` to `User`. Warn/suspend/ban set status,
+  record on `Report`, send notification. Login-blocking enforcement is a dedicated follow-up WU (see
+  workplan.md deferred note after WU39). Shadowban permanently rejected — deception-as-moderation,
+  contradicts §13 transparency philosophy. See `cross-cutting.md` "Moderation Model."
+  (4) **`User.ActiveReportCount` added** — symmetric with other authored-content targets; uniform
+  `AdjustActiveReportCount` switch; `PrivateMessage` has no counter. See `cross-cutting.md` "Moderation Model."
+  (5) **`Report.ReportedEntityId int→long`; `ReportedEntityType` +`Message = 5`.** Reportable set for WU34 =
+  Story, User, Comment, BlogPost, Recommendation, PrivateMessage.
+  (6) **Notification dedup-key fix.** Widen `CreateCoreAsync` dedup key from `(type, sourceUserId, !IsRead)`
+  to include `RelatedEntityId`. Regression-test follow/vouch/group. See `layer2-services.md` "Notification
+  Generation."
+  (7) **`StoryApproved` notification type added** (`NotificationTypeEnum.StoryApproved = 75`, `YourStories=2`,
+  `KindFor → Story`). Seeded `NotificationType` row + migration. See `layer2-services.md` "Notification
+  Generation."
+  (8) **WU34/WU39 scope split.** Story import + import verification are Feature 53 (WU39, deps WU24 + WU34).
+  `/mod/submissions` in WU34 builds a tabbed shell; the import-verification tab drops in with WU39.
+  See `audit/Moderation.md` Feature 53 + `workplan.md` WU39.
+
 - **Moderator role assignment in dev seed** — resolved (2026-06-24, WU27.5): role *rows* are already
   seeded via `ApplicationRoleConfiguration.HasData`. WU27.5 assigns `AdminUser` to both `"Moderator"`
   and `"Admin"` in `DataSeeder.cs` — role gate is now exercisable end-to-end. Admin-inheritance

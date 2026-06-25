@@ -51,6 +51,12 @@ public class User : IdentityUser<int>
     // --- "HOT" FILTER ---
     // This is a critical filter for site-wide queries
     public bool ShowMatureContent { get; set; } = false;
+
+    // --- Moderation state (WU34) ---
+    // Login-blocking enforcement deferred to a follow-up WU; this models the state + enables notifications.
+    public AccountStatusEnum AccountStatus { get; set; } = AccountStatusEnum.Active;
+    public DateTime? SuspendedUntilUtc { get; set; }
+    public int ActiveReportCount { get; set; }
     
     // --- "WARM" SETTINGS (Stored as JSON) ---
     public ReaderSettings ReaderSettings { get; set; } = new ReaderSettings();

@@ -652,6 +652,37 @@ ViewModel and EF model. Validation in **static extension methods** in Core.
 **Tier 3 (Server only):** Database context checks in service. On failure, throws
 `StoryValidationException` containing `List<string>` of errors. Server-side only.
 
+## Moderation Services (settled WU34)
+
+`IModerationReadService` / `IModerationWriteService` live in `Core/Moderation/`. Server impls live in
+`Server/Moderation/`. The write service inherits the read service (CQRS-lite inheritance pattern).
+
+**DAG position.** `ServerModerationWriteService` injects:
+- `INotificationWriteService` (notifications — already the standard cross-feature dep).
+- Feature *read* services for target/author resolution per `ReportedEntityType` — e.g.
+  `IStoryReadService` to look up a story's title and author when notifying `ContentRemoved`. Never feature
+  *write* services (DAG rule: moderation is a peer of features, not above them in the write graph).
+- `IActiveUserContext` for moderator ID.
+
+**Soft-delete visibility filter.** Each removable entity registers a `"ModeratedVisibility"` named query
+filter (`HasQueryFilter(e => !e.IsHidden)`). All reads through `ServerModerationReadService` and the
+author's own views use `IgnoreQueryFilters(["ModeratedVisibility"])`. Public reads go through the filter
+automatically. This composes alongside `"ContentRating"` on entities that have both.
+
+**`AdjustActiveReportCount(ReportedEntityType type, long id, int delta)` private switch.** Lives in
+`ServerModerationWriteService`. Called on report submit (+1) and report resolve (-1). Branches by target
+type; skips `Message` (no counter on `PrivateMessage`). This is the single authority on counter mutation —
+do not increment/decrement at call-sites.
+
+**`ApplyRemoval(ReportedEntityType type, long id, string reason)` private switch.** Soft-hides the target
+(`IsHidden = true`, `DateModeratedRemoved = UtcNow`, `ModerationRemovalReason = reason`) and resolves the
+author's id for `NotifyContentRemovedAsync`. A parallel `ApplyHardDelete(type, id, reason)` switch is for
+illegal content only — it is a distinct action from soft-hide, not a parameter flag.
+
+**Notification dedup key.** `CreateCoreAsync` dedups on `(NotificationTypeId, SourceUserId, RelatedEntityId,
+!IsRead)` — `RelatedEntityId` was missing from the original WHERE clause (WU34 fix). This ensures two
+moderation notifications about *different* targets both reach the recipient.
+
 ## Naming
 
 - Server impl prefix `Server...`, client impl prefix `Client...`.

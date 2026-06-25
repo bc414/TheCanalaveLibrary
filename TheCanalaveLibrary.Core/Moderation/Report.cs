@@ -10,7 +10,11 @@ public partial class Report
 
     public ReportedEntityType ReportedEntityType { get; set; }
 
-    public int ReportedEntityId { get; set; }
+    /// <summary>
+    /// <c>long</c> to accommodate PrivateMessage ids (which use long keys).
+    /// All other reportable entity ids fit in int but the column is wide for uniformity.
+    /// </summary>
+    public long ReportedEntityId { get; set; }
 
     public short ReportReasonId { get; set; }
 
@@ -20,7 +24,7 @@ public partial class Report
     public ReportStatusEnum ReportStatusId { get; set; }
 
     public int? ModeratorUserId { get; set; }
-    
+
     [MaxLength(1024)]
     public string? ActionTaken { get; set; }
 

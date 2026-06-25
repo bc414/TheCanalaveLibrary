@@ -1,0 +1,138 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject IModerationWriteService ModerationService
+
+@* Report dialog (WU34 Feature 46). Cross-cutting leaf — consumed by StoryCard, UserCard,
+   CommentItem, BlogPostCard, recommendation cards, and the message thread. Shell matches
+   ConfirmDialog (fixed backdrop + panel). Reports are submitted without page navigation.
+
+   Usage:
+     <ReportDialog @ref="_reportDialog" />
+     ...
+     await _reportDialog.OpenAsync(ReportedEntityType.Story, story.StoryId);
+*@
+
+@if (_isOpen)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @onclick="Cancel">
+        <div class="w-full max-w-sm rounded-xl bg-surface p-6 shadow-lg" @onclick:stopPropagation="true">
+            <h2 class="mb-4 text-lg font-semibold text-text">Report Content</h2>
+
+            @if (_reasons is null)
+            {
+                <p class="text-sm text-muted">Loading…</p>
+            }
+            else
+            {
+                <div class="mb-4">
+                    <label class="mb-1 block text-sm font-medium text-text" for="report-reason">Reason</label>
+                    <select id="report-reason"
+                            class="w-full rounded-md border border-[--color-border] bg-surface px-3 py-2 text-sm text-text"
+                            @bind="_selectedReasonId">
+                        <option value="0">— Select a reason —</option>
+                        @foreach (var r in _reasons)
+                        {
+                            <option value="@r.ReasonId">@r.ReasonName</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-4">
+                    <label class="mb-1 block text-sm font-medium text-text" for="report-notes">Additional notes (optional)</label>
+                    <textarea id="report-notes" rows="3"
+                              class="w-full rounded-md border border-[--color-border] bg-surface px-3 py-2 text-sm text-text"
+                              @bind="_notes"
+                              placeholder="Provide any context that may help a moderator.">
+                    </textarea>
+                </div>
+
+                @if (_errorMessage is not null)
+                {
+                    <p class="mb-3 text-sm text-danger">@_errorMessage</p>
+                }
+
+                @if (_submitted)
+                {
+                    <p class="mb-3 text-sm text-success">Your report has been submitted. Thank you.</p>
+                }
+
+                <div class="flex justify-end gap-2">
+                    <button type="button"
+                            class="rounded-md border border-[--color-border] bg-surface px-3 py-1 text-text transition-colors hover:bg-[--color-primary]/20"
+                            @onclick="Cancel">
+                        @(_submitted ? "Close" : "Cancel")
+                    </button>
+                    @if (!_submitted)
+                    {
+                        <button type="button"
+                                class="rounded-md bg-primary px-3 py-1 text-white transition-colors hover:bg-primary-strong disabled:opacity-50"
+                                disabled="@(_submitting || _selectedReasonId == 0)"
+                                @onclick="SubmitAsync">
+                            @(_submitting ? "Submitting…" : "Submit Report")
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private bool _isOpen;
+    private ReportedEntityType _entityType;
+    private long _entityId;
+    private ReportReasonDto[]? _reasons;
+    private short _selectedReasonId;
+    private string? _notes;
+    private bool _submitting;
+    private bool _submitted;
+    private string? _errorMessage;
+
+    /// <summary>Opens the dialog for the given target and loads reason options.</summary>
+    public async Task OpenAsync(ReportedEntityType entityType, long entityId)
+    {
+        _entityType = entityType;
+        _entityId = entityId;
+        _selectedReasonId = 0;
+        _notes = null;
+        _submitting = false;
+        _submitted = false;
+        _errorMessage = null;
+        _isOpen = true;
+
+        if (_reasons is null)
+            _reasons = await ModerationService.GetReportReasonsAsync();
+
+        StateHasChanged();
+    }
+
+    private void Cancel()
+    {
+        _isOpen = false;
+        StateHasChanged();
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_selectedReasonId == 0) return;
+
+        _submitting = true;
+        _errorMessage = null;
+        StateHasChanged();
+
+        try
+        {
+            await ModerationService.SubmitReportAsync(new SubmitReportRequest(
+                _entityType, _entityId, _selectedReasonId, _notes));
+            _submitted = true;
+        }
+        catch (Exception)
+        {
+            _errorMessage = "Something went wrong. Please try again.";
+        }
+        finally
+        {
+            _submitting = false;
+            StateHasChanged();
+        }
+    }
+}

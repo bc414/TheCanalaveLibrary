@@ -27,6 +27,12 @@ public abstract class BaseBlogPost
 
     public int ActiveReportCount { get; set; }
 
+    // Soft-delete (ModeratedVisibility named filter) — WU34
+    public bool IsHidden { get; set; }
+    public DateTime? DateModeratedRemoved { get; set; }
+    [MaxLength(1024)]
+    public string? ModerationRemovalReason { get; set; }
+
     public virtual User? Author { get; set; }
 
     public virtual ICollection<BlogPostComment> BlogPostComments { get; set; } = new List<BlogPostComment>();

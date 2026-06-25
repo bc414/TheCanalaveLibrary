@@ -118,7 +118,9 @@
                 <StoryDeck Stories="Stories"
                            UserStoryInteractionStates="InteractionStates"
                            CurrentUserId="CurrentUserId"
-                           EmptyMessage="No stories in this group yet." />
+                           EmptyMessage="No stories in this group yet."
+                           OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+                <ReportDialog @ref="_reportDialog" />
             </section>
 
             @* Blog posts ─────────────────────────────────────────────────────── *@
@@ -201,6 +203,7 @@
     [Parameter] public EventCallback<int> OnStoryRemoved { get; set; }
 
     // ── Add-story state ────────────────────────────────────────────────────────
+    private ReportDialog _reportDialog = default!;
     private bool _showAddStory;
     private int? _addStoryId;
     private string? _addStoryError;

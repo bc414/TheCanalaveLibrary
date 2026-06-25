@@ -121,9 +121,9 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 43 | Notification Settings | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |
 | 44 | Reading Progress Tracking | Chapters | 5 | 5 | 5 | 5 | N/A | N/A | N/A | 2 | N/A |
 | 45 | View Count Tracking | Stories | 5 | 2 | 2 | N/A | N/A | 2 | N/A | 2 | N/A |
-| 46 | Content Reporting | Moderation | 5 | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
-| 47 | Moderation Queue & Actions | Moderation | 5 | 2 | 2 | 2 | 1 | N/A | 2 | N/A | N/A |
-| 48 | Story Approval Workflow | Moderation | 5 | 2 | 2 | 2 | 1 | N/A | N/A | N/A | N/A |
+| 46 | Content Reporting | Moderation | 5 | 5 | 5 | 5 | 3 | 2 | 5 | N/A | N/A |
+| 47 | Moderation Queue & Actions | Moderation | 5 | 5 | 5 | 5 | 3 | N/A | 5 | N/A | N/A |
+| 48 | Story Approval Workflow | Moderation | 5 | 5 | 5 | 5 | 3 | N/A | N/A | N/A | N/A |
 | 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | N/A | 2 | N/A | N/A |
 | 50 | Badge System | Badges | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 51 | Custom Lists | CustomLists | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |

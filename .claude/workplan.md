@@ -894,11 +894,76 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   sign-off pending (bell flyout, page view toggle, settings toggles).
 - **Pointer:** `audit/Notifications.md`. **Deps:** WU22.
 
-### WU34 — Moderation + Story import/approval
-- **Cells:** 46/47/48 L2/L3/L3.5/L4, 53 L2/L3/L3.5.
-- **Do:** reporting (polymorphic), `/mod/reports` queue (desktop-only, ActiveReportCount auto-flag),
-  `/mod/submissions` approval, import verification. **Tool:** opusplan. **Pointer:** `audit/Moderation.md`.
-  **Deps:** WU9, WU12.
+### WU34 — Moderation (reporting, queue, actions, approval workflow, related notifications) DONE ✓ (2026-06-25)
+- **Cells:** 46 L2/L3-Logic/L3.5/L4; 47 L2/L3-Logic/L3.5/L4; 48 L2/L3/L3.5/L4.
+  Momentary L1 reopen (→ Stage 5 on green, precedent WU31.5): `Report.ReportedEntityId int→long`;
+  `ReportedEntityType` +`Message`; soft-delete columns on Story/BaseComment/BaseBlogPost/Recommendation
+  (`IsHidden`, `DateModeratedRemoved`, `ModerationRemovalReason`); `User.AccountStatus` +
+  `SuspendedUntilUtc` + `ActiveReportCount`; `NotificationType` seed for `StoryApproved` (type 75).
+  Notification semantic methods are additive to Features 41/42 (no stage change on those cells).
+- **Settled decisions (do not revisit in opusplan):**
+  1. **Soft-delete default, narrow hard-delete escape hatch.** Normal mod action = `IsHidden = true`
+     (reversible, author notified with reason). Separate explicit "illegal content" path hard-deletes
+     (CSAM/piracy only). Rationale: archive mission — mistakes must be reversible; authors are owed the
+     reason. This is the opposite default from attention platforms. See `cross-cutting.md` "Moderation Model."
+  2. **No auto-hide.** `ActiveReportCount` drives mod-only queue ordering (most-reported first) and
+     an inline badge — never an automatic action. Deliberations' "3 distinct reporters in 24h" threshold
+     is dropped. Report counts are mod-only (no public display — that gamifies reporting and enables
+     brigading). See `cross-cutting.md` "Moderation Model."
+  3. **Account actions: model state + notify now; login enforcement staged.** `AccountStatus` enum
+     (Active/Warned/Suspended/Banned — no Shadowbanned) + `SuspendedUntilUtc` on `User`. Actions set
+     status, record on `Report`, and notify. Login-blocking enforcement is a follow-up slice (see
+     deferred-follow-up note below). **Shadowban rejected permanently** — deception-as-moderation,
+     contradicts §13 transparency philosophy.
+  4. **`User.ActiveReportCount` added** (symmetric with other authored-content targets; uniform
+     `AdjustActiveReportCount(type, id, delta)` switch; skips `PrivateMessage`).
+  5. **Reportable targets widen to `long`.** Set = Story, User, Comment, BlogPost, Recommendation,
+     PrivateMessage. `ReportedEntityType` +`Message = 5`.
+  6. **Notification dedup-key fix.** `CreateCoreAsync` currently dedups on `(type, sourceUserId, !IsRead)`;
+     widen key to include `RelatedEntityId`. Regression-test follow/vouch/group notification suites.
+  7. **`StoryApproved` notification type added** (`NotificationTypeEnum.StoryApproved = 75`,
+     category `YourStories=2`, `KindFor → Story`). Seeded `NotificationType` row + migration.
+  8. **`/mod/submissions` tabbed shell; rec-approval wiring deferred.** Recs currently write as
+     `Approved` directly. Build the tab shell; import-verification tab drops in with WU39. Do not change
+     the rec write-path in WU34.
+- **Superseded (from `Moderation_And_Reporting_Deliberations.md` — do not resurrect):**
+  `RequestedStatusId` (use `StoryDetail.PostApprovalStatus`); `Author` role (SiteRoles =
+  User/Moderator/Admin); single `IModerationService` (CQRS-lite split); Shadowban; 3-reporter
+  auto-hide; SQL trigger on `FavoriteCount`; `DefaultCommentModeration`/`AllowGuestComments` in
+  `AuthorSettings`; single "Moderation & Safety" notification category (live: Warnings=7, YourReports=8).
+- **Build phases (for opusplan):**
+  - Phase 0 — Doc-touch: `forward_plan.md` + `cross-cutting.md` + `layer2-services.md` + audit files.
+  - Phase 1 — Cluster relocation + schema: move `Report`/`ReportReason`/`ReportStatus` → `Core/Moderation/`
+    (StoryImport stays in `Core/Models/` for WU39). One migration: widen `ReportedEntityId`; add soft-delete
+    columns; add `User` columns; add `Report(ReportStatusId)` + `Report(ReportedEntityType, ReportedEntityId)`
+    indexes; seed `StoryApproved` `NotificationType`. Add `"ModeratedVisibility"` named query filters on
+    four content entities; mod/author reads use `IgnoreQueryFilters`.
+  - Phase 2 — Notifications: dedup-key fix in `CreateCoreAsync`; add semantic methods
+    (`NotifyReportReceivedAsync`, `NotifyReportResolvedAsync`, `NotifyReportResolvedNoActionAsync`,
+    `NotifyContentRemovedAsync`, `NotifyStoryRejectedAsync`, `NotifyStoryApprovedAsync`,
+    `NotifyAccountWarningAsync`/`Suspended`/`Banned`); `KindFor` branch for `StoryApproved → Story`.
+  - Phase 3 — Moderation services: `Core/Moderation/` DTOs (`SubmitReportRequest`, `ReportReasonDto`,
+    `ReportQueueItemDto`, `ModeratedTargetDto`) + `IModerationReadService`/`IModerationWriteService`;
+    `Server/Moderation/ServerModerationReadService` + `ServerModerationWriteService`. DI in `Program.cs`.
+  - Phase 4 — `ReportDialog` + entry points: reusable `ReportDialog.razor` (reuses `ConfirmDialog` pattern,
+    WU9); add report affordances on StoryCard, UserCard, CommentItem, BlogPostCard, recommendation cards,
+    message thread. 46 L5 stays Stage 2 (public, can be WASM later).
+  - Phase 5 — `/mod/reports` queue: `@page "/mod/reports"`, `[Authorize(Policy="RequireModerator")]`,
+    two-pass `BatchLoadEntitiesAsync` pattern for polymorphic target label + deep-link, ordered by
+    `ActiveReportCount` desc.
+  - Phase 6 — Moderator actions: resolve-no-action / resolve-action-taken / claim logic; content
+    removal `ApplyRemoval(type, id, reason)` switch (soft-hide default; explicit hard-delete variant);
+    account actions set `AccountStatus`/`SuspendedUntilUtc` + notify (no login enforcement yet).
+  - Phase 7 — `/mod/submissions` + `/mod/users`: submissions tabbed shell; approve → `StoryStatusId =
+    PostApprovalStatus` + `NotifyStoryApprovedAsync`; reject → `Rejected` + reason + `NotifyStoryRejectedAsync`.
+    Users: lookup + report history + warn/suspend/ban controls. Both server-rendered, mod-gated.
+  - Phase 8 — Tests: Unit (target-type allow-set, `AdjustActiveReportCount` switch, dedup-key fix);
+    Integration (submit increments + ReportReceived; resolve decrements + notifies; dedup-key regression;
+    approve/reject; soft-hide visibility filter; non-mod → 403); bUnit (ReportDialog, ModReportsPage,
+    submissions tab shell).
+- **Ordering:** 0 → 1 → 2 → 3 → 4 → 6 → 5 → 7 → 8 (woven).
+- **Tool:** opusplan. **Pointer:** `audit/Moderation.md` Features 46/47/48; `cross-cutting.md` "Moderation
+  Model." **Deps:** WU9, WU12, WU20, WU22, WU24, WU29, WU31, WU35.
 
 ### WU35 — Messaging — DONE ✓ (2026-06-24)
 - **Cells:** 49 L2/L3/L3.5/L4 → Stage 5.
@@ -926,6 +991,22 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   client ping), 54 L2 (epub/pdf export, app-layer only).
 - **Tool:** opusplan. **Pointer:** `audit/Identity.md`, `audit/Stories.md` Feature 45, `audit/Export.md`.
   **Deps:** WU25.
+
+### WU39 — Story Import & Verification
+- **Cells:** 53 L2/L3/L3.5/L4.
+- **Do:** author-facing import submission (re-posting an externally-published own work — not a scraper):
+  supply `SourcePlatform`/`SourceUrl` + `OriginalPublishedDate`/`OriginalLastUpdatedDate`, create the
+  `StoryImport` row (unique `StoryId` + unique `SourceUrl`), route the story into `PendingApproval`.
+  Extend the WU34 `/mod/submissions` tabbed shell with an **import-verification** tab: moderator confirms
+  the account holder is the original author (MVP = manual review of the two-way link / `SourceUrl`;
+  `StoryImport.VerificationStatus` records the outcome). Relocate `StoryImport` → `Core/Moderation/`
+  (or `Core/Stories/`) at this point.
+- **Tool:** opusplan. **Pointer:** `audit/Moderation.md` Feature 53. **Deps:** WU24, WU34.
+
+> **Deferred follow-up (not yet sequenced):** Account-status login enforcement — block Suspended (until
+> `SuspendedUntilUtc`) / Banned users at login and surface the Warned banner in layout chrome. WU34 ships
+> the `AccountStatus` state + notifications it builds on; enforcement is a security-surface slice to append
+> as its own WU when scheduled (candidate: alongside WU38 account-deletion UI). No stage number yet.
 
 ---
 

@@ -5,8 +5,8 @@
    Owns the three-state: null Stories = loading, empty = empty state, populated = grid.
    Injects NO service — the hosting page batch-loads StoryListingDtos and per-viewer interaction
    state (GetStatesByStoryIdsAsync) and passes them down via UserStoryInteractionStates; the deck distributes each card its slice.
-   N+1 rule: never one query per card. No caret callbacks forwarded at this tier — additive when
-   the first real consumer (Discovery/Report/Export) needs them (WU28/34/38).
+   N+1 rule: never one query per card. OnReport (WU34): forwarded to each StoryCard only when
+   the consumer wires it — HasDelegate gating keeps the caret item hidden otherwise.
    Outer Margin Rule: root has no m-*; parent spaces the deck. *@
 
 @if (Stories is null)
@@ -30,7 +30,8 @@ else
             {
                 <StoryCard Story="story"
                            UserStoryInteractionState="@StateFor(story.StoryId)"
-                           IsOwnStory="@IsOwn(story)" />
+                           IsOwnStory="@IsOwn(story)"
+                           OnReport="@ReportCallbackFor(story)" />
             }
         </div>
         @* PaginationControls self-hides when TotalPages <= 1 — always safe to embed *@
@@ -73,6 +74,11 @@ else
     [Parameter] public int TotalCount { get; set; }
     [Parameter] public EventCallback<int> OnPageChanged { get; set; }
 
+    // ── Optional caret actions (forwarded to each StoryCard, hidden unless wired) ─────────────
+
+    /// <summary>Receives the storyId when a user clicks "Report" in any card's caret menu.</summary>
+    [Parameter] public EventCallback<int> OnReport { get; set; }
+
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────
 
     private UserStoryInteractionStateDto? StateFor(int storyId)
@@ -84,4 +90,9 @@ else
 
     private bool IsOwn(StoryListingDto story) =>
         CurrentUserId is not null && story.AuthorId == CurrentUserId;
+
+    private EventCallback ReportCallbackFor(StoryListingDto story) =>
+        OnReport.HasDelegate
+            ? EventCallback.Factory.Create(this, () => OnReport.InvokeAsync(story.StoryId))
+            : EventCallback.Empty;
 }

@@ -38,7 +38,9 @@
                        CurrentPage="@Filter.Page"
                        PageSize="@Filter.PageSize"
                        TotalCount="@TotalCount"
-                       OnPageChanged="@OnPageChanged" />
+                       OnPageChanged="@OnPageChanged"
+                       OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+            <ReportDialog @ref="_reportDialog" />
         </div>
 
         @* ResultsFilterPanel sidebar *@
@@ -64,6 +66,8 @@
     [Parameter, EditorRequired] public StoryFilterDto Filter { get; set; } = new();
     [Parameter] public EventCallback<StoryFilterDto> OnFilterChanged { get; set; }
     [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+
+    private ReportDialog _reportDialog = default!;
 
     private static readonly IReadOnlyList<DefaultSortOrder> _availableSorts =
         [DefaultSortOrder.DatePublished, DefaultSortOrder.Random, DefaultSortOrder.Relevance];

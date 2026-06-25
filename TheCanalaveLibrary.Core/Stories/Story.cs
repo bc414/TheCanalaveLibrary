@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using TheCanalaveLibrary.Core;
 
@@ -21,6 +22,12 @@ public partial class Story : IEditableStoryProperties
     public DateOnly? OriginalPublishedDate { get; set; }
     public DateOnly? OriginalLastUpdatedDate { get; set; }
     public int ActiveReportCount { get; set; }
+
+    // Soft-delete (ModeratedVisibility named filter) — WU34
+    public bool IsHidden { get; set; }
+    public DateTime? DateModeratedRemoved { get; set; }
+    [MaxLength(1024)]
+    public string? ModerationRemovalReason { get; set; }
     /// <summary>
     /// Provides a read-only, type-safe view of the story's tags.
     /// This prevents InvalidCastExceptions by correctly projecting the collection.

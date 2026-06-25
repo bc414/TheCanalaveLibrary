@@ -132,6 +132,17 @@
                     Delete
                 </button>
             }
+
+            @* Report — others only (not own comment) *@
+            @if (!IsOwnComment && OnReport.HasDelegate)
+            {
+                <button type="button"
+                        class="text-[--color-text-muted] hover:text-danger transition-colors"
+                        @onclick="() => OnReport.InvokeAsync(Comment.CommentId)"
+                        aria-label="Report comment">
+                    Report
+                </button>
+            }
         </div>
     }
 </div>
@@ -157,6 +168,8 @@
     [Parameter] public EventCallback<long> OnReply { get; set; }
     [Parameter] public EventCallback<long> OnEdit { get; set; }
     [Parameter] public EventCallback<long> OnDelete { get; set; }
+    /// <summary>Raised when the viewer clicks "Report" — receives the CommentId.</summary>
+    [Parameter] public EventCallback<long> OnReport { get; set; }
 
     /// <summary>Raised with new HTML when the user saves an edit (CommentEditor.OnSave bubbles here).</summary>
     [Parameter] public EventCallback<string> OnEditSave { get; set; }

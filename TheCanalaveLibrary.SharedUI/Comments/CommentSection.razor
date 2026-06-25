@@ -38,7 +38,8 @@ else
                          OnEdit="HandleEditClick"
                          OnEditSave="HandleEditSaveAsync"
                          OnEditCancel="HandleEditCancel"
-                         OnDelete="HandleDeleteClick" />
+                         OnDelete="HandleDeleteClick"
+                         OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Comment, id))" />
 
             @* Replies — indented; no OnReply (one level only) *@
             @foreach (var rep in RepliesOf(root.CommentId))
@@ -53,7 +54,8 @@ else
                                  OnEdit="HandleEditClick"
                                  OnEditSave="HandleEditSaveAsync"
                                  OnEditCancel="HandleEditCancel"
-                                 OnDelete="HandleDeleteClick" />
+                                 OnDelete="HandleDeleteClick"
+                                 OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Comment, id))" />
                 </div>
             }
 
@@ -102,6 +104,8 @@ else
                IsDestructive="true"
                OnConfirm="HandleDeleteConfirmAsync" />
 
+<ReportDialog @ref="_reportDialog" />
+
 @* ── Inline error feedback ───────────────────────────────────────────────────── *@
 @if (_error is not null)
 {
@@ -144,6 +148,7 @@ else
     private CommentTarget _target;
 
     // ── Load state ────────────────────────────────────────────────────────────────
+    private ReportDialog _reportDialog = default!;
     private CommentPageDto? _page;
     private List<CommentDto> _comments = [];
     private int _totalRootCount;

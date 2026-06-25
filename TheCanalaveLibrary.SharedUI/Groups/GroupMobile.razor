@@ -88,7 +88,9 @@
         <StoryDeck Stories="Stories"
                    UserStoryInteractionStates="InteractionStates"
                    CurrentUserId="CurrentUserId"
-                   EmptyMessage="No stories in this group yet." />
+                   EmptyMessage="No stories in this group yet."
+                   OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+        <ReportDialog @ref="_reportDialog" />
     </section>
 
     @* ── Folder tree (collapsed by default on mobile) ────────────────────────── *@
@@ -155,6 +157,7 @@
     [Parameter] public EventCallback<AddGroupStoryDto> OnStoryAdded { get; set; }
     [Parameter] public EventCallback<int> OnStoryRemoved { get; set; }
 
+    private ReportDialog _reportDialog = default!;
     private bool _showAddStory;
     private bool _showFolders;
     private int? _addStoryId;

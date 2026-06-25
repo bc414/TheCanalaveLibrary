@@ -650,6 +650,103 @@ dev. `IsInRole` is literal — there is no automatic Admin-inherits-Moderator hi
 that should accept either role must list both: `Roles="Moderator,Admin"` / `.RequireRole("Moderator",
 "Admin")` / `IsModerator || IsAdmin`.
 
+## Moderation Model (settled WU34)
+
+### Mission-Driven Defaults — Opposite of Industry Standard
+
+The moderation tooling is deliberately inverted from commercial/attention-economy defaults. Understanding
+*why* prevents re-introducing industry patterns that are load-bearing only for scale, ad-safety, or
+engagement-maximization — none of which apply here.
+
+| Industry driver | Industry pattern | This site's inversion |
+|---|---|---|
+| Ad-safety/brand pressure | Fast automated removal; err toward takedown | Soft-hide default (reversible); author told why |
+| Engagement maximization | Lax on borderline-toxic but engaging content | Deliberately anti-engagement design |
+| Adversarial spam scale | Auto-hide on threshold | Human-in-the-loop (affordable at this volume) |
+| Hard-delete for storage/legal finality | Opaque permanent takedowns | Soft-hide default; hard-delete only for illegal content |
+| Appeals cost money → no real appeal | Shadowban (user doesn't know) | **No shadowban — ever** |
+
+### Content Removal
+
+**Soft-delete default.** Normal mod action sets `IsHidden = true`, `DateModeratedRemoved`, and
+`ModerationRemovalReason` on the target entity. The content is invisible on public reads (named query filter
+`"ModeratedVisibility"`) but visible to the author (who reads with `IgnoreQueryFilters`) and to moderators
+(who also read with `IgnoreQueryFilters`). The author receives a `NotifyContentRemovedAsync` notification
+with the stated reason so they can often fix it (e.g. re-rate mature content) rather than just being punished.
+
+Applicable targets: `Story`, `BaseComment`, `BaseBlogPost`, `Recommendation`. `User` is handled by account
+actions (not `IsHidden`). `PrivateMessage` is not soft-hidable — DM reports go straight to the queue for
+moderator judgment only.
+
+**Narrow hard-delete escape hatch.** A separate explicit "illegal content" action (CSAM, piracy) hard-deletes
+via a distinct `ApplyHardDelete(type, id, reason)` path in `ServerModerationWriteService`. This is not the
+default and is presented as a distinct moderator choice, not the same action as soft-hide.
+
+**Named query filter pattern.** Each removable entity registers `"ModeratedVisibility"` via
+`HasQueryFilter` (EF Core named filters, composable alongside `"ContentRating"`). Mod and author reads
+use `IgnoreQueryFilters(["ModeratedVisibility"])`.
+
+### Auto-Hide Policy — None
+
+`ActiveReportCount` drives mod-only triage ordering (most-reported items first in the queue) and an inline
+queue badge. It is **never an automatic action trigger**. No threshold-based auto-hide or auto-flag logic.
+
+Rationale: auto-hide-on-threshold in a small fandom community becomes a brigading weapon (the mass-report
+heckler's veto). Human review is affordable and necessary at this site's volume. The deliberations'
+"3 distinct reporters in 24h" rule is permanently dropped.
+
+**Report counts are mod-only.** No public-facing "reported N times" display — that gamifies reporting and
+enables coordinated harassment. `ActiveReportCount` on entities and `User` is queried only by moderator
+surfaces.
+
+### Account Actions
+
+**State model:** `User.AccountStatus` enum (Active / Warned / Suspended / Banned — **no Shadowbanned**) +
+`User.SuspendedUntilUtc` (nullable `DateTime?`).
+
+**Action workflow:** each action (warn / suspend / ban) sets `AccountStatus`, records on `Report`
+(`ActionTaken` + `DateResolved` + `ModeratorUserId`), and sends the appropriate notification
+(`NotifyAccountWarningAsync` / `Suspended` / `Banned`). The user is always told why — transparency is
+non-negotiable per §13.
+
+**Shadowban is permanently rejected.** Deception-as-moderation directly contradicts the site's §13
+philosophy ("close the loop on ALL reports — the user is entitled to know they were heard"). A community
+that shadowbans lies to its members. This is a design axiom, not a deferred decision.
+
+**Login enforcement is staged.** WU34 ships the state columns and notifications. Actual login-blocking
+(block Suspended users until `SuspendedUntilUtc`; block Banned users permanently; surface Warned banner
+in layout chrome) is a dedicated follow-up WU — it's a security surface that deserves its own careful slice.
+
+### Report Targets and `ActiveReportCount`
+
+**Reportable set (WU34):** Story, User, Comment (covers all TPT subtypes coarsely), BlogPost, Recommendation,
+PrivateMessage. `Report.ReportedEntityId` is `long` (widened from `int` in WU34 migration). `ReportedEntityType`
+enum value `Message = 5` added.
+
+**`ActiveReportCount` exists on:** Story, BaseComment, BaseBlogPost, Recommendation, **and User** (added WU34
+for symmetry). **`PrivateMessage` has no counter** — DMs are 1:1 sensitive; no surface would display a
+per-message report count.
+
+**Uniform `AdjustActiveReportCount(type, id, delta)`** private switch in `ServerModerationWriteService`
+increments on report submit, decrements on resolve. The switch skips `Message` targets (no counter).
+
+### Notification Loop (§13 Transparency)
+
+Every report outcome notifies the reporter — including no-action outcomes. This is more work per report
+than industry standard, and it is affordable precisely because volume is low and the community is the
+point. **The "close the loop" philosophy is a project axiom; do not trade it away for efficiency.**
+
+Semantic methods:
+- `NotifyReportReceivedAsync` — immediate confirmation on submit.
+- `NotifyReportResolvedAsync` — action taken (links to affected entity if applicable).
+- `NotifyReportResolvedNoActionAsync` — no action taken, still closes the loop.
+- `NotifyContentRemovedAsync` — target author notified with reason.
+- `NotifyStoryApprovedAsync` / `NotifyStoryRejectedAsync` — submission outcomes.
+- `NotifyAccountWarningAsync` / `AccountSuspendedAsync` / `AccountBannedAsync` — disciplinary actions.
+
+All are best-effort post-commit (try/catch swallows; notification failure never rolls back the primary
+moderation action).
+
 ## Private Messaging Architecture (settled WU35)
 
 ### Stateless MVP — SignalR is post-MVP

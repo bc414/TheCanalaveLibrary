@@ -1,0 +1,198 @@
+@page "/mod/submissions"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize(Roles = "Moderator,Admin")]
+@using Microsoft.AspNetCore.Authorization
+@inject IModerationWriteService ModerationService
+
+@* Story submission queue (WU34 Feature 48). Tabbed shell — Stories tab is the active tab;
+   Imports tab is a placeholder for WU39. Desktop-only, server-rendered, no WASM.
+
+   Approve: sets StoryStatusId = PostApprovalStatus + fires StoryApproved notification.
+   Reject: sets StoryStatusId = Rejected + records reason + fires StoryRejected notification. *@
+
+<PageTitle>Mod — Submissions</PageTitle>
+
+<div class="flex flex-col gap-4 px-4 py-4">
+
+    <h1 class="text-xl font-bold text-text">Submissions</h1>
+
+    @* ── Tab bar ─────────────────────────────────────────────────────────────── *@
+    <nav class="flex gap-1 border-b border-[--color-border] pb-0" aria-label="Submission tabs">
+        <button type="button"
+                class="@TabClasses(_tab == SubmissionTab.Stories)"
+                @onclick="() => _tab = SubmissionTab.Stories">
+            Stories
+        </button>
+        <button type="button"
+                class="@TabClasses(_tab == SubmissionTab.Imports)"
+                @onclick="() => _tab = SubmissionTab.Imports">
+            Imports
+        </button>
+    </nav>
+
+    @if (_tab == SubmissionTab.Stories)
+    {
+        @* ── Stories tab ─────────────────────────────────────────────────────── *@
+        @if (_loading)
+        {
+            <p class="text-sm text-muted">Loading…</p>
+        }
+        else if (_submissions.Length == 0)
+        {
+            <p class="text-sm text-muted">No pending submissions.</p>
+        }
+        else
+        {
+            <div class="flex flex-col gap-3">
+                @foreach (var s in _submissions)
+                {
+                    var sub = s;
+                    <div class="rounded-lg border border-[--color-border] bg-surface p-4">
+                        <div class="flex items-start justify-between gap-4">
+                            <div>
+                                <a href="/story/@sub.StoryId" target="_blank"
+                                   class="font-semibold text-primary hover:underline">
+                                    @sub.Title
+                                </a>
+                                <p class="mt-0.5 text-sm text-muted">
+                                    by @sub.AuthorUserName &mdash;
+                                    @sub.Rating &mdash;
+                                    submitted @sub.SubmittedDate.ToString("yyyy-MM-dd")
+                                    @if (sub.IsImportedWork) { <span class="ml-1 rounded bg-warning/20 px-1 py-0.5 text-xs text-warning">Import</span> }
+                                </p>
+                                <p class="mt-1 text-xs text-muted">
+                                    Approve → publishes as <strong>@sub.PostApprovalStatus</strong>
+                                </p>
+                            </div>
+                            <div class="flex shrink-0 flex-col items-end gap-2">
+                                <button type="button"
+                                        class="rounded bg-success px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
+                                        disabled="@(_actingStoryId is not null)"
+                                        @onclick="() => ApproveAsync(sub.StoryId)">
+                                    Approve
+                                </button>
+                                <button type="button"
+                                        class="rounded bg-danger px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
+                                        disabled="@(_actingStoryId is not null)"
+                                        @onclick="() => OpenRejectPanel(sub)">
+                                    Reject
+                                </button>
+                            </div>
+                        </div>
+
+                        @* ── Inline reject reason panel ───────────────────────── *@
+                        @if (_rejectingStoryId == sub.StoryId)
+                        {
+                            <div class="mt-3 border-t border-[--color-border] pt-3">
+                                <label class="mb-1 block text-sm font-medium text-text" for="reject-reason-@sub.StoryId">
+                                    Rejection reason
+                                </label>
+                                <textarea id="reject-reason-@sub.StoryId" rows="2"
+                                          class="w-full rounded-md border border-[--color-border] bg-surface px-3 py-2 text-sm text-text"
+                                          @bind="_rejectReason"></textarea>
+                                @if (_rejectError is not null)
+                                {
+                                    <p class="mt-1 text-sm text-danger">@_rejectError</p>
+                                }
+                                <div class="mt-2 flex gap-2">
+                                    <button type="button"
+                                            class="rounded bg-danger px-3 py-1 text-sm text-white hover:opacity-90 disabled:opacity-50"
+                                            disabled="@(_actingStoryId is not null)"
+                                            @onclick="() => ConfirmRejectAsync(sub.StoryId)">
+                                        Confirm reject
+                                    </button>
+                                    <button type="button"
+                                            class="rounded border border-[--color-border] bg-surface px-3 py-1 text-sm text-text"
+                                            @onclick="CancelReject">
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
+    else
+    {
+        @* ── Imports tab — placeholder for WU39 ──────────────────────────────── *@
+        <p class="text-sm text-muted italic">
+            Import verification is coming in a future update (WU39).
+        </p>
+    }
+</div>
+
+@code {
+    private enum SubmissionTab { Stories, Imports }
+
+    private SubmissionTab _tab = SubmissionTab.Stories;
+    private StorySubmissionQueueItemDto[] _submissions = [];
+    private bool _loading = true;
+
+    private int? _actingStoryId;
+    private int? _rejectingStoryId;
+    private string? _rejectReason;
+    private string? _rejectError;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _submissions = await ModerationService.GetPendingSubmissionsAsync();
+        _loading = false;
+    }
+
+    private async Task ApproveAsync(int storyId)
+    {
+        _actingStoryId = storyId;
+        _rejectError = null;
+        try
+        {
+            await ModerationService.ApproveStoryAsync(storyId);
+            await LoadAsync();
+        }
+        catch (Exception ex) { _rejectError = ex.Message; }
+        finally { _actingStoryId = null; }
+    }
+
+    private void OpenRejectPanel(StorySubmissionQueueItemDto sub)
+    {
+        _rejectingStoryId = sub.StoryId;
+        _rejectReason = null;
+        _rejectError = null;
+    }
+
+    private void CancelReject()
+    {
+        _rejectingStoryId = null;
+        _rejectReason = null;
+        _rejectError = null;
+    }
+
+    private async Task ConfirmRejectAsync(int storyId)
+    {
+        if (string.IsNullOrWhiteSpace(_rejectReason))
+        {
+            _rejectError = "A rejection reason is required.";
+            return;
+        }
+
+        _actingStoryId = storyId;
+        _rejectError = null;
+        try
+        {
+            await ModerationService.RejectStoryAsync(storyId, _rejectReason!);
+            CancelReject();
+            await LoadAsync();
+        }
+        catch (Exception ex) { _rejectError = ex.Message; }
+        finally { _actingStoryId = null; }
+    }
+
+    private static string TabClasses(bool isActive) =>
+        "px-4 py-2 text-sm font-medium transition-colors border-b-2 " + (isActive
+            ? "border-primary text-primary"
+            : "border-transparent text-muted hover:text-text hover:border-[--color-border]");
+}

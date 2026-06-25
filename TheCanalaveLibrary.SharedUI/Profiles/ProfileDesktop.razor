@@ -111,7 +111,9 @@
                                CurrentPage="@StoryFilter.Page"
                                PageSize="@StoryFilter.PageSize"
                                TotalCount="@StoryTotalCount"
-                               OnPageChanged="@OnStoryPageChanged" />
+                               OnPageChanged="@OnStoryPageChanged"
+                               OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+                    <ReportDialog @ref="_reportDialog" />
                 </div>
                 <aside class="w-72 shrink-0 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4">
                     <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-[--color-text-muted]">Filters</h2>
@@ -153,6 +155,8 @@
     [Parameter] public int BlogPage { get; set; } = 1;
     [Parameter] public int BlogPageSize { get; set; } = 20;
     [Parameter] public EventCallback<int> OnBlogPageChanged { get; set; }
+
+    private ReportDialog _reportDialog = default!;
 
     private static readonly IReadOnlyList<DefaultSortOrder> _availableSorts =
         [DefaultSortOrder.DatePublished, DefaultSortOrder.Random, DefaultSortOrder.Relevance];

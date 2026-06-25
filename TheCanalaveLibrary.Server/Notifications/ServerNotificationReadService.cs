@@ -76,6 +76,7 @@ public class ServerNotificationReadService(
         NotificationTypeEnum.StoryRelationshipApproved       => RelatedEntityKind.Story,
         NotificationTypeEnum.NewStoryAcknowledgement         => RelatedEntityKind.Story,
         NotificationTypeEnum.StoryRejected                   => RelatedEntityKind.Story,
+        NotificationTypeEnum.StoryApproved                   => RelatedEntityKind.Story,
 
         // ── No navigable target (site announcements, account warnings, reports) ──
         _ => RelatedEntityKind.None
