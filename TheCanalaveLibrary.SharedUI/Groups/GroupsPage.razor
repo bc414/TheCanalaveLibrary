@@ -1,0 +1,92 @@
+@page "/groups"
+@namespace TheCanalaveLibrary.SharedUI
+@inject IGroupWriteService GroupService
+@inject NavigationManager Nav
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Groups listing page. No @attribute [Authorize] — anonymous visitors may browse public groups.
+   IGroupWriteService (: IGroupReadService) injected so the Join button on GroupPage can reuse
+   the same service scope (page itself only calls the read path here).
+   Server-side GroupAudience named filter hides Mature groups from mature-disabled users automatically.
+   WU32. *@
+
+<PageTitle>Groups</PageTitle>
+
+<div class="mx-auto max-w-4xl px-4 py-8 flex flex-col gap-6">
+
+    @* ── Page header ─────────────────────────────────────────────────────────── *@
+    <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-bold text-[--color-text]">Groups</h1>
+        @if (_currentUserId is not null)
+        {
+            <a href="/group/new"
+               class="rounded-md bg-[--color-primary] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[--color-primary-strong]">
+                + New Group
+            </a>
+        }
+    </div>
+
+    @* ── Listing ──────────────────────────────────────────────────────────────── *@
+    @if (_isLoading)
+    {
+        <p class="text-[--color-text-muted]"><em>Loading groups…</em></p>
+    }
+    else if (_groups.Length == 0)
+    {
+        <p class="text-[--color-text-muted]">No groups yet. Be the first to create one!</p>
+    }
+    else
+    {
+        <div class="flex flex-col gap-3">
+            @foreach (GroupCardDto group in _groups)
+            {
+                <GroupCard Group="group" />
+            }
+        </div>
+
+        <PaginationControls CurrentPage="_currentPage"
+                            PageSize="_pageSize"
+                            TotalCount="_totalCount"
+                            OnPageChanged="HandlePageChanged" />
+    }
+
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private GroupCardDto[] _groups = [];
+    private int _currentPage = 1;
+    private const int _pageSize = 20;
+    private int _totalCount;
+    private bool _isLoading = true;
+    private int? _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            AuthenticationState state = await AuthState;
+            string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            _currentUserId = int.TryParse(idStr, out int id) ? id : null;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        (GroupCardDto[] items, int total) = await GroupService.GetListingsAsync(_currentPage, _pageSize);
+        _groups     = items;
+        _totalCount = total;
+        _isLoading  = false;
+    }
+
+    private async Task HandlePageChanged(int page)
+    {
+        _currentPage = page;
+        await LoadAsync();
+    }
+}

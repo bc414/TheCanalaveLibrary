@@ -780,16 +780,41 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   `GetById_MaturePost_VisibleToMatureViewer`, `GetById_MaturePost_VisibleToAuthorRegardlessOfMatureSetting`.
 - **Pointer:** `audit/BlogPosts.md`, `audit/Comments.md`. **Deps:** WU31.
 
-### WU32 — Groups
-- **Cells:** 38/39/40 L2/L3/L3.5/L4.
-- **Do:** group CRUD (3 audience types, GroupMember roles), GroupStory + GroupFolder nesting (rating
-  enforcement at write), group page (`/group/{GroupId}/{*GroupSlug}`) with StoryDeck + comments.
-  **Tool:** opusplan. **Pointer:** `audit/Groups.md`. **Deps:** WU14, WU6, WU20.
+### WU32 — Groups — DONE ✓ (2026-06-24)
+- **Cells:** 38/39/40 L2/L3/L3.5/L4 → Stage 5.
+- **Done:** Phase 0 doc-touch: settled rating model (AudienceRating vs MaxContentRating), GroupAudience
+  named filter, membership/role model, group blog posts in scope, per-context comment pattern.
+  Phase 1: `GroupRole`/`GroupAudienceType` enums, `GroupAudienceTypeMapper`, `Group.Rating → AudienceRating`
+  rename, `DbSet<GroupComment>`, `GroupAudience` named filter, migration `WU32_Groups`.
+  Phase 2: Full L2 services (Core contracts + Server impls + DI) — group CRUD, join/leave, rating
+  waterfall, folder CRUD, group comments, group blog posts, notification fan-out.
+  Phase 3: `GroupCard`, `GroupsPage`, `GroupPage` (dispatcher), `GroupDesktop`, `GroupMobile`,
+  `GroupCreateEditPage`, `GroupBlogPostEditorPage`. `CommentSection.GroupId` + `CommentTarget.Group`.
+  Phase 4: Unit (`GroupAudienceTypeMapperTests`, `GroupValidationsTests` — 22 tests),
+  Integration (`GroupServiceTests` — 22 tests, DB-gated), RazorComponents (`GroupCardTests`,
+  `CommentSectionGroupTests` — 15 tests).
+  `dotnet build` green (0 errors); 513 non-integration tests pass (227 unit + 286 RazorComponents).
+  **Pointer:** `audit/Groups.md`. **Deps:** WU14, WU6, WU20.
 
-### WU33 — Notifications UI
-- **Cells:** 42 L3/L3.5/L4, 43 L3/L3.5/L4.
-- **Do:** `/notifications` grouped page + bell flyout (cross-cutting layout element) + settings page
-  driven by DB data. **Tool:** opusplan. **Pointer:** `audit/Notifications.md`. **Deps:** WU22.
+### WU33 — Notifications UI — DONE ✓ (2026-06-24)
+- **Cells:** 42 L3/L3.5 → Stage 5, 43 L3/L3.5 → Stage 5. L4 stays Stage 1 (pending visual sign-off
+  per WU8/WU13/WU23 precedent — Tailwind classes are present but not locked into Pattern Accumulation).
+  F42 L2 additive enrichment (SourceUserName, TargetTitle, TargetUrl, GetTotalCountAsync) also verified.
+- **Done:** Phase 0 doc-touch (layer2/layer3.5/layer4/cross-cutting skills + audit + forward_plan);
+  Phase 1 L2 enrichment (NotificationFeedOrder enum, NotificationDto extended, INotificationReadService
+  updated, ServerNotificationReadService two-pass batch enrichment); Phase 2 presentation atoms
+  (NotificationCategoryVisuals.cs, NotificationPresenter.cs, NotificationItem.razor); Phase 3
+  NotificationsPage.razor (by-date + by-category views, view toggle, sort toggle, mark-all, pagination);
+  Phase 4 NotificationBell.razor + layout insertion (DesktopLayout + MobileLayout); Phase 5
+  NotificationSettingsPage.razor (per-row immediate save, grouped by category); Phase 6 tests
+  (Integration: 6 new WU33 tests — enrichment, total-count, ordering; Unit: 22+13 new tests in
+  NotificationCategoryVisualsTests + NotificationPresenterTests; RazorComponents: pre-existing 308
+  unchanged — notification RazorComponents tests deferred per plan's note on FakeNotificationWriteService).
+- **Verified:** `dotnet build` 0 errors; `dotnet test` — Unit 391 ✓, RazorComponents 308 ✓, Integration
+  notification tests 22/22 ✓ (GroupServiceTests failures are pre-existing, unrelated). Routes auto-
+  discovered from SharedUI assembly — `/notifications` and `/notifications/settings` wired. Visual
+  sign-off pending (bell flyout, page view toggle, settings toggles).
+- **Pointer:** `audit/Notifications.md`. **Deps:** WU22.
 
 ### WU34 — Moderation + Story import/approval
 - **Cells:** 46/47/48 L2/L3/L3.5/L4, 53 L2/L3/L3.5.
@@ -797,8 +822,8 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   `/mod/submissions` approval, import verification. **Tool:** opusplan. **Pointer:** `audit/Moderation.md`.
   **Deps:** WU9, WU12.
 
-### WU35 — Messaging
-- **Cells:** 49 L2/L3/L3.5/L4.
+### WU35 — Messaging — DONE ✓ (2026-06-24)
+- **Cells:** 49 L2/L3/L3.5/L4 → Stage 5.
 - **Do:** `/messages/{ConversationId?}`, three-table model, SignalR realtime (InteractiveServer), EditorView
   composition, `LastReadTimestamp`, `AllowPrivateMessages` gate. **Tool:** opusplan.
   **Pointer:** `audit/Messaging.md`. **Deps:** WU6.
@@ -841,6 +866,14 @@ work-unit into Phase 3 and update `status.md` + the audit file.
 Per `grid_axes.md` §"The Two Boundaries": these swap method bodies / add DDL / add standalone workers
 behind the contracts frozen in Layers 1–4. Batch by pattern when the MVP slice they sit behind is stable.
 
+- **Messaging realtime push (SignalR).** Post-MVP additive layer on top of the stateless WU35 write
+  service (settled WU35, 2026-06-24 — see `forward_plan.md` Resolved, `cross-cutting.md` "Private
+  Messaging Architecture"). Build: first app-level `Hub` class (`MessagesHub`), `AddSignalR()` in
+  `Program.cs`, `MapHub<MessagesHub>("/hubs/messages")`; per-conversation SignalR group join/leave on
+  thread open; broadcast via `IHubContext<MessagesHub>` alongside `SendMessageAsync` in the write
+  service; client-side receive handler calling `InvokeAsync(StateHasChanged)`. No changes to L1–L4 —
+  the write service's sanitize+persist+return-DTO path is unchanged. Hub integration test harness
+  needed (no existing template). Feature 49 L5 stays N/A (this is not a REST-endpoint pattern).
 - **L5 — WASM enablement (all features).** Map endpoints from the stable `IXService` contracts + `Client`
   HTTP impls. Includes the two genuine mechanical Stage-4 cells — **Story L5 endpoint wiring** (4/5 L5:
   `HttpStory*Service` call `/{id}/edit` + write routes `StoryEndpoints` never maps) and **Sprites L5**

@@ -1,0 +1,221 @@
+@page "/notifications"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@inject INotificationWriteService NotificationService
+@inject NavigationManager Nav
+
+@* Feature 42 — Notification Display page (WU33).
+   /notifications shows the current user's full notification feed in two views:
+     • By date  — flat list ordered newest-first (default) or oldest-unread-first.
+     • By category — grouped by NotificationCategoryEnum, each group a <details> disclosure.
+       Group open/close state is seeded from the effective per-category Collapsed preference
+       (false = open, true = initially collapsed). Grouping is applied client-side over the
+       current page of results; pagination remains server-side.
+   View and sort state are ephemeral (component state — no querystring), reset on reload.
+   Single responsive component (no desktop/mobile split; layout-width difference only).
+   InjectS INotificationWriteService (inherits INotificationReadService) for both reads
+   and mark-as-read mutations. *@
+
+@if (_isLoading)
+{
+    <PageTitle>Notifications</PageTitle>
+    <p class="text-[--color-text-muted]"><em>Loading&hellip;</em></p>
+}
+else
+{
+    <PageTitle>Notifications</PageTitle>
+
+    @* ── Top bar: heading + controls ──────────────────────────────────────────── *@
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h1 class="text-2xl font-bold text-[--color-text]">Notifications</h1>
+        <div class="flex flex-wrap items-center gap-2">
+            @* View toggle *@
+            <div class="flex rounded-md border border-[--color-border] overflow-hidden text-sm">
+                <button type="button"
+                        class="px-3 py-1.5 transition-colors @(_view == NotifView.Date ? "bg-[--color-primary] text-white" : "bg-[--color-surface-raised] hover:bg-[--color-primary]/10")"
+                        @onclick="() => SetView(NotifView.Date)">
+                    By date
+                </button>
+                <button type="button"
+                        class="px-3 py-1.5 transition-colors @(_view == NotifView.Category ? "bg-[--color-primary] text-white" : "bg-[--color-surface-raised] hover:bg-[--color-primary]/10")"
+                        @onclick="() => SetView(NotifView.Category)">
+                    By category
+                </button>
+            </div>
+
+            @* Sort toggle — only visible in date feed *@
+            @if (_view == NotifView.Date)
+            {
+                <div class="flex rounded-md border border-[--color-border] overflow-hidden text-sm">
+                    <button type="button"
+                            class="px-3 py-1.5 transition-colors @(_order == NotificationFeedOrder.NewestFirst ? "bg-[--color-primary] text-white" : "bg-[--color-surface-raised] hover:bg-[--color-primary]/10")"
+                            @onclick="() => SetOrder(NotificationFeedOrder.NewestFirst)">
+                        Newest first
+                    </button>
+                    <button type="button"
+                            class="px-3 py-1.5 transition-colors @(_order == NotificationFeedOrder.OldestUnreadFirst ? "bg-[--color-primary] text-white" : "bg-[--color-surface-raised] hover:bg-[--color-primary]/10")"
+                            @onclick="() => SetOrder(NotificationFeedOrder.OldestUnreadFirst)">
+                        Oldest unread first
+                    </button>
+                </div>
+            }
+
+            @* Mark all as read *@
+            <button type="button"
+                    class="rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-1.5 text-sm hover:bg-[--color-primary]/10 transition-colors"
+                    @onclick="MarkAllReadAsync">
+                Mark all read
+            </button>
+        </div>
+    </div>
+
+    @* ── Content ───────────────────────────────────────────────────────────────── *@
+    @if (_notifications.Length == 0 && _totalCount == 0)
+    {
+        <div class="flex flex-col items-center justify-center py-16 text-[--color-text-muted]">
+            <svg viewBox="0 0 24 24" class="mb-3 size-10 opacity-30" aria-hidden="true" fill="currentColor">
+                <path d="M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M11 7V13H13V7Z M11 15V17H13V15Z" />
+            </svg>
+            <p class="text-sm font-medium">You're all caught up.</p>
+            <p class="text-xs">No notifications yet.</p>
+        </div>
+    }
+    else if (_view == NotifView.Date)
+    {
+        <div class="flex flex-col">
+            @foreach (var n in _notifications)
+            {
+                <NotificationItem Notification="n" OnActivate="() => ActivateAsync(n)" />
+            }
+        </div>
+    }
+    else
+    {
+        @* Category view — group by CategoryId, ordered by NotificationCategoryVisuals *@
+        <div class="flex flex-col gap-2">
+            @foreach (var cat in NotificationCategoryVisuals.AllCategories)
+            {
+                var group = _notifications.Where(n => n.CategoryId == cat).ToList();
+                if (group.Count == 0) continue;
+
+                bool collapsed = group.Any(n => n.Collapsed) && !group.Any(n => !n.Collapsed);
+                var visuals = NotificationCategoryVisuals.For(cat);
+
+                <details class="rounded-xl border border-[--color-border]" @attributes="collapsed ? null : OpenAttr">
+                    <summary class="flex cursor-pointer select-none items-center gap-2.5 px-4 py-3 text-sm font-semibold hover:bg-[--color-surface-hover] transition-colors rounded-xl">
+                        <svg viewBox="0 0 24 24" class="size-4 shrink-0" aria-hidden="true" fill="@visuals.AccentColor">
+                            <path d="@visuals.IconPath" />
+                        </svg>
+                        <span style="color:@visuals.AccentColor">@visuals.Label</span>
+                        <span class="ml-auto text-xs font-normal text-[--color-text-muted]">@group.Count</span>
+                    </summary>
+                    <div class="px-1 pb-2">
+                        @foreach (var n in group.OrderByDescending(n => n.DateCreated))
+                        {
+                            <NotificationItem Notification="n" OnActivate="() => ActivateAsync(n)" />
+                        }
+                    </div>
+                </details>
+            }
+        </div>
+    }
+
+    @* ── Pagination ─────────────────────────────────────────────────────────────── *@
+    @if (_totalCount > PageSize)
+    {
+        <div class="mt-6 flex justify-center">
+            <PaginationControls CurrentPage="_page"
+                                PageSize="PageSize"
+                                TotalCount="_totalCount"
+                                OnPageChanged="HandlePageChangedAsync" />
+        </div>
+    }
+
+    @* ── Footer link ─────────────────────────────────────────────────────────────── *@
+    <div class="mt-6 border-t border-[--color-border] pt-4 text-center text-sm text-[--color-text-muted]">
+        <a href="/notifications/settings" class="hover:text-[--color-text] hover:underline transition-colors">
+            Notification settings
+        </a>
+    </div>
+}
+
+@code {
+    private enum NotifView { Date, Category }
+
+    private const int PageSize = 20;
+
+    // ── IReadOnlyDictionary workaround for Blazor @attributes on <details> ──────
+    // <details open> uses a boolean attribute — pass via @attributes when open; omit when not.
+    private static readonly IReadOnlyDictionary<string, object> OpenAttr =
+        new Dictionary<string, object> { ["open"] = true };
+
+    private bool _isLoading = true;
+    private NotificationDto[] _notifications = [];
+    private int _totalCount;
+    private int _page = 1;
+    private NotifView _view = NotifView.Date;
+    private NotificationFeedOrder _order = NotificationFeedOrder.NewestFirst;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        // Start both queries concurrently; await each to get typed results.
+        var notifTask = NotificationService.GetNotificationsAsync(_page, PageSize, _order);
+        var countTask = NotificationService.GetTotalCountAsync();
+        _notifications = await notifTask;
+        _totalCount   = await countTask;
+        _isLoading = false;
+    }
+
+    private async Task SetView(NotifView view)
+    {
+        if (_view == view) return;
+        _view = view;
+        _page = 1;
+        // Category view always uses NewestFirst for the underlying data load.
+        if (view == NotifView.Category)
+            _order = NotificationFeedOrder.NewestFirst;
+        await LoadAsync();
+    }
+
+    private async Task SetOrder(NotificationFeedOrder order)
+    {
+        if (_order == order) return;
+        _order = order;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task HandlePageChangedAsync(int page)
+    {
+        _page = page;
+        await LoadAsync();
+    }
+
+    private async Task ActivateAsync(NotificationDto n)
+    {
+        // Optimistic local flip before the async call.
+        if (!n.IsRead)
+        {
+            // Replace the notification in the local array with IsRead = true.
+            _notifications = [.. _notifications.Select(x =>
+                x.NotificationId == n.NotificationId ? x with { IsRead = true } : x)];
+            await NotificationService.MarkAsReadAsync(n.NotificationId);
+        }
+        if (n.TargetUrl is not null)
+            Nav.NavigateTo(n.TargetUrl);
+    }
+
+    private async Task MarkAllReadAsync()
+    {
+        await NotificationService.MarkAllAsReadAsync();
+        // Refresh to reflect updated IsRead state.
+        await LoadAsync();
+    }
+}

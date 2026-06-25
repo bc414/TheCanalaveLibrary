@@ -1,0 +1,77 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Leaf — one row in the conversation list sidebar.
+   Shows the other participant's avatar + username, the conversation subject, a last-message
+   excerpt (HTML-stripped, truncated by the read service), the time since the last message,
+   an unread-count badge when UnreadCount > 0, and an archived indicator. The entire card is
+   a link to /messages/{ConversationId}. No service injection. *@
+
+<a href="/messages/@Conversation.ConversationId"
+   class="block rounded-xl border @(IsSelected ? "border-[--color-primary] bg-[--color-primary]/10" : "border-[--color-border] bg-[--color-surface]") p-3 transition-colors hover:bg-[--color-primary]/10">
+    <div class="flex items-start gap-3">
+        <img src="@Conversation.OtherParticipant.AvatarUrl"
+             alt="@Conversation.OtherParticipant.Username"
+             class="h-10 w-10 flex-none rounded-full object-cover"
+             onerror="this.src='/img/default-avatar.svg'" />
+
+        <div class="min-w-0 flex-1">
+            <div class="flex items-center justify-between gap-2">
+                <span class="truncate text-sm font-semibold text-[--color-text]">
+                    @Conversation.OtherParticipant.Username
+                </span>
+                <div class="flex flex-none items-center gap-1.5">
+                    @if (Conversation.UnreadCount > 0)
+                    {
+                        <span class="rounded-full bg-[--color-primary] px-1.5 py-0.5 text-xs font-bold text-white"
+                              aria-label="@Conversation.UnreadCount unread messages">
+                            @Conversation.UnreadCount
+                        </span>
+                    }
+                    @if (Conversation.LastMessageDate.HasValue)
+                    {
+                        <span class="text-xs text-[--color-text-muted]">
+                            @FormatDate(Conversation.LastMessageDate.Value)
+                        </span>
+                    }
+                </div>
+            </div>
+
+            <p class="mt-0.5 truncate text-xs font-medium text-[--color-text]">
+                @Conversation.Subject
+            </p>
+
+            @if (Conversation.LastMessagePreview is not null)
+            {
+                <p class="mt-0.5 truncate text-xs text-[--color-text-muted]">
+                    @Conversation.LastMessagePreview
+                </p>
+            }
+
+            @if (Conversation.IsArchived)
+            {
+                <span class="mt-1 inline-block rounded bg-[--color-text-muted]/20 px-1.5 py-0.5 text-xs text-[--color-text-muted]">
+                    Archived
+                </span>
+            }
+        </div>
+    </div>
+</a>
+
+@code {
+    [Parameter, EditorRequired] public ConversationSummaryDto Conversation { get; set; } = null!;
+
+    /// <summary>Highlights this item when its conversation is the currently viewed one.</summary>
+    [Parameter] public bool IsSelected { get; set; }
+
+    private static string FormatDate(DateTime date)
+    {
+        var diff = DateTime.UtcNow - date;
+        return diff.TotalDays >= 1
+            ? date.ToString("MMM d")
+            : diff.TotalHours >= 1
+                ? $"{(int)diff.TotalHours}h ago"
+                : diff.TotalMinutes >= 1
+                    ? $"{(int)diff.TotalMinutes}m ago"
+                    : "just now";
+    }
+}

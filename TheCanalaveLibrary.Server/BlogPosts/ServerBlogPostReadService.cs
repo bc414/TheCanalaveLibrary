@@ -121,4 +121,34 @@ public class ServerBlogPostReadService(
             row.StoryId,
             row.IsPublished);
     }
+
+    public async Task<(BlogPostListingDto[] Items, int TotalCount)> GetByGroupAsync(
+        int groupId, int page, int pageSize)
+    {
+        Rating maxRating = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
+
+        // Filter by group and apply content-rating ceiling (explicit .Where — same pattern as profile
+        // blog posts; named filter not available on TPT derived DbSets, see cross-cutting.md).
+        IQueryable<GroupBlogPost> query = readDb.GroupBlogPosts
+            .Where(p => p.GroupId == groupId && p.IsPublished && p.Rating <= maxRating);
+
+        int totalCount = await query.CountAsync();
+        if (totalCount == 0) return ([], 0);
+
+        List<(int BlogPostId, string Title, string Content, DateTime DateCreated, Rating Rating, bool HasSpoilers)> rows
+            = await query
+                .OrderByDescending(p => p.DateCreated)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(p => new ValueTuple<int, string, string, DateTime, Rating, bool>(
+                    p.BlogPostId, p.Title, p.Content, p.DateCreated, p.Rating, p.HasSpoilers))
+                .ToListAsync();
+
+        BlogPostListingDto[] items = rows
+            .Select(r => new BlogPostListingDto(
+                r.Item1, r.Item2, BlogPostText.MakeSnippet(r.Item3), r.Item4, r.Item5, r.Item6))
+            .ToArray();
+
+        return (items, totalCount);
+    }
 }

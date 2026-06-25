@@ -15,7 +15,17 @@ public partial class Group
     [MaxLength(2048)]
     public string? Description { get; set; }
     
-    public Rating Rating { get; set; }
+    /// <summary>
+    /// Controls group visibility. E = visible to all; M = hidden from users with mature content disabled.
+    /// Renamed from Rating (WU32) for semantic clarity vs. MaxContentRating. See cross-cutting.md
+    /// "Group Audience-Visibility Filter".
+    /// </summary>
+    public Rating AudienceRating { get; set; }
+
+    /// <summary>
+    /// Ceiling on what stories/folders may be added. Enforced at write time (layer2-services.md
+    /// "Group Rating Waterfall"). Folder MaxRating must be ≤ this value.
+    /// </summary>
     public Rating MaxContentRating { get; set; }
 
     public DateTime DateCreated { get; set; }

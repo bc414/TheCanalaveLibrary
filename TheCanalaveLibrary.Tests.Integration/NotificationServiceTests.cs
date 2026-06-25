@@ -310,6 +310,123 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
             "sparse model: setting both values back to defaults must delete the override row");
     }
 
+    // ── WU33: GetTotalCountAsync ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetTotalCountAsync_ReturnsCountOfAllNotificationsForCurrentUser()
+    {
+        await CallNotifyNewFollowerAsync(_recipientId, _actorId);
+        await CallNotifyNewVouchAsync(_recipientId, _actorId);
+
+        SetActiveUser(_recipientId);
+        int total = await CallGetTotalCountAsync();
+        total.Should().Be(2, "exactly two notifications were seeded for the recipient");
+    }
+
+    [Fact]
+    public async Task GetTotalCountAsync_Anonymous_ReturnsZero()
+    {
+        await CallNotifyNewFollowerAsync(_recipientId, _actorId);
+
+        Factory.Services.GetRequiredService<FakeActiveUserContext>().UserId = null;
+        Factory.Services.GetRequiredService<FakeActiveUserContext>().IsAuthenticated = false;
+
+        int total = await CallGetTotalCountAsync();
+        total.Should().Be(0, "anonymous callers receive 0 for total count");
+    }
+
+    // ── WU33: Two-pass enrichment — SourceUserName ──────────────────────────────
+
+    [Fact]
+    public async Task GetNotificationsAsync_ReturnsSourceUserName_WhenSourceUserExists()
+    {
+        await CallNotifyNewFollowerAsync(_recipientId, _actorId);
+
+        SetActiveUser(_recipientId);
+        NotificationDto[] dtos = await CallGetNotificationsAsync(1, 10);
+
+        NotificationDto? n = dtos.FirstOrDefault(d =>
+            d.NotificationTypeId == NotificationTypeEnum.NewFollowerOnYou);
+        n.Should().NotBeNull();
+        n!.SourceUserName.Should().NotBeNullOrEmpty(
+            "SourceUserName must be resolved via LEFT JOIN when the source user exists");
+        n.SourceUserId.Should().Be(_actorId);
+    }
+
+    // ── WU33: Two-pass enrichment — TargetTitle/TargetUrl (User kind) ───────────
+
+    [Fact]
+    public async Task GetNotificationsAsync_ReturnsTargetUrl_ForUserKindNotification()
+    {
+        // NewFollowerOnYou: RelatedEntityId = followerUserId (User kind).
+        // TargetUrl must be /user/{actorId}; TargetTitle must be the actor's username.
+        await CallNotifyNewFollowerAsync(_recipientId, _actorId);
+
+        SetActiveUser(_recipientId);
+        NotificationDto[] dtos = await CallGetNotificationsAsync(1, 10);
+
+        NotificationDto? n = dtos.FirstOrDefault(d =>
+            d.NotificationTypeId == NotificationTypeEnum.NewFollowerOnYou);
+        n.Should().NotBeNull();
+        n!.TargetTitle.Should().NotBeNullOrEmpty(
+            "TargetTitle must resolve to the actor's username for User-kind notifications");
+        n.TargetUrl.Should().Be($"/user/{_actorId}",
+            "TargetUrl for User-kind must be /user/{relatedEntityId}");
+    }
+
+    // ── WU33: Two-pass enrichment — null target for no-entity type ──────────────
+
+    [Fact]
+    public async Task GetNotificationsAsync_ReturnsNullTarget_ForSiteAnnouncementType()
+    {
+        // SiteAnnouncement maps to RelatedEntityKind.None — no batch-load, both fields null.
+        // Seed via DbContext since no semantic write method exists yet.
+        await SeedAnnouncementNotificationAsync(_recipientId);
+
+        SetActiveUser(_recipientId);
+        NotificationDto[] dtos = await CallGetNotificationsAsync(1, 10);
+
+        NotificationDto? n = dtos.FirstOrDefault(d =>
+            d.NotificationTypeId == NotificationTypeEnum.SiteAnnouncement);
+        n.Should().NotBeNull("the seeded announcement row must appear in the feed");
+        n!.TargetTitle.Should().BeNull(
+            "SiteAnnouncement has no navigable target entity (RelatedEntityKind.None)");
+        n.TargetUrl.Should().BeNull();
+    }
+
+    // ── WU33: OldestUnreadFirst ordering ──────────────────────────────────────────
+
+    [Fact]
+    public async Task GetNotificationsAsync_OldestUnreadFirst_PutsUnreadBeforeRead()
+    {
+        int actorB = await SeedUserAsync("NS-E");
+
+        // First (older) notification: follow.
+        await CallNotifyNewFollowerAsync(_recipientId, _actorId);
+        await Task.Delay(15); // ensure distinct DateCreated
+        // Second (newer) notification: vouch.
+        await CallNotifyNewVouchAsync(_recipientId, actorB);
+
+        // Mark the older follow notification as read.
+        SetActiveUser(_recipientId);
+        NotificationDto[] initial = await CallGetNotificationsAsync(1, 10);
+        NotificationDto follow = initial.First(n =>
+            n.NotificationTypeId == NotificationTypeEnum.NewFollowerOnYou);
+        await CallMarkAsReadAsync(follow.NotificationId);
+
+        // OldestUnreadFirst: the unread vouch (newer but unread) must precede the read follow (older but read).
+        NotificationDto[] ordered =
+            await CallGetNotificationsAsync(1, 10, NotificationFeedOrder.OldestUnreadFirst);
+
+        int vouchIdx  = Array.FindIndex(ordered, n => n.NotificationTypeId == NotificationTypeEnum.NewVouchOnYou);
+        int followIdx = Array.FindIndex(ordered, n => n.NotificationTypeId == NotificationTypeEnum.NewFollowerOnYou);
+
+        vouchIdx.Should().BeGreaterThanOrEqualTo(0);
+        followIdx.Should().BeGreaterThanOrEqualTo(0);
+        vouchIdx.Should().BeLessThan(followIdx,
+            "OldestUnreadFirst: unread notifications must appear before read ones regardless of creation time");
+    }
+
     // ── End-to-end: FollowAsync → notification ───────────────────────────────────
 
     [Fact]
@@ -355,6 +472,44 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
         using IServiceScope scope = Factory.Services.CreateScope();
         INotificationReadService svc = scope.ServiceProvider.GetRequiredService<INotificationReadService>();
         return await svc.GetNotificationsAsync(page, pageSize);
+    }
+
+    private async Task<NotificationDto[]> CallGetNotificationsAsync(
+        int page, int pageSize, NotificationFeedOrder order)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        INotificationReadService svc = scope.ServiceProvider.GetRequiredService<INotificationReadService>();
+        return await svc.GetNotificationsAsync(page, pageSize, order);
+    }
+
+    private async Task<int> CallGetTotalCountAsync()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        INotificationReadService svc = scope.ServiceProvider.GetRequiredService<INotificationReadService>();
+        return await svc.GetTotalCountAsync();
+    }
+
+    /// <summary>
+    /// Seeds a raw <c>SiteAnnouncement</c> notification row directly via
+    /// <see cref="ApplicationDbContext"/>. Used to test the RelatedEntityKind.None branch
+    /// (no semantic write method exists for SiteAnnouncement yet).
+    /// <c>RelatedEntityId = 0</c> — valid int, no FK constraint on the polymorphic column.
+    /// <c>SourceUserId = null</c> — announcements have no actor.
+    /// </summary>
+    private async Task SeedAnnouncementNotificationAsync(int recipientId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.Notifications.Add(new Notification
+        {
+            RecipientUserId    = recipientId,
+            NotificationTypeId = NotificationTypeEnum.SiteAnnouncement,
+            SourceUserId       = null,
+            RelatedEntityId    = 0,
+            IsRead             = false,
+            DateCreated        = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
     }
 
     private async Task CallMarkAsReadAsync(long notificationId)

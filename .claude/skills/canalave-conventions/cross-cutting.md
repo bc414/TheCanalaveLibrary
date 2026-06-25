@@ -137,9 +137,20 @@ JS file: `SharedUI/js/device.js`, loaded in `App.razor`. Uses `window.matchMedia
 Set as `DefaultLayout` in `Routes.razor`.
 
 **Persistent layout:** Desktop top bar (logo, nav links, notification bell, profile).
-Mobile hamburger menu. Notification bell injects `INotificationReadService` directly —
-legitimate cross-cutting injection. Login/logout are triggers on the persistent layout,
-not separate navigation targets.
+Mobile hamburger menu. Login/logout are triggers on the persistent layout, not separate navigation targets.
+
+**Notification bell** (`SharedUI/Notifications/NotificationBell.razor`, WU33) — legitimate cross-cutting injection:
+`INotificationReadService` is injected directly into this layout element (N+1 exception; confirmed in
+`grid_axes.md`). Rules for this component:
+- Wrapped in `<AuthorizeView><Authorized>` — renders only when logged in.
+- **Does NOT inject `IActiveUserContext`** — server-only service, will not exist post-WASM-split. The underlying
+  read service self-scopes via `IActiveUserContext` internally.
+- **UserCard caret pattern** — `relative` container + `@onclick="Toggle"` button (with unread-count badge) +
+  `@if (_open)` absolute `top-full z-10` flyout panel. NOT the `fixed inset-0` modal pattern (notifications
+  are a glanceable peripheral feed, not a blocking action).
+- Panel shows recent `NotificationItem`s + "Mark all read" + "See all → `/notifications`".
+- No live push (post-MVP L7); count refreshes on render/navigation.
+- Inserted before `<LoginDisplay />` in both `DesktopLayout.razor` and `MobileLayout.razor`.
 
 ## Active-User Context
 
@@ -279,6 +290,79 @@ is mature throughout; a T story allows T or M versions, not E. NULL = inherit st
 passes the floor). The **primary** version's effective rating must equal the story rating (naturally
 satisfied by NULL/inherit) — guarantees any reader who can see the story can always read its primary
 chapters without a content-gate block.
+
+## Group Audience-Visibility Filter (settled WU32)
+
+Groups carry an **`AudienceRating`** property (renamed from `Rating` in the WU32 migration — column
+renamed, enum mapping unchanged). It enforces the same "zero visible trace of mature content" rule
+as the story `ContentRating` filter, applied to group listings:
+
+- **`AudienceRating = E` (General):** group is visible to all users (mature on or off).
+- **`AudienceRating = M` (Mature):** group is hidden from users where `ShowMatureContent = false`.
+
+This is enforced as a **named EF Core query filter `"GroupAudience"`** on `Group`, registered in
+`ApplicationDbContext` and `ReadOnlyApplicationDbContext` alongside the `ContentRating` filter:
+
+```csharp
+modelBuilder.Entity<Group>()
+    .HasQueryFilter("GroupAudience", g => _maxRating == Rating.M || g.AudienceRating <= Rating.T);
+```
+
+`_maxRating` is the same field already captured from `IActiveUserContext` for the story filter — no
+additional constructor dependency is needed. Anonymous and mature-disabled users get `Rating.T`
+ceiling, so any Mature group is invisible; mature-enabled users get `Rating.M`, so all groups are visible.
+
+**Named opt-out:** group admin/creator paths that must see groups regardless of audience rating (e.g.,
+a creator editing their own Mature group) call:
+```csharp
+writeDb.Groups.IgnoreQueryFilters(["GroupAudience"]).FirstOrDefaultAsync(g => g.GroupId == id)
+```
+
+**Named filter applies to `Group` only.** `GroupStory`, `GroupFolder`, `GroupComment`, and
+`GroupBlogPost` are accessed only in the context of their parent group — when the parent group is
+invisible (filter applied), none of its children are reachable. No child-table filter needed.
+
+**Three audience presets are a UI/write convention, not stored.**  
+`GroupAudienceType { Standard, SfwOnly, Mature }` is a C# enum in `Core/Lookups/ModelEnums.cs`
+used only at the write/display boundary. The DB stores just `(AudienceRating, MaxContentRating)`.
+A static mapper in `Core/Groups/GroupAudienceTypeMapper` converts both ways:
+
+| `GroupAudienceType` | `AudienceRating` | `MaxContentRating` |
+|---------------------|------------------|--------------------|
+| Standard | E | M |
+| SfwOnly | E | T |
+| Mature | M | M |
+
+Non-M stories can be added to a Mature group — the audience rating defines the group's topic and
+audience, not a floor on story content. A T-rated story that fits can always be added to a Mature
+group; safe because mature-disabled users cannot see the Mature group at all (filtered at listing).
+
+## Group Membership and Role Model (settled WU32)
+
+Groups are **not gated communities.** The membership and role model is deliberately simple:
+
+- **Open join:** any authenticated user may join any group (subject to `GroupAudience` visibility —
+  you can't join a Mature group if you can't see it). No approval, no invitation, no waitlist.
+- **Permanent membership:** no kicking mechanism. If a member misbehaves, they are handled by site
+  moderators (WU34) exactly as in any other area of the site. No per-group moderator role.
+- **Two roles: Member and Admin.**
+  - `GroupRole.Member` — can browse the group, add stories (subject to content-rating waterfall),
+    post comments.
+  - `GroupRole.Admin` — additionally can remove stories, manage folders (create/rename/delete/reorder,
+    set `MaxRating ≤ group.MaxContentRating`), and edit the group's name/description/audience type.
+  - The group creator is automatically inserted as Admin on group creation. There is currently no
+    way to transfer Admin status — that is post-MVP if ever needed.
+- **No `GroupRole.Moderator` category.** Do not add one — the decision is permanent, not a
+  deferral. Site moderators handle group-level misconduct.
+
+**Server-side enforcement:** admin-gated write methods load the caller's `GroupMember` row and check
+`role == GroupRole.Admin`, throwing `UnauthorizedAccessException` on mismatch. UI affordances (folder
+management, remove-story buttons) are visibility-only `@if` wired to a page-computed `bool IsAdmin`
+passed down from the dispatcher — not a security gate.
+
+**Leave:** any member may leave. The `GroupMember` row is deleted. If the last admin leaves, the
+group remains but has no admin — currently acceptable (post-MVP: warn on last-admin leave or
+auto-promote).
 
 ## Content Rating Filtering
 
@@ -496,6 +580,53 @@ not for gating the dedicated `/mod/*` routes.
 comment merely *assuming* it's been seeded, not guaranteeing it). No `"Moderator"` role exists yet.
 Role-based gating above is the intended pattern but is not functional until roles are actually
 created and assigned (`RoleManager.CreateAsync`, `UserManager.AddToRoleAsync`).
+
+## Private Messaging Architecture (settled WU35)
+
+### Stateless MVP — SignalR is post-MVP
+
+The spec described "real-time via SignalR" for messaging. That framing is **reversed for MVP**:
+messaging is request/response, identical in shape to every other feature. The recipient sees new
+messages on navigate/refresh; the global unread badge refreshes on layout render (navigation). The
+practical rationale: the use-case is substantive and infrequent — the same "Discord handles ambient
+chat, this site handles substantive writing" decision that constrains group conversations. SignalR
+realtime buys very little here and costs a lot (first app-level hub, new test harness, reconnection
+handling — with no existing template).
+
+**Post-MVP:** SignalR push is an additive layer behind the **unchanged** write service. The message
+write path (sanitize → persist → return DTO) doesn't change; a broadcast via `IHubContext` is wired
+alongside it. No L1–L4 rework is needed. See `workplan.md` Post-MVP section.
+
+### Two unread systems by design — do not unify
+
+The app has two entirely separate unread-state systems, each the right shape for its domain:
+
+| System | Model | Read-state unit | Cleared by |
+|---|---|---|---|
+| **Notifications** | Event rows in `Notification` table | Per-event boolean | Individual dismiss / "mark all read" |
+| **Messaging** | `ConversationParticipant.LastReadTimestamp` | Per-conversation high-water mark | Timestamp write on thread open |
+
+**Do not unify them.** Notification event-rows and conversation watermarks answer structurally
+different questions:
+- A notification is a discrete point-in-time fact; once read, it stays done.
+- A conversation is a durable object you reopen; "unread" means "messages after where I left off,"
+  and marking-read is one timestamp write that clears an unbounded set in O(1).
+
+Generating a `Notification` row on every incoming PM would create **two unread truths** (the
+watermark AND the notification's read flag) that must be kept in sync, cleared in two inboxes, with
+the attendant sync bugs. A notification would also be a pointer with no content of its own, layered
+over a message that already has a first-class home and its own unread boundary.
+
+**Rule:** private messages **never** create `Notification` rows. `INotificationWriteService` is not
+injected by `IMessagingWriteService`. The global unread-messages badge (a `MessagesNavLink` component
+in the Desktop/Mobile layout chrome) calls `IMessagingReadService.GetUnreadConversationCountAsync()`
+directly — that badge is the cross-cutting signal; the notification bell is for social/content events.
+
+### 1-on-1 only
+
+Group conversations are out of scope. The N-participant data model (`ConversationParticipant`) is
+kept, but the compose flow always targets a single recipient and every conversation exactly two
+participants. Group discussions happen in public on-site (`/group/…`) or off-site.
 
 ## Rich Text & Sanitization
 

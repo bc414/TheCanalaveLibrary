@@ -126,6 +126,47 @@ public class ServerNotificationWriteService(
             sourceUserId: sourceRecommenderId,
             targets: [(recipientStoryAuthorId, sourceRecommenderId)]);
 
+    // ── Semantic generation methods (WU32 slice — group fan-out) ─────────────────
+
+    /// <inheritdoc/>
+    public async Task NotifyNewGroupStoryAsync(int groupId, int storyAuthorId, int sourceUserId)
+    {
+        // Fan-out to all members with NotifyForNewStory = true (type NewGroupStory = 60).
+        List<int> memberIds = await writeDb.GroupMembers
+            .Where(m => m.GroupId == groupId && m.NotifyForNewStory)
+            .Select(m => m.UserId)
+            .ToListAsync();
+
+        // Build (recipientId, relatedEntityId=groupId) pairs for fan-out.
+        IReadOnlyList<(int recipientId, int relatedEntityId)> fanOutTargets =
+            memberIds.Select(id => (id, groupId)).ToArray();
+
+        if (fanOutTargets.Count > 0)
+            await CreateCoreAsync(NotificationTypeEnum.NewGroupStory, sourceUserId, fanOutTargets);
+
+        // Also notify the story author (YourStoryAddedToGroup). Drop-self handled by create-core.
+        await CreateCoreAsync(
+            NotificationTypeEnum.YourStoryAddedToGroup,
+            sourceUserId,
+            [(storyAuthorId, groupId)]);
+    }
+
+    /// <inheritdoc/>
+    public async Task NotifyNewGroupBlogPostAsync(int groupId, int blogPostId, int authorId)
+    {
+        // Fan-out to all members with NotifyForNewBlogPost = true (type NewGroupBlogPost = 61).
+        List<int> memberIds = await writeDb.GroupMembers
+            .Where(m => m.GroupId == groupId && m.NotifyForNewBlogPost)
+            .Select(m => m.UserId)
+            .ToListAsync();
+
+        IReadOnlyList<(int recipientId, int relatedEntityId)> targets =
+            memberIds.Select(id => (id, blogPostId)).ToArray();
+
+        if (targets.Count > 0)
+            await CreateCoreAsync(NotificationTypeEnum.NewGroupBlogPost, authorId, targets);
+    }
+
     // ── Private create-core ───────────────────────────────────────────────────────
 
     /// <summary>

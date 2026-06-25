@@ -9,7 +9,8 @@ public sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
 {
     public void Configure(EntityTypeBuilder<Group> builder)
     {
-        builder.Property(e => e.Rating).HasConversion<short>();
+        // AudienceRating renamed from Rating (WU32) — column rename migration is data-preserving.
+        builder.Property(e => e.AudienceRating).HasConversion<short>().HasColumnName("audience_rating");
         builder.Property(e => e.MaxContentRating).HasConversion<short>();
         builder.Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
@@ -49,9 +50,12 @@ public sealed class GroupMemberConfiguration : IEntityTypeConfiguration<GroupMem
     public void Configure(EntityTypeBuilder<GroupMember> builder)
     {
         builder.Property(e => e.DateJoined).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        // GroupRole stored as short — keeps the column type consistent with other enum-backed short columns.
+        builder.Property(e => e.Role).HasConversion<short>();
 
         builder.HasKey(e => new { e.UserId, e.GroupId });
-        // Future indexes for querying (e.g., by GroupId, Role)...
+        // Index by GroupId to speed up member-list and admin-check lookups.
+        builder.HasIndex(e => e.GroupId);
     }
 }
 

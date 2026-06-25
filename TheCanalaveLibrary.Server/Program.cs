@@ -130,15 +130,23 @@ builder.Services.AddScoped<IFollowingWriteService, ServerFollowingWriteService>(
 // UserStoryInteractions (WU15) — L2 read/write services.
 builder.Services.AddScoped<IUserStoryInteractionReadService, ServerUserStoryInteractionReadService>();
 builder.Services.AddScoped<IUserStoryInteractionWriteService, ServerUserStoryInteractionWriteService>();
-// Blog Posts (WU31) — L2 read/write services (Features 35/36). Profile blog posts only for MVP;
-// GroupBlogPost UI → WU32. Feature 56 (feature contributions) deferred post-MVP.
+// Blog Posts (WU31/WU32) — L2 read/write services (Features 35/36). Profile blog posts shipped
+// WU31; GroupBlogPost create/view added WU32. Feature 56 (feature contributions) deferred post-MVP.
 builder.Services.AddScoped<IBlogPostReadService, ServerBlogPostWriteService>();
 builder.Services.AddScoped<IBlogPostWriteService, ServerBlogPostWriteService>();
+// Groups (WU32) — L2 read/write services (Features 38/39/40).
+builder.Services.AddScoped<IGroupReadService, ServerGroupWriteService>();
+builder.Services.AddScoped<IGroupWriteService, ServerGroupWriteService>();
 // Notifications (WU22) — L2 read/write services (Features 41/42/43).
 // WU22 delivers: service infra + NotifyNewFollowerAsync/NotifyNewVouchAsync + Following seam wiring.
 // Fan-out notify methods land incrementally with their triggering work-units (workplan.md WU22).
 builder.Services.AddScoped<INotificationReadService, ServerNotificationWriteService>();
 builder.Services.AddScoped<INotificationWriteService, ServerNotificationWriteService>();
+// Messaging (WU35) — L2 read/write services (Feature 49). Stateless MVP; SignalR post-MVP.
+// No Notification rows for PMs — messaging has its own LastReadTimestamp watermark bookkeeping.
+// See cross-cutting.md "Private Messaging Architecture" and layer2-services.md "AllowPrivateMessages Gate".
+builder.Services.AddScoped<IMessagingReadService, ServerMessagingReadService>();
+builder.Services.AddScoped<IMessagingWriteService, ServerMessagingWriteService>();
 
 WebApplication app = builder.Build();
 

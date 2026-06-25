@@ -32,4 +32,11 @@ public interface IBlogPostReadService
     /// Bypasses the content-rating filter so the author can load their own mature/unpublished post.
     /// </summary>
     Task<BlogPostEditDto?> GetForEditAsync(int blogPostId);
+
+    /// <summary>
+    /// Returns a page of published <see cref="GroupBlogPost"/> listings for the specified group,
+    /// ordered newest-first. Content-rating filter applied (group-level + global user ceiling).
+    /// </summary>
+    Task<(BlogPostListingDto[] Items, int TotalCount)> GetByGroupAsync(
+        int groupId, int page, int pageSize);
 }

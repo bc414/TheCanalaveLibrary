@@ -1,0 +1,159 @@
+@page "/group/{GroupId:int}/blog/new"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@inject IBlogPostWriteService BlogPostService
+@inject IStoryReadService StoryService
+@inject IGroupWriteService GroupService
+@inject NavigationManager Nav
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Group blog post create page — member-only.
+   Reuses BlogPostPropertiesForm (no publish toggle, group posts publish immediately).
+   Pattern 1 edit side (cross-cutting.md "Two content-editing patterns"); view is BlogPostPage.
+   WU32. *@
+
+<PageTitle>New Group Post</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        @if (_isLoading)
+        {
+            <p class="p-4 text-[--color-text-muted]"><em>Loading…</em></p>
+        }
+        else if (_forbidden)
+        {
+            <p class="p-4 text-[--color-danger]">You must be a member of this group to post.</p>
+        }
+        else if (_groupName is null)
+        {
+            <p class="p-4 text-[--color-danger]">Group not found.</p>
+        }
+        else
+        {
+            <div class="mx-auto max-w-2xl px-4 py-8">
+                <div class="mb-6 flex flex-col gap-1">
+                    <h1 class="text-2xl font-bold text-[--color-text]">New Blog Post</h1>
+                    <p class="text-sm text-[--color-text-muted]">
+                        Posting to
+                        <a href="/group/@GroupId"
+                           class="text-[--color-primary] hover:underline">@_groupName</a>
+                    </p>
+                </div>
+
+                <BlogPostPropertiesForm @ref="_form"
+                                        ViewModel="_viewModel"
+                                        AuthorStories="_authorStories"
+                                        SubmitLabel="Publish Post"
+                                        OnValidSubmit="HandleValidSubmit" />
+            </div>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <p class="p-4 text-[--color-danger]">You must be signed in to write a group blog post.</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public int GroupId { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private BlogPostPropertiesForm? _form;
+    private BlogPostPropertiesViewModel _viewModel = new();
+    private IReadOnlyList<(int Id, string Title)>? _authorStories;
+
+    private string? _groupName;
+    private bool _isLoading = true;
+    private bool _forbidden;
+
+    protected override async Task OnInitializedAsync()
+    {
+        int? currentUserId = await ResolveCurrentUserIdAsync();
+        if (currentUserId is null)
+        {
+            _isLoading = false;
+            return;
+        }
+
+        // Verify the group exists and user is a member (GetCurrentUserRoleAsync returns null for non-members).
+        GroupDetailDto? group = await GroupService.GetByIdAsync(GroupId);
+        if (group is null)
+        {
+            _isLoading = false;
+            return;
+        }
+
+        GroupRole? role = await GroupService.GetCurrentUserRoleAsync(GroupId);
+        if (role is null)
+        {
+            _forbidden = true;
+            _isLoading = false;
+            return;
+        }
+
+        _groupName = group.GroupName;
+
+        // Populate story picker in parallel with group load above (already have group).
+        _authorStories = await LoadAuthorStoriesAsync(currentUserId.Value);
+
+        _isLoading = false;
+    }
+
+    private async Task<IReadOnlyList<(int Id, string Title)>> LoadAuthorStoriesAsync(int authorId)
+    {
+        IReadOnlyList<int> ids = await StoryService.GetStoryIdsByAuthorAsync(authorId);
+        if (ids.Count == 0) return [];
+        StoryListingDto[] listings = await StoryService.GetListingsByIdsAsync(ids);
+        return listings.Select(l => (l.StoryId, l.Title)).ToArray();
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        _viewModel.IsLoading = true;
+        _viewModel.ServerValidationErrors.Clear();
+
+        try
+        {
+            string content = _form is not null ? await _form.GetContentAsync() : string.Empty;
+            _viewModel.Content = content;
+
+            int newId = await BlogPostService.CreateGroupBlogPostAsync(new CreateGroupBlogPostDto
+            {
+                GroupId     = GroupId,
+                Title       = _viewModel.Title,
+                Content     = _viewModel.Content,
+                Rating      = _viewModel.Rating,
+                HasSpoilers = _viewModel.HasSpoilers,
+                StoryId     = _viewModel.StoryId
+            });
+
+            Nav.NavigateTo($"/blog/{newId}");
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _forbidden = true;
+        }
+        catch (BlogPostValidationException ex)
+        {
+            _viewModel.ServerValidationErrors.AddRange(ex.Errors);
+        }
+        catch (Exception)
+        {
+            _viewModel.ServerValidationErrors.Add("An unexpected error occurred. Please try again.");
+        }
+        finally
+        {
+            _viewModel.IsLoading = false;
+        }
+    }
+
+    private async Task<int?> ResolveCurrentUserIdAsync()
+    {
+        if (AuthState is null) return null;
+        AuthenticationState state = await AuthState;
+        string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        return int.TryParse(idStr, out int id) ? id : null;
+    }
+}

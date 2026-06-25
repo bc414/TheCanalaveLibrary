@@ -1,0 +1,46 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Leaf — one message in a conversation thread.
+   Own messages align right; other-participant messages align left.
+   MessageText is stored sanitized HTML (sanitize-once-on-save) — rendered via RichTextView.
+   No service injection. *@
+
+<div class="flex @(Message.IsOwnMessage ? "flex-row-reverse" : "flex-row") items-start gap-2">
+    @if (!Message.IsOwnMessage)
+    {
+        <img src="@Message.SenderAvatarUrl"
+             alt="@Message.SenderUsername"
+             class="h-8 w-8 flex-none rounded-full object-cover"
+             onerror="this.src='/img/default-avatar.svg'" />
+    }
+
+    <div class="max-w-[75%] @(Message.IsOwnMessage ? "items-end" : "items-start") flex flex-col gap-0.5">
+        @if (!Message.IsOwnMessage)
+        {
+            <span class="text-xs font-medium text-[--color-text-muted]">
+                @Message.SenderUsername
+            </span>
+        }
+
+        <div class="rounded-xl @(Message.IsOwnMessage ? "rounded-tr-sm bg-[--color-primary] text-white" : "rounded-tl-sm bg-[--color-surface-raised] text-[--color-text]") border @(Message.IsOwnMessage ? "border-transparent" : "border-[--color-border]") px-3 py-2 text-sm">
+            <RichTextView HtmlContent="@Message.MessageText" />
+        </div>
+
+        <time class="text-xs text-[--color-text-muted]"
+              datetime="@Message.DateSent.ToString("O")">
+            @Message.DateSent.ToString("MMM d, yyyy h:mm tt")
+        </time>
+    </div>
+
+    @if (Message.IsOwnMessage)
+    {
+        <img src="@Message.SenderAvatarUrl"
+             alt="You"
+             class="h-8 w-8 flex-none rounded-full object-cover"
+             onerror="this.src='/img/default-avatar.svg'" />
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public MessageDto Message { get; set; } = null!;
+}

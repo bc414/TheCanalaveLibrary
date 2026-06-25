@@ -112,6 +112,7 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     public DbSet<BaseComment> BaseComments { get; set; }
     public DbSet<ChapterComment> ChapterComments { get; set; }
     public DbSet<BlogPostComment> BlogPostComments { get; set; }
+    public DbSet<GroupComment> GroupComments { get; set; }   // WU32 — typed set for per-context group comment queries
 
     //Polls
     public DbSet<BasePoll> Polls { get; set; }
@@ -185,6 +186,16 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
         // escape hatch used by mod/author/admin paths that must see every rating.
         modelBuilder.Entity<Story>().HasQueryFilter("ContentRating",
             s => s.Rating <= (_activeUser.ShowMatureContent ? Rating.M : Rating.T));
+
+        // Group audience-visibility filter — same "zero visible trace" rule as ContentRating (settled WU32).
+        // AudienceRating = M groups are invisible to users with mature content disabled.
+        // Applies only to Group; child entities (GroupStory, GroupComment, etc.) are accessed via the group,
+        // so they become unreachable once the parent is filtered — no child-table filter needed.
+        // Escape hatch: .IgnoreQueryFilters(["GroupAudience"]) for admin/creator paths that must see all groups.
+        // Lives here (not in GroupConfiguration) for the same reason as ContentRating: must close over THIS
+        // instance's _activeUser field so EF re-evaluates per-request, not once into a cached lambda.
+        modelBuilder.Entity<Group>().HasQueryFilter("GroupAudience",
+            g => _activeUser.ShowMatureContent || g.AudienceRating != Rating.M);
 
     }
 }

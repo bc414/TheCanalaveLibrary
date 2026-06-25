@@ -1,0 +1,74 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Leaf — renders a single notification row.
+   Pure leaf: no service injection. All state (IsRead, DateCreated, message) comes from
+   the NotificationDto passed by the parent. Click fires OnActivate; the parent is
+   responsible for mark-as-read + navigation (see NotificationsPage / NotificationBell).
+
+   Layout: icon · message · relative timestamp; unread dot on the leading edge.
+   Message text and icon are resolved by NotificationPresenter.Compose — caller does not
+   need to invoke the presenter separately. *@
+
+<button type="button"
+        class="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-[--color-surface-hover] @(Notification.IsRead ? "" : "bg-[--color-surface-raised]")"
+        aria-label="@_composed.Text"
+        @onclick="HandleActivate">
+
+    @* ── Unread indicator dot ──────────────────────────────────────────────────── *@
+    <span class="mt-1.5 size-2 shrink-0 rounded-full @(Notification.IsRead ? "bg-transparent" : "")"
+          style="@(Notification.IsRead ? "" : $"background-color:{_composed.AccentColor}")"
+          aria-hidden="true" />
+
+    @* ── Category / type icon ─────────────────────────────────────────────────── *@
+    <svg viewBox="0 0 24 24" class="mt-0.5 size-5 shrink-0" aria-hidden="true"
+         fill="@_composed.AccentColor">
+        <path d="@_composed.IconPath" />
+    </svg>
+
+    @* ── Message + timestamp ──────────────────────────────────────────────────── *@
+    <div class="min-w-0 flex-1">
+        <p class="text-sm @(Notification.IsRead ? "text-[--color-text-muted]" : "text-[--color-text] font-medium")">
+            @_composed.Text
+        </p>
+        <p class="mt-0.5 text-xs text-[--color-text-muted]">
+            @RelativeTime(Notification.DateCreated)
+        </p>
+    </div>
+
+</button>
+
+@code {
+    [Parameter, EditorRequired] public NotificationDto Notification { get; set; } = null!;
+
+    /// <summary>
+    /// Fired when the user clicks the notification row. The parent is responsible for
+    /// calling <c>MarkAsReadAsync</c> and optionally navigating to
+    /// <see cref="NotificationDto.TargetUrl"/> when non-null.
+    /// </summary>
+    [Parameter] public EventCallback OnActivate { get; set; }
+
+    private (string Text, string IconPath, string AccentColor) _composed;
+
+    protected override void OnParametersSet()
+    {
+        _composed = NotificationPresenter.Compose(Notification);
+    }
+
+    private async Task HandleActivate()
+    {
+        if (OnActivate.HasDelegate)
+            await OnActivate.InvokeAsync();
+    }
+
+    private static string RelativeTime(DateTime utc)
+    {
+        TimeSpan diff = DateTime.UtcNow - utc;
+        if (diff.TotalDays >= 365) return $"{(int)(diff.TotalDays / 365)}y ago";
+        if (diff.TotalDays >= 30)  return $"{(int)(diff.TotalDays / 30)}mo ago";
+        if (diff.TotalDays >= 1)   return $"{(int)diff.TotalDays}d ago";
+        if (diff.TotalHours >= 1)  return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalMinutes >= 1) return $"{(int)diff.TotalMinutes}m ago";
+        return "just now";
+    }
+}

@@ -107,6 +107,49 @@ public class ServerCommentWriteService(
         return comment.CommentId;
     }
 
+    public async Task<long> PostGroupCommentAsync(PostGroupCommentDto dto)
+    {
+        if (ActiveUser.UserId is not int userId)
+            throw new InvalidOperationException("Posting a comment requires an authenticated user.");
+
+        List<string> errors = dto.CanSave();
+        if (errors.Count > 0) throw new CommentValidationException(errors);
+
+        // Verify the group exists.
+        bool groupExists = await writeDb.Groups.AnyAsync(g => g.GroupId == dto.GroupId);
+        if (!groupExists)
+            throw new KeyNotFoundException($"Group {dto.GroupId} not found.");
+
+        // If replying, verify the parent belongs to the same group.
+        if (dto.ParentCommentId.HasValue)
+        {
+            bool parentOnSameGroup = await writeDb.GroupComments
+                .AnyAsync(gc =>
+                    gc.CommentId == dto.ParentCommentId.Value
+                    && gc.GroupId == dto.GroupId);
+            if (!parentOnSameGroup)
+                throw new KeyNotFoundException(
+                    $"Parent comment {dto.ParentCommentId} not found on group {dto.GroupId}.");
+        }
+
+        string sanitizedText = sanitizer.Sanitize(dto.CommentText);
+
+        // No IsSpoiler on group comments — spoilers are a chapter-only concept.
+        GroupComment comment = new()
+        {
+            GroupId         = dto.GroupId,
+            ParentCommentId = dto.ParentCommentId,
+            UserId          = userId,
+            CommentText     = sanitizedText,
+            DatePosted      = DateTime.UtcNow
+        };
+
+        writeDb.GroupComments.Add(comment);
+        await writeDb.SaveChangesAsync();
+
+        return comment.CommentId;
+    }
+
     public async Task EditCommentAsync(UpdateCommentDto dto)
     {
         if (ActiveUser.UserId is not int userId)

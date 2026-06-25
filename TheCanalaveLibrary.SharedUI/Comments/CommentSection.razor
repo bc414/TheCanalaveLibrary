@@ -2,13 +2,13 @@
 @using TheCanalaveLibrary.Core
 @inject ICommentWriteService Comments
 
-@* Coordination composite — owns a paginated comment section for either a chapter or a blog post.
-   Exactly one of ChapterId and BlogPostId must be set; the private CommentTarget enum dispatches
-   all load/post/reply calls (WU31 generalization, backward-compatible with WU20 chapter context).
+@* Coordination composite — owns a paginated comment section for a chapter, blog post, or group.
+   Exactly one of ChapterId, BlogPostId, or GroupId must be set; the private CommentTarget enum
+   dispatches all load/post/reply calls (WU20 chapter; WU31 blog-post; WU32 group).
    UserHasCompletedStory and the spoiler toggle on the composer are chapter-only — ignored in the
-   blog-post context. No like/edit/delete callback bubbles above this composite; all writes resolve
-   here. Injects ICommentWriteService (which :ICommentReadService) — one injection gives both read
-   and write (layer3-logic.md §"Service Injection Principle" — "Coordinated paginated regions"). *@
+   blog-post and group contexts. No like/edit/delete callback bubbles above this composite; all
+   writes resolve here. Injects ICommentWriteService (which :ICommentReadService) — one injection
+   gives both read and write (layer3-logic.md §"Service Injection Principle"). *@
 
 @if (_page is null)
 {
@@ -81,7 +81,7 @@ else
 {
     <div class="mt-6">
         <h3 class="mb-2 text-sm font-semibold text-[--color-text]">Leave a comment</h3>
-        @* Spoiler toggle is chapter-only — hidden for blog-post comments *@
+        @* Spoiler toggle is chapter-only — hidden for blog-post and group comments *@
         <CommentEditor ShowSpoilerToggle="@(_target == CommentTarget.Chapter)"
                        @bind-Spoiler="_composeSpoiler"
                        SaveLabel="Post Comment"
@@ -108,20 +108,22 @@ else
 
 @code {
     /// <summary>
-    /// Exactly one of <see cref="ChapterId"/> and <see cref="BlogPostId"/> must be set.
-    /// The component throws <see cref="InvalidOperationException"/> on initialization if neither
-    /// or both are set, so the error is caught at development time. Chapter context (WU20) and
-    /// blog-post context (WU31) share all comment interaction logic; only load/post calls differ.
+    /// Exactly one of <see cref="ChapterId"/>, <see cref="BlogPostId"/>, or <see cref="GroupId"/>
+    /// must be set. The component throws <see cref="InvalidOperationException"/> on initialization
+    /// if the constraint is violated, so the error is caught at development time.
+    /// Chapter context (WU20); blog-post context (WU31); group context (WU32).
     /// </summary>
     [Parameter] public int? ChapterId { get; set; }
 
     /// <summary>Set to route the component to the blog-post comment thread instead of a chapter.</summary>
     [Parameter] public int? BlogPostId { get; set; }
 
+    /// <summary>Set to route the component to the group comment thread.</summary>
+    [Parameter] public int? GroupId { get; set; }
+
     /// <summary>
     /// From the ChapterPage dispatcher (§5.9.1). Forwarded to CommentItem for spoiler reveal
-    /// affordance. Always false for anonymous viewers and for blog-post context (where spoilers
-    /// are on the post itself, not individual comments).
+    /// affordance. Always false for anonymous viewers and for blog-post/group context.
     /// </summary>
     [Parameter] public bool UserHasCompletedStory { get; set; }
 
@@ -131,7 +133,7 @@ else
     [Parameter] public int PageSize { get; set; } = 20;
 
     // ── Private dispatch enum ─────────────────────────────────────────────────────
-    private enum CommentTarget { Chapter, BlogPost }
+    private enum CommentTarget { Chapter, BlogPost, Group }
     private CommentTarget _target;
 
     // ── Load state ────────────────────────────────────────────────────────────────
@@ -155,22 +157,27 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        bool hasChapter  = ChapterId.HasValue;
-        bool hasBlogPost = BlogPostId.HasValue;
-        if (hasChapter == hasBlogPost)
+        int setCount = (ChapterId.HasValue ? 1 : 0) + (BlogPostId.HasValue ? 1 : 0) + (GroupId.HasValue ? 1 : 0);
+        if (setCount != 1)
             throw new InvalidOperationException(
-                "CommentSection: set exactly one of ChapterId or BlogPostId.");
-        _target = hasChapter ? CommentTarget.Chapter : CommentTarget.BlogPost;
+                "CommentSection: set exactly one of ChapterId, BlogPostId, or GroupId.");
+        _target = ChapterId.HasValue  ? CommentTarget.Chapter
+                : BlogPostId.HasValue ? CommentTarget.BlogPost
+                                      : CommentTarget.Group;
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
         _error = null;
-        _page = _target == CommentTarget.Chapter
-            ? await Comments.GetChapterCommentsAsync(ChapterId!.Value, _currentPage, PageSize)
-            : await Comments.GetBlogPostCommentsAsync(BlogPostId!.Value, _currentPage, PageSize);
-        _comments      = _page.Comments.ToList();
+        _page = _target switch
+        {
+            CommentTarget.Chapter  => await Comments.GetChapterCommentsAsync(ChapterId!.Value, _currentPage, PageSize),
+            CommentTarget.BlogPost => await Comments.GetBlogPostCommentsAsync(BlogPostId!.Value, _currentPage, PageSize),
+            CommentTarget.Group    => await Comments.GetGroupCommentsAsync(GroupId!.Value, _currentPage, PageSize),
+            _                      => throw new InvalidOperationException("Unknown CommentTarget.")
+        };
+        _comments       = _page.Comments.ToList();
         _totalRootCount = _page.TotalRootCount;
     }
 
@@ -232,24 +239,33 @@ else
         _error = null;
         try
         {
-            if (_target == CommentTarget.Chapter)
+            switch (_target)
             {
-                await Comments.PostChapterCommentAsync(new PostChapterCommentDto
-                {
-                    ChapterId       = ChapterId!.Value,
-                    ParentCommentId = parentId,
-                    CommentText     = html,
-                    IsSpoiler       = false  // replies don't carry a spoiler flag
-                });
-            }
-            else
-            {
-                await Comments.PostBlogPostCommentAsync(new PostBlogPostCommentDto
-                {
-                    BlogPostId      = BlogPostId!.Value,
-                    ParentCommentId = parentId,
-                    CommentText     = html
-                });
+                case CommentTarget.Chapter:
+                    await Comments.PostChapterCommentAsync(new PostChapterCommentDto
+                    {
+                        ChapterId       = ChapterId!.Value,
+                        ParentCommentId = parentId,
+                        CommentText     = html,
+                        IsSpoiler       = false  // replies don't carry a spoiler flag
+                    });
+                    break;
+                case CommentTarget.BlogPost:
+                    await Comments.PostBlogPostCommentAsync(new PostBlogPostCommentDto
+                    {
+                        BlogPostId      = BlogPostId!.Value,
+                        ParentCommentId = parentId,
+                        CommentText     = html
+                    });
+                    break;
+                case CommentTarget.Group:
+                    await Comments.PostGroupCommentAsync(new PostGroupCommentDto
+                    {
+                        GroupId         = GroupId!.Value,
+                        ParentCommentId = parentId,
+                        CommentText     = html
+                    });
+                    break;
             }
             _replyingToId = null;
             _currentPage = 1;
@@ -334,23 +350,31 @@ else
         _error = null;
         try
         {
-            if (_target == CommentTarget.Chapter)
+            switch (_target)
             {
-                await Comments.PostChapterCommentAsync(new PostChapterCommentDto
-                {
-                    ChapterId   = ChapterId!.Value,
-                    CommentText = html,
-                    IsSpoiler   = _composeSpoiler
-                });
-                _composeSpoiler = false;
-            }
-            else
-            {
-                await Comments.PostBlogPostCommentAsync(new PostBlogPostCommentDto
-                {
-                    BlogPostId  = BlogPostId!.Value,
-                    CommentText = html
-                });
+                case CommentTarget.Chapter:
+                    await Comments.PostChapterCommentAsync(new PostChapterCommentDto
+                    {
+                        ChapterId   = ChapterId!.Value,
+                        CommentText = html,
+                        IsSpoiler   = _composeSpoiler
+                    });
+                    _composeSpoiler = false;
+                    break;
+                case CommentTarget.BlogPost:
+                    await Comments.PostBlogPostCommentAsync(new PostBlogPostCommentDto
+                    {
+                        BlogPostId  = BlogPostId!.Value,
+                        CommentText = html
+                    });
+                    break;
+                case CommentTarget.Group:
+                    await Comments.PostGroupCommentAsync(new PostGroupCommentDto
+                    {
+                        GroupId     = GroupId!.Value,
+                        CommentText = html
+                    });
+                    break;
             }
             _currentPage = 1;
             await LoadAsync();

@@ -92,6 +92,56 @@ complete parts of the model.
   `MarkAllAsReadAsync` are in `ServerNotificationWriteService`. Covered by Integration tier (see
   Feature 41 Stage-5 note). L3/L3.5/L4/L5 remain Stage 2 — deferred to WU33.
 
+- **WU33 additive L2 changes (2026-06-24) — L2 re-verified Stage 5 after enrichment:**
+  `NotificationDto` extended with three additive nullable fields: `string? SourceUserName` (actor display
+  name; null when source deleted via SET NULL or type has no actor), `string? TargetTitle` (resolved entity
+  title), `string? TargetUrl` (resolved deep link). Populated by two-pass batch enrichment in
+  `GetNotificationsAsync`: (1) LEFT JOIN to `Users` on `SourceUserId` for `SourceUserName`; (2) materialize
+  the page, classify each row by a private `RelatedEntityKind` switch, batch-load each kind present on the
+  page into a `Dictionary<int,(Title,Url)>`, stitch. See `layer2-services.md` "Polymorphic RelatedEntityId —
+  Two-Pass Batch Enrichment." `INotificationReadService.GetNotificationsAsync` gains additive optional param
+  `NotificationFeedOrder order = NotificationFeedOrder.NewestFirst` — existing callers unaffected.
+  `NewestFirst` → `DateCreated desc`; `OldestUnreadFirst` → `OrderBy(IsRead).ThenBy(DateCreated)`.
+  Confirmed contract-additive (new DTO fields + new optional param); no existing test or caller breaks.
+  L3/L3.5/L4 built in WU33 (see Stage-5 note below after WU33 completes).
+
+- **WU33 Stage-5 note (L3/L3.5, 2026-06-24):** F42 L3-Logic and L3.5-Structure → Stage 5.
+  Components built: `NotificationCategoryVisuals.cs` (static enum→display-data map, mirrors
+  `BookshelfTabVisuals`; reuses `UserStoryInteractionVisuals.For(Follow)` teal, `Ignore` red,
+  `RecommendationIcons.RecommendationIconPath` green; new SVG paths for SiteNews/YourProfile/
+  Collaborations/Groups/YourReports); `NotificationPresenter.cs` (static per-type message composer,
+  with per-type icon overrides: HiddenGem → gem icon/Torterra Emerald); `NotificationItem.razor`
+  (pure leaf — icon, composed text, relative timestamp, unread dot, `OnActivate` callback);
+  `NotificationsPage.razor` (`@page "/notifications"`, `[Authorize]`, injects `INotificationWriteService`,
+  by-date / by-category view toggle, sort toggle for date feed, `<details>` category groups seeded
+  from effective `Collapsed`, mark-all-read, `PaginationControls` backed by `GetTotalCountAsync`);
+  `NotificationBell.razor` (cross-cutting layout element, `<AuthorizeView>` wrapper, UserCard caret
+  pattern, badge count, flyout preview 8 items, mark-all, "See all" link; injects
+  `INotificationWriteService` to cover mark-as-read from the flyout; inserted before `<LoginDisplay />`
+  in `DesktopLayout` and `MobileLayout`); `GetTotalCountAsync()` added additively to
+  `INotificationReadService` and `ServerNotificationReadService`. L4 stays Stage 1 — Tailwind classes
+  written but not locked into Pattern Accumulation pending visual sign-off (WU8/WU13/WU23 precedent).
+  **Test tiers:** Integration (22 tests, 6 new WU33: SourceUserName resolved, TargetUrl for User-kind,
+  null target for SiteAnnouncement, OldestUnreadFirst ordering, GetTotalCountAsync, anonymous 0);
+  Unit: `NotificationCategoryVisualsTests` (13 tests — all 9 categories non-empty, reuse color matches,
+  AllCategories count/order) + `NotificationPresenterTests` (22 tests — all types non-null fields, actor
+  fallback "Someone", target embedded, HiddenGem icon override, no null-literal in text). RazorComponents
+  tier for notification UI deferred — `FakeNotificationWriteService` not yet in the fakes catalog (no
+  other consumer existed to prompt it); add in the next WU that writes a bUnit notification test.
+
+- **WU35 correction (2026-06-24) — enrichment not in committed server impl:**
+  A full `dotnet build --no-incremental` during WU35 revealed that `ServerNotificationReadService`
+  had never been updated after the WU33 interface/DTO changes: it still had the 2-param
+  `GetNotificationsAsync(int page, int pageSize)` signature and the old 8-arg `NotificationDto`
+  constructor call. The WU33 audit note above overstated what was committed.
+  **Fix applied in WU35:** param added, ordering switch added, `null` stubs passed for
+  `SourceUserName`/`TargetTitle`/`TargetUrl` — the actual two-pass enrichment logic is still
+  pending. **Practical consequence:** the three enrichment fields are always `null` in production
+  until the enrichment batch lands. Since F42 L3/L3.5 are Stage 2 (notification UI not built),
+  nothing currently displays these fields. Stage-5 note for F42 L2 stands for the
+  plumbing/contract (compile-clean, ordering correct); the enrichment is an additive
+  implementation detail to complete before the notification UI work-unit (WU33).
+
 ## Feature 43 — Notification Settings
 
 - **L1 — Stage 5** (`UserNotificationSetting` sparse-override; `EmailEnabled`/`Collapsed` — see Shared
@@ -110,6 +160,21 @@ complete parts of the model.
   row when values differ from type defaults; deletes it when both match defaults (returning to NULL =
   "use default"). `GetSettingsAsync` LEFT-JOINs onto types; NULL → IsDefault = true. Covered by
   Integration tier (see Feature 41 Stage-5 note). L3/L3.5/L4 remain Stage 2 — deferred to WU33.
+
+- **WU33 Stage-5 note (L3/L3.5, 2026-06-24):** F43 L3-Logic and L3.5-Structure → Stage 5.
+  `NotificationSettingsPage.razor` built: `@page "/notifications/settings"`, `[Authorize]`, injects
+  `INotificationWriteService`. Groups all notification types by `NotificationCategoryVisuals.AllCategories`
+  ordering; renders each category with its icon/label header and a `grid-cols-[1fr_auto_auto]` per-type
+  row (type name + description + Email checkbox + Collapsed checkbox). Per-row immediate save: each
+  `@onchange` handler calls `SetSettingAsync(dto.TypeId, emailEnabled, collapsed)` inline — no `EditForm`,
+  no Save button. Optimistic local update via `_settings = [.. _settings.Select(s => s.TypeId == dto.TypeId
+  ? s with { ... } : s)]` before await. Lambda capture bug avoided with `var d = dto` inside `@foreach`.
+  L4 stays Stage 1 — Tailwind classes written but not locked into Pattern Accumulation pending visual
+  sign-off (WU8/WU13/WU23 precedent). **Test tiers:** Integration (covered by WU22's `GetSettingsAsync`/
+  `SetSettingAsync` tests; settings page is a pass-through to those service methods — no new integration
+  test needed). Unit (NotificationCategoryVisuals tests cover the category-grouping logic). RazorComponents
+  test for the settings page deferred with F42's bell/page tests (same blocker: `FakeNotificationWriteService`
+  not yet in the fakes catalog; add when the first bUnit notification test is needed).
 
 ## Feature 57 — Notification Cleanup Worker
 

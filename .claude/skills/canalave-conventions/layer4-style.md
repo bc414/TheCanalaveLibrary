@@ -444,3 +444,12 @@ p-3 text-sm` — no outer margin; the chapter reading page controls placement. Y
 `rounded-md bg-[--color-primary] px-3 py-1 text-white text-xs`. Dismiss link:
 `text-[--color-text-muted] text-xs underline cursor-pointer`. Renders nothing when dismissed
 (local `_dismissed` bool).
+
+**Notification icons (WU33, design-pending visual sign-off):** notification category/type icons are **inline
+SVG**, the same permanent carve-out as interaction icons. `NotificationCategoryVisuals.cs` is the single source
+of truth, mirroring `BookshelfTabVisuals`. Reuse existing icon paths from `UserStoryInteractionVisuals` and
+`RecommendationIcons` where the concept overlaps (YourFollows → Follow path, Warnings → Ignore path, etc.);
+new glyphs introduced only for categories with no existing equivalent. Per-type overrides in `NotificationPresenter`
+follow the same reuse discipline. L4 cells for Features 42/43 remain Stage 1 until visual sign-off — Tailwind
+class choices for `NotificationItem` / `NotificationBell` / `NotificationsPage` / `NotificationSettingsPage`
+are not locked here and will be added to Pattern Accumulation after visual review.

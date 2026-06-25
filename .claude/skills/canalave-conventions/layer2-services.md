@@ -302,6 +302,57 @@ canonical example is `ChapterText.CountWords(string?)` in `Core/Chapters/`. The 
 `WordCount` therefore always reflects *readable* words — what `RichTextView` would render — not a
 count of markup tokens.
 
+## Group Rating Waterfall — Enforcement at Write Time (settled WU32)
+
+Group content addition (`AddStoryAsync`, folder assignment) enforces a **three-tier waterfall** at
+write time. Tiers are checked in order; a violation at any tier throws `ContentRatingExceededException`:
+
+| Tier | Rule | Enforcement location |
+|------|------|---------------------|
+| 1 | User's site-wide filter (mature off → T ceiling) | Existing `ContentRating` named query filter on `Story`; already model-level — free, never bypassed |
+| 2 | `story.Rating > group.MaxContentRating` | Checked in `ServerGroupWriteService.AddStoryAsync` before inserting `GroupStory` |
+| 3 | `story.Rating > folder.MaxRating` (when a folder is specified) | Checked in `ServerGroupWriteService` before inserting the story↔folder join |
+
+Tier 1 means a write service call that resolves `story` from the write DbContext will already have
+the content-rating filter applied — the story row simply won't load if it exceeds the user's
+ceiling (anon + mature-off users get `Rating.T` ceiling; authenticated + mature-on users get `Rating.M`).
+Tiers 2/3 are explicit `if` guards in the write service.
+
+**Folder `MaxRating` ≤ group `MaxContentRating`:** the folder-create path (admin-only) enforces that
+a folder's ceiling cannot exceed the group ceiling. Attempting to create a folder with a higher
+`MaxRating` than the group's `MaxContentRating` throws `GroupValidationException`.
+
+**`ContentRatingExceededException`** lives in `Core/Groups/` (not `Core/` root) — it is a domain
+exception specific to the group content model, not a general cross-cutting concern.
+
+## Group Comments — Per-Context Method Pattern (settled WU32)
+
+Group comments follow the **per-context method** pattern established for blog-post comments in WU31.
+The comment service exposes one pair of methods per comment context (chapter / blog post / group),
+rather than a generic context enum:
+
+```csharp
+// ICommentReadService — group branch (mirrors GetBlogPostCommentsAsync)
+Task<(CommentDto[] Comments, int TotalCount)> GetGroupCommentsAsync(
+    int groupId, int page, int pageSize);
+
+// ICommentWriteService — group branch
+Task<long> PostGroupCommentAsync(PostGroupCommentDto dto);
+// PostGroupCommentDto: { int GroupId; long? ParentCommentId; string CommentText; }
+// No IsSpoiler — spoilers are a chapter-only concept (ChapterComment.IsSpoiler).
+```
+
+`ServerCommentReadService` uses `readDb.GroupComments` (the typed `DbSet<GroupComment>`) with the
+same two-step root-paging + per-viewer like-EXISTS projection as the blog-post and chapter branches.
+`ServerCommentWriteService.PostGroupCommentAsync` copies `PostBlogPostCommentAsync`, substituting
+`GroupComment` / `writeDb.GroupComments` for the entity and DbSet.
+
+**Why per-context, not a generic context enum:** each context differs in its verification step
+(blog-post branch verifies `writeDb.BlogPosts`; group branch verifies `writeDb.Groups`; chapter
+branch verifies `writeDb.Chapters` + parent-same-chapter cross-check). Sharing a single generic
+method with a `target` parameter does not simplify the verification logic and would produce a branchy
+switch that obscures what each context requires. The per-context pattern already exists; extend it.
+
 ## Notification Generation (settled WU22)
 
 Feature write services that trigger notifications inject `INotificationWriteService` as a standard
@@ -347,6 +398,40 @@ its triggering feature. WU22 delivers the service infra + the two single-recipie
 (`NotifyNewFollowerAsync`, `NotifyNewVouchAsync`) and wires them into the Following seams. Fan-out
 methods (new chapter, new story, etc.) land with their respective work-units when the recipient-source
 service is Stage 5.
+
+## Polymorphic RelatedEntityId — Two-Pass Batch Enrichment (WU33)
+
+`NotificationDto.RelatedEntityId` is a single `int` column that points at different entity tables
+depending on `NotificationTypeEnum` (story, chapter, user, group, blog post, comment, or nothing).
+The type-ambiguity makes a single SQL JOIN projection impossible.
+
+**Why not a conditional JOIN:** EF Core cannot translate a JOIN whose target table varies by row value
+across heterogeneous tables. Even with raw SQL, the column set differs per branch.
+
+**Why not DTO inheritance:** the codebase has no DTO-inheritance precedent; the DTO firewall favors flat
+projections; a heterogeneous `NotificationDto[]` would force the UI into type-switches. The solution is to
+normalize the polymorphic target into one `(TargetTitle?, TargetUrl?)` pair — one slot regardless of kind.
+
+**The pattern (applied in `GetNotificationsAsync`):**
+
+1. **Materialize the page** via normal LINQ with LEFT JOINs (`UserNotificationSettings` for effective
+   Collapsed; `Users` on `SourceUserId` for `SourceUserName`). Apply ordering before `Skip/Take`.
+2. **Classify** each materialized row's `RelatedEntityId` by a private
+   `static RelatedEntityKind KindFor(NotificationTypeEnum)` switch.
+   `RelatedEntityKind` is an internal enum: `User | Story | Chapter | Group | BlogPost | Comment | None`.
+3. **Batch-load** each kind present on the page in one query per kind:
+   - Group the materialized row ids by kind; skip empty sets.
+   - `Stories.Where(s => ids.Contains(s.StoryId)).Select(s => new {s.StoryId, s.Title})` → url = `$"/story/{id}"`.
+   - `Chapters.Where(...)` → url = `$"/story/{storyId}/{chapterNumber}"` (Chapter carries both fields).
+   - `Users.Where(...)` → url = `$"/user/{id}"`.
+   - Group/BlogPost/Comment → respective routes. `None` → no query; null title/url.
+   - Produce `Dictionary<int,(string Title,string Url)>` per kind.
+4. **Stitch** each DTO row with its `(TargetTitle, TargetUrl)` from the relevant dictionary; return enriched array.
+
+**Extra queries:** at most as many as distinct kinds appearing on the page (max 6, typically 1–3). Never N+1.
+
+**Forward-compat:** kinds whose triggering feature isn't built yet produce no rows, but their `KindFor` branch
+is coded now — dormant branches compile and need no future edit.
 
 ## Service Composition
 
@@ -465,6 +550,25 @@ the user must explicitly un-designate first. **Settled — do not revisit** (res
 **Like toggle (no notification):** `ToggleLikeAsync` returns `RecommendationLikeResultDto(int LikeCount,
 bool IsLiked)` so the UI reconciles optimistic state without a re-read. No notification fires on a
 recommendation like — anti-addictive design (§6.11), same as `CommentLike`.
+
+## `AllowPrivateMessages` Gate (settled WU35)
+
+`User.PrivacySettings.AllowPrivateMessages` is a **`SocialInteractionPermission` enum** (not a bool)
+with four tiers. It is enforced in **`ServerMessagingWriteService.StartConversationAsync` only** —
+not re-checked on replies to an existing thread:
+
+| Tier | Enforcement |
+|---|---|
+| `Public` | Allow any authenticated sender. |
+| `UsersOnly` | Allow any authenticated sender. (Default — most users.) |
+| `Following` | **Write-side existence check:** `writeDb.FollowedUsers.AnyAsync(f => f.FollowedUserId == senderId && f.UserId == recipientId)` — the recipient must follow the sender. Use `writeDb` (Case 1 — constraint check, for consistency), not `IFollowingReadService`. |
+| `Nobody` | Throw `MessagingPermissionException` (defined in `Core/Messaging/`). |
+
+`PrivacySettings` is stored as a jsonb complex property on `User` — the `AllowPrivateMessages` field
+is inside that JSON blob, not an indexed column. Querying by it in SQL requires a JSON path query;
+for MVP, load the recipient's `PrivacySettings` navigation and evaluate in C# (single-row lookup,
+not a filter over many rows). The gate check comes **after** the self-message guard and **before**
+validation/sanitization of the message body.
 
 ## Self-Referential Editing Exception
 

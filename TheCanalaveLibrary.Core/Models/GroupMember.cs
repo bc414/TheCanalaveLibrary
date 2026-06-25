@@ -6,7 +6,11 @@ public partial class GroupMember
 
     public int GroupId { get; set; }
 
-    public short Role { get; set; }
+    /// <summary>
+    /// Role within this group. Stored as <c>short</c> via HasConversion (GroupMemberConfiguration).
+    /// Two roles only: Member (0) and Admin (1) — settled WU32.
+    /// </summary>
+    public GroupRole Role { get; set; }
 
     public bool NotifyForNewStory { get; set; } = true;
     public bool NotifyForNewBlogPost { get; set; } = false;

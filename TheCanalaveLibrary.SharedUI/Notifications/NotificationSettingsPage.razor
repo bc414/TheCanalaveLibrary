@@ -1,0 +1,121 @@
+@page "/notifications/settings"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@inject INotificationWriteService NotificationService
+
+@* Feature 43 — Notification Settings page (WU33).
+   Displays all notification types grouped by category with two per-row toggles:
+     • Email — whether to receive email for this type (post-MVP side-channel).
+     • Collapsed — whether to initially collapse this type's category section in the
+       grouped notification view on /notifications.
+   No in-app mute toggle (always-on per audit correction #2). No Save button — each
+   toggle saves immediately via SetSettingAsync (sparse upsert/delete model). *@
+
+@if (_isLoading)
+{
+    <PageTitle>Notification Settings</PageTitle>
+    <p class="text-[--color-text-muted]"><em>Loading&hellip;</em></p>
+}
+else
+{
+    <PageTitle>Notification Settings</PageTitle>
+
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-[--color-text]">Notification Settings</h1>
+        <p class="mt-1 text-sm text-[--color-text-muted]">
+            Control which notifications you receive by email and how they appear on your
+            <a href="/notifications" class="text-[--color-primary] hover:underline">notifications page</a>.
+        </p>
+    </div>
+
+    <div class="flex flex-col gap-6">
+        @foreach (var cat in NotificationCategoryVisuals.AllCategories)
+        {
+            var rows = _settings.Where(s => s.CategoryId == cat).ToList();
+            if (rows.Count == 0) continue;
+
+            var visuals = NotificationCategoryVisuals.For(cat);
+
+            <section aria-labelledby="@($"cat-{(int)cat}")">
+                <div class="mb-3 flex items-center gap-2">
+                    <svg viewBox="0 0 24 24" class="size-5 shrink-0" aria-hidden="true" fill="@visuals.AccentColor">
+                        <path d="@visuals.IconPath" />
+                    </svg>
+                    <h2 id="@($"cat-{(int)cat}")" class="text-base font-semibold" style="color:@visuals.AccentColor">
+                        @visuals.Label
+                    </h2>
+                </div>
+
+                <div class="rounded-xl border border-[--color-border] divide-y divide-[--color-border]">
+                    @* Column headers (once per category) *@
+                    <div class="grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-[--color-text-muted]">
+                        <span>Notification type</span>
+                        <span class="w-16 text-center">Email</span>
+                        <span class="w-20 text-center">Collapsed</span>
+                    </div>
+
+                    @foreach (var dto in rows)
+                    {
+                        var d = dto; // capture for lambda
+                        <div class="grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-3">
+                            <div class="min-w-0">
+                                <p class="text-sm font-medium text-[--color-text]">@d.DisplayName</p>
+                                @if (!string.IsNullOrWhiteSpace(d.Description))
+                                {
+                                    <p class="text-xs text-[--color-text-muted]">@d.Description</p>
+                                }
+                            </div>
+
+                            @* Email toggle *@
+                            <div class="flex w-16 justify-center">
+                                <input type="checkbox"
+                                       class="size-4 cursor-pointer accent-[--color-primary]"
+                                       checked="@d.EmailEnabled"
+                                       title="@(d.EmailEnabled ? "Disable email for this notification type" : "Enable email for this notification type")"
+                                       @onchange="async e => await HandleToggleAsync(d, emailEnabled: (bool)(e.Value ?? d.EmailEnabled), collapsed: d.Collapsed)" />
+                            </div>
+
+                            @* Collapsed toggle *@
+                            <div class="flex w-20 justify-center">
+                                <input type="checkbox"
+                                       class="size-4 cursor-pointer accent-[--color-primary]"
+                                       checked="@d.Collapsed"
+                                       title="@(d.Collapsed ? "Show this category expanded by default" : "Show this category collapsed by default")"
+                                       @onchange="async e => await HandleToggleAsync(d, emailEnabled: d.EmailEnabled, collapsed: (bool)(e.Value ?? d.Collapsed))" />
+                            </div>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+    </div>
+
+    <div class="mt-6 border-t border-[--color-border] pt-4 text-center text-sm text-[--color-text-muted]">
+        <a href="/notifications" class="hover:text-[--color-text] hover:underline transition-colors">
+            ← Back to notifications
+        </a>
+    </div>
+}
+
+@code {
+    private bool _isLoading = true;
+    private NotificationSettingDto[] _settings = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _settings = await NotificationService.GetSettingsAsync();
+        _isLoading = false;
+    }
+
+    private async Task HandleToggleAsync(NotificationSettingDto dto, bool emailEnabled, bool collapsed)
+    {
+        // Optimistic local update first (the toggle is already visually toggled by the browser
+        // for a checked input; this keeps _settings in sync for subsequent interactions).
+        _settings = [.. _settings.Select(s =>
+            s.TypeId == dto.TypeId ? s with { EmailEnabled = emailEnabled, Collapsed = collapsed } : s)];
+
+        // Persist — service handles sparse upsert/delete (no row stored when both match defaults).
+        await NotificationService.SetSettingAsync(dto.TypeId, emailEnabled, collapsed);
+    }
+}

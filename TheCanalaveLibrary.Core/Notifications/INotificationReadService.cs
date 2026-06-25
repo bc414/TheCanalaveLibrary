@@ -22,12 +22,26 @@ public interface INotificationReadService
     Task<int> GetUnreadCountAsync();
 
     /// <summary>
-    /// Returns a page of notifications for the current user, newest first. Returns an empty
-    /// array for anonymous callers.
+    /// Returns the total number of notifications for the current user (read + unread).
+    /// Used by <c>PaginationControls</c> on the <c>/notifications</c> page. Returns 0
+    /// for anonymous callers. Added additively in WU33 — existing callers unaffected.
+    /// </summary>
+    Task<int> GetTotalCountAsync();
+
+    /// <summary>
+    /// Returns a page of notifications for the current user. Returns an empty array for
+    /// anonymous callers.
     /// </summary>
     /// <param name="page">1-indexed page number.</param>
     /// <param name="pageSize">Number of items per page.</param>
-    Task<NotificationDto[]> GetNotificationsAsync(int page, int pageSize);
+    /// <param name="order">
+    /// Feed ordering. Defaults to <see cref="NotificationFeedOrder.NewestFirst"/> —
+    /// existing callers that omit this parameter are unaffected (WU33 additive).
+    /// </param>
+    Task<NotificationDto[]> GetNotificationsAsync(
+        int page,
+        int pageSize,
+        NotificationFeedOrder order = NotificationFeedOrder.NewestFirst);
 
     /// <summary>
     /// Returns all notification types with the current user's effective preferences

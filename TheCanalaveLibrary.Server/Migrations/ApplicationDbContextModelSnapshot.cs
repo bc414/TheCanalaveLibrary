@@ -1072,6 +1072,10 @@ namespace TheCanalaveLibrary.Server.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("GroupId"));
 
+                    b.Property<short>("AudienceRating")
+                        .HasColumnType("smallint")
+                        .HasColumnName("audience_rating");
+
                     b.Property<int?>("CreatorId")
                         .HasColumnType("integer")
                         .HasColumnName("creator_id");
@@ -1096,10 +1100,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Property<short>("MaxContentRating")
                         .HasColumnType("smallint")
                         .HasColumnName("max_content_rating");
-
-                    b.Property<short>("Rating")
-                        .HasColumnType("smallint")
-                        .HasColumnName("rating");
 
                     b.HasKey("GroupId")
                         .HasName("pk_groups");
@@ -3875,6 +3875,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("group_id");
 
+                    b.Property<bool>("HasSpoilers")
+                        .HasColumnType("boolean")
+                        .HasColumnName("has_spoilers");
+
                     b.Property<bool>("IsPublished")
                         .HasColumnType("boolean")
                         .HasColumnName("is_published");
@@ -3886,6 +3890,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Property<short>("Rating")
                         .HasColumnType("smallint")
                         .HasColumnName("rating");
+
+                    b.Property<int?>("StoryId")
+                        .HasColumnType("integer")
+                        .HasColumnName("story_id");
 
                     b.HasIndex("GroupId")
                         .HasDatabaseName("ix_group_blog_posts_group_id");
@@ -4163,7 +4171,7 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasOne("TheCanalaveLibrary.Core.GroupComment", "GroupComment")
                         .WithMany()
                         .HasForeignKey("GroupCommentCommentId")
-                        .HasConstraintName("fk_base_comments_base_comments_group_comment_comment_id");
+                        .HasConstraintName("fk_base_comments_group_comments_group_comment_comment_id");
 
                     b.HasOne("TheCanalaveLibrary.Core.BaseComment", "ParentComment")
                         .WithMany("InverseParentComment")

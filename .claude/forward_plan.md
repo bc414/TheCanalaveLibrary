@@ -218,6 +218,24 @@ Guardrails:
 
 **Resolved:**
 
+- **WU32 Groups — four design decisions** — resolved (2026-06-24, WU32 planning):
+  (1) **Rating model:** `AudienceRating` (group visibility) and `MaxContentRating` (content ceiling)
+  are two distinct properties; three `GroupAudienceType` presets (Standard/SfwOnly/Mature) are a
+  UI/write convention mapped by `GroupAudienceTypeMapper`, not stored. `Group.Rating` renamed to
+  `AudienceRating` in WU32 migration. `GroupAudience` named query filter (EF model-level) hides
+  Mature groups from mature-disabled users. Content waterfall (three tiers) enforced at write time in
+  `ServerGroupWriteService`; violations → `ContentRatingExceededException`. Non-M stories allowed in
+  Mature groups (audience rating defines topic, not a content floor).
+  (2) **Membership:** open join, permanent — no approval, no kicking, no per-group moderator role.
+  (3) **Roles:** `GroupRole.Member` and `GroupRole.Admin` only. Creator auto-added as Admin. No
+  `GroupRole.Moderator` — permanent decision.
+  (4) **Group blog posts:** in scope for WU32, building on WU31 `BaseBlogPost` infrastructure.
+  (5) **Group comments:** per-context method pattern (mirrors WU31 blog-post precedent); no generic
+  context enum.
+  See `cross-cutting.md` "Group Audience-Visibility Filter" / "Group Membership and Role Model";
+  `layer2-services.md` "Group Rating Waterfall" / "Group Comments"; `audit/Groups.md`
+  "WU32 Settled Decisions."
+
 - **Active-user-conditional handling + two content-editing patterns** — resolved (2026-06-23, WU24
   planning): `IActiveUserContext` is server-only (query-shaping + server-side authz); SharedUI components
   never inject it — the dispatcher reads `AuthenticationState` and passes ownership down as a bool.
@@ -379,6 +397,22 @@ Guardrails:
   HasStarted blocker resolved: column + property exist from WU15/InitialSchema.
   See `cross-cutting.md` "Chapter Versioning — Progressive Disclosure" and "Two content-editing patterns."
 
+- **WU33 Notification UI — presentation decisions** — resolved (2026-06-24, WU33 planning):
+  (1) **Rich messages, flat DTO, normalized target pair:** `NotificationDto` extended with `SourceUserName?`,
+  `TargetTitle?`, `TargetUrl?` (a single resolved `(title, url)` pair for the polymorphic `RelatedEntityId`);
+  message text composed in UI by static `NotificationPresenter` (per-`NotificationTypeEnum` templates). No DTO
+  inheritance — no codebase precedent; flat projection wins at the DTO firewall.
+  (2) **Two-pass batch enrichment:** materialize page → classify by `RelatedEntityKind` → batch-load each kind
+  → stitch. See `layer2-services.md` "Polymorphic RelatedEntityId — Two-Pass Batch Enrichment."
+  (3) **Both grouped-by-category and flat date feed:** view toggle + sort toggle (Newest first / Oldest unread
+  first). `NotificationCategoryVisuals` maps 9 categories to icons/labels, reusing existing icon constants as
+  single source of truth; new glyphs only for SiteNews/YourProfile/Collaborations/Groups/YourReports.
+  (4) **Bell flyout:** UserCard caret pattern (not modal). `<AuthorizeView><Authorized>`. No `IActiveUserContext`.
+  (5) **Settings:** per-row immediate save; `EmailEnabled` + `Collapsed` only (no in-app toggle per audit
+  correction #2).
+  See `cross-cutting.md` "Notification bell"; `audit/Notifications.md` Feature 42 WU33 additive note;
+  `layer3.5-structure.md` "Notification Presentation Model."
+
 - **Integration test isolation foundation** — resolved (2026-06-24, post-WU29): **Respawn
   reset between every test.** The integration suite had no reset mechanism; tests shared one
   Postgres container with accumulating state, making absolute-count and absolute-emptiness
@@ -407,6 +441,21 @@ Guardrails:
   See `layer1-data-model.md` §"Denormalization with TPT", `cross-cutting.md` §"Content Rating
   Filtering", `audit/BlogPosts.md` §Feature 35, `audit/Comments.md`.
 
+- **WU35 Messaging architecture** — resolved (2026-06-24, WU35 planning):
+  (1) **1-on-1 only** — group conversations are out of scope for MVP; conversations always have exactly
+  two participants. The N-participant data model is kept. (2) **Stateless MVP, SignalR deferred post-MVP**
+  — reverses the spec's "real-time via SignalR" framing; messaging is request/response like every other
+  feature (recipient sees messages on navigate/refresh; global unread badge refreshes on navigation).
+  SignalR push is a post-MVP additive layer behind the unchanged write service; no L1–L4 rework needed.
+  Feature 49 L5 stays N/A. See Post-MVP section below for the deferred item. (3) **Global unread badge
+  in layout chrome** — a `MessagesNavLink` beside `LoginDisplay` in Desktop/Mobile layouts, derived from
+  `IMessagingReadService.GetUnreadConversationCountAsync()`. (4) **No PM Notification rows** —
+  messaging's `LastReadTimestamp` watermark is its only bookkeeping; the Notification cluster is
+  never touched. Rationale: event-rows and conversation-watermark are differently shaped read-state;
+  unifying creates two unread truths to sync. Substantive/infrequent use case provides none of the
+  value the notification dedup/batch machinery adds. See `cross-cutting.md` "Private Messaging
+  Architecture"; `audit/Messaging.md` WU35 Settled Decisions.
+
 - **WU31 Blog Post settled decisions** — resolved (2026-06-24, WU31 planning):
   (1) **Feature 56 (admin feature-contribution attribution) deferred post-MVP** — not in WU31;
   stays Stage 2 in `audit/BlogPosts.md`; `FeatureContribution` entity/FKs/DbSet unchanged.
@@ -414,7 +463,10 @@ Guardrails:
   `/blog/{id}/{*slug}` (read-only view) — overrides spec §5 line ~1585 "in-place editing" because
   a blog post is a multi-field form, not lightweight embedded content. See `cross-cutting.md`
   "Two content-editing patterns."
-  (3) **Profile blog posts only in WU31;** `GroupBlogPost` UI → WU32 (Groups).
+  (3) **Profile blog posts only in WU31;** `GroupBlogPost` UI built in WU32 (Groups) — confirmed
+      in scope (2026-06-24, WU32 planning). Reuses WU31 `BaseBlogPost` infrastructure;
+      `IBlogPostWriteService` gains `CreateGroupBlogPostAsync`; `IBlogPostReadService` gains
+      `GetByGroupAsync`. See `audit/Groups.md` §"WU32 Settled Decisions."
   (4) **Optional story-link picker** via `IStoryReadService.GetStoryIdsByAuthorAsync(int authorId)`
   (`IgnoreQueryFilters` — author always sees own mature stories). Method confirmed present
   (parallel session delivered it; [IStoryReadService.cs:55](TheCanalaveLibrary.Core/Stories/IStoryReadService.cs)).

@@ -31,6 +31,18 @@ public interface ICommentWriteService : ICommentReadService
     Task<long> PostBlogPostCommentAsync(PostBlogPostCommentDto dto);
 
     /// <summary>
+    /// Posts a new comment (or reply) on a group. Requires an authenticated user. Sanitizes
+    /// <c>dto.CommentText</c> before persisting. If <c>dto.ParentCommentId</c> is set, verifies
+    /// the parent comment belongs to the same group. No spoiler flag (group comments have no
+    /// spoiler concept — only <see cref="ChapterComment.IsSpoiler"/> exists).
+    /// </summary>
+    /// <returns>The new <c>BaseComment.CommentId</c>.</returns>
+    /// <exception cref="CommentValidationException">Thrown when text is empty.</exception>
+    /// <exception cref="KeyNotFoundException">Group or parent comment not found.</exception>
+    /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
+    Task<long> PostGroupCommentAsync(PostGroupCommentDto dto);
+
+    /// <summary>
     /// Edits the text of an existing comment. Author-only: throws
     /// <see cref="UnauthorizedAccessException"/> if the caller is not the comment's author.
     /// Re-sanitizes the new text before persisting.

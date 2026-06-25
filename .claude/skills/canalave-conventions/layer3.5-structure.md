@@ -540,6 +540,8 @@ component owns that behavior, not get bolted onto the display bag.
 | `UserCard` | Leaf | Following (vouch display), Profiles, Groups, Comments, Recommendations, Messaging, Users search, Tree search nodes |
 | `ConfirmDialog` | Container composite | Spoiler reveal, account deletion, leaving group, deleting list, unpublishing story |
 | `CommentSection` | Coordination composite | Chapter reading pages (WU20), Blog post view pages (WU31) — see "CommentSection — Multi-Context Dispatch" |
+| `NotificationItem` | Leaf | Notification bell flyout (WU33), Notifications page (WU33) |
+| `NotificationBell` | Coordination composite (cross-cutting layout element) | `DesktopLayout`, `MobileLayout` (WU33) |
 
 ## StoryCard and StoryDeck
 
@@ -616,6 +618,40 @@ they are ignored (have no effect) when `Target == BlogPost`.
 
 **Service dispatch:** `ICommentReadService.GetBlogPostCommentsAsync` / `ICommentWriteService.PostBlogPostCommentAsync`
 are the blog-post analogues of the chapter methods, added in WU31.
+
+## Notification Presentation Model — Static Presenter + Per-Type Templates (WU33)
+
+The notification cluster introduces two static visual-metadata classes that follow the `BookshelfTabVisuals`
+/ `UserStoryInteractionVisuals` precedent (settled WU33):
+
+**`NotificationCategoryVisuals`** (static, `SharedUI/Notifications/`):
+`NotificationCategoryEnum → Info(IconPath, AccentColor, Label, SortOrder)`. Labels and sort-order mirror the
+seeded `NotificationCategory` table (no service exposes category names). **Icons reuse existing constants as the
+single source of truth**, exactly as `BookshelfTabVisuals` sources from `UserStoryInteractionVisuals` and
+`RecommendationIcons`:
+- `YourFollows` → `UserStoryInteractionVisuals.For(Follow)` (teal `#2DBBA0`)
+- `YourStories` → `BookshelfTabVisuals.MyStoriesPath` (`#2F7D4F`)
+- `YourRecommendations` → `RecommendationIcons.RecommendationIconPath` (`#5BB85A`)
+- `Warnings` → `UserStoryInteractionVisuals.For(Ignore)` (red `#C04030`)
+- New glyphs (no existing equivalent): `SiteNews` megaphone, `YourProfile` user-circle, `Collaborations` link,
+  `Groups` user-group, `YourReports` flag — all 24×24 viewBox nonzero fill, defined in this class.
+
+**`NotificationPresenter`** (static, `SharedUI/Notifications/`):
+`Compose(NotificationDto) → (string Text, string IconPath, string AccentColor)`.
+Per-`NotificationTypeEnum` message template interpolating `SourceUserName` (fallback `"Someone"`/`"A user"`
+when null — source was deleted via SET NULL) and `TargetTitle`. Icon/accent default to the category visuals
+from `NotificationCategoryVisuals`, with per-type overrides for distinctive types (e.g. `HiddenGem` →
+`RecommendationIcons.HiddenGem*`). **The DTO carries data; the UI owns copy** — message text is never stored.
+
+**`NotificationBell`** uses the **UserCard caret pattern**: `relative` container + `@onclick="Toggle"` button
+with unread-count badge + `@if (_open)` `absolute top-full z-10` flyout panel. NOT the `fixed inset-0` modal
+pattern. Wrapped in `<AuthorizeView><Authorized>`. Does NOT inject `IActiveUserContext` — the underlying service
+self-scopes. See `cross-cutting.md` "Notification bell."
+
+**`NotificationItem`** (leaf, no injection): inline SVG icon (path from `NotificationPresenter`), composed
+message text with entity link (`<a href="@n.TargetUrl">@n.TargetTitle</a>` when present, else plain text),
+relative timestamp, unread dot. Exposes `EventCallback OnActivate` (parent marks read + navigates).
+Outer-margin rule honored.
 
 ## Filter-Axis Component Pattern
 

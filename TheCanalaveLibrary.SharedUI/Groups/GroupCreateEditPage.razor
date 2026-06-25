@@ -1,0 +1,228 @@
+@page "/group/new"
+@page "/group/{GroupId:int}/edit"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@inject IGroupWriteService GroupService
+@inject NavigationManager Nav
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+
+@* Group create/edit page — Pattern 1 edit side (cross-cutting.md "Two content-editing patterns").
+   Audience type is selected as a preset radio (Standard/SFW Only/Mature) which maps to the
+   (AudienceRating, MaxContentRating) pair via GroupAudienceTypeMapper on submit.
+   Admin-only for edit — UX pre-check here; real gate is in ServerGroupWriteService.
+   WU32. *@
+
+<PageTitle>@(GroupId.HasValue ? "Edit Group" : "New Group")</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        @if (_isLoading)
+        {
+            <p class="p-4 text-[--color-text-muted]"><em>Loading…</em></p>
+        }
+        else if (_forbidden)
+        {
+            <p class="p-4 text-[--color-danger]">You must be an admin of this group to edit it.</p>
+        }
+        else
+        {
+            <div class="mx-auto max-w-2xl px-4 py-8">
+                <h1 class="mb-6 text-2xl font-bold text-[--color-text]">
+                    @(GroupId.HasValue ? "Edit Group" : "Create a New Group")
+                </h1>
+
+                @if (_errors.Count > 0)
+                {
+                    <div class="mb-4 rounded-lg bg-[--color-danger]/10 p-4 text-sm text-[--color-danger]" role="alert">
+                        <ul class="list-disc pl-4 space-y-1">
+                            @foreach (string error in _errors)
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <div class="flex flex-col gap-6">
+
+                    @* ── Group name ───────────────────────────────────────────── *@
+                    <div class="flex flex-col gap-1">
+                        <label class="text-sm font-semibold text-[--color-text]">Group Name</label>
+                        <input type="text" @bind="_name" maxlength="@GroupConstants.MaxGroupNameLength"
+                               class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                               placeholder="Enter group name" />
+                        <p class="text-xs text-[--color-text-muted]">@GroupConstants.MaxGroupNameLength characters max.</p>
+                    </div>
+
+                    @* ── Description ─────────────────────────────────────────── *@
+                    <div class="flex flex-col gap-1">
+                        <label class="text-sm font-semibold text-[--color-text]">
+                            Description <span class="font-normal text-[--color-text-muted]">(optional)</span>
+                        </label>
+                        <textarea @bind="_description" rows="4" maxlength="@GroupConstants.MaxDescriptionLength"
+                                  class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary] resize-y"
+                                  placeholder="Describe what this group is about…"></textarea>
+                    </div>
+
+                    @* ── Audience type (preset radio) ─────────────────────────── *@
+                    <div class="flex flex-col gap-2">
+                        <label class="text-sm font-semibold text-[--color-text]">Audience Type</label>
+                        <div class="flex flex-col gap-2">
+                            @foreach (GroupAudienceType type in Enum.GetValues<GroupAudienceType>())
+                            {
+                                string id = $"audience-{type}";
+                                <label for="@id"
+                                       class="flex items-start gap-3 rounded-lg border @(type == _audienceType ? "border-[--color-primary] bg-[--color-primary]/5" : "border-[--color-border] bg-[--color-surface]") p-3 cursor-pointer transition-colors hover:border-[--color-primary]/50">
+                                    <input type="radio" id="@id" name="audience-type"
+                                           checked="@(type == _audienceType)"
+                                           @onchange="() => _audienceType = type"
+                                           class="mt-0.5 text-[--color-primary] focus:ring-[--color-primary]" />
+                                    <div class="flex flex-col gap-0.5">
+                                        <span class="text-sm font-medium text-[--color-text]">@AudienceTypeLabel(type)</span>
+                                        <span class="text-xs text-[--color-text-muted]">@AudienceTypeDescription(type)</span>
+                                    </div>
+                                </label>
+                            }
+                        </div>
+                    </div>
+
+                    @* ── Submit ───────────────────────────────────────────────── *@
+                    <div class="flex gap-3">
+                        <button type="button" @onclick="HandleSubmitAsync"
+                                disabled="@_busy"
+                                class="rounded-md bg-[--color-primary] px-5 py-2 font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50">
+                            @(_busy ? "Saving…" : (GroupId.HasValue ? "Save Changes" : "Create Group"))
+                        </button>
+                        <a href="@(GroupId.HasValue ? $"/group/{GroupId.Value}" : "/groups")"
+                           class="rounded-md border border-[--color-border] px-5 py-2 font-medium text-[--color-text] transition-colors hover:bg-[--color-surface-raised]">
+                            Cancel
+                        </a>
+                    </div>
+
+                </div>
+            </div>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <p class="p-4 text-[--color-danger]">You must be signed in to manage groups.</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public int? GroupId { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string _name = string.Empty;
+    private string? _description;
+    private GroupAudienceType _audienceType = GroupAudienceType.Standard;
+
+    private bool _isLoading = true;
+    private bool _forbidden;
+    private bool _busy;
+    private List<string> _errors = [];
+    private int? _currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            AuthenticationState state = await AuthState;
+            string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            _currentUserId = int.TryParse(idStr, out int id) ? id : null;
+        }
+
+        if (GroupId.HasValue)
+        {
+            // Load existing group for edit — verify caller is admin first.
+            GroupDetailDto? group = await GroupService.GetByIdAsync(GroupId.Value);
+
+            if (group is null)
+            {
+                Nav.NavigateTo("/not-found");
+                return;
+            }
+
+            // UX-level admin pre-check (real gate is in ServerGroupWriteService).
+            GroupRole? role = await GroupService.GetCurrentUserRoleAsync(GroupId.Value);
+            if (role != GroupRole.Admin)
+            {
+                _forbidden = true;
+                _isLoading = false;
+                return;
+            }
+
+            _name         = group.GroupName;
+            _description  = group.Description;
+            _audienceType = group.AudienceType;
+        }
+
+        _isLoading = false;
+    }
+
+    private async Task HandleSubmitAsync()
+    {
+        _errors.Clear();
+        _busy = true;
+
+        try
+        {
+            if (GroupId.HasValue)
+            {
+                await GroupService.UpdateGroupAsync(new UpdateGroupDto
+                {
+                    GroupId      = GroupId.Value,
+                    GroupName    = _name,
+                    Description  = _description,
+                    AudienceType = _audienceType
+                });
+                Nav.NavigateTo($"/group/{GroupId.Value}");
+            }
+            else
+            {
+                int newId = await GroupService.CreateGroupAsync(new CreateGroupDto
+                {
+                    GroupName    = _name,
+                    Description  = _description,
+                    AudienceType = _audienceType
+                });
+                Nav.NavigateTo($"/group/{newId}/{StorySlug.Slugify(_name)}");
+            }
+        }
+        catch (GroupValidationException ex)
+        {
+            _errors.AddRange(ex.Errors);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _forbidden = true;
+        }
+        catch (Exception)
+        {
+            _errors.Add("An unexpected error occurred. Please try again.");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string AudienceTypeLabel(GroupAudienceType type) => type switch
+    {
+        GroupAudienceType.Standard => "Standard",
+        GroupAudienceType.SfwOnly  => "SFW Only",
+        GroupAudienceType.Mature   => "Mature",
+        _                          => type.ToString()
+    };
+
+    private static string AudienceTypeDescription(GroupAudienceType type) => type switch
+    {
+        GroupAudienceType.Standard => "Open to all audiences. All content ratings welcome.",
+        GroupAudienceType.SfwOnly  => "Family-friendly. Only E and T rated stories can be added.",
+        GroupAudienceType.Mature   => "Mature topics and audience. Visible only to users with mature content enabled.",
+        _                          => string.Empty
+    };
+}

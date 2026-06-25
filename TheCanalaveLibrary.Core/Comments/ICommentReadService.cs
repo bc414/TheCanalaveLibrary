@@ -2,7 +2,8 @@ namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// Read side of the Comments service contract. Chapter context shipped WU19; blog-post context
-/// added WU31. Profile/group contexts follow in WU30/WU32.
+/// added WU31; group context added WU32. Each context uses a dedicated method pair
+/// (per-context method pattern — see <c>layer2-services.md</c> §"Group Comments").
 /// </summary>
 public interface ICommentReadService
 {
@@ -23,4 +24,11 @@ public interface ICommentReadService
     /// the post itself.
     /// </summary>
     Task<CommentPageDto> GetBlogPostCommentsAsync(int blogPostId, int page, int pageSize);
+
+    /// <summary>
+    /// Returns a page of group comments with their direct replies, ordered roots-newest-first
+    /// and replies-oldest-first within each root. Mirrors <see cref="GetBlogPostCommentsAsync"/>.
+    /// No spoiler flag on group comments.
+    /// </summary>
+    Task<CommentPageDto> GetGroupCommentsAsync(int groupId, int page, int pageSize);
 }

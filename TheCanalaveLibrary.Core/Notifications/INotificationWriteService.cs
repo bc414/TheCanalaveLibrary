@@ -68,4 +68,28 @@ public interface INotificationWriteService : INotificationReadService
     /// <c>ServerRecommendationWriteService.SetHiddenGemAsync</c> after its primary commit.
     /// </summary>
     Task NotifyStoryHiddenGemAsync(int recipientStoryAuthorId, int sourceRecommenderId);
+
+    // ── Semantic generation methods (WU32 slice — group fan-out) ─────────────────
+
+    /// <summary>
+    /// Fan-out notification sent to all group members with <c>NotifyForNewStory = true</c>
+    /// when a story is added to a group (type <c>NewGroupStory = 60</c>). Also sends
+    /// <c>YourStoryAddedToGroup = 25</c> to the story author (drop-self handled by the
+    /// create-core). Called by <c>ServerGroupWriteService.AddStoryAsync</c> after its primary
+    /// commit, best-effort (try/catch wraps the call).
+    /// </summary>
+    /// <param name="groupId">The group the story was added to.</param>
+    /// <param name="storyAuthorId">The author of the added story (receives <c>YourStoryAddedToGroup</c>).</param>
+    /// <param name="sourceUserId">The member who performed the add (drop-self source).</param>
+    Task NotifyNewGroupStoryAsync(int groupId, int storyAuthorId, int sourceUserId);
+
+    /// <summary>
+    /// Fan-out notification sent to all group members with <c>NotifyForNewBlogPost = true</c>
+    /// when a group blog post is published (type <c>NewGroupBlogPost = 61</c>). Called by
+    /// <c>ServerBlogPostWriteService.CreateGroupBlogPostAsync</c> after its primary commit.
+    /// </summary>
+    /// <param name="groupId">The group the blog post belongs to.</param>
+    /// <param name="blogPostId">The new blog post's id (used as <c>RelatedEntityId</c>).</param>
+    /// <param name="authorId">The author of the blog post (drop-self source).</param>
+    Task NotifyNewGroupBlogPostAsync(int groupId, int blogPostId, int authorId);
 }

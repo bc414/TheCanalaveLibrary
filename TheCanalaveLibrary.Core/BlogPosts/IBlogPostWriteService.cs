@@ -45,4 +45,18 @@ public interface IBlogPostWriteService : IBlogPostReadService
     /// <exception cref="KeyNotFoundException">Blog post not found.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task<BlogPostLikeResultDto> ToggleLikeAsync(int blogPostId);
+
+    /// <summary>
+    /// Creates a new <see cref="GroupBlogPost"/> in the specified group. Requires an authenticated
+    /// user who is a member of the group. <c>AuthorId</c> is server-stamped from
+    /// <see cref="IActiveUserContext.UserId"/>. Sanitizes <c>dto.Content</c> before persisting.
+    /// Fires <c>NotifyNewGroupBlogPostAsync</c> best-effort post-commit to members with
+    /// <c>NotifyForNewBlogPost = true</c>.
+    /// </summary>
+    /// <returns>The new <c>BlogPostId</c>.</returns>
+    /// <exception cref="BlogPostValidationException">Title or content validation fails.</exception>
+    /// <exception cref="KeyNotFoundException">Group not found.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not a member of the group.</exception>
+    /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
+    Task<int> CreateGroupBlogPostAsync(CreateGroupBlogPostDto dto);
 }

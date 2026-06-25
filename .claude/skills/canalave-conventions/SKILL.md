@@ -94,7 +94,10 @@ with no single feature owning the concept. `SharedUI/Bookshelves/` (WU27) holds 
 (`BookshelvesPage`), desktop/mobile composites, and `BookshelfTabVisuals`. `SharedUI/Recommendations/`
 (WU27 icons, WU29 cards) is another cross-cutting SharedUI cluster — WU27 mints the SVG icon constants
 (`RecommendationIcons.cs`), WU29 builds the display components; the cluster owns content that spans
-submission, display, Hidden Gem, and attribution sub-features.
+submission, display, Hidden Gem, and attribution sub-features. `Core/Messaging/` and
+`SharedUI/Messaging/` (WU35) are the Messaging feature cluster — `EditorView` (consumed here)
+and `UserCard` (used to show conversation participants) remain in their own cross-cutting clusters;
+Messaging's own services, DTOs, page dispatcher, and leaf components live in this cluster.
 
 API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
 cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/SpriteEndpoints.cs`

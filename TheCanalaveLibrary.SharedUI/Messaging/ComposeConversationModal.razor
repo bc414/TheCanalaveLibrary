@@ -1,0 +1,117 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Coordination composite — modal overlay for starting a new 1-on-1 conversation.
+   Injection-free; owning page provides OnSubmit and OnCancel callbacks.
+   RecipientPreset is provided when navigating here from a UserCard "Send PM" caret action;
+   RecipientUsername is editable when the user opens compose from the standalone "New Message" button. *@
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+         @onclick="() => OnCancel.InvokeAsync()" role="dialog" aria-modal="true" aria-labelledby="compose-title">
+        <div class="w-full max-w-lg rounded-xl bg-[--color-surface] shadow-xl"
+             @onclick:stopPropagation>
+            <div class="border-b border-[--color-border] px-5 py-4">
+                <h2 id="compose-title" class="text-base font-semibold text-[--color-text]">
+                    New Message
+                </h2>
+            </div>
+
+            <div class="flex flex-col gap-4 px-5 py-4">
+                @* Recipient *@
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium text-[--color-text]" for="compose-recipient">
+                        To
+                    </label>
+                    @if (RecipientPreset is not null)
+                    {
+                        <div class="flex items-center gap-2 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-2">
+                            <img src="@RecipientPreset.AvatarUrl"
+                                 alt="@RecipientPreset.Username"
+                                 class="h-6 w-6 rounded-full object-cover"
+                                 onerror="this.src='/img/default-avatar.svg'" />
+                            <span class="text-sm font-medium text-[--color-text]">@RecipientPreset.Username</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <input id="compose-recipient"
+                               type="text"
+                               class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-sm text-[--color-text] placeholder-[--color-text-muted] focus:border-[--color-primary] focus:outline-none"
+                               placeholder="Username"
+                               @bind="RecipientUsername"
+                               @bind:event="oninput"
+                               disabled="@Busy" />
+                    }
+                </div>
+
+                @* Subject *@
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium text-[--color-text]" for="compose-subject">
+                        Subject
+                    </label>
+                    <input id="compose-subject"
+                           type="text"
+                           class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-sm text-[--color-text] placeholder-[--color-text-muted] focus:border-[--color-primary] focus:outline-none"
+                           placeholder="What's this about?"
+                           maxlength="2048"
+                           @bind="Subject"
+                           @bind:event="oninput"
+                           disabled="@Busy" />
+                </div>
+
+                @* Message body *@
+                <div class="flex flex-col gap-1">
+                    <label class="text-sm font-medium text-[--color-text]">Message</label>
+                    <MessageComposer @ref="_composer"
+                                     SendLabel="Send"
+                                     OnSend="HandleSendAsync"
+                                     OnCancel="OnCancel"
+                                     Busy="@Busy" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(ErrorMessage))
+                {
+                    <p class="text-sm text-red-600" role="alert">@ErrorMessage</p>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Controls modal visibility. Use @bind-IsOpen from the owning page.</summary>
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    /// <summary>
+    /// When provided (navigation from UserCard "Send PM"), the recipient field is pre-filled
+    /// and read-only. When null, the user types a recipient username manually.
+    /// </summary>
+    [Parameter] public MessagingParticipantDto? RecipientPreset { get; set; }
+
+    /// <summary>
+    /// Raised when the user submits the compose form. The owning page calls
+    /// <c>IMessagingWriteService.StartConversationAsync</c> and navigates to the new thread.
+    /// </summary>
+    [Parameter] public EventCallback<(string RecipientUsername, string Subject, string MessageHtml)> OnSubmit { get; set; }
+
+    /// <summary>Raised when the user cancels or clicks the backdrop.</summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>Disables inputs while the owning page is performing the write.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Shown when submission fails (permission denied, user not found, etc.).</summary>
+    [Parameter] public string? ErrorMessage { get; set; }
+
+    private string Subject { get; set; } = string.Empty;
+    private string RecipientUsername { get; set; } = string.Empty;
+    private MessageComposer? _composer;
+
+    private async Task HandleSendAsync(string html)
+    {
+        string resolvedUsername = RecipientPreset?.Username ?? RecipientUsername;
+        await OnSubmit.InvokeAsync((resolvedUsername, Subject, html));
+    }
+}

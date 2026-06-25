@@ -12,6 +12,12 @@ public class GroupBlogPost : BaseBlogPost
     public DateTime LastUpdatedDate { get; set; }
     public Rating Rating { get; set; }
 
+    /// <summary>True when the post contains spoilers. Mirrors <see cref="ProfileBlogPost.HasSpoilers"/>.</summary>
+    public bool HasSpoilers { get; set; }
+
+    /// <summary>Optional FK to a story this post is about. SET NULL on story deletion.</summary>
+    public int? StoryId { get; set; }
+
     public int GroupId { get; set; }
     public virtual Group? Group { get; set; }
 }

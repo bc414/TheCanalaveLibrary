@@ -194,3 +194,30 @@ public enum DefaultSortOrder : short
     Relevance = 2,      // Only available when the FTS filter is active
     Score = 3,          // Recommendation / co-occurrence score (specific surfaces)
 }
+
+// Groups (WU32) ---------------------------------------------------------------
+
+/// <summary>
+/// Role of a user within a group. Stored as <c>short</c> in the DB (HasConversion).
+/// Two roles only — no Moderator category (settled WU32).
+/// </summary>
+public enum GroupRole : short
+{
+    Member = 0,
+    Admin  = 1,
+}
+
+/// <summary>
+/// Presentation-only preset for group creation / display — NOT stored in the database.
+/// Derives from / maps to <c>(AudienceRating, MaxContentRating)</c> via
+/// <c>GroupAudienceTypeMapper</c> in <c>Core/Groups/</c>.
+/// </summary>
+public enum GroupAudienceType
+{
+    /// <summary>Visible to all; allows all content ratings. AudienceRating=E, MaxContentRating=M.</summary>
+    Standard,
+    /// <summary>Visible to all; blocks M-rated content. AudienceRating=E, MaxContentRating=T.</summary>
+    SfwOnly,
+    /// <summary>Hidden from mature-disabled users; allows all content. AudienceRating=M, MaxContentRating=M.</summary>
+    Mature,
+}

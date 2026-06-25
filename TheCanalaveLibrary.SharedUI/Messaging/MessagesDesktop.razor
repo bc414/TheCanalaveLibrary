@@ -1,0 +1,89 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Injection-free layout for the messages page on desktop.
+   Two-pane: left sidebar (conversation list + New Message) and right pane (thread + composer).
+   The owning page (MessagesPage) holds state and raises EventCallbacks for all mutations. *@
+
+<div class="flex h-[calc(100vh-4rem)] overflow-hidden">
+
+    @* ── Left: conversation list sidebar ── *@
+    <aside class="flex w-72 shrink-0 flex-col border-r border-[--color-border]">
+        <div class="flex items-center justify-between border-b border-[--color-border] px-4 py-3">
+            <h1 class="text-base font-semibold text-[--color-text]">Messages</h1>
+            <button type="button"
+                    class="rounded-md bg-[--color-primary] px-2.5 py-1 text-xs font-medium text-white hover:bg-[--color-primary-strong]"
+                    @onclick="() => OnNewConversation.InvokeAsync()">
+                New
+            </button>
+        </div>
+
+        <div class="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
+            @if (Conversations.Count == 0)
+            {
+                <p class="mt-4 text-center text-sm text-[--color-text-muted]">
+                    No conversations yet.
+                </p>
+            }
+            else
+            {
+                @foreach (var conv in Conversations)
+                {
+                    <ConversationListItem Conversation="@conv"
+                                         IsSelected="@(conv.ConversationId == SelectedConversationId)" />
+                }
+            }
+        </div>
+    </aside>
+
+    @* ── Right: thread pane ── *@
+    <section class="flex flex-1 flex-col overflow-hidden">
+        <MessageThread Thread="Thread"
+                       OnSendReply="OnSendReply"
+                       OnLoadOlderMessages="OnLoadOlderMessages"
+                       BusySending="BusySendReply"
+                       BusyLoading="BusyLoadOlder"
+                       ErrorMessage="ReplyError" />
+    </section>
+</div>
+
+@* Compose modal renders as a fixed overlay; position is independent of layout. *@
+<ComposeConversationModal IsOpen="ComposeIsOpen"
+                          RecipientPreset="ComposePreset"
+                          OnSubmit="OnSubmitCompose"
+                          OnCancel="OnCancelCompose"
+                          Busy="ComposeBusy"
+                          ErrorMessage="ComposeError" />
+
+@code {
+    // ── Data ──────────────────────────────────────────────────────────────────
+
+    [Parameter] public IReadOnlyList<ConversationSummaryDto> Conversations { get; set; } = [];
+    [Parameter] public int? SelectedConversationId { get; set; }
+
+    /// <summary>
+    /// Current thread — null means no conversation is open (placeholder shown in MessageThread).
+    /// Messages must be newest-first so flex-col-reverse renders newest at bottom.
+    /// </summary>
+    [Parameter] public ConversationThreadDto? Thread { get; set; }
+
+    // ── Busy / error state ────────────────────────────────────────────────────
+
+    [Parameter] public bool BusySendReply { get; set; }
+    [Parameter] public bool BusyLoadOlder { get; set; }
+    [Parameter] public string? ReplyError { get; set; }
+
+    // ── Compose modal ─────────────────────────────────────────────────────────
+
+    [Parameter] public bool ComposeIsOpen { get; set; }
+    [Parameter] public MessagingParticipantDto? ComposePreset { get; set; }
+    [Parameter] public bool ComposeBusy { get; set; }
+    [Parameter] public string? ComposeError { get; set; }
+
+    // ── Callbacks ─────────────────────────────────────────────────────────────
+
+    [Parameter] public EventCallback<string> OnSendReply { get; set; }
+    [Parameter] public EventCallback OnLoadOlderMessages { get; set; }
+    [Parameter] public EventCallback OnNewConversation { get; set; }
+    [Parameter] public EventCallback OnCancelCompose { get; set; }
+    [Parameter] public EventCallback<(string RecipientUsername, string Subject, string MessageHtml)> OnSubmitCompose { get; set; }
+}

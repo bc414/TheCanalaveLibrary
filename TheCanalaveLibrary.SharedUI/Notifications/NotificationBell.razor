@@ -1,0 +1,129 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using Microsoft.AspNetCore.Authorization
+@using TheCanalaveLibrary.Core
+
+@* Cross-cutting layout element — injected into DesktopLayout and MobileLayout before
+   <LoginDisplay/>. Spec §cross-cutting.md "Notification Bell".
+
+   Render gate: wrapped in <AuthorizeView><Authorized> so the bell only renders when the
+   user is authenticated. Does NOT inject IActiveUserContext — the service is self-scoped
+   (uses its own IActiveUserContext via DI) so we avoid double-injection.
+
+   Interaction pattern: UserCard caret (relative + toggle button → absolute top-full panel),
+   NOT the fixed inset-0 modal pattern. See layer3.5-structure.md "NotificationBell".
+
+   No live push (post-MVP L7). Count and preview refresh on mount / navigation. *@
+
+<AuthorizeView>
+    <Authorized>
+        @inject INotificationWriteService NotificationService
+        @inject NavigationManager Nav
+
+        <div class="relative">
+
+            @* ── Bell button with unread badge ────────────────────────────────── *@
+            <button type="button"
+                    class="relative flex items-center justify-center rounded-full p-2 transition-colors hover:bg-[--color-surface-raised]"
+                    aria-label="@(_unreadCount > 0 ? $"{_unreadCount} unread notifications" : "Notifications")"
+                    aria-expanded="@_open"
+                    @onclick="Toggle">
+                <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true" fill="currentColor">
+                    <path d="M12 2A2 2 0 0 0 10 4A6 6 0 0 0 6 10V16L4 18V19H20V18L18 16V10A6 6 0 0 0 14 4A2 2 0 0 0 12 2Z M10 20A2 2 0 0 0 14 20Z" />
+                </svg>
+                @if (_unreadCount > 0)
+                {
+                    <span class="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-[--color-primary] text-[10px] font-bold text-white"
+                          aria-hidden="true">
+                        @(_unreadCount > 9 ? "9+" : _unreadCount.ToString())
+                    </span>
+                }
+            </button>
+
+            @* ── Flyout panel ──────────────────────────────────────────────────── *@
+            @if (_open)
+            {
+                <div class="absolute right-0 top-full z-10 mt-1 w-80 rounded-xl border border-[--color-border] bg-[--color-surface] shadow-medium">
+                    <div class="flex items-center justify-between border-b border-[--color-border] px-4 py-2">
+                        <span class="text-sm font-semibold text-[--color-text]">Notifications</span>
+                        <button type="button"
+                                class="text-xs text-[--color-text-muted] hover:text-[--color-text] transition-colors"
+                                @onclick="MarkAllReadAsync">
+                            Mark all read
+                        </button>
+                    </div>
+
+                    @if (_preview.Length == 0)
+                    {
+                        <p class="px-4 py-6 text-center text-sm text-[--color-text-muted]">
+                            You're all caught up.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="flex flex-col py-1">
+                            @foreach (var n in _preview)
+                            {
+                                <NotificationItem Notification="n" OnActivate="() => ActivateAsync(n)" />
+                            }
+                        </div>
+                    }
+
+                    <div class="border-t border-[--color-border] px-4 py-2 text-center">
+                        <a href="/notifications"
+                           class="text-xs text-[--color-primary] hover:underline transition-colors"
+                           @onclick="Close">
+                            See all notifications
+                        </a>
+                    </div>
+                </div>
+            }
+
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private const int PreviewSize = 8;
+
+    private bool _open;
+    private int _unreadCount;
+    private NotificationDto[] _preview = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        var countTask   = NotificationService.GetUnreadCountAsync();
+        var previewTask = NotificationService.GetNotificationsAsync(1, PreviewSize);
+        _unreadCount = await countTask;
+        _preview     = await previewTask;
+    }
+
+    private void Toggle() => _open = !_open;
+
+    private void Close() => _open = false;
+
+    private async Task ActivateAsync(NotificationDto n)
+    {
+        if (!n.IsRead)
+        {
+            _preview = [.. _preview.Select(x =>
+                x.NotificationId == n.NotificationId ? x with { IsRead = true } : x)];
+            _unreadCount = Math.Max(0, _unreadCount - 1);
+            await NotificationService.MarkAsReadAsync(n.NotificationId);
+        }
+        _open = false;
+        if (n.TargetUrl is not null)
+            Nav.NavigateTo(n.TargetUrl);
+    }
+
+    private async Task MarkAllReadAsync()
+    {
+        await NotificationService.MarkAllAsReadAsync();
+        _preview     = [.. _preview.Select(n => n with { IsRead = true })];
+        _unreadCount = 0;
+    }
+}

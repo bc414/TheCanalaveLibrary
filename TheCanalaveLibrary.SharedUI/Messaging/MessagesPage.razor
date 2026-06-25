@@ -1,0 +1,299 @@
+@page "/messages/{ConversationId:int?}"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@inject IMessagingWriteService WriteService
+@inject IDeviceDetectionService DeviceService
+@inject NavigationManager Nav
+
+@* Dispatcher page for private messaging (Feature 49).
+   Holds all state + handles all mutations. Dispatches rendering to
+   MessagesDesktop (two-pane) or MessagesMobile (single-pane).
+
+   _allMessages is stored newest-first so that flex-col-reverse in MessageThread
+   renders newest at the bottom without JS scroll manipulation. *@
+
+<PageTitle>Messages</PageTitle>
+
+@if (_isLoading)
+{
+    <p><em>Loading…</em></p>
+}
+else if (DeviceService.IsMobile())
+{
+    <MessagesMobile Conversations="_conversations"
+                    SelectedConversationId="ConversationId"
+                    Thread="EffectiveThread"
+                    BusySendReply="_replying"
+                    BusyLoadOlder="_loadingOlder"
+                    ReplyError="_replyError"
+                    ComposeIsOpen="_composeOpen"
+                    ComposePreset="_composePreset"
+                    ComposeBusy="_composeBusy"
+                    ComposeError="_composeError"
+                    OnSendReply="HandleSendReplyAsync"
+                    OnLoadOlderMessages="HandleLoadOlderAsync"
+                    OnNewConversation="HandleNewConversation"
+                    OnCancelCompose="HandleCancelCompose"
+                    OnSubmitCompose="HandleSubmitComposeAsync" />
+}
+else
+{
+    <MessagesDesktop Conversations="_conversations"
+                     SelectedConversationId="ConversationId"
+                     Thread="EffectiveThread"
+                     BusySendReply="_replying"
+                     BusyLoadOlder="_loadingOlder"
+                     ReplyError="_replyError"
+                     ComposeIsOpen="_composeOpen"
+                     ComposePreset="_composePreset"
+                     ComposeBusy="_composeBusy"
+                     ComposeError="_composeError"
+                     OnSendReply="HandleSendReplyAsync"
+                     OnLoadOlderMessages="HandleLoadOlderAsync"
+                     OnNewConversation="HandleNewConversation"
+                     OnCancelCompose="HandleCancelCompose"
+                     OnSubmitCompose="HandleSubmitComposeAsync" />
+}
+
+@code {
+    // ── Route / query params ──────────────────────────────────────────────────
+
+    [Parameter] public int? ConversationId { get; set; }
+
+    /// <summary>
+    /// Pre-fill the compose modal recipient when navigating from a UserCard "Send PM" action.
+    /// URL: <c>/messages?ComposeForUsername=Ash</c>
+    /// </summary>
+    [SupplyParameterFromQuery] private string? ComposeForUsername { get; set; }
+
+    // ── Conversation list ─────────────────────────────────────────────────────
+
+    private IReadOnlyList<ConversationSummaryDto> _conversations = [];
+
+    // ── Thread state ──────────────────────────────────────────────────────────
+
+    private ConversationThreadDto? _threadHeader;
+
+    /// <summary>
+    /// Accumulated messages in newest-first order ([newest,...,oldest]).
+    /// Page 1 messages are reversed on load; subsequent "load older" pages are appended.
+    /// </summary>
+    private List<MessageDto> _allMessages = [];
+    private int _totalMessageCount;
+    private int _currentPage;
+    private int? _loadedConversationId = int.MinValue; // sentinel; no real ConversationId equals this
+
+    // ── Compose modal ─────────────────────────────────────────────────────────
+
+    private bool _composeOpen;
+    private MessagingParticipantDto? _composePreset;
+    private bool _composeBusy;
+    private string? _composeError;
+
+    // ── Busy / error ──────────────────────────────────────────────────────────
+
+    private bool _isLoading = true;
+    private bool _replying;
+    private string? _replyError;
+    private bool _loadingOlder;
+
+    // ── Computed ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Projects _threadHeader + _allMessages into a ConversationThreadDto for the children.
+    /// Returns null when no conversation is selected (children show "no conversation" state).
+    /// </summary>
+    private ConversationThreadDto? EffectiveThread => _threadHeader is null ? null
+        : _threadHeader with { Messages = _allMessages, TotalMessageCount = _totalMessageCount };
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    private bool _initialized;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _conversations = await WriteService.GetConversationsAsync();
+
+        // Resolve compose preset when arriving from a UserCard "Send PM" action.
+        if (!string.IsNullOrWhiteSpace(ComposeForUsername))
+        {
+            _composePreset = await WriteService.FindUserByUsernameAsync(ComposeForUsername);
+            _composeOpen = true;
+        }
+
+        if (ConversationId.HasValue)
+        {
+            await LoadThreadAsync();
+        }
+
+        _isLoading = false;
+        _initialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Fires on every navigation to this route (same page, different ConversationId).
+        // Skip until OnInitializedAsync has run; also skip when nothing changed.
+        if (!_initialized) return;
+        if (ConversationId == _loadedConversationId) return;
+
+        _isLoading = true;
+        _threadHeader = null;
+        _allMessages = [];
+        _totalMessageCount = 0;
+        _replyError = null;
+
+        if (ConversationId.HasValue)
+        {
+            await LoadThreadAsync();
+        }
+        else
+        {
+            _loadedConversationId = null;
+        }
+
+        _isLoading = false;
+    }
+
+    private async Task LoadThreadAsync()
+    {
+        if (!ConversationId.HasValue) return;
+
+        _currentPage = 1;
+        _loadedConversationId = ConversationId;
+
+        try
+        {
+            var thread = await WriteService.GetConversationThreadAsync(
+                ConversationId.Value, page: 1, MessagingConstants.ThreadPageSize);
+
+            _threadHeader = thread;
+            // Reverse so _allMessages is newest-first — matches flex-col-reverse rendering.
+            _allMessages = thread.Messages.Reverse().ToList();
+            _totalMessageCount = thread.TotalMessageCount;
+
+            // Mark read + refresh list (updates unread counts in sidebar).
+            await WriteService.MarkConversationReadAsync(ConversationId.Value);
+            _conversations = await WriteService.GetConversationsAsync();
+        }
+        catch (KeyNotFoundException)
+        {
+            Nav.NotFound();
+        }
+    }
+
+    // ── Event handlers ────────────────────────────────────────────────────────
+
+    private async Task HandleSendReplyAsync(string html)
+    {
+        if (!ConversationId.HasValue) return;
+
+        _replying = true;
+        _replyError = null;
+
+        try
+        {
+            MessageDto sent = await WriteService.SendMessageAsync(ConversationId.Value, html);
+            // Prepend newest message at index 0 — appears at bottom in flex-col-reverse.
+            _allMessages.Insert(0, sent);
+            _totalMessageCount++;
+            // Refresh sidebar preview.
+            _conversations = await WriteService.GetConversationsAsync();
+        }
+        catch (MessagingValidationException ex)
+        {
+            _replyError = ex.Errors.Count > 0 ? ex.Errors[0] : "Validation failed.";
+        }
+        catch (Exception)
+        {
+            _replyError = "Failed to send message. Please try again.";
+        }
+        finally
+        {
+            _replying = false;
+        }
+    }
+
+    private async Task HandleLoadOlderAsync()
+    {
+        if (!ConversationId.HasValue || _threadHeader is null) return;
+        if (_totalMessageCount <= _allMessages.Count) return;
+
+        _loadingOlder = true;
+
+        try
+        {
+            _currentPage++;
+            var olderThread = await WriteService.GetConversationThreadAsync(
+                ConversationId.Value, _currentPage, MessagingConstants.ThreadPageSize);
+
+            // Append reversed page (oldest of this page at the end = visually at top).
+            _allMessages.AddRange(olderThread.Messages.Reverse());
+        }
+        finally
+        {
+            _loadingOlder = false;
+        }
+    }
+
+    private void HandleNewConversation()
+    {
+        _composePreset = null;
+        _composeError = null;
+        _composeOpen = true;
+    }
+
+    private void HandleCancelCompose()
+    {
+        _composeOpen = false;
+        _composeError = null;
+        _composePreset = null;
+    }
+
+    private async Task HandleSubmitComposeAsync(
+        (string RecipientUsername, string Subject, string MessageHtml) args)
+    {
+        _composeBusy = true;
+        _composeError = null;
+
+        try
+        {
+            // Resolve recipient by username if not already preset.
+            MessagingParticipantDto? recipient = _composePreset;
+            if (recipient is null
+                || !string.Equals(recipient.Username, args.RecipientUsername,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                recipient = await WriteService.FindUserByUsernameAsync(args.RecipientUsername);
+                if (recipient is null)
+                {
+                    _composeError = $"User \"{args.RecipientUsername}\" not found.";
+                    return;
+                }
+            }
+
+            int newId = await WriteService.StartConversationAsync(
+                new StartConversationDto(recipient.UserId, args.Subject, args.MessageHtml));
+
+            // Navigate to the new thread — page will reload and show the fresh conversation.
+            Nav.NavigateTo($"/messages/{newId}");
+        }
+        catch (MessagingPermissionException ex)
+        {
+            _composeError = ex.Message;
+        }
+        catch (MessagingValidationException ex)
+        {
+            _composeError = ex.Errors.Count > 0 ? ex.Errors[0] : "Validation failed.";
+        }
+        catch (Exception)
+        {
+            _composeError = "Failed to start conversation. Please try again.";
+        }
+        finally
+        {
+            _composeBusy = false;
+        }
+    }
+}

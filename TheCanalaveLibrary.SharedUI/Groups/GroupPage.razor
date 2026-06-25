@@ -1,0 +1,207 @@
+@page "/group/{GroupId:int}/{*GroupSlug}"
+@namespace TheCanalaveLibrary.SharedUI
+@inject IGroupWriteService GroupService
+@inject IStoryReadService StoryService
+@inject IUserStoryInteractionReadService InteractionService
+@inject IBlogPostReadService BlogPostService
+@inject IDeviceDetectionService DeviceService
+@inject NavigationManager Nav
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Group detail dispatcher — Pattern 2 dispatcher (layer3.5-structure.md §"Dispatcher Pattern").
+   Slug is cosmetic; only GroupId is the key (audience filter may return null for hidden Mature groups).
+   Resolves CurrentUserId from the auth cascade (never injects IActiveUserContext — SharedUI rule).
+   Batch-loads: group detail, story listings, interaction states, blog posts in parallel.
+   Passes fully loaded data to GroupDesktop / GroupMobile composites.
+   WU32. *@
+
+@if (_isLoading)
+{
+    <PageTitle>Group</PageTitle>
+    <p class="p-4 text-[--color-text-muted]"><em>Loading…</em></p>
+}
+else if (_group is null)
+{
+    <PageTitle>Group not found</PageTitle>
+    <p class="p-4 text-[--color-danger]">Group not found.</p>
+}
+else
+{
+    <PageTitle>@_group.GroupName</PageTitle>
+
+    @if (DeviceService.IsMobile())
+    {
+        <GroupMobile Group="_group"
+                     CurrentUserId="_currentUserId"
+                     CurrentUserRole="_currentUserRole"
+                     Stories="_stories"
+                     InteractionStates="_interactionStates"
+                     BlogPosts="_blogPosts"
+                     TotalBlogPosts="_totalBlogPosts"
+                     OnJoin="HandleJoinAsync"
+                     OnLeave="HandleLeaveAsync"
+                     OnStoryAdded="HandleStoryAddedAsync"
+                     OnStoryRemoved="HandleStoryRemovedAsync" />
+    }
+    else
+    {
+        <GroupDesktop Group="_group"
+                      CurrentUserId="_currentUserId"
+                      CurrentUserRole="_currentUserRole"
+                      Stories="_stories"
+                      InteractionStates="_interactionStates"
+                      BlogPosts="_blogPosts"
+                      TotalBlogPosts="_totalBlogPosts"
+                      OnJoin="HandleJoinAsync"
+                      OnLeave="HandleLeaveAsync"
+                      OnStoryAdded="HandleStoryAddedAsync"
+                      OnStoryRemoved="HandleStoryRemovedAsync" />
+    }
+}
+
+@* Inline error strip (join/leave/story errors surface here) *@
+@if (_actionError is not null)
+{
+    <div class="fixed bottom-4 right-4 rounded-lg bg-[--color-danger]/90 px-4 py-2 text-sm text-white shadow-lg">
+        @_actionError
+    </div>
+}
+
+@code {
+    [Parameter] public int GroupId { get; set; }
+
+    /// <summary>Cosmetic catch-all segment — ignored on load; only GroupId is the key.</summary>
+    [Parameter] public string? GroupSlug { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private GroupDetailDto? _group;
+    private GroupRole? _currentUserRole;
+    private int? _currentUserId;
+
+    // Story data batch-loaded from GroupDetailDto.StoryIds.
+    private StoryListingDto[] _stories = [];
+    private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _interactionStates =
+        new Dictionary<int, UserStoryInteractionStateDto>();
+
+    // Group blog posts (first page).
+    private BlogPostListingDto[] _blogPosts = [];
+    private int _totalBlogPosts;
+
+    private bool _isLoading = true;
+    private string? _actionError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            AuthenticationState state = await AuthState;
+            string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            _currentUserId = int.TryParse(idStr, out int id) ? id : null;
+        }
+
+        await LoadGroupAsync();
+    }
+
+    private async Task LoadGroupAsync()
+    {
+        _isLoading = true;
+
+        _group = await GroupService.GetByIdAsync(GroupId);
+
+        if (_group is not null)
+        {
+            // Role and stories batch-loaded in parallel.
+            Task<GroupRole?> roleTask      = GroupService.GetCurrentUserRoleAsync(GroupId);
+            Task<StoryListingDto[]> storyTask =
+                _group.StoryIds.Count > 0
+                    ? StoryService.GetListingsByIdsAsync(_group.StoryIds)
+                    : Task.FromResult(Array.Empty<StoryListingDto>());
+            Task<(BlogPostListingDto[], int)> blogTask =
+                BlogPostService.GetByGroupAsync(GroupId, page: 1, pageSize: 10);
+
+            await Task.WhenAll(roleTask, storyTask, blogTask);
+
+            _currentUserRole = await roleTask;
+            _stories         = await storyTask;
+
+            (BlogPostListingDto[] blogItems, int blogTotal) = await blogTask;
+            _blogPosts      = blogItems;
+            _totalBlogPosts = blogTotal;
+
+            // Interaction states (no-tracking, per-viewer, nullable).
+            if (_stories.Length > 0 && _currentUserId is not null)
+            {
+                IReadOnlyList<int> storyIds = _stories.Select(s => s.StoryId).ToArray();
+                _interactionStates = await InteractionService.GetStatesByStoryIdsAsync(storyIds);
+            }
+        }
+
+        _isLoading = false;
+    }
+
+    // ── Membership callbacks ──────────────────────────────────────────────────────
+
+    private async Task HandleJoinAsync()
+    {
+        _actionError = null;
+        try
+        {
+            await GroupService.JoinAsync(GroupId);
+            await LoadGroupAsync();
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+    }
+
+    private async Task HandleLeaveAsync()
+    {
+        _actionError = null;
+        try
+        {
+            await GroupService.LeaveAsync(GroupId);
+            await LoadGroupAsync();
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+    }
+
+    // ── Story management callbacks ────────────────────────────────────────────────
+
+    private async Task HandleStoryAddedAsync(AddGroupStoryDto dto)
+    {
+        _actionError = null;
+        try
+        {
+            await GroupService.AddStoryAsync(dto);
+            await LoadGroupAsync();
+        }
+        catch (ContentRatingExceededException ex)
+        {
+            _actionError = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+    }
+
+    private async Task HandleStoryRemovedAsync(int groupStoryId)
+    {
+        _actionError = null;
+        try
+        {
+            await GroupService.RemoveStoryAsync(groupStoryId);
+            await LoadGroupAsync();
+        }
+        catch (Exception ex)
+        {
+            _actionError = ex.Message;
+        }
+    }
+}

@@ -22,7 +22,8 @@ public class ServerBlogPostWriteService(
     ReadOnlyApplicationDbContext readDb,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
-    IHtmlSanitizationService sanitizer)
+    IHtmlSanitizationService sanitizer,
+    INotificationWriteService notifications)
     : ServerBlogPostReadService(readDb, activeUser), IBlogPostWriteService
 {
     public async Task<int> CreateProfileBlogPostAsync(CreateProfileBlogPostDto dto)
@@ -169,5 +170,58 @@ public class ServerBlogPostWriteService(
 
         // No notification generated — anti-addictive design (BlogPostLike entity comment).
         return new BlogPostLikeResultDto(newCount, nowLiked);
+    }
+
+    public async Task<int> CreateGroupBlogPostAsync(CreateGroupBlogPostDto dto)
+    {
+        if (ActiveUser.UserId is not int authorId)
+            throw new InvalidOperationException("Creating a group blog post requires an authenticated user.");
+
+        List<string> errors = dto.CanSave();
+        if (errors.Count > 0) throw new BlogPostValidationException(errors);
+
+        // Verify the caller is a member of the group.
+        bool isMember = await writeDb.GroupMembers
+            .AnyAsync(m => m.GroupId == dto.GroupId && m.UserId == authorId);
+        if (!isMember)
+            throw new UnauthorizedAccessException("You must be a member of this group to post a blog post.");
+
+        // Verify the group exists (audience filter bypassed — member is always allowed to post).
+        bool groupExists = await writeDb.Groups
+            .IgnoreQueryFilters(["GroupAudience"])
+            .AnyAsync(g => g.GroupId == dto.GroupId);
+        if (!groupExists)
+            throw new KeyNotFoundException($"Group {dto.GroupId} not found.");
+
+        string sanitizedContent = sanitizer.Sanitize(dto.Content);
+
+        GroupBlogPost post = new()
+        {
+            AuthorId        = authorId,
+            GroupId         = dto.GroupId,
+            Title           = dto.Title.Trim(),
+            Content         = sanitizedContent,
+            Rating          = dto.Rating,
+            HasSpoilers     = dto.HasSpoilers,
+            StoryId         = dto.StoryId,
+            IsPublished     = true,              // group blog posts publish immediately
+            DateCreated     = DateTime.UtcNow,
+            LastUpdatedDate = DateTime.UtcNow
+        };
+
+        writeDb.GroupBlogPosts.Add(post);
+        await writeDb.SaveChangesAsync();
+
+        // Fan-out notification to members with NotifyForNewBlogPost = true (best-effort post-commit).
+        try
+        {
+            await notifications.NotifyNewGroupBlogPostAsync(dto.GroupId, post.BlogPostId, authorId);
+        }
+        catch (Exception)
+        {
+            // Notification failure must never roll back the primary action.
+        }
+
+        return post.BlogPostId;
     }
 }
