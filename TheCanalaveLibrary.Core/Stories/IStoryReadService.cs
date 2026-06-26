@@ -48,6 +48,20 @@ public interface IStoryReadService
         StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null);
 
     /// <summary>
+    /// Returns a random selection of listing DTOs from the post-filter valid set (WU28, spec §5.3).
+    /// Applies the same tag / FTS / interaction-exclusion filters as <see cref="GetListingsAsync"/>
+    /// via the shared <c>ApplyFilters</c> helper, then orders by <c>EF.Functions.Random()</c> and
+    /// takes up to <paramref name="batchSize"/> results.
+    ///
+    /// <b>No shown-id tracking.</b> "Give me more" is a second call that appends a fresh draw — the
+    /// caller accumulates results for display; this method has no memory of prior calls. Repeats are
+    /// acceptable (and expected). <see cref="StoryFilterDto.Sort"/> is ignored; sorting is always
+    /// random. <see cref="StoryFilterDto.Page"/> / <see cref="StoryFilterDto.PageSize"/> are also
+    /// ignored; <paramref name="batchSize"/> controls the take.
+    /// </summary>
+    Task<StoryListingDto[]> GetRandomBatchAsync(StoryFilterDto filter, int batchSize);
+
+    /// <summary>
     /// Returns the IDs of all stories authored by <paramref name="authorId"/>, bypassing the
     /// content-rating filter so authors always see their own mature stories. Used by the
     /// My Stories bookshelf tab.

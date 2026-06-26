@@ -90,11 +90,14 @@ Narrowing-within-fixed-source query → WU27/WU30.
   - **Composition is page-level** — `ResultsFilterPanel` and `StoryDeck` are NOT bundled into a single
     composite. Spec §5.27 explicitly rejected a bundled `UserListPage`.
 
-  **Still open (not settled in WU23):** random-preload / "give me more" pagination (WU28);
-  narrowing-within-fixed-source queries (WU27/WU30); per-`SearchMode` default-settings matrix (§8.7).
+  **Still open (not settled in WU23, closed by WU28):** random-preload / "give me more" pagination
+  (→ WU28, now settled — see below); narrowing-within-fixed-source queries (WU27/WU30 ✓);
+  per-`SearchMode` default-settings matrix (§8.7 → WU28 Phase 1b, now settled).
 
-  **L2 note:** partially advanced — `GetListingsAsync(StoryFilterDto)` (Source=All filtered query)
-  is built. The random-preload and "give me more" interaction-button pagination remain Stage 2 (WU28).
+  **L2 note (WU23):** partially advanced — `GetListingsAsync(StoryFilterDto)` (Source=All filtered
+  query) is built. The random-preload and "give me more" pagination remain Stage 2 → WU28.
+  **L2 (WU28, in progress):** `GetRandomBatchAsync` + `IDiscoveryDefaultsReadService` are the
+  remaining L2 deliverables.
 
   **WU23 Stage note — L3/L3.5 (2026-06-23):**
   Built: `Core/Discovery/StoryFilterDto.cs` (sealed record: `TextQuery?`, `IncludedTagIds`,
@@ -125,6 +128,54 @@ Narrowing-within-fixed-source query → WU27/WU30.
   - **L4-Style sign-off:** pending live-server visual check (Stage-6 gate, consistent with WU8/WU13
     precedent). Cells stay Stage 1 in `status.md` until that check is done.
 
+  **WU28 settled-vs-open (2026-06-25, do not revisit):**
+
+  *Random batch:* `GetRandomBatchAsync(StoryFilterDto filter, int batchSize)` — plain random draw
+  from the post-filter valid set (`OrderBy(EF.Functions.Random()).Take(batchSize)`). No shown-id
+  parameter, no dedup. "Give me more" appends a fresh draw (repeats acceptable). StoryDeck pagination
+  suppressed in random mode (`TotalCount = Items.Count`). Sorted modes use offset pagination.
+  Interaction exclusions are **not** random-specific — they're whatever the viewer's effective §8.7
+  settings say, applied as an ordinary filter. The seeded SearchPage default excludes Ignored;
+  because it is user-overridable, the "Ignored story disappears from results" effect is a filter
+  consequence, not shown-id bookkeeping.
+
+  *§8.7 defaults read/merge:* `IDiscoveryDefaultsReadService.GetDefaultExcludedInteractionsAsync(string searchModeKey)`
+  — system-matrix rows overlaid with sparse per-user `UserStoryInteractionFilterSetting` overrides in
+  C# (user value wins). Anonymous → defaults only. 7 catalog keys map to 6 enum values (`HasStarted`
+  has no enum counterpart and is dropped from mapping — documented in the service). Seed unchanged
+  (Ignored=true on the 5 discovery surfaces; profiles none). No migration.
+
+  *Tag include-mode (AND/OR):* `TagIncludeMode { And, Or }` enum in `Core/Discovery/`. `StoryFilterDto`
+  gains `IncludeMode = And` (default preserves all existing behavior). The AND/OR toggle is surfaced
+  on the **include** selectors only on `/discover`; the exclude axis has no toggle. Default `And`
+  keeps Bookshelves/Profile unchanged. Interaction state stays **exclude-only as a filter** — inclusion
+  is a Bookshelves Source concern. This OR-include is a deliberate net-new extension: per the original
+  deliberations §11, OR-across-tags was "never deliberated" and AND is the intended default; the toggle
+  is gated to `/discover`.
+
+  *Interaction-filter UX (settled, first-principles — not the incumbent component's rendering):*
+  each kind is presented as **"Hide stories I've X"** with **checked ⇒ excluded** (`ExcludedInteractions`).
+  Rationale: discovery's engine is subtractive over the full catalog; the gesture must map monotonically
+  to the engine op (no inversion); "hide these" is honest while "show only these" implies a whitelist
+  the engine doesn't have (the §8 trap); a mostly-empty default truthfully signals "maximally open";
+  one subtractive polarity across the panel (matching the tag-exclude axis). The positive "show/
+  whitelist" framing is the Library Model, served on Bookshelves by the **Source** axis.
+
+  *Reconciliation with original deliberations (`Boolean_Logic_Search_Filter_Deliberations.md`):*
+  - **Superseded — do not resurrect:** "Random Search" as a mode (→ `Sort=Random`); `Viewed`/
+    `ReadStatus` family (→ `HasStarted`, WU0/A1 remodel); early "exclude all rows together" (→ per-type
+    §8.7 matrix); 6 filter criteria (→ 7 catalog keys + `HiddenFavorited`/`Followed`); all T-SQL
+    (→ Postgres / `EF.Functions.Random()`); §6 Search Templates (→ post-MVP; no entity — adjacent to
+    deferred Custom Lists Feature 51).
+  - **Corroborated:** §5 two-query C# merge IS Phase 1b. §8 Discovery-Model-exclude/Library-Model-
+    include split IS the origin of "interaction exclude-only on discovery." §2 stateless-fresh-search
+    IS the random-batch design. The deliberations **rejected a per-criterion include/exclude semantics
+    toggle** — the tag AND/OR toggle is set-combination *within* a fixed include selector, not that
+    rejected flip; they remain separate selectors. OR-include has §9 whitelist-union precedent.
+
+  *Deferred:* per-user override editing UI (no settings surface in MVP — entity supports it);
+  per-user random batch size (`User.ReaderSettings`) — MVP uses constant 20.
+
 - **WU8 Stage note (2026-06-21):** the **pagination slice** of this feature's L3.5/L4 is built —
   `PaginationControls` (`SharedUI/Pagination/`), a leaf settled per spec §3.11.1/
   `layer3.5-structure.md` (the `audit-summary.md` "Composite" classification is stale, superseded).
@@ -151,17 +202,92 @@ Narrowing-within-fixed-source query → WU27/WU30.
   markup-level evidence is correct; the visual rendering still requires human sign-off for Stage 6.
   `dotnet test` green.
 
+  **WU28 Stage note — F31 L2 (2026-06-25):**
+  Built: `GetRandomBatchAsync(StoryFilterDto filter, int batchSize)` in `IStoryReadService` /
+  `ServerStoryReadService`. The method is fed through a new `ApplyFilters` private helper that is
+  also used by `GetListingsAsync`, replacing the inlined filter code (DRY; the existing nine
+  `StoryListingsTests` integration tests prove the helper is behaviourally identical).
+  `ApplyFilters` branches on `filter.IncludeMode` (Or → single `WHERE EXISTS IN (...)`; And → per-tag
+  conjunctive loop, unchanged). `TagIncludeMode { And, Or }` enum added to `Core/Discovery/`.
+  `StoryFilterDto` gains `IncludeMode = And` (default; preserves all prior calls). `TagFilterSelection`
+  gains `IncludeMode` parameter. `TagFilter.razor` and `ResultsFilterPanel.razor` extended with
+  AND/OR toggle support (gated by `AllowIncludeModeToggle` param; false by default — Bookshelves and
+  Profile pages are unchanged).
+
+  `IDiscoveryDefaultsReadService` / `ServerDiscoveryDefaultsReadService` new: two-query merge
+  (system matrix + sparse per-user overrides in C#). `HasStarted` key dropped from the enum mapping
+  (documented in service). Registered as `AddScoped` in `Program.cs`. `SiteSearchModes` and
+  `UserStoryInteractionFilters` moved from `TheCanalaveLibrary.Server` (`SiteConstants.cs`) to
+  `TheCanalaveLibrary.Core/Discovery/SiteSearchModes.cs` so SharedUI components and the interface
+  can access them without a circular dependency.
+
+  UI: `SearchPage.razor` (dispatcher, `@page "/discover"`, `[AllowAnonymous]`, nullable auth cascade,
+  `OnInitializedAsync` seeds §8.7 defaults and loads random batch); `SearchDesktop.razor` /
+  `SearchMobile.razor` (injection-free composites — random mode: "Give me more" + suppressed
+  pagination; sorted mode: real pagination). Pre-existing `BookshelvesDesktopTests`,
+  `BookshelvesMobileTests`, `CommentSectionTests`, `CommentSectionGroupTests` all had
+  `IModerationWriteService` missing — fixed here by adding `FakeModerationWriteService` to each
+  test context.
+
+  **How verified (WU28, 2026-06-25):** `dotnet build` green (8 projects, 0 errors). `dotnet test`:
+  - **Unit:** 429 passing (unchanged).
+  - **Integration:** 329 passing (7 pre-existing `ModerationServiceTests` DI failures unrelated to
+    WU28). WU28-specific new tests:
+    - `DiscoveryDefaultsReadServiceTests` (5 tests): SearchPage default = {Ignore}; anonymous matches
+      authenticated-no-overrides; per-user enable adds key; per-user disable removes key; `HasStarted`
+      key silently dropped from output.
+    - `RandomBatchTests` (7 tests): batch respects `batchSize` cap; tag filter scopes the valid set;
+      interaction exclusion respected for authenticated viewer; content-rating filter still applies;
+      OR-include returns stories matching any included tag; AND-include still requires all tags;
+      mutation-sanity (OR and AND produce different results, confirming OR branch is reached).
+  - **RazorComponents:** 428 passing (0 failures; the prior 37 pre-existing failures were all
+    `IModerationWriteService` missing — fixed). WU28-specific new tests:
+    - `SearchDesktopTests` (8 tests): random mode has Give-me-more/no-pagination; sorted mode has
+      pagination/no-Give-me-more; `ResultsFilterPanel` present; deck renders supplied items;
+      `OnLoadMore` fires; mutation-sanity (switching mode changes controls).
+    - `SearchMobileTests` (9 tests): filter toggle button present; overlay not rendered when closed;
+      clicking toggle opens overlay; overlay contains `ResultsFilterPanel`; random mode has
+      Give-me-more; sorted mode has no Give-me-more; deck renders supplied items; `OnLoadMore` fires;
+      mutation-sanity.
+  - **L4 visual sign-off:** pending (consistent with WU8/WU13/WU23/WU27 precedent; cells stay
+    Stage 1 in `status.md` until human check).
+
 ## Feature 32 — Full-Text Search
 - **L1 — Stage 5.** `StoryListing.SearchVector` as a stored generated column from `to_tsvector('english',
   title || short_description)` — exactly the spec pattern (§5.3.2: FTS is a *filter*). Sound.
 - **L6 — Stage 5.** GIN index `ix_story_listing_search_vector` written and correct (awaiting migration).
-- **L2 — Stage 2** (`Rank()` relevance, WHERE-clause filter usage). **L3/L3.5 — Stage 2. L4 — Stage 1.
-  L5 — Stage 2.**
+- **L2 — Stage 5** (WU28). **L3/L3.5 — Stage 5** (WU28). **L4 — Stage 1. L5 — Stage 2.**
+
+  **WU28 Stage note — F32 L2/L3/L3.5 (2026-06-25):**
+  FTS was already built in WU23 (`ServerStoryReadService.GetListingsAsync` — `EF.Functions.PlainToTsQuery`
+  filter + `Rank()` relevance sort). WU28 completes F32 by consuming FTS through `/discover`:
+  - The existing `GetListingsAsync` `Relevance` sort branch powers FTS on the sorted search page.
+  - The `ApplyFilters` helper extracted in WU28 shares the same FTS predicate with `GetRandomBatchAsync`.
+  - The new `SearchDesktop`/`SearchMobile` composites expose the `Relevance` sort option in
+    `AvailableSorts` (gated behind `ResultsFilterPanel` which hides Relevance when `_textQuery` is empty).
+  - Verified end-to-end through `RandomBatchTests` (tag filter via `ApplyFilters`) and the nine
+    pre-existing `StoryListingsTests` (FTS + Relevance sort already covered there, now via the
+    extracted helper). No new dedicated FTS integration tests were needed — existing coverage is
+    sufficient.
+  - L3 (SearchDesktop/SearchMobile composites) and L3.5 (same files + `SearchPage` dispatcher) are now
+    built and verified. All tier assertions the same as Feature 31 WU28 note above.
 
 ## Feature 33 — Manual Tree Search
 - **L1 — N/A** (stateless graph pivots over live tables). **L2 — Stage 2** (per-node stateless query;
   privacy: graph never reveals identity, §5.4). **L3/L3.5 — Stage 2** (distinct graph/node visualization —
   NOT `StoryDeck`). **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
+
+  **Moved to WU40 (WU28 Phase 0, 2026-06-25).** Direction settled:
+  - **Four clean edges:** authored-by, public-favorite, recommendation, hidden-gem. No consent-
+    gated hidden-favorite aggregate or author-spotlight in the MVP tree (awkward edges deferred).
+  - **Stateless pivot over live tables** (not the mart — L8 mart is post-MVP). Each pivot is a fresh
+    query; no traversal state is persisted or passed between calls.
+  - **Privacy model:** graph never reveals identity (§5.4). Hidden-gem edge requires the target
+    author to have `allow_discovery_consent` opted in.
+  - **Distinct graph/node visualization — NOT `StoryDeck`.** The WU40 opusplan must design this
+    component from scratch.
+  - Corroborated by the original deliberations: §2 stateless-fresh-search, §3 hidden-gem chain-of-
+    trust, §12 "traversal cost dominated by rCTE, not by excluding a few hundred IDs."
 
 ## Feature 34 — Tag Directory (`/tags`)
 - **L1 — N/A.** **L2 — Stage 2** (browse query). **L3/L3.5 — Stage 2** (`TagDirectoryPage`: user browse +

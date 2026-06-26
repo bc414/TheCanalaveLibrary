@@ -106,8 +106,8 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 28 | Recommendation Display | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
 | 29 | Hidden Gem Management | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
 | 30 | Recommendation Attribution | Recommendations | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
-| 31 | Search Page | Discovery | N/A | 2 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
-| 32 | Full-Text Search | Discovery | 5 | 2 | 2 | 2 | 1 | 2 | 5 | N/A | N/A |
+| 31 | Search Page | Discovery | N/A | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
+| 32 | Full-Text Search | Discovery | 5 | 5 | 5 | 5 | 1 | 2 | 5 | N/A | N/A |
 | 33 | Manual Tree Search | Discovery | N/A | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
 | 34 | Tag Directory | Discovery | N/A | 5 | 5 | 5 | 1 | 2 | N/A | N/A | N/A |
 | 35 | Blog Post Writing | BlogPosts | 5 | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |

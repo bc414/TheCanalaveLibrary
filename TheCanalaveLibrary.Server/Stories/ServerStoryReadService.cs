@@ -133,57 +133,8 @@ public class ServerStoryReadService(
         if (restrictToStoryIds is { Count: > 0 })
             query = query.Where(s => restrictToStoryIds.Contains(s.StoryId));
 
-        // ── Tag include (AND semantics: story must have all included tags) ─────────────────
-        foreach (int tagId in filter.IncludedTagIds)
-        {
-            int tid = tagId; // local capture so the closure binds the right value
-            query = query.Where(s => s.StoryTags.Any(st => st.TagId == tid));
-        }
-
-        // ── Tag exclude (story must have none of the excluded tags) ───────────────────────
-        if (filter.ExcludedTagIds.Count > 0)
-        {
-            // EF translates IReadOnlyList.Contains(entity_field) to SQL IN (...) correctly.
-            query = query.Where(s => !s.StoryTags.Any(st => filter.ExcludedTagIds.Contains(st.TagId)));
-        }
-
-        // ── FTS ───────────────────────────────────────────────────────────────────────────
         bool hasFts = !string.IsNullOrWhiteSpace(filter.TextQuery);
-        if (hasFts)
-        {
-            string textQuery = filter.TextQuery!;
-            // PlainToTsQuery is safer than ToTsQuery (no tsquery syntax knowledge required from callers).
-            // SearchVector is a shadow property on StoryListing; EF.Property accesses it in a subquery.
-            query = query.Where(s => s.StoryListing != null &&
-                EF.Property<NpgsqlTsVector>(s.StoryListing, "SearchVector")
-                    .Matches(EF.Functions.PlainToTsQuery("english", textQuery)));
-        }
-
-        // ── Interaction exclusions (authenticated viewer only) ────────────────────────────
-        if (filter.ExcludedInteractions.Count > 0 && activeUser.UserId.HasValue)
-        {
-            int viewerId = activeUser.UserId.Value;
-
-            bool exclFav    = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Favorite);
-            bool exclHidden = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.PrivateFavorite);
-            bool exclFollow = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Follow);
-            bool exclComp   = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Complete);
-            bool exclLater  = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.ReadLater);
-            bool exclIgnore = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Ignore);
-
-            // Exclude stories where the viewer's USI row has any excluded bit set.
-            // The constants (exclFav, etc.) are evaluated at query-compilation time and fold into the
-            // SQL as literal true/false, which Postgres optimises away. Zero SQL overhead for bits that
-            // aren't excluded.
-            query = query.Where(s => !s.UserStoryInteractions
-                .Any(usi => usi.UserId == viewerId &&
-                    (exclFav    && usi.IsFavorite      ||
-                     exclHidden && usi.IsHiddenFavorite ||
-                     exclFollow && usi.IsFollowed       ||
-                     exclComp   && usi.IsCompleted      ||
-                     exclLater  && usi.IsReadItLater    ||
-                     exclIgnore && usi.IsIgnored)));
-        }
+        query = ApplyFilters(query, filter, hasFts);
 
         // ── Count (before Skip/Take so it reflects the full filtered set) ─────────────────
         int totalCount = await query.CountAsync();
@@ -221,6 +172,98 @@ public class ServerStoryReadService(
 
         StoryListingDto[] items = await GetListingsByIdsAsync(pageIds);
         return (items, totalCount);
+    }
+
+    public async Task<StoryListingDto[]> GetRandomBatchAsync(StoryFilterDto filter, int batchSize)
+    {
+        // Plain random draw from the post-filter valid set. No Sort/Page/PageSize from the DTO is
+        // consulted — batchSize is the only take-cap and EF.Functions.Random() is the only order.
+        // No shown-id tracking; "give me more" is a second call that appends a fresh independent draw.
+        IQueryable<Story> query = ApplyFilters(readDb.Stories, filter, !string.IsNullOrWhiteSpace(filter.TextQuery));
+
+        int[] ids = await query
+            .OrderBy(_ => EF.Functions.Random())
+            .Take(batchSize)
+            .Select(s => s.StoryId)
+            .ToArrayAsync();
+
+        return await GetListingsByIdsAsync(ids);
+    }
+
+    /// <summary>
+    /// Shared filter-building helper used by both <see cref="GetListingsAsync"/> and
+    /// <see cref="GetRandomBatchAsync"/>. Applies tag include (AND or OR per <c>filter.IncludeMode</c>),
+    /// tag exclude (ANY/none), FTS, and viewer-relative interaction exclusions. Does NOT add OrderBy
+    /// or pagination — those are the caller's responsibility.
+    /// </summary>
+    private IQueryable<Story> ApplyFilters(IQueryable<Story> query, StoryFilterDto filter, bool hasFts)
+    {
+        // ── Tag include ────────────────────────────────────────────────────────────────────
+        if (filter.IncludedTagIds.Count > 0)
+        {
+            if (filter.IncludeMode == TagIncludeMode.Or)
+            {
+                // OR — story must have at least one of the included tags.
+                // Single WHERE EXISTS IN (...) translates cleanly to SQL.
+                query = query.Where(s => s.StoryTags.Any(st => filter.IncludedTagIds.Contains(st.TagId)));
+            }
+            else
+            {
+                // AND (default) — story must have all of the included tags.
+                // One subquery per tag; Postgres folds the constants away efficiently.
+                foreach (int tagId in filter.IncludedTagIds)
+                {
+                    int tid = tagId; // local capture so the closure binds the right value
+                    query = query.Where(s => s.StoryTags.Any(st => st.TagId == tid));
+                }
+            }
+        }
+
+        // ── Tag exclude (story must have none of the excluded tags) ───────────────────────
+        if (filter.ExcludedTagIds.Count > 0)
+        {
+            // EF translates IReadOnlyList.Contains(entity_field) to SQL IN (...) correctly.
+            query = query.Where(s => !s.StoryTags.Any(st => filter.ExcludedTagIds.Contains(st.TagId)));
+        }
+
+        // ── FTS ───────────────────────────────────────────────────────────────────────────
+        if (hasFts)
+        {
+            string textQuery = filter.TextQuery!;
+            // PlainToTsQuery is safer than ToTsQuery (no tsquery syntax knowledge required from callers).
+            // SearchVector is a shadow property on StoryListing; EF.Property accesses it in a subquery.
+            query = query.Where(s => s.StoryListing != null &&
+                EF.Property<NpgsqlTsVector>(s.StoryListing, "SearchVector")
+                    .Matches(EF.Functions.PlainToTsQuery("english", textQuery)));
+        }
+
+        // ── Interaction exclusions (authenticated viewer only) ────────────────────────────
+        if (filter.ExcludedInteractions.Count > 0 && activeUser.UserId.HasValue)
+        {
+            int viewerId = activeUser.UserId.Value;
+
+            bool exclFav    = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Favorite);
+            bool exclHidden = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.PrivateFavorite);
+            bool exclFollow = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Follow);
+            bool exclComp   = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Complete);
+            bool exclLater  = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.ReadLater);
+            bool exclIgnore = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Ignore);
+
+            // Exclude stories where the viewer's USI row has any excluded bit set.
+            // The constants (exclFav, etc.) are evaluated at query-compilation time and fold into the
+            // SQL as literal true/false, which Postgres optimises away. Zero SQL overhead for bits that
+            // aren't excluded.
+            query = query.Where(s => !s.UserStoryInteractions
+                .Any(usi => usi.UserId == viewerId &&
+                    (exclFav    && usi.IsFavorite      ||
+                     exclHidden && usi.IsHiddenFavorite ||
+                     exclFollow && usi.IsFollowed       ||
+                     exclComp   && usi.IsCompleted      ||
+                     exclLater  && usi.IsReadItLater    ||
+                     exclIgnore && usi.IsIgnored)));
+        }
+
+        return query;
     }
 
     // Lean intermediate projection — ISpriteReadService.GetSpriteUrl is plain C# string-building, not

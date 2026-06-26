@@ -35,6 +35,7 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
 
     private int _reporterId;
     private int _modId;
+    private readonly List<IServiceScope> _serviceScopes = [];
 
     public override async Task InitializeAsync()
     {
@@ -259,10 +260,21 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
             .WithMessage("*Moderator*");
     }
 
+    public override async Task DisposeAsync()
+    {
+        foreach (IServiceScope scope in _serviceScopes)
+            scope.Dispose();
+        await base.DisposeAsync();
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────────
 
-    private IModerationWriteService GetMod() =>
-        Factory.Services.GetRequiredService<IModerationWriteService>();
+    private IModerationWriteService GetMod()
+    {
+        IServiceScope scope = Factory.Services.CreateScope();
+        _serviceScopes.Add(scope);
+        return scope.ServiceProvider.GetRequiredService<IModerationWriteService>();
+    }
 
     private async Task<short> GetFirstReasonIdAsync()
     {

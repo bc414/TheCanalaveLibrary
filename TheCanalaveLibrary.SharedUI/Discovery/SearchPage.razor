@@ -1,0 +1,169 @@
+@page "/discover"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.Authorization
+@inject IStoryReadService StoryReadService
+@inject IUserStoryInteractionReadService InteractionReadService
+@inject IDiscoveryDefaultsReadService DiscoveryDefaults
+@inject ITagReadService TagReadService
+@inject IDeviceDetectionService DeviceService
+
+@* SearchPage — dispatcher for /discover (WU28, spec §5.3 / §5.28).
+   Loads §8.7 defaults on init, preloads a random batch (area is never blank), and branches
+   to SearchDesktop / SearchMobile. AllowAnonymous: discovery is public.
+
+   Two modes keyed on _filter.Sort:
+   - Random: _items accumulates across batches; "Give me more" appends a fresh draw.
+   - Sorted (DatePublished / Relevance): offset pagination via GetListingsAsync. *@
+
+@if (DeviceService.IsMobile())
+{
+    <SearchMobile Items="_items"
+                  TotalCount="_totalCount"
+                  InteractionStates="_states"
+                  CurrentUserId="_currentUserId"
+                  Filter="_filter"
+                  InitialIncludedTags="_includedTagChips"
+                  InitialExcludedTags="_excludedTagChips"
+                  IsRandomMode="@(_filter.Sort == DefaultSortOrder.Random)"
+                  IsLoadingMore="_isLoadingMore"
+                  OnFilterChanged="HandleFilterChangedAsync"
+                  OnPageChanged="HandlePageChangedAsync"
+                  OnLoadMore="HandleLoadMoreAsync" />
+}
+else
+{
+    <SearchDesktop Items="_items"
+                   TotalCount="_totalCount"
+                   InteractionStates="_states"
+                   CurrentUserId="_currentUserId"
+                   Filter="_filter"
+                   InitialIncludedTags="_includedTagChips"
+                   InitialExcludedTags="_excludedTagChips"
+                   IsRandomMode="@(_filter.Sort == DefaultSortOrder.Random)"
+                   IsLoadingMore="_isLoadingMore"
+                   OnFilterChanged="HandleFilterChangedAsync"
+                   OnPageChanged="HandlePageChangedAsync"
+                   OnLoadMore="HandleLoadMoreAsync" />
+}
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private const int RandomBatchSize = 20;
+
+    private int? _currentUserId;
+    private StoryFilterDto _filter = new() { Sort = DefaultSortOrder.Random };
+
+    // Accumulation list — appended to in random mode; replaced on sort change or filter change.
+    private StoryListingDto[] _items = [];
+    private int _totalCount;
+    private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states =
+        new Dictionary<int, UserStoryInteractionStateDto>();
+
+    // Resolved tag chips for seeding the panel (loaded when InitialFilter carries tag ids).
+    private IReadOnlyList<TagChipDto> _includedTagChips = [];
+    private IReadOnlyList<TagChipDto> _excludedTagChips = [];
+
+    private bool _isLoadingMore;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Resolve current user id (nullable — anonymous viewers are fully supported).
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            string? idClaim = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(idClaim, out int userId)) _currentUserId = userId;
+        }
+
+        // Seed filter with §8.7 defaults for the SearchPage surface.
+        IReadOnlyList<UserStoryInteractionTypeEnum> defaultExclusions =
+            await DiscoveryDefaults.GetDefaultExcludedInteractionsAsync(SiteSearchModes.SearchPage);
+
+        _filter = _filter with { ExcludedInteractions = defaultExclusions };
+
+        // Pre-load initial random batch — spec §5.28: area is never blank on load.
+        await LoadRandomBatchAsync(append: false);
+    }
+
+    // ── Filter changes (panel Apply) ──────────────────────────────────────────────────────────────
+
+    private async Task HandleFilterChangedAsync(StoryFilterDto filter)
+    {
+        _filter = filter with { Page = 1 };
+
+        // Resolve tag chips for the new filter (feeds back into panel seed on next render).
+        await ResolveTagChipsAsync();
+
+        // Reset accumulation on any filter/mode change.
+        _items = [];
+        _totalCount = 0;
+
+        if (_filter.Sort == DefaultSortOrder.Random)
+            await LoadRandomBatchAsync(append: false);
+        else
+            await LoadSortedPageAsync();
+    }
+
+    // ── Sorted pagination ─────────────────────────────────────────────────────────────────────────
+
+    private async Task HandlePageChangedAsync(int page)
+    {
+        _filter = _filter with { Page = page };
+        await LoadSortedPageAsync();
+    }
+
+    private async Task LoadSortedPageAsync()
+    {
+        (_items, _totalCount) = await StoryReadService.GetListingsAsync(_filter);
+        await LoadInteractionStatesAsync();
+    }
+
+    // ── Random mode ───────────────────────────────────────────────────────────────────────────────
+
+    private async Task HandleLoadMoreAsync()
+    {
+        _isLoadingMore = true;
+        await LoadRandomBatchAsync(append: true);
+        _isLoadingMore = false;
+    }
+
+    private async Task LoadRandomBatchAsync(bool append)
+    {
+        StoryListingDto[] batch = await StoryReadService.GetRandomBatchAsync(_filter, RandomBatchSize);
+
+        _items = append ? [.. _items, .. batch] : batch;
+        // In random mode TotalCount is not meaningful (stateless draw); use item count as a proxy
+        // so StoryDeck's PaginationControls self-hides (TotalCount == PageSize == Items.Count → TotalPages=1).
+        _totalCount = _items.Length;
+
+        await LoadInteractionStatesAsync();
+    }
+
+    // ── Shared helpers ────────────────────────────────────────────────────────────────────────────
+
+    private async Task LoadInteractionStatesAsync()
+    {
+        if (_currentUserId.HasValue && _items.Length > 0)
+        {
+            _states = await InteractionReadService.GetStatesByStoryIdsAsync(
+                [.. _items.Select(i => i.StoryId)]);
+        }
+        else
+        {
+            _states = new Dictionary<int, UserStoryInteractionStateDto>();
+        }
+    }
+
+    private async Task ResolveTagChipsAsync()
+    {
+        _includedTagChips = _filter.IncludedTagIds.Count > 0
+            ? await TagReadService.GetTagChipsByIdsAsync(_filter.IncludedTagIds)
+            : [];
+
+        _excludedTagChips = _filter.ExcludedTagIds.Count > 0
+            ? await TagReadService.GetTagChipsByIdsAsync(_filter.ExcludedTagIds)
+            : [];
+    }
+}

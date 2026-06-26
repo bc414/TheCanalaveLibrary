@@ -742,6 +742,42 @@ Page-level composition: `ResultsFilterPanel` + `StoryDeck` are kept separate and
 page/dispatcher level. Do **not** bundle them into a shared composite (spec §5.27 explicitly
 rejected a bundled `UserListPage`; `StoryDeck` is also used without any panel at all).
 
+**WU28 additions to `ResultsFilterPanel`:**
+- `[Parameter] bool ShowTagIncludeModeToggle { get; set; } = false` — forward to
+  `TagFilter.AllowIncludeModeToggle`. Only `/discover` passes `true`; Bookshelves/Profile unaffected.
+- `[Parameter] IReadOnlyList<TagChipDto> InitialIncludedTags` / `InitialExcludedTags` (default `[]`)
+  — seed sprite-resolved chips into `TagFilter` in `OnInitialized`. The dispatcher pre-loads chips
+  via `ITagReadService.GetTagChipsByIdsAsync` and passes them in; the panel is still injection-free.
+- Buffer `TagIncludeMode` from `TagFilterSelection.IncludeMode`; set `StoryFilterDto.IncludeMode`
+  on Apply; seed from `InitialFilter.IncludeMode`.
+
+**WU28 additions to `TagFilter`:**
+- `[Parameter] bool AllowIncludeModeToggle { get; set; } = false` — when `true`, render a small
+  AND/OR segmented control **above the include selectors only** (exclude selectors are unchanged).
+  Default `false` keeps all existing usages unchanged.
+- `TagFilterSelection` gains `TagIncludeMode IncludeMode { get; init; } = TagIncludeMode.And`;
+  `EmitAsync` includes it.
+
+### Search Page Dual-Mode (`/discover`) (WU28)
+
+The `/discover` dispatcher (`SearchPage.razor`) runs in two modes keyed on `_filter.Sort`:
+
+**Random mode (`Sort = Random`):**
+- `_items` is an append-only display list. Each "Give me more" call invokes
+  `GetRandomBatchAsync(_filter, RandomBatchSize)` and appends the result. No dedup.
+- `StoryDeck` receives `TotalCount = Items.Count` and `PageSize = Items.Count` → forces
+  `TotalPages = 1` → embedded `PaginationControls` self-hides.
+- A **"Give me more"** button sits below the deck; it is absent in sorted mode.
+
+**Sorted mode (`Sort = DatePublished` or `Relevance`):**
+- `GetListingsAsync(_filter)` with offset pagination; `OnPageChanged` re-queries
+  `_filter with { Page = page }`.
+- Real `TotalCount`/`PageSize` passed to `StoryDeck`; `PaginationControls` is live.
+- No "Give me more" button.
+
+Switching mode (via `OnSearch` from the panel) resets `_items`, page to 1, and reloads.
+`Sort = Random` is the initial default (page is never blank on load).
+
 **Bookshelf narrowing pattern (WU27):** when `ResultsFilterPanel` is used for *narrowing* (not
 discovery), the dispatcher first computes a **candidate ID set** (e.g. all story IDs the user has
 favorited via `IUserStoryInteractionReadService.GetBookshelfStoryIdsAsync`), then passes

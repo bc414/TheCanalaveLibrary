@@ -38,6 +38,7 @@
     {
         <TagFilter TagTypes="@TagTypes"
                    AllowExclude="@AllowTagExclude"
+                   AllowIncludeModeToggle="@ShowTagIncludeModeToggle"
                    IncludedTags="@_seedIncludedTags"
                    ExcludedTags="@_seedExcludedTags"
                    OnChanged="OnTagFilterChanged" />
@@ -107,6 +108,13 @@
     /// <summary>Whether the tag filter shows exclude selectors. Default true.</summary>
     [Parameter] public bool AllowTagExclude { get; set; } = true;
 
+    /// <summary>
+    /// When true, forwards <c>AllowIncludeModeToggle=true</c> to <c>TagFilter</c>, surfacing the
+    /// AND/OR include-mode control above the include selectors. Default false — only <c>/discover</c>
+    /// passes true; Bookshelves/Profile leave this hidden and always use AND semantics.
+    /// </summary>
+    [Parameter] public bool ShowTagIncludeModeToggle { get; set; } = false;
+
     // ── Interaction filter configuration ───────────────────────────────────────────────────────────
 
     /// <summary>
@@ -125,6 +133,20 @@
     /// </summary>
     [Parameter] public StoryFilterDto? InitialFilter { get; set; }
 
+    /// <summary>
+    /// Sprite-resolved chips to pre-populate the TagFilter include selector on first render (WU28).
+    /// The dispatcher loads these via <c>ITagReadService.GetTagChipsByIdsAsync</c> when
+    /// <see cref="InitialFilter"/> carries tag ids. Panel stays injection-free — chip resolution
+    /// happens at the page level, not here.
+    /// </summary>
+    [Parameter] public IReadOnlyList<TagChipDto> InitialIncludedTags { get; set; } = [];
+
+    /// <summary>
+    /// Sprite-resolved chips to pre-populate the TagFilter exclude selector on first render (WU28).
+    /// Same sourcing pattern as <see cref="InitialIncludedTags"/>.
+    /// </summary>
+    [Parameter] public IReadOnlyList<TagChipDto> InitialExcludedTags { get; set; } = [];
+
     // ── Output ────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -140,15 +162,19 @@
     private IReadOnlyList<UserStoryInteractionTypeEnum> _excludedInteractions = [];
     private DefaultSortOrder _sort = DefaultSortOrder.DatePublished;
 
-    // Seed collections derived from InitialFilter for child axis components.
-    // TagFilter re-seeds only on OnInitialized; we pass seed tags directly.
-    // (No sprite data on ids-only InitialFilter — seed stays empty for now; WU28 will enrich.)
+    // Seed collections for child axis components; applied once on OnInitialized (WU28).
     private IReadOnlyList<TagChipDto> _seedIncludedTags = [];
     private IReadOnlyList<TagChipDto> _seedExcludedTags = [];
     private IReadOnlyList<UserStoryInteractionTypeEnum> _seedExcludedInteractions = [];
 
     protected override void OnInitialized()
     {
+        // Seed tag chips from the explicit chip params (resolved by the dispatcher via
+        // ITagReadService.GetTagChipsByIdsAsync). These supersede InitialFilter's id-only lists
+        // for display; the id-sets in _tagSelection are kept in sync via OnTagFilterChanged.
+        _seedIncludedTags = InitialIncludedTags;
+        _seedExcludedTags = InitialExcludedTags;
+
         if (InitialFilter is null) return;
 
         _textQuery = InitialFilter.TextQuery ?? "";
@@ -156,12 +182,11 @@
         _excludedInteractions = InitialFilter.ExcludedInteractions;
         _seedExcludedInteractions = InitialFilter.ExcludedInteractions;
 
-        // Tag seeds require TagChipDto (sprite-resolved). InitialFilter carries only ids; we seed the
-        // TagFilter as empty and let WU28 enrich (or callers pass pre-loaded chips via a future param).
-        // The id-sets ARE set so ApplyAsync produces the correct DTO even if the chips aren't displayed.
+        // Mirror the IncludeMode from InitialFilter so re-seeded panels emit the right mode on Apply.
         _tagSelection = new TagFilterSelection(
             IncludedTagIds: InitialFilter.IncludedTagIds,
-            ExcludedTagIds: InitialFilter.ExcludedTagIds);
+            ExcludedTagIds: InitialFilter.ExcludedTagIds,
+            IncludeMode: InitialFilter.IncludeMode);
     }
 
     // ── Handlers ──────────────────────────────────────────────────────────────────────────────────
@@ -192,6 +217,7 @@
             TextQuery = string.IsNullOrWhiteSpace(_textQuery) ? null : _textQuery.Trim(),
             IncludedTagIds = _tagSelection.IncludedTagIds,
             ExcludedTagIds = _tagSelection.ExcludedTagIds,
+            IncludeMode = _tagSelection.IncludeMode,
             ExcludedInteractions = _excludedInteractions,
             Sort = effectiveSort,
             Page = 1,

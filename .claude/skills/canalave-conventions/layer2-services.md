@@ -501,6 +501,76 @@ is correct. `ServerStoryReadService` → `IInteractionReadService` is a design s
 composition is permitted as a documented exception. Interface and DTO don't change; only the method
 body does. This is the same "body swap behind a stable interface" principle that governs Layers 5–7.
 
+## Discovery Defaults + Random Batch (WU28)
+
+### Random batch — plain draw from the post-filter set
+
+`GetRandomBatchAsync(StoryFilterDto filter, int batchSize)` on `IStoryReadService`:
+
+```csharp
+IQueryable<Story> q = ApplyFilters(readDb.Stories, filter); // shared helper, see below
+int[] ids = await q.OrderBy(_ => EF.Functions.Random()).Take(batchSize).Select(s => s.StoryId).ToArrayAsync();
+return await GetListingsByIdsAsync(ids);
+```
+
+**No `excludeStoryIds` parameter. No shown-id tracking. No TotalCount.** "Give me more" is a
+second call that appends a fresh draw to the display list — repeats are acceptable. Sorted-mode
+pagination uses offset (`Skip`/`Take` on `GetListingsAsync`); the random path never does.
+
+Interaction exclusions flow through `filter.ExcludedInteractions` the same as any other filter.
+The page seeds those from the §8.7 defaults read service; the random path is not special-cased.
+
+**`ApplyFilters(IQueryable<Story> q, StoryFilterDto filter) → IQueryable<Story>`** is a private
+helper extracted from `GetListingsAsync` so the random path and the sorted path share it (DRY).
+It applies: tag include (AND loop / OR Any by `filter.IncludeMode`), tag exclude, FTS Matches,
+and interaction-state exclusions. It does **not** add `OrderBy` or pagination — those live in
+the caller.
+
+### §8.7 Discovery Defaults — `IDiscoveryDefaultsReadService`
+
+New service in `Core/Discovery/` / `Server/Discovery/`:
+
+```csharp
+Task<IReadOnlyList<UserStoryInteractionTypeEnum>> GetDefaultExcludedInteractionsAsync(string searchModeKey);
+```
+
+**Algorithm:** load `DefaultUserStoryInteractionFilterSetting` rows for `searchModeKey` (the system
+matrix). If `activeUser.UserId` is non-null, load the user's `UserStoryInteractionFilterSetting`
+rows for the same mode and **overlay** (user value wins per key). Anonymous → system defaults only.
+Keep keys where effective `IsEnabled == true`; map filter-key string → enum via a static
+Server-side map (keys live in `SiteConstants.cs`). **`HasStarted` is not in the enum** (the catalog
+has 7 keys but `UserStoryInteractionTypeEnum` has 6 values) — drop it from the mapped output,
+documented in the service.
+
+**Seed is authoritative and unchanged** (Ignored=true on the 5 discovery surfaces; profiles=none).
+No migration. Per-user override *editing* UI is deferred post-MVP (entity supports it).
+
+### Tag include-mode boolean lattice
+
+The 2×2 lattice (Include × Exclude), with the dead ALL-exclude cell intentionally unbuilt:
+
+| | Include | Exclude |
+|---|---|---|
+| **AND (all)** | Default. `Where(has t)` per id (conjunctive loop). | N/A — dead cell. "Exclude all" has no practical meaning. |
+| **OR (any)** | Optional; toggle on `/discover` only. `Where(s => s.StoryTags.Any(st => ids.Contains(st.TagId)))`. | N/A — same dead cell. Exclude is always ANY/none. |
+
+`TagIncludeMode { And, Or }` lives in `Core/Discovery/`. `StoryFilterDto` gains
+`TagIncludeMode IncludeMode { get; init; } = TagIncludeMode.And` — default preserves all existing
+callers. The OR branch is gated at the page level (only `/discover` passes `ShowTagIncludeModeToggle`);
+the `StoryFilterDto` property is unconditional so the filter service handles it anywhere.
+
+**Why interaction state is exclude-only here (Discovery Model vs Library Model):** tags are
+story-intrinsic (any viewer can filter by them) — both include and exclude are meaningful.
+Interaction state is a viewer relationship — "show only stories I've completed" implies a
+whitelist over the full catalog, which is not what `/discover` does. Interaction *inclusion* is
+the Library/Bookshelves Source concern (`restrictToStoryIds`), not a discovery filter.
+
+**OR-include has precedent** in the original deliberations §9 whitelist-union of entity-filter
+lists. The AND/OR toggle is set-combination *within* a fixed include selector — it is not the
+per-criterion include/exclude *semantics* toggle the deliberations (§8) rejected as confusing
+(which would flip include↔exclude per checkbox). Include and exclude remain separate selectors.
+OR-across-tags was "never deliberated" (§11); this toggle is a deliberate net-new extension.
+
 ## `StoryFilterDto` + `GetListingsAsync` (WU23)
 
 **`StoryFilterDto`** (`Core/Discovery/`) is the source-agnostic filter criteria that `ResultsFilterPanel`

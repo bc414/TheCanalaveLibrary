@@ -218,6 +218,21 @@ Guardrails:
 
 **Resolved:**
 
+- **WU28 Discovery defaults + random-preload design** — resolved (2026-06-25, WU28 planning):
+  (1) **§8.7 default-settings matrix read path** ("complete the `DefaultSearchSetting` matrix"): the
+  read/merge service (`IDiscoveryDefaultsReadService`) is the WU28 Phase 1b deliverable. System
+  defaults overlaid with sparse per-user overrides in C#; anonymous viewers see defaults only. Seed
+  stays as-is (Ignored=true on the 5 discovery surfaces). This closes the "deferred post-WU23" item
+  in `audit/Discovery.md`.
+  (2) **Random-preload / "give me more" pagination**: random batch = a plain random selection out of
+  the post-filter valid set (`OrderBy(Random()).Take(batchSize)`). No shown-id tracking, no dedup —
+  "give me more" is a stateless re-draw that appends to the display list (repeats acceptable).
+  Interaction exclusions come from the §8.7 defaults, not random-specific logic. Sorted modes
+  (DatePublished/Relevance) use offset pagination. StoryDeck pagination is suppressed in random mode.
+  (3) **Feature 33 tree search**: carved into WU40 (stateless pivot / four clean edges direction settled).
+  See `audit/Discovery.md` Feature 31 and Feature 33; `canalave-conventions/layer2-services.md`
+  "Discovery Defaults + Random Batch" section.
+
 - **WU36 Badges — mechanism, scope, and Tastemaker tiers** — resolved (2026-06-25, WU36 planning):
   (1) **Mechanism:** synchronous inline award-check; `IBadgeWriteService.AwardAsync` (idempotent,
   best-effort try/catch after primary `SaveChangesAsync`). Background worker is post-MVP.

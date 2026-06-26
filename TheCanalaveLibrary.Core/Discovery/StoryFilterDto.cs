@@ -9,8 +9,9 @@ namespace TheCanalaveLibrary.Core;
 /// <list type="bullet">
 ///   <item>Content-rating — handled globally by <c>ApplicationDbContext</c>'s query filter
 ///         via <see cref="IActiveUserContext"/>; never belongs here.</item>
-///   <item>Per-SearchMode default-settings matrix (§8.7 entities) — deferred to WU28; these
-///         DTOs carry explicit user intent, not defaults.</item>
+///   <item>Per-SearchMode default-settings matrix (§8.7 entities) — seeded externally by
+///         <c>IDiscoveryDefaultsReadService</c> before the DTO is built; the DTO carries
+///         explicit viewer intent (already-merged effective exclusions).</item>
 ///   <item>Source axis — each consumer wires its own source query;
 ///         <c>GetListingsAsync</c> is Source=All only.</item>
 /// </list>
@@ -23,11 +24,24 @@ public sealed record StoryFilterDto
     /// </summary>
     public string? TextQuery { get; init; }
 
-    /// <summary>Tags the story must have (AND semantics across included ids).</summary>
+    /// <summary>
+    /// Tags the story must have. Boolean combination is controlled by <see cref="IncludeMode"/>:
+    /// default <see cref="TagIncludeMode.And"/> requires all; <see cref="TagIncludeMode.Or"/>
+    /// requires any one.
+    /// </summary>
     public IReadOnlyList<int> IncludedTagIds { get; init; } = [];
 
     /// <summary>Tags the story must not have (any match = excluded).</summary>
     public IReadOnlyList<int> ExcludedTagIds { get; init; } = [];
+
+    /// <summary>
+    /// How <see cref="IncludedTagIds"/> are combined. Default <see cref="TagIncludeMode.And"/>
+    /// (story must have all included tags) preserves existing behaviour on all surfaces.
+    /// <see cref="TagIncludeMode.Or"/> (story must have at least one) is surfaced on
+    /// <c>/discover</c> only via <c>TagFilter.AllowIncludeModeToggle</c>.
+    /// The exclude axis always uses ANY/none and has no mode flag.
+    /// </summary>
+    public TagIncludeMode IncludeMode { get; init; } = TagIncludeMode.And;
 
     /// <summary>
     /// Interaction kinds to exclude for the current viewer. Stories where the viewer holds

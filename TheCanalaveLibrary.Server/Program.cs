@@ -105,6 +105,7 @@ builder.Services.AddScoped<DataSeeder>();
 builder.Services.AddScoped<IDeviceDetectionService, ServerDeviceDetectionService>();
 builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
+builder.Services.AddScoped<IDiscoveryDefaultsReadService, ServerDiscoveryDefaultsReadService>();
 builder.Services.AddScoped<ISpriteReadService, ServerSpriteReadService>();
 builder.Services.AddScoped<ITagReadService, ServerTagReadService>();
 builder.Services.AddScoped<ITagWriteService, ServerTagWriteService>();

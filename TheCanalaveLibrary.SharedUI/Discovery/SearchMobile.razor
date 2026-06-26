@@ -1,0 +1,123 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Mobile coordination composite for /discover (WU28, spec §5.3 / §5.27).
+   Injection-free — all data arrives as parameters from SearchPage (the dispatcher).
+   Layout: filter-toggle button at top → slide-in overlay panel; StoryDeck below.
+   Outer Margin Rule: root has no m-*; parent/layout controls spacing. *@
+
+<div class="flex flex-col gap-4 px-3 py-4">
+
+    @* ── Filter toggle row ───────────────────────────────────────────────────────────────── *@
+    <div class="flex items-center justify-between">
+        <span class="text-sm font-medium text-[--color-text-muted]">
+            @(IsRandomMode ? "Random discover" : (Filter.Sort == DefaultSortOrder.Relevance ? "Relevance" : "Most recent"))
+        </span>
+        <button type="button"
+                class="flex items-center gap-1.5 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm transition-colors hover:bg-[--color-surface-hover]"
+                @onclick="ToggleFilter"
+                aria-expanded="@_filterOpen"
+                aria-controls="search-filter-overlay">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M4 6h16v2H4zm3 5h10v2H7zm3 5h4v2h-4z" />
+            </svg>
+            Filters
+        </button>
+    </div>
+
+    @* ── StoryDeck ────────────────────────────────────────────────────────────────────────── *@
+    @if (IsRandomMode)
+    {
+        <StoryDeck Stories="@Items"
+                   UserStoryInteractionStates="@InteractionStates"
+                   CurrentUserId="@CurrentUserId"
+                   EmptyMessage="No stories found for these filters. Try broadening your search."
+                   CurrentPage="1"
+                   PageSize="@Items.Length"
+                   TotalCount="@Items.Length"
+                   OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+
+        <button type="button"
+                class="self-center rounded-md bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 active:bg-sky-800 transition-colors disabled:opacity-50"
+                disabled="@IsLoadingMore"
+                @onclick="OnLoadMore">
+            @(IsLoadingMore ? "Loading…" : "Give me more")
+        </button>
+    }
+    else
+    {
+        <StoryDeck Stories="@Items"
+                   UserStoryInteractionStates="@InteractionStates"
+                   CurrentUserId="@CurrentUserId"
+                   EmptyMessage="No stories found for these filters. Try broadening your search."
+                   CurrentPage="@Filter.Page"
+                   PageSize="@Filter.PageSize"
+                   TotalCount="@TotalCount"
+                   OnPageChanged="@OnPageChanged"
+                   OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+    }
+
+    <ReportDialog @ref="_reportDialog" />
+
+</div>
+
+@* ── Filter slide-in overlay ─────────────────────────────────────────────────────────── *@
+@if (_filterOpen)
+{
+    <div class="fixed inset-0 z-50 bg-black/50" @onclick="CloseFilter" id="search-filter-overlay"></div>
+
+    <div class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-[--color-surface] shadow-xl"
+         @onclick:stopPropagation="true">
+        <div class="flex items-center justify-between border-b border-[--color-border] px-4 py-3">
+            <h2 class="text-sm font-bold">Filters</h2>
+            <button type="button"
+                    class="rounded p-1 text-[--color-text-muted] hover:bg-[--color-surface-hover]"
+                    @onclick="CloseFilter"
+                    aria-label="Close filters">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
+            </button>
+        </div>
+        <div class="overflow-y-auto p-4">
+            <ResultsFilterPanel OnSearch="@HandleFilterAndCloseAsync"
+                                InitialFilter="@Filter"
+                                InitialIncludedTags="@InitialIncludedTags"
+                                InitialExcludedTags="@InitialExcludedTags"
+                                AvailableSorts="@AvailableSorts"
+                                ShowTextSearch="true"
+                                ShowTagFilter="true"
+                                ShowInteractionFilters="true"
+                                ShowTagIncludeModeToggle="true" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public StoryListingDto[] Items { get; set; } = [];
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public IReadOnlyDictionary<int, UserStoryInteractionStateDto>? InteractionStates { get; set; }
+    [Parameter] public int? CurrentUserId { get; set; }
+    [Parameter, EditorRequired] public StoryFilterDto Filter { get; set; } = new();
+    [Parameter] public IReadOnlyList<TagChipDto> InitialIncludedTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<TagChipDto> InitialExcludedTags { get; set; } = [];
+    [Parameter] public bool IsRandomMode { get; set; }
+    [Parameter] public bool IsLoadingMore { get; set; }
+    [Parameter] public EventCallback<StoryFilterDto> OnFilterChanged { get; set; }
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+    [Parameter] public EventCallback OnLoadMore { get; set; }
+
+    private ReportDialog _reportDialog = default!;
+    private bool _filterOpen;
+
+    private static readonly IReadOnlyList<DefaultSortOrder> AvailableSorts =
+        [DefaultSortOrder.Random, DefaultSortOrder.DatePublished, DefaultSortOrder.Relevance];
+
+    private void ToggleFilter() => _filterOpen = !_filterOpen;
+    private void CloseFilter() => _filterOpen = false;
+
+    private async Task HandleFilterAndCloseAsync(StoryFilterDto filter)
+    {
+        _filterOpen = false;
+        await OnFilterChanged.InvokeAsync(filter);
+    }
+}

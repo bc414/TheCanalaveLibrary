@@ -30,6 +30,8 @@ public class CommentSectionTests : TestContext
     public CommentSectionTests()
     {
         Services.AddScoped<ICommentWriteService>(_ => _fakeService);
+        // ReportDialog (inside CommentSection) injects IModerationWriteService.
+        Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 

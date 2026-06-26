@@ -1,0 +1,84 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Desktop coordination composite for /discover (WU28, spec §5.3 / §5.27).
+   Injection-free — all data arrives as parameters from SearchPage (the dispatcher).
+   Layout: left = ResultsFilterPanel sidebar; right = StoryDeck + Give-me-more / pagination.
+   Outer Margin Rule: root has no m-*; parent/layout controls spacing. *@
+
+<div class="flex gap-6 items-start px-4 py-4">
+
+    @* ── ResultsFilterPanel sidebar ────────────────────────────────────────────────────── *@
+    <aside class="w-72 shrink-0 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4">
+        <h2 class="mb-3 text-sm font-bold text-[--color-text-muted] uppercase tracking-wide">Filters</h2>
+        <ResultsFilterPanel OnSearch="@OnFilterChanged"
+                            InitialFilter="@Filter"
+                            InitialIncludedTags="@InitialIncludedTags"
+                            InitialExcludedTags="@InitialExcludedTags"
+                            AvailableSorts="@AvailableSorts"
+                            ShowTextSearch="true"
+                            ShowTagFilter="true"
+                            ShowInteractionFilters="true"
+                            ShowTagIncludeModeToggle="true" />
+    </aside>
+
+    @* ── Main area: StoryDeck + mode-dependent controls ─────────────────────────────────── *@
+    <div class="min-w-0 flex-1 flex flex-col gap-4">
+
+        @if (IsRandomMode)
+        {
+            @* Random mode: no pagination; deck TotalCount == Items.Count forces TotalPages=1
+               so PaginationControls self-hides. "Give me more" button appears below the deck. *@
+            <StoryDeck Stories="@Items"
+                       UserStoryInteractionStates="@InteractionStates"
+                       CurrentUserId="@CurrentUserId"
+                       EmptyMessage="No stories found for these filters. Try broadening your search."
+                       CurrentPage="1"
+                       PageSize="@Items.Length"
+                       TotalCount="@Items.Length"
+                       OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+
+            <button type="button"
+                    class="self-center rounded-md bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 active:bg-sky-800 transition-colors disabled:opacity-50"
+                    disabled="@IsLoadingMore"
+                    @onclick="OnLoadMore">
+                @(IsLoadingMore ? "Loading…" : "Give me more")
+            </button>
+        }
+        else
+        {
+            @* Sorted mode: real pagination; no give-me-more button. *@
+            <StoryDeck Stories="@Items"
+                       UserStoryInteractionStates="@InteractionStates"
+                       CurrentUserId="@CurrentUserId"
+                       EmptyMessage="No stories found for these filters. Try broadening your search."
+                       CurrentPage="@Filter.Page"
+                       PageSize="@Filter.PageSize"
+                       TotalCount="@TotalCount"
+                       OnPageChanged="@OnPageChanged"
+                       OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+        }
+
+        <ReportDialog @ref="_reportDialog" />
+    </div>
+
+</div>
+
+@code {
+    [Parameter, EditorRequired] public StoryListingDto[] Items { get; set; } = [];
+    [Parameter] public int TotalCount { get; set; }
+    [Parameter] public IReadOnlyDictionary<int, UserStoryInteractionStateDto>? InteractionStates { get; set; }
+    [Parameter] public int? CurrentUserId { get; set; }
+    [Parameter, EditorRequired] public StoryFilterDto Filter { get; set; } = new();
+    [Parameter] public IReadOnlyList<TagChipDto> InitialIncludedTags { get; set; } = [];
+    [Parameter] public IReadOnlyList<TagChipDto> InitialExcludedTags { get; set; } = [];
+    [Parameter] public bool IsRandomMode { get; set; }
+    [Parameter] public bool IsLoadingMore { get; set; }
+    [Parameter] public EventCallback<StoryFilterDto> OnFilterChanged { get; set; }
+    [Parameter] public EventCallback<int> OnPageChanged { get; set; }
+    [Parameter] public EventCallback OnLoadMore { get; set; }
+
+    private ReportDialog _reportDialog = default!;
+
+    private static readonly IReadOnlyList<DefaultSortOrder> AvailableSorts =
+        [DefaultSortOrder.Random, DefaultSortOrder.DatePublished, DefaultSortOrder.Relevance];
+}

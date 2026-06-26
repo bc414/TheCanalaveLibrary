@@ -754,7 +754,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   **Tool:** Sonnet in Claude Code (plan approved 2026-06-24). **Pointer:** `audit/Tags.md` Feature 11,
   `audit/Discovery.md` Feature 34. **Deps:** WU4, WU9, WU11 (all Stage 5).
 
-### WU28 — Discovery: Search Page + FTS consumption + §8.7 default-settings matrix
+### WU28 — Discovery: Search Page + FTS consumption + §8.7 default-settings matrix DONE ✓ (2026-06-25)
 - **Cells:** 31 L2 (random batch method); 31 L3.5 (page dispatcher + Desktop/Mobile composites);
   32 L2/L3-Logic/L3.5 (FTS consumed + verified via the page — already built in `GetListingsAsync`,
   WU28 exposes + confirms end-to-end). Also additive: `TagIncludeMode { And, Or }` enum
@@ -790,6 +790,14 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Cells flipped:** 31 L2 `2→5`; 32 L2/L3/L3.5 `2→5`. Feature 33 unchanged → WU40.
   Feature 31 L3.5 stays Stage 5 (additive page on already-Stage-5 cell, precedent WU13).
   L4 stays Stage 1 (visual sign-off pending, consistent with WU8/WU13/WU23 precedent).
+- **Did:** All five phases complete. `SiteSearchModes`/`UserStoryInteractionFilters` moved to Core
+  (SharedUI accessibility fix). `HttpStoryReadService` stub added for `GetRandomBatchAsync`.
+  Pre-existing `IModerationWriteService` DI failures (37 RazorComponents tests across 4 classes)
+  fixed by adding `FakeModerationWriteService` + registration. Final counts: 429 Unit (all pass);
+  428 RazorComponents (all pass, 0 failures); 329 Integration pass (7 pre-existing
+  `ModerationServiceTests` DI failures unrelated to WU28). New tests: `DiscoveryDefaultsReadServiceTests`
+  (5 Integration), `RandomBatchTests` (7 Integration), `SearchDesktopTests` (8 RazorComponents),
+  `SearchMobileTests` (9 RazorComponents). See `audit/Discovery.md` F31 WU28 Stage note.
 - **Tool:** opusplan (plan approved 2026-06-25). **Pointer:** `audit/Discovery.md` Features 31, 32.
   **Deps:** WU14, WU23, WU4.
 
@@ -1030,6 +1038,16 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   client ping), 54 L2 (epub/pdf export, app-layer only).
 - **Tool:** opusplan. **Pointer:** `audit/Identity.md`, `audit/Stories.md` Feature 45, `audit/Export.md`.
   **Deps:** WU25.
+
+### WU40 — Manual Tree Search (Feature 33)
+- **Cells:** 33 L2 / L3-Logic / L3.5 → Stage 5.
+- **Direction settled (WU28 Phase 0, 2026-06-25):** stateless pivot over live tables (not the mart —
+  the mart is post-MVP). Four clean edges: authored-by, public-favorite, recommendation, hidden-gem.
+  Distinct graph/node visualization — **NOT `StoryDeck`**. Stateless fresh search each pivot (no
+  shown-id tracking); privacy model: graph never reveals identity (§5.4); hidden-gem edge requires
+  `allow_discovery_consent`-opted authors. Corroborated by original deliberations' §2 stateless-fresh-
+  search and §3 hidden-gem chain-of-trust. See `audit/Discovery.md` Feature 33.
+- **Tool:** opusplan. **Pointer:** `audit/Discovery.md` Feature 33. **Deps:** WU14, WU23, WU4, WU25.
 
 ### WU39 — Story Import & Verification
 - **Cells:** 53 L2/L3/L3.5/L4.

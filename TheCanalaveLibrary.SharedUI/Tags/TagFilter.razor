@@ -1,12 +1,41 @@
 @namespace TheCanalaveLibrary.SharedUI
 
-@* Filter-axis component for tag include/exclude filtering (WU23, spec §5.27).
+@* Filter-axis component for tag include/exclude filtering (WU23/WU28, spec §5.27).
    Injection-free: each nested TagSelector injects ITagReadService directly.
    Emits on every selection change; the assembler (ResultsFilterPanel) buffers behind Apply.
    Cross-dedup: adding a tag to include removes it from exclude and vice versa.
+
+   WU28: AllowIncludeModeToggle=true renders an AND/OR segmented control above the include
+   selectors only. The exclude axis never has a mode toggle (exclude is always ANY/none).
    Outer Margin Rule: root has no m-* — parent controls spacing. *@
 
 <div class="flex flex-col gap-4">
+    @* ── AND/OR include-mode toggle (rendered only when the consumer opts in) ──────────── *@
+    @if (AllowIncludeModeToggle)
+    {
+        <div class="flex flex-col gap-1">
+            <span class="text-sm font-bold">Match included tags</span>
+            <div class="flex gap-2">
+                <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="radio"
+                           name="tag-include-mode"
+                           class="accent-sky-600"
+                           checked="@(_includeMode == TagIncludeMode.And)"
+                           @onchange="@(() => SetIncludeModeAsync(TagIncludeMode.And))" />
+                    <span class="text-sm">All of these (AND)</span>
+                </label>
+                <label class="flex items-center gap-1.5 cursor-pointer select-none">
+                    <input type="radio"
+                           name="tag-include-mode"
+                           class="accent-sky-600"
+                           checked="@(_includeMode == TagIncludeMode.Or)"
+                           @onchange="@(() => SetIncludeModeAsync(TagIncludeMode.Or))" />
+                    <span class="text-sm">Any of these (OR)</span>
+                </label>
+            </div>
+        </div>
+    }
+
     @foreach (TagTypeEnum type in TagTypes)
     {
         <div class="flex flex-col gap-2">
@@ -36,6 +65,15 @@
     /// <summary>When false, the exclude selectors are hidden. Defaults to true.</summary>
     [Parameter]
     public bool AllowExclude { get; set; } = true;
+
+    /// <summary>
+    /// When true, renders an AND/OR segmented control above the include selectors so the
+    /// viewer can toggle how included tags are combined. Default false — the AND/OR toggle is
+    /// gated to <c>/discover</c> via <c>ResultsFilterPanel.ShowTagIncludeModeToggle</c>;
+    /// Bookshelves and Profile keep this hidden.
+    /// </summary>
+    [Parameter]
+    public bool AllowIncludeModeToggle { get; set; } = false;
 
     /// <summary>Seed included tags (ids + display data). Applied on first render only.</summary>
     [Parameter]
@@ -70,6 +108,7 @@
     // Mutable working sets, keyed by tag type.
     private Dictionary<TagTypeEnum, List<TagChipDto>> _included = [];
     private Dictionary<TagTypeEnum, List<TagChipDto>> _excluded = [];
+    private TagIncludeMode _includeMode = TagIncludeMode.And;
 
     protected override void OnInitialized()
     {
@@ -106,11 +145,18 @@
         await EmitAsync();
     }
 
+    private async Task SetIncludeModeAsync(TagIncludeMode mode)
+    {
+        _includeMode = mode;
+        await EmitAsync();
+    }
+
     private async Task EmitAsync()
     {
         TagFilterSelection selection = new(
             IncludedTagIds: _included.Values.SelectMany(l => l.Select(t => t.TagId)).ToList(),
-            ExcludedTagIds: _excluded.Values.SelectMany(l => l.Select(t => t.TagId)).ToList());
+            ExcludedTagIds: _excluded.Values.SelectMany(l => l.Select(t => t.TagId)).ToList(),
+            IncludeMode: _includeMode);
 
         await OnChanged.InvokeAsync(selection);
     }
