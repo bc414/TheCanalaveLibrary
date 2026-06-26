@@ -348,6 +348,120 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         rec!.SuccessfulRecCount.Should().Be(1, "duplicate RecordSuccess for same user must not double-count");
     }
 
+    // ── Tastemaker badge award chain (WU36) ──────────────────────────────────────
+    // Tests for the RecommendationSuccessesEarned counter and Recommender badge award that
+    // fires inside RecordSuccessAsync. Each test that touches the counter must seed a UserStat
+    // row for _recommenderUserId (IntegrationTestBase.SeedUserAsync does NOT create one).
+
+    [Fact]
+    public async Task RecordSuccess_IncreasesRecommendationSuccessesEarned()
+    {
+        await SeedUserStatAsync(_recommenderUserId);
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+
+        // Record success as a different user (not the recommender) to avoid the self-farm guard.
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRecordSuccessAsync(recId);
+
+        int earned = await LoadRecommendationSuccessesEarned(_recommenderUserId);
+        earned.Should().Be(1, "one qualifying success must increment the recommender's counter by 1");
+    }
+
+    [Fact]
+    public async Task RecordSuccess_Idempotent_StatDoesNotDoubleCount()
+    {
+        await SeedUserStatAsync(_recommenderUserId);
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRecordSuccessAsync(recId);
+        await CallRecordSuccessAsync(recId); // same reader, same rec — idempotent
+
+        int earned = await LoadRecommendationSuccessesEarned(_recommenderUserId);
+        earned.Should().Be(1, "duplicate RecordSuccess by the same reader must not double-count the stat");
+    }
+
+    [Fact]
+    public async Task RecordSuccess_SelfRecord_DoesNotIncrementStat()
+    {
+        // Recommender marks their own rec as helpful — anti-self-farm guard must fire.
+        await SeedUserStatAsync(_recommenderUserId);
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+
+        // Active user is already _recommenderUserId (set in InitializeAsync).
+        // The guard: recommenderId.Value (== _recommenderUserId) != userId (== _recommenderUserId) → false.
+        // Switch to author first to avoid the "already recorded" idempotency path for the recommender.
+        // Actually: self-record means the READER is the recommender. Submit as recommender, then
+        // call RecordSuccess still as the recommender — the guard checks caller userId vs rec.RecommenderId.
+        await CallRecordSuccessAsync(recId);
+
+        int earned = await LoadRecommendationSuccessesEarned(_recommenderUserId);
+        earned.Should().Be(0, "self-record (reader == recommender) must not increment the counter");
+    }
+
+    [Fact]
+    public async Task RecordSuccess_NullRecommenderId_DoesNotCrashAndDoesNotAward()
+    {
+        // Seed an anonymous recommendation (RecommenderId = null) directly via DB.
+        int anonRecId;
+        using (IServiceScope seedScope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = seedScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            Recommendation r = new()
+            {
+                StoryId           = _storyId,
+                RecommenderId     = null,
+                StatusId          = (short)RecommendationStatusEnum.Approved,
+                DatePosted        = DateTime.UtcNow
+            };
+            r.RecommendationDetail = new RecommendationDetail { Text = ValidHtml() };
+            db.Recommendations.Add(r);
+            await db.SaveChangesAsync();
+            anonRecId = r.RecommendationId;
+        }
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        Func<Task> act = async () => await CallRecordSuccessAsync(anonRecId);
+
+        // Must complete without throwing — no recommender to credit, no badge to fire.
+        await act.Should().NotThrowAsync("anonymous-rec RecordSuccess must not crash");
+    }
+
+    // Mutation-sanity: disabling the `if (total >= 10)` award check makes this test fail.
+    [Fact]
+    public async Task RecordSuccess_AtTenthSuccess_AwardsBronzeBadge()
+    {
+        // Seed the counter at 9 so that one more qualifying success crosses the threshold.
+        await SeedUserStatAsync(_recommenderUserId, successesEarned: 9);
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRecordSuccessAsync(recId); // takes counter to 10 — award fires
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        bool badgeExists = await db.UserBadges
+            .AnyAsync(ub => ub.UserId == _recommenderUserId && ub.BadgeKey == SiteBadges.Recommender);
+        badgeExists.Should().BeTrue("the tenth qualifying success must award the bronze Recommender badge");
+    }
+
+    [Fact]
+    public async Task RecordSuccess_AtNinthSuccess_DoesNotAwardBronzeBadge()
+    {
+        // Seed the counter at 8 — one more success brings it to 9, below the bronze threshold of 10.
+        await SeedUserStatAsync(_recommenderUserId, successesEarned: 8);
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRecordSuccessAsync(recId); // takes counter to 9 — below threshold
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        bool badgeExists = await db.UserBadges
+            .AnyAsync(ub => ub.UserId == _recommenderUserId && ub.BadgeKey == SiteBadges.Recommender);
+        badgeExists.Should().BeFalse("nine qualifying successes must NOT yet award the bronze badge (threshold is 10)");
+    }
+
     // ── RecordAttributionSourceAsync ──────────────────────────────────────────────
 
     [Fact]
@@ -450,6 +564,37 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         using IServiceScope scope = Factory.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>()
             .Recommendations.FirstOrDefaultAsync(r => r.RecommendationId == id);
+    }
+
+    /// <summary>
+    /// Ensures a <see cref="UserStat"/> row exists for <paramref name="userId"/> and optionally
+    /// pre-sets the <c>RecommendationSuccessesEarned</c> counter. Required for award-chain tests
+    /// because <see cref="IntegrationTestBase.SeedUserAsync"/> does not create a UserStat row and
+    /// <see cref="ServerRecommendationWriteService.RecordSuccessAsync"/>&#x27;s
+    /// <c>ExecuteUpdateAsync</c> silently no-ops when no UserStat row exists.
+    /// </summary>
+    private async Task SeedUserStatAsync(int userId, int successesEarned = 0)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.UserStats.Add(new UserStat { UserId = userId });
+        await db.SaveChangesAsync();
+
+        if (successesEarned > 0)
+            await db.UserStats
+                .Where(us => us.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(
+                    us => us.RecommendationSuccessesEarned, successesEarned));
+    }
+
+    private async Task<int> LoadRecommendationSuccessesEarned(int userId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.UserStats
+            .Where(us => us.UserId == userId)
+            .Select(us => us.RecommendationSuccessesEarned)
+            .FirstOrDefaultAsync();
     }
 
 }

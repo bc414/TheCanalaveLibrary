@@ -8,7 +8,7 @@
    wires only what it has; Report (WU34) and Send PM (WU35) stay dark until those features land.
    Avatar is a stored relative URL (User.ProfilePictureRelativeUrl copied verbatim by the producing
    read service), not a sprite key — see layer4-style.md "Avatars Are Stored URLs, Not Sprite Keys".
-   Badges render only when present (empty until WU36 populates the field). *@
+   Badges render up to 3 (capped here, ordered by DisplayOrder — producers emit all visible). *@
 
 <div class="relative inline-flex items-center gap-2 rounded-xl bg-surface px-3 py-2">
     <img src="@(User.AvatarUrl ?? DefaultAvatarUrl)" alt="" class="size-10 rounded-full shrink-0" loading="lazy" />
@@ -22,7 +22,7 @@
         @if (User.Badges.Count > 0)
         {
             <div class="flex items-center gap-1">
-                @foreach (var badge in User.Badges)
+                @foreach (var badge in User.Badges.Take(3))
                 {
                     <img src="@badge.IconUrl" alt="" title="@badge.Name" class="size-4" loading="lazy" />
                 }

@@ -683,6 +683,46 @@ illegal content only — it is a distinct action from soft-hide, not a parameter
 !IsRead)` — `RelatedEntityId` was missing from the original WHERE clause (WU34 fix). This ensures two
 moderation notifications about *different* targets both reach the recipient.
 
+## Synchronous Inline Badge Awards (WU36)
+
+A write service that triggers a badge-eligible event calls `IBadgeWriteService.AwardAsync` after the
+primary `SaveChangesAsync`, **best-effort** — inside a `try/catch` so a badge failure never rolls back
+the primary operation. `AwardAsync` is **idempotent** (no-op if already earned); the caller does NOT
+need a separate "has badge" check first.
+
+**Pattern:**
+
+```csharp
+// After primary SaveChangesAsync + counter ExecuteUpdateAsync:
+int total = await writeDb.UserStats
+    .Where(us => us.UserId == targetUserId)
+    .Select(us => us.SomeCounter)
+    .FirstOrDefaultAsync();
+
+try
+{
+    if (total >= 10) await badgeService.AwardAsync(targetUserId, SiteBadges.SomeBadge);
+    if (total >= 50) await badgeService.AwardAsync(targetUserId, SiteBadges.SomeBadgeSilver);
+}
+catch (Exception ex)
+{
+    logger.LogWarning(ex, "Badge award failed for user {UserId} — swallowed.", targetUserId);
+}
+```
+
+**Anti-self-farm guard:** when the mechanic is social (e.g., a reader marking a recommendation
+helpful), guard `actorId != beneficiaryId` AND `nullableFk != null` **before** incrementing or
+calling `AwardAsync`. Violations skip silently — no throw, no log.
+
+**A write service MAY depend on `IBadgeWriteService`** (inject it in the primary constructor; no DAG
+cycles since `IBadgeWriteService` depends only on `ApplicationDbContext` /
+`ReadOnlyApplicationDbContext`).
+
+**Newly awarded badges are visible by default** (`DisplayOrder = max+1`). The curation UI lets users
+hide or reorder. `UserCard.razor` caps to 3 badges.
+
+**Post-MVP:** a background worker will replace inline checks without changing callers' interface.
+
 ## Naming
 
 - Server impl prefix `Server...`, client impl prefix `Client...`.

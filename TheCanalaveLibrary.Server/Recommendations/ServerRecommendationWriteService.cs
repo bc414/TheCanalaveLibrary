@@ -23,6 +23,7 @@ public class ServerRecommendationWriteService(
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
     INotificationWriteService notifications,
+    IBadgeWriteService badges,
     ILogger<ServerRecommendationWriteService> logger)
     : ServerRecommendationReadService(readDb, activeUser), IRecommendationWriteService
 {
@@ -270,6 +271,43 @@ public class ServerRecommendationWriteService(
         rec.SuccessfulRecCount++;
 
         await writeDb.SaveChangesAsync();
+
+        // ── Tastemaker badge check (WU36) ────────────────────────────────────────
+        // Anti-self-farm: skip if the reader IS the recommender, or if the rec is anonymous.
+        // Best-effort: badge failure must never propagate back to the calling UI.
+        int? recommenderId = rec.RecommenderId;
+        if (recommenderId.HasValue && recommenderId.Value != userId)
+        {
+            // Increment the per-recommender aggregate counter.
+            // ExecuteUpdateAsync is a no-op when no UserStat row exists — the award is skipped
+            // harmlessly (counter stays 0, threshold not met). Production creates a UserStat row
+            // on user registration; integration tests must seed one explicitly.
+            await writeDb.UserStats
+                .Where(us => us.UserId == recommenderId.Value)
+                .ExecuteUpdateAsync(s => s.SetProperty(
+                    us => us.RecommendationSuccessesEarned,
+                    us => us.RecommendationSuccessesEarned + 1));
+
+            // Read the new total and evaluate badge thresholds.
+            int total = await writeDb.UserStats
+                .Where(us => us.UserId == recommenderId.Value)
+                .Select(us => us.RecommendationSuccessesEarned)
+                .FirstOrDefaultAsync();
+
+            try
+            {
+                // Tier 1 (bronze) — 10 successful recommendations.
+                if (total >= 10) await badges.AwardAsync(recommenderId.Value, SiteBadges.Recommender);
+                // Tier 2 (silver) — 50 successful recommendations.
+                if (total >= 50) await badges.AwardAsync(recommenderId.Value, SiteBadges.RecommenderSilver);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Badge award failed for recommender {RecommenderId} after RecordSuccessAsync — swallowed.",
+                    recommenderId.Value);
+            }
+        }
     }
 
     public async Task RecordAttributionSourceAsync(int storyId, int recommendationId)

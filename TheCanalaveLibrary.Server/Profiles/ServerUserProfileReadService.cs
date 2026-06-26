@@ -35,7 +35,8 @@ public class ServerUserProfileReadService(
                 Privacy          = u.PrivacySettings,
                 Stats            = u.UserStat,
                 Badges           = u.UserBadges
-                    .OrderBy(ub => ub.BadgeKeyNavigation.SortOrder)
+                    .Where(ub => ub.DisplayOrder > 0)
+                    .OrderBy(ub => ub.DisplayOrder)
                     .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
                     .ToList()
             })
@@ -66,7 +67,11 @@ public class ServerUserProfileReadService(
                     v.VouchedUser.UserName!,
                     v.VouchedUser.Tagline,
                     v.VouchedUser.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
-                    new List<UserCardBadgeDto>()),
+                    v.VouchedUser.UserBadges
+                    .Where(ub => ub.DisplayOrder > 0)
+                    .OrderBy(ub => ub.DisplayOrder)
+                    .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                    .ToList()),
                 v.VouchText,
                 v.DateVouched))
             .ToListAsync();

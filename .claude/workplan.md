@@ -754,12 +754,44 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   **Tool:** Sonnet in Claude Code (plan approved 2026-06-24). **Pointer:** `audit/Tags.md` Feature 11,
   `audit/Discovery.md` Feature 34. **Deps:** WU4, WU9, WU11 (all Stage 5).
 
-### WU28 — Discovery pages
-- **Cells:** 31 L3.5 (page), 32 L2/L3/L3.5 (FTS as filter axis + Rank relevance sort), 33 L2/L3/L3.5
-  (Manual Tree Search, stateless pivots).
-- **Do:** SearchPage (`/discover`, random-preloaded, "give me more" = interaction-as-pagination);
-  manual tree pages. **Tool:** opusplan.
-  **Pointer:** `audit/Discovery.md`. **Deps:** WU14, WU23, WU4.
+### WU28 — Discovery: Search Page + FTS consumption + §8.7 default-settings matrix
+- **Cells:** 31 L2 (random batch method); 31 L3.5 (page dispatcher + Desktop/Mobile composites);
+  32 L2/L3-Logic/L3.5 (FTS consumed + verified via the page — already built in `GetListingsAsync`,
+  WU28 exposes + confirms end-to-end). Also additive: `TagIncludeMode { And, Or }` enum
+  (`Core/Discovery/`), `StoryFilterDto.IncludeMode`, `TagFilterSelection.IncludeMode`,
+  `TagFilter.AllowIncludeModeToggle`, `ResultsFilterPanel.ShowTagIncludeModeToggle`/seed-chip params
+  (extend already-Stage-5 components; no separate cell).
+  **Feature 33 (Manual Tree Search) carved into WU40.**
+- **Do:**
+  - **Phase 0** (doc-touch first): workplan WU28 rewrite + WU40 add; `forward_plan.md` resolved items;
+    `audit/Discovery.md` settled-vs-open; skill files `layer2-services.md` / `layer3.5-structure.md`.
+  - **Phase 1a:** `GetRandomBatchAsync(StoryFilterDto filter, int batchSize)` — extract `ApplyFilters`
+    private helper from `GetListingsAsync`; plain random draw from the post-filter set
+    (`OrderBy(Random()).Take(batchSize)`), no shown-id tracking, no TotalCount; interface + impl +
+    integration tests.
+  - **Phase 1b:** `IDiscoveryDefaultsReadService.GetDefaultExcludedInteractionsAsync(string searchModeKey)`
+    — system matrix overlaid with sparse per-user overrides; `HasStarted` key dropped from mapping;
+    `ServerDiscoveryDefaultsReadService`; register in `Program.cs`; integration tests.
+  - **Phase 1c:** `TagIncludeMode { And, Or }` enum; `StoryFilterDto.IncludeMode = And` (default preserves
+    all existing behaviour); `ApplyFilters` Or branch (`Any(st => ids.Contains(st.TagId))`); integration tests.
+  - **Phase 2a:** `TagFilterSelection.IncludeMode`; `TagFilter [Parameter] AllowIncludeModeToggle = false`
+    + AND/OR control above include selectors only (exclude side unchanged); bUnit tests.
+  - **Phase 2b:** `ResultsFilterPanel [Parameter] ShowTagIncludeModeToggle = false`; `[Parameter]
+    IReadOnlyList<TagChipDto> InitialIncludedTags`/`InitialExcludedTags` (closes WU23-deferred seed-chip
+    enrichment); bUnit tests.
+  - **Phase 3a:** `SearchPage.razor` dispatcher (`SharedUI/Discovery/`, `@page "/discover"`,
+    `[AllowAnonymous]`; §8.7 defaults seed on init; two modes: random-append + "Give me more" vs.
+    sorted-offset pagination).
+  - **Phase 3b:** `SearchDesktop.razor` / `SearchMobile.razor` composites (`ShowTagIncludeModeToggle=true`
+    on panel; random mode suppresses pagination + shows Give-me-more button; sorted mode shows pagination).
+  - **Phase 4:** tests — Integration: `DiscoveryDefaultsReadServiceTests`, `RandomBatchTests`,
+    OR-include tag mode. RazorComponents: `SearchDesktopTests` / `SearchMobileTests`,
+    `ResultsFilterPanelTests` (seed-chip + toggle), `TagFilterTests` (AND/OR control).
+- **Cells flipped:** 31 L2 `2→5`; 32 L2/L3/L3.5 `2→5`. Feature 33 unchanged → WU40.
+  Feature 31 L3.5 stays Stage 5 (additive page on already-Stage-5 cell, precedent WU13).
+  L4 stays Stage 1 (visual sign-off pending, consistent with WU8/WU13/WU23 precedent).
+- **Tool:** opusplan (plan approved 2026-06-25). **Pointer:** `audit/Discovery.md` Features 31, 32.
+  **Deps:** WU14, WU23, WU4.
 
 ### WU29 — Recommendations ✓ DONE (2026-06-23/24)
 - **Cells:** 27/28/29/30 L2/L3/L3.5/L4/L5 (L5 includes integration test isolation overhaul);
@@ -971,9 +1003,16 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   composition, `LastReadTimestamp`, `AllowPrivateMessages` gate. **Tool:** opusplan.
   **Pointer:** `audit/Messaging.md`. **Deps:** WU6.
 
-### WU36 — Badges
-- **Cells:** 50 L2/L3/L3.5/L4.
-- **Do:** synchronous inline badge checks; UserBadge display order on profiles. **Tool:** opusplan.
+### WU36 — Badges — DONE ✓ (2026-06-25)
+- **Cells:** 50 L2→5 / L3→5 / L3.5→5 (L4 stays 1 — visual sign-off pending; L1 was already 5).
+- **Did:** `IBadgeReadService` / `IBadgeWriteService` + `EarnedBadgeDto`; `ServerBadgeReadService` /
+  `ServerBadgeWriteService`; DI registration; `UserStat.RecommendationSuccessesEarned` column +
+  `SiteBadges.RecommenderSilver` seed (migration `20260625234308_WU36_Badges`); award trigger wired
+  in `ServerRecommendationWriteService.RecordSuccessAsync` (anti-self-farm, best-effort, idempotent);
+  display-projection fix at all 6 card-producer sites; `BadgeSettingsForm.razor` + `SettingsPage.razor`
+  wiring. Tests: `BadgeServiceTests` (11 Integration) + 6 Tastemaker award-chain tests in
+  `RecommendationWriteServiceTests` + `BadgeSettingsFormTests` (14 RazorComponents). All WU36
+  tests green; pre-existing `ModerationServiceTests` DI failures (7) unrelated to this WU.
   **Pointer:** `audit/Badges.md`. **Deps:** WU30.
 
 ### WU37 — Remaining Stories/Tags cluster

@@ -7,6 +7,7 @@
 @inject IUserProfileReadService ProfileReadService
 @inject IThemeReadService ThemeReadService
 @inject IActiveUserContext ActiveUser
+@inject IBadgeWriteService BadgeService
 
 @* Feature 20 (profile editing) + Feature 3 (theme-selection UI), WU30.
    Self-referential settings page — the active user edits only their own data.
@@ -78,6 +79,12 @@ else
             InitialPrefersDataSaver="@_settings.PrefersDataSaverMode"
             Busy="@_appearanceBusy"
             OnSave="HandleSaveAppearanceAsync" />
+
+        @* Badges sub-form (Feature 50 — badge curation, WU36) *@
+        <BadgeSettingsForm
+            EarnedBadges="@_earnedBadges"
+            Busy="@_badgesBusy"
+            OnSave="HandleSaveBadgesAsync" />
     </div>
 }
 
@@ -86,6 +93,7 @@ else
     private string? _bioHtml;
     private string? _pictureUrl;
     private IReadOnlyList<ThemeDto> _themes = [];
+    private IReadOnlyList<EarnedBadgeDto> _earnedBadges = [];
     private bool _isLoading = true;
 
     // Per-section busy flags so saving one section doesn't disable the others.
@@ -95,6 +103,7 @@ else
     private bool _privacyBusy;
     private bool _authorBusy;
     private bool _appearanceBusy;
+    private bool _badgesBusy;
 
     private string? _successMessage;
     private string? _errorMessage;
@@ -104,14 +113,16 @@ else
         _settings = await SettingsService.GetMySettingsAsync();
         _pictureUrl = _settings.ProfilePictureRelativeUrl;
 
-        // Bio text and theme list can be loaded concurrently.
+        // Bio text, theme list, and badge list can be loaded concurrently.
         if (ActiveUser.UserId is int userId)
         {
-            Task<string?> bioTask    = ProfileReadService.GetProfileTextAsync(userId);
+            Task<string?> bioTask        = ProfileReadService.GetProfileTextAsync(userId);
             Task<IReadOnlyList<ThemeDto>> themesTask = ThemeReadService.GetThemesAsync();
-            await Task.WhenAll(bioTask, themesTask);
-            _bioHtml = bioTask.Result;
-            _themes  = themesTask.Result;
+            Task<IReadOnlyList<EarnedBadgeDto>> badgesTask = BadgeService.GetMyBadgesForCurationAsync(userId);
+            await Task.WhenAll(bioTask, themesTask, badgesTask);
+            _bioHtml      = bioTask.Result;
+            _themes       = themesTask.Result;
+            _earnedBadges = badgesTask.Result;
         }
         else
         {
@@ -166,6 +177,15 @@ else
             () => SettingsService.UpdateAppearanceAsync(args.ThemeId, args.PrefersAnimated, args.PrefersDataSaver),
             v => _appearanceBusy = v,
             "Appearance saved.");
+
+    private async Task HandleSaveBadgesAsync(IReadOnlyList<string> orderedVisibleKeys)
+    {
+        if (ActiveUser.UserId is not int userId) return;
+        await RunWithFeedbackAsync(
+            () => BadgeService.SetDisplayOrderAsync(userId, orderedVisibleKeys),
+            v => _badgesBusy = v,
+            "Badge display saved.");
+    }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
 

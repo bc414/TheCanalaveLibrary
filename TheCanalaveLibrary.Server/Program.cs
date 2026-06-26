@@ -160,6 +160,11 @@ builder.Services.AddScoped<IModerationReadService>(sp => sp.GetRequiredService<I
 builder.Services.AddScoped<IUserSettingsService, ServerUserSettingsService>();
 builder.Services.AddScoped<IUserProfileReadService, ServerUserProfileReadService>();
 builder.Services.AddScoped<IThemeReadService, ServerThemeReadService>();
+// Badges (WU36) — L2 services (Feature 50). Synchronous inline award-checks; curation UI.
+// Write service inherits read (CQRS-lite). Forwarding delegate ensures one instance per scope
+// when either interface is injected.
+builder.Services.AddScoped<IBadgeWriteService, ServerBadgeWriteService>();
+builder.Services.AddScoped<IBadgeReadService>(sp => sp.GetRequiredService<IBadgeWriteService>());
 
 WebApplication app = builder.Build();
 

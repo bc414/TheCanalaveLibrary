@@ -7,7 +7,8 @@ namespace TheCanalaveLibrary.Server;
 /// Server-side read implementation of <see cref="IFollowingReadService"/>. Uses
 /// <see cref="ReadOnlyApplicationDbContext"/> (no-tracking) and projects straight to DTOs.
 /// Avatar URLs are copied verbatim from <c>User.ProfilePictureRelativeUrl</c> (or a default
-/// fallback) — not resolved through <c>ISpriteReadService</c>. Badges are empty until WU36.
+/// fallback) — not resolved through <c>ISpriteReadService</c>. Badges project the curated visible
+/// subset (DisplayOrder &gt; 0, ordered by DisplayOrder); <see cref="UserCard"/> caps the display row.
 /// </summary>
 public class ServerFollowingReadService(
     ReadOnlyApplicationDbContext readDb,
@@ -54,7 +55,11 @@ public class ServerFollowingReadService(
                 f.FollowedUserNavigation.UserName!,
                 f.FollowedUserNavigation.Tagline,
                 f.FollowedUserNavigation.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
-                new List<UserCardBadgeDto>()
+                f.FollowedUserNavigation.UserBadges
+                    .Where(ub => ub.DisplayOrder > 0)
+                    .OrderBy(ub => ub.DisplayOrder)
+                    .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                    .ToList()
             ))
             .ToListAsync();
     }
@@ -70,7 +75,11 @@ public class ServerFollowingReadService(
                     v.VouchedUser.UserName!,
                     v.VouchedUser.Tagline,
                     v.VouchedUser.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
-                    new List<UserCardBadgeDto>()
+                    v.VouchedUser.UserBadges
+                        .Where(ub => ub.DisplayOrder > 0)
+                        .OrderBy(ub => ub.DisplayOrder)
+                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                        .ToList()
                 ),
                 v.VouchText,
                 v.DateVouched
@@ -93,7 +102,11 @@ public class ServerFollowingReadService(
                     v.VouchingUser.UserName!,
                     v.VouchingUser.Tagline,
                     v.VouchingUser.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
-                    new List<UserCardBadgeDto>()
+                    v.VouchingUser.UserBadges
+                        .Where(ub => ub.DisplayOrder > 0)
+                        .OrderBy(ub => ub.DisplayOrder)
+                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                        .ToList()
                 ),
                 v.VouchText,
                 v.DateVouched

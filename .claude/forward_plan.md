@@ -218,6 +218,22 @@ Guardrails:
 
 **Resolved:**
 
+- **WU36 Badges — mechanism, scope, and Tastemaker tiers** — resolved (2026-06-25, WU36 planning):
+  (1) **Mechanism:** synchronous inline award-check; `IBadgeWriteService.AwardAsync` (idempotent,
+  best-effort try/catch after primary `SaveChangesAsync`). Background worker is post-MVP.
+  (2) **Scope in WU36:** one live award trigger only — Recommender / "Tastemaker." All other badges
+  deferred to their source-feature WUs.
+  (3) **New `UserStat` column:** `RecommendationSuccessesEarned` (int, author-side). Do not reuse
+  `RecommendationsFoundUseful` (reader-side).
+  (4) **Two tiers:** `SiteBadges.Recommender` (threshold 10, existing) + `SiteBadges.RecommenderSilver`
+  (threshold 50, new constant + seed row in WU36 migration).
+  (5) **Default visibility on award:** `DisplayOrder = max+1` (visible by default; curation UI lets
+  users hide/reorder; `UserCard.razor` caps to 3 badges).
+  (6) **Anti-self-farm:** `RecordSuccessAsync` increments/awards only when `RecommenderId != null &&
+  RecommenderId != userId`.
+  See `canalave-conventions/layer2-services.md` "Synchronous Inline Badge Awards" and
+  `audit/Badges.md` "WU36 Settled Decisions."
+
 - **WU34 Moderation — eight design decisions** — resolved (2026-06-25, WU34 planning):
   (1) **Content removal:** soft-delete default (`IsHidden + DateModeratedRemoved + ModerationRemovalReason`,
   reversible, author notified) across Story/BaseComment/BaseBlogPost/Recommendation; separate explicit

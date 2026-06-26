@@ -467,25 +467,39 @@ required non-nullable on all types.
 
 ## Badge Checks
 
-**MVP:** synchronous inline checks in service methods after qualifying actions.
-Service reads `UserStats` counters and awards badge if threshold met.
+**MVP (WU36):** synchronous inline, best-effort. Call `IBadgeWriteService.AwardAsync` after the
+counter `ExecuteUpdateAsync` and after the primary `SaveChangesAsync`, inside a `try/catch` — never
+fail the parent operation on a badge error. See `layer2-services.md` "Synchronous Inline Badge
+Awards" for the full pattern and rationale.
+
+`AwardAsync` is **idempotent** (no-op if already earned; returns `true` only on first award). No
+separate `HasBadgeAsync` is needed — call `AwardAsync` and discard the bool if unused.
 
 ```csharp
-if (userStats.StoryCount >= 1 && !await HasBadgeAsync(userId, SiteBadges.FirstStory))
-    await AwardBadgeAsync(userId, SiteBadges.FirstStory);
-```
+// After primary SaveChangesAsync + counter ExecuteUpdateAsync:
+int total = await writeDb.UserStats
+    .Where(us => us.UserId == targetUserId)
+    .Select(us => us.SomeCounter)
+    .FirstOrDefaultAsync();
 
-**Future:** async worker scans for newly qualified users. This is a Layer 2 optimization
-(reads from PostgreSQL), not Layer 7 (Redis).
-
-Badge keys are string constants in `SiteConstants.cs`:
-```csharp
-public static class SiteBadges
+try
 {
-    public const string FirstStory = "first-story";
-    public const string WordSmith100K = "100k-words";
+    if (total >= 10) await badgeService.AwardAsync(targetUserId, SiteBadges.Recommender);
+    if (total >= 50) await badgeService.AwardAsync(targetUserId, SiteBadges.RecommenderSilver);
+}
+catch (Exception ex)
+{
+    logger.LogWarning(ex, "Badge award failed for user {UserId} — swallowed.", targetUserId);
 }
 ```
+
+**Anti-self-farm guard:** when the mechanic is social, validate `actorId != beneficiaryId` AND
+`nullableFk != null` before incrementing or calling `AwardAsync`.
+
+**Post-MVP:** a background worker replaces inline checks. `IBadgeWriteService` hides the swap.
+
+Live `SiteBadges` constants: `Patron`, `Recommender`, `RecommenderSilver`, `BetaReader`, `Architect`,
+`Artist`. Keys are `public const string` fields on `SiteConstants.SiteBadges`.
 
 ## UserStats Updates
 
@@ -511,6 +525,7 @@ Background worker (F58, post-MVP) periodically recalculates to correct drift.
 | `CommentsWritten` | commenter | `ServerCommentWriteService.Post*/Delete` (all 4 contexts: chapter/blogpost/group/userprofile) | ±1 |
 | `RecommendationsWritten` | recommender | `ServerRecommendationWriteService.SubmitAsync` | +1 |
 | `RecommendationsReceived` | story author | `ServerRecommendationWriteService.SubmitAsync` | +1 |
+| `RecommendationSuccessesEarned` | recommender | `ServerRecommendationWriteService.RecordSuccessAsync` (new column, WU36) | +1 |
 | `BlogPostsWritten` | author | `ServerBlogPostWriteService` create/delete | ±1 |
 | `GroupsJoined` | member | `ServerGroupWriteService` join/leave | ±1 |
 | `FavoritesOnStories` | story author | `ServerUserStoryInteractionWriteService` | **transition-delta** |

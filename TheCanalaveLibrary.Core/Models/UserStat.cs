@@ -44,6 +44,16 @@ public partial class UserStat
 
     public int RecommendationsReceived { get; set; }
 
+    /// <summary>
+    /// Author-side Tastemaker aggregate: how many readers followed one of this user's recommendations
+    /// to a story and clicked "this recommendation was helpful" (distinct RecommendationSuccess rows,
+    /// anti-self-farm). Incremented in <see cref="ServerRecommendationWriteService.RecordSuccessAsync"/>.
+    /// Used by the badge threshold checks for <see cref="SiteBadges.Recommender"/> (≥10) and
+    /// <see cref="SiteBadges.RecommenderSilver"/> (≥50). Do NOT confuse with
+    /// <see cref="RecommendationsFoundUseful"/> (reader-side, a different concept).
+    /// </summary>
+    public int RecommendationSuccessesEarned { get; set; }
+
     public int SpotlightCount { get; set; }
 
     public int ActiveReportCount { get; set; }

@@ -7,7 +7,8 @@ namespace TheCanalaveLibrary.Server;
 /// Server-side read implementation for Recommendations. No-tracking projections via
 /// <see cref="ReadOnlyApplicationDbContext"/>. Approved-only filter, highlighted/spotlighted first.
 /// Per-viewer <c>IsLikedByCurrentUser</c> is an EF-translated EXISTS subquery; no separate round-trip.
-/// Badges are empty until WU36.
+/// Recommender <see cref="UserCardDto.Badges"/> projects the curated visible subset
+/// (DisplayOrder &gt; 0, ordered by DisplayOrder); <see cref="UserCard"/> caps the display row.
 /// </summary>
 public class ServerRecommendationReadService(
     ReadOnlyApplicationDbContext readDb,
@@ -40,7 +41,11 @@ public class ServerRecommendationReadService(
                     r.Recommender.UserName!,
                     r.Recommender.Tagline,
                     r.Recommender.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
-                    new List<UserCardBadgeDto>()),
+                    r.Recommender.UserBadges
+                        .Where(ub => ub.DisplayOrder > 0)
+                        .OrderBy(ub => ub.DisplayOrder)
+                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                        .ToList()),
                 r.RecommendationDetail.Text,
                 r.LikeCount,
                 r.IsHiddenGem,
@@ -66,7 +71,11 @@ public class ServerRecommendationReadService(
                     r.Recommender.UserName!,
                     r.Recommender.Tagline,
                     r.Recommender.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
-                    new List<UserCardBadgeDto>()),
+                    r.Recommender.UserBadges
+                        .Where(ub => ub.DisplayOrder > 0)
+                        .OrderBy(ub => ub.DisplayOrder)
+                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                        .ToList()),
                 r.RecommendationDetail.Text,
                 r.LikeCount,
                 r.IsHiddenGem,
