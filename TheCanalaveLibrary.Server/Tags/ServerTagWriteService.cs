@@ -31,6 +31,7 @@ public class ServerTagWriteService(
             SpriteIdentifier = dto.SpriteIdentifier?.Trim(),
             IsFanon = dto.IsFanon,
             AllowOCDetails = TagValidations.CoerceAllowOCDetails(dto.AllowOCDetails, dto.TagTypeId),
+            AllowSettingDetails = TagValidations.CoerceAllowSettingDetails(dto.AllowSettingDetails, dto.TagTypeId),
             ParentTagId = dto.ParentTagId
         };
 
@@ -63,6 +64,7 @@ public class ServerTagWriteService(
         tag.SpriteIdentifier = dto.SpriteIdentifier?.Trim();
         tag.IsFanon = dto.IsFanon;
         tag.AllowOCDetails = TagValidations.CoerceAllowOCDetails(dto.AllowOCDetails, dto.TagTypeId);
+        tag.AllowSettingDetails = TagValidations.CoerceAllowSettingDetails(dto.AllowSettingDetails, dto.TagTypeId);
         tag.ParentTagId = dto.ParentTagId;
 
         await db.SaveChangesAsync();

@@ -5,8 +5,8 @@ namespace TheCanalaveLibrary.Core;
 /// for search results (use <see cref="StoryListingDto"/> for listing surfaces); good for the full
 /// story detail page.
 ///
-/// <see cref="Tags"/> are sprite-resolved <see cref="TagChipDto"/>s — the producing read service
-/// calls <c>ISpriteReadService.GetSpriteUrl</c> during projection (same discipline as listing service).
+/// <see cref="Tags"/> are sprite-resolved <see cref="TagChipDto"/>s (flat types: Genre, Setting,
+/// ContentWarning, CrossoverFandom) plus character chips merged in from <see cref="Characters"/>.
 /// <see cref="CoverArtRelativeUrl"/> is a stored relative URL, used verbatim (never resolved through
 /// a service — same discipline as <see cref="StoryListingDto.CoverArtRelativeUrl"/>).
 /// <see cref="AuthorId"/> is nullable to handle anonymized/deleted-author stories.
@@ -27,7 +27,15 @@ public class StoryDetailsDTO
     public string? CoverArtRelativeUrl { get; set; }
     public Rating Rating { get; set; }
     public StoryStatusEnum Status { get; set; }
+
+    /// <summary>Flat tag chips (Genre/Setting/ContentWarning/CrossoverFandom) + character chips.</summary>
     public IReadOnlyList<TagChipDto> Tags { get; set; } = [];
+
+    /// <summary>Per-character display entries with OC overlay data.</summary>
+    public IReadOnlyList<CharacterDisplayEntry> Characters { get; set; } = [];
+
+    /// <summary>Character pairings (ships) with resolved member names.</summary>
+    public IReadOnlyList<PairingDisplayEntry> Pairings { get; set; } = [];
 
     /// <summary>
     /// Legacy: chapter title list kept for backward-compatibility with the L5 JSON endpoint
@@ -36,4 +44,22 @@ public class StoryDetailsDTO
     /// per-chapter metadata. This field will be removed when the L5 endpoint is rebuilt (post-MVP).
     /// </summary>
     public List<string> ChapterNames { get; set; } = [];
+}
+
+/// <summary>Per-character display data for the story view page (OC overlay info).</summary>
+public sealed record CharacterDisplayEntry(
+    TagChipDto Chip,
+    TagPriority Priority,
+    bool IsOc,
+    string? OcName,
+    string? OcBio);
+
+/// <summary>Character pairing display row — member names already resolved from tag names.</summary>
+public sealed record PairingDisplayEntry(
+    CharacterPairingType PairingType,
+    TagPriority Priority,
+    IReadOnlyList<string> MemberNames)
+{
+    public string Separator => PairingType == CharacterPairingType.Romantic ? " ♥ " : " & ";
+    public string DisplayNames => string.Join(Separator, MemberNames);
 }

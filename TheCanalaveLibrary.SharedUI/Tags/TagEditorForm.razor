@@ -87,6 +87,18 @@
             </div>
         }
 
+        @if (_model.TagTypeId == TagTypeEnum.Setting)
+        {
+            <div class="flex items-center gap-2">
+                <input id="tag-allow-setting-details"
+                       type="checkbox"
+                       class="h-4 w-4 rounded border-[--color-border] accent-[--color-primary]"
+                       @bind="_model.AllowSettingDetails" />
+                <label class="text-sm text-text" for="tag-allow-setting-details">Allow setting details</label>
+                <span class="text-xs text-[--color-text-muted]">(original settings or AU-specific locations)</span>
+            </div>
+        }
+
         @if (!string.IsNullOrEmpty(_serverError))
         {
             <p class="text-sm text-[--color-danger]" role="alert">@_serverError</p>
@@ -147,6 +159,7 @@
             _model.Description = EditingTag.Description;
             _model.IsFanon = EditingTag.IsFanon;
             _model.AllowOCDetails = EditingTag.AllowOCDetails;
+            _model.AllowSettingDetails = EditingTag.AllowSettingDetails;
             _model.ParentTagId = EditingTag.ParentTagId;
         }
         else
@@ -160,8 +173,9 @@
         _isSaving = true;
         _serverError = null;
 
-        // Coerce AllowOCDetails for non-Character types.
+        // Coerce gated flags for their respective types.
         bool allowOcDetails = _model.TagTypeId == TagTypeEnum.Character && _model.AllowOCDetails;
+        bool allowSettingDetails = _model.TagTypeId == TagTypeEnum.Setting && _model.AllowSettingDetails;
 
         await OnSave.InvokeAsync(new TagEditorFormResult
         {
@@ -171,6 +185,7 @@
             SpriteIdentifier = string.IsNullOrWhiteSpace(_model.SpriteIdentifier) ? null : _model.SpriteIdentifier.Trim(),
             IsFanon = _model.IsFanon,
             AllowOCDetails = allowOcDetails,
+            AllowSettingDetails = allowSettingDetails,
             ParentTagId = _model.ParentTagId
         });
 
@@ -185,6 +200,7 @@
         public string? SpriteIdentifier { get; set; }
         public bool IsFanon { get; set; }
         public bool AllowOCDetails { get; set; }
+        public bool AllowSettingDetails { get; set; }
         public int? ParentTagId { get; set; }
     }
 }

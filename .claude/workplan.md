@@ -1023,21 +1023,46 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   tests green; pre-existing `ModerationServiceTests` DI failures (7) unrelated to this WU.
   **Pointer:** `audit/Badges.md`. **Deps:** WU30.
 
-### WU37 — Remaining Stories/Tags cluster
-- **Cells:** 9 L2/L3/L3.5/L4 (Series), 10 L2/L3/L3.5/L4 (Relationships), 12 L2/L3/L3.5 (Story Tagging
-  write), 15 L2/L3/L3.5/L4 (Saved Tag Selections, copy-on-write share).
-- **Note (Feature 12 + 10):** Full OC workflow, Priority ("Primary"/"Supporting"), and SettingDetails
-  design from `Tag_Design_Deliberations.md` is captured in `audit/Tags.md` Feature 12. Key points:
-  OC enforcement via `TR_StoryCharacters_EnforceOCLogic` (uses `AllowOCDetails` gate set by WU27.5);
-  `Priority` TINYINT enum on story↔tag link; `AllowSettingDetails` gate + `SettingDetails` row
-  (absent from current model — add here); fanonize `TagUpdateSuggestion` notify/migrate seam.
-- **Tool:** opusplan. **Pointer:** `audit/Stories.md`, `audit/Tags.md` Features 12, 15. **Deps:** WU11, WU24, WU27.5.
+### WU37 — Story Tagging — structured authoring (Feature 12)
+- **Cells:** 12 L2/L3/L3.5 → Stage 5 (L4 → Stage 1, visual sign-off pending). L1 additions
+  (`AllowSettingDetails`, `StoryCharacterPairing` rename, `UNIQUE(SettingDetail)`, new
+  `StoryCharacterPairingMember`) noted against the existing Stage-5 L1 cell.
+- **Scope note (2026-06-25):** Features 9 (Series), 10 (story↔story Relationships), 15 (Saved Tag
+  Selections) were originally bundled here; carved to WU41/WU42/WU43 — each is independently
+  L1-settled, greenfield from L2, with no design coupling to Feature 12.
+- **Architecture:** shared catalog / differentiated per-story association.
+  - Genre/ContentWarning/CrossoverFandom → `StoryTag` (flat)
+  - Setting → `StoryTag` + optional `SettingDetail` side-row
+  - Character → `StoryCharacter` (replaces `StoryTag`; OC payload + pairing anchor)
+  - Pairing (ship) → `StoryCharacterPairing` + `StoryCharacterPairingMember` join (renamed from
+    `StoryCharacterRelationship`; promotes the only implicit shadow join to first-class entity)
+  - `TagTypeEnum.Relationship` removed; a pairing is not a catalog tag.
+  - `ApplyFilters` partitions included/excluded ids by `TagTypeId`: Character ids →
+    `s.StoryCharacters.Any(...)`, all others → `s.StoryTags.Any(...)`.
+    (See `audit/Discovery.md` Feature 31.)
+- **DONE ✓ (2026-06-25):** Phase 0 doc-touch → Phase 1 L1 migration (`WU37_StructuredStoryTagging`)
+  → Phase 2 L2 write/read + `ApplyFilters` character branch → Phase 3 L3/L3.5 `StoryPropertiesForm`
+  rebuild (`CharacterEntry`, `SettingEntry`, `PairingBuilder`) + `StoryEditorPage` mapping
+  → Phase 5 integration tests (`StoryTaggingTests.cs`, 12 tests) + RazorComponents tests
+  (`CharacterEntryTests.cs` 8 tests, `PairingBuilderTests.cs` 5 tests) → Phase 6 view-page display
+  (`StoryDetailsDTO` extended, `GetStoryByIdAsync` projection, `StoryDesktop`/`StoryMobile` OC names
+  + ship pills). L4 stays Stage 1 pending human visual sign-off.
+  Final: 348 Integration + 440 RazorComponents + 434 Unit = **1222 tests green**.
+- **Enforcement:** service-layer only (`CanSave()` / `StoryValidationException`); no DB trigger.
+- **Tool:** opusplan. **Pointer:** `audit/Tags.md` Feature 12; `audit/Discovery.md` Feature 31
+  (ApplyFilters branch). **Deps:** WU11, WU24, WU27.5.
 
-### WU38 — Account deletion UI + View Count + Export
-- **Cells:** 52 L3/L3.5 (deletion UI; service in WU1), 45 L2/L3 (view-count MVP direct increment, first
-  client ping), 54 L2 (epub/pdf export, app-layer only).
-- **Tool:** opusplan. **Pointer:** `audit/Identity.md`, `audit/Stories.md` Feature 45, `audit/Export.md`.
-  **Deps:** WU25.
+### WU38a — Account Deletion UI
+- **Cells:** 52 L3/L3.5 (deletion UI; service already in WU1).
+- **Tool:** opusplan. **Pointer:** `audit/Identity.md`. **Deps:** WU25.
+
+### WU38b — View Count
+- **Cells:** 45 L2/L3 (view-count MVP direct increment, first client ping).
+- **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 45. **Deps:** WU25.
+
+### WU38c — Export (epub/pdf)
+- **Cells:** 54 L2 (epub/pdf export, app-layer only).
+- **Tool:** opusplan. **Pointer:** `audit/Export.md`. **Deps:** WU25.
 
 ### WU40 — Manual Tree Search (Feature 33)
 - **Cells:** 33 L2 / L3-Logic / L3.5 → Stage 5.
@@ -1064,6 +1089,29 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 > `SuspendedUntilUtc`) / Banned users at login and surface the Warned banner in layout chrome. WU34 ships
 > the `AccountStatus` state + notifications it builds on; enforcement is a security-surface slice to append
 > as its own WU when scheduled (candidate: alongside WU38 account-deletion UI). No stage number yet.
+
+### WU41 — Series (Feature 9)
+- **Cells:** 9 L2/L3/L3.5/L4 → Stage 5 (L4 pending visual sign-off).
+- **Do:** `ISeriesReadService` / `ISeriesWriteService`; `SeriesEntry` ordered membership (position
+  field); series creation/edit/delete (author-gated); series browse page + `StoryDeck`; series
+  membership display on `StoryPage`. L1 already Stage 5 (`Series`, `SeriesEntry` present).
+- **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 9. **Deps:** WU14, WU24.
+
+### WU42 — Story↔Story Relationships (Feature 10)
+- **Cells:** 10 L2/L3/L3.5/L4 → Stage 5 (L4 pending visual sign-off).
+- **Do:** `IStoryRelationshipReadService` / `IStoryRelationshipWriteService`; create/accept/reject
+  flow on `StoryRelationship` (`SourceStoryId`, `TargetStoryId`, `RelationshipTypeId`, `StatusId`);
+  related-stories display on `StoryPage`. L1 already Stage 5 (`StoryRelationship`,
+  `StoryRelationshipType` present — unrelated to the `StoryCharacterPairing` introduced in WU37).
+- **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 10. **Deps:** WU24, WU25.
+
+### WU43 — Saved Tag Selections (Feature 15)
+- **Cells:** 15 L2/L3/L3.5/L4 → Stage 5 (L4 pending visual sign-off).
+- **Do:** `ISavedTagSelectionReadService` / `ISavedTagSelectionWriteService`; save/load/delete/share
+  (copy-on-write on public share) of tag filter sets; UI in `ResultsFilterPanel` (load dropdown +
+  save-as affordance). L1 already Stage 5 (`SavedTagSelection`, `SavedTagSelectionEntry` present with
+  unique constraints).
+- **Tool:** opusplan. **Pointer:** `audit/Tags.md` Feature 15. **Deps:** WU23, WU27.5.
 
 ---
 

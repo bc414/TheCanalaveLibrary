@@ -57,7 +57,6 @@ public class TagDirectoryTests : TestContext
         ]},
         new() { TagType = TagTypeEnum.ContentWarning,  Nodes = [] },
         new() { TagType = TagTypeEnum.CrossoverFandom, Nodes = [] },
-        new() { TagType = TagTypeEnum.Relationship,    Nodes = [] },
     ];
 
     // ── Desktop — section headings ────────────────────────────────────────────

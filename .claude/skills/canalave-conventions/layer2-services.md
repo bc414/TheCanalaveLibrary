@@ -657,6 +657,68 @@ the user must explicitly un-designate first. **Settled — do not revisit** (res
 bool IsLiked)` so the UI reconciles optimistic state without a re-read. No notification fires on a
 recommendation like — anti-addictive design (§6.11), same as `CommentLike`.
 
+## Structured Tag Authoring — Routing and Validation (WU37)
+
+### Write path — route by tag type
+
+`StoryMappers.UpdateStoryEditableProperties` clears and rebuilds each per-story collection.
+Route by `TagTypeId` on the incoming DTO:
+
+```csharp
+// StoryMappers.cs — structured routing (WU37)
+foreach (var sc in dto.StoryCharacters)
+    story.StoryCharacters.Add(new StoryCharacter { CharacterTagId = sc.TagId, ... });
+
+foreach (var st in dto.FlatTags)   // Genre/ContentWarning/CrossoverFandom/Setting
+    story.StoryTags.Add(new StoryTag { TagId = st.TagId, Priority = st.Priority });
+
+foreach (var sd in dto.SettingDetails)
+    story.SettingDetails.Add(new SettingDetail { BaseTagId = sd.BaseTagId, ... });
+
+foreach (var sp in dto.StoryCharacterPairings)
+{
+    var pairing = new StoryCharacterPairing { PairingType = sp.PairingType, Priority = sp.Priority };
+    foreach (var memberId in sp.MemberStoryCharacterIds)
+        pairing.Members.Add(new StoryCharacterPairingMember { StoryCharacterId = memberId });
+    story.StoryCharacterPairings.Add(pairing);
+}
+```
+
+**Character never touches `StoryTag`.** Setting appears in both `StoryTag` (for catalog association)
+and optionally `SettingDetail` (for per-story custom name/description).
+
+### Validation — server re-reads gates from Tag
+
+The write service calls `ServerStoryWriteService.ValidateStructuredTagsAsync` (or extends `CanSave()`)
+after loading `Tag` rows for all referenced TagIds. **Never trust DTO-carried `AllowOCDetails` or
+`AllowSettingDetails`** — load fresh from the `Tag` table. See `cross-cutting.md` "Structured Tag
+Authoring & Legality Enforcement" for the full rules table.
+
+### Per-type filter branch in `ApplyFilters`
+
+`ApplyFilters(IQueryable<Story> q, StoryFilterDto filter)` must partition tag ids by type **before**
+building the include/exclude predicates, because Character ids no longer appear in `StoryTags`:
+
+```csharp
+// WU37 change to ApplyFilters — partition by TagTypeId
+var characterIds = filter.IncludedTagIds.Where(IsCharacterTag).ToList();
+var otherIds     = filter.IncludedTagIds.Where(t => !IsCharacterTag(t)).ToList();
+
+// Character branch
+foreach (var id in characterIds)
+    q = q.Where(s => s.StoryCharacters.Any(sc => sc.CharacterTagId == id));
+
+// Flat-tag branch (Setting/Genre/ContentWarning/CrossoverFandom)
+foreach (var id in otherIds)
+    q = q.Where(s => s.StoryTags.Any(st => st.TagId == id));
+```
+
+`IsCharacterTag` resolves from `TagTypeId` carried on `StoryFilterDto` tag-metadata (or a helper that
+queries `Tag.TagTypeId` for a given id set). The same partition applies to `ExcludedTagIds`.
+
+`StoryFilterDto` gains the per-id type metadata to support this without an extra DB round-trip; or the
+write path sends `(TagId, TagTypeId)` tuples rather than flat ids.
+
 ## `AllowPrivateMessages` Gate (settled WU35)
 
 `User.PrivacySettings.AllowPrivateMessages` is a **`SocialInteractionPermission` enum** (not a bool)

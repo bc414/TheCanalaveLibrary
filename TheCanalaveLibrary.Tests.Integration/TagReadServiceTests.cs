@@ -228,14 +228,14 @@ public class TagReadServiceTests(PostgresFixture postgres) : IntegrationTestBase
     // ── GetTagDirectoryAsync ──────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetTagDirectoryAsync_GroupsByType_AllSixTypesPresent()
+    public async Task GetTagDirectoryAsync_GroupsByType_AllFiveTypesPresent()
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         ITagReadService svc = scope.ServiceProvider.GetRequiredService<ITagReadService>();
 
         List<TagDirectoryGroupDto> result = await svc.GetTagDirectoryAsync();
 
-        result.Should().HaveCount(6, "there are 6 TagTypeEnum values");
+        result.Should().HaveCount(5, "there are 5 TagTypeEnum values (Relationship removed in WU37)");
         result.Select(g => g.TagType)
             .Should().BeEquivalentTo(Enum.GetValues<TagTypeEnum>(), "all types are represented");
     }

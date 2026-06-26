@@ -23,6 +23,12 @@ never cached cross-user/theme).
 `IActiveUserContext.Theme`/`PrefersAnimatedSprites`, now that that context exists. Small, low-risk
 follow-on found while building WU12's `IActiveUserContext` — not a re-opened Feature 14 cell.
 
+**WU37 naming correction (2026-06-25):** `StoryCharacterRelationship` → **`StoryCharacterPairing`**;
+`CharacterRelationshipType` → **`CharacterPairingType`** (Romantic/Platonic); new first-class join
+`StoryCharacterPairingMember` replaces the EF auto-generated shadow table
+`StoryCharacterStoryCharacterRelationship`. Feature 10's unrelated `StoryRelationship` /
+`StoryRelationshipType` (story-to-story) are unchanged.
+
 **Components:** `TagSelector` (`SharedUI/Tags/` — moved out of the legacy `Components/` folder; see
 `canalave-conventions/SKILL.md` "Code Organization"). The empty, unused `TagViewModel.cs` that sat
 alongside it was deleted in the same move. **The relocation is folder-only — `TagSelector`'s content is
@@ -102,43 +108,120 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
     server error renders in `role="alert"`.
 
 ## Feature 12 — Story Tagging
-- **L1 — Stage 5.** `StoryTag`, `StoryCharacter`, `StoryCharacterRelationship`, `SettingDetail` all
-  present with priorities and relationship-type conversion. *Note:* OC-detail enforcement is spec'd as a DB
-  **trigger** (when `AllowOCDetails`), which is a manual migration edit — not present (no migrations exist).
-  Tracked as a Layer-1 follow-up, not a downgrade.
-  **L1 gap (WU37 add):** `AllowSettingDetails` flag (parallel to `AllowOCDetails`) is absent from model +
-  spec but documented in `Tag_Design_Deliberations.md` §7 — Setting/AU tags only; gates `SettingDetail`
-  creation; add in WU37.
-- **L2 — Stage 2.** No tagging write service. **L3/L3.5 — Stage 4** (via `TagSelector`, see Feature 14).
-  **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
+- **L1 — Stage 5.** `StoryTag`, `StoryCharacter`, `StoryCharacterPairing` (renamed from
+  `StoryCharacterRelationship` in WU37), `SettingDetail` all present with priorities and pairing-type
+  conversion. *Note:* the spec's SQL-Server-era `TR_StoryCharacters_EnforceOCLogic` trigger is
+  superseded by service-layer `StoryValidationException` (WU37 settled decision — see below).
+  **L1 additions in WU37:** `Tag.AllowSettingDetails`; `StoryCharacterPairing` rename + `PairingType`
+  field + `CharacterPairingType` enum; new `StoryCharacterPairingMember` first-class join; `UNIQUE(StoryId,
+  BaseTagId)` on `SettingDetail`; `TagChipDto.AllowSettingDetails`.
+- **L2 — Stage 5. L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4 — Stage 1** (pending human visual
+  sign-off on sub-component styling). **L5 — Stage 5. L6 — Stage 2.**
 
-  **Captured-for-later — design from `Tag_Design_Deliberations.md` (WU37 scope, not WU27.5):**
+  **WU37 Stage notes (2026-06-25):**
 
-  - **OC workflow (§2, §6):** Characters split into a dedicated `StoryCharacters`/OCs table (stable
-    per-story character IDs for relationships; OC override secondary). Columns: `IsOC`, `OC_Name`,
-    `OC_Bio`. "OC Bulbasaur \*" display with tooltip when `OC_Name` populated. **Sprite always from
-    the base tag** — users cannot upload custom OC sprites (keeps user images out of site-standard
-    search cards). `IsOC = 1` legal only where `Tag.AllowOCDetails = true` (generic Pokémon, "OC
-    Trainer"/"OC Human" — never named characters like "Ash Ketchum"). Enforcement via DB trigger
-    `TR_StoryCharacters_EnforceOCLogic`. **WU27.5 sets the `AllowOCDetails` gate on Tag (Character-type
-    only in `TagEditorForm`); WU37 consumes it.**
+  **L2 — how verified:** Built write path (Phase 2): `ServerStoryWriteService` extended to route
+  characters → `StoryCharacters`, settings → `StoryTag`+`SettingDetail`, pairings → `StoryCharacterPairing`+
+  `StoryCharacterPairingMember`, flat types → `StoryTag`. Validation in `StoryValidations.cs`: OC gate
+  (rejects `IsOc=true` on tag with `AllowOCDetails=false`), SettingDetail gate (`AllowSettingDetails`),
+  ContentWarning priority coercion to Primary, pairing-member count ≥2, pairing-members in story's
+  character set. `GetStoryForEditAsync` hydrates structured collections. `ApplyFilters` partitioned by
+  tag type — Character ids match `s.StoryCharacters.Any(...)`, all others match `s.StoryTags.Any(...)`.
+  `ServerTagReadService.GetTagChipsByIdsAsync` extended with `AllowOCDetails` and `AllowSettingDetails`
+  fields for UI gating. `Story : IEditableStoryProperties` removed (was causing EF Core shadow-nav
+  registration of `StoryCharacterPairings`, making `Include(s => s.StoryCharacterPairings)` throw
+  `InvalidOperationException`).
+  - **Unit** (`StoryTaggingValidationTests.cs` + existing mapper unit tests, 434 total green): OC gate
+    reject/allow, SettingDetail gate reject/allow, ContentWarning coercion, pairing member count,
+    pairing member not in story.
+  - **Integration** (`StoryTaggingTests.cs`, new; 12 tests): character routing (StoryCharacters not
+    StoryTags), CW priority coercion, OC gate reject/allow, SettingDetail gate reject/allow, pairing
+    member count < 2 throws, pairing member not in story throws, pairing persistence (StoryCharacterPairing
+    + StoryCharacterPairingMembers), GetStoryForEditAsync round-trip, discovery character filter via
+    StoryCharacters, sanity-check that character is absent from StoryTags. 348 integration tests green.
 
-  - **Priority / "Primary vs Supporting" (§5):** `Priority` TINYINT (0=None, 1=Primary, 2=Supporting)
-    on the story↔tag link (already present as `StoryTag.Priority` / `TagPriority`). User-facing labels:
-    "Primary" / "Supporting". Applies to Genre, Character, Relationship — **not** ContentWarning (to be
-    enforced by a trigger in WU37).
+  **L3/L3.5 — how verified:** Built Phase 3 authoring UI: `StoryPropertiesViewModel.cs` replaced single
+  `SelectedTags` list with four structured collections (`SelectedFlatTags`, `SelectedCharacters`,
+  `SelectedSettingDetails`, `SelectedPairings`). New presentational sub-components (no `@inject`,
+  bUnit-testable): `CharacterEntry.razor` (Priority select, OC checkbox gated by `AllowOCDetails`,
+  OcName/OcBio when IsOc), `SettingEntry.razor` (Name + Description inputs), `PairingBuilder.razor`
+  (member toggle buttons, Romantic/Platonic radio, Priority select, Add/Remove). `StoryPropertiesForm.razor`
+  rebuilt with per-type chip lists, structured state dictionaries, `RebuildViewModel()` pattern, `@key`
+  directives on selectors for programmatic removal. `StoryEditorPage.razor` updated with 4 new init
+  parameters and structured DTO mapping on submit.
+  View-page display (Phase 6): `StoryDetailsDTO` extended with `Characters` and `Pairings` collections
+  + display records `CharacterDisplayEntry` / `PairingDisplayEntry`. `GetStoryByIdAsync` projection
+  extended to include character and pairing data with sprite resolution. `StoryDesktop.razor` and
+  `StoryMobile.razor` render OC character names and ship pairing pills in the metadata section.
+  - **RazorComponents** (`CharacterEntryTests.cs`, 8 tests; `PairingBuilderTests.cs`, 5 tests): chip
+    name renders, priority select present, OC toggle gated by AllowOCDetails, OC fields gated by IsOc,
+    Remove fires callback, priority change fires OnChanged, pairing add UI visible only with 2+ chars,
+    existing pairings show member names, Remove fires OnPairingsChanged, Add button disabled with no
+    members. 440 RazorComponents tests green.
+  - **Visual sign-off:** pending human check (L4 stays Stage 1).
 
-  - **SettingDetails (§7, §8):** `SettingDetail` row for custom setting name/description override (already
-    present). Parallel `AllowSettingDetails` gate (Setting/AU tags only — absent from current model +
-    spec; add to `Tag` entity + `TagConfigurations.cs` + migration in WU37). Uniqueness constraint
-    `UNIQUE(StoryId, BaseTagId)` so a story can hold custom details for multiple settings simultaneously.
+  **Settled for WU37 (2026-06-25, do not revisit):**
 
-  - **Fanonize notify/migrate (§14):** when a mod flips a tag to `IsFanon = true`, the
-    `TagUpdateSuggestion` notification (enum value 26, already seeded in `ModelEnums.cs`) fires to
-    authors whose `StoryCharacter.OC_Name` matches the newly-fanonized tag's `TagName`. Authors get a
-    one-click option to migrate their OC to the official fanon tag. **WU27.5 ships `IsFanon` as a plain
-    editable field only; this workflow lands in its own future WU (depends on StoryCharacter.OC_Name +
-    author-facing UI).**
+  - **Per-story routing table.** Every tag type's per-story association is differentiated:
+
+    | Tag type | Per-story target |
+    |---|---|
+    | Genre, ContentWarning, CrossoverFandom | `StoryTag` (flat) |
+    | Setting | `StoryTag` + optional `SettingDetail` side-row |
+    | Character | `StoryCharacter` (replaces `StoryTag`; OC payload + pairing anchor) |
+    | Pairing (ship) | `StoryCharacterPairing` + `StoryCharacterPairingMember` join |
+
+    Character leaves `StoryTag` for one reason: pairings need a stable surrogate PK
+    (`StoryCharacterId`) to anchor to. `TagTypeEnum.Relationship` is removed (last value; no renumber).
+
+  - **Naming disambiguation (WU37 Phase 1).** The existing `StoryCharacterRelationship` entity is
+    renamed `StoryCharacterPairing` to eliminate the near-collision with Feature 10's unrelated
+    story-to-story `StoryRelationship` / `StoryRelationshipType`. Other renames in the same pass:
+    field `RelationshipType` → `PairingType`; enum `CharacterRelationshipType` → `CharacterPairingType`;
+    nav `StoryCharacter.StoryCharacterRelationships` → `StoryCharacterPairings`; the implicit EF
+    shadow join table `StoryCharacterStoryCharacterRelationship` is replaced by a first-class named
+    entity `StoryCharacterPairingMember` (`StoryCharacterPairingId` + `StoryCharacterId`, composite PK).
+    Feature 10's `StoryRelationship` / `StoryRelationshipType` are untouched.
+
+  - **`AllowSettingDetails` gap (closed in WU37 L1).** `Tag_Design_Deliberations.md` §7 calls for a
+    gate parallel to `AllowOCDetails`: Setting/AU tags only; gates `SettingDetail` creation. Add
+    `Tag.AllowSettingDetails (bool, default false)` + `TagChipDto.AllowSettingDetails`; coerce `false`
+    for non-Setting types in `TagConfiguration`; surface in `TagEditorForm` for Setting tags only.
+    `UNIQUE(StoryId, BaseTagId)` on `SettingDetail` also added here (currently missing from config).
+
+  - **Priority — 2-value, Primary default.** Keep existing `TagPriority { Primary=0, Supporting=1 }`.
+    No `None` value, no renumber migration. Primary is the default. ContentWarning gets no priority
+    picker and its priority is coerced to `Primary` at service layer.
+
+  - **OC workflow.** `IsOc = true` is legal only where `Tag.AllowOCDetails = true` (the gate set in
+    WU27.5). OC display: "OC Bulbasaur \*" with tooltip when `OcName` is populated. Sprite always
+    from the base tag — no custom OC sprite uploads. `OcName` max 128, `OcBio` max 2048 chars.
+
+  - **Enforcement is service-layer only.** The spec's `TR_StoryCharacters_EnforceOCLogic` trigger is
+    SQL-Server-era framing — not implemented and not planned. All legality rules (`IsOc` gate,
+    `SettingDetail` gate, ContentWarning priority coercion, pairing members ≥2 and from this story's
+    characters) are enforced via `StoryValidationException` in `ServerStoryWriteService`. A DB CHECK
+    is an optional post-MVP defense-in-depth.
+
+  - **Discovery filter branch.** `ApplyFilters` in `ServerStoryReadService` currently filters all
+    tag types through a single `s.StoryTags.Any(st => st.TagId == tid)` predicate. After Character
+    leaves `StoryTag`, that branch finds nothing for character filters. Fix in WU37 Phase 2: partition
+    `IncludedTagIds` / `ExcludedTagIds` by `TagTypeId` (carried on `StoryFilterDto`); Character ids →
+    `s.StoryCharacters.Any(sc => sc.CharacterTagId == id)`; all others → `s.StoryTags.Any(...)`.
+    See `audit/Discovery.md` Feature 31 and `layer2-services.md` "Structured Tag Authoring."
+
+  - **Fanonize notify/migrate (§14) — deferred.** The `TagUpdateSuggestion` notification flow
+    (when a mod flips `IsFanon = true`, notify authors whose `OcName` matches the newly-fanonized
+    tag's `TagName` + offer migration) depends on `OcName` + author-facing UI built in WU37. The
+    seam exists (`NotificationTypeEnum.TagUpdateSuggestion = 26`, already seeded); the workflow
+    lands in its own future WU after WU37.
+
+  **Open for WU37 opusplan:**
+  - New sub-components for character wrapper, setting wrapper, and pairing builder (names, parameter
+    contracts, ViewModel layout).
+  - Edit-mode hydration DTO shape for structured collections (`StoryCharacters`, `SettingDetails`,
+    `StoryCharacterPairings`).
+  - `StoryPropertiesForm.razor` rebuild approach — wrapper-per-pick vs. per-type section.
 
 ## Feature 13 — Tag Display & Sprites
 - **L1 — Stage 5.** `SpriteIdentifier` URL-builder key on `Tag`.

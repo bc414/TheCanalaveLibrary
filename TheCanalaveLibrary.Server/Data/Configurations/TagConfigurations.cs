@@ -20,12 +20,10 @@ public sealed class TagTypeConfiguration : IEntityTypeConfiguration<TagType>
             new { TagTypeId = TagTypeEnum.Setting, TypeName = "Setting" },
             new { TagTypeId = TagTypeEnum.Genre, TypeName = "Genre" },
             new { TagTypeId = TagTypeEnum.ContentWarning, TypeName = "Content Warning" },
-            new { TagTypeId = TagTypeEnum.CrossoverFandom, TypeName = "Crossover Fandom" },
-            new { TagTypeId = TagTypeEnum.Relationship, TypeName = "Relationship" }
+            new { TagTypeId = TagTypeEnum.CrossoverFandom, TypeName = "Crossover Fandom" }
         );
 
         builder.HasIndex(e => e.TypeName).IsUnique();
-        // Future indexes for querying...
     }
 }
 
@@ -38,7 +36,7 @@ public sealed class TagConfiguration : IEntityTypeConfiguration<Tag>
         builder.HasMany(t => t.ChildTags)
             .WithOne(t => t.ParentTag)
             .HasForeignKey(t => t.ParentTagId)
-            .OnDelete(DeleteBehavior.SetNull); // Keep child tags as top-level tags when parent is deleted
+            .OnDelete(DeleteBehavior.SetNull);
 
         builder.HasMany(t => t.StoryTags)
             .WithOne(st => st.Tag)
@@ -59,7 +57,6 @@ public sealed class TagConfiguration : IEntityTypeConfiguration<Tag>
         // "Paris" can be both a Character and a Setting; a single-column unique on TagName would prevent that.
         builder.HasIndex(e => new { e.TagName, e.TagTypeId }).IsUnique()
             .HasDatabaseName("ix_tags_tag_name_tag_type_id");
-        // Future indexes for querying (e.g., by TagTypeId, IsFanon)...
     }
 }
 
@@ -70,7 +67,6 @@ public sealed class StoryTagConfiguration : IEntityTypeConfiguration<StoryTag>
         builder.Property(e => e.Priority).HasConversion<short>();
 
         builder.HasKey(e => new { e.StoryId, e.TagId });
-        // Future indexes for querying (e.g., by TagId)...
     }
 }
 
@@ -79,17 +75,33 @@ public sealed class StoryCharacterConfiguration : IEntityTypeConfiguration<Story
     public void Configure(EntityTypeBuilder<StoryCharacter> builder)
     {
         builder.Property(e => e.Priority).HasConversion<short>();
-        // Future indexes for querying (e.g., by StoryId, CharacterTagId)...
     }
 }
 
-public sealed class StoryCharacterRelationshipConfiguration : IEntityTypeConfiguration<StoryCharacterRelationship>
+public sealed class StoryCharacterPairingConfiguration : IEntityTypeConfiguration<StoryCharacterPairing>
 {
-    public void Configure(EntityTypeBuilder<StoryCharacterRelationship> builder)
+    public void Configure(EntityTypeBuilder<StoryCharacterPairing> builder)
     {
         builder.Property(e => e.Priority).HasConversion<short>();
-        builder.Property(e => e.RelationshipType).HasConversion<short>();
-        // Future indexes for querying (e.g., by StoryId)...
+        builder.Property(e => e.PairingType).HasConversion<short>();
+
+        builder.HasMany(p => p.Members)
+            .WithOne(m => m.Pairing)
+            .HasForeignKey(m => m.StoryCharacterPairingId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
+public sealed class StoryCharacterPairingMemberConfiguration : IEntityTypeConfiguration<StoryCharacterPairingMember>
+{
+    public void Configure(EntityTypeBuilder<StoryCharacterPairingMember> builder)
+    {
+        builder.HasKey(m => new { m.StoryCharacterPairingId, m.StoryCharacterId });
+
+        builder.HasOne(m => m.StoryCharacter)
+            .WithMany(sc => sc.PairingMemberships)
+            .HasForeignKey(m => m.StoryCharacterId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 
@@ -97,7 +109,8 @@ public sealed class SettingDetailConfiguration : IEntityTypeConfiguration<Settin
 {
     public void Configure(EntityTypeBuilder<SettingDetail> builder)
     {
-        // Future indexes for querying (e.g., by StoryId, BaseTagId)...
+        builder.HasIndex(e => new { e.StoryId, e.BaseTagId }).IsUnique()
+            .HasDatabaseName("ix_setting_details_story_id_base_tag_id");
     }
 }
 
@@ -112,7 +125,7 @@ public sealed class SavedTagSelectionConfiguration : IEntityTypeConfiguration<Sa
 
         // When a User is deleted, delete their saved selections
         builder.HasOne(e => e.User)
-            .WithMany() // No nav property on User
+            .WithMany()
             .HasForeignKey(e => e.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
@@ -121,8 +134,6 @@ public sealed class SavedTagSelectionConfiguration : IEntityTypeConfiguration<Sa
             .WithOne(e => e.SavedTagSelection)
             .HasForeignKey(e => e.SavedTagSelectionId)
             .OnDelete(DeleteBehavior.Cascade);
-
-        // Future indexes for querying (e.g., by is_public, user_id)...
     }
 }
 
@@ -135,10 +146,8 @@ public sealed class SavedTagSelectionEntryConfiguration : IEntityTypeConfigurati
 
         // Don't allow a Tag to be deleted if it's in a saved selection
         builder.HasOne(e => e.Tag)
-            .WithMany() // No nav property on Tag
+            .WithMany()
             .HasForeignKey(e => e.TagId)
             .OnDelete(DeleteBehavior.Restrict);
-
-        // Future indexes for querying (e.g., by tag_id)...
     }
 }

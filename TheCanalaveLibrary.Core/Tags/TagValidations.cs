@@ -117,4 +117,11 @@ public static class TagValidations
     /// </summary>
     public static bool CoerceAllowOCDetails(bool value, TagTypeEnum tagTypeId) =>
         tagTypeId == TagTypeEnum.Character && value;
+
+    /// <summary>
+    /// Returns <c>false</c> for non-Setting types — <c>AllowSettingDetails</c> is only meaningful on
+    /// Setting tags. The service coerces the value before persisting.
+    /// </summary>
+    public static bool CoerceAllowSettingDetails(bool value, TagTypeEnum tagTypeId) =>
+        tagTypeId == TagTypeEnum.Setting && value;
 }

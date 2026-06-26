@@ -465,6 +465,56 @@ No in-app mute column exists; that toggle was deliberately dropped from spec §5
 9 categories, ~35 types with gap-based numbering. `DefaultEmailEnabled` and `DefaultCollapsed` are
 required non-nullable on all types.
 
+## Structured Tag Authoring & Legality Enforcement (WU37)
+
+### Per-story routing table
+
+Every tag type uses a **different per-story association table**. Route by `TagChipDto.TagTypeId`:
+
+| Tag type | Per-story target | Entity |
+|---|---|---|
+| Genre, ContentWarning, CrossoverFandom | Flat junction | `StoryTag` |
+| Setting | Flat junction + optional side-row | `StoryTag` + `SettingDetail` |
+| Character | Dedicated entity (replaces StoryTag) | `StoryCharacter` |
+| Pairing (ship) | Structural, named members | `StoryCharacterPairing` + `StoryCharacterPairingMember` |
+
+Character never routes to `StoryTag`. A pairing is not a catalog tag (no `Tag` row; its name derives
+from its members). `TagTypeEnum.Relationship` is removed.
+
+### Table naming — disambiguation from story↔story relationships (Feature 10)
+
+| Concept | Entity | Note |
+|---|---|---|
+| Character-in-story | `StoryCharacter` | Per-story; links to `Tag` (Character type) |
+| Ship/pairing of characters | `StoryCharacterPairing` | Per-story; NOT a catalog tag |
+| Members of a pairing | `StoryCharacterPairingMember` | First-class join; was auto-generated shadow table |
+| **Story-to-story** relationship | `StoryRelationship` | Feature 10; unrelated; leave untouched |
+| Story relationship type | `StoryRelationshipType` | Feature 10; unrelated; leave untouched |
+
+The `Story…Pairing` prefix marks the concept as per-story and eliminates grep collision with the
+Feature-10 `StoryRelationship` / `StoryRelationshipType` entities.
+
+### Legality rules — enforced at service layer
+
+All rules are enforced by `ServerStoryWriteService` via `StoryValidationException` (same pattern as
+`CanSave()` / author-gate). Server re-reads gates from `Tag` — never trusts client DTO values.
+
+| Rule | Condition | Error |
+|---|---|---|
+| OC details require gate | `IsOc == true` but `Tag.AllowOCDetails == false` | Reject |
+| SettingDetail requires gate | `SettingDetail` submitted but `Tag.AllowSettingDetails == false` | Reject |
+| ContentWarning priority coercion | Priority != Primary | Coerce to Primary (not an error) |
+| Pairing member count | Members < 2 | Reject |
+| Pairing members in-story | Member `StoryCharacterId` must exist in this story's `StoryCharacters` | Reject |
+
+No DB trigger (`TR_StoryCharacters_EnforceOCLogic` is SQL-Server-era; superseded). A DB CHECK is
+post-MVP defense-in-depth if wanted.
+
+### Priority
+
+`TagPriority { Primary=0, Supporting=1 }`. Primary default. No `None` value. ContentWarning gets no
+priority picker and its priority is coerced to `Primary` at service layer.
+
 ## Badge Checks
 
 **MVP (WU36):** synchronous inline, best-effort. Call `IBadgeWriteService.AwardAsync` after the

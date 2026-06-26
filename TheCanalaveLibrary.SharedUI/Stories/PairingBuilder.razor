@@ -1,0 +1,112 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Presentational pairing builder. No @inject. Receives current character set; manages add/remove
+   of pairings via OnPairingsChanged. *@
+
+<div class="flex flex-col gap-3">
+    @* Existing pairings *@
+    @for (int i = 0; i < Pairings.Count; i++)
+    {
+        int idx = i;
+        StoryCharacterPairingDto pairing = Pairings[idx];
+        string memberNames = string.Join(
+            pairing.PairingType == CharacterPairingType.Romantic ? " ♥ " : " & ",
+            pairing.MemberCharacterTagIds.Select(id => CharacterChips.FirstOrDefault(c => c.TagId == id)?.TagName ?? $"#{id}"));
+        <div class="flex items-center justify-between gap-2 rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-sm">
+            <span class="text-[--color-text]">
+                @memberNames
+                <span class="ml-2 text-xs text-[--color-text-muted]">(@pairing.PairingType · @pairing.Priority)</span>
+            </span>
+            <button type="button" @onclick="@(() => RemovePairing(idx))"
+                    class="text-xs text-[--color-danger] hover:underline">Remove</button>
+        </div>
+    }
+
+    @* Add-pairing UI (requires ≥2 characters in story) *@
+    @if (CharacterChips.Count >= 2)
+    {
+        <div class="rounded-md border border-[--color-border] bg-[--color-surface] p-3 flex flex-col gap-3">
+            <p class="text-sm font-medium text-[--color-text]">Add Pairing</p>
+            <div class="flex flex-wrap gap-2">
+                @foreach (TagChipDto chip in CharacterChips)
+                {
+                    bool selected = _selectedMemberIds.Contains(chip.TagId);
+                    <button type="button" @onclick="@(() => ToggleMember(chip.TagId))"
+                            class="@($"rounded-full border px-3 py-1 text-xs transition-colors {(selected ? "border-[--color-primary] bg-[--color-primary] text-white" : "border-[--color-border] text-[--color-text] hover:border-[--color-primary]")}")">
+                        @chip.TagName
+                    </button>
+                }
+            </div>
+            <div class="flex flex-wrap items-center gap-4">
+                <label class="flex cursor-pointer items-center gap-1.5 text-sm text-[--color-text]">
+                    <input type="radio" name="pairingType_@_instanceId"
+                           checked="@(_newPairingType == CharacterPairingType.Romantic)"
+                           @onchange="@(() => _newPairingType = CharacterPairingType.Romantic)" />
+                    Romantic
+                </label>
+                <label class="flex cursor-pointer items-center gap-1.5 text-sm text-[--color-text]">
+                    <input type="radio" name="pairingType_@_instanceId"
+                           checked="@(_newPairingType == CharacterPairingType.Platonic)"
+                           @onchange="@(() => _newPairingType = CharacterPairingType.Platonic)" />
+                    Platonic
+                </label>
+                <div class="flex items-center gap-2">
+                    <label class="text-xs text-[--color-text-muted]">Priority</label>
+                    <select @bind="_newPairingPriority"
+                            class="rounded border border-[--color-border] bg-[--color-surface] px-2 py-1 text-xs text-[--color-text]">
+                        <option value="@TagPriority.Primary">Primary</option>
+                        <option value="@TagPriority.Supporting">Supporting</option>
+                    </select>
+                </div>
+            </div>
+            <button type="button" @onclick="AddPairing" disabled="@(_selectedMemberIds.Count < 2)"
+                    class="self-start rounded-md bg-[--color-primary] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-40">
+                Add Pairing
+            </button>
+        </div>
+    }
+    else if (CharacterChips.Count == 1)
+    {
+        <p class="text-xs text-[--color-text-muted]">Add at least 2 characters to create a pairing.</p>
+    }
+</div>
+
+@code {
+    [Parameter] public IReadOnlyList<TagChipDto> CharacterChips { get; set; } = [];
+    [Parameter] public IReadOnlyList<StoryCharacterPairingDto> Pairings { get; set; } = [];
+    [Parameter] public EventCallback<List<StoryCharacterPairingDto>> OnPairingsChanged { get; set; }
+
+    private HashSet<int> _selectedMemberIds = new();
+    private CharacterPairingType _newPairingType = CharacterPairingType.Romantic;
+    private TagPriority _newPairingPriority = TagPriority.Primary;
+    // Unique per-instance suffix to namespace radio button groups (prevents cross-instance interference).
+    private readonly string _instanceId = Guid.NewGuid().ToString("N")[..8];
+
+    private void ToggleMember(int tagId)
+    {
+        if (!_selectedMemberIds.Remove(tagId))
+            _selectedMemberIds.Add(tagId);
+    }
+
+    private async Task AddPairing()
+    {
+        if (_selectedMemberIds.Count < 2) return;
+
+        var newPairing = new StoryCharacterPairingDto
+        {
+            PairingType = _newPairingType,
+            Priority = _newPairingPriority,
+            MemberCharacterTagIds = _selectedMemberIds.ToList()
+        };
+
+        _selectedMemberIds = new HashSet<int>();
+        _newPairingType = CharacterPairingType.Romantic;
+        _newPairingPriority = TagPriority.Primary;
+
+        await OnPairingsChanged.InvokeAsync([.. Pairings, newPairing]);
+    }
+
+    private async Task RemovePairing(int index) =>
+        await OnPairingsChanged.InvokeAsync(Pairings.Where((_, i) => i != index).ToList());
+}

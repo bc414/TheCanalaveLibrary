@@ -35,7 +35,6 @@ public class TagChipTests : TestContext
     [InlineData(TagTypeEnum.Genre, "bg-sky-100")]
     [InlineData(TagTypeEnum.ContentWarning, "bg-rose-100")]
     [InlineData(TagTypeEnum.CrossoverFandom, "bg-amber-100")]
-    [InlineData(TagTypeEnum.Relationship, "bg-pink-100")]
     public void TagChip_AppliesCorrectBackgroundClassForTagType(TagTypeEnum type, string expectedClass)
     {
         IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p =>

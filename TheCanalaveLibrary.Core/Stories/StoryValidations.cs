@@ -35,7 +35,7 @@ public static class StoryValidations
             errorReasons.Add("Your story must have at least one Genre tag selected.");
         }
 
-        if (story.StoryTags.Count(t => t.TagTypeEnum == TagTypeEnum.Character && t.Priority == TagPriority.Primary) > 5)
+        if (story.StoryCharacters.Count(sc => sc.Priority == TagPriority.Primary) > 5)
         {
             errorReasons.Add("Your story cannot have more than 5 Primary Character tags");
         }

@@ -218,6 +218,34 @@ Guardrails:
 
 **Resolved:**
 
+- **WU37 Story Tagging — architecture, scope split, and naming** — resolved (2026-06-25, WU37
+  scoping):
+  (1) **Scope split.** Features 9 (Series), 10 (story↔story Relationships), 15 (Saved Tag
+  Selections) carved from WU37 into WU41/WU42/WU43. Each is independently L1-settled with no
+  design coupling to Feature 12.
+  (2) **Shared catalog / differentiated association.** `Tags` table stays unified; per-story
+  routing is differentiated: Genre/ContentWarning/CrossoverFandom → `StoryTag`; Setting →
+  `StoryTag` + optional `SettingDetail`; Character → `StoryCharacter` (never `StoryTag`); pairing
+  (ship) → `StoryCharacterPairing` (new name). Character stays in the catalog because it is the
+  primary user of sprite/hierarchy/`IsFanon`/`AllowOCDetails` and the §14 fanonize flow.
+  (3) **`TagTypeEnum.Relationship` removed.** A pairing is not a catalog tag; its name derives
+  from its members. Last enum value; no renumber. `TagType` seeded row dropped by migration.
+  (4) **Naming disambiguation** — `StoryCharacterRelationship` renamed to `StoryCharacterPairing`
+  (story-scoped; parallels `StoryCharacter`; eliminates near-collision with Feature 10's unrelated
+  story-to-story `StoryRelationship` / `StoryRelationshipType`). Shadow join promoted to first-class
+  `StoryCharacterPairingMember`. Enum `CharacterRelationshipType` → `CharacterPairingType`.
+  See `cross-cutting.md` "Structured Tag Authoring & Legality Enforcement."
+  (5) **2-value `TagPriority`.** Keep existing `{ Primary=0, Supporting=1 }`; Primary default;
+  no `None`, no renumber. ContentWarning gets no priority picker — enforced at service layer.
+  (6) **Service-layer enforcement only.** OC-gate, SettingDetail-gate, ContentWarning-priority
+  coercion, pairing-member count — all via `StoryValidationException` in `ServerStoryWriteService`.
+  The spec's SQL-Server-era `TR_StoryCharacters_EnforceOCLogic` trigger is superseded; a DB
+  CHECK is post-MVP defense-in-depth if wanted.
+  (7) **`ApplyFilters` character branch.** Because Character leaves `StoryTag`, discovery filter
+  must partition included/excluded ids by `TagTypeId` and route Character ids to
+  `s.StoryCharacters.Any(...)`. See `audit/Discovery.md` Feature 31 and `layer2-services.md`
+  "Structured Tag Authoring — Per-Type Filter Branch."
+
 - **WU28 Discovery defaults + random-preload design** — resolved (2026-06-25, WU28 planning):
   (1) **§8.7 default-settings matrix read path** ("complete the `DefaultSearchSetting` matrix"): the
   read/merge service (`IDiscoveryDefaultsReadService`) is the WU28 Phase 1b deliverable. System

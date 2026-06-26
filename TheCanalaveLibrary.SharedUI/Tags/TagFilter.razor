@@ -90,7 +90,7 @@
     // ── Defaults ──────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// All six tag types are filterable in a discovery context.
+    /// All five tag types are filterable in a discovery context.
     /// Consumers supply a narrower <see cref="TagTypes"/> list when needed.
     /// </summary>
     public static readonly IReadOnlyList<TagTypeEnum> DefaultFilterTypes =
@@ -98,7 +98,6 @@
         TagTypeEnum.Genre,
         TagTypeEnum.Character,
         TagTypeEnum.Setting,
-        TagTypeEnum.Relationship,
         TagTypeEnum.ContentWarning,
         TagTypeEnum.CrossoverFandom,
     ];
@@ -170,7 +169,6 @@
         TagTypeEnum.Genre => "genre",
         TagTypeEnum.ContentWarning => "content warning",
         TagTypeEnum.CrossoverFandom => "crossover",
-        TagTypeEnum.Relationship => "relationship",
         _ => type.ToString().ToLowerInvariant()
     };
 }

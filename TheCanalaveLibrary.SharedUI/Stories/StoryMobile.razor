@@ -57,13 +57,41 @@
             <span class="text-xs text-[--color-text-muted]">@WordCountDisplay</span>
         </div>
 
-        @* Tag chips — sprite-resolved, read-only (no OnRemove) *@
+        @* Tag chips — sprite-resolved, read-only (no OnRemove); includes character chips *@
         @if (Story.Tags.Count > 0)
         {
             <div class="flex flex-wrap gap-1">
                 @foreach (var tag in Story.Tags)
                 {
                     <TagChip Tag="@tag" />
+                }
+            </div>
+        }
+
+        @* OC character names *@
+        @{ var ocChars = Story.Characters.Where(c => c.IsOc && c.OcName != null).ToList(); }
+        @if (ocChars.Count > 0)
+        {
+            <div class="text-sm text-[--color-text-muted]">
+                @foreach (var oc in ocChars)
+                {
+                    <span class="mr-2">
+                        <span class="font-medium text-[--color-text]">@oc.OcName</span>
+                        <span class="text-xs"> (@oc.Chip.TagName OC)</span>
+                    </span>
+                }
+            </div>
+        }
+
+        @* Ships *@
+        @if (Story.Pairings.Count > 0)
+        {
+            <div class="flex flex-wrap gap-1.5 text-sm">
+                @foreach (var pairing in Story.Pairings)
+                {
+                    <span class="px-2 py-0.5 rounded-full bg-[--color-surface-hover] text-[--color-text]">
+                        @pairing.DisplayNames
+                    </span>
                 }
             </div>
         }

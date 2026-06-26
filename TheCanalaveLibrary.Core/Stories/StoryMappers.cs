@@ -39,12 +39,13 @@ public static class StoryMappers
             CoverArtRelativeUrl = story.CoverArtRelativeUrl,
             LongDescription = story.LongDescription,
             PostApprovalStatus = story.PostApprovalStatus,
-            // The source is already a List<IStoryTag>. We create a new list
-            // to avoid sharing the same list instance (defensive copy).
-            StoryTags = new List<IStoryTag>(story.StoryTags)
+                StoryTags = new List<IStoryTag>(story.StoryTags),
+            StoryCharacters = new List<StoryCharacterDto>(story.StoryCharacters),
+            SettingDetails = new List<SettingDetailDto>(story.SettingDetails),
+            StoryCharacterPairings = new List<StoryCharacterPairingDto>(story.StoryCharacterPairings)
         };
     }
-    
+
     /// <summary>
     /// Maps any object implementing IStoryProperties to a CreateStoryDTO.
     /// AuthorId is omitted — the server service stamps it from IActiveUserContext.UserId.
@@ -60,7 +61,10 @@ public static class StoryMappers
             CoverArtRelativeUrl = story.CoverArtRelativeUrl,
             LongDescription = story.LongDescription,
             PostApprovalStatus = story.PostApprovalStatus,
-            StoryTags = new List<IStoryTag>(story.StoryTags)
+            StoryTags = new List<IStoryTag>(story.StoryTags),
+            StoryCharacters = new List<StoryCharacterDto>(story.StoryCharacters),
+            SettingDetails = new List<SettingDetailDto>(story.SettingDetails),
+            StoryCharacterPairings = new List<StoryCharacterPairingDto>(story.StoryCharacterPairings)
         };
     }
 
@@ -87,12 +91,61 @@ public static class StoryMappers
         actualStory.StoryDetail.LongDescription = tempStory.LongDescription;
         actualStory.StoryDetail.PostApprovalStatus = tempStory.PostApprovalStatus;
 
-        // This is the correct way to update a navigation collection.
-        // Replacing the collection directly can cause EF Core tracking issues.
+        // ── StoryTags (Genre / ContentWarning / CrossoverFandom / Setting flat rows) ──
+        // ContentWarning gets no priority picker — server coerces it to Primary regardless.
         actualStory.StoryTags.Clear();
         foreach (IStoryTag tempTag in tempStory.StoryTags)
         {
-            actualStory.StoryTags.Add(tempTag.ToStoryTag());
+            StoryTag st = tempTag.ToStoryTag();
+            if (tempTag.TagTypeEnum == TagTypeEnum.ContentWarning)
+                st.Priority = TagPriority.Primary;
+            actualStory.StoryTags.Add(st);
+        }
+
+        // ── StoryCharacters ────────────────────────────────────────────────────────
+        // Clear pairings first so their Members cascade-delete before StoryCharacter rows go.
+        actualStory.StoryCharacterPairings.Clear();
+        actualStory.StoryCharacters.Clear();
+        foreach (StoryCharacterDto charDto in tempStory.StoryCharacters)
+        {
+            actualStory.StoryCharacters.Add(new StoryCharacter
+            {
+                CharacterTagId = charDto.CharacterTagId,
+                Priority       = charDto.Priority,
+                IsOc           = charDto.IsOc,
+                OcName         = charDto.OcName,
+                OcBio          = charDto.OcBio
+            });
+        }
+
+        // ── StoryCharacterPairings (members reference the rebuilt StoryCharacter objects) ──
+        foreach (StoryCharacterPairingDto pairingDto in tempStory.StoryCharacterPairings)
+        {
+            StoryCharacterPairing pairing = new()
+            {
+                PairingType = pairingDto.PairingType,
+                Priority    = pairingDto.Priority
+            };
+            foreach (int charTagId in pairingDto.MemberCharacterTagIds)
+            {
+                StoryCharacter? sc = actualStory.StoryCharacters
+                    .FirstOrDefault(c => c.CharacterTagId == charTagId);
+                if (sc is not null)
+                    pairing.Members.Add(new StoryCharacterPairingMember { StoryCharacter = sc });
+            }
+            actualStory.StoryCharacterPairings.Add(pairing);
+        }
+
+        // ── SettingDetails ─────────────────────────────────────────────────────────
+        actualStory.SettingDetails.Clear();
+        foreach (SettingDetailDto detailDto in tempStory.SettingDetails)
+        {
+            actualStory.SettingDetails.Add(new SettingDetail
+            {
+                BaseTagId   = detailDto.BaseTagId,
+                Name        = detailDto.Name,
+                Description = detailDto.Description
+            });
         }
 
         return actualStory;

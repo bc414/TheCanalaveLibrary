@@ -6,6 +6,5 @@ public enum TagTypeEnum : short
     Setting = 1,
     Genre = 2,
     ContentWarning = 3,
-    CrossoverFandom = 4,
-    Relationship = 5
+    CrossoverFandom = 4
 }

@@ -25,5 +25,5 @@ public partial class StoryCharacter
 
     public virtual Story Story { get; set; } = null!;
 
-    public virtual ICollection<StoryCharacterRelationship> StoryCharacterRelationships { get; set; } = new List<StoryCharacterRelationship>();
+    public virtual ICollection<StoryCharacterPairingMember> PairingMemberships { get; set; } = new List<StoryCharacterPairingMember>();
 }

@@ -87,7 +87,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 9 | Series & Ordering | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
 | 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
-| 12 | Story Tagging | Tags | 5 | 2 | 4 | 4 | 1 | 2 | 2 | N/A | N/A |
+| 12 | Story Tagging | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
 | 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
 | 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
 | 15 | Saved Tag Selections | Tags | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |

@@ -173,25 +173,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
-            modelBuilder.Entity("StoryCharacterStoryCharacterRelationship", b =>
-                {
-                    b.Property<int>("StoryCharacterRelationshipsStoryCharacterRelationshipId")
-                        .HasColumnType("integer")
-                        .HasColumnName("story_character_relationships_story_character_relationship_id");
-
-                    b.Property<int>("StoryCharactersStoryCharacterId")
-                        .HasColumnType("integer")
-                        .HasColumnName("story_characters_story_character_id");
-
-                    b.HasKey("StoryCharacterRelationshipsStoryCharacterRelationshipId", "StoryCharactersStoryCharacterId")
-                        .HasName("pk_story_character_story_character_relationship");
-
-                    b.HasIndex("StoryCharactersStoryCharacterId")
-                        .HasDatabaseName("ix_story_character_story_character_relationship_story_characte");
-
-                    b.ToTable("story_character_story_character_relationship", (string)null);
-                });
-
             modelBuilder.Entity("TheCanalaveLibrary.Core.AcknowledgmentRole", b =>
                 {
                     b.Property<short>("AcknowledgmentRoleId")
@@ -2528,8 +2509,9 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasIndex("BaseTagId")
                         .HasDatabaseName("ix_setting_details_base_tag_id");
 
-                    b.HasIndex("StoryId")
-                        .HasDatabaseName("ix_setting_details_story_id");
+                    b.HasIndex("StoryId", "BaseTagId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_setting_details_story_id_base_tag_id");
 
                     b.ToTable("setting_details", (string)null);
                 });
@@ -2732,34 +2714,53 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.ToTable("story_characters", (string)null);
                 });
 
-            modelBuilder.Entity("TheCanalaveLibrary.Core.StoryCharacterRelationship", b =>
+            modelBuilder.Entity("TheCanalaveLibrary.Core.StoryCharacterPairing", b =>
                 {
-                    b.Property<int>("StoryCharacterRelationshipId")
+                    b.Property<int>("StoryCharacterPairingId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
-                        .HasColumnName("story_character_relationship_id");
+                        .HasColumnName("story_character_pairing_id");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("StoryCharacterRelationshipId"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("StoryCharacterPairingId"));
+
+                    b.Property<short>("PairingType")
+                        .HasColumnType("smallint")
+                        .HasColumnName("pairing_type");
 
                     b.Property<short>("Priority")
                         .HasColumnType("smallint")
                         .HasColumnName("priority");
 
-                    b.Property<short>("RelationshipType")
-                        .HasColumnType("smallint")
-                        .HasColumnName("relationship_type");
-
                     b.Property<int>("StoryId")
                         .HasColumnType("integer")
                         .HasColumnName("story_id");
 
-                    b.HasKey("StoryCharacterRelationshipId")
-                        .HasName("pk_story_character_relationships");
+                    b.HasKey("StoryCharacterPairingId")
+                        .HasName("pk_story_character_pairings");
 
                     b.HasIndex("StoryId")
-                        .HasDatabaseName("ix_story_character_relationships_story_id");
+                        .HasDatabaseName("ix_story_character_pairings_story_id");
 
-                    b.ToTable("story_character_relationships", (string)null);
+                    b.ToTable("story_character_pairings", (string)null);
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.StoryCharacterPairingMember", b =>
+                {
+                    b.Property<int>("StoryCharacterPairingId")
+                        .HasColumnType("integer")
+                        .HasColumnName("story_character_pairing_id");
+
+                    b.Property<int>("StoryCharacterId")
+                        .HasColumnType("integer")
+                        .HasColumnName("story_character_id");
+
+                    b.HasKey("StoryCharacterPairingId", "StoryCharacterId")
+                        .HasName("pk_story_character_pairing_members");
+
+                    b.HasIndex("StoryCharacterId")
+                        .HasDatabaseName("ix_story_character_pairing_members_story_character_id");
+
+                    b.ToTable("story_character_pairing_members", (string)null);
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.StoryDetail", b =>
@@ -3075,6 +3076,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("allow_oc_details");
 
+                    b.Property<bool>("AllowSettingDetails")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allow_setting_details");
+
                     b.Property<string>("Description")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)")
@@ -3165,11 +3170,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                         {
                             TagTypeId = (short)4,
                             TypeName = "Crossover Fandom"
-                        },
-                        new
-                        {
-                            TagTypeId = (short)5,
-                            TypeName = "Relationship"
                         });
                 });
 
@@ -4181,23 +4181,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasConstraintName("fk_asp_net_user_tokens_asp_net_users_user_id");
                 });
 
-            modelBuilder.Entity("StoryCharacterStoryCharacterRelationship", b =>
-                {
-                    b.HasOne("TheCanalaveLibrary.Core.StoryCharacterRelationship", null)
-                        .WithMany()
-                        .HasForeignKey("StoryCharacterRelationshipsStoryCharacterRelationshipId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_story_character_story_character_relationship_story_characte");
-
-                    b.HasOne("TheCanalaveLibrary.Core.StoryCharacter", null)
-                        .WithMany()
-                        .HasForeignKey("StoryCharactersStoryCharacterId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_story_character_story_character_relationship_story_characte1");
-                });
-
             modelBuilder.Entity("TheCanalaveLibrary.Core.ApplicationRole", b =>
                 {
                     b.HasOne("TheCanalaveLibrary.Core.User", null)
@@ -4974,16 +4957,37 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("Story");
                 });
 
-            modelBuilder.Entity("TheCanalaveLibrary.Core.StoryCharacterRelationship", b =>
+            modelBuilder.Entity("TheCanalaveLibrary.Core.StoryCharacterPairing", b =>
                 {
                     b.HasOne("TheCanalaveLibrary.Core.Story", "Story")
-                        .WithMany("StoryCharacterRelationships")
+                        .WithMany("StoryCharacterPairings")
                         .HasForeignKey("StoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_story_character_relationships_stories_story_id");
+                        .HasConstraintName("fk_story_character_pairings_stories_story_id");
 
                     b.Navigation("Story");
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.StoryCharacterPairingMember", b =>
+                {
+                    b.HasOne("TheCanalaveLibrary.Core.StoryCharacter", "StoryCharacter")
+                        .WithMany("PairingMemberships")
+                        .HasForeignKey("StoryCharacterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_story_character_pairing_members_story_characters_story_char");
+
+                    b.HasOne("TheCanalaveLibrary.Core.StoryCharacterPairing", "Pairing")
+                        .WithMany("Members")
+                        .HasForeignKey("StoryCharacterPairingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_story_character_pairing_members_story_character_pairings_st");
+
+                    b.Navigation("Pairing");
+
+                    b.Navigation("StoryCharacter");
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.StoryDetail", b =>
@@ -5623,7 +5627,7 @@ namespace TheCanalaveLibrary.Server.Migrations
 
                     b.Navigation("StoryArcs");
 
-                    b.Navigation("StoryCharacterRelationships");
+                    b.Navigation("StoryCharacterPairings");
 
                     b.Navigation("StoryCharacters");
 
@@ -5642,6 +5646,16 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("StoryTags");
 
                     b.Navigation("UserStoryInteractions");
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.StoryCharacter", b =>
+                {
+                    b.Navigation("PairingMemberships");
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.StoryCharacterPairing", b =>
+                {
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.StoryRelationshipType", b =>

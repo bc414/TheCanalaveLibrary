@@ -41,7 +41,7 @@ public class ServerTagReadService(
 
         var rows = await readDb.Tags
             .Where(t => tagIds.Contains(t.TagId))
-            .Select(t => new { t.TagId, t.TagName, t.TagTypeId, t.Description, t.SpriteIdentifier })
+            .Select(t => new { t.TagId, t.TagName, t.TagTypeId, t.Description, t.SpriteIdentifier, t.AllowOCDetails, t.AllowSettingDetails })
             .ToListAsync();
 
         // Reorder to match the caller's id order (same reorder-to-input convention as GetListingsByIdsAsync).
@@ -53,7 +53,9 @@ public class ServerTagReadService(
             Description = t.Description,
             SpriteUrl = t.SpriteIdentifier is null
                 ? null
-                : spriteReadService.GetSpriteUrl(activeUser.Theme, t.SpriteIdentifier, activeUser.PrefersAnimatedSprites)
+                : spriteReadService.GetSpriteUrl(activeUser.Theme, t.SpriteIdentifier, activeUser.PrefersAnimatedSprites),
+            AllowOCDetails = t.AllowOCDetails,
+            AllowSettingDetails = t.AllowSettingDetails
         });
 
         return [.. tagIds.Where(byId.ContainsKey).Select(id => byId[id])];
@@ -73,7 +75,8 @@ public class ServerTagReadService(
                 t.SpriteIdentifier,
                 t.ParentTagId,
                 t.IsFanon,
-                t.AllowOCDetails
+                t.AllowOCDetails,
+                t.AllowSettingDetails
             })
             .ToListAsync();
 
@@ -90,6 +93,7 @@ public class ServerTagReadService(
             // Admin fields — set here so the mod editor can pre-populate without a second round-trip.
             IsFanon = t.IsFanon,
             AllowOCDetails = t.AllowOCDetails,
+            AllowSettingDetails = t.AllowSettingDetails,
             ParentTagId = t.ParentTagId
         });
 

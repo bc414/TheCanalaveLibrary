@@ -67,7 +67,8 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     public DbSet<Tag> Tags { get; set; } //The tags must be prepopulated here by site staff
     public DbSet<StoryTag> StoryTags { get; set; } //Contains the tags on a story which are not character or setting
     public DbSet<StoryCharacter> StoryCharacters { get; set; } //Contains the characters in a story
-    public DbSet<StoryCharacterRelationship> StoryCharacterRelationships { get; set; }
+    public DbSet<StoryCharacterPairing> StoryCharacterPairings { get; set; }
+    public DbSet<StoryCharacterPairingMember> StoryCharacterPairingMembers { get; set; }
     public DbSet<SettingDetail> SettingDetails { get; set; } //For specifying what setting the story is in, as well as original settings
     public DbSet<SavedTagSelection> SavedTagSelections { get; set; }
     public DbSet<SavedTagSelectionEntry> SavedTagSelectionEntries { get; set; }

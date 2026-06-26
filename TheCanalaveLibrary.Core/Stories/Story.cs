@@ -9,7 +9,7 @@ namespace TheCanalaveLibrary.Core;
 /// and relationships. This table is optimized to be small
 /// and live in RAM.
 /// </summary>
-public partial class Story : IEditableStoryProperties
+public partial class Story
 {
     public int StoryId { get; set; }
     public int? AuthorId { get; set; }
@@ -57,7 +57,7 @@ public partial class Story : IEditableStoryProperties
     public virtual ICollection<SettingDetail> SettingDetails { get; set; } = new List<SettingDetail>();
     public virtual ICollection<StoryAcknowledgment> StoryAcknowledgments { get; set; } = new List<StoryAcknowledgment>();
     public virtual ICollection<StoryArc> StoryArcs { get; set; } = new List<StoryArc>();
-    public virtual ICollection<StoryCharacterRelationship> StoryCharacterRelationships { get; set; } = new List<StoryCharacterRelationship>();
+    public virtual ICollection<StoryCharacterPairing> StoryCharacterPairings { get; set; } = new List<StoryCharacterPairing>();
     public virtual ICollection<StoryCharacter> StoryCharacters { get; set; } = new List<StoryCharacter>();
     public virtual StoryImport? StoryImport { get; set; }
     public virtual ICollection<StoryRelationship> StoryRelationshipSourceStories { get; set; } = new List<StoryRelationship>();
@@ -65,30 +65,4 @@ public partial class Story : IEditableStoryProperties
     public virtual ICollection<StoryTag> StoryTags { get; set; } = new List<StoryTag>();
     public virtual ICollection<UserStoryInteraction> UserStoryInteractions { get; set; } = new List<UserStoryInteraction>();
 
-    // --- Explicit Interface Implementation for IEditableStoryProperties ---
-    // This allows the Story model to be treated as an editable object by mappers and validators
-    // without polluting its public API or confusing EF Core.
-
-    [NotMapped]
-    string IEditableStoryProperties.Title { get => StoryListing.StoryTitle; set => StoryListing.StoryTitle = value; }
-    [NotMapped]
-    string? IEditableStoryProperties.ShortDescription { get => StoryListing.ShortDescription; set => StoryListing.ShortDescription = value; }
-    [NotMapped]
-    Rating IEditableStoryProperties.Rating { get => Rating; set => Rating = value; }
-    [NotMapped]
-    StoryStatusEnum IEditableStoryProperties.StoryStatusId { get => StoryStatusId; set => StoryStatusId = value; }
-    [NotMapped]
-    string? IEditableStoryProperties.CoverArtRelativeUrl { get => StoryListing.CoverArtRelativeUrl; set => StoryListing.CoverArtRelativeUrl = value; }
-    [NotMapped]
-    string? IEditableStoryProperties.LongDescription { get => StoryDetail.LongDescription; set => StoryDetail.LongDescription = value; }
-    [NotMapped]
-    StoryStatusEnum IEditableStoryProperties.PostApprovalStatus { get => StoryDetail.PostApprovalStatus; set => StoryDetail.PostApprovalStatus = value; }
-    [NotMapped]
-    List<IStoryTag> IEditableStoryProperties.StoryTags
-    {
-        // The getter projects the internal collection to the DTO.
-        get => StoryTags.Select(st => st as IStoryTag).ToList();
-        // The setter clears the existing collection and adds the new tags.
-        set { StoryTags.Clear(); foreach (IStoryTag tag in value) { StoryTags.Add(tag.ToStoryTag()); } }
-    }
 }

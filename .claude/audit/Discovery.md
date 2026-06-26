@@ -202,6 +202,17 @@ Narrowing-within-fixed-source query → WU27/WU30.
   markup-level evidence is correct; the visual rendering still requires human sign-off for Stage 6.
   `dotnet test` green.
 
+  **WU37 `ApplyFilters` type-branch (2026-06-25 — built and verified):**
+  WU37 Phase 2 moved Character tags from `StoryTag` to `StoryCharacter`. The existing flat
+  `s.StoryTags.Any(st => st.TagId == tid)` predicate would silently miss Character-type filters.
+  Fixed: `StoryFilterDto` carries `IncludedTagIdsByType` / `ExcludedTagIdsByType`
+  (`Dictionary<TagTypeEnum, IReadOnlyList<int>>`); `ApplyFilters` routes Character ids →
+  `s.StoryCharacters.Any(sc => sc.CharacterTagId == id)`, all others → `s.StoryTags.Any(...)`.
+  - **Integration** (`StoryTaggingTests` — `GetListingsAsync_IncludeByCharacterTagId_MatchesViaStoryCharacters`
+    + `SanityCheck_CharacterFilter_CharacterIsNotInStoryTags`): confirms the character branch is live
+    and that character tags are absent from `StoryTags`. 348 integration tests green (2026-06-25).
+  See `layer2-services.md` "Structured Tag Authoring — Per-Type Filter Branch."
+
   **WU28 Stage note — F31 L2 (2026-06-25):**
   Built: `GetRandomBatchAsync(StoryFilterDto filter, int batchSize)` in `IStoryReadService` /
   `ServerStoryReadService`. The method is fed through a new `ApplyFilters` private helper that is

@@ -6,9 +6,8 @@ namespace TheCanalaveLibrary.SharedUI;
 /// <summary>
 /// View model for StoryPropertiesForm. Carries UI-only state (IsLoading, ServerValidationErrors)
 /// and shields the form from the wire DTOs' server-only fields (AuthorId, StoryId, Slug).
-/// SelectedTags uses TagChipDto (the form's native type from TagSelector) — the page maps to
-/// IStoryTag on submit. Does not implement IEditableStoryProperties: the mapping lives at the
-/// page layer so the ViewModel stays a pure UI bag.
+/// Structured tag collections are built by the form on every selection change and read by the
+/// page on submit. Does not implement IEditableStoryProperties: mapping lives at the page layer.
 /// </summary>
 public class StoryPropertiesViewModel
 {
@@ -36,10 +35,14 @@ public class StoryPropertiesViewModel
     public StoryStatusEnum PostApprovalStatus { get; set; }
 
     /// <summary>
-    /// Live tag selections from TagSelector instances. Updated by the form's OnSelectionChanged
-    /// handlers. Mapped to List&lt;IStoryTag&gt; by the page when building the write DTO.
+    /// Flat tag associations (Genre/ContentWarning/CrossoverFandom/Setting) with correct priorities.
+    /// Built by the form on every selection change; read by the page when building the write DTO.
     /// </summary>
-    public List<TagChipDto> SelectedTags { get; set; } = new();
+    public List<StoryTagDTO> SelectedFlatTags { get; set; } = new();
+
+    public List<StoryCharacterDto> SelectedCharacters { get; set; } = new();
+    public List<SettingDetailDto> SelectedSettingDetails { get; set; } = new();
+    public List<StoryCharacterPairingDto> SelectedPairings { get; set; } = new();
 
     public bool IsLoading { get; set; }
     public List<string> ServerValidationErrors { get; set; } = new();

@@ -4,10 +4,11 @@
 
 @* Presentational form for story create/edit. No @inject — all I/O lives in StoryEditorPage.
    Contract:
-     - ViewModel carries field values + tag selections + validation errors (set by the page).
+     - ViewModel carries field values + structured tag state + validation errors (set by the page).
      - OnValidSubmit fires when EditForm validation passes; the page then calls GetLongDescriptionAsync()
        and reads SelectedCoverFile before mapping to the write DTO.
-     - InitialTagsByType seeds TagSelectors on first render (edit mode). Null = create mode (empty). *@
+     - InitialTagsByType seeds TagSelectors on first render (edit mode). Null = create mode (empty).
+     - InitialCharacters/SettingDetails/Pairings/GenrePriorities seed structured data in edit mode. *@
 
 @if (ViewModel.ServerValidationErrors.Any())
 {
@@ -88,32 +89,86 @@
     </div>
 
     @* ── Tags ────────────────────────────────────────────────────────────────── *@
-    <div class="flex flex-col gap-4">
+    <div class="flex flex-col gap-6">
         <p class="text-sm font-semibold text-[--color-text]">Tags</p>
-        <TagSelector TagType="TagTypeEnum.Character"
-                     Label="Characters"
-                     SelectedTags="@GetSelected(TagTypeEnum.Character)"
-                     OnSelectionChanged="@(chips => HandleTagChange(TagTypeEnum.Character, chips))" />
-        <TagSelector TagType="TagTypeEnum.Setting"
-                     Label="Settings"
-                     SelectedTags="@GetSelected(TagTypeEnum.Setting)"
-                     OnSelectionChanged="@(chips => HandleTagChange(TagTypeEnum.Setting, chips))" />
-        <TagSelector TagType="TagTypeEnum.Genre"
-                     Label="Genres"
-                     SelectedTags="@GetSelected(TagTypeEnum.Genre)"
-                     OnSelectionChanged="@(chips => HandleTagChange(TagTypeEnum.Genre, chips))" />
+
+        @* Characters + per-entry detail + pairings *@
+        <div class="flex flex-col gap-2">
+            <TagSelector @key="@string.Join(",", _characterChips.Select(c => c.TagId))"
+                         TagType="TagTypeEnum.Character"
+                         Label="Characters"
+                         SelectedTags="@_characterChips"
+                         OnSelectionChanged="HandleCharacterChange" />
+            @for (int i = 0; i < _characterDtos.Count; i++)
+            {
+                int idx = i;
+                TagChipDto? chip = _characterChips.FirstOrDefault(c => c.TagId == _characterDtos[idx].CharacterTagId);
+                if (chip is not null)
+                {
+                    <CharacterEntry Chip="@chip" Dto="@_characterDtos[idx]"
+                                    OnChanged="@(dto => OnCharacterDtoChanged(idx, dto))"
+                                    OnRemoved="@(() => RemoveCharacter(_characterDtos[idx].CharacterTagId))" />
+                }
+            }
+        </div>
+
+        @if (_characterChips.Count >= 2)
+        {
+            <div class="flex flex-col gap-1">
+                <p class="text-sm font-medium text-[--color-text]">Character Pairings</p>
+                <PairingBuilder CharacterChips="@_characterChips"
+                                Pairings="@_pairings"
+                                OnPairingsChanged="HandlePairingsChanged" />
+            </div>
+        }
+
+        @* Settings + optional detail overlays *@
+        <div class="flex flex-col gap-2">
+            <TagSelector @key="@string.Join(",", _settingChips.Select(c => c.TagId))"
+                         TagType="TagTypeEnum.Setting"
+                         Label="Settings"
+                         SelectedTags="@_settingChips"
+                         OnSelectionChanged="HandleSettingChange" />
+            @foreach (TagChipDto chip in _settingChips.Where(c => c.AllowSettingDetails))
+            {
+                SettingDetailDto detail = _settingDetailMap.GetValueOrDefault(chip.TagId,
+                    new SettingDetailDto { BaseTagId = chip.TagId });
+                <SettingEntry Chip="@chip" Detail="@detail"
+                              OnChanged="@(d => OnSettingDetailChanged(chip.TagId, d))" />
+            }
+        </div>
+
+        @* Genres with per-tag priority *@
+        <div class="flex flex-col gap-2">
+            <TagSelector TagType="TagTypeEnum.Genre"
+                         Label="Genres"
+                         SelectedTags="@_genreChips"
+                         OnSelectionChanged="HandleGenreChange" />
+            @foreach (TagChipDto chip in _genreChips)
+            {
+                TagPriority priority = _genrePriorityMap.GetValueOrDefault(chip.TagId, TagPriority.Primary);
+                <div class="flex items-center gap-3 rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2">
+                    <span class="flex-1 text-sm text-[--color-text]">@chip.TagName</span>
+                    <label class="text-xs text-[--color-text-muted]">Priority</label>
+                    <select value="@priority"
+                            @onchange="@(e => HandleGenrePriorityChange(chip.TagId, Enum.Parse<TagPriority>((string)e.Value!)))"
+                            class="rounded border border-[--color-border] bg-[--color-surface] px-2 py-1 text-xs text-[--color-text]">
+                        <option value="@TagPriority.Primary">Primary</option>
+                        <option value="@TagPriority.Supporting">Supporting</option>
+                    </select>
+                </div>
+            }
+        </div>
+
+        @* Content Warnings + Crossover Fandoms — flat, no priority UI *@
         <TagSelector TagType="TagTypeEnum.ContentWarning"
                      Label="Content Warnings"
-                     SelectedTags="@GetSelected(TagTypeEnum.ContentWarning)"
-                     OnSelectionChanged="@(chips => HandleTagChange(TagTypeEnum.ContentWarning, chips))" />
+                     SelectedTags="@_cwChips"
+                     OnSelectionChanged="HandleCwChange" />
         <TagSelector TagType="TagTypeEnum.CrossoverFandom"
                      Label="Crossover Fandoms"
-                     SelectedTags="@GetSelected(TagTypeEnum.CrossoverFandom)"
-                     OnSelectionChanged="@(chips => HandleTagChange(TagTypeEnum.CrossoverFandom, chips))" />
-        <TagSelector TagType="TagTypeEnum.Relationship"
-                     Label="Relationships"
-                     SelectedTags="@GetSelected(TagTypeEnum.Relationship)"
-                     OnSelectionChanged="@(chips => HandleTagChange(TagTypeEnum.Relationship, chips))" />
+                     SelectedTags="@_crossoverChips"
+                     OnSelectionChanged="HandleCrossoverChange" />
     </div>
 
     @* ── Submit ──────────────────────────────────────────────────────────────── *@
@@ -129,18 +184,33 @@
     [Parameter] public EventCallback OnValidSubmit { get; set; }
 
     /// <summary>
-    /// Pre-populated tag chips per type, used in edit mode to seed TagSelectors on first render.
+    /// Pre-populated tag chips per type for edit mode (seeded from GetTagChipsByIdsAsync).
     /// Null = create mode (all selectors start empty). Passed in before first render — not reactive.
     /// </summary>
     [Parameter] public IReadOnlyDictionary<TagTypeEnum, IReadOnlyList<TagChipDto>>? InitialTagsByType { get; set; }
+
+    /// <summary>Structured edit-mode seeds; all null in create mode.</summary>
+    [Parameter] public IReadOnlyList<StoryCharacterDto>? InitialCharacters { get; set; }
+    [Parameter] public IReadOnlyList<SettingDetailDto>? InitialSettingDetails { get; set; }
+    [Parameter] public IReadOnlyList<StoryCharacterPairingDto>? InitialPairings { get; set; }
+    [Parameter] public IReadOnlyDictionary<int, TagPriority>? InitialGenrePriorities { get; set; }
 
     [Parameter] public string SubmitLabel { get; set; } = "Save";
 
     private EditorView? _editor;
 
-    // Per-type selections kept in sync with each TagSelector's OnSelectionChanged.
-    // Seeded from InitialTagsByType (edit mode) or empty (create mode).
-    private readonly Dictionary<TagTypeEnum, IReadOnlyList<TagChipDto>> _tagsByType = new();
+    // Per-type chip lists (kept in sync with TagSelector OnSelectionChanged)
+    private List<TagChipDto> _characterChips = new();
+    private List<TagChipDto> _settingChips = new();
+    private List<TagChipDto> _genreChips = new();
+    private List<TagChipDto> _cwChips = new();
+    private List<TagChipDto> _crossoverChips = new();
+
+    // Structured state
+    private List<StoryCharacterDto> _characterDtos = new();
+    private Dictionary<int, SettingDetailDto> _settingDetailMap = new();
+    private Dictionary<int, TagPriority> _genrePriorityMap = new();
+    private List<StoryCharacterPairingDto> _pairings = new();
 
     /// <summary>The most recently selected cover file, or null if none was picked this session.</summary>
     public IBrowserFile? SelectedCoverFile { get; private set; }
@@ -151,25 +221,152 @@
 
     protected override void OnInitialized()
     {
-        if (InitialTagsByType is null) return;
+        if (InitialTagsByType is not null)
+        {
+            foreach ((TagTypeEnum type, IReadOnlyList<TagChipDto> chips) in InitialTagsByType)
+            {
+                switch (type)
+                {
+                    case TagTypeEnum.Character: _characterChips = chips.ToList(); break;
+                    case TagTypeEnum.Setting:   _settingChips   = chips.ToList(); break;
+                    case TagTypeEnum.Genre:     _genreChips     = chips.ToList(); break;
+                    case TagTypeEnum.ContentWarning:  _cwChips       = chips.ToList(); break;
+                    case TagTypeEnum.CrossoverFandom: _crossoverChips = chips.ToList(); break;
+                }
+            }
+        }
 
-        foreach ((TagTypeEnum type, IReadOnlyList<TagChipDto> chips) in InitialTagsByType)
-            _tagsByType[type] = chips;
+        if (InitialCharacters is not null)
+            _characterDtos = InitialCharacters.ToList();
 
-        RebuildViewModelTags();
+        if (InitialSettingDetails is not null)
+            foreach (SettingDetailDto d in InitialSettingDetails)
+                _settingDetailMap[d.BaseTagId] = d;
+
+        // Seed detail map stubs for setting chips that allow details but have no existing detail
+        foreach (TagChipDto chip in _settingChips.Where(c => c.AllowSettingDetails))
+            _settingDetailMap.TryAdd(chip.TagId, new SettingDetailDto { BaseTagId = chip.TagId });
+
+        if (InitialPairings is not null)
+            _pairings = InitialPairings.ToList();
+
+        if (InitialGenrePriorities is not null)
+            foreach ((int tagId, TagPriority priority) in InitialGenrePriorities)
+                _genrePriorityMap[tagId] = priority;
+
+        RebuildViewModel();
     }
 
-    private IReadOnlyList<TagChipDto> GetSelected(TagTypeEnum type) =>
-        _tagsByType.TryGetValue(type, out IReadOnlyList<TagChipDto>? chips) ? chips : [];
+    // ── Character handlers ────────────────────────────────────────────────────
 
-    private void HandleTagChange(TagTypeEnum type, IReadOnlyList<TagChipDto> chips)
+    private void HandleCharacterChange(IReadOnlyList<TagChipDto> chips)
     {
-        _tagsByType[type] = chips;
-        RebuildViewModelTags();
+        HashSet<int> newIds = chips.Select(c => c.TagId).ToHashSet();
+        _characterChips = chips.ToList();
+        _characterDtos.RemoveAll(d => !newIds.Contains(d.CharacterTagId));
+        foreach (TagChipDto chip in chips.Where(c => _characterDtos.All(d => d.CharacterTagId != c.TagId)))
+            _characterDtos.Add(new StoryCharacterDto { CharacterTagId = chip.TagId });
+        // Drop pairings whose member set shrinks below 2 after removal
+        _pairings = _pairings
+            .Select(p => new StoryCharacterPairingDto
+            {
+                PairingType = p.PairingType, Priority = p.Priority,
+                MemberCharacterTagIds = p.MemberCharacterTagIds.Where(id => newIds.Contains(id)).ToList()
+            })
+            .Where(p => p.MemberCharacterTagIds.Count >= 2)
+            .ToList();
+        RebuildViewModel();
     }
 
-    private void RebuildViewModelTags() =>
-        ViewModel.SelectedTags = [.. _tagsByType.Values.SelectMany(c => c)];
+    private void OnCharacterDtoChanged(int index, StoryCharacterDto dto)
+    {
+        _characterDtos[index] = dto;
+        RebuildViewModel();
+    }
+
+    private void RemoveCharacter(int charTagId)
+    {
+        _characterDtos.RemoveAll(d => d.CharacterTagId == charTagId);
+        _characterChips.RemoveAll(c => c.TagId == charTagId);
+        HashSet<int> remaining = _characterChips.Select(c => c.TagId).ToHashSet();
+        _pairings = _pairings
+            .Select(p => new StoryCharacterPairingDto
+            {
+                PairingType = p.PairingType, Priority = p.Priority,
+                MemberCharacterTagIds = p.MemberCharacterTagIds.Where(id => remaining.Contains(id)).ToList()
+            })
+            .Where(p => p.MemberCharacterTagIds.Count >= 2)
+            .ToList();
+        RebuildViewModel();
+    }
+
+    // ── Setting handlers ──────────────────────────────────────────────────────
+
+    private void HandleSettingChange(IReadOnlyList<TagChipDto> chips)
+    {
+        HashSet<int> newIds = chips.Select(c => c.TagId).ToHashSet();
+        _settingChips = chips.ToList();
+        foreach (int id in _settingDetailMap.Keys.Where(k => !newIds.Contains(k)).ToList())
+            _settingDetailMap.Remove(id);
+        foreach (TagChipDto chip in chips.Where(c => c.AllowSettingDetails))
+            _settingDetailMap.TryAdd(chip.TagId, new SettingDetailDto { BaseTagId = chip.TagId });
+        RebuildViewModel();
+    }
+
+    private void OnSettingDetailChanged(int tagId, SettingDetailDto detail)
+    {
+        _settingDetailMap[tagId] = detail;
+        RebuildViewModel();
+    }
+
+    // ── Genre handlers ────────────────────────────────────────────────────────
+
+    private void HandleGenreChange(IReadOnlyList<TagChipDto> chips)
+    {
+        HashSet<int> newIds = chips.Select(c => c.TagId).ToHashSet();
+        foreach (int id in _genrePriorityMap.Keys.Where(k => !newIds.Contains(k)).ToList())
+            _genrePriorityMap.Remove(id);
+        _genreChips = chips.ToList();
+        RebuildViewModel();
+    }
+
+    private void HandleGenrePriorityChange(int tagId, TagPriority priority)
+    {
+        _genrePriorityMap[tagId] = priority;
+        RebuildViewModel();
+    }
+
+    // ── CW / Crossover handlers ───────────────────────────────────────────────
+
+    private void HandleCwChange(IReadOnlyList<TagChipDto> chips)       { _cwChips = chips.ToList(); RebuildViewModel(); }
+    private void HandleCrossoverChange(IReadOnlyList<TagChipDto> chips) { _crossoverChips = chips.ToList(); RebuildViewModel(); }
+
+    // ── Pairing handler ───────────────────────────────────────────────────────
+
+    private void HandlePairingsChanged(List<StoryCharacterPairingDto> pairings)
+    {
+        _pairings = pairings;
+        RebuildViewModel();
+    }
+
+    // ── ViewModel rebuild ─────────────────────────────────────────────────────
+
+    private void RebuildViewModel()
+    {
+        ViewModel.SelectedCharacters = new List<StoryCharacterDto>(_characterDtos);
+        ViewModel.SelectedPairings   = new List<StoryCharacterPairingDto>(_pairings);
+        // Only include SettingDetail entries that carry at least one non-null field
+        ViewModel.SelectedSettingDetails = _settingDetailMap.Values
+            .Where(d => d.Name != null || d.Description != null)
+            .ToList();
+        ViewModel.SelectedFlatTags =
+        [
+            .._settingChips.Select(c  => new StoryTagDTO { TagId = c.TagId, TagTypeEnum = TagTypeEnum.Setting, Priority = TagPriority.Primary }),
+            .._genreChips.Select(c    => new StoryTagDTO { TagId = c.TagId, TagTypeEnum = TagTypeEnum.Genre, Priority = _genrePriorityMap.GetValueOrDefault(c.TagId, TagPriority.Primary) }),
+            .._cwChips.Select(c       => new StoryTagDTO { TagId = c.TagId, TagTypeEnum = TagTypeEnum.ContentWarning, Priority = TagPriority.Primary }),
+            .._crossoverChips.Select(c => new StoryTagDTO { TagId = c.TagId, TagTypeEnum = TagTypeEnum.CrossoverFandom, Priority = TagPriority.Primary }),
+        ];
+    }
 
     private void HandleCoverSelected(InputFileChangeEventArgs e) =>
         SelectedCoverFile = e.File;

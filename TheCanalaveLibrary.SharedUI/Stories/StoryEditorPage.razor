@@ -35,6 +35,10 @@ else
         <StoryPropertiesForm @ref="_form"
                              ViewModel="_viewModel"
                              InitialTagsByType="_initialTagsByType"
+                             InitialCharacters="_initialCharacters"
+                             InitialSettingDetails="_initialSettingDetails"
+                             InitialPairings="_initialPairings"
+                             InitialGenrePriorities="_initialGenrePriorities"
                              SubmitLabel="@(StoryId.HasValue ? "Save Changes" : "Create Story")"
                              OnValidSubmit="HandleValidSubmit" />
     </div>
@@ -46,6 +50,10 @@ else
     private StoryPropertiesForm? _form;
     private StoryPropertiesViewModel _viewModel = new();
     private IReadOnlyDictionary<TagTypeEnum, IReadOnlyList<TagChipDto>>? _initialTagsByType;
+    private IReadOnlyList<StoryCharacterDto>? _initialCharacters;
+    private IReadOnlyList<SettingDetailDto>? _initialSettingDetails;
+    private IReadOnlyList<StoryCharacterPairingDto>? _initialPairings;
+    private IReadOnlyDictionary<int, TagPriority>? _initialGenrePriorities;
     private bool _isLoading = true;
     private bool _forbidden;
 
@@ -67,15 +75,23 @@ else
 
             PopulateViewModelFromEdit(editData);
 
-            // Load chip data for pre-selected tags (TagSelector needs TagName + SpriteUrl).
-            List<int> tagIds = editData.StoryTags.Select(t => t.TagId).ToList();
-            if (tagIds.Count > 0)
+            // Load chip data for all tags (flat tags + character tags; TagSelector needs display data).
+            List<int> charTagIds = editData.StoryCharacters.Select(c => c.CharacterTagId).ToList();
+            List<int> flatTagIds = editData.StoryTags.Select(t => t.TagId).ToList();
+            List<int> allTagIds = [..charTagIds, ..flatTagIds];
+            if (allTagIds.Count > 0)
             {
-                List<TagChipDto> chips = await TagReadService.GetTagChipsByIdsAsync(tagIds);
+                List<TagChipDto> chips = await TagReadService.GetTagChipsByIdsAsync(allTagIds);
                 _initialTagsByType = chips
                     .GroupBy(c => c.TagTypeId)
                     .ToDictionary(g => g.Key, g => (IReadOnlyList<TagChipDto>)[.. g]);
             }
+            _initialCharacters     = editData.StoryCharacters;
+            _initialSettingDetails = editData.SettingDetails;
+            _initialPairings       = editData.StoryCharacterPairings;
+            _initialGenrePriorities = editData.StoryTags
+                .Where(t => t.TagTypeEnum == TagTypeEnum.Genre)
+                .ToDictionary(t => t.TagId, t => t.Priority);
         }
 
         _isLoading = false;
@@ -105,15 +121,11 @@ else
                 : string.Empty;
             _viewModel.LongDescription = longDescription;
 
-            // Map selected TagChipDtos → IStoryTag (default Priority = Primary; no priority UI in MVP).
-            List<IStoryTag> tags = _viewModel.SelectedTags
-                .Select(c => (IStoryTag)new StoryTagDTO
-                {
-                    TagId = c.TagId,
-                    TagTypeEnum = c.TagTypeId,
-                    Priority = TagPriority.Primary
-                })
-                .ToList();
+            // Structured collections — built by the form on every selection change.
+            List<IStoryTag> flatTags = _viewModel.SelectedFlatTags.Cast<IStoryTag>().ToList();
+            List<StoryCharacterDto> characters   = _viewModel.SelectedCharacters;
+            List<SettingDetailDto> settingDetails = _viewModel.SelectedSettingDetails;
+            List<StoryCharacterPairingDto> pairings = _viewModel.SelectedPairings;
 
             if (StoryId.HasValue)
             {
@@ -128,7 +140,10 @@ else
                     CoverArtRelativeUrl = _viewModel.CoverArtRelativeUrl,
                     LongDescription = _viewModel.LongDescription,
                     PostApprovalStatus = _viewModel.PostApprovalStatus,
-                    StoryTags = tags
+                    StoryTags = flatTags,
+                    StoryCharacters = characters,
+                    SettingDetails = settingDetails,
+                    StoryCharacterPairings = pairings
                 };
 
                 // Upload new cover if selected (id already exists on edit).
@@ -156,7 +171,10 @@ else
                     CoverArtRelativeUrl = null, // set after create if a file was selected
                     LongDescription = _viewModel.LongDescription,
                     PostApprovalStatus = _viewModel.PostApprovalStatus,
-                    StoryTags = tags
+                    StoryTags = flatTags,
+                    StoryCharacters = characters,
+                    SettingDetails = settingDetails,
+                    StoryCharacterPairings = pairings
                 };
 
                 int newStoryId = await StoryWriteService.CreateStoryAsync(createDto);
@@ -180,7 +198,10 @@ else
                         CoverArtRelativeUrl = coverUrl,
                         LongDescription = _viewModel.LongDescription,
                         PostApprovalStatus = _viewModel.PostApprovalStatus,
-                        StoryTags = tags
+                        StoryTags = flatTags,
+                        StoryCharacters = characters,
+                        SettingDetails = settingDetails,
+                        StoryCharacterPairings = pairings
                     });
                 }
 

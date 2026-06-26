@@ -18,9 +18,9 @@ public class ServerStoryWriteService(
 
         List<string> validationErrors = newStoryDTO.CanSave();
         if (validationErrors.Any())
-        {
             throw new StoryValidationException(validationErrors);
-        }
+
+        await ValidateStructuredTagGatesAsync(newStoryDTO, writeDb);
 
         Story newStoryDB = newStoryDTO.ToStory();
         newStoryDB.AuthorId = authorId;
@@ -46,14 +46,15 @@ public class ServerStoryWriteService(
     {
         List<string> validationErrors = dto.CanSave();
         if (validationErrors.Any())
-        {
             throw new StoryValidationException(validationErrors);
-        }
 
         Story? storyToUpdate = await writeDb.Stories
             .Include(s => s.StoryListing)
             .Include(s => s.StoryDetail)
             .Include(s => s.StoryTags)
+            .Include(s => s.StoryCharacters)
+            .Include(s => s.StoryCharacterPairings).ThenInclude(scp => scp.Members)
+            .Include(s => s.SettingDetails)
             .FirstOrDefaultAsync(s => s.StoryId == dto.StoryId);
 
         if (storyToUpdate is null)
@@ -64,9 +65,61 @@ public class ServerStoryWriteService(
         if (storyToUpdate.AuthorId != activeUser.UserId)
             throw new UnauthorizedAccessException("You can only edit your own stories.");
 
+        await ValidateStructuredTagGatesAsync(dto, writeDb);
+
         storyToUpdate.UpdateStoryEditableProperties(dto);
 
         await writeDb.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Server-side gate checks that require DB reads.
+    /// CanSave() handles client-verifiable rules; this handles rules that trust only server Tag state.
+    /// </summary>
+    private static async Task ValidateStructuredTagGatesAsync(
+        IEditableStoryProperties dto, ApplicationDbContext writeDb)
+    {
+        List<string> errors = [];
+
+        // OC gate: character tags that carry OC data must have AllowOCDetails == true.
+        List<int> ocCharTagIds = dto.StoryCharacters
+            .Where(sc => sc.IsOc || sc.OcName != null || sc.OcBio != null)
+            .Select(sc => sc.CharacterTagId).Distinct().ToList();
+        if (ocCharTagIds.Count > 0)
+        {
+            List<int> disallowed = await writeDb.Tags
+                .Where(t => ocCharTagIds.Contains(t.TagId) && !t.AllowOCDetails)
+                .Select(t => t.TagId).ToListAsync();
+            if (disallowed.Count > 0)
+                errors.Add($"Character tag(s) {string.Join(", ", disallowed)} do not allow OC details.");
+        }
+
+        // SettingDetail gate: tags with custom detail data must have AllowSettingDetails == true.
+        List<int> detailSettingTagIds = dto.SettingDetails
+            .Where(sd => sd.Name != null || sd.Description != null)
+            .Select(sd => sd.BaseTagId).Distinct().ToList();
+        if (detailSettingTagIds.Count > 0)
+        {
+            List<int> disallowed = await writeDb.Tags
+                .Where(t => detailSettingTagIds.Contains(t.TagId) && !t.AllowSettingDetails)
+                .Select(t => t.TagId).ToListAsync();
+            if (disallowed.Count > 0)
+                errors.Add($"Setting tag(s) {string.Join(", ", disallowed)} do not allow custom details.");
+        }
+
+        // Pairing member count: each pairing needs ≥2 members.
+        if (dto.StoryCharacterPairings.Any(p => p.MemberCharacterTagIds.Count < 2))
+            errors.Add("Each character pairing must include at least 2 members.");
+
+        // Pairing members must all be in the story's character list.
+        HashSet<int> storyCharTagIds = dto.StoryCharacters.Select(sc => sc.CharacterTagId).ToHashSet();
+        bool orphanedMembers = dto.StoryCharacterPairings
+            .SelectMany(p => p.MemberCharacterTagIds)
+            .Any(tagId => !storyCharTagIds.Contains(tagId));
+        if (orphanedMembers)
+            errors.Add("Pairing members must all be in the story's character list.");
+
+        if (errors.Count > 0) throw new StoryValidationException(errors);
     }
 
     // Tier-3 (cross-row, server set-based) uniqueness check per spec §3.7 — the unique-filtered index

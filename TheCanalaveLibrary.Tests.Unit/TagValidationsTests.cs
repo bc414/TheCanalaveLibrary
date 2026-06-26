@@ -180,9 +180,22 @@ public class TagValidationsTests
     [InlineData(TagTypeEnum.Genre, true, false)]
     [InlineData(TagTypeEnum.ContentWarning, true, false)]
     [InlineData(TagTypeEnum.CrossoverFandom, true, false)]
-    [InlineData(TagTypeEnum.Relationship, true, false)]
     public void CoerceAllowOCDetails_ReturnsTrueOnlyForCharacter(TagTypeEnum type, bool input, bool expected)
     {
         TagValidations.CoerceAllowOCDetails(input, type).Should().Be(expected);
+    }
+
+    // ── AllowSettingDetails coercion ──────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(TagTypeEnum.Setting, true, true)]
+    [InlineData(TagTypeEnum.Setting, false, false)]
+    [InlineData(TagTypeEnum.Character, true, false)]
+    [InlineData(TagTypeEnum.Genre, true, false)]
+    [InlineData(TagTypeEnum.ContentWarning, true, false)]
+    [InlineData(TagTypeEnum.CrossoverFandom, true, false)]
+    public void CoerceAllowSettingDetails_ReturnsTrueOnlyForSetting(TagTypeEnum type, bool input, bool expected)
+    {
+        TagValidations.CoerceAllowSettingDetails(input, type).Should().Be(expected);
     }
 }

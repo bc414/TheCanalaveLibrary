@@ -21,5 +21,11 @@ public interface IEditableStoryProperties
     
     public StoryStatusEnum PostApprovalStatus { get; set; }
     
+    /// <summary>Genre, ContentWarning, CrossoverFandom, and Setting flat associations only.
+    /// Character type is stored separately in <see cref="StoryCharacters"/>.</summary>
     public List<IStoryTag> StoryTags { get; set; }
+
+    public List<StoryCharacterDto> StoryCharacters { get; set; }
+    public List<SettingDetailDto> SettingDetails { get; set; }
+    public List<StoryCharacterPairingDto> StoryCharacterPairings { get; set; }
 }

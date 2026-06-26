@@ -75,7 +75,7 @@ public class StoryValidationsTests
         CreateStoryDTO dto = MakeValidDto();
         for (int i = 0; i < 6; i++)
         {
-            dto.StoryTags.Add(new StoryTagDTO { TagId = 100 + i, TagTypeEnum = TagTypeEnum.Character, Priority = TagPriority.Primary });
+            dto.StoryCharacters.Add(new StoryCharacterDto { CharacterTagId = 100 + i, Priority = TagPriority.Primary });
         }
 
         dto.CanSave().Should().Contain("Your story cannot have more than 5 Primary Character tags");

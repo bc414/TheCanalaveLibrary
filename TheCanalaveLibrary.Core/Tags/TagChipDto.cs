@@ -29,6 +29,12 @@ public class TagChipDto
     public bool AllowOCDetails { get; set; }
 
     /// <summary>
+    /// Setting-domain: whether this Setting tag permits custom SettingDetail side-rows.
+    /// Always false for non-Setting types (coerced by TagValidations).
+    /// </summary>
+    public bool AllowSettingDetails { get; set; }
+
+    /// <summary>
     /// FK to the parent Tag, or null for top-level tags. Only one level deep.
     /// Populated by GetTagDirectoryAsync; null elsewhere.
     /// </summary>

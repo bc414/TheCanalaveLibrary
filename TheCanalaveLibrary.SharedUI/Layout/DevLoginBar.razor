@@ -1,0 +1,23 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using Microsoft.Extensions.Hosting
+@using Microsoft.JSInterop
+@inject IHostEnvironment HostEnv
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+@if (HostEnv.IsDevelopment())
+{
+    <div class="flex items-center gap-3 px-3 py-1.5 bg-yellow-50 border-b border-yellow-300 text-sm">
+        <span class="text-yellow-700 font-semibold">Dev</span>
+        <button class="text-blue-600 hover:underline" @onclick='() => DevLoginAsync("TestUser")'>TestUser</button>
+        <button class="text-blue-600 hover:underline" @onclick='() => DevLoginAsync("AdminUser")'>AdminUser</button>
+    </div>
+}
+
+@code {
+    private async Task DevLoginAsync(string username)
+    {
+        await JS.InvokeVoidAsync("fetch", $"/dev/wu12/login-as/{username}", new { method = "POST" });
+        Nav.NavigateTo("/", forceLoad: true);
+    }
+}

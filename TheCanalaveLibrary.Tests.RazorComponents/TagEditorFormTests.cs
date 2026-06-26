@@ -38,7 +38,6 @@ public class TagEditorFormTests : TestContext
         ]},
         new() { TagType = TagTypeEnum.ContentWarning,  Nodes = [] },
         new() { TagType = TagTypeEnum.CrossoverFandom, Nodes = [] },
-        new() { TagType = TagTypeEnum.Relationship,    Nodes = [] },
     ];
 
     private static TagChipDto MakeChip(int id, string name, TagTypeEnum type,
@@ -58,7 +57,7 @@ public class TagEditorFormTests : TestContext
             .Add(c => c.EditingTag, null));
 
         cut.FindAll("select#tag-type option").Should()
-            .HaveCount(6, "there are 6 TagTypeEnum values");
+            .HaveCount(5, "there are 5 TagTypeEnum values");
     }
 
     [Fact]
@@ -81,7 +80,6 @@ public class TagEditorFormTests : TestContext
     [InlineData(TagTypeEnum.Genre, false)]
     [InlineData(TagTypeEnum.ContentWarning, false)]
     [InlineData(TagTypeEnum.CrossoverFandom, false)]
-    [InlineData(TagTypeEnum.Relationship, false)]
     public void AllowOCDetails_VisibleOnlyForCharacterType(TagTypeEnum type, bool shouldBeVisible)
     {
         // Edit a tag of the given type to trigger the correct branch.

@@ -16,4 +16,7 @@ public class CreateStoryDTO : IEditableStoryProperties
     public string? LongDescription { get; set; }
     public StoryStatusEnum PostApprovalStatus { get; set; }
     public List<IStoryTag> StoryTags { get; set; } = new();
+    public List<StoryCharacterDto> StoryCharacters { get; set; } = new();
+    public List<SettingDetailDto> SettingDetails { get; set; } = new();
+    public List<StoryCharacterPairingDto> StoryCharacterPairings { get; set; } = new();
 }

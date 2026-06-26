@@ -37,10 +37,31 @@ public class ServerStoryReadService(
                     .Select(st => new TagListingRow(
                         st.TagId, st.Tag.TagName, st.Tag.TagTypeId,
                         st.Tag.Description, st.Tag.SpriteIdentifier))
+                    .ToList(),
+                s.StoryCharacters
+                    .Select(sc => new CharacterDetailRow(
+                        sc.CharacterTagId, sc.CharacterTag.TagName, sc.CharacterTag.SpriteIdentifier,
+                        sc.Priority, sc.IsOc, sc.OcName, sc.OcBio))
+                    .ToList(),
+                s.StoryCharacterPairings
+                    .Select(scp => new PairingDetailRow(
+                        scp.PairingType, scp.Priority,
+                        scp.Members.Select(m => m.StoryCharacter.CharacterTag.TagName).ToList()))
                     .ToList()))
             .FirstOrDefaultAsync();
 
         if (row is null) return null;
+
+        List<TagChipDto> characterChips = row.Characters
+            .Select(c => new TagChipDto
+            {
+                TagId = c.CharacterTagId, TagName = c.TagName,
+                TagTypeId = TagTypeEnum.Character,
+                SpriteUrl = c.SpriteIdentifier is null
+                    ? null
+                    : spriteReadService.GetSpriteUrl(activeUser.Theme, c.SpriteIdentifier, activeUser.PrefersAnimatedSprites)
+            })
+            .ToList();
 
         return new StoryDetailsDTO
         {
@@ -59,7 +80,13 @@ public class ServerStoryReadService(
             Rating               = row.Rating,
             Status               = row.Status,
             ChapterNames         = row.ChapterNames,
-            Tags                 = row.Tags.Select(ToTagChip).ToList()
+            Tags                 = [..row.Tags.Select(ToTagChip), ..characterChips],
+            Characters           = row.Characters
+                .Select((c, i) => new CharacterDisplayEntry(characterChips[i], c.Priority, c.IsOc, c.OcName, c.OcBio))
+                .ToList(),
+            Pairings             = row.Pairings
+                .Select(p => new PairingDisplayEntry(p.PairingType, p.Priority, p.MemberNames))
+                .ToList()
         };
     }
 
@@ -77,7 +104,27 @@ public class ServerStoryReadService(
                 CoverArtRelativeUrl = s.StoryListing != null ? s.StoryListing.CoverArtRelativeUrl : null,
                 LongDescription = s.StoryDetail != null ? s.StoryDetail.LongDescription : null,
                 PostApprovalStatus = s.StoryDetail != null ? s.StoryDetail.PostApprovalStatus : default,
-                StoryTags = s.StoryTags.Select(st => new StoryTagDTO { TagId = st.TagId, Priority = st.Priority, TagTypeEnum = st.Tag.TagTypeId }).ToList<IStoryTag>()
+                StoryTags = s.StoryTags.Select(st => new StoryTagDTO { TagId = st.TagId, Priority = st.Priority, TagTypeEnum = st.Tag.TagTypeId }).ToList<IStoryTag>(),
+                StoryCharacters = s.StoryCharacters.Select(sc => new StoryCharacterDto
+                {
+                    CharacterTagId = sc.CharacterTagId,
+                    Priority       = sc.Priority,
+                    IsOc           = sc.IsOc,
+                    OcName         = sc.OcName,
+                    OcBio          = sc.OcBio
+                }).ToList(),
+                SettingDetails = s.SettingDetails.Select(sd => new SettingDetailDto
+                {
+                    BaseTagId   = sd.BaseTagId,
+                    Name        = sd.Name,
+                    Description = sd.Description
+                }).ToList(),
+                StoryCharacterPairings = s.StoryCharacterPairings.Select(scp => new StoryCharacterPairingDto
+                {
+                    PairingType           = scp.PairingType,
+                    Priority              = scp.Priority,
+                    MemberCharacterTagIds = scp.Members.Select(m => m.StoryCharacter.CharacterTagId).ToList()
+                }).ToList()
             })
             .FirstOrDefaultAsync();
     }
@@ -199,31 +246,37 @@ public class ServerStoryReadService(
     private IQueryable<Story> ApplyFilters(IQueryable<Story> query, StoryFilterDto filter, bool hasFts)
     {
         // ── Tag include ────────────────────────────────────────────────────────────────────
+        // Character tags live in StoryCharacters; all others live in StoryTags. Since every
+        // TagId belongs to exactly one entity type, the || always resolves to one side only —
+        // this is correct without pre-partitioning the id list.
         if (filter.IncludedTagIds.Count > 0)
         {
             if (filter.IncludeMode == TagIncludeMode.Or)
             {
-                // OR — story must have at least one of the included tags.
-                // Single WHERE EXISTS IN (...) translates cleanly to SQL.
-                query = query.Where(s => s.StoryTags.Any(st => filter.IncludedTagIds.Contains(st.TagId)));
+                // OR — story must match at least one included tag in either collection.
+                query = query.Where(s =>
+                    s.StoryCharacters.Any(sc => filter.IncludedTagIds.Contains(sc.CharacterTagId)) ||
+                    s.StoryTags.Any(st => filter.IncludedTagIds.Contains(st.TagId)));
             }
             else
             {
-                // AND (default) — story must have all of the included tags.
-                // One subquery per tag; Postgres folds the constants away efficiently.
+                // AND (default) — story must match every included tag; each gets one subquery.
                 foreach (int tagId in filter.IncludedTagIds)
                 {
                     int tid = tagId; // local capture so the closure binds the right value
-                    query = query.Where(s => s.StoryTags.Any(st => st.TagId == tid));
+                    query = query.Where(s =>
+                        s.StoryCharacters.Any(sc => sc.CharacterTagId == tid) ||
+                        s.StoryTags.Any(st => st.TagId == tid));
                 }
             }
         }
 
-        // ── Tag exclude (story must have none of the excluded tags) ───────────────────────
+        // ── Tag exclude (story must have none of the excluded tags in either collection) ──
         if (filter.ExcludedTagIds.Count > 0)
         {
-            // EF translates IReadOnlyList.Contains(entity_field) to SQL IN (...) correctly.
-            query = query.Where(s => !s.StoryTags.Any(st => filter.ExcludedTagIds.Contains(st.TagId)));
+            query = query.Where(s =>
+                !s.StoryCharacters.Any(sc => filter.ExcludedTagIds.Contains(sc.CharacterTagId)) &&
+                !s.StoryTags.Any(st => filter.ExcludedTagIds.Contains(st.TagId)));
         }
 
         // ── FTS ───────────────────────────────────────────────────────────────────────────
@@ -323,8 +376,18 @@ public class ServerStoryReadService(
         int WordCount, DateTime PublishDate, DateTime LastUpdatedDate,
         DateOnly? OriginalPublishDate, DateOnly? OriginalLastUpdatedDate,
         int? AuthorId, string? AuthorName, string? CoverArtRelativeUrl,
-        Rating Rating, StoryStatusEnum Status, List<string> ChapterNames, List<TagListingRow> Tags);
+        Rating Rating, StoryStatusEnum Status, List<string> ChapterNames,
+        List<TagListingRow> Tags,
+        List<CharacterDetailRow> Characters,
+        List<PairingDetailRow> Pairings);
 
     private sealed record TagListingRow(
         int TagId, string TagName, TagTypeEnum TagTypeId, string? Description, string? SpriteIdentifier);
+
+    private sealed record CharacterDetailRow(
+        int CharacterTagId, string TagName, string? SpriteIdentifier,
+        TagPriority Priority, bool IsOc, string? OcName, string? OcBio);
+
+    private sealed record PairingDetailRow(
+        CharacterPairingType PairingType, TagPriority Priority, List<string> MemberNames);
 }

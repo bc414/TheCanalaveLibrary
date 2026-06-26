@@ -935,6 +935,68 @@ Listings and states then flow through the existing
 `GetListingsAsync(filter, restrictToStoryIds)` + `GetStatesByStoryIdsAsync`, exactly as
 `BookshelvesPage` does.
 
+## Story Editor — Structured Tag Authoring (WU37)
+
+`StoryPropertiesForm.razor` receives a `StoryPropertiesViewModel` and is presentational (no `@inject`).
+For WU37, each tag type uses a distinct authoring pattern:
+
+### Flat types (Genre / ContentWarning / CrossoverFandom)
+Reuse `TagSelector` directly. One `TagSelector` instance per type, scoped by `TagTypeEnum`.
+Genre and CrossoverFandom get a `TagPriority` picker per chip. ContentWarning gets no priority
+picker (service coerces to `Primary`).
+
+### Character — picker-plus-wrapper pattern
+
+One `TagSelector` for catalog pick. Each selected chip spawns a `CharacterEntry` sub-component
+(presentational leaf, no `@inject`). `CharacterEntry` receives the `TagChipDto` + a mutable
+`StoryCharacterViewModel` and renders:
+- Priority picker (Primary / Supporting)
+- "OC" toggle — visible only when `chip.AllowOCDetails` is true (gate from `TagChipDto`)
+- `OcName` / `OcBio` fields — revealed only when the OC toggle is on
+
+```razor
+@* StoryPropertiesForm — character section *@
+<TagSelector TagType="TagTypeEnum.Character" OnSelectionChanged="HandleCharacterSelected" />
+@foreach (var entry in _characters)
+{
+    <CharacterEntry Chip="entry.Chip" Model="entry" OnRemove="() => RemoveCharacter(entry)" />
+}
+```
+
+`CharacterEntry` is an inner leaf — purely presentational, bUnit-testable. Feeds the
+`StoryPropertiesViewModel.Characters` collection.
+
+### Setting — picker-plus-optional-detail pattern
+
+One `TagSelector` for catalog pick. Each selected chip spawns a `SettingEntry` sub-component.
+`SettingEntry` renders a "Custom details" section only when `chip.AllowSettingDetails` is true.
+When shown: `SettingName` (max 128) + `SettingDescription` (max 2048 chars) fields.
+
+### Pairing builder — no TagSelector
+
+The pairing section does **not** use `TagSelector`. It sources its member list from the story's
+**own** `_characters` (selected above), not from the catalog. Structure:
+
+```razor
+@* Pairing section — entirely separate from catalog picking *@
+<PairingBuilder Characters="_characters"
+                Pairings="_pairings"
+                OnPairingsChanged="HandlePairingsChanged" />
+```
+
+`PairingBuilder` is a coordination composite (manages pairing list state, emits on change):
+- Member multi-select (checkboxes or pills) drawn from `_characters`
+- `CharacterPairingType` selector: Romantic (`/`) or Platonic (`&`)
+- Priority picker (Primary / Supporting)
+- Add / Remove pairing buttons
+
+Minimum 2 members per pairing enforced at service layer (not in the component itself).
+Component-level guard: disable "Add pairing" button when fewer than 2 characters are selected.
+
+All four sub-components are **presentational leaves** (no `@inject`) so they are bUnit-testable.
+`StoryEditorPage` owns the `StoryPropertiesViewModel`, populates it from `GetStoryForEditAsync`
+on edit-mode load, and maps it back to DTOs on submit.
+
 ## Page Route Reference
 
 See spec §5.29 for the complete page inventory. Key dispatcher pages:
