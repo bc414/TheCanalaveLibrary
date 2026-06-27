@@ -335,7 +335,7 @@ passes the floor). The **primary** version's effective rating must equal the sto
 satisfied by NULL/inherit) — guarantees any reader who can see the story can always read its primary
 chapters without a content-gate block.
 
-## Group Audience-Visibility Filter (settled WU32)
+## Group Audience-Visibility Filter
 
 Groups carry an **`AudienceRating`** property (renamed from `Rating` in the WU32 migration — column
 renamed, enum mapping unchanged). It enforces the same "zero visible trace of mature content" rule
@@ -380,7 +380,7 @@ Non-M stories can be added to a Mature group — the audience rating defines the
 audience, not a floor on story content. A T-rated story that fits can always be added to a Mature
 group; safe because mature-disabled users cannot see the Mature group at all (filtered at listing).
 
-## Group Membership and Role Model (settled WU32)
+## Group Membership and Role Model
 
 Groups are **not gated communities.** The membership and role model is deliberately simple:
 
@@ -409,9 +409,7 @@ auto-promote).
 
 ## Content Rating Filtering
 
-Every read service returning story data must filter by content rating. **Settled (WU12, revised post-WU38
-revamp): this is a global EF Core named query filter, sourced from `IActiveUserContext`, defined on
-`ReadOnlyApplicationDbContext` only — not the base `ApplicationDbContext`.**
+Every read service returning story data must filter by content rating. The ceiling is a **global EF Core named query filter** sourced from `IActiveUserContext`, registered on `ReadOnlyApplicationDbContext` only — not the base `ApplicationDbContext`.
 
 ### The principle: display filters live only on the read context
 
@@ -483,33 +481,9 @@ await writeDb.SaveChangesAsync();` — EF issues child-then-base DELETE in one t
 
 ## Notification Creation
 
-### Generation mechanism (settled WU22)
+### Generation mechanism
 
-Every user-facing action that triggers a notification calls a **semantic per-event method** on
-`INotificationWriteService` — injected into the feature write service just like
-`IHtmlSanitizationService`. The semantic method (not a generic `CreateAsync`) is the only public
-generation surface; the invariants (drop-self, dedup) live inside the service's private create-core and
-can't be bypassed per-caller. This is the same principle as the content-rating filter: make it a
-property of the model, not per-method vigilance.
-
-```csharp
-// Feature write service wires it after its primary save (best-effort post-commit):
-await writeDb.SaveChangesAsync();   // durable — committed before we notify
-try { await notifications.NotifyNewFollowerAsync(actorId, targetUserId); }
-catch (Exception ex) { logger.LogError(ex, "Notification failed (non-fatal)"); }
-```
-
-**Best-effort post-commit** — primary `SaveChangesAsync` first, notification call in `try/catch`.
-Notification failure is logged and swallowed; it never rolls back the primary action. The primary
-`SaveChanges` *must* precede the notify call, because the feature service and notification service
-share the same scoped `ApplicationDbContext` instance — after the primary commit the change tracker is
-clean, so the notification service's own `SaveChangesAsync` is a separate transaction that covers only
-the notification rows.
-
-**DAG rule — recipient resolution composes read services only.** Fan-out methods (e.g. "notify all
-`ReceiveAlerts` followers of this author") call `IFollowingReadService` or similar *read* services to
-resolve recipients. Notification write → feature read is fine; feature write → notification write →
-feature write would be a cycle.
+See `layer2-services.md` "Notification Generation" for the wiring pattern (semantic per-event methods, best-effort post-commit ordering, semantic-methods rationale, DAG rule).
 
 ### Filtering semantics
 
@@ -586,33 +560,7 @@ priority picker and its priority is coerced to `Primary` at service layer.
 **MVP (WU36):** synchronous inline, best-effort. Call `IBadgeWriteService.AwardAsync` after the
 counter `ExecuteUpdateAsync` and after the primary `SaveChangesAsync`, inside a `try/catch` — never
 fail the parent operation on a badge error. See `layer2-services.md` "Synchronous Inline Badge
-Awards" for the full pattern and rationale.
-
-`AwardAsync` is **idempotent** (no-op if already earned; returns `true` only on first award). No
-separate `HasBadgeAsync` is needed — call `AwardAsync` and discard the bool if unused.
-
-```csharp
-// After primary SaveChangesAsync + counter ExecuteUpdateAsync:
-int total = await writeDb.UserStats
-    .Where(us => us.UserId == targetUserId)
-    .Select(us => us.SomeCounter)
-    .FirstOrDefaultAsync();
-
-try
-{
-    if (total >= 10) await badgeService.AwardAsync(targetUserId, SiteBadges.Recommender);
-    if (total >= 50) await badgeService.AwardAsync(targetUserId, SiteBadges.RecommenderSilver);
-}
-catch (Exception ex)
-{
-    logger.LogWarning(ex, "Badge award failed for user {UserId} — swallowed.", targetUserId);
-}
-```
-
-**Anti-self-farm guard:** when the mechanic is social, validate `actorId != beneficiaryId` AND
-`nullableFk != null` before incrementing or calling `AwardAsync`.
-
-**Post-MVP:** a background worker replaces inline checks. `IBadgeWriteService` hides the swap.
+Awards" for the full pattern, idempotency guarantee, anti-self-farm guard, and post-MVP swap note.
 
 Live `SiteBadges` constants: `Patron`, `Recommender`, `RecommenderSilver`, `BetaReader`, `Architect`,
 `Artist`. Keys are `public const string` fields on `SiteConstants.SiteBadges`.
@@ -802,7 +750,7 @@ dev. `IsInRole` is literal — there is no automatic Admin-inherits-Moderator hi
 that should accept either role must list both: `Roles="Moderator,Admin"` / `.RequireRole("Moderator",
 "Admin")` / `IsModerator || IsAdmin`.
 
-## Moderation Model (settled WU34)
+## Moderation Model
 
 ### Mission-Driven Defaults — Opposite of Industry Standard
 
@@ -911,7 +859,7 @@ Semantic methods:
 All are best-effort post-commit (try/catch swallows; notification failure never rolls back the primary
 moderation action).
 
-## Private Messaging Architecture (settled WU35)
+## Private Messaging Architecture
 
 ### Stateless MVP — SignalR is post-MVP
 

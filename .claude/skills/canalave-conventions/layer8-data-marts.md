@@ -1,3 +1,5 @@
+> **Provisional — Stage 2 (unbuilt).** This file records design intent for post-MVP work validated against the spec, not against built code. Re-verify all details when this layer is implemented.
+
 # Layer 8 — Data Mart Workers
 
 Non-EF-Core background workers: raw SQL table creation, zero-downtime swap, recursive CTEs.

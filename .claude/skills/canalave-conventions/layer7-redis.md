@@ -1,3 +1,5 @@
+> **Provisional — Stage 2 (unbuilt).** This file records design intent for post-MVP work validated against the spec, not against built code. Re-verify all details when this layer is implemented.
+
 # Layer 7 — Redis Integration
 
 Write-behind buffer, ephemeral store, read-side cache, and associated `IHostedService` workers.
@@ -16,8 +18,8 @@ Clients (Blazor WASM) **NEVER** connect to Redis directly. The server is the tru
 The path for high-frequency interaction updates (Favorite / Follow / Ignore buttons):
 
 1. **Blazor WASM component:** optimistic UI update on click + a **2-second per-component debounce**
-   (`SiteConstants.InteractionDebounceMs`) to absorb click/unclick churn. When the timer fires,
-   one API call for that one story.
+   (`InteractionConstants.InteractionDebounceMs` in `Core/UserStoryInteractions/`) to absorb
+   click/unclick churn. When the timer fires, one API call for that one story.
 2. **API endpoint ("fast and dumb"):** validate → `LPUSH` a message onto Redis list
    `interaction-queue` → return `202 Accepted`. **Never touches `DbContext`.**
 3. **Background worker (`IHostedService`):** wakes every **5 seconds**, drains all pending messages,

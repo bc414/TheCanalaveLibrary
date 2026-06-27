@@ -54,57 +54,21 @@ These have documented rationale and rejected alternatives. **Do not propose alte
 
 ## Code Organization
 
-**Vertical (folder-per-feature) is a hard rule, not an aspiration.** Group by feature (`Stories/`,
-`Tags/`, `UserStoryInteractions/`, `Sprites/`, …) per `folder_clusters.md`, never by technical layer.
-One flat namespace per project regardless of folder depth: `TheCanalaveLibrary.Core`, `.Server`,
-`.Client`, `.SharedUI`. A feature's cluster is parallel across projects — e.g. `Core/Sprites/`,
-`Server/Sprites/`, `Client/Sprites/`, `SharedUI/Sprites/` each hold that feature's files in their
-project; moving a file between them is a folder move only, never a namespace edit. `Core/Stories/` and
-`Core/Tags/` are the model to follow: entity, DTOs, validation, and service interface all live together.
-`Lookups/` is a legitimate cluster too — it deliberately holds cross-cutting seeded/enum-mirror data
-that every other cluster queries by FK, not feature-specific code; it isn't an exception to vertical
-organization, it's a cluster whose feature *is* "shared reference data." `RichText/` is the same kind
-of exception, for the opposite-tier reason: `RichTextView` (and its consumer, `EditorView`) are
-universal rendering/editing atoms consumed by Chapters, Comments, Recommendations, BlogPosts, Profiles,
-and Messaging — no single feature owns them, so their cluster's feature *is* "rich-text rendering."
-`Dialogs/` (WU9) is the same kind of exception again: `ConfirmDialog` is a universal confirm/cancel
-modal with no owning feature — its cluster's feature *is* "modal/overlay dialogs," consumed by spoiler
-reveal, account deletion, leaving a group, deleting a list, and unpublishing a story. `Users/` (WU10)
-is the same kind of exception once more: `UserCardDto` and the `UserCard` leaf are a universal
-user-summary atom consumed by Following (vouch display), Profiles, Groups, Comments, Recommendations,
-Messaging, Users search, and tree search nodes — no single feature owns the atom, so `Core/Users/` and
-`SharedUI/Users/` are its cluster, distinct from `Core/Identity/` (which holds the `User` entity
-itself), the same way `Core/Sprites/` is distinct from the entities it projects. `Core/Identity/`
-(WU12) also holds `IActiveUserContext` — the read-side "who is the current viewer" companion to the
-`User` entity, consumed by the content-rating query filter and sprite-resolution projections across
-every feature; its Server impl lives in `Server/Identity/`. `Images/` (WU12) is the same shape of
-exception again: `IImageStorageService` (Core/Images/, Server impl `Server/Images/`) is a universal
-user-upload-blob write op with no owning feature — covers (Stories) and profile pictures (Profiles)
-both call it — so its cluster's feature *is* "user-upload image storage," distinct from `Sprites/`
-(read-only resolution of git-managed static assets, not uploads). `Discovery/` (WU23) follows the
-same rule: `SharedUI/Discovery/` holds `ResultsFilterPanel` (the coordination composite that assembles
-filter axes for search/profile/bookshelf consumers); `SharedUI/Tags/TagFilter.razor` is the include/exclude
-tag-filter axis (reused by tree search directly); `SharedUI/UserStoryInteractions/UserStoryInteractionFilter.razor`
-is the USI-exclusion axis. `Core/Discovery/` holds `StoryFilterDto` plus the three §8.7 renamed
-entities (`UserStoryInteractionFilterType`, `DefaultUserStoryInteractionFilterSetting`,
-`UserStoryInteractionFilterSetting`) — none of these belong to a single consuming feature. `Core/Bookshelves/`
-(WU27) is the same shape of exception: `BookshelfTab` enum and `BookshelfTabSlug` slug helper are consumed
-by `SharedUI/Bookshelves/` (the page cluster) and `Server/UserStoryInteractions/` (the bookshelf query),
-with no single feature owning the concept. `SharedUI/Bookshelves/` (WU27) holds the page dispatcher
-(`BookshelvesPage`), desktop/mobile composites, and `BookshelfTabVisuals`. `SharedUI/Recommendations/`
-(WU27 icons, WU29 cards) is another cross-cutting SharedUI cluster — WU27 mints the SVG icon constants
-(`RecommendationIcons.cs`), WU29 builds the display components; the cluster owns content that spans
-submission, display, Hidden Gem, and attribution sub-features. `Core/Messaging/` and
-`SharedUI/Messaging/` (WU35) are the Messaging feature cluster — `EditorView` (consumed here)
-and `UserCard` (used to show conversation participants) remain in their own cross-cutting clusters;
-Messaging's own services, DTOs, page dispatcher, and leaf components live in this cluster.
-`Core/Profiles/`, `Server/Profiles/`, and `SharedUI/Profiles/` (WU30) are the Profiles feature
-cluster. `Core/Identity/` keeps the `User` entity + `IActiveUserContext`; `Core/Profiles/` holds
-the projection and settings-edit services *over* it — same distinction as `Core/Sprites/` (which
-owns `IThemeReadService`/`ISpriteReadService`) vs the entities those services project, or
-`Core/Users/` (the `UserCardDto` atom) vs `Core/Identity/` (the `User` entity itself). The cluster
-boundary is: Identity = the entity + auth plumbing; Profiles = how the entity is read and edited
-by the owner or public viewer.
+**Vertical (folder-per-feature) is the hard rule.** Group by feature per `folder_clusters.md`, never by technical layer. One flat namespace per project: `TheCanalaveLibrary.Core`, `.Server`, `.Client`, `.SharedUI` — a file that moves folders never changes its namespace. A cross-cutting cluster is legitimate when its *feature is a shared concern* that no single consuming feature owns.
+
+Cross-cutting clusters and their scope:
+- **`Lookups/`** — seeded reference data (themes, report reasons, etc.) every cluster queries by FK; no single owning feature.
+- **`RichText/`** — `RichTextView`/`EditorView` universal render/edit atoms consumed by Chapters, Comments, Recommendations, BlogPosts, Profiles, Messaging.
+- **`Dialogs/`** — `ConfirmDialog` universal confirm/cancel modal (spoiler reveal, account deletion, leaving a group, etc.); no owning feature.
+- **`Users/`** — `UserCardDto`/`UserCard` universal user-summary atom consumed across Following, Profiles, Groups, Comments, Recommendations, Messaging, tree-search. Distinct from `Identity/` (which owns the `User` entity).
+- **`Images/`** — `IImageStorageService` universal user-upload-blob write path (story covers, profile pictures). Distinct from `Sprites/` (read-only git-managed static assets).
+- **`Identity/`** — `User` entity + `IActiveUserContext` + auth plumbing (Server impl: `Server/Identity/`). Distinct from `Users/` (summary atom) and `Profiles/` (read/edit layer).
+- **`Sprites/`** — `IThemeReadService`/`ISpriteReadService` render-time URL resolution (read-only). Distinct from `Images/` (upload) and `Identity/` (the entities projected).
+- **`Discovery/`** — `StoryFilterDto`, the three §8.7 filter-setting entities, and `ResultsFilterPanel`/`TagFilter`/`UserStoryInteractionFilter` coordination components; consumed by search, profiles, and bookshelves.
+- **`Bookshelves/`** — `BookshelfTab` enum + `BookshelfTabSlug` slug helper consumed by `SharedUI/Bookshelves/` and `Server/UserStoryInteractions/`.
+- **`Recommendations/`** — SVG icon constants and display components spanning submission, display, Hidden Gem, and attribution sub-features.
+- **`Messaging/`** — Messaging feature cluster; `EditorView` and `UserCard` remain in their own cross-cutting clusters.
+- **`Profiles/`** — projection and settings-edit services *over* the `User` entity. Boundary: Identity = entity + auth plumbing; Profiles = how the entity is read and edited by owner or public viewer.
 
 API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
 cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/SpriteEndpoints.cs`

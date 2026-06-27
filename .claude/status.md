@@ -6,92 +6,23 @@ features from `grid_axes.md`, grouped by folder cluster. Columns:
 `L1 | L2 | L3-Logic | L3.5-Structure | L4-Style | L5 | L6 | L7 | L8`
 
 Global conditions affecting many cells — kept terse; detail lives at the pointer, not here:
-- **Spec supersedes stale code.** Most Stage-4 cells are stale-code traps (build to spec, code is
-  salvage), not two-way adjudications. Detail: `audit-summary.md` §0/§3.
-- **L4-Style blocker cleared (Tailwind v4 tokens locked).** L4-Style cells are intent-settled,
-  non-blocking; each rides along inside its feature's Phase-E work-unit rather than being
-  sequenced separately. Detail: `layer4-style.md` §"Prerequisite: Design Tokens",
-  `forward_plan.md` Phase C "Resolved."
-- **L1 migration-verified.** Fluent config lives in `IEntityTypeConfiguration<T>` classes;
-  `InitialSchema` generated clean. Every L1 Stage 5 below is migration-verified. Detail:
-  `layer1-data-model.md` §"Fluent API Organization."
+- **Spec supersedes stale code.** Most Stage-4 cells are stale-code traps (build to spec, code is salvage), not two-way adjudications. Detail: `audit-summary.md` §0/§3.
+- **L4-Style blocker cleared (Tailwind v4 tokens locked).** Each rides along inside its feature's Phase-E work-unit. Detail: `layer4-style.md` §"Prerequisite: Design Tokens", `forward_plan.md` Phase C "Resolved."
+- **L1 migration-verified.** `InitialSchema` generated clean; every L1 Stage 5 below is migration-verified. Detail: `layer1-data-model.md` §"Fluent API Organization."
 - **Rows 19, 29 reclassified (Phase B).** Detail: `audit/Following.md`, `audit/Recommendations.md`.
-- **Workplan exists.** `.claude/workplan.md` sequences the build (WU0 → atoms → composites →
-  pages); rows 8/37/51/55 blocked/deferred (confirmed no dependents); Layers 5–8 batched post-MVP.
-  Planning artifact — no cell Stage changed by this.
-- **First real app run (WU0) found and fixed 3 startup bugs, pivoted dev off Aspire for MVP.**
-  Detail split by where each fix lives: Stories L2 DI-registration fix → `audit/Stories.md` row
-  4/5; render-mode/interactive-routing fix → `cross-cutting.md` "Render Mode" (current pattern);
-  Aspire-off-for-MVP decision → `forward_plan.md` "Aspire orchestration during MVP dev" Resolved
-  entry; start/stop + verification procedure → `.claude/skills/run-server/SKILL.md`. WU0 itself is
-  closed — see `workplan.md` WU0.
-- **Legacy technical-layer folders are being retired to vertical feature clusters, just-in-time
-  (WU2).** `Core/Models/`, `Core/ServiceInterfaces/`, `Server/Services/`, `Client/Services/`,
-  `Server/Endpoints/` are deprecated — no new file is added to them, and each work-unit moves the
-  files it touches into that feature's cluster folder as part of finishing the work. Detail:
-  `canalave-conventions/SKILL.md` "Code Organization".
-- **Cross-cutting infra minted (WU12): `IActiveUserContext`, the content-rating named query filter,
-  `IImageStorageService`.** All three are now load-bearing for every future read service touching
-  `Story` or user-uploaded images, not Stories-specific. Also: the Aspire Npgsql EF Core *client*
-  package is removed from `TheCanalaveLibrary.Server` (pooled DbContexts are incompatible with
-  `IActiveUserContext`'s Scoped lifetime) — plain `AddDbContext` is now the standing registration
-  pattern for both DbContexts. Detail: `cross-cutting.md` "Active-User Context"/"Content Rating
-  Filtering", `layer2-services.md` "DbContext Registration", `audit/ImageStorage.md`,
-  `forward_plan.md` "Aspire orchestration during MVP dev" narrower correction.
-- **TPT denormalization retrofitted (WU31.5, 2026-06-24).** Discovery columns (`DateCreated`,
-  `LastUpdatedDate`, `Rating`, `IsPublished` on blog-post children; `DatePosted` on comment children)
-  moved from base tables to child tables. Named filter removed from `BaseBlogPost`. F35/F36/F23–F26
-  L1/L2 momentarily reopened and re-closed to Stage 5 on green `dotnet test`. Detail:
-  `layer1-data-model.md` §"Denormalization with TPT", `audit/BlogPosts.md`, `audit/Comments.md`.
-- **Three-tier automated test suite in place (WU12.5 + 2026-06-22 backfill).** Three test projects in
-  the `.sln` — `dotnet test` runs all. Organized by *kind* (not production project): `Tests.Unit`
-  (directly-constructed, no host/DB — refs Core + Server), `Tests.Integration` (real Testcontainers
-  Postgres + `WebApplicationFactory`), `Tests.RazorComponents` (bUnit component render tests). Per-unit
-  loop and Phase E loop now name `dotnet test`; obligation is advisory ("should add tests") — no Stage
-  gate. No cell Stage changes from this; it's tooling every future work-unit should add tests to.
-  Detail: `canalave-conventions/testing.md`, `workplan.md` WU12.5.
-- **Integration test isolation overhaul (2026-06-24).** Respawn DB reset before every test; all 19
-  integration test classes migrated to `IntegrationTestBase` (Respawn reset, factory lifecycle, GUID-
-  suffixed user seeding via `SeedUserAsync`). `[assembly: CollectionBehavior(DisableTestParallelization
-  = true)]` made deliberate. `RecommendationStatusEnum` added to `Core/Lookups/ModelEnums.cs`. This
-  unlocked reliable L5 Stage-5 verification for F7/16/17/18/19/23/24/25/26/27/28/29/42/43 (all
-  integration tests that existed but had order-dependent shared-state). Detail: `canalave-conventions/
-  testing.md` §"Integration tests reset between every test", `forward_plan.md` "Integration test
-  isolation foundation" Resolved. F4/F5 L5 stay Stage 4 (architectural disagreement pending Opus
-  reconcile; unrelated to this overhaul).
-- **TestAppFactory DB-wiring fix + TPT phantom-nav fix (2026-06-25, WU31_5b).** `TestAppFactory`
-  was silently connecting to the dev DB (`localhost:5432`) instead of the Testcontainers container
-  because `ConfigureAppConfiguration` fires too late with `WebApplicationBuilder`. Fixed by
-  re-registering both `DbContextOptions` in `ConfigureServices` (doc: `testing.md` §"Driving the
-  content-rating filter"). Separately: four phantom down-navigation properties on `BaseComment`
-  (`BlogPostComment`, `ChapterComment`, `GroupComment`, `UserProfileComment`) caused EF to create
-  phantom FK columns on `base_comments` pointing back to child comment tables — backwards TPT edges
-  that formed FK cycles, breaking Respawn's topological sort and leaving the `groups` table
-  uncleaned between tests. Migration `WU31_5b_DropPhantomBaseCommentFKs` drops the 4 phantom
-  columns/indexes/FKs. Three additional service bugs exposed by the clean DB: `ServerGroupWriteService
-  .AddStoryAsync` missing `IgnoreQueryFilters(["ContentRating"])` on story lookup; `ServerRecommendation
-  WriteService.SubmitAsync` (a) using `Select((int?)s.AuthorId).FirstOrDefault()` which confuses null-
-  author-id with "row not found", (b) unconditional `.Value` on a nullable AuthorId. All fixed; all 298
-  integration tests green. Detail: `audit/Comments.md`, `audit/Groups.md`, `testing.md`.
+- **Workplan exists.** `.claude/workplan.md` sequences the build; rows 8/37/51/55 blocked/deferred; Layers 5–8 batched post-MVP. Planning artifact — no cell Stage changed by this.
+- **First real app run (WU0) fixed 3 startup bugs; dev pivoted off Aspire for MVP.** Detail: `audit/Stories.md`, `cross-cutting.md` "Render Mode", `forward_plan.md` Aspire-MVP entry, `.claude/skills/run-server/SKILL.md`.
+- **Legacy technical-layer folders being retired to vertical clusters just-in-time (WU2).** No new file added to deprecated folders; touched files migrate as part of each work-unit. Detail: `canalave-conventions/SKILL.md` "Code Organization".
+- **Cross-cutting infra minted (WU12): `IActiveUserContext`, content-rating named query filter, `IImageStorageService`.** Aspire Npgsql EF pooling removed; plain `AddDbContext` is standing registration. Detail: `cross-cutting.md` "Active-User Context"/"Content Rating Filtering", `layer2-services.md` "DbContext Registration".
+- **TPT denormalization retrofitted (WU31.5, 2026-06-24).** Discovery columns moved from base to child tables; named filter removed from `BaseBlogPost`. Detail: `layer1-data-model.md` §"Denormalization with TPT", `audit/BlogPosts.md`, `audit/Comments.md`.
+- **Three-tier automated test suite in place (WU12.5, 2026-06-22 backfill).** `dotnet test` runs Unit + Integration + RazorComponents; obligation advisory, no Stage gate. Detail: `canalave-conventions/testing.md`, `workplan.md` WU12.5.
+- **Integration test isolation overhaul (2026-06-24).** Respawn reset + `IntegrationTestBase` + GUID seeding across all 19 classes; F4/F5 L5 remain Stage 4. Detail: `canalave-conventions/testing.md` §"Integration tests reset between every test".
+- **TestAppFactory DB-wiring + TPT phantom-nav fixed (2026-06-25, WU31_5b); 298 integration tests green.** Detail: `testing.md`, `audit/Comments.md`, `audit/Groups.md`.
+- **Content-safety filter revamp done (2026-06-27).** All display filters moved to `ReadOnlyApplicationDbContext` only; write context sees ground truth; F4/F5 L5: `4 → 2`. Detail: `audit/Stories.md`, `cross-cutting.md` "Content Rating Filtering".
+- **Pre-integration cleanup done (WU37.5, 2026-06-26).** Renamed `IsTakenDown`/TakedownDate; sprite singleton cache; `CharacterRelationshipType` deleted. No grid changes. Detail: `workplan.md` WU37.5.
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L5 | L6 | L7 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|----|----|----|----|
-- **Content-safety filter revamp done (2026-06-27).** All named display/visibility EF filters
-  (`ContentRating`, `GroupAudience`, `IsTakenDown`) moved from `ApplicationDbContext` to
-  `ReadOnlyApplicationDbContext.OnModelCreating` only. Write context now sees ground truth
-  (no filters); ~15 unnecessary write-side bypasses deleted; ~7 legitimate elevated reads kept
-  and annotated `// elevated read:`. Closed latent line-51 edit bug; client HTTP dead code
-  (`HttpStory{Read,Write}Service`) and parallel migration tree (`Migrations/ReadOnlyApplicationDb/`)
-  deleted. F4/F5 L5: `4 → 2`. Grid changes only those two cells. Detail: `audit/Stories.md`,
-  `audit/Moderation.md`, `canalave-conventions/cross-cutting.md` "Content Rating Filtering."
-- **Pre-integration cleanup done (WU37.5, 2026-06-26).** `IsHidden`/`DateModeratedRemoved`/
-  `ModerationRemovalReason` → `IsTakenDown`/`TakedownDate`/`TakedownReason` on 4 roots; EF filter key
-  `"ModeratedVisibility"` → `"IsTakenDown"`; `IModeratableContent` interface collapses moderation dispatch;
-  all `IgnoreQueryFilters()` → `IgnoreQueryFilters(["IsTakenDown"])`; `ServerSpriteReadService` rewritten
-  as singleton startup cache (O(1) lookups); `SpriteReadServiceExtensions` added; `CharacterRelationshipType`
-  deleted; `CharacterPairingType : byte → : short`; Home placeholder replaces WU13 harness. All cells
-  already Stage 5 — no grid changes. Detail: `workplan.md` WU37.5.
-
 | 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | N/A | N/A | N/A | N/A |
 | 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |

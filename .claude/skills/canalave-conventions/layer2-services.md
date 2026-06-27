@@ -348,7 +348,7 @@ canonical example is `ChapterText.CountWords(string?)` in `Core/Chapters/`. The 
 `WordCount` therefore always reflects *readable* words — what `RichTextView` would render — not a
 count of markup tokens.
 
-## Group Rating Waterfall — Enforcement at Write Time (settled WU32)
+## Group Rating Waterfall — Enforcement at Write Time
 
 Group content addition (`AddStoryAsync`, folder assignment) enforces a **three-tier waterfall** at
 write time. Tiers are checked in order; a violation at any tier throws `ContentRatingExceededException`:
@@ -371,7 +371,7 @@ a folder's ceiling cannot exceed the group ceiling. Attempting to create a folde
 **`ContentRatingExceededException`** lives in `Core/Groups/` (not `Core/` root) — it is a domain
 exception specific to the group content model, not a general cross-cutting concern.
 
-## Group Comments — Per-Context Method Pattern (settled WU32)
+## Group Comments — Per-Context Method Pattern
 
 Group comments follow the **per-context method** pattern established for blog-post comments in WU31.
 The comment service exposes one pair of methods per comment context (chapter / blog post / group),
@@ -399,7 +399,7 @@ branch verifies `writeDb.Chapters` + parent-same-chapter cross-check). Sharing a
 method with a `target` parameter does not simplify the verification logic and would produce a branchy
 switch that obscures what each context requires. The per-context pattern already exists; extend it.
 
-## Notification Generation (settled WU22)
+## Notification Generation
 
 Feature write services that trigger notifications inject `INotificationWriteService` as a standard
 scoped dependency and call a **semantic per-event method** after their primary `SaveChangesAsync`:
@@ -439,11 +439,7 @@ relatedId)` would require every caller to re-implement filtering. Semantic metho
 composes *read* services for recipient resolution (e.g. `IFollowingReadService.GetFollowedUsersAsync`),
 keeping the DAG acyclic — see "The DAG rule" below.
 
-**Semantic methods land incrementally** — each method is co-delivered with the work-unit that builds
-its triggering feature. WU22 delivers the service infra + the two single-recipient methods
-(`NotifyNewFollowerAsync`, `NotifyNewVouchAsync`) and wires them into the Following seams. Fan-out
-methods (new chapter, new story, etc.) land with their respective work-units when the recipient-source
-service is Stage 5.
+**Semantic methods land incrementally** — each method is co-delivered with the work-unit that builds its triggering feature; fan-out methods (new chapter, new story, etc.) land with their respective work-units when the triggering feature is Stage 5.
 
 ## Polymorphic RelatedEntityId — Two-Pass Batch Enrichment (WU33)
 
@@ -729,7 +725,7 @@ queries `Tag.TagTypeId` for a given id set). The same partition applies to `Excl
 `StoryFilterDto` gains the per-id type metadata to support this without an extra DB round-trip; or the
 write path sends `(TagId, TagTypeId)` tuples rather than flat ids.
 
-## `AllowPrivateMessages` Gate (settled WU35)
+## `AllowPrivateMessages` Gate
 
 `User.PrivacySettings.AllowPrivateMessages` is a **`SocialInteractionPermission` enum** (not a bool)
 with four tiers. It is enforced in **`ServerMessagingWriteService.StartConversationAsync` only** —
@@ -748,7 +744,7 @@ for MVP, load the recipient's `PrivacySettings` navigation and evaluate in C# (s
 not a filter over many rows). The gate check comes **after** the self-message guard and **before**
 validation/sanitization of the message body.
 
-## Self-Referential Editing Exception — `IUserSettingsService` (WU30, spec §3.5)
+## Self-Referential Editing Exception — `IUserSettingsService` (spec §3.5)
 
 When the reader and writer populations are **identical by definition** — a user editing only
 their own settings, never anyone else's — a single integrated read+write service is sanctioned.
@@ -794,7 +790,7 @@ ViewModel and EF model. Validation in **static extension methods** in Core.
 **Tier 3 (Server only):** Database context checks in service. On failure, throws
 `StoryValidationException` containing `List<string>` of errors. Server-side only.
 
-## Moderation Services (settled WU34)
+## Moderation Services
 
 `IModerationReadService` / `IModerationWriteService` live in `Core/Moderation/`. Server impls live in
 `Server/Moderation/`. The write service inherits the read service (CQRS-lite inheritance pattern).

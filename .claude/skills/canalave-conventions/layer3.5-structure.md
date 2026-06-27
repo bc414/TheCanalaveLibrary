@@ -304,7 +304,7 @@ preview popup uses (see below) — reused, not reinvented, but **not extracted i
 primitive** with only two consumers and two different flows (confirm/cancel vs. content-preview); that
 extraction is deferred until a third consumer's shape clarifies what the shared part actually is.
 
-### Owner-Conditional Edit Affordances on a Display Composite (settled WU21)
+### Owner-Conditional Edit Affordances on a Display Composite
 
 A display composite that renders a list of items owned by a user — but is also consumed read-only by
 non-owners — gates per-row mutation controls behind an `IsEditable` parameter rather than duplicating

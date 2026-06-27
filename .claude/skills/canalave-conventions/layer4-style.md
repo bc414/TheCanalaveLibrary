@@ -275,7 +275,6 @@ no outer margin; parents space chips with `gap-`/`flex flex-wrap gap-2`). Tag-ty
 | `Genre` | `bg-sky-100 text-sky-800` |
 | `ContentWarning` | `bg-rose-100 text-rose-800` |
 | `CrossoverFandom` | `bg-amber-100 text-amber-900` |
-| `Relationship` | `bg-pink-100 text-pink-800` |
 
 **`RichTextView` (WU5, 2026-06-21):** root is a single `<div>` carrying only typography inline
 styles (`font-family`/`font-size`/`line-height`/`max-width`/`text-align`, from the cascaded
@@ -339,7 +338,6 @@ so the scannable list format stays visually distinct from "this is already selec
 | `Genre` | `bg-sky-500` |
 | `ContentWarning` | `bg-rose-500` |
 | `CrossoverFandom` | `bg-amber-500` |
-| `Relationship` | `bg-pink-500` |
 
 (Same hue family as the `TagChip` table above, solid `-500` instead of light `-100`/dark text — keeps
 dot and chip visually associated as "the same tag type" without making the dot a tiny chip.)

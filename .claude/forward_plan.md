@@ -232,121 +232,15 @@ Guardrails:
   Deleted. MVP is `InteractiveServer`-only. F4/F5 L5 reclassified `4 → 2`. Convention: post-MVP
   L5 WASM enablement section in `workplan.md`.
 
-- **Sprite system redesign — full decision set** — resolved (2026-06-27, this WU):
-  (1) **Theme.Slug column** (`[Required][MaxLength(64)]`, unique index). `Theme.Name` stays
-  display-only. Claims + sprite path carry the slug. Seed: `{ ThemeId=1, Name="Pokémon", Slug="pokemon" }`.
-  (2) **Optimistic URL construction + `onerror`** everywhere. No startup-existence cache (can't work
-  against R2). Browser handles misses via `onerror` chain (`webp → png → unknown.png`).
-  (3) **Single `OptimisticSpriteReadService`** in Core (pure string builder, registered on both
-  Server and Client as singleton). `ServerSpriteReadService`, `SpriteReadServiceExtensions`, and
-  `Client/OptimisticSpriteService` deleted. L5 Stage-4 divergence resolved.
-  (4) **Resolution moves into the component** via `@inject ISpriteReadService` + `[CascadingParameter]
-  ThemeContext`. See `cross-cutting.md` "ThemeContext Cascading Provider." DTOs carry `SpriteIdentifier`,
-  not a resolved URL. Read services drop the `ISpriteReadService` constructor dependency.
-  (5) **`SpriteBaseUrl` config seam** (`Sprites:BaseUrl`, default `/sprites/themes`). R2/CDN cutover
-  is a config flip + Rclone sync — zero code change. Convention: `layer2-services.md` "Sprite URLs
-  Are Resolved At Render Time."
-  (6) **Sprite assets provisioned out-of-band** (Rclone → R2 for assets; DB seed for tags/themes).
-  No web upload UI, no `/mod/sprites` page, no runtime Theme CRUD, no bulk/zip upload. Seeding
-  bypasses the Blazor app entirely. The app never writes sprite assets.
-  (7) **`ISpriteAssetProbe`** — server-only write-time checker (`ExistsAsync(slug, id)`). Used only
-  in `ServerTagWriteService` as a non-blocking warning when a mod creates/edits a tag with a dangling
-  identifier. Never called at render time. `LocalSpriteAssetProbe` (`File.Exists`); R2 impl deferred.
-  (8) **Image orphan bug fixed** — `IImageStorageService.DeleteAsync` now called on cover/avatar
-  replace. See `audit/ImageStorage.md`.
-  **Deferred items from this analysis (not built, no decisions needed):**
-  - Data-saver wiring (`PrefersDataSaverMode` → force-static sprites; claim not yet added; behavior
-    undefined until its own WU).
-  - R2/MinIO sprite hosting — behind `SpriteBaseUrl` + a future `R2SpriteAssetProbe` impl. No
-    code change needed when `LocalSpriteAssetProbe` → `R2SpriteAssetProbe`.
-  - Open-source asset hygiene — `.gitignore` the real Pokémon pack; ship `unknown.png` + CC0
-    placeholders so forks run out-of-box. Asset curation is deployer's concern.
+- **Sprite system redesign — full decision set** — resolved (2026-06-27, 8 decisions): Theme.Slug column; optimistic URL + onerror; singleton `OptimisticSpriteReadService` in Core; component-level resolution via `ThemeContext` + `ISpriteReadService`; `SpriteBaseUrl` config seam; assets provisioned out-of-band; `ISpriteAssetProbe` write-time checker; image-orphan fix. See `cross-cutting.md` "ThemeContext Cascading Provider", `layer2-services.md` "Sprite URLs Are Resolved At Render Time", `audit/ImageStorage.md`.
 
-- **WU37 Story Tagging — architecture, scope split, and naming** — resolved (2026-06-25, WU37
-  scoping):
-  (1) **Scope split.** Features 9 (Series), 10 (story↔story Relationships), 15 (Saved Tag
-  Selections) carved from WU37 into WU41/WU42/WU43. Each is independently L1-settled with no
-  design coupling to Feature 12.
-  (2) **Shared catalog / differentiated association.** `Tags` table stays unified; per-story
-  routing is differentiated: Genre/ContentWarning/CrossoverFandom → `StoryTag`; Setting →
-  `StoryTag` + optional `SettingDetail`; Character → `StoryCharacter` (never `StoryTag`); pairing
-  (ship) → `StoryCharacterPairing` (new name). Character stays in the catalog because it is the
-  primary user of sprite/hierarchy/`IsFanon`/`AllowOCDetails` and the §14 fanonize flow.
-  (3) **`TagTypeEnum.Relationship` removed.** A pairing is not a catalog tag; its name derives
-  from its members. Last enum value; no renumber. `TagType` seeded row dropped by migration.
-  (4) **Naming disambiguation** — `StoryCharacterRelationship` renamed to `StoryCharacterPairing`
-  (story-scoped; parallels `StoryCharacter`; eliminates near-collision with Feature 10's unrelated
-  story-to-story `StoryRelationship` / `StoryRelationshipType`). Shadow join promoted to first-class
-  `StoryCharacterPairingMember`. Enum `CharacterRelationshipType` → `CharacterPairingType`.
-  See `cross-cutting.md` "Structured Tag Authoring & Legality Enforcement."
-  (5) **2-value `TagPriority`.** Keep existing `{ Primary=0, Supporting=1 }`; Primary default;
-  no `None`, no renumber. ContentWarning gets no priority picker — enforced at service layer.
-  (6) **Service-layer enforcement only.** OC-gate, SettingDetail-gate, ContentWarning-priority
-  coercion, pairing-member count — all via `StoryValidationException` in `ServerStoryWriteService`.
-  The spec's SQL-Server-era `TR_StoryCharacters_EnforceOCLogic` trigger is superseded; a DB
-  CHECK is post-MVP defense-in-depth if wanted.
-  (7) **`ApplyFilters` character branch.** Because Character leaves `StoryTag`, discovery filter
-  must partition included/excluded ids by `TagTypeId` and route Character ids to
-  `s.StoryCharacters.Any(...)`. See `audit/Discovery.md` Feature 31 and `layer2-services.md`
-  "Structured Tag Authoring — Per-Type Filter Branch."
+- **WU37 Story Tagging — architecture, scope split, naming** — resolved (2026-06-25): F9/10/15 carved to WU41/WU42/WU43; Character→`StoryCharacter` (not `StoryTag`); pairing→`StoryCharacterPairing`; `TagTypeEnum.Relationship` removed; service-layer enforcement only; `ApplyFilters` character branch. See `cross-cutting.md` "Structured Tag Authoring & Legality Enforcement", `layer2-services.md` "Structured Tag Authoring — Per-Type Filter Branch."
 
-- **WU28 Discovery defaults + random-preload design** — resolved (2026-06-25, WU28 planning):
-  (1) **§8.7 default-settings matrix read path** ("complete the `DefaultSearchSetting` matrix"): the
-  read/merge service (`IDiscoveryDefaultsReadService`) is the WU28 Phase 1b deliverable. System
-  defaults overlaid with sparse per-user overrides in C#; anonymous viewers see defaults only. Seed
-  stays as-is (Ignored=true on the 5 discovery surfaces). This closes the "deferred post-WU23" item
-  in `audit/Discovery.md`.
-  (2) **Random-preload / "give me more" pagination**: random batch = a plain random selection out of
-  the post-filter valid set (`OrderBy(Random()).Take(batchSize)`). No shown-id tracking, no dedup —
-  "give me more" is a stateless re-draw that appends to the display list (repeats acceptable).
-  Interaction exclusions come from the §8.7 defaults, not random-specific logic. Sorted modes
-  (DatePublished/Relevance) use offset pagination. StoryDeck pagination is suppressed in random mode.
-  (3) **Feature 33 tree search**: carved into WU40 (stateless pivot / four clean edges direction settled).
-  See `audit/Discovery.md` Feature 31 and Feature 33; `canalave-conventions/layer2-services.md`
-  "Discovery Defaults + Random Batch" section.
+- **WU28 Discovery defaults + random-preload** — resolved (2026-06-25): `IDiscoveryDefaultsReadService` merges system defaults + sparse per-user overrides; random batch = stateless re-draw from post-filter set; F33 tree search carved to WU40. See `layer2-services.md` "Discovery Defaults + Random Batch", `audit/Discovery.md` Features 31/33.
 
-- **WU36 Badges — mechanism, scope, and Tastemaker tiers** — resolved (2026-06-25, WU36 planning):
-  (1) **Mechanism:** synchronous inline award-check; `IBadgeWriteService.AwardAsync` (idempotent,
-  best-effort try/catch after primary `SaveChangesAsync`). Background worker is post-MVP.
-  (2) **Scope in WU36:** one live award trigger only — Recommender / "Tastemaker." All other badges
-  deferred to their source-feature WUs.
-  (3) **New `UserStat` column:** `RecommendationSuccessesEarned` (int, author-side). Do not reuse
-  `RecommendationsFoundUseful` (reader-side).
-  (4) **Two tiers:** `SiteBadges.Recommender` (threshold 10, existing) + `SiteBadges.RecommenderSilver`
-  (threshold 50, new constant + seed row in WU36 migration).
-  (5) **Default visibility on award:** `DisplayOrder = max+1` (visible by default; curation UI lets
-  users hide/reorder; `UserCard.razor` caps to 3 badges).
-  (6) **Anti-self-farm:** `RecordSuccessAsync` increments/awards only when `RecommenderId != null &&
-  RecommenderId != userId`.
-  See `canalave-conventions/layer2-services.md` "Synchronous Inline Badge Awards" and
-  `audit/Badges.md` "WU36 Settled Decisions."
+- **WU36 Badges** — resolved (2026-06-25): synchronous inline `AwardAsync`; Recommender + RecommenderSilver tiers; `RecommendationSuccessesEarned` column; anti-self-farm guard. See `layer2-services.md` "Synchronous Inline Badge Awards", `audit/Badges.md` WU36.
 
-- **WU34 Moderation — eight design decisions** — resolved (2026-06-25, WU34 planning):
-  (1) **Content removal:** soft-delete default (`IsHidden + DateModeratedRemoved + ModerationRemovalReason`,
-  reversible, author notified) across Story/BaseComment/BaseBlogPost/Recommendation; separate explicit
-  hard-delete path for illegal content (CSAM/piracy). Rationale: archive mission — mistakes are reversible,
-  authors deserve a reason. See `cross-cutting.md` "Moderation Model."
-  (2) **No auto-hide.** `ActiveReportCount` is a mod-only triage sort key / queue badge — never an automatic
-  action trigger. Deliberations' "3 distinct reporters in 24h" rule dropped (brigading risk). Report counts
-  are mod-only (no public counter). See `cross-cutting.md` "Moderation Model."
-  (3) **Account actions: state + notify now; login enforcement staged.** Add `AccountStatus` (Active/Warned/
-  Suspended/Banned — **no Shadowbanned**) + `SuspendedUntilUtc` to `User`. Warn/suspend/ban set status,
-  record on `Report`, send notification. Login-blocking enforcement is a dedicated follow-up WU (see
-  workplan.md deferred note after WU39). Shadowban permanently rejected — deception-as-moderation,
-  contradicts §13 transparency philosophy. See `cross-cutting.md` "Moderation Model."
-  (4) **`User.ActiveReportCount` added** — symmetric with other authored-content targets; uniform
-  `AdjustActiveReportCount` switch; `PrivateMessage` has no counter. See `cross-cutting.md` "Moderation Model."
-  (5) **`Report.ReportedEntityId int→long`; `ReportedEntityType` +`Message = 5`.** Reportable set for WU34 =
-  Story, User, Comment, BlogPost, Recommendation, PrivateMessage.
-  (6) **Notification dedup-key fix.** Widen `CreateCoreAsync` dedup key from `(type, sourceUserId, !IsRead)`
-  to include `RelatedEntityId`. Regression-test follow/vouch/group. See `layer2-services.md` "Notification
-  Generation."
-  (7) **`StoryApproved` notification type added** (`NotificationTypeEnum.StoryApproved = 75`, `YourStories=2`,
-  `KindFor → Story`). Seeded `NotificationType` row + migration. See `layer2-services.md` "Notification
-  Generation."
-  (8) **WU34/WU39 scope split.** Story import + import verification are Feature 53 (WU39, deps WU24 + WU34).
-  `/mod/submissions` in WU34 builds a tabbed shell; the import-verification tab drops in with WU39.
-  See `audit/Moderation.md` Feature 53 + `workplan.md` WU39.
+- **WU34 Moderation — eight design decisions** — resolved (2026-06-25): soft-delete default; no auto-hide; `AccountStatus`+`SuspendedUntilUtc`; `ActiveReportCount` on User; `ReportedEntityId int→long`; dedup-key fix; `StoryApproved` notification type; WU34/WU39 scope split (F53 → WU39). See `cross-cutting.md` "Moderation Model", `layer2-services.md` "Notification Generation", `audit/Moderation.md` Feature 53.
 
 - **Moderator role assignment in dev seed** — resolved (2026-06-24, WU27.5): role *rows* are already
   seeded via `ApplicationRoleConfiguration.HasData`. WU27.5 assigns `AdminUser` to both `"Moderator"`
@@ -354,35 +248,9 @@ Guardrails:
   expressed by listing both roles (IsInRole is literal). See `cross-cutting.md` "Role-Based
   (Moderator) Gating."
 
-- **WU32 Groups — four design decisions** — resolved (2026-06-24, WU32 planning):
-  (1) **Rating model:** `AudienceRating` (group visibility) and `MaxContentRating` (content ceiling)
-  are two distinct properties; three `GroupAudienceType` presets (Standard/SfwOnly/Mature) are a
-  UI/write convention mapped by `GroupAudienceTypeMapper`, not stored. `Group.Rating` renamed to
-  `AudienceRating` in WU32 migration. `GroupAudience` named query filter (EF model-level) hides
-  Mature groups from mature-disabled users. Content waterfall (three tiers) enforced at write time in
-  `ServerGroupWriteService`; violations → `ContentRatingExceededException`. Non-M stories allowed in
-  Mature groups (audience rating defines topic, not a content floor).
-  (2) **Membership:** open join, permanent — no approval, no kicking, no per-group moderator role.
-  (3) **Roles:** `GroupRole.Member` and `GroupRole.Admin` only. Creator auto-added as Admin. No
-  `GroupRole.Moderator` — permanent decision.
-  (4) **Group blog posts:** in scope for WU32, building on WU31 `BaseBlogPost` infrastructure.
-  (5) **Group comments:** per-context method pattern (mirrors WU31 blog-post precedent); no generic
-  context enum.
-  See `cross-cutting.md` "Group Audience-Visibility Filter" / "Group Membership and Role Model";
-  `layer2-services.md` "Group Rating Waterfall" / "Group Comments"; `audit/Groups.md`
-  "WU32 Settled Decisions."
+- **WU32 Groups — five decisions** — resolved (2026-06-24): `AudienceRating`/`MaxContentRating` split; open join, permanent; Member+Admin only (no Moderator — permanent); group blog posts in WU32; per-context comment methods. See `cross-cutting.md` "Group Audience-Visibility Filter"/"Group Membership and Role Model", `layer2-services.md` "Group Rating Waterfall"/"Group Comments", `audit/Groups.md` WU32.
 
-- **Active-user-conditional handling + two content-editing patterns** — resolved (2026-06-23, WU24
-  planning): `IActiveUserContext` is server-only (query-shaping + server-side authz); SharedUI components
-  never inject it — the dispatcher reads `AuthenticationState` and passes ownership down as a bool.
-  Ownership is identity-equality (`entity.AuthorId == currentUserId`), not a role — plain inline `@if`,
-  no `AdminControls` component (spec §5.17 reference is stale; that component was never built and should
-  not be). Editing is **author-only, server-enforced**; moderation is a separate WU34 path.
-  Two content-editing patterns by content weight: (1) Story/Chapter → **view-page / edit-page split**
-  (separate routes; `RichTextView` on view, `EditorView` on edit); (2) comments/recs/vouch text →
-  **in-place inline edit** (one page, parent-owned edit mode, both renderers co-exist normally).
-  See `cross-cutting.md` "Active-User-Conditional Handling" and
-  `layer3.5-structure.md` "Owner-Conditional Edit Affordances."
+- **Active-user-conditional handling + two content-editing patterns** — resolved (2026-06-23): `IActiveUserContext` server-only; ownership = identity equality, inline `@if`; view/edit-page split for Story/Chapter; in-place inline for comments/recs/vouch. See `cross-cutting.md` "Active-User-Conditional Handling", `layer3.5-structure.md` "Owner-Conditional Edit Affordances."
 
 - **`UserStoryInteraction` nomenclature rule** — resolved (2026-06-23, WU23 Phase 0): every identifier
   meaning *user×story interaction* must be spelled `UserStoryInteraction…`, never bare `Interaction…`.
@@ -413,14 +281,7 @@ Guardrails:
 - **`AllowInteractions` → `SocialInteractionPermission`** — resolved (2026-06-23, WU23 Phase 0):
   disambiguates from `UserStoryInteraction`. C#-only; column names unchanged. See `audit/Discovery.md`.
 
-- **Notification generation mechanism** — resolved (2026-06-23, WU22): **direct injected call +
-  semantic per-event methods + best-effort post-commit.** Feature write services inject
-  `INotificationWriteService` and call a semantic method (e.g. `NotifyNewFollowerAsync`) after their
-  primary `SaveChangesAsync`; the semantic method is the only public generation surface; a private
-  create-core owns drop-self + dedup + bulk-insert, unbypassable per-caller (same "property of the
-  model" principle as the content-rating named query filter). In-process domain events, EF interceptors,
-  and outbox rejected (infra cost, inconsistency with Badges/UserStats, MediatR commercial-license).
-  See `cross-cutting.md` "Notification Creation" and `layer2-services.md` "Notification Generation."
+- **Notification generation mechanism** — resolved (2026-06-23): semantic per-event methods injected into write services; best-effort post-commit; private create-core owns drop-self + dedup. See `cross-cutting.md` "Notification Creation", `layer2-services.md` "Notification Generation."
 
 - **Notification in-app toggle dropped (§5.18 deviation)** — resolved (2026-06-23, WU22): the spec
   §5.18 "in-app toggle" is not implemented. `UserNotificationSetting` stores only `EmailEnabled` and
@@ -476,44 +337,7 @@ Guardrails:
   only; `RichTextView`/`RichTextEditor` (all user-generated content) use the user's `ReaderSettings`
   font instead. See [layer4-style.md](skills/canalave-conventions/layer4-style.md) §"Prerequisite:
   Design Tokens" and §"Reader Settings as CSS."
-- **Aspire orchestration during MVP dev** — resolved (2026-06-20): not used day-to-day while the MVP
-  stays `InteractiveServer`-only with no Redis/WASM (matches spec's MVP boundary, Layers 1–4 only —
-  Layers 5–8 including Redis write-behind are post-MVP). Run `TheCanalaveLibrary.Server` directly;
-  `ConnectionStrings:canalavedb` in `appsettings.Development.json` points at a local Postgres instance.
-  `builder.AddRedisDistributedCache("cache")` is removed from `Program.cs` (nothing consumed
-  `IDistributedCache` yet) with a comment marking where to re-add it. `AppHost.cs` keeps its
-  `AddPostgres("postgres").AddDatabase("canalavedb")` wiring dormant in the tree — this part is
-  genuinely additive/swappable, like Redis/L6 indexes: no application service knows or cares whether
-  AppHost orchestrated the Postgres it's talking to, so there's nothing to undo when Aspire-orchestrated
-  dev comes back post-MVP.
-  **Narrower correction (WU12, 2026-06-22):** "Aspire" is not one decision — the line above only ever
-  examined AppHost/orchestration, which stays correctly deferred. It separately assumed the *client
-  integration package* (`Aspire.Npgsql.EntityFrameworkCore.PostgreSQL`'s `AddNpgsqlDbContext<T>`, called
-  directly in `Server/Program.cs`) was equally inert plumbing — "reads `ConnectionStrings:canalavedb`
-  from plain config either way." That assumption was wrong: `AddNpgsqlDbContext<T>` registers the
-  DbContext via EF Core's `DbContextPool` with no opt-out (confirmed against the package's own settings
-  type — no `DbContextPooling` property exists), and pooled contexts are constructed from the *root*
-  provider, so they cannot take a Scoped constructor dependency. This directly broke `IActiveUserContext`
-  (WU12's content-rating query filter, itself sourced into `ApplicationDbContext`'s constructor) and
-  directly contradicts spec §6.6's already-resolved "plain `AddScoped<>`, DI manages DbContext lifetime"
-  decision. Unlike orchestration, this is a composition-root choice every DbContext-consuming service is
-  written against — **architectural, not swappable**, the same category as `IActiveUserContext` itself.
-  Resolved: the Aspire Npgsql *client* package is removed from `TheCanalaveLibrary.Server`; both
-  DbContexts register via plain `AddDbContext<T>` + `UseNpgsql(...)` (retries preserved explicitly via
-  `EnableRetryOnFailure()` — WU0's audit note already relies on retry behavior existing). See
-  `layer2-services.md` for the registration pattern. This does **not** reopen the orchestration
-  question above, and does not affect the Postgres primary/read-replica axis (a connection-string
-  concern, orthogonal to whether the *.NET-side DbContext object* is pooled).
-  **Durability — holds in production too, not just MVP.** Unlike the orchestration question (genuinely
-  MVP-scoped, AppHost is meant to return post-MVP), this one doesn't expire: `IActiveUserContext`/the
-  content-rating filter is permanent functional architecture, not an MVP shortcut, so the
-  pooling-vs-Scoped-dependency incompatibility never goes away on its own. Actual production (DigitalOcean
-  Droplet + Managed Postgres, spec's resolved hosting decision) never runs AppHost either — it's the same
-  plain `AddDbContext` registration in both environments, not a dev-only stand-in. What's genuinely lost
-  (not reopened, just no longer free): Aspire's auto-registered DB health check and Npgsql-specific OTel
-  command tracing — both addable independently later if wanted, never bundled-or-nothing. Re-check this
-  decision only if a future version of the Aspire package adds a pooling opt-out to its settings type
-  (none exists today).
+- **Aspire orchestration during MVP dev** — resolved (2026-06-20, narrowed WU12): AppHost deferred for MVP; Aspire Npgsql EF client package removed (pooling incompatible with Scoped `IActiveUserContext`); plain `AddDbContext` is permanent (holds in production too). See `layer2-services.md` "DbContext Registration."
 - **Interaction-icon design** (Feature 16 L4, previously Stage-1 blocked) — resolved WU7 (2026-06-21):
   inline SVG shapes, not theme-swappable sprite URLs — a permanent, deliberate carve-out from the
   "never inline SVG" rule (which still governs tags/covers/avatars). Square button, three visual
@@ -523,149 +347,21 @@ Guardrails:
   Supersedes the WU2-era `GetInteractionIcon`/sprite-key plan. See
   [layer4-style.md](skills/canalave-conventions/layer4-style.md) §"Interaction Icons Are Inline SVG"
   and [audit/UserStoryInteractions.md](audit/UserStoryInteractions.md) Feature 16.
-- **WU26 chapter routes, versioning UX, and rating model** — resolved (2026-06-24, WU26 planning):
-  Reading routes: `/story/{id}/{ch}` + optional `/{versionOrder}` (no `/chapter/` literal; fixed by
-  spec §5.30.3 + shipped ChapterNavigation). Edit/new: `/story/{id}/chapter/new`,
-  `/story/{id}/chapter/{ch}/edit[/{versionOrder}/]`. Version token = `SortOrder`, not ContentId.
-  Versioning UX: progressive disclosure (plain editor + one "Add alternate version" link until
-  `VersionCount > 1`). Rating: `ChapterContent.Rating → Rating?` (nullable, NULL=inherit); floor
-  invariant (version ≥ story); primary invariant (primary's effective rating = story rating, via NULL).
-  HasStarted blocker resolved: column + property exist from WU15/InitialSchema.
-  See `cross-cutting.md` "Chapter Versioning — Progressive Disclosure" and "Two content-editing patterns."
+- **WU26 chapter routes, versioning, rating** — resolved (2026-06-24): `/story/{id}/{ch}[/{versionOrder}]`; edit routes use `/chapter/`; version token = SortOrder; progressive disclosure UX; `ChapterContent.Rating?` nullable. See `cross-cutting.md` "Chapter Versioning — Progressive Disclosure."
 
-- **WU33 Notification UI — presentation decisions** — resolved (2026-06-24, WU33 planning):
-  (1) **Rich messages, flat DTO, normalized target pair:** `NotificationDto` extended with `SourceUserName?`,
-  `TargetTitle?`, `TargetUrl?` (a single resolved `(title, url)` pair for the polymorphic `RelatedEntityId`);
-  message text composed in UI by static `NotificationPresenter` (per-`NotificationTypeEnum` templates). No DTO
-  inheritance — no codebase precedent; flat projection wins at the DTO firewall.
-  (2) **Two-pass batch enrichment:** materialize page → classify by `RelatedEntityKind` → batch-load each kind
-  → stitch. See `layer2-services.md` "Polymorphic RelatedEntityId — Two-Pass Batch Enrichment."
-  (3) **Both grouped-by-category and flat date feed:** view toggle + sort toggle (Newest first / Oldest unread
-  first). `NotificationCategoryVisuals` maps 9 categories to icons/labels, reusing existing icon constants as
-  single source of truth; new glyphs only for SiteNews/YourProfile/Collaborations/Groups/YourReports.
-  (4) **Bell flyout:** UserCard caret pattern (not modal). `<AuthorizeView><Authorized>`. No `IActiveUserContext`.
-  (5) **Settings:** per-row immediate save; `EmailEnabled` + `Collapsed` only (no in-app toggle per audit
-  correction #2).
-  See `cross-cutting.md` "Notification bell"; `audit/Notifications.md` Feature 42 WU33 additive note;
-  `layer3.5-structure.md` "Notification Presentation Model."
+- **WU33 Notification UI** — resolved (2026-06-24): rich flat DTO + normalized target pair; two-pass batch enrichment; grouped + flat feeds; bell flyout (UserCard caret pattern); per-row settings save. See `layer2-services.md` "Polymorphic RelatedEntityId", `layer3.5-structure.md` "Notification Presentation Model", `audit/Notifications.md` Feature 42.
 
-- **WU30 Profiles + theme-selection — settled decisions** — resolved (2026-06-24, WU30 planning):
-  (1) **`IUserSettingsService` self-referential exception** (spec §3.5): single integrated
-  read+write service is sanctioned only when reader=writer population; resolves target from
-  `IActiveUserContext`, never takes a `userId`; every method throws if unauthenticated.
-  Contrast with `IUserProfileReadService` (public display, read-only, own-vs-other =
-  `bool includePrivate` predicate). See `layer2-services.md` "Self-Referential Editing Exception."
-  (2) **UserStats counter wiring:** built-event counters wired now into the already-built write
-  services (Following, Stories, Chapters, Comments×4, Recommendations, BlogPosts, Groups,
-  UserStoryInteractions). Transition-delta rule for USI-derived counters (increment/decrement only
-  on boolean flip, not every call). Counters for unbuilt features (ViewsOnStories WU38,
-  acknowledgments WU37, SpotlightCount post-MVP, ActiveReportCount WU34) deferred.
-  See `cross-cutting.md` "UserStats Updates — Counter ↔ event map."
-  (3) **Profile comment wall:** `UserProfileComment` wall rendered inside the Profile tab (not
-  beside story decks). Generalize `CommentSection` to a 4th context (`ProfileUserId` param +
-  `CommentTarget.UserProfile`), gated by `PrivacySettings.AllowProfileComments`.
-  See `layer3.5-structure.md` "CommentSection — Multi-Context Dispatch."
-  (4) **Profile page shape:** persistent metadata banner (avatar/name/tagline/stats/badges/vouches/
-  relationship actions) on top, then a tabbed body. Five tabs: Profile (bio + CommentSection),
-  Favorites, Recommendations, Authored (each a StoryDeck + ResultsFilterPanel), Blog
-  (paginated BlogPostCard list). Comments and StoryDecks never share a view.
-  See `layer3.5-structure.md` "Profile Page Composition."
-  (5) **Blog tab owner/viewer distinction + GetByAuthorAsync extension:** owner sees drafts
-  ("Draft" badge), per-card Edit affordance, and "+ New Post" tab button; viewers see published
-  only. Requires: `bool IsPublished` added to `BlogPostListingDto`; `includeUnpublished` flag on
-  `IBlogPostReadService.GetByAuthorAsync` (default `false`); `BlogPostCard` de-nested anchor +
-  optional owner affordances (gated by `IsOwner` param). `GroupDesktop` usage unaffected.
-  (6) **`IThemeReadService.GetThemesAsync()` in `Core/Sprites/`** (Feature 3 owns Theme); Server
-  impl reading `Themes` table. Surfaced in `/settings` Appearance section.
-  (7) **`Profiles/` cluster** added to Code Organization: `Core/Profiles/`, `Server/Profiles/`,
-  `SharedUI/Profiles/`. `Core/Identity/` keeps the `User` entity + `IActiveUserContext`;
-  `Core/Profiles/` holds the projection/edit services over it.
-  See `canalave-conventions/SKILL.md` "Code Organization" and `layer3.5-structure.md."
+- **WU30 Profiles + theme-selection — seven decisions** — resolved (2026-06-24): `IUserSettingsService` self-referential exception; UserStats counter wiring (transition-delta rule); profile comment wall as 4th `CommentSection` context; tabbed page shape; blog-tab owner/viewer distinction + `GetByAuthorAsync` extension; `IThemeReadService.GetThemesAsync`; `Profiles/` cluster added. See `layer2-services.md` "Self-Referential Editing Exception", `cross-cutting.md` "UserStats Updates", `layer3.5-structure.md` "Profile Page Composition"/"CommentSection".
 
-- **Integration test isolation foundation** — resolved (2026-06-24, post-WU29): **Respawn
-  reset between every test.** The integration suite had no reset mechanism; tests shared one
-  Postgres container with accumulating state, making absolute-count and absolute-emptiness
-  assertions untestable and producing order-dependent failures (e.g. `SetHiddenGem_RejectAtFive`,
-  `GetChapterComments_EmptyChapter`). Fix: `PostgresFixture` holds a `Respawner` (FK-ordered
-  deletes, lookup tables excluded); `IntegrationTestBase.InitializeAsync` calls `ResetAsync`
-  before creating the factory. Each test seeds its own users/stories via base helpers;
-  `DataSeeder` creates `TestUser`/`AdminUser` per-factory (harmless — no test references them;
-  Respawn removes them before the next test); `Environments.Development` is kept so that
-  `appsettings.Development.json` supplies the connection string to `Program.cs`.
-  `[assembly: CollectionBehavior(DisableTestParallelization
-  = true)]` makes serial execution deliberate. `RecommendationStatusEnum` added to
-  `Core/Lookups/ModelEnums.cs` (missing enum mirror). Magic literals replaced with named enums.
-  See [canalave-conventions/testing.md](skills/canalave-conventions/testing.md)
-  §"Integration tests reset between every test."
+- **Integration test isolation foundation** — resolved (2026-06-24): Respawn reset + `IntegrationTestBase` + GUID-suffixed seeding across all 19 classes; serial execution deliberate. See [canalave-conventions/testing.md](skills/canalave-conventions/testing.md) §"Integration tests reset between every test."
 
-- **WU31.5 TPT denormalization + blog-post content-rating refactor** — resolved (2026-06-24,
-  WU31.5 planning): (1) Spec §4.3 line 839's "configure on derived to override base-table mapping"
-  technique does not work in EF Core 10 — a property on the base type always maps to the base table.
-  Correct technique: declare the property on each derived class, remove from base. (2) Blog posts:
-  `DateCreated`, `LastUpdatedDate`, `Rating`, `IsPublished` moved base→child; comments: `DatePosted`
-  moved base→child. Child-only, no duplication. (3) Named query filter removed from `BaseBlogPost`;
-  content rating enforced via explicit `.Where(p => p.Rating <= max)` projection checks (TPT +
-  named-filter generates broken EF Core 10 SQL on derived entity materialization). (4) Change-tracker
-  stub delete replaces raw-SQL workaround (`ExecuteDeleteAsync` unsupported on TPT base-type DbSets).
-  See `layer1-data-model.md` §"Denormalization with TPT", `cross-cutting.md` §"Content Rating
-  Filtering", `audit/BlogPosts.md` §Feature 35, `audit/Comments.md`.
+- **WU31.5 TPT denormalization** — resolved (2026-06-24): discovery/date columns base→child; named filter removed from `BaseBlogPost`; change-tracker stub delete. See `layer1-data-model.md` §"Denormalization with TPT", `audit/BlogPosts.md` Feature 35, `audit/Comments.md`.
 
-- **WU35 Messaging architecture** — resolved (2026-06-24, WU35 planning):
-  (1) **1-on-1 only** — group conversations are out of scope for MVP; conversations always have exactly
-  two participants. The N-participant data model is kept. (2) **Stateless MVP, SignalR deferred post-MVP**
-  — reverses the spec's "real-time via SignalR" framing; messaging is request/response like every other
-  feature (recipient sees messages on navigate/refresh; global unread badge refreshes on navigation).
-  SignalR push is a post-MVP additive layer behind the unchanged write service; no L1–L4 rework needed.
-  Feature 49 L5 stays N/A. See Post-MVP section below for the deferred item. (3) **Global unread badge
-  in layout chrome** — a `MessagesNavLink` beside `LoginDisplay` in Desktop/Mobile layouts, derived from
-  `IMessagingReadService.GetUnreadConversationCountAsync()`. (4) **No PM Notification rows** —
-  messaging's `LastReadTimestamp` watermark is its only bookkeeping; the Notification cluster is
-  never touched. Rationale: event-rows and conversation-watermark are differently shaped read-state;
-  unifying creates two unread truths to sync. Substantive/infrequent use case provides none of the
-  value the notification dedup/batch machinery adds. See `cross-cutting.md` "Private Messaging
-  Architecture"; `audit/Messaging.md` WU35 Settled Decisions.
+- **WU35 Messaging architecture** — resolved (2026-06-24): 1-on-1 only; stateless MVP, SignalR post-MVP; global unread badge in chrome; no PM Notification rows (watermark only). See `cross-cutting.md` "Private Messaging Architecture", `audit/Messaging.md` WU35.
 
-- **WU31 Blog Post settled decisions** — resolved (2026-06-24, WU31 planning):
-  (1) **Feature 56 (admin feature-contribution attribution) deferred post-MVP** — not in WU31;
-  stays Stage 2 in `audit/BlogPosts.md`; `FeatureContribution` entity/FKs/DbSet unchanged.
-  (2) **Content-editing Pattern 1 for blog posts:** `/blog/new` + `/blog/{id}/edit` (form/auth),
-  `/blog/{id}/{*slug}` (read-only view) — overrides spec §5 line ~1585 "in-place editing" because
-  a blog post is a multi-field form, not lightweight embedded content. See `cross-cutting.md`
-  "Two content-editing patterns."
-  (3) **Profile blog posts only in WU31;** `GroupBlogPost` UI built in WU32 (Groups) — confirmed
-      in scope (2026-06-24, WU32 planning). Reuses WU31 `BaseBlogPost` infrastructure;
-      `IBlogPostWriteService` gains `CreateGroupBlogPostAsync`; `IBlogPostReadService` gains
-      `GetByGroupAsync`. See `audit/Groups.md` §"WU32 Settled Decisions."
-  (4) **Optional story-link picker** via `IStoryReadService.GetStoryIdsByAuthorAsync(int authorId)`
-  (`IgnoreQueryFilters` — author always sees own mature stories). Method confirmed present
-  (parallel session delivered it; [IStoryReadService.cs:55](TheCanalaveLibrary.Core/Stories/IStoryReadService.cs)).
-  (5) **Content-rating filter extended to `BaseBlogPost`** (same "no trace" rule as Story, WU12).
-  (6) `{*slug}` URL segment is cosmetic — no `Slug` column on `BaseBlogPost`; `BlogPostId` (int) is
-  the sole key. See `audit/BlogPosts.md` Features 35/36/56.
+- **WU31 Blog Post** — resolved (2026-06-24): F56 deferred; edit-page pattern for blog posts; `GroupBlogPost` UI in WU32; optional story-link picker via `GetStoryIdsByAuthorAsync`; content-rating filter on `BaseBlogPost`; `{*slug}` cosmetic only. See `audit/BlogPosts.md` Features 35/36/56, `cross-cutting.md` "Two content-editing patterns."
 
-- **Test strategy** — resolved (2026-06-22, post-WU12 post-mortem): the project had zero automated
-  tests; WU12's create-path bugs were caught only by manual reading of `/dev/wu12/*` probe output,
-  which asserts nothing. Two-layer regime: a **unit** test project (`TheCanalaveLibrary.Tests.Unit`,
-  Core-only, no DB/host) for pure logic (`StoryValidations`, `StoryMappers`, slug `Slugify`); an
-  **integration** test project (`TheCanalaveLibrary.Tests.Integration`, references Server) against a
-  **real Testcontainers Postgres** — never EF InMemory/SQLite, because the invariants worth protecting
-  (the `"ContentRating"` named query filter's SQL translation, the slug unique-filtered index, snake-
-  case naming, FTS) are Postgres-specific and a different provider would give false confidence on
-  exactly those. Integration tests drive a `WebApplicationFactory` with `IActiveUserContext` swapped
-  for a settable fake — sidesteps the one genuinely manual-only band (auth-cookie claim baking,
-  `SecurityStampValidator` timing, SignalR circuit init), which stays Playwright/manual. Dev-
-  diagnostics endpoints (`DevDiagnosticsEndpoints.cs`) remain **interactive probes, not the regression
-  net** — they're `Development`-only, never run in CI, and assert nothing; the WU12 fixtures/endpoints
-  stay in place per prior user instruction but are no longer the source of truth once these tests
-  exist. See [canalave-conventions/testing.md](skills/canalave-conventions/testing.md).
-  **Updated (2026-06-22, post-WU12.5-evaluation):** The two-tier model is now three tiers by *kind*:
-  Unit (directly-constructed, no host/DB — references Core **and** Server), Integration
-  (`WebApplicationFactory`/Testcontainers Postgres), and RazorComponents (bUnit component render tests,
-  references SharedUI/Client). Unit's "Core-only reference" proxy is replaced by a behavioral rule:
-  if you can `new` the type without a real host or DB it's Unit, even if it lives in Server. The
-  Phase E loop and per-unit loop in `workplan.md` now name `dotnet test` as a required verification
-  step. Obligation remains advisory ("should add tests") — no Stage-5 gate. `Tests.RazorComponents`
-  (bUnit) added to the sln for SharedUI/Client component render tests.
+- **Test strategy** — resolved (2026-06-22, updated post-WU12.5): three tiers by kind — Unit (directly-constructed, no host/DB), Integration (Testcontainers Postgres + `WebApplicationFactory` + `IActiveUserContext` fake), RazorComponents (bUnit); never EF InMemory/SQLite. See [canalave-conventions/testing.md](skills/canalave-conventions/testing.md).
 
 ---
 
