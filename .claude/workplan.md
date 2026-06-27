@@ -1231,6 +1231,32 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 
 ---
 
+### WU-CounterAtomicity — Denormalized-counter lost-update fix + CS9107 tidy — DONE ✓ (2026-06-27)
+- **Cells changed:** none — Comments L2/L3 and Recommendations L2/L3 stay Stage 5; Stories L2/L3
+  stay Stage 5. These were correctness polishes inside already-aligned cells; no stage transition.
+- **Done:**
+  - `ServerRecommendationWriteService.ToggleLikeAsync` and `ServerCommentWriteService.ToggleLikeAsync`:
+    replaced tracked read-modify-write (`rec.LikeCount++`) with atomic
+    `ExecuteUpdateAsync(SetProperty(x => x.LikeCount, x => x.LikeCount + delta))` after the join-row
+    `SaveChangesAsync`. Returned DTO value unchanged (optimistic `loaded + delta`). Eliminates the
+    lost-update race when two users like the same target concurrently.
+  - `ServerStoryReadService`: promoted `activeUser` primary-ctor parameter to
+    `protected IActiveUserContext ActiveUser { get; } = activeUser;` (same pattern as
+    `ServerBlogPostReadService`); routed internal uses through `ActiveUser`.
+  - `ServerStoryWriteService`: changed two `activeUser.UserId` references to `ActiveUser.UserId`
+    (via the inherited property). The ctor parameter now only appears in the base-ctor argument, not
+    as a captured field — CS9107 eliminated.
+  - `cross-cutting.md` §"UserStats Updates": added "Counter mutation rule" subsection documenting
+    the atomic `ExecuteUpdateAsync` requirement for all denormalized counters.
+- **Verified:** `dotnet build` green, zero errors, zero CS9107 warnings. `dotnet test` 1232/1232 pass
+  (437 Unit + 443 RazorComponents + 352 Integration). Concurrency fix is not automatable
+  (no parallel-request seam in the test harness); covered by code review + sequential toggle tests
+  confirming correct counter behavior.
+- **Pointer:** `audit/Recommendations.md` §Feature 29, `audit/Comments.md` §Feature 25,
+  `audit/Stories.md` §"WU-CounterAtomicity Stage note."
+
+---
+
 ## Blocked / deferred — genuine Stage-1 intent gaps (no sequence number)
 
 These have an undesigned UI; resolve the design (chat with skill files) before they can be sequenced.

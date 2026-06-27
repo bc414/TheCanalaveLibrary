@@ -129,6 +129,14 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   (filtered `Include`); toggles presence + adjusts denormalized `LikeCount` (floor 0 on decrement); saves;
   returns `CommentLikeResultDto(int LikeCount, bool IsLiked)`. No notification, no `DateLiked` — §6.11
   anti-addictive design. **Verified:** Integration tier (see Feature 23).
+  **WU-CounterAtomicity Stage note (2026-06-27):** `ToggleLikeAsync` previously used tracked
+  read-modify-write (`comment.LikeCount++` / `Math.Max(0, ... - 1)`) — the lone deviation from the
+  codebase's atomic-counter pattern. Replaced with `ExecuteUpdateAsync(SetProperty(c => c.LikeCount,
+  c => c.LikeCount + delta))` after the join-row `SaveChangesAsync`. Returned DTO value unchanged
+  (optimistic `loaded + delta`). Concurrency fix not automatable (no parallel-request seam); covered by
+  existing sequential `ToggleLikeAsync` integration tests confirming correct counter behavior + code review
+  that the SQL is now `SET like_count = like_count + delta`. Convention documented in
+  `cross-cutting.md §"Counter mutation rule"`. `dotnet test` 1232/1232 pass.
 
 ## Feature 26 — Spoiler Comments
 - **L3-Logic / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note.

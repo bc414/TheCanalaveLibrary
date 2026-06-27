@@ -13,7 +13,7 @@ public class ServerStoryWriteService(
     public async Task<int> CreateStoryAsync(CreateStoryDTO newStoryDTO)
     {
         // AuthorId is always server-stamped; CreateStoryDTO intentionally has no AuthorId property.
-        if (activeUser.UserId is not int authorId)
+        if (ActiveUser.UserId is not int authorId)
             throw new InvalidOperationException("Creating a story requires an authenticated user.");
 
         List<string> validationErrors = newStoryDTO.CanSave();
@@ -62,7 +62,7 @@ public class ServerStoryWriteService(
 
         // Author-only gate (cross-cutting.md "Security vs affordance"). Moderation actions (WU34) use
         // a separate admin service path — they do NOT OR into this ownership check.
-        if (storyToUpdate.AuthorId != activeUser.UserId)
+        if (storyToUpdate.AuthorId != ActiveUser.UserId)
             throw new UnauthorizedAccessException("You can only edit your own stories.");
 
         await ValidateStructuredTagGatesAsync(dto, writeDb);

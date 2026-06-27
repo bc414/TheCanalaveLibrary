@@ -143,6 +143,26 @@ migrated separately (both contexts share the same schema); this had been accumul
 updated to use `ReadOnlyApplicationDbContext` for the public-visibility assertion (was incorrectly using
 the unfiltered write context). All 1232 tests pass.
 
+### WU-CounterAtomicity Stage note (2026-06-27)
+
+**CS9107 eliminated — `ServerStoryReadService` / `ServerStoryWriteService`:**
+
+`ServerStoryWriteService` was double-capturing the primary-constructor `activeUser` parameter — once in
+its own body (lines using `activeUser.UserId`) and once passed to the base ctor
+`ServerStoryReadService(readDb, activeUser)`. C# primary-constructor semantics count both captures,
+raising CS9107. Fix mirrors the pattern already established in `ServerBlogPostReadService`:
+
+- `ServerStoryReadService` now exposes `protected IActiveUserContext ActiveUser { get; } = activeUser;`
+  (same comment about CS9107/CS9124 as the blog-post service). Internal reference in `ApplyFilters`
+  updated to `ActiveUser.UserId`.
+- `ServerStoryWriteService` two `activeUser.UserId` references (auth guard in `CreateStoryAsync`,
+  ownership check in `UpdateStoryAsync`) updated to `ActiveUser.UserId`. The ctor parameter now only
+  appears in the base-ctor argument — not a captured field — so the warning disappears.
+
+No behavior change. `dotnet build` zero warnings. `dotnet test` 1232/1232 pass (Integration tier,
+same existing Story tests — no new tests needed; this is a compiler-warning fix, not a behavioral
+change).
+
 ## Feature 5 — Story Browsing & Display
 
 - **L1 — Stage 5.** `StoryListing` warm partition is the projection anchor; sound.

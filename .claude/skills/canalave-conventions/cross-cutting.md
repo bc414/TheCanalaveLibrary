@@ -630,6 +630,27 @@ await writeDb.UserStats
 
 Background worker (F58, post-MVP) periodically recalculates to correct drift.
 
+### Counter mutation rule — all denormalized counters
+
+Every denormalized counter — `LikeCount` on `Recommendation` / `BaseComment`, and every `UserStats.*`
+field — must be adjusted with an **atomic** `ExecuteUpdateAsync`:
+
+```csharp
+// ✓ Correct — one SQL `SET counter = counter + delta`; concurrent callers can't collide
+await writeDb.Recommendations
+    .Where(r => r.RecommendationId == id)
+    .ExecuteUpdateAsync(s => s.SetProperty(r => r.LikeCount, r => r.LikeCount + delta));
+
+// ✗ Wrong — tracked read-modify-write; two concurrent readers both see the old value → lost update
+rec.LikeCount++;
+await writeDb.SaveChangesAsync();
+```
+
+The tracked `++` form reads a value into memory, increments it, and writes it back. Two concurrent
+callers reading the same stale value both produce the same written result: one increment is lost.
+`ExecuteUpdateAsync` issues a single `SET like_count = like_count + delta` that the database
+serializes correctly under any isolation level.
+
 ### Counter ↔ event map (WU30, wired into already-built write services)
 
 | `UserStat` counter | Owning user | Event / write service | Δ |

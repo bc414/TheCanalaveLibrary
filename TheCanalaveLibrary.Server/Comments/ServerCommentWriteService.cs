@@ -275,26 +275,33 @@ public class ServerCommentWriteService(
             throw new KeyNotFoundException($"Comment {commentId} not found.");
 
         bool nowLiked;
+        int delta;
         CommentLike? existingLike = comment.Likes.FirstOrDefault();
 
         if (existingLike is not null)
         {
             // Already liked — remove the like.
             writeDb.CommentLikes.Remove(existingLike);
-            comment.LikeCount = Math.Max(0, comment.LikeCount - 1);
             nowLiked = false;
+            delta = -1;
         }
         else
         {
             // Not yet liked — add the like.
             writeDb.CommentLikes.Add(new CommentLike { CommentId = commentId, UserId = userId });
-            comment.LikeCount++;
             nowLiked = true;
+            delta = 1;
         }
 
         await writeDb.SaveChangesAsync();
         // No notification generated — anti-addictive design (§6.11).
 
-        return new CommentLikeResultDto(comment.LikeCount, nowLiked);
+        // Atomic counter update — see cross-cutting.md §"Counter mutation rule" for why
+        // ExecuteUpdateAsync is used here instead of tracked read-modify-write.
+        await writeDb.BaseComments
+            .Where(c => c.CommentId == commentId)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.LikeCount, c => c.LikeCount + delta));
+
+        return new CommentLikeResultDto(Math.Max(0, comment.LikeCount + delta), nowLiked);
     }
 }

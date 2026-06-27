@@ -142,12 +142,13 @@ public class ServerRecommendationWriteService(
 
         RecommendationLike? existing = rec.Likes.FirstOrDefault();
         bool nowLiked;
+        int delta;
 
         if (existing is not null)
         {
             writeDb.RecommendationLikes.Remove(existing);
-            rec.LikeCount = Math.Max(0, rec.LikeCount - 1);
             nowLiked = false;
+            delta = -1;
         }
         else
         {
@@ -156,14 +157,20 @@ public class ServerRecommendationWriteService(
                 RecommendationId = recommendationId,
                 UserId = userId
             });
-            rec.LikeCount++;
             nowLiked = true;
+            delta = 1;
         }
 
         await writeDb.SaveChangesAsync();
         // No notification — anti-addictive design (§6.11).
 
-        return new RecommendationLikeResultDto(rec.LikeCount, nowLiked);
+        // Atomic counter update — see cross-cutting.md §"Counter mutation rule" for why
+        // ExecuteUpdateAsync is used here instead of tracked read-modify-write.
+        await writeDb.Recommendations
+            .Where(r => r.RecommendationId == recommendationId)
+            .ExecuteUpdateAsync(s => s.SetProperty(r => r.LikeCount, r => r.LikeCount + delta));
+
+        return new RecommendationLikeResultDto(Math.Max(0, rec.LikeCount + delta), nowLiked);
     }
 
     // ── Hidden Gem ───────────────────────────────────────────────────────────────

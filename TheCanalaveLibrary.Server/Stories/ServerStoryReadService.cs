@@ -11,6 +11,12 @@ public class ServerStoryReadService(
     ReadOnlyApplicationDbContext readDb,
     IActiveUserContext activeUser) : IStoryReadService
 {
+    /// <summary>
+    /// Exposed as a protected property so derived write services can access the user context
+    /// without double-capturing the constructor parameter (eliminates CS9107/CS9124 warnings).
+    /// </summary>
+    protected IActiveUserContext ActiveUser { get; } = activeUser;
+
     public async Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId)
     {
         // Two-step: project a lean intermediate row (EF-translatable) then build DTOs in memory.
@@ -289,9 +295,9 @@ public class ServerStoryReadService(
         }
 
         // ── Interaction exclusions (authenticated viewer only) ────────────────────────────
-        if (filter.ExcludedInteractions.Count > 0 && activeUser.UserId.HasValue)
+        if (filter.ExcludedInteractions.Count > 0 && ActiveUser.UserId.HasValue)
         {
-            int viewerId = activeUser.UserId.Value;
+            int viewerId = ActiveUser.UserId.Value;
 
             bool exclFav    = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Favorite);
             bool exclHidden = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.PrivateFavorite);

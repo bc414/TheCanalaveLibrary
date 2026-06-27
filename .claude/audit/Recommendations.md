@@ -46,9 +46,17 @@ fully built in WU29 (L2/L3/L3.5/L4 across all four features).
 - **L2 — Stage 5 (WU29, 2026-06-23).** `GetForStoryAsync`: Approved only; highlighted/spotlighted
   first then DatePosted desc; per-viewer `IsLikedByCurrentUser` via short-circuited EXISTS subquery
   (EF Core anonymous-safe pattern). `ToggleLikeAsync`: load rec with filtered `Likes` include,
-  add/remove, `LikeCount = Math.Max(0, …)`, return `RecommendationLikeResultDto`. **No notification
+  add/remove, atomic counter update, return `RecommendationLikeResultDto`. **No notification
   on like** (anti-addictive design — same as `CommentLike`, §6.11). Author-highlight `≤5/story`
   enforced in `SetHighlightedByAuthorAsync` (story-author-only).
+  **WU-CounterAtomicity Stage note (2026-06-27):** `ToggleLikeAsync` previously used tracked
+  read-modify-write (`rec.LikeCount++` / `Math.Max(0, ... - 1)`) — the lone deviation from the
+  codebase's atomic-counter pattern. Replaced with `ExecuteUpdateAsync(SetProperty(r => r.LikeCount,
+  r => r.LikeCount + delta))` after the join-row `SaveChangesAsync`. Returned DTO value unchanged
+  (optimistic `loaded + delta`). Concurrency fix not automatable (no parallel-request seam); covered by
+  existing sequential `ToggleLikeAsync` integration tests confirming correct counter behavior + code review
+  that the SQL is now `SET like_count = like_count + delta`. Convention documented in
+  `cross-cutting.md §"Counter mutation rule"`. `dotnet test` 1232/1232 pass.
 - **L3/L3.5 — Stage 5 (WU29, 2026-06-23).** `RecommendationCard` leaf: `UserCard` (attribution
   variant, §5.30.7 #2) + `RichTextView` (body) + like button + successful-rec count. Two visual
   states: **Author-spotlighted** (accent border/glow + "Author's Pick" ribbon, Roserade Green or
