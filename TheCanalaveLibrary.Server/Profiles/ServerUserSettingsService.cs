@@ -217,6 +217,12 @@ public class ServerUserSettingsService(
     {
         int userId = RequireCurrentUserId();
 
+        // Read the old path before overwriting so we can clean it up (orphan-bug fix).
+        string? oldPath = await writeDb.Users
+            .Where(u => u.Id == userId)
+            .Select(u => u.ProfilePictureRelativeUrl)
+            .FirstOrDefaultAsync();
+
         // Delegate storage and key construction to IImageStorageService.
         // Stored key: users/{userId}/profile-{uuid}.{ext} (per layer2-services.md §"Image Storage").
         string relativeUrl = await imageStorage.SaveAsync(
@@ -227,6 +233,15 @@ public class ServerUserSettingsService(
             .Where(u => u.Id == userId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(u => u.ProfilePictureRelativeUrl, relativeUrl));
+
+        // Best-effort cleanup of the old blob. A failed delete must not surface to the user —
+        // the upload already succeeded. Skip if the old path is null (no previous picture) or
+        // somehow the same (shouldn't happen with uuid keys, but guard anyway).
+        if (oldPath is not null && oldPath != relativeUrl)
+        {
+            try { await imageStorage.DeleteAsync(oldPath); }
+            catch { /* best-effort; log in a future structured-logging pass */ }
+        }
 
         return relativeUrl;
     }

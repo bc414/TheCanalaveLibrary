@@ -131,17 +131,17 @@ public class TagReadServiceTests(PostgresFixture postgres) : IntegrationTestBase
     }
 
     [Fact]
-    public async Task SearchTagChipsAsync_SpriteUrlIsNull_WhenTagHasNoSpriteIdentifier()
+    public async Task SearchTagChipsAsync_SpriteIdentifierIsNull_WhenTagHasNoSpriteIdentifier()
     {
-        // All fixture tags are seeded without a SpriteIdentifier (null) — SpriteUrl must be null.
+        // All fixture tags are seeded without a SpriteIdentifier (null) — chip must carry null identifier.
         using IServiceScope scope = Factory.Services.CreateScope();
         ITagReadService tagReadService = scope.ServiceProvider.GetRequiredService<ITagReadService>();
 
         List<TagChipDto> result = await tagReadService.SearchTagChipsAsync(TagTypeEnum.Genre, _suffix);
 
         result.Where(c => c.TagId == _genreTagAardvarkId)
-            .Should().AllSatisfy(c => c.SpriteUrl.Should().BeNull(
-                "SpriteIdentifier is null → SpriteUrl must be null regardless of user theme/animation preference"));
+            .Should().AllSatisfy(c => c.SpriteIdentifier.Should().BeNull(
+                "SpriteIdentifier is null on the tag → TagChipDto.SpriteIdentifier must also be null"));
     }
 
     [Fact]
@@ -319,7 +319,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IntegrationTestBase
         TagDirectoryGroupDto genreGroup = result.Single(g => g.TagType == TagTypeEnum.Genre);
         genreGroup.Nodes
             .Where(n => n.Tag.TagName == $"NoSprite-{suffix}")
-            .Should().AllSatisfy(n => n.Tag.SpriteUrl.Should().BeNull());
+            .Should().AllSatisfy(n => n.Tag.SpriteIdentifier.Should().BeNull());
     }
 
     [Fact]

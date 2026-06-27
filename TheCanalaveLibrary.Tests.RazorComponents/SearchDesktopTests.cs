@@ -28,6 +28,8 @@ public class SearchDesktopTests : TestContext
         Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeUsiService);
         // TagSelector inside ResultsFilterPanel injects ITagReadService.
         Services.AddScoped<ITagReadService>(_ => new FakeTagReadService());
+        // TagChip and TagSelector inject ISpriteReadService for sprite URL resolution.
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         // ReportDialog (inside SearchDesktop) injects IModerationWriteService.
         Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
         JSInterop.Mode = JSRuntimeMode.Loose;

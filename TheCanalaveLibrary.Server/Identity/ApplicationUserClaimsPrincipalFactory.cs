@@ -8,7 +8,7 @@ namespace TheCanalaveLibrary.Server;
 
 /// <summary>
 /// Bakes the hot <see cref="User"/> columns <see cref="IActiveUserContext"/> needs
-/// (<see cref="User.ShowMatureContent"/>, theme name, <see cref="User.PrefersAnimatedSprites"/>) into the
+/// (<see cref="User.ShowMatureContent"/>, theme slug, <see cref="User.PrefersAnimatedSprites"/>) into the
 /// auth cookie's claims at sign-in — settled WU12. This is what lets <c>ServerActiveUserContext</c> read
 /// purely from claims with zero DbContext dependency, avoiding a circular dependency with
 /// <c>ApplicationDbContext</c>'s content-rating query filter (which itself depends on
@@ -17,6 +17,9 @@ namespace TheCanalaveLibrary.Server;
 /// once roles are configured (<c>.AddRoles&lt;ApplicationRole&gt;()</c> in Program.cs).
 /// </summary>
 /// <remarks>
+/// The <c>canalave:theme</c> claim carries the URL-safe <see cref="Theme.Slug"/> (e.g. <c>"pokemon"</c>),
+/// not the display <see cref="Theme.Name"/> (e.g. <c>"Pokémon"</c>). This means the claim can be used
+/// directly as a sprite URL path segment without any further transformation.
 /// Consequence: if a user's ShowMatureContent/Theme/PrefersAnimatedSprites changes (WU30 profile
 /// settings), the auth cookie is stale until next sign-in unless that write path calls
 /// <c>SignInManager.RefreshSignInAsync</c> to reissue claims. Flagged here for WU30, not solved by WU12.
@@ -33,14 +36,15 @@ public class ApplicationUserClaimsPrincipalFactory(
         ClaimsIdentity identity = await base.GenerateClaimsAsync(user);
 
         // Themes carry no query filter, so this read is unaffected by whatever the signing-in user's
-        // *previous* IActiveUserContext happened to be.
-        string themeName = await readDb.Themes
+        // *previous* IActiveUserContext happened to be. We select Slug, not Name: the claim value is
+        // used directly as a sprite URL path segment, so it must be URL-safe (e.g. "pokemon").
+        string themeSlug = await readDb.Themes
             .Where(t => t.ThemeId == user.ThemeId)
-            .Select(t => t.Name)
-            .FirstOrDefaultAsync() ?? "Pokémon";
+            .Select(t => t.Slug)
+            .FirstOrDefaultAsync() ?? "pokemon";
 
         identity.AddClaim(new Claim(ActiveUserClaimTypes.ShowMatureContent, user.ShowMatureContent.ToString()));
-        identity.AddClaim(new Claim(ActiveUserClaimTypes.Theme, themeName));
+        identity.AddClaim(new Claim(ActiveUserClaimTypes.Theme, themeSlug));
         identity.AddClaim(new Claim(ActiveUserClaimTypes.PrefersAnimatedSprites, user.PrefersAnimatedSprites.ToString()));
 
         return identity;

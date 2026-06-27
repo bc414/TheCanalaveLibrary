@@ -1,17 +1,24 @@
 using Bunit;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.SharedUI;
 
 namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
-/// Render and interaction tests for <see cref="CharacterEntry"/> (WU37 Phase 5).
-/// No @inject — no DI setup needed.
+/// Render and interaction tests for <see cref="CharacterEntry"/> (WU37 Phase 5, updated WU38).
+/// CharacterEntry injects ISpriteReadService for sprite URL resolution.
 /// Tier: RazorComponents (bUnit).
 /// </summary>
 public class CharacterEntryTests : TestContext
 {
+    public CharacterEntryTests()
+    {
+        // CharacterEntry injects ISpriteReadService for sprite URL resolution.
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
+    }
+
     private static TagChipDto MakeChip(bool allowOc = false) => new()
     {
         TagId = 1,

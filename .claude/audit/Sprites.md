@@ -1,76 +1,68 @@
 # Audit — Sprites/
 
-**Feature:** 3 (Sprite & Theme System). Read-only service cluster — `ISpriteReadService` only, **no write
-half** (correct per §7.4). Git-managed assets in `wwwroot`. Dual server/WASM implementation.
+**Feature:** 3 (Sprite & Theme System). Read service + asset probe. Git/Rclone-managed assets in
+`wwwroot/sprites/themes/` (dev) / R2 (prod). Single shared Core impl.
 
 ## Shared Context
 
-**Entities:** `Theme` (Core/Models/, seeded with the default "Pokémon" theme); `Tag.SpriteIdentifier`
-stores a **key, not a URL** — the client builds `wwwroot/images/themes/{theme}/static|animated/...` at
-render time. `User.PrefersAnimatedSprites` selects the path; fallback is `unknown_sprite.png`.
+**Entities:** `Theme` (Core/Sprites/Theme.cs — `ThemeId`, `Name` (display), `Slug` (URL-safe,
+unique, path segment), `Description`; seeded with `{ ThemeId=1, Name="Pokémon", Slug="pokemon" }`).
+`Tag.SpriteIdentifier` (`[MaxLength(50)]`) stores a **semantic key** (e.g. `"bulbasaur"`) — **not a
+URL**. The URL is computed at render time from `(SpriteBaseUrl, slug, id, prefersAnimated)`.
 
-**Contracts/impls:** `ISpriteReadService` (Core/Sprites/),
-`ServerSpriteReadService` (Server/Sprites/ — `IWebHostEnvironment` + disk check w/ fallback),
-`OptimisticSpriteService` (Client/Sprites/ — constructs URLs optimistically, no disk/HTTP; its own
-rename to `WasmSpriteReadService` is Post-MVP L5 work). Registered in each project's `Program.cs` as
-`ISpriteReadService → ServerSpriteReadService` (Server) / `ISpriteReadService → OptimisticSpriteService`
-(Client).
+**Key architectural decisions (settled 2026-06-27, do not revisit):**
+- Sprite assets are provisioned **out-of-band** (Rclone → R2 + DB seed for tags/themes). The Blazor
+  app never writes sprite assets. No web upload UI, no `/mod/sprites` page, no runtime Theme CRUD.
+- URL construction is **optimistic** — the browser handles misses via `onerror` (`webp → png → unknown.png`).
+- **`ISpriteReadService`** (Core/Sprites/) — single shared impl `OptimisticSpriteReadService`
+  (pure string builder, no host/disk dependency). Registered as singleton on both Server and Client.
+  Method: `GetSpriteUrl(string slug, string id, bool prefersAnimated)`.
+- **`ISpriteAssetProbe`** (Core/Sprites/) — server-only `ExistsAsync(slug, id)` for write-time
+  validation in `ServerTagWriteService`. Never called at render time. Local impl: `LocalSpriteAssetProbe`
+  (`File.Exists`); R2 impl deferred.
+- **`ThemeContext` cascading value** (`record ThemeContext(string Slug, bool PrefersAnimated)`) —
+  cascaded from a root `ThemeContextProvider` in `Routes.razor`. SharedUI sprite components inject
+  `ISpriteReadService` and take `[CascadingParameter] ThemeContext`. See `cross-cutting.md`
+  "ThemeContext Cascading Provider."
 
 ---
 
 ## Feature 3 — Sprite & Theme System
-- **L1 — Stage 5.** `Theme` entity + seed; `Tag.SpriteIdentifier` key pattern; `User` animation/theme
-  prefs. Adding a theme = a new folder, zero DB change (§3.17). Sound.
-- **L2 — Stage 5 (WU2, 2026-06-20).** Dual-impl architecture was already correct (server
-  disk-check-with-fallback vs. WASM optimistic), matching `layer5-wasm.md`'s resource-gap guidance.
-  Reconciled the two naming/location divergences: renamed `ISpriteService`→`ISpriteReadService` and
-  `FileSystemSpriteService`→`ServerSpriteReadService` (now primary-constructor DI, matching
-  `Server{Feature}ReadService` style); moved all three files (interface, server impl, client impl —
-  `OptimisticSpriteService` keeps its name, see L5 note below) out of the legacy `ServiceInterfaces/`/
-  `Services/` folders into their `Sprites/` cluster folder in Core/Server/Client respectively; updated
-  both `Program.cs` DI registrations. The single method
-  `GetSpriteUrl(theme, spriteIdentifier, animated)` is otherwise unchanged.
-  **Settled (WU2) — `GetInteractionIcon` is explicitly OUT of scope for this service** (previously this
-  note and spec §5.30.5 implied the sprite service should grow a
-  `GetInteractionIcon(InteractionTypeEnum, theme)` method). Theme-swappable interaction icons are a
-  **UserStoryInteraction-domain concept** — see `audit/UserStoryInteractions.md` Feature 16. The sprite
-  service stays a single generic `GetSpriteUrl` resolver; it never learns about `InteractionTypeEnum`.
-  Spec §5.30.5's `ISpriteService.GetInteractionIcon(...)` line is superseded by this note (spec is a
-  read-only historical snapshot; this audit file is the current authority).
-  **Further settled (WU7) — interaction icons don't route through this service at all, even via the
-  generic `GetSpriteUrl`.** The WU2-era plan was "map `InteractionTypeEnum` → sprite key → resolve via
-  `GetSpriteUrl`"; WU7 replaced that with inline SVG (`IconPath`/`AccentColor` parameters on
-  `UserStoryInteractionButton`, mapped by the owning composite — no sprite asset, no theme folder, no
-  `GetSpriteUrl` call). `GetSpriteUrl` is otherwise unaffected — still the resolver for tags, covers,
-  avatars, and any future theme-swappable art. See `audit/UserStoryInteractions.md` Feature 16 L4 note
-  and `layer4-style.md` "Interaction Icons Are Inline SVG."
-  **How verified:** `dotnet build` green across all four projects (zero warnings/errors introduced);
-  grepped the repo for `ISpriteService`/`FileSystemSpriteService` — zero remaining code references;
-  live server run (`TheCanalaveLibrary.Server`, direct, not AppHost) booted clean with DI resolving
-  `ISpriteReadService → ServerSpriteReadService`, `/`, `/Account/Login`, `/Account/Register` all `200`.
-  No sprite-rendering consumer exists yet, so this was a contract/DI-correctness verification, not a
-  visual one (no L4 work in this unit).
-  **2026-06-22 (WU12.5 backfill):** verification migrated into asserted tests — `SpriteReadServiceTests`
-  in `TheCanalaveLibrary.Tests.Unit` (tier: **Unit**). `ServerSpriteReadService` is constructed
-  directly (`new ServerSpriteReadService(fakeEnv)` with a `FakeWebHostEnvironment` pointing at a
-  per-test temp dir — no host, no DB). Covers: animated `.webp` path when the file exists; static
-  `.png` fallback when animated is missing or `prefersAnimated=false`; `unknown.png` when neither
-  exists; correct theme sub-path. Mutation-sanity confirmed (removing `unknown.png` fallback → test
-  fails). `dotnet test` green.
-  **Stage note (pre-integration cleanup — 2026-06-26):** `ServerSpriteReadService` rewritten as a
-  singleton that builds a `Dictionary<string, HashSet<string>>` per (theme, kind) at construction time
-  by scanning `wwwroot/sprites/themes/*/{animated,static}/` once. `GetSpriteUrl(theme, id, prefersAnimated)`
-  is now an O(1) in-memory lookup with no `File.Exists` per call (formerly called per chip on every listing
-  render — ~100–200 synchronous syscalls per page under concurrency). DI registration changed from
-  `AddScoped` → `AddSingleton` in `Program.cs` (no per-request deps; startup scan is safe for singleton
-  lifetime). `SpriteReadServiceExtensions.cs` added alongside: extension `GetSpriteUrl(this ISpriteReadService,
-  IActiveUserContext, string spriteIdentifier)` that reads `Theme`/`PrefersAnimatedSprites` off the context —
-  eliminates the repeated theme/animation triple at call sites. Five call sites updated:
-  `ServerStoryReadService` (character chips + `ToTagChip`) and `ServerTagReadService` (three sites).
-  Unit test class `SpriteReadServiceTests` restructured — `BuildSut()` called after `CreateSpriteFile()` in
-  each test, since startup cache is built in the constructor. All 1222 tests green after changes.
-  Tier: **Unit** (`SpriteReadServiceTests`, 6 tests). No schema change.
+- **L1 — Stage 5 (updated 2026-06-27).** `Theme` entity + seed; `Tag.SpriteIdentifier` key pattern;
+  `User` animation/theme prefs. **`Theme.Slug` added** (`[Required][MaxLength(64)]`, unique index;
+  seeded `"pokemon"`). Claim + path carry the slug; `Theme.Name` stays display-only. Adding a theme
+  = add a DB row (slug+name) + provision a sprite folder. Zero code change.
+- **L2 — Stage 5 (WU2 through 2026-06-27).** History: WU2 renamed/relocated the interface and impls;
+  WU12.5 added unit tests; pre-integration cleanup (2026-06-26) rewrote `ServerSpriteReadService` as a
+  singleton startup-scan cache and added `SpriteReadServiceExtensions.cs` for the `IActiveUserContext`
+  extension. **2026-06-27 (sprite redesign — this WU):** the startup-scan cache is structurally unable
+  to work against remote object storage (cannot `File.Exists` an R2 bucket per render). It is replaced
+  by a single **optimistic URL builder** `OptimisticSpriteReadService` in Core — pure string building,
+  no host/disk dependency, registered as singleton on both Server and Client. The `IActiveUserContext`
+  extension (`SpriteReadServiceExtensions.cs`) and `ServerSpriteReadService.cs` /
+  `Client/OptimisticSpriteService.cs` are **deleted**. URL resolution moves from the read service into
+  the rendering components (see L3.5/L4 note). The read-service call sites in
+  `ServerTagReadService` (3 sites) and `ServerStoryReadService` (`ToTagChip` + character chips) revert
+  to projecting the raw `SpriteIdentifier`; those services drop their `ISpriteReadService` constructor
+  dependency. **Settled (WU2) — `GetInteractionIcon` stays OUT of scope.** See `audit/UserStoryInteractions.md`
+  Feature 16 and `layer4-style.md` "Interaction Icons Are Inline SVG" (supersedes spec §5.30.5).
+  **How verified (2026-06-27):** Unit tests (`SpriteReadServiceTests`, rewritten) — optimistic builder:
+  `(slug, id, animated)` → `{base}/{slug}/animated/{id}.webp`; `prefersAnimated=false` →
+  `.../static/{id}.png`; configured base prepended. New unit test class `LocalSpriteAssetProbeTests` —
+  `ExistsAsync` true/false against a temp dir. Integration tests — read-service projections put
+  `SpriteIdentifier` (not a URL) on `TagChipDto`. `dotnet test` green (all tiers). Tier: **Unit**
+  (`SpriteReadServiceTests` rewritten + `LocalSpriteAssetProbeTests` new).
 
+- **L3-Logic / L3.5-Structure (sprite rendering) — Stage 5 (2026-06-27).** `ThemeContextProvider`
+  component added at the root of `Routes.razor` (inside `CascadingAuthenticationState`). Components
+  `TagChip`, `TagSelector`, `CharacterEntry` now inject `ISpriteReadService` and take
+  `[CascadingParameter] ThemeContext`; they resolve sprite URLs at render time with a plain-HTML
+  `onerror` fallback chain (`webp → png → unknown.png`). DTOs carry `SpriteIdentifier` (not a URL).
+  `ISpriteAssetProbe` wired into `ServerTagWriteService` as a non-blocking warning on mod-write.
+  **Tier: RazorComponents** (`TagChip`/`TagSelector`/`CharacterEntry` tests updated — assert `<img src>`
+  built from cascaded slug/animation, `onerror` present, null identifier renders no `<img>`).
+  See `cross-cutting.md` "ThemeContext Cascading Provider" and `layer2-services.md` "Sprite URLs
+  Are Resolved At Render Time."
 - **L3-Logic — Stage 5 (WU30, 2026-06-24).** Theme-selection control built inside
   `SharedUI/Profiles/AppearanceSettingsForm.razor` (the Feature-3 theme-selection UI lives in the
   Profiles settings page Appearance section — this was the settled design). `AppearanceSettingsForm`
@@ -84,8 +76,8 @@ rename to `WasmSpriteReadService` is Post-MVP L5 work). Registered in each proje
   lambda (inner-double-quote limitation in Razor attributes — see `cross-cutting.md` §"Razor attribute
   quoting"). Visual sign-off pending human run at `/settings`. Stage-6 gate = human visual approval.
 - **L4-Style — Stage 1.** Theme-selection UI visual; blocked on tokens.
-- **L5 — Stage 4.** `OptimisticSpriteService` (Client) is the WASM half and is architecturally sound, but
-  carries the same interface-naming divergence as L2 (its own rename to `WasmSpriteReadService` is
-  deferred to this Post-MVP L5 work, per `workplan.md`). No endpoint needed (pure URL construction) —
-  correct.
+- **L5 — Stage 5 (resolved 2026-06-27).** The prior Stage-4 divergence (two separate impls with
+  different behaviors) is resolved: the two impls collapsed into one `OptimisticSpriteReadService` in
+  Core (registered on both Server and Client). No endpoint needed (pure URL construction). No WASM
+  proxy required; SharedUI components inject the Core service directly on both sides.
 - **L6/L7/L8 — N/A.**

@@ -35,7 +35,7 @@ public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Ap
         public int? UserId => null;
         public bool IsAuthenticated => false;
         public bool ShowMatureContent => false;
-        public string Theme => "Pokémon";
+        public string Theme => "pokemon"; // URL-safe slug; display name is "Pokémon"
         public bool PrefersAnimatedSprites => true;
         public bool IsModerator => false;
         public bool IsAdmin => false;

@@ -2,19 +2,29 @@ using AngleSharp.Dom;
 using Bunit;
 using FluentAssertions;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.SharedUI;
 
 namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
-/// Render tests for <see cref="TagChip"/> (WU4). The chip is a pure leaf — it injects no service,
-/// takes a <see cref="TagChipDto"/> and an optional <see cref="EventCallback"/> OnRemove, and
-/// renders the tag name, a type-coloured badge, an optional sprite image, and an optional remove
-/// button. All behaviours are exercisable by constructing the DTO directly.
+/// Render tests for <see cref="TagChip"/> (WU4, updated WU38). The chip injects
+/// <see cref="ISpriteReadService"/> and reads a <see cref="ThemeContext"/> cascading value.
+/// When <see cref="TagChipDto.SpriteIdentifier"/> is non-null and a <see cref="ThemeContext"/>
+/// is cascaded, the chip renders an <c>&lt;img&gt;</c> with the resolved URL and an
+/// <c>onerror</c> fallback. All behaviours are exercisable by constructing the DTO directly.
 /// </summary>
 public class TagChipTests : TestContext
 {
+    private static readonly ThemeContext DefaultTheme = new("pokemon", false);
+
+    public TagChipTests()
+    {
+        // Register the Core sprite service with the default base URL.
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
+    }
+
     // ── tag name renders ─────────────────────────────────────────────────────────
 
     [Fact]
@@ -45,27 +55,73 @@ public class TagChipTests : TestContext
             $"TagTypeEnum.{type} maps to {expectedClass} in TypeClasses");
     }
 
-    // ── sprite image ─────────────────────────────────────────────────────────────
+    // ── sprite image (requires ThemeContext cascading value) ──────────────────────
 
     [Fact]
-    public void TagChip_WhenSpriteUrlIsPresent_RendersImg()
+    public void TagChip_WhenSpriteIdentifierIsPresent_AndThemeContextCascaded_RendersImg()
     {
-        TagChipDto dto = MakeDto(TagTypeEnum.Character, "Pikachu", spriteUrl: "/sprites/pikachu.png");
+        TagChipDto dto = MakeDto(TagTypeEnum.Character, "Pikachu", spriteIdentifier: "pikachu");
 
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p.Add(c => c.Tag, dto));
+        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p
+            .Add(c => c.Tag, dto)
+            .AddCascadingValue(DefaultTheme));
 
         IElement img = cut.Find("img");
-        img.GetAttribute("src").Should().Be("/sprites/pikachu.png");
+        // Optimistic URL: static .png (DefaultTheme.PrefersAnimated = false)
+        img.GetAttribute("src").Should().Be("/sprites/themes/pokemon/static/pikachu.png");
     }
 
     [Fact]
-    public void TagChip_WhenSpriteUrlIsNull_DoesNotRenderImg()
+    public void TagChip_WhenPrefersAnimated_RendersAnimatedWebpSrc()
     {
-        TagChipDto dto = MakeDto(TagTypeEnum.Character, "Generic Character", spriteUrl: null);
+        TagChipDto dto = MakeDto(TagTypeEnum.Character, "Pikachu", spriteIdentifier: "pikachu");
+        var animatedTheme = new ThemeContext("pokemon", true);
 
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p.Add(c => c.Tag, dto));
+        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p
+            .Add(c => c.Tag, dto)
+            .AddCascadingValue(animatedTheme));
 
-        cut.FindAll("img").Should().BeEmpty("no sprite URL → no img element");
+        IElement img = cut.Find("img");
+        img.GetAttribute("src").Should().Be("/sprites/themes/pokemon/animated/pikachu.webp");
+    }
+
+    [Fact]
+    public void TagChip_WhenSpriteIdentifierIsPresent_RendersOnerrorAttribute()
+    {
+        TagChipDto dto = MakeDto(TagTypeEnum.Character, "Bulbasaur", spriteIdentifier: "bulbasaur");
+
+        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p
+            .Add(c => c.Tag, dto)
+            .AddCascadingValue(DefaultTheme));
+
+        IElement img = cut.Find("img");
+        img.GetAttribute("onerror").Should().Contain("spriteFallback",
+            "onerror fallback chain must be wired up for every sprite img");
+    }
+
+    [Fact]
+    public void TagChip_WhenSpriteIdentifierIsNull_DoesNotRenderImg()
+    {
+        TagChipDto dto = MakeDto(TagTypeEnum.Character, "Generic Character", spriteIdentifier: null);
+
+        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p
+            .Add(c => c.Tag, dto)
+            .AddCascadingValue(DefaultTheme));
+
+        cut.FindAll("img").Should().BeEmpty("null SpriteIdentifier → no img element");
+    }
+
+    [Fact]
+    public void TagChip_WhenNoThemeContextCascaded_DoesNotRenderImg()
+    {
+        // ThemeContext is nullable — if not cascaded, no img should render even with an identifier.
+        TagChipDto dto = MakeDto(TagTypeEnum.Character, "Pikachu", spriteIdentifier: "pikachu");
+
+        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p =>
+            p.Add(c => c.Tag, dto));
+        // No AddCascadingValue — ThemeContext will be null.
+
+        cut.FindAll("img").Should().BeEmpty("no ThemeContext → img guard fails → no img rendered");
     }
 
     // ── description tooltip ──────────────────────────────────────────────────────
@@ -126,14 +182,14 @@ public class TagChipTests : TestContext
     private static TagChipDto MakeDto(
         TagTypeEnum type,
         string name,
-        string? spriteUrl = null,
+        string? spriteIdentifier = null,
         string? description = null) =>
         new()
         {
             TagId = 1,
             TagName = name,
             TagTypeId = type,
-            SpriteUrl = spriteUrl,
+            SpriteIdentifier = spriteIdentifier,
             Description = description
         };
 }

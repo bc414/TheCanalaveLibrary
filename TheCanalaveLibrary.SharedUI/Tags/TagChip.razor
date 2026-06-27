@@ -1,9 +1,16 @@
 @namespace TheCanalaveLibrary.SharedUI
+@inject ISpriteReadService Sprites
 
 <span class="@TypeClasses inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-sm" title="@Tag.Description">
-    @if (Tag.SpriteUrl is not null)
+    @if (Tag.SpriteIdentifier is not null && _themeCtx is not null)
     {
-        <img src="@Tag.SpriteUrl" alt="" class="w-4 h-4" loading="lazy" />
+        var staticSrc = Sprites.GetSpriteUrl(_themeCtx.Slug, Tag.SpriteIdentifier, prefersAnimated: false);
+        var unknownSrc = $"/sprites/themes/{_themeCtx.Slug}/unknown.png";
+        <img src="@Sprites.GetSpriteUrl(_themeCtx.Slug, Tag.SpriteIdentifier, _themeCtx.PrefersAnimated)"
+             data-static="@staticSrc"
+             data-unknown="@unknownSrc"
+             alt="" class="w-4 h-4" loading="lazy"
+             onerror="spriteFallback(this)" />
     }
     @Tag.TagName
     @if (OnRemove.HasDelegate)
@@ -13,6 +20,8 @@
 </span>
 
 @code {
+    [CascadingParameter] private ThemeContext? _themeCtx { get; set; }
+
     [Parameter, EditorRequired]
     public TagChipDto Tag { get; set; } = null!;
 

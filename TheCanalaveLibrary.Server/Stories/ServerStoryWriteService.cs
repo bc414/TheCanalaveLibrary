@@ -7,8 +7,8 @@ public class ServerStoryWriteService(
     ReadOnlyApplicationDbContext readDb,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
-    ISpriteReadService spriteReadService)
-    : ServerStoryReadService(readDb, activeUser, spriteReadService), IStoryWriteService
+    IImageStorageService imageStorage)
+    : ServerStoryReadService(readDb, activeUser), IStoryWriteService
 {
     public async Task<int> CreateStoryAsync(CreateStoryDTO newStoryDTO)
     {
@@ -67,9 +67,21 @@ public class ServerStoryWriteService(
 
         await ValidateStructuredTagGatesAsync(dto, writeDb);
 
+        // Capture the old cover path before overwriting (orphan-bug fix — DeleteAsync had zero callers).
+        string? oldCoverPath = storyToUpdate.StoryListing?.CoverArtRelativeUrl;
+
         storyToUpdate.UpdateStoryEditableProperties(dto);
 
         await writeDb.SaveChangesAsync();
+
+        // Best-effort cleanup of the old cover blob when it changes. A failed delete must not
+        // propagate — the story update already succeeded. The null/same-path guard prevents
+        // accidental deletion when the cover hasn't actually changed.
+        if (oldCoverPath is not null && oldCoverPath != dto.CoverArtRelativeUrl)
+        {
+            try { await imageStorage.DeleteAsync(oldCoverPath); }
+            catch { /* best-effort; log in a future structured-logging pass */ }
+        }
     }
 
     /// <summary>

@@ -3,10 +3,12 @@ using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
 
+// ISpriteReadService is intentionally NOT injected here — sprite URL resolution moved into
+// render components (TagChip, TagSelector) that receive a ThemeContext cascading value.
+// TagChipDto now carries the raw SpriteIdentifier; see layer2-services.md §"Sprite URLs Are
+// Resolved At Render Time" and audit/Tags.md.
 public class ServerTagReadService(
-    ReadOnlyApplicationDbContext readDb,
-    ISpriteReadService spriteReadService,
-    IActiveUserContext activeUser) : ITagReadService
+    ReadOnlyApplicationDbContext readDb) : ITagReadService
 {
     private const int MaxSearchResults = 10;
 
@@ -14,25 +16,19 @@ public class ServerTagReadService(
     {
         if (string.IsNullOrWhiteSpace(term)) return [];
 
-        var rows = await readDb.Tags
+        return await readDb.Tags
             .Where(t => t.TagTypeId == type && EF.Functions.ILike(t.TagName, $"%{term}%"))
             .OrderBy(t => t.TagName)
             .Take(MaxSearchResults)
-            .Select(t => new { t.TagId, t.TagName, t.TagTypeId, t.Description, t.SpriteIdentifier })
+            .Select(t => new TagChipDto
+            {
+                TagId = t.TagId,
+                TagName = t.TagName,
+                TagTypeId = t.TagTypeId,
+                Description = t.Description,
+                SpriteIdentifier = t.SpriteIdentifier
+            })
             .ToListAsync();
-
-        // IActiveUserContext (minted WU12) replaces the WU4/WU11-era "pokemon"/non-animated literal
-        // placeholder — this resolves the real signed-in viewer's theme/animation preference now.
-        return rows.Select(t => new TagChipDto
-        {
-            TagId = t.TagId,
-            TagName = t.TagName,
-            TagTypeId = t.TagTypeId,
-            Description = t.Description,
-            SpriteUrl = t.SpriteIdentifier is null
-                ? null
-                : spriteReadService.GetSpriteUrl(activeUser, t.SpriteIdentifier)
-        }).ToList();
     }
 
     public async Task<List<TagChipDto>> GetTagChipsByIdsAsync(IReadOnlyList<int> tagIds)
@@ -51,9 +47,7 @@ public class ServerTagReadService(
             TagName = t.TagName,
             TagTypeId = t.TagTypeId,
             Description = t.Description,
-            SpriteUrl = t.SpriteIdentifier is null
-                ? null
-                : spriteReadService.GetSpriteUrl(activeUser, t.SpriteIdentifier),
+            SpriteIdentifier = t.SpriteIdentifier,
             AllowOCDetails = t.AllowOCDetails,
             AllowSettingDetails = t.AllowSettingDetails
         });
@@ -80,16 +74,13 @@ public class ServerTagReadService(
             })
             .ToListAsync();
 
-        // Resolve sprites post-materialization (theme/animated preference is per-viewer, not storable).
         var chips = rows.ToDictionary(t => t.TagId, t => new TagChipDto
         {
             TagId = t.TagId,
             TagName = t.TagName,
             TagTypeId = t.TagTypeId,
             Description = t.Description,
-            SpriteUrl = t.SpriteIdentifier is null
-                ? null
-                : spriteReadService.GetSpriteUrl(activeUser, t.SpriteIdentifier),
+            SpriteIdentifier = t.SpriteIdentifier,
             // Admin fields — set here so the mod editor can pre-populate without a second round-trip.
             IsFanon = t.IsFanon,
             AllowOCDetails = t.AllowOCDetails,

@@ -18,6 +18,13 @@ else
 {
     <PageTitle>Tag Directory</PageTitle>
 
+    @if (_spriteWarning is not null)
+    {
+        <div class="mb-3 rounded-md border border-amber-400 bg-amber-50 px-4 py-2 text-sm text-amber-900">
+            ⚠️ @_spriteWarning
+        </div>
+    }
+
     @if (DeviceService.IsMobile())
     {
         <TagDirectoryMobile Directory="_directory" />
@@ -34,6 +41,7 @@ else
 @code {
     private List<TagDirectoryGroupDto> _directory = [];
     private bool _isLoading = true;
+    private string? _spriteWarning;
 
     protected override async Task OnInitializedAsync()
     {
@@ -49,18 +57,20 @@ else
 
     private async Task HandleTagCreatedAsync(CreateTagDto dto)
     {
-        await TagWriteService.CreateTagAsync(dto);
+        TagSaveResult result = await TagWriteService.CreateTagAsync(dto);
+        _spriteWarning = result.SpriteWarning;
         await LoadDirectoryAsync();
     }
 
     private async Task HandleTagUpdatedAsync(UpdateTagDto dto)
     {
-        await TagWriteService.UpdateTagAsync(dto);
+        _spriteWarning = await TagWriteService.UpdateTagAsync(dto);
         await LoadDirectoryAsync();
     }
 
     private async Task HandleTagDeletedAsync(int tagId)
     {
+        _spriteWarning = null;
         await TagWriteService.DeleteTagAsync(tagId);
         await LoadDirectoryAsync();
     }

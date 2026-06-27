@@ -6,11 +6,11 @@ namespace TheCanalaveLibrary.Server;
 public class ServerTagWriteService(
     ApplicationDbContext db,
     ReadOnlyApplicationDbContext readDb,
-    ISpriteReadService spriteReadService,
-    IActiveUserContext activeUser)
-    : ServerTagReadService(readDb, spriteReadService, activeUser), ITagWriteService
+    IActiveUserContext activeUser,
+    ISpriteAssetProbe spriteProbe)
+    : ServerTagReadService(readDb), ITagWriteService
 {
-    public async Task<int> CreateTagAsync(CreateTagDto dto)
+    public async Task<TagSaveResult> CreateTagAsync(CreateTagDto dto)
     {
         RequireMod();
 
@@ -37,10 +37,12 @@ public class ServerTagWriteService(
 
         db.Tags.Add(tag);
         await db.SaveChangesAsync();
-        return tag.TagId;
+
+        string? warning = await BuildSpriteWarningAsync(dto.SpriteIdentifier?.Trim());
+        return new TagSaveResult(tag.TagId, warning);
     }
 
-    public async Task UpdateTagAsync(UpdateTagDto dto)
+    public async Task<string?> UpdateTagAsync(UpdateTagDto dto)
     {
         RequireMod();
 
@@ -68,6 +70,8 @@ public class ServerTagWriteService(
         tag.ParentTagId = dto.ParentTagId;
 
         await db.SaveChangesAsync();
+
+        return await BuildSpriteWarningAsync(dto.SpriteIdentifier?.Trim());
     }
 
     public async Task DeleteTagAsync(int tagId)
@@ -103,5 +107,24 @@ public class ServerTagWriteService(
     {
         if (!activeUser.IsModerator && !activeUser.IsAdmin)
             throw new UnauthorizedAccessException("Tag administration requires moderator or admin role.");
+    }
+
+    /// <summary>
+    /// Probes for the sprite asset and returns an advisory warning string if it doesn't exist.
+    /// Returns <c>null</c> when <paramref name="spriteIdentifier"/> is null/empty (no sprite
+    /// set) or when the asset exists. Non-blocking — callers surface the warning but still
+    /// treat the save as successful.
+    /// </summary>
+    private async Task<string?> BuildSpriteWarningAsync(string? spriteIdentifier)
+    {
+        if (string.IsNullOrWhiteSpace(spriteIdentifier)) return null;
+
+        // Probe against the default theme slug ("pokemon"). All fandom-agnostic assets must
+        // exist in the default theme; fandom-specific themes are out-of-band provisioned.
+        bool exists = await spriteProbe.ExistsAsync("pokemon", spriteIdentifier);
+        return exists
+            ? null
+            : $"No sprite asset found for \"{spriteIdentifier}\" in theme \"pokemon\" — " +
+              $"the sprite URL will show unknown.png until the asset is provisioned.";
     }
 }

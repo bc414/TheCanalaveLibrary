@@ -41,6 +41,7 @@ public class TagSelectorTests : TestContext
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         Services.AddScoped<ITagReadService>(_ => _fakeTagService);
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
     }
 
     // ── label renders ────────────────────────────────────────────────────────────

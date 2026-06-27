@@ -165,7 +165,7 @@ public interface IActiveUserContext
     int? UserId { get; }              // null = anonymous
     bool IsAuthenticated { get; }
     bool ShowMatureContent { get; }    // feeds the content-rating filter below
-    string Theme { get; }              // feeds ISpriteReadService.GetSpriteUrl
+    string Theme { get; }              // URL-safe theme SLUG (e.g. "pokemon") — feeds ThemeContext / sprite URL builder
     bool PrefersAnimatedSprites { get; }
     bool IsModerator { get; }          // query-shaping hint only — NOT the auth authority
     bool IsAdmin { get; }
@@ -184,8 +184,52 @@ prefs (feature-local, read where needed). Collapsing those back into this contex
 without bound.
 
 Two consumers justify the abstraction independently: the content-rating query filter (below) and
-sprite resolution's `theme`/`animated` arguments (`layer2-services.md` "Sprite URLs Are Resolved
-Server-Side") — both previously had no defined source for "the current user."
+the `Theme` slug + `PrefersAnimatedSprites` arguments passed to the root `ThemeContextProvider`
+(see "ThemeContext Cascading Provider" below) — both previously had no defined source for "the current user."
+
+## ThemeContext Cascading Provider
+
+Sprite-rendering components in SharedUI need the viewer's theme slug and animation preference but
+must **not** inject `IActiveUserContext` (server-only, no WASM impl). The bridge is a lightweight
+cascading value fed by the root `ThemeContextProvider` component.
+
+```csharp
+// Core/Sprites/ or SharedUI/
+public record ThemeContext(string Slug, bool PrefersAnimated);
+```
+
+**Provider** (`Server/Components/ThemeContextProvider.razor`) — nested directly inside
+`CascadingAuthenticationState` in `Routes.razor`, outside `AuthorizeRouteView`. Reads
+`canalave:theme` and `canalave:prefers_animated_sprites` claims off the cascaded
+`Task<AuthenticationState>`; falls back to `("pokemon", true)` for anonymous users.
+Exposes `<CascadingValue Value="@_themeContext">`.
+
+**Why claims, not IActiveUserContext:** claims are present in **both** the prerender pass
+(static SSR) and the interactive pass. Because both passes read from the same claim source,
+the resolved sprite URL is byte-identical across the SSR→interactive handoff → **no flicker**.
+
+**Consumer pattern** (`TagChip.razor`, `TagSelector.razor`, `CharacterEntry.razor`):
+
+```razor
+@inject ISpriteReadService Sprites
+[CascadingParameter] private ThemeContext ThemeCtx { get; set; } = default!;
+
+// Resolve at render — no per-request cache, no service round-trip
+private string? SpriteUrl => Tag.SpriteIdentifier is null
+    ? null
+    : Sprites.GetSpriteUrl(ThemeCtx.Slug, Tag.SpriteIdentifier, ThemeCtx.PrefersAnimated);
+```
+
+**SharedUI may inject `ISpriteReadService`** — it is NOT `IActiveUserContext`. `ISpriteReadService`
+has a shared Core impl (`OptimisticSpriteReadService`, pure string logic) registered as a singleton
+on both Server and Client. The `IActiveUserContext`-never-in-SharedUI rule is unaffected.
+
+**`SpriteBaseUrl` config seam** (`appsettings` key `Sprites:BaseUrl`, default `/sprites/themes`).
+The resolver builds: `{SpriteBaseUrl}/{slug}/{static|animated}/{id}.{ext}`. Changing this one
+setting + Rclone syncing assets is the complete R2/CDN cutover — zero code change. This is the same
+public-asset-base seam `IImageStorageService` will adopt at `S3ImageStorageService` time; sprites
+and uploads converge on one CDN/base-URL config but do **not** share a storage service (sprites have
+no runtime write path — assets are provisioned out-of-band).
 
 ## Active-User-Conditional Handling
 

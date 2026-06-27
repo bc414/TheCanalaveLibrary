@@ -1093,6 +1093,59 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Tool:** Opus (holistic pre-integration audit + implementation). **Pointer:** `audit/Moderation.md`
   Features 46/47/48; `audit/Sprites.md` Feature 3 L2; `audit/Tags.md` Shared Context.
 
+### WU38 — Sprite System Redesign + Existence Validation — DONE ✓ (2026-06-27)
+- **Cells:** 3 L5 → Stage 5 (resolved Stage-4 divergence; prior: Server startup-scan cache vs. Client
+  optimistic build; now: single `OptimisticSpriteReadService` in Core, registered on both). All other
+  touched cells (3 L1/L2/L3.5, 11 L2/L3, 4 L2, 20 L2) were already Stage 5 — corrections within
+  Stage 5, no regression.
+- **Done (9 phases):**
+  - **Phase 0 (doc prep, moment 1):** Skill files updated — `layer2-services.md` (sprite resolution
+    moves to render time; `ISpriteReadService` allowed in SharedUI; `ISpriteAssetProbe` server-only),
+    `cross-cutting.md` (ThemeContext cascading provider + SpriteBaseUrl seam),
+    `layer1-data-model.md` (`Theme.Slug` convention). Audit files (`Sprites.md`, `Tags.md`,
+    `Stories.md`, `ImageStorage.md`) updated with settled decisions. `forward_plan.md` moved sprite
+    redesign to Resolved.
+  - **Phase 1:** `Theme.Slug` column added (`[Required][MaxLength(64)]`, unique index). Migration
+    `WU38_ThemeSlug` on both DbContexts; seed updated `{ Name="Pokémon", Slug="pokemon" }`.
+  - **Phase 2:** Claims carry slug — `ApplicationUserClaimsPrincipalFactory` bakes `Theme.Slug`
+    (not `.Name`) into the `canalave:theme` claim; default changed `"Pokémon"` → `"pokemon"` in
+    `ServerActiveUserContext`, `ApplicationDbContextFactory`, and `IActiveUserContext` XML doc.
+  - **Phase 3:** `OptimisticSpriteReadService` (Core/Sprites/) — pure string builder, singleton on
+    both Server and Client. `SpriteBaseUrl` config seam (`Sprites:BaseUrl`, default
+    `/sprites/themes`). Deleted `ServerSpriteReadService`, `SpriteReadServiceExtensions`, and
+    `Client/OptimisticSpriteService`.
+  - **Phase 4:** `ThemeContext(string Slug, bool PrefersAnimated)` record (Core/Sprites/).
+    `ThemeContextProvider.razor` (Server) reads claims from cascaded `AuthenticationState`;
+    nested inside `CascadingAuthenticationState` in `Routes.razor`.
+  - **Phase 5:** `TagChipDto.SpriteUrl` renamed → `SpriteIdentifier`. `ServerTagReadService` and
+    `ServerStoryReadService` drop `ISpriteReadService` dep; project raw `SpriteIdentifier`.
+    `TagChip`, `TagSelector`, `CharacterEntry` inject `ISpriteReadService` + take `[CascadingParameter]
+    ThemeContext`; resolve URL at render time with `onerror` fallback chain. `sprite-fallback.js`
+    helper (SharedUI wwwroot); script tag added to `App.razor`.
+  - **Phase 6:** `ISpriteAssetProbe` (Core) + `LocalSpriteAssetProbe` (Server, `File.Exists`
+    against static PNG). `TagSaveResult(int TagId, string? SpriteWarning)` record. `ITagWriteService`
+    signatures updated. `ServerTagWriteService` probes default theme; surfaces non-blocking warning.
+    `TagDirectoryPage` shows amber advisory.
+  - **Phase 7:** `IImageStorageService.DeleteAsync` callers added: `ServerStoryWriteService.UpdateStoryAsync`
+    (best-effort cover cleanup) + `ServerUserSettingsService.UploadProfilePictureAsync` (best-effort
+    avatar cleanup).
+  - **Phase 8:** `wwwroot/sprites/themes/pokemon/unknown.png` (1×1 transparent PNG fallback).
+    `.gitignore` updated — `static/` and `animated/` subdirs gitignored; `unknown.png` at theme root
+    committed so the fallback renders correctly without provisioning a full pack.
+- **Test backfill (all tiers):**
+  - Unit — `SpriteReadServiceTests` rewritten for `OptimisticSpriteReadService` (5 tests);
+    `LocalSpriteAssetProbeTests` new (4 tests).
+  - RazorComponents — `TagChipTests` rewritten for new architecture (11 tests, `AddCascadingValue`
+    + `ISpriteReadService` registration). All RazorComponents test contexts that render
+    `TagChip`/`TagSelector`/`CharacterEntry` updated to register `ISpriteReadService`.
+  - Integration — `TagWriteServiceTests` unwraps `TagSaveResult.TagId` at all call sites;
+    `TagReadServiceTests` uses `SpriteIdentifier` (not `SpriteUrl`).
+- **Verified (2026-06-27):** `dotnet build` 0 errors; `dotnet test` 437 Unit + 443 RazorComponents +
+  348 Integration = **1228 tests green**.
+- **Tool:** Opus (multi-phase holistic redesign). **Pointer:** `audit/Sprites.md` Feature 3,
+  `audit/Tags.md` Feature 11 WU38 note, `audit/ImageStorage.md` WU38 note.
+- **Deps:** WU27.5.
+
 ### WU38a — Account Deletion UI
 - **Cells:** 52 L3/L3.5 (deletion UI; service already in WU1).
 - **Tool:** opusplan. **Pointer:** `audit/Identity.md`. **Deps:** WU25.

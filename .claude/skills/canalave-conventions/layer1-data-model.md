@@ -84,7 +84,7 @@ carry no navigations to `ProfileBlogPost`/`GroupBlogPost`/`SitePoll`/`BlogPostPo
 | Pattern | When | Examples |
 |---|---|---|
 | **Magic enum** (no table) | Tiny, stable, app-coupled, no display name | `Rating`, `ReportedEntityType`, `CharacterPairingType`, `FilterEntityType`, `ProfileVisibility` |
-| **Lookup table** (no enum) | Content-only display; rename/add without deploy | `ReportReason`, `AcknowledgmentRole`, `StoryRelationshipType` |
+| **Lookup table** (no enum) | Content-only display; rename/add without deploy | `ReportReason`, `AcknowledgmentRole`, `StoryRelationshipType`, `Theme` |
 | **Hybrid** (table + enum with `...Enum` suffix) | Both flexible display AND rigid C# logic | `StoryStatusEnum`, `ReportStatusEnum`, `NotificationCategoryEnum`, `NotificationTypeEnum` |
 | **String key** (string PK) | Tiny table; key used directly in C# | `SearchMode.SearchModeKey`, `Badge.BadgeKey`, `UserInteractionFilter.InteractionFilterKey` |
 
@@ -137,6 +137,10 @@ independently. The service layer rejects logically impossible write combinations
 - **Strings:** `[Required]` + non-nullable `string` for mandatory; `string?` for optional;
   `[MaxLength(n)]` on every bounded string. URLs: `[MaxLength(512)]` for CDN/relative, `[MaxLength(2048)]`
   for external.
+- **Theme.Slug** (`[Required][MaxLength(64)]`, unique index) — URL-safe identifier for a theme (e.g.
+  `"pokemon"`). Distinct from `Theme.Name` (display-only, e.g. `"Pokémon"`). The slug is the value
+  baked into the `canalave:theme` claim and used as the path segment in sprite URLs. Both columns must
+  exist; neither substitutes for the other.
 - **Booleans:** `NOT NULL DEFAULT false` (1 byte each in PostgreSQL — no bit-packing, accepted trade-off).
 
 ## Relationships & Queries

@@ -15,6 +15,9 @@ edit contract. Also here: `StoryArc`, `Series`/`SeriesEntry`, `StoryRelationship
 
 **DTOs/contracts (Core/Stories/):** `CreateStoryDTO`, `StoryUpdateDTO`, `StoryDetailsDTO`, `StoryTagDTO`,
 `IEditableStoryProperties`, `IStoryTag`, `StoryMappers`, `StoryValidations`, `StoryValidationException`.
+**As of 2026-06-27 (sprite redesign):** `TagChipDto.SpriteIdentifier` replaces `TagChipDto.SpriteUrl`
+in the character-chip projections in `ServerStoryReadService`. The read service drops its
+`ISpriteReadService` dependency; sprite resolution is now in the `CharacterEntry.razor` component.
 
 **Services:** `IStoryReadService` / `IStoryWriteService` (Core) + `ServerStoryReadService` /
 `ServerStoryWriteService` (Server, direct-injection pattern per spec §6.6 — see RESOLVED note below) +

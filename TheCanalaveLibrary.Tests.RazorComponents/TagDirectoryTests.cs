@@ -23,6 +23,7 @@ public class TagDirectoryTests : TestContext
 
     public TagDirectoryTests()
     {
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         Services.AddScoped<ITagWriteService>(_ => new FakeTagWriteService());
         JSInterop.Mode = JSRuntimeMode.Loose;
         _auth = this.AddTestAuthorization(); // anonymous/not-authorized by default
@@ -199,8 +200,8 @@ public class TagDirectoryTests : TestContext
 /// </summary>
 internal sealed class FakeTagWriteService : ITagWriteService
 {
-    public Task<int> CreateTagAsync(CreateTagDto dto) => Task.FromResult(0);
-    public Task UpdateTagAsync(UpdateTagDto dto) => Task.CompletedTask;
+    public Task<TagSaveResult> CreateTagAsync(CreateTagDto dto) => Task.FromResult(new TagSaveResult(0, null));
+    public Task<string?> UpdateTagAsync(UpdateTagDto dto) => Task.FromResult<string?>(null);
     public Task DeleteTagAsync(int tagId) => Task.CompletedTask;
 
     // ITagReadService pass-through — not exercised in desktop/mobile render tests.

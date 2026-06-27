@@ -14,10 +14,10 @@ public sealed class ThemeConfiguration : IEntityTypeConfiguration<Theme>
             .OnDelete(DeleteBehavior.Restrict); // Don't delete a theme in use.
 
         builder.HasIndex(e => e.Name).IsUnique();
-        // Future indexes for querying...
+        builder.HasIndex(e => e.Slug).IsUnique();
 
         builder.HasData(
-            new { ThemeId = 1, Name = "Pokémon", Description = "The default Pokémon theme!" }
+            new { ThemeId = 1, Name = "Pokémon", Slug = "pokemon", Description = "The default Pokémon theme!" }
         );
     }
 }

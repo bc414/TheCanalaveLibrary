@@ -4,17 +4,17 @@ using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
 
+// ISpriteReadService is intentionally NOT injected here — sprite URL resolution moved into render
+// components (CharacterEntry, TagChip) that receive a ThemeContext cascading value. TagChipDto now
+// carries the raw SpriteIdentifier key. See layer2-services.md §"Sprite URLs Are Resolved At Render Time."
 public class ServerStoryReadService(
     ReadOnlyApplicationDbContext readDb,
-    IActiveUserContext activeUser,
-    ISpriteReadService spriteReadService) : IStoryReadService
+    IActiveUserContext activeUser) : IStoryReadService
 {
     public async Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId)
     {
-        // Two-step: project a lean intermediate row (EF-translatable) then resolve sprites in memory.
-        // ISpriteReadService.GetSpriteUrl is plain C# string-building (not SQL-translatable) — same
-        // pattern as ProjectListingRows / ToDto used for listing queries (layer2-services.md
-        // §"Sprite URLs Are Resolved Server-Side, At Projection Time").
+        // Two-step: project a lean intermediate row (EF-translatable) then build DTOs in memory.
+        // SpriteIdentifier is passed through raw — no URL construction here.
         StoryDetailRow? row = await readDb.Stories
             .Where(s => s.StoryId == storyId)
             .Select(s => new StoryDetailRow(
@@ -57,9 +57,7 @@ public class ServerStoryReadService(
             {
                 TagId = c.CharacterTagId, TagName = c.TagName,
                 TagTypeId = TagTypeEnum.Character,
-                SpriteUrl = c.SpriteIdentifier is null
-                    ? null
-                    : spriteReadService.GetSpriteUrl(activeUser, c.SpriteIdentifier)
+                SpriteIdentifier = c.SpriteIdentifier   // raw key; component resolves via ThemeContext
             })
             .ToList();
 
@@ -319,9 +317,7 @@ public class ServerStoryReadService(
         return query;
     }
 
-    // Lean intermediate projection — ISpriteReadService.GetSpriteUrl is plain C# string-building, not
-    // SQL-translatable, so tag sprites are resolved in-memory after materialization, mirroring the WU11
-    // ServerTagReadService.SearchTagChipsAsync pattern (layer2-services.md "Per-keystroke typeahead...").
+    // Lean intermediate projection — SpriteIdentifier is passed through raw (no resolution here).
     private static IQueryable<StoryListingRow> ProjectListingRows(IQueryable<Story> query) =>
         query.Select(s => new StoryListingRow(
             s.StoryId,
@@ -350,15 +346,13 @@ public class ServerStoryReadService(
         row.LastUpdatedDate,
         row.Tags.Select(ToTagChip).ToList());
 
-    private TagChipDto ToTagChip(TagListingRow tag) => new()
+    private static TagChipDto ToTagChip(TagListingRow tag) => new()
     {
         TagId = tag.TagId,
         TagName = tag.TagName,
         TagTypeId = tag.TagTypeId,
         Description = tag.Description,
-        SpriteUrl = tag.SpriteIdentifier is null
-            ? null
-            : spriteReadService.GetSpriteUrl(activeUser, tag.SpriteIdentifier)
+        SpriteIdentifier = tag.SpriteIdentifier  // raw key; component resolves via ThemeContext
     };
 
     private sealed record StoryListingRow(

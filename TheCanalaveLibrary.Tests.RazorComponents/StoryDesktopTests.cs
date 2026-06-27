@@ -24,6 +24,8 @@ public class StoryDesktopTests : TestContext
     {
         // RecommendationSection (nested in StoryDesktop) injects IRecommendationWriteService.
         Services.AddScoped<IRecommendationWriteService>(_ => _fakeRecommendations);
+        // TagChip (nested in StoryDesktop) injects ISpriteReadService.
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         // RichTextView and EditorView inside RecommendationEditor use JS interop.
         JSInterop.Mode = JSRuntimeMode.Loose;
         // Start with an empty recommendation list unless a test overrides this.

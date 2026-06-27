@@ -29,6 +29,8 @@ public class StoryPropertiesFormTests : TestContext
         JSInterop.Mode = JSRuntimeMode.Loose;
         // StoryPropertiesForm renders TagSelector children, which inject ITagReadService.
         Services.AddSingleton<ITagReadService>(new FakeTagReadServiceForForm());
+        // TagChip and TagSelector inject ISpriteReadService for sprite URL resolution.
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
     }
 
     private StoryPropertiesViewModel MakeValidViewModel() => new()

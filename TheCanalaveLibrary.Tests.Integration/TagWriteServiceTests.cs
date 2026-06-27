@@ -79,12 +79,13 @@ public class TagWriteServiceTests(PostgresFixture postgres) : IntegrationTestBas
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         string suffix = Guid.NewGuid().ToString("N")[..8];
-        int tagId = await svc.CreateTagAsync(new CreateTagDto
+        TagSaveResult result = await svc.CreateTagAsync(new CreateTagDto
         {
             TagName = $"Gengar-{suffix}",
             TagTypeId = TagTypeEnum.Character,
             IsFanon = false
         });
+        int tagId = result.TagId;
 
         tagId.Should().BeGreaterThan(0);
         Tag? saved = await db.Tags.FindAsync(tagId);
@@ -155,15 +156,15 @@ public class TagWriteServiceTests(PostgresFixture postgres) : IntegrationTestBas
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         string suffix = Guid.NewGuid().ToString("N")[..8];
-        int parentId = await svc.CreateTagAsync(new CreateTagDto
+        int parentId = (await svc.CreateTagAsync(new CreateTagDto
         {
             TagName = $"Parent-{suffix}", TagTypeId = TagTypeEnum.Genre
-        });
+        })).TagId;
 
-        int childId = await svc.CreateTagAsync(new CreateTagDto
+        int childId = (await svc.CreateTagAsync(new CreateTagDto
         {
             TagName = $"Child-{suffix}", TagTypeId = TagTypeEnum.Genre, ParentTagId = parentId
-        });
+        })).TagId;
 
         Tag? child = await db.Tags.FindAsync(childId);
         child!.ParentTagId.Should().Be(parentId);
@@ -180,14 +181,14 @@ public class TagWriteServiceTests(PostgresFixture postgres) : IntegrationTestBas
         ITagWriteService svc = scope.ServiceProvider.GetRequiredService<ITagWriteService>();
 
         string suffix = Guid.NewGuid().ToString("N")[..8];
-        int grandparentId = await svc.CreateTagAsync(new CreateTagDto
+        int grandparentId = (await svc.CreateTagAsync(new CreateTagDto
         {
             TagName = $"Grandparent-{suffix}", TagTypeId = TagTypeEnum.Genre
-        });
-        int parentId = await svc.CreateTagAsync(new CreateTagDto
+        })).TagId;
+        int parentId = (await svc.CreateTagAsync(new CreateTagDto
         {
             TagName = $"Parent-{suffix}", TagTypeId = TagTypeEnum.Genre, ParentTagId = grandparentId
-        });
+        })).TagId;
 
         Func<Task> act = () => svc.CreateTagAsync(new CreateTagDto
         {
@@ -209,10 +210,10 @@ public class TagWriteServiceTests(PostgresFixture postgres) : IntegrationTestBas
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         string suffix = Guid.NewGuid().ToString("N")[..8];
-        int tagId = await svc.CreateTagAsync(new CreateTagDto
+        int tagId = (await svc.CreateTagAsync(new CreateTagDto
         {
             TagName = $"Original-{suffix}", TagTypeId = TagTypeEnum.Genre
-        });
+        })).TagId;
 
         await svc.UpdateTagAsync(new UpdateTagDto
         {
@@ -240,10 +241,10 @@ public class TagWriteServiceTests(PostgresFixture postgres) : IntegrationTestBas
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         string suffix = Guid.NewGuid().ToString("N")[..8];
-        int tagId = await svc.CreateTagAsync(new CreateTagDto
+        int tagId = (await svc.CreateTagAsync(new CreateTagDto
         {
             TagName = $"Unused-{suffix}", TagTypeId = TagTypeEnum.Genre
-        });
+        })).TagId;
 
         await svc.DeleteTagAsync(tagId);
 
@@ -295,10 +296,10 @@ public class TagWriteServiceTests(PostgresFixture postgres) : IntegrationTestBas
         ITagWriteService svc = scope.ServiceProvider.GetRequiredService<ITagWriteService>();
 
         string suffix = Guid.NewGuid().ToString("N")[..8];
-        int parentId = await svc.CreateTagAsync(new CreateTagDto
+        int parentId = (await svc.CreateTagAsync(new CreateTagDto
         {
             TagName = $"ParentToDelete-{suffix}", TagTypeId = TagTypeEnum.Genre
-        });
+        })).TagId;
         await svc.CreateTagAsync(new CreateTagDto
         {
             TagName = $"ChildTag-{suffix}", TagTypeId = TagTypeEnum.Genre, ParentTagId = parentId

@@ -86,7 +86,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 
 | 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | N/A | N/A | N/A | N/A |
 | 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 4 | N/A | N/A | N/A |
+| 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |
 | 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 4 | 2 | N/A | N/A |
 | 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 4 | 2 | N/A | N/A |
 | 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |

@@ -21,3 +21,11 @@ TheCanalaveLibrary.Server/wwwroot/app.css
 # LocalImageStorageService (WU12) — user-uploaded blobs, runtime content, not source.
 # Post-MVP these move to R2/MinIO (S3ImageStorageService); this folder only exists for local dev.
 TheCanalaveLibrary.Server/wwwroot/uploads/
+
+# Sprite asset packs — large binary trees provisioned out-of-band (Rclone → R2 in prod).
+# The static/ and animated/ subdirectories inside each theme folder hold the actual sprites
+# (~1000+ files per theme) and are gitignored. Only the unknown.png placeholder at the
+# theme root (e.g. themes/pokemon/unknown.png) is committed so the fallback renders correctly
+# for anyone who clones without provisioning a full pack. Forks supply their own asset packs.
+TheCanalaveLibrary.Server/wwwroot/sprites/themes/**/static/
+TheCanalaveLibrary.Server/wwwroot/sprites/themes/**/animated/

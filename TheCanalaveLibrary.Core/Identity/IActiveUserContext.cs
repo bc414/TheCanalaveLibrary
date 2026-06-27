@@ -16,7 +16,11 @@ public interface IActiveUserContext
     /// <summary>Feeds the content-rating query filter on <see cref="Story"/> (cross-cutting.md).</summary>
     bool ShowMatureContent { get; }
 
-    /// <summary>Feeds <c>ISpriteReadService.GetSpriteUrl(theme, ...)</c>.</summary>
+    /// <summary>
+    /// URL-safe theme slug (e.g. <c>"pokemon"</c>). Feeds <c>ThemeContext.Slug</c>, which is cascaded
+    /// from <c>ThemeContextProvider</c> in <c>Routes.razor</c> and consumed by sprite render components.
+    /// Never the display name (e.g. <c>"Pokémon"</c>) — the slug is a direct sprite URL path segment.
+    /// </summary>
     string Theme { get; }
     bool PrefersAnimatedSprites { get; }
 

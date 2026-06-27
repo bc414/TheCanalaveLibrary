@@ -22,8 +22,9 @@ public class ResultsFilterPanelTests : TestContext
 {
     public ResultsFilterPanelTests()
     {
-        // TagSelector injects ITagReadService; we provide a do-nothing fake so TagFilter can render.
+        // TagSelector injects ITagReadService and ISpriteReadService for chip rendering.
         Services.AddScoped<ITagReadService>(_ => new FakeTagReadService());
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 

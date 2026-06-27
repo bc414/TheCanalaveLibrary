@@ -218,6 +218,36 @@ Guardrails:
 
 **Resolved:**
 
+- **Sprite system redesign — full decision set** — resolved (2026-06-27, this WU):
+  (1) **Theme.Slug column** (`[Required][MaxLength(64)]`, unique index). `Theme.Name` stays
+  display-only. Claims + sprite path carry the slug. Seed: `{ ThemeId=1, Name="Pokémon", Slug="pokemon" }`.
+  (2) **Optimistic URL construction + `onerror`** everywhere. No startup-existence cache (can't work
+  against R2). Browser handles misses via `onerror` chain (`webp → png → unknown.png`).
+  (3) **Single `OptimisticSpriteReadService`** in Core (pure string builder, registered on both
+  Server and Client as singleton). `ServerSpriteReadService`, `SpriteReadServiceExtensions`, and
+  `Client/OptimisticSpriteService` deleted. L5 Stage-4 divergence resolved.
+  (4) **Resolution moves into the component** via `@inject ISpriteReadService` + `[CascadingParameter]
+  ThemeContext`. See `cross-cutting.md` "ThemeContext Cascading Provider." DTOs carry `SpriteIdentifier`,
+  not a resolved URL. Read services drop the `ISpriteReadService` constructor dependency.
+  (5) **`SpriteBaseUrl` config seam** (`Sprites:BaseUrl`, default `/sprites/themes`). R2/CDN cutover
+  is a config flip + Rclone sync — zero code change. Convention: `layer2-services.md` "Sprite URLs
+  Are Resolved At Render Time."
+  (6) **Sprite assets provisioned out-of-band** (Rclone → R2 for assets; DB seed for tags/themes).
+  No web upload UI, no `/mod/sprites` page, no runtime Theme CRUD, no bulk/zip upload. Seeding
+  bypasses the Blazor app entirely. The app never writes sprite assets.
+  (7) **`ISpriteAssetProbe`** — server-only write-time checker (`ExistsAsync(slug, id)`). Used only
+  in `ServerTagWriteService` as a non-blocking warning when a mod creates/edits a tag with a dangling
+  identifier. Never called at render time. `LocalSpriteAssetProbe` (`File.Exists`); R2 impl deferred.
+  (8) **Image orphan bug fixed** — `IImageStorageService.DeleteAsync` now called on cover/avatar
+  replace. See `audit/ImageStorage.md`.
+  **Deferred items from this analysis (not built, no decisions needed):**
+  - Data-saver wiring (`PrefersDataSaverMode` → force-static sprites; claim not yet added; behavior
+    undefined until its own WU).
+  - R2/MinIO sprite hosting — behind `SpriteBaseUrl` + a future `R2SpriteAssetProbe` impl. No
+    code change needed when `LocalSpriteAssetProbe` → `R2SpriteAssetProbe`.
+  - Open-source asset hygiene — `.gitignore` the real Pokémon pack; ship `unknown.png` + CC0
+    placeholders so forks run out-of-box. Asset curation is deployer's concern.
+
 - **WU37 Story Tagging — architecture, scope split, and naming** — resolved (2026-06-25, WU37
   scoping):
   (1) **Scope split.** Features 9 (Series), 10 (story↔story Relationships), 15 (Saved Tag

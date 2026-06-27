@@ -57,7 +57,9 @@ public class ServerActiveUserContext(
         && bool.TryParse(Principal.FindFirstValue(ActiveUserClaimTypes.ShowMatureContent), out bool mature)
         && mature;
 
-    public string Theme => Principal.FindFirstValue(ActiveUserClaimTypes.Theme) ?? "Pokémon";
+    // Returns the URL-safe slug (e.g. "pokemon") — not the display name. Default matches the
+    // seeded Theme.Slug so anonymous users resolve optimistic sprite URLs to the correct path.
+    public string Theme => Principal.FindFirstValue(ActiveUserClaimTypes.Theme) ?? "pokemon";
 
     public bool PrefersAnimatedSprites =>
         !IsAuthenticated

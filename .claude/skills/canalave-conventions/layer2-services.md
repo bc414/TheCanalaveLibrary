@@ -256,47 +256,58 @@ mutate or grow), declare it `IReadOnlyList<T>` — not `List<T>`, not `T[]`.
 - The natural *producer* of an id batch is usually `.Select(x => x.Id).ToArrayAsync()` — that array
   satisfies `IReadOnlyList<T>` with no allocation, so this rule never costs a caller anything.
 
-### Sprite URLs Are Resolved Server-Side, At Projection Time
+### Sprite URLs Are Resolved At Render Time, In the Component
 
-Display DTOs that include a sprite (`TagChipDto.SpriteUrl`, and any future sprite-bearing DTO) follow
-the same pattern as `CoverArtRelativeUrl` above: the **read service** calls
-`ISpriteReadService.GetSpriteUrl(theme, spriteIdentifier, animated)` inside its `.Select()`/mapping
-step — using the current user's theme + animated-sprite preference — and the DTO carries the
-**resolved relative path** (e.g. `/sprites/themes/pokemon/static/bulbasaur.png`), not the raw
-`SpriteIdentifier` key. The browser fetches that path in its own request (Cloudflare/MinIO-cacheable);
-the DTO itself is never cached. Components never inject `ISpriteReadService` to resolve a sprite for
-display — only services do (consistent with the DTO Firewall and the Leaf-tier "never inject a
-service" rule in `SKILL.md`'s Component Taxonomy).
+Display DTOs that include a sprite (`TagChipDto.SpriteIdentifier`, and any future sprite-bearing DTO)
+carry the **raw `SpriteIdentifier` key** — not a resolved URL. Resolution happens **in the rendering
+component** via two injected/cascaded values:
 
-**Consequence:** because the resolved URL depends on the requesting user's theme/animation prefs, any
-DTO carrying one is **per-user and request-scoped — never cache it across users or themes.**
+1. **`[CascadingParameter] ThemeContext`** — a `record ThemeContext(string Slug, bool PrefersAnimated)`
+   cascaded from a root `ThemeContextProvider` component (see `cross-cutting.md` "ThemeContext
+   Cascading Provider"). The provider reads `canalave:theme` and `canalave:prefers_animated_sprites`
+   claims off the cascaded `ClaimsPrincipal`; those claims are present in both the prerender and
+   interactive passes, so the resolved `<img src>` is byte-identical across the SSR→interactive
+   handoff — **no flicker**.
+2. **`@inject ISpriteReadService`** — a render-pure URL builder with a single method
+   `GetSpriteUrl(string slug, string id, bool prefersAnimated)` producing
+   `{SpriteBaseUrl}/{slug}/{static|animated}/{id}.{ext}`. **SharedUI components may inject
+   `ISpriteReadService`** — it is not `IActiveUserContext`. `ISpriteReadService` is implemented in
+   Core (no server/host dependency), registered on both server and client; the
+   `IActiveUserContext`-never-in-SharedUI rule is unchanged.
 
-**Per-keystroke typeahead search is the one case where sprite resolution can't live inside `.Select()`**
-(settled WU11): `ISpriteReadService.GetSpriteUrl` is plain C# string-building, not a SQL-translatable
-expression, so a method backing a Blazored.Typeahead `SearchMethod` — e.g.
-`Task<List<TagChipDto>> SearchTagChipsAsync(TagTypeEnum type, string term)` — must `.Select()` into a
-**lean intermediate projection** (id/name/type/description/sprite-identifier only), `Take()`-cap it,
-materialize with `.ToListAsync()`, and only then map each row to the display DTO in-memory, calling
-`GetSpriteUrl` per row. The "resolved at projection time" rule still holds in spirit — the read
-service resolves it before the DTO leaves the service, never the component — it's just that
-"projection" here is the in-memory mapping step that follows materialization, not the EF `.Select()`
-itself. The same per-user/never-cache consequence below still applies.
+Components resolve: `id is null ? null : Sprites.GetSpriteUrl(ctx.Slug, id, ctx.PrefersAnimated)` and
+render `<img src>` with a plain-HTML `onerror` fallback chain (`webp → static .png → unknown.png`).
+
+**`ISpriteAssetProbe` is server-only** (`Core/Sprites/ISpriteAssetProbe.cs`, `ExistsAsync(slug, id)`)
+— used only in `ServerTagWriteService` to validate a sprite identifier exists on disk/R2 at mod-write
+time, returning a **non-blocking warning** (the save still succeeds). It is **never injected** by render
+components. Render-time misses are handled by the `onerror` chain, not the probe.
+
+**Why DTOs carry the identifier, not the resolved URL:** the resolved URL depends on the requesting
+viewer's theme and animation preference. Carrying `SpriteIdentifier` keeps the DTO per-content (the
+same DTO is valid for all viewers with the same content), and places the per-viewer computation at the
+correct layer (render time). The DTO is therefore freely cacheable across users of the same content.
+
+**`SpriteBaseUrl` is a config seam** (`appsettings` key `Sprites:BaseUrl`, default `/sprites/themes`
+for wwwroot). At R2/CDN time, changing this one config value — together with an Rclone sync of the
+assets — is the complete cutover; no code changes. This is the same public-asset-base seam
+`IImageStorageService` will adopt when `S3ImageStorageService` lands; the two features converge on
+one base-URL config and one CDN but do **not** share a storage service (sprites have no runtime
+write path — assets are provisioned out-of-band via Rclone).
 
 **Avatars are a related but distinct case (settled WU10):** `UserCardDto.AvatarUrl` is *not* produced
-by `GetSpriteUrl` — it's the producing read service copying `User.ProfilePictureRelativeUrl` (a
+by `ISpriteReadService` — it's the read service copying `User.ProfilePictureRelativeUrl` (a
 user-uploaded blob path stored verbatim on the entity) into the DTO, or substituting a service-chosen
-default when null. No theme/animation resolution is involved, but the request-scoping discipline still
-applies the same way: the DTO is per-user and isn't cached across users. See `layer4-style.md`
-§"Avatars Are Stored URLs, Not Sprite Keys".
+default when null. No theme/animation resolution is involved; the DTO carries the resolved URL
+directly. See `layer4-style.md` §"Avatars Are Stored URLs, Not Sprite Keys".
 
 **Cover art is the same pattern as avatars, produced by a different write-side source (settled WU12):**
 `StoryListingDto.CoverArtRelativeUrl` is also copied verbatim, never resolved through
 `ISpriteReadService`. The difference from sprites/tags is *how the relative path got there in the first
 place* — `IImageStorageService.SaveAsync` (Core/Images/) is the write-side counterpart that turns an
-uploaded file into the relative key stored on the entity, distinct from `ISpriteReadService` which only
-*resolves* keys that already exist as git-managed static assets. `LocalImageStorageService` (MVP) writes
-under `wwwroot/uploads/`; the interface is the seam for the Post-MVP `S3ImageStorageService` swap
-(MinIO/R2). See `audit/ImageStorage.md` for the full contract and URL conventions.
+uploaded file into the relative key stored on the entity. `LocalImageStorageService` (MVP) writes under
+`wwwroot/uploads/`; the interface is the seam for the Post-MVP `S3ImageStorageService` swap (MinIO/R2).
+See `audit/ImageStorage.md` for the full contract and URL conventions.
 
 ### User HTML Is Sanitized Once, On Save — Never On Display
 

@@ -1,14 +1,21 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
+@inject ISpriteReadService Sprites
 
-@* Presentational sub-component. No @inject — all I/O via parameters and callbacks. *@
+@* Presentational sub-component. No @inject for I/O services — all I/O via parameters and callbacks. *@
 
 <div class="flex flex-col gap-2 rounded-md border border-[--color-border] bg-[--color-surface] p-3">
     <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2">
-            @if (Chip.SpriteUrl is not null)
+            @if (Chip.SpriteIdentifier is not null && _themeCtx is not null)
             {
-                <img src="@Chip.SpriteUrl" alt="" class="h-6 w-6 object-contain" />
+                var staticSrc = Sprites.GetSpriteUrl(_themeCtx.Slug, Chip.SpriteIdentifier, prefersAnimated: false);
+                var unknownSrc = $"/sprites/themes/{_themeCtx.Slug}/unknown.png";
+                <img src="@Sprites.GetSpriteUrl(_themeCtx.Slug, Chip.SpriteIdentifier, _themeCtx.PrefersAnimated)"
+                     data-static="@staticSrc"
+                     data-unknown="@unknownSrc"
+                     alt="" class="h-6 w-6 object-contain"
+                     onerror="spriteFallback(this)" />
             }
             <span class="font-medium text-[--color-text]">@Chip.TagName</span>
         </div>
@@ -45,6 +52,8 @@
 </div>
 
 @code {
+    [CascadingParameter] private ThemeContext? _themeCtx { get; set; }
+
     [Parameter, EditorRequired] public TagChipDto Chip { get; set; } = null!;
     [Parameter, EditorRequired] public StoryCharacterDto Dto { get; set; } = null!;
     [Parameter] public EventCallback<StoryCharacterDto> OnChanged { get; set; }

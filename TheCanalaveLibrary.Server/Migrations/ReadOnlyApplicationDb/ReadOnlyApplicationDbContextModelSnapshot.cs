@@ -3194,12 +3194,22 @@ namespace TheCanalaveLibrary.Server.Migrations.ReadOnlyApplicationDb
                         .HasColumnType("character varying(100)")
                         .HasColumnName("name");
 
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("slug");
+
                     b.HasKey("ThemeId")
                         .HasName("pk_themes");
 
                     b.HasIndex("Name")
                         .IsUnique()
                         .HasDatabaseName("ix_themes_name");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_themes_slug");
 
                     b.ToTable("themes", (string)null);
 
@@ -3208,7 +3218,8 @@ namespace TheCanalaveLibrary.Server.Migrations.ReadOnlyApplicationDb
                         {
                             ThemeId = 1,
                             Description = "The default Pokémon theme!",
-                            Name = "Pokémon"
+                            Name = "Pokémon",
+                            Slug = "pokemon"
                         });
                 });
 

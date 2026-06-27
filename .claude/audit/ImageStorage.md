@@ -11,8 +11,22 @@ built here). This file is the settled-vs-open reference both cite.
 **Contract (Core/Images/):** `IImageStorageService` — `Task<string> SaveAsync(Stream content, string
 contentType, ImageKind kind, int ownerId)` returning the **stored relative path**; `Task
 DeleteAsync(string relativePath)`. `ImageKind` enum (`Cover`/`ProfilePicture`) drives the key
-convention. No read-only/write-only split (unlike Sprites) — this is a write-side blob operation; any
-read is just serving the static file directly, no service call.
+convention. This is a **write-side blob service** (distinct from sprites, which have no runtime write
+path at all — sprite assets are provisioned out-of-band via Rclone → R2). Any read of a user image is
+just serving the static file directly, no service call.
+
+**Relationship to sprites (settled 2026-06-27):** user uploads and sprites converge on **one thing
+only** — the public-asset-base config (same CDN / R2 bucket in prod, same `SpriteBaseUrl` /
+upload-base seam). They do **not** share a storage service. The separation is principled:
+uploads are owner-written at runtime (uuid key, entity stores path), sprites are out-of-band
+provisioned (semantic key on `Tag`, URL computed per-viewer). `IImageStorageService` stays
+uploads-only; sprites use `ISpriteAssetProbe` for write-time existence checking only.
+
+**Orphan bug (fixed 2026-06-27):** `IImageStorageService.DeleteAsync` previously had zero callers
+— replacing a cover or avatar orphaned the old blob forever. Now: `ServerStoryWriteService.UpdateStoryAsync`
+calls `DeleteAsync(oldPath)` after a successful save when the cover changes;
+`ServerUserSettingsService.UploadProfilePictureAsync` reads the old path and calls `DeleteAsync` after
+persisting the new one. Both are best-effort (failure does not fail the user's save).
 
 **Impls:**
 - `LocalImageStorageService` (Server/Images/, **MVP, built WU12**) — writes under `wwwroot/uploads/`,
@@ -71,6 +85,21 @@ content, story id 999 does not correspond to an actual `Story` row.
 behavior plus delete and path-traversal-guard cases, writing to a per-test-run temp `WebRootPath`
 rather than the real `wwwroot/uploads/`. The dev-diagnostics endpoint is no longer the source of truth
 for this behavior (see `canalave-conventions/testing.md`).
+
+**WU38 Stage note — orphan bug fix (2026-06-27):**
+
+`IImageStorageService.DeleteAsync` had zero callers before this fix. Two call sites added:
+- `ServerStoryWriteService.UpdateStoryAsync`: reads `storyToUpdate.StoryListing.CoverArtRelativeUrl`
+  before updating, then calls `DeleteAsync(oldPath)` best-effort after `SaveChangesAsync` when the
+  cover changed.
+- `ServerUserSettingsService.UploadProfilePictureAsync`: reads `ProfilePictureRelativeUrl` before
+  `SaveAsync`, calls `DeleteAsync(oldPath)` best-effort after persisting the new path.
+Both guard on null old path and skip when old == new. Failures are silently swallowed — the user's
+save already succeeded, and blob cleanup is best-effort.
+**How verified (2026-06-27):** `dotnet build` green; `dotnet test` green (1228 total). The orphan
+behavior has no automated test (would require a fake `IImageStorageService` tracking `DeleteAsync`
+calls in the integration layer — not yet implemented; manual verification is the gate for Stage 6).
+Cells: F4 L2 (Stories — story cover orphan) and F20 L2 (Profiles — avatar orphan) both remain Stage 5.
 
 ## L3/L3.5/L4 — N/A for this cluster
 

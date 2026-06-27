@@ -1,23 +1,95 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
+using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
 
 namespace TheCanalaveLibrary.Tests.Unit;
 
 /// <summary>
-/// Unit tests for <see cref="ServerSpriteReadService"/> (WU2). The service builds its existence
-/// cache at construction time by scanning <see cref="IWebHostEnvironment.WebRootPath"/> — no DB,
-/// no host. Each test that needs files creates them first, then constructs the service, so the
-/// startup scan picks them up. Tests that check the absence/fallback path construct the service
-/// against an empty (or minimally populated) temp directory.
+/// Unit tests for <see cref="OptimisticSpriteReadService"/> (WU38 sprite redesign).
+/// The service is a pure string builder with no host/disk dependency — no FakeWebHostEnvironment
+/// needed. Tests verify the URL shape from (slug, identifier, animated) triples.
 /// </summary>
-public class SpriteReadServiceTests : IDisposable
+public class SpriteReadServiceTests
+{
+    private const string DefaultBase = "/sprites/themes";
+
+    private static OptimisticSpriteReadService BuildSut(string? baseUrl = null) =>
+        new(baseUrl ?? DefaultBase);
+
+    // ── animated path when prefersAnimated = true ──────────────────────────────
+
+    [Fact]
+    public void GetSpriteUrl_WhenPrefersAnimated_ReturnsAnimatedWebpPath()
+    {
+        var sut = BuildSut();
+
+        var result = sut.GetSpriteUrl("pokemon", "bulbasaur", prefersAnimated: true);
+
+        result.Should().Be("/sprites/themes/pokemon/animated/bulbasaur.webp");
+    }
+
+    // ── static path when prefersAnimated = false ────────────────────────────────
+
+    [Fact]
+    public void GetSpriteUrl_WhenDoesNotPreferAnimated_ReturnsStaticPngPath()
+    {
+        var sut = BuildSut();
+
+        var result = sut.GetSpriteUrl("pokemon", "bulbasaur", prefersAnimated: false);
+
+        result.Should().Be("/sprites/themes/pokemon/static/bulbasaur.png");
+    }
+
+    // ── slug is used as path segment, not name ──────────────────────────────────
+
+    [Fact]
+    public void GetSpriteUrl_UsesSlugNotDisplayName_InPath()
+    {
+        var sut = BuildSut();
+
+        // "pokemon" slug, not "Pokémon" display name
+        var result = sut.GetSpriteUrl("pokemon", "pikachu", prefersAnimated: false);
+
+        result.Should().Contain("/pokemon/").And.NotContain("Pok");
+    }
+
+    // ── different theme slug ────────────────────────────────────────────────────
+
+    [Fact]
+    public void GetSpriteUrl_DifferentThemeSlug_UsesCorrectSlugInPath()
+    {
+        var sut = BuildSut();
+
+        var result = sut.GetSpriteUrl("dark", "umbreon", prefersAnimated: true);
+
+        result.Should().Be("/sprites/themes/dark/animated/umbreon.webp");
+    }
+
+    // ── configured base URL is prepended ───────────────────────────────────────
+
+    [Fact]
+    public void GetSpriteUrl_CustomBaseUrl_IsPrepended()
+    {
+        var sut = BuildSut("https://cdn.example.com/sprites/themes");
+
+        var result = sut.GetSpriteUrl("pokemon", "snorlax", prefersAnimated: false);
+
+        result.Should().Be("https://cdn.example.com/sprites/themes/pokemon/static/snorlax.png");
+    }
+}
+
+/// <summary>
+/// Unit tests for <see cref="LocalSpriteAssetProbe"/> (WU38 sprite redesign).
+/// Checks File.Exists against a temp wwwroot directory — no DB, no host beyond the fake env.
+/// </summary>
+public class LocalSpriteAssetProbeTests : IDisposable
 {
     private readonly string _webRoot;
 
-    public SpriteReadServiceTests()
+    public LocalSpriteAssetProbeTests()
     {
-        _webRoot = Path.Combine(Path.GetTempPath(), $"sprite-test-{Guid.NewGuid():N}");
+        _webRoot = Path.Combine(Path.GetTempPath(), $"probe-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_webRoot);
     }
 
@@ -27,114 +99,69 @@ public class SpriteReadServiceTests : IDisposable
             Directory.Delete(_webRoot, recursive: true);
     }
 
-    // ── animated path returned when the .webp exists ────────────────────────────
-
     [Fact]
-    public void GetSpriteUrl_WhenAnimatedFileExists_AndUserPrefersAnimated_ReturnsAnimatedPath()
+    public async Task ExistsAsync_WhenStaticPngExists_ReturnsTrue()
     {
-        const string theme = "default";
-        const string identifier = "pikachu";
-        CreateSpriteFile("sprites", "themes", theme, "animated", $"{identifier}.webp");
-        var sut = BuildSut();
+        CreateStaticSprite("pokemon", "bulbasaur");
+        var probe = BuildProbe();
 
-        var result = sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: true);
+        bool exists = await probe.ExistsAsync("pokemon", "bulbasaur");
 
-        result.Should().Be($"/sprites/themes/{theme}/animated/{identifier}.webp");
-    }
-
-    // ── static fallback when user doesn't prefer animated ───────────────────────
-
-    [Fact]
-    public void GetSpriteUrl_WhenUserDoesNotPreferAnimated_ReturnsStaticPath()
-    {
-        const string theme = "default";
-        const string identifier = "eevee";
-        CreateSpriteFile("sprites", "themes", theme, "static", $"{identifier}.png");
-        var sut = BuildSut();
-
-        var result = sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: false);
-
-        result.Should().Be($"/sprites/themes/{theme}/static/{identifier}.png");
-    }
-
-    // ── static fallback when user prefers animated but .webp is absent ──────────
-
-    [Fact]
-    public void GetSpriteUrl_WhenUserPrefersAnimated_ButAnimatedFileMissing_FallsBackToStaticPng()
-    {
-        const string theme = "default";
-        const string identifier = "snorlax";
-        // Only the static PNG exists; no animated .webp.
-        CreateSpriteFile("sprites", "themes", theme, "static", $"{identifier}.png");
-        var sut = BuildSut();
-
-        var result = sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: true);
-
-        result.Should().Be($"/sprites/themes/{theme}/static/{identifier}.png",
-            "static fallback applies when the .webp is absent, even if the user prefers animated");
-    }
-
-    // ── unknown.png fallback when neither file exists ───────────────────────────
-
-    [Fact]
-    public void GetSpriteUrl_WhenNeitherAnimatedNorStaticFileExists_ReturnsUnknownPath()
-    {
-        const string theme = "default";
-        const string identifier = "missingno";
-        // No files created at all — empty webroot.
-        var sut = BuildSut();
-
-        var result = sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: false);
-
-        result.Should().Be($"/sprites/themes/{theme}/unknown.png",
-            "unknown.png is the last-resort fallback for a sprite that doesn't exist in any form");
+        exists.Should().BeTrue();
     }
 
     [Fact]
-    public void GetSpriteUrl_WhenNeitherFileExists_AndUserPrefersAnimated_ReturnsUnknownPath()
+    public async Task ExistsAsync_WhenStaticPngMissing_ReturnsFalse()
     {
-        const string theme = "dark";
-        const string identifier = "missingno";
-        var sut = BuildSut();
+        var probe = BuildProbe();
 
-        var result = sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: true);
+        bool exists = await probe.ExistsAsync("pokemon", "missingno");
 
-        result.Should().Be($"/sprites/themes/{theme}/unknown.png");
+        exists.Should().BeFalse();
     }
 
-    // ── theme parameter is honoured ─────────────────────────────────────────────
+    [Fact]
+    public async Task ExistsAsync_ChecksStaticNotAnimated_AnimatedAloneReturnsFalse()
+    {
+        // Only an animated .webp exists — probe checks .png in static/, so returns false.
+        CreateAnimatedSprite("pokemon", "pikachu");
+        var probe = BuildProbe();
+
+        bool exists = await probe.ExistsAsync("pokemon", "pikachu");
+
+        exists.Should().BeFalse("probe checks static .png; animated .webp alone is insufficient");
+    }
 
     [Fact]
-    public void GetSpriteUrl_DifferentTheme_UsesCorrectThemePath()
+    public async Task ExistsAsync_WrongTheme_ReturnsFalse()
     {
-        const string theme = "dark";
-        const string identifier = "umbreon";
-        CreateSpriteFile("sprites", "themes", theme, "static", $"{identifier}.png");
-        var sut = BuildSut();
+        CreateStaticSprite("pokemon", "eevee");
+        var probe = BuildProbe();
 
-        var result = sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: false);
+        bool exists = await probe.ExistsAsync("dark", "eevee");
 
-        result.Should().Be($"/sprites/themes/{theme}/static/{identifier}.png");
+        exists.Should().BeFalse("sprite exists only in 'pokemon' theme, not 'dark'");
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Builds a new <see cref="ServerSpriteReadService"/> against the test's webroot. Must be
-    /// called AFTER all <see cref="CreateSpriteFile"/> calls — the startup scan runs in the
-    /// constructor, so files must exist before construction.
-    /// </summary>
-    private ServerSpriteReadService BuildSut() =>
+    private LocalSpriteAssetProbe BuildProbe() =>
         new(new FakeWebHostEnvironment(_webRoot));
 
-    private void CreateSpriteFile(params string[] pathSegments)
+    private void CreateStaticSprite(string theme, string identifier)
     {
-        var fullPath = Path.Combine([_webRoot, .. pathSegments]);
-        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        File.WriteAllBytes(fullPath, []);  // empty file — only existence matters
+        string dir = Path.Combine(_webRoot, "sprites", "themes", theme, "static");
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, $"{identifier}.png"), []);
     }
 
-    // Minimal fake IWebHostEnvironment — only WebRootPath is used by ServerSpriteReadService.
+    private void CreateAnimatedSprite(string theme, string identifier)
+    {
+        string dir = Path.Combine(_webRoot, "sprites", "themes", theme, "animated");
+        Directory.CreateDirectory(dir);
+        File.WriteAllBytes(Path.Combine(dir, $"{identifier}.webp"), []);
+    }
+
     private sealed class FakeWebHostEnvironment(string webRootPath) : IWebHostEnvironment
     {
         public string WebRootPath { get; set; } = webRootPath;

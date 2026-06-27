@@ -10,7 +10,9 @@ builder.Services.AddAuthenticationStateDeserialization();
 
 //Client side service registration for dependency injection
 builder.Services.AddScoped<IDeviceDetectionService, WasmDeviceDetectionService>();
-builder.Services.AddScoped<ISpriteReadService, OptimisticSpriteService>();
+// OptimisticSpriteReadService is stateless; base URL uses same wwwroot default as Server.
+// Both sides share the Core impl — see audit/Sprites.md L5 and layer2-services.md §"Sprite URLs Are Resolved At Render Time."
+builder.Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
 builder.Services.AddScoped<IStoryReadService, HttpStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, HttpStoryWriteService>();
 

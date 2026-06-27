@@ -106,10 +106,15 @@ builder.Services.AddScoped<IDeviceDetectionService, ServerDeviceDetectionService
 builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
 builder.Services.AddScoped<IDiscoveryDefaultsReadService, ServerDiscoveryDefaultsReadService>();
-// Singleton: ServerSpriteReadService scans wwwroot/sprites/ once at startup (no per-request deps).
-builder.Services.AddSingleton<ISpriteReadService, ServerSpriteReadService>();
+// Singleton: OptimisticSpriteReadService is stateless — pure string builder, no host/disk deps.
+// SpriteBaseUrl defaults to /sprites/themes (dev wwwroot); override in production for R2/CDN.
+var spriteBaseUrl = builder.Configuration["Sprites:BaseUrl"] ?? "/sprites/themes";
+builder.Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService(spriteBaseUrl));
 builder.Services.AddScoped<ITagReadService, ServerTagReadService>();
 builder.Services.AddScoped<ITagWriteService, ServerTagWriteService>();
+// Server-only write-time probe — checks File.Exists at mod-write time (never at render time).
+// Post-MVP: replace with R2SpriteAssetProbe behind this same interface. See audit/Sprites.md L2.
+builder.Services.AddSingleton<ISpriteAssetProbe, LocalSpriteAssetProbe>();
 // MVP impl writes under wwwroot/uploads/ — settled WU12. Post-MVP swap target: S3ImageStorageService
 // (MinIO dev / R2 prod), behind this same interface — see workplan.md Post-MVP section.
 builder.Services.AddScoped<IImageStorageService, LocalImageStorageService>();

@@ -30,6 +30,8 @@ public class StoryCardTests : TestContext
     {
         // StoryCard nests UserStoryInteractionPanel, which injects IUserStoryInteractionWriteService.
         Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeService);
+        // TagChip (nested in StoryCard) injects ISpriteReadService for sprite URL resolution.
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 

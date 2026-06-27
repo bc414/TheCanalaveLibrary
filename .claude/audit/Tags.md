@@ -14,14 +14,15 @@ mirror `TagTypeEnum`: Character/Setting/Genre/ContentWarning/CrossoverFandom/Rel
 
 **Contracts:** `ITagReadService` (Core/Tags/ — renamed from `ITagRetrievalService` in WU3), `TagDropDownDTO`,
 `StoryTagDTO`, `IStoryTag`, `TagPriority`, `TagChipDto` (Core/Tags/, minted WU4 — render-ready tag data
-for the `TagChip` leaf; `SpriteUrl` is a server-resolved relative path, not the raw `SpriteIdentifier`
-key — see `layer2-services.md` §"Sprite URLs Are Resolved Server-Side, At Projection Time"; request-scoped,
-never cached cross-user/theme).
-**WU12 follow-on:** `ServerTagReadService.SearchTagChipsAsync`'s WU4/WU11-era hardcoded
-`"pokemon"`/`false` theme placeholder (the per-keystroke typeahead's in-memory sprite-resolution step,
-`layer2-services.md` §"Per-keystroke typeahead search...") is replaced with the real
-`IActiveUserContext.Theme`/`PrefersAnimatedSprites`, now that that context exists. Small, low-risk
-follow-on found while building WU12's `IActiveUserContext` — not a re-opened Feature 14 cell.
+for the `TagChip` leaf). **As of 2026-06-27 (sprite redesign):** `TagChipDto.SpriteUrl` replaced by
+`TagChipDto.SpriteIdentifier` (the raw key, not a resolved path). Sprite URL resolution moved from the
+read service into the render component (`TagChip.razor` + `ThemeContext` cascading value). See
+`layer2-services.md` §"Sprite URLs Are Resolved At Render Time." The DTO is now per-content (not
+per-user/per-theme) and is freely cacheable across viewers.
+**WU12 follow-on (superseded 2026-06-27):** `SearchTagChipsAsync`'s per-keystroke typeahead
+sprite-resolve step previously called `ISpriteReadService` in-memory after materialization. Superseded
+by the sprite-redesign: read services now project raw `SpriteIdentifier` and drop their
+`ISpriteReadService` constructor dependency entirely.
 
 **WU37 naming correction (2026-06-25):** `StoryCharacterRelationship` → **`StoryCharacterPairing`**;
 `CharacterRelationshipType` → **`CharacterPairingType`** (Romantic/Platonic); new first-class join
@@ -60,6 +61,15 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
 - **L1 — Stage 5.** `Tag` shape matches §5.16 (curated, staff-only, hierarchy, sprite key, OC flag,
   tooltip description). Sound. **L2 — Stage 2** (no admin/write service). **L3/L3.5 — Stage 2**
   (mod CRUD behind `AuthorizeView` on Tag Directory). **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
+
+  **Settled for sprite redesign (2026-06-27, do not revisit):** `ServerTagWriteService` gains a
+  non-blocking sprite-existence warning via `ISpriteAssetProbe.ExistsAsync` (server-only write-time
+  probe). When `SpriteIdentifier` is non-empty, the probe checks whether the static asset exists for
+  the default theme slug. On miss, the write **still succeeds** but returns a warning alongside the
+  saved tag (non-blocking — out-of-band provisioning may lag tag creation). `TagEditorForm.razor`
+  surfaces the warning inline. `TagValidations.cs` is unchanged (length-only, pure, no IO).
+  `ISpriteReadService` is **removed** from `ServerTagReadService`'s constructor. `TagChipDto.SpriteUrl`
+  renamed to `TagChipDto.SpriteIdentifier`.
 
   **Settled for WU27.5 (2026-06-24, do not revisit):**
   - **Role gate — real now.** `<AuthorizeView Roles="Moderator,Admin">` for UI affordances; server
@@ -115,6 +125,28 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
     visible only for Character type (theory, 6 types); edit mode pre-populates name; parent dropdown
     shows same-type top-level only; parent dropdown excludes self; submit emits DTO; cancel fires callback;
     server error renders in `role="alert"`.
+
+  **WU38 Stage note — sprite redesign (2026-06-27):**
+
+  Applied to Feature 11 as part of the wider sprite-system redesign:
+  - `TagChipDto.SpriteUrl` renamed → `TagChipDto.SpriteIdentifier` (raw key, not a resolved URL).
+  - `ServerTagReadService` drops its `ISpriteReadService` constructor dep; all projection sites now
+    copy `tag.SpriteIdentifier` verbatim.
+  - `ITagWriteService.CreateTagAsync` return type changed to `Task<TagSaveResult>` (record
+    `(int TagId, string? SpriteWarning)`). `UpdateTagAsync` return type changed to `Task<string?>` (the
+    warning string). `ISpriteAssetProbe spriteProbe` injected into `ServerTagWriteService`; non-blocking
+    `BuildSpriteWarningAsync` probes the default theme slug and returns an advisory string on miss.
+    The save always succeeds regardless of the probe result.
+  - `TagDirectoryPage.razor` captures the `SpriteWarning` and shows an amber advisory block below the
+    form on create.
+  - **How verified (2026-06-27):** `dotnet test` green — 437 Unit + 443 RazorComponents + 348
+    Integration = 1228 tests. Integration tier (`TagWriteServiceTests.cs`): all 11 existing tests
+    updated to unwrap `TagSaveResult.TagId` — verified still pass. Unit tier
+    (`LocalSpriteAssetProbeTests`, 4 tests): `ExistsAsync` true/false against temp dir, checks static
+    `.png` not animated `.webp`, wrong theme returns false. RazorComponents tier
+    (`TagDirectoryTests.cs`, `TagEditorFormTests.cs`): `FakeTagWriteService` updated to return
+    `Task<TagSaveResult>` / `Task<string?>`. All cells (F11 L2/L3/L3.5) remain Stage 5 — the changes
+    are additive corrections to already-Stage-5 code; no regression found.
 
 ## Feature 12 — Story Tagging
 - **L1 — Stage 5.** `StoryTag`, `StoryCharacter`, `StoryCharacterPairing` (renamed from

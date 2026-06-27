@@ -1,5 +1,6 @@
 @namespace TheCanalaveLibrary.SharedUI
 @inject ITagReadService TagService
+@inject ISpriteReadService Sprites
 
 <div class="flex flex-col gap-2">
     <label class="text-sm font-bold">@Label</label>
@@ -22,9 +23,15 @@
         <ResultTemplate Context="tag">
             <span class="inline-flex items-center gap-2">
                 <span class="w-2 h-2 rounded-full @DotClass(tag.TagTypeId)"></span>
-                @if (tag.SpriteUrl is not null)
+                @if (tag.SpriteIdentifier is not null && _themeCtx is not null)
                 {
-                    <img src="@tag.SpriteUrl" alt="" class="w-4 h-4" loading="lazy" />
+                    var staticSrc = Sprites.GetSpriteUrl(_themeCtx.Slug, tag.SpriteIdentifier, prefersAnimated: false);
+                    var unknownSrc = $"/sprites/themes/{_themeCtx.Slug}/unknown.png";
+                    <img src="@Sprites.GetSpriteUrl(_themeCtx.Slug, tag.SpriteIdentifier, _themeCtx.PrefersAnimated)"
+                         data-static="@staticSrc"
+                         data-unknown="@unknownSrc"
+                         alt="" class="w-4 h-4" loading="lazy"
+                         onerror="spriteFallback(this)" />
                 }
                 @tag.TagName
             </span>
@@ -35,6 +42,8 @@
 </div>
 
 @code {
+    [CascadingParameter] private ThemeContext? _themeCtx { get; set; }
+
     [Parameter, EditorRequired]
     public TagTypeEnum TagType { get; set; }
 

@@ -8,7 +8,9 @@
         NotFoundPage="typeof(NotFound)">
     <Found Context="routeData">
         <CascadingAuthenticationState>
-            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(DeviceLayout)" />
+            <ThemeContextProvider>
+                <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(DeviceLayout)" />
+            </ThemeContextProvider>
         </CascadingAuthenticationState>
         <FocusOnNavigate RouteData="routeData" Selector="h1"/>
     </Found>

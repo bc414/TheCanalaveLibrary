@@ -25,6 +25,8 @@ public class StoryMobileTests : TestContext
     public StoryMobileTests()
     {
         Services.AddScoped<IRecommendationWriteService>(_ => _fakeRecommendations);
+        // TagChip (nested in StoryMobile) injects ISpriteReadService.
+        Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         JSInterop.Mode = JSRuntimeMode.Loose;
         _fakeRecommendations.SetGetForStoryResult([]);
     }
