@@ -139,3 +139,23 @@ conventions. **Do not revisit these.** Pointers:
 - **L5 — Stage 5 (2026-06-25, WU31_5b).** Group comments, blog-post create + read, and
   notification fan-out (NewGroupStory, YourStoryAddedToGroup, NewGroupBlogPost, drop-self rule)
   covered by `GroupServiceTests`. See F38 L5 note for root cause of the prior failures.
+
+### WU-ComponentSoundness Stage note (2026-06-27)
+
+**Cell affected:** F40 L3-Logic (GroupPage) — correctness polish inside an already-aligned Stage-5
+cell; no stage transition.
+
+**F1 — GroupPage lifecycle reload (in-place GroupId change stale content, now closed):**
+
+`GroupPage.razor` now implements the MessagesPage route-dispatcher pattern with key `GroupId`:
+- `private bool _initialized;` + `private int _loadedGroupId = int.MinValue;` sentinel.
+- `OnInitializedAsync`: auth-resolution (one-time); `_initialized = true` (first load handled inline).
+- `OnParametersSetAsync`: guards `GroupId == _loadedGroupId`; calls `LoadGroupAsync()` for a changed GroupId.
+- `LoadGroupAsync()`: sets `_loadedGroupId = GroupId` at the start, then loads group detail.
+
+Root cause: `GroupCard` links (`/group/{id}/{*slug}`) can navigate in-place if routed via
+`NavigationManager`; `OnInitializedAsync` does not re-fire on same-template navigation.
+
+Covering tier: **manual boot gate** (no bUnit test — GroupPage injects too many services for a
+minimal bUnit render; behavior listed in E2E checklist). Convention in
+`layer3-logic.md` §"Route-parameter dispatchers reload in `OnParametersSetAsync`".

@@ -263,6 +263,30 @@ Perhaps need to go more texture/color detail instead of totally flat svg, or use
   `IRecommendationReadService` and implemented in `ServerRecommendationReadService` as part of WU27
   (2026-06-24) — additive, server-only, no client stub required.
 
+### WU-ComponentSoundness Stage note (2026-06-27)
+
+**Cell affected:** F17 L3-Logic (BookshelvesPage) — correctness polish inside an already-aligned
+Stage-5 cell; no stage transition.
+
+**F1 — BookshelvesPage lifecycle reload (tab-switch stale content, now closed):**
+
+`BookshelvesPage.razor` now implements the MessagesPage route-dispatcher pattern with key `Tab`:
+- `private bool _initialized;` + `private string _loadedTab = "";` (empty string sentinel — no valid
+  tab slug is empty).
+- `OnInitializedAsync`: auth-resolution (one-time); calls `LoadTabAsync()` then sets `_initialized = true`.
+- `OnParametersSetAsync`: guards `Tab == _loadedTab`; resets `_filter = new()`, then calls `LoadTabAsync()`.
+- `LoadTabAsync()`: handles empty-tab redirect (→ default "favorites" tab), bad-slug NotFound, sets
+  `_tab`, `_loadedTab = Tab`, then calls `LoadPageAsync()`.
+
+Root cause: the 11-tab bar on `BookshelvesDesktop`/`BookshelvesMobile` navigates via router-intercepted
+`<a href>` links — same component instance, `OnInitializedAsync` does not re-fire. The prior code
+loaded the tab payload in `OnInitializedAsync` only; switching from "Favorites" to "Completed"
+left the Favorites deck on screen.
+
+Covering tier: **manual boot gate** (no bUnit test — BookshelvesPage injects many services; listed in
+E2E checklist). Convention in `layer3-logic.md`
+§"Route-parameter dispatchers reload in `OnParametersSetAsync`".
+
 ---
 
 ### Dependency callout

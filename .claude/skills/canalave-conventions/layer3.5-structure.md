@@ -582,6 +582,69 @@ parent, keyed by StoryId), `int? CurrentUserId` (deck computes `IsOwnStory` per 
 `EventCallback<int> OnPageChanged`). No service injection. Caret callbacks deferred — additive when
 the first consumer (Discovery/Report/Export) needs them.
 
+## `@key` on `@foreach` Over Stateful Children
+
+When a `@foreach` renders child **components** (not plain HTML elements), Blazor matches live instances
+to items **positionally by default** — the instance at slot *i* is reused for whatever item is now at
+slot *i*, regardless of the item's identity. Only the `[Parameter]` values are overwritten; private
+fields survive.
+
+This is a **data-corruption bug** the instant a child caches a parameter into a private field and then
+stops re-syncing it. The canonical example is `UserStoryInteractionPanel`:
+
+```csharp
+protected override void OnParametersSet()
+{
+    if (_localState is null)     // ← caches ONCE, never re-syncs
+        _localState = State;
+}
+```
+
+On pagination from stories [A, B, C] → [D, E, F], the panel at slot 0 stays alive, gets `StoryId`=D
+but keeps `_localState` from A. `FlushAsync` then writes A's interaction booleans onto D's id —
+server-side corruption.
+
+### The fix: `@key` on a stable domain id
+
+```razor
+@foreach (var story in Stories)
+{
+    <StoryCard @key="story.StoryId" Story="story" ... />
+}
+```
+
+`@key` changes the matching rule from positional to by-id. Blazor reuses the instance for the *same*
+id (even if it moved slots), disposes instances whose ids disappear, and creates fresh instances for
+new ids. The instance↔data identity is preserved.
+
+### When `@key` is required
+
+Any `@foreach` rendering a component that holds **per-item private state** MUST carry `@key` on a
+stable domain id. Indicators that a child holds per-item state:
+
+- An optimistic cache (`_localState`, `_like`, etc.) populated once in `OnParametersSet` with an
+  `if (field is null)` guard — the hallmark of the corruption pattern.
+- Ephemeral reveal / menu flags (`_isRevealed`, `_menuOpen`, `_showSpoilerConfirm`).
+- A disposable resource scoped per row (debounce `CancellationTokenSource`).
+
+### When `@key` is NOT required (and why)
+
+Two safe categories do **not** require a key:
+
+**Pure-display leaves** — children whose *only* state is their `[Parameter]`s. Blazor overwrites all
+`[Parameter]` values correctly on every positional reuse, so no bleed is possible. Examples:
+`RecommendationCard`, `GroupCard`, `BlogPostCard`, `ConversationListItem`, `MessageItem`. Keying them
+changes nothing observable; prefer to omit so a key's presence signals "this child holds per-item
+state" at a glance.
+
+**Self-healing children** — children that *do* hold a private derived field but recompute it from
+parameters on **every** `OnParametersSet` (no `if (is null)` guard). Example: `NotificationItem`
+recomputes `_composed` unconditionally, so a reused instance fixes itself immediately. No bleed.
+
+The aggravating pattern that turns a positional reuse into a bug is exactly the `if (field is null)`
+cache guard — it caches on first render and then ignores all subsequent parameter updates. If you see
+that guard on a per-row field, add `@key` on the parent loop.
+
 ## Rich-Text Editor Shells — Separate Leaves, Not a Shared Abstraction (WU29)
 
 `EditorView` (the raw Quill.js wrapper) is universal — see "Third-Party Wrapper Composite" above and

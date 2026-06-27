@@ -57,22 +57,43 @@ else
         new Dictionary<int, UserStoryInteractionStateDto>();
     private bool _isLoading = true;
 
+    private bool _initialized;
+    private string? _loadedTab = ""; // sentinel; no valid bookshelf slug is empty
+
     protected override async Task OnInitializedAsync()
+    {
+        // One-time: resolve the authenticated user id (auth doesn't change mid-session).
+        var authState = await AuthState;
+        string? idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out int userId)) _currentUserId = userId;
+
+        await LoadTabAsync();
+        _initialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Fires on every same-component tab navigation (router-intercepted <a href> in the tab strip).
+        // Skip the first pass (races OnInitializedAsync) and skip unrelated re-renders.
+        if (!_initialized) return;
+        if (Tab == _loadedTab) return;
+        _filter = new(); // reset filter state for the incoming tab
+        await LoadTabAsync();
+    }
+
+    // Parses the Tab slug, redirects or 404s on invalid input, then calls LoadPageAsync.
+    // Called from both OnInitializedAsync (first load) and OnParametersSetAsync (tab switch).
+    private async Task LoadTabAsync()
     {
         if (string.IsNullOrEmpty(Tab))
         {
             Nav.NavigateTo($"/bookshelves/{BookshelfTabSlug.For(BookshelfTab.MyStories)}", replace: true);
             return;
         }
-
         BookshelfTab? parsed = BookshelfTabSlug.Parse(Tab);
         if (parsed is null) { Nav.NotFound(); return; }
         _tab = parsed.Value;
-
-        var authState = await AuthState;
-        string? idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
-        if (int.TryParse(idClaim, out int userId)) _currentUserId = userId;
-
+        _loadedTab = Tab;
         await LoadPageAsync();
     }
 

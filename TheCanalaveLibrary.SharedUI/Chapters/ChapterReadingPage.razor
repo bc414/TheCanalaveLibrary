@@ -146,6 +146,11 @@ else
     private DotNetObjectReference<ChapterReadingPage>? _dotnetRef;
     private bool _jsRegistered;
 
+    private bool _initialized;
+    private int _loadedStoryId      = int.MinValue; // sentinel; no real StoryId equals this
+    private int _loadedChapterNumber = int.MinValue; // sentinel; no real ChapterNumber equals this
+    private int? _loadedVersionOrder = int.MaxValue; // sentinel; int.MaxValue is never a real VersionOrder
+
     private string EditUrl =>
         _dto is null ? "#"
         : _dto.VersionOrder == 0
@@ -154,7 +159,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        // Resolve current user from the cascading AuthenticationState.
+        // One-time: resolve the authenticated user id (auth doesn't change mid-session).
         if (AuthStateTask is not null)
         {
             AuthenticationState auth = await AuthStateTask;
@@ -162,6 +167,40 @@ else
             if (int.TryParse(idStr, out int parsedId))
                 _currentUserId = parsedId;
         }
+
+        await LoadChapterAsync();
+        _initialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Fires on every same-component chapter navigation (ChapterNavigation <a href> links —
+        // router-intercepted, same instance, OnInitializedAsync does NOT re-run).
+        if (!_initialized) return;
+        if (StoryId == _loadedStoryId && ChapterNumber == _loadedChapterNumber && VersionOrder == _loadedVersionOrder) return;
+
+        // Dispose the existing JS scroll-progress registration before loading the new chapter
+        // so readingProgress.register binds to the new chapter body, not the old one.
+        await DisposeJsRegistrationAsync();
+        await LoadChapterAsync();
+    }
+
+    // Loads chapter content, TOC, versions, prompt gate, and attribution.
+    // Called from both OnInitializedAsync (first load) and OnParametersSetAsync (chapter change).
+    private async Task LoadChapterAsync()
+    {
+        _isLoading = true;
+        _dto = null;
+        _toc = [];
+        _versions = [];
+        _isAuthor = false;
+        _recId = null;
+        _progressReached90 = false;
+        _gatedByRating = false;
+
+        _loadedStoryId       = StoryId;
+        _loadedChapterNumber = ChapterNumber;
+        _loadedVersionOrder  = VersionOrder;
 
         _dto = await ChapterReadService.GetChapterForReadingAsync(StoryId, ChapterNumber, VersionOrder);
 
@@ -188,7 +227,7 @@ else
         if (_currentUserId.HasValue)
             _recId = await RecommendationReadService.GetHelpfulPromptRecommendationIdAsync(StoryId);
 
-        // Attribution capture from ?rec= query param.
+        // Attribution capture from ?rec= query param (fires only when the param is present).
         var uri = new Uri(NavigationManager.Uri);
         var qs = System.Web.HttpUtility.ParseQueryString(uri.Query);
         if (int.TryParse(qs["rec"], out int queryRecId) && _currentUserId.HasValue)
@@ -197,9 +236,11 @@ else
         _isLoading = false;
     }
 
+    // _jsRegistered is the sole gate (no firstRender check) so that re-registration works after
+    // an in-place chapter change where firstRender is always false.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || _jsRegistered || _dto is null) return;
+        if (_jsRegistered || _dto is null) return;
         _jsRegistered = true;
         _dotnetRef = DotNetObjectReference.Create(this);
         try
@@ -232,12 +273,21 @@ else
         _recId = null;  // dismiss regardless of response
     }
 
-    public async ValueTask DisposeAsync()
+    // Disposes the JS scroll-progress registration and the DotNetObjectReference.
+    // Called on both component dispose and in-place chapter change (OnParametersSetAsync).
+    private async Task DisposeJsRegistrationAsync()
     {
         if (_jsRegistered)
         {
-            try { await JS.InvokeVoidAsync("readingProgress.dispose"); } catch { /* page already gone */ }
+            try { await JS.InvokeVoidAsync("readingProgress.dispose"); } catch { /* page already gone or no JS */ }
+            _jsRegistered = false;
         }
         _dotnetRef?.Dispose();
+        _dotnetRef = null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisposeJsRegistrationAsync();
     }
 }

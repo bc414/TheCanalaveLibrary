@@ -72,6 +72,34 @@ JSON on `User` (see Identity audit). Spec calls for `IUserProfileReadService` (p
 
 ---
 
+### WU-ComponentSoundness Stage note (2026-06-27)
+
+**Cell affected:** F21 L3-Logic (ProfilePage) — correctness polish inside an already-aligned Stage-5
+cell; no stage transition.
+
+**F1 — ProfilePage lifecycle reload (tab-switch stale content, now closed):**
+
+`ProfilePage.razor` now implements the MessagesPage route-dispatcher pattern with a composite key
+`(UserId, Tab)`:
+- `private bool _initialized;` — set at the end of `OnInitializedAsync`.
+- `private int _loadedUserId = int.MinValue;` + `private ProfileTab _loadedTab = (ProfileTab)(-1);`
+  (sentinel outside valid enum range) — last-loaded-key caches.
+- `OnInitializedAsync`: auth-resolution (one-time); first `LoadHeaderAsync()` + first `LoadTabPayloadAsync()`.
+- `OnParametersSetAsync`: guards `UserId == _loadedUserId && newTab == _loadedTab`, then:
+  - UserId change → reload banner + relationship + tab payload (`_isOwner` must be recomputed on userId change).
+  - Tab change only → reload tab payload; keep banner.
+
+Root cause: the tab strip on `ProfileDesktop`/`ProfileMobile` navigates via router-intercepted `<a href>`
+links — same component instance, `OnInitializedAsync` does not re-fire. The prior code loaded the tab
+payload in `OnInitializedAsync` only; switching from "Profile" to "Blog" left the old tab's data on screen
+(bio text lingered, blog posts never loaded).
+
+Covering tier: **RazorComponents** —
+`ProfilePageTests.TabSwitch_OnSameInstance_ReloadsTabPayload`. Convention recorded in
+`layer3-logic.md` §"Route-parameter dispatchers reload in `OnParametersSetAsync`".
+
+---
+
 ## Feature 22 — User Stats
 
 - **L1 — Stage 5** (`UserStat`, keyed on `UserId`).

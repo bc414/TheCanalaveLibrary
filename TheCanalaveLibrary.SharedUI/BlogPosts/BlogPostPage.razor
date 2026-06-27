@@ -125,9 +125,12 @@ else
     private bool _likeBusy;
     private string? _likeError;
 
+    private bool _initialized;
+    private int _loadedBlogPostId = int.MinValue; // sentinel; no real BlogPostId equals this
+
     protected override async Task OnInitializedAsync()
     {
-        // Resolve current user first — GetByIdAsync uses it for IsLikedByCurrentUser.
+        // One-time: resolve the authenticated user id (auth doesn't change mid-session).
         if (AuthState is not null)
         {
             AuthenticationState state = await AuthState;
@@ -135,6 +138,26 @@ else
             _currentUserId = int.TryParse(idStr, out int parsedId) ? parsedId : null;
         }
 
+        await LoadPostAsync();
+        _initialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Fires when the same BlogPostPage instance is reused for a different BlogPostId.
+        if (!_initialized) return;
+        if (BlogPostId == _loadedBlogPostId) return;
+        _notFound = false;
+        _likeError = null;
+        await LoadPostAsync();
+    }
+
+    // Loads the blog post and seeds optimistic like state.
+    // Called from both OnInitializedAsync (first load) and OnParametersSetAsync (post change).
+    private async Task LoadPostAsync()
+    {
+        _isLoading = true;
+        _loadedBlogPostId = BlogPostId;
         _post = await BlogPostService.GetByIdAsync(BlogPostId);
         if (_post is null)
         {

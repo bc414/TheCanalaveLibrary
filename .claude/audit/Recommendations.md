@@ -89,6 +89,27 @@ fully built in WU29 (L2/L3/L3.5/L4 across all four features).
   citing the limit) — mutation-tested (disabled guard → test fails; re-enabled → passes).
   `SetHighlightedByAuthorAsync` spotlight ≤5 limit enforced. 190/190 green twice.
 
+### WU-ComponentSoundness Stage note (2026-06-27)
+
+**Cell affected:** F28 L3.5-Structure (RecommendationSection) — hygiene fix, no data-corruption risk;
+no stage transition.
+
+`RecommendationSection.razor` now carries `@key="rec.RecommendationId"` on `<RecommendationCard>` in
+the `@foreach` loop.
+
+The recommendation list has no per-card ephemeral state (pure-display leaf), so positional reuse does not
+cause data corruption here. The key was added because the highlight re-sort occasionally reorders the list
+(spotlighted recommendations float to the top); without `@key`, reordered slots receive new `[Parameter]`
+values but Blazor may diff the DOM less efficiently. The convention drawn from the two buggy cases
+(`StoryDeck F2`, `CommentSection F3`) is: key any `@foreach` over components that could be reordered or
+whose identity matters for correct diffing. Pure-display leaves that only receive `[Parameter]` values are
+self-healing (no cache guard on private state), so the key is a hygiene guard rather than a bug fix here.
+
+Covering tier: **no automated test** — `RecommendationCard` is a pure-display leaf; all observable
+behavior is exercised by existing `RecommendationSectionTests`.
+
+---
+
 ## Feature 30 — Recommendation Attribution
 - **L1 — Stage 5** (`UserStoryRecommendationSource` sparse; `RecommendationSuccess`). **L2 — Stage 5
   (WU29, 2026-06-23 — surface minted; trigger deferred to WU26).** `RecordAttributionSourceAsync`

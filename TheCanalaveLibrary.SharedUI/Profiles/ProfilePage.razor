@@ -117,44 +117,79 @@ else
     private int _blogTotalCount;
     private int _blogPage = 1;
 
+    private bool _initialized;
+    private int _loadedUserId = int.MinValue;      // sentinel; no real UserId equals this
+    private ProfileTab _loadedTab = (ProfileTab)(-1); // sentinel; outside valid enum range
+
     protected override async Task OnInitializedAsync()
     {
-        // Resolve current viewer
+        // One-time: resolve the current viewer's identity (auth doesn't change mid-session).
         var authState = await AuthState;
         string? idClaim = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (int.TryParse(idClaim, out int id)) _currentUserId = id;
-
         _isOwner = _currentUserId.HasValue && _currentUserId.Value == UserId;
 
-        // Parse tab
+        // Parse tab; bad slug → 404.
         ProfileTab? parsed = ProfileTabSlug.Parse(Tab);
-        if (parsed is null) { Nav.NavigateTo("/not-found"); return; }
+        if (parsed is null) { Nav.NavigateTo("/not-found"); _initialized = true; return; }
         _tab = parsed.Value;
 
-        // Load banner (once — tab-independent)
-        _header = await ProfileReadService.GetProfileHeaderAsync(UserId, includePrivate: _isOwner);
-        if (_header is null) { _isLoading = false; return; }
+        await LoadHeaderAsync();
+        if (_header is not null)
+            await LoadTabPayloadAsync();
 
-        // Overlay relationship state for authenticated non-owners
-        if (_currentUserId.HasValue && !_isOwner)
-        {
-            _relationship = await FollowingReadService.GetRelationshipStateAsync(UserId);
-        }
+        _loadedUserId = UserId;
+        _loadedTab = _tab;
+        _isLoading = false;
+        _initialized = true;
+    }
 
-        // Load initial tab payload concurrently with bio text when on the Profile tab,
-        // otherwise just load the tab payload.
-        if (_tab == ProfileTab.Profile)
+    protected override async Task OnParametersSetAsync()
+    {
+        // Fires on every same-component navigation (tab strip / UserId change).
+        if (!_initialized) return;
+
+        ProfileTab? parsed = ProfileTabSlug.Parse(Tab);
+        if (parsed is null) { Nav.NavigateTo("/not-found"); return; }
+        ProfileTab newTab = parsed.Value;
+
+        bool userChanged = UserId != _loadedUserId;
+        bool tabChanged  = newTab != _loadedTab;
+        if (!userChanged && !tabChanged) return;
+
+        _tab = newTab;
+        _isLoading = true;
+
+        if (userChanged)
         {
-            Task<string?> bioTask = ProfileReadService.GetProfileTextAsync(UserId);
-            await bioTask;
-            _bioHtml = bioTask.Result;
+            // Banner + relationship are tied to UserId — reload both.
+            _isOwner = _currentUserId.HasValue && _currentUserId.Value == UserId;
+            _loadedUserId = UserId;
+            _storyFilter = new StoryFilterDto { PageSize = StoryPageSize };
+            _blogPage = 1;
+            await LoadHeaderAsync();
+            if (_header is not null)
+                await LoadTabPayloadAsync();
         }
         else
         {
+            // Same user, different tab — keep banner, reload payload only.
+            _storyFilter = new StoryFilterDto { PageSize = StoryPageSize };
+            _blogPage = 1;
             await LoadTabPayloadAsync();
         }
 
+        _loadedTab = _tab;
         _isLoading = false;
+    }
+
+    // Loads (or reloads) the tab-independent banner and relationship state.
+    private async Task LoadHeaderAsync()
+    {
+        _header = await ProfileReadService.GetProfileHeaderAsync(UserId, includePrivate: _isOwner);
+        _relationship = null;
+        if (_header is not null && _currentUserId.HasValue && !_isOwner)
+            _relationship = await FollowingReadService.GetRelationshipStateAsync(UserId);
     }
 
     // ── Tab payload loading ───────────────────────────────────────────────────────

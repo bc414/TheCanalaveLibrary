@@ -311,6 +311,69 @@ change).
   component). **L4 — N/A. L5 — Stage 2.**
 - **L7 — Stage 2.** Redis `INCR` + drain worker (write-behind pattern 1). Interface unchanged from MVP.
 
+### WU-ComponentSoundness Stage note (2026-06-27)
+
+**Cells affected:** F5 L3-Logic (StoryPage, StoryDeck) + F7 L3-Logic (ChapterReadingPage) — correctness
+polishes inside already-aligned Stage-5 cells; no stage transition.
+
+**F2 — StoryDeck list-keying (data-corruption bug, now closed):**
+
+`StoryDeck.razor` now carries `@key="story.StoryId"` on `<StoryCard>` in the `@foreach` loop.
+
+Root cause: `UserStoryInteractionPanel.OnParametersSet` caches `State → _localState` once (`if
+(_localState is null) _localState = State;`) and stops syncing. Without `@key`, Blazor matched `<StoryCard>`
+instances **positionally**, so paginating or filter-swapping recycled the position-0 instance for a new
+story. The recycled panel's `_localState` still held the prior story's state; `FlushAsync` subsequently
+wrote those booleans to the wrong `StoryId`, silently corrupting the interaction row.
+
+Fix: `@key="story.StoryId"` forces Blazor to destroy and recreate the keyed component tree whenever the
+`StoryId` in that slot changes — the fresh instance starts with `_localState = null` and seeds correctly
+from the new story's `State` parameter. (Convention recorded in `layer3.5-structure.md`
+§"`@key` on `@foreach` over stateful children".)
+
+Covering tier: **RazorComponents** — `StoryDeckTests.KeyedList_WhenStorySwapped_PanelReflectsNewStorysState_NotPreviousStorysState`.
+
+---
+
+**F1 — StoryPage lifecycle reload (`[PersistentState]` gotcha):**
+
+`StoryPage.razor` now implements the MessagesPage route-dispatcher pattern: `_initialized` flag +
+`_loadedStoryId = int.MinValue` sentinel; `OnInitializedAsync` keeps auth-resolution + first load (using
+`??=` for anti-flicker); `OnParametersSetAsync` guards on `StoryId == _loadedStoryId` then does a plain
+reassignment (`Story = await …;` — **not** `??=`) before loading.
+
+Root cause: Blazor reuses the same component instance on same-route-template navigation; `OnInitializedAsync`
+does not re-fire. The prior code loaded only in `OnInitializedAsync`, so navigating from
+`/story/1/slug-a` to `/story/2/slug-b` without a full page reload left the old story's data on screen.
+
+`[PersistentState]` gotcha: the `??=` guard in `OnInitializedAsync` is correct (anti-flicker across
+prerender → interactive). But in `OnParametersSetAsync` the field is already non-null from the prior
+prerender payload — `??=` would short-circuit the DB call for the new StoryId. Plain assignment
+(`Story = await …`) is required there.
+
+Covering tier: **manual boot gate** (no bUnit test — `[PersistentState]` prerender-to-interactive
+handoff cannot be asserted in bUnit). Listed in verification checklist for the upcoming human E2E pass.
+
+---
+
+**F1 — ChapterReadingPage lifecycle reload + scroll-JS re-registration:**
+
+`ChapterReadingPage.razor` now implements the MessagesPage pattern with composite key
+`(StoryId, ChapterNumber, VersionOrder)` (sentinel: `int.MaxValue` for `VersionOrder` because `null` is
+a valid value meaning "primary version").
+
+`DisposeJsRegistrationAsync()` extracted from `DisposeAsync()` and called at the top of
+`OnParametersSetAsync` before `LoadChapterAsync()`, so `readingProgress.dispose` releases the old
+chapter's scroll subscription before the new chapter DOM is rendered. `OnAfterRenderAsync` dropped the
+`firstRender` gate in favor of the `_jsRegistered` flag alone — re-registration fires on the render
+after the new chapter loads, binding to the fresh `#chapter-body` element. `_progressReached90` is
+reset inside `LoadChapterAsync()` so the 90%-scroll → `MarkStartedAsync` milestone fires correctly for
+new Chapter 1s.
+
+Covering tier: **manual boot gate** (JS-interop + multi-service; listed in E2E verification checklist).
+Convention for the route-dispatcher pattern recorded in `layer3-logic.md`
+§"Route-parameter dispatchers reload in `OnParametersSetAsync`".
+
 ---
 
 ### Cluster-level notes

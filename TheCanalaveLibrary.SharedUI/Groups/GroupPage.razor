@@ -92,8 +92,12 @@ else
     private bool _isLoading = true;
     private string? _actionError;
 
+    private bool _initialized;
+    private int _loadedGroupId = int.MinValue; // sentinel; no real GroupId equals this
+
     protected override async Task OnInitializedAsync()
     {
+        // One-time: resolve the authenticated user id (auth doesn't change mid-session).
         if (AuthState is not null)
         {
             AuthenticationState state = await AuthState;
@@ -102,11 +106,21 @@ else
         }
 
         await LoadGroupAsync();
+        _initialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Fires when the same GroupPage instance is reused for a different GroupId.
+        if (!_initialized) return;
+        if (GroupId == _loadedGroupId) return;
+        await LoadGroupAsync();
     }
 
     private async Task LoadGroupAsync()
     {
         _isLoading = true;
+        _loadedGroupId = GroupId;
 
         _group = await GroupService.GetByIdAsync(GroupId);
 

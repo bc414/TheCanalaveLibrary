@@ -159,6 +159,34 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   spoiler flag is set at post time only; editing a comment does not change its spoiler state (WU20 may
   revisit). **Verified:** Integration tier — `PostChapterComment_IsSpoilerTrue_RoundTrips` confirms
   `IsSpoiler = true` persists and reads back correctly.
+### WU-ComponentSoundness Stage note (2026-06-27)
+
+**Cell affected:** F26 L3-Logic (CommentSection, CommentItem) — correctness polish inside an
+already-aligned Stage-5 cell; no stage transition.
+
+**F3 — CommentSection list-keying (spoiler-state leak, now closed):**
+
+`CommentSection.razor` now carries `@key="root.CommentId"` on the root `<CommentItem>` loop and
+`@key="reply.CommentId"` on the nested reply `<CommentItem>` loop.
+
+Root cause: `CommentItem` holds `private bool _isRevealed` as ephemeral private state (per spec §5.9.1
+— spoiler re-hides on every page load). Without `@key`, Blazor matched `<CommentItem>` instances
+positionally. When the user revealed a spoiler at position 0 (`_isRevealed = true` on that instance) and
+then paginated to page 2 (new comments loaded into the same DOM slots), the position-0 instance was
+reused — `_isRevealed` stayed `true` from the previous comment, so the new comment's spoiler rendered
+as already-revealed without the user ever clicking Reveal. This bypassed the spec's completion-gate
+requirement (§5.9.1).
+
+Fix: `@key="root.CommentId"` forces Blazor to destroy and recreate the keyed CommentItem whenever the
+CommentId in that slot changes — the fresh instance starts with `_isRevealed = false` and the spoiler
+is hidden until the user explicitly clicks Reveal.
+
+Covering tier: **RazorComponents** —
+`CommentSectionTests.KeyedList_WhenSpoilerPaginates_NewCommentStartsHidden_NotRevealedFromPreviousInstance`.
+Convention recorded in `layer3.5-structure.md` §"`@key` on `@foreach` over stateful children."
+
+---
+
 - **WU9 Stage-5 note (2026-06-21):** built the universal `ConfirmDialog` container composite at
   `SharedUI/Dialogs/ConfirmDialog.razor` (new cross-cutting cluster — no owning feature, mirrors
   `RichText/`/`Lookups/`). Contract: `@bind-IsOpen` (two-way `IsOpen`/`IsOpenChanged`), `Title`/

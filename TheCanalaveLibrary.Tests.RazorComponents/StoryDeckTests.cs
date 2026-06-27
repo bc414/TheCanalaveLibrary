@@ -242,4 +242,51 @@ public class StoryDeckTests : TestContext
 
         received.Should().ContainSingle().Which.Should().Be(2);
     }
+
+    // ── F2 mutation-sanity — @key forces a fresh panel on story swap ─────────────
+    //
+    // Root cause: UserStoryInteractionPanel caches State → _localState once (the `if (_localState is null)`
+    // guard in OnParametersSet). Without @key, Blazor reuses the positional panel instance and
+    // OnParametersSet skips the update — _localState still holds story A's values while the panel
+    // is now bound to story B. The Favorite span from A bleeds into B's slot.
+    //
+    // Fix: @key="story.StoryId" on <StoryCard> in StoryDeck.razor. Blazor tears down the key=1
+    // instance and creates a fresh key=2 instance, so _localState starts null and is correctly
+    // seeded from story B's all-false state.
+
+    [Fact]
+    public void KeyedList_WhenStorySwapped_PanelReflectsNewStorysState_NotPreviousStorysState()
+    {
+        // ── Arrange ──────────────────────────────────────────────────────────────
+        // Story A: IsFavorite = true → the active read-only Favorite span should appear.
+        StoryListingDto storyA = MakeStory(storyId: 1);
+        var statesA = MakeStates(
+            new UserStoryInteractionStateDto(1, false, false, IsFavorite: true, false, false, false, false));
+
+        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+            .Add(c => c.Stories, new[] { storyA })
+            .Add(c => c.UserStoryInteractionStates, (IReadOnlyDictionary<int, UserStoryInteractionStateDto>)statesA));
+
+        // Sanity: story A's Favorite span is present before the swap.
+        cut.FindAll("span[aria-label='Favorite']").Should().NotBeEmpty(
+            "story A has IsFavorite=true — the read-only Favorite span must appear (pre-swap sanity)");
+
+        // ── Act: swap in story B at the same list position ───────────────────────
+        // Story B: all-false — the Favorite span must NOT appear.
+        StoryListingDto storyB = MakeStory(storyId: 2);
+        var statesB = MakeStates(UserStoryInteractionStateDto.AllFalse(2));
+
+        cut.SetParametersAndRender(p => p
+            .Add(c => c.Stories, new[] { storyB })
+            .Add(c => c.UserStoryInteractionStates, (IReadOnlyDictionary<int, UserStoryInteractionStateDto>)statesB));
+
+        // ── Assert ───────────────────────────────────────────────────────────────
+        // @key="story.StoryId" destroys the storyId=1 panel and creates a fresh storyId=2 panel.
+        // The new panel starts with _localState=null, seeds from story B's all-false state, and
+        // renders no active Favorite indicator. Without @key, the positional panel's _localState
+        // would still hold story A's IsFavorite=true → the span would bleed.
+        cut.FindAll("span[aria-label='Favorite']").Should().BeEmpty(
+            "story B has IsFavorite=false — @key must have created a fresh panel; " +
+            "if Favorite span appears, the panel is bleeding story A's _localState into story B's slot");
+    }
 }

@@ -29,7 +29,8 @@ else
         {
             var root = r;
 
-            <CommentItem Comment="root"
+            <CommentItem @key="root.CommentId"
+                         Comment="root"
                          IsOwnComment="@(root.AuthorId is not null && root.AuthorId == CurrentUserId)"
                          IsEditing="@(_editingId == root.CommentId)"
                          UserHasCompletedStory="@UserHasCompletedStory"
@@ -46,7 +47,8 @@ else
             {
                 var reply = rep;
                 <div class="ml-8">
-                    <CommentItem Comment="reply"
+                    <CommentItem @key="reply.CommentId"
+                                 Comment="reply"
                                  IsOwnComment="@(reply.AuthorId is not null && reply.AuthorId == CurrentUserId)"
                                  IsEditing="@(_editingId == reply.CommentId)"
                                  UserHasCompletedStory="@UserHasCompletedStory"

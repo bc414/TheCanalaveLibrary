@@ -286,6 +286,76 @@ protected override async Task OnInitializedAsync()
 
 Replaces manual navigation to error pages. The framework routes to the designated Not Found page.
 
+## Route-Parameter Dispatchers Reload in `OnParametersSetAsync`
+
+When a page component's route template contains a parameter (e.g. `{StoryId:int}`, `{Tab}`), in-place
+navigation between two URLs that match the *same template* — such as clicking chapter prev/next, or
+switching a profile/bookshelf tab — **reuses the existing component instance**. The Blazor Router
+intercepts the link and calls `SetParametersAsync` on the existing object; `OnInitialized{Async}` does
+**not** re-fire.
+
+Any data load that is keyed on a route `[Parameter]` therefore **must run in `OnParametersSetAsync`**
+(guarded, see below), not only in `OnInitializedAsync`. Placing the load exclusively in
+`OnInitializedAsync` compiles cleanly and works on the first visit, but silently shows stale content on
+every subsequent in-place navigation — the classic WU38 class of unsound compile-clean patterns.
+
+### The required pattern (MessagesPage is the reference)
+
+```csharp
+private bool _initialized;
+private int? _loadedConversationId = int.MinValue; // sentinel; no real id equals this
+
+protected override async Task OnInitializedAsync()
+{
+    // ── One-time / identity work ─────────────────────────────────────────────
+    // Auth resolution, user-id extraction, things that must NOT repeat.
+    _currentUserId = await ResolveCurrentUserIdAsync(AuthState);
+
+    // ── First param-dependent load ───────────────────────────────────────────
+    await LoadDataAsync();           // same method OnParametersSetAsync uses
+    _initialized = true;
+}
+
+protected override async Task OnParametersSetAsync()
+{
+    if (!_initialized) return;                    // skip the first pass (races OnInitializedAsync)
+    if (RouteParam == _loadedRouteParam) return;  // skip unrelated re-renders (parent re-renders etc.)
+
+    // Reset any stale local state, then reload.
+    _data = null;
+    await LoadDataAsync();
+}
+
+private async Task LoadDataAsync()
+{
+    _loadedRouteParam = RouteParam;   // record the key at the start of the load
+    // ... actual service calls ...
+}
+```
+
+**Rules:**
+- `_loadedXxx` cache field seeded with a sentinel value (`int.MinValue`, `""`, etc.) so the first real
+  load is never accidentally short-circuited by an uninitialized default.
+- `_initialized` prevents `OnParametersSetAsync` from racing `OnInitializedAsync` on the first render
+  pass (both fire; the flag makes the two cooperate cleanly).
+- Extract the load body into a named method (`LoadDataAsync`, `LoadChapterAsync`, `LoadTabPayloadAsync`,
+  etc.) so it is callable from both lifecycle points without duplication.
+- When a single page has **two independently-keyed parameters** (e.g. `UserId` and `Tab`), cache them
+  separately and only reload the portion that actually changed.
+
+**One-time work that MUST stay in `OnInitializedAsync` only (never repeated on param change):**
+- Auth state → `_currentUserId` extraction (auth doesn't change mid-session).
+- Default-tab redirects, bad-slug `Nav.NotFound()` on parse failure (the redirect itself fires the new
+  nav; a repeat would double-redirect).
+- Any resource that is invariant to route-param changes.
+
+**`[PersistentState]` interaction:** if a page uses `[PersistentState]` with a `??=` first-load guard
+for anti-flicker (e.g. `Story ??= await Service.GetAsync(StoryId);`), the `??=` is correct in
+`OnInitializedAsync` (where prerender state may already populate the field), but a **plain assignment**
+(`Story = await Service.GetAsync(StoryId);`) is required in `OnParametersSetAsync` for a new key —
+otherwise the non-null persisted field short-circuits the reload. Reset persisted fields to `null`
+before the reload.
+
 ## Parameters: DTOs and Primitives
 
 **Pass the DTO** when a component renders multiple fields from it:
@@ -307,4 +377,4 @@ Don't decompose a DTO into individual primitive parameters — that defeats the 
 |---|---|---|---|---|
 | Leaf | Never | DTOs for multi-field display, primitives for single values, EventCallbacks | Computed display properties from DTOs, trivial internal fields | None |
 | Composite | Rarely (independent concerns only) | DTOs flowing through, configuration primitives | Coordination state (debounce, mode, dropdown open) | Rarely |
-| Page | Always (primary data loading) | Route `[Parameter]`s only | Loaded DTOs with `[PersistentState]`, ViewModels for EditForm | `OnInitializedAsync`, loading/error states |
+| Page | Always (primary data loading) | Route `[Parameter]`s only | Loaded DTOs with `[PersistentState]`, ViewModels for EditForm | `OnInitializedAsync` (one-time/identity) + `OnParametersSetAsync` (param-keyed loads, guarded — see "Route-Parameter Dispatchers Reload in `OnParametersSetAsync`"); loading/error states |

@@ -1255,6 +1255,40 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Pointer:** `audit/Recommendations.md` §Feature 29, `audit/Comments.md` §Feature 25,
   `audit/Stories.md` §"WU-CounterAtomicity Stage note."
 
+### WU-ComponentSoundness — Lifecycle reload + list keying correctness wave — DONE ✓ (2026-06-27)
+- **Cells:** none — all affected cells (F5 L3/L3.5 StoryPage/StoryDeck, F7 L3 ChapterReadingPage,
+  F17 L3 BookshelvesPage, F21 L3 ProfilePage, F26/F28 L3.5 CommentSection/RecommendationSection,
+  F36 L3 BlogPostPage, F40 L3 GroupPage) were already Stage 5. This wave closes three latent
+  correctness gaps inside aligned cells — no stage transition.
+- **Done:**
+  - **Phase 0 (conventions):** `layer3-logic.md` §"Route-parameter dispatchers reload in
+    `OnParametersSetAsync`" added (MessagesPage pattern: `_initialized` + `_loadedXxx` sentinel,
+    one-time auth in `OnInitializedAsync`, reload in `OnParametersSetAsync`; `[PersistentState]`
+    `??=`-vs-plain-assignment gotcha documented). `layer3.5-structure.md` §"`@key` on `@foreach`
+    over stateful children" added (when required vs. not; self-healing and pure-display exceptions;
+    `if (_field is null)` cache guard as the aggravating pattern).
+  - **Phase 1 (F1 lifecycle fixes):** `ProfilePage`, `BookshelvesPage`, `GroupPage`, `BlogPostPage`,
+    `StoryPage`, `ChapterReadingPage` — all converted to MessagesPage pattern. ChapterReadingPage also
+    adds `DisposeJsRegistrationAsync()` called on chapter change (dispose + reset `_jsRegistered`) and
+    drops `firstRender` guard from `OnAfterRenderAsync` in favor of `_jsRegistered` flag alone.
+    `[PersistentState]` plain-assignment fix in `StoryPage.OnParametersSetAsync`.
+  - **Phase 2 (F2/F3 list keying):** `@key="story.StoryId"` on `<StoryCard>` in `StoryDeck.razor`;
+    `@key="root.CommentId"` + `@key="reply.CommentId"` on `<CommentItem>` in `CommentSection.razor`;
+    `@key="rec.RecommendationId"` on `<RecommendationCard>` in `RecommendationSection.razor`.
+  - **Phase 3 (tests):** `StoryDeckTests.KeyedList_WhenStorySwapped_*` (F2 mutation-sanity);
+    `CommentSectionTests.KeyedList_WhenSpoilerPaginates_*` (F3 mutation-sanity);
+    `ProfilePageTests.TabSwitch_OnSameInstance_ReloadsTabPayload` (F1 lifecycle, with 6 new fake
+    service classes in `FakeProfileTestServices.cs`).
+  - **Phase 4 (docs):** audit Stage notes in all 7 affected audit files; this workplan entry;
+    `status.md` Global conditions bullet.
+- **Verified:** `dotnet build` green (1 pre-existing CS8618 warning in `TagDropDownDTO.cs`, unrelated).
+  `dotnet test` 1235/1235 pass (446 RazorComponents + 437 Unit + 352 Integration). Remaining F1 pages
+  (ChapterReadingPage, GroupPage, BlogPostPage, StoryPage) covered by manual E2E checklist (JS-interop
+  or service-heavy; see `audit/Stories.md`, `audit/Groups.md`, `audit/BlogPosts.md`).
+- **Tool:** Opus in Claude Code. **Pointer:** `.claude/plans/l3-component-soundness-md-is-a-plan-quiet-swan.md`;
+  audit Stage notes in `audit/Stories.md`, `audit/Comments.md`, `audit/Recommendations.md`,
+  `audit/Profiles.md`, `audit/Groups.md`, `audit/BlogPosts.md`, `audit/UserStoryInteractions.md`.
+
 ---
 
 ## Blocked / deferred — genuine Stage-1 intent gaps (no sequence number)

@@ -69,6 +69,29 @@ WU31 delivers L2/L3/L3.5/L4 for features 35/36 (profile blog posts only); Featur
     `BlogPostPage` is a page-level dispatcher — L4 visual sign-off required to leave Stage 1.
     `CommentSection` blog-post context additions covered by `CommentSection` tests.
 
+### WU-ComponentSoundness Stage note (2026-06-27)
+
+**Cell affected:** F36 L3-Logic (BlogPostPage) — correctness polish inside an already-aligned Stage-5
+cell; no stage transition.
+
+**F1 — BlogPostPage lifecycle reload (in-place BlogPostId change stale content, now closed):**
+
+`BlogPostPage.razor` now implements the MessagesPage route-dispatcher pattern with key `BlogPostId`:
+- `private bool _initialized;` + `private int _loadedBlogPostId = int.MinValue;` sentinel.
+- `OnInitializedAsync`: auth-resolution (one-time); calls `LoadPostAsync()` then sets `_initialized = true`.
+- `OnParametersSetAsync`: guards `BlogPostId == _loadedBlogPostId`; resets `_notFound = false` and
+  `_likeError = null`, then calls `LoadPostAsync()`.
+- `LoadPostAsync()`: sets `_loadedBlogPostId = BlogPostId` first, then loads the post and seeds like state.
+
+Root cause: same-template navigation (e.g., clicking a `BlogPostCard` link from a profile page) reuses
+the component instance; `OnInitializedAsync` does not re-fire.
+
+Covering tier: **manual boot gate** (no bUnit test — `BlogPostPage` injects `IBlogPostReadService` and
+auth services; listed in E2E checklist). Convention in
+`layer3-logic.md` §"Route-parameter dispatchers reload in `OnParametersSetAsync`".
+
+---
+
 ## Feature 37 — Polls
 - **L1 — Stage 5** (`BasePoll`/`SitePoll`/`BlogPostPoll`, `PollOption` with `Voters` M:N + unique
   constraints). **L2 — Stage 2.** **L3 / L3.5 — Stage 1 (conceptual, §8.6):** detailed poll UI was never

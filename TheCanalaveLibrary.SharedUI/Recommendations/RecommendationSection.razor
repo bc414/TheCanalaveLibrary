@@ -32,7 +32,8 @@ else
         @foreach (var r in _recs)
         {
             var rec = r;
-            <RecommendationCard Rec="rec"
+            <RecommendationCard @key="rec.RecommendationId"
+                                Rec="rec"
                                 OnLike="@(CurrentUserId is not null ? EventCallback.Factory.Create<int>(this, HandleLike) : default)"
                                 OnEdit="@(rec.IsOwnRecommendation ? EventCallback.Factory.Create<int>(this, HandleEditClick) : default)"
                                 OnDelete="@(rec.IsOwnRecommendation ? EventCallback.Factory.Create<int>(this, HandleDeleteClick) : default)"

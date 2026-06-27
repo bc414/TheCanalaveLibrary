@@ -344,6 +344,60 @@ public class CommentSectionTests : TestContext
             "the new-comment composer must render for authenticated viewers");
     }
 
+    // ── F3 mutation-sanity — @key forces a fresh CommentItem on page change ──────
+    //
+    // Root cause: CommentItem holds `private bool _isRevealed` as ephemeral private state.
+    // Without @key, Blazor matches <CommentItem> instances positionally. After the user reveals
+    // commentA's spoiler (_isRevealed=true on the position-0 instance), paginating to page 2
+    // loads commentB into the same list — but without @key the position-0 CommentItem instance is
+    // reused, so _isRevealed stays true and commentB's spoiler renders as already-revealed.
+    //
+    // Fix: @key="root.CommentId" on <CommentItem> in CommentSection.razor. Blazor tears down the
+    // commentId=1 instance and creates a fresh commentId=2 instance with _isRevealed=false.
+
+    [Fact]
+    public async Task KeyedList_WhenSpoilerPaginates_NewCommentStartsHidden_NotRevealedFromPreviousInstance()
+    {
+        // ── Arrange: page 1 has commentA (spoiler), TotalRootCount=2, PageSize=1 → 2 pages ──
+        const long commentAId = 1L;
+        const long commentBId = 2L;
+        _fakeService.SetGetResult(new CommentPageDto(
+            [MakeComment(commentAId, isSpoiler: true)], TotalRootCount: 2));
+
+        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+            .Add(c => c.ChapterId, 1)
+            .Add(c => c.CurrentUserId, 42)
+            .Add(c => c.UserHasCompletedStory, true)  // skips the ConfirmDialog; sets _isRevealed immediately
+            .Add(c => c.PageSize, 1));
+
+        // Sanity: commentA renders the "Reveal spoiler" button (before reveal).
+        cut.Find("button[aria-label='Reveal spoiler']").Should().NotBeNull(
+            "commentA must start hidden — the Reveal button must be present");
+
+        // Reveal commentA: HandleRevealClick → _isRevealed=true (UserHasCompletedStory skips the dialog).
+        cut.Find("button[aria-label='Reveal spoiler']").Click();
+
+        cut.FindAll("button[aria-label='Reveal spoiler']").Should().BeEmpty(
+            "after Reveal, commentA's CommentItem must have _isRevealed=true — the button must disappear");
+
+        // ── Act: paginate to page 2 where commentB (also a spoiler) lives ────────
+        // Update the fake before the click; CommentSection.HandlePageChanged → LoadAsync re-reads it.
+        _fakeService.SetGetResult(new CommentPageDto(
+            [MakeComment(commentBId, isSpoiler: true)], TotalRootCount: 2));
+
+        IElement nextBtn = cut.Find("button[aria-label='Next page']");
+        await nextBtn.ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        // ── Assert ───────────────────────────────────────────────────────────────
+        // @key="root.CommentId" destroys the commentId=1 instance and creates a fresh commentId=2
+        // instance with _isRevealed=false. The "Reveal spoiler" button must reappear for commentB.
+        // Without @key, the position-0 instance's _isRevealed is still true from commentA → the
+        // button stays hidden even though commentB is a new, unrevealed spoiler.
+        cut.FindAll("button[aria-label='Reveal spoiler']").Should().ContainSingle(
+            "commentB's fresh CommentItem must start with _isRevealed=false; " +
+            "if the Reveal button is absent, the old instance's _isRevealed=true is bleeding into commentB's slot");
+    }
+
     // ── Mutation sanity — gating inversions must break the right tests ─────────────
     // (Manual verification: flip IsOwnComment check in CommentSection render to always-true
     //  → edit/delete affordances appear for all → affordance-gate tests fail. Revert.)
