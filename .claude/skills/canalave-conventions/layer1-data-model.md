@@ -31,10 +31,20 @@ protected override void OnConfiguring(DbContextOptionsBuilder options)
     => options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
 ```
 
-Both map the same model. Keep `OnModelCreating` in one place — it contains only `base.OnModelCreating(...)`
-followed by `modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly())`. All actual
-configuration lives in `IEntityTypeConfiguration<T>` classes (location and grouping rules in
-§"Fluent API Organization" below).
+Both map the same schema. `ApplicationDbContext.OnModelCreating` calls `base.OnModelCreating(...)` then
+`modelBuilder.ApplyConfigurationsFromAssembly(...)`. All entity shape/index/FK configuration lives in
+`IEntityTypeConfiguration<T>` classes (location rules in §"Fluent API Organization" below).
+
+`ReadOnlyApplicationDbContext.OnModelCreating` calls `base.OnModelCreating(modelBuilder)` first, then adds
+the four named visibility/display query filters (`"ContentRating"`, `"GroupAudience"`, `"IsTakenDown"` ×4
+roots). These filters don't touch schema and live on the read context **only** — the write context sees
+ground truth with no filters. See `cross-cutting.md` "Content Rating Filtering" for the principle.
+
+**Migrations are `ApplicationDbContext`-only.** `ReadOnlyApplicationDbContext` owns no migration history
+(its `Migrations/ReadOnlyApplicationDb/` folder was deleted post-WU38 revamp). Always generate and apply
+migrations against `ApplicationDbContext`. The read context picks up schema changes automatically
+(it inherits the same model). Migration commands: `dotnet ef migrations add <Name> --context
+ApplicationDbContext`.
 
 ## TPT Inheritance (Settled — Not TPH)
 
@@ -278,7 +288,7 @@ Key manual edits EF won't generate:
 - **CHECK constraints:** `migrationBuilder.Sql(...)` in `Up()`, drop in `Down()`.
 - **Triggers:** `CREATE TRIGGER` (PL/pgSQL) in `Up()`, `DROP TRIGGER` in `Down()`.
   `HasTrigger` Fluent API is SQL Server-specific — do not use.
-- **Migration commands:** `--context ApplicationDbContext` required when two DbContext types exist.
+- **Migration commands:** always `--context ApplicationDbContext` (the read context owns no migrations).
 
 Cache/data-mart tables (`UserStoryTreeSearchEntries`, `AlsoFavoritedScore`, `AlsoRecommendedScore`)
 are **NOT in EF Core migrations** — managed by background workers via raw SQL.

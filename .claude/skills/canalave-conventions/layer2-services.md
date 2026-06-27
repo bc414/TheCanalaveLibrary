@@ -129,14 +129,13 @@ DbContext-consuming service is written against, architectural in the same sense 
 is. It's also unrelated to the Postgres primary/read-replica axis: which connection string a context
 points at is orthogonal to whether the .NET-side object is pooled.
 
-**Client side:** `ClientStoryWriteService : ClientStoryReadService` mirrors the inheritance.
-
-### Content-Rating Filtering Lives on the DbContext, Not in Each Service
+### Content-Rating Filtering Lives on the Read DbContext, Not in Each Service
 
 Read services do **not** add a `.Where(s => s.Rating <= ...)` clause themselves. The ceiling is a global
-EF Core named query filter on `Story`, sourced from a scoped `IActiveUserContext` injected into
-`ApplicationDbContext`'s constructor (settled WU12) — see `cross-cutting.md` "Content Rating Filtering"
-and "Active-User Context" for the full mechanism and rationale (model invariant vs. per-method
+EF Core named query filter on `Story` (and `GroupAudience` on `Group`, `IsTakenDown` on four roots),
+sourced from `IActiveUserContext` and registered in `ReadOnlyApplicationDbContext.OnModelCreating` only
+(post-WU38 revamp — write context is unfiltered by design). See `cross-cutting.md` "Content Rating
+Filtering" for the principle and mechanism (model invariant vs. per-method
 vigilance). A read service projecting `Story` rows gets the filter automatically; it never re-derives
 it. The two cases where a service deliberately bypasses it:
 1. **Mod/admin/author read paths** that must surface content regardless of rating — call

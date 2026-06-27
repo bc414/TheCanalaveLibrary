@@ -115,7 +115,7 @@ public class ServerModerationReadService(
     public async Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync() =>
         await (
             from s in ReadDb.Stories
-                .IgnoreQueryFilters(["IsTakenDown"])
+                .IgnoreQueryFilters(["IsTakenDown"]) // elevated read: pending submissions may be taken-down
                 .Where(s => s.StoryStatusId == StoryStatusEnum.PendingApproval)
             join sl in ReadDb.StoryListings on s.StoryId equals sl.StoryId
             join sd in ReadDb.StoryDetails on s.StoryId equals sd.StoryId
@@ -158,7 +158,7 @@ public class ServerModerationReadService(
                 {
                     var intIds = ids.Select(id => (int)id).ToList();
                     var data = await (
-                        from s in ReadDb.Stories.IgnoreQueryFilters(["IsTakenDown"])
+                        from s in ReadDb.Stories.IgnoreQueryFilters(["IsTakenDown"]) // elevated read: mod queue sees taken-down content
                             .Where(s => intIds.Contains(s.StoryId))
                         join sl in ReadDb.StoryListings on s.StoryId equals sl.StoryId
                         join sd in ReadDb.StoryDetails on s.StoryId equals sd.StoryId
@@ -187,7 +187,7 @@ public class ServerModerationReadService(
                 {
                     var longIds = ids;
                     var data = await ReadDb.BaseComments
-                        .IgnoreQueryFilters(["IsTakenDown"])
+                        .IgnoreQueryFilters(["IsTakenDown"]) // elevated read: mod queue sees taken-down content
                         .Where(c => longIds.Contains(c.CommentId))
                         .Select(c => new
                         {
@@ -206,7 +206,7 @@ public class ServerModerationReadService(
                 {
                     var intIds = ids.Select(id => (int)id).ToList();
                     var data = await ReadDb.BlogPosts
-                        .IgnoreQueryFilters(["IsTakenDown"])
+                        .IgnoreQueryFilters(["IsTakenDown"]) // elevated read: mod queue sees taken-down content
                         .Where(b => intIds.Contains(b.BlogPostId))
                         .Select(b => new { b.BlogPostId, b.Title, b.ActiveReportCount })
                         .ToListAsync();
@@ -220,7 +220,7 @@ public class ServerModerationReadService(
                 {
                     var intIds = ids.Select(id => (int)id).ToList();
                     var data = await ReadDb.Recommendations
-                        .IgnoreQueryFilters(["IsTakenDown"])
+                        .IgnoreQueryFilters(["IsTakenDown"]) // elevated read: mod queue sees taken-down content
                         .Where(r => intIds.Contains(r.RecommendationId))
                         .Select(r => new { r.RecommendationId, r.StoryId, r.ActiveReportCount })
                         .ToListAsync();

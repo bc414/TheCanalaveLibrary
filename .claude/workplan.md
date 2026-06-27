@@ -1209,6 +1209,28 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 
 ---
 
+### WU-FilterRevamp — Content-visibility filter revamp + two dead-code removals DONE ✓ (2026-06-27)
+- **Cells changed:** F4/F5 L5 `4 → 2`. All other affected cells (Moderation/Groups/Recommendations/
+  BlogPosts L2) were already Stage 5 and remain so — this work corrected the code underlying them.
+- **Done:**
+  - **Phase A:** All four named EF display/visibility filters (`ContentRating`, `GroupAudience`,
+    `IsTakenDown` ×4 roots) moved from `ApplicationDbContext.OnModelCreating` to
+    `ReadOnlyApplicationDbContext.OnModelCreating`. `_activeUser` changed from `private` to
+    `protected`. Write context sees ground truth with no filters. ~15 write-side `IgnoreQueryFilters`
+    calls deleted; ~7 read-side elevated reads kept and annotated `// elevated read:`. Latent edit
+    bug at `ServerStoryWriteService:51` fixed by construction.
+  - **B1:** `Migrations/ReadOnlyApplicationDb/` deleted (9 files). Read context owns no migration
+    history; `ApplicationDbContext` is the sole migration source.
+  - **B2:** `HttpStoryReadService.cs` + `HttpStoryWriteService.cs` deleted; DI registrations at
+    `Client/Program.cs:16-17` removed; stale doc comment in `StoryDetailsDTO.cs:42` updated.
+  - **Tests:** `ContentRatingFilterTests` extended (+5 integration tests incl. line-51 regression);
+    `ModerationServiceTests` fixture corrected. All 1232 tests pass.
+  - **Docs:** `cross-cutting.md`, `layer1-data-model.md`, `layer2-services.md` skill files updated;
+    `audit/Stories.md` and `audit/Moderation.md` Stage notes written; `status.md` updated.
+- **Pointer:** `audit/Stories.md` §"Feature 4 / Feature 5 — Filter revamp Stage note."
+
+---
+
 ## Blocked / deferred — genuine Stage-1 intent gaps (no sequence number)
 
 These have an undesigned UI; resolve the design (chat with skill files) before they can be sequenced.

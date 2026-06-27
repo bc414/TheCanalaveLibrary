@@ -101,9 +101,47 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
   with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
   column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
   bUnit).
-- **L5 — Stage 4.** `HttpStoryWriteService` exists but `StoryEndpoints` maps **no** write endpoints; the
-  client calls handlers that don't exist. Reconcile by adding POST/PUT endpoints from the stable interface.
+- **L5 — Stage 2 (2026-06-27, filter revamp).** `HttpStoryWriteService` and `HttpStoryReadService`
+  deleted — they were dead code calling endpoints `StoryEndpoints` never mapped (divergence since WU12,
+  confirmed by the Stage-4 note above). Client `Program.cs:16-17` DI registrations removed. MVP is
+  `InteractiveServer`-only; L5 for story read/write is a genuine post-MVP build-to-spec item. No
+  architectural blocker remains. Tests: build green (Server + Client); `dotnet test` all 1232 pass.
 - **L6 — Stage 2.** Story search indexes deferred ("to be added by query need").
+
+### Feature 4 / Feature 5 — Filter revamp Stage note (2026-06-27)
+
+**What changed:** All four named EF display/visibility filters (`"ContentRating"` on `Story`,
+`"GroupAudience"` on `Group`, `"IsTakenDown"` on `Story`/`BaseComment`/`BaseBlogPost`/`Recommendation`)
+were moved from `ApplicationDbContext.OnModelCreating` to `ReadOnlyApplicationDbContext.OnModelCreating`.
+`_activeUser` on `ApplicationDbContext` changed from `private` to `protected` to allow the subclass to
+close over it in its own `OnModelCreating`. The write context (`ApplicationDbContext`) now carries no
+visibility filters — it sees ground truth. All display/visibility filters live on the read context only.
+
+**Latent bug closed:** `ServerStoryWriteService.UpdateStoryAsync:51` loaded the story via `writeDb.Stories`
+with no `IgnoreQueryFilters` bypass. An author with `ShowMatureContent=false` editing their own M-rated
+story got a null result (ContentRating filter on the write context filtered it out) → `KeyNotFoundException`
+"Story not found" on their own edit. Fixed by construction: the write context no longer has any filter.
+
+**Bypasses removed (~15):** All `IgnoreQueryFilters` on `writeDb` — 11 in `ServerModerationWriteService`
+(`IsTakenDown` on all 4 roots), 1 in `ServerRecommendationWriteService` (`ContentRating`), 2 in
+`ServerGroupWriteService` (`GroupAudience` + `ContentRating`), 1 in `ServerBlogPostWriteService`
+(`GroupAudience`). None of these were defensive; all existed solely because the write context inherited
+filters that writes should never see.
+
+**Elevated reads kept (~7):** Moderation read queue (`IsTakenDown` on Story/Comment/BlogPost/Recommendation)
+and `GetStoryIdsByAuthorAsync` (`ContentRating`). Each annotated `// elevated read:`.
+
+**Migration tree removed:** `Migrations/ReadOnlyApplicationDb/` deleted — the read context is never
+migrated separately (both contexts share the same schema); this had been accumulating dead artifacts.
+
+**Tests (Integration tier):** `ContentRatingFilterTests` extended with 5 new tests:
+- `TakenDownStory_IsInvisible_OnPublicRead` — IsTakenDown filter on read path
+- `TakenDownStory_WriteContext_CanStillBeUpdated` — write path sees ground truth after takedown
+- `MatureRatedStory_IsVisible_OnWriteContext_WhenAuthorHasMatureContentOff` — line-51 bug regression
+- `MatureRatedStory_IsInvisible_OnReadContext_WhenViewerHasMatureContentOff` — companion filter check
+`ModerationServiceTests.ResolveWithRemovalAsync_SoftHides_DropsFromPublicQuery_VisibleWithIgnoreFilter`
+updated to use `ReadOnlyApplicationDbContext` for the public-visibility assertion (was incorrectly using
+the unfiltered write context). All 1232 tests pass.
 
 ## Feature 5 — Story Browsing & Display
 

@@ -98,6 +98,15 @@ by `ContentRating` are dropped (not placeholder-labelled); no-op `IgnoreQueryFil
 removed. Verified: `dotnet test` green (see verification section below). Note: integration tests for the new
 per-mod rating-scoping behavior still to be added (see plan).
 
+**Stage note (filter revamp — 2026-06-27):** `ServerModerationWriteService` — all 11 `IgnoreQueryFilters(
+["IsTakenDown"])` on `writeDb` removed. Write context sees ground truth by architectural rule (no filters);
+no bypass is needed when mods load entities to act on them. Moderation *read* bypasses in
+`ServerModerationReadService` (`~6 calls`) kept — these are legitimate elevated reads (mod queue must see
+taken-down content); each annotated `// elevated read:`. `ModerationServiceTests.ResolveWithRemovalAsync_
+SoftHides_DropsFromPublicQuery_VisibleWithIgnoreFilter` corrected to use `ReadOnlyApplicationDbContext` for
+the public-visibility assertion (was using write context, which is now unfiltered). Tests: Integration tier,
+all 1232 pass. See `audit/Stories.md` §"Filter revamp Stage note" for the full cross-cutting narrative.
+
 ## Feature 53 — Story Import & Verification (→ WU39, deps WU34)
 
 **Note:** Story import and import verification are **split into WU39** (after WU34). `/mod/submissions`'s

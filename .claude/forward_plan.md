@@ -218,6 +218,20 @@ Guardrails:
 
 **Resolved:**
 
+- **Content-visibility filter placement** — resolved (2026-06-27, WU-FilterRevamp):
+  All named display/visibility EF Core query filters (`"ContentRating"`, `"GroupAudience"`,
+  `"IsTakenDown"`) live on `ReadOnlyApplicationDbContext.OnModelCreating` only. The write context
+  (`ApplicationDbContext`) carries no filters and sees ground truth. A `readDb` bypass
+  (`IgnoreQueryFilters`) is always a deliberate elevated read, annotated `// elevated read:`.
+  Convention: `cross-cutting.md` "Content Rating Filtering."
+- **Read context migration tree** — resolved (2026-06-27, WU-FilterRevamp):
+  `ReadOnlyApplicationDbContext` owns no schema and has no migration tree. Deleted
+  `Migrations/ReadOnlyApplicationDb/`. Future migrations always target `ApplicationDbContext`.
+  Convention: `layer1-data-model.md` §"Two DbContexts."
+- **HttpStory{Read,Write}Service (Client) dead-code removal** — resolved (2026-06-27, WU-FilterRevamp):
+  Deleted. MVP is `InteractiveServer`-only. F4/F5 L5 reclassified `4 → 2`. Convention: post-MVP
+  L5 WASM enablement section in `workplan.md`.
+
 - **Sprite system redesign — full decision set** — resolved (2026-06-27, this WU):
   (1) **Theme.Slug column** (`[Required][MaxLength(64)]`, unique index). `Theme.Name` stays
   display-only. Claims + sprite path carry the slug. Seed: `{ ThemeId=1, Name="Pokémon", Slug="pokemon" }`.

@@ -76,6 +76,14 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L5 | L6 | L7 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|----|----|----|----|
+- **Content-safety filter revamp done (2026-06-27).** All named display/visibility EF filters
+  (`ContentRating`, `GroupAudience`, `IsTakenDown`) moved from `ApplicationDbContext` to
+  `ReadOnlyApplicationDbContext.OnModelCreating` only. Write context now sees ground truth
+  (no filters); ~15 unnecessary write-side bypasses deleted; ~7 legitimate elevated reads kept
+  and annotated `// elevated read:`. Closed latent line-51 edit bug; client HTTP dead code
+  (`HttpStory{Read,Write}Service`) and parallel migration tree (`Migrations/ReadOnlyApplicationDb/`)
+  deleted. F4/F5 L5: `4 → 2`. Grid changes only those two cells. Detail: `audit/Stories.md`,
+  `audit/Moderation.md`, `canalave-conventions/cross-cutting.md` "Content Rating Filtering."
 - **Pre-integration cleanup done (WU37.5, 2026-06-26).** `IsHidden`/`DateModeratedRemoved`/
   `ModerationRemovalReason` → `IsTakenDown`/`TakedownDate`/`TakedownReason` on 4 roots; EF filter key
   `"ModeratedVisibility"` → `"IsTakenDown"`; `IModeratableContent` interface collapses moderation dispatch;
@@ -87,8 +95,8 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | N/A | N/A | N/A | N/A |
 | 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |
-| 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 4 | 2 | N/A | N/A |
-| 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 4 | 2 | N/A | N/A |
+| 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
+| 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
 | 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |

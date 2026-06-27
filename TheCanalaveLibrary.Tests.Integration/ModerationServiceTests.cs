@@ -133,21 +133,24 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         await GetMod().ResolveWithRemovalAsync(reportId, "rule violation");
 
         using IServiceScope scope = Factory.Services.CreateScope();
-        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        // Use write context (unfiltered) to assert ground-truth state.
+        ApplicationDbContext writeDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        // Use read context (filtered) to assert the public-visibility invariant.
+        ReadOnlyApplicationDbContext readDb = scope.ServiceProvider.GetRequiredService<ReadOnlyApplicationDbContext>();
 
-        Story story = await db.Stories.IgnoreQueryFilters(["IsTakenDown"])
+        Story story = await writeDb.Stories
             .SingleAsync(s => s.StoryId == storyId);
         story.IsTakenDown.Should().BeTrue();
         story.TakedownReason.Should().Be("rule violation");
         story.TakedownDate.Should().NotBeNull();
 
-        // Public query (with IsTakenDown filter active) should not find the story.
-        bool visiblePublicly = await db.Stories
+        // Public query via read context (IsTakenDown filter active) should not find the story.
+        bool visiblePublicly = await readDb.Stories
             .AnyAsync(s => s.StoryId == storyId);
         visiblePublicly.Should().BeFalse();
 
         // ContentRemoved notification should go to the author.
-        bool authorNotified = await db.Notifications.AnyAsync(n =>
+        bool authorNotified = await writeDb.Notifications.AnyAsync(n =>
             n.RecipientUserId == authorId &&
             n.NotificationTypeId == NotificationTypeEnum.ContentRemoved);
         authorNotified.Should().BeTrue();

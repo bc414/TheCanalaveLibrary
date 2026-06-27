@@ -16,7 +16,11 @@ namespace TheCanalaveLibrary.Server;
 // through it. A primary constructor can't be declared protected, hence the explicit form here.
 public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int>
 {
-    private readonly IActiveUserContext _activeUser;
+    // protected so ReadOnlyApplicationDbContext can close over it in its own OnModelCreating to
+    // register the display/visibility query filters (ContentRating, GroupAudience, IsTakenDown).
+    // The write context (this class) carries no filters — it sees ground truth. See
+    // cross-cutting.md "Content Rating Filtering" for the principle.
+    protected readonly IActiveUserContext _activeUser;
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options, IActiveUserContext activeUser)
         : this((DbContextOptions)options, activeUser)
@@ -175,40 +179,10 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
         // folders) — see skills/canalave-conventions/layer1-data-model.md §"Fluent API Organization".
         modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
 
-        // Content-rating master filter ("mature off ⇒ no trace anywhere", spec §5) — settled WU12.
-        // Deliberately inline here, NOT in Data/Configurations/: the filter must close over THIS
-        // DbContext instance's `_activeUser` field, so EF re-evaluates `_activeUser.ShowMatureContent`
-        // against whichever instance is actually running a query — never a value precomputed once into
-        // a local variable, which EF's model caching would freeze forever across every future DbContext
-        // instance (the canonical EF Core multi-tenant-filter pitfall). A separate parameterless
-        // IEntityTypeConfiguration<T> class (instantiated via Activator.CreateInstance, no DI) has no
-        // DbContext instance to close over, so it structurally cannot express this filter — that's why
-        // it lives here instead of there.
-        // See cross-cutting.md "Content Rating Filtering" for the IgnoreQueryFilters(["ContentRating"])
-        // escape hatch used by mod/author/admin paths that must see every rating.
-        modelBuilder.Entity<Story>().HasQueryFilter("ContentRating",
-            s => s.Rating <= (_activeUser.ShowMatureContent ? Rating.M : Rating.T));
-
-        // Group audience-visibility filter — same "zero visible trace" rule as ContentRating (settled WU32).
-        // AudienceRating = M groups are invisible to users with mature content disabled.
-        // Applies only to Group; child entities (GroupStory, GroupComment, etc.) are accessed via the group,
-        // so they become unreachable once the parent is filtered — no child-table filter needed.
-        // Escape hatch: .IgnoreQueryFilters(["GroupAudience"]) for admin/creator paths that must see all groups.
-        // Lives here (not in GroupConfiguration) for the same reason as ContentRating: must close over THIS
-        // instance's _activeUser field so EF re-evaluates per-request, not once into a cached lambda.
-        modelBuilder.Entity<Group>().HasQueryFilter("GroupAudience",
-            g => _activeUser.ShowMatureContent || g.AudienceRating != Rating.M);
-
-        // IsTakenDown filter — hides moderator-removed content from public reads (WU34).
-        // Column name matches the filter key: both use "IsTakenDown" stem. This filter has no user-state
-        // dependency (unlike ContentRating/GroupAudience) but lives here alongside them for a single
-        // authoritative location for all named filters.
-        // Escape hatch for mod review paths: .IgnoreQueryFilters(["IsTakenDown"]) — so already-taken-down
-        // content stays reviewable. ContentRating and GroupAudience should NOT be bypassed on review paths;
-        // a moderator's content-rating reach equals their personal ShowMatureContent setting (same as browsing).
-        modelBuilder.Entity<Story>().HasQueryFilter("IsTakenDown", s => !s.IsTakenDown);
-        modelBuilder.Entity<BaseComment>().HasQueryFilter("IsTakenDown", c => !c.IsTakenDown);
-        modelBuilder.Entity<BaseBlogPost>().HasQueryFilter("IsTakenDown", b => !b.IsTakenDown);
-        modelBuilder.Entity<Recommendation>().HasQueryFilter("IsTakenDown", r => !r.IsTakenDown);
+        // No display/visibility query filters here. The write context sees ground truth — it must load
+        // entities by id regardless of rating, takedown state, or audience gating. All named filters
+        // (ContentRating, GroupAudience, IsTakenDown) live on ReadOnlyApplicationDbContext.OnModelCreating,
+        // which closes over _activeUser (exposed as protected above). See cross-cutting.md
+        // "Content Rating Filtering" for the principle and rationale.
     }
 }

@@ -134,18 +134,14 @@ public class ServerGroupWriteService(
         int userId = RequireAuthenticatedUser();
         await RequireMemberAsync(dto.GroupId, userId);
 
-        // Load the group — audience filter bypassed because we already verified membership;
-        // a member must always be able to act on their group even if it's Mature.
+        // Write context is unfiltered — loads the group and story regardless of audience rating or
+        // content rating, so a member can always act on their group and any story. The tier-2 check
+        // below enforces the group's MaxContentRating ceiling on the loaded story.
         Group? group = await writeDb.Groups
-            .IgnoreQueryFilters(["GroupAudience"])
             .FirstOrDefaultAsync(g => g.GroupId == dto.GroupId);
         if (group is null) throw new KeyNotFoundException($"Group {dto.GroupId} not found.");
 
-        // Load the story without the ContentRating filter so that any member can attempt to add
-        // an M-rated story; the tier-2 check below then decides whether the story's rating fits
-        // within the group's MaxContentRating ceiling.
         Story? story = await writeDb.Stories
-            .IgnoreQueryFilters(["ContentRating"])
             .FirstOrDefaultAsync(s => s.StoryId == dto.StoryId);
         if (story is null) throw new KeyNotFoundException($"Story {dto.StoryId} not found.");
 

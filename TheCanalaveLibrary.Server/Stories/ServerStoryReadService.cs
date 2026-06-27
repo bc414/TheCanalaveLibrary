@@ -164,7 +164,7 @@ public class ServerStoryReadService(
 
     public async Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId) =>
         await readDb.Stories
-            .IgnoreQueryFilters(["ContentRating"])
+            .IgnoreQueryFilters(["ContentRating"]) // elevated read: author always sees their own stories regardless of rating setting
             .Where(s => s.AuthorId == authorId)
             .Select(s => s.StoryId)
             .ToListAsync();

@@ -208,7 +208,6 @@ public class ServerModerationWriteService(
         int modId = RequireModerator();
 
         Story story = await writeDb.Stories
-            .IgnoreQueryFilters(["IsTakenDown"])
             .Include(s => s.StoryDetail)
             .SingleAsync(s => s.StoryId == storyId);
 
@@ -237,7 +236,6 @@ public class ServerModerationWriteService(
         int modId = RequireModerator();
 
         Story story = await writeDb.Stories
-            .IgnoreQueryFilters(["IsTakenDown"])
             .SingleAsync(s => s.StoryId == storyId);
 
         if (story.StoryStatusId != StoryStatusEnum.PendingApproval)
@@ -273,11 +271,11 @@ public class ServerModerationWriteService(
     }
 
     /// <summary>
-    /// Loads the <see cref="IModeratableContent"/> entity for the given type and id, bypassing
-    /// only the <c>IsTakenDown</c> filter so already-taken-down content remains actionable.
-    /// ContentRating and GroupAudience stay live — a moderator's rating reach equals their
-    /// personal ShowMatureContent setting. Returns <c>null</c> if the entity doesn't exist or
-    /// is filtered by ContentRating/GroupAudience (which is correct: the mod can't see it anyway).
+    /// Loads the <see cref="IModeratableContent"/> entity for the given type and id from the
+    /// write context (unfiltered — sees ground truth regardless of takedown/rating state).
+    /// ContentRating and GroupAudience do not apply on the write context; a moderator acting on
+    /// a taken-down or rating-gated entity acts on ground truth, not the public view.
+    /// Returns <c>null</c> if the entity doesn't exist.
     /// Message and User are not IModeratableContent — callers handle them directly.
     /// </summary>
     private async Task<IModeratableContent?> LoadModeratableAsync(ReportedEntityType type, long id)
@@ -286,22 +284,18 @@ public class ServerModerationWriteService(
         {
             case ReportedEntityType.Story:
                 return await writeDb.Stories
-                    .IgnoreQueryFilters(["IsTakenDown"])
                     .SingleOrDefaultAsync(s => s.StoryId == (int)id);
 
             case ReportedEntityType.Comment:
                 return await writeDb.BaseComments
-                    .IgnoreQueryFilters(["IsTakenDown"])
                     .SingleOrDefaultAsync(c => c.CommentId == id);
 
             case ReportedEntityType.BlogPost:
                 return await writeDb.BlogPosts
-                    .IgnoreQueryFilters(["IsTakenDown"])
                     .SingleOrDefaultAsync(b => b.BlogPostId == (int)id);
 
             case ReportedEntityType.Recommendation:
                 return await writeDb.Recommendations
-                    .IgnoreQueryFilters(["IsTakenDown"])
                     .SingleOrDefaultAsync(r => r.RecommendationId == (int)id);
 
             default:
@@ -314,15 +308,14 @@ public class ServerModerationWriteService(
     /// <c>ActiveReportCount</c> column on the target entity. No-op for <c>Message</c>
     /// (PrivateMessage has no counter column).
     /// Uses ExecuteUpdateAsync (set-based, no load) — does not go through IModeratableContent.
-    /// ContentRating stays live; only IsTakenDown is bypassed so taken-down content still gets
-    /// its counter adjusted.
+    /// Write context is unfiltered — taken-down content gets its counter adjusted correctly.
     /// </summary>
     private async Task AdjustActiveReportCountAsync(ReportedEntityType type, long id, int delta)
     {
         switch (type)
         {
             case ReportedEntityType.Story:
-                await writeDb.Stories.IgnoreQueryFilters(["IsTakenDown"])
+                await writeDb.Stories
                     .Where(s => s.StoryId == (int)id)
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.ActiveReportCount, x => x.ActiveReportCount + delta));
                 break;
@@ -332,17 +325,17 @@ public class ServerModerationWriteService(
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.ActiveReportCount, x => x.ActiveReportCount + delta));
                 break;
             case ReportedEntityType.Comment:
-                await writeDb.BaseComments.IgnoreQueryFilters(["IsTakenDown"])
+                await writeDb.BaseComments
                     .Where(c => c.CommentId == id)
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.ActiveReportCount, x => x.ActiveReportCount + delta));
                 break;
             case ReportedEntityType.BlogPost:
-                await writeDb.BlogPosts.IgnoreQueryFilters(["IsTakenDown"])
+                await writeDb.BlogPosts
                     .Where(b => b.BlogPostId == (int)id)
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.ActiveReportCount, x => x.ActiveReportCount + delta));
                 break;
             case ReportedEntityType.Recommendation:
-                await writeDb.Recommendations.IgnoreQueryFilters(["IsTakenDown"])
+                await writeDb.Recommendations
                     .Where(r => r.RecommendationId == (int)id)
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.ActiveReportCount, x => x.ActiveReportCount + delta));
                 break;

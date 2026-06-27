@@ -345,22 +345,21 @@ as the story `ContentRating` filter, applied to group listings:
 - **`AudienceRating = M` (Mature):** group is hidden from users where `ShowMatureContent = false`.
 
 This is enforced as a **named EF Core query filter `"GroupAudience"`** on `Group`, registered in
-`ApplicationDbContext` and `ReadOnlyApplicationDbContext` alongside the `ContentRating` filter:
+`ReadOnlyApplicationDbContext.OnModelCreating` (not the base `ApplicationDbContext` — see "Content Rating
+Filtering" below for the principle: display filters live only on the read context):
 
 ```csharp
 modelBuilder.Entity<Group>()
-    .HasQueryFilter("GroupAudience", g => _maxRating == Rating.M || g.AudienceRating <= Rating.T);
+    .HasQueryFilter("GroupAudience", g => _activeUser.ShowMatureContent || g.AudienceRating != Rating.M);
 ```
 
-`_maxRating` is the same field already captured from `IActiveUserContext` for the story filter — no
-additional constructor dependency is needed. Anonymous and mature-disabled users get `Rating.T`
-ceiling, so any Mature group is invisible; mature-enabled users get `Rating.M`, so all groups are visible.
+`_activeUser` is the `protected readonly IActiveUserContext` field on `ApplicationDbContext`, accessible to
+the subclass. Anonymous and mature-disabled users cannot see Mature groups; mature-enabled users can.
 
-**Named opt-out:** group admin/creator paths that must see groups regardless of audience rating (e.g.,
-a creator editing their own Mature group) call:
-```csharp
-writeDb.Groups.IgnoreQueryFilters(["GroupAudience"]).FirstOrDefaultAsync(g => g.GroupId == id)
-```
+**Write paths are unfiltered by design** — the write context (`ApplicationDbContext`) carries no
+`GroupAudience` filter, so load-by-id on write paths sees all groups without any `IgnoreQueryFilters` call.
+The mod/creator *read* path that legitimately needs to surface a taken-down or audience-gated group goes
+through the read context with an explicit elevated-read bypass (annotated `// elevated read:`).
 
 **Named filter applies to `Group` only.** `GroupStory`, `GroupFolder`, `GroupComment`, and
 `GroupBlogPost` are accessed only in the context of their parent group — when the parent group is
@@ -410,54 +409,77 @@ auto-promote).
 
 ## Content Rating Filtering
 
-Every read service returning story data must filter by content rating. **Settled (WU12): this is a
-global EF Core named query filter, sourced from `IActiveUserContext` — not a per-method `.Where`.**
-A per-method filter only holds "no trace anywhere" as strong as every future read method remembering to
-add it; a model-level filter makes it a property of the model. `ApplicationDbContext` takes
-`IActiveUserContext` in its constructor and closes over the resulting ceiling:
+Every read service returning story data must filter by content rating. **Settled (WU12, revised post-WU38
+revamp): this is a global EF Core named query filter, sourced from `IActiveUserContext`, defined on
+`ReadOnlyApplicationDbContext` only — not the base `ApplicationDbContext`.**
+
+### The principle: display filters live only on the read context
+
+> **The write context (`ApplicationDbContext`) sees ground truth and is never filtered. All display/
+> visibility filters — `ContentRating`, `GroupAudience`, `IsTakenDown` — live only on
+> `ReadOnlyApplicationDbContext`.** A bypass (`IgnoreQueryFilters`) on the read context is therefore always
+> a deliberate, auditable "this read intentionally sees more than a normal viewer." There is nothing to
+> forget on a write.
+
+This makes the content-safety boundary **structurally safe** instead of discipline-safe. Write services
+load entities by id to mutate them; they must see ground truth. If a visibility filter sits on the write
+context, every write path must *remember* to bypass it — a discipline that silently breaks (WU31_5b,
+post-WU38 audit). Moving all filters to the read context eliminates that entire class of bug.
+
+`ReadOnlyApplicationDbContext` inherits from `ApplicationDbContext` and overrides `OnModelCreating` to add
+the four named filters, closing over the `protected readonly IActiveUserContext _activeUser` field exposed
+by the base class:
 
 ```csharp
-public class ApplicationDbContext : DbContext
-{
-    private readonly Rating _maxRating;
+// ReadOnlyApplicationDbContext.OnModelCreating (after base.OnModelCreating):
+modelBuilder.Entity<Story>().HasQueryFilter("ContentRating",
+    s => s.Rating <= (_activeUser.ShowMatureContent ? Rating.M : Rating.T));
 
-    public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options, IActiveUserContext activeUser)
-        : base(options)
-    {
-        _maxRating = activeUser.ShowMatureContent ? Rating.M : Rating.T;
-    }
+modelBuilder.Entity<Group>().HasQueryFilter("GroupAudience",
+    g => _activeUser.ShowMatureContent || g.AudienceRating != Rating.M);
 
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<Story>()
-            .HasQueryFilter("ContentRating", s => s.Rating <= _maxRating);
-    }
-}
+modelBuilder.Entity<Story>().HasQueryFilter("IsTakenDown", s => !s.IsTakenDown);
+modelBuilder.Entity<BaseComment>().HasQueryFilter("IsTakenDown", c => !c.IsTakenDown);
+modelBuilder.Entity<BaseBlogPost>().HasQueryFilter("IsTakenDown", b => !b.IsTakenDown);
+modelBuilder.Entity<Recommendation>().HasQueryFilter("IsTakenDown", r => !r.IsTakenDown);
 ```
+
+EF Core caches models per context *type*, so the read context gets a filtered model; the base type
+(`ApplicationDbContext`) remains unfiltered. Query filters don't touch schema — no migration impact.
 
 Anonymous viewers get the `Rating.T` ceiling (never `IsAuthenticated` ⇒ never `ShowMatureContent`).
-`User.ShowMatureContent` is a hot boolean on the User table — direct column, not in jsonb. This is the
-most frequently evaluated filter in the system.
+`User.ShowMatureContent` is a hot boolean on the User table — direct column, not in jsonb.
 
-Mod/author/admin read paths that must see all ratings call `IgnoreQueryFilters` **by name** — EF Core 10
-named filters let this opt-out target only the content-rating filter, leaving any other named filter
-(e.g. a future soft-delete filter) intact on the same query:
+### Elevated reads (the only surviving bypasses)
+
+Legitimate "see more than a normal viewer" read paths call `IgnoreQueryFilters` **by name** and are
+annotated `// elevated read:` so they read as deliberate:
 
 ```csharp
-// Mod queue / author viewing their own unpublished mature story:
-var allRatings = await context.Stories
+// elevated read: author always sees their own stories regardless of personal rating setting
+await readDb.Stories
     .IgnoreQueryFilters(["ContentRating"])
+    .Where(s => s.AuthorId == userId)
     .ToListAsync();
+
+// elevated read: mod queue must see taken-down content to act on it
+await readDb.Stories
+    .IgnoreQueryFilters(["IsTakenDown"])
+    .Where(s => s.StoryId == id)
+    .FirstOrDefaultAsync();
 ```
 
-**Named filter applies to non-TPT root entities only (`Story`).** Placing `HasQueryFilter` on a TPT
-root (`BaseBlogPost`) forces `IgnoreQueryFilters()` on derived DbSets — which generates broken SQL on
-entity materialization in EF Core 10 — and `ExecuteDeleteAsync` is unsupported on TPT base-type DbSets
-entirely. Blog-post content rating is therefore checked via an explicit `.Where(p => p.Rating <= max)`
-in each service read projection; the rating ceiling is enforced per-method rather than model-level.
-Blog-post delete uses the change-tracker stub (not raw SQL): `writeDb.Remove(new ProfileBlogPost {
-BlogPostId = id }); await writeDb.SaveChangesAsync();` — EF issues child-then-base DELETE in one
-transaction. See `audit/BlogPosts.md` §Feature 35 Stage-5 note (WU31.5) for full rationale.
+EF Core 10 named filters allow per-filter opt-out, leaving other named filters active on the same query.
+
+### TPT blog-post exception
+
+`HasQueryFilter` on a TPT root (`BaseBlogPost`) generates broken EF Core 10 SQL on entity
+materialization, so the `"IsTakenDown"` and blog-post content-rating filters are **not** applied
+model-level to `BaseBlogPost`. Instead, each blog-post read service enforces them via an explicit
+`.Where(p => !p.IsTakenDown)` / `.Where(p => p.Rating <= max)` in the projection. Blog-post delete uses
+the change-tracker stub: `writeDb.Remove(new ProfileBlogPost { BlogPostId = id });
+await writeDb.SaveChangesAsync();` — EF issues child-then-base DELETE in one transaction. See
+`audit/BlogPosts.md` §Feature 35 Stage-5 note (WU31.5) for full rationale.
 
 ## Notification Creation
 
@@ -795,8 +817,10 @@ via a distinct `ApplyHardDeleteAsync(type, id)` path in `ServerModerationWriteSe
 default and is presented as a distinct moderator choice, not the same action as soft takedown.
 
 **Named query filter `"IsTakenDown"`.** Each removable entity registers the `"IsTakenDown"` filter via
-`HasQueryFilter` in `OnModelCreating` (EF Core named filters, composable alongside `"ContentRating"` and
-`"GroupAudience"`). Reviews/author reads use `IgnoreQueryFilters(["IsTakenDown"])`.
+`HasQueryFilter` in `ReadOnlyApplicationDbContext.OnModelCreating` (composable alongside `"ContentRating"`
+and `"GroupAudience"` — all display/visibility filters live on the read context only; see "Content Rating
+Filtering" above). The write context sees ground truth; `IgnoreQueryFilters` is only needed on elevated
+*read* paths (mod queue, author viewing own taken-down content).
 
 **Moderator filter behavior (settled 2026-06-26).** A moderator's content-rating reach equals their
 personal `ShowMatureContent` setting, **both** when browsing the site and when reviewing the report queue.

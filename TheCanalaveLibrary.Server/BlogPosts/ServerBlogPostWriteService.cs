@@ -190,9 +190,8 @@ public class ServerBlogPostWriteService(
         if (!isMember)
             throw new UnauthorizedAccessException("You must be a member of this group to post a blog post.");
 
-        // Verify the group exists (audience filter bypassed — member is always allowed to post).
+        // Write context is unfiltered — group loads regardless of audience rating.
         bool groupExists = await writeDb.Groups
-            .IgnoreQueryFilters(["GroupAudience"])
             .AnyAsync(g => g.GroupId == dto.GroupId);
         if (!groupExists)
             throw new KeyNotFoundException($"Group {dto.GroupId} not found.");

@@ -40,12 +40,11 @@ public class ServerRecommendationWriteService(
     {
         int userId = RequireAuthenticatedUser("Submitting a recommendation");
 
-        // IgnoreQueryFilters: the ContentRating filter must not prevent recommending M-rated stories;
-        // the story must exist, not be visible to the recommender.
-        // Project to anonymous type so null AuthorId (authorless story) is not confused with "row
-        // not found" — FirstOrDefault<int?> cannot distinguish the two cases.
+        // Write context is unfiltered — story loads regardless of ContentRating, so a reader with
+        // mature content off can still recommend an M-rated story. Project to anonymous type so null
+        // AuthorId (authorless story) is not confused with "row not found" — FirstOrDefault<int?>
+        // cannot distinguish the two cases.
         var storyRow = await writeDb.Stories
-            .IgnoreQueryFilters(["ContentRating"])
             .Where(s => s.StoryId == dto.StoryId)
             .Select(s => new { s.AuthorId })
             .FirstOrDefaultAsync();
