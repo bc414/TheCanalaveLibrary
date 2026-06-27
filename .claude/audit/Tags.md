@@ -29,6 +29,15 @@ follow-on found while building WU12's `IActiveUserContext` — not a re-opened F
 `StoryCharacterStoryCharacterRelationship`. Feature 10's unrelated `StoryRelationship` /
 `StoryRelationshipType` (story-to-story) are unchanged.
 
+**Pre-integration cleanup (2026-06-26):** `CharacterRelationshipType { Romantic, Platonic }` enum in
+`Core/Lookups/ModelEnums.cs` deleted — zero references repo-wide; the live pairing-type enum is
+`CharacterPairingType` (Romantic/Platonic). `CharacterPairingType` backing type normalized from `: byte` to
+`: short`, consistent with the project convention (magic enums use `: short` / `HasConversion<short>()`;
+no migration needed — Npgsql maps both `byte` and `short` to `smallint`). Dead placeholder comment
+`// ... (Keep all existing enums from Part 1 and Part 2) ...` removed from `ModelEnums.cs`.
+`layer1-data-model.md` enum table example updated to `CharacterPairingType` (replaces the now-deleted
+`CharacterRelationshipType`). Verified: `dotnet test` 1222 green.
+
 **Components:** `TagSelector` (`SharedUI/Tags/` — moved out of the legacy `Components/` folder; see
 `canalave-conventions/SKILL.md` "Code Organization"). The empty, unused `TagViewModel.cs` that sat
 alongside it was deleted in the same move. **The relocation is folder-only — `TagSelector`'s content is

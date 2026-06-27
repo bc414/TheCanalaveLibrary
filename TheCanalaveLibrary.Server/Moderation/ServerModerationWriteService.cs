@@ -13,6 +13,17 @@ namespace TheCanalaveLibrary.Server;
 /// Messages have no <c>ActiveReportCount</c> column — <see cref="AdjustActiveReportCountAsync"/>
 /// is a no-op for that type (per cross-cutting.md §"Moderation Model (settled WU34)").</para>
 ///
+/// <para><b>IModeratableContent.</b> Story, Comment, BlogPost, and Recommendation implement
+/// <see cref="IModeratableContent"/>; their soft-remove and hard-delete operations are handled
+/// through shared interface code after a single per-type load. User and Message stay explicitly
+/// special-cased: User uses ApplyAccountActionAsync; Message goes straight to hard-delete with no
+/// takedown columns.</para>
+///
+/// <para><b>Content-rating filter.</b> Review/entity loads bypass <em>only</em>
+/// <c>IsTakenDown</c> (so already-taken-down content stays reviewable); ContentRating and
+/// GroupAudience stay live so a T-only moderator's review queue is scoped by their own
+/// ShowMatureContent setting — exactly as when browsing (settled 2026-06-26).</para>
+///
 /// <para><b>Notifications are best-effort.</b> All <c>NotifyXxx</c> calls happen <em>after</em>
 /// the primary <c>SaveChangesAsync</c> inside a <c>try/catch</c> that logs and swallows — a
 /// notification failure never rolls back a moderation action.</para>
@@ -197,7 +208,7 @@ public class ServerModerationWriteService(
         int modId = RequireModerator();
 
         Story story = await writeDb.Stories
-            .IgnoreQueryFilters()
+            .IgnoreQueryFilters(["IsTakenDown"])
             .Include(s => s.StoryDetail)
             .SingleAsync(s => s.StoryId == storyId);
 
@@ -226,7 +237,7 @@ public class ServerModerationWriteService(
         int modId = RequireModerator();
 
         Story story = await writeDb.Stories
-            .IgnoreQueryFilters()
+            .IgnoreQueryFilters(["IsTakenDown"])
             .SingleAsync(s => s.StoryId == storyId);
 
         if (story.StoryStatusId != StoryStatusEnum.PendingApproval)
@@ -234,8 +245,8 @@ public class ServerModerationWriteService(
 
         int? authorId = story.AuthorId;
         story.StoryStatusId = StoryStatusEnum.Rejected;
-        story.ModerationRemovalReason = reason;
-        story.DateModeratedRemoved = DateTime.UtcNow;
+        story.TakedownReason = reason;
+        story.TakedownDate = DateTime.UtcNow;
 
         await writeDb.SaveChangesAsync();
 
@@ -262,16 +273,56 @@ public class ServerModerationWriteService(
     }
 
     /// <summary>
+    /// Loads the <see cref="IModeratableContent"/> entity for the given type and id, bypassing
+    /// only the <c>IsTakenDown</c> filter so already-taken-down content remains actionable.
+    /// ContentRating and GroupAudience stay live — a moderator's rating reach equals their
+    /// personal ShowMatureContent setting. Returns <c>null</c> if the entity doesn't exist or
+    /// is filtered by ContentRating/GroupAudience (which is correct: the mod can't see it anyway).
+    /// Message and User are not IModeratableContent — callers handle them directly.
+    /// </summary>
+    private async Task<IModeratableContent?> LoadModeratableAsync(ReportedEntityType type, long id)
+    {
+        switch (type)
+        {
+            case ReportedEntityType.Story:
+                return await writeDb.Stories
+                    .IgnoreQueryFilters(["IsTakenDown"])
+                    .SingleOrDefaultAsync(s => s.StoryId == (int)id);
+
+            case ReportedEntityType.Comment:
+                return await writeDb.BaseComments
+                    .IgnoreQueryFilters(["IsTakenDown"])
+                    .SingleOrDefaultAsync(c => c.CommentId == id);
+
+            case ReportedEntityType.BlogPost:
+                return await writeDb.BlogPosts
+                    .IgnoreQueryFilters(["IsTakenDown"])
+                    .SingleOrDefaultAsync(b => b.BlogPostId == (int)id);
+
+            case ReportedEntityType.Recommendation:
+                return await writeDb.Recommendations
+                    .IgnoreQueryFilters(["IsTakenDown"])
+                    .SingleOrDefaultAsync(r => r.RecommendationId == (int)id);
+
+            default:
+                throw new InvalidOperationException($"LoadModeratableAsync does not handle '{type}' — use the direct path.");
+        }
+    }
+
+    /// <summary>
     /// Atomically increments (positive delta) or decrements (negative delta) the
     /// <c>ActiveReportCount</c> column on the target entity. No-op for <c>Message</c>
     /// (PrivateMessage has no counter column).
+    /// Uses ExecuteUpdateAsync (set-based, no load) — does not go through IModeratableContent.
+    /// ContentRating stays live; only IsTakenDown is bypassed so taken-down content still gets
+    /// its counter adjusted.
     /// </summary>
     private async Task AdjustActiveReportCountAsync(ReportedEntityType type, long id, int delta)
     {
         switch (type)
         {
             case ReportedEntityType.Story:
-                await writeDb.Stories.IgnoreQueryFilters()
+                await writeDb.Stories.IgnoreQueryFilters(["IsTakenDown"])
                     .Where(s => s.StoryId == (int)id)
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.ActiveReportCount, x => x.ActiveReportCount + delta));
                 break;
@@ -281,17 +332,17 @@ public class ServerModerationWriteService(
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.ActiveReportCount, x => x.ActiveReportCount + delta));
                 break;
             case ReportedEntityType.Comment:
-                await writeDb.BaseComments.IgnoreQueryFilters()
+                await writeDb.BaseComments.IgnoreQueryFilters(["IsTakenDown"])
                     .Where(c => c.CommentId == id)
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.ActiveReportCount, x => x.ActiveReportCount + delta));
                 break;
             case ReportedEntityType.BlogPost:
-                await writeDb.BlogPosts.IgnoreQueryFilters()
+                await writeDb.BlogPosts.IgnoreQueryFilters(["IsTakenDown"])
                     .Where(b => b.BlogPostId == (int)id)
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.ActiveReportCount, x => x.ActiveReportCount + delta));
                 break;
             case ReportedEntityType.Recommendation:
-                await writeDb.Recommendations.IgnoreQueryFilters()
+                await writeDb.Recommendations.IgnoreQueryFilters(["IsTakenDown"])
                     .Where(r => r.RecommendationId == (int)id)
                     .ExecuteUpdateAsync(s => s.SetProperty(x => x.ActiveReportCount, x => x.ActiveReportCount + delta));
                 break;
@@ -302,67 +353,27 @@ public class ServerModerationWriteService(
     }
 
     /// <summary>
-    /// Soft-hides the target entity by setting <c>IsHidden = true</c> and recording
-    /// the removal metadata. Returns the content author's user id (for notification), or
-    /// <c>null</c> when the author cannot be determined.
+    /// Soft-removes the target by setting <c>IsTakenDown = true</c> and recording removal metadata
+    /// via <see cref="IModeratableContent"/>. Returns the content author's user id, or <c>null</c>
+    /// when the entity doesn't exist or the moderator's rating filter excludes it.
+    /// Messages have no takedown columns — falls through to <see cref="ApplyHardDeleteAsync"/>.
+    /// User removal is handled via <see cref="ApplyAccountActionAsync"/> (account status change).
     /// </summary>
     private async Task<int?> ApplyRemovalAsync(ReportedEntityType type, long id, string reason)
     {
-        var removedAt = DateTime.UtcNow;
+        if (type == ReportedEntityType.Message)
+            return await ApplyHardDeleteAsync(type, id);
 
-        switch (type)
-        {
-            case ReportedEntityType.Story:
-            {
-                var story = await writeDb.Stories.IgnoreQueryFilters()
-                    .SingleOrDefaultAsync(s => s.StoryId == (int)id);
-                if (story is null) return null;
-                story.IsHidden = true;
-                story.DateModeratedRemoved = removedAt;
-                story.ModerationRemovalReason = reason;
-                return story.AuthorId;
-            }
-            case ReportedEntityType.Comment:
-            {
-                var comment = await writeDb.BaseComments.IgnoreQueryFilters()
-                    .SingleOrDefaultAsync(c => c.CommentId == id);
-                if (comment is null) return null;
-                comment.IsHidden = true;
-                comment.DateModeratedRemoved = removedAt;
-                comment.ModerationRemovalReason = reason;
-                return comment.UserId;
-            }
-            case ReportedEntityType.BlogPost:
-            {
-                var post = await writeDb.BlogPosts.IgnoreQueryFilters()
-                    .SingleOrDefaultAsync(b => b.BlogPostId == (int)id);
-                if (post is null) return null;
-                post.IsHidden = true;
-                post.DateModeratedRemoved = removedAt;
-                post.ModerationRemovalReason = reason;
-                return post.AuthorId;
-            }
-            case ReportedEntityType.Recommendation:
-            {
-                var rec = await writeDb.Recommendations.IgnoreQueryFilters()
-                    .SingleOrDefaultAsync(r => r.RecommendationId == (int)id);
-                if (rec is null) return null;
-                rec.IsHidden = true;
-                rec.DateModeratedRemoved = removedAt;
-                rec.ModerationRemovalReason = reason;
-                return rec.RecommenderId;
-            }
-            case ReportedEntityType.Message:
-                // Messages have no soft-delete columns; use ApplyHardDeleteAsync for illegal content.
-                return await ApplyHardDeleteAsync(type, id);
+        if (type == ReportedEntityType.User)
+            return null; // User removal is handled via ApplyAccountActionAsync
 
-            case ReportedEntityType.User:
-                // User removal is handled via ApplyAccountActionAsync (account status change).
-                return null;
+        IModeratableContent? entity = await LoadModeratableAsync(type, id);
+        if (entity is null) return null;
 
-            default:
-                throw new InvalidOperationException($"Removal is not supported for entity type '{type}'.");
-        }
+        entity.IsTakenDown = true;
+        entity.TakedownDate = DateTime.UtcNow;
+        entity.TakedownReason = reason;
+        return entity.AuthorUserId;
     }
 
     /// <summary>
@@ -371,54 +382,25 @@ public class ServerModerationWriteService(
     /// </summary>
     private async Task<int?> ApplyHardDeleteAsync(ReportedEntityType type, long id)
     {
-        switch (type)
+        if (type is ReportedEntityType.Story or ReportedEntityType.Comment
+            or ReportedEntityType.BlogPost or ReportedEntityType.Recommendation)
         {
-            case ReportedEntityType.Story:
-            {
-                var story = await writeDb.Stories.IgnoreQueryFilters()
-                    .SingleOrDefaultAsync(s => s.StoryId == (int)id);
-                if (story is null) return null;
-                int? authorId = story.AuthorId;
-                writeDb.Stories.Remove(story);
-                return authorId;
-            }
-            case ReportedEntityType.Comment:
-            {
-                var comment = await writeDb.BaseComments.IgnoreQueryFilters()
-                    .SingleOrDefaultAsync(c => c.CommentId == id);
-                if (comment is null) return null;
-                int? userId = comment.UserId;
-                writeDb.BaseComments.Remove(comment);
-                return userId;
-            }
-            case ReportedEntityType.BlogPost:
-            {
-                var post = await writeDb.BlogPosts.IgnoreQueryFilters()
-                    .SingleOrDefaultAsync(b => b.BlogPostId == (int)id);
-                if (post is null) return null;
-                int? authorId = post.AuthorId;
-                writeDb.BlogPosts.Remove(post);
-                return authorId;
-            }
-            case ReportedEntityType.Recommendation:
-            {
-                var rec = await writeDb.Recommendations.IgnoreQueryFilters()
-                    .SingleOrDefaultAsync(r => r.RecommendationId == (int)id);
-                if (rec is null) return null;
-                int? recommender = rec.RecommenderId;
-                writeDb.Recommendations.Remove(rec);
-                return recommender;
-            }
-            case ReportedEntityType.Message:
-            {
-                var msg = await writeDb.PrivateMessages
-                    .SingleOrDefaultAsync(m => m.MessageId == id);
-                if (msg is null) return null;
-                writeDb.PrivateMessages.Remove(msg);
-                return null;
-            }
-            default:
-                throw new InvalidOperationException($"Hard delete is not supported for entity type '{type}'.");
+            IModeratableContent? entity = await LoadModeratableAsync(type, id);
+            if (entity is null) return null;
+            int? authorId = entity.AuthorUserId;
+            writeDb.Remove((object)entity);
+            return authorId;
         }
+
+        if (type == ReportedEntityType.Message)
+        {
+            var msg = await writeDb.PrivateMessages
+                .SingleOrDefaultAsync(m => m.MessageId == id);
+            if (msg is null) return null;
+            writeDb.PrivateMessages.Remove(msg);
+            return null;
+        }
+
+        throw new InvalidOperationException($"Hard delete is not supported for entity type '{type}'.");
     }
 }

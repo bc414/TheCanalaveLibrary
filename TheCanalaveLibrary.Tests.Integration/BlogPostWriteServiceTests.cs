@@ -345,7 +345,7 @@ public class BlogPostWriteServiceTests(PostgresFixture postgres) : IntegrationTe
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.ProfileBlogPosts
-            .IgnoreQueryFilters()
+            .IgnoreQueryFilters(["IsTakenDown"])
             .FirstOrDefaultAsync(p => p.BlogPostId == blogPostId);
     }
 

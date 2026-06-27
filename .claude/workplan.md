@@ -1052,6 +1052,47 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Tool:** opusplan. **Pointer:** `audit/Tags.md` Feature 12; `audit/Discovery.md` Feature 31
   (ApplyFilters branch). **Deps:** WU11, WU24, WU27.5.
 
+### WU37.5 — Pre-Integration Cleanup — DONE ✓ (2026-06-26)
+- **Cells:** All touched cells were already Stage 5; this is a code-quality / naming cleanup, not a
+  stage change. Cells that were re-verified clean: F3 L2 (Sprites), F12 L1/L2 (Tags/Lookups enum),
+  F46/F47/F48 L2/L3-Logic/L3.5 (Moderation). No stage number changes to `status.md`.
+- **Done (5 phases):**
+  - **Phase 0 doc prep:** `forward_plan.md` "Decisions that need you" row added for deferred
+    non-story rating-route scoping (blog posts, recs, rated comments).
+  - **Phase 1 enum cleanup:** Deleted vestigial `CharacterRelationshipType { Romantic, Platonic }`
+    enum (zero references; live type is `CharacterPairingType`). Changed `CharacterPairingType : byte`
+    → `: short` (convention alignment; no migration — Npgsql maps both to `smallint`). Removed dead
+    placeholder comment in `ModelEnums.cs`.
+  - **Phase 2 moderation:** Renamed soft-delete columns on Story/BaseComment/BaseBlogPost/Recommendation:
+    `IsHidden → IsTakenDown`, `DateModeratedRemoved → TakedownDate`, `ModerationRemovalReason →
+    TakedownReason`. Added `IModeratableContent` interface (`Core/Moderation/`) implemented by all four
+    roots. Collapsed three-switch dispatch in `ServerModerationWriteService` → single `LoadModeratableAsync`
+    loader + interface mutation. Renamed EF named filter key `"ModeratedVisibility" → "IsTakenDown"`.
+    Replaced all parameterless `IgnoreQueryFilters()` in moderation services with by-name
+    `IgnoreQueryFilters(["IsTakenDown"])` so `ContentRating`/`GroupAudience` stay live — a moderator's
+    rating reach equals their `ShowMatureContent`. Report-queue stitch drops rows filtered by `ContentRating`
+    instead of emitting `[Type #Id]` placeholder. Removed no-op `IgnoreQueryFilters()` on `ReadDb.Reports`.
+    Updated all call sites in `ModerationServiceTests`, `GroupServiceTests`, `BlogPostWriteServiceTests`.
+    EF migrations: `PreIntegrationCleanup_TakedownColumns` (ApplicationDbContext + ReadOnlyApplicationDbContext).
+  - **Phase 3 sprites:** `ServerSpriteReadService` rewritten as singleton with startup existence cache
+    (enumerates `wwwroot/sprites/themes/*/{animated,static}/` into HashSets at construction; O(1) lookups,
+    no `File.Exists` per call). DI changed `AddScoped → AddSingleton`. `SpriteReadServiceExtensions.cs`
+    added (`GetSpriteUrl(ISpriteReadService, IActiveUserContext, string)` extension). Five call sites
+    updated in `ServerStoryReadService` and `ServerTagReadService`. Unit tests restructured so
+    `BuildSut()` is called after `CreateSpriteFile()` (startup cache requires files to exist at construction).
+  - **Phase 4 home placeholder:** Replaced `HomeDesktop.razor` WU13 harness (hardcoded StoryCard sample
+    data) and `HomeMobile.razor` stub with honest minimal placeholders. `<DevLoginBar />` retained.
+  - **Phase 5 docs:** `cross-cutting.md`, `layer2-services.md`, `layer1-data-model.md` enum table,
+    `audit/Moderation.md`, `audit/Sprites.md`, `audit/Tags.md` all updated. `forward_plan.md`
+    "Decisions that need you" row added.
+- **Migrations:** `PreIntegrationCleanup_TakedownColumns` (column renames on 4 tables);
+  `PreIntegrationCleanup_PairingTypeShort` (empty — snapshot sync for `CharacterPairingType` type change).
+  Both ApplicationDbContext + ReadOnlyApplicationDbContext.
+- **Verified (2026-06-26):** `dotnet build` 0 errors; `dotnet test` 434 Unit + 440 RazorComponents +
+  348 Integration = **1222 tests green**.
+- **Tool:** Opus (holistic pre-integration audit + implementation). **Pointer:** `audit/Moderation.md`
+  Features 46/47/48; `audit/Sprites.md` Feature 3 L2; `audit/Tags.md` Shared Context.
+
 ### WU38a — Account Deletion UI
 - **Cells:** 52 L3/L3.5 (deletion UI; service already in WU1).
 - **Tool:** opusplan. **Pointer:** `audit/Identity.md`. **Deps:** WU25.

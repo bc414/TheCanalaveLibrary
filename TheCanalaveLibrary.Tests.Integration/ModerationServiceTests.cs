@@ -15,8 +15,8 @@ namespace TheCanalaveLibrary.Tests.Integration;
 ///   <item><c>SubmitReportAsync</c>: creates Report row, increments <c>ActiveReportCount</c>.</item>
 ///   <item>Invalid target type throws immediately (allow-set gate).</item>
 ///   <item><c>ResolveNoActionAsync</c>: status → ResolvedNoAction, count decremented, notification sent.</item>
-///   <item><c>ResolveWithRemovalAsync</c> (soft hide): sets <c>IsHidden=true</c>, drops from public
-///   reads, remains visible with <c>IgnoreQueryFilters</c>.</item>
+///   <item><c>ResolveWithRemovalAsync</c> (soft takedown): sets <c>IsTakenDown=true</c>, drops from
+///   public reads, remains visible with <c>IgnoreQueryFilters(["IsTakenDown"])</c>.</item>
 ///   <item>Dedup-key fix: two reports on *different* stories both produce <c>ReportReceived</c>
 ///   notifications; two on the *same* story dedup to one notification.</item>
 ///   <item><c>ApproveStoryAsync</c>: sets <c>StoryStatusId = PostApprovalStatus</c>, fires
@@ -68,7 +68,7 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         report.ReportStatusId.Should().Be(ReportStatusEnum.Open);
         report.Notes.Should().Be("test notes");
 
-        Story story = await db.Stories.IgnoreQueryFilters()
+        Story story = await db.Stories.IgnoreQueryFilters(["IsTakenDown"])
             .SingleAsync(s => s.StoryId == storyId);
         story.ActiveReportCount.Should().Be(1);
     }
@@ -108,7 +108,7 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         report.ActionTaken.Should().Be("looks fine");
         report.DateResolved.Should().NotBeNull();
 
-        Story story = await db.Stories.IgnoreQueryFilters()
+        Story story = await db.Stories.IgnoreQueryFilters(["IsTakenDown"])
             .SingleAsync(s => s.StoryId == storyId);
         story.ActiveReportCount.Should().Be(0);
 
@@ -135,13 +135,13 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        Story story = await db.Stories.IgnoreQueryFilters()
+        Story story = await db.Stories.IgnoreQueryFilters(["IsTakenDown"])
             .SingleAsync(s => s.StoryId == storyId);
-        story.IsHidden.Should().BeTrue();
-        story.ModerationRemovalReason.Should().Be("rule violation");
-        story.DateModeratedRemoved.Should().NotBeNull();
+        story.IsTakenDown.Should().BeTrue();
+        story.TakedownReason.Should().Be("rule violation");
+        story.TakedownDate.Should().NotBeNull();
 
-        // Public query (with ModeratedVisibility filter active) should not find the story.
+        // Public query (with IsTakenDown filter active) should not find the story.
         bool visiblePublicly = await db.Stories
             .AnyAsync(s => s.StoryId == storyId);
         visiblePublicly.Should().BeFalse();
@@ -209,7 +209,7 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        Story story = await db.Stories.IgnoreQueryFilters()
+        Story story = await db.Stories.IgnoreQueryFilters(["IsTakenDown"])
             .SingleAsync(s => s.StoryId == storyId);
         story.StoryStatusId.Should().Be(StoryStatusEnum.InProgress,
             "approve should set StoryStatusId to the PostApprovalStatus that was configured at submission");
@@ -234,10 +234,10 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
-        Story story = await db.Stories.IgnoreQueryFilters()
+        Story story = await db.Stories.IgnoreQueryFilters(["IsTakenDown"])
             .SingleAsync(s => s.StoryId == storyId);
         story.StoryStatusId.Should().Be(StoryStatusEnum.Rejected);
-        story.ModerationRemovalReason.Should().Be("needs more description");
+        story.TakedownReason.Should().Be("needs more description");
 
         bool notified = await db.Notifications.AnyAsync(n =>
             n.RecipientUserId == authorId &&
@@ -311,7 +311,7 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
 
         // Increment target count inline (mirrors what SubmitReportAsync does via ExecuteUpdate).
         if (type == ReportedEntityType.Story)
-            await db.Stories.IgnoreQueryFilters()
+            await db.Stories.IgnoreQueryFilters(["IsTakenDown"])
                 .Where(s => s.StoryId == (int)entityId)
                 .ExecuteUpdateAsync(u => u.SetProperty(s => s.ActiveReportCount, s => s.ActiveReportCount + 1));
 

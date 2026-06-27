@@ -5,25 +5,20 @@ using TheCanalaveLibrary.Server;
 namespace TheCanalaveLibrary.Tests.Unit;
 
 /// <summary>
-/// Unit tests for <see cref="ServerSpriteReadService"/> (WU2). The service wraps filesystem probes
-/// via <see cref="IWebHostEnvironment.WebRootPath"/> — no DB, no host. Tested by constructing the
-/// service directly with a fake <see cref="IWebHostEnvironment"/> that points at a per-test temp
-/// directory, following the same pattern as <c>TestAppFactory</c>'s temp-webroot redirect for
-/// <c>ImageStorageServiceTests</c> in the Integration tier (see <c>canalave-conventions/testing.md</c>
-/// §"Three test tiers").
+/// Unit tests for <see cref="ServerSpriteReadService"/> (WU2). The service builds its existence
+/// cache at construction time by scanning <see cref="IWebHostEnvironment.WebRootPath"/> — no DB,
+/// no host. Each test that needs files creates them first, then constructs the service, so the
+/// startup scan picks them up. Tests that check the absence/fallback path construct the service
+/// against an empty (or minimally populated) temp directory.
 /// </summary>
 public class SpriteReadServiceTests : IDisposable
 {
     private readonly string _webRoot;
-    private readonly ServerSpriteReadService _sut;
 
     public SpriteReadServiceTests()
     {
         _webRoot = Path.Combine(Path.GetTempPath(), $"sprite-test-{Guid.NewGuid():N}");
         Directory.CreateDirectory(_webRoot);
-
-        var env = new FakeWebHostEnvironment(_webRoot);
-        _sut = new ServerSpriteReadService(env);
     }
 
     public void Dispose()
@@ -40,8 +35,9 @@ public class SpriteReadServiceTests : IDisposable
         const string theme = "default";
         const string identifier = "pikachu";
         CreateSpriteFile("sprites", "themes", theme, "animated", $"{identifier}.webp");
+        var sut = BuildSut();
 
-        var result = _sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: true);
+        var result = sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: true);
 
         result.Should().Be($"/sprites/themes/{theme}/animated/{identifier}.webp");
     }
@@ -54,8 +50,9 @@ public class SpriteReadServiceTests : IDisposable
         const string theme = "default";
         const string identifier = "eevee";
         CreateSpriteFile("sprites", "themes", theme, "static", $"{identifier}.png");
+        var sut = BuildSut();
 
-        var result = _sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: false);
+        var result = sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: false);
 
         result.Should().Be($"/sprites/themes/{theme}/static/{identifier}.png");
     }
@@ -69,8 +66,9 @@ public class SpriteReadServiceTests : IDisposable
         const string identifier = "snorlax";
         // Only the static PNG exists; no animated .webp.
         CreateSpriteFile("sprites", "themes", theme, "static", $"{identifier}.png");
+        var sut = BuildSut();
 
-        var result = _sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: true);
+        var result = sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: true);
 
         result.Should().Be($"/sprites/themes/{theme}/static/{identifier}.png",
             "static fallback applies when the .webp is absent, even if the user prefers animated");
@@ -83,9 +81,10 @@ public class SpriteReadServiceTests : IDisposable
     {
         const string theme = "default";
         const string identifier = "missingno";
-        // No files created at all.
+        // No files created at all — empty webroot.
+        var sut = BuildSut();
 
-        var result = _sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: false);
+        var result = sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: false);
 
         result.Should().Be($"/sprites/themes/{theme}/unknown.png",
             "unknown.png is the last-resort fallback for a sprite that doesn't exist in any form");
@@ -96,8 +95,9 @@ public class SpriteReadServiceTests : IDisposable
     {
         const string theme = "dark";
         const string identifier = "missingno";
+        var sut = BuildSut();
 
-        var result = _sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: true);
+        var result = sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: true);
 
         result.Should().Be($"/sprites/themes/{theme}/unknown.png");
     }
@@ -110,13 +110,22 @@ public class SpriteReadServiceTests : IDisposable
         const string theme = "dark";
         const string identifier = "umbreon";
         CreateSpriteFile("sprites", "themes", theme, "static", $"{identifier}.png");
+        var sut = BuildSut();
 
-        var result = _sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: false);
+        var result = sut.GetSpriteUrl(theme, identifier, userPrefersAnimatedSprites: false);
 
-        result.Should().StartWith($"/sprites/themes/{theme}/");
+        result.Should().Be($"/sprites/themes/{theme}/static/{identifier}.png");
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Builds a new <see cref="ServerSpriteReadService"/> against the test's webroot. Must be
+    /// called AFTER all <see cref="CreateSpriteFile"/> calls — the startup scan runs in the
+    /// constructor, so files must exist before construction.
+    /// </summary>
+    private ServerSpriteReadService BuildSut() =>
+        new(new FakeWebHostEnvironment(_webRoot));
 
     private void CreateSpriteFile(params string[] pathSegments)
     {

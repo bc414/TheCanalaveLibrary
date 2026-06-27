@@ -76,6 +76,14 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L5 | L6 | L7 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|----|----|----|----|
+- **Pre-integration cleanup done (WU37.5, 2026-06-26).** `IsHidden`/`DateModeratedRemoved`/
+  `ModerationRemovalReason` → `IsTakenDown`/`TakedownDate`/`TakedownReason` on 4 roots; EF filter key
+  `"ModeratedVisibility"` → `"IsTakenDown"`; `IModeratableContent` interface collapses moderation dispatch;
+  all `IgnoreQueryFilters()` → `IgnoreQueryFilters(["IsTakenDown"])`; `ServerSpriteReadService` rewritten
+  as singleton startup cache (O(1) lookups); `SpriteReadServiceExtensions` added; `CharacterRelationshipType`
+  deleted; `CharacterPairingType : byte → : short`; Home placeholder replaces WU13 harness. All cells
+  already Stage 5 — no grid changes. Detail: `workplan.md` WU37.5.
+
 | 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | N/A | N/A | N/A | N/A |
 | 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 4 | N/A | N/A | N/A |

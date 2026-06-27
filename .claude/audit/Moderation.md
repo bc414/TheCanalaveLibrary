@@ -13,8 +13,9 @@ polymorphic `ReportedEntityType`→short + `ReportedEntityId` widened to **long*
 **No services or components built prior to WU34.**
 
 **Schema additions in WU34:** `Report.ReportedEntityId int→long`; `ReportedEntityType` +`Message = 5`;
-soft-delete columns on Story/BaseComment/BaseBlogPost/Recommendation (`IsHidden bool`, `DateModeratedRemoved
-DateTime?`, `ModerationRemovalReason string?`); `User.AccountStatus` + `SuspendedUntilUtc` +
+soft-delete columns on Story/BaseComment/BaseBlogPost/Recommendation (renamed in pre-integration cleanup
+2026-06-26: `IsTakenDown bool`, `TakedownDate DateTime?`, `TakedownReason string?`; formerly
+`IsHidden`/`DateModeratedRemoved`/`ModerationRemovalReason`); `User.AccountStatus` + `SuspendedUntilUtc` +
 `ActiveReportCount`; `NotificationType` seed for `StoryApproved = 75` (category `YourStories=2`, deep-link
 `KindFor → Story`).
 
@@ -49,9 +50,10 @@ L6=5 (composite index `ix_reports_reported_entity_type_reported_entity_id` added
 - `/mod/reports` and `/mod/users` — server-rendered, mod-gated (`RequireModerator` policy), no dispatcher.
 - Report queue ordered by `ActiveReportCount` desc (most-reported first) — triage sort only, never an
   automation trigger. Report counts are mod-only (no public-facing badge).
-- Content removal: soft-hide default (`IsHidden = true`, reversible, author notified with `ModerationRemovalReason`);
-  separate explicit hard-delete for illegal content (CSAM/piracy). One private `ApplyRemoval(type, id, reason)`
-  switch in `ServerModerationWriteService`.
+- Content removal: soft-takedown default (`IsTakenDown = true`, reversible, author notified with `TakedownReason`);
+  separate explicit hard-delete for illegal content (CSAM/piracy). `LoadModeratableAsync` single loader switch
+  + interface mutation via `IModeratableContent` in `ServerModerationWriteService` (pre-integration cleanup
+  2026-06-26 collapsed the prior triple switch).
 - Account actions: `AccountStatus` enum (Active/Warned/Suspended/Banned — **no Shadowbanned**) +
   `SuspendedUntilUtc` set on `User`. Status + notification + `Report` record set together. Login-blocking
   enforcement is a deferred follow-up WU (see `workplan.md` note after WU39).
@@ -82,6 +84,19 @@ as Feature 46).
 flows implemented and covered by `ModerationServiceTests.ApproveStoryAsync_*` /
 `RejectStoryAsync_*` (Integration). `StoryApproved` notification wired end-to-end
 (`NotifyStoryApprovedAsync` → `CreateCoreAsync` → notification row). L4=3 (functional styling). L5=N/A.
+
+**Stage note (pre-integration cleanup — 2026-06-26):** Features 46/47/48, all L1-L3 cells updated.
+Soft-delete columns renamed from `IsHidden`/`DateModeratedRemoved`/`ModerationRemovalReason` → `IsTakenDown`/
+`TakedownDate`/`TakedownReason` across `Story`, `BaseComment`, `BaseBlogPost`, `Recommendation`; EF named
+filter key `"ModeratedVisibility"` → `"IsTakenDown"`; `IModeratableContent` interface added in
+`Core/Moderation/` with `AuthorUserId` projection; `ServerModerationWriteService` triple switch collapsed to
+`LoadModeratableAsync` + interface mutation (one per-type loader switch remains; `AdjustActiveReportCountAsync`
+stays as set-based `ExecuteUpdateAsync`); all moderation service filter bypasses changed from parameterless
+`IgnoreQueryFilters()` to `IgnoreQueryFilters(["IsTakenDown"])` so `ContentRating`/`GroupAudience` stay
+live — a moderator's rating reach equals their `ShowMatureContent` setting; report rows for entities filtered
+by `ContentRating` are dropped (not placeholder-labelled); no-op `IgnoreQueryFilters()` on `ReadDb.Reports`
+removed. Verified: `dotnet test` green (see verification section below). Note: integration tests for the new
+per-mod rating-scoping behavior still to be added (see plan).
 
 ## Feature 53 — Story Import & Verification (→ WU39, deps WU34)
 

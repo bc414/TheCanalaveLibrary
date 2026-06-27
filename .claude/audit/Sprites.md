@@ -57,6 +57,20 @@ rename to `WasmSpriteReadService` is Post-MVP L5 work). Registered in each proje
   `.png` fallback when animated is missing or `prefersAnimated=false`; `unknown.png` when neither
   exists; correct theme sub-path. Mutation-sanity confirmed (removing `unknown.png` fallback → test
   fails). `dotnet test` green.
+  **Stage note (pre-integration cleanup — 2026-06-26):** `ServerSpriteReadService` rewritten as a
+  singleton that builds a `Dictionary<string, HashSet<string>>` per (theme, kind) at construction time
+  by scanning `wwwroot/sprites/themes/*/{animated,static}/` once. `GetSpriteUrl(theme, id, prefersAnimated)`
+  is now an O(1) in-memory lookup with no `File.Exists` per call (formerly called per chip on every listing
+  render — ~100–200 synchronous syscalls per page under concurrency). DI registration changed from
+  `AddScoped` → `AddSingleton` in `Program.cs` (no per-request deps; startup scan is safe for singleton
+  lifetime). `SpriteReadServiceExtensions.cs` added alongside: extension `GetSpriteUrl(this ISpriteReadService,
+  IActiveUserContext, string spriteIdentifier)` that reads `Theme`/`PrefersAnimatedSprites` off the context —
+  eliminates the repeated theme/animation triple at call sites. Five call sites updated:
+  `ServerStoryReadService` (character chips + `ToTagChip`) and `ServerTagReadService` (three sites).
+  Unit test class `SpriteReadServiceTests` restructured — `BuildSut()` called after `CreateSpriteFile()` in
+  each test, since startup cache is built in the constructor. All 1222 tests green after changes.
+  Tier: **Unit** (`SpriteReadServiceTests`, 6 tests). No schema change.
+
 - **L3-Logic — Stage 5 (WU30, 2026-06-24).** Theme-selection control built inside
   `SharedUI/Profiles/AppearanceSettingsForm.razor` (the Feature-3 theme-selection UI lives in the
   Profiles settings page Appearance section — this was the settled design). `AppearanceSettingsForm`

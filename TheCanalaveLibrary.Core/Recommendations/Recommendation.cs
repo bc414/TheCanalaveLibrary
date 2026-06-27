@@ -2,8 +2,11 @@ using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Core;
 
-public class Recommendation
+public class Recommendation : IModeratableContent
 {
+    // IModeratableContent — AuthorUserId maps to the recommendation's RecommenderId FK
+    int? IModeratableContent.AuthorUserId => RecommenderId;
+
     public int RecommendationId { get; set; }
     public int StoryId { get; set; }
     public int? RecommenderId { get; set; }
@@ -15,11 +18,11 @@ public class Recommendation
     public DateTime DatePosted { get; set; }
     public int ActiveReportCount { get; set; }
 
-    // Soft-delete (ModeratedVisibility named filter) — WU34
-    public bool IsHidden { get; set; }
-    public DateTime? DateModeratedRemoved { get; set; }
+    // Soft-delete (IsTakenDown named filter) — WU34; renamed from IsHidden/DateModeratedRemoved/ModerationRemovalReason in pre-integration cleanup
+    public bool IsTakenDown { get; set; }
+    public DateTime? TakedownDate { get; set; }
     [MaxLength(1024)]
-    public string? ModerationRemovalReason { get; set; }
+    public string? TakedownReason { get; set; }
 
     public RecommendationDetail RecommendationDetail { get; set; } = null!;
     public ICollection<RecommendationLike> Likes { get; set; } = [];

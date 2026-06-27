@@ -733,23 +733,33 @@ engagement-maximization — none of which apply here.
 
 ### Content Removal
 
-**Soft-delete default.** Normal mod action sets `IsHidden = true`, `DateModeratedRemoved`, and
-`ModerationRemovalReason` on the target entity. The content is invisible on public reads (named query filter
-`"ModeratedVisibility"`) but visible to the author (who reads with `IgnoreQueryFilters`) and to moderators
-(who also read with `IgnoreQueryFilters`). The author receives a `NotifyContentRemovedAsync` notification
-with the stated reason so they can often fix it (e.g. re-rate mature content) rather than just being punished.
+**Soft-delete (takedown) default.** Normal mod action sets `IsTakenDown = true`, `TakedownDate`, and
+`TakedownReason` on the target entity. All three share the "takedown" stem; do not confuse with
+`IsHiddenFavorite` (UserStoryInteraction, private-favorites), `IsHiddenGem` (Recommendation, a curator
+label), or the `ContentRating`/`GroupAudience` filters (which hide by rating/audience, not by mod action).
+The content is invisible on public reads (named query filter `"IsTakenDown"`) but visible to the author
+(who reads with `IgnoreQueryFilters(["IsTakenDown"])`) and to moderators (same). The author receives a
+`NotifyContentRemovedAsync` notification with the stated reason so they can often fix it (e.g. re-rate
+mature content) rather than just being punished.
 
 Applicable targets: `Story`, `BaseComment`, `BaseBlogPost`, `Recommendation`. `User` is handled by account
-actions (not `IsHidden`). `PrivateMessage` is not soft-hidable — DM reports go straight to the queue for
-moderator judgment only.
+actions (not a takedown column). `PrivateMessage` is not soft-hidable — DM reports go straight to the queue
+for moderator judgment only.
 
 **Narrow hard-delete escape hatch.** A separate explicit "illegal content" action (CSAM, piracy) hard-deletes
-via a distinct `ApplyHardDelete(type, id, reason)` path in `ServerModerationWriteService`. This is not the
-default and is presented as a distinct moderator choice, not the same action as soft-hide.
+via a distinct `ApplyHardDeleteAsync(type, id)` path in `ServerModerationWriteService`. This is not the
+default and is presented as a distinct moderator choice, not the same action as soft takedown.
 
-**Named query filter pattern.** Each removable entity registers `"ModeratedVisibility"` via
-`HasQueryFilter` (EF Core named filters, composable alongside `"ContentRating"`). Mod and author reads
-use `IgnoreQueryFilters(["ModeratedVisibility"])`.
+**Named query filter `"IsTakenDown"`.** Each removable entity registers the `"IsTakenDown"` filter via
+`HasQueryFilter` in `OnModelCreating` (EF Core named filters, composable alongside `"ContentRating"` and
+`"GroupAudience"`). Reviews/author reads use `IgnoreQueryFilters(["IsTakenDown"])`.
+
+**Moderator filter behavior (settled 2026-06-26).** A moderator's content-rating reach equals their
+personal `ShowMatureContent` setting, **both** when browsing the site and when reviewing the report queue.
+The report queue is a shared global pool scoped by the `ContentRating` filter — a T-only mod sees only E/T
+Story reports, not M ones. Review/entity-load paths bypass **only** `"IsTakenDown"` (so already-taken-down
+content stays reviewable); `ContentRating` and `GroupAudience` stay live. Reports on entities filtered out
+by ContentRating are *dropped* from the queue (not shown as placeholders).
 
 ### Auto-Hide Policy — None
 

@@ -9,8 +9,11 @@ namespace TheCanalaveLibrary.Core;
 /// and relationships. This table is optimized to be small
 /// and live in RAM.
 /// </summary>
-public partial class Story
+public partial class Story : IModeratableContent
 {
+    // IModeratableContent — AuthorUserId maps to the story's AuthorId FK
+    int? IModeratableContent.AuthorUserId => AuthorId;
+
     public int StoryId { get; set; }
     public int? AuthorId { get; set; }
     public Rating Rating { get; set; }
@@ -23,11 +26,11 @@ public partial class Story
     public DateOnly? OriginalLastUpdatedDate { get; set; }
     public int ActiveReportCount { get; set; }
 
-    // Soft-delete (ModeratedVisibility named filter) — WU34
-    public bool IsHidden { get; set; }
-    public DateTime? DateModeratedRemoved { get; set; }
+    // Soft-delete (IsTakenDown named filter) — WU34; renamed from IsHidden/DateModeratedRemoved/ModerationRemovalReason in pre-integration cleanup
+    public bool IsTakenDown { get; set; }
+    public DateTime? TakedownDate { get; set; }
     [MaxLength(1024)]
-    public string? ModerationRemovalReason { get; set; }
+    public string? TakedownReason { get; set; }
     /// <summary>
     /// Provides a read-only, type-safe view of the story's tags.
     /// This prevents InvalidCastExceptions by correctly projecting the collection.

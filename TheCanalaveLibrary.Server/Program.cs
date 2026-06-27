@@ -106,7 +106,8 @@ builder.Services.AddScoped<IDeviceDetectionService, ServerDeviceDetectionService
 builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
 builder.Services.AddScoped<IDiscoveryDefaultsReadService, ServerDiscoveryDefaultsReadService>();
-builder.Services.AddScoped<ISpriteReadService, ServerSpriteReadService>();
+// Singleton: ServerSpriteReadService scans wwwroot/sprites/ once at startup (no per-request deps).
+builder.Services.AddSingleton<ISpriteReadService, ServerSpriteReadService>();
 builder.Services.AddScoped<ITagReadService, ServerTagReadService>();
 builder.Services.AddScoped<ITagWriteService, ServerTagWriteService>();
 // MVP impl writes under wwwroot/uploads/ — settled WU12. Post-MVP swap target: S3ImageStorageService

@@ -214,7 +214,7 @@ Guardrails:
 
 | Decision | Default (per spec/§0) | Why it's yours |
 |----------|----------------------|----------------|
-| *(none currently open)* | | |
+| **Non-story report-target rating routing** — how a T-only moderator's queue excludes non-Story M content. Blog posts carry their own `Rating` column (on `ProfileBlogPost`/`GroupBlogPost` child tables, not the `BaseBlogPost` root — EF-root query-filter wrinkle); recommendations derive one-hop from parent `Story.Rating`; chapter/blog-post comments derive two hops; profile/group comments and private messages are genuinely un-rated. Delivery: extend `GetReportQueueAsync` so non-story targets whose effective rating exceeds the mod's cap are dropped (not placeholder-labelled). Decide: (a) join-based scoping at query time in the `BatchLoadTargetsAsync` arms; or (b) a post-load rating check in the stitching step using a join or parent re-fetch. Also decide how to handle the EF-root child-table filter for blog posts — note: adding a named query filter on `BaseBlogPost` at the root is possible but the `Rating` column lives on the discriminated child tables, requiring a `(b as ProfileBlogPost).Rating` or a shadow-column approach. | Deferred from pre-integration cleanup (2026-06-26) — story-target rating scoping shipped; this is net-new behavior for the other target types. | Own work-unit; surface when moderation queue is under human review. |
 
 **Resolved:**
 

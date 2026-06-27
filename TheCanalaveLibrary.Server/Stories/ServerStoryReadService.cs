@@ -59,7 +59,7 @@ public class ServerStoryReadService(
                 TagTypeId = TagTypeEnum.Character,
                 SpriteUrl = c.SpriteIdentifier is null
                     ? null
-                    : spriteReadService.GetSpriteUrl(activeUser.Theme, c.SpriteIdentifier, activeUser.PrefersAnimatedSprites)
+                    : spriteReadService.GetSpriteUrl(activeUser, c.SpriteIdentifier)
             })
             .ToList();
 
@@ -358,7 +358,7 @@ public class ServerStoryReadService(
         Description = tag.Description,
         SpriteUrl = tag.SpriteIdentifier is null
             ? null
-            : spriteReadService.GetSpriteUrl(activeUser.Theme, tag.SpriteIdentifier, activeUser.PrefersAnimatedSprites)
+            : spriteReadService.GetSpriteUrl(activeUser, tag.SpriteIdentifier)
     };
 
     private sealed record StoryListingRow(

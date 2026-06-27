@@ -796,20 +796,27 @@ ViewModel and EF model. Validation in **static extension methods** in Core.
   *write* services (DAG rule: moderation is a peer of features, not above them in the write graph).
 - `IActiveUserContext` for moderator ID.
 
-**Soft-delete visibility filter.** Each removable entity registers a `"ModeratedVisibility"` named query
-filter (`HasQueryFilter(e => !e.IsHidden)`). All reads through `ServerModerationReadService` and the
-author's own views use `IgnoreQueryFilters(["ModeratedVisibility"])`. Public reads go through the filter
-automatically. This composes alongside `"ContentRating"` on entities that have both.
+**Soft-delete (takedown) visibility filter `"IsTakenDown"`.** Each removable entity registers
+`HasQueryFilter("IsTakenDown", e => !e.IsTakenDown)` in `OnModelCreating`. Public reads go through the
+filter automatically. Author views and mod review paths use `IgnoreQueryFilters(["IsTakenDown"])`. The
+filter composes alongside `"ContentRating"` and `"GroupAudience"` on entities that have multiple filters.
+See `cross-cutting.md` "Content Removal" for the column naming rationale and moderator filter behavior.
 
-**`AdjustActiveReportCount(ReportedEntityType type, long id, int delta)` private switch.** Lives in
-`ServerModerationWriteService`. Called on report submit (+1) and report resolve (-1). Branches by target
-type; skips `Message` (no counter on `PrivateMessage`). This is the single authority on counter mutation —
-do not increment/decrement at call-sites.
+**`IModeratableContent` interface.** `Story`, `BaseComment`, `BaseBlogPost`, `Recommendation` each implement
+this interface exposing `IsTakenDown`, `TakedownDate`, `TakedownReason`, `ActiveReportCount`, and
+`AuthorUserId`. `ServerModerationWriteService` loads via a single per-type switch (`LoadModeratableAsync`)
+then mutates through the interface — no repeated switch per operation.
 
-**`ApplyRemoval(ReportedEntityType type, long id, string reason)` private switch.** Soft-hides the target
-(`IsHidden = true`, `DateModeratedRemoved = UtcNow`, `ModerationRemovalReason = reason`) and resolves the
-author's id for `NotifyContentRemovedAsync`. A parallel `ApplyHardDelete(type, id, reason)` switch is for
-illegal content only — it is a distinct action from soft-hide, not a parameter flag.
+**`AdjustActiveReportCountAsync(ReportedEntityType type, long id, int delta)` private switch.** Lives in
+`ServerModerationWriteService`. Called on report submit (+1) and report resolve (-1). Uses per-DbSet
+`ExecuteUpdateAsync` (set-based, no load) with `IgnoreQueryFilters(["IsTakenDown"])`. Skips `Message`
+(no counter on `PrivateMessage`). This is the single authority on counter mutation — do not
+increment/decrement at call-sites.
+
+**`ApplyRemovalAsync` / `ApplyHardDeleteAsync` — collapsed to interface.** Both call `LoadModeratableAsync`
+once, then mutate via `IModeratableContent`. `ApplyRemovalAsync` sets `IsTakenDown = true`, `TakedownDate`,
+`TakedownReason`. A parallel `ApplyHardDeleteAsync` calls `writeDb.Remove((object)entity)` for illegal
+content — a distinct action, not a flag.
 
 **Notification dedup key.** `CreateCoreAsync` dedups on `(NotificationTypeId, SourceUserId, RelatedEntityId,
 !IsRead)` — `RelatedEntityId` was missing from the original WHERE clause (WU34 fix). This ensures two

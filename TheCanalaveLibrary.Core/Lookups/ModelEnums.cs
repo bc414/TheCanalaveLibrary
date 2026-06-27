@@ -33,12 +33,6 @@ public enum FilterEntityType : short
 
 
 
-public enum CharacterRelationshipType : short
-{
-    Romantic = 0,
-    Platonic = 1
-}
-
 public enum StoryRelationshipStatus : short
 {
     Pending = 0,
@@ -164,8 +158,6 @@ public enum SiteRoles : int
     Moderator = 2,
     Admin = 3,
 }
-
-// ... (Keep all existing enums from Part 1 and Part 2) ...
 
 //Part 3: Enums for User Settings
 

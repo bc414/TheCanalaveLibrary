@@ -88,9 +88,9 @@ public class GroupServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
 
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        // IgnoreQueryFilters: the GroupAudience filter hides M-rated groups when ShowMatureContent=false.
+        // IgnoreQueryFilters: bypass GroupAudience (hides M-rated groups when ShowMatureContent=false).
         // We're verifying internal persistence here, not public visibility.
-        Group? g = await db.Groups.IgnoreQueryFilters()
+        Group? g = await db.Groups.IgnoreQueryFilters(["GroupAudience"])
             .FirstOrDefaultAsync(x => x.GroupId == groupId);
         g.Should().NotBeNull();
         g!.AudienceRating.Should().Be(Rating.M);

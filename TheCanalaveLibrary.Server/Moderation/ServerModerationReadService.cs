@@ -9,6 +9,13 @@ namespace TheCanalaveLibrary.Server;
 /// to enforce moderator/admin role gating at the page or endpoint level — this service does not
 /// re-check roles.
 ///
+/// <para><b>Filter contract.</b> Review/entity loads bypass <em>only</em> <c>IsTakenDown</c>
+/// (so already-taken-down content remains viewable in the queue). ContentRating and GroupAudience
+/// stay live — a moderator's content-rating reach equals their personal ShowMatureContent setting,
+/// same as when browsing (settled 2026-06-26). Reports on entities filtered out by ContentRating
+/// are <em>dropped</em> from the queue rather than shown as a placeholder; an M-rated story simply
+/// does not appear for a T-only moderator.</para>
+///
 /// <para><b>Polymorphic target resolution</b> in <see cref="GetReportQueueAsync"/> follows the
 /// same two-pass batch-enrichment pattern as <c>GetNotificationsAsync</c> (WU33): one query per
 /// distinct <c>ReportedEntityType</c> present on the page, never N+1.</para>
@@ -33,8 +40,8 @@ public class ServerModerationReadService(
     public async Task<ReportQueueItemDto[]> GetReportQueueAsync(bool includeResolved = false)
     {
         // Step 1: materialize all matching reports with reason name + reporter username.
+        // Note: Report table has no named filters; no IgnoreQueryFilters needed here.
         var q = ReadDb.Reports
-            .IgnoreQueryFilters() // ModeratedVisibility doesn't apply to the Report table itself
             .Where(r => includeResolved ||
                         r.ReportStatusId == ReportStatusEnum.Open ||
                         r.ReportStatusId == ReportStatusEnum.UnderReview);
@@ -63,20 +70,24 @@ public class ServerModerationReadService(
         if (rows.Count == 0) return [];
 
         // Step 2: batch-load target labels, URLs, and ActiveReportCount per entity type present.
+        // ContentRating stays live here — entities filtered by the moderator's rating preference
+        // simply won't appear in the dictionary, and their report rows are dropped in Step 3.
         var typesPresent = rows.Select(r => r.ReportedEntityType).Distinct().ToList();
-        var entityIds = rows.ToDictionary(r => r.ReportId, r => r.ReportedEntityId);
         var labelMap = await BatchLoadTargetsAsync(typesPresent, rows
             .GroupBy(r => r.ReportedEntityType)
             .ToDictionary(g => g.Key, g => g.Select(r => r.ReportedEntityId).Distinct().ToList()));
 
-        // Step 3: stitch.
+        // Step 3: stitch — drop report rows whose target was filtered by ContentRating/GroupAudience.
+        // This is the mechanism that makes the queue per-moderator-rating-scoped: an M story simply
+        // doesn't appear for a T-only mod, rather than showing as a labelless placeholder.
         return [..rows
+            .Where(r =>
+                labelMap.TryGetValue(r.ReportedEntityType, out var dict) &&
+                dict.ContainsKey(r.ReportedEntityId))
             .Select(r =>
             {
                 var (label, url, reportCount) =
-                    labelMap.TryGetValue(r.ReportedEntityType, out var dict) &&
-                    dict.TryGetValue(r.ReportedEntityId, out var t)
-                        ? t : ($"[{r.ReportedEntityType} #{r.ReportedEntityId}]", null, 0);
+                    labelMap[r.ReportedEntityType][r.ReportedEntityId];
 
                 return new ReportQueueItemDto(
                     r.ReportId,
@@ -104,7 +115,7 @@ public class ServerModerationReadService(
     public async Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync() =>
         await (
             from s in ReadDb.Stories
-                .IgnoreQueryFilters()
+                .IgnoreQueryFilters(["IsTakenDown"])
                 .Where(s => s.StoryStatusId == StoryStatusEnum.PendingApproval)
             join sl in ReadDb.StoryListings on s.StoryId equals sl.StoryId
             join sd in ReadDb.StoryDetails on s.StoryId equals sd.StoryId
@@ -126,6 +137,9 @@ public class ServerModerationReadService(
     /// <summary>
     /// Returns one dictionary per <see cref="ReportedEntityType"/> present in
     /// <paramref name="idsPerType"/>, each mapping <c>entityId → (label, url, activeReportCount)</c>.
+    /// ContentRating and GroupAudience filters stay live — entities filtered out simply won't
+    /// appear in the returned dictionary, causing their report rows to be dropped by the caller.
+    /// Only <c>IsTakenDown</c> is bypassed so taken-down content is still reviewable.
     /// </summary>
     private async Task<Dictionary<ReportedEntityType, Dictionary<long, (string Label, string? Url, int Count)>>>
         BatchLoadTargetsAsync(
@@ -144,7 +158,7 @@ public class ServerModerationReadService(
                 {
                     var intIds = ids.Select(id => (int)id).ToList();
                     var data = await (
-                        from s in ReadDb.Stories.IgnoreQueryFilters()
+                        from s in ReadDb.Stories.IgnoreQueryFilters(["IsTakenDown"])
                             .Where(s => intIds.Contains(s.StoryId))
                         join sl in ReadDb.StoryListings on s.StoryId equals sl.StoryId
                         join sd in ReadDb.StoryDetails on s.StoryId equals sd.StoryId
@@ -173,7 +187,7 @@ public class ServerModerationReadService(
                 {
                     var longIds = ids;
                     var data = await ReadDb.BaseComments
-                        .IgnoreQueryFilters()
+                        .IgnoreQueryFilters(["IsTakenDown"])
                         .Where(c => longIds.Contains(c.CommentId))
                         .Select(c => new
                         {
@@ -192,7 +206,7 @@ public class ServerModerationReadService(
                 {
                     var intIds = ids.Select(id => (int)id).ToList();
                     var data = await ReadDb.BlogPosts
-                        .IgnoreQueryFilters()
+                        .IgnoreQueryFilters(["IsTakenDown"])
                         .Where(b => intIds.Contains(b.BlogPostId))
                         .Select(b => new { b.BlogPostId, b.Title, b.ActiveReportCount })
                         .ToListAsync();
@@ -206,7 +220,7 @@ public class ServerModerationReadService(
                 {
                     var intIds = ids.Select(id => (int)id).ToList();
                     var data = await ReadDb.Recommendations
-                        .IgnoreQueryFilters()
+                        .IgnoreQueryFilters(["IsTakenDown"])
                         .Where(r => intIds.Contains(r.RecommendationId))
                         .Select(r => new { r.RecommendationId, r.StoryId, r.ActiveReportCount })
                         .ToListAsync();

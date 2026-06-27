@@ -2,8 +2,11 @@ using System.ComponentModel.DataAnnotations;
 
 namespace TheCanalaveLibrary.Core;
 
-public partial class BaseComment
+public partial class BaseComment : IModeratableContent
 {
+    // IModeratableContent — AuthorUserId maps to the comment's UserId FK
+    int? IModeratableContent.AuthorUserId => UserId;
+
     [Key]
     public long CommentId { get; set; }
 
@@ -18,11 +21,11 @@ public partial class BaseComment
 
     public int ActiveReportCount { get; set; }
 
-    // Soft-delete (ModeratedVisibility named filter) — WU34
-    public bool IsHidden { get; set; }
-    public DateTime? DateModeratedRemoved { get; set; }
+    // Soft-delete (IsTakenDown named filter) — WU34; renamed from IsHidden/DateModeratedRemoved/ModerationRemovalReason in pre-integration cleanup
+    public bool IsTakenDown { get; set; }
+    public DateTime? TakedownDate { get; set; }
     [MaxLength(1024)]
-    public string? ModerationRemovalReason { get; set; }
+    public string? TakedownReason { get; set; }
 
     public virtual ICollection<CommentLike> Likes { get; set; } = new List<CommentLike>();
 

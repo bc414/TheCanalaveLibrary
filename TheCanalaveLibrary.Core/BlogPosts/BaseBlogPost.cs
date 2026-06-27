@@ -8,8 +8,11 @@ namespace TheCanalaveLibrary.Core;
 /// <c>IsPublished</c>) live on the child tables — declared on each derived class so EF Core 10
 /// maps them to the child table, not here.
 /// </summary>
-public abstract class BaseBlogPost
+public abstract class BaseBlogPost : IModeratableContent
 {
+    // IModeratableContent — AuthorUserId maps to the blog post's AuthorId FK
+    int? IModeratableContent.AuthorUserId => AuthorId;
+
     [Key]
     public int BlogPostId { get; set; }
     public int? AuthorId { get; set; }
@@ -27,11 +30,11 @@ public abstract class BaseBlogPost
 
     public int ActiveReportCount { get; set; }
 
-    // Soft-delete (ModeratedVisibility named filter) — WU34
-    public bool IsHidden { get; set; }
-    public DateTime? DateModeratedRemoved { get; set; }
+    // Soft-delete (IsTakenDown named filter) — WU34; renamed from IsHidden/DateModeratedRemoved/ModerationRemovalReason in pre-integration cleanup
+    public bool IsTakenDown { get; set; }
+    public DateTime? TakedownDate { get; set; }
     [MaxLength(1024)]
-    public string? ModerationRemovalReason { get; set; }
+    public string? TakedownReason { get; set; }
 
     public virtual User? Author { get; set; }
 

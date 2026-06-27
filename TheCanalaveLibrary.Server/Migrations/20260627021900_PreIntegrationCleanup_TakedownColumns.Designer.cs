@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using NpgsqlTypes;
@@ -10,12 +11,14 @@ using TheCanalaveLibrary.Server;
 
 #nullable disable
 
-namespace TheCanalaveLibrary.Server.Migrations.ReadOnlyApplicationDb
+namespace TheCanalaveLibrary.Server.Migrations
 {
-    [DbContext(typeof(ReadOnlyApplicationDbContext))]
-    partial class ReadOnlyApplicationDbContextModelSnapshot : ModelSnapshot
+    [DbContext(typeof(ApplicationDbContext))]
+    [Migration("20260627021900_PreIntegrationCleanup_TakedownColumns")]
+    partial class PreIntegrationCleanup_TakedownColumns
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

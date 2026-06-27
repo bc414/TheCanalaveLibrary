@@ -31,7 +31,7 @@ public class ServerTagReadService(
             Description = t.Description,
             SpriteUrl = t.SpriteIdentifier is null
                 ? null
-                : spriteReadService.GetSpriteUrl(activeUser.Theme, t.SpriteIdentifier, activeUser.PrefersAnimatedSprites)
+                : spriteReadService.GetSpriteUrl(activeUser, t.SpriteIdentifier)
         }).ToList();
     }
 
@@ -53,7 +53,7 @@ public class ServerTagReadService(
             Description = t.Description,
             SpriteUrl = t.SpriteIdentifier is null
                 ? null
-                : spriteReadService.GetSpriteUrl(activeUser.Theme, t.SpriteIdentifier, activeUser.PrefersAnimatedSprites),
+                : spriteReadService.GetSpriteUrl(activeUser, t.SpriteIdentifier),
             AllowOCDetails = t.AllowOCDetails,
             AllowSettingDetails = t.AllowSettingDetails
         });
@@ -89,7 +89,7 @@ public class ServerTagReadService(
             Description = t.Description,
             SpriteUrl = t.SpriteIdentifier is null
                 ? null
-                : spriteReadService.GetSpriteUrl(activeUser.Theme, t.SpriteIdentifier, activeUser.PrefersAnimatedSprites),
+                : spriteReadService.GetSpriteUrl(activeUser, t.SpriteIdentifier),
             // Admin fields — set here so the mod editor can pre-populate without a second round-trip.
             IsFanon = t.IsFanon,
             AllowOCDetails = t.AllowOCDetails,

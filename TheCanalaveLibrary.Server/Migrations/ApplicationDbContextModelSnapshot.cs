@@ -395,22 +395,22 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("text")
                         .HasColumnName("content");
 
-                    b.Property<DateTime?>("DateModeratedRemoved")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("date_moderated_removed");
-
-                    b.Property<bool>("IsHidden")
+                    b.Property<bool>("IsTakenDown")
                         .HasColumnType("boolean")
-                        .HasColumnName("is_hidden");
+                        .HasColumnName("is_taken_down");
 
                     b.Property<int>("LikeCount")
                         .HasColumnType("integer")
                         .HasColumnName("like_count");
 
-                    b.Property<string>("ModerationRemovalReason")
+                    b.Property<DateTime?>("TakedownDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("takedown_date");
+
+                    b.Property<string>("TakedownReason")
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)")
-                        .HasColumnName("moderation_removal_reason");
+                        .HasColumnName("takedown_reason");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -450,26 +450,26 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("text")
                         .HasColumnName("comment_text");
 
-                    b.Property<DateTime?>("DateModeratedRemoved")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("date_moderated_removed");
-
-                    b.Property<bool>("IsHidden")
+                    b.Property<bool>("IsTakenDown")
                         .HasColumnType("boolean")
-                        .HasColumnName("is_hidden");
+                        .HasColumnName("is_taken_down");
 
                     b.Property<int>("LikeCount")
                         .HasColumnType("integer")
                         .HasColumnName("like_count");
 
-                    b.Property<string>("ModerationRemovalReason")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)")
-                        .HasColumnName("moderation_removal_reason");
-
                     b.Property<long?>("ParentCommentId")
                         .HasColumnType("bigint")
                         .HasColumnName("parent_comment_id");
+
+                    b.Property<DateTime?>("TakedownDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("takedown_date");
+
+                    b.Property<string>("TakedownReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("takedown_reason");
 
                     b.Property<int?>("UserId")
                         .HasColumnType("integer")
@@ -1898,19 +1898,11 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("active_report_count");
 
-                    b.Property<DateTime?>("DateModeratedRemoved")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("date_moderated_removed");
-
                     b.Property<DateTime>("DatePosted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("date_posted")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-                    b.Property<bool>("IsHidden")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_hidden");
 
                     b.Property<bool>("IsHiddenGem")
                         .HasColumnType("boolean")
@@ -1920,16 +1912,15 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("is_highlighted_by_author");
 
+                    b.Property<bool>("IsTakenDown")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_taken_down");
+
                     b.Property<int>("LikeCount")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(0)
                         .HasColumnName("like_count");
-
-                    b.Property<string>("ModerationRemovalReason")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)")
-                        .HasColumnName("moderation_removal_reason");
 
                     b.Property<int?>("RecommenderId")
                         .HasColumnType("integer")
@@ -1946,6 +1937,15 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Property<int>("SuccessfulRecCount")
                         .HasColumnType("integer")
                         .HasColumnName("successful_rec_count");
+
+                    b.Property<DateTime?>("TakedownDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("takedown_date");
+
+                    b.Property<string>("TakedownReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("takedown_reason");
 
                     b.HasKey("RecommendationId")
                         .HasName("pk_recommendations");
@@ -2533,22 +2533,13 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("author_id");
 
-                    b.Property<DateTime?>("DateModeratedRemoved")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("date_moderated_removed");
-
-                    b.Property<bool>("IsHidden")
+                    b.Property<bool>("IsTakenDown")
                         .HasColumnType("boolean")
-                        .HasColumnName("is_hidden");
+                        .HasColumnName("is_taken_down");
 
                     b.Property<DateTime>("LastUpdatedDate")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_updated_date");
-
-                    b.Property<string>("ModerationRemovalReason")
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)")
-                        .HasColumnName("moderation_removal_reason");
 
                     b.Property<DateOnly?>("OriginalLastUpdatedDate")
                         .HasColumnType("date")
@@ -2569,6 +2560,15 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Property<short>("StoryStatusId")
                         .HasColumnType("smallint")
                         .HasColumnName("story_status_id");
+
+                    b.Property<DateTime?>("TakedownDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("takedown_date");
+
+                    b.Property<string>("TakedownReason")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)")
+                        .HasColumnName("takedown_reason");
 
                     b.Property<int>("ViewCount")
                         .HasColumnType("integer")

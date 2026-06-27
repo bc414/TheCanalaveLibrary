@@ -199,13 +199,16 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
         modelBuilder.Entity<Group>().HasQueryFilter("GroupAudience",
             g => _activeUser.ShowMatureContent || g.AudienceRating != Rating.M);
 
-        // ModeratedVisibility filter — hides soft-deleted content from public reads (WU34).
-        // Escape hatch: .IgnoreQueryFilters(["ModeratedVisibility"]) for mod and author reads that must see
-        // hidden content. Static predicate (no user-state dependency) but registered inline here alongside
-        // ContentRating/GroupAudience for a single authoritative location for all named filters.
-        modelBuilder.Entity<Story>().HasQueryFilter("ModeratedVisibility", s => !s.IsHidden);
-        modelBuilder.Entity<BaseComment>().HasQueryFilter("ModeratedVisibility", c => !c.IsHidden);
-        modelBuilder.Entity<BaseBlogPost>().HasQueryFilter("ModeratedVisibility", b => !b.IsHidden);
-        modelBuilder.Entity<Recommendation>().HasQueryFilter("ModeratedVisibility", r => !r.IsHidden);
+        // IsTakenDown filter — hides moderator-removed content from public reads (WU34).
+        // Column name matches the filter key: both use "IsTakenDown" stem. This filter has no user-state
+        // dependency (unlike ContentRating/GroupAudience) but lives here alongside them for a single
+        // authoritative location for all named filters.
+        // Escape hatch for mod review paths: .IgnoreQueryFilters(["IsTakenDown"]) — so already-taken-down
+        // content stays reviewable. ContentRating and GroupAudience should NOT be bypassed on review paths;
+        // a moderator's content-rating reach equals their personal ShowMatureContent setting (same as browsing).
+        modelBuilder.Entity<Story>().HasQueryFilter("IsTakenDown", s => !s.IsTakenDown);
+        modelBuilder.Entity<BaseComment>().HasQueryFilter("IsTakenDown", c => !c.IsTakenDown);
+        modelBuilder.Entity<BaseBlogPost>().HasQueryFilter("IsTakenDown", b => !b.IsTakenDown);
+        modelBuilder.Entity<Recommendation>().HasQueryFilter("IsTakenDown", r => !r.IsTakenDown);
     }
 }
