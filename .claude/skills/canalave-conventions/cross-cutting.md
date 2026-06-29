@@ -659,9 +659,9 @@ CS1525 parse error.
 @onchange="e => { if (int.TryParse(e.Value?.ToString(), out int rv)) _myEnum = (MyEnum)rv; }"
 ```
 
-This avoids any string literal inside the attribute value. The `int.TryParse` pattern is the canonical
-form for all enum `<select>` onchange handlers in this codebase (`AuthorSettingsForm`, `PrivacySettingsForm`,
-`AppearanceSettingsForm` follow this pattern since WU30, 2026-06-24).
+This avoids any string literal inside the attribute value. The `int.TryParse` block lambda is the
+canonical form for all enum `<select>` onchange handlers in this codebase (e.g. `AuthorSettingsForm`,
+`PrivacySettingsForm`, `AppearanceSettingsForm`).
 
 **Why `@bind` doesn't work for enum selects:** `@bind` on a `<select>` requires a string two-way
 binding; enums stored as `int` need an explicit cast, so `@bind` is not idiomatic here. The

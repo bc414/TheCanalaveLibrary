@@ -76,12 +76,16 @@ User Management (`/mod/users`).
 ### Leaf (no children)
 
 ```razor
-@* TagChip.razor — Tag is a TagChipDto (Core/Tags/); SpriteUrl arrives pre-resolved by the
-   producing read service (layer2-services.md "Sprite URLs Are Resolved Server-Side") *@
+@* TagChip.razor — Tag is a TagChipDto (Core/Tags/); SpriteIdentifier is the raw key;
+   the leaf resolves the sprite URL at render via injected ISpriteReadService + ThemeContext
+   (see layer2-services.md §"Sprite URLs Are Resolved At Render Time, In the Component"). *@
+@inject ISpriteReadService Sprites
+
 <span class="...tag type styling...">
-    @if (Tag.SpriteUrl is not null)
+    @if (Tag.SpriteIdentifier is not null && _themeCtx is not null)
     {
-        <img src="@Tag.SpriteUrl" alt="" class="..." />
+        <img src="@Sprites.GetSpriteUrl(_themeCtx.Slug, Tag.SpriteIdentifier, _themeCtx.PrefersAnimated)"
+             alt="" class="..." />
     }
     @Tag.TagName
     @if (OnRemove.HasDelegate)
@@ -91,6 +95,7 @@ User Management (`/mod/users`).
 </span>
 
 @code {
+    [CascadingParameter] private ThemeContext? _themeCtx { get; set; }
     [Parameter, EditorRequired] public TagChipDto Tag { get; set; } = null!;
     [Parameter] public EventCallback OnRemove { get; set; }
 }
@@ -440,7 +445,7 @@ resets the bound value to `null`, clearing the input for the next pick:
         <ResultTemplate Context="tag">
             <span class="inline-flex items-center gap-2">
                 <span class="w-2 h-2 rounded-full @DotClass(tag.TagTypeId)"></span>
-                @if (tag.SpriteUrl is not null) { <img src="@tag.SpriteUrl" class="w-4 h-4" alt="" /> }
+                @if (tag.SpriteIdentifier is not null && _themeCtx is not null) { <img src="@Sprites.GetSpriteUrl(_themeCtx.Slug, tag.SpriteIdentifier, _themeCtx.PrefersAnimated)" class="w-4 h-4" alt="" /> }
                 @tag.TagName
             </span>
         </ResultTemplate>
@@ -473,21 +478,13 @@ resets the bound value to `null`, clearing the input for the next pick:
 }
 ```
 
-**`SelectedTemplate` is mandatory, not optional (WU11).** `BlazoredTypeahead.OnInitialized()` throws
+**`SelectedTemplate` is mandatory, not optional.** `BlazoredTypeahead.OnInitialized()` throws
 `InvalidOperationException: ... requires a SelectedTemplate parameter` if it's omitted — unlike
 `ResultTemplate`/`NotFoundTemplate`, which the package defaults sensibly. Omitting it doesn't fail
-quietly: in single-select mode it's barely visible (the bound value resets to `null` immediately
-after each pick, per `OnPicked` above), which makes it tempting to assume it's decorative and skip
-it — it isn't. First symptom looked like a **prerender incompatibility**: the missing-parameter
-exception killed `OnInitialized()` mid-init, which left the component's internal state (its debounce
-timer) never constructed, so when the half-initialized instance was later torn down —
-either the prerendered copy at the end of the static-render request, or the interactive copy when
-its circuit hit the same `OnInitialized` exception and got torn down — `Dispose()` threw a *second*,
-unrelated-looking `NullReferenceException` on that timer field. Chasing the Dispose symptom first is
-a dead end; the real fault is always upstream, at `OnInitialized()`. Once `SelectedTemplate` is
-supplied, both the prerendered and interactive lifecycles complete and dispose cleanly — there is
-**no actual prerendering incompatibility** in this package; the disposal trace was a downstream
-symptom, not a separate bug.
+quietly in single-select mode (the bound value silently resets to `null` after each pick), making
+it tempting to assume the template is decorative. The failure eventually surfaces as an unrelated
+`NullReferenceException` in `Dispose()` — a downstream symptom of `OnInitialized()` never
+completing. Chase `OnInitialized()`, not the disposal trace.
 
 **Contract deviation from the spec's literal wording, deliberate:** §5.30.4 says
 `EventCallback<IReadOnlyList<Tag>> OnSelectionChanged` — `Tag` is the EF entity. The DTO Firewall
@@ -555,7 +552,7 @@ component owns that behavior, not get bolted onto the display bag.
 
 **StoryCard** (leaf, WU13): pure leaf, no service injection. Contract:
 - `[Parameter, EditorRequired] StoryListingDto Story` — warm-partition projection; includes
-  `ShortDescription` (nullable, tooltip + synopsis) and `Tags` (sprite-resolved `TagChipDto` list).
+  `ShortDescription` (nullable, tooltip + synopsis) and `Tags` (`TagChipDto` list; each chip resolves its sprite at render).
 - `[Parameter] UserStoryInteractionStateDto? UserStoryInteractionState` — batch-loaded by the parent
   via `GetStatesByStoryIdsAsync`; forwarded to the nested `UserStoryInteractionPanel`. Null = all-false.
 - `[Parameter] bool IsOwnStory` — forwarded to the panel (renders Edit link instead of buttons).
@@ -809,7 +806,7 @@ rejected a bundled `UserListPage`; `StoryDeck` is also used without any panel at
 - `[Parameter] bool ShowTagIncludeModeToggle { get; set; } = false` — forward to
   `TagFilter.AllowIncludeModeToggle`. Only `/discover` passes `true`; Bookshelves/Profile unaffected.
 - `[Parameter] IReadOnlyList<TagChipDto> InitialIncludedTags` / `InitialExcludedTags` (default `[]`)
-  — seed sprite-resolved chips into `TagFilter` in `OnInitialized`. The dispatcher pre-loads chips
+  — seed tag chips into `TagFilter` in `OnInitialized`. The dispatcher pre-loads chips
   via `ITagReadService.GetTagChipsByIdsAsync` and passes them in; the panel is still injection-free.
 - Buffer `TagIncludeMode` from `TagFilterSelection.IncludeMode`; set `StoryFilterDto.IncludeMode`
   on Apply; seed from `InitialFilter.IncludeMode`.

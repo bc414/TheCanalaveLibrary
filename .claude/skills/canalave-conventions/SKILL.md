@@ -37,7 +37,7 @@ These have documented rationale and rejected alternatives. **Do not propose alte
 5. **snake_case via `EFCore.NamingConventions`** — never hand-name tables/columns.
 6. **CQRS-lite with a DTO firewall** — UI never sees EF Core model classes.
 7. **Write-behind Redis queue** — high-frequency writes go to Redis, drained by background worker.
-8. **Global `InteractiveAuto`** — SSR prerender → SPA via WASM. Set on `<RouteView>` in `Routes.razor`.
+8. **Global `InteractiveAuto` (end state)** — SSR prerender → SPA via WASM. Set render mode on `<Routes>`/`<HeadOutlet>` in `App.razor` (never on `RouteView`); `InteractiveServer` is the spec-sanctioned dev shortcut until WASM ships. See `cross-cutting.md` §"Render Mode".
 9. **Tailwind CSS v4** — utility-first, no component library. Design tokens in an `@theme` block
    (CSS-first config; see `layer4-style.md`), not `tailwind.config.js`.
 10. **Three-axis search** — Source × Filter × Sort. FTS is a filter, not a source.

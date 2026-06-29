@@ -107,34 +107,33 @@ For complex conditional classes, extract to a computed property:
 
 ## Sprite Resolution
 
-**Leaves never inject `ISpriteReadService`.** A sprite URL is resolved once, upstream, by whichever
-**read service** is producing the display DTO — during its `.Select()`/mapping step, via
-`ISpriteReadService.GetSpriteUrl(theme, spriteIdentifier, animated)` (note the real signature: theme
-first, then key, then the animated flag) — using the current user's theme + animated-sprite
-preference. The DTO carries the already-resolved relative URL; the leaf just renders it:
+Sprite-bearing DTOs (e.g. `TagChipDto`) carry the **raw `SpriteIdentifier` key** — not a resolved
+URL. The rendering leaf `@inject`s `ISpriteReadService` and resolves at render time via
+`GetSpriteUrl(slug, id, prefersAnimated)` (real signature: slug first, then key, then animated flag),
+using the theme slug and animation preference cascaded from `ThemeContext`:
 
 ```razor
-@* Inside a leaf component — Tag.SpriteUrl was set server-side, not here *@
-@if (Tag.SpriteUrl is not null)
+@inject ISpriteReadService Sprites
+@* [CascadingParameter] ThemeContext _themeCtx — supplies slug + PrefersAnimated *@
+@if (Tag.SpriteIdentifier is not null && _themeCtx is not null)
 {
-    <img src="@Tag.SpriteUrl" alt="" class="w-5 h-5 inline-block" loading="lazy" />
+    <img src="@Sprites.GetSpriteUrl(_themeCtx.Slug, Tag.SpriteIdentifier, _themeCtx.PrefersAnimated)"
+         alt="" class="w-4 h-4" loading="lazy" />
 }
 ```
 
-Sprites live at `wwwroot/sprites/themes/{theme}/static/{key}.png` or `animated/{key}.webp`. See
-`layer2-services.md` §"Sprite URLs Are Resolved Server-Side, At Projection Time" for the full rule and
-the request-scoping consequence (never cache a sprite-bearing DTO across users/themes).
+See `layer2-services.md` §"Sprite URLs Are Resolved At Render Time, In the Component" for the full
+rule — including the no-cross-user-cache consequence and the ThemeContext plumbing.
 
-## Avatars Are Stored URLs, Not Sprite Keys (settled WU10)
+## Avatars Are Stored URLs, Not Sprite Keys
 
-**Settled (WU10), corrects an earlier overgeneralization below (Interaction Icons section):** a
-user's profile picture is **not** theme-pack art resolved via `GetSpriteUrl`. `User.ProfilePictureRelativeUrl`
+A user's profile picture is **not** theme-pack art resolved via `GetSpriteUrl`. `User.ProfilePictureRelativeUrl`
 is a user-uploaded blob path stored directly on the entity — the producing read service copies it into
-the display DTO verbatim (e.g. `UserCardDto.AvatarUrl`), the same DTO-firewall shape as a sprite URL but
-a different resolution mechanism. `ISpriteReadService.GetSpriteUrl` plays no role for a user's own
-avatar; it would only apply if a feature ever needed a **themed default placeholder** for users with no
-upload, and that's the producing service's call to make, not the leaf's. The leaf (`UserCard`) just
-renders whatever `AvatarUrl` it's given, falling back to a static `wwwroot` placeholder asset when null:
+the display DTO verbatim (e.g. `UserCardDto.AvatarUrl`). `ISpriteReadService.GetSpriteUrl` plays no
+role for a user's own avatar; it would only apply if a feature ever needed a **themed default
+placeholder** for users with no upload, and that's the producing service's call to make, not the
+leaf's. The leaf (`UserCard`) just renders whatever `AvatarUrl` it's given, falling back to a static
+`wwwroot` placeholder asset when null:
 
 ```razor
 @* Inside UserCard — AvatarUrl is a stored path or null, never resolved here *@
@@ -144,16 +143,16 @@ renders whatever `AvatarUrl` it's given, falling back to a static `wwwroot` plac
 Still governed by the "never inline SVG" rule (avatars are image assets) and the `rounded-full` radius
 convention below.
 
-## Interaction Icons Are Inline SVG (superseded the sprite-URL design — WU7)
+## Interaction Icons Are Inline SVG
 
-**Settled (WU7), supersedes the WU2-era plan below `GetInteractionIcon` line:** interaction icons
-(Favorite, Followed, Ignore, ReadItLater, HiddenFavorite, …) are **inline SVG shapes**, not
-theme-swappable sprite URLs. This is a deliberate, permanent carve-out from the "never inline SVG"
-rule above — that rule still governs everything else (tags, covers, avatars, profile pictures: those
-stay `wwwroot` image assets, though avatars resolve via a stored URL, not `GetSpriteUrl` — see
-"Avatars Are Stored URLs, Not Sprite Keys" above). The reason for the split: interaction
-icons are small, single-color glyphs the site itself owns and styles per-state (gray/hover/active),
-not theme-swappable art assets a Theme pack provides — they don't belong in `wwwroot/sprites/`.
+Interaction icons (Favorite, Followed, Ignore, ReadItLater, HiddenFavorite, …) are **inline SVG
+shapes**, not theme-swappable sprite URLs. This is a deliberate, permanent carve-out from the
+"never inline SVG" rule above — that rule still governs everything else (tags, covers, avatars,
+profile pictures: those stay `wwwroot` image assets, with avatars using stored URLs and sprites
+resolved at render via `ISpriteReadService` — see the two sections above). The reason for the
+split: interaction icons are small, single-color glyphs the site itself owns and styles per-state
+(gray/hover/active), not theme-swappable art assets a Theme pack provides — they don't belong in
+`wwwroot/sprites/`.
 
 **Leaf stays dumb (panel supplies, leaf renders):** `UserStoryInteractionButton` takes `IconPath`
 (an SVG `<path d>` string) + `AccentColor` (a CSS color) as `[Parameter]`s and renders one inline

@@ -65,10 +65,8 @@ or `SecurityStampValidator`. Use a `TestAppFactory : WebApplicationFactory<Progr
    `ConfigureAppConfiguration` is **not** sufficient here: `Program.cs` reads
    `builder.Configuration.GetConnectionString("canalavedb")` before the
    `WebApplicationFactory`'s callback fires (a `WebApplicationBuilder` timing quirk), so the
-   in-memory override is too late. Replacing the `DbContextOptions` descriptors directly
-   in `ConfigureServices` is the reliable fix — confirmed 2026-06-25 after the factory
-   was silently hitting the dev DB on `localhost:5432` instead of the Testcontainers
-   container on its ephemeral port.
+   in-memory override is too late. Replace the `DbContextOptions` descriptors directly
+   in `ConfigureServices` — that fires after the builder is fully constructed.
 
 2. **Replaces `IActiveUserContext`** with `FakeActiveUserContext` (the settable test double).
 
