@@ -20,7 +20,7 @@
 @if (_isLoading)
 {
     <PageTitle>Notifications</PageTitle>
-    <p class="text-[--color-text-muted]"><em>Loading&hellip;</em></p>
+    <p class="text-(--color-text-muted)"><em>Loading&hellip;</em></p>
 }
 else
 {
@@ -28,17 +28,17 @@ else
 
     @* ── Top bar: heading + controls ──────────────────────────────────────────── *@
     <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 class="text-2xl font-bold text-[--color-text]">Notifications</h1>
+        <h1 class="text-2xl font-bold text-(--color-text)">Notifications</h1>
         <div class="flex flex-wrap items-center gap-2">
             @* View toggle *@
-            <div class="flex rounded-md border border-[--color-border] overflow-hidden text-sm">
+            <div class="flex rounded-md border border-(--color-border) overflow-hidden text-sm">
                 <button type="button"
-                        class="px-3 py-1.5 transition-colors @(_view == NotifView.Date ? "bg-[--color-primary] text-white" : "bg-[--color-surface-raised] hover:bg-[--color-primary]/10")"
+                        class="px-3 py-1.5 transition-colors @(_view == NotifView.Date ? "bg-(--color-primary) text-white" : "bg-(--color-surface-raised) hover:bg-(--color-primary)/10")"
                         @onclick="() => SetView(NotifView.Date)">
                     By date
                 </button>
                 <button type="button"
-                        class="px-3 py-1.5 transition-colors @(_view == NotifView.Category ? "bg-[--color-primary] text-white" : "bg-[--color-surface-raised] hover:bg-[--color-primary]/10")"
+                        class="px-3 py-1.5 transition-colors @(_view == NotifView.Category ? "bg-(--color-primary) text-white" : "bg-(--color-surface-raised) hover:bg-(--color-primary)/10")"
                         @onclick="() => SetView(NotifView.Category)">
                     By category
                 </button>
@@ -47,14 +47,14 @@ else
             @* Sort toggle — only visible in date feed *@
             @if (_view == NotifView.Date)
             {
-                <div class="flex rounded-md border border-[--color-border] overflow-hidden text-sm">
+                <div class="flex rounded-md border border-(--color-border) overflow-hidden text-sm">
                     <button type="button"
-                            class="px-3 py-1.5 transition-colors @(_order == NotificationFeedOrder.NewestFirst ? "bg-[--color-primary] text-white" : "bg-[--color-surface-raised] hover:bg-[--color-primary]/10")"
+                            class="px-3 py-1.5 transition-colors @(_order == NotificationFeedOrder.NewestFirst ? "bg-(--color-primary) text-white" : "bg-(--color-surface-raised) hover:bg-(--color-primary)/10")"
                             @onclick="() => SetOrder(NotificationFeedOrder.NewestFirst)">
                         Newest first
                     </button>
                     <button type="button"
-                            class="px-3 py-1.5 transition-colors @(_order == NotificationFeedOrder.OldestUnreadFirst ? "bg-[--color-primary] text-white" : "bg-[--color-surface-raised] hover:bg-[--color-primary]/10")"
+                            class="px-3 py-1.5 transition-colors @(_order == NotificationFeedOrder.OldestUnreadFirst ? "bg-(--color-primary) text-white" : "bg-(--color-surface-raised) hover:bg-(--color-primary)/10")"
                             @onclick="() => SetOrder(NotificationFeedOrder.OldestUnreadFirst)">
                         Oldest unread first
                     </button>
@@ -63,7 +63,7 @@ else
 
             @* Mark all as read *@
             <button type="button"
-                    class="rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-1.5 text-sm hover:bg-[--color-primary]/10 transition-colors"
+                    class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 text-sm hover:bg-(--color-primary)/10 transition-colors"
                     @onclick="MarkAllReadAsync">
                 Mark all read
             </button>
@@ -73,7 +73,7 @@ else
     @* ── Content ───────────────────────────────────────────────────────────────── *@
     @if (_notifications.Length == 0 && _totalCount == 0)
     {
-        <div class="flex flex-col items-center justify-center py-16 text-[--color-text-muted]">
+        <div class="flex flex-col items-center justify-center py-16 text-(--color-text-muted)">
             <svg viewBox="0 0 24 24" class="mb-3 size-10 opacity-30" aria-hidden="true" fill="currentColor">
                 <path d="M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M11 7V13H13V7Z M11 15V17H13V15Z" />
             </svg>
@@ -102,13 +102,13 @@ else
                 bool collapsed = group.Any(n => n.Collapsed) && !group.Any(n => !n.Collapsed);
                 var visuals = NotificationCategoryVisuals.For(cat);
 
-                <details class="rounded-xl border border-[--color-border]" @attributes="collapsed ? null : OpenAttr">
-                    <summary class="flex cursor-pointer select-none items-center gap-2.5 px-4 py-3 text-sm font-semibold hover:bg-[--color-surface-hover] transition-colors rounded-xl">
+                <details class="rounded-xl border border-(--color-border)" @attributes="collapsed ? null : OpenAttr">
+                    <summary class="flex cursor-pointer select-none items-center gap-2.5 px-4 py-3 text-sm font-semibold hover:bg-(--color-surface-hover) transition-colors rounded-xl">
                         <svg viewBox="0 0 24 24" class="size-4 shrink-0" aria-hidden="true" fill="@visuals.AccentColor">
                             <path d="@visuals.IconPath" />
                         </svg>
                         <span style="color:@visuals.AccentColor">@visuals.Label</span>
-                        <span class="ml-auto text-xs font-normal text-[--color-text-muted]">@group.Count</span>
+                        <span class="ml-auto text-xs font-normal text-(--color-text-muted)">@group.Count</span>
                     </summary>
                     <div class="px-1 pb-2">
                         @foreach (var n in group.OrderByDescending(n => n.DateCreated))
@@ -133,8 +133,8 @@ else
     }
 
     @* ── Footer link ─────────────────────────────────────────────────────────────── *@
-    <div class="mt-6 border-t border-[--color-border] pt-4 text-center text-sm text-[--color-text-muted]">
-        <a href="/notifications/settings" class="hover:text-[--color-text] hover:underline transition-colors">
+    <div class="mt-6 border-t border-(--color-border) pt-4 text-center text-sm text-(--color-text-muted)">
+        <a href="/notifications/settings" class="hover:text-(--color-text) hover:underline transition-colors">
             Notification settings
         </a>
     </div>

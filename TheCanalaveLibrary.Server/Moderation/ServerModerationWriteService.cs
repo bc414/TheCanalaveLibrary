@@ -29,12 +29,12 @@ namespace TheCanalaveLibrary.Server;
 /// notification failure never rolls back a moderation action.</para>
 /// </summary>
 public class ServerModerationWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     INotificationWriteService notifications,
     ILogger<ServerModerationWriteService> logger)
-    : ServerModerationReadService(readDb), IModerationWriteService
+    : ServerModerationReadService(readDbFactory), IModerationWriteService
 {
     // ── Allowed reportable entity types ──────────────────────────────────────────
 

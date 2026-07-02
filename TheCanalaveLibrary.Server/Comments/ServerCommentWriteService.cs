@@ -10,11 +10,11 @@ namespace TheCanalaveLibrary.Server;
 /// (WU34) will bypass the ownership check via a separate admin service or method.
 /// </summary>
 public class ServerCommentWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer)
-    : ServerCommentReadService(readDb, activeUser), ICommentWriteService
+    : ServerCommentReadService(readDbFactory, activeUser), ICommentWriteService
 {
     public async Task<long> PostChapterCommentAsync(PostChapterCommentDto dto)
     {

@@ -4,7 +4,7 @@
 
 @* Presentational sub-component. No @inject for I/O services — all I/O via parameters and callbacks. *@
 
-<div class="flex flex-col gap-2 rounded-md border border-[--color-border] bg-[--color-surface] p-3">
+<div class="flex flex-col gap-2 rounded-md border border-(--color-border) bg-(--color-surface) p-3">
     <div class="flex items-center justify-between gap-2">
         <div class="flex items-center gap-2">
             @if (Chip.SpriteIdentifier is not null && _themeCtx is not null)
@@ -17,25 +17,25 @@
                      alt="" class="h-6 w-6 object-contain"
                      onerror="spriteFallback(this)" />
             }
-            <span class="font-medium text-[--color-text]">@Chip.TagName</span>
+            <span class="font-medium text-(--color-text)">@Chip.TagName</span>
         </div>
         <div class="flex items-center gap-3">
-            <label class="text-xs text-[--color-text-muted]">Priority</label>
+            <label class="text-xs text-(--color-text-muted)">Priority</label>
             <select value="@Dto.Priority" @onchange="HandlePriorityChange"
-                    class="rounded border border-[--color-border] bg-[--color-surface] px-2 py-1 text-xs text-[--color-text]">
+                    class="rounded border border-(--color-border) bg-(--color-surface) px-2 py-1 text-xs text-(--color-text)">
                 <option value="@TagPriority.Primary">Primary</option>
                 <option value="@TagPriority.Supporting">Supporting</option>
             </select>
             <button type="button" @onclick="HandleRemove"
-                    class="text-xs text-[--color-danger] hover:underline">Remove</button>
+                    class="text-xs text-(--color-danger) hover:underline">Remove</button>
         </div>
     </div>
 
     @if (Chip.AllowOCDetails)
     {
-        <label class="flex cursor-pointer items-center gap-2 text-sm text-[--color-text]">
+        <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
             <input type="checkbox" checked="@Dto.IsOc" @onchange="HandleOcToggle"
-                   class="rounded border-[--color-border]" />
+                   class="rounded border-(--color-border)" />
             OC (Original Character)
         </label>
 
@@ -43,10 +43,10 @@
         {
             <input type="text" value="@Dto.OcName" @onchange="HandleOcNameChange"
                    placeholder="OC name (optional)"
-                   class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-1.5 text-sm text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]" />
+                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)" />
             <textarea value="@Dto.OcBio" @onchange="HandleOcBioChange" rows="2"
                       placeholder="OC bio / description (optional)"
-                      class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-1.5 text-sm text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"></textarea>
+                      class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"></textarea>
         }
     }
 </div>

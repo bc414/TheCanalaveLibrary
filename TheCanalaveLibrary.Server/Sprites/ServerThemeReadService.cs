@@ -9,10 +9,12 @@ namespace TheCanalaveLibrary.Server;
 /// <c>PreviewColor</c> is projected as <c>null</c> — the <c>Theme</c> entity has no color column yet;
 /// add it when the swatch design is finalised.
 /// </summary>
-public class ServerThemeReadService(ReadOnlyApplicationDbContext readDb) : IThemeReadService
+public class ServerThemeReadService(
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory) : IThemeReadService
 {
     public async Task<IReadOnlyList<ThemeDto>> GetThemesAsync()
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         return await readDb.Themes
             .OrderBy(t => t.ThemeId)
             .Select(t => new ThemeDto(t.ThemeId, t.Name, null))

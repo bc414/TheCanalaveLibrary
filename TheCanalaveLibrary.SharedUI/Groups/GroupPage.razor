@@ -19,12 +19,12 @@
 @if (_isLoading)
 {
     <PageTitle>Group</PageTitle>
-    <p class="p-4 text-[--color-text-muted]"><em>Loading…</em></p>
+    <p class="p-4 text-(--color-text-muted)"><em>Loading…</em></p>
 }
 else if (_group is null)
 {
     <PageTitle>Group not found</PageTitle>
-    <p class="p-4 text-[--color-danger]">Group not found.</p>
+    <p class="p-4 text-(--color-danger)">Group not found.</p>
 }
 else
 {
@@ -63,7 +63,7 @@ else
 @* Inline error strip (join/leave/story errors surface here) *@
 @if (_actionError is not null)
 {
-    <div class="fixed bottom-4 right-4 rounded-lg bg-[--color-danger]/90 px-4 py-2 text-sm text-white shadow-lg">
+    <div class="fixed bottom-4 right-4 rounded-lg bg-(--color-danger)/90 px-4 py-2 text-sm text-white shadow-lg">
         @_actionError
     </div>
 }

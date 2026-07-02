@@ -55,12 +55,16 @@ to flip `ShowMatureContent`/`UserId`/role flags per-test without a real sign-in 
 or `SecurityStampValidator`. Use a `TestAppFactory : WebApplicationFactory<Program>` that does **two** things in
 `ConfigureWebHost` via `builder.ConfigureServices(...)`:
 
-1. **Re-registers both `DbContext`s** with the Testcontainers connection string:
+1. **Re-registers both `DbContext`s** with the Testcontainers connection string — mirroring
+   production's shapes (plain `AddDbContext` for the write context, **scoped
+   `AddDbContextFactory` for the read context** — see `layer2-services.md` §"Read-Context
+   Concurrency: Factory Per Method"):
    ```csharp
    services.RemoveAll<DbContextOptions<ApplicationDbContext>>();
    services.RemoveAll<DbContextOptions<ReadOnlyApplicationDbContext>>();
    services.AddDbContext<ApplicationDbContext>(opt => opt.UseNpgsql(connectionString)…);
-   services.AddDbContext<ReadOnlyApplicationDbContext>(opt => opt.UseNpgsql(connectionString)…);
+   services.AddDbContextFactory<ReadOnlyApplicationDbContext>(
+       opt => opt.UseNpgsql(connectionString)…, ServiceLifetime.Scoped);
    ```
    `ConfigureAppConfiguration` is **not** sufficient here: `Program.cs` reads
    `builder.Configuration.GetConnectionString("canalavedb")` before the
@@ -71,6 +75,14 @@ or `SecurityStampValidator`. Use a `TestAppFactory : WebApplicationFactory<Progr
 2. **Replaces `IActiveUserContext`** with `FakeActiveUserContext` (the settable test double).
 
 Everything else (real service registrations, Identity) stays wired as production.
+
+**`DevSeed=Minimal` pin:** `TestAppFactory` also overrides config key `DevSeed` to `Minimal`
+(users + roles only). Under the `Development` environment the `DataSeeder` runs on every factory
+boot — i.e. before *every* test, because Respawn wipes `TestUser` so the seeder's guard never
+trips — and the Full showcase inventory would add seconds per test. Unlike the connection string
+(read eagerly, hence the descriptor-replacement dance above), the seeder reads `IConfiguration`
+lazily at run time, so a plain `ConfigureAppConfiguration` in-memory override works. Tests still
+must not depend on seeded rows (the rule above) — including the Minimal-mode `TestUser`/`AdminUser`.
 
 ## What stays manual (out of scope for automated tests)
 
@@ -207,6 +219,27 @@ not a lifetime error, which makes it easy to misdiagnose.
 
 This applies to any async method with a `using`-scoped resource: `IServiceScope`, `HttpClient`, or
 any other `IDisposable` that owns resources the async operation needs.
+
+## What the three tiers structurally can't see
+
+Each tier trades away some slice of runtime realism on purpose — that's what makes it fast and
+deterministic. Unit has no host or `DbContext` at all. Integration runs through a real `DbContext`
+scope, but one test typically drives one call path through it. RazorComponents fakes services and
+never opens a real server circuit. None of the three, by design, runs a live circuit — real
+component-initialization interleaving, real circuit/SignalR timing, real auth-cookie behavior stay
+invisible to all three regardless of how comprehensive the suite is or how green `dotnet test`
+comes back. A green suite means the tiers' own realism trade-offs held, not that every runtime
+behavior was exercised.
+
+When a hypothesis depends on that kind of real-circuit behavior, don't keep guessing against the
+automated tiers — reach for browser-based debugging instead (`run-server/SKILL.md` "Browser-based
+debugging & verification"; methodology in `canalave-conventions/debugging.md`).
+
+Once browser debugging isolates such a bug to a mechanism the Integration tier *can* express,
+pin it there. Precedent: the circuit-concurrency crash (2026-07-01) reproduced as "resolve two
+services from one scope, `Task.WhenAll` their reads" — `ConcurrentReadAccessTests` now guards that
+shape without a browser (see `layer2-services.md` §"Read-Context Concurrency: Factory Per Method").
+The browser finds the bug class; the tier keeps it fixed.
 
 ## Dev-diagnostics endpoints are probes, not the regression net
 

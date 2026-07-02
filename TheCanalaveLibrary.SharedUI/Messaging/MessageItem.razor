@@ -17,16 +17,16 @@
     <div class="max-w-[75%] @(Message.IsOwnMessage ? "items-end" : "items-start") flex flex-col gap-0.5">
         @if (!Message.IsOwnMessage)
         {
-            <span class="text-xs font-medium text-[--color-text-muted]">
+            <span class="text-xs font-medium text-(--color-text-muted)">
                 @Message.SenderUsername
             </span>
         }
 
-        <div class="rounded-xl @(Message.IsOwnMessage ? "rounded-tr-sm bg-[--color-primary] text-white" : "rounded-tl-sm bg-[--color-surface-raised] text-[--color-text]") border @(Message.IsOwnMessage ? "border-transparent" : "border-[--color-border]") px-3 py-2 text-sm">
+        <div class="rounded-xl @(Message.IsOwnMessage ? "rounded-tr-sm bg-(--color-primary) text-white" : "rounded-tl-sm bg-(--color-surface-raised) text-(--color-text)") border @(Message.IsOwnMessage ? "border-transparent" : "border-(--color-border)") px-3 py-2 text-sm">
             <RichTextView HtmlContent="@Message.MessageText" />
         </div>
 
-        <time class="text-xs text-[--color-text-muted]"
+        <time class="text-xs text-(--color-text-muted)"
               datetime="@Message.DateSent.ToString("O")">
             @Message.DateSent.ToString("MMM d, yyyy h:mm tt")
         </time>

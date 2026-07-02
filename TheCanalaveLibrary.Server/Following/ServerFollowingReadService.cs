@@ -11,7 +11,7 @@ namespace TheCanalaveLibrary.Server;
 /// subset (DisplayOrder &gt; 0, ordered by DisplayOrder); <see cref="UserCard"/> caps the display row.
 /// </summary>
 public class ServerFollowingReadService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser) : IFollowingReadService
 {
     private const string DefaultAvatarUrl = "/img/default-avatar.svg";
@@ -27,6 +27,8 @@ public class ServerFollowingReadService(
         int? viewerId = activeUser.UserId;
         if (viewerId is null)
             return new UserRelationshipStateDto(false, false, false, 0);
+
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
 
         bool isFollowing = await readDb.FollowedUsers
             .AnyAsync(f => f.UserId == viewerId && f.FollowedUserId == targetUserId);
@@ -47,6 +49,7 @@ public class ServerFollowingReadService(
 
     public async Task<IReadOnlyList<UserCardDto>> GetFollowedUsersAsync(int userId)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         return await readDb.FollowedUsers
             .Where(f => f.UserId == userId)
             .OrderBy(f => f.DateFollowed)
@@ -66,6 +69,7 @@ public class ServerFollowingReadService(
 
     public async Task<IReadOnlyList<VouchDisplayDto>> GetOutgoingVouchesAsync(int userId)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         return await readDb.Vouches
             .Where(v => v.VouchingUserId == userId)
             .OrderBy(v => v.DateVouched)
@@ -93,6 +97,7 @@ public class ServerFollowingReadService(
         if (ownerId is null)
             return [];
 
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         return await readDb.Vouches
             .Where(v => v.VouchedUserId == ownerId)
             .OrderBy(v => v.DateVouched)

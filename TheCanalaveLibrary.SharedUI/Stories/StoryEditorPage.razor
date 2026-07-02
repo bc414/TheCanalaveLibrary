@@ -19,16 +19,16 @@
 
 @if (_isLoading)
 {
-    <p class="text-[--color-text-muted]"><em>Loading…</em></p>
+    <p class="text-(--color-text-muted)"><em>Loading…</em></p>
 }
 else if (_forbidden)
 {
-    <p class="text-[--color-danger]">You don't have permission to edit this story.</p>
+    <p class="text-(--color-danger)">You don't have permission to edit this story.</p>
 }
 else
 {
     <div class="mx-auto max-w-2xl px-4 py-8">
-        <h1 class="mb-6 text-2xl font-bold text-[--color-text]">
+        <h1 class="mb-6 text-2xl font-bold text-(--color-text)">
             @(StoryId.HasValue ? "Edit Story" : "New Story")
         </h1>
 

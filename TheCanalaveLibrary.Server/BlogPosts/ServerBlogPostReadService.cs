@@ -4,7 +4,7 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Server;
 
 public class ServerBlogPostReadService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser) : IBlogPostReadService
 {
     /// <summary>
@@ -13,10 +13,18 @@ public class ServerBlogPostReadService(
     /// </summary>
     protected IActiveUserContext ActiveUser { get; } = activeUser;
 
+    /// <summary>
+    /// Read contexts are created per method from this factory (`await using`) — see
+    /// <c>layer2-services.md</c> §"Read-context concurrency: factory per method".
+    /// </summary>
+    protected IDbContextFactory<ReadOnlyApplicationDbContext> ReadDbFactory { get; } = readDbFactory;
+
     public async Task<BlogPostDto?> GetByIdAsync(int blogPostId)
     {
         int? currentUserId = ActiveUser.UserId;
         Rating maxRating = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
         // Single query through ProfileBlogPosts — TPT join pulls base columns (title, content,
         // author_id, like_count, view_count) alongside child columns (rating, date_created,
@@ -74,6 +82,8 @@ public class ServerBlogPostReadService(
     {
         Rating maxRating = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
 
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
         // includeUnpublished is true only when the owner is viewing their own profile (the caller
         // passes includeUnpublished: includePrivate where includePrivate = viewerId == authorId).
         // When false: published-only, rating-filtered (the usual public-feed case).
@@ -113,6 +123,7 @@ public class ServerBlogPostReadService(
     public async Task<BlogPostEditDto?> GetForEditAsync(int blogPostId)
     {
         // Edit page is author-only — no rating check. The page verifies ownership after load.
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
         var row = await readDb.ProfileBlogPosts
             .Where(p => p.BlogPostId == blogPostId)
             .Select(p => new { p.AuthorId, p.Title, p.Content, p.Rating, p.IsPublished, p.HasSpoilers, p.StoryId })
@@ -135,6 +146,8 @@ public class ServerBlogPostReadService(
         int groupId, int page, int pageSize)
     {
         Rating maxRating = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
         // Filter by group and apply content-rating ceiling (explicit .Where — same pattern as profile
         // blog posts; named filter not available on TPT derived DbSets, see cross-cutting.md).

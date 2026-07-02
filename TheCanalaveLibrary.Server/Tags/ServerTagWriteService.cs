@@ -5,10 +5,10 @@ namespace TheCanalaveLibrary.Server;
 
 public class ServerTagWriteService(
     ApplicationDbContext db,
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser,
     ISpriteAssetProbe spriteProbe)
-    : ServerTagReadService(readDb), ITagWriteService
+    : ServerTagReadService(readDbFactory), ITagWriteService
 {
     public async Task<TagSaveResult> CreateTagAsync(CreateTagDto dto)
     {

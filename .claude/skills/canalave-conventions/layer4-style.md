@@ -44,6 +44,20 @@ Tokens are defined in `TheCanalaveLibrary.Server/Styles/app.css` inside an `@the
 
 This config is the first act of code generation, not a spec task.
 
+### Consuming tokens in classes: `-(--token)`, never `-[--token]` (Tailwind v4)
+
+Reference a token in a utility with the **parenthesized** CSS-variable shorthand:
+`bg-(--color-surface)`, `text-(--color-text-muted)`, `border-(--color-border)`,
+`hover:bg-(--color-primary)/20`. The square-bracket form `bg-[--color-surface]` is **Tailwind v3
+syntax that v4 no longer supports** — v4 treats the bracket content as a literal arbitrary value and
+compiles it to invalid CSS (`background-color: --color-surface`), which the browser silently drops.
+The class *looks* right in markup, builds without error, and renders as nothing: transparent
+flyouts/dialogs, invisible badges. 987 usages were converted in one sweep on 2026-07-01 after a
+browser pass caught the transparent NotificationBell flyout; the compiled `wwwroot/app.css` is the
+place to confirm a token class actually emits `var(--…)`. bUnit tests must also assert the paren
+form when a class assertion is unavoidable (see `ConversationListItemTests`). Rebuild CSS with
+`npm run css:build` in `TheCanalaveLibrary.Server/` after class changes.
+
 **Design intent:** Non-corporate, warm community feel. Pokémon-fandom identity, anchored specifically
 in Gen 4/5 (the generation with the most prolific fanfiction and the strongest in-game storytelling).
 Engaging visual design with cover art (Fimfiction reference, not AO3 plainness). Not predatory, not
@@ -450,3 +464,34 @@ new glyphs introduced only for categories with no existing equivalent. Per-type 
 follow the same reuse discipline. L4 cells for Features 42/43 remain Stage 1 until visual sign-off — Tailwind
 class choices for `NotificationItem` / `NotificationBell` / `NotificationsPage` / `NotificationSettingsPage`
 are not locked here and will be added to Pattern Accumulation after visual review.
+
+**`DesktopLayout` top bar / `UserMenu` / `CreateMenu` (2026-07-01):** replaced the placeholder
+`w-64` empty sidebar + hardcoded MS "About" link with a single full-width sticky bar —
+`sticky top-0 z-20 flex items-center gap-6 border-b border-(--color-border)
+bg-(--color-surface-raised) px-6 py-3 shadow-subtle`. Layout: wordmark (`font-display`) → `<nav>`
+of `<NavLink>`s (Home/Discover/Tags/Groups, `ActiveClass="font-semibold text-(--color-primary)"`,
+Home uses `Match="NavLinkMatch.All"`) → `ml-auto` right-side chrome group. No left sidebar; no
+inline search field (Discover link covers it). Mobile is a structurally separate composition
+(`MobileLayout`, unchanged) per the desktop-vs-mobile split rule.
+
+Two new dropdown components follow the `NotificationBell` caret pattern exactly (`relative` root +
+`@onclick` toggle + `@if(_open)` `absolute right-0 top-full z-30` panel — not a `fixed inset-0`
+modal):
+- **`UserMenu`** replaces `LoginDisplay` on desktop (mobile keeps `LoginDisplay` as-is). Trigger
+  shows `context.User.Identity?.Name`. Flyout: My Profile (`/user/{id}`, id resolved from the
+  cascaded `Task<AuthenticationState>`'s `NameIdentifier` claim — never `IActiveUserContext` in
+  SharedUI), Bookshelves, Settings, then a divider + `<AuthorizeView Roles="Moderator,Admin">`-gated
+  Mod tools row, then a divider + the existing POST-`Account/Logout` form (antiforgery + `ReturnUrl`,
+  copied verbatim from `LoginDisplay`). `NotAuthorized` renders a plain `Account/Login` link.
+- **`CreateMenu`** is a `bg-(--color-accent)` "Write" button, `<AuthorizeView><Authorized>`-gated
+  (renders nothing when anonymous), opening New Story / New Blog Post / New Group links.
+
+Dropdown list items share one class string:
+`block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)`, panel
+chrome is `w-44`–`w-48 rounded-xl border border-(--color-border) bg-(--color-surface-raised) py-1
+shadow-medium`, dividers are `my-1 border-t border-(--color-border)`. Verified via HTTP/HTML
+inspection (no Chrome MCP tool available this session): anonymous shows only "Log in", no Write
+button; TestUser shows username + Write, no Mod tools; AdminUser shows Mod tools; `/mod/reports`
+returns 403 for TestUser and 200 for AdminUser. Click-driven flyout-open behavior was not
+browser-verified this session (relies on the same `@onclick`/`_open` mechanism already proven by
+`NotificationBell` in production) — worth a follow-up visual pass once a browser tool is available.

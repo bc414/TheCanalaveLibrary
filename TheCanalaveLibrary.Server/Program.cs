@@ -42,11 +42,23 @@ builder.Services.AddDbContext<ApplicationDbContext>(options => options
     .UseNpgsql(canalaveConnectionString, npgsql => npgsql.EnableRetryOnFailure())
     .UseSnakeCaseNamingConvention());
 
-// Register the dedicated read-only DbContext for high-performance queries
-builder.Services.AddDbContext<ReadOnlyApplicationDbContext>(options => options
+// Register the dedicated read-only DbContext for high-performance queries — via a SCOPED factory,
+// not AddDbContext. Blazor Server interleaves sibling components' async init on one circuit scope,
+// so a circuit-scoped read context instance is hit concurrently the moment two components (layout
+// chrome + page dispatcher, or one page's Task.WhenAll loads) query at once → EF throws
+// "A second operation was started on this context instance." Read services therefore create a
+// short-lived context per method from IDbContextFactory<ReadOnlyApplicationDbContext>.
+// ServiceLifetime.Scoped (not the default Singleton) is required so factory-created contexts can
+// resolve the Scoped IActiveUserContext ctor dependency for the named query filters — the same
+// scoped-deps constraint that ruled out pooling above. AddDbContextFactory also registers the
+// context type itself as a scoped service, so non-circuit consumers (e.g.
+// ApplicationUserClaimsPrincipalFactory, request-scoped) may still inject it directly.
+// See layer2-services.md "Read-context concurrency: factory per method".
+builder.Services.AddDbContextFactory<ReadOnlyApplicationDbContext>(options => options
     .UseNpgsql(canalaveConnectionString, npgsql => npgsql.EnableRetryOnFailure())
     .UseSnakeCaseNamingConvention()
-    .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)); // Good practice for a read-only context
+    .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking), // Good practice for a read-only context
+    ServiceLifetime.Scoped);
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 

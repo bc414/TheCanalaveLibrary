@@ -13,11 +13,11 @@
 
 @if (_isLoading)
 {
-    <p class="text-[--color-text-muted]"><em>Loading…</em></p>
+    <p class="text-(--color-text-muted)"><em>Loading…</em></p>
 }
 else if (_notFound || _post is null)
 {
-    <p class="text-[--color-danger]">Post not found.</p>
+    <p class="text-(--color-danger)">Post not found.</p>
 }
 else
 {
@@ -26,14 +26,14 @@ else
     <article class="mx-auto max-w-2xl px-4 py-8 flex flex-col gap-6">
 
         @* ── Title ─────────────────────────────────────────────────────────── *@
-        <h1 class="text-3xl font-bold text-[--color-text]">@_post.Title</h1>
+        <h1 class="text-3xl font-bold text-(--color-text)">@_post.Title</h1>
 
         @* ── Meta row ──────────────────────────────────────────────────────── *@
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[--color-text-muted]">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-(--color-text-muted)">
             @if (_post.AuthorDisplayName is not null)
             {
                 <a href="/profile/@_post.AuthorId"
-                   class="text-[--color-primary] hover:underline">@_post.AuthorDisplayName</a>
+                   class="text-(--color-primary) hover:underline">@_post.AuthorDisplayName</a>
                 <span>·</span>
             }
             <span>@_post.DateCreated.ToString("MMMM d, yyyy")</span>
@@ -42,27 +42,27 @@ else
             @if (_post.HasSpoilers)
             {
                 <span>·</span>
-                <span class="font-medium text-[--color-warning]">⚠ Spoilers</span>
+                <span class="font-medium text-(--color-warning)">⚠ Spoilers</span>
             }
             @if (!_post.IsPublished && isAuthor)
             {
                 <span>·</span>
-                <span class="rounded bg-[--color-surface] px-1.5 py-0.5 text-xs font-medium text-[--color-text-muted] ring-1 ring-[--color-border]">Draft</span>
+                <span class="rounded bg-(--color-surface) px-1.5 py-0.5 text-xs font-medium text-(--color-text-muted) ring-1 ring-(--color-border)">Draft</span>
             }
         </div>
 
         @* ── Linked story ──────────────────────────────────────────────────── *@
         @if (_post.LinkedStoryTitle is not null && _post.StoryId.HasValue)
         {
-            <div class="text-sm text-[--color-text-muted]">
+            <div class="text-sm text-(--color-text-muted)">
                 About:
                 <a href="/story/@_post.StoryId"
-                   class="text-[--color-primary] hover:underline">@_post.LinkedStoryTitle</a>
+                   class="text-(--color-primary) hover:underline">@_post.LinkedStoryTitle</a>
             </div>
         }
 
         @* ── Content ───────────────────────────────────────────────────────── *@
-        <div class="prose prose-sm max-w-none text-[--color-text]">
+        <div class="prose prose-sm max-w-none text-(--color-text)">
             <RichTextView HtmlContent="@_post.Content" />
         </div>
 
@@ -73,25 +73,25 @@ else
                 <button type="button"
                         disabled="@_likeBusy"
                         @onclick="HandleLikeAsync"
-                        class="flex items-center gap-1.5 text-sm transition-colors disabled:opacity-50 @(_isLiked ? "text-[--color-primary]" : "text-[--color-text-muted] hover:text-[--color-primary]")">
+                        class="flex items-center gap-1.5 text-sm transition-colors disabled:opacity-50 @(_isLiked ? "text-(--color-primary)" : "text-(--color-text-muted) hover:text-(--color-primary)")">
                     @(_isLiked ? "♥" : "♡") @_likeCount
                 </button>
             }
             else
             {
-                <span class="text-sm text-[--color-text-muted]">♡ @_likeCount</span>
+                <span class="text-sm text-(--color-text-muted)">♡ @_likeCount</span>
             }
 
             @if (isAuthor)
             {
                 <a href="/blog/@_post.BlogPostId/edit"
-                   class="text-sm text-[--color-primary] hover:underline">Edit</a>
+                   class="text-sm text-(--color-primary) hover:underline">Edit</a>
             }
         </div>
 
         @if (_likeError is not null)
         {
-            <p class="text-sm text-[--color-danger]">@_likeError</p>
+            <p class="text-sm text-(--color-danger)">@_likeError</p>
         }
 
     </article>

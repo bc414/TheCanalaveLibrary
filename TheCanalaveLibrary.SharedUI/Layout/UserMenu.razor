@@ -1,0 +1,100 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject NavigationManager Nav
+
+@* Cross-cutting layout element — replaces the plain LoginDisplay on desktop with a profile
+   dropdown that centralizes the authenticated-only destinations (profile, bookshelves,
+   settings, mod tools, log out). Caret pattern (relative + toggle → absolute top-full panel),
+   same as NotificationBell — not the fixed inset-0 modal pattern.
+
+   Does not inject IActiveUserContext (SharedUI rule); resolves the viewer's id from the
+   cascaded AuthenticationState claim, same pattern as StoryPage.razor. *@
+
+<AuthorizeView>
+    <Authorized>
+        <div class="relative">
+            <button type="button"
+                    class="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface) hover:text-(--color-primary)"
+                    aria-expanded="@_open"
+                    @onclick="Toggle">
+                <span>@context.User.Identity?.Name</span>
+                <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true"
+                     fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+            </button>
+
+            @if (_open)
+            {
+                <div class="absolute right-0 top-full z-30 mt-1 w-48 rounded-xl border border-(--color-border) bg-(--color-surface-raised) py-1 shadow-medium">
+                    <a href="@_profileHref"
+                       class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)"
+                       @onclick="Close">
+                        My Profile
+                    </a>
+                    <a href="bookshelves"
+                       class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)"
+                       @onclick="Close">
+                        Bookshelves
+                    </a>
+                    <a href="settings"
+                       class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)"
+                       @onclick="Close">
+                        Settings
+                    </a>
+
+                    <AuthorizeView Roles="Moderator,Admin" Context="modContext">
+                        <Authorized>
+                            <div class="my-1 border-t border-(--color-border)"></div>
+                            <a href="mod/reports"
+                               class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)"
+                               @onclick="Close">
+                                Mod tools
+                            </a>
+                        </Authorized>
+                    </AuthorizeView>
+
+                    <div class="my-1 border-t border-(--color-border)"></div>
+                    <form action="Account/Logout" method="post">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="ReturnUrl" value="@_currentUrl" />
+                        <button type="submit"
+                                class="block w-full px-4 py-2 text-left text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)">
+                            Log out
+                        </button>
+                    </form>
+                </div>
+            }
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <a href="Account/Login"
+           class="rounded-md px-2 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface) hover:text-(--color-primary)">
+            Log in
+        </a>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _open;
+    private string? _currentUrl;
+    private string _profileHref = "user";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _currentUrl = Nav.ToBaseRelativePath(Nav.Uri);
+
+        if (AuthState is not null)
+        {
+            AuthenticationState state = await AuthState;
+            string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (idStr is not null)
+                _profileHref = $"user/{idStr}";
+        }
+    }
+
+    private void Toggle() => _open = !_open;
+
+    private void Close() => _open = false;
+}

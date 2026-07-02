@@ -16,7 +16,7 @@
     <div class="flex items-center justify-between">
         <h1 class="text-xl font-bold text-text">Report Queue</h1>
         <label class="flex cursor-pointer items-center gap-2 text-sm text-muted">
-            <input type="checkbox" class="rounded border-[--color-border]"
+            <input type="checkbox" class="rounded border-(--color-border)"
                    @bind="_showResolved" @bind:after="LoadAsync" />
             Show resolved
         </label>
@@ -35,7 +35,7 @@
         <div class="overflow-x-auto">
             <table class="w-full border-collapse text-sm">
                 <thead>
-                    <tr class="border-b border-[--color-border] text-left text-xs font-semibold uppercase tracking-wide text-muted">
+                    <tr class="border-b border-(--color-border) text-left text-xs font-semibold uppercase tracking-wide text-muted">
                         <th class="py-2 pr-4">Target</th>
                         <th class="py-2 pr-4">Type</th>
                         <th class="py-2 pr-4">Reports</th>
@@ -49,7 +49,7 @@
                 <tbody>
                     @foreach (var r in _reports)
                     {
-                        <tr class="border-b border-[--color-border] align-top hover:bg-[--color-surface-raised]">
+                        <tr class="border-b border-(--color-border) align-top hover:bg-(--color-surface-raised)">
                             <td class="py-2 pr-4 font-medium">
                                 @if (r.TargetUrl is not null)
                                 {
@@ -104,7 +104,7 @@
     @* ── Action panel (shown below table when a report is being actioned) ────────── *@
     @if (_activeReport is not null)
     {
-        <div class="rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4">
+        <div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
             <h2 class="mb-3 text-base font-semibold text-text">
                 Act on: @_activeReport.TargetLabel
             </h2>
@@ -112,7 +112,7 @@
             <div class="mb-3">
                 <label class="mb-1 block text-sm font-medium text-text" for="action-notes">Notes / reason</label>
                 <textarea id="action-notes" rows="3"
-                          class="w-full rounded-md border border-[--color-border] bg-surface px-3 py-2 text-sm text-text"
+                          class="w-full rounded-md border border-(--color-border) bg-surface px-3 py-2 text-sm text-text"
                           @bind="_actionNotes"></textarea>
             </div>
 
@@ -141,7 +141,7 @@
                     Warn user
                 </button>
                 <button type="button"
-                        class="rounded border border-[--color-border] bg-surface px-3 py-1 text-sm text-text hover:bg-[--color-surface-raised]"
+                        class="rounded border border-(--color-border) bg-surface px-3 py-1 text-sm text-text hover:bg-(--color-surface-raised)"
                         @onclick="CloseActionPanel">
                     Cancel
                 </button>
@@ -255,8 +255,8 @@
     {
         ReportStatusEnum.Open => "bg-warning/20 text-warning",
         ReportStatusEnum.UnderReview => "bg-primary/20 text-primary",
-        ReportStatusEnum.ResolvedNoAction => "bg-[--color-surface-raised] text-muted",
+        ReportStatusEnum.ResolvedNoAction => "bg-(--color-surface-raised) text-muted",
         ReportStatusEnum.ResolvedActionTaken => "bg-success/20 text-success",
-        _ => "bg-[--color-surface-raised] text-muted"
+        _ => "bg-(--color-surface-raised) text-muted"
     };
 }

@@ -4,11 +4,11 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Server;
 
 public class ServerStoryWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IImageStorageService imageStorage)
-    : ServerStoryReadService(readDb, activeUser), IStoryWriteService
+    : ServerStoryReadService(readDbFactory, activeUser), IStoryWriteService
 {
     public async Task<int> CreateStoryAsync(CreateStoryDTO newStoryDTO)
     {

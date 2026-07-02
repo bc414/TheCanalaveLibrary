@@ -13,7 +13,7 @@
 
 @if (ViewModel.ServerValidationErrors.Count > 0)
 {
-    <div class="rounded-lg bg-[--color-danger]/10 p-4 text-sm text-[--color-danger]" role="alert">
+    <div class="rounded-lg bg-(--color-danger)/10 p-4 text-sm text-(--color-danger)" role="alert">
         <ul class="list-disc pl-4 space-y-1">
             @foreach (string error in ViewModel.ServerValidationErrors)
             {
@@ -29,40 +29,43 @@
 
     @* ── Title ───────────────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-[--color-text]">Chapter Title <span class="font-normal text-[--color-text-muted]">(optional — defaults to "Chapter N")</span></label>
+        <label class="text-sm font-semibold text-(--color-text)">Chapter Title <span class="font-normal text-(--color-text-muted)">(optional — defaults to "Chapter N")</span></label>
         <InputText @bind-Value="ViewModel.Title"
-                   class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
                    placeholder="Chapter title" />
     </div>
 
     @* ── Top author's note ───────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-[--color-text]">
-            Top Author's Note <span class="font-normal text-[--color-text-muted]">(optional)</span>
+        <label class="text-sm font-semibold text-(--color-text)">
+            Top Author's Note <span class="font-normal text-(--color-text-muted)">(optional)</span>
         </label>
-        <EditorView @ref="_topNoteEditor" InitialHtml="@ViewModel.TopAuthorsNote" Compact="true" />
+        @* Html= (not InitialHtml=) — EditorView's parameter surface; the Compact variant was
+           tried and discarded (see EditorView header comment). Unmatched component parameters
+           fail at RUNTIME, not compile time — found via browser pass 2026-07-01. *@
+        <EditorView @ref="_topNoteEditor" Html="@ViewModel.TopAuthorsNote" />
     </div>
 
     @* ── Chapter text ─────────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-[--color-text]">Chapter Text</label>
-        <EditorView @ref="_textEditor" InitialHtml="@ViewModel.ChapterText" />
+        <label class="text-sm font-semibold text-(--color-text)">Chapter Text</label>
+        <EditorView @ref="_textEditor" Html="@ViewModel.ChapterText" />
     </div>
 
     @* ── Bottom author's note ────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-[--color-text]">
-            Bottom Author's Note <span class="font-normal text-[--color-text-muted]">(optional)</span>
+        <label class="text-sm font-semibold text-(--color-text)">
+            Bottom Author's Note <span class="font-normal text-(--color-text-muted)">(optional)</span>
         </label>
-        <EditorView @ref="_bottomNoteEditor" InitialHtml="@ViewModel.BottomAuthorsNote" Compact="true" />
+        <EditorView @ref="_bottomNoteEditor" Html="@ViewModel.BottomAuthorsNote" />
     </div>
 
     @* ── Rating ──────────────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-[--color-text]">Version Rating</label>
+        <label class="text-sm font-semibold text-(--color-text)">Version Rating</label>
         @if (IsPrimary)
         {
-            <p class="text-sm text-[--color-text-muted]">
+            <p class="text-sm text-(--color-text-muted)">
                 The default version inherits the story's @StoryRating rating (primary invariant).
                 To change this, update the story's rating first.
             </p>
@@ -70,14 +73,14 @@
         else
         {
             <InputSelect @bind-Value="ViewModel.Rating"
-                         class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]">
+                         class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)">
                 <option value="">Same as story (@StoryRating — inherit)</option>
                 @foreach (Rating r in Enum.GetValues<Rating>().Where(r => r >= StoryRating))
                 {
                     <option value="@r">@r</option>
                 }
             </InputSelect>
-            <p class="text-xs text-[--color-text-muted]">Alternates may be rated at or above the story's rating.</p>
+            <p class="text-xs text-(--color-text-muted)">Alternates may be rated at or above the story's rating.</p>
         }
     </div>
 
@@ -85,11 +88,11 @@
     @if (VersionCount > 1)
     {
         <div class="flex flex-col gap-1">
-            <label class="text-sm font-semibold text-[--color-text]">
-                Version Name <span class="font-normal text-[--color-text-muted]">(optional)</span>
+            <label class="text-sm font-semibold text-(--color-text)">
+                Version Name <span class="font-normal text-(--color-text-muted)">(optional)</span>
             </label>
             <InputText @bind-Value="ViewModel.VersionName"
-                       class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
                        placeholder="e.g. T-rated version, Director's cut…" />
         </div>
     }
@@ -98,7 +101,7 @@
     <div>
         <button type="submit"
                 disabled="@ViewModel.IsLoading"
-                class="rounded-md bg-[--color-primary] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50">
+                class="rounded-md bg-(--color-primary) px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50">
             @SubmitLabel
         </button>
     </div>

@@ -14,11 +14,11 @@
 
 @if (_page is null)
 {
-    <p class="text-[--color-text-muted] text-sm">Loading comments…</p>
+    <p class="text-(--color-text-muted) text-sm">Loading comments…</p>
 }
 else if (_totalRootCount == 0 && _comments.Count == 0)
 {
-    <p class="text-[--color-text-muted] text-sm">No comments yet. Be the first!</p>
+    <p class="text-(--color-text-muted) text-sm">No comments yet. Be the first!</p>
 }
 else
 {
@@ -86,9 +86,10 @@ else
 @if (CurrentUserId is not null)
 {
     <div class="mt-6">
-        <h3 class="mb-2 text-sm font-semibold text-[--color-text]">Leave a comment</h3>
+        <h3 class="mb-2 text-sm font-semibold text-(--color-text)">Leave a comment</h3>
         @* Spoiler toggle is chapter-only — hidden for blog-post, group, and profile comments *@
-        <CommentEditor ShowSpoilerToggle="@(_target == CommentTarget.Chapter)"
+        <CommentEditor @ref="_composer"
+                       ShowSpoilerToggle="@(_target == CommentTarget.Chapter)"
                        @bind-Spoiler="_composeSpoiler"
                        SaveLabel="Post Comment"
                        Busy="@_busy"
@@ -111,7 +112,7 @@ else
 @* ── Inline error feedback ───────────────────────────────────────────────────── *@
 @if (_error is not null)
 {
-    <p class="mt-2 text-sm text-[--color-danger]">@_error</p>
+    <p class="mt-2 text-sm text-(--color-danger)">@_error</p>
 }
 
 @code {
@@ -164,6 +165,7 @@ else
     private long _pendingDeleteId;
     private bool _busy;
     private string? _error;
+    private CommentEditor? _composer; // persistent "Leave a comment" composer — cleared after post
 
     // ── Tree helpers ──────────────────────────────────────────────────────────────
     private IEnumerable<CommentDto> Roots => _comments.Where(c => c.ParentCommentId is null);
@@ -405,6 +407,10 @@ else
             }
             _currentPage = 1;
             await LoadAsync();
+            // Reset the persistent composer — Quill retains its content across renders, so
+            // without this the just-posted text lingers and invites an accidental double-post.
+            if (_composer is not null)
+                await _composer.ClearAsync();
         }
         catch (Exception ex) when (ex is CommentValidationException or KeyNotFoundException)
         {

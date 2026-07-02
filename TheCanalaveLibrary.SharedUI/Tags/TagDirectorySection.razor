@@ -14,13 +14,13 @@
             <AuthorizeView Roles="Moderator,Admin">
                 <Authorized>
                     <button type="button"
-                            class="hidden group-hover/row:inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[--color-text-muted] hover:bg-[--color-primary]/10 transition-colors"
+                            class="hidden group-hover/row:inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-(--color-text-muted) hover:bg-(--color-primary)/10 transition-colors"
                             @onclick="() => OnEditTag.InvokeAsync(node.Tag)"
                             title="Edit @node.Tag.TagName">
                         ✎
                     </button>
                     <button type="button"
-                            class="hidden group-hover/row:inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[--color-text-muted] hover:bg-[--color-danger]/10 transition-colors"
+                            class="hidden group-hover/row:inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-(--color-text-muted) hover:bg-(--color-danger)/10 transition-colors"
                             @onclick="() => OnDeleteTag.InvokeAsync(node.Tag)"
                             title="Delete @node.Tag.TagName">
                         ✕
@@ -40,13 +40,13 @@
                         <AuthorizeView Roles="Moderator,Admin">
                             <Authorized>
                                 <button type="button"
-                                        class="hidden group-hover/row:inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[--color-text-muted] hover:bg-[--color-primary]/10 transition-colors"
+                                        class="hidden group-hover/row:inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-(--color-text-muted) hover:bg-(--color-primary)/10 transition-colors"
                                         @onclick="() => OnEditTag.InvokeAsync(child)"
                                         title="Edit @child.TagName">
                                     ✎
                                 </button>
                                 <button type="button"
-                                        class="hidden group-hover/row:inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-[--color-text-muted] hover:bg-[--color-danger]/10 transition-colors"
+                                        class="hidden group-hover/row:inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-(--color-text-muted) hover:bg-(--color-danger)/10 transition-colors"
                                         @onclick="() => OnDeleteTag.InvokeAsync(child)"
                                         title="Delete @child.TagName">
                                     ✕
@@ -61,7 +61,7 @@
 
     @if (Group.Nodes.Count == 0)
     {
-        <p class="text-sm text-[--color-text-muted] italic">No tags yet.</p>
+        <p class="text-sm text-(--color-text-muted) italic">No tags yet.</p>
     }
 </div>
 

@@ -8,7 +8,7 @@ namespace TheCanalaveLibrary.Server;
 // TagChipDto now carries the raw SpriteIdentifier; see layer2-services.md §"Sprite URLs Are
 // Resolved At Render Time" and audit/Tags.md.
 public class ServerTagReadService(
-    ReadOnlyApplicationDbContext readDb) : ITagReadService
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory) : ITagReadService
 {
     private const int MaxSearchResults = 10;
 
@@ -16,6 +16,7 @@ public class ServerTagReadService(
     {
         if (string.IsNullOrWhiteSpace(term)) return [];
 
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         return await readDb.Tags
             .Where(t => t.TagTypeId == type && EF.Functions.ILike(t.TagName, $"%{term}%"))
             .OrderBy(t => t.TagName)
@@ -35,6 +36,7 @@ public class ServerTagReadService(
     {
         if (tagIds.Count == 0) return [];
 
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         var rows = await readDb.Tags
             .Where(t => tagIds.Contains(t.TagId))
             .Select(t => new { t.TagId, t.TagName, t.TagTypeId, t.Description, t.SpriteIdentifier, t.AllowOCDetails, t.AllowSettingDetails })
@@ -57,6 +59,8 @@ public class ServerTagReadService(
 
     public async Task<List<TagDirectoryGroupDto>> GetTagDirectoryAsync()
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
         // Single projection — fetch all tags with ParentTagId so we can build the tree in memory.
         var rows = await readDb.Tags
             .OrderBy(t => t.TagName)
@@ -117,12 +121,18 @@ public class ServerTagReadService(
         return groups;
     }
 
-    public Task<List<TagDropDownDTO>> GetTagsByTypeAsync(TagTypeEnum type) =>
-        readDb.Tags
+    // Block-bodied with an awaited query — returning the bare Task would dispose the factory
+    // context before the query streams (same lifetime pitfall as testing.md §"async methods that
+    // create a scope must await the call inside it").
+    public async Task<List<TagDropDownDTO>> GetTagsByTypeAsync(TagTypeEnum type)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        return await readDb.Tags
             .Where(t => t.TagTypeId == type)
             .OrderBy(t => t.TagName)
             .Select(t => new TagDropDownDTO { TagId = t.TagId, TagName = t.TagName })
             .ToListAsync();
+    }
 
     public Task<List<TagDropDownDTO>> GetAllCharacterTagsAsync() =>
         GetTagsByTypeAsync(TagTypeEnum.Character);

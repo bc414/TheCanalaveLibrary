@@ -5,18 +5,18 @@
    The dispatcher hides this component entirely when Stats is null (owner's ShowUserStats = false
    and viewer is not the owner); no conditional render needed here. *@
 
-<div class="flex flex-wrap gap-x-5 gap-y-2 text-sm text-[--color-text-muted]">
-    <span><strong class="text-[--color-text]">@Stats.StoriesWritten</strong> stories</span>
-    <span><strong class="text-[--color-text]">@FormatWords(Stats.WordsWritten)</strong> words</span>
-    <span><strong class="text-[--color-text]">@Stats.FollowerCount</strong> followers</span>
-    <span><strong class="text-[--color-text]">@Stats.AuthorsFollowed</strong> following</span>
-    <span><strong class="text-[--color-text]">@Stats.CommentsWritten</strong> comments</span>
-    <span><strong class="text-[--color-text]">@Stats.RecommendationsWritten</strong> recs given</span>
-    <span><strong class="text-[--color-text]">@Stats.RecommendationsReceived</strong> recs received</span>
-    <span><strong class="text-[--color-text]">@Stats.BlogPostsWritten</strong> blog posts</span>
-    <span><strong class="text-[--color-text]">@Stats.GroupsJoined</strong> groups</span>
-    <span><strong class="text-[--color-text]">@Stats.StoriesRead</strong> finished</span>
-    <span><strong class="text-[--color-text]">@Stats.StoriesInProgress</strong> reading</span>
+<div class="flex flex-wrap gap-x-5 gap-y-2 text-sm text-(--color-text-muted)">
+    <span><strong class="text-(--color-text)">@Stats.StoriesWritten</strong> stories</span>
+    <span><strong class="text-(--color-text)">@FormatWords(Stats.WordsWritten)</strong> words</span>
+    <span><strong class="text-(--color-text)">@Stats.FollowerCount</strong> followers</span>
+    <span><strong class="text-(--color-text)">@Stats.AuthorsFollowed</strong> following</span>
+    <span><strong class="text-(--color-text)">@Stats.CommentsWritten</strong> comments</span>
+    <span><strong class="text-(--color-text)">@Stats.RecommendationsWritten</strong> recs given</span>
+    <span><strong class="text-(--color-text)">@Stats.RecommendationsReceived</strong> recs received</span>
+    <span><strong class="text-(--color-text)">@Stats.BlogPostsWritten</strong> blog posts</span>
+    <span><strong class="text-(--color-text)">@Stats.GroupsJoined</strong> groups</span>
+    <span><strong class="text-(--color-text)">@Stats.StoriesRead</strong> finished</span>
+    <span><strong class="text-(--color-text)">@Stats.StoriesInProgress</strong> reading</span>
 </div>
 
 @code {

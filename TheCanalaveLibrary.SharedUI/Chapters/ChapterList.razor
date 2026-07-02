@@ -24,18 +24,18 @@
     @foreach (var chapter in visible)
     {
         @* Primary chapter row — always links to the primary version (no version segment in URL). *@
-        <div class="border-b border-[--color-border] last:border-b-0">
+        <div class="border-b border-(--color-border) last:border-b-0">
             <a href="/story/@StoryId/@chapter.ChapterNumber"
-               class="flex items-center justify-between gap-3 px-3 py-3 text-sm hover:bg-[--color-surface-hover] transition-colors">
+               class="flex items-center justify-between gap-3 px-3 py-3 text-sm hover:bg-(--color-surface-hover) transition-colors">
                 <span class="flex items-center gap-2 min-w-0">
-                    <span class="shrink-0 w-6 text-right text-[--color-text-muted] tabular-nums text-xs">@chapter.ChapterNumber.</span>
-                    <span class="truncate text-[--color-text]">@chapter.Title</span>
+                    <span class="shrink-0 w-6 text-right text-(--color-text-muted) tabular-nums text-xs">@chapter.ChapterNumber.</span>
+                    <span class="truncate text-(--color-text)">@chapter.Title</span>
                     @if (!chapter.IsPublished)
                     {
-                        <span class="shrink-0 rounded bg-[--color-surface] px-1.5 py-0.5 text-xs font-medium text-[--color-text-muted] ring-1 ring-[--color-border]">Draft</span>
+                        <span class="shrink-0 rounded bg-(--color-surface) px-1.5 py-0.5 text-xs font-medium text-(--color-text-muted) ring-1 ring-(--color-border)">Draft</span>
                     }
                 </span>
-                <span class="shrink-0 text-xs text-[--color-text-muted] tabular-nums">@WordCountDisplay(chapter.WordCount) &rsaquo;</span>
+                <span class="shrink-0 text-xs text-(--color-text-muted) tabular-nums">@WordCountDisplay(chapter.WordCount) &rsaquo;</span>
             </a>
 
             @* Alternate (non-primary) versions — indented sub-rows, same vertical structure on
@@ -43,12 +43,12 @@
             @foreach (var alt in chapter.AlternateVersions)
             {
                 <a href="/story/@StoryId/@chapter.ChapterNumber/@alt.VersionOrder"
-                   class="flex items-center justify-between gap-3 pl-10 pr-3 py-2 text-sm hover:bg-[--color-surface-hover] transition-colors border-t border-[--color-border]/50">
+                   class="flex items-center justify-between gap-3 pl-10 pr-3 py-2 text-sm hover:bg-(--color-surface-hover) transition-colors border-t border-(--color-border)/50">
                     <span class="flex items-center gap-2 min-w-0">
-                        <span class="shrink-0 text-[--color-text-muted]">&#8627;</span>
-                        <span class="truncate text-[--color-text-muted]">@chapter.Title — @AltVersionLabel(alt)</span>
+                        <span class="shrink-0 text-(--color-text-muted)">&#8627;</span>
+                        <span class="truncate text-(--color-text-muted)">@chapter.Title — @AltVersionLabel(alt)</span>
                     </span>
-                    <span class="shrink-0 text-xs text-[--color-text-muted] tabular-nums">@WordCountDisplay(alt.WordCount) &rsaquo;</span>
+                    <span class="shrink-0 text-xs text-(--color-text-muted) tabular-nums">@WordCountDisplay(alt.WordCount) &rsaquo;</span>
                 </a>
             }
         </div>
@@ -56,7 +56,7 @@
 
     @if (!visible.Any())
     {
-        <p class="px-3 py-4 text-sm text-[--color-text-muted]">No chapters yet.</p>
+        <p class="px-3 py-4 text-sm text-(--color-text-muted)">No chapters yet.</p>
     }
 </div>
 

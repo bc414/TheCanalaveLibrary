@@ -12,7 +12,7 @@
 
 @if (ViewModel.ServerValidationErrors.Any())
 {
-    <div class="rounded-lg bg-[--color-danger]/10 p-4 text-sm text-[--color-danger]" role="alert">
+    <div class="rounded-lg bg-(--color-danger)/10 p-4 text-sm text-(--color-danger)" role="alert">
         <ul class="list-disc pl-4 space-y-1">
             @foreach (string error in ViewModel.ServerValidationErrors)
             {
@@ -28,28 +28,28 @@
 
     @* ── Title ───────────────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-[--color-text]">Title</label>
+        <label class="text-sm font-semibold text-(--color-text)">Title</label>
         <InputText @bind-Value="ViewModel.Title"
-                   class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
                    placeholder="Story title" />
-        <ValidationMessage For="@(() => ViewModel.Title)" class="text-sm text-[--color-danger]" />
+        <ValidationMessage For="@(() => ViewModel.Title)" class="text-sm text-(--color-danger)" />
     </div>
 
     @* ── Short description ────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-[--color-text]">Short Description</label>
+        <label class="text-sm font-semibold text-(--color-text)">Short Description</label>
         <InputTextArea @bind-Value="ViewModel.ShortDescription" rows="2"
-                       class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
                        placeholder="One-line hook shown in story listings (max 500 chars)" />
-        <ValidationMessage For="@(() => ViewModel.ShortDescription)" class="text-sm text-[--color-danger]" />
+        <ValidationMessage For="@(() => ViewModel.ShortDescription)" class="text-sm text-(--color-danger)" />
     </div>
 
     @* ── Rating + Status (side by side on wider screens) ─────────────────────── *@
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div class="flex flex-col gap-1">
-            <label class="text-sm font-semibold text-[--color-text]">Rating</label>
+            <label class="text-sm font-semibold text-(--color-text)">Rating</label>
             <InputSelect @bind-Value="ViewModel.Rating"
-                         class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]">
+                         class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)">
                 @foreach (Rating r in Enum.GetValues<Rating>())
                 {
                     <option value="@r">@r.ToString()</option>
@@ -57,9 +57,9 @@
             </InputSelect>
         </div>
         <div class="flex flex-col gap-1">
-            <label class="text-sm font-semibold text-[--color-text]">Status</label>
+            <label class="text-sm font-semibold text-(--color-text)">Status</label>
             <InputSelect @bind-Value="ViewModel.StoryStatusId"
-                         class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]">
+                         class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)">
                 @foreach (StoryStatusEnum s in Enum.GetValues<StoryStatusEnum>())
                 {
                     <option value="@s">@s.ToString()</option>
@@ -70,7 +70,7 @@
 
     @* ── Cover art ───────────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-2">
-        <label class="text-sm font-semibold text-[--color-text]">Cover Art</label>
+        <label class="text-sm font-semibold text-(--color-text)">Cover Art</label>
         @if (!string.IsNullOrEmpty(ViewModel.CoverArtRelativeUrl))
         {
             <img src="@ViewModel.CoverArtRelativeUrl"
@@ -78,19 +78,19 @@
                  class="h-32 w-24 rounded-md object-cover shadow-sm" />
         }
         <InputFile OnChange="HandleCoverSelected" accept="image/jpeg,image/png,image/webp"
-                   class="text-sm text-[--color-text-muted] file:mr-3 file:rounded-md file:border-0 file:bg-[--color-primary] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white file:transition-colors hover:file:bg-[--color-primary-strong]" />
-        <p class="text-xs text-[--color-text-muted]">JPEG, PNG, or WebP · max 10 MB</p>
+                   class="text-sm text-(--color-text-muted) file:mr-3 file:rounded-md file:border-0 file:bg-(--color-primary) file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white file:transition-colors hover:file:bg-(--color-primary-strong)" />
+        <p class="text-xs text-(--color-text-muted)">JPEG, PNG, or WebP · max 10 MB</p>
     </div>
 
     @* ── Long description (rich text) ─────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-[--color-text]">Summary / Long Description</label>
+        <label class="text-sm font-semibold text-(--color-text)">Summary / Long Description</label>
         <EditorView @ref="_editor" Html="@ViewModel.LongDescription" Placeholder="Full story summary…" />
     </div>
 
     @* ── Tags ────────────────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-6">
-        <p class="text-sm font-semibold text-[--color-text]">Tags</p>
+        <p class="text-sm font-semibold text-(--color-text)">Tags</p>
 
         @* Characters + per-entry detail + pairings *@
         <div class="flex flex-col gap-2">
@@ -115,7 +115,7 @@
         @if (_characterChips.Count >= 2)
         {
             <div class="flex flex-col gap-1">
-                <p class="text-sm font-medium text-[--color-text]">Character Pairings</p>
+                <p class="text-sm font-medium text-(--color-text)">Character Pairings</p>
                 <PairingBuilder CharacterChips="@_characterChips"
                                 Pairings="@_pairings"
                                 OnPairingsChanged="HandlePairingsChanged" />
@@ -147,12 +147,12 @@
             @foreach (TagChipDto chip in _genreChips)
             {
                 TagPriority priority = _genrePriorityMap.GetValueOrDefault(chip.TagId, TagPriority.Primary);
-                <div class="flex items-center gap-3 rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2">
-                    <span class="flex-1 text-sm text-[--color-text]">@chip.TagName</span>
-                    <label class="text-xs text-[--color-text-muted]">Priority</label>
+                <div class="flex items-center gap-3 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2">
+                    <span class="flex-1 text-sm text-(--color-text)">@chip.TagName</span>
+                    <label class="text-xs text-(--color-text-muted)">Priority</label>
                     <select value="@priority"
                             @onchange="@(e => HandleGenrePriorityChange(chip.TagId, Enum.Parse<TagPriority>((string)e.Value!)))"
-                            class="rounded border border-[--color-border] bg-[--color-surface] px-2 py-1 text-xs text-[--color-text]">
+                            class="rounded border border-(--color-border) bg-(--color-surface) px-2 py-1 text-xs text-(--color-text)">
                         <option value="@TagPriority.Primary">Primary</option>
                         <option value="@TagPriority.Supporting">Supporting</option>
                     </select>
@@ -174,7 +174,7 @@
     @* ── Submit ──────────────────────────────────────────────────────────────── *@
     <button type="submit"
             disabled="@ViewModel.IsLoading"
-            class="self-start rounded-md bg-[--color-primary] px-5 py-2 font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50">
+            class="self-start rounded-md bg-(--color-primary) px-5 py-2 font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50">
         @(ViewModel.IsLoading ? "Saving…" : SubmitLabel)
     </button>
 </EditForm>

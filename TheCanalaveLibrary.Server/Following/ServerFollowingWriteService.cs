@@ -18,13 +18,13 @@ namespace TheCanalaveLibrary.Server;
 /// logged and swallowed; it never rolls back the primary action.
 /// </summary>
 public class ServerFollowingWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
     INotificationWriteService notifications,
     ILogger<ServerFollowingWriteService> logger)
-    : ServerFollowingReadService(readDb, activeUser), IFollowingWriteService
+    : ServerFollowingReadService(readDbFactory, activeUser), IFollowingWriteService
 {
     public async Task FollowAsync(int targetUserId)
     {

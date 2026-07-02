@@ -9,11 +9,11 @@
 
     @* ── Title + author-only Edit link ───────────────────────────────────────── *@
     <div class="flex items-start justify-between gap-3">
-        <h1 class="text-2xl font-bold text-[--color-text] leading-snug">@Story.StoryTitle</h1>
+        <h1 class="text-2xl font-bold text-(--color-text) leading-snug">@Story.StoryTitle</h1>
         @if (IsAuthor)
         {
             <a href="/story/@Story.StoryId/edit"
-               class="shrink-0 text-sm text-[--color-primary] hover:underline">Edit</a>
+               class="shrink-0 text-sm text-(--color-primary) hover:underline">Edit</a>
         }
     </div>
 
@@ -26,8 +26,8 @@
     }
     else if (Story.CoverArtRelativeUrl is not null && _coverArtFailed)
     {
-        <div class="w-full h-32 rounded-xl bg-[--color-surface-hover] flex items-center justify-center">
-            <span class="text-4xl text-[--color-text-muted] select-none">
+        <div class="w-full h-32 rounded-xl bg-(--color-surface-hover) flex items-center justify-center">
+            <span class="text-4xl text-(--color-text-muted) select-none">
                 @(Story.StoryTitle?.Length > 0 ? Story.StoryTitle[0] : '?')
             </span>
         </div>
@@ -36,11 +36,11 @@
     @* ── Metadata row ─────────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-2">
         @* Author + dates *@
-        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-[--color-text-muted]">
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-(--color-text-muted)">
             @if (Story.AuthorId is not null)
             {
                 <a href="/user/@Story.AuthorId"
-                   class="text-[--color-primary] hover:underline font-medium">@(Story.AuthorName ?? "Unknown")</a>
+                   class="text-(--color-primary) hover:underline font-medium">@(Story.AuthorName ?? "Unknown")</a>
             }
             else
             {
@@ -54,7 +54,7 @@
         <div class="flex flex-wrap items-center gap-1.5">
             <span class="@StatusBadgeClass px-2 py-0.5 rounded-full text-xs font-medium">@StatusLabel</span>
             <span class="@RatingBadgeClass px-2 py-0.5 rounded-full text-xs font-medium">@RatingLabel</span>
-            <span class="text-xs text-[--color-text-muted]">@WordCountDisplay</span>
+            <span class="text-xs text-(--color-text-muted)">@WordCountDisplay</span>
         </div>
 
         @* Tag chips — sprite-resolved, read-only (no OnRemove); includes character chips *@
@@ -72,11 +72,11 @@
         @{ var ocChars = Story.Characters.Where(c => c.IsOc && c.OcName != null).ToList(); }
         @if (ocChars.Count > 0)
         {
-            <div class="text-sm text-[--color-text-muted]">
+            <div class="text-sm text-(--color-text-muted)">
                 @foreach (var oc in ocChars)
                 {
                     <span class="mr-2">
-                        <span class="font-medium text-[--color-text]">@oc.OcName</span>
+                        <span class="font-medium text-(--color-text)">@oc.OcName</span>
                         <span class="text-xs"> (@oc.Chip.TagName OC)</span>
                     </span>
                 }
@@ -89,7 +89,7 @@
             <div class="flex flex-wrap gap-1.5 text-sm">
                 @foreach (var pairing in Story.Pairings)
                 {
-                    <span class="px-2 py-0.5 rounded-full bg-[--color-surface-hover] text-[--color-text]">
+                    <span class="px-2 py-0.5 rounded-full bg-(--color-surface-hover) text-(--color-text)">
                         @pairing.DisplayNames
                     </span>
                 }
@@ -100,7 +100,7 @@
     @* ── Long description ─────────────────────────────────────────────────────── *@
     @if (!string.IsNullOrWhiteSpace(Story.LongDescription))
     {
-        <div class="prose prose-sm max-w-none text-[--color-text]">
+        <div class="prose prose-sm max-w-none text-(--color-text)">
             <RichTextView HtmlContent="@Story.LongDescription" />
         </div>
     }
@@ -109,8 +109,8 @@
     @if (Chapters.Count > 0 || IsAuthor)
     {
         <section>
-            <h2 class="text-base font-semibold text-[--color-text] mb-1.5">Chapters</h2>
-            <div class="rounded-xl border border-[--color-border] bg-[--color-surface] overflow-hidden">
+            <h2 class="text-base font-semibold text-(--color-text) mb-1.5">Chapters</h2>
+            <div class="rounded-xl border border-(--color-border) bg-(--color-surface) overflow-hidden">
                 <ChapterList Chapters="Chapters" StoryId="Story.StoryId" ShowDrafts="IsAuthor" />
             </div>
         </section>

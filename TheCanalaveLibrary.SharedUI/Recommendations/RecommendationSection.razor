@@ -13,18 +13,18 @@
     <svg viewBox="0 0 24 24" class="size-5 shrink-0" aria-hidden="true" fill="#5BB85A">
         <path d="@RecommendationIcons.RecommendationIconPath" />
     </svg>
-    <h2 class="text-base font-semibold text-[--color-text]">
-        Recommendations <span class="text-[--color-text-muted] font-normal text-sm">(@_recs.Count)</span>
+    <h2 class="text-base font-semibold text-(--color-text)">
+        Recommendations <span class="text-(--color-text-muted) font-normal text-sm">(@_recs.Count)</span>
     </h2>
 </div>
 
 @if (_loading)
 {
-    <p class="text-sm text-[--color-text-muted]">Loading recommendations…</p>
+    <p class="text-sm text-(--color-text-muted)">Loading recommendations…</p>
 }
 else if (_recs.Count == 0 && !_composing)
 {
-    <p class="text-sm text-[--color-text-muted]">No recommendations yet. Be the first!</p>
+    <p class="text-sm text-(--color-text-muted)">No recommendations yet. Be the first!</p>
 }
 else
 {
@@ -73,7 +73,7 @@ else
         }
         else
         {
-            <h3 class="mb-2 text-sm font-semibold text-[--color-text]">Write a recommendation</h3>
+            <h3 class="mb-2 text-sm font-semibold text-(--color-text)">Write a recommendation</h3>
             <RecommendationEditor SaveLabel="Submit Recommendation"
                                    Busy="@_busy"
                                    OnSave="HandleSubmitAsync"
@@ -94,7 +94,7 @@ else
 @* ── Inline error feedback ────────────────────────────────────────────────────── *@
 @if (_error is not null)
 {
-    <p class="mt-2 text-sm text-[--color-danger]">@_error</p>
+    <p class="mt-2 text-sm text-(--color-danger)">@_error</p>
 }
 
 @code {

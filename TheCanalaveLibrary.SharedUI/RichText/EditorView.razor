@@ -111,6 +111,14 @@
     /// </summary>
     public async Task<string> GetHtmlAsync() => await _quill!.GetHTML();
 
+    /// <summary>
+    /// Replaces the editor's content. Quill stays mounted and ignores later changes to the Html
+    /// parameter, so persistent composers (e.g. CommentSection's "Leave a comment") call this via
+    /// @ref to reset after a successful post — without it the just-posted text lingers and a second
+    /// click double-posts.
+    /// </summary>
+    public async Task SetHtmlAsync(string html) => await _quill!.LoadHTMLContent(html);
+
     private async Task OpenPreview()
     {
         _previewHtml = await _quill!.GetHTML();

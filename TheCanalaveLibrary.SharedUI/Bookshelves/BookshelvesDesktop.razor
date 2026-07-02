@@ -8,7 +8,7 @@
 <div class="flex flex-col gap-4 px-4 py-4">
 
     @* ── Tab bar ─────────────────────────────────────────────────────────────────────── *@
-    <nav class="flex flex-wrap gap-1 border-b border-[--color-border] pb-2" aria-label="Bookshelf tabs">
+    <nav class="flex flex-wrap gap-1 border-b border-(--color-border) pb-2" aria-label="Bookshelf tabs">
         @foreach (BookshelfTab tab in BookshelfTabVisuals.AllTabs)
         {
             var info = BookshelfTabVisuals.For(tab);
@@ -44,8 +44,8 @@
         </div>
 
         @* ResultsFilterPanel sidebar *@
-        <aside class="w-72 shrink-0 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4">
-            <h2 class="mb-3 text-sm font-bold text-[--color-text-muted] uppercase tracking-wide">Filters</h2>
+        <aside class="w-72 shrink-0 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+            <h2 class="mb-3 text-sm font-bold text-(--color-text-muted) uppercase tracking-wide">Filters</h2>
             <ResultsFilterPanel OnSearch="@OnFilterChanged"
                                 InitialFilter="@Filter"
                                 AvailableSorts="@_availableSorts"
@@ -78,5 +78,5 @@
         "flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-sm transition-colors " +
         (isActive
             ? "font-semibold"
-            : "text-[--color-text-muted] hover:bg-[--color-surface-hover] hover:text-[--color-text]");
+            : "text-(--color-text-muted) hover:bg-(--color-surface-hover) hover:text-(--color-text)");
 }

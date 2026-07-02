@@ -9,10 +9,10 @@ namespace TheCanalaveLibrary.Server;
 /// HasStarted is never touched — it belongs to the reading path (WU26).
 /// </summary>
 public class ServerUserStoryInteractionWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser)
-    : ServerUserStoryInteractionReadService(readDb, activeUser), IUserStoryInteractionWriteService
+    : ServerUserStoryInteractionReadService(readDbFactory, activeUser), IUserStoryInteractionWriteService
 {
     public async Task SetUserStoryInteractionStateAsync(int storyId, UserStoryInteractionStateUpdate update)
     {

@@ -22,23 +22,23 @@
 
 @if (_isLoading)
 {
-    <p class="text-[--color-text-muted]"><em>Loading…</em></p>
+    <p class="text-(--color-text-muted)"><em>Loading…</em></p>
 }
 else if (_forbidden)
 {
-    <p class="text-[--color-danger]">You don't have permission to edit this chapter.</p>
+    <p class="text-(--color-danger)">You don't have permission to edit this chapter.</p>
 }
 else
 {
     <div class="mx-auto max-w-2xl px-4 py-8">
         <div class="mb-6 flex items-center justify-between gap-4">
-            <h1 class="text-2xl font-bold text-[--color-text]">
+            <h1 class="text-2xl font-bold text-(--color-text)">
                 @(_isNew ? "New Chapter" : $"Edit Chapter {ChapterNumber}")
             </h1>
             @if (!_isNew)
             {
                 <a href="/story/@StoryId/@ChapterNumber"
-                   class="text-sm text-[--color-primary] hover:underline">
+                   class="text-sm text-(--color-primary) hover:underline">
                     ← Back to reading
                 </a>
             }
@@ -47,8 +47,8 @@ else
         @* ── Version switcher (progressive — only when VersionCount > 1) ─────── *@
         @if (_versionCount > 1 && !_isNew)
         {
-            <div class="mb-6 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4">
-                <h2 class="mb-2 text-sm font-semibold text-[--color-text]">Versions</h2>
+            <div class="mb-6 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+                <h2 class="mb-2 text-sm font-semibold text-(--color-text)">Versions</h2>
                 <div class="flex flex-wrap gap-2">
                     @foreach (ChapterVersionDto version in _versions)
                     {
@@ -56,30 +56,30 @@ else
                         string versionLabel = version.VersionName ?? (version.IsPrimary ? "Primary" : $"Version {version.VersionOrder}");
                         <a href="@VersionEditUrl(version)"
                            class="@(isCurrent
-                               ? "rounded-md bg-[--color-primary]/10 px-3 py-1.5 text-sm font-semibold text-[--color-primary] ring-1 ring-[--color-primary]"
-                               : "rounded-md border border-[--color-border] px-3 py-1.5 text-sm text-[--color-text] hover:bg-[--color-surface-hover]")">
+                               ? "rounded-md bg-(--color-primary)/10 px-3 py-1.5 text-sm font-semibold text-(--color-primary) ring-1 ring-(--color-primary)"
+                               : "rounded-md border border-(--color-border) px-3 py-1.5 text-sm text-(--color-text) hover:bg-(--color-surface-hover)")">
                             @versionLabel
                             @if (version.IsPrimary)
                             {
-                                <span class="ml-1 text-xs text-[--color-text-muted]">(default)</span>
+                                <span class="ml-1 text-xs text-(--color-text-muted)">(default)</span>
                             }
                         </a>
                     }
                 </div>
                 @if (_currentVersion is not null)
                 {
-                    <div class="mt-3 flex flex-wrap gap-2 border-t border-[--color-border] pt-3">
+                    <div class="mt-3 flex flex-wrap gap-2 border-t border-(--color-border) pt-3">
                         @if (!_currentVersion.IsPrimary)
                         {
                             <button type="button"
-                                    class="text-sm text-[--color-primary] hover:underline"
+                                    class="text-sm text-(--color-primary) hover:underline"
                                     @onclick="SetAsPrimaryAsync">
                                 Set as default
                             </button>
                         }
                         else
                         {
-                            <span class="text-sm text-[--color-text-muted]">This is the default version</span>
+                            <span class="text-sm text-(--color-text-muted)">This is the default version</span>
                         }
                     </div>
                 }
@@ -90,17 +90,17 @@ else
         @if (!_isNew)
         {
             <div class="mb-4 flex items-center gap-3">
-                <span class="text-sm font-semibold text-[--color-text]">Status:</span>
+                <span class="text-sm font-semibold text-(--color-text)">Status:</span>
                 @if (_isPublished)
                 {
-                    <span class="text-sm text-[--color-text-muted]">Published</span>
-                    <button type="button" class="text-sm text-[--color-danger] hover:underline"
+                    <span class="text-sm text-(--color-text-muted)">Published</span>
+                    <button type="button" class="text-sm text-(--color-danger) hover:underline"
                             @onclick="() => SetPublishedAsync(false)">Unpublish</button>
                 }
                 else
                 {
-                    <span class="text-sm text-[--color-text-muted]">Draft</span>
-                    <button type="button" class="text-sm text-[--color-primary] hover:underline"
+                    <span class="text-sm text-(--color-text-muted)">Draft</span>
+                    <button type="button" class="text-sm text-(--color-primary) hover:underline"
                             @onclick="() => SetPublishedAsync(true)">Publish</button>
                 }
             </div>
@@ -118,9 +118,9 @@ else
         @* ── "Add alternate version" — progressive; hidden for new chapters ─── *@
         @if (!_isNew && _chapterId.HasValue)
         {
-            <div class="mt-4 border-t border-[--color-border] pt-4">
+            <div class="mt-4 border-t border-(--color-border) pt-4">
                 <button type="button"
-                        class="text-sm text-[--color-text-muted] hover:text-[--color-text] hover:underline"
+                        class="text-sm text-(--color-text-muted) hover:text-(--color-text) hover:underline"
                         @onclick="AddAlternateAsync">
                     + Add alternate version
                 </button>
@@ -150,8 +150,45 @@ else
     private IReadOnlyList<ChapterVersionDto> _versions = [];
     private ChapterVersionDto? _currentVersion;
 
+    // Route-param tracking for same-component navigation (create → edit, or version switch).
+    // Router-intercepted <a>/NavigateTo between routes served by THIS component reuses the
+    // instance: OnInitializedAsync does NOT re-run — OnParametersSetAsync must reload. Same
+    // pattern as ChapterReadingPage / the WU-ComponentSoundness dispatcher wave.
+    private bool _initialized;
+    private int _loadedStoryId;
+    private int? _loadedChapterNumber;
+    private int? _loadedVersionOrder;
+
     protected override async Task OnInitializedAsync()
     {
+        await LoadAsync();
+        _initialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_initialized) return;
+        if (StoryId == _loadedStoryId && ChapterNumber == _loadedChapterNumber
+            && VersionOrder == _loadedVersionOrder) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _forbidden = false;
+        _viewModel = new();
+        _chapterId = null;
+        _contentId = null;
+        _versions = [];
+        _currentVersion = null;
+        _isPrimary = true;
+        _versionCount = 1;
+        _isPublished = false;
+        _loadedStoryId = StoryId;
+        _loadedChapterNumber = ChapterNumber;
+        _loadedVersionOrder = VersionOrder;
+
         _isNew = !ChapterNumber.HasValue;
 
         // Load story rating for the form's floor/primary invariant UI.
@@ -256,8 +293,16 @@ else
                     Rating            = _viewModel.Rating,
                     VersionName       = _viewModel.VersionName
                 });
-                // Navigate to the story's TOC / first chapter reading route after create.
-                NavigationManager.NavigateTo($"/story/{StoryId}/chapter/{newChapterId}/edit");
+                // CreateChapterAsync returns the new ChapterId (PK) — NOT the route's
+                // ChapterNumber. Resolve the assigned number from the TOC (the service assigns
+                // the next sequential number) and land on the edit page so the author can
+                // publish the new draft. Navigating by ChapterId here 404'd/mis-routed —
+                // found via browser pass 2026-07-01.
+                _ = newChapterId; // PK retained for clarity; routing uses the number below.
+                IReadOnlyList<ChapterTocEntryDto> tocAfterCreate =
+                    await ChapterService.GetChapterTocAsync(StoryId);
+                int newChapterNumber = tocAfterCreate.Max(t => t.ChapterNumber);
+                NavigationManager.NavigateTo($"/story/{StoryId}/chapter/{newChapterNumber}/edit");
             }
             else if (_contentId.HasValue)
             {

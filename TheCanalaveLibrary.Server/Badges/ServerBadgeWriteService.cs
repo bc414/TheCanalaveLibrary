@@ -20,9 +20,9 @@ namespace TheCanalaveLibrary.Server;
 /// every requested key is owned before persisting.</para>
 /// </summary>
 public class ServerBadgeWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb)
-    : ServerBadgeReadService(readDb), IBadgeWriteService
+    : ServerBadgeReadService(readDbFactory), IBadgeWriteService
 {
     /// <inheritdoc/>
     public async Task<bool> AwardAsync(int userId, string badgeKey)

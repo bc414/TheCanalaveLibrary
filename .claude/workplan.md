@@ -1289,6 +1289,107 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   audit Stage notes in `audit/Stories.md`, `audit/Comments.md`, `audit/Recommendations.md`,
   `audit/Profiles.md`, `audit/Groups.md`, `audit/BlogPosts.md`, `audit/UserStoryInteractions.md`.
 
+### WU-BrowserPass — First browser-based debugging wave (real-circuit bugs) — DONE ✓ (2026-07-01)
+- **Cells:** none flipped — every bug was fixed same-session (`debugging.md` "Fix same-session"), so
+  Stage numbers keep describing sound code. Cross-cutting corrections + five feature-local fixes.
+- **Done:** first end-to-end browser pass over the integrated MVP (dev-bar login → navigation →
+  authoring → reading → social → moderation). Five bug classes found and fixed, none reproducible
+  by the automated tiers:
+  1. **Circuit-scoped read-DbContext concurrency crash** (login gate — every authenticated page
+     500'd): all read services moved to per-method contexts from a scoped
+     `IDbContextFactory<ReadOnlyApplicationDbContext>`; supersedes spec §6.6. Detail:
+     `layer2-services.md` §"Read-Context Concurrency: Factory Per Method", `forward_plan.md`
+     Resolved entry, `audit/Notifications.md` + `audit/Messaging.md` notes; regression net
+     `Tests.Integration/ConcurrentReadAccessTests.cs` (3 tests).
+  2. **Tailwind v3 CSS-variable classes silently no-oping under v4** (`-[--token]` → invalid CSS;
+     transparent flyouts, invisible badges): 987 usages converted to `-(--token)` + CSS rebuilt.
+     Detail: `layer4-style.md` §"Consuming tokens in classes".
+  3. **ChapterPropertiesForm passed phantom `InitialHtml`/`Compact` params to EditorView**
+     (chapter editor 500'd) + **ChapterEditorPage navigated by PK in the ChapterNumber route slot**
+     + missing `OnParametersSetAsync` reload. Detail: `audit/Chapters.md` note.
+  4. **CommentSection persistent composer never cleared after posting** (double-post hazard):
+     `EditorView.SetHtmlAsync` → `CommentEditor.ClearAsync` → clear on successful post. Detail:
+     `audit/Comments.md` note.
+  5. **DevLoginBar's fetch-POST silently dropped on an established circuit** (couldn't switch
+     users): endpoint is now GET + redirect, bar renders plain anchors. Detail:
+     `run-server/SKILL.md` "Skipping login".
+- **Verified:** browser — login as TestUser and AdminUser, mark-all-read, chapter
+  create→publish→read, comment post + composer clear, group join, mod queue as AdminUser, all
+  major routes render (`/discover`, `/tags`, `/bookshelves`, `/notifications{,/settings}`,
+  `/messages`, `/settings`, `/story/*`, `/user/*`, `/groups`, `/group/*`, `/blog/new`,
+  `/story/new`, `/mod/*`). `dotnet test` 1238/1238 (437 Unit + 446 RazorComponents +
+  355 Integration — includes the 3 new concurrency regressions).
+- **Tool:** Sonnet in Claude Code (browser tools per `run-server/SKILL.md`). **Pointer:** audit
+  notes listed above; methodology minted this session in `canalave-conventions/debugging.md`.
+- **Known non-blockers (deliberately not fixed):** dev DB carries pre-Testcontainers fixture junk
+  (GUID-suffixed tags/stories — data hygiene, not code); empty author's-note panels render as blank
+  boxes on the reading page (cosmetic); anonymous mod-page hit returns a bare 403 status (deliberate
+  Blazor-cookie choice in `Program.cs`).
+
+### WU-DesktopNav — Desktop top navigation bar — DONE ✓ (2026-07-01)
+- **Cells:** none tracked — persistent-layout chrome has no dedicated grid row (`status.md` Global
+  Conditions note).
+- **Done:** replaced `DesktopLayout.razor`'s placeholder (`w-64` empty sidebar + hardcoded MS
+  "About" link) with a single full-width sticky top bar: brand wordmark, `NavLink`s to
+  Home/Discover/Tags/Groups, and a right-side chrome group. Added two new components:
+  `CreateMenu` (auth-gated "Write" dropdown → New Story/Blog Post/Group) and `UserMenu` (profile
+  dropdown replacing desktop's `LoginDisplay` — My Profile/Bookshelves/Settings/role-gated Mod
+  tools/Log out). Both follow the existing `NotificationBell` caret dropdown pattern. Mobile
+  (`MobileLayout`, still on plain `LoginDisplay`) intentionally untouched — desktop/mobile chrome
+  are structurally separate compositions. Detail: `layer4-style.md` Pattern Accumulation
+  "`DesktopLayout` top bar / `UserMenu` / `CreateMenu`".
+- **Verified:** `dotnet build` clean (0 warnings/errors); `npm run css:build` picked up the new
+  paren-form token classes. No Chrome MCP tool available this session, so verification was via
+  headless server + curl/cookie-jar HTTP checks rather than a real browser: anonymous homepage
+  shows wordmark/Discover/Groups/"Log in" only (no Write button); dev-login as TestUser shows
+  username + Write, no Mod tools; dev-login as AdminUser shows Mod tools; `/mod/reports` returns
+  403 for TestUser and 200 for AdminUser; all nav-linked routes (`/discover`, `/tags`, `/groups`,
+  `/bookshelves` [redirects to its default tab], `/settings`, `/notifications`, `/messages`)
+  return 200/expected-redirect with no errors in the server log. This is L4-Style chrome (manual
+  visual band, no automated tier); the interactive dropdown open/close click behavior itself was
+  not click-tested this session (no browser tool) — follow-up visual pass recommended once one is
+  available.
+- **Tool:** Opus in Claude Code (plan mode + direct implementation, no browser tools this session).
+
+### WU-DevSeed — Dev-DB reset workflow + representative seed data — DONE ✓ (2026-07-01)
+- **Cells:** none — dev tooling. Purged the pre-isolation fixture junk (6,295 GUID tags, WU12-era
+  stories/groups) by instituting the wipe workflow rather than surgical deletes.
+- **Done:**
+  - **`scripts/`** (new, repo root): `start-dev-server.ps1` (foreground or `-Background` with
+    log-wait), `stop-dev-server.ps1` (port-based kill + verify), `reset-dev-db.ps1` (stop +
+    `DROP DATABASE … WITH (FORCE)` + existence re-check; `-Restart` chains a background start —
+    the next Development boot's `MigrateAsync` recreates the DB and `DataSeeder` repopulates).
+    Scripts are ASCII-only on purpose: PowerShell 5.1 reads BOM-less `.ps1` as ANSI, and UTF-8
+    em-dashes decode into smart-quote bytes that terminate strings mid-line (bit us on first run,
+    as did PS→native quoting: an unescaped `"TheCanalaveLibraryDB"` identifier reached psql
+    unquoted, was lowercased, and "dropped" a nonexistent database — the script now verifies the
+    DB is actually gone).
+  - **`DataSeeder` rewritten** (mode via config `DevSeed`: `Full` default / `Minimal` users+roles /
+    `None`): deterministic medium-showcase inventory (7 users incl. `TestUser`=1/`AdminUser`=2,
+    44-tag real taxonomy, 12 stories across ratings/statuses, multi-chapter + alternate version +
+    draft chapter, full bookshelf coverage, comments/likes/spoiler, 3 recommendations incl. Hidden
+    Gem + author-highlighted, 3 groups incl. Mature-audience + SFW-only `(E,T)` per
+    `GroupAudienceTypeMapper`, blog posts, unread message, 3 notifications, 2 open reports).
+    Raw-DbContext graph inserts with invariants maintained by construction (see file header —
+    the single source of truth for the inventory); deliberately artificial naming (no faux
+    community content).
+  - **`TestAppFactory`** pins `DevSeed=Minimal` (the seeder runs before every integration test
+    under the Development env — Full would balloon the suite). `appsettings.Development.json`
+    sets `DevSeed=Full`.
+  - **`run-server/SKILL.md`**: Start/Stop now lead with the scripts; new **"Dev DB lifecycle —
+    keep or wipe (agent's choice)"** section (default keep; wipe deliberately via the script for
+    confounding state / schema+seed changes / junk-caused errors / user request; ask before wiping
+    ambiguous state); prerequisites corrected (DB auto-created by `MigrateAsync`, no manual setup).
+  - `testing.md` §"Driving the content-rating filter" documents the `DevSeed=Minimal` pin.
+- **Verified:** `reset-dev-db.ps1 -Restart` run twice end-to-end (drop → recreate → migrate →
+  seed); browser walk of the seeded showcase — discover cards with real tags, clean tag directory
+  (no GUID junk), bookshelves populated per tab, flagship story TOC with nested alternate version +
+  author-highlighted recommendation, messages badge 1, bell badge 3, ReaderGamma sees no Mature
+  group/story, AdminUser mod queues show 2 submissions + 2 reports. `dotnet test` green with
+  Integration duration flat (Minimal pin effective).
+- **Tool:** Sonnet in Claude Code. **Pointer:** `DataSeeder.cs` header;
+  `run-server/SKILL.md` "Dev DB lifecycle"; `testing.md` DevSeed note.
+
 ---
 
 ## Blocked / deferred — genuine Stage-1 intent gaps (no sequence number)

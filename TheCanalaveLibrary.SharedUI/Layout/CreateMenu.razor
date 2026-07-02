@@ -1,0 +1,47 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Cross-cutting layout element — auth-gated "Write" action in the desktop top bar, opening
+   a dropdown of create destinations. Hidden entirely for anonymous users. Caret pattern
+   (relative + toggle → absolute top-full panel), same as NotificationBell/UserMenu. *@
+
+<AuthorizeView>
+    <Authorized>
+        <div class="relative">
+            <button type="button"
+                    class="rounded-md bg-(--color-accent) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-accent)/80"
+                    aria-expanded="@_open"
+                    @onclick="Toggle">
+                Write
+            </button>
+
+            @if (_open)
+            {
+                <div class="absolute right-0 top-full z-30 mt-1 w-44 rounded-xl border border-(--color-border) bg-(--color-surface-raised) py-1 shadow-medium">
+                    <a href="story/new"
+                       class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)"
+                       @onclick="Close">
+                        New Story
+                    </a>
+                    <a href="blog/new"
+                       class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)"
+                       @onclick="Close">
+                        New Blog Post
+                    </a>
+                    <a href="group/new"
+                       class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)"
+                       @onclick="Close">
+                        New Group
+                    </a>
+                </div>
+            }
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private bool _open;
+
+    private void Toggle() => _open = !_open;
+
+    private void Close() => _open = false;
+}

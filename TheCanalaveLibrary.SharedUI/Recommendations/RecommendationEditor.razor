@@ -25,11 +25,11 @@
         }
         else
         {
-            <span class="text-[--color-text-muted]">
+            <span class="text-(--color-text-muted)">
                 @_currentLength / @RecommendationConstants.MinLength characters minimum
                 @if (_currentLength > 0)
                 {
-                    <span class="ml-1 text-[--color-text-muted]">(@(RecommendationConstants.MinLength - _currentLength) more needed)</span>
+                    <span class="ml-1 text-(--color-text-muted)">(@(RecommendationConstants.MinLength - _currentLength) more needed)</span>
                 }
             </span>
         }
@@ -38,7 +38,7 @@
     @* ── Action row ──────────────────────────────────────────────────────────── *@
     <div class="flex items-center gap-2">
         <button type="button"
-                class="rounded-md bg-[--color-primary] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50"
+                class="rounded-md bg-(--color-primary) px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50"
                 disabled="@(Busy || _currentLength < RecommendationConstants.MinLength)"
                 aria-label="@SaveLabel"
                 @onclick="HandleSaveAsync">
@@ -48,7 +48,7 @@
         @if (OnCancel.HasDelegate)
         {
             <button type="button"
-                    class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-1.5 text-sm text-[--color-text] transition-colors hover:bg-[--color-primary]/20 disabled:opacity-50"
+                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-primary)/20 disabled:opacity-50"
                     disabled="@Busy"
                     aria-label="Cancel"
                     @onclick="() => OnCancel.InvokeAsync()">

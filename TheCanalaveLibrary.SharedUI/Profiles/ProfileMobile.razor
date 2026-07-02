@@ -10,7 +10,7 @@
 <div class="flex flex-col">
 
     @* ── Persistent banner (mobile — vouches collapsed by default) ────────────── *@
-    <div class="border-b border-[--color-border] bg-[--color-surface]">
+    <div class="border-b border-(--color-border) bg-(--color-surface)">
         <ProfileBanner Header="@Header"
                        IsOwner="@IsOwner"
                        RelationshipState="@RelationshipState"
@@ -23,11 +23,11 @@
 
         @* <details> disclosure tab selector *@
         <details class="relative flex-1">
-            <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm transition-colors hover:bg-[--color-surface-hover]">
-                <span class="flex-1 font-medium text-[--color-text]">@TabLabel(Tab)</span>
-                <span aria-hidden="true" class="text-[--color-text-muted]">&#9662;</span>
+            <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm transition-colors hover:bg-(--color-surface-hover)">
+                <span class="flex-1 font-medium text-(--color-text)">@TabLabel(Tab)</span>
+                <span aria-hidden="true" class="text-(--color-text-muted)">&#9662;</span>
             </summary>
-            <div class="absolute left-0 top-full z-20 mt-1 w-full overflow-hidden rounded-md border border-[--color-border] bg-[--color-surface] shadow-md">
+            <div class="absolute left-0 top-full z-20 mt-1 w-full overflow-hidden rounded-md border border-(--color-border) bg-(--color-surface) shadow-md">
                 @foreach (ProfileTab tab in Enum.GetValues<ProfileTab>())
                 {
                     bool isActive = tab == Tab;
@@ -44,7 +44,7 @@
         @if (IsStoryTab)
         {
             <button type="button"
-                    class="flex items-center gap-1.5 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm transition-colors hover:bg-[--color-surface-hover]"
+                    class="flex items-center gap-1.5 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm transition-colors hover:bg-(--color-surface-hover)"
                     @onclick="ToggleFilter"
                     aria-expanded="@_filterOpen"
                     aria-controls="mobile-profile-filter-overlay">
@@ -65,7 +65,7 @@
                 @if (!string.IsNullOrEmpty(BioHtml))
                 {
                     <section>
-                        <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-[--color-text-muted]">About</h2>
+                        <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">About</h2>
                         <RichTextView HtmlContent="@BioHtml" />
                     </section>
                 }
@@ -73,7 +73,7 @@
                 @if (Header.AllowProfileComments != SocialInteractionPermission.Nobody || IsOwner)
                 {
                     <section>
-                        <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-[--color-text-muted]">Comments</h2>
+                        <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Comments</h2>
                         <CommentSection ProfileUserId="@Header.UserId"
                                         CurrentUserId="@CurrentUserId" />
                     </section>
@@ -87,14 +87,14 @@
                 {
                     <div class="flex justify-end">
                         <a href="/blog/new"
-                           class="rounded-md bg-[--color-primary] px-4 py-2 text-sm font-medium text-white hover:bg-[--color-primary-strong]">
+                           class="rounded-md bg-(--color-primary) px-4 py-2 text-sm font-medium text-white hover:bg-(--color-primary-strong)">
                             + New Post
                         </a>
                     </div>
                 }
                 @if (BlogPosts.Length == 0)
                 {
-                    <p class="text-sm text-[--color-text-muted]">@(IsOwner ? "You haven't written any blog posts yet." : "No blog posts yet.")</p>
+                    <p class="text-sm text-(--color-text-muted)">@(IsOwner ? "You haven't written any blog posts yet." : "No blog posts yet.")</p>
                 }
                 else
                 {
@@ -135,12 +135,12 @@
 @if (_filterOpen && IsStoryTab)
 {
     <div class="fixed inset-0 z-50 bg-black/50" @onclick="CloseFilter" id="mobile-profile-filter-overlay"></div>
-    <div class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-[--color-surface] shadow-xl"
+    <div class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-(--color-surface) shadow-xl"
          @onclick:stopPropagation="true">
-        <div class="flex items-center justify-between border-b border-[--color-border] px-4 py-3">
+        <div class="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
             <h2 class="text-sm font-bold">Filters</h2>
             <button type="button"
-                    class="rounded p-1 text-[--color-text-muted] hover:bg-[--color-surface-hover]"
+                    class="rounded p-1 text-(--color-text-muted) hover:bg-(--color-surface-hover)"
                     @onclick="CloseFilter"
                     aria-label="Close filters">
                 <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -224,6 +224,6 @@
     private static string DropdownEntryClasses(bool isActive) =>
         "flex items-center gap-2 px-3 py-2 text-sm " +
         (isActive
-            ? "bg-[--color-surface-hover] font-semibold text-[--color-text]"
-            : "text-[--color-text] hover:bg-[--color-surface-hover]");
+            ? "bg-(--color-surface-hover) font-semibold text-(--color-text)"
+            : "text-(--color-text) hover:bg-(--color-surface-hover)");
 }

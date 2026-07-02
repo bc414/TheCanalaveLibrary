@@ -18,27 +18,27 @@
 
 @if (_isLoading)
 {
-    <p class="text-[--color-text-muted]"><em>Loading settings…</em></p>
+    <p class="text-(--color-text-muted)"><em>Loading settings…</em></p>
 }
 else if (_settings is null)
 {
-    <p class="text-[--color-danger]">Could not load your settings. Please try refreshing the page.</p>
+    <p class="text-(--color-danger)">Could not load your settings. Please try refreshing the page.</p>
 }
 else
 {
     <div class="flex flex-col gap-8">
-        <h1 class="text-2xl font-bold text-[--color-text]">Settings</h1>
+        <h1 class="text-2xl font-bold text-(--color-text)">Settings</h1>
 
         @* Success / error banner *@
         @if (_successMessage is not null)
         {
-            <div class="rounded-lg bg-[--color-success]/10 px-4 py-3 text-sm text-[--color-success]" role="status">
+            <div class="rounded-lg bg-(--color-success)/10 px-4 py-3 text-sm text-(--color-success)" role="status">
                 @_successMessage
             </div>
         }
         @if (_errorMessage is not null)
         {
-            <div class="rounded-lg bg-[--color-danger]/10 px-4 py-3 text-sm text-[--color-danger]" role="alert">
+            <div class="rounded-lg bg-(--color-danger)/10 px-4 py-3 text-sm text-(--color-danger)" role="alert">
                 @_errorMessage
             </div>
         }

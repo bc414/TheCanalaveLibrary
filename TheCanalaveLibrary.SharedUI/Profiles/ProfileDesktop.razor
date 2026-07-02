@@ -13,7 +13,7 @@
 <div class="flex flex-col">
 
     @* ── Persistent banner ───────────────────────────────────────────────────── *@
-    <div class="border-b border-[--color-border] bg-[--color-surface]">
+    <div class="border-b border-(--color-border) bg-(--color-surface)">
         <div class="mx-auto max-w-6xl">
             <ProfileBanner Header="@Header"
                            IsOwner="@IsOwner"
@@ -24,7 +24,7 @@
     </div>
 
     @* ── Tab bar ──────────────────────────────────────────────────────────────── *@
-    <nav class="border-b border-[--color-border] bg-[--color-surface-raised]"
+    <nav class="border-b border-(--color-border) bg-(--color-surface-raised)"
          aria-label="Profile tabs">
         <div class="mx-auto flex max-w-6xl gap-1 px-4 md:px-6">
             @foreach (ProfileTab tab in Enum.GetValues<ProfileTab>())
@@ -49,7 +49,7 @@
                 @if (!string.IsNullOrEmpty(BioHtml))
                 {
                     <section>
-                        <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-[--color-text-muted]">About</h2>
+                        <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">About</h2>
                         <RichTextView HtmlContent="@BioHtml" />
                     </section>
                 }
@@ -58,7 +58,7 @@
                      IsOwner)
                 {
                     <section>
-                        <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-[--color-text-muted]">Comments</h2>
+                        <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Comments</h2>
                         <CommentSection ProfileUserId="@Header.UserId"
                                         CurrentUserId="@CurrentUserId" />
                     </section>
@@ -73,14 +73,14 @@
                 {
                     <div class="flex justify-end">
                         <a href="/blog/new"
-                           class="rounded-md bg-[--color-primary] px-4 py-2 text-sm font-medium text-white hover:bg-[--color-primary-strong]">
+                           class="rounded-md bg-(--color-primary) px-4 py-2 text-sm font-medium text-white hover:bg-(--color-primary-strong)">
                             + New Post
                         </a>
                     </div>
                 }
                 @if (BlogPosts.Length == 0)
                 {
-                    <p class="text-sm text-[--color-text-muted]">@(IsOwner ? "You haven't written any blog posts yet." : "No blog posts yet.")</p>
+                    <p class="text-sm text-(--color-text-muted)">@(IsOwner ? "You haven't written any blog posts yet." : "No blog posts yet.")</p>
                 }
                 else
                 {
@@ -115,8 +115,8 @@
                                OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
                     <ReportDialog @ref="_reportDialog" />
                 </div>
-                <aside class="w-72 shrink-0 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4">
-                    <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-[--color-text-muted]">Filters</h2>
+                <aside class="w-72 shrink-0 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+                    <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Filters</h2>
                     <ResultsFilterPanel OnSearch="@OnStoryFilterChanged"
                                         InitialFilter="@StoryFilter"
                                         AvailableSorts="@_availableSorts"
@@ -182,6 +182,6 @@
     private static string TabClasses(bool isActive) =>
         "px-3 py-2.5 text-sm transition-colors border-b-2 " +
         (isActive
-            ? "border-[--color-primary] font-semibold text-[--color-primary]"
-            : "border-transparent text-[--color-text-muted] hover:border-[--color-border] hover:text-[--color-text]");
+            ? "border-(--color-primary) font-semibold text-(--color-primary)"
+            : "border-transparent text-(--color-text-muted) hover:border-(--color-border) hover:text-(--color-text)");
 }

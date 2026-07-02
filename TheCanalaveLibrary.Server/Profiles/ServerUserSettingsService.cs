@@ -18,7 +18,7 @@ namespace TheCanalaveLibrary.Server;
 /// </summary>
 public class ServerUserSettingsService(
     ApplicationDbContext writeDb,
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser,
     IImageStorageService imageStorage,
     IHtmlSanitizationService sanitizer) : IUserSettingsService
@@ -37,6 +37,7 @@ public class ServerUserSettingsService(
     {
         int userId = RequireCurrentUserId();
 
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         var row = await readDb.Users
             .Where(u => u.Id == userId)
             .Select(u => new

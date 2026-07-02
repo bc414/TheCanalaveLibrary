@@ -20,25 +20,25 @@
     <Authorized>
         @if (_isLoading)
         {
-            <p class="p-4 text-[--color-text-muted]"><em>Loading…</em></p>
+            <p class="p-4 text-(--color-text-muted)"><em>Loading…</em></p>
         }
         else if (_forbidden)
         {
-            <p class="p-4 text-[--color-danger]">You must be a member of this group to post.</p>
+            <p class="p-4 text-(--color-danger)">You must be a member of this group to post.</p>
         }
         else if (_groupName is null)
         {
-            <p class="p-4 text-[--color-danger]">Group not found.</p>
+            <p class="p-4 text-(--color-danger)">Group not found.</p>
         }
         else
         {
             <div class="mx-auto max-w-2xl px-4 py-8">
                 <div class="mb-6 flex flex-col gap-1">
-                    <h1 class="text-2xl font-bold text-[--color-text]">New Blog Post</h1>
-                    <p class="text-sm text-[--color-text-muted]">
+                    <h1 class="text-2xl font-bold text-(--color-text)">New Blog Post</h1>
+                    <p class="text-sm text-(--color-text-muted)">
                         Posting to
                         <a href="/group/@GroupId"
-                           class="text-[--color-primary] hover:underline">@_groupName</a>
+                           class="text-(--color-primary) hover:underline">@_groupName</a>
                     </p>
                 </div>
 
@@ -51,7 +51,7 @@
         }
     </Authorized>
     <NotAuthorized>
-        <p class="p-4 text-[--color-danger]">You must be signed in to write a group blog post.</p>
+        <p class="p-4 text-(--color-danger)">You must be signed in to write a group blog post.</p>
     </NotAuthorized>
 </AuthorizeView>
 

@@ -10,7 +10,7 @@ namespace TheCanalaveLibrary.Server;
 /// §"Group Audience-Visibility Filter."
 /// </summary>
 public class ServerGroupReadService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser) : IGroupReadService
 {
     /// <summary>
@@ -20,8 +20,16 @@ public class ServerGroupReadService(
     /// </summary>
     protected IActiveUserContext ActiveUser { get; } = activeUser;
 
+    /// <summary>
+    /// Read contexts are created per method from this factory (`await using`) — see
+    /// <c>layer2-services.md</c> §"Read-context concurrency: factory per method".
+    /// </summary>
+    protected IDbContextFactory<ReadOnlyApplicationDbContext> ReadDbFactory { get; } = readDbFactory;
+
     public async Task<(GroupCardDto[] Items, int TotalCount)> GetListingsAsync(int page, int pageSize)
     {
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
         // GroupAudience filter is applied automatically — Mature groups filtered for mature-disabled users.
         IQueryable<Group> query = readDb.Groups.OrderByDescending(g => g.DateCreated);
 
@@ -47,6 +55,8 @@ public class ServerGroupReadService(
     public async Task<GroupDetailDto?> GetByIdAsync(int groupId)
     {
         int? currentUserId = ActiveUser.UserId;
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
         // Audience filter applied automatically. Returns null if not visible or not found.
         var row = await readDb.Groups
@@ -99,6 +109,7 @@ public class ServerGroupReadService(
         int? userId = ActiveUser.UserId;
         if (userId is null) return null;
 
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
         return await readDb.GroupMembers
             .Where(m => m.GroupId == groupId && m.UserId == userId)
             .Select(m => (GroupRole?)m.Role)
@@ -108,6 +119,7 @@ public class ServerGroupReadService(
     public async Task<(GroupMemberDto[] Members, int TotalCount)> GetMembersAsync(
         int groupId, int page, int pageSize)
     {
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
         IQueryable<GroupMember> query = readDb.GroupMembers
             .Where(m => m.GroupId == groupId)
             .OrderBy(m => m.DateJoined);
@@ -142,6 +154,10 @@ public class ServerGroupReadService(
     /// </summary>
     protected async Task<List<GroupFolderDto>> BuildFolderTreeAsync(int groupId)
     {
+        // Creates its own context — callers' contexts are already disposed or mid-use by the time
+        // this runs; helper-owns-context keeps the per-method rule uniform.
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
         // Flat load — includes each folder's direct story assignments.
         var flatFolders = await readDb.GroupFolders
             .Where(f => f.GroupId == groupId)

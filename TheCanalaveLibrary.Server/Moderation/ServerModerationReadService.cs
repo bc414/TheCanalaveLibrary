@@ -21,35 +21,42 @@ namespace TheCanalaveLibrary.Server;
 /// distinct <c>ReportedEntityType</c> present on the page, never N+1.</para>
 /// </summary>
 public class ServerModerationReadService(
-    ReadOnlyApplicationDbContext readDb) : IModerationReadService
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory) : IModerationReadService
 {
-    // ── Expose ReadDb for the derived write service ───────────────────────────────
+    // ── Expose the read-context factory for the derived write service ─────────────
+    // Contexts are created per method (`await using`) — see layer2-services.md
+    // §"Read-context concurrency: factory per method".
 
-    protected ReadOnlyApplicationDbContext ReadDb { get; } = readDb;
+    protected IDbContextFactory<ReadOnlyApplicationDbContext> ReadDbFactory { get; } = readDbFactory;
 
     // ── Report reasons ────────────────────────────────────────────────────────────
 
-    public async Task<ReportReasonDto[]> GetReportReasonsAsync() =>
-        await ReadDb.ReportReasons
+    public async Task<ReportReasonDto[]> GetReportReasonsAsync()
+    {
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        return await readDb.ReportReasons
             .OrderBy(r => r.ReportReasonId)
             .Select(r => new ReportReasonDto(r.ReportReasonId, r.ReasonName, r.Description))
             .ToArrayAsync();
+    }
 
     // ── Report queue ─────────────────────────────────────────────────────────────
 
     public async Task<ReportQueueItemDto[]> GetReportQueueAsync(bool includeResolved = false)
     {
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
         // Step 1: materialize all matching reports with reason name + reporter username.
         // Note: Report table has no named filters; no IgnoreQueryFilters needed here.
-        var q = ReadDb.Reports
+        var q = readDb.Reports
             .Where(r => includeResolved ||
                         r.ReportStatusId == ReportStatusEnum.Open ||
                         r.ReportStatusId == ReportStatusEnum.UnderReview);
 
         var rows = await (
             from r in q
-            join rr in ReadDb.ReportReasons on r.ReportReasonId equals rr.ReportReasonId
-            join reporter in ReadDb.Users on r.ReporterUserId equals reporter.Id into reporters
+            join rr in readDb.ReportReasons on r.ReportReasonId equals rr.ReportReasonId
+            join reporter in readDb.Users on r.ReporterUserId equals reporter.Id into reporters
             from rep in reporters.DefaultIfEmpty()
             select new
             {
@@ -73,7 +80,7 @@ public class ServerModerationReadService(
         // ContentRating stays live here — entities filtered by the moderator's rating preference
         // simply won't appear in the dictionary, and their report rows are dropped in Step 3.
         var typesPresent = rows.Select(r => r.ReportedEntityType).Distinct().ToList();
-        var labelMap = await BatchLoadTargetsAsync(typesPresent, rows
+        var labelMap = await BatchLoadTargetsAsync(readDb, typesPresent, rows
             .GroupBy(r => r.ReportedEntityType)
             .ToDictionary(g => g.Key, g => g.Select(r => r.ReportedEntityId).Distinct().ToList()));
 
@@ -112,14 +119,16 @@ public class ServerModerationReadService(
 
     // ── Pending submissions ───────────────────────────────────────────────────────
 
-    public async Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync() =>
-        await (
-            from s in ReadDb.Stories
+    public async Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync()
+    {
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        return await (
+            from s in readDb.Stories
                 .IgnoreQueryFilters(["IsTakenDown"]) // elevated read: pending submissions may be taken-down
                 .Where(s => s.StoryStatusId == StoryStatusEnum.PendingApproval)
-            join sl in ReadDb.StoryListings on s.StoryId equals sl.StoryId
-            join sd in ReadDb.StoryDetails on s.StoryId equals sd.StoryId
-            join author in ReadDb.Users on s.AuthorId equals author.Id into authors
+            join sl in readDb.StoryListings on s.StoryId equals sl.StoryId
+            join sd in readDb.StoryDetails on s.StoryId equals sd.StoryId
+            join author in readDb.Users on s.AuthorId equals author.Id into authors
             from a in authors.DefaultIfEmpty()
             orderby s.PublishedDate
             select new StorySubmissionQueueItemDto(
@@ -129,8 +138,9 @@ public class ServerModerationReadService(
                 s.Rating,
                 s.PublishedDate,
                 sd.PostApprovalStatus,
-                ReadDb.StoryImports.Any(si => si.StoryId == s.StoryId))
+                readDb.StoryImports.Any(si => si.StoryId == s.StoryId))
         ).ToArrayAsync();
+    }
 
     // ── Private: two-pass batch target resolution ─────────────────────────────────
 
@@ -141,8 +151,9 @@ public class ServerModerationReadService(
     /// appear in the returned dictionary, causing their report rows to be dropped by the caller.
     /// Only <c>IsTakenDown</c> is bypassed so taken-down content is still reviewable.
     /// </summary>
-    private async Task<Dictionary<ReportedEntityType, Dictionary<long, (string Label, string? Url, int Count)>>>
+    private static async Task<Dictionary<ReportedEntityType, Dictionary<long, (string Label, string? Url, int Count)>>>
         BatchLoadTargetsAsync(
+            ReadOnlyApplicationDbContext readDb,
             IReadOnlyList<ReportedEntityType> typesPresent,
             Dictionary<ReportedEntityType, List<long>> idsPerType)
     {
@@ -158,10 +169,10 @@ public class ServerModerationReadService(
                 {
                     var intIds = ids.Select(id => (int)id).ToList();
                     var data = await (
-                        from s in ReadDb.Stories.IgnoreQueryFilters(["IsTakenDown"]) // elevated read: mod queue sees taken-down content
+                        from s in readDb.Stories.IgnoreQueryFilters(["IsTakenDown"]) // elevated read: mod queue sees taken-down content
                             .Where(s => intIds.Contains(s.StoryId))
-                        join sl in ReadDb.StoryListings on s.StoryId equals sl.StoryId
-                        join sd in ReadDb.StoryDetails on s.StoryId equals sd.StoryId
+                        join sl in readDb.StoryListings on s.StoryId equals sl.StoryId
+                        join sd in readDb.StoryDetails on s.StoryId equals sd.StoryId
                         select new { s.StoryId, sl.StoryTitle, sd.Slug, s.ActiveReportCount }
                     ).ToListAsync();
 
@@ -173,7 +184,7 @@ public class ServerModerationReadService(
                 case ReportedEntityType.User:
                 {
                     var intIds = ids.Select(id => (int)id).ToList();
-                    var data = await ReadDb.Users
+                    var data = await readDb.Users
                         .Where(u => intIds.Contains(u.Id))
                         .Select(u => new { u.Id, u.UserName, u.ActiveReportCount })
                         .ToListAsync();
@@ -186,7 +197,7 @@ public class ServerModerationReadService(
                 case ReportedEntityType.Comment:
                 {
                     var longIds = ids;
-                    var data = await ReadDb.BaseComments
+                    var data = await readDb.BaseComments
                         .IgnoreQueryFilters(["IsTakenDown"]) // elevated read: mod queue sees taken-down content
                         .Where(c => longIds.Contains(c.CommentId))
                         .Select(c => new
@@ -205,7 +216,7 @@ public class ServerModerationReadService(
                 case ReportedEntityType.BlogPost:
                 {
                     var intIds = ids.Select(id => (int)id).ToList();
-                    var data = await ReadDb.BlogPosts
+                    var data = await readDb.BlogPosts
                         .IgnoreQueryFilters(["IsTakenDown"]) // elevated read: mod queue sees taken-down content
                         .Where(b => intIds.Contains(b.BlogPostId))
                         .Select(b => new { b.BlogPostId, b.Title, b.ActiveReportCount })
@@ -219,7 +230,7 @@ public class ServerModerationReadService(
                 case ReportedEntityType.Recommendation:
                 {
                     var intIds = ids.Select(id => (int)id).ToList();
-                    var data = await ReadDb.Recommendations
+                    var data = await readDb.Recommendations
                         .IgnoreQueryFilters(["IsTakenDown"]) // elevated read: mod queue sees taken-down content
                         .Where(r => intIds.Contains(r.RecommendationId))
                         .Select(r => new { r.RecommendationId, r.StoryId, r.ActiveReportCount })
@@ -233,7 +244,7 @@ public class ServerModerationReadService(
                 case ReportedEntityType.Message:
                     // No navigable URL; messages are reviewed in-panel by moderators.
                     var msgIds = ids;
-                    var msgs = await ReadDb.PrivateMessages
+                    var msgs = await readDb.PrivateMessages
                         .Where(m => msgIds.Contains(m.MessageId))
                         .Select(m => new { m.MessageId, m.ConversationId })
                         .ToListAsync();

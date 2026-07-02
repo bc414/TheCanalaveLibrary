@@ -41,7 +41,7 @@
         }
         else
         {
-            <span class="text-sm text-[--color-text-muted]">[deleted user]</span>
+            <span class="text-sm text-(--color-text-muted)">[deleted user]</span>
         }
     </div>
 
@@ -51,7 +51,7 @@
     </div>
 
     @* ── Footer: like, meta, and author/recommender actions ──────────────────── *@
-    <div class="flex flex-wrap items-center gap-3 text-sm text-[--color-text-muted]">
+    <div class="flex flex-wrap items-center gap-3 text-sm text-(--color-text-muted)">
 
         @* Like button *@
         @if (OnLike.HasDelegate)
@@ -97,7 +97,7 @@
             @if (OnEdit.HasDelegate)
             {
                 <button type="button"
-                        class="hover:text-[--color-text] transition-colors"
+                        class="hover:text-(--color-text) transition-colors"
                         aria-label="Edit recommendation"
                         @onclick="() => OnEdit.InvokeAsync(Rec.RecommendationId)">
                     Edit
@@ -106,7 +106,7 @@
             @if (OnDelete.HasDelegate)
             {
                 <button type="button"
-                        class="hover:text-[--color-danger] transition-colors"
+                        class="hover:text-(--color-danger) transition-colors"
                         aria-label="Delete recommendation"
                         @onclick="() => OnDelete.InvokeAsync(Rec.RecommendationId)">
                     Delete
@@ -155,9 +155,9 @@
 
     private string CardBorderClass => Rec.IsHighlightedByAuthor
         ? "border-2 border-[#5BB85A] shadow-[0_0_0_2px_rgba(91,184,90,0.15)]"
-        : "border-[--color-border]";
+        : "border-(--color-border)";
 
     private string CardShadowClass => Rec.IsHighlightedByAuthor
-        ? "bg-[--color-surface]"
-        : "bg-[--color-surface]";
+        ? "bg-(--color-surface)"
+        : "bg-(--color-surface)";
 }

@@ -13,7 +13,7 @@ namespace TheCanalaveLibrary.Server;
 /// accessible without navigating through the shadow one-to-one FK on <c>base_comments</c>.
 /// </summary>
 public class ServerCommentReadService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser) : ICommentReadService
 {
     /// <summary>
@@ -24,6 +24,8 @@ public class ServerCommentReadService(
 
     public async Task<CommentPageDto> GetChapterCommentsAsync(int chapterId, int page, int pageSize)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
         // Root count for PaginationControls — does not include replies.
         int totalRootCount = await readDb.ChapterComments
             .Where(c => c.ChapterId == chapterId && c.ParentCommentId == null)
@@ -88,6 +90,8 @@ public class ServerCommentReadService(
 
     public async Task<CommentPageDto> GetGroupCommentsAsync(int groupId, int page, int pageSize)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
         // Mirrors GetBlogPostCommentsAsync exactly — same two-step load and in-memory ordering,
         // over GroupComments instead of BlogPostComments. No spoiler flag on group comments.
         int totalRootCount = await readDb.GroupComments
@@ -144,6 +148,8 @@ public class ServerCommentReadService(
 
     public async Task<CommentPageDto> GetUserProfileCommentsAsync(int profileUserId, int page, int pageSize)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
         // Mirrors GetGroupCommentsAsync exactly — same two-step load and in-memory ordering,
         // over UserProfileComments instead of GroupComments. No spoiler flag on profile comments.
         int totalRootCount = await readDb.UserProfileComments
@@ -200,6 +206,8 @@ public class ServerCommentReadService(
 
     public async Task<CommentPageDto> GetBlogPostCommentsAsync(int blogPostId, int page, int pageSize)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
         // Mirrors GetChapterCommentsAsync exactly — same two-step load and in-memory ordering,
         // over BlogPostComments instead of ChapterComments. No spoiler flag on blog-post comments.
         int totalRootCount = await readDb.BlogPostComments

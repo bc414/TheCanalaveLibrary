@@ -203,3 +203,12 @@ Convention recorded in `layer3.5-structure.md` §"`@key` on `@foreach` over stat
   `HomeDesktop.razor` (message-only dialog, `ChildContent` dialog, `IsDestructive` variant, backdrop
   click and Confirm/Cancel all round-tripping `@bind-IsOpen` correctly) — harness removed immediately
   after confirmation (self-contained, no missing-producer dependency, unlike WU4's TagChip harness).
+
+**Browser-pass fix (2026-07-01) — CommentSection composer clear-after-post (L3, stages unchanged):**
+Posting from the persistent "Leave a comment" composer left the just-posted text in the Quill editor
+(Quill retains content across renders; `Html` is seed-only) — inviting accidental double-posts.
+`EditorView` gained `SetHtmlAsync` (wraps `LoadHTMLContent`), `CommentEditor` gained `ClearAsync`,
+and `CommentSection.HandlePostAsync` clears the composer via `@ref` after a successful post (reply
+and edit composers unmount, so only the persistent composer needed this). **Verified:** browser —
+post → comment appears, composer shows placeholder; second post confirms. Not bUnit-coverable
+(Quill JS interop is faked in that tier).

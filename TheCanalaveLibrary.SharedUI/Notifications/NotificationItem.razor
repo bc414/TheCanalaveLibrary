@@ -11,7 +11,7 @@
    need to invoke the presenter separately. *@
 
 <button type="button"
-        class="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-[--color-surface-hover] @(Notification.IsRead ? "" : "bg-[--color-surface-raised]")"
+        class="flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors hover:bg-(--color-surface-hover) @(Notification.IsRead ? "" : "bg-(--color-surface-raised)")"
         aria-label="@_composed.Text"
         @onclick="HandleActivate">
 
@@ -28,10 +28,10 @@
 
     @* ── Message + timestamp ──────────────────────────────────────────────────── *@
     <div class="min-w-0 flex-1">
-        <p class="text-sm @(Notification.IsRead ? "text-[--color-text-muted]" : "text-[--color-text] font-medium")">
+        <p class="text-sm @(Notification.IsRead ? "text-(--color-text-muted)" : "text-(--color-text) font-medium")">
             @_composed.Text
         </p>
-        <p class="mt-0.5 text-xs text-[--color-text-muted]">
+        <p class="mt-0.5 text-xs text-(--color-text-muted)">
             @RelativeTime(Notification.DateCreated)
         </p>
     </div>

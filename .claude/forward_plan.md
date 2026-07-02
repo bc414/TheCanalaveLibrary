@@ -218,6 +218,18 @@ Guardrails:
 
 **Resolved:**
 
+- **Read-context lifetime under Blazor Server circuits (supersedes spec §6.6)** — resolved
+  (2026-07-01, browser-debugging wave): `ReadOnlyApplicationDbContext` is registered via
+  `AddDbContextFactory<…>(…, ServiceLifetime.Scoped)` and every read-service method creates its
+  own short-lived context (`await using`). Spec §6.6's direct-injection rationale ("scoped DI
+  addresses the thread-safety concern") holds for per-request scopes but not per-circuit scopes —
+  layout chrome + page dispatchers query concurrently on one circuit, crashing a shared scoped
+  context on every authenticated load. Compile-time read/write separation and scoped
+  `IActiveUserContext` filter resolution are preserved; the write context stays plain scoped
+  `AddDbContext`; WU12's anti-pooling ruling is unaffected. Convention: `layer2-services.md`
+  "Read-Context Concurrency: Factory Per Method"; regression:
+  `Tests.Integration/ConcurrentReadAccessTests.cs`.
+
 - **Content-visibility filter placement** — resolved (2026-06-27, WU-FilterRevamp):
   All named display/visibility EF Core query filters (`"ContentRating"`, `"GroupAudience"`,
   `"IsTakenDown"`) live on `ReadOnlyApplicationDbContext.OnModelCreating` only. The write context

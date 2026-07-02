@@ -13,7 +13,7 @@
 
 @if (ViewModel.ServerValidationErrors.Any())
 {
-    <div class="rounded-lg bg-[--color-danger]/10 p-4 text-sm text-[--color-danger]" role="alert">
+    <div class="rounded-lg bg-(--color-danger)/10 p-4 text-sm text-(--color-danger)" role="alert">
         <ul class="list-disc pl-4 space-y-1">
             @foreach (string error in ViewModel.ServerValidationErrors)
             {
@@ -29,25 +29,25 @@
 
     @* ── Title ───────────────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-[--color-text]">Title</label>
+        <label class="text-sm font-semibold text-(--color-text)">Title</label>
         <InputText @bind-Value="ViewModel.Title"
-                   class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
                    placeholder="Post title" />
-        <ValidationMessage For="@(() => ViewModel.Title)" class="text-sm text-[--color-danger]" />
+        <ValidationMessage For="@(() => ViewModel.Title)" class="text-sm text-(--color-danger)" />
     </div>
 
     @* ── Content (rich text) ──────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-[--color-text]">Content</label>
+        <label class="text-sm font-semibold text-(--color-text)">Content</label>
         <EditorView @ref="_editor" Html="@ViewModel.Content" Placeholder="Write your post…" />
     </div>
 
     @* ── Rating + Spoilers (side by side) ────────────────────────────────────── *@
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div class="flex flex-col gap-1">
-            <label class="text-sm font-semibold text-[--color-text]">Rating</label>
+            <label class="text-sm font-semibold text-(--color-text)">Rating</label>
             <InputSelect @bind-Value="ViewModel.Rating"
-                         class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]">
+                         class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)">
                 @foreach (Rating r in Enum.GetValues<Rating>())
                 {
                     <option value="@r">@r.ToString()</option>
@@ -56,8 +56,8 @@
         </div>
         <div class="flex items-center gap-3 pt-6">
             <InputCheckbox @bind-Value="ViewModel.HasSpoilers" id="has-spoilers"
-                           class="h-4 w-4 rounded border-[--color-border] text-[--color-primary] focus:ring-[--color-primary]" />
-            <label for="has-spoilers" class="text-sm text-[--color-text]">Contains spoilers</label>
+                           class="h-4 w-4 rounded border-(--color-border) text-(--color-primary) focus:ring-(--color-primary)" />
+            <label for="has-spoilers" class="text-sm text-(--color-text)">Contains spoilers</label>
         </div>
     </div>
 
@@ -65,32 +65,32 @@
     @if (AuthorStories is not null)
     {
         <div class="flex flex-col gap-1">
-            <label class="text-sm font-semibold text-[--color-text]">Linked Story <span class="font-normal text-[--color-text-muted]">(optional)</span></label>
+            <label class="text-sm font-semibold text-(--color-text)">Linked Story <span class="font-normal text-(--color-text-muted)">(optional)</span></label>
             <select @bind="ViewModel.StoryId"
-                    class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]">
+                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)">
                 <option value="">— none —</option>
                 @foreach ((int id, string title) in AuthorStories)
                 {
                     <option value="@id">@title</option>
                 }
             </select>
-            <p class="text-xs text-[--color-text-muted]">Show a link to one of your stories at the top of this post.</p>
+            <p class="text-xs text-(--color-text-muted)">Show a link to one of your stories at the top of this post.</p>
         </div>
     }
 
     @* ── Publish toggle ───────────────────────────────────────────────────────── *@
     <div class="flex items-center gap-3">
         <InputCheckbox @bind-Value="ViewModel.IsPublished" id="is-published"
-                       class="h-4 w-4 rounded border-[--color-border] text-[--color-primary] focus:ring-[--color-primary]" />
-        <label for="is-published" class="text-sm text-[--color-text]">
-            Publish <span class="text-[--color-text-muted]">(uncheck to save as draft)</span>
+                       class="h-4 w-4 rounded border-(--color-border) text-(--color-primary) focus:ring-(--color-primary)" />
+        <label for="is-published" class="text-sm text-(--color-text)">
+            Publish <span class="text-(--color-text-muted)">(uncheck to save as draft)</span>
         </label>
     </div>
 
     @* ── Submit ──────────────────────────────────────────────────────────────── *@
     <button type="submit"
             disabled="@ViewModel.IsLoading"
-            class="self-start rounded-md bg-[--color-primary] px-5 py-2 font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50">
+            class="self-start rounded-md bg-(--color-primary) px-5 py-2 font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50">
         @(ViewModel.IsLoading ? "Saving…" : SubmitLabel)
     </button>
 </EditForm>

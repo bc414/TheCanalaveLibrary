@@ -5,15 +5,15 @@
 
 <section class="flex flex-col gap-4">
     <div>
-        <h2 class="text-base font-semibold text-[--color-text]">Author Preferences</h2>
-        <p class="text-sm text-[--color-text-muted]">Default values applied when you create new stories.</p>
+        <h2 class="text-base font-semibold text-(--color-text)">Author Preferences</h2>
+        <p class="text-sm text-(--color-text-muted)">Default values applied when you create new stories.</p>
     </div>
 
-    <div class="flex flex-col gap-4 rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
+    <div class="flex flex-col gap-4 rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-4">
         <div class="flex flex-col gap-1">
-            <label for="default-rating" class="text-sm font-medium text-[--color-text]">Default story rating</label>
+            <label for="default-rating" class="text-sm font-medium text-(--color-text)">Default story rating</label>
             <select id="default-rating"
-                    class="max-w-xs rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                    class="max-w-xs rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
                     value="@((int)_defaultRating)"
                     @onchange="e => { if (int.TryParse(e.Value?.ToString(), out int rv)) _defaultRating = (Rating)rv; }">
                 @foreach (Rating r in Enum.GetValues<Rating>())
@@ -24,7 +24,7 @@
         </div>
 
         <button type="button"
-                class="self-start rounded-md bg-[--color-primary] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50"
+                class="self-start rounded-md bg-(--color-primary) px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50"
                 disabled="@Busy"
                 @onclick="HandleSave">
             @(Busy ? "Saving…" : "Save Author Preferences")

@@ -106,6 +106,17 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
   for thread paging; a participant index for unread/archived queries. Functionally correct without it
   for MVP; deferred to the L6 DDL batch.
 
+- **Circuit-concurrency fix (2026-07-01) — L2 remains Stage 5; found via browser debugging:**
+  `MessagesNavLink` + `NotificationBell` initializing concurrently on one circuit scope crashed
+  every authenticated page load (`InvalidOperationException: A second operation…` on the shared
+  scoped `ReadOnlyApplicationDbContext`; the nav link's `LocationChanged` refresh also collides
+  with every page dispatcher's loads). Cross-cutting root fix: `ServerMessagingReadService` (and
+  all read services) now creates a per-method context from a scoped
+  `IDbContextFactory<ReadOnlyApplicationDbContext>` via a protected `ReadDbFactory`. Convention:
+  `layer2-services.md` §"Read-Context Concurrency: Factory Per Method"; chrome note:
+  `cross-cutting.md` §"Layout-chrome concurrency". **Verified:** browser (authenticated home
+  renders with both chrome components, no 500) + Integration `ConcurrentReadAccessTests`.
+
 ### Tests (WU35, 2026-06-24)
 
 - **Unit** (`Tests.Unit/MessagingValidationsTests.cs`, 11 tests): `MessagingValidations.Validate`

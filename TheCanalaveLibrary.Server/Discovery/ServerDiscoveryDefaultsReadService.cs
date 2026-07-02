@@ -9,7 +9,7 @@ namespace TheCanalaveLibrary.Server;
 /// sparse <see cref="UserStoryInteractionFilterSetting"/> per-user rows in C#.
 /// </summary>
 public class ServerDiscoveryDefaultsReadService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser) : IDiscoveryDefaultsReadService
 {
     /// <summary>
@@ -32,6 +32,8 @@ public class ServerDiscoveryDefaultsReadService(
     public async Task<IReadOnlyList<UserStoryInteractionTypeEnum>> GetDefaultExcludedInteractionsAsync(
         string searchModeKey)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
         // Load system defaults for this mode.
         List<(string Key, bool IsEnabled)> defaults = await readDb
             .DefaultUserStoryInteractionFilterSettings

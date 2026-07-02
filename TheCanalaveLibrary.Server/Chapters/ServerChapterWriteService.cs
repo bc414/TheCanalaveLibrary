@@ -4,11 +4,11 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Server;
 
 public class ServerChapterWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer)
-    : ServerChapterReadService(readDb, activeUser), IChapterWriteService
+    : ServerChapterReadService(readDbFactory, activeUser), IChapterWriteService
 {
     public async Task<int> CreateChapterAsync(CreateChapterDto dto)
     {

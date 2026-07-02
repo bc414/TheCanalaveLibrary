@@ -351,3 +351,22 @@ the USI write service. No migration needed.
   rating = story rating (naturally via NULL/inherit). Details in `cross-cutting.md` "Chapter Versioning."
 - Integration test coverage: floor rejection, primary rejection on create + promote, NULL→story
   inheritance, effective ceiling in reads.
+
+**Browser-pass fixes (2026-07-01) — L3/L3.5 corrections, found via browser debugging (stages unchanged, fixed same-session):**
+- `ChapterPropertiesForm` passed `InitialHtml=`/`Compact=` to `EditorView` — parameters the component
+  never declared (unmatched component parameters fail at *runtime*, not compile time; every other
+  caller uses `Html=`; `Compact` was the variant EditorView's header documents as tried-and-discarded).
+  `/story/{id}/chapter/new` 500'd on render. Fixed to `Html=`, `Compact` removed.
+- `ChapterEditorPage` post-create navigation interpolated the returned **ChapterId (PK)** into the
+  `{ChapterNumber:int}` route slot (`/story/1/chapter/3429/edit` for chapter *1*). Now resolves the
+  assigned number from `GetChapterTocAsync` (service assigns next-sequential) and lands on the new
+  draft's edit page (which owns the Publish toggle).
+- `ChapterEditorPage` loaded only in `OnInitializedAsync` — same-component route changes
+  (`/chapter/new` → `/chapter/{n}/edit`, version switches) rendered stale state. Refactored to the
+  WU-ComponentSoundness dispatcher pattern (`LoadAsync` + guarded `OnParametersSetAsync`), which that
+  wave applied to ChapterReadingPage but not this page.
+- **Verified:** browser — create chapter → land on `/story/1/chapter/1/edit` with populated form →
+  Publish → `/story/1/1` renders the chapter (ChapterReadingPage's parallel toc+versions load also
+  exercised live). No automated tier covers Quill/JS-backed editor rendering (bUnit fakes it); the
+  param-name class of bug is caught only by rendering the real component tree — browser band per
+  `debugging.md`.

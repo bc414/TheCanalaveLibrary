@@ -8,7 +8,7 @@ namespace TheCanalaveLibrary.Server;
 // components (CharacterEntry, TagChip) that receive a ThemeContext cascading value. TagChipDto now
 // carries the raw SpriteIdentifier key. See layer2-services.md §"Sprite URLs Are Resolved At Render Time."
 public class ServerStoryReadService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser) : IStoryReadService
 {
     /// <summary>
@@ -19,6 +19,8 @@ public class ServerStoryReadService(
 
     public async Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
         // Two-step: project a lean intermediate row (EF-translatable) then build DTOs in memory.
         // SpriteIdentifier is passed through raw — no URL construction here.
         StoryDetailRow? row = await readDb.Stories
@@ -96,6 +98,7 @@ public class ServerStoryReadService(
 
     public async Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         return await readDb.Stories // Using a direct projection for optimal query generation
             .Where(s => s.StoryId == storyId)
             .Select(s => new StoryUpdateDTO
@@ -137,6 +140,7 @@ public class ServerStoryReadService(
     {
         if (storyIds.Count == 0) return [];
 
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         List<StoryListingRow> rows = await ProjectListingRows(readDb.Stories.Where(s => storyIds.Contains(s.StoryId)))
             .ToListAsync();
 
@@ -152,6 +156,7 @@ public class ServerStoryReadService(
 
     public async Task<(StoryListingDto[] Items, int TotalCount)> GetRecentListingsAsync(int page, int pageSize)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         int totalCount = await readDb.Stories.CountAsync();
 
         // Page on scalar StoryId first — keeps Skip/Take scoped to story-level rows, not a join cartesian
@@ -168,16 +173,20 @@ public class ServerStoryReadService(
         return (items, totalCount);
     }
 
-    public async Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId) =>
-        await readDb.Stories
+    public async Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        return await readDb.Stories
             .IgnoreQueryFilters(["ContentRating"]) // elevated read: author always sees their own stories regardless of rating setting
             .Where(s => s.AuthorId == authorId)
             .Select(s => s.StoryId)
             .ToListAsync();
+    }
 
     public async Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(
         StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         IQueryable<Story> query = readDb.Stories;
 
         // ── Bookshelf candidate narrowing (applied first so count + all filters are scoped to it) ──
@@ -230,6 +239,7 @@ public class ServerStoryReadService(
         // Plain random draw from the post-filter valid set. No Sort/Page/PageSize from the DTO is
         // consulted — batchSize is the only take-cap and EF.Functions.Random() is the only order.
         // No shown-id tracking; "give me more" is a second call that appends a fresh independent draw.
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         IQueryable<Story> query = ApplyFilters(readDb.Stories, filter, !string.IsNullOrWhiteSpace(filter.TextQuery));
 
         int[] ids = await query

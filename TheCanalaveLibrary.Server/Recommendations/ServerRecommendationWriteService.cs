@@ -18,14 +18,14 @@ namespace TheCanalaveLibrary.Server;
 /// <para><b>Like toggle:</b> no notification — anti-addictive design (§6.11).</para>
 /// </summary>
 public class ServerRecommendationWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
     INotificationWriteService notifications,
     IBadgeWriteService badges,
     ILogger<ServerRecommendationWriteService> logger)
-    : ServerRecommendationReadService(readDb, activeUser), IRecommendationWriteService
+    : ServerRecommendationReadService(readDbFactory, activeUser), IRecommendationWriteService
 {
     private const short ApprovedStatusId = 2;
 

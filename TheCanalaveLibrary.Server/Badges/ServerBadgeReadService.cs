@@ -8,21 +8,26 @@ namespace TheCanalaveLibrary.Server;
 /// No-tracking projections via <see cref="ReadOnlyApplicationDbContext"/>.
 /// Returns the full earned-badge list for the curation settings form.
 /// </summary>
-public class ServerBadgeReadService(ReadOnlyApplicationDbContext readDb) : IBadgeReadService
+public class ServerBadgeReadService(
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory) : IBadgeReadService
 {
     /// <summary>
-    /// Protected so the derived write service can access the read DbContext without capturing
-    /// it a second time (avoids CS9107 warning on the shared constructor parameter).
+    /// Protected so the derived write service can create read contexts without capturing the
+    /// factory a second time (avoids CS9107 warning on the shared constructor parameter).
+    /// Contexts are created per method (`await using`) — see <c>layer2-services.md</c>
+    /// §"Read-context concurrency: factory per method".
     /// </summary>
-    protected ReadOnlyApplicationDbContext ReadDb { get; } = readDb;
+    protected IDbContextFactory<ReadOnlyApplicationDbContext> ReadDbFactory { get; } = readDbFactory;
 
     /// <inheritdoc/>
     public async Task<IReadOnlyList<EarnedBadgeDto>> GetMyBadgesForCurationAsync(int userId)
     {
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
         // Visible badges (DisplayOrder > 0) first, ordered by DisplayOrder ascending.
         // Hidden badges (DisplayOrder == 0) follow, ordered by catalogue SortOrder.
         // CASE WHEN display_order = 0 THEN 2147483647 ELSE display_order END is valid PostgreSQL.
-        return await ReadDb.UserBadges
+        return await readDb.UserBadges
             .Where(ub => ub.UserId == userId)
             .OrderBy(ub => ub.DisplayOrder == 0 ? int.MaxValue : ub.DisplayOrder)
             .ThenBy(ub => ub.BadgeKeyNavigation.SortOrder)

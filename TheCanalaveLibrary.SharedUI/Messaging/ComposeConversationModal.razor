@@ -9,10 +9,10 @@
 {
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
          @onclick="() => OnCancel.InvokeAsync()" role="dialog" aria-modal="true" aria-labelledby="compose-title">
-        <div class="w-full max-w-lg rounded-xl bg-[--color-surface] shadow-xl"
+        <div class="w-full max-w-lg rounded-xl bg-(--color-surface) shadow-xl"
              @onclick:stopPropagation>
-            <div class="border-b border-[--color-border] px-5 py-4">
-                <h2 id="compose-title" class="text-base font-semibold text-[--color-text]">
+            <div class="border-b border-(--color-border) px-5 py-4">
+                <h2 id="compose-title" class="text-base font-semibold text-(--color-text)">
                     New Message
                 </h2>
             </div>
@@ -20,24 +20,24 @@
             <div class="flex flex-col gap-4 px-5 py-4">
                 @* Recipient *@
                 <div class="flex flex-col gap-1">
-                    <label class="text-sm font-medium text-[--color-text]" for="compose-recipient">
+                    <label class="text-sm font-medium text-(--color-text)" for="compose-recipient">
                         To
                     </label>
                     @if (RecipientPreset is not null)
                     {
-                        <div class="flex items-center gap-2 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-2">
+                        <div class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2">
                             <img src="@RecipientPreset.AvatarUrl"
                                  alt="@RecipientPreset.Username"
                                  class="h-6 w-6 rounded-full object-cover"
                                  onerror="this.src='/img/default-avatar.svg'" />
-                            <span class="text-sm font-medium text-[--color-text]">@RecipientPreset.Username</span>
+                            <span class="text-sm font-medium text-(--color-text)">@RecipientPreset.Username</span>
                         </div>
                     }
                     else
                     {
                         <input id="compose-recipient"
                                type="text"
-                               class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-sm text-[--color-text] placeholder-[--color-text-muted] focus:border-[--color-primary] focus:outline-none"
+                               class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) placeholder-(--color-text-muted) focus:border-(--color-primary) focus:outline-none"
                                placeholder="Username"
                                @bind="RecipientUsername"
                                @bind:event="oninput"
@@ -47,12 +47,12 @@
 
                 @* Subject *@
                 <div class="flex flex-col gap-1">
-                    <label class="text-sm font-medium text-[--color-text]" for="compose-subject">
+                    <label class="text-sm font-medium text-(--color-text)" for="compose-subject">
                         Subject
                     </label>
                     <input id="compose-subject"
                            type="text"
-                           class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-sm text-[--color-text] placeholder-[--color-text-muted] focus:border-[--color-primary] focus:outline-none"
+                           class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) placeholder-(--color-text-muted) focus:border-(--color-primary) focus:outline-none"
                            placeholder="What's this about?"
                            maxlength="2048"
                            @bind="Subject"
@@ -62,7 +62,7 @@
 
                 @* Message body *@
                 <div class="flex flex-col gap-1">
-                    <label class="text-sm font-medium text-[--color-text]">Message</label>
+                    <label class="text-sm font-medium text-(--color-text)">Message</label>
                     <MessageComposer @ref="_composer"
                                      SendLabel="Send"
                                      OnSend="HandleSendAsync"

@@ -7,19 +7,19 @@
    WU32 (Groups) embeds this in GroupsPage via the server-filtered listing. *@
 
 <a href="/group/@Group.GroupId/@StorySlug.Slugify(Group.GroupName)"
-   class="block rounded-lg border border-[--color-border] bg-[--color-surface] p-4 transition-shadow hover:shadow-sm">
+   class="block rounded-lg border border-(--color-border) bg-(--color-surface) p-4 transition-shadow hover:shadow-sm">
     <div class="flex flex-col gap-2">
 
         @* ── Header row: name + audience badge ───────────────────────────────── *@
         <div class="flex flex-wrap items-center justify-between gap-2">
-            <h3 class="font-semibold text-[--color-text] leading-snug">@Group.GroupName</h3>
+            <h3 class="font-semibold text-(--color-text) leading-snug">@Group.GroupName</h3>
             <span class="@AudienceBadgeClasses(Group.AudienceType) rounded px-1.5 py-0.5 text-xs font-medium ring-1">
                 @AudienceBadgeLabel(Group.AudienceType)
             </span>
         </div>
 
         @* ── Meta row: member count + date ───────────────────────────────────── *@
-        <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-[--color-text-muted]">
+        <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-(--color-text-muted)">
             <span>@Group.MemberCount @(Group.MemberCount == 1 ? "member" : "members")</span>
             <span>·</span>
             <span>Founded @Group.DateCreated.ToString("MMM d, yyyy")</span>
@@ -28,7 +28,7 @@
         @* ── Description snippet ─────────────────────────────────────────────── *@
         @if (!string.IsNullOrWhiteSpace(Group.Description))
         {
-            <p class="text-sm text-[--color-text-muted] leading-relaxed line-clamp-2">@Group.Description</p>
+            <p class="text-sm text-(--color-text-muted) leading-relaxed line-clamp-2">@Group.Description</p>
         }
 
     </div>
@@ -46,8 +46,8 @@
 
     private static string AudienceBadgeClasses(GroupAudienceType type) => type switch
     {
-        GroupAudienceType.Mature  => "bg-[--color-danger]/10 text-[--color-danger] ring-[--color-danger]/30",
-        GroupAudienceType.SfwOnly => "bg-[--color-warning]/10 text-[--color-warning] ring-[--color-warning]/30",
-        _                         => "bg-[--color-surface-raised] text-[--color-text-muted] ring-[--color-border]"
+        GroupAudienceType.Mature  => "bg-(--color-danger)/10 text-(--color-danger) ring-(--color-danger)/30",
+        GroupAudienceType.SfwOnly => "bg-(--color-warning)/10 text-(--color-warning) ring-(--color-warning)/30",
+        _                         => "bg-(--color-surface-raised) text-(--color-text-muted) ring-(--color-border)"
     };
 }

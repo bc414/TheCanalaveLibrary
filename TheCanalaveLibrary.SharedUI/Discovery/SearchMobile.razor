@@ -9,11 +9,11 @@
 
     @* ── Filter toggle row ───────────────────────────────────────────────────────────────── *@
     <div class="flex items-center justify-between">
-        <span class="text-sm font-medium text-[--color-text-muted]">
+        <span class="text-sm font-medium text-(--color-text-muted)">
             @(IsRandomMode ? "Random discover" : (Filter.Sort == DefaultSortOrder.Relevance ? "Relevance" : "Most recent"))
         </span>
         <button type="button"
-                class="flex items-center gap-1.5 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm transition-colors hover:bg-[--color-surface-hover]"
+                class="flex items-center gap-1.5 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm transition-colors hover:bg-(--color-surface-hover)"
                 @onclick="ToggleFilter"
                 aria-expanded="@_filterOpen"
                 aria-controls="search-filter-overlay">
@@ -65,12 +65,12 @@
 {
     <div class="fixed inset-0 z-50 bg-black/50" @onclick="CloseFilter" id="search-filter-overlay"></div>
 
-    <div class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-[--color-surface] shadow-xl"
+    <div class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-(--color-surface) shadow-xl"
          @onclick:stopPropagation="true">
-        <div class="flex items-center justify-between border-b border-[--color-border] px-4 py-3">
+        <div class="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
             <h2 class="text-sm font-bold">Filters</h2>
             <button type="button"
-                    class="rounded p-1 text-[--color-text-muted] hover:bg-[--color-surface-hover]"
+                    class="rounded p-1 text-(--color-text-muted) hover:bg-(--color-surface-hover)"
                     @onclick="CloseFilter"
                     aria-label="Close filters">
                 <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

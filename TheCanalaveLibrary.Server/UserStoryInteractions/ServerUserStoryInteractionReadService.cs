@@ -9,7 +9,7 @@ namespace TheCanalaveLibrary.Server;
 /// without hitting the database.
 /// </summary>
 public class ServerUserStoryInteractionReadService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser) : IUserStoryInteractionReadService
 {
     /// <summary>
@@ -24,6 +24,7 @@ public class ServerUserStoryInteractionReadService(
         if (userId is null)
             return UserStoryInteractionStateDto.AllFalse(storyId);
 
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         UserStoryInteraction? row = await readDb.UserStoryInteractions
             .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
 
@@ -39,6 +40,7 @@ public class ServerUserStoryInteractionReadService(
         if (userId is null || storyIds.Count == 0)
             return new Dictionary<int, UserStoryInteractionStateDto>();
 
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         List<UserStoryInteraction> rows = await readDb.UserStoryInteractions
             .Where(i => i.UserId == userId && storyIds.Contains(i.StoryId))
             .ToListAsync();
@@ -51,6 +53,7 @@ public class ServerUserStoryInteractionReadService(
         int? userId = activeUser.UserId;
         if (userId is null) return [];
 
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         IQueryable<UserStoryInteraction> query = readDb.UserStoryInteractions
             .Where(i => i.UserId == userId);
 
@@ -75,6 +78,7 @@ public class ServerUserStoryInteractionReadService(
     {
         // includePrivate = true when the owner views their own profile; false for visitors.
         // Hidden favorites (IsHiddenFavorite) are visible only to the owner.
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         return await readDb.UserStoryInteractions
             .Where(i => i.UserId == userId
                         && i.IsFavorite

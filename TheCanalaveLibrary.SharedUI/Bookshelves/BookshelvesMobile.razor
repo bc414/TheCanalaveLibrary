@@ -16,16 +16,16 @@
             @{
                 var activeInfo = BookshelfTabVisuals.For(Tab);
             }
-            <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm transition-colors hover:bg-[--color-surface-hover]"
+            <summary class="flex cursor-pointer list-none items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm transition-colors hover:bg-(--color-surface-hover)"
                      style="color:@activeInfo.AccentColor">
                 <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24"
                      style="fill:@activeInfo.AccentColor" aria-hidden="true">
                     <path d="@activeInfo.IconPath" />
                 </svg>
                 <span class="flex-1 font-medium">@activeInfo.Label</span>
-                <span aria-hidden="true" class="text-[--color-text-muted]">&#9662;</span>
+                <span aria-hidden="true" class="text-(--color-text-muted)">&#9662;</span>
             </summary>
-            <div class="absolute left-0 top-full z-20 mt-1 w-full overflow-hidden rounded-md border border-[--color-border] bg-[--color-surface] shadow-md">
+            <div class="absolute left-0 top-full z-20 mt-1 w-full overflow-hidden rounded-md border border-(--color-border) bg-(--color-surface) shadow-md">
                 @foreach (BookshelfTab tab in BookshelfTabVisuals.AllTabs)
                 {
                     var info = BookshelfTabVisuals.For(tab);
@@ -46,7 +46,7 @@
 
         @* Filter toggle button *@
         <button type="button"
-                class="flex items-center gap-1.5 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-2 text-sm transition-colors hover:bg-[--color-surface-hover]"
+                class="flex items-center gap-1.5 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm transition-colors hover:bg-(--color-surface-hover)"
                 @onclick="ToggleFilter"
                 aria-expanded="@_filterOpen"
                 aria-controls="mobile-filter-overlay">
@@ -78,12 +78,12 @@
     <div class="fixed inset-0 z-50 bg-black/50" @onclick="CloseFilter" id="mobile-filter-overlay"></div>
 
     @* Slide-in panel — stopPropagation prevents backdrop from receiving the click *@
-    <div class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-[--color-surface] shadow-xl"
+    <div class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-(--color-surface) shadow-xl"
          @onclick:stopPropagation="true">
-        <div class="flex items-center justify-between border-b border-[--color-border] px-4 py-3">
+        <div class="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
             <h2 class="text-sm font-bold">Filters</h2>
             <button type="button"
-                    class="rounded p-1 text-[--color-text-muted] hover:bg-[--color-surface-hover]"
+                    class="rounded p-1 text-(--color-text-muted) hover:bg-(--color-surface-hover)"
                     @onclick="CloseFilter"
                     aria-label="Close filters">
                 <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -132,6 +132,6 @@
     private static string DropdownEntryClasses(bool isActive) =>
         "flex items-center gap-2 px-3 py-2 text-sm " +
         (isActive
-            ? "bg-[--color-surface-hover] font-semibold"
-            : "text-[--color-text] hover:bg-[--color-surface-hover]");
+            ? "bg-(--color-surface-hover) font-semibold"
+            : "text-(--color-text) hover:bg-(--color-surface-hover)");
 }

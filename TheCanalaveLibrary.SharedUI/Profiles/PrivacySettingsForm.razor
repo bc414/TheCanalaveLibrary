@@ -7,17 +7,17 @@
 
 <section class="flex flex-col gap-4">
     <div>
-        <h2 class="text-base font-semibold text-[--color-text]">Privacy &amp; Content Preferences</h2>
-        <p class="text-sm text-[--color-text-muted]">Control your profile visibility, who can contact you, and what content you see.</p>
+        <h2 class="text-base font-semibold text-(--color-text)">Privacy &amp; Content Preferences</h2>
+        <p class="text-sm text-(--color-text-muted)">Control your profile visibility, who can contact you, and what content you see.</p>
     </div>
 
-    <div class="flex flex-col gap-4 rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
+    <div class="flex flex-col gap-4 rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-4">
 
         @* Profile Visibility *@
         <div class="flex flex-col gap-1">
-            <label for="profile-visibility" class="text-sm font-medium text-[--color-text]">Profile visibility</label>
+            <label for="profile-visibility" class="text-sm font-medium text-(--color-text)">Profile visibility</label>
             <select id="profile-visibility"
-                    class="max-w-xs rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                    class="max-w-xs rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
                     value="@((int)_profileVisibility)"
                     @onchange="e => { if (int.TryParse(e.Value?.ToString(), out int pv)) _profileVisibility = (ProfileVisibility)pv; }">
                 <option value="0">Public — anyone can view</option>
@@ -28,9 +28,9 @@
 
         @* Allow profile comments *@
         <div class="flex flex-col gap-1">
-            <label for="allow-comments" class="text-sm font-medium text-[--color-text]">Profile comment wall</label>
+            <label for="allow-comments" class="text-sm font-medium text-(--color-text)">Profile comment wall</label>
             <select id="allow-comments"
-                    class="max-w-xs rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                    class="max-w-xs rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
                     value="@((int)_allowProfileComments)"
                     @onchange="e => { if (int.TryParse(e.Value?.ToString(), out int ac)) _allowProfileComments = (SocialInteractionPermission)ac; }">
                 <option value="0">Public — anyone can comment</option>
@@ -41,9 +41,9 @@
 
         @* Allow private messages *@
         <div class="flex flex-col gap-1">
-            <label for="allow-pm" class="text-sm font-medium text-[--color-text]">Private messages</label>
+            <label for="allow-pm" class="text-sm font-medium text-(--color-text)">Private messages</label>
             <select id="allow-pm"
-                    class="max-w-xs rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                    class="max-w-xs rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
                     value="@((int)_allowPrivateMessages)"
                     @onchange="e => { if (int.TryParse(e.Value?.ToString(), out int apm)) _allowPrivateMessages = (SocialInteractionPermission)apm; }">
                 <option value="0">Public — anyone can message you</option>
@@ -54,50 +54,50 @@
 
         @* Boolean toggles *@
         <div class="flex flex-col gap-2">
-            <label class="flex cursor-pointer items-center gap-2 text-sm text-[--color-text]">
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
                 <input type="checkbox"
-                       class="h-4 w-4 rounded border-[--color-border] accent-[--color-primary]"
+                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
                        checked="@_showActivityStatus"
                        @onchange="e => _showActivityStatus = (bool)(e.Value ?? false)" />
                 Show my activity status
             </label>
 
-            <label class="flex cursor-pointer items-center gap-2 text-sm text-[--color-text]">
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
                 <input type="checkbox"
-                       class="h-4 w-4 rounded border-[--color-border] accent-[--color-primary]"
+                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
                        checked="@_showUserStats"
                        @onchange="e => _showUserStats = (bool)(e.Value ?? false)" />
                 Show my stats on my profile
             </label>
 
-            <label class="flex cursor-pointer items-center gap-2 text-sm text-[--color-text]">
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
                 <input type="checkbox"
-                       class="h-4 w-4 rounded border-[--color-border] accent-[--color-primary]"
+                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
                        checked="@_showCurrentlyReading"
                        @onchange="e => _showCurrentlyReading = (bool)(e.Value ?? false)" />
                 Show what I'm currently reading
             </label>
 
-            <label class="flex cursor-pointer items-center gap-2 text-sm text-[--color-text]">
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
                 <input type="checkbox"
-                       class="h-4 w-4 rounded border-[--color-border] accent-[--color-primary]"
+                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
                        checked="@_showMatureContent"
                        @onchange="e => _showMatureContent = (bool)(e.Value ?? false)" />
                 Show mature (M-rated) content
             </label>
 
-            <label class="flex cursor-pointer items-center gap-2 text-sm text-[--color-text]">
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
                 <input type="checkbox"
-                       class="h-4 w-4 rounded border-[--color-border] accent-[--color-primary]"
+                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
                        checked="@_allowDiscovery"
                        @onchange="e => _allowDiscovery = (bool)(e.Value ?? false)" />
                 Allow discovery based on hidden favorites
-                <span class="text-xs text-[--color-text-muted]">(others won't see which story, only the tag set)</span>
+                <span class="text-xs text-(--color-text-muted)">(others won't see which story, only the tag set)</span>
             </label>
         </div>
 
         <button type="button"
-                class="self-start rounded-md bg-[--color-primary] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50"
+                class="self-start rounded-md bg-(--color-primary) px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50"
                 disabled="@Busy"
                 @onclick="HandleSave">
             @(Busy ? "Saving…" : "Save Privacy Settings")

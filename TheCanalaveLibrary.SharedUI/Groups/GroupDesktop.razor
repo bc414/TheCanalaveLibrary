@@ -13,19 +13,19 @@
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div class="flex flex-col gap-1">
                 <div class="flex flex-wrap items-center gap-3">
-                    <h1 class="text-3xl font-bold text-[--color-text]">@Group.GroupName</h1>
+                    <h1 class="text-3xl font-bold text-(--color-text)">@Group.GroupName</h1>
                     <span class="@AudienceBadgeClasses(Group.AudienceType) rounded px-2 py-0.5 text-xs font-medium ring-1">
                         @AudienceBadgeLabel(Group.AudienceType)
                     </span>
                 </div>
-                <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-[--color-text-muted]">
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-(--color-text-muted)">
                     <span>@Group.MemberCount @(Group.MemberCount == 1 ? "member" : "members")</span>
                     @if (Group.CreatorDisplayName is not null)
                     {
                         <span>·</span>
                         <span>Created by
                             <a href="/profile/@Group.CreatorId"
-                               class="text-[--color-primary] hover:underline">@Group.CreatorDisplayName</a>
+                               class="text-(--color-primary) hover:underline">@Group.CreatorDisplayName</a>
                         </span>
                     }
                     <span>·</span>
@@ -40,24 +40,24 @@
                     @if (CurrentUserRole is null)
                     {
                         <button type="button" @onclick="OnJoin"
-                                class="rounded-md bg-[--color-primary] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[--color-primary-strong]">
+                                class="rounded-md bg-(--color-primary) px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-(--color-primary-strong)">
                             Join Group
                         </button>
                     }
                     else
                     {
-                        <span class="text-sm text-[--color-text-muted]">
+                        <span class="text-sm text-(--color-text-muted)">
                             @(CurrentUserRole == GroupRole.Admin ? "Admin" : "Member")
                         </span>
                         <button type="button" @onclick="OnLeave"
-                                class="rounded-md border border-[--color-border] bg-[--color-surface] px-4 py-2 text-sm font-medium text-[--color-text] transition-colors hover:bg-[--color-surface-raised]">
+                                class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-surface-raised)">
                             Leave
                         </button>
                     }
                     @if (CurrentUserRole == GroupRole.Admin)
                     {
                         <a href="/group/@Group.GroupId/edit"
-                           class="rounded-md border border-[--color-border] bg-[--color-surface] px-4 py-2 text-sm font-medium text-[--color-text] transition-colors hover:bg-[--color-surface-raised]">
+                           class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-surface-raised)">
                             Edit Group
                         </a>
                     }
@@ -67,7 +67,7 @@
 
         @if (!string.IsNullOrWhiteSpace(Group.Description))
         {
-            <p class="text-sm text-[--color-text] leading-relaxed max-w-2xl">@Group.Description</p>
+            <p class="text-sm text-(--color-text) leading-relaxed max-w-2xl">@Group.Description</p>
         }
     </div>
 
@@ -80,11 +80,11 @@
             @* Stories ─────────────────────────────────────────────────────────── *@
             <section class="flex flex-col gap-4">
                 <div class="flex items-center justify-between">
-                    <h2 class="text-lg font-semibold text-[--color-text]">Stories</h2>
+                    <h2 class="text-lg font-semibold text-(--color-text)">Stories</h2>
                     @if (CurrentUserRole is not null)
                     {
                         <button type="button" @onclick="ToggleAddStory"
-                                class="text-sm text-[--color-primary] hover:underline">
+                                class="text-sm text-(--color-primary) hover:underline">
                             @(_showAddStory ? "Cancel" : "+ Add Story")
                         </button>
                     }
@@ -93,22 +93,22 @@
                 @* ── Inline add-story form (members only) ──────────────────────── *@
                 @if (_showAddStory)
                 {
-                    <div class="rounded-lg border border-[--color-border] bg-[--color-surface] p-4 flex flex-col gap-3">
-                        <label class="text-sm font-semibold text-[--color-text]">Add a story to this group</label>
+                    <div class="rounded-lg border border-(--color-border) bg-(--color-surface) p-4 flex flex-col gap-3">
+                        <label class="text-sm font-semibold text-(--color-text)">Add a story to this group</label>
                         <input type="number" @bind="_addStoryId" placeholder="Story ID"
-                               class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-sm text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary] w-40" />
+                               class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary) w-40" />
                         @if (_addStoryError is not null)
                         {
-                            <p class="text-xs text-[--color-danger]">@_addStoryError</p>
+                            <p class="text-xs text-(--color-danger)">@_addStoryError</p>
                         }
                         <div class="flex gap-2">
                             <button type="button" @onclick="HandleAddStoryAsync"
-                                    class="rounded-md bg-[--color-primary] px-3 py-1.5 text-sm font-medium text-white hover:bg-[--color-primary-strong] disabled:opacity-50"
+                                    class="rounded-md bg-(--color-primary) px-3 py-1.5 text-sm font-medium text-white hover:bg-(--color-primary-strong) disabled:opacity-50"
                                     disabled="@(_addStoryId is null)">
                                 Add
                             </button>
                             <button type="button" @onclick="() => _showAddStory = false"
-                                    class="rounded-md border border-[--color-border] px-3 py-1.5 text-sm text-[--color-text] hover:bg-[--color-surface-raised]">
+                                    class="rounded-md border border-(--color-border) px-3 py-1.5 text-sm text-(--color-text) hover:bg-(--color-surface-raised)">
                                 Cancel
                             </button>
                         </div>
@@ -126,16 +126,16 @@
             @* Blog posts ─────────────────────────────────────────────────────── *@
             <section class="flex flex-col gap-4">
                 <div class="flex items-center justify-between">
-                    <h2 class="text-lg font-semibold text-[--color-text]">Blog Posts</h2>
+                    <h2 class="text-lg font-semibold text-(--color-text)">Blog Posts</h2>
                     @if (CurrentUserRole is not null)
                     {
                         <a href="/group/@Group.GroupId/blog/new"
-                           class="text-sm text-[--color-primary] hover:underline">+ New Post</a>
+                           class="text-sm text-(--color-primary) hover:underline">+ New Post</a>
                     }
                 </div>
                 @if (BlogPosts.Length == 0)
                 {
-                    <p class="text-sm text-[--color-text-muted]">No blog posts yet.</p>
+                    <p class="text-sm text-(--color-text-muted)">No blog posts yet.</p>
                 }
                 else
                 {
@@ -147,14 +147,14 @@
                     </div>
                     @if (TotalBlogPosts > BlogPosts.Length)
                     {
-                        <p class="text-sm text-[--color-text-muted]">Showing @BlogPosts.Length of @TotalBlogPosts posts.</p>
+                        <p class="text-sm text-(--color-text-muted)">Showing @BlogPosts.Length of @TotalBlogPosts posts.</p>
                     }
                 }
             </section>
 
             @* Comments ──────────────────────────────────────────────────────────── *@
             <section class="flex flex-col gap-3">
-                <h2 class="text-lg font-semibold text-[--color-text]">Comments</h2>
+                <h2 class="text-lg font-semibold text-(--color-text)">Comments</h2>
                 <CommentSection GroupId="@((int?)Group.GroupId)" CurrentUserId="CurrentUserId" />
             </section>
 
@@ -164,18 +164,18 @@
         <aside class="flex flex-col gap-4">
             @if (Group.FolderTree.Count > 0 || CurrentUserRole == GroupRole.Admin)
             {
-                <div class="rounded-lg border border-[--color-border] bg-[--color-surface] p-4 flex flex-col gap-3">
+                <div class="rounded-lg border border-(--color-border) bg-(--color-surface) p-4 flex flex-col gap-3">
                     <div class="flex items-center justify-between">
-                        <h2 class="text-base font-semibold text-[--color-text]">Folders</h2>
+                        <h2 class="text-base font-semibold text-(--color-text)">Folders</h2>
                         @if (CurrentUserRole == GroupRole.Admin)
                         {
                             <a href="/group/@Group.GroupId/folders"
-                               class="text-xs text-[--color-primary] hover:underline">Manage</a>
+                               class="text-xs text-(--color-primary) hover:underline">Manage</a>
                         }
                     </div>
                     @if (Group.FolderTree.Count == 0)
                     {
-                        <p class="text-xs text-[--color-text-muted]">No folders yet.</p>
+                        <p class="text-xs text-(--color-text-muted)">No folders yet.</p>
                     }
                     else
                     {
@@ -238,14 +238,14 @@
         {
             builder.OpenElement(2, "li");
             builder.OpenElement(3, "div");
-            builder.AddAttribute(4, "class", "flex items-center gap-1 text-[--color-text]");
+            builder.AddAttribute(4, "class", "flex items-center gap-1 text-(--color-text)");
             builder.OpenElement(5, "span");
             builder.AddContent(6, "📁 " + folder.Name);
             builder.CloseElement(); // span
             if (folder.MaxRating != Rating.M)
             {
                 builder.OpenElement(7, "span");
-                builder.AddAttribute(8, "class", "text-xs text-[--color-text-muted]");
+                builder.AddAttribute(8, "class", "text-xs text-(--color-text-muted)");
                 builder.AddContent(9, $"({folder.MaxRating})");
                 builder.CloseElement(); // span
             }
@@ -273,8 +273,8 @@
 
     private static string AudienceBadgeClasses(GroupAudienceType type) => type switch
     {
-        GroupAudienceType.Mature  => "bg-[--color-danger]/10 text-[--color-danger] ring-[--color-danger]/30",
-        GroupAudienceType.SfwOnly => "bg-[--color-warning]/10 text-[--color-warning] ring-[--color-warning]/30",
-        _                         => "bg-[--color-surface-raised] text-[--color-text-muted] ring-[--color-border]"
+        GroupAudienceType.Mature  => "bg-(--color-danger)/10 text-(--color-danger) ring-(--color-danger)/30",
+        GroupAudienceType.SfwOnly => "bg-(--color-warning)/10 text-(--color-warning) ring-(--color-warning)/30",
+        _                         => "bg-(--color-surface-raised) text-(--color-text-muted) ring-(--color-border)"
     };
 }

@@ -28,12 +28,17 @@ public static class DevDiagnosticsEndpoints
             activeUser = new { activeUser.UserId, activeUser.IsAuthenticated, activeUser.ShowMatureContent, activeUser.Theme, activeUser.PrefersAnimatedSprites }
         }));
 
-        devApi.MapPost("/wu12/login-as/{username}", async (string username, SignInManager<User> signInManager, UserManager<User> userManager) =>
+        // GET + redirect (not POST + JS fetch): DevLoginBar renders plain <a> links to this, which
+        // works in every render mode and regardless of circuit state. The previous fetch-POST +
+        // forceLoad-reload pattern silently failed on an established interactive circuit (the POST
+        // never reached the server — found via browser pass 2026-07-01). GET-with-side-effects is
+        // acceptable here only because this endpoint is Development-only and never shipped.
+        devApi.MapGet("/wu12/login-as/{username}", async (string username, SignInManager<User> signInManager, UserManager<User> userManager) =>
         {
             User? user = await userManager.FindByNameAsync(username);
             if (user is null) return Results.NotFound($"no user named {username}");
             await signInManager.SignInAsync(user, isPersistent: false);
-            return Results.Ok($"signed in as {username}");
+            return Results.Redirect("/");
         });
 
         devApi.MapPost("/wu12/create-test-story", async (

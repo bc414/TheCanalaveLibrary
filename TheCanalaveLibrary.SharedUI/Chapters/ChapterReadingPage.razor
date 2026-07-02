@@ -22,25 +22,25 @@
 
 @if (_isLoading)
 {
-    <p class="text-[--color-text-muted]"><em>Loading…</em></p>
+    <p class="text-(--color-text-muted)"><em>Loading…</em></p>
 }
 else if (_gatedByRating)
 {
     <div class="mx-auto max-w-2xl px-4 py-8">
-        <p class="text-[--color-text-muted]">This version of the chapter requires mature content to be enabled in your account settings.</p>
-        <a href="/story/@StoryId/@ChapterNumber" class="mt-4 inline-block text-[--color-primary] hover:underline">Read the default version instead</a>
+        <p class="text-(--color-text-muted)">This version of the chapter requires mature content to be enabled in your account settings.</p>
+        <a href="/story/@StoryId/@ChapterNumber" class="mt-4 inline-block text-(--color-primary) hover:underline">Read the default version instead</a>
     </div>
 }
 else if (_dto is null)
 {
-    <p class="text-[--color-text-muted]">Chapter not found.</p>
+    <p class="text-(--color-text-muted)">Chapter not found.</p>
 }
 else
 {
     <div class="mx-auto max-w-2xl px-4 py-6">
 
-        <h1 class="mb-1 text-xl font-bold text-[--color-text]">@_dto.Title</h1>
-        <p class="mb-4 text-sm text-[--color-text-muted]">
+        <h1 class="mb-1 text-xl font-bold text-(--color-text)">@_dto.Title</h1>
+        <p class="mb-4 text-sm text-(--color-text-muted)">
             Chapter @_dto.ChapterNumber
             @if (_dto.VersionName is not null)
             {
@@ -52,11 +52,11 @@ else
            floor rating. The primary invariant guarantees the primary never triggers this. *@
         @if (_dto.Rating > _dto.StoryRating)
         {
-            <div class="mb-4 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-3 text-sm text-[--color-text-muted]">
+            <div class="mb-4 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-3 text-sm text-(--color-text-muted)">
                 This version is rated @_dto.Rating and exceeds the story's @_dto.StoryRating rating.
                 @if (_dto.NextChapterNumber.HasValue)
                 {
-                    <a href="/story/@StoryId/@_dto.NextChapterNumber.Value" class="ml-1 text-[--color-primary] hover:underline">Skip to the next chapter</a>
+                    <a href="/story/@StoryId/@_dto.NextChapterNumber.Value" class="ml-1 text-(--color-primary) hover:underline">Skip to the next chapter</a>
                 }
             </div>
         }
@@ -75,7 +75,7 @@ else
         @* Chapter body — chapter-body id is the scroll-tracking anchor for reading-progress.js *@
         @if (_dto.TopAuthorsNote is not null)
         {
-            <aside class="mb-4 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4 text-sm">
+            <aside class="mb-4 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4 text-sm">
                 <RichTextView HtmlContent="@_dto.TopAuthorsNote" />
             </aside>
         }
@@ -86,7 +86,7 @@ else
 
         @if (_dto.BottomAuthorsNote is not null)
         {
-            <aside class="mb-6 rounded-lg border border-[--color-border] bg-[--color-surface-raised] p-4 text-sm">
+            <aside class="mb-6 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4 text-sm">
                 <RichTextView HtmlContent="@_dto.BottomAuthorsNote" />
             </aside>
         }
@@ -106,7 +106,7 @@ else
         @if (_isAuthor)
         {
             <div class="mb-6 text-sm">
-                <a href="@EditUrl" class="text-[--color-primary] hover:underline">Edit this chapter</a>
+                <a href="@EditUrl" class="text-(--color-primary) hover:underline">Edit this chapter</a>
             </div>
         }
 

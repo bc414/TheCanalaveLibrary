@@ -11,12 +11,12 @@ namespace TheCanalaveLibrary.Server;
 /// <see cref="Group.Description"/> once on save.
 /// </summary>
 public class ServerGroupWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
     INotificationWriteService notifications)
-    : ServerGroupReadService(readDb, activeUser), IGroupWriteService
+    : ServerGroupReadService(readDbFactory, activeUser), IGroupWriteService
 {
     // ── Group CRUD ────────────────────────────────────────────────────────────────
 

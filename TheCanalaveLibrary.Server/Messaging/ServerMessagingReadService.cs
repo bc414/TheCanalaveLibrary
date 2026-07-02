@@ -10,7 +10,7 @@ namespace TheCanalaveLibrary.Server;
 /// All methods are viewer-scoped via <see cref="IActiveUserContext"/>.
 /// </summary>
 public partial class ServerMessagingReadService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser) : IMessagingReadService
 {
     private const string DefaultAvatarUrl = "/img/default-avatar.svg";
@@ -21,6 +21,12 @@ public partial class ServerMessagingReadService(
     /// </summary>
     protected IActiveUserContext ActiveUser { get; } = activeUser;
 
+    /// <summary>
+    /// Read contexts are created per method from this factory (`await using`) — never held for the
+    /// service's lifetime. See <c>layer2-services.md</c> §"Read-context concurrency: factory per method".
+    /// </summary>
+    protected IDbContextFactory<ReadOnlyApplicationDbContext> ReadDbFactory { get; } = readDbFactory;
+
     // -----------------------------------------------------------------------
     // IMessagingReadService
     // -----------------------------------------------------------------------
@@ -29,6 +35,8 @@ public partial class ServerMessagingReadService(
         bool includeArchived = false)
     {
         int viewerId = RequireAuthenticatedUser();
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
         // Two-step: EF handles the DB work, C# handles HTML stripping and final ordering.
         var raw = await readDb.ConversationParticipants
@@ -83,6 +91,8 @@ public partial class ServerMessagingReadService(
         int conversationId, int page, int pageSize)
     {
         int viewerId = RequireAuthenticatedUser();
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
         // Guard + header in one query. Returns null when conversation doesn't exist
         // or the viewer is not a participant.
@@ -170,6 +180,8 @@ public partial class ServerMessagingReadService(
         int? viewerId = ActiveUser.UserId;
         if (viewerId is null) return 0;
 
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
         // Count conversations (non-archived) that have at least one message from the other
         // participant sent after my LastReadTimestamp (or ever, if I have no timestamp yet).
         return await readDb.ConversationParticipants
@@ -188,6 +200,8 @@ public partial class ServerMessagingReadService(
         // or equality after normalisation).
         // Identity stores normalised usernames in NormalizedUserName (upper-case).
         string normalised = username.Trim().ToUpperInvariant();
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
         return await readDb.Users
             .Where(u => u.NormalizedUserName == normalised)

@@ -106,10 +106,12 @@ string connectionString = builder.Configuration.GetConnectionString("canalavedb"
 builder.Services.AddDbContext<ApplicationDbContext>(options => options
     .UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure())
     .UseSnakeCaseNamingConvention());
-builder.Services.AddDbContext<ReadOnlyApplicationDbContext>(options => options
+// Read context registers a SCOPED factory, not AddDbContext — see the next section.
+builder.Services.AddDbContextFactory<ReadOnlyApplicationDbContext>(options => options
     .UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure())
     .UseSnakeCaseNamingConvention()
-    .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
+    .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking),
+    ServiceLifetime.Scoped);
 ```
 
 **Why:** `AddNpgsqlDbContext<T>` always registers via EF Core's `DbContextPool` — its settings type has
@@ -128,6 +130,66 @@ genuinely additive/swappable dev infra; this is a composition-root lifetime choi
 DbContext-consuming service is written against, architectural in the same sense `IActiveUserContext`
 is. It's also unrelated to the Postgres primary/read-replica axis: which connection string a context
 points at is orthogonal to whether the .NET-side object is pooled.
+
+### Read-Context Concurrency: Factory Per Method (supersedes spec §6.6)
+
+**Every read-service method creates its own short-lived `ReadOnlyApplicationDbContext` from a
+scoped `IDbContextFactory<ReadOnlyApplicationDbContext>` — never holds one for the service's
+lifetime** (settled 2026-07-01, found via browser debugging; regression net:
+`Tests.Integration/ConcurrentReadAccessTests.cs`):
+
+```csharp
+public class ServerStoryReadService(
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
+    IActiveUserContext activeUser) : IStoryReadService
+{
+    public async Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        return await readDb.Stories ...;   // method body otherwise unchanged
+    }
+}
+```
+
+**Why:** in Blazor Server the DI scope is per-*circuit*, not per-request, and sibling components'
+async initialization interleaves. Layout chrome (`NotificationBell`, `MessagesNavLink`) queries
+concurrently with every page dispatcher's load, and pages themselves parallel-load via
+`Task.WhenAll` (ChapterReadingPage, SettingsPage, GroupPage, NotificationsPage). A single
+circuit-scoped context instance shared by all of them throws
+`InvalidOperationException: A second operation was started on this context instance` on the first
+authenticated page load. `DbContext` is not concurrency-safe; the container manages *lifetime*, not
+*concurrency*. This is EF's documented Blazor Server pattern.
+
+**This supersedes spec §6.6** ("Why Direct DbContext Injection over IDbContextFactory"). §6.6's
+claim that "with scoped registration the thread-safety concern doesn't apply" is true for
+per-request scopes and false for per-circuit scopes — the app is `InteractiveServer`, so circuits
+are the operative model. What §6.6 actually valued survives intact:
+- **Compile-time read/write separation** — write services still hold only `writeDb`; read access
+  is a method-local `await using` variable.
+- **Scoped dependencies** — `ServiceLifetime.Scoped` on the factory (NOT the default Singleton)
+  makes factory-created contexts resolve the circuit's scoped `IActiveUserContext` for the named
+  query filters. This is the same scoped-deps constraint that rules out pooling above.
+
+Mechanics:
+- **Local name stays `readDb`** so method bodies read identically to the old pattern.
+- **Expression-bodied query methods become block-bodied** — returning a bare `Task` would dispose
+  the context before the query streams (same lifetime pitfall as `testing.md` §"async methods that
+  create a scope must await the call inside it").
+- **Private/protected helpers that query take the context as a parameter** when called inside a
+  method that already opened one (`BatchLoadEntitiesAsync`, `BatchLoadTargetsAsync`), or open
+  their own when standalone (`BuildFolderTreeAsync`).
+- **Base/derived (CS9107):** the base read service exposes
+  `protected IDbContextFactory<ReadOnlyApplicationDbContext> ReadDbFactory { get; }`; derived
+  write services use it for their read-side lookups.
+- **The write context stays plain `AddDbContext` (scoped).** Writes are triggered by discrete user
+  actions, effectively serialized per circuit, and a scoped `ApplicationDbContext` never collides
+  with factory-created read contexts (different instances). Revisit only if a real write-vs-write
+  interleaving surfaces.
+- **Non-circuit consumers may still inject `ReadOnlyApplicationDbContext` directly**
+  (`ApplicationUserClaimsPrincipalFactory` — sign-in request scope, no concurrency):
+  `AddDbContextFactory` also registers the context type itself as a scoped service.
+- Component-side corollary: `Task.WhenAll` parallel loading in pages/components is *sanctioned* by
+  this pattern — do not sequentialize awaits to dodge context sharing.
 
 ### Content-Rating Filtering Lives on the Read DbContext, Not in Each Service
 

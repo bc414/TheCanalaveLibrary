@@ -28,20 +28,20 @@
         else
         {
             @* Placeholder initial avatar *@
-            <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-[--color-surface-raised] text-3xl font-bold text-[--color-text-muted] shadow-sm md:h-24 md:w-24">
+            <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-(--color-surface-raised) text-3xl font-bold text-(--color-text-muted) shadow-sm md:h-24 md:w-24">
                 @Header.Username[0].ToString().ToUpperInvariant()
             </div>
         }
 
         @* Name, tagline, action buttons *@
         <div class="flex min-w-0 flex-1 flex-col gap-1">
-            <h1 class="text-xl font-bold text-[--color-text] leading-tight md:text-2xl">
+            <h1 class="text-xl font-bold text-(--color-text) leading-tight md:text-2xl">
                 @Header.Username
             </h1>
 
             @if (!string.IsNullOrEmpty(Header.Tagline))
             {
-                <p class="text-sm text-[--color-text-muted]">@Header.Tagline</p>
+                <p class="text-sm text-(--color-text-muted)">@Header.Tagline</p>
             }
 
             @* Badges row *@
@@ -64,7 +64,7 @@
                 @if (IsOwner)
                 {
                     <a href="/settings"
-                       class="rounded-md border border-[--color-border] px-3 py-1.5 text-sm font-medium text-[--color-text] hover:bg-[--color-surface-hover]">
+                       class="rounded-md border border-(--color-border) px-3 py-1.5 text-sm font-medium text-(--color-text) hover:bg-(--color-surface-hover)">
                         Edit Profile
                     </a>
                 }
@@ -93,10 +93,10 @@
     @if (Header.OutgoingVouches.Count > 0)
     {
         <details class="group" open="@(!IsMobile)">
-            <summary class="cursor-pointer list-none text-sm font-medium text-[--color-text] hover:text-[--color-primary]">
+            <summary class="cursor-pointer list-none text-sm font-medium text-(--color-text) hover:text-(--color-primary)">
                 Vouches (@Header.OutgoingVouches.Count)
-                <span class="group-open:hidden text-[--color-text-muted]">▸</span>
-                <span class="hidden group-open:inline text-[--color-text-muted]">▾</span>
+                <span class="group-open:hidden text-(--color-text-muted)">▸</span>
+                <span class="hidden group-open:inline text-(--color-text-muted)">▾</span>
             </summary>
             <div class="mt-3">
                 <VouchList Vouches="@Header.OutgoingVouches"

@@ -11,12 +11,12 @@ namespace TheCanalaveLibrary.Server;
 /// Message HTML is sanitized once on save (sanitize-once-on-save convention).
 /// </summary>
 public class ServerMessagingWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
     ILogger<ServerMessagingWriteService> logger)
-    : ServerMessagingReadService(readDb, activeUser), IMessagingWriteService
+    : ServerMessagingReadService(readDbFactory, activeUser), IMessagingWriteService
 {
     // -----------------------------------------------------------------------
     // IMessagingWriteService

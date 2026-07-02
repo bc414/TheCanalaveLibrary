@@ -10,27 +10,27 @@
 
 @if (!string.IsNullOrEmpty(_pictureUrl))
 {
-    <div class="flex items-center gap-3 rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-3">
+    <div class="flex items-center gap-3 rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-3">
         <img src="@_pictureUrl"
              alt="Your profile picture"
              class="h-16 w-16 rounded-full object-cover shadow-sm" />
-        <div class="text-sm text-[--color-text-muted]">Current profile picture</div>
+        <div class="text-sm text-(--color-text-muted)">Current profile picture</div>
     </div>
 }
 
 <section class="flex flex-col gap-4">
     <div>
-        <h2 class="text-base font-semibold text-[--color-text]">Profile</h2>
-        <p class="text-sm text-[--color-text-muted]">Your public identity on the site.</p>
+        <h2 class="text-base font-semibold text-(--color-text)">Profile</h2>
+        <p class="text-sm text-(--color-text-muted)">Your public identity on the site.</p>
     </div>
 
-    <div class="flex flex-col gap-4 rounded-xl border border-[--color-border] bg-[--color-surface-raised] p-4">
+    <div class="flex flex-col gap-4 rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-4">
 
         @* Tagline *@
         <div class="flex flex-col gap-1">
-            <label for="tagline" class="text-sm font-medium text-[--color-text]">Tagline</label>
+            <label for="tagline" class="text-sm font-medium text-(--color-text)">Tagline</label>
             <input id="tagline" type="text" maxlength="256"
-                   class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-2 text-[--color-text] focus:outline-none focus:ring-2 focus:ring-[--color-primary]"
+                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
                    value="@_tagline"
                    @onchange="e => _tagline = (string?)e.Value"
                    placeholder="A short one-liner about yourself (optional)" />
@@ -38,26 +38,26 @@
 
         @* Profile bio (rich text) *@
         <div class="flex flex-col gap-1">
-            <label class="text-sm font-medium text-[--color-text]">About me</label>
+            <label class="text-sm font-medium text-(--color-text)">About me</label>
             <EditorView @ref="_editor" Html="@InitialBioHtml" Placeholder="Write something about yourself…" />
         </div>
 
         @* Profile picture *@
         <div class="flex flex-col gap-1">
-            <label for="profile-picture" class="text-sm font-medium text-[--color-text]">Profile picture</label>
+            <label for="profile-picture" class="text-sm font-medium text-(--color-text)">Profile picture</label>
             <InputFile id="profile-picture"
                        accept="image/jpeg,image/png,image/webp"
-                       class="text-sm text-[--color-text]"
+                       class="text-sm text-(--color-text)"
                        OnChange="HandlePictureSelected"
                        disabled="@UploadBusy" />
             @if (UploadBusy)
             {
-                <span class="text-xs text-[--color-text-muted]">Uploading…</span>
+                <span class="text-xs text-(--color-text-muted)">Uploading…</span>
             }
         </div>
 
         <button type="button"
-                class="self-start rounded-md bg-[--color-primary] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[--color-primary-strong] disabled:opacity-50"
+                class="self-start rounded-md bg-(--color-primary) px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50"
                 disabled="@Busy"
                 @onclick="HandleSaveProfileAsync">
             @(Busy ? "Saving…" : "Save Profile")

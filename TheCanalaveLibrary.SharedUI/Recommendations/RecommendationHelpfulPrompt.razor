@@ -9,14 +9,14 @@
 
 @if (!_dismissed)
 {
-    <div class="mt-6 rounded-xl border border-[#5BB85A] bg-[--color-surface] p-4 shadow-sm"
+    <div class="mt-6 rounded-xl border border-[#5BB85A] bg-(--color-surface) p-4 shadow-sm"
          role="region" aria-label="Recommendation feedback">
         <div class="flex items-start gap-3">
             <svg viewBox="0 0 24 24" class="mt-0.5 size-5 shrink-0" aria-hidden="true" fill="#5BB85A">
                 <path d="@RecommendationIcons.RecommendationIconPath" />
             </svg>
             <div class="flex-1 min-w-0">
-                <p class="mb-3 text-sm text-[--color-text]">
+                <p class="mb-3 text-sm text-(--color-text)">
                     Was the recommendation that brought you here helpful?
                 </p>
                 <div class="flex flex-wrap items-center gap-2">
@@ -27,7 +27,7 @@
                         Yes, it was!
                     </button>
                     <button type="button"
-                            class="rounded-md border border-[--color-border] bg-[--color-surface] px-3 py-1.5 text-sm text-[--color-text-muted] transition-colors hover:bg-[--color-surface-hover]"
+                            class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text-muted) transition-colors hover:bg-(--color-surface-hover)"
                             aria-label="No, this recommendation was not helpful"
                             @onclick="HandleNo">
                         No thanks
@@ -35,7 +35,7 @@
                 </div>
             </div>
             <button type="button"
-                    class="shrink-0 text-[--color-text-muted] hover:text-[--color-text]"
+                    class="shrink-0 text-(--color-text-muted) hover:text-(--color-text)"
                     aria-label="Dismiss"
                     @onclick="Dismiss">
                 <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2">

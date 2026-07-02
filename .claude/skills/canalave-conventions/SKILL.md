@@ -5,9 +5,10 @@ description: >
   Use when writing, reviewing, or planning code in this project.
   Covers EF Core (TPT, Npgsql, migrations), Blazor (InteractiveAuto,
   component design, [PersistentState]), CQRS-lite (services, DTOs),
-  Redis, Aspire, naming, code organization, and automated testing
+  Redis, Aspire, naming, code organization, automated testing
   (Unit / Integration / RazorComponents-bUnit tiers, Testcontainers-Postgres,
-  fake IActiveUserContext).
+  fake IActiveUserContext), and full-breadth debugging methodology (repro
+  discipline, diagnostic-surface correlation, browser-based debugging).
 paths: "*.cs, *.razor, *.csproj"
 ---
 
@@ -132,6 +133,7 @@ exactly how Bootstrap-template classnames (`top-row`, `nav-pills`, …) get copi
 | [layer8-data-marts.md](layer8-data-marts.md) | 8 | Non-EF background workers, raw SQL, table swap |
 | [cross-cutting.md](cross-cutting.md) | All | Render mode, device detection, Identity, Aspire, notifications, badges, UserStats, content rating filtering, delete policies |
 | [testing.md](testing.md) | All | Three test tiers by *kind* (Unit = directly-constructed, no host/DB; Integration = `WebApplicationFactory`/Testcontainers Postgres; RazorComponents = bUnit render tests); Testcontainers-Postgres rule; fake `IActiveUserContext`; what dev-diagnostics endpoints are/aren't for |
+| [debugging.md](debugging.md) | All | Full-breadth debugging methodology: reproduce before fixing, correlating diagnostic surfaces (server log / exception page / browser console+network / psql / dev-diagnostics), re-running the identical repro after a candidate fix (a moved stack trace ≠ fixed), feature-local vs. cross-cutting scope classification, when to reach for browser-based debugging, fix-same-session discipline |
 
 ## Component Taxonomy Quick Reference
 

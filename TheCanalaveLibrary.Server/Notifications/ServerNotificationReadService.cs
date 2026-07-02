@@ -21,7 +21,7 @@ namespace TheCanalaveLibrary.Server;
 /// default" (sparse-override model, Feature 43).</para>
 /// </summary>
 public class ServerNotificationReadService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser) : INotificationReadService
 {
     // ── Internal kind classification ──────────────────────────────────────────────
@@ -85,11 +85,13 @@ public class ServerNotificationReadService(
     // ── Protected surface for the derived write service ────────────────────────────
 
     /// <summary>
-    /// Exposed so the derived write service can use the read context without re-capturing
-    /// the <c>readDb</c> primary constructor parameter (avoids CS9107 double-capture warning
+    /// Exposed so the derived write service can create read contexts without re-capturing
+    /// the <c>readDbFactory</c> primary constructor parameter (avoids CS9107 double-capture warning
     /// — see <c>layer2-services.md</c> §"CS9107/CS9124: shared constructor parameters").
+    /// Every method creates its own short-lived context (`await using`) — see
+    /// <c>layer2-services.md</c> §"Read-context concurrency: factory per method".
     /// </summary>
-    protected ReadOnlyApplicationDbContext ReadDb { get; } = readDb;
+    protected IDbContextFactory<ReadOnlyApplicationDbContext> ReadDbFactory { get; } = readDbFactory;
 
     /// <summary>
     /// Exposed so the derived write service can access the current user's id without
@@ -104,7 +106,8 @@ public class ServerNotificationReadService(
         int? userId = activeUser.UserId;
         if (userId is null) return 0;
 
-        return await ReadDb.Notifications
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        return await readDb.Notifications
             .CountAsync(n => n.RecipientUserId == userId && !n.IsRead);
     }
 
@@ -113,7 +116,8 @@ public class ServerNotificationReadService(
         int? userId = activeUser.UserId;
         if (userId is null) return 0;
 
-        return await ReadDb.Notifications
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        return await readDb.Notifications
             .CountAsync(n => n.RecipientUserId == userId);
     }
 
@@ -127,20 +131,22 @@ public class ServerNotificationReadService(
 
         int skip = (page - 1) * pageSize;
 
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
         // ── First pass: materialize the page ──────────────────────────────────────
         // LEFT JOINs:
         //   • UserNotificationSettings (sparse) → effective Collapsed per type.
         //   • Users on SourceUserId (int?) → SourceUserName; null when source deleted
         //     (SET NULL policy) or type has no actor field.
         var q =
-            from n in ReadDb.Notifications
+            from n in readDb.Notifications
             where n.RecipientUserId == userId
-            join nt in ReadDb.NotificationTypes
+            join nt in readDb.NotificationTypes
                 on n.NotificationTypeId equals nt.NotificationTypeId
-            join uns in ReadDb.UserNotificationSettings.Where(s => s.UserId == userId)
+            join uns in readDb.UserNotificationSettings.Where(s => s.UserId == userId)
                 on n.NotificationTypeId equals uns.NotificationTypeId into settings
             from s in settings.DefaultIfEmpty()
-            join u in ReadDb.Users
+            join u in readDb.Users
                 on n.SourceUserId equals u.Id into sources
             from src in sources.DefaultIfEmpty()
             select new
@@ -173,7 +179,9 @@ public class ServerNotificationReadService(
 
         // ── Second pass: batch-load RelatedEntity data per kind ───────────────────
         // One query per RelatedEntityKind present on this page; kinds absent produce no query.
+        // Reuses this method's context (sequential within the method — no concurrency).
         var kindLookups = await BatchLoadEntitiesAsync(
+            readDb,
             rows.Select(r => (r.NotificationTypeId, r.RelatedEntityId)).ToList());
 
         // ── Stitch: merge enriched fields into DTOs ────────────────────────────────
@@ -205,10 +213,12 @@ public class ServerNotificationReadService(
     {
         int? userId = activeUser.UserId;
 
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
         if (userId is null)
         {
             // Anonymous: return defaults for all types (IsDefault = true — no override rows).
-            return await ReadDb.NotificationTypes
+            return await readDb.NotificationTypes
                 .OrderBy(nt => nt.NotificationCategory).ThenBy(nt => nt.NotificationTypeId)
                 .Select(nt => new NotificationSettingDto(
                     nt.NotificationTypeId,
@@ -224,8 +234,8 @@ public class ServerNotificationReadService(
         // LEFT JOIN UserNotificationSettings onto NotificationTypes.
         // NULL from the left join → no override → IsDefault = true, values come from type defaults.
         return await (
-            from nt in ReadDb.NotificationTypes
-            join uns in ReadDb.UserNotificationSettings.Where(s => s.UserId == userId)
+            from nt in readDb.NotificationTypes
+            join uns in readDb.UserNotificationSettings.Where(s => s.UserId == userId)
                 on nt.NotificationTypeId equals uns.NotificationTypeId into settings
             from s in settings.DefaultIfEmpty()
             orderby nt.NotificationCategory, nt.NotificationTypeId
@@ -253,8 +263,9 @@ public class ServerNotificationReadService(
     /// returned at stitch time for such rows — the caller checks
     /// <c>kindLookups.TryGetValue</c> first).</para>
     /// </summary>
-    private async Task<Dictionary<RelatedEntityKind, Dictionary<int, (string? Title, string? Url)>>>
+    private static async Task<Dictionary<RelatedEntityKind, Dictionary<int, (string? Title, string? Url)>>>
         BatchLoadEntitiesAsync(
+            ReadOnlyApplicationDbContext readDb,
             IReadOnlyList<(NotificationTypeEnum TypeId, int RelatedEntityId)> typeIdPairs)
     {
         // Classify each row's kind and group ids per kind — skip None entirely.
@@ -269,7 +280,7 @@ public class ServerNotificationReadService(
 
         if (idsByKind.TryGetValue(RelatedEntityKind.Story, out var storyIds))
         {
-            result[RelatedEntityKind.Story] = (await ReadDb.StoryListings
+            result[RelatedEntityKind.Story] = (await readDb.StoryListings
                     .Where(s => storyIds.Contains(s.StoryId))
                     .Select(s => new { s.StoryId, s.StoryTitle })
                     .ToListAsync())
@@ -280,7 +291,7 @@ public class ServerNotificationReadService(
 
         if (idsByKind.TryGetValue(RelatedEntityKind.Chapter, out var chapterIds))
         {
-            result[RelatedEntityKind.Chapter] = (await ReadDb.Chapters
+            result[RelatedEntityKind.Chapter] = (await readDb.Chapters
                     .Where(c => chapterIds.Contains(c.ChapterId))
                     .Select(c => new { c.ChapterId, c.Title, c.StoryId, c.ChapterNumber })
                     .ToListAsync())
@@ -291,7 +302,7 @@ public class ServerNotificationReadService(
 
         if (idsByKind.TryGetValue(RelatedEntityKind.User, out var userIds))
         {
-            result[RelatedEntityKind.User] = (await ReadDb.Users
+            result[RelatedEntityKind.User] = (await readDb.Users
                     .Where(u => userIds.Contains(u.Id))
                     .Select(u => new { u.Id, u.UserName })
                     .ToListAsync())
@@ -302,7 +313,7 @@ public class ServerNotificationReadService(
 
         if (idsByKind.TryGetValue(RelatedEntityKind.Group, out var groupIds))
         {
-            result[RelatedEntityKind.Group] = (await ReadDb.Groups
+            result[RelatedEntityKind.Group] = (await readDb.Groups
                     .Where(g => groupIds.Contains(g.GroupId))
                     .Select(g => new { g.GroupId, g.GroupName })
                     .ToListAsync())
@@ -316,7 +327,7 @@ public class ServerNotificationReadService(
             // Only GroupBlogPost generates notifications today (NewGroupBlogPost via WU32).
             // GroupBlogPost inherits Title from BaseBlogPost (TPT); GroupId needed for the URL.
             // ProfileBlogPost notification types are not yet implemented (no generating path).
-            result[RelatedEntityKind.BlogPost] = (await ReadDb.GroupBlogPosts
+            result[RelatedEntityKind.BlogPost] = (await readDb.GroupBlogPosts
                     .Where(b => blogPostIds.Contains(b.BlogPostId))
                     .Select(b => new { b.BlogPostId, b.Title, b.GroupId })
                     .ToListAsync())

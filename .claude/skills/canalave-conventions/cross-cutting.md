@@ -152,6 +152,19 @@ Mobile hamburger menu. Login/logout are triggers on the persistent layout, not s
 - No live push (post-MVP L7); count refreshes on render/navigation.
 - Inserted before `<LoginDisplay />` in both `DesktopLayout.razor` and `MobileLayout.razor`.
 
+**Messages nav link** (`SharedUI/Messaging/MessagesNavLink.razor`, WU35) — the second legitimate
+cross-cutting layout injection, parallel to the bell: injects `IMessagingReadService` for the unread
+badge, wrapped in `<AuthorizeView>`, refreshes on every navigation via a `LocationChanged`
+subscription, inserted beside the bell in both layouts.
+
+**Layout-chrome concurrency (applies to both, and to any future chrome component):** these
+components render on *every* authenticated page and initialize/refresh **concurrently with each
+other and with the page dispatcher's own loads** — Blazor Server interleaves sibling async init on
+one circuit-scoped DI scope. Services reachable from layout chrome must therefore follow the
+read-context factory rule (`layer2-services.md` §"Read-Context Concurrency: Factory Per Method");
+a circuit-scoped `ReadOnlyApplicationDbContext` shared across them crashes every authenticated
+load (found via browser debugging 2026-07-01; regression: `Tests.Integration/ConcurrentReadAccessTests.cs`).
+
 ## Active-User Context
 
 `IActiveUserContext` (Core/Identity/) is the scoped "who is the current viewer" companion to the `User`

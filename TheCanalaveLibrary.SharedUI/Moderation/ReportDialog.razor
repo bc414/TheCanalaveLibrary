@@ -26,7 +26,7 @@
                 <div class="mb-4">
                     <label class="mb-1 block text-sm font-medium text-text" for="report-reason">Reason</label>
                     <select id="report-reason"
-                            class="w-full rounded-md border border-[--color-border] bg-surface px-3 py-2 text-sm text-text"
+                            class="w-full rounded-md border border-(--color-border) bg-surface px-3 py-2 text-sm text-text"
                             @bind="_selectedReasonId">
                         <option value="0">— Select a reason —</option>
                         @foreach (var r in _reasons)
@@ -39,7 +39,7 @@
                 <div class="mb-4">
                     <label class="mb-1 block text-sm font-medium text-text" for="report-notes">Additional notes (optional)</label>
                     <textarea id="report-notes" rows="3"
-                              class="w-full rounded-md border border-[--color-border] bg-surface px-3 py-2 text-sm text-text"
+                              class="w-full rounded-md border border-(--color-border) bg-surface px-3 py-2 text-sm text-text"
                               @bind="_notes"
                               placeholder="Provide any context that may help a moderator.">
                     </textarea>
@@ -57,7 +57,7 @@
 
                 <div class="flex justify-end gap-2">
                     <button type="button"
-                            class="rounded-md border border-[--color-border] bg-surface px-3 py-1 text-text transition-colors hover:bg-[--color-primary]/20"
+                            class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-primary)/20"
                             @onclick="Cancel">
                         @(_submitted ? "Close" : "Cancel")
                     </button>

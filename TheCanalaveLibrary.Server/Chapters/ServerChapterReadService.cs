@@ -4,7 +4,7 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Server;
 
 public class ServerChapterReadService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser) : IChapterReadService
 {
     /// <summary>
@@ -18,6 +18,8 @@ public class ServerChapterReadService(
         int? versionOrder = null)
     {
         Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
+
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
 
         // Build a query that resolves to the target ChapterContent. Both branches produce
         // IQueryable<ChapterContent> so the final projection stays unified.
@@ -82,6 +84,7 @@ public class ServerChapterReadService(
     {
         Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
 
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         return await readDb.Chapters
             .Where(c => c.StoryId == storyId)
             .OrderBy(c => c.ChapterNumber)
@@ -105,6 +108,8 @@ public class ServerChapterReadService(
     {
         Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
 
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
         // SelectMany from the matching chapter into its accessible ChapterContent rows.
         // OrderBy must be inside the SelectMany (on the entity field) — EF Core cannot translate
         // OrderBy on the projected DTO's VersionOrder property outside the SelectMany boundary.
@@ -126,6 +131,8 @@ public class ServerChapterReadService(
     public async Task<IReadOnlyList<ChapterListEntryDto>> GetChapterListAsync(int storyId)
     {
         Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
+
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
 
         // Step 1: All chapters for the story, ordered by ChapterNumber.
         // PrimaryContent is nullable during the brief post-create window; default WordCount to 0.
@@ -198,6 +205,7 @@ public class ServerChapterReadService(
         // applying IgnoreQueryFilters(["ContentRating"]) if the parent Story is Mature and the
         // editing author has ShowMatureContent=false; WU17 leaves the Story-level filter active
         // here, which suffices for the common case.)
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         return await readDb.ChapterContents
             .Where(cc => cc.ChapterContentId == chapterContentId)
             .Select(cc => new ChapterReadingDto(

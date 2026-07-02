@@ -17,13 +17,15 @@ namespace TheCanalaveLibrary.Server;
 /// The dispatcher calls this separately so it can load it lazily on Profile-tab activation.
 /// </summary>
 public class ServerUserProfileReadService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser) : IUserProfileReadService
 {
     private const string DefaultAvatarUrl = "/img/default-avatar.svg";
 
     public async Task<ProfileHeaderDto?> GetProfileHeaderAsync(int userId, bool includePrivate)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
         var row = await readDb.Users
             .Where(u => u.Id == userId)
             .Select(u => new
@@ -114,6 +116,7 @@ public class ServerUserProfileReadService(
 
     public async Task<string?> GetProfileTextAsync(int userId)
     {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         return await readDb.UserProfiles
             .Where(p => p.UserId == userId)
             .Select(p => p.Text)

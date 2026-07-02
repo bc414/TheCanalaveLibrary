@@ -19,12 +19,12 @@ namespace TheCanalaveLibrary.Server;
 /// </para>
 /// </summary>
 public class ServerBlogPostWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
     INotificationWriteService notifications)
-    : ServerBlogPostReadService(readDb, activeUser), IBlogPostWriteService
+    : ServerBlogPostReadService(readDbFactory, activeUser), IBlogPostWriteService
 {
     public async Task<int> CreateProfileBlogPostAsync(CreateProfileBlogPostDto dto)
     {

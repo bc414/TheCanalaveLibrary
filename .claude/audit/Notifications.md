@@ -142,6 +142,21 @@ complete parts of the model.
   plumbing/contract (compile-clean, ordering correct); the enrichment is an additive
   implementation detail to complete before the notification UI work-unit (WU33).
 
+- **Circuit-concurrency fix (2026-07-01) — L2 remains Stage 5; found via browser debugging:**
+  First real browser login (dev-bar TestUser) crashed with `InvalidOperationException: A second
+  operation was started on this context instance` — `NotificationBell` + `MessagesNavLink` both
+  render in the layout, both backed by the same circuit-scoped `ReadOnlyApplicationDbContext`, and
+  Blazor Server interleaves their async init. Sequentializing the bell's two awaits only *moved*
+  the stack trace (partial fix — see `debugging.md`). Root fix is cross-cutting, not F42-local:
+  all read services now create a per-method context from a scoped
+  `IDbContextFactory<ReadOnlyApplicationDbContext>`; `ServerNotificationReadService`'s protected
+  `ReadDb` became `ReadDbFactory`, `BatchLoadEntitiesAsync` takes the context as a parameter, and
+  the bell's parallel `RefreshAsync` loads were restored (sanctioned under the factory rule).
+  Convention: `layer2-services.md` §"Read-Context Concurrency: Factory Per Method" (supersedes
+  spec §6.6). **Verified:** browser — dev-bar login renders authenticated home with bell +
+  messages, no 500; Integration — `ConcurrentReadAccessTests` (two-services-one-scope,
+  one-service-parallel-calls, chrome-plus-page shapes); full suite green post-refactor.
+
 ## Feature 43 — Notification Settings
 
 - **L1 — Stage 5** (`UserNotificationSetting` sparse-override; `EmailEnabled`/`Collapsed` — see Shared

@@ -28,10 +28,10 @@ namespace TheCanalaveLibrary.Server;
 /// separate transaction covering only the notification rows.</para>
 /// </summary>
 public class ServerNotificationWriteService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser)
-    : ServerNotificationReadService(readDb, activeUser), INotificationWriteService
+    : ServerNotificationReadService(readDbFactory, activeUser), INotificationWriteService
 {
     // ── Read-side mutations ──────────────────────────────────────────────────────
 
@@ -60,9 +60,10 @@ public class ServerNotificationWriteService(
         int userId = RequireAuthenticatedUser();
 
         // Load the type defaults from the read context (no-tracking, fast).
-        // Uses ReadDb (the protected property on the base class), not the readDb constructor
-        // parameter directly, to avoid CS9107 double-capture (layer2-services.md).
-        NotificationType? type = await ReadDb.NotificationTypes
+        // Uses ReadDbFactory (the protected property on the base class), not the readDbFactory
+        // constructor parameter directly, to avoid CS9107 double-capture (layer2-services.md).
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        NotificationType? type = await readDb.NotificationTypes
             .FirstOrDefaultAsync(t => t.NotificationTypeId == notifType);
         if (type is null) return; // unknown type enum — no-op (should not happen in practice)
 

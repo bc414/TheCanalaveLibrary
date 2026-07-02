@@ -36,11 +36,11 @@
        Current chapter highlighted with aria-current="page"; chapters that have viewer-accessible
        alternate versions carry a small indicator in their row. *@
     <details class="relative">
-        <summary class="flex cursor-pointer list-none items-center gap-1 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-1.5 text-sm transition-colors hover:bg-[--color-primary]/20">
+        <summary class="flex cursor-pointer list-none items-center gap-1 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 text-sm transition-colors hover:bg-(--color-primary)/20">
             Chapter @CurrentChapterNumber@(CurrentChapterTitle is not null ? $": {CurrentChapterTitle}" : string.Empty)
-            <span aria-hidden="true" class="text-[--color-text-muted]">&#9662;</span>
+            <span aria-hidden="true" class="text-(--color-text-muted)">&#9662;</span>
         </summary>
-        <div class="absolute left-0 top-full z-10 mt-1 max-h-64 min-w-48 overflow-y-auto rounded-md border border-[--color-border] bg-[--color-surface] py-1 shadow-md">
+        <div class="absolute left-0 top-full z-10 mt-1 max-h-64 min-w-48 overflow-y-auto rounded-md border border-(--color-border) bg-(--color-surface) py-1 shadow-md">
             @foreach (var entry in Toc)
             {
                 <a href="@ChapterUrl(entry.ChapterNumber)"
@@ -49,7 +49,7 @@
                     <span>@entry.ChapterNumber. @entry.Title</span>
                     @if (entry.HasAlternateVersions)
                     {
-                        <span class="ml-auto text-xs text-[--color-text-muted]"
+                        <span class="ml-auto text-xs text-(--color-text-muted)"
                               title="Has alternate versions">&#8942;</span>
                     }
                 </a>
@@ -63,11 +63,11 @@
     @if (Versions.Count > 1)
     {
         <details class="relative">
-            <summary class="flex cursor-pointer list-none items-center gap-1 rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-1.5 text-sm transition-colors hover:bg-[--color-primary]/20">
+            <summary class="flex cursor-pointer list-none items-center gap-1 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 text-sm transition-colors hover:bg-(--color-primary)/20">
                 @CurrentVersionLabel
-                <span aria-hidden="true" class="text-[--color-text-muted]">&#9662;</span>
+                <span aria-hidden="true" class="text-(--color-text-muted)">&#9662;</span>
             </summary>
-            <div class="absolute left-0 top-full z-10 mt-1 max-h-48 min-w-40 overflow-y-auto rounded-md border border-[--color-border] bg-[--color-surface] py-1 shadow-md">
+            <div class="absolute left-0 top-full z-10 mt-1 max-h-48 min-w-40 overflow-y-auto rounded-md border border-(--color-border) bg-(--color-surface) py-1 shadow-md">
                 @foreach (var version in Versions)
                 {
                     bool isCurrent = version.VersionOrder == CurrentVersionOrder;
@@ -140,21 +140,21 @@
     // Shared style helpers — mirrors PaginationControls' Prev/Next button convention.
     private static string NavLinkClasses(bool disabled) =>
         (disabled
-            ? "bg-[--color-surface-raised]/50 border-[--color-border] text-[--color-text-muted] cursor-not-allowed"
-            : "bg-[--color-surface-raised] border-[--color-border] text-[--color-text] hover:bg-[--color-primary]/20") +
+            ? "bg-(--color-surface-raised)/50 border-(--color-border) text-(--color-text-muted) cursor-not-allowed"
+            : "bg-(--color-surface-raised) border-(--color-border) text-(--color-text) hover:bg-(--color-primary)/20") +
         " inline-grid size-9 place-items-center rounded-md border transition-colors";
 
     private string TocEntryClasses(ChapterTocEntryDto entry) =>
         (entry.ChapterNumber == CurrentChapterNumber
-            ? "bg-[--color-primary]/10 font-semibold text-[--color-primary]"
+            ? "bg-(--color-primary)/10 font-semibold text-(--color-primary)"
             : (entry.IsPublished
-                ? "text-[--color-text] hover:bg-[--color-surface-hover]"
-                : "pointer-events-none text-[--color-text-muted]")) +
+                ? "text-(--color-text) hover:bg-(--color-surface-hover)"
+                : "pointer-events-none text-(--color-text-muted)")) +
         " flex items-center justify-between gap-2 px-3 py-1.5 text-sm";
 
     private static string VersionEntryClasses(bool isCurrent) =>
         (isCurrent
-            ? "bg-[--color-primary]/10 font-semibold text-[--color-primary]"
-            : "text-[--color-text] hover:bg-[--color-surface-hover]") +
+            ? "bg-(--color-primary)/10 font-semibold text-(--color-primary)"
+            : "text-(--color-text) hover:bg-(--color-surface-hover)") +
         " block px-3 py-1.5 text-sm";
 }

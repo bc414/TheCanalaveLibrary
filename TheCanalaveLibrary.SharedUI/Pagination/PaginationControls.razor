@@ -24,7 +24,7 @@
                 {
                     @if (page is null)
                     {
-                        <span class="size-9 grid place-items-center text-[--color-text-muted]">&hellip;</span>
+                        <span class="size-9 grid place-items-center text-(--color-text-muted)">&hellip;</span>
                     }
                     else
                     {
@@ -44,7 +44,7 @@
             </button>
         </div>
 
-        <span class="text-sm text-[--color-text-muted]">
+        <span class="text-sm text-(--color-text-muted)">
             Showing @RangeStart&ndash;@RangeEnd of @TotalCount
         </span>
     </div>
@@ -112,14 +112,14 @@
 
     private string NavButtonClasses(bool disabled) =>
         (disabled
-            ? "bg-[--color-surface-raised]/50 border-[--color-border] text-[--color-text-muted] cursor-not-allowed"
-            : "bg-[--color-surface-raised] border-[--color-border] text-[--color-text] hover:bg-[--color-primary]/20") +
+            ? "bg-(--color-surface-raised)/50 border-(--color-border) text-(--color-text-muted) cursor-not-allowed"
+            : "bg-(--color-surface-raised) border-(--color-border) text-(--color-text) hover:bg-(--color-primary)/20") +
         " size-9 rounded-md border grid place-items-center transition-colors";
 
     private string PageButtonClasses(int page) =>
         (page == CurrentPage
-            ? "bg-[--color-primary] border-[--color-primary] text-white"
-            : "bg-[--color-surface-raised] border-[--color-border] hover:bg-[--color-primary]/20 text-[--color-text]") +
+            ? "bg-(--color-primary) border-(--color-primary) text-white"
+            : "bg-(--color-surface-raised) border-(--color-border) hover:bg-(--color-primary)/20 text-(--color-text)") +
         " size-9 rounded-md border grid place-items-center transition-colors";
 
     private async Task HandlePage(int page)

@@ -80,6 +80,8 @@ approved; a Stage note is an *output* recorded after the work lands.
 
 **Unresolved dependency encountered.** If a cell you need depends on another cell that hasn't reached Stage 5, surface it to the user. This applies regardless of the dependency's current stage — don't assume any unresolved dependency's outcome. Name it, state its stage, let the user decide.
 
+**Runtime bug surfaces during verification.** When manual or browser-based checking turns up a bug the automated tiers didn't catch, diagnose it per `canalave-conventions/debugging.md` and fix it in the same session — don't leave a cell's Stage number describing code that isn't actually sound while the fix waits. This is a debugging technique (mechanics in `run-server/SKILL.md`), not a new verification band or Stage gate.
+
 **After completing any work-unit.** Run `dotnet test` (should be green; add tests for any new testable surface per `canalave-conventions/testing.md`'s tier rules). Flip the grid number(s) in `.claude/status.md`, write the verification narrative — including which test tier covers the behavior or why none applies — in the affected audit file's Stage note, and update `.claude/workplan.md`. This is part of finishing the work, not separate bookkeeping.
 
 **Phase 4 (integration tests) plan completeness.** Integration tests reset between every test

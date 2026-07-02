@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
@@ -44,6 +45,14 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
         // IWebHostEnvironment.WebRootPath, and tests must never touch the real wwwroot/uploads/.
         builder.UseWebRoot(WebRootPath);
 
+        // Pin the seeder to Minimal (users + roles only): under the Development environment the
+        // seeder runs on every factory boot — i.e. before EVERY test (Respawn wipes TestUser, so
+        // its guard never trips). The Full showcase inventory would add seconds per test. Unlike
+        // the connection string (read eagerly by Program.cs — see the DbContext note below), the
+        // seeder reads IConfiguration lazily at run time, so this override works.
+        builder.ConfigureAppConfiguration((_, cfg) =>
+            cfg.AddInMemoryCollection(new Dictionary<string, string?> { ["DevSeed"] = "Minimal" }));
+
         builder.ConfigureServices(services =>
         {
             // Re-register both DbContexts against the Testcontainers database.
@@ -58,10 +67,14 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
                 .UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure())
                 .UseSnakeCaseNamingConvention());
 
-            services.AddDbContext<ReadOnlyApplicationDbContext>(options => options
+            // Mirrors production's scoped-factory registration (Program.cs) — read services create
+            // per-method contexts via IDbContextFactory<ReadOnlyApplicationDbContext>; the factory
+            // must be Scoped so created contexts resolve the scoped IActiveUserContext (the fake below).
+            services.AddDbContextFactory<ReadOnlyApplicationDbContext>(options => options
                 .UseNpgsql(connectionString, npgsql => npgsql.EnableRetryOnFailure())
                 .UseSnakeCaseNamingConvention()
-                .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking));
+                .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking),
+                ServiceLifetime.Scoped);
 
             // Swap the real claims-based IActiveUserContext for a settable test double.
             services.RemoveAll<IActiveUserContext>();

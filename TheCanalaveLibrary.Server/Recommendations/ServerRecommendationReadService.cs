@@ -11,7 +11,7 @@ namespace TheCanalaveLibrary.Server;
 /// (DisplayOrder &gt; 0, ordered by DisplayOrder); <see cref="UserCard"/> caps the display row.
 /// </summary>
 public class ServerRecommendationReadService(
-    ReadOnlyApplicationDbContext readDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser) : IRecommendationReadService
 {
     private const string DefaultAvatarUrl = "/img/default-avatar.svg";
@@ -23,13 +23,18 @@ public class ServerRecommendationReadService(
     /// </summary>
     protected IActiveUserContext ActiveUser { get; } = activeUser;
 
-    protected ReadOnlyApplicationDbContext ReadDb { get; } = readDb;
+    /// <summary>
+    /// Read contexts are created per method from this factory (`await using`) — see
+    /// <c>layer2-services.md</c> §"Read-context concurrency: factory per method".
+    /// </summary>
+    protected IDbContextFactory<ReadOnlyApplicationDbContext> ReadDbFactory { get; } = readDbFactory;
 
     public async Task<List<RecommendationDto>> GetForStoryAsync(int storyId)
     {
         int? currentUserId = ActiveUser.UserId;
 
-        return await ReadDb.Recommendations
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        return await readDb.Recommendations
             .Where(r => r.StoryId == storyId && r.StatusId == ApprovedStatusId)
             .OrderByDescending(r => r.IsHighlightedByAuthor)
             .ThenByDescending(r => r.DatePosted)
@@ -61,7 +66,8 @@ public class ServerRecommendationReadService(
     {
         int? currentUserId = ActiveUser.UserId;
 
-        return await ReadDb.Recommendations
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        return await readDb.Recommendations
             .Where(r => r.RecommendationId == recommendationId && r.StatusId == ApprovedStatusId)
             .Select(r => new RecommendationDto(
                 r.RecommendationId,
@@ -92,7 +98,8 @@ public class ServerRecommendationReadService(
         int? userId = ActiveUser.UserId;
         if (userId is null) return [];
 
-        return await ReadDb.Recommendations
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        return await readDb.Recommendations
             .Where(r => r.RecommenderId == userId && r.StatusId == ApprovedStatusId)
             .Select(r => r.StoryId)
             .Distinct()
@@ -104,7 +111,8 @@ public class ServerRecommendationReadService(
         int? userId = ActiveUser.UserId;
         if (userId is null) return [];
 
-        return await ReadDb.Recommendations
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        return await readDb.Recommendations
             .Where(r => r.RecommenderId == userId && r.StatusId == ApprovedStatusId && r.IsHiddenGem)
             .Select(r => r.StoryId)
             .Distinct()
@@ -116,8 +124,10 @@ public class ServerRecommendationReadService(
         int? userId = ActiveUser.UserId;
         if (userId is null) return null;
 
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
         // Find the source recommendation this user opened the story from.
-        int? recId = await ReadDb.UserStoryRecommendationSources
+        int? recId = await readDb.UserStoryRecommendationSources
             .Where(src => src.UserId == userId && src.StoryId == storyId)
             .Select(src => (int?)src.SourceRecommendationId)
             .FirstOrDefaultAsync();
@@ -125,7 +135,7 @@ public class ServerRecommendationReadService(
         if (recId is null) return null;
 
         // Gate: only show the prompt if no success has already been recorded.
-        bool alreadyRecorded = await ReadDb.RecommendationSuccesses
+        bool alreadyRecorded = await readDb.RecommendationSuccesses
             .AnyAsync(s => s.UserId == userId && s.RecommendationId == recId);
 
         return alreadyRecorded ? null : recId;
@@ -138,7 +148,8 @@ public class ServerRecommendationReadService(
         // RecommenderId is nullable (anonymous recs are allowed), so we compare int? == int.
         // No visibility gating needed — the set only determines which stories appear in the
         // StoryDeck; the deck applies the global content-rating query filter at listing time.
-        return await ReadDb.Recommendations
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        return await readDb.Recommendations
             .Where(r => r.RecommenderId == userId)
             .Select(r => r.StoryId)
             .Distinct()
