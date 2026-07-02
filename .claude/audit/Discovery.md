@@ -422,3 +422,15 @@ overlapping users = score.
 ### `site_daily_stats` (Feature 62)
 PK `stat_date` (one row/day). Counters: `new_users, total_users, new_stories, total_stories, new_words,
 total_words, page_views, active_users`. Daily aggregation worker.
+
+## L4.5-Browser verification (2026-07-02) — F31 + F32 + F34 → Stage 5
+
+- **F31 Search Page:** filter panel drives the deck end-to-end — genre tag chip + Apply narrowed
+  to exactly the tagged stories (see Tags audit); WU28 interaction-exclusion defaults live (the
+  viewer's ignored/favorited seed story is absent from default results); Random mode + "Give me
+  more" appends fresh draws; Date published sort available; interaction filter checkboxes render.
+- **F32 FTS:** typing "versioning" + Apply returned exactly the one story whose listing matches,
+  via `plainto_tsquery` against the generated SearchVector; the Sort dropdown gains "Relevance"
+  only while a text query is present (panel contract).
+- **F34 Tag Directory:** curated post-reseed taxonomy renders grouped by type with counts and
+  type jump-nav (see Tags audit for the editor overlay on the same page).

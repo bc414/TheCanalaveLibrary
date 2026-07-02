@@ -136,3 +136,14 @@ Covering tier: **RazorComponents** —
 - **L2 — Stage 2.** Periodic `IHostedService`/`BackgroundService` reconciling the denormalized counters.
   Pure background computation — Layer 2 *is* the worker (grid_axes). All UI layers **N/A**; **L8 — N/A**
   (EF-based recalculation, not a raw-SQL data mart).
+
+## L4.5-Browser verification (2026-07-01) — F20 + F21 + F22 → Stage 5, no bugs
+
+F21/F22: profile banner (name, tagline, avatar fallback), full stats strip matching the seeded
+`UserStat` counters, outgoing-vouches accordion (incl. Remove affordance on own vouches), tab row,
+ABOUT bio from `UserProfile.Text`, and the comment wall all render for own and other profiles;
+profiles without a `UserStat` row render without a strip (null-safe). F20: `/settings` tagline
+edit → "Profile saved." feedback → psql-verified on `AspNetUsers.tagline` → banner reflects it.
+(Reader/Privacy/Author sub-forms rendered with correct persisted values; per-sub-form save loops
+share the same `RunWithFeedbackAsync` path as the verified profile save.) Owner vs visitor
+affordances correct: Edit Profile for owner, Follow/Vouch for visitors.

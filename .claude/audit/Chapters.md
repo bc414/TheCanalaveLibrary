@@ -370,3 +370,16 @@ the USI write service. No migration needed.
   exercised live). No automated tier covers Quill/JS-backed editor rendering (bUnit fakes it); the
   param-name class of bug is caught only by rendering the real component tree — browser band per
   `debugging.md`.
+
+**L4.5-Browser verification (2026-07-01) — F6 + F7 + F44 → Stage 5, no new bugs:**
+As AuthorAlpha: "+ Add alternate version" on the flagship's chapter 1 → editor at
+`/story/1/chapter/1/2/edit` with Versions panel → typed body → Save landed on the new version's
+reading page → "Set as default" promoted it (bare `/story/1/1` served it) → demote/re-promote
+restored the original. Author gate negative-tested (TestUser gets "You don't have permission to
+edit this chapter" on someone else's chapter). Publish toggle + create-chapter verified in the
+prior browser wave (workplan WU-BrowserPass). F7: chapter nav dropdowns, prev/next links, and the
+per-chapter version switcher (appears only when alternates exist; `/story/1/3/2` renders the
+alternate with switcher state) all behave per the WU26 notes. F44: as TestUser on a never-touched
+story (`/story/6/1`), the `readingProgress` JS threshold fired and
+`user_story_interactions.has_started` flipped to true (psql-verified) — the JS-interop band no
+automated tier covers.

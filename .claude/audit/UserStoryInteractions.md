@@ -293,3 +293,21 @@ E2E checklist). Convention in `layer3-logic.md`
 Everything in this folder past L1 is blocked on resolving the reading-status re-model **and** on the
 `StoryCard`/`StoryDeck` atoms (owned by Stories/). Both resolved: `StoryDeck` is WU14 (Stage 5),
 `StoryCard` is WU13 (Stage 5), `ResultsFilterPanel` is WU23 (Stage 5). WU27 proceeds.
+
+## L4.5-Browser verification (2026-07-01) — F16 + F17 → Stage 5, one implementation gap fixed
+
+**Gap found and fixed same-session:** `UserStoryInteractionPanel`'s `Detail` context (all six
+buttons, built + bUnit-tested in WU16) was mounted NOWHERE — only `StoryCard` consumed the panel,
+in `Listing` context, whose blank-slate deliberately shows just ReadLater/Ignore. Net effect:
+Favorite / PrivateFavorite / Follow / Complete were unreachable anywhere in the UI. Fixed:
+`StoryPage` now injects `IUserStoryInteractionReadService`, loads `GetStateAsync(StoryId)` for
+authenticated viewers (both lifecycle paths), and passes `UsiState` to `StoryDesktop`/`StoryMobile`,
+which mount the panel in `Detail` context under the badge row (auth-gated; own-story renders the
+Edit link per the panel's `IsOwnStory` contract; N+1 rule preserved — panel still receives state
+from the dispatcher).
+
+**Verified in browser:** on another author's story, all six buttons render with seeded state
+reflected (Ignore active); clicking Favorite applied the optimistic pink-active state and, after
+the 2s debounce, persisted (`is_favorite=t` via psql); `/bookshelves/favorites` immediately lists
+the story (F17). All bookshelf tabs render with the seeded per-tab coverage; listing-context card
+buttons render per the blank-slate rules.

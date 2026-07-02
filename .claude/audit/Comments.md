@@ -212,3 +212,18 @@ and `CommentSection.HandlePostAsync` clears the composer via `@ref` after a succ
 and edit composers unmount, so only the persistent composer needed this). **Verified:** browser —
 post → comment appears, composer shows placeholder; second post confirms. Not bUnit-coverable
 (Quill JS interop is faked in that tier).
+
+## L4.5-Browser verification (2026-07-01) — F23 + F24 + F25 + F26 → Stage 5, no new bugs
+
+Driven on the seeded chapter-1 thread as TestUser (plus the prior wave's root-post +
+composer-clear verification): threaded reply posted via the inline Reply composer (renders under
+the root, oldest-first within the thread, newest-root-first across roots — the two-step ordering
+live); owner affordances correct per comment (Edit/Delete on own, Reply/Report on others'); like
+toggled on another user's reply (optimistic heart + `comment_likes` row + `LikeCount` counter via
+psql; an accidental like/unlike round-trip also confirmed toggle-off). Spoiler comment renders
+covered; clicking it raised the completion-gated ConfirmDialog ("You haven't finished the story
+yet…") since TestUser hasn't completed the story; Reveal shows the text — the full WU20 gate.
+Pagination controls present but not depth-exercised (seed corpus is under one page; ordering
+logic is bUnit/Integration-covered). **Server-side observation (not blocking):** the like write
+path accepts likes on one's own comment (UI renders the button on own comments too) — flag for a
+future rules pass if self-likes should be rejected.

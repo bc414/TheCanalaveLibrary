@@ -93,3 +93,32 @@ namespace). Only a stale comment remained (fixed). `dotnet build` green; `/Accou
   `DeletionService.DeleteUserAsync(user.Id)`; a `false` return (not found) now redirects to the existing
   invalid-user path instead of throwing. Inherits the resolved post-move reconciliation. **L4 — Stage 1
   (unchanged). L5 — N/A.**
+
+## L4.5-Browser verification (2026-07-01) — F1 + F52 → Stage 5, three bugs fixed same-session
+
+Full real-form pass (not the dev bar): logout via UserMenu → login → register → email-confirm →
+login as the new user → delete the account. Three defects found and fixed:
+
+1. **Login by email failed for every account** (`Login.razor`): the scaffold passes `Input.Email`
+   to `PasswordSignInAsync`, which treats it as a *username* — and site usernames are display
+   handles that never equal the email, while `[EmailAddress]` validation blocks typing a username.
+   Fixed: resolve `FindByEmailAsync` first, sign in with the resolved `UserName` (raw-input
+   fallback retained).
+2. **Registration 500'd on every submit** (`Register.razor`): the scaffold's bare `Activator`
+   user carried `ThemeId = 0` → `fk_asp_net_users_themes_theme_id` violation. Also
+   `UserName = Input.Email` would have published email addresses as the public display handle
+   (comments/profiles/messaging). Fixed: `ThemeId = 1` (migration-seeded default), plus a required
+   Username field (3–32 chars, `[a-zA-Z0-9_-]`) distinct from the email.
+3. **"An unhandled error has occurred" banner permanently visible on Identity pages**
+   (`App.razor`): the scoped-CSS bundle href said `TheCanalaveLibrary.styles.css` but the real
+   asset is assembly-named `TheCanalaveLibrary.Server.styles.css` → 404 → every `*.razor.css`
+   rule dead, including `MainLayout.razor.css`'s `#blazor-error-ui { display:none }`. Fixed href.
+
+**Verified:** register ThrowawayUser → RegisterConfirmation shows the NoOp-sender confirm link →
+ConfirmEmail succeeds → login by email lands authenticated with baked claims (whoami probe:
+nameidentifier/theme/mature all correct) → `/Account/Manage/DeletePersonalData` with password
+deletes the account (user row + cascaded `user_stats` gone via psql; anonymous session after).
+Known rough edge (not blocking): the post-deletion redirect surfaces a bare 401 page before the
+user lands anonymous — deliberate cookie 401/403 config; polish belongs to Identity L4.
+Browser-automation note: Blazor SSR forms only serialize values typed via real key events —
+programmatic `form_input` values post empty (matters for future browser passes, not for users).

@@ -10,9 +10,10 @@ namespace TheCanalaveLibrary.Server;
 /// deterministic representative dataset so every major UI surface has something to show.
 ///
 /// <para><b>Mode</b> (config key <c>DevSeed</c>, read lazily at run time):
-/// <c>Full</c> (default; the showcase below), <c>Minimal</c> (users + roles only — pinned by
-/// <c>TestAppFactory</c> so the seeder doesn't run the full showcase before every integration
-/// test), <c>None</c> (migrate only).</para>
+/// <c>Full</c> (default; the showcase below), <c>Minimal</c> (ONLY <c>TestUser</c> +
+/// <c>AdminUser</c> + roles — pinned by <c>TestAppFactory</c>, because this method runs before
+/// every integration test and each extra user costs a slow PBKDF2 password hash per test),
+/// <c>None</c> (migrate only).</para>
 ///
 /// <para><b>Guard:</b> seeding is skipped entirely when a user named <c>TestUser</c> exists.
 /// With the wipe workflow this means the seeder only ever writes into an empty database —
@@ -159,6 +160,15 @@ public class DataSeeder(
             }
             .Select(n => new Tag { TagName = n, TagTypeId = TagTypeEnum.Character })
             .ToList();
+        // One species tag with a sprite key matching the checked-in dev asset
+        // (wwwroot/sprites/themes/pokemon/static/bulbasaur.png) so the optimistic sprite-URL
+        // render path is exercisable on a fresh database.
+        characters.Add(new Tag
+        {
+            TagName = "Bulbasaur",
+            TagTypeId = TagTypeEnum.Character,
+            SpriteIdentifier = "bulbasaur",
+        });
         // Structured-tag gate exercise: one character allows OC details.
         characters[0].AllowOCDetails = true;
 
@@ -219,7 +229,12 @@ public class DataSeeder(
                 {
                     LongDescription = $"<p>Seed long description for “{title}”. Status: {status}, rating: {rating}.</p>",
                     Slug = $"seed-story-{++slugIndex}",
-                    PostApprovalStatus = status,
+                    // ApproveStoryAsync transitions the story TO this value, so a PendingApproval
+                    // story must carry its intended published status here — PendingApproval itself
+                    // would make moderator approval a silent no-op (found in the L4.5 browser pass).
+                    PostApprovalStatus = status == StoryStatusEnum.PendingApproval
+                        ? StoryStatusEnum.InProgress
+                        : status,
                 },
             };
             foreach (Tag t in storyTags)
@@ -753,6 +768,17 @@ public class DataSeeder(
                 StoriesWritten = 5, WordsWritten = 250, FollowerCount = 0, AuthorsFollowed = 0,
                 RecommendationsReceived = 1,
             });
+
+        // One earned badge for TestUser so the badge curation UI (settings) and the UserCard
+        // badge row render a populated state; visible by default (DisplayOrder 1). Award
+        // thresholds themselves are Integration-covered — this row is display seed only.
+        context.UserBadges.Add(new UserBadge
+        {
+            UserId = users.Test.Id,
+            BadgeKey = SiteBadges.Recommender,
+            DisplayOrder = 1,
+            DateEarned = Now.AddDays(-4),
+        });
 
         await context.SaveChangesAsync();
     }

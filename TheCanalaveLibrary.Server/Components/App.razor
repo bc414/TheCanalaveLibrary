@@ -8,7 +8,11 @@
     <base href="/"/>
     <ResourcePreloader/>
     <link rel="stylesheet" href="@Assets["app.css"]"/>
-    <link rel="stylesheet" href="@Assets["TheCanalaveLibrary.styles.css"]"/>
+    @* Scoped-CSS bundle is named after the ASSEMBLY (TheCanalaveLibrary.Server), not the solution.
+       The old "TheCanalaveLibrary.styles.css" href 404'd silently, killing every *.razor.css rule —
+       most visibly MainLayout.razor.css's #blazor-error-ui display:none, which left the "unhandled
+       error" banner permanently visible on Identity pages (browser pass 2026-07-01). *@
+    <link rel="stylesheet" href="@Assets["TheCanalaveLibrary.Server.styles.css"]"/>
     <!-- Quill.js (via Blazored.TextEditor, SharedUI/RichText/EditorView) — CDN per the package's own
          setup instructions; it ships no bundled Quill copy of its own. Test against Tailwind's
          Preflight resets early (layer4-style.md "Quill.js Stylesheet Interaction"). -->

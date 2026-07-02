@@ -127,3 +127,21 @@ behavior is exercised by existing `RecommendationSectionTests`.
 - **L3.5/L4 — Stage 5 (WU29, 2026-06-23).** Covering tier: RazorComponents (dismiss + respond events).
 - **L5 — Stage 2.** Attribution trigger wired in WU26 (chapter reading page, after 90% of Ch.1 `IsRead`).
   Integration test pending until WU26 is done. Service methods callable now; not yet exercised from UI.
+
+## L4.5-Browser verification (2026-07-01/02) — F27 + F28 + F29 + F30 → Stage 5
+
+- **F27:** submitted a rec via "Recommend this story" — 500-char minimum gate live (meter counts
+  up every 500 ms sample, submit disabled until "minimum met"); card appears with owner
+  Edit/Delete affordances. **Tooling note:** the char-meter's PeriodicTimer keeps CDP screenshots
+  from settling on this page (captureScreenshot times out while the composer is open) — automation
+  must drive this page textually; not a user-facing defect.
+- **F28:** cards render recommender UserCard (live tagline), like count, date, and the
+  author's-pick highlight styling (seeded rec on the flagship).
+- **F29:** "Mark as Hidden Gem" on own rec → `is_hidden_gem=t` + HiddenGem (type 23) notification
+  to the story author (psql-verified). **Observation to re-check in a later pass:** when the STORY
+  AUTHOR views another user's rec, the card appeared to offer Edit/Delete/Mark-gem affordances
+  (seen on the flagship as AuthorAlpha) — affordance-only concern (server gates own the authority),
+  but the `IsOwn` gating deserves a look.
+- **F30:** full attribution loop — opened `/story/5/1?rec=3` as TestUser (source row written),
+  revisited → "Was the recommendation that brought you here helpful?" inline banner at chapter
+  bottom → "Yes, it was!" → `recommendation_successes (1,3)` + `SuccessfulRecCount=1` (psql).

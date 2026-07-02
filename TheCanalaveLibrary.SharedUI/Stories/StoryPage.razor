@@ -4,6 +4,7 @@
 @using TheCanalaveLibrary.Core
 @inject IStoryReadService StoryReadService
 @inject IChapterReadService ChapterReadService
+@inject IUserStoryInteractionReadService UsiReadService
 @inject IDeviceDetectionService DeviceService
 @inject NavigationManager NavigationManager
 
@@ -34,14 +35,16 @@ else
         <StoryMobile Story="Story"
                      Chapters="@(Chapters ?? [])"
                      CurrentUserId="_currentUserId"
-                     IsAuthor="_isAuthor" />
+                     IsAuthor="_isAuthor"
+                     UsiState="_usiState" />
     }
     else
     {
         <StoryDesktop Story="Story"
                       Chapters="@(Chapters ?? [])"
                       CurrentUserId="_currentUserId"
-                      IsAuthor="_isAuthor" />
+                      IsAuthor="_isAuthor"
+                      UsiState="_usiState" />
     }
 }
 
@@ -63,6 +66,11 @@ else
     private bool _notFound;
     private int? _currentUserId;
     private bool _isAuthor;
+    // Per-viewer interaction state for the Detail-context panel (N+1 rule: the panel receives
+    // state from this dispatcher, never loads its own). Added in the L4.5 browser pass
+    // (2026-07-01): the Detail panel existed and was bUnit-tested but was mounted nowhere, so
+    // Favorite/Follow/Complete were unreachable anywhere in the UI.
+    private UserStoryInteractionStateDto? _usiState;
 
     private bool _initialized;
     private int _loadedStoryId = int.MinValue; // sentinel; no real StoryId equals this
@@ -92,6 +100,9 @@ else
 
         Chapters ??= (await ChapterReadService.GetChapterListAsync(StoryId)).ToArray();
 
+        if (_currentUserId is not null)
+            _usiState = await UsiReadService.GetStateAsync(StoryId);
+
         _isAuthor  = _currentUserId.HasValue && Story.AuthorId == _currentUserId;
         _isLoading = false;
         _initialized = true;
@@ -119,6 +130,7 @@ else
         }
 
         Chapters = (await ChapterReadService.GetChapterListAsync(StoryId)).ToArray();
+        _usiState = _currentUserId is not null ? await UsiReadService.GetStateAsync(StoryId) : null;
         _isAuthor = _currentUserId.HasValue && Story.AuthorId == _currentUserId;
         _isLoading = false;
     }

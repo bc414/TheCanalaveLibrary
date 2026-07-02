@@ -380,3 +380,23 @@ Convention for the route-dispatcher pattern recorded in `layer3-logic.md`
 - The commented-out `[NotMapped] IReadOnlyCollection<IStoryTag> StoryTags => StoryTags.ToList();` in
   `Story.cs` would have been infinitely recursive — correctly left disabled; the explicit-interface version
   is the live one.
+
+## L4.5-Browser verification (2026-07-01) — F4 + F5 → Stage 5, one bug fixed same-session
+
+Real-form pass as TestUser: `/story/new` (title, short desc, Quill long description, character
+typeahead → Cynthia w/ Primary priority row, setting → Canalave City, genre → Adventure) →
+Create Story landed on `/story/{id}/edit` with all values retained → title edit → Save Changes →
+story page shows updated title, tags, and description. Discover cards and story-page display (F5)
+exercised across the seeded corpus and the newly created story.
+
+**Bug fixed:** `CreateStoryAsync` never stamped `PublishedDate`/`LastUpdatedDate` (the mapper
+covers only `IEditableStoryProperties`), so UI-created stories carried `DateTime.MinValue` →
+Postgres `-infinity` → story pages showed "Published Jan 1, 0001". Fixed: server-stamps both at
+create (like `AuthorId`) and bumps `LastUpdatedDate` in `UpdateStoryAsync`. Verified via psql
+after a browser round-trip.
+
+**Coverage exception:** the cover-art `InputFile` → `IImageStorageService` browser interaction
+could not be driven (browser-automation file-upload API mismatch in this session's tooling —
+not an app defect); the storage service itself is Integration-covered and was WU12
+endpoint-verified. Re-verify the InputFile wiring when a browser pass with working file upload
+is available.

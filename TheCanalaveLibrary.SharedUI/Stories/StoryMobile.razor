@@ -57,6 +57,15 @@
             <span class="text-xs text-(--color-text-muted)">@WordCountDisplay</span>
         </div>
 
+        @* Interaction panel — Detail context; mirrors StoryDesktop (mounted 2026-07-01, see there). *@
+        @if (CurrentUserId is not null)
+        {
+            <UserStoryInteractionPanel StoryId="@Story.StoryId"
+                                       State="@UsiState"
+                                       Context="UserStoryInteractionDisplayContext.Detail"
+                                       IsOwnStory="@IsAuthor" />
+        }
+
         @* Tag chips — sprite-resolved, read-only (no OnRemove); includes character chips *@
         @if (Story.Tags.Count > 0)
         {
@@ -130,6 +139,9 @@
     [Parameter, EditorRequired] public IReadOnlyList<ChapterListEntryDto> Chapters { get; set; } = [];
     [Parameter] public int? CurrentUserId { get; set; }
     [Parameter] public bool IsAuthor { get; set; }
+
+    /// <summary>Viewer's interaction state, loaded by StoryPage (null = anonymous/all-false).</summary>
+    [Parameter] public UserStoryInteractionStateDto? UsiState { get; set; }
 
     private bool _coverArtFailed;
 

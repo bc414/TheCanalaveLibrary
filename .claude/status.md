@@ -3,7 +3,14 @@
 Dashboard only. Stage values per CLAUDE.md (1–6 or N/A). Rows are the dependency-ordered
 features from `grid_axes.md`, grouped by folder cluster. Columns:
 
-`L1 | L2 | L3-Logic | L3.5-Structure | L4-Style | L5 | L6 | L7 | L8`
+`L1 | L2 | L3-Logic | L3.5-Structure | L4-Style | L4.5-Browser | L5 | L6 | L7 | L8`
+
+L4.5-Browser is the end-to-end browser-verification band (real circuit, per
+`run-server/SKILL.md` "Browser-based debugging & verification"): Stage 5 = the feature was
+driven in a real browser and behaves as its audit file intends; Stage 1 = not yet
+browser-verified (or prerequisite layers unbuilt); N/A = no browser-facing surface (workers,
+pure seed data). L4-Style may still be Stage 1 while L4.5 is 5 — visual polish is a separate
+sign-off; L4.5 only demands the feature be *usable*.
 
 Global conditions affecting many cells — kept terse; detail lives at the pointer, not here:
 - **Spec supersedes stale code.** Most Stage-4 cells are stale-code traps (build to spec, code is salvage), not two-way adjudications. Detail: `audit-summary.md` §0/§3.
@@ -24,67 +31,67 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 - **First browser-debugging wave done (WU-BrowserPass, 2026-07-01).** Read context now factory-per-method (`AddDbContextFactory`, scoped — supersedes spec §6.6, plain `AddDbContext` remains for the write context); all 987 Tailwind token classes converted to v4 `-(--token)` syntax; chapter editor, comment composer, dev-login fixes. All fixed same-session — no grid changes. Login, navigation, authoring→reading, social, and mod flows verified in a real browser. `dotnet test` 1238/1238 (355 Integration incl. 3 new concurrency regressions). Detail: `workplan.md` WU-BrowserPass; `layer2-services.md` §"Read-Context Concurrency"; `layer4-style.md` §"Consuming tokens in classes"; `canalave-conventions/debugging.md`.
 - **Desktop top bar built (2026-07-01).** `DesktopLayout`'s placeholder sidebar/stub bar replaced with a real sticky nav (brand, Home/Discover/Tags/Groups, `CreateMenu`, `UserMenu` profile dropdown); no dedicated grid row (navigation is persistent-layout chrome, not a tracked feature). Detail: `layer4-style.md` Pattern Accumulation "`DesktopLayout` top bar / `UserMenu` / `CreateMenu`".
 
-| # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L5 | L6 | L7 | L8 |
-|---|---------|--------|----|----|----------|-------------|----------|----|----|----|----|
-| 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | N/A | N/A | N/A | N/A |
-| 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |
-| 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
-| 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
-| 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
-| 9 | Series & Ordering | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
-| 12 | Story Tagging | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
-| 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
-| 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
-| 15 | Saved Tag Selections | Tags | 5 | 2 | 2 | 2 | 1 | 2 | N/A | N/A | N/A |
-| 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
-| 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 18 | User Following | Following | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 19 | Vouches | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 20 | User Profile Editing | Profiles | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
-| 21 | User Profile Display | Profiles | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
-| 22 | User Stats | Profiles | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
-| 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 25 | Comment Likes | Comments | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
-| 26 | Spoiler Comments | Comments | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
-| 27 | Recommendation Submission | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 28 | Recommendation Display | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
-| 29 | Hidden Gem Management | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
-| 30 | Recommendation Attribution | Recommendations | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
-| 31 | Search Page | Discovery | N/A | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
-| 32 | Full-Text Search | Discovery | 5 | 5 | 5 | 5 | 1 | 2 | 5 | N/A | N/A |
-| 33 | Manual Tree Search | Discovery | N/A | 2 | 2 | 2 | 1 | 2 | 2 | N/A | N/A |
-| 34 | Tag Directory | Discovery | N/A | 5 | 5 | 5 | 1 | 2 | N/A | N/A | N/A |
-| 35 | Blog Post Writing | BlogPosts | 5 | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
-| 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 2 | N/A | N/A | N/A |
-| 37 | Polls | BlogPosts | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
-| 38 | Group Management | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
-| 40 | Group Display | Groups | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
-| 41 | Notification Generation | Notifications | 5 | 5 | N/A | N/A | N/A | N/A | 2 | N/A | N/A |
-| 42 | Notification Display | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
-| 43 | Notification Settings | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |
-| 44 | Reading Progress Tracking | Chapters | 5 | 5 | 5 | 5 | N/A | N/A | N/A | 2 | N/A |
-| 45 | View Count Tracking | Stories | 5 | 2 | 2 | N/A | N/A | 2 | N/A | 2 | N/A |
-| 46 | Content Reporting | Moderation | 5 | 5 | 5 | 5 | 3 | 2 | 5 | N/A | N/A |
-| 47 | Moderation Queue & Actions | Moderation | 5 | 5 | 5 | 5 | 3 | N/A | 5 | N/A | N/A |
-| 48 | Story Approval Workflow | Moderation | 5 | 5 | 5 | 5 | 3 | N/A | N/A | N/A | N/A |
-| 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | N/A | 2 | N/A | N/A |
-| 50 | Badge System | Badges | 5 | 5 | 5 | 5 | 1 | 2 | N/A | N/A | N/A |
-| 51 | Custom Lists | CustomLists | 5 | 2 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
-| 52 | User Account Deletion | Identity | 5 | 5 | 5 | 5 | 1 | N/A | N/A | N/A | N/A |
-| 53 | Story Import & Verification | Moderation | 5 | 2 | 2 | 2 | 1 | N/A | N/A | N/A | N/A |
-| 54 | Content Download/Export | Export | N/A | 2 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| 55 | Community Spotlight | Spotlight | 1 | 1 | 1 | 1 | 1 | N/A | N/A | N/A | N/A |
-| 56 | Feature Contributions | BlogPosts | 5 | 2 | 2 | 2 | 1 | N/A | N/A | N/A | N/A |
-| 57 | Notification Cleanup Worker | Notifications | N/A | 2 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| 58 | UserStat Recalculation Worker | Profiles | N/A | 2 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| 59 | Automatic Tree Search | Discovery | N/A | 2 | 2 | 2 | 1 | 2 | N/A | N/A | 2 |
-| 60 | Tree Search Data Mart Worker | Discovery | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | 2 |
-| 61 | Also Favorited / Also Recommended | Discovery | N/A | 2 | 2 | 2 | 1 | 2 | 2 | 2 | 2 |
-| 62 | SiteDailyStat Worker | Moderation | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | 2 |
+| # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L4.5-Browser | L5 | L6 | L7 | L8 |
+|---|---------|--------|----|----|----------|-------------|----------|--------------|----|----|----|----|
+| 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A | N/A |
+| 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A | N/A |
+| 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A | N/A |
+| 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 2 | N/A | N/A |
+| 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
+| 9 | Series & Ordering | Stories | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A | N/A |
+| 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A | N/A |
+| 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 2 | N/A | N/A |
+| 12 | Story Tagging | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A | N/A |
+| 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
+| 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
+| 15 | Saved Tag Selections | Tags | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A | N/A |
+| 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
+| 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 18 | User Following | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 19 | Vouches | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 20 | User Profile Editing | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
+| 21 | User Profile Display | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
+| 22 | User Stats | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
+| 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 25 | Comment Likes | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
+| 26 | Spoiler Comments | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
+| 27 | Recommendation Submission | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 28 | Recommendation Display | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
+| 29 | Hidden Gem Management | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
+| 30 | Recommendation Attribution | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
+| 31 | Search Page | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 2 | 2 | N/A | N/A |
+| 32 | Full-Text Search | Discovery | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 5 | N/A | N/A |
+| 33 | Manual Tree Search | Discovery | N/A | 2 | 2 | 2 | 1 | 1 | 2 | 2 | N/A | N/A |
+| 34 | Tag Directory | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A | N/A |
+| 35 | Blog Post Writing | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 2 | N/A | N/A |
+| 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A | N/A |
+| 37 | Polls | BlogPosts | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
+| 38 | Group Management | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
+| 40 | Group Display | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
+| 41 | Notification Generation | Notifications | 5 | 5 | N/A | N/A | N/A | 5 | N/A | 2 | N/A | N/A |
+| 42 | Notification Display | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A | N/A |
+| 43 | Notification Settings | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A | N/A |
+| 44 | Reading Progress Tracking | Chapters | 5 | 5 | 5 | 5 | N/A | 5 | N/A | N/A | 2 | N/A |
+| 45 | View Count Tracking | Stories | 5 | 2 | 2 | N/A | N/A | 1 | 2 | N/A | 2 | N/A |
+| 46 | Content Reporting | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 2 | 5 | N/A | N/A |
+| 47 | Moderation Queue & Actions | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | 5 | N/A | N/A |
+| 48 | Story Approval Workflow | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | N/A | N/A | N/A |
+| 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | 5 | N/A | 2 | N/A | N/A |
+| 50 | Badge System | Badges | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A | N/A |
+| 51 | Custom Lists | CustomLists | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
+| 52 | User Account Deletion | Identity | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A | N/A |
+| 53 | Story Import & Verification | Moderation | 5 | 2 | 2 | 2 | 1 | 1 | N/A | N/A | N/A | N/A |
+| 54 | Content Download/Export | Export | N/A | 2 | N/A | N/A | N/A | 1 | N/A | N/A | N/A | N/A |
+| 55 | Community Spotlight | Spotlight | 1 | 1 | 1 | 1 | 1 | 1 | N/A | N/A | N/A | N/A |
+| 56 | Feature Contributions | BlogPosts | 5 | 2 | 2 | 2 | 1 | 1 | N/A | N/A | N/A | N/A |
+| 57 | Notification Cleanup Worker | Notifications | N/A | 2 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| 58 | UserStat Recalculation Worker | Profiles | N/A | 2 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| 59 | Automatic Tree Search | Discovery | N/A | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A | 2 |
+| 60 | Tree Search Data Mart Worker | Discovery | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | 2 |
+| 61 | Also Favorited / Also Recommended | Discovery | N/A | 2 | 2 | 2 | 1 | 1 | 2 | 2 | 2 | 2 |
+| 62 | SiteDailyStat Worker | Moderation | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | 2 |

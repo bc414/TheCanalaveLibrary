@@ -368,3 +368,23 @@ datalist, list mutation, inline badges, outer margin. The build-to-spec path is 
 `ITagReadService` impl + register it — **done, WU3** — (b) extract a `TagChip` leaf (WU4), (c) rebuild
 `TagSelector` around Blazored.Typeahead + `OnSelectionChanged` (WU11). That makes it the Phase-1 atom
 several other features wait on.
+
+## L4.5-Browser verification (2026-07-01) — F11 + F12 + F13 + F14 → Stage 5, two bugs fixed same-session
+
+- **F11:** as AdminUser on `/tags`, hover ✎/✕ mod controls appear; TagEditorForm modal opens; edited
+  Adventure's description and saved (psql-verified). Two bugs fixed:
+  1. `TagDirectoryDesktop.razor` passed `ServerError="_editorError"` — missing `@`, so the literal
+     text "_editorError" rendered in red on every editor open (string-typed params take attribute
+     text literally; the neighboring non-string params compile as expressions — the exact
+     `cross-cutting.md` "Razor Attribute Quoting" pitfall recurring).
+  2. `TagEditorForm`'s Tag Type `<option>` values were numeric shorts while `@bind` on a
+     `TagTypeEnum` property serializes the enum NAME — no option matched, so the select rendered
+     blank when editing an existing tag. Options now use `value="@type"`.
+- **F12:** structured tagging driven through `/story/new` (character typeahead + priority row,
+  setting, genre; persisted and displayed on the story page — see Stories audit note).
+- **F13:** TagChip display verified across directory/cards/story pages (type-colored chips).
+  Sprite-bearing chips not visually exercised — seeded tags carry no `SpriteIdentifier` (sprite
+  URL-building itself is Unit-covered; the visual band belongs to Feature 3's pass).
+- **F14:** on `/discover`, genre typeahead → Adventure chip → Apply Filters narrowed the deck to
+  exactly the three Adventure-tagged stories; ✕ removal renders. AND/OR toggle + interaction
+  filters present (interaction-exclusion semantics exercised under F16/F17's pass).

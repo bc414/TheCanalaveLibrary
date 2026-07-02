@@ -41,6 +41,25 @@
 - **L4 — Stage 1.** Visual sign-off pending. UI renders but full design-token / responsive pass not done.
 - **L5 — Stage 2.** Client-side badge service deferred (batch post-MVP).
 
+- **L4.5-Browser verification (2026-07-02) — Feature 50 → L4.5=5.** Browser-verifiable surface
+  exercised as TestUser against the seeded dev DB:
+  - Empty state: `/settings` Badges section rendered "You haven't earned any badges yet."
+  - Curation: after awarding `Recommender` (direct `user_badges` insert — the award *trigger*
+    thresholds are Integration-covered by `BadgeServiceTests` + the Tastemaker chain tests, and need
+    10 distinct reader successes, impractical to drive by hand), the Visible section rendered the
+    badge with ↑/↓/Hide; Hide → Save persisted `DisplayOrder=0`, Show → Save restored `1`
+    (psql-verified both ways).
+  - Display: the `UserCard` on TestUser's recommendation (story 1 `RecommendationSection`) projected
+    the curated badge (`<img title="Recommender">`) — the card-producer projection works live.
+  - **Resilience fix (same-session):** badge icon assets are provisioned out-of-band like sprites,
+    and none exist in dev (`wwwroot/icons/` absent), so badge imgs rendered broken-image glyphs.
+    `UserCard` and `BadgeSettingsForm` imgs now carry `onerror="this.style.display='none'"` —
+    consistent with the optimistic-asset philosophy; the settings rows still show name+description
+    text. Icon provisioning itself remains an out-of-band task.
+  - `DataSeeder` now awards TestUser the `Recommender` badge (`DisplayOrder=1`) so the curation UI
+    and card badge row render a populated state on a fresh DB.
+  - L4 stays 1 (visual sign-off pending) — nothing unusable found.
+
 ## WU36 Settled Decisions (2026-06-25)
 
 **Mechanism:** synchronous inline, best-effort. Badge award fires in the write service that triggers

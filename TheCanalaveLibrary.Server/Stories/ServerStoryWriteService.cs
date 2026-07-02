@@ -24,6 +24,11 @@ public class ServerStoryWriteService(
 
         Story newStoryDB = newStoryDTO.ToStory();
         newStoryDB.AuthorId = authorId;
+        // Server-stamped like AuthorId — the mapper deliberately covers only IEditableStoryProperties,
+        // so without these the entity defaults (DateTime.MinValue → Postgres "-infinity") reached the
+        // DB and story pages showed "Published Jan 1, 0001" (browser pass 2026-07-01).
+        newStoryDB.PublishedDate = DateTime.UtcNow;
+        newStoryDB.LastUpdatedDate = DateTime.UtcNow;
         // Slug is server-only and never client-editable (not on CreateStoryDTO at all) — settled WU12.
         newStoryDB.StoryDetail.Slug = await GenerateUniqueSlugAsync(newStoryDTO.Title);
 
@@ -71,6 +76,8 @@ public class ServerStoryWriteService(
         string? oldCoverPath = storyToUpdate.StoryListing?.CoverArtRelativeUrl;
 
         storyToUpdate.UpdateStoryEditableProperties(dto);
+        // Server-stamped on every successful property edit (same rationale as the create stamp above).
+        storyToUpdate.LastUpdatedDate = DateTime.UtcNow;
 
         await writeDb.SaveChangesAsync();
 

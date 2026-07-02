@@ -196,3 +196,17 @@ complete parts of the model.
 - **L2 — Stage 2.** `IHostedService` deleting read notifications older than 60 days. Pure background
   computation (Layer 2 *is* the worker). Nothing to clean until data ages — naturally sorts late. All
   other layers **N/A**.
+
+## L4.5-Browser verification (2026-07-01/02) — F41 + F42 + F43 → Stage 5
+
+- **F41 generation via real seams (psql-verified after UI actions):** Follow → NewFollowerOnYou
+  (type 30) to the followee; Vouch → NewVouchOnYou (type 32); recommender's Hidden Gem designation
+  → HiddenGem (type 23) to the story author. Drop-self/dedup paths remain Integration-covered.
+- **F42 display:** bell badge counts unread; flyout preview with unread dots; "Mark all read"
+  clears badge + dots (verified in the first browser wave); page composes presenter text with
+  live enrichment (`SourceUserName` resolved: "AuthorAlpha is now following you"); By date ↔
+  By category toggle groups under category headers with counts; Newest/Oldest-unread orderings
+  render.
+- **F43 settings:** grouped per-type grid renders; toggling Site Announcement's Email checkbox
+  wrote the sparse override row (`user_notification_settings (1, 0, email_enabled=t)`) — the
+  sparse upsert model live in-browser.

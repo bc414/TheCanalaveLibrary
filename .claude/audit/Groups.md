@@ -159,3 +159,15 @@ Root cause: `GroupCard` links (`/group/{id}/{*slug}`) can navigate in-place if r
 Covering tier: **manual boot gate** (no bUnit test — GroupPage injects too many services for a
 minimal bUnit render; behavior listed in E2E checklist). Convention in
 `layer3-logic.md` §"Route-parameter dispatchers reload in `OnParametersSetAsync`".
+
+## L4.5-Browser verification (2026-07-01/02) — F38 + F39 + F40 → Stage 5
+
+F38: created a group via `/group/new` (name + SFW Only audience preset radio) → landed on the
+slugged group page as Admin with Edit Group + Manage-folders affordances; earlier joined the
+seeded standard group as a member (member count bumped, Member/Leave state, + Add Story /
++ New Post affordances appeared). F39/F40: group detail renders the folder tree (parent + nested
+child with rating cap), group stories as cards, the group blog post, and the group comment wall
+(same CommentSection contract as chapters); audience filtering verified — the Mature group is
+invisible to a mature-off viewer in `/groups`, and audience badges (Standard/SFW Only/Mature)
+derive correctly from the rating pairs. Deeper folder management + add-story-to-group writes
+remain Integration-covered (GroupServiceTests) rather than browser-driven.

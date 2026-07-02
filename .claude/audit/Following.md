@@ -102,3 +102,14 @@ services, no components built.
   `ix_vouches_vouched_user_id` covers incoming-vouch lookups. The spec's old filtered-index pair on
   `followed_users` (`WHERE is_vouched = true`) no longer applies — see
   `skills/canalave-conventions/layer6-indexes.md` "Vouch Indexes" (updated to match).
+
+## L4.5-Browser verification (2026-07-01) — F18 + F19 → Stage 5
+
+As TestUser on ModUser's profile: Follow button → active "Following" + alerts-bell toggle appears;
+`followed_users (1,3, receive_alerts=t)` via psql; recipient got a NewFollowerOnYou (type 30)
+notification through the real WU22 seam (Feature 41 generation evidence). Vouch: button gated on
+IsFollowing per WU21; dialog shows remaining-slots count (respected the seeded vouch), optional
+rich-text note; Submit persisted the sanitized note (`<p>…</p>` via psql), button flipped to
+"✓ Vouched", recipient got a NewVouchOnYou (type 32) notification. **Minor staleness (not
+unsound):** VouchButton's IsFollowing comes from page-load RelationshipState, so it appears only
+after a reload when the user follows and vouches in one visit — polish candidate for a later WU.

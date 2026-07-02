@@ -28,7 +28,12 @@
             <hr/>
             <ValidationSummary class="text-danger" role="alert"/>
             <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username" aria-required="true" placeholder="name@example.com"/>
+                <InputText @bind-Value="Input.UserName" id="Input.UserName" class="form-control" autocomplete="username" aria-required="true" placeholder="username"/>
+                <label for="Input.UserName">Username</label>
+                <ValidationMessage For="() => Input.UserName" class="text-danger"/>
+            </div>
+            <div class="form-floating mb-3">
+                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="email" aria-required="true" placeholder="name@example.com"/>
                 <label for="Input.Email">Email</label>
                 <ValidationMessage For="() => Input.Email" class="text-danger"/>
             </div>
@@ -72,7 +77,16 @@
     {
         var user = CreateUser();
 
-        await UserStore.SetUserNameAsync(user, Input.Email, CancellationToken.None);
+        // Site-model requirements the scaffold doesn't know about (browser pass 2026-07-01):
+        //  • ThemeId is a non-nullable FK — the scaffold's bare Activator instance carried 0 and
+        //    every registration 500'd on fk_asp_net_users_themes_theme_id. 1 = the migration-seeded
+        //    default theme (same value DataSeeder uses).
+        //  • UserName is the PUBLIC display handle (comments, profiles, messaging) and must be the
+        //    user's chosen name, never the email — the scaffold's UserName=email leaked the email
+        //    address on every public surface.
+        user.ThemeId = 1;
+
+        await UserStore.SetUserNameAsync(user, Input.UserName, CancellationToken.None);
         var emailStore = GetEmailStore();
         await emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
         var result = await UserManager.CreateAsync(user, Input.Password);
@@ -132,6 +146,12 @@
 
     private sealed class InputModel
     {
+        [Required]
+        [StringLength(32, ErrorMessage = "The {0} must be at least {2} and at max {1} characters long.", MinimumLength = 3)]
+        [RegularExpression(@"^[a-zA-Z0-9_\-]+$", ErrorMessage = "Usernames may contain letters, digits, underscores, and hyphens only.")]
+        [Display(Name = "Username")]
+        public string UserName { get; set; } = "";
+
         [Required]
         [EmailAddress]
         [Display(Name = "Email")]

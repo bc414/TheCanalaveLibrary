@@ -73,9 +73,12 @@
             <h2 class="mb-4 text-lg font-semibold text-text">
                 @(_editingTag is null ? "New Tag" : $"Edit: {_editingTag.TagName}")
             </h2>
+            @* ServerError needs @: string-typed parameters take attribute text LITERALLY (the
+               form rendered the text "_editorError" in red on every open — browser pass
+               2026-07-01). Non-string params (EditingTag/Directory) compile as expressions. *@
             <TagEditorForm Directory="Directory"
                            EditingTag="_editingTag"
-                           ServerError="_editorError"
+                           ServerError="@_editorError"
                            OnSave="HandleEditorSaveAsync"
                            OnCancel="CloseEditor" />
         </div>

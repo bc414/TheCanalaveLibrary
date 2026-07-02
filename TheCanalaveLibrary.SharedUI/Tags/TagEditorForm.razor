@@ -24,9 +24,12 @@
             <select id="tag-type"
                     class="mt-1 w-full rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text"
                     @bind="_model.TagTypeId">
+                @* value must be the enum NAME: @bind on a TagTypeEnum property serializes the
+                   current value as its name ("Genre"), so numeric option values never match and
+                   the select rendered BLANK when editing an existing tag (browser pass 2026-07-01). *@
                 @foreach (TagTypeEnum type in Enum.GetValues<TagTypeEnum>())
                 {
-                    <option value="@((short)type)">@type</option>
+                    <option value="@type">@type</option>
                 }
             </select>
         </div>

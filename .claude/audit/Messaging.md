@@ -117,6 +117,31 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
   `cross-cutting.md` §"Layout-chrome concurrency". **Verified:** browser (authenticated home
   renders with both chrome components, no 500) + Integration `ConcurrentReadAccessTests`.
 
+- **L4.5-Browser verification (2026-07-02) — Feature 49 → L4.5=5.** Full messaging loop driven in a
+  real browser as TestUser against the seeded dev DB:
+  - Conversation list rendered subject/preview/unread badge; opening the thread advanced only the
+    viewer's `LastReadTimestamp` (psql-verified) and cleared the badge.
+  - Reply via `MessageComposer` persisted (`private_messages` row) and appeared at the bottom
+    (newest-first + `flex-col-reverse`).
+  - Compose modal: recipient resolved by username, `StartConversationAsync` created the full
+    three-table graph (conversation + 2 participants + message, recipient unread), navigated to the
+    new thread.
+  - **Two bugs found & fixed same-session:**
+    1. *Literal string-parameter bindings* — `ReplyError="_replyError"`/`ComposeError="_composeError"`
+       (MessagesPage, both layout branches) and `ErrorMessage="ReplyError"`/`"ComposeError"`
+       (MessagesDesktop/MessagesMobile) passed literal text instead of the field/parameter (string
+       params take attribute text verbatim without `@`), so the thread pane permanently displayed a
+       phantom "ReplyError" alert. All six corrected to `@`-prefixed. Same bug class as the
+       TagDirectoryDesktop `ServerError` fix (see `audit/Tags.md`, 2026-07-01); a project-wide
+       `="_field"` sweep found no further instances.
+    2. *Compose modal never closed after success* — `HandleSubmitComposeAsync` navigated to
+       `/messages/{newId}` without resetting `_composeOpen`; same-route navigation reuses the page
+       instance so the modal survived into the new thread. Now closes the modal before navigating.
+  - **Observation (not a defect):** no UI affordance calls `SetArchivedAsync` — the service method
+    and the `ConversationListItem` "Archived" label exist (Integration-covered), but no
+    archive/unarchive control is surfaced. The audit scope above never promised one; noting it as a
+    candidate future affordance.
+
 ### Tests (WU35, 2026-06-24)
 
 - **Unit** (`Tests.Unit/MessagingValidationsTests.cs`, 11 tests): `MessagingValidations.Validate`

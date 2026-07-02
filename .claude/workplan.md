@@ -1390,6 +1390,45 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Tool:** Sonnet in Claude Code. **Pointer:** `DataSeeder.cs` header;
   `run-server/SKILL.md` "Dev DB lifecycle"; `testing.md` DevSeed note.
 
+### WU-L45Pass — L4.5-Browser verification wave (feature-by-feature) — DONE ✓ (2026-07-02)
+- **Cells:** new `L4.5-Browser` column added to the `status.md` grid (legend there defines the
+  band); every feature with L1–L3.5 at Stage 5 was driven end to end in a real browser against the
+  seeded dev DB and flipped to L4.5=5: **F1, 3, 4–7, 11–14, 16–32, 34–36, 38–44, 46–50, 52**
+  (36 features across 16 clusters). Remaining L4.5=1 rows are features whose earlier layers are
+  unbuilt/blocked; N/A rows have no browser surface (workers, pure seed).
+- **Method:** per cluster — drive the audit file's intended flows in Chrome (claude-in-chrome MCP),
+  verify every mutation against psql ground truth, fix bugs same-session (per CLAUDE.md rule), then
+  flip the grid number and write the narrative into the cluster's audit Stage note. Verification
+  narratives live in the per-cluster audit files (Identity, Stories, Chapters, Tags,
+  UserStoryInteractions, Following, Profiles, Comments, Recommendations, Discovery, BlogPosts,
+  Groups, Notifications, Moderation, Messaging, Sprites, Badges — all dated 2026-07-01/02).
+- **Bugs found & fixed (browser-only classes, invisible to the three automated tiers):**
+  1. Email login broken for every account (`Login.razor` passed email as username).
+  2. Registration 500 (`ThemeId` never set → FK violation) + emails leaked as public usernames
+     (dedicated Username field added).
+  3. Scoped-CSS bundle href 404 (`App.razor` missing `.Server` in the bundle name) — permanent
+     error banner on Identity pages.
+  4. Story `PublishedDate`/`LastUpdatedDate` never stamped (showed "Jan 1, 0001").
+  5. Literal string-parameter bindings (missing `@`): `TagDirectoryDesktop.ServerError`, then the
+     same class ×6 in Messaging (`ReplyError`/`ComposeError` chains) — phantom error text always
+     visible. Project-wide sweep found no further instances.
+  6. `TagEditorForm` enum `<option>` values serialized numerically — Tag Type select rendered blank.
+  7. USI Detail-context panel was built + bUnit-tested but mounted nowhere — Favorite/Follow/
+     Complete unreachable in the entire UI; mounted on StoryPage→StoryDesktop/Mobile with
+     dispatcher-loaded state (N+1 rule).
+  8. `DataSeeder` stamped `PostApprovalStatus = status` — approval of the seeded pending stories
+     would have been a silent no-op (production submit path was already validation-guarded).
+  9. Compose-conversation modal never closed after a successful send (same-route navigation reuses
+     the page instance).
+  10. Badge icon imgs rendered broken-image glyphs (assets are out-of-band and absent in dev) —
+      `onerror` hide added to `UserCard`/`BadgeSettingsForm`.
+- **Seed additions:** `Bulbasaur` character tag with `SpriteIdentifier="bulbasaur"` (matches the
+  checked-in dev asset; the sprite render+fallback path is exercisable on a fresh DB) and one
+  earned `Recommender` badge for TestUser (curation UI + card badge row render populated).
+- **Verified:** `dotnet test` 1238/1238 green (437 Unit + 446 RazorComponents + 355 Integration).
+- **Tool:** Sonnet in Claude Code. **Pointer:** `status.md` L4.5 legend; per-cluster audit Stage
+  notes; `canalave-conventions/debugging.md` for the methodology.
+
 ---
 
 ## Blocked / deferred — genuine Stage-1 intent gaps (no sequence number)

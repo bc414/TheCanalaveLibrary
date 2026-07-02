@@ -77,12 +77,15 @@ or `SecurityStampValidator`. Use a `TestAppFactory : WebApplicationFactory<Progr
 Everything else (real service registrations, Identity) stays wired as production.
 
 **`DevSeed=Minimal` pin:** `TestAppFactory` also overrides config key `DevSeed` to `Minimal`
-(users + roles only). Under the `Development` environment the `DataSeeder` runs on every factory
-boot — i.e. before *every* test, because Respawn wipes `TestUser` so the seeder's guard never
-trips — and the Full showcase inventory would add seconds per test. Unlike the connection string
-(read eagerly, hence the descriptor-replacement dance above), the seeder reads `IConfiguration`
-lazily at run time, so a plain `ConfigureAppConfiguration` in-memory override works. Tests still
-must not depend on seeded rows (the rule above) — including the Minimal-mode `TestUser`/`AdminUser`.
+(ONLY `TestUser` + `AdminUser` + roles — matching the pre-rewrite seeder's per-test cost; each
+additional user is a slow PBKDF2 hash multiplied by every test). Under the `Development`
+environment the `DataSeeder` runs on every factory boot — i.e. before *every* test, because
+Respawn wipes `TestUser` so the seeder's guard never trips — and the Full showcase inventory
+would add seconds per test (measured: Full-in-tests pushed the tier from ~2m20s to ~3m45s even
+with just 5 extra users). Unlike the connection string (read eagerly, hence the
+descriptor-replacement dance above), the seeder reads `IConfiguration` lazily at run time, so a
+plain `ConfigureAppConfiguration` in-memory override works. Tests still must not depend on seeded
+rows (the rule above) — including the Minimal-mode `TestUser`/`AdminUser`.
 
 ## What stays manual (out of scope for automated tests)
 

@@ -105,3 +105,13 @@ auth services; listed in E2E checklist). Convention in
   post-MVP work-unit (no sequence number yet). `FeatureContribution` entity, SetNull FKs, `DbSet`,
   and `BaseBlogPost.FeatureContributions` navigation property remain as-is (L1 Stage 5, unchanged).
   Only L2+ implementation is deferred. See `forward_plan.md` "WU31 Blog Post settled decisions."
+
+## L4.5-Browser verification (2026-07-02) — F35 + F36 → Stage 5
+
+F35: created a post via `/blog/new` (title + Quill body, rating select, Linked Story dropdown
+correctly listing only the author's own stories) → landed on the post page as a Draft (author
+sees own drafts per the includeUnpublished rule) → `/blog/{id}/edit` round-trip → Publish checkbox
++ Save → `is_published=t` (psql). F36: post page renders title/author/date/rating/draft badge,
+body, like affordance, and the comment section; seeded published+draft posts behave per the
+author-visibility rules on the profile Blog tab. (Post-save the edit page stays put rather than
+redirecting to the post — mild UX polish candidate, not unsound.)

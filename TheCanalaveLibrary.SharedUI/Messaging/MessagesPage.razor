@@ -26,11 +26,11 @@ else if (DeviceService.IsMobile())
                     Thread="EffectiveThread"
                     BusySendReply="_replying"
                     BusyLoadOlder="_loadingOlder"
-                    ReplyError="_replyError"
+                    ReplyError="@_replyError"
                     ComposeIsOpen="_composeOpen"
                     ComposePreset="_composePreset"
                     ComposeBusy="_composeBusy"
-                    ComposeError="_composeError"
+                    ComposeError="@_composeError"
                     OnSendReply="HandleSendReplyAsync"
                     OnLoadOlderMessages="HandleLoadOlderAsync"
                     OnNewConversation="HandleNewConversation"
@@ -44,11 +44,11 @@ else
                      Thread="EffectiveThread"
                      BusySendReply="_replying"
                      BusyLoadOlder="_loadingOlder"
-                     ReplyError="_replyError"
+                     ReplyError="@_replyError"
                      ComposeIsOpen="_composeOpen"
                      ComposePreset="_composePreset"
                      ComposeBusy="_composeBusy"
-                     ComposeError="_composeError"
+                     ComposeError="@_composeError"
                      OnSendReply="HandleSendReplyAsync"
                      OnLoadOlderMessages="HandleLoadOlderAsync"
                      OnNewConversation="HandleNewConversation"
@@ -275,6 +275,12 @@ else
 
             int newId = await WriteService.StartConversationAsync(
                 new StartConversationDto(recipient.UserId, args.Subject, args.MessageHtml));
+
+            // Close the modal before navigating — same-route navigation reuses this component
+            // instance, so _composeOpen survives into the new thread view otherwise
+            // (found in the L4.5 browser pass).
+            _composeOpen = false;
+            _composePreset = null;
 
             // Navigate to the new thread — page will reload and show the fresh conversation.
             Nav.NavigateTo($"/messages/{newId}");

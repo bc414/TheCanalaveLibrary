@@ -107,6 +107,29 @@ SoftHides_DropsFromPublicQuery_VisibleWithIgnoreFilter` corrected to use `ReadOn
 the public-visibility assertion (was using write context, which is now unfiltered). Tests: Integration tier,
 all 1232 pass. See `audit/Stories.md` §"Filter revamp Stage note" for the full cross-cutting narrative.
 
+**Stage note (L4.5-Browser verification — 2026-07-02, Features 46/47/48 → L4.5=5):** full
+report→claim→resolve and approve/reject cycles driven in a real browser against the seeded dev DB.
+- **F46:** report filed on a chapter comment via `ReportDialog` (reason select + notes + submit);
+  `reports` row verified in psql (reporter/status/notes correct).
+- **F47:** `/mod/reports` as ModUser listed all three open reports; Claim → `UnderReview` +
+  `ModeratorUserId` stamped; Act panel enforced the removal-reason validation ("A removal reason is
+  required"), then Hide content → report `Resolved` (`ActionTaken` + `DateResolved` stamped), target
+  comment `IsTakenDown=t` with `TakedownReason`, `ActiveReportCount` decremented to 0, and the
+  comment no longer renders in the chapter thread. Takedown also fired the account-action
+  notification to the comment author (type 70).
+- **F48:** per-mod ContentRating scoping verified in both directions — ModUser
+  (`ShowMatureContent=f`) saw only the E-rated pending story; AdminUser saw both. Approve →
+  `StoryStatusId = PostApprovalStatus` (InProgress) + `StoryApproved` notification (type 75) to the
+  author; Reject → validation requires a reason, then `Rejected` + `TakedownReason`/`TakedownDate`
+  stamped + `StoryRejected` notification (type 71).
+- **Seeder bug found & fixed same-session:** `DataSeeder` stamped `PostApprovalStatus = status` for
+  every story, making the two PendingApproval seeds self-referential (approval would have been a
+  silent no-op). Seeder now maps PendingApproval → InProgress; live rows patched via psql. The
+  production submit path was already sound (`CanSubmitForApproval` requires a resolved status —
+  Unit-covered; approve semantics Integration-covered by `ApproveStoryAsync_SetsPostApprovalStatus_
+  NotifiesAuthor`).
+- L4 stays 3 (functional styling, not design-reviewed) — nothing unusable found.
+
 ## Feature 53 — Story Import & Verification (→ WU39, deps WU34)
 
 **Note:** Story import and import verification are **split into WU39** (after WU34). `/mod/submissions`'s

@@ -34,7 +34,9 @@
                         if (b is null) continue;
                         int idx = i; // capture by value, not loop variable, to avoid lambda closure issue
                         <div class="flex items-center gap-3 rounded-md px-2 py-1.5">
-                            <img src="@b.IconUrl" alt="" title="@b.DisplayName" class="size-6 shrink-0" loading="lazy" />
+                            @* Badge icons are provisioned out-of-band; hide on miss (L4.5 pass). *@
+                            <img src="@b.IconUrl" alt="" title="@b.DisplayName" class="size-6 shrink-0" loading="lazy"
+                                 onerror="this.style.display='none'" />
                             <div class="flex min-w-0 flex-1 flex-col">
                                 <span class="text-sm font-medium text-(--color-text)">@b.DisplayName</span>
                                 @if (b.Description is not null)
@@ -72,7 +74,9 @@
                     {
                         string key = b.BadgeKey;
                         <div class="flex items-center gap-3 rounded-md px-2 py-1.5 opacity-50">
-                            <img src="@b.IconUrl" alt="" title="@b.DisplayName" class="size-6 shrink-0 grayscale" loading="lazy" />
+                            @* Badge icons are provisioned out-of-band; hide on miss (L4.5 pass). *@
+                            <img src="@b.IconUrl" alt="" title="@b.DisplayName" class="size-6 shrink-0 grayscale" loading="lazy"
+                                 onerror="this.style.display='none'" />
                             <div class="flex min-w-0 flex-1 flex-col">
                                 <span class="text-sm font-medium text-(--color-text)">@b.DisplayName</span>
                                 @if (b.Description is not null)
