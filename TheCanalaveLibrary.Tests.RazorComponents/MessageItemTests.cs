@@ -12,7 +12,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 ///
 /// <b>Tier:</b> RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class MessageItemTests : TestContext
+public class MessageItemTests : BunitContext
 {
     private static MessageDto OwnMessage(string html = "<p>My text</p>") =>
         new(MessageId: 1,
@@ -39,7 +39,7 @@ public class MessageItemTests : TestContext
     [Fact]
     public void MessageItem_OwnMessage_UsesFlexRowReverse()
     {
-        IRenderedComponent<MessageItem> cut = RenderComponent<MessageItem>(p => p
+        IRenderedComponent<MessageItem> cut = Render<MessageItem>(p => p
             .Add(c => c.Message, OwnMessage()));
 
         // Outer flex container should use flex-row-reverse for right-side bubble alignment.
@@ -50,7 +50,7 @@ public class MessageItemTests : TestContext
     [Fact]
     public void MessageItem_OwnMessage_DoesNotShowSenderUsername()
     {
-        IRenderedComponent<MessageItem> cut = RenderComponent<MessageItem>(p => p
+        IRenderedComponent<MessageItem> cut = Render<MessageItem>(p => p
             .Add(c => c.Message, OwnMessage()));
 
         // Own messages don't repeat the username (it's you).
@@ -63,7 +63,7 @@ public class MessageItemTests : TestContext
     [Fact]
     public void MessageItem_OtherMessage_DoesNotUseFlexRowReverse()
     {
-        IRenderedComponent<MessageItem> cut = RenderComponent<MessageItem>(p => p
+        IRenderedComponent<MessageItem> cut = Render<MessageItem>(p => p
             .Add(c => c.Message, OtherMessage()));
 
         cut.Markup.Should().NotContain("flex-row-reverse",
@@ -73,7 +73,7 @@ public class MessageItemTests : TestContext
     [Fact]
     public void MessageItem_OtherMessage_ShowsSenderUsername()
     {
-        IRenderedComponent<MessageItem> cut = RenderComponent<MessageItem>(p => p
+        IRenderedComponent<MessageItem> cut = Render<MessageItem>(p => p
             .Add(c => c.Message, OtherMessage()));
 
         cut.Markup.Should().Contain("Misty",
@@ -85,7 +85,7 @@ public class MessageItemTests : TestContext
     [Fact]
     public void MessageItem_RendersStoredHtmlViaRichTextView()
     {
-        IRenderedComponent<MessageItem> cut = RenderComponent<MessageItem>(p => p
+        IRenderedComponent<MessageItem> cut = Render<MessageItem>(p => p
             .Add(c => c.Message, OwnMessage("<p>Great chapter!</p>")));
 
         // RichTextView renders the MarkupString inside a div; the text should appear in DOM.
@@ -96,7 +96,7 @@ public class MessageItemTests : TestContext
     [Fact]
     public void MessageItem_OtherMessage_RendersStoredHtml()
     {
-        IRenderedComponent<MessageItem> cut = RenderComponent<MessageItem>(p => p
+        IRenderedComponent<MessageItem> cut = Render<MessageItem>(p => p
             .Add(c => c.Message, OtherMessage("<p>Looking forward to it!</p>")));
 
         cut.Markup.Should().Contain("Looking forward to it!",

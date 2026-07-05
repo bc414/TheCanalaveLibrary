@@ -156,7 +156,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IntegrationTestBase
 
         List<TagChipDto> result = await tagReadService.SearchTagChipsAsync(TagTypeEnum.Genre, capSuffix);
 
-        result.Should().HaveCountLessOrEqualTo(10, "MaxSearchResults caps the result at 10 rows");
+        result.Should().HaveCountLessThanOrEqualTo(10, "MaxSearchResults caps the result at 10 rows");
     }
 
     // ── GetTagsByTypeAsync / convenience wrappers ────────────────────────────────

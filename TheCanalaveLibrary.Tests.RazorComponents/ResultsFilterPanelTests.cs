@@ -18,7 +18,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// UserStoryInteractionFilter toggle logic (covered by UserStoryInteractionFilterTests);
 /// live visual rendering (Stage 6 sign-off required per WU8/WU13 precedent).
 /// </summary>
-public class ResultsFilterPanelTests : TestContext
+public class ResultsFilterPanelTests : BunitContext
 {
     public ResultsFilterPanelTests()
     {
@@ -33,7 +33,7 @@ public class ResultsFilterPanelTests : TestContext
     [Fact]
     public void ShowTextSearch_False_NoSearchInput()
     {
-        IRenderedComponent<ResultsFilterPanel> cut = RenderComponent<ResultsFilterPanel>(p => p
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
             .Add(c => c.ShowTextSearch, false));
 
         cut.FindAll("input[type='search']").Should().BeEmpty("ShowTextSearch=false must hide the FTS input");
@@ -42,7 +42,7 @@ public class ResultsFilterPanelTests : TestContext
     [Fact]
     public void ShowTextSearch_True_RendersSearchInput()
     {
-        IRenderedComponent<ResultsFilterPanel> cut = RenderComponent<ResultsFilterPanel>(p => p
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
             .Add(c => c.ShowTextSearch, true));
 
         cut.FindAll("input[type='search']").Should().HaveCount(1);
@@ -51,7 +51,7 @@ public class ResultsFilterPanelTests : TestContext
     [Fact]
     public void ShowTagFilter_False_NoTagSelectorPresent()
     {
-        IRenderedComponent<ResultsFilterPanel> cut = RenderComponent<ResultsFilterPanel>(p => p
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
             .Add(c => c.ShowTagFilter, false));
 
         // TagSelector renders a typeahead <input> with placeholder; absence proves TagFilter is hidden.
@@ -62,7 +62,7 @@ public class ResultsFilterPanelTests : TestContext
     [Fact]
     public void ShowInteractionFilters_False_NoCheckboxes()
     {
-        IRenderedComponent<ResultsFilterPanel> cut = RenderComponent<ResultsFilterPanel>(p => p
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
             .Add(c => c.ShowInteractionFilters, false));
 
         cut.FindAll("input[type='checkbox']").Should().BeEmpty(
@@ -72,7 +72,7 @@ public class ResultsFilterPanelTests : TestContext
     [Fact]
     public void ShowInteractionFilters_True_RendersCheckboxes()
     {
-        IRenderedComponent<ResultsFilterPanel> cut = RenderComponent<ResultsFilterPanel>(p => p
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
             .Add(c => c.ShowInteractionFilters, true));
 
         cut.FindAll("input[type='checkbox']").Count.Should().BeGreaterThan(0,
@@ -85,7 +85,7 @@ public class ResultsFilterPanelTests : TestContext
     public async Task Apply_WithDefaultState_EmitsFilterDtoWithDefaultValues()
     {
         StoryFilterDto? emitted = null;
-        IRenderedComponent<ResultsFilterPanel> cut = RenderComponent<ResultsFilterPanel>(p => p
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
             .Add(c => c.ShowTagFilter, false)
             .Add(c => c.ShowInteractionFilters, false)
             .Add(c => c.OnSearch, (StoryFilterDto dto) => emitted = dto));
@@ -104,7 +104,7 @@ public class ResultsFilterPanelTests : TestContext
     public async Task Apply_AfterTypingText_EmitsTrimmedTextQuery()
     {
         StoryFilterDto? emitted = null;
-        IRenderedComponent<ResultsFilterPanel> cut = RenderComponent<ResultsFilterPanel>(p => p
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
             .Add(c => c.ShowTagFilter, false)
             .Add(c => c.ShowInteractionFilters, false)
             .Add(c => c.OnSearch, (StoryFilterDto dto) => emitted = dto));
@@ -122,7 +122,7 @@ public class ResultsFilterPanelTests : TestContext
     [Fact]
     public void RelevanceSort_HiddenWhenNoTextQuery()
     {
-        IRenderedComponent<ResultsFilterPanel> cut = RenderComponent<ResultsFilterPanel>(p => p
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
             .Add(c => c.ShowTagFilter, false)
             .Add(c => c.ShowInteractionFilters, false)
             .Add(c => c.AvailableSorts, [DefaultSortOrder.DatePublished, DefaultSortOrder.Relevance]));
@@ -136,7 +136,7 @@ public class ResultsFilterPanelTests : TestContext
     [Fact]
     public async Task RelevanceSort_AppearsAfterTypingText()
     {
-        IRenderedComponent<ResultsFilterPanel> cut = RenderComponent<ResultsFilterPanel>(p => p
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
             .Add(c => c.ShowTagFilter, false)
             .Add(c => c.ShowInteractionFilters, false)
             .Add(c => c.AvailableSorts, [DefaultSortOrder.DatePublished, DefaultSortOrder.Relevance]));
@@ -162,7 +162,7 @@ public class ResultsFilterPanelTests : TestContext
             Page = 3  // Apply must reset to 1
         };
 
-        IRenderedComponent<ResultsFilterPanel> cut = RenderComponent<ResultsFilterPanel>(p => p
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
             .Add(c => c.ShowTagFilter, false)
             .Add(c => c.InitialFilter, initial)
             .Add(c => c.AvailableSorts, [DefaultSortOrder.DatePublished, DefaultSortOrder.Random])

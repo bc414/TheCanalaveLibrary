@@ -26,14 +26,14 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// indicator is correct: the button for CurrentPage gets <c>aria-current="page"</c> and the
 /// active-state class string ("text-white"), not the inactive-state class string.
 /// </summary>
-public class PaginationControlsTests : TestContext
+public class PaginationControlsTests : BunitContext
 {
     // ── guard: nothing rendered when there is only one page ──────────────────────
 
     [Fact]
     public void PaginationControls_WhenTotalCountFitsOnOnePage_RendersNothing()
     {
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, 1)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 5));
@@ -44,7 +44,7 @@ public class PaginationControlsTests : TestContext
     [Fact]
     public void PaginationControls_WhenTotalCountIsZero_RendersNothing()
     {
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, 1)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 0));
@@ -57,7 +57,7 @@ public class PaginationControlsTests : TestContext
     [Fact]
     public void PaginationControls_SevenPages_ShowsAllSevenWithNoEllipsis()
     {
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, 4)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 70));  // 7 pages
@@ -76,7 +76,7 @@ public class PaginationControlsTests : TestContext
     [Fact]
     public void PaginationControls_ManyPages_NearStart_ShowsPages1Through5ThenEllipsisThenLast()
     {
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, 3)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 200));  // 20 pages
@@ -104,7 +104,7 @@ public class PaginationControlsTests : TestContext
     [Fact]
     public void PaginationControls_ManyPages_MiddlePage_ShowsFirstEllipsisCurrentNeighboursEllipsisLast()
     {
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, 10)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 200));  // 20 pages, page 10 = middle
@@ -130,7 +130,7 @@ public class PaginationControlsTests : TestContext
         // This is the WU8 markup-level verification (see class summary — visual CSS is out of bUnit scope).
         const int currentPage = 3;
 
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, currentPage)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 50));  // 5 pages
@@ -144,13 +144,13 @@ public class PaginationControlsTests : TestContext
     [Fact]
     public void PaginationControls_InactivePageButtons_DoNotHaveAriaCurrent()
     {
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, 2)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 50));  // 5 pages, page 2 is current
 
         // Buttons 1, 3, 4, 5 must NOT have aria-current="page".
-        IRefreshableElementCollection<IElement> inactiveButtons = cut.FindAll("button.size-9:not([aria-current])");
+        var inactiveButtons = cut.FindAll("button.size-9:not([aria-current])");
         inactiveButtons.Select(b => b.TextContent.Trim())
             .Should().Contain(["1", "3", "4", "5"],
                 "all non-current page buttons must not carry aria-current");
@@ -159,7 +159,7 @@ public class PaginationControlsTests : TestContext
     [Fact]
     public void PaginationControls_ActivePage_HasDistinctCssTokenFromInactivePage()
     {
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, 2)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 50));
@@ -178,7 +178,7 @@ public class PaginationControlsTests : TestContext
     [Fact]
     public void PaginationControls_OnFirstPage_PreviousButtonIsDisabled()
     {
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, 1)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 50));
@@ -190,7 +190,7 @@ public class PaginationControlsTests : TestContext
     [Fact]
     public void PaginationControls_OnLastPage_NextButtonIsDisabled()
     {
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, 5)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 50));
@@ -202,7 +202,7 @@ public class PaginationControlsTests : TestContext
     [Fact]
     public void PaginationControls_OnMiddlePage_BothNavButtonsAreEnabled()
     {
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, 3)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 50));
@@ -216,7 +216,7 @@ public class PaginationControlsTests : TestContext
     [Fact]
     public void PaginationControls_RangeSummary_ShowsCorrectRange()
     {
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, 2)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 47));
@@ -235,7 +235,7 @@ public class PaginationControlsTests : TestContext
     {
         int? receivedPage = null;
 
-        IRenderedComponent<PaginationControls> cut = RenderComponent<PaginationControls>(p => p
+        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
             .Add(c => c.CurrentPage, 1)
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 50)

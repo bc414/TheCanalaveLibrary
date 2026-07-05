@@ -13,14 +13,14 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// with a profile link, optional tagline/badges, and a toggleable caret menu. All behaviours are
 /// exercisable without a host or DB.
 /// </summary>
-public class UserCardTests : TestContext
+public class UserCardTests : BunitContext
 {
     // ── username and profile link ────────────────────────────────────────────────
 
     [Fact]
     public void UserCard_RendersUsername()
     {
-        IRenderedComponent<UserCard> cut = RenderComponent<UserCard>(p =>
+        IRenderedComponent<UserCard> cut = Render<UserCard>(p =>
             p.Add(c => c.User, MakeUser(userId: 42, username: "Ash Ketchum")));
 
         cut.Markup.Should().Contain("Ash Ketchum");
@@ -29,7 +29,7 @@ public class UserCardTests : TestContext
     [Fact]
     public void UserCard_ProfileLink_PointsToCorrectHref()
     {
-        IRenderedComponent<UserCard> cut = RenderComponent<UserCard>(p =>
+        IRenderedComponent<UserCard> cut = Render<UserCard>(p =>
             p.Add(c => c.User, MakeUser(userId: 99, username: "Misty")));
 
         IElement profileLink = cut.FindAll("a[href]")
@@ -43,7 +43,7 @@ public class UserCardTests : TestContext
     [Fact]
     public void UserCard_WhenTaglineIsPresent_RendersTagline()
     {
-        IRenderedComponent<UserCard> cut = RenderComponent<UserCard>(p =>
+        IRenderedComponent<UserCard> cut = Render<UserCard>(p =>
             p.Add(c => c.User, MakeUser(username: "Brock", tagline: "Pokémon Breeder")));
 
         cut.Markup.Should().Contain("Pokémon Breeder");
@@ -52,7 +52,7 @@ public class UserCardTests : TestContext
     [Fact]
     public void UserCard_WhenTaglineIsNull_DoesNotRenderTaglineSpan()
     {
-        IRenderedComponent<UserCard> cut = RenderComponent<UserCard>(p =>
+        IRenderedComponent<UserCard> cut = Render<UserCard>(p =>
             p.Add(c => c.User, MakeUser(username: "Gary", tagline: null)));
 
         // The tagline span has class "text-muted" — should not appear when tagline is null.
@@ -64,7 +64,7 @@ public class UserCardTests : TestContext
     [Fact]
     public void UserCard_WhenAvatarUrlIsProvided_UsesProvidedUrl()
     {
-        IRenderedComponent<UserCard> cut = RenderComponent<UserCard>(p =>
+        IRenderedComponent<UserCard> cut = Render<UserCard>(p =>
             p.Add(c => c.User, MakeUser(username: "Trainer", avatarUrl: "/avatars/trainer.png")));
 
         cut.Find("img").GetAttribute("src").Should().Be("/avatars/trainer.png");
@@ -73,7 +73,7 @@ public class UserCardTests : TestContext
     [Fact]
     public void UserCard_WhenAvatarUrlIsNull_FallsBackToDefaultAvatar()
     {
-        IRenderedComponent<UserCard> cut = RenderComponent<UserCard>(p =>
+        IRenderedComponent<UserCard> cut = Render<UserCard>(p =>
             p.Add(c => c.User, MakeUser(username: "NoAvatar", avatarUrl: null)));
 
         cut.Find("img").GetAttribute("src").Should().Be("/img/default-avatar.svg",
@@ -85,7 +85,7 @@ public class UserCardTests : TestContext
     [Fact]
     public void UserCard_MenuIsClosedByDefault()
     {
-        IRenderedComponent<UserCard> cut = RenderComponent<UserCard>(p =>
+        IRenderedComponent<UserCard> cut = Render<UserCard>(p =>
             p.Add(c => c.User, MakeUser(username: "Mewtwo")));
 
         // The menu div is inside an @if (_menuOpen) block — absent when closed.
@@ -95,7 +95,7 @@ public class UserCardTests : TestContext
     [Fact]
     public async Task UserCard_ClickingCaretButton_OpensMenu()
     {
-        IRenderedComponent<UserCard> cut = RenderComponent<UserCard>(p =>
+        IRenderedComponent<UserCard> cut = Render<UserCard>(p =>
             p.Add(c => c.User, MakeUser(username: "Ditto")));
 
         IElement caretButton = cut.Find("button[aria-label='More options']");
@@ -109,7 +109,7 @@ public class UserCardTests : TestContext
     [Fact]
     public async Task UserCard_WithNoOptionalCallbacks_MenuShowsOnlyViewProfile()
     {
-        IRenderedComponent<UserCard> cut = RenderComponent<UserCard>(p =>
+        IRenderedComponent<UserCard> cut = Render<UserCard>(p =>
             p.Add(c => c.User, MakeUser(username: "Snorlax")));
 
         // Open the menu.
@@ -126,7 +126,7 @@ public class UserCardTests : TestContext
     {
         bool reportInvoked = false;
 
-        IRenderedComponent<UserCard> cut = RenderComponent<UserCard>(p => p
+        IRenderedComponent<UserCard> cut = Render<UserCard>(p => p
             .Add(c => c.User, MakeUser(username: "Villain"))
             .Add(c => c.OnReport, () => { reportInvoked = true; }));
 

@@ -30,7 +30,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// JSInterop is configured with <see cref="JSRuntimeMode.Loose"/> so that Blazored Typeahead's
 /// internal JS focus calls don't cause the test to throw.
 /// </summary>
-public class TagSelectorTests : TestContext
+public class TagSelectorTests : BunitContext
 {
     private readonly FakeTagReadService _fakeTagService = new();
 
@@ -49,7 +49,7 @@ public class TagSelectorTests : TestContext
     [Fact]
     public void TagSelector_RendersLabel()
     {
-        IRenderedComponent<TagSelector> cut = RenderComponent<TagSelector>(p => p
+        IRenderedComponent<TagSelector> cut = Render<TagSelector>(p => p
             .Add(c => c.TagType, TagTypeEnum.Genre)
             .Add(c => c.Label, "Genre Tags"));
 
@@ -67,7 +67,7 @@ public class TagSelectorTests : TestContext
             MakeChip(2, "Mystery", TagTypeEnum.Genre)
         ];
 
-        IRenderedComponent<TagSelector> cut = RenderComponent<TagSelector>(p => p
+        IRenderedComponent<TagSelector> cut = Render<TagSelector>(p => p
             .Add(c => c.TagType, TagTypeEnum.Genre)
             .Add(c => c.SelectedTags, initial));
 
@@ -78,7 +78,7 @@ public class TagSelectorTests : TestContext
     [Fact]
     public void TagSelector_WithNoInitialSelectedTags_RendersNoChips()
     {
-        IRenderedComponent<TagSelector> cut = RenderComponent<TagSelector>(p => p
+        IRenderedComponent<TagSelector> cut = Render<TagSelector>(p => p
             .Add(c => c.TagType, TagTypeEnum.Genre)
             .Add(c => c.SelectedTags, []));
 
@@ -100,7 +100,7 @@ public class TagSelectorTests : TestContext
             MakeChip(2, "Mystery", TagTypeEnum.Genre)
         ];
 
-        IRenderedComponent<TagSelector> cut = RenderComponent<TagSelector>(p => p
+        IRenderedComponent<TagSelector> cut = Render<TagSelector>(p => p
             .Add(c => c.TagType, TagTypeEnum.Genre)
             .Add(c => c.SelectedTags, initial)
             .Add(c => c.OnSelectionChanged, (IReadOnlyList<TagChipDto> updated) =>
@@ -128,7 +128,7 @@ public class TagSelectorTests : TestContext
             MakeChip(2, "Mystery", TagTypeEnum.Genre)
         ];
 
-        IRenderedComponent<TagSelector> cut = RenderComponent<TagSelector>(p => p
+        IRenderedComponent<TagSelector> cut = Render<TagSelector>(p => p
             .Add(c => c.TagType, TagTypeEnum.Genre)
             .Add(c => c.SelectedTags, initial)
             .Add(c => c.OnSelectionChanged, (IReadOnlyList<TagChipDto> _) => { }));

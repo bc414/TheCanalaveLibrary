@@ -1605,6 +1605,35 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Tool:** Claude Code. **Pointer:** `middle_plan_v2.md` Phase 0 + Resolved (branch convention,
   CI-hardening deliberation), `status.md` Global Conditions.
 
+### WU-DepBump1 — First Dependabot batch: all 7 PRs applied locally (2026-07-05) — DONE ✓
+- **Cells:** none (dependency maintenance — no feature cell changes stage). Applied the whole
+  first Dependabot wave directly on master rather than merging 7 PRs individually; Dependabot
+  auto-closes its PRs when it sees the versions bumped on master.
+- **Done:**
+  - Test projects (×3): `coverlet.collector` 6.0.4→10.0.1, `FluentAssertions` 7.0.0→8.10.0,
+    `Microsoft.NET.Test.Sdk` 17.14.1→18.7.0. RazorComponents additionally: **`bunit`
+    1.33.3→2.7.2 (major, real API migration)** — all 40 test classes: `TestContext` →
+    `BunitContext`, `RenderComponent<T>()` → `Render<T>()` (373 sites),
+    `SetParametersAndRender` → `Render` (4 sites), `TestAuthorizationContext`/
+    `AddTestAuthorization()` → `BunitAuthorizationContext`/`AddAuthorization()`
+    (TagDirectoryTests), removed-abstraction `IRefreshableElementCollection<IElement>` → `var`
+    (PaginationControlsTests). FluentAssertions 8 rename: `HaveCountLessOrEqualTo` →
+    `HaveCountLessThanOrEqualTo` (2 Integration sites). `IRenderedComponent<T>`, `JSInterop.Mode`,
+    `WaitForState`, `Services.Add*` all survived v2 unchanged.
+  - `ServiceDefaults`: `OpenTelemetry.Instrumentation.AspNetCore` 1.15.2→1.16.0.
+  - npm (`TheCanalaveLibrary.Server`): `tailwindcss` + `@tailwindcss/cli` 4.3.1→4.3.2
+    (lockfile bump via `npm update`).
+  - **FluentAssertions 8 licensing note:** v8 moved to a paid license for commercial use
+    (free for non-commercial/OSS). Fine for this project as-is; revisit only if the project's
+    commercial status ever changes (alternatives: stay on v7, or the Apache-licensed
+    AwesomeAssertions fork).
+  - `testing.md` tier table updated to the bunit v2 API names (Doc-Touch moment 2).
+- **Verified (2026-07-05):** `dotnet build` -c Release green; full `dotnet test` green —
+  1,266/1,266 (448 Unit + 446 RazorComponents + 372 Integration) on the new versions. The
+  446 RazorComponents tests passing is the regression net for the bunit 2 migration itself.
+- **Tool:** Claude Code (bunit 1→2 migration guide via live docs). **Pointer:** this entry;
+  `testing.md` tier table.
+
 ---
 
 ## Blocked / deferred — genuine Stage-1 intent gaps (no sequence number)

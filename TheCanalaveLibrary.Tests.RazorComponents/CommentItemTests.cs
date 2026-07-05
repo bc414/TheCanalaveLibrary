@@ -20,7 +20,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// actual editor HTML content (empty under loose JS mode — service-level tests cover persistence).
 /// <b>Tier:</b> RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class CommentItemTests : TestContext
+public class CommentItemTests : BunitContext
 {
     public CommentItemTests()
     {
@@ -32,7 +32,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public void CommentItem_AuthorPresent_RendersUsernameLink()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1, authorId: 42, username: "Misty")));
 
         cut.Markup.Should().Contain("/user/42", "a link to the author profile must appear");
@@ -43,7 +43,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public void CommentItem_DeletedAuthor_RendersDeletedUserFallback()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1, authorId: null)));
 
         cut.Markup.Should().Contain("[deleted user]",
@@ -57,7 +57,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public void CommentItem_WhenNotEditing_RendersCommentText()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1, text: "<p>Hello world</p>"))
             .Add(c => c.IsEditing, false));
 
@@ -68,7 +68,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public void CommentItem_WhenIsEditing_ShowsCommentEditorSaveButton()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1))
             .Add(c => c.IsEditing, true)
             .Add(c => c.OnEditSave,
@@ -84,7 +84,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public void CommentItem_WhenIsEditing_ActionBarHidden()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1))
             .Add(c => c.IsEditing, true)
             .Add(c => c.OnEditSave,
@@ -103,7 +103,7 @@ public class CommentItemTests : TestContext
     public async Task CommentItem_LikeClick_InvokesOnToggleLikeWithCommentId()
     {
         long? received = null;
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(99))
             .Add(c => c.OnToggleLike,
                 EventCallback.Factory.Create<long>(this, id => { received = id; })));
@@ -117,7 +117,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public void CommentItem_WhenOnToggleLikeNotWired_NoLikeButton()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1))
             // OnToggleLike intentionally not wired
         );
@@ -131,7 +131,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public void CommentItem_WhenOnToggleLikeNotWired_ReadOnlyCountShownWhenPositive()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1, likeCount: 5))
             // OnToggleLike not wired → read-only span
         );
@@ -146,7 +146,7 @@ public class CommentItemTests : TestContext
     public async Task CommentItem_ReplyClick_InvokesOnReplyWithCommentId()
     {
         long? received = null;
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(77))
             .Add(c => c.OnReply,
                 EventCallback.Factory.Create<long>(this, id => { received = id; })));
@@ -160,7 +160,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public void CommentItem_WhenOnReplyNotWired_NoReplyButton()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1)));
 
         cut.FindAll("button[aria-label='Reply to comment']").Should().BeEmpty(
@@ -173,7 +173,7 @@ public class CommentItemTests : TestContext
     public async Task CommentItem_EditClick_IsOwnComment_InvokesOnEditWithCommentId()
     {
         long? received = null;
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(55))
             .Add(c => c.IsOwnComment, true)
             .Add(c => c.OnEdit,
@@ -188,7 +188,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public void CommentItem_EditButton_AbsentWhenNotOwnComment()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1))
             .Add(c => c.IsOwnComment, false)
             .Add(c => c.OnEdit,
@@ -204,7 +204,7 @@ public class CommentItemTests : TestContext
     public async Task CommentItem_DeleteClick_IsOwnComment_InvokesOnDeleteWithCommentId()
     {
         long? received = null;
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(88))
             .Add(c => c.IsOwnComment, true)
             .Add(c => c.OnDelete,
@@ -219,7 +219,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public void CommentItem_DeleteButton_AbsentWhenNotOwnComment()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1))
             .Add(c => c.IsOwnComment, false)
             .Add(c => c.OnDelete,
@@ -234,7 +234,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public void CommentItem_SpoilerComment_InitiallyBlurred()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1, isSpoiler: true, text: "<p>Secret ending</p>"))
             .Add(c => c.UserHasCompletedStory, false));
 
@@ -248,7 +248,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public async Task CommentItem_RevealClick_WhenUserHasCompleted_RevealsImmediately()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1, isSpoiler: true, text: "<p>Secret ending</p>"))
             .Add(c => c.UserHasCompletedStory, true));
 
@@ -264,7 +264,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public async Task CommentItem_RevealClick_WhenUserHasNotCompleted_OpensSpoilerDialog()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1, isSpoiler: true))
             .Add(c => c.UserHasCompletedStory, false));
 
@@ -279,7 +279,7 @@ public class CommentItemTests : TestContext
     [Fact]
     public void CommentItem_NonSpoilerComment_RendersContentDirectly()
     {
-        IRenderedComponent<CommentItem> cut = RenderComponent<CommentItem>(p => p
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
             .Add(c => c.Comment, MakeComment(1, isSpoiler: false, text: "<p>Normal comment</p>")));
 
         cut.FindAll("button[aria-label='Reveal spoiler']").Should().BeEmpty(

@@ -20,7 +20,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// - ServerError is rendered when set.
 /// Tier: RazorComponents (bUnit).
 /// </summary>
-public class TagEditorFormTests : TestContext
+public class TagEditorFormTests : BunitContext
 {
     // A minimal directory with two Genre parents and one Character parent.
     private static List<TagDirectoryGroupDto> MakeDirectory(
@@ -52,7 +52,7 @@ public class TagEditorFormTests : TestContext
     [Fact]
     public void CreateMode_AllTagTypeOptionsPresent()
     {
-        IRenderedComponent<TagEditorForm> cut = RenderComponent<TagEditorForm>(p => p
+        IRenderedComponent<TagEditorForm> cut = Render<TagEditorForm>(p => p
             .Add(c => c.Directory, MakeDirectory())
             .Add(c => c.EditingTag, null));
 
@@ -64,7 +64,7 @@ public class TagEditorFormTests : TestContext
     public void CreateMode_AllowOCDetailsHidden_WhenDefaultTypeIsCharacter()
     {
         // Default type is Character, so the checkbox should be visible.
-        IRenderedComponent<TagEditorForm> cut = RenderComponent<TagEditorForm>(p => p
+        IRenderedComponent<TagEditorForm> cut = Render<TagEditorForm>(p => p
             .Add(c => c.Directory, MakeDirectory())
             .Add(c => c.EditingTag, null));
 
@@ -85,7 +85,7 @@ public class TagEditorFormTests : TestContext
         // Edit a tag of the given type to trigger the correct branch.
         TagChipDto chip = MakeChip(99, "TestTag", type);
 
-        IRenderedComponent<TagEditorForm> cut = RenderComponent<TagEditorForm>(p => p
+        IRenderedComponent<TagEditorForm> cut = Render<TagEditorForm>(p => p
             .Add(c => c.Directory, MakeDirectory())
             .Add(c => c.EditingTag, chip));
 
@@ -103,7 +103,7 @@ public class TagEditorFormTests : TestContext
     {
         TagChipDto chip = MakeChip(5, "Existingtag", TagTypeEnum.Genre);
 
-        IRenderedComponent<TagEditorForm> cut = RenderComponent<TagEditorForm>(p => p
+        IRenderedComponent<TagEditorForm> cut = Render<TagEditorForm>(p => p
             .Add(c => c.Directory, MakeDirectory())
             .Add(c => c.EditingTag, chip));
 
@@ -118,7 +118,7 @@ public class TagEditorFormTests : TestContext
         // Editing a Genre tag — parent dropdown should show Genre parents only.
         TagChipDto chip = MakeChip(99, "NewGenre", TagTypeEnum.Genre);
 
-        IRenderedComponent<TagEditorForm> cut = RenderComponent<TagEditorForm>(p => p
+        IRenderedComponent<TagEditorForm> cut = Render<TagEditorForm>(p => p
             .Add(c => c.Directory, MakeDirectory(genre1Id: 20, genre2Id: 21))
             .Add(c => c.EditingTag, chip));
 
@@ -135,7 +135,7 @@ public class TagEditorFormTests : TestContext
         // Editing char1 — it should not appear in its own parent dropdown.
         TagChipDto self = MakeChip(10, "Pikachu", TagTypeEnum.Character);
 
-        IRenderedComponent<TagEditorForm> cut = RenderComponent<TagEditorForm>(p => p
+        IRenderedComponent<TagEditorForm> cut = Render<TagEditorForm>(p => p
             .Add(c => c.Directory, MakeDirectory(char1Id: 10))
             .Add(c => c.EditingTag, self));
 
@@ -152,7 +152,7 @@ public class TagEditorFormTests : TestContext
     {
         TagEditorFormResult? captured = null;
 
-        IRenderedComponent<TagEditorForm> cut = RenderComponent<TagEditorForm>(p => p
+        IRenderedComponent<TagEditorForm> cut = Render<TagEditorForm>(p => p
             .Add(c => c.Directory, MakeDirectory())
             .Add(c => c.EditingTag, null)
             .Add(c => c.OnSave, EventCallback.Factory.Create<TagEditorFormResult>(this, r => captured = r)));
@@ -171,7 +171,7 @@ public class TagEditorFormTests : TestContext
     {
         bool cancelled = false;
 
-        IRenderedComponent<TagEditorForm> cut = RenderComponent<TagEditorForm>(p => p
+        IRenderedComponent<TagEditorForm> cut = Render<TagEditorForm>(p => p
             .Add(c => c.Directory, MakeDirectory())
             .Add(c => c.EditingTag, null)
             .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => cancelled = true)));
@@ -186,7 +186,7 @@ public class TagEditorFormTests : TestContext
     [Fact]
     public void ServerError_RendersErrorMessage()
     {
-        IRenderedComponent<TagEditorForm> cut = RenderComponent<TagEditorForm>(p => p
+        IRenderedComponent<TagEditorForm> cut = Render<TagEditorForm>(p => p
             .Add(c => c.Directory, MakeDirectory())
             .Add(c => c.EditingTag, null)
             .Add(c => c.ServerError, "Tag name already exists."));

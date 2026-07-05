@@ -19,7 +19,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <b>Not tested here:</b> Tailwind visual rendering (human sign-off for Stage 6).
 /// <b>Tier:</b> RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class CommentEditorTests : TestContext
+public class CommentEditorTests : BunitContext
 {
     public CommentEditorTests()
     {
@@ -31,7 +31,7 @@ public class CommentEditorTests : TestContext
     [Fact]
     public void CommentEditor_SaveLabel_AppearsOnPrimaryButton()
     {
-        IRenderedComponent<CommentEditor> cut = RenderComponent<CommentEditor>(p => p
+        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
             .Add(c => c.SaveLabel, "Post Comment"));
 
         cut.Markup.Should().Contain("Post Comment",
@@ -41,7 +41,7 @@ public class CommentEditorTests : TestContext
     [Fact]
     public void CommentEditor_DefaultSaveLabel_IsSave()
     {
-        IRenderedComponent<CommentEditor> cut = RenderComponent<CommentEditor>();
+        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>();
 
         // Default SaveLabel is "Save" — primary button must carry it
         cut.Markup.Should().Contain("Save");
@@ -52,7 +52,7 @@ public class CommentEditorTests : TestContext
     [Fact]
     public void CommentEditor_WhenOnCancelNotWired_NoCancelButton()
     {
-        IRenderedComponent<CommentEditor> cut = RenderComponent<CommentEditor>(p => p
+        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
             .Add(c => c.SaveLabel, "Post Comment")
             // OnCancel deliberately not wired — persistent composer pattern
         );
@@ -64,7 +64,7 @@ public class CommentEditorTests : TestContext
     [Fact]
     public void CommentEditor_WhenOnCancelWired_CancelButtonPresent()
     {
-        IRenderedComponent<CommentEditor> cut = RenderComponent<CommentEditor>(p => p
+        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
             .Add(c => c.SaveLabel, "Save")
             .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => { })));
 
@@ -76,7 +76,7 @@ public class CommentEditorTests : TestContext
     public async Task CommentEditor_ClickCancel_InvokesOnCancel()
     {
         bool cancelFired = false;
-        IRenderedComponent<CommentEditor> cut = RenderComponent<CommentEditor>(p => p
+        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
             .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => { cancelFired = true; })));
 
         // Find by aria-label — EditorView embeds BlazoredTextEditor which can render its own
@@ -93,7 +93,7 @@ public class CommentEditorTests : TestContext
     public async Task CommentEditor_ClickSave_InvokesOnSave()
     {
         bool saveFired = false;
-        IRenderedComponent<CommentEditor> cut = RenderComponent<CommentEditor>(p => p
+        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
             .Add(c => c.OnSave, EventCallback.Factory.Create<string>(this, _ => { saveFired = true; })));
 
         // Find by aria-label — the save button carries aria-label="@SaveLabel" so it is uniquely
@@ -109,7 +109,7 @@ public class CommentEditorTests : TestContext
     [Fact]
     public void CommentEditor_WhenShowSpoilerToggleFalse_NoCheckbox()
     {
-        IRenderedComponent<CommentEditor> cut = RenderComponent<CommentEditor>(p => p
+        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
             .Add(c => c.ShowSpoilerToggle, false));
 
         cut.Markup.Should().NotContain("spoilers",
@@ -119,7 +119,7 @@ public class CommentEditorTests : TestContext
     [Fact]
     public void CommentEditor_WhenShowSpoilerToggleTrue_CheckboxPresent()
     {
-        IRenderedComponent<CommentEditor> cut = RenderComponent<CommentEditor>(p => p
+        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
             .Add(c => c.ShowSpoilerToggle, true));
 
         cut.Markup.Should().Contain("spoilers",
@@ -132,7 +132,7 @@ public class CommentEditorTests : TestContext
     [Fact]
     public void CommentEditor_WhenBusy_SaveButtonDisabled()
     {
-        IRenderedComponent<CommentEditor> cut = RenderComponent<CommentEditor>(p => p
+        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
             .Add(c => c.Busy, true));
 
         IElement saveBtn = cut.Find("button[aria-label='Save']");
@@ -143,7 +143,7 @@ public class CommentEditorTests : TestContext
     [Fact]
     public void CommentEditor_WhenBusy_CancelButtonDisabled()
     {
-        IRenderedComponent<CommentEditor> cut = RenderComponent<CommentEditor>(p => p
+        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
             .Add(c => c.Busy, true)
             .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => { })));
 
@@ -155,7 +155,7 @@ public class CommentEditorTests : TestContext
     [Fact]
     public void CommentEditor_WhenNotBusy_SaveButtonEnabled()
     {
-        IRenderedComponent<CommentEditor> cut = RenderComponent<CommentEditor>(p => p
+        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
             .Add(c => c.Busy, false));
 
         IElement saveBtn = cut.Find("button[aria-label='Save']");

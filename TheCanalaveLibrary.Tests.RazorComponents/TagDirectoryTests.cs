@@ -17,16 +17,16 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// - OnTagCreated / OnTagDeleted callbacks fire from desktop buttons.
 /// Tier: RazorComponents (bUnit).
 /// </summary>
-public class TagDirectoryTests : TestContext
+public class TagDirectoryTests : BunitContext
 {
-    private readonly TestAuthorizationContext _auth;
+    private readonly BunitAuthorizationContext _auth;
 
     public TagDirectoryTests()
     {
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         Services.AddScoped<ITagWriteService>(_ => new FakeTagWriteService());
         JSInterop.Mode = JSRuntimeMode.Loose;
-        _auth = this.AddTestAuthorization(); // anonymous/not-authorized by default
+        _auth = this.AddAuthorization(); // anonymous/not-authorized by default
     }
 
     // ── Fixture factory ───────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ public class TagDirectoryTests : TestContext
     [Fact]
     public void Desktop_RendersCharactersAndGenreHeadings()
     {
-        IRenderedComponent<TagDirectoryDesktop> cut = RenderComponent<TagDirectoryDesktop>(p => p
+        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
             .Add(c => c.Directory, MakeDirectory()));
 
         string markup = cut.Markup;
@@ -78,7 +78,7 @@ public class TagDirectoryTests : TestContext
     [Fact]
     public void Desktop_RendersBulbasaurChipWithNestedChild()
     {
-        IRenderedComponent<TagDirectoryDesktop> cut = RenderComponent<TagDirectoryDesktop>(p => p
+        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
             .Add(c => c.Directory, MakeDirectory()));
 
         string markup = cut.Markup;
@@ -92,7 +92,7 @@ public class TagDirectoryTests : TestContext
     public void Desktop_UnboundedType_RenderedInDetails()
     {
         // Character is unbounded — its section should be in a <details> element.
-        IRenderedComponent<TagDirectoryDesktop> cut = RenderComponent<TagDirectoryDesktop>(p => p
+        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
             .Add(c => c.Directory, MakeDirectory()));
 
         // Find a <details> that contains the word "Characters"
@@ -104,7 +104,7 @@ public class TagDirectoryTests : TestContext
     public void Desktop_BoundedType_RenderedAsSection_NotDetails()
     {
         // Genre is bounded — its section should be a plain <section>, not a <details>.
-        IRenderedComponent<TagDirectoryDesktop> cut = RenderComponent<TagDirectoryDesktop>(p => p
+        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
             .Add(c => c.Directory, MakeDirectory()));
 
         // There should be a <section> containing "Genres" and no <details> containing it.
@@ -121,7 +121,7 @@ public class TagDirectoryTests : TestContext
     public void Desktop_Anonymous_DoesNotRenderModControls()
     {
         // No auth context → no edit/delete buttons, no "+ New Tag".
-        IRenderedComponent<TagDirectoryDesktop> cut = RenderComponent<TagDirectoryDesktop>(p => p
+        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
             .Add(c => c.Directory, MakeDirectory()));
 
         cut.FindAll("button[title^='Edit']").Should().BeEmpty("anonymous sees no edit buttons");
@@ -135,7 +135,7 @@ public class TagDirectoryTests : TestContext
     {
         _auth.SetAuthorized("mod-user").SetRoles("Moderator");
 
-        IRenderedComponent<TagDirectoryDesktop> cut = RenderComponent<TagDirectoryDesktop>(p => p
+        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
             .Add(c => c.Directory, MakeDirectory()));
 
         // "+ New Tag" button should be present.
@@ -148,7 +148,7 @@ public class TagDirectoryTests : TestContext
     {
         _auth.SetAuthorized("admin-user").SetRoles("Admin");
 
-        IRenderedComponent<TagDirectoryDesktop> cut = RenderComponent<TagDirectoryDesktop>(p => p
+        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
             .Add(c => c.Directory, MakeDirectory()));
 
         cut.FindAll("button").Any(b => b.TextContent.Contains("New Tag"))
@@ -160,7 +160,7 @@ public class TagDirectoryTests : TestContext
     [Fact]
     public void Mobile_RendersBothChips()
     {
-        IRenderedComponent<TagDirectoryMobile> cut = RenderComponent<TagDirectoryMobile>(p => p
+        IRenderedComponent<TagDirectoryMobile> cut = Render<TagDirectoryMobile>(p => p
             .Add(c => c.Directory, MakeDirectory()));
 
         string markup = cut.Markup;
@@ -172,7 +172,7 @@ public class TagDirectoryTests : TestContext
     [Fact]
     public void Mobile_UnboundedType_RenderedInDetails()
     {
-        IRenderedComponent<TagDirectoryMobile> cut = RenderComponent<TagDirectoryMobile>(p => p
+        IRenderedComponent<TagDirectoryMobile> cut = Render<TagDirectoryMobile>(p => p
             .Add(c => c.Directory, MakeDirectory()));
 
         bool hasDetails = cut.FindAll("details").Any(d => d.InnerHtml.Contains("Characters"));
@@ -187,7 +187,7 @@ public class TagDirectoryTests : TestContext
         // but the page-level create action is suppressed.
         _auth.SetAuthorized("mod-user").SetRoles("Moderator");
 
-        IRenderedComponent<TagDirectoryMobile> cut = RenderComponent<TagDirectoryMobile>(p => p
+        IRenderedComponent<TagDirectoryMobile> cut = Render<TagDirectoryMobile>(p => p
             .Add(c => c.Directory, MakeDirectory()));
 
         cut.FindAll("button").Where(b => b.TextContent.Contains("New Tag"))

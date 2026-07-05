@@ -15,7 +15,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// is cascaded, the chip renders an <c>&lt;img&gt;</c> with the resolved URL and an
 /// <c>onerror</c> fallback. All behaviours are exercisable by constructing the DTO directly.
 /// </summary>
-public class TagChipTests : TestContext
+public class TagChipTests : BunitContext
 {
     private static readonly ThemeContext DefaultTheme = new("pokemon", false);
 
@@ -32,7 +32,7 @@ public class TagChipTests : TestContext
     {
         TagChipDto dto = MakeDto(TagTypeEnum.Genre, "My Genre Tag");
 
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p.Add(c => c.Tag, dto));
+        IRenderedComponent<TagChip> cut = Render<TagChip>(p => p.Add(c => c.Tag, dto));
 
         cut.Markup.Should().Contain("My Genre Tag");
     }
@@ -47,7 +47,7 @@ public class TagChipTests : TestContext
     [InlineData(TagTypeEnum.CrossoverFandom, "bg-amber-100")]
     public void TagChip_AppliesCorrectBackgroundClassForTagType(TagTypeEnum type, string expectedClass)
     {
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p =>
+        IRenderedComponent<TagChip> cut = Render<TagChip>(p =>
             p.Add(c => c.Tag, MakeDto(type, $"{type} Tag")));
 
         string spanClass = cut.Find("span").GetAttribute("class") ?? string.Empty;
@@ -62,7 +62,7 @@ public class TagChipTests : TestContext
     {
         TagChipDto dto = MakeDto(TagTypeEnum.Character, "Pikachu", spriteIdentifier: "pikachu");
 
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p
+        IRenderedComponent<TagChip> cut = Render<TagChip>(p => p
             .Add(c => c.Tag, dto)
             .AddCascadingValue(DefaultTheme));
 
@@ -77,7 +77,7 @@ public class TagChipTests : TestContext
         TagChipDto dto = MakeDto(TagTypeEnum.Character, "Pikachu", spriteIdentifier: "pikachu");
         var animatedTheme = new ThemeContext("pokemon", true);
 
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p
+        IRenderedComponent<TagChip> cut = Render<TagChip>(p => p
             .Add(c => c.Tag, dto)
             .AddCascadingValue(animatedTheme));
 
@@ -90,7 +90,7 @@ public class TagChipTests : TestContext
     {
         TagChipDto dto = MakeDto(TagTypeEnum.Character, "Bulbasaur", spriteIdentifier: "bulbasaur");
 
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p
+        IRenderedComponent<TagChip> cut = Render<TagChip>(p => p
             .Add(c => c.Tag, dto)
             .AddCascadingValue(DefaultTheme));
 
@@ -104,7 +104,7 @@ public class TagChipTests : TestContext
     {
         TagChipDto dto = MakeDto(TagTypeEnum.Character, "Generic Character", spriteIdentifier: null);
 
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p
+        IRenderedComponent<TagChip> cut = Render<TagChip>(p => p
             .Add(c => c.Tag, dto)
             .AddCascadingValue(DefaultTheme));
 
@@ -117,7 +117,7 @@ public class TagChipTests : TestContext
         // ThemeContext is nullable — if not cascaded, no img should render even with an identifier.
         TagChipDto dto = MakeDto(TagTypeEnum.Character, "Pikachu", spriteIdentifier: "pikachu");
 
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p =>
+        IRenderedComponent<TagChip> cut = Render<TagChip>(p =>
             p.Add(c => c.Tag, dto));
         // No AddCascadingValue — ThemeContext will be null.
 
@@ -131,7 +131,7 @@ public class TagChipTests : TestContext
     {
         TagChipDto dto = MakeDto(TagTypeEnum.Genre, "Adventure", description: "Action-adventure stories");
 
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p.Add(c => c.Tag, dto));
+        IRenderedComponent<TagChip> cut = Render<TagChip>(p => p.Add(c => c.Tag, dto));
 
         string title = cut.Find("span").GetAttribute("title") ?? string.Empty;
         title.Should().Be("Action-adventure stories");
@@ -144,7 +144,7 @@ public class TagChipTests : TestContext
     {
         TagChipDto dto = MakeDto(TagTypeEnum.Genre, "Removable");
 
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p
+        IRenderedComponent<TagChip> cut = Render<TagChip>(p => p
             .Add(c => c.Tag, dto)
             .Add(c => c.OnRemove, EventCallback.Empty));
 
@@ -156,7 +156,7 @@ public class TagChipTests : TestContext
     {
         TagChipDto dto = MakeDto(TagTypeEnum.Genre, "Non-removable");
 
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p.Add(c => c.Tag, dto));
+        IRenderedComponent<TagChip> cut = Render<TagChip>(p => p.Add(c => c.Tag, dto));
         // OnRemove not supplied → HasDelegate == false
 
         cut.FindAll("button").Should().BeEmpty("no OnRemove delegate → no remove button");
@@ -168,7 +168,7 @@ public class TagChipTests : TestContext
         bool invoked = false;
         TagChipDto dto = MakeDto(TagTypeEnum.Genre, "Click Me");
 
-        IRenderedComponent<TagChip> cut = RenderComponent<TagChip>(p => p
+        IRenderedComponent<TagChip> cut = Render<TagChip>(p => p
             .Add(c => c.Tag, dto)
             .Add(c => c.OnRemove, () => { invoked = true; }));
 

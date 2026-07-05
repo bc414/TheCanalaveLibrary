@@ -16,7 +16,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// the cover art @onerror path (bUnit does not fire browser img events).
 /// Tier: RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class StoryDesktopTests : TestContext
+public class StoryDesktopTests : BunitContext
 {
     private readonly FakeRecommendationWriteService _fakeRecommendations = new();
 
@@ -72,7 +72,7 @@ public class StoryDesktopTests : TestContext
     [Fact]
     public void StoryDesktop_Title_RendersInH1()
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(title: "The Dragon's Oath"))
             .Add(c => c.Chapters, []));
 
@@ -84,7 +84,7 @@ public class StoryDesktopTests : TestContext
     [Fact]
     public void StoryDesktop_AuthorWithId_RendersAuthorLink()
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(authorId: 99, authorName: "PokéWriter"))
             .Add(c => c.Chapters, []));
 
@@ -94,7 +94,7 @@ public class StoryDesktopTests : TestContext
     [Fact]
     public void StoryDesktop_AuthorWithNullId_RendersPlainTextNoLink()
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(authorId: null, authorName: "Anonymous"))
             .Add(c => c.Chapters, []));
 
@@ -109,7 +109,7 @@ public class StoryDesktopTests : TestContext
     [Fact]
     public void StoryDesktop_IsAuthorTrue_RendersEditStoryLink()
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(storyId: 5))
             .Add(c => c.Chapters, [])
             .Add(c => c.IsAuthor, true));
@@ -121,7 +121,7 @@ public class StoryDesktopTests : TestContext
     [Fact]
     public void StoryDesktop_IsAuthorFalse_NoEditStoryLink()
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(storyId: 5))
             .Add(c => c.Chapters, [])
             .Add(c => c.IsAuthor, false));
@@ -139,7 +139,7 @@ public class StoryDesktopTests : TestContext
     [InlineData(StoryStatusEnum.Cancelled, "Cancelled")]
     public void StoryDesktop_StatusBadge_ShowsExpectedLabel(StoryStatusEnum status, string expected)
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(status: status))
             .Add(c => c.Chapters, []));
 
@@ -152,7 +152,7 @@ public class StoryDesktopTests : TestContext
     [InlineData(Rating.M, "Mature")]
     public void StoryDesktop_RatingBadge_ShowsExpectedLabel(Rating rating, string expected)
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(rating: rating))
             .Add(c => c.Chapters, []));
 
@@ -167,7 +167,7 @@ public class StoryDesktopTests : TestContext
     [InlineData(2_000_000, "2.0M words")]
     public void StoryDesktop_WordCountDisplay_FormatsCorrectly(int wordCount, string expected)
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(wordCount: wordCount))
             .Add(c => c.Chapters, []));
 
@@ -185,7 +185,7 @@ public class StoryDesktopTests : TestContext
             MakeTag(2, "Mystery"),
         ];
 
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(tags: tags))
             .Add(c => c.Chapters, []));
 
@@ -197,7 +197,7 @@ public class StoryDesktopTests : TestContext
     [Fact]
     public void StoryDesktop_WithNoTags_TagSectionAbsent()
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(tags: []))
             .Add(c => c.Chapters, []));
 
@@ -211,7 +211,7 @@ public class StoryDesktopTests : TestContext
     [Fact]
     public void StoryDesktop_CoverUrlPresent_RendersImg()
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(coverArtRelativeUrl: "/images/covers/great-fanfic.webp"))
             .Add(c => c.Chapters, []));
 
@@ -221,7 +221,7 @@ public class StoryDesktopTests : TestContext
     [Fact]
     public void StoryDesktop_CoverUrlNull_NoImgRendered()
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(coverArtRelativeUrl: null))
             .Add(c => c.Chapters, []));
 
@@ -234,7 +234,7 @@ public class StoryDesktopTests : TestContext
     [Fact]
     public void StoryDesktop_LongDescriptionPresent_RendersContent()
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(longDescription: "<p>A gripping adventure across Sinnoh.</p>"))
             .Add(c => c.Chapters, []));
 
@@ -245,7 +245,7 @@ public class StoryDesktopTests : TestContext
     [Fact]
     public void StoryDesktop_LongDescriptionNull_NoRichTextViewDiv()
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(longDescription: null))
             .Add(c => c.Chapters, []));
 
@@ -266,7 +266,7 @@ public class StoryDesktopTests : TestContext
             MakeChapter(2, "Rising Action"),
         ];
 
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(storyId: 7))
             .Add(c => c.Chapters, chapters));
 
@@ -278,7 +278,7 @@ public class StoryDesktopTests : TestContext
     [Fact]
     public void StoryDesktop_NoChaptersAndNotAuthor_ChapterSectionAbsent()
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(storyId: 3))
             .Add(c => c.Chapters, [])
             .Add(c => c.IsAuthor, false));
@@ -293,7 +293,7 @@ public class StoryDesktopTests : TestContext
     {
         // IsAuthor=true forces the section to render even with 0 published chapters,
         // so the author can see the empty state and know to add chapters.
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(storyId: 3))
             .Add(c => c.Chapters, [])
             .Add(c => c.IsAuthor, true));
@@ -309,7 +309,7 @@ public class StoryDesktopTests : TestContext
     [Fact]
     public void StoryDesktop_RendersRecommendationSection()
     {
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory(storyId: 10))
             .Add(c => c.Chapters, []));
 
@@ -323,7 +323,7 @@ public class StoryDesktopTests : TestContext
     public void StoryDesktop_RecommendationSection_CurrentUserIdPassedThrough()
     {
         // Anonymous (null) CurrentUserId → no "Recommend this story" CTA.
-        IRenderedComponent<StoryDesktop> cut = RenderComponent<StoryDesktop>(p => p
+        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
             .Add(c => c.Story, MakeStory())
             .Add(c => c.Chapters, [])
             .Add(c => c.CurrentUserId, (int?)null));

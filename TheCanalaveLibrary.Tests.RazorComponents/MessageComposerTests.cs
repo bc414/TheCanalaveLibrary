@@ -17,7 +17,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 ///
 /// <b>Tier:</b> RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class MessageComposerTests : TestContext
+public class MessageComposerTests : BunitContext
 {
     public MessageComposerTests()
     {
@@ -29,7 +29,7 @@ public class MessageComposerTests : TestContext
     [Fact]
     public void MessageComposer_DefaultSendLabel_IsSend()
     {
-        IRenderedComponent<MessageComposer> cut = RenderComponent<MessageComposer>();
+        IRenderedComponent<MessageComposer> cut = Render<MessageComposer>();
 
         cut.Markup.Should().Contain("Send",
             "the primary button must display the default SendLabel");
@@ -38,7 +38,7 @@ public class MessageComposerTests : TestContext
     [Fact]
     public void MessageComposer_CustomSendLabel_AppearsOnPrimaryButton()
     {
-        IRenderedComponent<MessageComposer> cut = RenderComponent<MessageComposer>(p => p
+        IRenderedComponent<MessageComposer> cut = Render<MessageComposer>(p => p
             .Add(c => c.SendLabel, "Send Reply"));
 
         cut.Markup.Should().Contain("Send Reply",
@@ -50,7 +50,7 @@ public class MessageComposerTests : TestContext
     [Fact]
     public void MessageComposer_WhenOnCancelNotWired_NoCancelButton()
     {
-        IRenderedComponent<MessageComposer> cut = RenderComponent<MessageComposer>();
+        IRenderedComponent<MessageComposer> cut = Render<MessageComposer>();
         // OnCancel not wired — Cancel button must not render.
 
         cut.Markup.Should().NotContain("Cancel",
@@ -60,7 +60,7 @@ public class MessageComposerTests : TestContext
     [Fact]
     public void MessageComposer_WhenOnCancelWired_CancelButtonPresent()
     {
-        IRenderedComponent<MessageComposer> cut = RenderComponent<MessageComposer>(p => p
+        IRenderedComponent<MessageComposer> cut = Render<MessageComposer>(p => p
             .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => { })));
 
         cut.Markup.Should().Contain("Cancel",
@@ -73,7 +73,7 @@ public class MessageComposerTests : TestContext
     public async Task MessageComposer_ClickSend_InvokesOnSend()
     {
         bool fired = false;
-        IRenderedComponent<MessageComposer> cut = RenderComponent<MessageComposer>(p => p
+        IRenderedComponent<MessageComposer> cut = Render<MessageComposer>(p => p
             .Add(c => c.OnSend, EventCallback.Factory.Create<string>(this, _ => { fired = true; }))
             .Add(c => c.SendLabel, "Send"));
 
@@ -89,7 +89,7 @@ public class MessageComposerTests : TestContext
     public async Task MessageComposer_ClickCancel_InvokesOnCancel()
     {
         bool fired = false;
-        IRenderedComponent<MessageComposer> cut = RenderComponent<MessageComposer>(p => p
+        IRenderedComponent<MessageComposer> cut = Render<MessageComposer>(p => p
             .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => { fired = true; })));
 
         IElement cancelBtn = cut.Find("button[aria-label='Cancel']");
@@ -103,7 +103,7 @@ public class MessageComposerTests : TestContext
     [Fact]
     public void MessageComposer_WhenBusy_SendButtonDisabled()
     {
-        IRenderedComponent<MessageComposer> cut = RenderComponent<MessageComposer>(p => p
+        IRenderedComponent<MessageComposer> cut = Render<MessageComposer>(p => p
             .Add(c => c.Busy, true)
             .Add(c => c.SendLabel, "Send"));
 
@@ -115,7 +115,7 @@ public class MessageComposerTests : TestContext
     [Fact]
     public void MessageComposer_WhenBusy_CancelButtonDisabled()
     {
-        IRenderedComponent<MessageComposer> cut = RenderComponent<MessageComposer>(p => p
+        IRenderedComponent<MessageComposer> cut = Render<MessageComposer>(p => p
             .Add(c => c.Busy, true)
             .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => { })));
 
@@ -127,7 +127,7 @@ public class MessageComposerTests : TestContext
     [Fact]
     public void MessageComposer_WhenNotBusy_SendButtonEnabled()
     {
-        IRenderedComponent<MessageComposer> cut = RenderComponent<MessageComposer>(p => p
+        IRenderedComponent<MessageComposer> cut = Render<MessageComposer>(p => p
             .Add(c => c.Busy, false)
             .Add(c => c.SendLabel, "Send"));
 

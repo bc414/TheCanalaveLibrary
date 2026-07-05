@@ -11,7 +11,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// CharacterEntry injects ISpriteReadService for sprite URL resolution.
 /// Tier: RazorComponents (bUnit).
 /// </summary>
-public class CharacterEntryTests : TestContext
+public class CharacterEntryTests : BunitContext
 {
     public CharacterEntryTests()
     {
@@ -39,7 +39,7 @@ public class CharacterEntryTests : TestContext
     [Fact]
     public void CharacterEntry_Renders_ChipName()
     {
-        IRenderedComponent<CharacterEntry> cut = RenderComponent<CharacterEntry>(p =>
+        IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p =>
         {
             p.Add(c => c.Chip, MakeChip());
             p.Add(c => c.Dto, MakeDto());
@@ -51,7 +51,7 @@ public class CharacterEntryTests : TestContext
     [Fact]
     public void CharacterEntry_Renders_PrioritySelect()
     {
-        IRenderedComponent<CharacterEntry> cut = RenderComponent<CharacterEntry>(p =>
+        IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p =>
         {
             p.Add(c => c.Chip, MakeChip());
             p.Add(c => c.Dto, MakeDto());
@@ -63,7 +63,7 @@ public class CharacterEntryTests : TestContext
     [Fact]
     public void CharacterEntry_OcToggle_NotShown_WhenAllowOcDetailsFalse()
     {
-        IRenderedComponent<CharacterEntry> cut = RenderComponent<CharacterEntry>(p =>
+        IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p =>
         {
             p.Add(c => c.Chip, MakeChip(allowOc: false));
             p.Add(c => c.Dto, MakeDto());
@@ -75,7 +75,7 @@ public class CharacterEntryTests : TestContext
     [Fact]
     public void CharacterEntry_OcToggle_Shown_WhenAllowOcDetailsTrue()
     {
-        IRenderedComponent<CharacterEntry> cut = RenderComponent<CharacterEntry>(p =>
+        IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p =>
         {
             p.Add(c => c.Chip, MakeChip(allowOc: true));
             p.Add(c => c.Dto, MakeDto());
@@ -87,7 +87,7 @@ public class CharacterEntryTests : TestContext
     [Fact]
     public void CharacterEntry_OcFields_NotShown_WhenIsOcFalse()
     {
-        IRenderedComponent<CharacterEntry> cut = RenderComponent<CharacterEntry>(p =>
+        IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p =>
         {
             p.Add(c => c.Chip, MakeChip(allowOc: true));
             p.Add(c => c.Dto, MakeDto(isOc: false));
@@ -100,7 +100,7 @@ public class CharacterEntryTests : TestContext
     [Fact]
     public void CharacterEntry_OcFields_Shown_WhenIsOcTrue()
     {
-        IRenderedComponent<CharacterEntry> cut = RenderComponent<CharacterEntry>(p =>
+        IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p =>
         {
             p.Add(c => c.Chip, MakeChip(allowOc: true));
             p.Add(c => c.Dto, MakeDto(isOc: true));
@@ -114,7 +114,7 @@ public class CharacterEntryTests : TestContext
     public async Task CharacterEntry_RemoveButton_FiresOnRemoved()
     {
         bool fired = false;
-        IRenderedComponent<CharacterEntry> cut = RenderComponent<CharacterEntry>(p =>
+        IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p =>
         {
             p.Add(c => c.Chip, MakeChip());
             p.Add(c => c.Dto, MakeDto());
@@ -130,7 +130,7 @@ public class CharacterEntryTests : TestContext
     public async Task CharacterEntry_PriorityChange_FiresOnChangedWithNewPriority()
     {
         StoryCharacterDto? received = null;
-        IRenderedComponent<CharacterEntry> cut = RenderComponent<CharacterEntry>(p =>
+        IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p =>
         {
             p.Add(c => c.Chip, MakeChip());
             p.Add(c => c.Dto, MakeDto());

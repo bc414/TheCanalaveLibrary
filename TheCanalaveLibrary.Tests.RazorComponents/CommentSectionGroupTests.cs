@@ -13,7 +13,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// Mirrors the chapter/blog-post tests in CommentSectionTests — only the dispatch branch differs.
 /// Tier: RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class CommentSectionGroupTests : TestContext
+public class CommentSectionGroupTests : BunitContext
 {
     private readonly FakeCommentWriteService _fakeService = new();
 
@@ -32,7 +32,7 @@ public class CommentSectionGroupTests : TestContext
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
 
-        RenderComponent<CommentSection>(p => p
+        Render<CommentSection>(p => p
             .Add(c => c.GroupId, 99));
 
         _fakeService.GetGroupCommentsCalls.Should().ContainSingle(
@@ -46,7 +46,7 @@ public class CommentSectionGroupTests : TestContext
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.GroupId, 1));
 
         cut.Markup.Should().Contain("No comments yet");
@@ -59,7 +59,7 @@ public class CommentSectionGroupTests : TestContext
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.GroupId, 55)
             .Add(c => c.CurrentUserId, 1));
 
@@ -80,7 +80,7 @@ public class CommentSectionGroupTests : TestContext
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.GroupId, 1)
             .Add(c => c.CurrentUserId, 1));
 
@@ -95,7 +95,7 @@ public class CommentSectionGroupTests : TestContext
     public void CommentSection_NoneSet_ThrowsInvalidOperation()
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
-        Action act = () => RenderComponent<CommentSection>(); // no GroupId / ChapterId / BlogPostId
+        Action act = () => Render<CommentSection>(); // no GroupId / ChapterId / BlogPostId
         act.Should().Throw<InvalidOperationException>("exactly one target must be set");
     }
 
@@ -103,7 +103,7 @@ public class CommentSectionGroupTests : TestContext
     public void CommentSection_TwoSet_ThrowsInvalidOperation()
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
-        Action act = () => RenderComponent<CommentSection>(p => p
+        Action act = () => Render<CommentSection>(p => p
             .Add(c => c.GroupId, 1)
             .Add(c => c.ChapterId, 2)); // two set at once
         act.Should().Throw<InvalidOperationException>();

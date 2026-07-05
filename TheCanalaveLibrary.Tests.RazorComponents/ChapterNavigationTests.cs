@@ -25,7 +25,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// both dropdowns are always accessible in the bUnit DOM regardless of the disclosure open state,
 /// which is why we test them directly). Visual/Tailwind layout is human-verified at Stage 6.
 /// </summary>
-public class ChapterNavigationTests : TestContext
+public class ChapterNavigationTests : BunitContext
 {
     // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ public class ChapterNavigationTests : TestContext
     ];
 
     private IRenderedComponent<ChapterNavigation> RenderMid() =>
-        RenderComponent<ChapterNavigation>(p => p
+        Render<ChapterNavigation>(p => p
             .Add(c => c.StoryId,              42)
             .Add(c => c.CurrentChapterNumber, 2)
             .Add(c => c.CurrentVersionOrder,  0)        // viewing primary
@@ -81,7 +81,7 @@ public class ChapterNavigationTests : TestContext
     [Fact]
     public void ChapterNavigation_FirstChapter_PrevIsDisabledSpanNotLink()
     {
-        IRenderedComponent<ChapterNavigation> cut = RenderComponent<ChapterNavigation>(p => p
+        IRenderedComponent<ChapterNavigation> cut = Render<ChapterNavigation>(p => p
             .Add(c => c.StoryId,              42)
             .Add(c => c.CurrentChapterNumber, 1)
             .Add(c => c.PreviousChapterNumber, null)
@@ -100,7 +100,7 @@ public class ChapterNavigationTests : TestContext
     [Fact]
     public void ChapterNavigation_LastChapter_NextIsDisabledSpanNotLink()
     {
-        IRenderedComponent<ChapterNavigation> cut = RenderComponent<ChapterNavigation>(p => p
+        IRenderedComponent<ChapterNavigation> cut = Render<ChapterNavigation>(p => p
             .Add(c => c.StoryId,              42)
             .Add(c => c.CurrentChapterNumber, 3)
             .Add(c => c.PreviousChapterNumber, 2)
@@ -201,7 +201,7 @@ public class ChapterNavigationTests : TestContext
             new(10, VersionOrder: 0, VersionName: null, Rating: Rating.E, WordCount: 1000, IsPrimary: true),
         ];
 
-        IRenderedComponent<ChapterNavigation> cut = RenderComponent<ChapterNavigation>(p => p
+        IRenderedComponent<ChapterNavigation> cut = Render<ChapterNavigation>(p => p
             .Add(c => c.StoryId,              42)
             .Add(c => c.CurrentChapterNumber, 1)
             .Add(c => c.Toc,      MakeToc())
@@ -215,7 +215,7 @@ public class ChapterNavigationTests : TestContext
     [Fact]
     public void ChapterNavigation_NoVersions_VersionPickerNotRendered()
     {
-        IRenderedComponent<ChapterNavigation> cut = RenderComponent<ChapterNavigation>(p => p
+        IRenderedComponent<ChapterNavigation> cut = Render<ChapterNavigation>(p => p
             .Add(c => c.StoryId,              42)
             .Add(c => c.CurrentChapterNumber, 1)
             .Add(c => c.Toc,      MakeToc())
@@ -280,7 +280,7 @@ public class ChapterNavigationTests : TestContext
     [Fact]
     public void ChapterNavigation_VersionPicker_WhenAlternateIsCurrent_CorrectHighlight()
     {
-        IRenderedComponent<ChapterNavigation> cut = RenderComponent<ChapterNavigation>(p => p
+        IRenderedComponent<ChapterNavigation> cut = Render<ChapterNavigation>(p => p
             .Add(c => c.StoryId,              42)
             .Add(c => c.CurrentChapterNumber, 2)
             .Add(c => c.CurrentVersionOrder,  1)        // alternate (VersionOrder=1) is active

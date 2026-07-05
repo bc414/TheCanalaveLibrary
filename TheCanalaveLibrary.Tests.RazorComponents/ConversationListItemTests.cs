@@ -13,7 +13,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 ///
 /// <b>Tier:</b> RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class ConversationListItemTests : TestContext
+public class ConversationListItemTests : BunitContext
 {
     private static ConversationSummaryDto MakeConversation(int unreadCount = 0, bool isArchived = false)
         => new(
@@ -31,7 +31,7 @@ public class ConversationListItemTests : TestContext
     [Fact]
     public void ConversationListItem_UnreadCountGreaterThanZero_RendersBadge()
     {
-        IRenderedComponent<ConversationListItem> cut = RenderComponent<ConversationListItem>(p => p
+        IRenderedComponent<ConversationListItem> cut = Render<ConversationListItem>(p => p
             .Add(c => c.Conversation, MakeConversation(unreadCount: 3)));
 
         // Badge has aria-label "N unread messages"
@@ -43,7 +43,7 @@ public class ConversationListItemTests : TestContext
     [Fact]
     public void ConversationListItem_UnreadCountZero_NoBadge()
     {
-        IRenderedComponent<ConversationListItem> cut = RenderComponent<ConversationListItem>(p => p
+        IRenderedComponent<ConversationListItem> cut = Render<ConversationListItem>(p => p
             .Add(c => c.Conversation, MakeConversation(unreadCount: 0)));
 
         cut.Markup.Should().NotContain("unread messages",
@@ -55,7 +55,7 @@ public class ConversationListItemTests : TestContext
     [Fact]
     public void ConversationListItem_IsArchivedTrue_ShowsArchivedLabel()
     {
-        IRenderedComponent<ConversationListItem> cut = RenderComponent<ConversationListItem>(p => p
+        IRenderedComponent<ConversationListItem> cut = Render<ConversationListItem>(p => p
             .Add(c => c.Conversation, MakeConversation(isArchived: true)));
 
         cut.Markup.Should().Contain("Archived",
@@ -65,7 +65,7 @@ public class ConversationListItemTests : TestContext
     [Fact]
     public void ConversationListItem_IsArchivedFalse_NoArchivedLabel()
     {
-        IRenderedComponent<ConversationListItem> cut = RenderComponent<ConversationListItem>(p => p
+        IRenderedComponent<ConversationListItem> cut = Render<ConversationListItem>(p => p
             .Add(c => c.Conversation, MakeConversation(isArchived: false)));
 
         cut.Markup.Should().NotContain("Archived",
@@ -77,7 +77,7 @@ public class ConversationListItemTests : TestContext
     [Fact]
     public void ConversationListItem_WhenSelected_HasPrimaryBorderClass()
     {
-        IRenderedComponent<ConversationListItem> cut = RenderComponent<ConversationListItem>(p => p
+        IRenderedComponent<ConversationListItem> cut = Render<ConversationListItem>(p => p
             .Add(c => c.Conversation, MakeConversation())
             .Add(c => c.IsSelected, true));
 
@@ -90,7 +90,7 @@ public class ConversationListItemTests : TestContext
     [Fact]
     public void ConversationListItem_WhenNotSelected_NoPrimaryBorderClass()
     {
-        IRenderedComponent<ConversationListItem> cut = RenderComponent<ConversationListItem>(p => p
+        IRenderedComponent<ConversationListItem> cut = Render<ConversationListItem>(p => p
             .Add(c => c.Conversation, MakeConversation())
             .Add(c => c.IsSelected, false));
 
@@ -103,7 +103,7 @@ public class ConversationListItemTests : TestContext
     [Fact]
     public void ConversationListItem_RendersLinkToConversation()
     {
-        IRenderedComponent<ConversationListItem> cut = RenderComponent<ConversationListItem>(p => p
+        IRenderedComponent<ConversationListItem> cut = Render<ConversationListItem>(p => p
             .Add(c => c.Conversation, MakeConversation()));
 
         IElement anchor = cut.Find("a");

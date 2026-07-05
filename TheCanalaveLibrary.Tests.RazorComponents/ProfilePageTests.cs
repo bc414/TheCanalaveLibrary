@@ -31,7 +31,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 ///
 /// <b>Tier:</b> RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class ProfilePageTests : TestContext
+public class ProfilePageTests : BunitContext
 {
     private const int TestUserId = 1;
     private const string BioText = "This is the test bio.";
@@ -98,7 +98,7 @@ public class ProfilePageTests : TestContext
     public void TabSwitch_OnSameInstance_ReloadsTabPayload()
     {
         // Start on the Profile tab — bio text should be visible.
-        IRenderedComponent<ProfilePage> cut = RenderComponent<ProfilePage>(p => p
+        IRenderedComponent<ProfilePage> cut = Render<ProfilePage>(p => p
             .Add(c => c.UserId, TestUserId)
             .Add(c => c.Tab, "profile"));
 
@@ -109,7 +109,7 @@ public class ProfilePageTests : TestContext
 
         // Simulate same-component tab navigation (router reuses the instance and calls
         // SetParametersAsync — which triggers OnParametersSetAsync with the new Tab value).
-        cut.SetParametersAndRender(p => p
+        cut.Render(p => p
             .Add(c => c.UserId, TestUserId)
             .Add(c => c.Tab, "blog"));
 

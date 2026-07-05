@@ -23,7 +23,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// not HTML content.
 /// <b>Tier:</b> RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class CommentSectionTests : TestContext
+public class CommentSectionTests : BunitContext
 {
     private readonly FakeCommentWriteService _fakeService = new();
 
@@ -42,7 +42,7 @@ public class CommentSectionTests : TestContext
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
 
-        RenderComponent<CommentSection>(p => p
+        Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 7));
 
         _fakeService.GetChapterCommentsCalls.Should().ContainSingle(
@@ -56,7 +56,7 @@ public class CommentSectionTests : TestContext
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
 
-        RenderComponent<CommentSection>(p => p
+        Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             .Add(c => c.PageSize, 10));
 
@@ -70,7 +70,7 @@ public class CommentSectionTests : TestContext
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1));
 
         cut.Markup.Should().Contain("No comments yet",
@@ -83,7 +83,7 @@ public class CommentSectionTests : TestContext
         _fakeService.SetGetResult(new CommentPageDto(
             [MakeComment(1, text: "<p>First comment</p>")], 1));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             .Add(c => c.CurrentUserId, 99));
 
@@ -104,7 +104,7 @@ public class CommentSectionTests : TestContext
         ], 1);
         _fakeService.SetGetResult(page);
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1));
 
         cut.Markup.Should().Contain("Root");
@@ -121,7 +121,7 @@ public class CommentSectionTests : TestContext
             [MakeComment(commentId)], 1));
         _fakeService.SetLikeResult(new CommentLikeResultDto(1, true));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             .Add(c => c.CurrentUserId, 42));
 
@@ -140,7 +140,7 @@ public class CommentSectionTests : TestContext
             [MakeComment(commentId, likeCount: 0)], 1));
         _fakeService.SetLikeResult(new CommentLikeResultDto(LikeCount: 1, IsLiked: true));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             .Add(c => c.CurrentUserId, 42));
 
@@ -159,7 +159,7 @@ public class CommentSectionTests : TestContext
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 5)
             .Add(c => c.CurrentUserId, 99));
 
@@ -179,7 +179,7 @@ public class CommentSectionTests : TestContext
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             .Add(c => c.CurrentUserId, 1));
 
@@ -204,7 +204,7 @@ public class CommentSectionTests : TestContext
         _fakeService.SetGetResult(new CommentPageDto(
             [MakeComment(1)], 1));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             .Add(c => c.CurrentUserId, 1));
 
@@ -223,7 +223,7 @@ public class CommentSectionTests : TestContext
         _fakeService.SetGetResult(new CommentPageDto(
             [MakeComment(rootId)], 1));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             .Add(c => c.CurrentUserId, 1));
 
@@ -250,7 +250,7 @@ public class CommentSectionTests : TestContext
         _fakeService.SetGetResult(new CommentPageDto(
             [MakeComment(commentId, authorId: 42)], 1));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             .Add(c => c.CurrentUserId, 42)); // IsOwnComment = true
 
@@ -275,7 +275,7 @@ public class CommentSectionTests : TestContext
         _fakeService.SetGetResult(new CommentPageDto(
             [MakeComment(commentId, authorId: 42)], 1));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             .Add(c => c.CurrentUserId, 42)); // IsOwnComment = true
 
@@ -301,7 +301,7 @@ public class CommentSectionTests : TestContext
         CommentDto[] roots = Enumerable.Range(1, 3).Select(i => MakeComment(i)).ToArray();
         _fakeService.SetGetResult(new CommentPageDto(roots, TotalRootCount: 30));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             .Add(c => c.PageSize, 10));
 
@@ -322,7 +322,7 @@ public class CommentSectionTests : TestContext
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             // CurrentUserId intentionally not set (null = anonymous)
         );
@@ -336,7 +336,7 @@ public class CommentSectionTests : TestContext
     {
         _fakeService.SetGetResult(new CommentPageDto([], 0));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             .Add(c => c.CurrentUserId, 1));
 
@@ -364,7 +364,7 @@ public class CommentSectionTests : TestContext
         _fakeService.SetGetResult(new CommentPageDto(
             [MakeComment(commentAId, isSpoiler: true)], TotalRootCount: 2));
 
-        IRenderedComponent<CommentSection> cut = RenderComponent<CommentSection>(p => p
+        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
             .Add(c => c.ChapterId, 1)
             .Add(c => c.CurrentUserId, 42)
             .Add(c => c.UserHasCompletedStory, true)  // skips the ConfirmDialog; sets _isRevealed immediately

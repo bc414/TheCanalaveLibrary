@@ -16,7 +16,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <c>FollowingWriteServiceTests</c> in the Integration tier). Tailwind token rendering remains
 /// manual sign-off for Stage 6.
 /// </summary>
-public class FollowButtonTests : TestContext
+public class FollowButtonTests : BunitContext
 {
     private readonly FakeFollowingWriteService _fakeService = new();
 
@@ -30,7 +30,7 @@ public class FollowButtonTests : TestContext
     [Fact]
     public void FollowButton_WhenNotFollowing_RendersFollowLabel()
     {
-        IRenderedComponent<FollowButton> cut = RenderComponent<FollowButton>(p => p
+        IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p
             .Add(c => c.TargetUserId, 42)
             .Add(c => c.IsFollowing, false));
 
@@ -40,7 +40,7 @@ public class FollowButtonTests : TestContext
     [Fact]
     public void FollowButton_WhenFollowing_RendersFollowingLabel()
     {
-        IRenderedComponent<FollowButton> cut = RenderComponent<FollowButton>(p => p
+        IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p
             .Add(c => c.TargetUserId, 42)
             .Add(c => c.IsFollowing, true)
             .Add(c => c.ReceiveAlerts, true));
@@ -53,7 +53,7 @@ public class FollowButtonTests : TestContext
     [Fact]
     public void FollowButton_WhenNotFollowing_NoBellButton()
     {
-        IRenderedComponent<FollowButton> cut = RenderComponent<FollowButton>(p => p
+        IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p
             .Add(c => c.TargetUserId, 42)
             .Add(c => c.IsFollowing, false));
 
@@ -65,7 +65,7 @@ public class FollowButtonTests : TestContext
     [Fact]
     public void FollowButton_WhenFollowing_ShowsBellButton()
     {
-        IRenderedComponent<FollowButton> cut = RenderComponent<FollowButton>(p => p
+        IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p
             .Add(c => c.TargetUserId, 42)
             .Add(c => c.IsFollowing, true)
             .Add(c => c.ReceiveAlerts, true));
@@ -77,7 +77,7 @@ public class FollowButtonTests : TestContext
     [Fact]
     public void FollowButton_WhenFollowingWithAlertsOn_BellHasDisableLabel()
     {
-        IRenderedComponent<FollowButton> cut = RenderComponent<FollowButton>(p => p
+        IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p
             .Add(c => c.TargetUserId, 42)
             .Add(c => c.IsFollowing, true)
             .Add(c => c.ReceiveAlerts, true));
@@ -89,7 +89,7 @@ public class FollowButtonTests : TestContext
     [Fact]
     public void FollowButton_WhenFollowingWithAlertsOff_BellHasEnableLabel()
     {
-        IRenderedComponent<FollowButton> cut = RenderComponent<FollowButton>(p => p
+        IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p
             .Add(c => c.TargetUserId, 42)
             .Add(c => c.IsFollowing, true)
             .Add(c => c.ReceiveAlerts, false));
@@ -103,7 +103,7 @@ public class FollowButtonTests : TestContext
     [Fact]
     public async Task FollowButton_ClickFollow_CallsFollowAsync()
     {
-        IRenderedComponent<FollowButton> cut = RenderComponent<FollowButton>(p => p
+        IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p
             .Add(c => c.TargetUserId, 99)
             .Add(c => c.IsFollowing, false));
 
@@ -115,7 +115,7 @@ public class FollowButtonTests : TestContext
     [Fact]
     public async Task FollowButton_ClickUnfollow_CallsUnfollowAsync()
     {
-        IRenderedComponent<FollowButton> cut = RenderComponent<FollowButton>(p => p
+        IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p
             .Add(c => c.TargetUserId, 99)
             .Add(c => c.IsFollowing, true)
             .Add(c => c.ReceiveAlerts, true));
@@ -129,7 +129,7 @@ public class FollowButtonTests : TestContext
     [Fact]
     public async Task FollowButton_ClickBell_CallsSetReceiveAlertsAsync()
     {
-        IRenderedComponent<FollowButton> cut = RenderComponent<FollowButton>(p => p
+        IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p
             .Add(c => c.TargetUserId, 99)
             .Add(c => c.IsFollowing, true)
             .Add(c => c.ReceiveAlerts, true));

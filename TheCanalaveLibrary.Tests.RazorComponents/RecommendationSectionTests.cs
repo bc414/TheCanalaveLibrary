@@ -16,7 +16,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// uses JS; tests assert service calls, not HTML content.
 /// <b>Tier:</b> RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class RecommendationSectionTests : TestContext
+public class RecommendationSectionTests : BunitContext
 {
     private readonly FakeRecommendationWriteService _fakeService = new();
 
@@ -50,7 +50,7 @@ public class RecommendationSectionTests : TestContext
     {
         _fakeService.SetGetForStoryResult([]);
 
-        RenderComponent<RecommendationSection>(p => p
+        Render<RecommendationSection>(p => p
             .Add(c => c.StoryId, 7));
 
         _fakeService.GetForStoryCalls.Should().ContainSingle()
@@ -64,7 +64,7 @@ public class RecommendationSectionTests : TestContext
     {
         _fakeService.SetGetForStoryResult([]);
 
-        IRenderedComponent<RecommendationSection> cut = RenderComponent<RecommendationSection>(p => p
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
             .Add(c => c.StoryId, 1));
 
         cut.Markup.Should().Contain("No recommendations yet");
@@ -75,7 +75,7 @@ public class RecommendationSectionTests : TestContext
     {
         _fakeService.SetGetForStoryResult([MakeRec(1), MakeRec(2)]);
 
-        IRenderedComponent<RecommendationSection> cut = RenderComponent<RecommendationSection>(p => p
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
             .Add(c => c.StoryId, 1));
 
         cut.Markup.Should().Contain("Body 1").And.Contain("Body 2");
@@ -88,7 +88,7 @@ public class RecommendationSectionTests : TestContext
     {
         _fakeService.SetGetForStoryResult([]);
 
-        IRenderedComponent<RecommendationSection> cut = RenderComponent<RecommendationSection>(p => p
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.CurrentUserId, 77));
 
@@ -101,7 +101,7 @@ public class RecommendationSectionTests : TestContext
     {
         _fakeService.SetGetForStoryResult([]);
 
-        IRenderedComponent<RecommendationSection> cut = RenderComponent<RecommendationSection>(p => p
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.CurrentUserId, (int?)null));
 
@@ -115,7 +115,7 @@ public class RecommendationSectionTests : TestContext
         // The viewer's own recommendation is in the result set.
         _fakeService.SetGetForStoryResult([MakeRec(1, isOwn: true)]);
 
-        IRenderedComponent<RecommendationSection> cut = RenderComponent<RecommendationSection>(p => p
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.CurrentUserId, 42));
 
@@ -131,7 +131,7 @@ public class RecommendationSectionTests : TestContext
         _fakeService.SetGetForStoryResult([MakeRec(3)]);
         _fakeService.SetLikeResult(new RecommendationLikeResultDto(1, true));
 
-        IRenderedComponent<RecommendationSection> cut = RenderComponent<RecommendationSection>(p => p
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.CurrentUserId, 77));
 
@@ -149,7 +149,7 @@ public class RecommendationSectionTests : TestContext
     {
         _fakeService.SetGetForStoryResult([MakeRec(5, isOwn: true)]);
 
-        IRenderedComponent<RecommendationSection> cut = RenderComponent<RecommendationSection>(p => p
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.CurrentUserId, 42));
 
@@ -172,7 +172,7 @@ public class RecommendationSectionTests : TestContext
     {
         _fakeService.SetGetForStoryResult([MakeRec(7, isOwn: true)]);
 
-        IRenderedComponent<RecommendationSection> cut = RenderComponent<RecommendationSection>(p => p
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.CurrentUserId, 42));
 

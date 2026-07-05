@@ -19,7 +19,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// Not tested: Tailwind layout, animated overlay transitions (human sign-off for Stage 6).
 /// Tier: RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class SearchMobileTests : TestContext
+public class SearchMobileTests : BunitContext
 {
     private readonly FakeUserStoryInteractionWriteService _fakeUsiService = new();
 
@@ -48,7 +48,7 @@ public class SearchMobileTests : TestContext
         StoryFilterDto? filter = null)
     {
         StoryListingDto[] stories = items ?? [MakeStory(1), MakeStory(2)];
-        return RenderComponent<SearchMobile>(p => p
+        return Render<SearchMobile>(p => p
             .Add(c => c.Items, stories)
             .Add(c => c.TotalCount, totalCount == 0 ? stories.Length : totalCount)
             .Add(c => c.IsRandomMode, isRandomMode)
@@ -141,7 +141,7 @@ public class SearchMobileTests : TestContext
     public void OnLoadMore_Fires_WhenGiveMeMoreClicked()
     {
         bool fired = false;
-        IRenderedComponent<SearchMobile> cut = RenderComponent<SearchMobile>(p => p
+        IRenderedComponent<SearchMobile> cut = Render<SearchMobile>(p => p
             .Add(c => c.Items, [MakeStory()])
             .Add(c => c.TotalCount, 1)
             .Add(c => c.IsRandomMode, true)
@@ -164,7 +164,7 @@ public class SearchMobileTests : TestContext
         cut.FindAll("button").Select(b => b.TextContent.Trim())
             .Should().Contain("Give me more");
 
-        cut.SetParametersAndRender(p => p
+        cut.Render(p => p
             .Add(c => c.IsRandomMode, false)
             .Add(c => c.TotalCount, 1)
             .Add(c => c.Filter, new StoryFilterDto { Sort = DefaultSortOrder.DatePublished, Page = 1, PageSize = 20 }));

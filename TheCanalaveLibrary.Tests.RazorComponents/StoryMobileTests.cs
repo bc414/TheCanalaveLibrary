@@ -18,7 +18,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 ///
 /// <b>Tier:</b> RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class StoryMobileTests : TestContext
+public class StoryMobileTests : BunitContext
 {
     private readonly FakeRecommendationWriteService _fakeRecommendations = new();
 
@@ -71,7 +71,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_Title_RendersInH1()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(title: "Pikachu's Journey"))
             .Add(c => c.Chapters, []));
 
@@ -83,7 +83,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_AuthorWithId_RendersAuthorLink()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(authorId: 77, authorName: "PokéFanatic"))
             .Add(c => c.Chapters, []));
 
@@ -93,7 +93,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_AuthorWithNullId_RendersPlainText_NoLink()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(authorId: null, authorName: "Deleted User"))
             .Add(c => c.Chapters, []));
 
@@ -106,7 +106,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_IsAuthorTrue_RendersEditLink()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(storyId: 8))
             .Add(c => c.Chapters, [])
             .Add(c => c.IsAuthor, true));
@@ -117,7 +117,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_IsAuthorFalse_NoEditLink()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(storyId: 8))
             .Add(c => c.Chapters, [])
             .Add(c => c.IsAuthor, false));
@@ -133,7 +133,7 @@ public class StoryMobileTests : TestContext
     [InlineData(StoryStatusEnum.OnHiatus, "On Hiatus")]
     public void StoryMobile_StatusBadge_ShowsExpectedLabel(StoryStatusEnum status, string expected)
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(status: status))
             .Add(c => c.Chapters, []));
 
@@ -146,7 +146,7 @@ public class StoryMobileTests : TestContext
     [InlineData(Rating.M, "Mature")]
     public void StoryMobile_RatingBadge_ShowsExpectedLabel(Rating rating, string expected)
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(rating: rating))
             .Add(c => c.Chapters, []));
 
@@ -161,7 +161,7 @@ public class StoryMobileTests : TestContext
     [InlineData(1_000_000, "1.0M words")]
     public void StoryMobile_WordCountDisplay_FormatsCorrectly(int wordCount, string expected)
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(wordCount: wordCount))
             .Add(c => c.Chapters, []));
 
@@ -179,7 +179,7 @@ public class StoryMobileTests : TestContext
             MakeTag(2, "Johto"),
         ];
 
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(tags: tags))
             .Add(c => c.Chapters, []));
 
@@ -191,7 +191,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_WithNoTags_NoTagNamesInMarkup()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(tags: []))
             .Add(c => c.Chapters, []));
 
@@ -203,7 +203,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_CoverUrlPresent_RendersImg()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(coverArtRelativeUrl: "/images/covers/mobile-cover.webp"))
             .Add(c => c.Chapters, []));
 
@@ -213,7 +213,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_CoverUrlNull_NoImgRendered()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(coverArtRelativeUrl: null))
             .Add(c => c.Chapters, []));
 
@@ -225,7 +225,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_LongDescriptionPresent_RendersContent()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(longDescription: "<p>A legendary tale of Team Rocket.</p>"))
             .Add(c => c.Chapters, []));
 
@@ -235,7 +235,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_LongDescriptionNull_NoProse()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(longDescription: null))
             .Add(c => c.Chapters, []));
 
@@ -253,7 +253,7 @@ public class StoryMobileTests : TestContext
             MakeChapter(2, "The Journey Begins"),
         ];
 
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(storyId: 15))
             .Add(c => c.Chapters, chapters));
 
@@ -264,7 +264,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_NoChaptersAndNotAuthor_ChapterSectionAbsent()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(storyId: 4))
             .Add(c => c.Chapters, [])
             .Add(c => c.IsAuthor, false));
@@ -275,7 +275,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_NoChaptersButIsAuthor_ChapterSectionPresent()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(storyId: 4))
             .Add(c => c.Chapters, [])
             .Add(c => c.IsAuthor, true));
@@ -289,7 +289,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_RendersRecommendationSection()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory(storyId: 20))
             .Add(c => c.Chapters, []));
 
@@ -301,7 +301,7 @@ public class StoryMobileTests : TestContext
     [Fact]
     public void StoryMobile_Anonymous_NoRecommendCTA()
     {
-        IRenderedComponent<StoryMobile> cut = RenderComponent<StoryMobile>(p => p
+        IRenderedComponent<StoryMobile> cut = Render<StoryMobile>(p => p
             .Add(c => c.Story, MakeStory())
             .Add(c => c.Chapters, [])
             .Add(c => c.CurrentUserId, (int?)null));

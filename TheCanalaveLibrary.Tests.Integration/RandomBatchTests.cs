@@ -52,7 +52,7 @@ public class RandomBatchTests(PostgresFixture postgres) : IntegrationTestBase(po
         StoryListingDto[] result = await InvokeAsync(svc =>
             svc.GetRandomBatchAsync(new StoryFilterDto(), batchSize: 3));
 
-        result.Should().HaveCountLessOrEqualTo(3,
+        result.Should().HaveCountLessThanOrEqualTo(3,
             "GetRandomBatchAsync must not return more than batchSize stories");
     }
 

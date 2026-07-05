@@ -12,7 +12,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// No @inject in GroupCard — no services to register.
 /// Tier: RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class GroupCardTests : TestContext
+public class GroupCardTests : BunitContext
 {
     // ── Factory ──────────────────────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ public class GroupCardTests : TestContext
     [Fact]
     public void GroupCard_RendersGroupName()
     {
-        IRenderedComponent<GroupCard> cut = RenderComponent<GroupCard>(p => p
+        IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
             .Add(c => c.Group, MakeGroup(groupName: "Pokémon Writers")));
 
         cut.Markup.Should().Contain("Pokémon Writers");
@@ -40,7 +40,7 @@ public class GroupCardTests : TestContext
     [Fact]
     public void GroupCard_LinksToGroupDetailPage()
     {
-        IRenderedComponent<GroupCard> cut = RenderComponent<GroupCard>(p => p
+        IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
             .Add(c => c.Group, MakeGroup(groupId: 42, groupName: "My Group")));
 
         // Href should start with /group/42/ (slug is cosmetic, appended by Slugify).
@@ -50,7 +50,7 @@ public class GroupCardTests : TestContext
     [Fact]
     public void GroupCard_Standard_ShowsStandardBadge()
     {
-        IRenderedComponent<GroupCard> cut = RenderComponent<GroupCard>(p => p
+        IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
             .Add(c => c.Group, MakeGroup(audienceType: GroupAudienceType.Standard)));
 
         cut.Markup.Should().Contain("Standard", "Standard badge should be visible");
@@ -59,7 +59,7 @@ public class GroupCardTests : TestContext
     [Fact]
     public void GroupCard_SfwOnly_ShowsSfwOnlyBadge()
     {
-        IRenderedComponent<GroupCard> cut = RenderComponent<GroupCard>(p => p
+        IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
             .Add(c => c.Group, MakeGroup(audienceType: GroupAudienceType.SfwOnly)));
 
         cut.Markup.Should().Contain("SFW Only");
@@ -68,7 +68,7 @@ public class GroupCardTests : TestContext
     [Fact]
     public void GroupCard_Mature_ShowsMatureBadge()
     {
-        IRenderedComponent<GroupCard> cut = RenderComponent<GroupCard>(p => p
+        IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
             .Add(c => c.Group, MakeGroup(audienceType: GroupAudienceType.Mature)));
 
         cut.Markup.Should().Contain("Mature");
@@ -77,7 +77,7 @@ public class GroupCardTests : TestContext
     [Fact]
     public void GroupCard_ShowsMemberCount()
     {
-        IRenderedComponent<GroupCard> cut = RenderComponent<GroupCard>(p => p
+        IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
             .Add(c => c.Group, MakeGroup(memberCount: 12)));
 
         cut.Markup.Should().Contain("12 members");
@@ -86,7 +86,7 @@ public class GroupCardTests : TestContext
     [Fact]
     public void GroupCard_OneMember_ShowsSingular()
     {
-        IRenderedComponent<GroupCard> cut = RenderComponent<GroupCard>(p => p
+        IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
             .Add(c => c.Group, MakeGroup(memberCount: 1)));
 
         cut.Markup.Should().Contain("1 member", "singular form for exactly one member");
@@ -96,7 +96,7 @@ public class GroupCardTests : TestContext
     [Fact]
     public void GroupCard_WithDescription_RendersDescription()
     {
-        IRenderedComponent<GroupCard> cut = RenderComponent<GroupCard>(p => p
+        IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
             .Add(c => c.Group, MakeGroup(description: "A great group for fans.")));
 
         cut.Markup.Should().Contain("A great group for fans.");
@@ -105,7 +105,7 @@ public class GroupCardTests : TestContext
     [Fact]
     public void GroupCard_NullDescription_DoesNotRenderDescriptionElement()
     {
-        IRenderedComponent<GroupCard> cut = RenderComponent<GroupCard>(p => p
+        IRenderedComponent<GroupCard> cut = Render<GroupCard>(p => p
             .Add(c => c.Group, MakeGroup(description: null)));
 
         // No <p> element with empty or whitespace content for description.

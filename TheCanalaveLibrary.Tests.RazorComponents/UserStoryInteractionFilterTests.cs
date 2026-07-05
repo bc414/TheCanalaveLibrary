@@ -15,7 +15,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 ///
 /// No service injection needed (component is injection-free).
 /// </summary>
-public class UserStoryInteractionFilterTests : TestContext
+public class UserStoryInteractionFilterTests : BunitContext
 {
     // ── Default render ───────────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ public class UserStoryInteractionFilterTests : TestContext
     public void DefaultRender_RendersOneCheckboxPerDefaultKind()
     {
         IRenderedComponent<UserStoryInteractionFilter> cut =
-            RenderComponent<UserStoryInteractionFilter>();
+            Render<UserStoryInteractionFilter>();
 
         int expectedCount = UserStoryInteractionFilter.DefaultKinds.Count;
         cut.FindAll("input[type='checkbox']").Count.Should().Be(expectedCount,
@@ -34,7 +34,7 @@ public class UserStoryInteractionFilterTests : TestContext
     public void DefaultRender_NoCheckboxesAreChecked()
     {
         IRenderedComponent<UserStoryInteractionFilter> cut =
-            RenderComponent<UserStoryInteractionFilter>();
+            Render<UserStoryInteractionFilter>();
 
         cut.FindAll("input[type='checkbox']")
             .All(cb => !cb.HasAttribute("checked"))
@@ -47,7 +47,7 @@ public class UserStoryInteractionFilterTests : TestContext
     public async Task ToggleIgnore_EmitsIgnoreInExcludedList()
     {
         IReadOnlyList<UserStoryInteractionTypeEnum>? emitted = null;
-        IRenderedComponent<UserStoryInteractionFilter> cut = RenderComponent<UserStoryInteractionFilter>(p => p
+        IRenderedComponent<UserStoryInteractionFilter> cut = Render<UserStoryInteractionFilter>(p => p
             .Add(c => c.OnChanged,
                 (IReadOnlyList<UserStoryInteractionTypeEnum> list) => emitted = list));
 
@@ -68,7 +68,7 @@ public class UserStoryInteractionFilterTests : TestContext
     public async Task ToggleTwoKinds_EmitsBothInExcludedList()
     {
         IReadOnlyList<UserStoryInteractionTypeEnum>? emitted = null;
-        IRenderedComponent<UserStoryInteractionFilter> cut = RenderComponent<UserStoryInteractionFilter>(p => p
+        IRenderedComponent<UserStoryInteractionFilter> cut = Render<UserStoryInteractionFilter>(p => p
             .Add(c => c.OnChanged,
                 (IReadOnlyList<UserStoryInteractionTypeEnum> list) => emitted = list));
 
@@ -95,7 +95,7 @@ public class UserStoryInteractionFilterTests : TestContext
     public async Task UncheckKind_RemovesItFromExcludedList()
     {
         IReadOnlyList<UserStoryInteractionTypeEnum>? emitted = null;
-        IRenderedComponent<UserStoryInteractionFilter> cut = RenderComponent<UserStoryInteractionFilter>(p => p
+        IRenderedComponent<UserStoryInteractionFilter> cut = Render<UserStoryInteractionFilter>(p => p
             .Add(c => c.ExcludedKinds, [UserStoryInteractionTypeEnum.Ignore])
             .Add(c => c.OnChanged,
                 (IReadOnlyList<UserStoryInteractionTypeEnum> list) => emitted = list));
@@ -118,7 +118,7 @@ public class UserStoryInteractionFilterTests : TestContext
     [Fact]
     public void ExcludedKindsSeed_PresetsCheckboxCheckedState()
     {
-        IRenderedComponent<UserStoryInteractionFilter> cut = RenderComponent<UserStoryInteractionFilter>(p => p
+        IRenderedComponent<UserStoryInteractionFilter> cut = Render<UserStoryInteractionFilter>(p => p
             .Add(c => c.ExcludedKinds, [UserStoryInteractionTypeEnum.Ignore]));
 
         // The ignored checkbox should be checked, others should not.
@@ -141,7 +141,7 @@ public class UserStoryInteractionFilterTests : TestContext
             UserStoryInteractionTypeEnum.Complete
         ];
 
-        IRenderedComponent<UserStoryInteractionFilter> cut = RenderComponent<UserStoryInteractionFilter>(p => p
+        IRenderedComponent<UserStoryInteractionFilter> cut = Render<UserStoryInteractionFilter>(p => p
             .Add(c => c.AvailableKinds, subset));
 
         cut.FindAll("input[type='checkbox']").Count.Should().Be(2,

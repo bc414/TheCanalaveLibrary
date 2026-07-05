@@ -15,14 +15,14 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// BadgeSettingsForm has no @inject (parameter-driven leaf) — no DI setup needed.
 /// Tier: RazorComponents (bUnit).
 /// </summary>
-public class BadgeSettingsFormTests : TestContext
+public class BadgeSettingsFormTests : BunitContext
 {
     // ── Empty state ───────────────────────────────────────────────────────────────
 
     [Fact]
     public void EmptyBadges_ShowsNoBadgesMessage()
     {
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p =>
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
             p.Add(f => f.EarnedBadges, []));
 
         cut.Markup.Should().Contain("You haven't earned any badges yet.");
@@ -31,7 +31,7 @@ public class BadgeSettingsFormTests : TestContext
     [Fact]
     public void EmptyBadges_DoesNotRenderSaveButton()
     {
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p =>
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
             p.Add(f => f.EarnedBadges, []));
 
         cut.FindAll("button[type='button']")
@@ -45,7 +45,7 @@ public class BadgeSettingsFormTests : TestContext
     [Fact]
     public void VisibleBadge_DisplayNameAppearsInMarkup()
     {
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p =>
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
             p.Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 1)]));
 
         cut.Markup.Should().Contain("Recommender Name",
@@ -55,7 +55,7 @@ public class BadgeSettingsFormTests : TestContext
     [Fact]
     public void VisibleBadge_ShowsHideButton()
     {
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p =>
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
             p.Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 1)]));
 
         cut.FindAll("button[title='Hide this badge']")
@@ -65,7 +65,7 @@ public class BadgeSettingsFormTests : TestContext
     [Fact]
     public void HiddenBadge_ShowsShowButton()
     {
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p =>
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
             p.Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 0)]));
 
         cut.FindAll("button[title='Make visible']")
@@ -75,7 +75,7 @@ public class BadgeSettingsFormTests : TestContext
     [Fact]
     public void HiddenBadge_DoesNotShowHideButton()
     {
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p =>
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
             p.Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 0)]));
 
         cut.FindAll("button[title='Hide this badge']")
@@ -87,7 +87,7 @@ public class BadgeSettingsFormTests : TestContext
     [Fact]
     public async Task ClickHide_MovesVisibleBadgeToHiddenSection()
     {
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p =>
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
             p.Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 1)]));
 
         IElement hideButton = cut.Find("button[title='Hide this badge']");
@@ -103,7 +103,7 @@ public class BadgeSettingsFormTests : TestContext
     [Fact]
     public async Task ClickShow_MovesHiddenBadgeToVisibleSection()
     {
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p =>
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
             p.Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 0)]));
 
         IElement showButton = cut.Find("button[title='Make visible']");
@@ -123,7 +123,7 @@ public class BadgeSettingsFormTests : TestContext
     {
         // One visible badge — the emitted list must contain exactly its key.
         IReadOnlyList<string>? emittedKeys = null;
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p => p
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p => p
             .Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 1)])
             .Add(f => f.OnSave, EventCallback.Factory.Create<IReadOnlyList<string>>(
                 this, keys => { emittedKeys = keys; })));
@@ -144,7 +144,7 @@ public class BadgeSettingsFormTests : TestContext
     {
         // Hidden badge — Save must emit an empty visible list.
         IReadOnlyList<string>? emittedKeys = null;
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p => p
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p => p
             .Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 0)])
             .Add(f => f.OnSave, EventCallback.Factory.Create<IReadOnlyList<string>>(
                 this, keys => { emittedKeys = keys; })));
@@ -165,7 +165,7 @@ public class BadgeSettingsFormTests : TestContext
         // Two visible badges: A at DisplayOrder 1, B at DisplayOrder 2.
         // Click ↑ on B → emitted order must be [B, A].
         IReadOnlyList<string>? emittedKeys = null;
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p => p
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p => p
             .Add(f => f.EarnedBadges,
             [
                 MakeBadge("BadgeA", displayOrder: 1, sortOrder: 1),
@@ -190,7 +190,7 @@ public class BadgeSettingsFormTests : TestContext
     public async Task MoveDown_FirstBadge_EmitsReversedOrder()
     {
         IReadOnlyList<string>? emittedKeys = null;
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p => p
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p => p
             .Add(f => f.EarnedBadges,
             [
                 MakeBadge("BadgeA", displayOrder: 1, sortOrder: 1),
@@ -216,7 +216,7 @@ public class BadgeSettingsFormTests : TestContext
     [Fact]
     public void BusyTrue_SaveButtonIsDisabled()
     {
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p => p
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p => p
             .Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 1)])
             .Add(f => f.Busy, true));
 
@@ -228,7 +228,7 @@ public class BadgeSettingsFormTests : TestContext
     [Fact]
     public void BusyTrue_SaveButtonShowsSavingText()
     {
-        IRenderedComponent<BadgeSettingsForm> cut = RenderComponent<BadgeSettingsForm>(p => p
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p => p
             .Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 1)])
             .Add(f => f.Busy, true));
 

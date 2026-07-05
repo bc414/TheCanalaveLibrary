@@ -19,7 +19,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// visual Tailwind layout (human Stage 6 sign-off).
 /// Tier: RazorComponents (bUnit).
 /// </summary>
-public class StoryPropertiesFormTests : TestContext
+public class StoryPropertiesFormTests : BunitContext
 {
     public StoryPropertiesFormTests()
     {
@@ -42,7 +42,7 @@ public class StoryPropertiesFormTests : TestContext
     [Fact]
     public void Form_Renders_TitleInput()
     {
-        IRenderedComponent<StoryPropertiesForm> cut = RenderComponent<StoryPropertiesForm>(
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel()));
 
         cut.Find("input[placeholder='Story title']").Should().NotBeNull();
@@ -51,7 +51,7 @@ public class StoryPropertiesFormTests : TestContext
     [Fact]
     public void Form_Renders_ShortDescriptionTextarea()
     {
-        IRenderedComponent<StoryPropertiesForm> cut = RenderComponent<StoryPropertiesForm>(
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel()));
 
         cut.FindAll("textarea").Should().NotBeEmpty();
@@ -60,7 +60,7 @@ public class StoryPropertiesFormTests : TestContext
     [Fact]
     public void Form_Renders_RatingSelect()
     {
-        IRenderedComponent<StoryPropertiesForm> cut = RenderComponent<StoryPropertiesForm>(
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel()));
 
         // Rating and Status are both selects; at least one select should be present.
@@ -70,7 +70,7 @@ public class StoryPropertiesFormTests : TestContext
     [Fact]
     public void Form_Renders_InputFile()
     {
-        IRenderedComponent<StoryPropertiesForm> cut = RenderComponent<StoryPropertiesForm>(
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel()));
 
         cut.FindAll("input[type='file']").Should().NotBeEmpty();
@@ -79,7 +79,7 @@ public class StoryPropertiesFormTests : TestContext
     [Fact]
     public void Form_Renders_SubmitButton_WithDefaultLabel()
     {
-        IRenderedComponent<StoryPropertiesForm> cut = RenderComponent<StoryPropertiesForm>(
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel()));
 
         cut.Find("button[type='submit']").TextContent.Trim().Should().Be("Save");
@@ -88,7 +88,7 @@ public class StoryPropertiesFormTests : TestContext
     [Fact]
     public void Form_Renders_SubmitButton_WithCustomLabel()
     {
-        IRenderedComponent<StoryPropertiesForm> cut = RenderComponent<StoryPropertiesForm>(p =>
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(p =>
         {
             p.Add(f => f.ViewModel, MakeValidViewModel());
             p.Add(f => f.SubmitLabel, "Create Story");
@@ -103,7 +103,7 @@ public class StoryPropertiesFormTests : TestContext
         bool callbackFired = false;
         StoryPropertiesViewModel vm = MakeValidViewModel();
 
-        IRenderedComponent<StoryPropertiesForm> cut = RenderComponent<StoryPropertiesForm>(p =>
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(p =>
         {
             p.Add(f => f.ViewModel, vm);
             p.Add(f => f.OnValidSubmit, EventCallback.Factory.Create(this, () => callbackFired = true));
@@ -124,7 +124,7 @@ public class StoryPropertiesFormTests : TestContext
             ShortDescription = "ok"
         };
 
-        IRenderedComponent<StoryPropertiesForm> cut = RenderComponent<StoryPropertiesForm>(p =>
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(p =>
         {
             p.Add(f => f.ViewModel, vm);
             p.Add(f => f.OnValidSubmit, EventCallback.Factory.Create(this, () => callbackFired = true));
@@ -141,7 +141,7 @@ public class StoryPropertiesFormTests : TestContext
         StoryPropertiesViewModel vm = MakeValidViewModel();
         vm.ServerValidationErrors.Add("Server says no.");
 
-        IRenderedComponent<StoryPropertiesForm> cut = RenderComponent<StoryPropertiesForm>(
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
             p => p.Add(f => f.ViewModel, vm));
 
         cut.Markup.Should().Contain("Server says no.");
@@ -153,7 +153,7 @@ public class StoryPropertiesFormTests : TestContext
         StoryPropertiesViewModel vm = MakeValidViewModel();
         vm.IsLoading = true;
 
-        IRenderedComponent<StoryPropertiesForm> cut = RenderComponent<StoryPropertiesForm>(
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
             p => p.Add(f => f.ViewModel, vm));
 
         cut.Find("button[type='submit']").HasAttribute("disabled").Should().BeTrue();

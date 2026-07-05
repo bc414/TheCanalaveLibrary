@@ -17,7 +17,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 ///
 /// Not tested: Tailwind visual layout, accent color inline styles (human sign-off for Stage 6).
 /// </summary>
-public class BookshelvesMobileTests : TestContext
+public class BookshelvesMobileTests : BunitContext
 {
     private readonly FakeUserStoryInteractionWriteService _fakeUsiService = new();
 
@@ -43,7 +43,7 @@ public class BookshelvesMobileTests : TestContext
         BookshelfTab activeTab = BookshelfTab.Favorites,
         StoryListingDto[]? items = null)
     {
-        return RenderComponent<BookshelvesMobile>(p => p
+        return Render<BookshelvesMobile>(p => p
             .Add(c => c.Tab, activeTab)
             .Add(c => c.Items, items ?? [MakeStory(1)])
             .Add(c => c.TotalCount, 1)

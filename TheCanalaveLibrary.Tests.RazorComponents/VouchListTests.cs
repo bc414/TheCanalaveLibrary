@@ -14,14 +14,14 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 ///
 /// Tier: <b>RazorComponents</b> (bUnit, no host or DB).
 /// </summary>
-public class VouchListTests : TestContext
+public class VouchListTests : BunitContext
 {
     // ── empty state ───────────────────────────────────────────────────────────────
 
     [Fact]
     public void VouchList_WhenEmpty_RendersEmptyMessage()
     {
-        IRenderedComponent<VouchList> cut = RenderComponent<VouchList>(p => p
+        IRenderedComponent<VouchList> cut = Render<VouchList>(p => p
             .Add(c => c.Vouches, [])
             .Add(c => c.EmptyMessage, "No vouches yet."));
 
@@ -40,7 +40,7 @@ public class VouchListTests : TestContext
             MakeVouch(2, "Misty", null)
         ];
 
-        IRenderedComponent<VouchList> cut = RenderComponent<VouchList>(p => p
+        IRenderedComponent<VouchList> cut = Render<VouchList>(p => p
             .Add(c => c.Vouches, vouches));
 
         cut.FindAll("li").Should().HaveCount(2);
@@ -55,7 +55,7 @@ public class VouchListTests : TestContext
             MakeVouch(2, "Gary", null)
         ];
 
-        IRenderedComponent<VouchList> cut = RenderComponent<VouchList>(p => p
+        IRenderedComponent<VouchList> cut = Render<VouchList>(p => p
             .Add(c => c.Vouches, vouches));
 
         cut.Markup.Should().Contain("Brock");
@@ -72,7 +72,7 @@ public class VouchListTests : TestContext
             MakeVouch(1, "Ash", "<p>Great trainer.</p>")
         ];
 
-        IRenderedComponent<VouchList> cut = RenderComponent<VouchList>(p => p
+        IRenderedComponent<VouchList> cut = Render<VouchList>(p => p
             .Add(c => c.Vouches, vouches));
 
         cut.Markup.Should().Contain("Great trainer.",
@@ -87,7 +87,7 @@ public class VouchListTests : TestContext
             MakeVouch(1, "Pikachu", null)
         ];
 
-        IRenderedComponent<VouchList> cut = RenderComponent<VouchList>(p => p
+        IRenderedComponent<VouchList> cut = Render<VouchList>(p => p
             .Add(c => c.Vouches, vouches));
 
         // RichTextView wraps its content in a <div style="..."> when HtmlContent is non-empty.
@@ -102,7 +102,7 @@ public class VouchListTests : TestContext
     {
         IReadOnlyList<VouchDisplayDto> vouches = [MakeVouch(1, "Nurse Joy", null)];
 
-        IRenderedComponent<VouchList> cut = RenderComponent<VouchList>(p => p
+        IRenderedComponent<VouchList> cut = Render<VouchList>(p => p
             .Add(c => c.Vouches, vouches)
             .Add(c => c.IsEditable, false));
 
@@ -121,7 +121,7 @@ public class VouchListTests : TestContext
             MakeVouch(2, "Nurse Joy", null)
         ];
 
-        IRenderedComponent<VouchList> cut = RenderComponent<VouchList>(p => p
+        IRenderedComponent<VouchList> cut = Render<VouchList>(p => p
             .Add(c => c.Vouches, vouches)
             .Add(c => c.IsEditable, true));
 
@@ -140,7 +140,7 @@ public class VouchListTests : TestContext
         int? received = null;
         IReadOnlyList<VouchDisplayDto> vouches = [MakeVouch(userId: 77, username: "Erika", text: null)];
 
-        IRenderedComponent<VouchList> cut = RenderComponent<VouchList>(p => p
+        IRenderedComponent<VouchList> cut = Render<VouchList>(p => p
             .Add(c => c.Vouches, vouches)
             .Add(c => c.IsEditable, true)
             .Add(c => c.OnRemoveVouch, (int id) => { received = id; }));

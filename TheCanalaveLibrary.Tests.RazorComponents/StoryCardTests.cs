@@ -22,7 +22,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <b>Not tested here:</b> visual/Tailwind layout (human sign-off for Stage 6),
 /// and the _coverArtFailed @onerror path (bUnit does not fire img browser events).
 /// </summary>
-public class StoryCardTests : TestContext
+public class StoryCardTests : BunitContext
 {
     private readonly FakeUserStoryInteractionWriteService _fakeService = new();
 
@@ -59,7 +59,7 @@ public class StoryCardTests : TestContext
     [Fact]
     public void Title_RendersAsLink_PointingToStoryRoute()
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(storyId: 7, title: "My Fic")));
 
         cut.Find("a[href='/story/7']").TextContent.Trim().Should().Be("My Fic");
@@ -70,7 +70,7 @@ public class StoryCardTests : TestContext
     [Fact]
     public void AuthorByline_WhenAuthorIdPresent_RendersAsLink()
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(authorId: 99, authorName: "Famous Author")));
 
         var authorLinks = cut.FindAll($"a[href='/user/99']");
@@ -81,7 +81,7 @@ public class StoryCardTests : TestContext
     [Fact]
     public void AuthorByline_WhenAuthorIdNull_RendersPlainText_NoAnchor()
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(authorId: null, authorName: "Unknown Author")));
 
         // No link to a user profile should exist when the author is anonymous/deleted.
@@ -97,7 +97,7 @@ public class StoryCardTests : TestContext
     public void Tags_RenderOneTagChip_PerTag()
     {
         var tags = new[] { MakeTag(10, "Tag A"), MakeTag(11, "Tag B"), MakeTag(12, "Tag C") };
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(tags: tags)));
 
         // TagChip renders as a <span>; the three chips must be present.
@@ -112,7 +112,7 @@ public class StoryCardTests : TestContext
     [Fact]
     public void Tags_WhenEmpty_NoTagNames()
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(tags: [])));
 
         // When the tag list is empty the @if block suppresses the tag container entirely.
@@ -127,7 +127,7 @@ public class StoryCardTests : TestContext
     [Fact]
     public void ShortDescription_WhenPresent_RendersWithTitleTooltip()
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(shortDescription: "A gripping tale of Sinnoh.")));
 
         var para = cut.Find("p[title='A gripping tale of Sinnoh.']");
@@ -137,7 +137,7 @@ public class StoryCardTests : TestContext
     [Fact]
     public void ShortDescription_WhenNull_NotRendered()
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(shortDescription: null)));
 
         // No <p> with a title attribute should appear (there's no other <p> in the card).
@@ -157,7 +157,7 @@ public class StoryCardTests : TestContext
     [InlineData(1_500_000, "1.5M words")]
     public void WordCountDisplay_FormatsCorrectly(int wordCount, string expected)
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(wordCount: wordCount)));
 
         cut.Markup.Should().Contain(expected, $"word count {wordCount} should display as '{expected}'");
@@ -168,7 +168,7 @@ public class StoryCardTests : TestContext
     [Fact]
     public void CoverArt_WhenUrlNull_RendersFallbackDiv_NoImg()
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(coverArtRelativeUrl: null, title: "Fallback Story")));
 
         cut.FindAll("img").Should().BeEmpty("null URL must show the fallback placeholder, not a broken img");
@@ -179,7 +179,7 @@ public class StoryCardTests : TestContext
     [Fact]
     public void CoverArt_WhenUrlPresent_RendersImg_WithLazyLoading()
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(coverArtRelativeUrl: "/img/covers/my-story.webp")));
 
         var img = cut.Find("img");
@@ -197,7 +197,7 @@ public class StoryCardTests : TestContext
     [InlineData(StoryStatusEnum.Draft, "Draft")]
     public void StatusBadge_ShowsExpectedLabel(StoryStatusEnum status, string expectedLabel)
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(status: status)));
 
         cut.Markup.Should().Contain(expectedLabel,
@@ -210,7 +210,7 @@ public class StoryCardTests : TestContext
     [InlineData(Rating.M, "Mature")]
     public void RatingBadge_ShowsExpectedLabel(Rating rating, string expectedLabel)
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(rating: rating)));
 
         cut.Markup.Should().Contain(expectedLabel,
@@ -223,7 +223,7 @@ public class StoryCardTests : TestContext
     public void InteractionPanel_BlankSlate_ShowsReadLaterAndIgnoreButtons()
     {
         // Panel in Listing context with null state (all-false) shows ReadLater + Ignore.
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(storyId: 3))
             .Add(c => c.UserStoryInteractionState, null));
 
@@ -237,7 +237,7 @@ public class StoryCardTests : TestContext
     [Fact]
     public void InteractionPanel_IsOwnStory_ShowsEditLink_NoButtons()
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(storyId: 5))
             .Add(c => c.IsOwnStory, true));
 
@@ -254,7 +254,7 @@ public class StoryCardTests : TestContext
     [Fact]
     public void Caret_NoCallbacksWired_MenuShowsOnlyViewStory()
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(storyId: 1)));
 
         // Open the menu by clicking the caret button.
@@ -271,7 +271,7 @@ public class StoryCardTests : TestContext
     [Fact]
     public void Caret_OnReportWired_MenuShowsReportItem()
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(storyId: 1))
             .Add(c => c.OnReport, EventCallback.Factory.Create(this, () => { })));
 
@@ -284,7 +284,7 @@ public class StoryCardTests : TestContext
     [Fact]
     public void Caret_ViewStory_AlwaysPresent_EvenWithNoCallbacks()
     {
-        IRenderedComponent<StoryCard> cut = RenderComponent<StoryCard>(p => p
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(storyId: 8)));
 
         cut.Find("button[aria-label='Story options']").Click();

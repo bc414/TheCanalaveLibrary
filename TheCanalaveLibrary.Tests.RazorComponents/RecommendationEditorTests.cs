@@ -16,7 +16,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// keeping the submit button disabled. Tests assert structure/callback firing, not the count value.
 /// <b>Tier:</b> RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class RecommendationEditorTests : TestContext
+public class RecommendationEditorTests : BunitContext
 {
     public RecommendationEditorTests()
     {
@@ -28,7 +28,7 @@ public class RecommendationEditorTests : TestContext
     [Fact]
     public void RecommendationEditor_SaveLabel_AppearsOnButton()
     {
-        IRenderedComponent<RecommendationEditor> cut = RenderComponent<RecommendationEditor>(p => p
+        IRenderedComponent<RecommendationEditor> cut = Render<RecommendationEditor>(p => p
             .Add(c => c.SaveLabel, "Submit Recommendation"));
 
         cut.Markup.Should().Contain("Submit Recommendation",
@@ -41,7 +41,7 @@ public class RecommendationEditorTests : TestContext
     public void RecommendationEditor_InitialRender_SubmitDisabledBelowMinimum()
     {
         // With JSInterop.Loose, GetHtmlAsync returns empty → 0 chars → disabled.
-        IRenderedComponent<RecommendationEditor> cut = RenderComponent<RecommendationEditor>(p => p
+        IRenderedComponent<RecommendationEditor> cut = Render<RecommendationEditor>(p => p
             .Add(c => c.SaveLabel, "Submit Recommendation"));
 
         // aria-label selectors are more stable than text content.
@@ -55,7 +55,7 @@ public class RecommendationEditorTests : TestContext
     [Fact]
     public void RecommendationEditor_OnCancelNotWired_NoCancelButton()
     {
-        IRenderedComponent<RecommendationEditor> cut = RenderComponent<RecommendationEditor>(p => p
+        IRenderedComponent<RecommendationEditor> cut = Render<RecommendationEditor>(p => p
             .Add(c => c.SaveLabel, "Submit Recommendation")
             // OnCancel not wired — new-compose pattern
         );
@@ -67,7 +67,7 @@ public class RecommendationEditorTests : TestContext
     [Fact]
     public void RecommendationEditor_OnCancelWired_ShowsCancelButton()
     {
-        IRenderedComponent<RecommendationEditor> cut = RenderComponent<RecommendationEditor>(p => p
+        IRenderedComponent<RecommendationEditor> cut = Render<RecommendationEditor>(p => p
             .Add(c => c.SaveLabel, "Save Changes")
             .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => { })));
 
@@ -79,7 +79,7 @@ public class RecommendationEditorTests : TestContext
     public async Task RecommendationEditor_CancelClick_RaisesOnCancel()
     {
         bool cancelled = false;
-        IRenderedComponent<RecommendationEditor> cut = RenderComponent<RecommendationEditor>(p => p
+        IRenderedComponent<RecommendationEditor> cut = Render<RecommendationEditor>(p => p
             .Add(c => c.SaveLabel, "Save Changes")
             .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => cancelled = true)));
 
@@ -93,7 +93,7 @@ public class RecommendationEditorTests : TestContext
     [Fact]
     public void RecommendationEditor_Busy_CancelButtonDisabled()
     {
-        IRenderedComponent<RecommendationEditor> cut = RenderComponent<RecommendationEditor>(p => p
+        IRenderedComponent<RecommendationEditor> cut = Render<RecommendationEditor>(p => p
             .Add(c => c.SaveLabel, "Save Changes")
             .Add(c => c.Busy, true)
             .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => { })));
@@ -107,7 +107,7 @@ public class RecommendationEditorTests : TestContext
     [Fact]
     public void RecommendationEditor_OnRender_ShowsMinimumCharacterHint()
     {
-        IRenderedComponent<RecommendationEditor> cut = RenderComponent<RecommendationEditor>(p => p
+        IRenderedComponent<RecommendationEditor> cut = Render<RecommendationEditor>(p => p
             .Add(c => c.SaveLabel, "Submit Recommendation"));
 
         cut.Markup.Should().Contain("500", "the 500-char minimum must be visible in the meter");

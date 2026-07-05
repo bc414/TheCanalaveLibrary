@@ -12,7 +12,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// visibility + callback; gated affordances (edit/delete only for IsOwnRecommendation).
 /// Tier: RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class RecommendationCardTests : TestContext
+public class RecommendationCardTests : BunitContext
 {
     // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ public class RecommendationCardTests : TestContext
     [Fact]
     public void RecommendationCard_WithRecommender_RendersUsername()
     {
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, PlainRec()));
 
         cut.Markup.Should().Contain("TestWriter", "recommender username must appear");
@@ -52,7 +52,7 @@ public class RecommendationCardTests : TestContext
     {
         var rec = PlainRec() with { Recommender = null };
 
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, rec));
 
         cut.Markup.Should().Contain("[deleted user]");
@@ -63,7 +63,7 @@ public class RecommendationCardTests : TestContext
     [Fact]
     public void RecommendationCard_IsHighlightedByAuthor_ShowsRibbon()
     {
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, SpotlightedRec()));
 
         cut.Markup.Should().Contain("Author's Pick",
@@ -73,7 +73,7 @@ public class RecommendationCardTests : TestContext
     [Fact]
     public void RecommendationCard_NotHighlighted_NoRibbon()
     {
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, PlainRec()));
 
         cut.Markup.Should().NotContain("Author's Pick");
@@ -84,7 +84,7 @@ public class RecommendationCardTests : TestContext
     [Fact]
     public void RecommendationCard_IsHiddenGem_ShowsBadge()
     {
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, HiddenGemRec()));
 
         cut.Markup.Should().Contain("Hidden Gem",
@@ -94,7 +94,7 @@ public class RecommendationCardTests : TestContext
     [Fact]
     public void RecommendationCard_NotHiddenGem_NoBadge()
     {
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, PlainRec()));
 
         cut.Markup.Should().NotContain("Hidden Gem");
@@ -106,7 +106,7 @@ public class RecommendationCardTests : TestContext
     public void RecommendationCard_OnLikeWired_ShowsLikeButton()
     {
         int? invokedId = null;
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, PlainRec())
             .Add(c => c.OnLike, EventCallback.Factory.Create<int>(this, id => invokedId = id)));
 
@@ -117,7 +117,7 @@ public class RecommendationCardTests : TestContext
     public void RecommendationCard_OnLikeWired_ClickRaisesCallbackWithId()
     {
         int? invokedId = null;
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, PlainRec())
             .Add(c => c.OnLike, EventCallback.Factory.Create<int>(this, id => invokedId = id)));
 
@@ -129,7 +129,7 @@ public class RecommendationCardTests : TestContext
     [Fact]
     public void RecommendationCard_OnLikeNotWired_NoLikeButton()
     {
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, PlainRec())
             // OnLike deliberately not wired
         );
@@ -142,7 +142,7 @@ public class RecommendationCardTests : TestContext
     [Fact]
     public void RecommendationCard_IsOwnRecommendation_ShowsEditAndDelete()
     {
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, PlainRec(isOwn: true))
             .Add(c => c.OnEdit, EventCallback.Factory.Create<int>(this, _ => { }))
             .Add(c => c.OnDelete, EventCallback.Factory.Create<int>(this, _ => { })));
@@ -154,7 +154,7 @@ public class RecommendationCardTests : TestContext
     [Fact]
     public void RecommendationCard_NotOwnRecommendation_NoEditOrDelete()
     {
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, PlainRec(isOwn: false))
             .Add(c => c.OnEdit, EventCallback.Factory.Create<int>(this, _ => { }))
             .Add(c => c.OnDelete, EventCallback.Factory.Create<int>(this, _ => { })));
@@ -168,7 +168,7 @@ public class RecommendationCardTests : TestContext
     [Fact]
     public void RecommendationCard_LikeCount_IsRendered()
     {
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, PlainRec()));
 
         cut.Markup.Should().Contain("3", "like count must be rendered");
@@ -177,7 +177,7 @@ public class RecommendationCardTests : TestContext
     [Fact]
     public void RecommendationCard_DatePosted_IsRendered()
     {
-        IRenderedComponent<RecommendationCard> cut = RenderComponent<RecommendationCard>(p => p
+        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
             .Add(c => c.Rec, PlainRec()));
 
         cut.Markup.Should().Contain("2026", "post date must be rendered");

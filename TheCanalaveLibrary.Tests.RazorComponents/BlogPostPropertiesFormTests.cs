@@ -17,7 +17,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// Not tested here: EditorView rich-text interaction (JS; no interpreter in bUnit).
 /// Tier: RazorComponents (bUnit).
 /// </summary>
-public class BlogPostPropertiesFormTests : TestContext
+public class BlogPostPropertiesFormTests : BunitContext
 {
     public BlogPostPropertiesFormTests()
     {
@@ -35,7 +35,7 @@ public class BlogPostPropertiesFormTests : TestContext
     [Fact]
     public void Form_Renders_TitleInput()
     {
-        IRenderedComponent<BlogPostPropertiesForm> cut = RenderComponent<BlogPostPropertiesForm>(
+        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel()));
 
         cut.Find("input[placeholder='Post title']").Should().NotBeNull();
@@ -44,7 +44,7 @@ public class BlogPostPropertiesFormTests : TestContext
     [Fact]
     public void Form_Renders_RatingSelect()
     {
-        IRenderedComponent<BlogPostPropertiesForm> cut = RenderComponent<BlogPostPropertiesForm>(
+        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel()));
 
         cut.FindAll("select").Should().NotBeEmpty();
@@ -53,7 +53,7 @@ public class BlogPostPropertiesFormTests : TestContext
     [Fact]
     public void Form_Renders_HasSpoilersCheckbox()
     {
-        IRenderedComponent<BlogPostPropertiesForm> cut = RenderComponent<BlogPostPropertiesForm>(
+        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel()));
 
         cut.Find("#has-spoilers").Should().NotBeNull();
@@ -62,7 +62,7 @@ public class BlogPostPropertiesFormTests : TestContext
     [Fact]
     public void Form_Renders_PublishToggle()
     {
-        IRenderedComponent<BlogPostPropertiesForm> cut = RenderComponent<BlogPostPropertiesForm>(
+        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel()));
 
         cut.Find("#is-published").Should().NotBeNull();
@@ -71,7 +71,7 @@ public class BlogPostPropertiesFormTests : TestContext
     [Fact]
     public void Form_Renders_SubmitButton_WithCustomLabel()
     {
-        IRenderedComponent<BlogPostPropertiesForm> cut = RenderComponent<BlogPostPropertiesForm>(
+        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel())
                   .Add(f => f.SubmitLabel, "Create Post"));
 
@@ -84,7 +84,7 @@ public class BlogPostPropertiesFormTests : TestContext
         BlogPostPropertiesViewModel vm = MakeValidViewModel();
         vm.IsLoading = true;
 
-        IRenderedComponent<BlogPostPropertiesForm> cut = RenderComponent<BlogPostPropertiesForm>(
+        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
             p => p.Add(f => f.ViewModel, vm));
 
         cut.Find("button[type='submit']").HasAttribute("disabled").Should().BeTrue();
@@ -93,7 +93,7 @@ public class BlogPostPropertiesFormTests : TestContext
     [Fact]
     public void Form_AuthorStoriesNull_HidesStoryPicker()
     {
-        IRenderedComponent<BlogPostPropertiesForm> cut = RenderComponent<BlogPostPropertiesForm>(
+        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel())
                   .Add(f => f.AuthorStories, null));
 
@@ -106,7 +106,7 @@ public class BlogPostPropertiesFormTests : TestContext
     {
         IReadOnlyList<(int Id, string Title)> stories = [(1, "My Story"), (2, "Another Story")];
 
-        IRenderedComponent<BlogPostPropertiesForm> cut = RenderComponent<BlogPostPropertiesForm>(
+        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel())
                   .Add(f => f.AuthorStories, stories));
 
@@ -123,7 +123,7 @@ public class BlogPostPropertiesFormTests : TestContext
         vm.ServerValidationErrors.Add("Title is required.");
         vm.ServerValidationErrors.Add("Content must not be empty.");
 
-        IRenderedComponent<BlogPostPropertiesForm> cut = RenderComponent<BlogPostPropertiesForm>(
+        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
             p => p.Add(f => f.ViewModel, vm));
 
         cut.FindAll("li").Should().HaveCount(2);
@@ -133,7 +133,7 @@ public class BlogPostPropertiesFormTests : TestContext
     public async Task Form_ValidSubmit_RaisesOnValidSubmitCallback()
     {
         bool callbackFired = false;
-        IRenderedComponent<BlogPostPropertiesForm> cut = RenderComponent<BlogPostPropertiesForm>(
+        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel())
                   .Add(f => f.OnValidSubmit, EventCallback.Factory.Create(this, () => { callbackFired = true; })));
 

@@ -12,14 +12,14 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// Pure leaf — no service injection.
 /// Tier: RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class RecommendationHelpfulPromptTests : TestContext
+public class RecommendationHelpfulPromptTests : BunitContext
 {
     // ── Renders when not dismissed ────────────────────────────────────────────────
 
     [Fact]
     public void RecommendationHelpfulPrompt_OnRender_ShowsPromptText()
     {
-        IRenderedComponent<RecommendationHelpfulPrompt> cut = RenderComponent<RecommendationHelpfulPrompt>(p => p
+        IRenderedComponent<RecommendationHelpfulPrompt> cut = Render<RecommendationHelpfulPrompt>(p => p
             .Add(c => c.RecommendationId, 1));
 
         cut.Markup.Should().Contain("helpful", "the prompt must mention the concept");
@@ -28,7 +28,7 @@ public class RecommendationHelpfulPromptTests : TestContext
     [Fact]
     public void RecommendationHelpfulPrompt_OnRender_ShowsYesAndNoButtons()
     {
-        IRenderedComponent<RecommendationHelpfulPrompt> cut = RenderComponent<RecommendationHelpfulPrompt>(p => p
+        IRenderedComponent<RecommendationHelpfulPrompt> cut = Render<RecommendationHelpfulPrompt>(p => p
             .Add(c => c.RecommendationId, 1));
 
         cut.Find("[aria-label*='Yes']").Should().NotBeNull();
@@ -41,7 +41,7 @@ public class RecommendationHelpfulPromptTests : TestContext
     public async Task RecommendationHelpfulPrompt_YesClick_RaisesOnRespondTrue()
     {
         bool? responded = null;
-        IRenderedComponent<RecommendationHelpfulPrompt> cut = RenderComponent<RecommendationHelpfulPrompt>(p => p
+        IRenderedComponent<RecommendationHelpfulPrompt> cut = Render<RecommendationHelpfulPrompt>(p => p
             .Add(c => c.RecommendationId, 5)
             .Add(c => c.OnRespond, EventCallback.Factory.Create<bool>(this, v => responded = v)));
 
@@ -53,7 +53,7 @@ public class RecommendationHelpfulPromptTests : TestContext
     [Fact]
     public async Task RecommendationHelpfulPrompt_YesClick_HidesPrompt()
     {
-        IRenderedComponent<RecommendationHelpfulPrompt> cut = RenderComponent<RecommendationHelpfulPrompt>(p => p
+        IRenderedComponent<RecommendationHelpfulPrompt> cut = Render<RecommendationHelpfulPrompt>(p => p
             .Add(c => c.RecommendationId, 5));
 
         await cut.Find("[aria-label*='Yes']").ClickAsync(new());
@@ -67,7 +67,7 @@ public class RecommendationHelpfulPromptTests : TestContext
     public async Task RecommendationHelpfulPrompt_NoClick_RaisesOnRespondFalse()
     {
         bool? responded = null;
-        IRenderedComponent<RecommendationHelpfulPrompt> cut = RenderComponent<RecommendationHelpfulPrompt>(p => p
+        IRenderedComponent<RecommendationHelpfulPrompt> cut = Render<RecommendationHelpfulPrompt>(p => p
             .Add(c => c.RecommendationId, 5)
             .Add(c => c.OnRespond, EventCallback.Factory.Create<bool>(this, v => responded = v)));
 
@@ -79,7 +79,7 @@ public class RecommendationHelpfulPromptTests : TestContext
     [Fact]
     public async Task RecommendationHelpfulPrompt_NoClick_HidesPrompt()
     {
-        IRenderedComponent<RecommendationHelpfulPrompt> cut = RenderComponent<RecommendationHelpfulPrompt>(p => p
+        IRenderedComponent<RecommendationHelpfulPrompt> cut = Render<RecommendationHelpfulPrompt>(p => p
             .Add(c => c.RecommendationId, 5));
 
         await cut.Find("[aria-label*='No']").ClickAsync(new());
@@ -93,7 +93,7 @@ public class RecommendationHelpfulPromptTests : TestContext
     public async Task RecommendationHelpfulPrompt_DismissClick_RaisesOnDismissAndHides()
     {
         bool dismissed = false;
-        IRenderedComponent<RecommendationHelpfulPrompt> cut = RenderComponent<RecommendationHelpfulPrompt>(p => p
+        IRenderedComponent<RecommendationHelpfulPrompt> cut = Render<RecommendationHelpfulPrompt>(p => p
             .Add(c => c.RecommendationId, 5)
             .Add(c => c.OnDismiss, EventCallback.Factory.Create(this, () => dismissed = true)));
 

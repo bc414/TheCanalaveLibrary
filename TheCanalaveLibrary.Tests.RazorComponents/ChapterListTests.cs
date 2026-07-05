@@ -22,7 +22,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <b>Not tested here:</b> visual/Tailwind layout (human sign-off for Stage 6).
 /// Tier: RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class ChapterListTests : TestContext
+public class ChapterListTests : BunitContext
 {
     private const int StoryId = 42;
 
@@ -50,7 +50,7 @@ public class ChapterListTests : TestContext
     {
         IReadOnlyList<ChapterListEntryDto> chapters = [MakeChapter(chapterNumber: 1, title: "Prologue")];
 
-        IRenderedComponent<ChapterList> cut = RenderComponent<ChapterList>(p => p
+        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, chapters)
             .Add(c => c.StoryId, StoryId));
 
@@ -64,7 +64,7 @@ public class ChapterListTests : TestContext
     {
         IReadOnlyList<ChapterListEntryDto> chapters = [MakeChapter(chapterNumber: 1)];
 
-        IRenderedComponent<ChapterList> cut = RenderComponent<ChapterList>(p => p
+        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, chapters)
             .Add(c => c.StoryId, StoryId));
 
@@ -84,7 +84,7 @@ public class ChapterListTests : TestContext
             MakeChapter(chapterNumber: 2, title: "Rising Action", alternates: [alt])
         ];
 
-        IRenderedComponent<ChapterList> cut = RenderComponent<ChapterList>(p => p
+        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, chapters)
             .Add(c => c.StoryId, StoryId));
 
@@ -105,7 +105,7 @@ public class ChapterListTests : TestContext
             MakeChapter(chapterNumber: 3, title: "Climax", alternates: [alt])
         ];
 
-        IRenderedComponent<ChapterList> cut = RenderComponent<ChapterList>(p => p
+        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, chapters)
             .Add(c => c.StoryId, StoryId));
 
@@ -127,7 +127,7 @@ public class ChapterListTests : TestContext
             MakeChapter(chapterNumber: 1, title: "Chapter One", alternates: alts)
         ];
 
-        IRenderedComponent<ChapterList> cut = RenderComponent<ChapterList>(p => p
+        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, chapters)
             .Add(c => c.StoryId, StoryId));
 
@@ -147,7 +147,7 @@ public class ChapterListTests : TestContext
             MakeChapter(chapterNumber: 1, title: "Intro", alternates: [unnamedAlt])
         ];
 
-        IRenderedComponent<ChapterList> cut = RenderComponent<ChapterList>(p => p
+        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, chapters)
             .Add(c => c.StoryId, StoryId));
 
@@ -167,7 +167,7 @@ public class ChapterListTests : TestContext
             MakeChapter(chapterNumber: 2, title: "Secret Draft", isPublished: false),
         ];
 
-        IRenderedComponent<ChapterList> cut = RenderComponent<ChapterList>(p => p
+        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, chapters)
             .Add(c => c.StoryId, StoryId)
             .Add(c => c.ShowDrafts, false));
@@ -186,7 +186,7 @@ public class ChapterListTests : TestContext
             MakeChapter(chapterNumber: 1, title: "Draft Chapter", isPublished: false),
         ];
 
-        IRenderedComponent<ChapterList> cut = RenderComponent<ChapterList>(p => p
+        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, chapters)
             .Add(c => c.StoryId, StoryId)
             .Add(c => c.ShowDrafts, true));
@@ -206,7 +206,7 @@ public class ChapterListTests : TestContext
             MakeChapter(chapterNumber: 1, title: "Live Chapter", isPublished: true),
         ];
 
-        IRenderedComponent<ChapterList> cut = RenderComponent<ChapterList>(p => p
+        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, chapters)
             .Add(c => c.StoryId, StoryId)
             .Add(c => c.ShowDrafts, true));
@@ -227,7 +227,7 @@ public class ChapterListTests : TestContext
     [Fact]
     public void ChapterList_EmptyList_ShowsNoChaptersMessage()
     {
-        IRenderedComponent<ChapterList> cut = RenderComponent<ChapterList>(p => p
+        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, [])
             .Add(c => c.StoryId, StoryId));
 
@@ -238,7 +238,7 @@ public class ChapterListTests : TestContext
     [Fact]
     public void ChapterList_EmptyList_NoAnchorLinksRendered()
     {
-        IRenderedComponent<ChapterList> cut = RenderComponent<ChapterList>(p => p
+        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, [])
             .Add(c => c.StoryId, StoryId));
 
@@ -259,7 +259,7 @@ public class ChapterListTests : TestContext
             MakeChapter(chapterNumber: 1, wordCount: wordCount)
         ];
 
-        IRenderedComponent<ChapterList> cut = RenderComponent<ChapterList>(p => p
+        IRenderedComponent<ChapterList> cut = Render<ChapterList>(p => p
             .Add(c => c.Chapters, chapters)
             .Add(c => c.StoryId, StoryId));
 

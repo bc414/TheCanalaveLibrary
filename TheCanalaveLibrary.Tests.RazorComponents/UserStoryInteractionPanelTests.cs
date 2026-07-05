@@ -21,7 +21,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <c>UserStoryInteractionServiceTests</c> in the Integration tier). Tailwind visual rendering
 /// requires human sign-off for Stage 6.
 /// </summary>
-public class UserStoryInteractionPanelTests : TestContext
+public class UserStoryInteractionPanelTests : BunitContext
 {
     private readonly FakeUserStoryInteractionWriteService _fakeService = new();
 
@@ -36,7 +36,7 @@ public class UserStoryInteractionPanelTests : TestContext
     [Fact]
     public void Detail_AllFalseState_RendersAllSixButtons()
     {
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(1))
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
@@ -48,7 +48,7 @@ public class UserStoryInteractionPanelTests : TestContext
     [Fact]
     public void Detail_AllFalseState_ButtonsInLockedEnumDeclarationOrder()
     {
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(1))
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
@@ -64,7 +64,7 @@ public class UserStoryInteractionPanelTests : TestContext
     [Fact]
     public void Detail_AllFalseState_NoButtonsHaveAriaPressed()
     {
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(1))
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
@@ -80,7 +80,7 @@ public class UserStoryInteractionPanelTests : TestContext
     public void Detail_IsFavoriteTrue_FavoriteButtonHasAriaPressed()
     {
         var state = UserStoryInteractionStateDto.AllFalse(1) with { IsFavorite = true };
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 1)
             .Add(c => c.State, state)
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
@@ -96,7 +96,7 @@ public class UserStoryInteractionPanelTests : TestContext
     [Fact]
     public void Listing_BlankSlate_RendersOnlyReadLaterAndIgnoreButtons()
     {
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 2)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(2))
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Listing));
@@ -112,7 +112,7 @@ public class UserStoryInteractionPanelTests : TestContext
     public void Listing_IsFavoriteTrue_NoReadLaterOrIgnoreButtons()
     {
         var state = UserStoryInteractionStateDto.AllFalse(2) with { IsFavorite = true };
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 2)
             .Add(c => c.State, state)
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Listing));
@@ -126,7 +126,7 @@ public class UserStoryInteractionPanelTests : TestContext
     public void Listing_IsFavoriteTrue_FavoriteShownAsSpan()
     {
         var state = UserStoryInteractionStateDto.AllFalse(2) with { IsFavorite = true };
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 2)
             .Add(c => c.State, state)
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Listing));
@@ -140,7 +140,7 @@ public class UserStoryInteractionPanelTests : TestContext
     public void Listing_IsReadLaterTrue_ReadLaterActiveAndIgnoreStillShown()
     {
         var state = UserStoryInteractionStateDto.AllFalse(2) with { IsReadItLater = true };
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 2)
             .Add(c => c.State, state)
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Listing));
@@ -160,7 +160,7 @@ public class UserStoryInteractionPanelTests : TestContext
     public void Listing_IsCompletedTrue_ReadLaterAndIgnoreHidden()
     {
         var state = UserStoryInteractionStateDto.AllFalse(2) with { IsCompleted = true };
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 2)
             .Add(c => c.State, state)
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Listing));
@@ -176,7 +176,7 @@ public class UserStoryInteractionPanelTests : TestContext
     [Fact]
     public void IsOwnStory_True_RendersEditLinkAndNoButtons()
     {
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 7)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(7))
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail)
@@ -192,7 +192,7 @@ public class UserStoryInteractionPanelTests : TestContext
     [Fact]
     public async Task Detail_ClickFavorite_ImmediatelyAddsAriaPressed_BeforeDebounce()
     {
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 3)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(3))
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
@@ -212,7 +212,7 @@ public class UserStoryInteractionPanelTests : TestContext
     public async Task Detail_ClickFavoriteOff_RemovesAriaPressed()
     {
         var state = UserStoryInteractionStateDto.AllFalse(3) with { IsFavorite = true };
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 3)
             .Add(c => c.State, state)
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
@@ -230,7 +230,7 @@ public class UserStoryInteractionPanelTests : TestContext
     [Fact]
     public async Task Listing_ClickReadLater_FlipsAndBecomesActive()
     {
-        IRenderedComponent<UserStoryInteractionPanel> cut = RenderComponent<UserStoryInteractionPanel>(p => p
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
             .Add(c => c.StoryId, 4)
             .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(4))
             .Add(c => c.Context, UserStoryInteractionDisplayContext.Listing));

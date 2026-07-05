@@ -19,7 +19,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// L4 visual sign-off (human, Stage 6).
 /// Tier: RazorComponents (bUnit, no host or DB).
 /// </summary>
-public class SearchDesktopTests : TestContext
+public class SearchDesktopTests : BunitContext
 {
     private readonly FakeUserStoryInteractionWriteService _fakeUsiService = new();
 
@@ -48,7 +48,7 @@ public class SearchDesktopTests : TestContext
         StoryFilterDto? filter = null)
     {
         StoryListingDto[] stories = items ?? [MakeStory(1), MakeStory(2)];
-        return RenderComponent<SearchDesktop>(p => p
+        return Render<SearchDesktop>(p => p
             .Add(c => c.Items, stories)
             .Add(c => c.TotalCount, totalCount == 0 ? stories.Length : totalCount)
             .Add(c => c.IsRandomMode, isRandomMode)
@@ -139,7 +139,7 @@ public class SearchDesktopTests : TestContext
     public void OnLoadMore_Fires_WhenGiveMeMoreClicked()
     {
         bool fired = false;
-        IRenderedComponent<SearchDesktop> cut = RenderComponent<SearchDesktop>(p => p
+        IRenderedComponent<SearchDesktop> cut = Render<SearchDesktop>(p => p
             .Add(c => c.Items, [MakeStory()])
             .Add(c => c.TotalCount, 1)
             .Add(c => c.IsRandomMode, true)
@@ -162,7 +162,7 @@ public class SearchDesktopTests : TestContext
         cut.FindAll("button").Select(b => b.TextContent.Trim())
             .Should().Contain("Give me more");
 
-        cut.SetParametersAndRender(p => p
+        cut.Render(p => p
             .Add(c => c.IsRandomMode, false)
             .Add(c => c.TotalCount, 1)
             .Add(c => c.Filter, new StoryFilterDto { Sort = DefaultSortOrder.DatePublished, Page = 1, PageSize = 20 }));

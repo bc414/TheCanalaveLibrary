@@ -21,7 +21,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <b>Not tested here:</b> Tailwind grid/responsive layout (human sign-off for Stage 6),
 /// and the loading-spinner visual (only markup content is verified, not CSS).
 /// </summary>
-public class StoryDeckTests : TestContext
+public class StoryDeckTests : BunitContext
 {
     private readonly FakeUserStoryInteractionWriteService _fakeService = new();
 
@@ -50,7 +50,7 @@ public class StoryDeckTests : TestContext
     [Fact]
     public void NullStories_ShowsLoadingText_AndNoStoryCard()
     {
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, (IReadOnlyList<StoryListingDto>?)null));
 
         cut.FindAll("[class*='Loading'], span").Select(e => e.TextContent)
@@ -63,7 +63,7 @@ public class StoryDeckTests : TestContext
     [Fact]
     public void EmptyStories_ShowsDefaultEmptyMessage_AndNoStoryCard()
     {
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new List<StoryListingDto>()));
 
         cut.Markup.Should().Contain("No stories found.", "default empty message expected");
@@ -73,7 +73,7 @@ public class StoryDeckTests : TestContext
     [Fact]
     public void EmptyStories_WithCustomEmptyMessage_ShowsCustomMessage()
     {
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new List<StoryListingDto>())
             .Add(c => c.EmptyMessage, "Your bookshelf is empty."));
 
@@ -94,7 +94,7 @@ public class StoryDeckTests : TestContext
             MakeStory(storyId: 3, title: "Story C"),
         };
 
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, stories));
 
         cut.FindComponents<StoryCard>().Should().HaveCount(3);
@@ -103,7 +103,7 @@ public class StoryDeckTests : TestContext
     [Fact]
     public void PopulatedStories_GridContainerPresent()
     {
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory() }));
 
         // Grid class is on the immediate card wrapper — assert both grid and deck wrapper exist
@@ -116,7 +116,7 @@ public class StoryDeckTests : TestContext
     public void CurrentUserId_MatchingAuthorId_RendersEditStoryLink()
     {
         // authorId = 42, CurrentUserId = 42 → IsOwnStory = true → Edit Story link
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory(storyId: 1, authorId: 42) })
             .Add(c => c.CurrentUserId, 42));
 
@@ -127,7 +127,7 @@ public class StoryDeckTests : TestContext
     public void CurrentUserId_NotMatchingAuthorId_DoesNotRenderEditStoryLink()
     {
         // authorId = 42, CurrentUserId = 99 → IsOwnStory = false → interaction buttons shown
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory(storyId: 1, authorId: 42) })
             .Add(c => c.CurrentUserId, 99));
 
@@ -138,7 +138,7 @@ public class StoryDeckTests : TestContext
     public void NullCurrentUserId_DoesNotRenderEditStoryLink()
     {
         // Anonymous viewer → IsOwnStory always false
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory(storyId: 1, authorId: 42) })
             .Add(c => c.CurrentUserId, (int?)null));
 
@@ -163,7 +163,7 @@ public class StoryDeckTests : TestContext
             new UserStoryInteractionStateDto(1, false, false, IsFavorite: true, false, false, false, false),
             UserStoryInteractionStateDto.AllFalse(2));
 
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { story1, story2 })
             .Add(c => c.UserStoryInteractionStates, (IReadOnlyDictionary<int, UserStoryInteractionStateDto>)states));
 
@@ -176,7 +176,7 @@ public class StoryDeckTests : TestContext
     public void NullUserStoryInteractionStates_NoActiveFavoriteSpan()
     {
         // Null state → all-false → Favorite is inactive → leaf guard hides it → no span
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory(storyId: 1), MakeStory(storyId: 2) })
             .Add(c => c.UserStoryInteractionStates, (IReadOnlyDictionary<int, UserStoryInteractionStateDto>?)null));
 
@@ -190,7 +190,7 @@ public class StoryDeckTests : TestContext
     public void PaginationControls_RenderedWhenTotalPagesExceedsOne()
     {
         // 25 items, page size 10 → 3 pages → PaginationControls visible
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory() })
             .Add(c => c.CurrentPage, 1)
             .Add(c => c.PageSize, 10)
@@ -205,7 +205,7 @@ public class StoryDeckTests : TestContext
     public void PaginationControls_HiddenWhenSinglePage()
     {
         // 5 items, page size 10 → 1 page → PaginationControls self-hides (renders nothing)
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory() })
             .Add(c => c.CurrentPage, 1)
             .Add(c => c.PageSize, 10)
@@ -219,7 +219,7 @@ public class StoryDeckTests : TestContext
     public void PaginationControls_HiddenWhenPageSizeIsZero()
     {
         // PageSize default = 0 → TotalPages = 0 → PaginationControls self-hides
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory() }));
 
         cut.Markup.Should().NotContain("aria-label=\"Previous page\"");
@@ -230,7 +230,7 @@ public class StoryDeckTests : TestContext
     {
         var received = new List<int>();
 
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory() })
             .Add(c => c.CurrentPage, 1)
             .Add(c => c.PageSize, 5)
@@ -263,7 +263,7 @@ public class StoryDeckTests : TestContext
         var statesA = MakeStates(
             new UserStoryInteractionStateDto(1, false, false, IsFavorite: true, false, false, false, false));
 
-        IRenderedComponent<StoryDeck> cut = RenderComponent<StoryDeck>(p => p
+        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { storyA })
             .Add(c => c.UserStoryInteractionStates, (IReadOnlyDictionary<int, UserStoryInteractionStateDto>)statesA));
 
@@ -276,7 +276,7 @@ public class StoryDeckTests : TestContext
         StoryListingDto storyB = MakeStory(storyId: 2);
         var statesB = MakeStates(UserStoryInteractionStateDto.AllFalse(2));
 
-        cut.SetParametersAndRender(p => p
+        cut.Render(p => p
             .Add(c => c.Stories, new[] { storyB })
             .Add(c => c.UserStoryInteractionStates, (IReadOnlyDictionary<int, UserStoryInteractionStateDto>)statesB));
 

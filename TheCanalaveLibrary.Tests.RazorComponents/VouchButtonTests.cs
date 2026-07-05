@@ -19,7 +19,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// JSInterop is set to <see cref="JSRuntimeMode.Loose"/> so that Quill-backed EditorView JS calls
 /// when the dialog renders do not throw.
 /// </summary>
-public class VouchButtonTests : TestContext
+public class VouchButtonTests : BunitContext
 {
     private readonly FakeFollowingWriteService _fakeService = new();
 
@@ -34,7 +34,7 @@ public class VouchButtonTests : TestContext
     [Fact]
     public void VouchButton_WhenNotFollowing_RendersNothing()
     {
-        IRenderedComponent<VouchButton> cut = RenderComponent<VouchButton>(p => p
+        IRenderedComponent<VouchButton> cut = Render<VouchButton>(p => p
             .Add(c => c.TargetUserId, 42)
             .Add(c => c.IsFollowing, false)
             .Add(c => c.IsVouched, false)
@@ -48,7 +48,7 @@ public class VouchButtonTests : TestContext
     [Fact]
     public void VouchButton_WhenFollowingAndNotVouched_RendersVouchButton()
     {
-        IRenderedComponent<VouchButton> cut = RenderComponent<VouchButton>(p => p
+        IRenderedComponent<VouchButton> cut = Render<VouchButton>(p => p
             .Add(c => c.TargetUserId, 42)
             .Add(c => c.IsFollowing, true)
             .Add(c => c.IsVouched, false)
@@ -64,7 +64,7 @@ public class VouchButtonTests : TestContext
     [Fact]
     public void VouchButton_WhenAtVouchLimit_RendersDisabledButton()
     {
-        IRenderedComponent<VouchButton> cut = RenderComponent<VouchButton>(p => p
+        IRenderedComponent<VouchButton> cut = Render<VouchButton>(p => p
             .Add(c => c.TargetUserId, 42)
             .Add(c => c.IsFollowing, true)
             .Add(c => c.IsVouched, false)
@@ -78,7 +78,7 @@ public class VouchButtonTests : TestContext
     [Fact]
     public void VouchButton_WhenAtVouchLimit_HasExplanatoryTooltip()
     {
-        IRenderedComponent<VouchButton> cut = RenderComponent<VouchButton>(p => p
+        IRenderedComponent<VouchButton> cut = Render<VouchButton>(p => p
             .Add(c => c.TargetUserId, 42)
             .Add(c => c.IsFollowing, true)
             .Add(c => c.IsVouched, false)
@@ -96,7 +96,7 @@ public class VouchButtonTests : TestContext
     [Fact]
     public void VouchButton_WhenAlreadyVouched_RendersVouchedButton()
     {
-        IRenderedComponent<VouchButton> cut = RenderComponent<VouchButton>(p => p
+        IRenderedComponent<VouchButton> cut = Render<VouchButton>(p => p
             .Add(c => c.TargetUserId, 42)
             .Add(c => c.IsFollowing, true)
             .Add(c => c.IsVouched, true)
@@ -111,7 +111,7 @@ public class VouchButtonTests : TestContext
     [Fact]
     public async Task VouchButton_ClickVouch_OpensDialog()
     {
-        IRenderedComponent<VouchButton> cut = RenderComponent<VouchButton>(p => p
+        IRenderedComponent<VouchButton> cut = Render<VouchButton>(p => p
             .Add(c => c.TargetUserId, 42)
             .Add(c => c.IsFollowing, true)
             .Add(c => c.IsVouched, false)

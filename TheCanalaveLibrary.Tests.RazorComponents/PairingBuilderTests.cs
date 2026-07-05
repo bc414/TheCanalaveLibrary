@@ -10,7 +10,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// No @inject — no DI setup needed.
 /// Tier: RazorComponents (bUnit).
 /// </summary>
-public class PairingBuilderTests : TestContext
+public class PairingBuilderTests : BunitContext
 {
     private static IReadOnlyList<TagChipDto> TwoChips() =>
     [
@@ -21,7 +21,7 @@ public class PairingBuilderTests : TestContext
     [Fact]
     public void PairingBuilder_WithZeroCharacters_ShowsNoAddUI()
     {
-        IRenderedComponent<PairingBuilder> cut = RenderComponent<PairingBuilder>(p =>
+        IRenderedComponent<PairingBuilder> cut = Render<PairingBuilder>(p =>
         {
             p.Add(c => c.CharacterChips, []);
             p.Add(c => c.Pairings, []);
@@ -33,7 +33,7 @@ public class PairingBuilderTests : TestContext
     [Fact]
     public void PairingBuilder_WithOneCharacter_ShowsHintNotAddUI()
     {
-        IRenderedComponent<PairingBuilder> cut = RenderComponent<PairingBuilder>(p =>
+        IRenderedComponent<PairingBuilder> cut = Render<PairingBuilder>(p =>
         {
             p.Add(c => c.CharacterChips, [new TagChipDto { TagId = 1, TagName = "Pikachu", TagTypeId = TagTypeEnum.Character }]);
             p.Add(c => c.Pairings, []);
@@ -46,7 +46,7 @@ public class PairingBuilderTests : TestContext
     [Fact]
     public void PairingBuilder_WithTwoCharacters_ShowsAddUI()
     {
-        IRenderedComponent<PairingBuilder> cut = RenderComponent<PairingBuilder>(p =>
+        IRenderedComponent<PairingBuilder> cut = Render<PairingBuilder>(p =>
         {
             p.Add(c => c.CharacterChips, TwoChips());
             p.Add(c => c.Pairings, []);
@@ -68,7 +68,7 @@ public class PairingBuilderTests : TestContext
             }
         ];
 
-        IRenderedComponent<PairingBuilder> cut = RenderComponent<PairingBuilder>(p =>
+        IRenderedComponent<PairingBuilder> cut = Render<PairingBuilder>(p =>
         {
             p.Add(c => c.CharacterChips, TwoChips());
             p.Add(c => c.Pairings, pairings);
@@ -91,7 +91,7 @@ public class PairingBuilderTests : TestContext
             }
         ];
 
-        IRenderedComponent<PairingBuilder> cut = RenderComponent<PairingBuilder>(p =>
+        IRenderedComponent<PairingBuilder> cut = Render<PairingBuilder>(p =>
         {
             p.Add(c => c.CharacterChips, TwoChips());
             p.Add(c => c.Pairings, pairings);
@@ -109,7 +109,7 @@ public class PairingBuilderTests : TestContext
     [Fact]
     public void PairingBuilder_AddButton_DisabledWhenNoMembersSelected()
     {
-        IRenderedComponent<PairingBuilder> cut = RenderComponent<PairingBuilder>(p =>
+        IRenderedComponent<PairingBuilder> cut = Render<PairingBuilder>(p =>
         {
             p.Add(c => c.CharacterChips, TwoChips());
             p.Add(c => c.Pairings, []);
