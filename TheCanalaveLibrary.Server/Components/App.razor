@@ -57,6 +57,10 @@
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
 
+    // The site converts to global InteractiveAuto in a single flip (layer5-wasm.md §"The Global
+    // Flip") — this expression is where that flip lands. If a page must run as a WASM island
+    // before then (debug bisect during the flip wave), the pilot-verified recipe is
+    // [ExcludeFromInteractiveRouting] + @rendermode on the page; the same check below covers it.
     private IComponentRenderMode? PageRenderMode
         => HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
 }

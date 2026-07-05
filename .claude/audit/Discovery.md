@@ -303,7 +303,7 @@ Narrowing-within-fixed-source query → WU27/WU30.
 ## Feature 34 — Tag Directory (`/tags`)
 - **L1 — N/A.** **L2 — Stage 2** (browse query). **L3/L3.5 — Stage 2** (`TagDirectoryPage`: user browse +
   mod CRUD behind `AuthorizeView`; mobile browse, desktop-only edit). Depends on the `TagChip` atom owned
-  by Tags/. **L4 — Stage 1. L5 — Stage 2.**
+  by Tags/. **L4 — Stage 1. L5 — Stage 5 (WU-L5Pilot, see Stage note below).**
 
   **Settled for WU27.5 (2026-06-24, do not revisit):**
   - **Browse layout:** sections per type (enum order), parent→child nesting everywhere (TOC-style,
@@ -347,6 +347,37 @@ Narrowing-within-fixed-source query → WU27/WU30.
     `<section>` not `<details>`; anonymous user sees no "New Tag" button or edit/delete buttons; Moderator
     auth shows "New Tag" button; Admin auth shows "New Tag" button; mobile renders both chips; mobile
     unbounded in `<details>`; mobile suppresses "New Tag" button.
+
+  **WU-L5Pilot Stage note — L5 (2026-07-04):**
+
+  `/tags` is the project's first WASM page — deliberately chosen as the `layer5-wasm.md`
+  battle-test pilot (public read + mod-gated write + sprite theming in one small surface).
+  `TagDirectoryPage` now carries `[ExcludeFromInteractiveRouting]` + `@rendermode
+  RenderMode.InteractiveWebAssembly` (the island pattern — both directives load-bearing, see
+  `layer5-wasm.md` §"Render-Mode Topology"), `[PersistentState] Directory` (prerendered data
+  hydrates into WASM with zero refetch — the "Loading…" branch keys off `Directory is null`,
+  replacing the old `_isLoading` field), and wraps its content in `ThemeContextProvider` (now in
+  `SharedUI/Sprites/`) because Routes-level cascades don't cross the island boundary. Endpoints +
+  client services: see `audit/Tags.md` F11/F13 WU-L5Pilot notes.
+
+  **How verified (2026-07-04):** browser band (real WASM runtime): anonymous browse renders the
+  full directory from persisted state (no `/api/` call on load — verified via network log), WASM
+  `AuthorizeView` correctly hides mod controls anonymously and shows them for AdminUser
+  (serialized role claims), full mod CRUD round trip with psql ground-truth checks, and
+  cross-navigation both directions (island → home via enhanced nav; home → island via the
+  interactive router's full-page reload — without `[ExcludeFromInteractiveRouting]` that click
+  crashed the InteractiveServer circuit, the pilot's biggest catch). Automated: Integration
+  `TagEndpointsTests` + Unit `ClientTagServiceTests` (see `audit/Tags.md`); bUnit tier unchanged
+  (`TagDirectoryTests` render the Desktop/Mobile composites, which are untouched).
+
+  **2026-07-04 (same day, post-verification):** island directives + page-level
+  `ThemeContextProvider` wrap removed from `TagDirectoryPage` per the settled single-flip
+  rollout strategy (`middle_plan.md` Resolved "L5 rollout strategy") — `/tags` rides global
+  `InteractiveServer` until the site-wide `InteractiveAuto` flip; `[PersistentState]` kept
+  (prevents the prerender double fetch under the circuit too). L5 remains Stage 5: endpoints,
+  client impls, and tests are live and green, and the WASM-runtime verification above is the
+  standing record. Re-islanding recipe, if a flip-wave bisect needs it: `layer5-wasm.md`
+  §"The Island Recipe".
 
 ## Feature 59 — Automatic Tree Search (below the line)
 - **L1 — N/A** (Phase A removed the EF model; `user_story_tree_search_entries` is a raw-SQL mart — divergence

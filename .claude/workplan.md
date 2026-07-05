@@ -1443,6 +1443,49 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   CSS×DPR contract — the skill documents setup + intended usage, dated 2026-07-02, not permanent
   limitations.
 
+### WU-L5Pilot — First WASM feature end-to-end (Tag Directory island) — DONE ✓ (2026-07-04)
+- **Cells:** F11 Tag Administration L5 `2 → 5`, F13 Tag Display & Sprites L5 `2 → 5`,
+  F34 Tag Directory L5 `2 → 5`. Purpose: battle-test `layer5-wasm.md` (previously Stage-2 design
+  intent, unbuilt) on one representative feature before the Phase-4 L5 batch applies it broadly
+  (`middle_plan.md` Phase 4 item 6).
+- **Done:**
+  - `Server/Tags/TagEndpoints.cs` — full `ITagRead/WriteService` HTTP surface under `/api/tags`
+    (cluster-colocated, thin pass-throughs, exception→status translation; bodied `Results.Problem`
+    for ALL error statuses — bare `Results.NotFound()` gets re-executed by
+    `UseStatusCodePagesWithReExecute` with the original HTTP method and surfaces as 405).
+  - `Client/Tags/ClientTagReadService` + `ClientTagWriteService` — first minted client HTTP pair
+    (write inherits read; status→exception translation restores the typed-exception contract),
+    registered in `Client/Program.cs`.
+  - `TagDirectoryPage` converted to the island pattern: `[ExcludeFromInteractiveRouting]` +
+    `@rendermode RenderMode.InteractiveWebAssembly` (both load-bearing — without the attribute,
+    in-circuit nav to the page crashes the InteractiveServer circuit) + `[PersistentState]`
+    directory (zero refetch on hydration) + page-level `ThemeContextProvider` wrap.
+  - `ThemeContextProvider` moved `Server/Components/` → `SharedUI/Sprites/` (islands need it;
+    zero server-only deps). `Program.cs`: `AddAuthenticationStateSerialization(SerializeAllClaims
+    = true)` so theme claims + roles reach the WASM runtime. `App.razor` unchanged in the end
+    (`AcceptsInteractiveRouting` covers island pages too).
+- **Verified:** real-browser end to end (2026-07-04): WASM runtime boots on `/tags` (dotnet.wasm
+  + assemblies fetched; `AuthorizeView` evaluates in-browser); anonymous browse + sprite fallback
+  chain identical to server rendering; AdminUser sees mod controls via serialized role claims;
+  create → `POST /api/tags` 200 + psql row + sprite-warning advisory rendered; duplicate name →
+  400 → inline `TagValidationException` message; delete → row gone in psql; cross-navigation
+  both directions (island→home enhanced nav; home→island full-page reload — the pre-fix circuit
+  crash is the documented hazard). `dotnet test` green: 448 Unit (+11 `ClientTagServiceTests`) +
+  446 RazorComponents + 365 Integration (+10 `TagEndpointsTests`).
+- **Tool:** Claude Code (browser-driven verification per `run-server/SKILL.md`). **Pointer:**
+  `layer5-wasm.md` (rewritten from battle-tested reality — the deliverable), `cross-cutting.md`
+  §"Render Mode" + §"ThemeContext Cascading Provider", `testing.md` project-setup reference,
+  audit notes in `audit/Tags.md` (F11/F13) and `audit/Discovery.md` (F34).
+- **Post-verification decision (2026-07-04):** rollout strategy settled — per-feature L5 builds
+  stay headless; the render-mode conversion happens in ONE global `InteractiveAuto` flip + one
+  browser wave (`middle_plan.md` Resolved "L5 rollout strategy"). The pilot's island directives
+  (`[ExcludeFromInteractiveRouting]` + `@rendermode`) and page-level `ThemeContextProvider` wrap
+  were removed from `TagDirectoryPage` — `/tags` rides global `InteractiveServer` again;
+  `[PersistentState]` kept (benefits circuit prerender too). F11/F13/F34 L5 stay Stage 5: the
+  cells' substance (endpoints, client impls, serialized-auth config, tests) is live and green;
+  the WASM-runtime browser verification stands as recorded above. The island recipe survives in
+  `layer5-wasm.md` §"The Island Recipe" as a flip-wave debugging technique.
+
 ---
 
 ## Blocked / deferred — genuine Stage-1 intent gaps (no sequence number)

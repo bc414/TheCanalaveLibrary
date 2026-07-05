@@ -7,9 +7,18 @@
 @* Tag Directory dispatcher — Pattern 2 dispatcher (layer3.5-structure.md §"Dispatcher Pattern").
    Public route (no [Authorize]). Injects both read + write services; write calls owned here
    and triggered via EventCallbacks from TagDirectoryDesktop. Reloads the directory after
-   create/update/delete so state stays fresh without a full page navigation. WU27.5. *@
+   create/update/delete so state stays fresh without a full page navigation. WU27.5.
 
-@if (_isLoading)
+   L5 status (WU-L5Pilot, 2026-07-04): this page ran end-to-end as an InteractiveWebAssembly
+   island to battle-test layer5-wasm.md, then the island directives were removed by decision —
+   the site converts to global InteractiveAuto in a single flip, not via long-lived mixed mode
+   (see layer5-wasm.md §"The Global Flip"). The Layer-5 assets remain live and tested:
+   Server/Tags/TagEndpoints.cs + Client/Tags/ClientTag{Read,Write}Service (resolved in the WASM
+   runtime once the flip lands; Server impls resolve here meanwhile). [PersistentState] below is
+   kept — it prevents the prerender→interactive double fetch under BOTH InteractiveServer today
+   and WASM after the flip. *@
+
+@if (Directory is null)
 {
     <PageTitle>Tag Directory</PageTitle>
     <p class="p-4 text-(--color-text-muted)"><em>Loading…</em></p>
@@ -27,11 +36,11 @@ else
 
     @if (DeviceService.IsMobile())
     {
-        <TagDirectoryMobile Directory="_directory" />
+        <TagDirectoryMobile Directory="Directory" />
     }
     else
     {
-        <TagDirectoryDesktop Directory="_directory"
+        <TagDirectoryDesktop Directory="Directory"
                              OnTagCreated="HandleTagCreatedAsync"
                              OnTagUpdated="HandleTagUpdatedAsync"
                              OnTagDeleted="HandleTagDeletedAsync" />
@@ -39,20 +48,23 @@ else
 }
 
 @code {
-    private List<TagDirectoryGroupDto> _directory = [];
-    private bool _isLoading = true;
+    // Public property (not a private field): [PersistentState] requires one — it round-trips the
+    // prerender pass's value into the interactive pass via the persisted-component-state payload.
+    [PersistentState]
+    public List<TagDirectoryGroupDto>? Directory { get; set; }
+
     private string? _spriteWarning;
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadDirectoryAsync();
+        // Null only when there's no persisted prerender value to restore (first pass, or a
+        // post-write reload has cleared it) — the standard [PersistentState] ??= idiom.
+        Directory ??= await TagReadService.GetTagDirectoryAsync();
     }
 
     private async Task LoadDirectoryAsync()
     {
-        _isLoading = true;
-        _directory = await TagReadService.GetTagDirectoryAsync();
-        _isLoading = false;
+        Directory = await TagReadService.GetTagDirectoryAsync();
     }
 
     private async Task HandleTagCreatedAsync(CreateTagDto dto)

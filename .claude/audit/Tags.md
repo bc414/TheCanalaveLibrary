@@ -60,7 +60,8 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
 ## Feature 11 — Tag Administration
 - **L1 — Stage 5.** `Tag` shape matches §5.16 (curated, staff-only, hierarchy, sprite key, OC flag,
   tooltip description). Sound. **L2 — Stage 2** (no admin/write service). **L3/L3.5 — Stage 2**
-  (mod CRUD behind `AuthorizeView` on Tag Directory). **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
+  (mod CRUD behind `AuthorizeView` on Tag Directory). **L4 — Stage 1. L5 — Stage 5 (WU-L5Pilot,
+  see Stage note below). L6 — Stage 2.**
 
   **Settled for sprite redesign (2026-06-27, do not revisit):** `ServerTagWriteService` gains a
   non-blocking sprite-existence warning via `ISpriteAssetProbe.ExistsAsync` (server-only write-time
@@ -147,6 +148,29 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
     (`TagDirectoryTests.cs`, `TagEditorFormTests.cs`): `FakeTagWriteService` updated to return
     `Task<TagSaveResult>` / `Task<string?>`. All cells (F11 L2/L3/L3.5) remain Stage 5 — the changes
     are additive corrections to already-Stage-5 code; no regression found.
+
+  **WU-L5Pilot Stage note — L5 (2026-07-04):**
+
+  Built as the project's first Layer-5 surface (the `layer5-wasm.md` battle-test pilot):
+  `Server/Tags/TagEndpoints.cs` (`/api/tags` group: directory/by-type/chips reads public;
+  POST/PUT/DELETE writes rely on the service's `RequireMod` gate, endpoint translates
+  `TagValidationException`→400-with-`ProblemDetails.Detail`, `UnauthorizedAccessException`→403,
+  `KeyNotFoundException`→404 — all as **bodied** `Results.Problem`, since body-less error results
+  get re-executed by `UseStatusCodePagesWithReExecute` with the original HTTP method and surface
+  as 405). `Client/Tags/ClientTagWriteService : ClientTagReadService` mirrors the server
+  inheritance and rethrows the same typed exceptions from status codes, so `TagDirectoryDesktop`'s
+  existing catch-and-display works unchanged in WASM.
+
+  **How verified (2026-07-04):** **Integration** (`TagEndpointsTests`, 10 tests via
+  `Factory.CreateClient()`): directory grouping, enum-from-query + repeated-`ids` binding with
+  order preservation, 403 non-mod, 200 create + DB row, 400 duplicate with detail message, 400
+  route/body mismatch, 404 unknown tag, 204 delete + row gone, 400 in-use delete. **Unit**
+  (`ClientTagServiceTests`, 11 tests, canned `HttpMessageHandler`): URL/verb shapes, blank-term
+  short-circuit, `TagSaveResult`/JSON-null round trips, 400→`TagValidationException` (message from
+  `ProblemDetails.Detail`), 401/403→`UnauthorizedAccessException`, 404→`KeyNotFoundException`,
+  unmapped→`HttpRequestException`. **Browser (L4.5 band):** full mod CRUD driven on the live WASM
+  island — create with sprite-warning advisory, duplicate-name inline error, confirmed delete —
+  each mutation checked against psql ground truth.
 
 ## Feature 12 — Story Tagging
 - **L1 — Stage 5.** `StoryTag`, `StoryCharacter`, `StoryCharacterPairing` (renamed from
@@ -302,6 +326,17 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
   all six `TagTypeEnum` background classes (Theory); sprite `<img>` present/absent; `Description` as
   `title`; remove button present only with `OnRemove` delegate; click invokes callback. `dotnet test`
   green.
+- **L5 — Stage 5 (WU-L5Pilot, 2026-07-04).** The tag-display read path now runs in WASM:
+  `Client/Tags/ClientTagReadService` (HttpClient over `Server/Tags/TagEndpoints.cs` — supersedes
+  the L2 note's "no Client/L5 impl yet"), registered in `Client/Program.cs`. Sprite resolution in
+  WASM works via `ThemeContextProvider` **moved to `SharedUI/Sprites/`** (islands can't receive
+  Routes.razor's cascade) + `AddAuthenticationStateSerialization(SerializeAllClaims = true)` so
+  the theme claims reach the client. **How verified:** Unit tier `ClientTagServiceTests` (URL
+  shapes, deserialization, blank-term short-circuit); Integration tier `TagEndpointsTests` (read
+  endpoints incl. binding); browser band — `TagChip` sprites render on the live `/tags` WASM
+  island with the full `onerror` fallback chain (animated 404 → static 200), byte-identical to
+  server rendering. `TagSelector`'s typeahead path in WASM remains untested-in-browser (no WASM
+  page hosts it yet — that's Feature 14 L5, still Stage 2).
 
 ## Feature 14 — Tag Filtering & Selection UI
 - **L1 — N/A.**

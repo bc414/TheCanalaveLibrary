@@ -30,6 +30,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 - **Component-soundness wave done (WU-ComponentSoundness, 2026-06-27).** Three compile-clean Stage-5 patterns corrected: F1 (route-param dispatchers now reload in `OnParametersSetAsync` — ProfilePage, BookshelvesPage, GroupPage, BlogPostPage, StoryPage, ChapterReadingPage), F2 (StoryDeck `@key` — fixes `UserStoryInteractionPanel._localState` data-corruption on list swap), F3 (CommentSection `@key` — fixes `_isRevealed` spoiler-state bleed on pagination). No stage-number changes (cells were already Stage 5 — the wave closes a latent correctness gap). `dotnet test` 1235/1235 pass (446 RazorComponents + 437 Unit + 352 Integration). Detail: `workplan.md` WU-ComponentSoundness; audit notes in `audit/Stories.md`, `audit/Comments.md`, `audit/Recommendations.md`, `audit/Profiles.md`, `audit/Groups.md`, `audit/BlogPosts.md`, `audit/UserStoryInteractions.md`.
 - **First browser-debugging wave done (WU-BrowserPass, 2026-07-01).** Read context now factory-per-method (`AddDbContextFactory`, scoped — supersedes spec §6.6, plain `AddDbContext` remains for the write context); all 987 Tailwind token classes converted to v4 `-(--token)` syntax; chapter editor, comment composer, dev-login fixes. All fixed same-session — no grid changes. Login, navigation, authoring→reading, social, and mod flows verified in a real browser. `dotnet test` 1238/1238 (355 Integration incl. 3 new concurrency regressions). Detail: `workplan.md` WU-BrowserPass; `layer2-services.md` §"Read-Context Concurrency"; `layer4-style.md` §"Consuming tokens in classes"; `canalave-conventions/debugging.md`.
 - **`forward_plan.md` retired (2026-07-03); `.claude/middle_plan.md` is the live master plan** (MVP → beta → launch; L5–L8 re-scoped pre-beta). Planning artifact — no cell Stage changed. Detail: `middle_plan.md` "Where you are".
+- **L5 WASM pilot landed (WU-L5Pilot, 2026-07-04); rollout strategy settled same day.** `layer5-wasm.md` is battle-tested (was provisional design intent): Tags-cluster endpoints + client HTTP services + serialized auth verified end-to-end in a real WASM runtime. Rollout is per-feature headless builds → **one global `InteractiveAuto` flip** (no long-lived mixed mode; the pilot's island directives on `/tags` were removed after verification — the page rides global `InteractiveServer` until the flip). Rule: `layer5-wasm.md`. Detail: `workplan.md` WU-L5Pilot; `audit/Tags.md` F11/F13; `audit/Discovery.md` F34; `middle_plan.md` Resolved.
 - **Desktop top bar built (2026-07-01).** `DesktopLayout`'s placeholder sidebar/stub bar replaced with a real sticky nav (brand, Home/Discover/Tags/Groups, `CreateMenu`, `UserMenu` profile dropdown); no dedicated grid row (navigation is persistent-layout chrome, not a tracked feature). Detail: `layer4-style.md` Pattern Accumulation "`DesktopLayout` top bar / `UserMenu` / `CreateMenu`".
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L4.5-Browser | L5 | L6 | L7 | L8 |
@@ -44,9 +45,9 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |
 | 9 | Series & Ordering | Stories | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A | N/A |
 | 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A | N/A |
-| 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 2 | N/A | N/A |
+| 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A | N/A |
 | 12 | Story Tagging | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A | N/A |
-| 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
+| 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
 | 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A | N/A |
 | 15 | Saved Tag Selections | Tags | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A | N/A |
 | 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
@@ -67,7 +68,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 31 | Search Page | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 2 | 2 | N/A | N/A |
 | 32 | Full-Text Search | Discovery | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 5 | N/A | N/A |
 | 33 | Manual Tree Search | Discovery | N/A | 2 | 2 | 2 | 1 | 1 | 2 | 2 | N/A | N/A |
-| 34 | Tag Directory | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A | N/A |
+| 34 | Tag Directory | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A | N/A |
 | 35 | Blog Post Writing | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 2 | N/A | N/A |
 | 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A | N/A |
 | 37 | Polls | BlogPosts | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A | N/A |

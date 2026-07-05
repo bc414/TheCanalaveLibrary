@@ -137,10 +137,15 @@ most from beta data but must exist before it).
 5. **SignalR messaging push** — settled WU35 design; first app-level Hub (`MessagesHub`).
    Needs a hub integration-test harness (none exists yet). Pointer: `cross-cutting.md`
    "Private Messaging Architecture".
-6. **L5 WASM enablement** — endpoints + `Http*Service` impls from the frozen `IXService`
+6. **L5 WASM enablement** — endpoints + `Client*Service` impls from the frozen `IXService`
    contracts, including the two genuine mechanical Stage-4 cells (Story L5 endpoint wiring,
    Sprites L5). Deliberately last in this batch: once it lands, every subsequent L2 contract
-   change also costs an endpoint + client-impl touch. Governed by `layer5-wasm.md`.
+   change also costs an endpoint + client-impl touch. Governed by `layer5-wasm.md` — battle-
+   tested as of WU-L5Pilot (2026-07-04, Tags cluster: F11/F13/F34 L5 Stage 5), so this batch is
+   pattern-application, not discovery. Shape (rollout strategy settled 2026-07-04, see Resolved):
+   per-feature endpoint + client-pair builds, headless (Integration + Unit tiers); then the
+   **single global `InteractiveAuto` flip** + one whole-site browser debug wave per
+   `layer5-wasm.md` §"The Global Flip" (Routes.razor moves client-side there).
 7. **L8 data marts + consumers + workers** — raw-SQL marts, no EF model (settled): then
    Automatic Tree Search (59), Also Favorited/Recommended (61), workers 57/58/60/62.
    Sparse-data results expected until beta traffic accumulates; that's fine — beta is what
@@ -180,6 +185,15 @@ strategy (user secrets → env vars).
 
 Newest first. Every entry points at the doc that now states the rule. Entries up to 2026-07-01
 are carried verbatim from `forward_plan.md`.
+
+- **L5 rollout strategy — single global flip, no long-lived mixed mode** — resolved
+  (2026-07-04, WU-L5Pilot): per-feature endpoint/client-impl work lands incrementally and
+  headlessly; the render-mode conversion to `InteractiveAuto` happens in one whole-site pass
+  followed by one browser debug wave. `InteractiveAuto` requires dual implementations behind
+  every reachable interface (no fallback for missing client DI), and mixed-mode pages cost UX
+  degradations + a circuit-crash hazard for no early user value. The pilot's island directives
+  on `/tags` were removed accordingly; the island recipe survives as a debugging/staged-rollout
+  technique. Rule: `layer5-wasm.md` §"Rollout Strategy" / §"The Global Flip".
 
 - **Revised MVP cutoff — L5–L8 land pre-beta** — resolved (2026-07-03): the L1–L4 scheduling
   boundary is retired; see "Where you are" above for rationale and accepted costs.

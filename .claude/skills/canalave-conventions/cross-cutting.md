@@ -37,6 +37,14 @@ hardcode the render mode — confirmed current for .NET 9/10/11 against `render-
 **Dev shortcut (spec-sanctioned):** during active development, use `InteractiveServer` globally
 (faster debugging, no API controllers needed yet). Switch to `InteractiveAuto` when shipping WASM.
 
+**L5 rollout (settled):** per-feature endpoints + client impls land incrementally (headless,
+inert until a WASM pass runs); the render-mode conversion happens **once, globally** — no
+long-lived mixed-mode pages. `InteractiveAuto` requires both impls behind every reachable
+interface (client cache state decides the runtime; missing client DI = browser crash, no
+fallback). A single page CAN run as a WASM island (`[ExcludeFromInteractiveRouting]` +
+`@rendermode RenderMode.InteractiveWebAssembly`, both required) — a debugging/staged-rollout
+technique only. Strategy, Auto semantics, island recipe, and flip checklist: `layer5-wasm.md`.
+
 **Two valid syntaxes for render mode directives:**
 
 ```razor
@@ -211,7 +219,8 @@ cascading value fed by the root `ThemeContextProvider` component.
 public record ThemeContext(string Slug, bool PrefersAnimated);
 ```
 
-**Provider** (`Server/Components/ThemeContextProvider.razor`) — nested directly inside
+**Provider** (`SharedUI/Sprites/ThemeContextProvider.razor` — moved from `Server/Components/`
+in WU-L5Pilot so WASM islands can render it too) — nested directly inside
 `CascadingAuthenticationState` in `Routes.razor`, outside `AuthorizeRouteView`. Reads
 `canalave:theme` and `canalave:prefers_animated_sprites` claims off the cascaded
 `Task<AuthenticationState>`; falls back to `("pokemon", true)` for anonymous users.
@@ -220,6 +229,11 @@ Exposes `<CascadingValue Value="@_themeContext">`.
 **Why claims, not IActiveUserContext:** claims are present in **both** the prerender pass
 (static SSR) and the interactive pass. Because both passes read from the same claim source,
 the resolved sprite URL is byte-identical across the SSR→interactive handoff → **no flicker**.
+This carries into WASM: the server serializes all claims into the persisted auth state
+(`AddAuthenticationStateSerialization(o => o.SerializeAllClaims = true)`), so the same two
+claims are readable client-side. Routes' cascade can't cross into a WASM island, so an island
+page wraps its own content in `<ThemeContextProvider>` (see `TagDirectoryPage`,
+`layer5-wasm.md` §"ThemeContext in WASM").
 
 **Consumer pattern** (`TagChip.razor`, `TagSelector.razor`, `CharacterEntry.razor`):
 

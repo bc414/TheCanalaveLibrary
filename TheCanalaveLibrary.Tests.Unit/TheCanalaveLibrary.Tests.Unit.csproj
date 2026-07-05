@@ -24,6 +24,9 @@
     <!-- Server reference enables host-free Server-service unit tests (sanitizer, sprite-resolver).
          EF types are transitively available — keep no DbContext in Unit tests per testing.md. -->
     <ProjectReference Include="..\TheCanalaveLibrary.Server\TheCanalaveLibrary.Server.csproj" />
+    <!-- Client reference enables host-free HttpClient-service unit tests (Client{Feature}Services
+         constructed over a fake HttpMessageHandler — see testing.md "Project setup reference"). -->
+    <ProjectReference Include="..\TheCanalaveLibrary.Client\TheCanalaveLibrary.Client.csproj" />
   </ItemGroup>
 
 </Project>

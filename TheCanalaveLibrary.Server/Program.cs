@@ -13,7 +13,10 @@ builder.AddServiceDefaults();
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents()
-    .AddAuthenticationStateSerialization();
+    // SerializeAllClaims: the default set is name + role claims only. WASM components also need
+    // the custom claims baked in by ApplicationUserClaimsPrincipalFactory (Theme,
+    // PrefersAnimatedSprites → ThemeContextProvider sprite resolution client-side).
+    .AddAuthenticationStateSerialization(options => options.SerializeAllClaims = true);
 
 // Add HttpContextAccessor to access the HttpContext from services.
 builder.Services.AddHttpContextAccessor();
@@ -256,6 +259,7 @@ app.MapRazorComponents<App>()
 app.MapAdditionalIdentityEndpoints();
 
 app.MapStoryEndpoints();
+app.MapTagEndpoints();
 
 app.Run();
 

@@ -12,8 +12,8 @@ project the type-under-test lives in.
 
 | Tier | Project | What it can `new` / spin up | Targets |
 |---|---|---|---|
-| **Unit** | `TheCanalaveLibrary.Tests.Unit` (references Core **and** Server) | Any type constructed directly — no `WebApplicationFactory`, no Testcontainers, no `DbContext` | Pure logic: `StoryValidations`, `StoryMappers`, `StorySlug.Slugify`; **and** host-free Server services: `ServerHtmlSanitizationService` (no deps), `ServerSpriteReadService` (fake `IWebHostEnvironment`) |
-| **Integration** | `TheCanalaveLibrary.Tests.Integration` (references Server) | `WebApplicationFactory<Program>` + Testcontainers Postgres | `Server{Feature}{Read,Write}Service` impls, content-rating query filter, EF projections, unique indexes, `IImageStorageService`, `UserDeletionService` |
+| **Unit** | `TheCanalaveLibrary.Tests.Unit` (references Core, Server, **and** Client) | Any type constructed directly — no `WebApplicationFactory`, no Testcontainers, no `DbContext` | Pure logic: `StoryValidations`, `StoryMappers`, `StorySlug.Slugify`; host-free Server services: `ServerHtmlSanitizationService` (no deps), `ServerSpriteReadService` (fake `IWebHostEnvironment`); **and** `Client{Feature}Service` HTTP impls over a canned `HttpMessageHandler` (`ClientTagServiceTests`) |
+| **Integration** | `TheCanalaveLibrary.Tests.Integration` (references Server) | `WebApplicationFactory<Program>` + Testcontainers Postgres | `Server{Feature}{Read,Write}Service` impls, content-rating query filter, EF projections, unique indexes, `IImageStorageService`, `UserDeletionService`; **L5 `{Feature}Endpoints` via `Factory.CreateClient()`** (routing, binding, exception→status mapping — see `TagEndpointsTests`) |
 | **RazorComponents** | `TheCanalaveLibrary.Tests.RazorComponents` (references SharedUI, Client) | bUnit `TestContext` — renders Razor components without a real host or DB | **L3 `@code` logic only:** EventCallback invocations with correct arg values, service method calls triggered by interaction, non-trivial computed state. Not L3.5 markup structure or L4 style. |
 
 **The placement rule is behavioral, not by production project.** If you can `new` the
@@ -267,8 +267,11 @@ fixtures without checking the relevant audit file for a note that they were deli
 ## Project setup reference
 
 - **`TheCanalaveLibrary.Tests.Unit`**: `xunit`, `xunit.runner.visualstudio`,
-  `Microsoft.NET.Test.Sdk`, `FluentAssertions`, `coverlet.collector`. Project references: Core
-  **and** Server (enables host-free Server-service tests; keep no `DbContext` in Unit tests).
+  `Microsoft.NET.Test.Sdk`, `FluentAssertions`, `coverlet.collector`. Project references: Core,
+  Server (enables host-free Server-service tests; keep no `DbContext` in Unit tests), **and
+  Client** — `Client{Feature}Service` HttpClient impls are directly constructible over a canned
+  `HttpMessageHandler`, so their URL-shape and status→exception-translation tests are Unit by
+  the behavioral placement rule (see `ClientTagServiceTests`).
 - **`TheCanalaveLibrary.Tests.Integration`**: same xUnit/FluentAssertions packages, plus
   `Testcontainers.PostgreSql`, `Microsoft.AspNetCore.Mvc.Testing`, and `Respawn`. Project
   reference: Server. All test classes inherit `IntegrationTestBase` (provides factory

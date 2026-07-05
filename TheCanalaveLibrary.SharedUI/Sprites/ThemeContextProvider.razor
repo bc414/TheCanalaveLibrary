@@ -1,0 +1,37 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Cascades the viewer's ThemeContext from the two sprite scalars on the cascaded
+   ClaimsPrincipal. Claims are present in the SSR prerender pass, the InteractiveServer pass,
+   AND (since the L5 WASM pilot) the WASM pass — the server serializes all claims into the
+   persisted auth state (Program.cs AddAuthenticationStateSerialization SerializeAllClaims) and
+   the client deserializes them — so the resolved ThemeContext (and therefore every downstream
+   <img src>) is byte-identical across every handoff → no flicker.
+
+   Lives in SharedUI (not Server/Components) because WASM islands need it too: cascading values
+   from the server-rendered tree do NOT cross into an interactive island, so an island page
+   supplies its own provider around its content (see TagDirectoryPage), while Routes.razor keeps
+   the app-level one for the server-interactive tree. Zero server-only dependencies — it reads
+   only the cascaded AuthenticationState, supplied by AddCascadingAuthenticationState on both
+   sides. See cross-cutting.md "ThemeContext Cascading Provider." *@
+
+<CascadingValue Value="@_context">
+    @ChildContent
+</CascadingValue>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private ThemeContext _context = ThemeContext.Default;
+
+    protected override async Task OnInitializedAsync()
+    {
+        AuthenticationState auth = await AuthState;
+        System.Security.Claims.ClaimsPrincipal user = auth.User;
+
+        string slug = user.FindFirst(ActiveUserClaimTypes.Theme)?.Value ?? ThemeContext.Default.Slug;
+        bool animated = !bool.TryParse(user.FindFirst(ActiveUserClaimTypes.PrefersAnimatedSprites)?.Value, out bool val) || val;
+
+        _context = new ThemeContext(slug, animated);
+    }
+}
