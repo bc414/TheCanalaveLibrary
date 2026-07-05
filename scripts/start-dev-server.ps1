@@ -1,7 +1,8 @@
-# Starts the Canalave Library dev server (TheCanalaveLibrary.Server, Development environment).
-# On startup the app applies EF migrations (creating the database if it does not exist) and runs
-# DataSeeder (mode per appsettings.Development.json "DevSeed"). MVP dev runs the Server project
-# directly - no Aspire AppHost, no Redis, no WASM.
+# Starts the Canalave Library dev server, SERVER-ONLY PATH (TheCanalaveLibrary.Server directly,
+# Development environment, local PostgreSQL on 5432). On startup the app applies EF migrations
+# (creating the database if it does not exist) and runs DataSeeder (mode per
+# appsettings.Development.json "DevSeed"). For the Aspire-orchestrated path (containerized
+# Postgres/Redis/MinIO + dashboard) use scripts\start-aspire.ps1 instead - both paths bind 5028.
 #
 #   .\scripts\start-dev-server.ps1                # foreground (Ctrl+C to stop) - manual use
 #   .\scripts\start-dev-server.ps1 -Background    # detached, logs to file, waits for "Now listening"

@@ -975,28 +975,46 @@ recommendations, profile bios, blog posts, AND private messages. Desktop shows f
 shows compact toolbar with overflow for less-used formatting **(deferred — WU6 shipped desktop only;
 not MVP-blocking, see `layer3.5-structure.md` "Third-Party Wrapper Composite")**.
 
-## .NET Aspire 13 Configuration
+## Aspire 13 Configuration
 
-AppHost defines dev containers; it **never deploys**:
+Live since 2026-07-05 (WU-Aspire). AppHost defines dev containers; it **never deploys**. The
+authoritative resource graph is `AppHost/AppHost.cs` itself (Postgres 18 on host port 5433 →
+`canalavedb`; Redis as `cache` on 6379; MinIO pinned-image `AddContainer` on 9000/9001; web =
+Server's `http` launch profile → 5028). Run/stop/wipe workflow: `run-server/SKILL.md` "Aspire path".
 
-```csharp
-var postgres = builder.AddPostgres("postgres").AddDatabase("canalavedb");
-var redis = builder.AddRedis("redis");
-var minio = builder.AddMinIO("minio");
+Standing rules, all applied in `AppHost.cs`:
 
-builder.AddProject<Projects.TheCanalaveLibrary_Server>("web")
-    .WithReference(postgres)
-    .WithReference(redis)
-    .WithReference(minio);
-```
+- **Version alignment is a correctness constraint:** the `Aspire.AppHost.Sdk` (the csproj's
+  top-level SDK since 13.x — it encapsulates `Aspire.Hosting.AppHost`, no explicit package),
+  every `Aspire.Hosting.*` package, and any app-side `Aspire.*` client package ride the same
+  version (13.4.6). DCP + dashboard are delivered through the SDK's NuGet pin — a mismatched SDK
+  runs mismatched orchestration binaries. `aspire update` bumps the whole set.
+- **Persistent-lifetime containers + named volumes + stable secrets.** All three backing services
+  use `WithLifetime(ContainerLifetime.Persistent)`, `WithContainerName("canalave-…")`, and named
+  `-data` volumes. Passwords are `AddParameter(..., secret: true)` from AppHost **user secrets**
+  (`Parameters:postgres-password`, `Parameters:minio-password`) — a stable password is mandatory
+  once a data volume exists (a regenerated one no longer matches the initialized cluster).
+- **The Server consumes plain connection strings.** `WithReference(canalaveDb)` injects
+  `ConnectionStrings__canalavedb` as an env var, which overrides `appsettings.Development.json`;
+  plain `GetConnectionString("canalavedb")` + `AddDbContext` just works. **No Aspire Npgsql EF
+  client package** — `AddNpgsqlDbContext` stays banned per `layer2-services.md` "DbContext
+  Registration" (pooling vs. Scoped `IActiveUserContext`). Redis will consume by logical name
+  `cache` (`layer7-redis.md`).
+- **The dev S3 endpoint is Garage (`dxflrs/garage`), a plain `AddContainer`** — settled 2026-07-05,
+  superseding the spec's MinIO (OSS archived 2026-02; its Aspire toolkit package deprecated).
+  `--single-node --default-bucket` bootstraps layout/key/bucket from `GARAGE_DEFAULT_*` env vars
+  (restart-idempotent); config bind-mounted from `AppHost/garage.toml`, whose `s3_region` must
+  match the injected `ImageStorage:S3:Region` ("garage"). The client side is **the same AWS S3 SDK
+  code** as Cloudflare R2 in prod — interchangeable only under the three wire-format constraints
+  centralized in `S3ImageStorageService.CreateClient` (unchunked uploads, WHEN_REQUIRED checksums,
+  path-style); rationale + R2 specifics: `audit/ImageStorage.md` "R2 interchangeability".
+- **ServiceDefaults** holds shared cross-cutting config (telemetry, health checks, resilience);
+  under the AppHost the OTLP env vars light up the dashboard's logs/traces/metrics automatically.
 
-- **ServiceDefaults** holds shared cross-cutting config (telemetry, health checks, resilience).
-- Consume references by **logical name** (`builder.AddNpgsqlDbContext<ApplicationDbContext>("canalavedb")`).
-- MinIO uses the **same AWS S3 SDK code** as Cloudflare R2 in prod.
-
-**Dual-Configuration Strategy:** `dotnet ef` CLI cannot see AppHost's configuration. The connection
-string must exist in both AppHost's user secrets (runtime) and server project's user secrets
-(design-time EF tooling).
+**Dual-Configuration Strategy:** `dotnet ef` CLI cannot see AppHost's configuration. Design-time EF
+tooling and the server-only run path both read the Server project's own configuration
+(`appsettings.Development.json` → local Postgres 5432); the AppHost env-var injection only exists
+at Aspire runtime. The two run paths therefore point at **different databases** by design.
 
 ## Read Replica Awareness
 

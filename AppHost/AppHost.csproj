@@ -1,6 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
-
-    <Sdk Name="Aspire.AppHost.Sdk" Version="9.5.2" />
+<Project Sdk="Aspire.AppHost.Sdk/13.4.6">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -11,9 +9,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Aspire.Hosting.AppHost" Version="13.4.5" />
-        <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.4.5" />
-        <PackageReference Include="Aspire.Hosting.Redis" Version="13.4.5" />
+        <!-- Aspire 13: the AppHost SDK is the project's top-level SDK and encapsulates
+             Aspire.Hosting.AppHost - no explicit PackageReference to it anymore. Hosting
+             integration packages must stay version-aligned with the SDK. -->
+        <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.4.6" />
+        <PackageReference Include="Aspire.Hosting.Redis" Version="13.4.6" />
         <PackageReference Include="System.Security.Cryptography.Xml" Version="10.0.9" />
     </ItemGroup>
 

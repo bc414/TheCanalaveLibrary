@@ -1,0 +1,21 @@
+# Garage config for the Aspire dev container (mounted read-only at /etc/garage.toml by
+# AppHost.cs). Single-node dev mode: the container runs `garage server --single-node
+# --default-bucket`, which auto-creates the layout, an access key from
+# GARAGE_DEFAULT_ACCESS_KEY/GARAGE_DEFAULT_SECRET_KEY, and the GARAGE_DEFAULT_BUCKET bucket.
+# rpc_secret comes from the GARAGE_RPC_SECRET env var (AppHost user secrets), not this file.
+# s3_region here must match ImageStorage:S3:Region injected into the web app ("garage") —
+# Garage rejects requests signed for any other region.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "[::]:3900"
+root_domain = ".s3.garage.localhost"

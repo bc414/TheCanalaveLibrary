@@ -130,9 +130,28 @@ builder.Services.AddScoped<ITagWriteService, ServerTagWriteService>();
 // Server-only write-time probe — checks File.Exists at mod-write time (never at render time).
 // Post-MVP: replace with R2SpriteAssetProbe behind this same interface. See audit/Sprites.md L2.
 builder.Services.AddSingleton<ISpriteAssetProbe, LocalSpriteAssetProbe>();
-// MVP impl writes under wwwroot/uploads/ — settled WU12. Post-MVP swap target: S3ImageStorageService
-// (MinIO dev / R2 prod), behind this same interface — see workplan.md Post-MVP section.
-builder.Services.AddScoped<IImageStorageService, LocalImageStorageService>();
+// Image storage provider switch (WU-S3Garage): "Local" (default — wwwroot/uploads, static
+// files) or "S3" (Garage in dev via the Aspire AppHost's env injection, Cloudflare R2 in prod)
+// behind the same frozen IImageStorageService. Read eagerly like the connection string above —
+// fine in production/Aspire where env vars exist at boot; the integration-test host always gets
+// Local (see TestAppFactory's config-eagerness note). S3 mode also maps the /uploads serving
+// route below. Wire-format constraints that keep Garage and R2 interchangeable live in
+// S3ImageStorageService.CreateClient.
+string imageStorageProvider = builder.Configuration["ImageStorage:Provider"] ?? "Local";
+bool useS3ImageStorage = imageStorageProvider.Equals("S3", StringComparison.OrdinalIgnoreCase);
+if (useS3ImageStorage)
+{
+    builder.Services.Configure<S3ImageStorageOptions>(
+        builder.Configuration.GetSection(S3ImageStorageOptions.SectionName));
+    // One client for the process — AmazonS3Client is thread-safe and holds the connection pool.
+    builder.Services.AddSingleton<Amazon.S3.IAmazonS3>(sp => S3ImageStorageService.CreateClient(
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<S3ImageStorageOptions>>().Value));
+    builder.Services.AddScoped<IImageStorageService, S3ImageStorageService>();
+}
+else
+{
+    builder.Services.AddScoped<IImageStorageService, LocalImageStorageService>();
+}
 // Configuration happens once at construction and Sanitize() is thread-safe thereafter, so this is a
 // singleton rather than scoped (see ServerHtmlSanitizationService). First call site: WU17 chapter
 // write service. Future: WU19 comments, WU29 recommendations, WU31 blog posts, WU35 messaging.
@@ -260,6 +279,14 @@ app.MapAdditionalIdentityEndpoints();
 
 app.MapStoryEndpoints();
 app.MapTagEndpoints();
+
+// S3 mode only: stored /uploads/… URLs resolve from the bucket instead of wwwroot. Local mode
+// must NOT map this — without a configured IAmazonS3 the handler can't resolve, and static
+// files already serve those paths.
+if (useS3ImageStorage)
+{
+    app.MapImageServingEndpoints();
+}
 
 app.Run();
 

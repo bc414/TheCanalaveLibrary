@@ -3,71 +3,53 @@ using TheCanalaveLibrary.Core;
 namespace TheCanalaveLibrary.Server;
 
 /// <summary>
-/// MVP implementation of <see cref="IImageStorageService"/> — writes under <c>wwwroot/uploads/</c>,
-/// served directly by <c>UseStaticFiles()</c>. Returns a host-relative URL (e.g.
-/// <c>/uploads/stories/5/cover-{uuid}.jpg</c>) that resolves against whatever origin the app is
-/// running on — localhost in dev, the real domain once deployed — see audit/ImageStorage.md "URL
-/// conventions". Post-MVP swap target: <c>S3ImageStorageService</c> (AWSSDK.S3, MinIO/R2 endpoints)
-/// behind this same interface — see workplan.md Post-MVP section.
+/// Filesystem implementation of <see cref="IImageStorageService"/> — writes under
+/// <c>wwwroot/uploads/</c>, served directly by <c>UseStaticFiles()</c>. Returns a host-relative URL
+/// (e.g. <c>/uploads/stories/5/cover-{uuid}.jpg</c>) that resolves against whatever origin the app
+/// is running on — see audit/ImageStorage.md "URL conventions". The default provider
+/// (<c>ImageStorage:Provider</c> = <c>Local</c>); <c>S3ImageStorageService</c> is the S3-compatible
+/// alternative (Garage in dev via Aspire, Cloudflare R2 in prod) behind this same interface.
+/// Validation rules and key convention are shared via <see cref="ImageUploadRules"/> so stored
+/// paths stay interchangeable across implementations.
 /// </summary>
 public class LocalImageStorageService(IWebHostEnvironment env) : IImageStorageService
 {
-    private const long MaxBytes = 10 * 1024 * 1024; // 10 MB
-
-    private static readonly Dictionary<string, string> AllowedContentTypes = new()
-    {
-        ["image/jpeg"] = "jpg",
-        ["image/png"] = "png",
-        ["image/webp"] = "webp"
-    };
-
     public async Task<string> SaveAsync(Stream content, string contentType, ImageKind kind, int ownerId)
     {
-        if (!AllowedContentTypes.TryGetValue(contentType, out string? extension))
+        string extension = ImageUploadRules.ExtensionFor(contentType);
+
+        if (content.CanSeek && content.Length > ImageUploadRules.MaxBytes)
         {
-            throw new ArgumentException($"Unsupported image content type: {contentType}", nameof(contentType));
+            throw new ArgumentException(
+                $"Image exceeds the {ImageUploadRules.MaxBytes / (1024 * 1024)} MB limit.", nameof(content));
         }
 
-        if (content.CanSeek && content.Length > MaxBytes)
-        {
-            throw new ArgumentException($"Image exceeds the {MaxBytes / (1024 * 1024)} MB limit.", nameof(content));
-        }
+        string key = ImageUploadRules.BuildKey(kind, ownerId, extension);
 
-        // Spec §3.17 key convention — honored by both this impl and the Post-MVP S3ImageStorageService
-        // so a stored path is interchangeable across implementations (no data migration on swap).
-        string subfolder = kind switch
-        {
-            ImageKind.Cover => $"stories/{ownerId}",
-            ImageKind.ProfilePicture => $"users/{ownerId}",
-            _ => throw new ArgumentOutOfRangeException(nameof(kind))
-        };
-        string filePrefix = kind == ImageKind.Cover ? "cover" : "profile";
-        string fileName = $"{filePrefix}-{Guid.NewGuid()}.{extension}";
+        string fullPath = Path.Combine(env.WebRootPath, "uploads", key.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
 
-        string directory = Path.Combine(env.WebRootPath, "uploads", subfolder.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(directory);
-
-        string fullPath = Path.Combine(directory, fileName);
         await using FileStream fileStream = File.Create(fullPath);
         await content.CopyToAsync(fileStream);
 
         // Host-relative — never a full URL (spec §3.17 explicitly rejected storing one).
-        return $"/uploads/{subfolder}/{fileName}";
+        return ImageUploadRules.UploadsPrefix + key;
     }
 
     public Task DeleteAsync(string relativePath)
     {
-        if (string.IsNullOrWhiteSpace(relativePath) || !relativePath.StartsWith("/uploads/"))
+        // TryExtractKey rejects non-/uploads/ values and any ".." traversal segment — the same
+        // defensive stance the pre-refactor Path.GetFullPath check provided.
+        string? key = ImageUploadRules.TryExtractKey(relativePath);
+        if (key is null)
         {
             return Task.CompletedTask;
         }
 
         string uploadsRoot = Path.GetFullPath(Path.Combine(env.WebRootPath, "uploads"));
-        string relativeDiskPath = relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-        string fullPath = Path.GetFullPath(Path.Combine(env.WebRootPath, relativeDiskPath));
+        string fullPath = Path.GetFullPath(Path.Combine(uploadsRoot, key.Replace('/', Path.DirectorySeparatorChar)));
 
-        // Defensive: reject anything that escapes wwwroot/uploads/ via "..", even though relativePath
-        // should only ever be a value this class itself previously returned.
+        // Belt-and-suspenders: even with segment validation above, never delete outside uploads/.
         if (!fullPath.StartsWith(uploadsRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
         {
             return Task.CompletedTask;

@@ -124,13 +124,22 @@ most from beta data but must exist before it).
    service discovery, connection-string wiring. Constraints to honor: plain `AddDbContext`
    stays (WU12's anti-pooling ruling holds — no Aspire Npgsql EF client package); the
    dev-without-Aspire path (`scripts/` + `run-server` skill) remains supported.
+   **DONE ✓ (2026-07-05)** — both constraints held (zero Server code changed); see
+   `workplan.md` WU-Aspire. (The WU's provisional MinIO container was replaced by Garage the same
+   week when item 3 was built — see item 3 and Resolved "Garage replaces MinIO".)
 2. **L6 index batch** — regenerate the UserStoryInteraction filtered indexes off the
    re-modeled `has_started` columns (16/17 L6), comment golden index
    `(chapter_id, date_posted DESC)`, StoryTag reverse index. Pure DDL; contracts frozen.
    Pointers: per-folder audit L6 notes; `layer6-indexes.md`.
 3. **S3/R2 image storage** — `S3ImageStorageService` (`AWSSDK.S3`) behind the frozen
-   `IImageStorageService`; MinIO endpoint in dev (via Aspire), Cloudflare R2 in production.
+   `IImageStorageService`; **Garage** endpoint in dev (via Aspire — supersedes the spec's MinIO,
+   see Resolved 2026-07-05), Cloudflare R2 in production.
    Settled 2026-07-03: this lands **before launch**. Pointer: `audit/ImageStorage.md`.
+   **DONE ✓ (2026-07-05)** — built out of order (pulled ahead of L6/Phase 1 by Brian, with the
+   Garage decision); frozen interface + call sites untouched, so no ordering cost. The R2 side
+   needs only Phase-6 config values (account id / API token / bucket — decision row 4); the
+   wire-format compatibility work is done and encoded (`audit/ImageStorage.md`
+   "R2 interchangeability").
 4. **L7 Redis** — write-behind (16/17 interaction writes, 45 view counts via `INCR`),
    ephemeral store (44 LastReadDate hash), read-side caches. Method-body swaps behind
    unchanged signatures. Governed by `layer7-redis.md`.
@@ -185,6 +194,13 @@ strategy (user secrets → env vars).
 
 Newest first. Every entry points at the doc that now states the rule. Entries up to 2026-07-01
 are carried verbatim from `forward_plan.md`.
+
+- **Garage replaces MinIO as the dev S3 endpoint** — resolved (2026-07-05, Brian): the spec's
+  "MinIO via Aspire in dev" (§1/§3.17/decision #8) predates MinIO OSS's archival (2026-02);
+  Garage (actively maintained, S3-compatible, single-node dev mode) takes the role. Everything
+  else in the settled S3 design holds: `S3ImageStorageService` on `AWSSDK.S3`, one
+  implementation, R2 in prod, endpoint-only difference. Rule: `audit/ImageStorage.md` Shared
+  Context; `cross-cutting.md` "Aspire 13 Configuration".
 
 - **L5 rollout strategy — single global flip, no long-lived mixed mode** — resolved
   (2026-07-04, WU-L5Pilot): per-feature endpoint/client-impl work lands incrementally and

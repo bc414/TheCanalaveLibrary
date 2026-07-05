@@ -3,13 +3,40 @@ name: run-server
 description: >
   How to start and cleanly stop The Canalave Library's web app for local dev/verification.
   Use whenever asked to run, start, boot, launch, stop, or kill the server, or to verify a
-  change works end-to-end against the real database. MVP runs TheCanalaveLibrary.Server
-  directly — no Aspire AppHost, no Redis, no WASM.
+  change works end-to-end against the real database. Two run paths exist: server-only
+  (TheCanalaveLibrary.Server directly against local Postgres — the lightweight default) and
+  the Aspire path (AppHost orchestrates containerized Postgres + Redis + Garage S3 + dashboard,
+  with S3-backed image storage).
 ---
 
 # Running the server
 
-## Prerequisites
+## Two run paths — pick one, they're mutually exclusive
+
+Both bind the web app to `http://localhost:5028`, so only one can run at a time (every start
+script refuses to start if 5028 is taken). All verification techniques below — curl, browser
+tools, DevLoginBar, dev diagnostics endpoints — work identically under either path.
+
+| | **Server-only** (default) | **Aspire** |
+|---|---|---|
+| Start/stop | `start-dev-server.ps1` / `stop-dev-server.ps1` | `start-aspire.ps1` / `stop-aspire.ps1` |
+| Database | Local PostgreSQL 18, port **5432**, `TheCanalaveLibraryDB` | Containerized Postgres 18, port **5433**, `canalavedb` |
+| Redis / S3 (Garage) | none | containers (6379 / 3900) |
+| Image storage | `Local` provider (wwwroot/uploads) | `S3` provider (Garage bucket `canalave-images`) |
+| Needs Docker | no | yes (Docker Desktop running) |
+| DB wipe | `reset-dev-db.ps1` | `reset-aspire-db.ps1` |
+
+**When to pick which:** server-only for ordinary L1–L4 feature work (faster inner loop, no
+Docker dependency — and the standing workbench DB with hand-built fixtures lives there). Aspire
+when the work touches orchestrated infrastructure (Redis/L7, MinIO/S3 image storage, service
+discovery, OpenTelemetry traces in the dashboard) or when verifying the app boots correctly
+under the orchestration it will resemble in production. **The two paths have separate
+databases** — state built in one does not exist in the other; the "Dev DB lifecycle" keep-or-wipe
+rules below apply to each independently.
+
+## Server-only path
+
+### Prerequisites
 
 - Local PostgreSQL listening on `localhost:5432`, matching
   `TheCanalaveLibrary.Server/appsettings.Development.json`'s `ConnectionStrings:canalavedb`
@@ -23,11 +50,7 @@ description: >
   already-open shell needs `$env:Path += ";C:\Program Files\PostgreSQL\18\bin"` first.
   Credentials match the connection string above.
 
-**Do not use the Aspire AppHost for MVP dev.** `AppHost.cs` still defines Postgres/Redis
-resources for when Aspire orchestration returns post-MVP, but running it is not the current
-workflow — run `TheCanalaveLibrary.Server` directly.
-
-## Start
+### Start
 
 Preferred — the repo scripts (agents via the PowerShell tool; the user manually):
 
@@ -56,7 +79,7 @@ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5028/
 `ASPNETCORE_ENVIRONMENT` must be `Development` or the app won't read
 `appsettings.Development.json` and will fail to resolve the `canalavedb` connection string.
 
-## Stop — cleanly
+### Stop — cleanly
 
 Preferred:
 
@@ -75,6 +98,76 @@ automatic variable):
 $conn = Get-NetTCPConnection -LocalPort 5028 -State Listen -ErrorAction SilentlyContinue
 if ($conn) { Stop-Process -Id $conn.OwningProcess -Force }
 ```
+
+## Aspire path
+
+`AppHost/` (Aspire 13, SDK + hosting packages version-aligned — keep them that way, `aspire update`
+does it) orchestrates four resources: containerized **Postgres 18** (host port **5433** — local
+PG 18 owns 5432; database `canalavedb`), **Redis** (resource name `cache`, port 6379), **Garage**
+(S3-compatible blob store, S3 API port **3900**, bucket `canalave-images` — supersedes the spec's
+MinIO, see `audit/ImageStorage.md`), and the web project (same `http://localhost:5028`, with the
+`S3` image-storage provider active via injected `ImageStorage__*` env vars — uploads go to the
+Garage bucket and stored `/uploads/…` URLs are served from it by `ImageEndpoints`). The three
+containers are **persistent-lifetime with named volumes** (`canalave-postgres`/`canalave-redis`/
+`canalave-garage`): they keep running and keep data after the AppHost stops, which makes restarts
+fast and the Aspire DB a persistent workbench. On first web-app start against an empty volume,
+migrate + seed runs exactly like the server-only path. Garage self-bootstraps its layout, access
+key, and bucket on start (`--single-node --default-bucket`, restart-idempotent); its config is
+bind-mounted from `AppHost/garage.toml`.
+
+Credentials are **AppHost user secrets** (`Parameters:postgres-password` = `butterfree`,
+`Parameters:garage-s3-secret` and `Parameters:garage-rpc-secret` = random hex, all set via
+`dotnet user-secrets set --project AppHost`). They are machine-local: a fresh clone must set all
+three before the AppHost will start (the Garage ones can be any fresh random hex — but changing
+them after the Garage volume exists orphans the bootstrapped key; wipe `canalave-garage-meta`/
+`-data` volumes if you rotate them).
+
+### Start / stop / wipe
+
+```powershell
+.\scripts\start-aspire.ps1               # foreground, Ctrl+C to stop (manual use)
+.\scripts\start-aspire.ps1 -Background   # detached; logs to %TEMP%\canalave-aspire.log,
+                                         # waits for the WEB APP (not just the dashboard) to answer
+.\scripts\stop-aspire.ps1                # kills AppHost; DCP tears down the web server;
+                                         # containers KEEP RUNNING (add -StopContainers to stop them)
+.\scripts\reset-aspire-db.ps1            # stop AppHost + remove postgres container AND volume;
+                                         # next start rebuilds (add -Restart to do that immediately)
+```
+
+Docker Desktop must be running first (the script checks). First-ever start pulls the three
+images — allow minutes; `-TimeoutSeconds 600` if needed. The background script prints the
+**tokenized dashboard login URL** (`http://localhost:15031/login?t=…`) extracted from the log;
+dashboard auth stays on (don't disable it — it's one grep to get the token).
+
+### Verifying against the Aspire DB
+
+Same techniques as everywhere else, different port: `psql -h localhost -p 5433 -U postgres -d
+canalavedb` (password `butterfree`). `docker ps --filter name=canalave-` shows the containers;
+container logs via the dashboard (per-resource Console/Structured logs + OTel traces) or
+`docker logs canalave-postgres`. Blob ground truth (Garage has no web console):
+`docker exec canalave-garage /garage bucket info canalave-images` (object count + size), and a
+direct `curl` of the stored `/uploads/…` URL (S3 mode serves it from the bucket — 200 with
+`Cache-Control: immutable` proves the full write→store→serve loop).
+
+### Gotchas encoded here
+
+- **http transport:** the AppHost runs on plain http locally, which Aspire only allows with
+  `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` — set in both the `http` launch profile and
+  `start-aspire.ps1`. Removing it makes startup fail with an `applicationUrl … must be an https
+  address` OptionsValidationException.
+- **Postgres major pinned:** `WithImageTag("18")` — PG minors are volume-compatible, majors are
+  not. A major bump = `reset-aspire-db.ps1` (wipe + reseed), never an in-place tag change.
+- **Image storage differs per path by design:** Aspire = `S3` provider (Garage bucket), server-only
+  = `Local` provider (wwwroot/uploads). An image uploaded under one path does not exist under the
+  other — same separate-workbench rule as the databases. `reset-aspire-db.ps1` wipes only
+  Postgres; Garage blobs whose DB rows were wiped become harmless dev orphans (wipe them too by
+  removing the `canalave-garage` container + `canalave-garage-meta`/`-data` volumes).
+- **The S3 client wire format is deliberate** — unchunked uploads, `WHEN_REQUIRED` checksums,
+  path-style, centralized in `S3ImageStorageService.CreateClient`. Don't "simplify" them away;
+  they are what keeps Garage (dev) and Cloudflare R2 (prod) interchangeable. Detail:
+  `audit/ImageStorage.md` "R2 interchangeability".
+- **`stop-dev-server.ps1` is the wrong stop for this path** — it frees 5028 but leaves the
+  AppHost + containers up (and DCP may show the web resource as failed). Use `stop-aspire.ps1`.
 
 ## Dev DB lifecycle — keep or wipe (agent's choice)
 

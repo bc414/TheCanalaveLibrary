@@ -23,7 +23,7 @@ what's wrong.
 
 - **.NET 10** (all projects share the same major version). C# 14.
 - **EF Core 10** + `Npgsql.EntityFrameworkCore.PostgreSQL` 10 + `EFCore.NamingConventions` 10.
-- **.NET Aspire 13** for local orchestration (dev only — never deployed).
+- **Aspire 13** (SDK + all `Aspire.*` packages version-aligned) for local orchestration (dev only — never deployed). Two run paths: server-only and Aspire — `run-server/SKILL.md`.
 - **Blazor Web App**, global `InteractiveAuto`.
 - **PostgreSQL** (primary + read replica), **Redis** (write-behind/cache), **Cloudflare R2 / MinIO** (blobs).
 

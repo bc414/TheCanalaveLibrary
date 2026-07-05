@@ -83,18 +83,31 @@ Both are `IHostedService` / `BackgroundService` in the server project.
 
 ## Aspire Configuration
 
+The resource is live in `AppHost/AppHost.cs` (built 2026-07-05) under the logical name **`cache`** —
+persistent-lifetime container, named data volume, RDB snapshotting, pinned host port 6379:
+
 ```csharp
-// AppHost
-var redis = builder.AddRedis("redis");
+// AppHost (already exists — don't re-add)
+var cache = builder.AddRedis("cache")
+    .WithContainerName("canalave-redis")
+    .WithDataVolume("canalave-redis-data")
+    .WithPersistence(TimeSpan.FromMinutes(5), 100)
+    .WithHostPort(6379)
+    .WithLifetime(ContainerLifetime.Persistent);
 
-builder.AddProject<Projects.TheCanalaveLibrary_Server>("web")
-    .WithReference(redis);
+builder.AddProject<Projects.TheCanalaveLibrary_Server>("web", launchProfileName: "http")
+    .WithReference(cache);   // injects ConnectionStrings__cache
 
-// Server Program.cs
-builder.AddRedisDistributedCache("redis");
+// Server Program.cs — the L7 build adds this (package Aspire.StackExchange.Redis.DistributedCaching
+// is already referenced by Server.csproj, version-aligned with the AppHost's hosting packages):
+builder.AddRedisDistributedCache("cache");
 ```
 
-Consume by **logical name**, never hard-coded connection strings.
+Consume by **logical name**, never hard-coded connection strings — the name `cache` must match in
+`AddRedis(...)` and `AddRedisDistributedCache(...)`. Note the Aspire-run Redis requires auth
+(`--requirepass` with a generated parameter); the injected connection string carries the password,
+so nothing reads it manually. L7 work runs under the Aspire path (`run-server/SKILL.md` "Aspire
+path") — the server-only path has no Redis.
 
 ## Multi-Layer Caching Architecture
 

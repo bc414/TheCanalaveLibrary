@@ -1486,6 +1486,86 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   the WASM-runtime browser verification stands as recorded above. The island recipe survives in
   `layer5-wasm.md` §"The Island Recipe" as a flip-wave debugging technique.
 
+### WU-Aspire — Orchestration returns: AppHost + Postgres/Redis/MinIO (Phase 4 item 1) — DONE ✓ (2026-07-05)
+- **Cells:** none (dev-infrastructure work-unit — no feature cell changes stage; recorded as a
+  `status.md` Global Condition). Executes `middle_plan.md` Phase 4 item 1 under its two standing
+  constraints: plain `AddDbContext` stays (WU12 anti-pooling ruling — zero Server code changed),
+  and the server-only dev path remains fully supported.
+- **Done:**
+  - `AppHost.csproj` realigned: `Aspire.AppHost.Sdk` was 9.5.2 against 13.4.5 hosting packages —
+    an unsupported mismatch (the SDK pins DCP + dashboard binaries). Now top-level SDK
+    `Aspire.AppHost.Sdk/13.4.6` + all hosting packages 13.4.6; the explicit
+    `Aspire.Hosting.AppHost` PackageReference is gone (encapsulated by the 13.x SDK).
+  - `AppHost.cs` resource graph: Postgres 18 (`WithImageTag("18")`, host port 5433, database
+    `canalavedb`), Redis as `cache` (6379, `WithPersistence`), MinIO as pinned plain
+    `AddContainer` (9000/9001; the CommunityToolkit MinIO package is deprecated — MinIO OSS
+    archived 2026-02, see `audit/ImageStorage.md`). All three: persistent lifetime, named
+    containers/volumes (`canalave-*`), secret parameters from AppHost user secrets. Web =
+    Server `http` launch profile → same 5028 as the server-only path; `WaitFor(canalaveDb)`.
+  - Scripts: `start-aspire.ps1` / `stop-aspire.ps1` / `reset-aspire-db.ps1` (mirror the
+    server-only trio's contracts: refuse double-start, background readiness wait on the web app,
+    kill-the-worker-not-the-launcher, wipe = remove container+volume). `start-dev-server.ps1`
+    header updated to name the two paths. `ASPIRE_ALLOW_UNSECURED_TRANSPORT=true` added to the
+    AppHost `http` launch profile + script (http-only apphost URL hard-fails without it).
+  - `aspire` CLI 13.4.6 installed globally (`dotnet tool install --global Aspire.Cli`).
+  - Docs: `run-server/SKILL.md` "Two run paths" + "Aspire path" sections; `cross-cutting.md`
+    "Aspire 13 Configuration" rewritten from the live implementation (the old sketch's
+    `AddNpgsqlDbContext` consumption line contradicted the settled plain-`AddDbContext` rule —
+    removed); `layer7-redis.md` Aspire section now names the real `cache` resource;
+    `audit/ImageStorage.md` MinIO provisioning note.
+- **Verified (2026-07-05):** full end-to-end run under the AppHost — three containers up
+  (pinned images, proxied pinned host ports), fresh-volume boot ran migrate + full `DataSeeder`
+  (12 stories / 7 users via psql on 5433), dev-login + `/discover` deck browser-verified against
+  the containerized DB, dashboard authenticated via tokenized login URL with all 5 resources
+  Running and zero error-level structured logs for `web`; stop/start cycle proved persistent
+  containers + data survival (no reseed) with the second start taking seconds. `dotnet test`
+  green — no automated tier covers orchestration itself (Integration uses Testcontainers, not
+  the AppHost); the manual end-to-end run above is the verification band, per the L4.5 precedent.
+- **Tool:** Claude Code (research-driven; Aspire 13.4.6 facts current as of 2026-07-05).
+  **Pointer:** `run-server/SKILL.md` "Aspire path", `cross-cutting.md` "Aspire 13 Configuration".
+
+### WU-S3Garage — S3 image storage: Garage (dev) / Cloudflare R2 (prod) (Phase 4 item 3) — DONE ✓ (2026-07-05)
+- **Cells:** F4 L2 and F20 L2 stay Stage 5 (cloud backend was those cells' recorded open item —
+  now closed; the frozen `IImageStorageService` contract and every call site are untouched).
+  Decision input: middle_plan Resolved "Garage replaces MinIO as the dev S3 endpoint"
+  (2026-07-05, Brian) — MinIO OSS archived 2026-02, spec §1/§3.17 superseded on the dev-endpoint
+  choice only; everything else in the settled S3 design holds.
+- **Done:**
+  - `ImageUploadRules` (new): shared allow-list, 10 MB cap, spec §3.17 key convention, and
+    stored-path parsing used by BOTH impls — interchangeability enforced by construction.
+    `LocalImageStorageService` refactored onto it, behavior unchanged.
+  - `S3ImageStorageService` (`AWSSDK.S3` 4.0.100.2): buffers uploads (cap enforcement even on
+    non-seekable browser streams), returns the same `/uploads/{key}` stored shape as Local.
+    `CreateClient` centralizes the three researched wire-format constraints that make "same SDK,
+    different endpoint" actually true against both Garage and R2: `UseChunkEncoding = false`
+    (R2 has no SigV4 streaming), checksum calculation/validation `WHEN_REQUIRED` (R2 lacks the
+    SDK-v4 default trailers), `ForcePathStyle = true`. Full R2 dossier:
+    `audit/ImageStorage.md` "R2 interchangeability".
+  - `ImageEndpoints.MapImageServingEndpoints` (new): S3-mode-only `GET /uploads/{**key}` streams
+    from the bucket (key validation via the same rules, immutable cache header); Local mode keeps
+    serving the identical URLs from wwwroot via static files.
+  - Program.cs provider switch: `ImageStorage:Provider` = `Local` (default; server-only path
+    unchanged) | `S3` (singleton `IAmazonS3` + scoped service + serving route).
+  - AppHost: `canalave-minio` replaced by `canalave-garage` (`dxflrs/garage:v2.3.0`,
+    `--single-node --default-bucket` self-bootstrap, S3 API pinned 3900, `AppHost/garage.toml`
+    bind mount, `canalave-garage-meta`/`-data` volumes, secrets `Parameters:garage-s3-secret`/
+    `garage-rpc-secret`); injects `ImageStorage__*` env vars + `WaitFor(garage)` into web. Old
+    minio container/volume/user-secret removed from the machine.
+- **Verified (2026-07-05):** Integration — `S3ImageStorageServiceTests` (7 tests) against a real
+  Garage Testcontainer via the production `CreateClient`; full `dotnet test` green (1,266:
+  448 Unit + 446 RazorComponents + 372 Integration). Browser, full stack under the AppHost —
+  `/settings` avatar upload as TestUser: DB row correct shape (psql 5433), exactly 1 object in
+  `canalave-images` at exact byte size (Garage CLI), page renders from the bucket, direct GET 200
+  + immutable cache header; replacement upload: bucket still 1 object, old URL 404 / new 200
+  (first end-to-end exercise of the WU38 orphan cleanup against a real blob backend); Garage
+  container restart: bootstrap idempotent, blob survived. The serving route is browser-band (not
+  automated) because Program.cs reads the provider eagerly, pre-`WebApplicationFactory`-override —
+  the documented TestAppFactory quirk; rationale in the audit Stage note.
+- **Tool:** Claude Code (research-driven: Garage v2.3.0 + AWSSDK-v4/R2 compat verified against
+  current sources 2026-07-05). **Pointer:** `audit/ImageStorage.md` (Shared Context +
+  WU-S3Garage Stage note), `cross-cutting.md` "Aspire 13 Configuration",
+  `run-server/SKILL.md` "Aspire path".
+
 ---
 
 ## Blocked / deferred — genuine Stage-1 intent gaps (no sequence number)
