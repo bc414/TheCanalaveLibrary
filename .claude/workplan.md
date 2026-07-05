@@ -1566,6 +1566,45 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   WU-S3Garage Stage note), `cross-cutting.md` "Aspire 13 Configuration",
   `run-server/SKILL.md` "Aspire path".
 
+### WU-CI — Git/CI hygiene: CI + Dependabot (Phase 0) — DONE ✓ (2026-07-05)
+- **Cells:** none (process/tooling work-unit — no feature cell changes stage; recorded as a
+  `status.md` Global Condition). Executes `middle_plan_v2.md` Phase 0.
+- **Done:**
+  - `.github/workflows/ci.yml`: single job on `ubuntu-latest` — `actions/setup-dotnet` (10.0.x) +
+    `actions/setup-node` (20, npm-cached on `TheCanalaveLibrary.Server/package-lock.json`, needed
+    because the Server build's `NpmInstall`/`TailwindBuild` MSBuild targets shell out to npm) →
+    `dotnet restore`/`build -c Release` (runs the Tailwind step) → `dotnet test --no-build -c
+    Release` (all three tiers; `ubuntu-latest` ships the Docker daemon Integration's Testcontainers
+    Postgres `postgres:18-alpine` + Garage `dxflrs/garage:v2.3.0` fixtures need; nothing else to
+    configure — the suite is fully self-contained, no secrets/services block) → `dotnet list
+    package --vulnerable --include-transitive`, `continue-on-error: true` (report-only by design).
+    **Triggers: `pull_request` + `workflow_dispatch` only — no `push: master`**, a deliberate
+    choice (see `middle_plan_v2.md` Resolved "CI hardening deliberately deferred to launch"):
+    Brian tests locally before his own pushes, so CI's job is vetting Dependabot's PRs on GitHub's
+    infra, not re-checking his own already-tested work.
+  - `.github/dependabot.yml`: `nuget` ecosystem (directory `/`) with grouped rules — `aspire`
+    (pattern `Aspire*`, enforcing the version-lockstep correctness constraint from
+    `cross-cutting.md` "Aspire 13 Configuration") and `efcore` (`Microsoft.EntityFrameworkCore*`,
+    `Npgsql.EntityFrameworkCore.*`); `npm` ecosystem (directory `/TheCanalaveLibrary.Server`, where
+    `package.json`/Tailwind live). Weekly, capped at 5 open PRs per ecosystem.
+  - `global.json` added at repo root (`"version": "10.0.100"`, `rollForward: "latestFeature"`) —
+    previously absent; local dev, CI, and future prod builds now resolve the same SDK feature band
+    instead of "whatever's installed." Verified it resolves against the installed 10.0.301 SDK.
+  - `phase-a-foundation` merged into `master` (fast-forward, 0 conflicts — master was 0 ahead/38
+    behind) and pushed. Branch convention settled: commit to master directly going forward (decision
+    row 5, resolved — see `middle_plan_v2.md` Resolved).
+  - GitHub web-UI steps (outside Claude Code's reach, Brian-performed): Dependabot security
+    alerts/updates toggle (Settings → Code security); confirmed Actions enabled (public repo
+    default). Branch protection deliberately not enabled yet — see the Resolved entry.
+- **Verified (2026-07-05):** local pre-flight — `dotnet build TheCanalaveLibrary.sln -c Release`
+  green (Tailwind step ran, 0 errors); `dotnet test TheCanalaveLibrary.sln --no-build -c Release`
+  green (Docker running locally, Testcontainers Postgres + Garage came up). No automated test
+  applies to the workflow/Dependabot YAML themselves (process config, not app code) — verification
+  is the local pre-flight matching the workflow's exact commands, plus a post-merge manual
+  `workflow_dispatch` run on GitHub confirming the cloud run is green end-to-end.
+- **Tool:** Claude Code. **Pointer:** `middle_plan_v2.md` Phase 0 + Resolved (branch convention,
+  CI-hardening deliberation), `status.md` Global Conditions.
+
 ---
 
 ## Blocked / deferred — genuine Stage-1 intent gaps (no sequence number)

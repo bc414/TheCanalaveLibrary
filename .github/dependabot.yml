@@ -1,0 +1,29 @@
+version: 2
+updates:
+  # NuGet — scans every .csproj reachable from the solution directory.
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      # Aspire's SDK + every Aspire.* package must move together — version alignment is a
+      # correctness constraint, not a nicety (see cross-cutting.md "Aspire 13 Configuration").
+      # Grouping means one PR bumps the whole train instead of relying on remembering to bump
+      # them in lockstep by hand.
+      aspire:
+        patterns:
+          - "Aspire*"
+      efcore:
+        patterns:
+          - "Microsoft.EntityFrameworkCore*"
+          - "Npgsql.EntityFrameworkCore.*"
+      # Everything else (AWSSDK.S3, xunit, bunit, FluentAssertions, Respawn, Testcontainers.*, ...)
+      # is left ungrouped and gets its own PR per bump — no cross-package version constraint.
+
+  # npm — Tailwind's package.json lives under the Server project, not the repo root.
+  - package-ecosystem: "npm"
+    directory: "/TheCanalaveLibrary.Server"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

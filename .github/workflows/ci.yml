@@ -1,0 +1,55 @@
+name: CI
+
+# Deliberately PR-only (+ manual button) — no `push: master` trigger.
+#
+# Why: Brian tests locally before pushing his own work, so CI-ing every master push would just
+# reflag things he already knows about. The one place CI genuinely earns its keep pre-launch is
+# vetting Dependabot's version-bump PRs on GitHub's infrastructure, so nobody has to pull each
+# bump branch and run the (Docker-heavy) suite by hand. `push: master` gets added at launch,
+# alongside branch protection and an auto-deploy step — see middle_plan_v2.md Phase 7.
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # The Server project's MSBuild targets (NpmInstall / TailwindBuild, BeforeTargets=BeforeBuild)
+      # shell out to `npm install` + `npm run css:build` as part of a normal `dotnet build`.
+      # Node must be present on the runner for the build to succeed.
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: TheCanalaveLibrary.Server/package-lock.json
+
+      - name: Restore
+        run: dotnet restore TheCanalaveLibrary.sln
+
+      - name: Build
+        run: dotnet build TheCanalaveLibrary.sln --no-restore -c Release
+
+      # No services:/secrets: block needed — Unit/RazorComponents tests have no external deps,
+      # and Integration + the Garage/S3 test spin up their own ephemeral Testcontainers
+      # (postgres:18-alpine, dxflrs/garage:v2.3.0) against the Docker daemon ubuntu-latest ships
+      # with. Connection strings/credentials are generated per-run inside the fixtures, not read
+      # from CI config. `dotnet test` on the .sln runs all three tiers (Unit, RazorComponents,
+      # Integration).
+      - name: Test (all tiers)
+        run: dotnet test TheCanalaveLibrary.sln --no-build -c Release
+
+      # Report-only: prints known-vulnerable packages (including transitive) to the log but never
+      # fails the build. A CVE in a dependency-of-a-dependency you can't immediately fix shouldn't
+      # block every push. Revisit as a hard gate near launch — see middle_plan_v2.md Phase 7.
+      - name: Vulnerability scan (report-only)
+        run: dotnet list TheCanalaveLibrary.sln package --vulnerable --include-transitive
+        continue-on-error: true

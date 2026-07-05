@@ -32,7 +32,7 @@ All process artifacts live under `.claude/`. The spec and this file live at repo
 | `.claude/audit-summary.md` | Write-once audit overview: stage distribution, surprises, reconciliation index, Stage-1 landscape, UI component inventory. | Written once during audit |
 | `.claude/audit/<FolderName>.md` | Per-folder-cluster notes. Shared context header, then per-feature sections with per-layer stages. | Audit creates; working sessions update |
 | `.claude/skills/canalave-conventions/SKILL.md` | Authoritative code conventions (hub file + layer files). Loaded as a skill when writing code. | Refined through implementation |
-| `.claude/middle_plan.md` | Live phased master plan (MVP → beta → launch) + "Decisions that need you" table (open items) and a "Resolved" list (closed items, each pointing at the convention doc that now states the rule). Supersedes the retired `.claude/forward_plan.md` (historical reference). | Whoever resolves a decision or advances a phase |
+| `.claude/middle_plan_v2.md` | Live phased master plan (platform-first → features → beta → launch) + "Decisions that need you" table (open items) and a "Resolved" list (closed items, each pointing at the convention doc that now states the rule). Supersedes the retired `.claude/middle_plan.md` and `.claude/forward_plan.md` (both historical references; v1 phase-number pointers resolve via v2's mapping table). | Whoever resolves a decision or advances a phase |
 
 ### Audit file content per stage
 
@@ -63,7 +63,7 @@ Three distinct moments touch process docs. Keep them separate — don't fold mom
 
 | Moment | Trigger | Action | Files touched |
 |---|---|---|---|
-| **1. Pre-implementation** | Plan resolves a `middle_plan.md` "Decisions that need you" row, would contradict a "settled" audit note, or needs a convention not yet recorded anywhere | Settle it (ask the user if genuinely open), then update every doc that states or defers it — as an explicit first phase of the plan, completed before any code change | Skill file(s); audit file's settled-vs-open note; `middle_plan.md` (move row to "Resolved", point at the doc) |
+| **1. Pre-implementation** | Plan resolves a `middle_plan_v2.md` "Decisions that need you" row, would contradict a "settled" audit note, or needs a convention not yet recorded anywhere | Settle it (ask the user if genuinely open), then update every doc that states or defers it — as an explicit first phase of the plan, completed before any code change | Skill file(s); audit file's settled-vs-open note; `middle_plan_v2.md` (move row to "Resolved", point at the doc) |
 | **2. Mid-implementation** | Building reveals a convention should change | Update the skill file in the same work-unit — conventions are living; don't silently diverge | Skill file(s) |
 | **3. Post-implementation** | A work-unit completes | Run `dotnet test` (should be green). Flip the affected cell(s)' number(s) in `status.md`'s grid (no narrative there); write the "how it was verified" / "what changed" detail into each affected cell's audit file Stage note — include which test tier covers the behavior (Unit / Integration / RazorComponents) or state why none applies. Only write a `status.md` Global Conditions note when the fact is genuinely cross-cutting and doesn't attach to any single cell — and keep that note short, a pointer to the skill/audit file for detail, not the detail itself. | `status.md` (grid number only), `workplan.md`, audit Stage note (the narrative) |
 
