@@ -122,3 +122,7 @@ Known rough edge (not blocking): the post-deletion redirect surfaces a bare 401 
 user lands anonymous — deliberate cookie 401/403 config; polish belongs to Identity L4.
 Browser-automation note: Blazor SSR forms only serialize values typed via real key events —
 programmatic `form_input` values post empty (matters for future browser passes, not for users).
+**Correction (2026-07-02):** the above was a misattribution — re-tested in a healthy (non-frozen)
+tab, `form_input` values serialize into the SSR Login POST and authentication succeeds. The
+original failure was Chrome throttling a backgrounded tab, not the tool or Blazor. Current
+guidance: `run-server/SKILL.md` §"Driving the UI reliably".

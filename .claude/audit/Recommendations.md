@@ -134,7 +134,10 @@ behavior is exercised by existing `RecommendationSectionTests`.
   up every 500 ms sample, submit disabled until "minimum met"); card appears with owner
   Edit/Delete affordances. **Tooling note:** the char-meter's PeriodicTimer keeps CDP screenshots
   from settling on this page (captureScreenshot times out while the composer is open) — automation
-  must drive this page textually; not a user-facing defect.
+  must drive this page textually; not a user-facing defect. **Correction (2026-07-02):** cause
+  misattributed — the pass's screenshot timeouts traced to Chrome throttling backgrounded tabs,
+  not this component's 500 ms sampler. Current guidance: `run-server/SKILL.md` §"Driving the UI
+  reliably".
 - **F28:** cards render recommender UserCard (live tagline), like count, date, and the
   author's-pick highlight styling (seeded rec on the flagship).
 - **F29:** "Mark as Hidden Gem" on own rec → `is_hidden_gem=t` + HiddenGem (type 23) notification

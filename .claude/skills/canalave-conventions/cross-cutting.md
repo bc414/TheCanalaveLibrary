@@ -237,6 +237,16 @@ private string? SpriteUrl => Tag.SpriteIdentifier is null
 has a shared Core impl (`OptimisticSpriteReadService`, pure string logic) registered as a singleton
 on both Server and Client. The `IActiveUserContext`-never-in-SharedUI rule is unaffected.
 
+**Claims are stamped at sign-in and stale until the next one — by design.** Every claims-baked
+preference (theme slug, `prefers_animated_sprites`, `show_mature_content`) is a point-in-time copy
+made by `ApplicationUserClaimsPrincipalFactory` when the auth cookie is issued. A settings save
+updates the database, not the cookie: an interactive circuit **cannot** reissue the cookie
+(`RefreshSignInAsync` needs an HTTP response to write to — only the static-SSR Identity pages call
+it). Consequence: changes to these preferences take effect at the next sign-in. Do not chase the
+gap as a bug, and do not attempt a circuit-side refresh hack; if a future requirement demands
+immediacy, the shape of the fix is an SSR round-trip that reissues the cookie. (Flagged in the
+factory's header since WU12; browser-verified end-to-end in `audit/Sprites.md`, 2026-07-02.)
+
 **`SpriteBaseUrl` config seam** (`appsettings` key `Sprites:BaseUrl`, default `/sprites/themes`).
 The resolver builds: `{SpriteBaseUrl}/{slug}/{static|animated}/{id}.{ext}`. Changing this one
 setting + Rclone syncing assets is the complete R2/CDN cutover — zero code change. This is the same
@@ -676,9 +686,31 @@ This avoids any string literal inside the attribute value. The `int.TryParse` bl
 canonical form for all enum `<select>` onchange handlers in this codebase (e.g. `AuthorSettingsForm`,
 `PrivacySettingsForm`, `AppearanceSettingsForm`).
 
-**Why `@bind` doesn't work for enum selects:** `@bind` on a `<select>` requires a string two-way
-binding; enums stored as `int` need an explicit cast, so `@bind` is not idiomatic here. The
-`@onchange` block lambda is correct for this pattern.
+### Enum `<select>` — two valid patterns, never mix their halves
+
+`@bind` on an enum-typed property **does** work on a `<select>`, but it serializes the current
+value as the enum **name** (`.ToString()`), so it only ever matches `<option>` values that are
+also the enum name. The two coherent patterns:
+
+1. **`@onchange` block lambda + numeric option values** (`value="@((int)v)"` + the `int.TryParse`
+   lambda above) — the canonical settings-form pattern.
+2. **`@bind` on the enum property + name option values** (`value="@type"` inside an
+   `Enum.GetValues<T>()` loop) — `TagEditorForm` is the reference.
+
+Mixing them — `@bind` with numeric option values — compiles clean and renders a **blank select**
+whenever the bound value should be pre-selected, because nothing matches. Found live in the L4.5
+browser pass (`audit/Tags.md`, 2026-07-01).
+
+### String parameters take attribute text literally
+
+For a **string-typed** component parameter, `Param="_myField"` passes the literal text
+`"_myField"` — not the field's value. Only `@`-prefixed values (`Param="@_myField"`) compile as
+expressions. Non-string-typed parameters compile the attribute text as an expression either way —
+that asymmetry is why the trap survives review: identical syntax is correct on the `bool`
+parameter above and wrong on the `string` parameter below it. Rule: **always `@`-prefix identifier
+values regardless of the parameter's type.** Sweep for the bug class with `="_\w+"` (plus
+suspicious PascalCase values on string params) — it was hit seven times before being swept
+(`audit/Messaging.md`, `audit/Tags.md`).
 
 ## Identity & Auth
 

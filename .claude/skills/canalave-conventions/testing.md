@@ -234,6 +234,16 @@ invisible to all three regardless of how comprehensive the suite is or how green
 comes back. A green suite means the tiers' own realism trade-offs held, not that every runtime
 behavior was exercised.
 
+The tiers also can't see **reachability**: bUnit proves a component behaves correctly when
+rendered, not that any page actually renders it. A fully-tested component can be unreachable in
+the entire UI while every tier stays green (this happened — a tested interaction-panel context was
+mounted nowhere, leaving its feature inaccessible until a browser pass caught it). Treat
+composition as part of the work-unit: a leaf or composite isn't done until a page composes it, and
+the plan should name that consumer. The systemic catch for this whole gap class is the
+**L4.5-Browser band** — the per-feature real-browser verification column in `status.md`'s grid
+(its legend defines the band; `run-server/SKILL.md` "Browser-based debugging & verification" has
+the mechanics).
+
 When a hypothesis depends on that kind of real-circuit behavior, don't keep guessing against the
 automated tiers — reach for browser-based debugging instead (`run-server/SKILL.md` "Browser-based
 debugging & verification"; methodology in `canalave-conventions/debugging.md`).

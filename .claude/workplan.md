@@ -1,6 +1,9 @@
 # Workplan — Ordered Work-Units (atoms-first)
 
-Produced by Phase D (`forward_plan.md`). This is the build sequence for Phase E. Each work-unit names
+> New work-units (2026-07-03 onward) are sequenced by `.claude/middle_plan.md`, which superseded
+> `forward_plan.md`; this file remains the work-unit ledger — every unit is still recorded here.
+
+Produced by Phase D (`forward_plan.md`, now retired). This is the build sequence for Phase E. Each work-unit names
 its **cell(s)** (Feature # + layer, per `status.md`), its **tool** (per CLAUDE.md Per-Stage Guidance),
 its **audit pointer** (`.claude/audit/<Folder>.md`, section), and its **deps** (work-units that must be
 at Stage 5 first). CLAUDE.md is the source of truth for stage semantics and file paths — this file
@@ -1428,6 +1431,17 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Verified:** `dotnet test` 1238/1238 green (437 Unit + 446 RazorComponents + 355 Integration).
 - **Tool:** Sonnet in Claude Code. **Pointer:** `status.md` L4.5 legend; per-cluster audit Stage
   notes; `canalave-conventions/debugging.md` for the methodology.
+- **Docs follow-up (2026-07-02):** methodology learnings institutionalized into the skills tree —
+  `run-server` ("Driving the UI reliably" browser mechanics; seed state-machine-invariant rule),
+  `cross-cutting.md` (literal string params, enum-select binding patterns, claim staleness),
+  `layer3-logic.md` (transient UI state on same-route nav), `layer4-style.md` (out-of-band asset
+  `onerror` rule), `testing.md` (unmounted-component reachability hole + first L4.5 cross-ref),
+  `debugging.md` (recorded-intent-before-fixing principle). Prior "tool limitation" claims from
+  this WU's browser pass were researched + empirically re-tested first: the background-tab freeze
+  was Chrome Memory Saver (setup, not tooling), `form_input` works on both SSR POSTs and
+  interactive `@bind` (earlier failures misattributed), and the coordinate space is the documented
+  CSS×DPR contract — the skill documents setup + intended usage, dated 2026-07-02, not permanent
+  limitations.
 
 ---
 

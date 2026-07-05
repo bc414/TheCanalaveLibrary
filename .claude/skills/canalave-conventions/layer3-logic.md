@@ -356,6 +356,14 @@ for anti-flicker (e.g. `Story ??= await Service.GetAsync(StoryId);`), the `??=` 
 otherwise the non-null persisted field short-circuits the reload. Reset persisted fields to `null`
 before the reload.
 
+**Transient UI state survives in-place navigation too.** Instance reuse doesn't just skip data
+reloads — open modals, error flags, compose buffers, and any other transient UI field carry over
+into the "new" page. When a handler ends by calling `NavigateTo` to a URL matching the same
+template (e.g. compose → navigate to the new entity), **close/reset the transient state before
+navigating**; nothing else will. Reference fix: MessagesPage's compose modal
+(`_composeOpen = false` before `Nav.NavigateTo($"/messages/{newId}")` — it survived into the new
+thread otherwise; found in the L4.5 browser pass, 2026-07-02).
+
 ## Parameters: DTOs and Primitives
 
 **Pass the DTO** when a component renders multiple fields from it:

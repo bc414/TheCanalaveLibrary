@@ -106,7 +106,10 @@ all `Password123!`), a real tag taxonomy, 12 stories across ratings/statuses (mu
 alternate chapter version, drafts, two pending-approval for the mod queue), TestUser bookshelf
 rows on every tab, comments/recommendations/groups/blog posts/messages/notifications/reports.
 Names are deliberately artificial ("Seed Story: …") — seed data must never read as real
-community content.
+community content. Seed rows that participate in workflow state machines must carry valid
+**target** states, not just valid FKs — a row can satisfy every constraint and still make the
+workflow a silent no-op (see the `PostApprovalStatus` comment in `DataSeeder.cs` for the worked
+example).
 
 ## Dev diagnostics endpoints
 
@@ -157,6 +160,48 @@ mid-session (AdminUser has the Admin role for `/mod/*` pages). No password, emai
 or antiforgery form to drive. Prefer this over scripting the real login form when the thing under
 test is what happens *after* auth, not the login flow itself. (It was previously a JS fetch-POST
 from the bar, which silently dropped the request on an established circuit — don't reintroduce that.)
+
+### Driving the UI reliably
+
+Tool-behavior notes below were verified against the claude-in-chrome extension on 2026-07-02; the
+extension updates frequently and has no unified known-limitations page upstream, so if a note here
+contradicts observed behavior, re-verify empirically before trusting either.
+
+**Tab state is everything (setup, do this first).** Chrome's Memory Saver / Energy Saver freezes
+background tabs, and a frozen renderer hangs the CDP layer every browser tool sits on. Nearly every
+"tool failure" in the first L4.5 pass — screenshot timeouts ("renderer may be frozen"), JS-eval
+timeouts, clicks that change nothing, `loading="lazy"` images stuck at `complete:false` — was this
+one cause, not the tools and not the app. Work in a freshly created tab (it becomes the window's
+active tab) and prefer re-creating a tab over fighting a stale one; ask the user to keep the
+window visible / exempt `localhost` from Memory Saver (`chrome://settings/performance`) if
+throttling persists. **Recognize the symptom cluster and foreground/recreate the tab before
+suspecting the app.**
+
+**Coordinates are a documented contract, not a stable one.** `computer` coordinates live in
+screenshot-pixel space = CSS px × `devicePixelRatio` (Windows commonly 1.25), and the mapping
+moves whenever the window/viewport changes. Pin the viewport with `resize_window` (≈1280×720) at
+session start if coordinate clicks are unavoidable — but prefer refs and `form_input`, which don't
+depend on the mapping at all.
+
+**Use each tool for what it's for.** `form_input` is the intended tool for form controls (text
+inputs, selects, checkboxes, textareas) and — verified 2026-07-02 — its values serialize correctly
+into both static-SSR form POSTs (Identity pages) and interactive-circuit `@bind` fields. `computer`
+clicks (ref-based is fine) are for buttons and links. Clicks can transiently no-op even in a
+healthy tab: **always verify the effect** (page text, network log, DB) **and retry once** before
+escalating.
+
+**Fallbacks when a healthy tab still won't cooperate.** On an interactive circuit, JS dispatch via
+`javascript_tool` reaches Blazor reliably: `el.click()` bubbles into Blazor's delegated event
+handler; for `@bind` fields set `.value` then
+`el.dispatchEvent(new Event('change', {bubbles: true}))` (`'input'` when the field binds with
+`@bind:event="oninput"`); Quill editors: set `.ql-editor.innerHTML` and dispatch `input` — the
+pull-on-submit `GetHtmlAsync` reads the editor DOM. When a tab can't be foregrounded, verify image
+assets by direct `fetch` + decode and `read_network_requests` instead of screenshots (a
+never-rendered tab never loads lazy images — that's browser behavior, not a bug).
+
+**Ground truth is the database.** After every UI mutation, confirm the actual row via `psql`
+(credentials in Prerequisites) before declaring the behavior verified — page text can lag, lie, or
+describe optimistic local state.
 
 Stop the server the same way as "Stop — cleanly" above when done; browser tabs don't need explicit
 cleanup.

@@ -157,6 +157,26 @@ leaf's. The leaf (`UserCard`) just renders whatever `AvatarUrl` it's given, fall
 Still governed by the "never inline SVG" rule (avatars are image assets) and the `rounded-full` radius
 convention below.
 
+## Out-of-Band Asset Images Always Carry an onerror Fallback
+
+Sprites, badge icons, avatars, and cover art are all provisioned **outside the app** (Rclone/R2
+folders, user uploads, ops-added files) — the app builds their URLs optimistically and can never
+assume the asset exists. Every `<img>` in that family must therefore handle a miss in markup; a
+broken-image glyph is never an acceptable render. Three sanctioned shapes, picked by what the
+element means:
+
+1. **Fallback chain** when a lesser variant is still meaningful — sprites:
+   `onerror="spriteFallback(this)"` walks animated `.webp` → static `.png` → `unknown.png`.
+2. **Hide** when adjacent text already carries the meaning — badge icons:
+   `onerror="this.style.display='none'"` (`UserCard`, `BadgeSettingsForm`).
+3. **Placeholder swap** when the slot must stay visually occupied — avatars (`onerror` → the
+   default-avatar asset), cover art (`@onerror` flips a `_coverArtFailed` flag to a styled
+   placeholder block — `StoryDesktop`/`StoryMobile`).
+
+New image-bearing components pick one of these at build time — the miss case is part of the
+component's contract, not an ops problem (badge icons shipped without one and rendered broken
+glyphs until the L4.5 pass, 2026-07-02).
+
 ## Interaction Icons Are Inline SVG
 
 Interaction icons (Favorite, Followed, Ignore, ReadItLater, HiddenFavorite, …) are **inline SVG

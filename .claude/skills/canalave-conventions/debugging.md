@@ -75,6 +75,16 @@ once. When a hypothesis depends on one of these, don't keep guessing against the
 tiers — drive the actual running app in a browser instead. Mechanics are in `run-server/SKILL.md`
 ("Browser-based debugging & verification"); this file only says *when* to reach for it.
 
+## Check recorded intent before fixing a "wrong" behavior
+
+Surprising is not the same as broken. Before treating an observed behavior as a defect, check
+whether it is *recorded intent*: this project writes settled decisions into the audit files'
+settled-decision notes and into service-header contracts, and a behavior that looks wrong from one
+vantage point may be a deliberate trade-off made from another. A "fix" that contradicts a settled
+decision is a regression wearing a bug fix's clothes. If observation and recorded intent genuinely
+conflict — or no record exists either way and the behavior is consequential — that is Stage-4
+reconciliation territory: surface it to the user rather than silently picking a side.
+
 ## Fix same-session
 
 Once a bug is confirmed and understood, fix it in the same session it was found — don't leave a
