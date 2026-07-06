@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Amazon.Runtime;
 using Amazon.S3;
 using Amazon.S3.Model;
@@ -26,8 +27,13 @@ namespace TheCanalaveLibrary.Server;
 /// <item><c>ForcePathStyle = true</c> — required for Garage on localhost, harmless on R2.</item>
 /// </list>
 /// </summary>
-public class S3ImageStorageService(IAmazonS3 s3, IOptions<S3ImageStorageOptions> options) : IImageStorageService
+public class S3ImageStorageService(
+    IAmazonS3 s3,
+    IOptions<S3ImageStorageOptions> options,
+    ILogger<S3ImageStorageService> logger) : IImageStorageService
 {
+    private const string Provider = "s3";
+
     /// <summary>
     /// Builds the one client configuration that works against both Garage and R2. Static and
     /// public so Program.cs (DI singleton) and the integration-test fixture construct byte-for-byte
@@ -59,43 +65,85 @@ public class S3ImageStorageService(IAmazonS3 s3, IOptions<S3ImageStorageOptions>
 
     public async Task<string> SaveAsync(Stream content, string contentType, ImageKind kind, int ownerId)
     {
-        string extension = ImageUploadRules.ExtensionFor(contentType);
+        // Custom span: HttpClient instrumentation sees only the raw PUT to the S3 endpoint —
+        // nothing names "one cover-image save" as a unit (logging.md §"Custom Instrumentation").
+        using Activity? activity = CanalaveTelemetry.ImageStorage.Source.StartActivity("ImageStorage.Save");
+        activity?.SetTag("canalave.image.provider", Provider);
+        activity?.SetTag("canalave.image.kind", kind.ToString());
 
-        // Buffer before PutObject: browser upload streams are non-seekable, and an unchunked
-        // signed payload needs a known length up front. Buffering also enforces MaxBytes on
-        // non-seekable streams (which the Local impl's CanSeek check cannot); the 10 MB cap
-        // makes the memory cost fine.
-        using MemoryStream buffer = new();
-        await CopyWithLimitAsync(content, buffer);
-        buffer.Position = 0;
-
-        string key = ImageUploadRules.BuildKey(kind, ownerId, extension);
-
-        await s3.PutObjectAsync(new PutObjectRequest
+        try
         {
-            BucketName = options.Value.BucketName,
-            Key = key,
-            InputStream = buffer,
-            ContentType = contentType,
-            AutoCloseStream = false,       // the using block owns the buffer
-            UseChunkEncoding = false,      // R2: no SigV4 streaming — see class doc
-        });
+            string extension = ImageUploadRules.ExtensionFor(contentType);
 
-        return ImageUploadRules.UploadsPrefix + key;
+            // Buffer before PutObject: browser upload streams are non-seekable, and an unchunked
+            // signed payload needs a known length up front. Buffering also enforces MaxBytes on
+            // non-seekable streams (which the Local impl's CanSeek check cannot); the 10 MB cap
+            // makes the memory cost fine.
+            using MemoryStream buffer = new();
+            await CopyWithLimitAsync(content, buffer);
+            buffer.Position = 0;
+
+            string key = ImageUploadRules.BuildKey(kind, ownerId, extension);
+
+            await s3.PutObjectAsync(new PutObjectRequest
+            {
+                BucketName = options.Value.BucketName,
+                Key = key,
+                InputStream = buffer,
+                ContentType = contentType,
+                AutoCloseStream = false,       // the using block owns the buffer
+                UseChunkEncoding = false,      // R2: no SigV4 streaming — see class doc
+            });
+
+            activity?.SetTag("canalave.image.size_bytes", buffer.Length);
+            CanalaveTelemetry.ImageStorage.RecordUpload(kind, Provider, buffer.Length);
+            logger.LogInformation(
+                "Saved {ImageKind} image {ImageKey} ({SizeBytes} bytes) via S3",
+                kind, key, buffer.Length);
+
+            return ImageUploadRules.UploadsPrefix + key;
+        }
+        catch (Exception ex)
+        {
+            // Recorded on the span; not logged here — the exception propagates and is logged
+            // (with this scope's trace context) wherever it surfaces (logging.md: no double-log).
+            activity?.AddException(ex);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
 
     public async Task DeleteAsync(string relativePath)
     {
+        using Activity? activity = CanalaveTelemetry.ImageStorage.Source.StartActivity("ImageStorage.Delete");
+        activity?.SetTag("canalave.image.provider", Provider);
+
         string? key = ImageUploadRules.TryExtractKey(relativePath);
         if (key is null)
         {
-            return; // not a value this service family produced — no-op, per the interface contract
+            // Not a value this service family produced — no-op, per the interface contract. Still
+            // a data-shape surprise worth a trace (a stored URL nothing here wrote).
+            logger.LogWarning(
+                "Image delete no-op: {ImagePath} is not an uploads key this service family produces",
+                relativePath);
+            activity?.SetTag("canalave.image.delete_noop", true);
+            return;
         }
 
-        // S3 DeleteObject is idempotent: deleting a nonexistent key succeeds (204), which
-        // matches the interface's "no-ops if not found" contract without a HEAD round-trip.
-        await s3.DeleteObjectAsync(options.Value.BucketName, key);
+        try
+        {
+            // S3 DeleteObject is idempotent: deleting a nonexistent key succeeds (204), which
+            // matches the interface's "no-ops if not found" contract without a HEAD round-trip.
+            await s3.DeleteObjectAsync(options.Value.BucketName, key);
+        }
+        catch (Exception ex)
+        {
+            activity?.AddException(ex);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
+
 
     private static async Task CopyWithLimitAsync(Stream source, MemoryStream destination)
     {

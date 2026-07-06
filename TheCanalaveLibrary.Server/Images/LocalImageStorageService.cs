@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
@@ -12,37 +13,77 @@ namespace TheCanalaveLibrary.Server;
 /// Validation rules and key convention are shared via <see cref="ImageUploadRules"/> so stored
 /// paths stay interchangeable across implementations.
 /// </summary>
-public class LocalImageStorageService(IWebHostEnvironment env) : IImageStorageService
+public class LocalImageStorageService(
+    IWebHostEnvironment env,
+    ILogger<LocalImageStorageService> logger) : IImageStorageService
 {
+    private const string Provider = "local";
+
     public async Task<string> SaveAsync(Stream content, string contentType, ImageKind kind, int ownerId)
     {
-        string extension = ImageUploadRules.ExtensionFor(contentType);
+        // Custom span: mirrors S3ImageStorageService — filesystem I/O is invisible to every
+        // auto-instrument (logging.md §"Custom Instrumentation").
+        using Activity? activity = CanalaveTelemetry.ImageStorage.Source.StartActivity("ImageStorage.Save");
+        activity?.SetTag("canalave.image.provider", Provider);
+        activity?.SetTag("canalave.image.kind", kind.ToString());
 
-        if (content.CanSeek && content.Length > ImageUploadRules.MaxBytes)
+        try
         {
-            throw new ArgumentException(
-                $"Image exceeds the {ImageUploadRules.MaxBytes / (1024 * 1024)} MB limit.", nameof(content));
+            string extension = ImageUploadRules.ExtensionFor(contentType);
+
+            if (content.CanSeek && content.Length > ImageUploadRules.MaxBytes)
+            {
+                throw new ArgumentException(
+                    $"Image exceeds the {ImageUploadRules.MaxBytes / (1024 * 1024)} MB limit.", nameof(content));
+            }
+
+            string key = ImageUploadRules.BuildKey(kind, ownerId, extension);
+
+            string fullPath = Path.Combine(env.WebRootPath, "uploads", key.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+
+            long sizeBytes;
+            await using (FileStream fileStream = File.Create(fullPath))
+            {
+                await content.CopyToAsync(fileStream);
+                sizeBytes = fileStream.Length;
+            }
+
+            activity?.SetTag("canalave.image.size_bytes", sizeBytes);
+            CanalaveTelemetry.ImageStorage.RecordUpload(kind, Provider, sizeBytes);
+            logger.LogInformation(
+                "Saved {ImageKind} image {ImageKey} ({SizeBytes} bytes) to local uploads",
+                kind, key, sizeBytes);
+
+            // Host-relative — never a full URL (spec §3.17 explicitly rejected storing one).
+            return ImageUploadRules.UploadsPrefix + key;
         }
-
-        string key = ImageUploadRules.BuildKey(kind, ownerId, extension);
-
-        string fullPath = Path.Combine(env.WebRootPath, "uploads", key.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-
-        await using FileStream fileStream = File.Create(fullPath);
-        await content.CopyToAsync(fileStream);
-
-        // Host-relative — never a full URL (spec §3.17 explicitly rejected storing one).
-        return ImageUploadRules.UploadsPrefix + key;
+        catch (Exception ex)
+        {
+            // Recorded on the span; not logged here — the exception propagates and is logged
+            // (with this scope's trace context) wherever it surfaces (logging.md: no double-log).
+            activity?.AddException(ex);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
+        }
     }
 
     public Task DeleteAsync(string relativePath)
     {
+        using Activity? activity = CanalaveTelemetry.ImageStorage.Source.StartActivity("ImageStorage.Delete");
+        activity?.SetTag("canalave.image.provider", Provider);
+
         // TryExtractKey rejects non-/uploads/ values and any ".." traversal segment — the same
         // defensive stance the pre-refactor Path.GetFullPath check provided.
         string? key = ImageUploadRules.TryExtractKey(relativePath);
         if (key is null)
         {
+            // Not a value this service family produced — no-op, per the interface contract. Still
+            // a data-shape surprise worth a trace (a stored URL nothing here wrote).
+            logger.LogWarning(
+                "Image delete no-op: {ImagePath} is not an uploads key this service family produces",
+                relativePath);
+            activity?.SetTag("canalave.image.delete_noop", true);
             return Task.CompletedTask;
         }
 
@@ -52,12 +93,24 @@ public class LocalImageStorageService(IWebHostEnvironment env) : IImageStorageSe
         // Belt-and-suspenders: even with segment validation above, never delete outside uploads/.
         if (!fullPath.StartsWith(uploadsRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
         {
+            logger.LogWarning(
+                "Image delete no-op: {ImagePath} resolved outside the uploads root", relativePath);
+            activity?.SetTag("canalave.image.delete_noop", true);
             return Task.CompletedTask;
         }
 
-        if (File.Exists(fullPath))
+        try
         {
-            File.Delete(fullPath);
+            if (File.Exists(fullPath))
+            {
+                File.Delete(fullPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            activity?.AddException(ex);
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            throw;
         }
 
         return Task.CompletedTask;

@@ -121,8 +121,8 @@ one, same as `testing.md`/`debugging.md` accreted.
    swallow-without-trace); the sweep that fixes the existing `/* best-effort; log in a future
    structured-logging pass */` sites; Npgsql tracing instrumentation in ServiceDefaults (per-query
    spans); a custom `ActivitySource`/`Meter` primer for domain instrumentation. Test bed: the
-   whole app under the Aspire dashboard. Decision row 7 (production telemetry destination) can
-   lag this WU — conventions first, destination before launch.
+   whole app under the Aspire dashboard. Decision row 7 (production telemetry destination)
+   resolved 2026-07-06 — Grafana LGTM container, see Resolved; deployment stays Phase 7.
 2. **WU-Redis — L7 end-to-end, two steps** (sequencing settled 2026-07-05, see Resolved):
    - **Step 1 — WU38b View Count as the isolated battle test** (moves here from v1 Phase 1).
      Arc: `AddRedisDistributedCache("cache")` client registration → WU38b direct-increment L2 +
@@ -244,7 +244,11 @@ checklist — each bullet becomes a checkable item, most are small:
   story for blobs (versioning or periodic sync). A backup never restored is a hypothesis.
 - **Uptime & alerting** — safely-exposed health endpoint (currently dev-only-mapped) + external
   pinger + an alert channel that reaches Brian.
-- **Telemetry destination live** (decision row 7, decided during Phase 1, deployed here).
+- **Telemetry destination live** (decision row 7, resolved 2026-07-06: self-hosted Grafana LGTM
+  single container on the droplet — see Resolved). Deploy the container; set
+  `OTEL_EXPORTER_OTLP_ENDPOINT` on the web app (the exporter is already gated on it — config
+  contract above); verify the Claude query path (SSH to droplet → curl Loki/Tempo/Prometheus
+  HTTP APIs; optionally the Grafana MCP server).
 - **CI hardening for a live master** (deferred from Phase 0 WU-CI, 2026-07-05 — see Resolved):
   - Add `push: master` to `ci.yml`'s triggers — master now means "what's deployed," so continuous
     proof it's green matters where it didn't pre-launch; this is also the signal an auto-deploy
@@ -263,8 +267,9 @@ checklist — each bullet becomes a checkable item, most are small:
 ## Decisions that need you
 
 Rows 1–6 carried from v1 (numbering preserved — existing docs cite these numbers). Row 4 is
-expanded in scope by Phase 7 above. **Row 5 resolved 2026-07-05 and moved to Resolved below** —
-row numbers are otherwise left as gaps rather than renumbered, since other docs cite them by number.
+expanded in scope by Phase 7 above. **Row 5 resolved 2026-07-05, row 7 resolved 2026-07-06 —
+both moved to Resolved below** — row numbers are otherwise left as gaps rather than renumbered,
+since other docs cite them by number.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -273,7 +278,6 @@ row numbers are otherwise left as gaps rather than renumbered, since other docs 
 | 3 | **Beta scope for features 8 / 37 / 51 / 55-remainder / 56** — design or defer, per feature. | None — genuine Stage-1 intent gaps. | Product-scope judgment. Phase 4. |
 | 4 | **Launch-readiness mechanics** — now the full Phase 7 checklist: deploy mechanism, config contract, migration-in-prod, backup+restore drill, uptime/alerting, TLS/domain, R2 values. | Topology settled (droplet + managed PG + R2); `aspire publish` compose output is the default deploy candidate. | Operational cost/effort trade-offs. Phase 7. |
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Phase 6 gate. |
-| 7 | **Production telemetry destination** — where OTLP signals go on the droplet (the Aspire dashboard is dev-only/ephemeral). | Self-hosted Grafana LGTM single container on the droplet; alternatives: SaaS free tier (Grafana Cloud, Honeycomb), Seq (logs-first). | Cost vs ops-burden preference. Decide during Phase 1 item 1; deploy Phase 7. |
 | 8 | **Email provider + sending domain** — transactional provider for confirmation/reset/notification mail. | Postmark or Amazon SES (cheap at this scale); needs a sending domain, which ties into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Gates Phase 1 item 5. |
 | 9 | **Error-handling UX** — what a user sees on circuit crash / service exception / failed form post (the three dimensions flagged in `cross-cutting.md`'s standing gap). | None designed — Blazor defaults today. | Product-feel decision (CLAUDE.md Stage-1 venue: design conversation in chat). Gates Phase 1 item 4. |
 | 10 | **Legal/policy track ownership + timing** — ToS, privacy policy, DMCA agent/process, moderation obligations for a fanfiction UGC site. | None. | Legal exposure and community policy are yours; engineering only hosts the documents. Gates Phase 7 (lighter obligation defensible for the trusted-audience beta — your call). |
@@ -286,6 +290,21 @@ Newest first. Every entry points at the doc that now states the rule. Entries up
 are carried forward from `middle_plan.md` (which carried 2026-07-01-and-earlier entries from
 `forward_plan.md`) — a few long entries lightly condensed with their full technical framing
 intact at the named pointer; `middle_plan.md` remains the unabridged historical record.
+
+- **Production telemetry destination = self-hosted Grafana LGTM container (decision row 7)** —
+  resolved (2026-07-06, Brian, during WU-Observability planning): one `grafana/otel-lgtm` container
+  on the droplet, deployed at Phase 7. Deciding criterion: the consumer is *Claude queried
+  on demand* when Brian points it at an issue — not Brian reading dashboards — so what matters is
+  agent-queryable HTTP APIs, which LGTM provides natively (Loki logs / Tempo traces / Prometheus
+  metrics, each curl-able over SSH to the droplet with no exposed endpoints; official Grafana MCP
+  server available if richer access is ever wanted). Full metrics support retained deliberately —
+  WU-Redis's write-behind worker needs queue-depth/drain-latency metrics to be trustworthy.
+  Alternatives weighed: Seq (best-in-class log search but weak metrics — would need Prometheus
+  bolted on anyway), SigNoz/ClickStack (SQL-queryable but heavier ops on a small droplet), SaaS
+  free tiers (external account + egress for no ops savings that matter at this scale). The only
+  code seam is `OTEL_EXPORTER_OTLP_ENDPOINT` (exporter already gated on it) — goes on the Phase 7
+  config contract. Rule: this file, Phase 7 "Telemetry destination live" bullet;
+  `canalave-conventions/logging.md` records the conventions the destination will receive.
 
 - **CI hardening deliberately deferred to launch (report-only, PR-only, no branch protection)**
   — resolved (2026-07-05, Brian, Phase 0 WU-CI): considered turning CI into a hard gate now

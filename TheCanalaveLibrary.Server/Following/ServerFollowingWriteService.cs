@@ -57,7 +57,11 @@ public class ServerFollowingWriteService(
         // Best-effort post-commit notification (WU22). Primary save already committed above;
         // a notification failure must not roll back the follow. See cross-cutting.md.
         try { await notifications.NotifyNewFollowerAsync(targetUserId, actorId); }
-        catch (Exception ex) { logger.LogError(ex, "Notification failed — FollowAsync (non-fatal)"); }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "NewFollower notification failed for user {UserId} following {TargetUserId}",
+                actorId, targetUserId);
+        }
     }
 
     public async Task UnfollowAsync(int targetUserId)
@@ -126,7 +130,11 @@ public class ServerFollowingWriteService(
         // Best-effort post-commit notification (WU22). Primary save already committed above;
         // a notification failure must not roll back the vouch. See cross-cutting.md.
         try { await notifications.NotifyNewVouchAsync(targetUserId, actorId); }
-        catch (Exception ex) { logger.LogError(ex, "Notification failed — VouchAsync (non-fatal)"); }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "NewVouch notification failed for user {UserId} vouching for {TargetUserId}",
+                actorId, targetUserId);
+        }
     }
 
     public async Task RemoveVouchAsync(int targetUserId)

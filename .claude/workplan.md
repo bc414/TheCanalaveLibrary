@@ -1634,6 +1634,60 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Tool:** Claude Code (bunit 1→2 migration guide via live docs). **Pointer:** this entry;
   `testing.md` tier table.
 
+### WU-Observability — Logging & telemetry conventions + additive OTel (middle_plan_v2 Phase 1 item 1) — DONE ✓ (2026-07-06)
+- **Cells:** none (cross-cutting platform work-unit — recorded as a `status.md` Global
+  Condition). Decision row 7 resolved as Doc-Touch moment 1 (Grafana LGTM on the droplet,
+  chosen for the Claude-queried-on-demand consumption model; deploy stays Phase 7 — see
+  `middle_plan_v2.md` Resolved).
+- **Scope philosophy:** conventions + seams, not instrument-everything. Auto-instrumentation
+  closes the visibility holes now (Npgsql per-query spans, .NET 10 Blazor circuit/component
+  sources — the app's real execution path is the circuit, which the stock template never saw);
+  custom spans only where auto-instrumentation is blind. WU-Redis consumes the seams as the
+  named observability pilot for worker metrics.
+- **Done:**
+  - `Core/Diagnostics/CanalaveTelemetry.cs` (new cross-cutting cluster): per-component
+    `ActivitySource`+`Meter` registry (`TheCanalaveLibrary.{Component}`; first component
+    `ImageStorage`, reserved `ViewCount`/`Email`/`Marts`), wildcard-subscribed
+    (`"TheCanalaveLibrary.*"`) in ServiceDefaults with no project reference (string literal,
+    cross-commented).
+  - ServiceDefaults: `Npgsql.OpenTelemetry` 10.0.3 (`AddNpgsql()` tracing; version tracks
+    transitive Npgsql — dependabot efcore group widened to `Npgsql*`), `AddMeter("Npgsql")`,
+    Blazor built-in sources/meters (`Microsoft.AspNetCore.Components` +`.Lifecycle`
+    +`.Server.Circuits`), `EnrichWithHttpResponse` → `canalave.user.id` on request spans
+    (response hook — auth runs after span start).
+  - `Server/Telemetry/TelemetryCircuitHandler.cs` (new): scoped `CircuitHandler` wrapping every
+    inbound circuit dispatch — `BeginScope` `CircuitId`/`UserId` (lazy from circuit-scoped
+    `IActiveUserContext`) + `canalave.user.id` on `Activity.Current`; the dispatch-boundary
+    counterpart to HTTP middleware, which circuit work never traverses.
+  - Image-storage pilot: both impls (S3 + Local) emit `ImageStorage.Save`/`.Delete` spans
+    (provider/kind/size tags, exceptions recorded + status Error on failure, no double-log),
+    `canalave.image.uploads` + `.upload.size` metrics via shared `RecordUpload`, `Information`
+    save logs, `Warning` on foreign-path delete no-ops (previously a silent return).
+  - Silent-catch sweep (exhaustive; grep re-verified): the two
+    `/* best-effort; log in a future structured-logging pass */` blob-delete sites
+    (`ServerUserSettingsService`, `ServerStoryWriteService`) → `LogWarning` with
+    `{ImagePath}`/`{UserId}`/`{StoryId}`; the two unlogged notification fan-out swallows
+    (`ServerBlogPostWriteService`, `ServerGroupWriteService`) → `LogWarning` with entity IDs;
+    consistency pass normalized Following's two `LogError`-without-IDs sites to the settled
+    Warning-with-IDs shape; `ServerActiveUserContext` anonymous fallback annotated
+    `sanctioned-silent` (the registry's first entry).
+  - `canalave-conventions/logging.md` (new, linked from SKILL.md hub + cluster list): templates,
+    level semantics (best-effort swallows = Warning, settled 2026-07-06), no-silent-catches +
+    sanctioned registry, dispatch-boundary scopes, per-surface recipes (external call = worked
+    example; worker + hub stubs for WU-Redis/WU-SignalR), telemetry testing patterns,
+    dashboard-reading guide.
+- **Verified (2026-07-06):** Unit — `ImageStorageTelemetryTests` (4 tests: span tags/error
+  status, metric values+tags via `MetricCollector`, `FakeLogger` level+structured-state;
+  `Microsoft.Extensions.Diagnostics.Testing` added to Tests.Unit). Integration —
+  `NpgsqlTracingSmokeTests` pins the `"Npgsql"` source name against silent upgrade breakage.
+  The four swept catch-log sites are review-carried (DbContext-bound services — throwing-fake
+  machinery disproportionate to one-line catches; rationale in `logging.md` §Testing). Full
+  `dotnet test` green (1,271: 452 Unit + 446 RazorComponents + 373 Integration). Browser band:
+  Aspire-path dashboard pass — circuit-parented Npgsql spans with SQL text, `ImageStorage.Save`
+  span + S3 HTTP child on avatar upload, `canalave.*` metrics, `CircuitId`/`UserId` log scopes.
+- **Tool:** Claude Code (Fable; plan approved 2026-07-06). **Pointer:**
+  `canalave-conventions/logging.md`; `middle_plan_v2.md` Phase 1 item 1 + Resolved (row 7).
+
 ---
 
 ## Blocked / deferred — genuine Stage-1 intent gaps (no sequence number)

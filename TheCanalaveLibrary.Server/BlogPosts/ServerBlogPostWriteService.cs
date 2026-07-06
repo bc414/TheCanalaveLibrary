@@ -23,7 +23,8 @@ public class ServerBlogPostWriteService(
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
-    INotificationWriteService notifications)
+    INotificationWriteService notifications,
+    ILogger<ServerBlogPostWriteService> logger)
     : ServerBlogPostReadService(readDbFactory, activeUser), IBlogPostWriteService
 {
     public async Task<int> CreateProfileBlogPostAsync(CreateProfileBlogPostDto dto)
@@ -220,9 +221,12 @@ public class ServerBlogPostWriteService(
         {
             await notifications.NotifyNewGroupBlogPostAsync(dto.GroupId, post.BlogPostId, authorId);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // Notification failure must never roll back the primary action.
+            logger.LogWarning(ex,
+                "NewGroupBlogPost notification fan-out failed for blog post {BlogPostId} in group {GroupId}",
+                post.BlogPostId, dto.GroupId);
         }
 
         return post.BlogPostId;

@@ -12,6 +12,10 @@
 
         <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.7.0" />
         <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" Version="10.7.0" />
+        <!-- Version tracks the transitive Npgsql version (10.0.3 via Npgsql.EntityFrameworkCore
+             .PostgreSQL in Server), not the EF provider's own version — grouped with the EF Core
+             train in .github/dependabot.yml so they move together. -->
+        <PackageReference Include="Npgsql.OpenTelemetry" Version="10.0.3" />
         <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
         <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.16.0" />
         <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.16.0" />

@@ -15,7 +15,8 @@ public class ServerGroupWriteService(
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
-    INotificationWriteService notifications)
+    INotificationWriteService notifications,
+    ILogger<ServerGroupWriteService> logger)
     : ServerGroupReadService(readDbFactory, activeUser), IGroupWriteService
 {
     // ── Group CRUD ────────────────────────────────────────────────────────────────
@@ -180,9 +181,12 @@ public class ServerGroupWriteService(
             {
                 await notifications.NotifyNewGroupStoryAsync(dto.GroupId, storyAuthorId.Value, userId);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 // Best-effort — notification failure must not roll back the primary action.
+                logger.LogWarning(ex,
+                    "NewGroupStory notification failed for story {StoryId} added to group {GroupId}",
+                    dto.StoryId, dto.GroupId);
             }
         }
     }

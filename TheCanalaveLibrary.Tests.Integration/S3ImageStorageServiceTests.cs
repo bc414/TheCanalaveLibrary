@@ -2,6 +2,7 @@ using System.Net;
 using Amazon.S3;
 using Amazon.S3.Model;
 using FluentAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
@@ -26,7 +27,8 @@ public class S3ImageStorageServiceTests(GarageFixture garage) : IClassFixture<Ga
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
 
     private S3ImageStorageService CreateService() =>
-        new(S3ImageStorageService.CreateClient(garage.Options), Options.Create(garage.Options));
+        new(S3ImageStorageService.CreateClient(garage.Options), Options.Create(garage.Options),
+            NullLogger<S3ImageStorageService>.Instance);
 
     [Fact]
     public async Task SaveAsync_PutsTheObject_AndReturnsTheSameStoredPathShapeAsLocal()

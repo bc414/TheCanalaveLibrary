@@ -33,6 +33,11 @@ builder.Services.AddScoped<UserDeletionService>();
 // DbContexts below resolve it as a constructor dependency for the content-rating query filter.
 builder.Services.AddScoped<IActiveUserContext, ServerActiveUserContext>();
 
+// Telemetry correlation at the circuit dispatch boundary (WU-Observability): logger scope
+// (CircuitId/UserId) + canalave.user.id trace tag around every inbound circuit activity.
+// See canalave-conventions/logging.md §"Context Scopes".
+builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, TelemetryCircuitHandler>();
+
 // --- Database Contexts ---
 // Plain AddDbContext, never the Aspire Npgsql package's AddNpgsqlDbContext — settled WU12
 // (forward_plan.md "Aspire orchestration during MVP dev" narrower correction; layer2-services.md

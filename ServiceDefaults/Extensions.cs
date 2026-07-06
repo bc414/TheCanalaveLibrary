@@ -1,9 +1,11 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.ServiceDiscovery;
+using Npgsql;
 using OpenTelemetry;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
@@ -58,17 +60,58 @@ public static class Extensions
             {
                 metrics.AddAspNetCoreInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddRuntimeInstrumentation();
+                    .AddRuntimeInstrumentation()
+                    // Every Canalave domain meter (Core's CanalaveTelemetry.{Component}, named
+                    // "TheCanalaveLibrary.{Component}") — wildcard so new components light up
+                    // without touching this file. String literal on purpose: no ServiceDefaults →
+                    // Core project reference (Core carries Identity/EF packages that don't belong
+                    // in an Aspire shared project).
+                    .AddMeter("TheCanalaveLibrary.*")
+                    // Npgsql connection-pool + command metrics — pool saturation is the classic
+                    // Blazor Server failure mode with per-method read-context factories.
+                    .AddMeter("Npgsql")
+                    // Blazor built-in meters (.NET 10): event/navigation duration, component
+                    // lifecycle + render batches, circuit active/connected/duration.
+                    .AddMeter(
+                        "Microsoft.AspNetCore.Components",
+                        "Microsoft.AspNetCore.Components.Lifecycle",
+                        "Microsoft.AspNetCore.Components.Server.Circuits");
             })
             .WithTracing(tracing =>
             {
                 tracing.AddSource(builder.Environment.ApplicationName)
+                    // Every Canalave domain ActivitySource — same wildcard/literal rationale as
+                    // the meter subscription above.
+                    .AddSource("TheCanalaveLibrary.*")
+                    // Blazor built-in activities (.NET 10): circuit lifecycle, navigation, and
+                    // event-handler spans — the app's real execution spine under InteractiveServer;
+                    // custom + Npgsql spans parent under these.
+                    .AddSource(
+                        "Microsoft.AspNetCore.Components",
+                        "Microsoft.AspNetCore.Components.Server.Circuits")
+                    // Npgsql per-query spans (SQL text + duration), from Npgsql.OpenTelemetry.
+                    .AddNpgsql()
                     .AddAspNetCoreInstrumentation(tracing =>
+                    {
                         // Exclude health check requests from tracing
                         tracing.Filter = context =>
                             !context.Request.Path.StartsWithSegments(HealthEndpointPath)
-                            && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath)
-                    )
+                            && !context.Request.Path.StartsWithSegments(AlivenessEndpointPath);
+                        // Tag request spans with the authenticated user. Must be the RESPONSE
+                        // hook: the request span starts before the auth middleware has populated
+                        // HttpContext.User. Circuit dispatches (Blazor's main execution path)
+                        // never pass through here — TelemetryCircuitHandler (Server) is their
+                        // equivalent.
+                        tracing.EnrichWithHttpResponse = (activity, response) =>
+                        {
+                            string? userId = response.HttpContext.User
+                                .FindFirstValue(ClaimTypes.NameIdentifier);
+                            if (userId is not null)
+                            {
+                                activity.SetTag("canalave.user.id", userId);
+                            }
+                        };
+                    })
                     // Uncomment the following line to enable gRPC instrumentation (requires the OpenTelemetry.Instrumentation.GrpcNetClient package)
                     //.AddGrpcClientInstrumentation()
                     .AddHttpClientInstrumentation();

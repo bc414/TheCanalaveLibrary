@@ -21,7 +21,8 @@ public class ServerUserSettingsService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser,
     IImageStorageService imageStorage,
-    IHtmlSanitizationService sanitizer) : IUserSettingsService
+    IHtmlSanitizationService sanitizer,
+    ILogger<ServerUserSettingsService> logger) : IUserSettingsService
 {
     // Resolves and validates the current user id — throws when anonymous.
     private int RequireCurrentUserId()
@@ -241,7 +242,12 @@ public class ServerUserSettingsService(
         if (oldPath is not null && oldPath != relativeUrl)
         {
             try { await imageStorage.DeleteAsync(oldPath); }
-            catch { /* best-effort; log in a future structured-logging pass */ }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Best-effort delete of replaced profile image {ImagePath} failed for user {UserId} — blob orphaned",
+                    oldPath, userId);
+            }
         }
 
         return relativeUrl;

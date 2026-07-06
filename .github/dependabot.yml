@@ -14,10 +14,12 @@ updates:
       aspire:
         patterns:
           - "Aspire*"
+      # Npgsql* (not just the EF provider) rides this train: Npgsql.OpenTelemetry
+      # (ServiceDefaults) must version-track the transitive Npgsql the EF provider pulls in.
       efcore:
         patterns:
           - "Microsoft.EntityFrameworkCore*"
-          - "Npgsql.EntityFrameworkCore.*"
+          - "Npgsql*"
       # Everything else (AWSSDK.S3, xunit, bunit, FluentAssertions, Respawn, Testcontainers.*, ...)
       # is left ungrouped and gets its own PR per bump — no cross-package version constraint.
 

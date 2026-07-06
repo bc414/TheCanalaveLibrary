@@ -7,7 +7,9 @@ description: >
   component design, [PersistentState]), CQRS-lite (services, DTOs),
   Redis, Aspire, naming, code organization, automated testing
   (Unit / Integration / RazorComponents-bUnit tiers, Testcontainers-Postgres,
-  fake IActiveUserContext), and full-breadth debugging methodology (repro
+  fake IActiveUserContext), logging & telemetry (OpenTelemetry signals,
+  structured templates, level semantics, no-silent-catches, CanalaveTelemetry
+  custom sources), and full-breadth debugging methodology (repro
   discipline, diagnostic-surface correlation, browser-based debugging).
 paths: "*.cs, *.razor, *.csproj"
 ---
@@ -66,6 +68,7 @@ Cross-cutting clusters and their scope:
 - **`Identity/`** — `User` entity + `IActiveUserContext` + auth plumbing (Server impl: `Server/Identity/`). Distinct from `Users/` (summary atom) and `Profiles/` (read/edit layer).
 - **`Sprites/`** — `IThemeReadService`/`ISpriteReadService` render-time URL resolution (read-only). Distinct from `Images/` (upload) and `Identity/` (the entities projected).
 - **`Discovery/`** — `StoryFilterDto`, the three §8.7 filter-setting entities, and `ResultsFilterPanel`/`TagFilter`/`UserStoryInteractionFilter` coordination components; consumed by search, profiles, and bookshelves.
+- **`Diagnostics/`** (Core) — `CanalaveTelemetry`, the per-component `ActivitySource`/`Meter` registry every instrumented feature emits through (see `logging.md`); no owning feature. Server-side counterpart: `Server/Telemetry/` (`TelemetryCircuitHandler`).
 - **`Bookshelves/`** — `BookshelfTab` enum + `BookshelfTabSlug` slug helper consumed by `SharedUI/Bookshelves/` and `Server/UserStoryInteractions/`.
 - **`Recommendations/`** — SVG icon constants and display components spanning submission, display, Hidden Gem, and attribution sub-features.
 - **`Messaging/`** — Messaging feature cluster; `EditorView` and `UserCard` remain in their own cross-cutting clusters.
@@ -132,6 +135,7 @@ exactly how Bootstrap-template classnames (`top-row`, `nav-pills`, …) get copi
 | [layer7-redis.md](layer7-redis.md) | 7 | Write-behind buffer, ephemeral store, read-side cache |
 | [layer8-data-marts.md](layer8-data-marts.md) | 8 | Non-EF background workers, raw SQL, table swap |
 | [cross-cutting.md](cross-cutting.md) | All | Render mode, device detection, Identity, Aspire, notifications, badges, UserStats, content rating filtering, delete policies |
+| [logging.md](logging.md) | All | OpenTelemetry three-signal conventions: structured log templates, level semantics, no-silent-catches + sanctioned registry, `CanalaveTelemetry` custom sources/meters + naming, dispatch-boundary scopes (`TelemetryCircuitHandler`), per-surface recipes (external call / worker / hub), telemetry testing patterns |
 | [testing.md](testing.md) | All | Three test tiers by *kind* (Unit = directly-constructed, no host/DB; Integration = `WebApplicationFactory`/Testcontainers Postgres; RazorComponents = bUnit render tests); Testcontainers-Postgres rule; fake `IActiveUserContext`; what dev-diagnostics endpoints are/aren't for |
 | [debugging.md](debugging.md) | All | Full-breadth debugging methodology: reproduce before fixing, correlating diagnostic surfaces (server log / exception page / browser console+network / psql / dev-diagnostics), re-running the identical repro after a candidate fix (a moved stack trace ≠ fixed), feature-local vs. cross-cutting scope classification, when to reach for browser-based debugging, fix-same-session discipline |
 

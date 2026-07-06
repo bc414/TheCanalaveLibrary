@@ -7,7 +7,8 @@ public class ServerStoryWriteService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
-    IImageStorageService imageStorage)
+    IImageStorageService imageStorage,
+    ILogger<ServerStoryWriteService> logger)
     : ServerStoryReadService(readDbFactory, activeUser), IStoryWriteService
 {
     public async Task<int> CreateStoryAsync(CreateStoryDTO newStoryDTO)
@@ -87,7 +88,12 @@ public class ServerStoryWriteService(
         if (oldCoverPath is not null && oldCoverPath != dto.CoverArtRelativeUrl)
         {
             try { await imageStorage.DeleteAsync(oldCoverPath); }
-            catch { /* best-effort; log in a future structured-logging pass */ }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex,
+                    "Best-effort delete of replaced cover {ImagePath} failed for story {StoryId} — blob orphaned",
+                    oldCoverPath, dto.StoryId);
+            }
         }
     }
 

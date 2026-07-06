@@ -91,8 +91,9 @@ public class ServerActiveUserContext(
         }
         catch
         {
-            // No HttpContext and no usable circuit state (e.g. DataSeeder's background scope) —
-            // anonymous is the safe failure mode for a content-rating filter.
+            // sanctioned-silent: no HttpContext and no usable circuit state (e.g. DataSeeder's
+            // background scope) — anonymous is the by-design fallback for a content-rating filter,
+            // and this static helper predates any logger (see logging.md §"No Silent Catches").
             return new ClaimsPrincipal(new ClaimsIdentity());
         }
     }
