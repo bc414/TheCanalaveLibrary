@@ -27,7 +27,7 @@
                     @* Badge icons are provisioned out-of-band (same policy as sprites); hide on
                        miss rather than render a broken-image glyph. *@
                     <img src="@badge.IconUrl" alt="" title="@badge.Name" class="size-4" loading="lazy"
-                         onerror="this.style.display='none'" />
+                         data-hide-on-error />
                 }
             </div>
         }

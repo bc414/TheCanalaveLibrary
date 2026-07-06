@@ -1,4 +1,5 @@
 using System.Reflection;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Core;
@@ -14,7 +15,7 @@ namespace TheCanalaveLibrary.Server;
 // (invisible to DI's constructor selection, so it can't create ambiguity) that only a subclass can reach,
 // letting ReadOnlyApplicationDbContext pass its OWN DbContextOptions<ReadOnlyApplicationDbContext> up
 // through it. A primary constructor can't be declared protected, hence the explicit form here.
-public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int>
+public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int>, IDataProtectionKeyContext
 {
     // protected so ReadOnlyApplicationDbContext can close over it in its own OnModelCreating to
     // register the display/visibility query filters (ContentRating, GroupAudience, IsTakenDown).
@@ -39,6 +40,10 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     //The fundamentals
     //Users is in base class
     public DbSet<UserProfile> UserProfiles { get; set; }
+
+    // Data Protection keyring (WU-DataProtection) — never delete rows; old keys must remain
+    // decryptable. Respawn ignores this table in integration tests. See security.md.
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
 
     //Stories
     public DbSet<Story> Stories { get; set; } //Metadata table

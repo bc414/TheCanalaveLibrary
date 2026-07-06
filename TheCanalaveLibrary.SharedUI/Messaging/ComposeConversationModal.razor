@@ -29,7 +29,7 @@
                             <img src="@RecipientPreset.AvatarUrl"
                                  alt="@RecipientPreset.Username"
                                  class="h-6 w-6 rounded-full object-cover"
-                                 onerror="this.src='/img/default-avatar.svg'" />
+                                 data-fallback-src="/img/default-avatar.svg" />
                             <span class="text-sm font-medium text-(--color-text)">@RecipientPreset.Username</span>
                         </div>
                     }

@@ -80,6 +80,12 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
             services.RemoveAll<IActiveUserContext>();
             services.AddSingleton<FakeActiveUserContext>();
             services.AddScoped<IActiveUserContext>(sp => sp.GetRequiredService<FakeActiveUserContext>());
+
+            // Swap the real per-user write throttle for a pass-through — tests legitimately
+            // hammer write services in loops (paging seeds, at-limit fills). WriteThrottleTests
+            // re-registers the real ServerWriteRateLimitService to cover the throttle itself.
+            services.RemoveAll<IWriteRateLimitService>();
+            services.AddSingleton<IWriteRateLimitService, FakeWriteRateLimitService>();
         });
     }
 

@@ -8,6 +8,7 @@ public class ServerStoryWriteService(
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IImageStorageService imageStorage,
+    IWriteRateLimitService rateLimit,
     ILogger<ServerStoryWriteService> logger)
     : ServerStoryReadService(readDbFactory, activeUser), IStoryWriteService
 {
@@ -16,6 +17,7 @@ public class ServerStoryWriteService(
         // AuthorId is always server-stamped; CreateStoryDTO intentionally has no AuthorId property.
         if (ActiveUser.UserId is not int authorId)
             throw new InvalidOperationException("Creating a story requires an authenticated user.");
+        rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, authorId);
 
         List<string> validationErrors = newStoryDTO.CanSave();
         if (validationErrors.Any())

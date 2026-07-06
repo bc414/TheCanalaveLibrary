@@ -24,6 +24,7 @@ public class ServerBlogPostWriteService(
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
     INotificationWriteService notifications,
+    IWriteRateLimitService rateLimit,
     ILogger<ServerBlogPostWriteService> logger)
     : ServerBlogPostReadService(readDbFactory, activeUser), IBlogPostWriteService
 {
@@ -31,6 +32,7 @@ public class ServerBlogPostWriteService(
     {
         if (ActiveUser.UserId is not int authorId)
             throw new InvalidOperationException("Creating a blog post requires an authenticated user.");
+        rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, authorId);
 
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new BlogPostValidationException(errors);
@@ -181,6 +183,7 @@ public class ServerBlogPostWriteService(
     {
         if (ActiveUser.UserId is not int authorId)
             throw new InvalidOperationException("Creating a group blog post requires an authenticated user.");
+        rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, authorId);
 
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new BlogPostValidationException(errors);

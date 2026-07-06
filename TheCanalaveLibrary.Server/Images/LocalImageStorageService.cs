@@ -15,6 +15,7 @@ namespace TheCanalaveLibrary.Server;
 /// </summary>
 public class LocalImageStorageService(
     IWebHostEnvironment env,
+    ImageUploadProcessor processor,
     ILogger<LocalImageStorageService> logger) : IImageStorageService
 {
     private const string Provider = "local";
@@ -29,15 +30,12 @@ public class LocalImageStorageService(
 
         try
         {
-            string extension = ImageUploadRules.ExtensionFor(contentType);
+            // Sniff + re-encode + size/dimension caps — the shared hardening step; never write
+            // caller-supplied bytes (security.md "Upload Content Pipeline"). The stored
+            // extension follows the SNIFFED format, not the browser's claimed content type.
+            using ProcessedImage processed = await processor.ProcessAsync(content, contentType);
 
-            if (content.CanSeek && content.Length > ImageUploadRules.MaxBytes)
-            {
-                throw new ArgumentException(
-                    $"Image exceeds the {ImageUploadRules.MaxBytes / (1024 * 1024)} MB limit.", nameof(content));
-            }
-
-            string key = ImageUploadRules.BuildKey(kind, ownerId, extension);
+            string key = ImageUploadRules.BuildKey(kind, ownerId, processed.Extension);
 
             string fullPath = Path.Combine(env.WebRootPath, "uploads", key.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
@@ -45,7 +43,7 @@ public class LocalImageStorageService(
             long sizeBytes;
             await using (FileStream fileStream = File.Create(fullPath))
             {
-                await content.CopyToAsync(fileStream);
+                await processed.Content.CopyToAsync(fileStream);
                 sizeBytes = fileStream.Length;
             }
 

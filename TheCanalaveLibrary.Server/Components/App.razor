@@ -15,13 +15,18 @@
     <link rel="stylesheet" href="@Assets["TheCanalaveLibrary.Server.styles.css"]"/>
     <!-- Quill.js (via Blazored.TextEditor, SharedUI/RichText/EditorView) — CDN per the package's own
          setup instructions; it ships no bundled Quill copy of its own. Test against Tailwind's
-         Preflight resets early (layer4-style.md "Quill.js Stylesheet Interaction"). -->
-    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet"/>
+         Preflight resets early (layer4-style.md "Quill.js Stylesheet Interaction").
+         SRI required on every CDN asset (security.md); recompute the hash on any version bump. -->
+    <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet"
+          integrity="sha384-ecIckRi4QlKYya/FQUbBUjS4qp65jF/J87Guw5uzTbO1C1Jfa/6kYmd6dXUF6D7i"
+          crossorigin="anonymous"/>
     <!-- Blazored.Typeahead (SharedUI/Tags/TagSelector) — package-provided positioning skeleton,
          see layer4-style.md "Blazored.Typeahead Stylesheet". No DI registration exists for this
          package (confirmed: no AddBlazoredTypeahead extension in the assembly). -->
     <link href="_content/Blazored.Typeahead/blazored-typeahead.css" rel="stylesheet"/>
-    <ImportMap/>
+    @* The nonce authorizes ImportMap's inline <script type="importmap"> under CSP — minted per
+       request by SecurityHeadersMiddleware, which lists the same value in script-src. *@
+    <ImportMap nonce="@CspNonce"/>
     <HeadOutlet @rendermode="PageRenderMode"/>
 </head>
 
@@ -36,9 +41,15 @@
 <script src="_content/TheCanalaveLibrary.SharedUI/js/reading-progress.js"></script>
 <!-- Sprite onerror fallback chain: animated webp → static png → unknown.png (TagChip, CharacterEntry) -->
 <script src="_content/TheCanalaveLibrary.SharedUI/js/sprite-fallback.js"></script>
+<!-- Delegated data-* image fallbacks — the CSP-safe replacement for inline onerror attributes
+     (security.md "no new raw inline on* attributes"). Must load after sprite-fallback.js. -->
+<script src="_content/TheCanalaveLibrary.SharedUI/js/img-fallback.js"></script>
 
-<!-- Quill.js + Blazored.TextEditor's interop (EditorView, SharedUI/RichText/) -->
-<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+<!-- Quill.js + Blazored.TextEditor's interop (EditorView, SharedUI/RichText/).
+     SRI required on every CDN asset (security.md); recompute the hash on any version bump. -->
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"
+        integrity="sha384-utBUCeG4SYaCm4m7GQZYr8Hy8Fpy3V4KGjBZaf4WTKOcwhCYpt/0PfeEe3HNlwx8"
+        crossorigin="anonymous"></script>
 <script src="_content/Blazored.TextEditor/quill-blot-formatter.min.js"></script>
 <script src="_content/Blazored.TextEditor/Blazored-BlazorQuill.js"></script>
 
@@ -56,6 +67,9 @@
     // that metadata so those pages stay static SSR while the rest of the app is InteractiveServer.
     [CascadingParameter]
     private HttpContext HttpContext { get; set; } = default!;
+
+    // Per-request CSP nonce minted by SecurityHeadersMiddleware — see <ImportMap> above.
+    private string? CspNonce => HttpContext.Items[SecurityHeadersMiddleware.NonceItemKey] as string;
 
     // The site converts to global InteractiveAuto in a single flip (layer5-wasm.md §"The Global
     // Flip") — this expression is where that flip lands. If a page must run as a WASM island

@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using SixLabors.ImageSharp;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Tests.Integration;
@@ -17,26 +18,44 @@ namespace TheCanalaveLibrary.Tests.Integration;
 [Collection("Postgres")]
 public class ImageStorageServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
-    // Minimal valid 1x1 PNG — same fixture bytes the WU12 dev-diagnostics endpoint used.
-    private static readonly byte[] OnePixelPng = Convert.FromBase64String(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+    // Real encoded fixture (see TestImages) — the sniff + re-encode pipeline rejects fake blobs.
+    private static readonly byte[] SmallPng = TestImages.Png(4, 4);
 
     [Fact]
     public async Task SaveAsync_WritesFileUnderWebRoot_AndReturnsAHostRelativePath()
     {
-        string relativePath = await SaveOnePixelPngAsync(ownerId: 999);
+        string relativePath = await SaveSmallPngAsync(ownerId: 999);
 
         relativePath.Should().MatchRegex(@"^/uploads/stories/999/cover-[0-9a-fA-F-]+\.png$");
 
         string fullPath = ToFullPath(relativePath);
         File.Exists(fullPath).Should().BeTrue();
-        (await File.ReadAllBytesAsync(fullPath)).Should().Equal(OnePixelPng);
+        // Bytes are re-encoded by the upload pipeline (never stored verbatim) — assert the stored
+        // file is a genuine same-dimensions PNG rather than byte-equal to the input.
+        ImageInfo stored = Image.Identify(fullPath);
+        stored.Metadata.DecodedImageFormat!.DefaultMimeType.Should().Be("image/png");
+        (stored.Width, stored.Height).Should().Be((4, 4));
+    }
+
+    [Fact]
+    public async Task SaveAsync_OnASpoofedContentType_StoresTheSniffedFormatInstead()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IImageStorageService imageStorage = scope.ServiceProvider.GetRequiredService<IImageStorageService>();
+        // PNG bytes claiming to be JPEG — the classic rename trick. The sniffed format wins.
+        using MemoryStream content = new(SmallPng);
+
+        string relativePath = await imageStorage.SaveAsync(content, "image/jpeg", ImageKind.Cover, 998);
+
+        relativePath.Should().MatchRegex(@"^/uploads/stories/998/cover-[0-9a-fA-F-]+\.png$");
+        Image.Identify(ToFullPath(relativePath)).Metadata.DecodedImageFormat!
+            .DefaultMimeType.Should().Be("image/png");
     }
 
     [Fact]
     public async Task DeleteAsync_RemovesThePreviouslySavedFile()
     {
-        string relativePath = await SaveOnePixelPngAsync(ownerId: 1000);
+        string relativePath = await SaveSmallPngAsync(ownerId: 1000);
         string fullPath = ToFullPath(relativePath);
         File.Exists(fullPath).Should().BeTrue("the save in the test's own setup should have succeeded");
 
@@ -64,7 +83,7 @@ public class ImageStorageServiceTests(PostgresFixture postgres) : IntegrationTes
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         IImageStorageService imageStorage = scope.ServiceProvider.GetRequiredService<IImageStorageService>();
-        using MemoryStream content = new(OnePixelPng);
+        using MemoryStream content = new(SmallPng);
 
         Func<Task> act = async () => await imageStorage.SaveAsync(content, "image/gif", ImageKind.Cover, 1);
 
@@ -74,11 +93,11 @@ public class ImageStorageServiceTests(PostgresFixture postgres) : IntegrationTes
     private string ToFullPath(string relativePath) =>
         Path.Combine(Factory.WebRootPath, relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
 
-    private async Task<string> SaveOnePixelPngAsync(int ownerId)
+    private async Task<string> SaveSmallPngAsync(int ownerId)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         IImageStorageService imageStorage = scope.ServiceProvider.GetRequiredService<IImageStorageService>();
-        using MemoryStream content = new(OnePixelPng);
+        using MemoryStream content = new(SmallPng);
         return await imageStorage.SaveAsync(content, "image/png", ImageKind.Cover, ownerId);
     }
 }

@@ -36,7 +36,7 @@
                         <div class="flex items-center gap-3 rounded-md px-2 py-1.5">
                             @* Badge icons are provisioned out-of-band; hide on miss (L4.5 pass). *@
                             <img src="@b.IconUrl" alt="" title="@b.DisplayName" class="size-6 shrink-0" loading="lazy"
-                                 onerror="this.style.display='none'" />
+                                 data-hide-on-error />
                             <div class="flex min-w-0 flex-1 flex-col">
                                 <span class="text-sm font-medium text-(--color-text)">@b.DisplayName</span>
                                 @if (b.Description is not null)
@@ -76,7 +76,7 @@
                         <div class="flex items-center gap-3 rounded-md px-2 py-1.5 opacity-50">
                             @* Badge icons are provisioned out-of-band; hide on miss (L4.5 pass). *@
                             <img src="@b.IconUrl" alt="" title="@b.DisplayName" class="size-6 shrink-0 grayscale" loading="lazy"
-                                 onerror="this.style.display='none'" />
+                                 data-hide-on-error />
                             <div class="flex min-w-0 flex-1 flex-col">
                                 <span class="text-sm font-medium text-(--color-text)">@b.DisplayName</span>
                                 @if (b.Description is not null)

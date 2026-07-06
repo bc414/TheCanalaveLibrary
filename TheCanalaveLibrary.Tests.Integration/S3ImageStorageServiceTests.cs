@@ -4,6 +4,8 @@ using Amazon.S3.Model;
 using FluentAssertions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
 
@@ -22,19 +24,26 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// </summary>
 public class S3ImageStorageServiceTests(GarageFixture garage) : IClassFixture<GarageFixture>
 {
-    // Minimal valid 1x1 PNG — same fixture bytes as ImageStorageServiceTests (the Local impl's suite).
-    private static readonly byte[] OnePixelPng = Convert.FromBase64String(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+    // Real encoded fixtures generated with ImageSharp — the sniff + re-encode pipeline
+    // (ImageUploadProcessor) rightly rejects fake byte blobs, so fixtures must decode.
+    private static readonly byte[] SmallPng = TestImages.Png(4, 4);
+    private static readonly byte[] SmallWebp = TestImages.Webp(4, 4);
 
     private S3ImageStorageService CreateService() =>
         new(S3ImageStorageService.CreateClient(garage.Options), Options.Create(garage.Options),
+            // Directly-constructed processor: anonymous viewer (throttle skipped — throttle
+            // behavior is WriteThrottleTests' job), pass-through limiter.
+            new ImageUploadProcessor(
+                new FakeWriteRateLimitService(),
+                FakeActiveUserContext.Anonymous(),
+                NullLogger<ImageUploadProcessor>.Instance),
             NullLogger<S3ImageStorageService>.Instance);
 
     [Fact]
     public async Task SaveAsync_PutsTheObject_AndReturnsTheSameStoredPathShapeAsLocal()
     {
         S3ImageStorageService service = CreateService();
-        using MemoryStream content = new(OnePixelPng);
+        using MemoryStream content = new(SmallPng);
 
         string relativePath = await service.SaveAsync(content, "image/png", ImageKind.Cover, ownerId: 999);
 
@@ -47,14 +56,19 @@ public class S3ImageStorageServiceTests(GarageFixture garage) : IClassFixture<Ga
         response.Headers.ContentType.Should().Be("image/png");
         using MemoryStream downloaded = new();
         await response.ResponseStream.CopyToAsync(downloaded);
-        downloaded.ToArray().Should().Equal(OnePixelPng);
+        // Bytes are re-encoded by the upload pipeline (never stored verbatim) — assert the stored
+        // object is a genuine same-dimensions PNG rather than byte-equal to the input.
+        downloaded.Position = 0;
+        ImageInfo stored = Image.Identify(downloaded);
+        stored.Metadata.DecodedImageFormat!.DefaultMimeType.Should().Be("image/png");
+        (stored.Width, stored.Height).Should().Be((4, 4));
     }
 
     [Fact]
     public async Task SaveAsync_BuildsProfileKeysForProfilePictures()
     {
         S3ImageStorageService service = CreateService();
-        using MemoryStream content = new(OnePixelPng);
+        using MemoryStream content = new(SmallWebp);
 
         string relativePath = await service.SaveAsync(content, "image/webp", ImageKind.ProfilePicture, ownerId: 7);
 
@@ -62,10 +76,27 @@ public class S3ImageStorageServiceTests(GarageFixture garage) : IClassFixture<Ga
     }
 
     [Fact]
+    public async Task SaveAsync_OnASpoofedContentType_StoresTheSniffedFormatInstead()
+    {
+        S3ImageStorageService service = CreateService();
+        // PNG bytes claiming to be JPEG — the classic rename trick. The sniffed format wins:
+        // stored key + object content type are png, end to end through a real bucket.
+        using MemoryStream content = new(SmallPng);
+
+        string relativePath = await service.SaveAsync(content, "image/jpeg", ImageKind.Cover, ownerId: 998);
+
+        relativePath.Should().MatchRegex(@"^/uploads/stories/998/cover-[0-9a-fA-F-]+\.png$");
+        using AmazonS3Client client = S3ImageStorageService.CreateClient(garage.Options);
+        using GetObjectResponse response = await client.GetObjectAsync(
+            garage.Options.BucketName, relativePath["/uploads/".Length..]);
+        response.Headers.ContentType.Should().Be("image/png");
+    }
+
+    [Fact]
     public async Task DeleteAsync_RemovesThePreviouslySavedObject()
     {
         S3ImageStorageService service = CreateService();
-        using MemoryStream content = new(OnePixelPng);
+        using MemoryStream content = new(SmallPng);
         string relativePath = await service.SaveAsync(content, "image/png", ImageKind.Cover, ownerId: 1000);
 
         await service.DeleteAsync(relativePath);
@@ -103,7 +134,7 @@ public class S3ImageStorageServiceTests(GarageFixture garage) : IClassFixture<Ga
     public async Task SaveAsync_RejectsAnUnsupportedContentType()
     {
         S3ImageStorageService service = CreateService();
-        using MemoryStream content = new(OnePixelPng);
+        using MemoryStream content = new(SmallPng);
 
         Func<Task> act = async () => await service.SaveAsync(content, "image/gif", ImageKind.Cover, 1);
 

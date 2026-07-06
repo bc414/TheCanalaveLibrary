@@ -75,6 +75,17 @@ token; `CreateBucket` is supported on R2's S3 API but the prod bucket will pre-e
 irrelevant at this payload size (10 MB cap vs 5 GiB single-PUT); if multipart is ever added, R2
 requires all parts except the last be equal-sized.
 
+**Upload content pipeline (settled 2026-07-06, Brian, WU-Security planning):** the browser's
+claimed MIME string is no longer trusted — `ImageUploadProcessor` (magic-byte sniff via
+`Image.Identify`, sniffed format authoritative; ImageSharp decode/re-encode; header-level
+decompression-bomb guard; EXIF/XMP/IPTC strip; downscale to ≤ 2048 px) is the single shared
+step both storage impls consume before writing bytes. This also closes two pre-existing gaps:
+`LocalImageStorageService`'s size cap silently skipped for non-seekable streams (`CanSeek`
+guard), and stored extension/content-type following the claimed MIME rather than the actual
+bytes. The frozen `IImageStorageService` signature is unchanged — hardening is entirely behind
+`SaveAsync`, so it carries over as-is when an upload endpoint appears at the L5 flip. Full
+pipeline + rationale: `canalave-conventions/security.md` §"Upload Content Pipeline".
+
 **Key convention (spec §3.17):** `stories/{StoryID}/cover-{uuid}.{ext}`,
 `users/{UserID}/profile-{uuid}.{ext}`. Both impls honor it so a stored path is interchangeable across
 implementations (no data migration on swap).
@@ -162,6 +173,31 @@ DB row `/uploads/users/1/profile-{uuid}.png` (psql on 5433), blob in `canalave-i
 `public, max-age=31536000, immutable`; second upload replaced the first — bucket still exactly
 1 object, old URL 404, new URL 200 (orphan cleanup exercised end-to-end for the first time with a
 real blob backend); Garage container restart → bootstrap idempotent, blob survived, URL still 200.
+
+**WU-Security Stage note (2026-07-06) — upload content pipeline built; L2 remains Stage 5:**
+
+`ImageUploadProcessor` (Server/Images/) is now the single hardening step both impls call before
+writing any byte: per-user throttle (`WriteActionKind.ImageUpload`, skipped for the anonymous
+dev-diagnostics probe) → claimed-MIME fast-fail → buffered 10 MB cap (closes the Local impl's
+`CanSeek`-gated bypass; S3's private `CopyWithLimitAsync` deleted as subsumed) → magic-byte
+sniff via `Image.Identify` with only jpeg/png/webp decoders (sniffed format authoritative —
+stored extension + content type follow the bytes, never the browser claim) → header-level
+decompression-bomb guard (16 384 px side / 64 MP, pre-decode) → first-frame decode →
+`AutoOrient` then EXIF/XMP/IPTC strip (ICC kept) → ≤ 2 048 px downscale → re-encode. Frozen
+`IImageStorageService` unchanged. SixLabors.ImageSharp **pinned to 3.1.x** (4.x demands a
+build-time license key; Dependabot major-ignore in `.github/dependabot.yml`).
+
+**How verified:** Unit — `ImageUploadProcessorTests` (11: format round trips, spoofed-MIME
+returns sniffed format, garbage/GIF rejection, oversized non-seekable stream rejection,
+hand-crafted 50 000×50 000 IHDR rejected without decode, EXIF strip, aspect-preserving
+downscale, throttle called for authenticated / skipped for anonymous);
+`ImageStorageTelemetryTests` updated (re-encode changes stored size — assertions now
+presence-based). Integration — `ImageStorageServiceTests` + `S3ImageStorageServiceTests`
+refitted to real generated fixtures (`TestImages`), each with a spoofed-MIME end-to-end case
+(stored key + served/object content type = png against real filesystem and real Garage).
+Browser band (server-only path, 2026-07-06): `/settings` avatar upload of PNG bytes named
+`.jpg` → DB row `profile-{uuid}.png`, served `image/png` with `nosniff`; 3000×100 upload
+stored 2048×68; prior avatar orphan-deleted on replace.
 
 ## L3/L3.5/L4 — N/A for this cluster
 

@@ -15,6 +15,7 @@ public class ServerMessagingWriteService(
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
+    IWriteRateLimitService rateLimit,
     ILogger<ServerMessagingWriteService> logger)
     : ServerMessagingReadService(readDbFactory, activeUser), IMessagingWriteService
 {
@@ -25,6 +26,7 @@ public class ServerMessagingWriteService(
     public async Task<int> StartConversationAsync(StartConversationDto dto)
     {
         int senderId = RequireAuthenticatedUser();
+        rateLimit.EnsureAllowed(WriteActionKind.Message, senderId);
 
         // Tier-3 domain validation (empty subject / body / self-message).
         List<string> errors = dto.Validate(senderId);
@@ -92,6 +94,7 @@ public class ServerMessagingWriteService(
     public async Task<MessageDto> SendMessageAsync(int conversationId, string messageHtml)
     {
         int senderId = RequireAuthenticatedUser();
+        rateLimit.EnsureAllowed(WriteActionKind.Message, senderId);
 
         // Validate body.
         List<string> errors = MessagingValidations.ValidateMessageBody(messageHtml);

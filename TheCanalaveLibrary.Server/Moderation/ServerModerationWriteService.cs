@@ -33,6 +33,7 @@ public class ServerModerationWriteService(
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     INotificationWriteService notifications,
+    IWriteRateLimitService rateLimit,
     ILogger<ServerModerationWriteService> logger)
     : ServerModerationReadService(readDbFactory), IModerationWriteService
 {
@@ -56,6 +57,10 @@ public class ServerModerationWriteService(
             throw new InvalidOperationException($"Entity type '{request.EntityType}' cannot be reported.");
 
         int? reporterId = activeUser.UserId;
+        // Reports may be anonymous (nullable reporter) — throttle only the authenticated axis;
+        // report-form UI is auth-gated, so this covers every real path (security.md).
+        if (reporterId is int throttleUserId)
+            rateLimit.EnsureAllowed(WriteActionKind.Report, throttleUserId);
 
         var report = new Report
         {

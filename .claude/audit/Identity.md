@@ -19,6 +19,19 @@ enum→short conversions. Cold `UserProfile` partition is 1-to-1.
 
 **Services:** `UserDeletionService` (Server). DI + cookie 401/403 config + role seeding in `Program.cs`.
 
+**Hardening scope settled (2026-07-06, Brian, WU-Security/WU-DataProtection planning):**
+- Identity lockout ON (`MaxFailedAccessAttempts = 5`, 15-min window, `AllowedForNewUsers`;
+  `Login.razor` flips to `lockoutOnFailure: true`) — per-account brute-force defense.
+- Auth form posts (`POST /Account/*`) get a per-IP HTTP rate-limit window (10/min) — per-IP
+  axis, complements lockout. Per-IP is dev/test-correct now; only meaningful in prod after
+  Phase 7's ForwardedHeaders work (see `security.md` §"HTTP Edge Rate Limiting").
+- Application-cookie flags set explicitly (`HttpOnly`, `SecurePolicy=Always`, `SameSite=Lax`).
+- Data Protection keyring persists via `PersistKeysToDbContext<ApplicationDbContext>` +
+  `SetApplicationName` (F1 L2 scope; keys table rides `ApplicationDbContext`'s migration tree);
+  deliberately no `ProtectKeysWith*` — rationale in `security.md` §"Data Protection Keyring".
+  One-time global sign-out expected when this ships (new key ring + app name).
+Conventions: `canalave-conventions/security.md`.
+
 ---
 
 ## The post-move reconciliation — RESOLVED (2026-06-20, WU1)
@@ -93,6 +106,32 @@ namespace). Only a stale comment remained (fixed). `dotnet build` green; `/Accou
   `DeletionService.DeleteUserAsync(user.Id)`; a `false` return (not found) now redirects to the existing
   invalid-user path instead of throwing. Inherits the resolved post-move reconciliation. **L4 — Stage 1
   (unchanged). L5 — N/A.**
+
+## WU-Security + WU-DataProtection Stage note (2026-07-06) — F1 L2 remains Stage 5, hardened
+
+Built per the settled note above; all landed 2026-07-06:
+- **Data Protection keyring → Postgres:** `AddDataProtection().PersistKeysToDbContext
+  <ApplicationDbContext>().SetApplicationName("TheCanalaveLibrary")`; migration #20
+  `AddDataProtectionKeys` (`data_protection_keys`, Respawn-ignored — never delete rows). The
+  key repository resolves `ApplicationDbContext` in a fresh DI scope outside any circuit —
+  verified safe (`ServerActiveUserContext` stores its deps and resolves the principal lazily;
+  write context carries no query filters).
+- **Lockout:** `MaxFailedAccessAttempts = 5` / 15 min / `AllowedForNewUsers`;
+  `Login.razor` → `lockoutOnFailure: true` (its `IsLockedOut` branch already routed to
+  `/Account/Lockout`).
+- **Cookie flags explicit:** `HttpOnly`, `SecurePolicy = Always`, `SameSite = Lax`.
+- **Per-IP HTTP window on `POST /Account/*`:** 10/min, bodied 429 + `Retry-After` (body is
+  load-bearing — `UseStatusCodePagesWithReExecute` re-executes body-less errors).
+
+**How verified:** Integration — `DataProtectionPersistenceTests` (protect/unprotect + keys-row;
+cross-factory unprotect = the automated survive-redeploy analog), `AuthRateLimitTests` in
+`HttpRateLimitTests` (11th POST → 429 with `Retry-After` + body; GETs unlimited),
+`SecurityHeadersTests`. Manual band (real browser, server-only path, 2026-07-06): filesystem
+key store moved aside → server process replaced → TestUser session survived and logout form
+POST succeeded (antiforgery valid; no filesystem store recreated — keyring provably Postgres);
+five wrong ReaderGamma passwords → `/Account/Lockout` (psql-verified counter mid-drill;
+lockout state reset afterward). Expect exactly one global sign-out when this ships (new key
+ring + app name). Conventions: `canalave-conventions/security.md`.
 
 ## L4.5-Browser verification (2026-07-01) — F1 + F52 → Stage 5, three bugs fixed same-session
 

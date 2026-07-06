@@ -22,6 +22,13 @@ updates:
           - "Npgsql*"
       # Everything else (AWSSDK.S3, xunit, bunit, FluentAssertions, Respawn, Testcontainers.*, ...)
       # is left ungrouped and gets its own PR per bump — no cross-package version constraint.
+    ignore:
+      # ImageSharp 4.x switched to a build-time license-key requirement; the project deliberately
+      # stays on the 3.1.x Split-License line (free for this project's scale, no key). Patch/minor
+      # 3.1.x bumps (incl. security fixes) still flow. See TheCanalaveLibrary.Server.csproj comment
+      # and canalave-conventions/security.md "Upload Content Pipeline".
+      - dependency-name: "SixLabors.ImageSharp"
+        update-types: ["version-update:semver-major"]
 
   # npm — Tailwind's package.json lives under the Server project, not the repo root.
   - package-ecosystem: "npm"

@@ -7,11 +7,17 @@ public class ServerChapterWriteService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
-    IHtmlSanitizationService sanitizer)
+    IHtmlSanitizationService sanitizer,
+    IWriteRateLimitService rateLimit)
     : ServerChapterReadService(readDbFactory, activeUser), IChapterWriteService
 {
     public async Task<int> CreateChapterAsync(CreateChapterDto dto)
     {
+        // Chapter creates stamp a nullable AuthorId rather than hard-requiring auth, so the
+        // throttle mirrors that: authenticated axis only (security.md "Write Throttling").
+        if (ActiveUser.UserId is int throttleUserId)
+            rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, throttleUserId);
+
         // Load story rating for invariant checks before validation.
         Rating? storyRating = await writeDb.Stories
             .Where(s => s.StoryId == dto.StoryId)
@@ -89,6 +95,10 @@ public class ServerChapterWriteService(
 
     public async Task<long> AddAlternateVersionAsync(int chapterId, CreateChapterDto dto)
     {
+        // Same conditional throttle as CreateChapterAsync (nullable AuthorId contract).
+        if (ActiveUser.UserId is int throttleUserId)
+            rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, throttleUserId);
+
         // Load story rating for floor invariant (alternate versions are not primary — no primary invariant).
         Rating? storyRating = await writeDb.Chapters
             .Where(c => c.ChapterId == chapterId)

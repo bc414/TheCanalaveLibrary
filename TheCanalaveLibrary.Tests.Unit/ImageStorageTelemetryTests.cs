@@ -25,16 +25,23 @@ namespace TheCanalaveLibrary.Tests.Unit;
 /// </summary>
 public sealed class ImageStorageTelemetryTests : IDisposable
 {
-    // Minimal valid 1x1 PNG — same fixture bytes as the Integration image suites.
-    private static readonly byte[] OnePixelPng = Convert.FromBase64String(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=");
+    // Real encoded fixture — the sniff + re-encode pipeline rejects fake byte blobs (TestImages).
+    private static readonly byte[] SmallPng = TestImages.Png(4, 4);
 
     private readonly string _webRoot =
         Path.Combine(Path.GetTempPath(), "canalave-telemetry-tests", Guid.NewGuid().ToString("N"));
 
     private readonly FakeLogger<LocalImageStorageService> _logger = new();
 
-    private LocalImageStorageService BuildSut() => new(new FakeWebHostEnvironment(_webRoot), _logger);
+    private LocalImageStorageService BuildSut() => new(
+        new FakeWebHostEnvironment(_webRoot),
+        // Anonymous viewer + recording limiter: the processor skips the throttle for null UserId,
+        // and this suite asserts telemetry, not throttling (ImageUploadProcessorTests covers that).
+        new ImageUploadProcessor(
+            new RecordingWriteRateLimitService(),
+            new StubActiveUserContext(),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<ImageUploadProcessor>.Instance),
+        _logger);
 
     public void Dispose()
     {
@@ -50,7 +57,7 @@ public sealed class ImageStorageTelemetryTests : IDisposable
         List<Activity> captured = [];
         using ActivityListener listener = ListenTo(CanalaveTelemetry.ImageStorage.Name, captured);
         LocalImageStorageService sut = BuildSut();
-        using MemoryStream content = new(OnePixelPng);
+        using MemoryStream content = new(SmallPng);
 
         await sut.SaveAsync(content, "image/png", ImageKind.Cover, ownerId: 1);
 
@@ -58,7 +65,8 @@ public sealed class ImageStorageTelemetryTests : IDisposable
         activity.OperationName.Should().Be("ImageStorage.Save");
         activity.GetTagItem("canalave.image.provider").Should().Be("local");
         activity.GetTagItem("canalave.image.kind").Should().Be("Cover");
-        activity.GetTagItem("canalave.image.size_bytes").Should().Be((long)OnePixelPng.Length);
+        // Stored size differs from the input's — the pipeline re-encodes — so assert presence, not equality.
+        ((long)activity.GetTagItem("canalave.image.size_bytes")!).Should().BePositive();
         activity.Status.Should().Be(ActivityStatusCode.Unset, "a successful save is not an error span");
 
         FakeLogRecord log = _logger.Collector.GetSnapshot().Should().ContainSingle().Which;
@@ -73,7 +81,7 @@ public sealed class ImageStorageTelemetryTests : IDisposable
         using MetricCollector<long> uploads = new(CanalaveTelemetry.ImageStorage.Uploads);
         using MetricCollector<long> sizes = new(CanalaveTelemetry.ImageStorage.UploadSize);
         LocalImageStorageService sut = BuildSut();
-        using MemoryStream content = new(OnePixelPng);
+        using MemoryStream content = new(SmallPng);
 
         await sut.SaveAsync(content, "image/png", ImageKind.ProfilePicture, ownerId: 7);
 
@@ -83,7 +91,7 @@ public sealed class ImageStorageTelemetryTests : IDisposable
         count.Tags["canalave.image.provider"].Should().Be("local");
 
         CollectedMeasurement<long> size = sizes.GetMeasurementSnapshot().Should().ContainSingle().Which;
-        size.Value.Should().Be(OnePixelPng.Length);
+        size.Value.Should().BePositive("the pipeline re-encodes, so the stored size differs from the input's");
         size.Tags.Should().ContainKey("canalave.image.kind");
     }
 

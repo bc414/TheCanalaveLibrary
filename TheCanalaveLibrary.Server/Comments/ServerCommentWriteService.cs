@@ -13,13 +13,15 @@ public class ServerCommentWriteService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
-    IHtmlSanitizationService sanitizer)
+    IHtmlSanitizationService sanitizer,
+    IWriteRateLimitService rateLimit)
     : ServerCommentReadService(readDbFactory, activeUser), ICommentWriteService
 {
     public async Task<long> PostChapterCommentAsync(PostChapterCommentDto dto)
     {
         if (ActiveUser.UserId is not int userId)
             throw new InvalidOperationException("Posting a comment requires an authenticated user.");
+        rateLimit.EnsureAllowed(WriteActionKind.Comment, userId);
 
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new CommentValidationException(errors);
@@ -69,6 +71,7 @@ public class ServerCommentWriteService(
     {
         if (ActiveUser.UserId is not int userId)
             throw new InvalidOperationException("Posting a comment requires an authenticated user.");
+        rateLimit.EnsureAllowed(WriteActionKind.Comment, userId);
 
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new CommentValidationException(errors);
@@ -119,6 +122,7 @@ public class ServerCommentWriteService(
     {
         if (ActiveUser.UserId is not int userId)
             throw new InvalidOperationException("Posting a comment requires an authenticated user.");
+        rateLimit.EnsureAllowed(WriteActionKind.Comment, userId);
 
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new CommentValidationException(errors);
@@ -166,6 +170,7 @@ public class ServerCommentWriteService(
     {
         if (ActiveUser.UserId is not int userId)
             throw new InvalidOperationException("Posting a comment requires an authenticated user.");
+        rateLimit.EnsureAllowed(WriteActionKind.Comment, userId);
 
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new CommentValidationException(errors);

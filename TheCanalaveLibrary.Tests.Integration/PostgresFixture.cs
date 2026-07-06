@@ -53,6 +53,9 @@ public sealed class PostgresFixture : IAsyncLifetime
             TablesToIgnore =
             [
                 "__EFMigrationsHistory",
+                // Data Protection keyring — wiping it between tests would churn the key ring on
+                // every reset (and deleting keys is forbidden in general; see security.md).
+                "data_protection_keys",
                 "asp_net_roles",
                 "badges",
                 "notification_categories",

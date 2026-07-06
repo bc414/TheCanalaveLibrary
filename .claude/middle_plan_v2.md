@@ -164,16 +164,20 @@ one, same as `testing.md`/`debugging.md` accreted.
    decision row 8; real `IEmailSender<User>` (confirmation, password reset), then notification
    email fan-out (the `EmailEnabled` per-user setting already exists, unconsumed). Test bed:
    registration + reset flows; a dev inbox (provider sandbox or local catcher via Aspire).
-6. **WU-Security** — hardening pass + new `canalave-conventions/security.md`: ASP.NET rate
-   limiting on auth/upload/comment endpoints; magic-byte sniffing on image uploads (both storage
-   impls currently trust the browser's claimed MIME — close it in shared `ImageUploadRules`);
-   response headers (CSP to the extent Blazor allows, X-Content-Type-Options, frame options);
-   the CI vulnerability scan from Phase 0 documented as cadence. Test bed: existing auth/upload
-   surfaces; integration tests for limiter + sniffer.
-7. **WU-DataProtection** — persist the Data Protection keyring (default: EF
-   `PersistKeysToDbContext`, i.e. Postgres) so auth cookies and antiforgery tokens survive
-   process replacement — the classic droplet redeploy footgun. Test bed: locally provable now —
-   wipe `bin/`, restart, cookie still valid. Small; do it while touching Program.cs for items 5–6.
+6. **WU-Security** — DONE ✓ (2026-07-06) — hardening pass + new
+   `canalave-conventions/security.md`. As-built differs from the original wording in one
+   settled way: comment/upload writes are NOT HTTP endpoints (SignalR circuit; and
+   `InteractiveAuto` keeps the circuit alive post-flip), so write throttling lives at the L2
+   service layer (`IWriteRateLimitService`) with HTTP middleware limits only on the genuinely
+   HTTP surfaces (`POST /Account/*` per-IP, `/api/tags` writes). Upload validation expanded
+   from sniff-only to sniff + ImageSharp re-encode (see Resolved). Headers/CSP + nonce +
+   SRI + inline-handler sweep, Identity lockout + cookie flags, vuln-scan cadence documented.
+   Detail: `workplan.md` WU-Security entry; `security.md`.
+7. **WU-DataProtection** — DONE ✓ (2026-07-06) — keyring persisted via
+   `PersistKeysToDbContext<ApplicationDbContext>` + `SetApplicationName`; restart drill
+   passed (filesystem store moved aside, process replaced, cookie + antiforgery survived).
+   One-time global sign-out expected when this first deploys. Detail: `workplan.md` entry;
+   `security.md` §"Data Protection Keyring".
 8. **WU-SignalR** — messaging push (settled WU35 design; first app-level Hub, `MessagesHub`)
    plus the hub integration-test harness that does not exist yet. Test bed: the built messaging
    feature, two browser sessions. Pointer: `cross-cutting.md` "Private Messaging Architecture".
@@ -290,6 +294,37 @@ Newest first. Every entry points at the doc that now states the rule. Entries up
 are carried forward from `middle_plan.md` (which carried 2026-07-01-and-earlier entries from
 `forward_plan.md`) — a few long entries lightly condensed with their full technical framing
 intact at the named pointer; `middle_plan.md` remains the unabridged historical record.
+
+- **Upload validation = magic-byte sniff + ImageSharp decode/re-encode (WU-Security scope)** —
+  resolved (2026-07-06, Brian, WU-Security planning): the Phase 1 item 6 wording ("magic-byte
+  sniffing") is expanded to the full pipeline — sniff (sniffed format authoritative over the
+  browser's claimed MIME) + decode/re-encode via SixLabors.ImageSharp + header-level
+  decompression-bomb guard + EXIF strip + downscale to a stored ceiling. Sniff-only was weighed
+  and rejected: signature checks are beatable by prepending valid magic bytes to a polyglot
+  file, and re-encode also closes `LocalImageStorageService`'s CanSeek-gated size-cap bypass
+  through the same shared step. SVG stays off the allow-list permanently. Rule:
+  `canalave-conventions/security.md` §"Upload Content Pipeline".
+
+- **Write throttling lives at the L2 service layer, not (only) HTTP middleware (WU-Security
+  scope)** — resolved (2026-07-06, Brian, WU-Security planning): Phase 1 item 6's "rate
+  limiting on auth/upload/comment endpoints" assumed those were HTTP endpoints; uploads and
+  comments actually travel over the SignalR circuit, which HTTP rate-limiting middleware never
+  sees — and the settled `InteractiveAuto` end state keeps the circuit path alive permanently
+  even after the Phase 5 WASM flip. Therefore: per-user token-bucket throttling
+  (`IWriteRateLimitService`) enforced inside the L2 write services (one transport-agnostic
+  point covering circuit now + HTTP endpoints later), with HTTP middleware limiting reserved
+  for the surfaces that are genuinely HTTP today (`/Account/*` auth form posts per-IP,
+  `/api/tags` writes). Endpoint-only limiting (deferring to Phase 5) was weighed and rejected —
+  it leaves writes unthrottled until the flip and the residual circuit path uncovered forever.
+  Rule: `canalave-conventions/security.md` §"Write Throttling" / §"HTTP Edge Rate Limiting".
+
+- **Data Protection keys persist to Postgres unencrypted (WU-DataProtection scope)** — resolved
+  (2026-07-06, Brian, WU-Security planning): `PersistKeysToDbContext<ApplicationDbContext>` +
+  `SetApplicationName`, deliberately with **no** `ProtectKeysWith*` at-rest key encryption. On
+  Linux there is no DPAPI; a self-managed certificate adds key-management burden against a
+  threat (DB-read access) that already implies full compromise of what the keys protect.
+  Revisit only if DB backups ever land somewhere less trusted than the database. Rule:
+  `canalave-conventions/security.md` §"Data Protection Keyring".
 
 - **Production telemetry destination = self-hosted Grafana LGTM container (decision row 7)** —
   resolved (2026-07-06, Brian, during WU-Observability planning): one `grafana/otel-lgtm` container

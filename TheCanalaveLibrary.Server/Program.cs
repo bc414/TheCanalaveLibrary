@@ -1,5 +1,8 @@
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Server;
 using TheCanalaveLibrary.Core;
@@ -70,6 +73,15 @@ builder.Services.AddDbContextFactory<ReadOnlyApplicationDbContext>(options => op
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
+// Data Protection keyring → Postgres (WU-DataProtection): auth cookies + antiforgery tokens
+// survive process replacement (the droplet-redeploy logout footgun). SetApplicationName is
+// mandatory — without it key isolation derives from the content-root path. Deliberately no
+// ProtectKeysWith* (keys unencrypted in our own DB — accepted small-deployment trade-off).
+// See security.md "Data Protection Keyring".
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<ApplicationDbContext>()
+    .SetApplicationName("TheCanalaveLibrary");
+
 // --- START: Corrected Identity Configuration ---
 
 // 1. Add base authentication services and the cookie scheme
@@ -79,6 +91,13 @@ builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
 // 2. Configure ApplicationCookie to handle 401/403 responses for Blazor
 builder.Services.ConfigureApplicationCookie(options =>
 {
+    // Explicit cookie hardening (WU-Security): these match today's framework defaults but are
+    // set deliberately so the posture is self-documenting and survives default drift
+    // (security.md "Identity Hardening"). SameSite stays Lax — no cross-site POST flows exist.
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+
     options.Events.OnRedirectToLogin = context =>
     {
         context.Response.StatusCode = 401;
@@ -102,6 +121,13 @@ builder.Services.AddIdentityCore<User>(options =>
         options.Password.RequireUppercase = true;
         options.Password.RequireNonAlphanumeric = false;
         options.Password.RequiredLength = 8;
+
+        // Per-ACCOUNT brute-force defense (WU-Security) — complements the per-IP rate limit on
+        // the /Account/* form posts below; the two defend different axes (security.md
+        // "Identity Hardening"). Login.razor passes lockoutOnFailure: true.
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+        options.Lockout.AllowedForNewUsers = true;
     })
     .AddRoles<ApplicationRole>() // Add the Role service
     .AddEntityFrameworkStores<ApplicationDbContext>() // Connect to your DbContext
@@ -117,6 +143,58 @@ builder.Services.AddScoped<IUserClaimsPrincipalFactory<User>, ApplicationUserCla
 // --- END: Corrected Identity Configuration ---
 
 builder.Services.AddSingleton<IEmailSender<User>, IdentityNoOpEmailSender>();
+
+// HTTP edge rate limiting (WU-Security) — covers the surfaces that are plain HTTP today:
+// per-IP window on the /Account/* auth form posts (credential-stuffing damping) and the
+// "TagWrites" policy on /api/tags writes. User writes (comments, uploads, …) are throttled at
+// the service layer instead — they travel over the SignalR circuit, which this middleware
+// never sees. Per-IP partitioning only becomes meaningful in production once Phase 7's
+// ForwardedHeaders work lands (behind Cloudflare every request shares a handful of proxy IPs).
+// See security.md "HTTP Edge Rate Limiting".
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out TimeSpan retryAfter))
+        {
+            context.HttpContext.Response.Headers.RetryAfter =
+                ((int)Math.Ceiling(retryAfter.TotalSeconds)).ToString();
+        }
+        // The body is load-bearing: UseStatusCodePagesWithReExecute re-executes BODY-LESS error
+        // responses into /not-found with the original method (the TagEndpoints.cs trap).
+        await context.HttpContext.Response.WriteAsync(
+            "Too many requests - please slow down and try again shortly.", cancellationToken);
+    };
+
+    // Global limiter: tight per-IP window on auth form posts only; everything else unlimited.
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+    {
+        if (HttpMethods.IsPost(httpContext.Request.Method) &&
+            httpContext.Request.Path.StartsWithSegments("/Account"))
+        {
+            return RateLimitPartition.GetFixedWindowLimiter(
+                $"auth:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
+                _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = 10,
+                    Window = TimeSpan.FromMinutes(1),
+                    QueueLimit = 0, // reject immediately — never delay a brute-forcer politely
+                });
+        }
+        return RateLimitPartition.GetNoLimiter("unlimited");
+    });
+
+    options.AddPolicy("TagWrites", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            $"tagwrites:{httpContext.User.Identity?.Name ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+});
 
 // Add your custom development data seeder
 builder.Services.AddScoped<DataSeeder>();
@@ -142,6 +220,13 @@ builder.Services.AddSingleton<ISpriteAssetProbe, LocalSpriteAssetProbe>();
 // Local (see TestAppFactory's config-eagerness note). S3 mode also maps the /uploads serving
 // route below. Wire-format constraints that keep Garage and R2 interchangeable live in
 // S3ImageStorageService.CreateClient.
+// Per-user write throttle (WU-Security) — the transport-agnostic enforcement point L2 write
+// services and ImageUploadProcessor call. Singleton: one token-bucket table for the process,
+// same lifetime reasoning as ServerHtmlSanitizationService. See security.md "Write Throttling".
+builder.Services.AddSingleton<IWriteRateLimitService, ServerWriteRateLimitService>();
+// Shared upload hardening step (sniff + re-encode) both storage impls consume — scoped because
+// it reads the scoped IActiveUserContext for the per-user upload throttle.
+builder.Services.AddScoped<ImageUploadProcessor>();
 string imageStorageProvider = builder.Configuration["ImageStorage:Provider"] ?? "Local";
 bool useS3ImageStorage = imageStorageProvider.Equals("S3", StringComparison.OrdinalIgnoreCase);
 if (useS3ImageStorage)
@@ -266,13 +351,21 @@ app.MapDefaultEndpoints();
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+// Security headers + per-request CSP nonce on every response (WU-Security). CSP is enforced
+// outside Development, Report-Only in Development — see security.md "Response Headers & CSP".
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
 // This must come before MapRazorComponents
-app.UseStaticFiles(); 
+app.UseStaticFiles();
+// After UseStaticFiles (assets exempt), before UseAntiforgery — see security.md.
+app.UseRateLimiter();
 app.UseAntiforgery();
 app.MapStaticAssets();
 
 app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode()
+    // Keeps the WebSocket-compression frame-ancestors setting consistent with the
+    // SecurityHeadersMiddleware's frame-ancestors 'none' / X-Frame-Options DENY (security.md).
+    .AddInteractiveServerRenderMode(options => options.ContentSecurityFrameAncestorsPolicy = "'none'")
     .AddInteractiveWebAssemblyRenderMode()
     .AddAdditionalAssemblies(
         typeof(TheCanalaveLibrary.Client.WasmClientAssemblyIdentifier).Assembly,

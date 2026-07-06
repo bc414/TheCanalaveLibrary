@@ -26,11 +26,21 @@
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+        <!-- Upload sniff + re-encode pipeline (WU-Security, ImageUploadProcessor). PINNED to the
+             3.1.x line deliberately: v4.0 switched to a build-time license-key requirement
+             ($(SixLaborsLicenseKey) — build fails without one), while 3.1.x stays on the Split
+             License (free below the small-business threshold, no key). Dependabot is told to
+             ignore the major bump (.github/dependabot.yml). See security.md "Upload Content
+             Pipeline". -->
+        <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
         <ProjectReference Include="..\ServiceDefaults\ServiceDefaults.csproj" />
         <ProjectReference Include="..\TheCanalaveLibrary.Core\TheCanalaveLibrary.Core.csproj" />
         <ProjectReference Include="..\TheCanalaveLibrary.SharedUI\TheCanalaveLibrary.SharedUI.csproj" />
         <ProjectReference Include="..\TheCanalaveLibrary.Client\TheCanalaveLibrary.Client.csproj" />
         <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.9" />
+        <!-- Data Protection keyring persisted to Postgres (WU-DataProtection) — auth cookies +
+             antiforgery tokens survive process replacement. See security.md "Data Protection Keyring". -->
+        <PackageReference Include="Microsoft.AspNetCore.DataProtection.EntityFrameworkCore" Version="10.0.9" />
         <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.9" />
         <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.9" />
         <PackageReference Include="HtmlSanitizer" Version="9.0.892" />
@@ -38,8 +48,7 @@
 
     <!-- Tailwind CSS v4 build pipeline (Phase C). Input: Styles/app.css. Output: wwwroot/app.css
          (generated, gitignored). See .claude/skills/canalave-conventions/layer4-style.md. -->
-    <Target Name="NpmInstall" BeforeTargets="TailwindBuild"
-            Inputs="package.json" Outputs="node_modules/.install-stamp">
+    <Target Name="NpmInstall" BeforeTargets="TailwindBuild" Inputs="package.json" Outputs="node_modules/.install-stamp">
         <Exec Command="npm install" />
         <Touch Files="node_modules/.install-stamp" AlwaysCreate="true" />
     </Target>

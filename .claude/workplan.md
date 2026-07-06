@@ -1688,6 +1688,67 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Tool:** Claude Code (Fable; plan approved 2026-07-06). **Pointer:**
   `canalave-conventions/logging.md`; `middle_plan_v2.md` Phase 1 item 1 + Resolved (row 7).
 
+### WU-Security + WU-DataProtection — hardening pass + keyring persistence (middle_plan_v2 Phase 1 items 6–7) — DONE ✓ (2026-07-06)
+- **Cells:** none flipped (cross-cutting platform work-units — `status.md` Global Condition;
+  Stage notes in `audit/ImageStorage.md` + `audit/Identity.md`). Three design decisions
+  resolved as Doc-Touch moment 1 (upload sniff+re-encode over sniff-only; write throttling at
+  the L2 service layer, not HTTP-only — the middle_plan wording assumed comment/upload
+  endpoints were HTTP, but they ride the SignalR circuit and `InteractiveAuto` keeps the
+  circuit alive post-flip; keyring persisted unencrypted, no `ProtectKeysWith*` — see
+  `middle_plan_v2.md` Resolved ×3).
+- **Done (WU-DataProtection):** `AddDataProtection().PersistKeysToDbContext<ApplicationDbContext>()
+  .SetApplicationName("TheCanalaveLibrary")`; `ApplicationDbContext : IDataProtectionKeyContext`
+  + migration #20 `AddDataProtectionKeys` (`data_protection_keys`, Respawn-ignored);
+  `Microsoft.AspNetCore.DataProtection.EntityFrameworkCore` 10.0.9. Fresh-scope
+  `ApplicationDbContext` resolution at key-manager time verified safe (`ServerActiveUserContext`
+  stores deps lazily; no query filters on the write context).
+- **Done (WU-Security):**
+  - Upload pipeline: new `Server/Images/ImageUploadProcessor` (throttle → claimed-MIME
+    fast-fail → buffered 10 MB cap that no longer depends on `CanSeek` → `Image.Identify`
+    sniff with only jpeg/png/webp decoders, sniffed format authoritative → header-level bomb
+    guard (16384px / 64 MP) → decode first-frame-only → AutoOrient + EXIF/XMP/IPTC strip →
+    ≤2048px downscale → re-encode); both storage impls consume it (S3's `CopyWithLimitAsync`
+    and Local's `CanSeek` cap deleted as subsumed). SixLabors.ImageSharp **pinned 3.1.x**
+    (4.x requires a build-time license key — Dependabot major-ignore in `dependabot.yml`).
+  - Service-layer write throttle: `Core/Security/` (`WriteActionKind`, `IWriteRateLimitService`,
+    `WriteRateLimitExceededException` with user-ready message + RetryAfter) +
+    `Server/Security/ServerWriteRateLimitService` (singleton `PartitionedRateLimiter` of token
+    buckets per (userId, kind)); `EnsureAllowed` calls in comment ×4 / messaging ×2 / report /
+    story / chapter ×2 / blog post ×2 / recommendation creates + uploads via the processor.
+    `TestAppFactory` defaults to pass-through `FakeWriteRateLimitService`.
+  - HTTP edge: `AddRateLimiter` (global per-IP 10/min window on `POST /Account/*`, bodied 429
+    + `Retry-After`; named `"TagWrites"` 30/min on the three tag write endpoints) +
+    `UseRateLimiter` after `UseStaticFiles`.
+  - Headers/CSP: `Server/Security/SecurityHeadersMiddleware` + pure `CspPolicy` builder —
+    nosniff, `X-Frame-Options DENY`, Referrer-Policy, Permissions-Policy, COOP on every
+    response; full CSP enforced outside Development / Report-Only in Development; per-request
+    nonce → `<ImportMap nonce>`; `ContentSecurityFrameAncestorsPolicy = "'none'"`. SRI pinned
+    on both Quill jsdelivr assets. **Inline-handler sweep:** all 12 raw `onerror=` attributes
+    replaced with `data-fallback-src`/`data-hide-on-error`/`data-sprite-fallback` + new
+    delegated `SharedUI/wwwroot/js/img-fallback.js` (capture-phase listener + attach sweep).
+  - Identity hardening: lockout on (5 attempts / 15 min; `Login.razor`
+    `lockoutOnFailure: true`), explicit cookie flags (`HttpOnly`/`SecurePolicy=Always`/
+    `SameSite=Lax`).
+- **Verified (2026-07-06):** full `dotnet test` green (1,306: 472 Unit + 446 RazorComponents +
+  388 Integration; new — `ImageUploadProcessorTests` 11 incl. hand-crafted IHDR bomb,
+  `ServerWriteRateLimitServiceTests` 4, `CspPolicyTests` 3, `DataProtectionPersistenceTests` 2
+  incl. cross-factory survive-redeploy, `WriteThrottleTests` 3 with real limiter re-registered,
+  `SecurityHeadersTests` 4, `HttpRateLimitTests` 4; `TagChipTests` updated to the `data-*`
+  contract). Browser band (server-only path): **cookie-survives-restart drill** — filesystem
+  key store moved aside, server process replaced, TestUser session survived and logout form
+  POST 200'd (antiforgery valid; keyring provably from Postgres, no filesystem store
+  recreated); **CSP Report-Only console watch** — zero violation reports across home / tags /
+  discover / story / chapter / messages / settings / login incl. Quill CDN (SRI 200s, no digest
+  errors); **upload pipeline live** — PNG-bytes-claimed-JPEG avatar stored as `.png` (served
+  `image/png` + nosniff), 3000×100 PNG stored 2048×68, old avatar orphan-deleted; **delegated
+  fallbacks** — `data-fallback-src` swap + `data-hide-on-error` proven via injected broken
+  imgs, sprite chain advanced webp→static; **lockout** — 5 wrong ReaderGamma passwords →
+  `/Account/Lockout` (counter verified in psql at 3/5 mid-drill; state reset after). Enforced
+  CSP against production topology deliberately remains a Phase 7 checklist item.
+- **Tool:** Claude Code (Fable; plan approved 2026-07-06). **Pointer:**
+  `canalave-conventions/security.md` (new); `middle_plan_v2.md` Phase 1 items 6–7 + Resolved ×3;
+  `audit/ImageStorage.md`, `audit/Identity.md`.
+
 ---
 
 ## Blocked / deferred — genuine Stage-1 intent gaps (no sequence number)

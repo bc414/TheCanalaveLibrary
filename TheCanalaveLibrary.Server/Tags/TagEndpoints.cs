@@ -37,25 +37,30 @@ public static class TagEndpoints
             Results.Ok(await tags.GetTagChipsByIdsAsync(ids)));
 
         // ── Writes (mod/admin — enforced by the service's RequireMod, translated here) ──
+        // RequireRateLimiting("TagWrites"): per-user (IP fallback) HTTP edge limit — the tag API
+        // is the one write surface that is plain HTTP today (security.md "HTTP Edge Rate Limiting").
 
         group.MapPost("/", (ITagWriteService tags, CreateTagDto dto) =>
-            ExecuteWriteAsync(async () => Results.Ok(await tags.CreateTagAsync(dto))));
+                ExecuteWriteAsync(async () => Results.Ok(await tags.CreateTagAsync(dto))))
+            .RequireRateLimiting("TagWrites");
 
         group.MapPut("/{tagId:int}", (ITagWriteService tags, int tagId, UpdateTagDto dto) =>
-            ExecuteWriteAsync(async () =>
-                tagId != dto.TagId
-                    ? Results.Problem(detail: "Route tagId does not match body TagId.",
-                        statusCode: StatusCodes.Status400BadRequest)
-                    // Body is the raw sprite-warning string (or JSON null) — the service contract
-                    // returns string?, and Layer 5 is a body-swap: no new wrapper DTO is minted.
-                    : Results.Json(await tags.UpdateTagAsync(dto))));
+                ExecuteWriteAsync(async () =>
+                    tagId != dto.TagId
+                        ? Results.Problem(detail: "Route tagId does not match body TagId.",
+                            statusCode: StatusCodes.Status400BadRequest)
+                        // Body is the raw sprite-warning string (or JSON null) — the service contract
+                        // returns string?, and Layer 5 is a body-swap: no new wrapper DTO is minted.
+                        : Results.Json(await tags.UpdateTagAsync(dto))))
+            .RequireRateLimiting("TagWrites");
 
         group.MapDelete("/{tagId:int}", (ITagWriteService tags, int tagId) =>
-            ExecuteWriteAsync(async () =>
-            {
-                await tags.DeleteTagAsync(tagId);
-                return Results.NoContent();
-            }));
+                ExecuteWriteAsync(async () =>
+                {
+                    await tags.DeleteTagAsync(tagId);
+                    return Results.NoContent();
+                }))
+            .RequireRateLimiting("TagWrites");
 
         return app;
     }

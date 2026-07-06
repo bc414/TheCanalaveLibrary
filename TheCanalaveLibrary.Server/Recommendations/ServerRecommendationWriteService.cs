@@ -24,6 +24,7 @@ public class ServerRecommendationWriteService(
     IHtmlSanitizationService sanitizer,
     INotificationWriteService notifications,
     IBadgeWriteService badges,
+    IWriteRateLimitService rateLimit,
     ILogger<ServerRecommendationWriteService> logger)
     : ServerRecommendationReadService(readDbFactory, activeUser), IRecommendationWriteService
 {
@@ -39,6 +40,7 @@ public class ServerRecommendationWriteService(
     public async Task<int> SubmitAsync(RecommendationSubmitDto dto)
     {
         int userId = RequireAuthenticatedUser("Submitting a recommendation");
+        rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, userId);
 
         // Write context is unfiltered — story loads regardless of ContentRating, so a reader with
         // mature content off can still recommend an M-rated story. Project to anonymous type so null

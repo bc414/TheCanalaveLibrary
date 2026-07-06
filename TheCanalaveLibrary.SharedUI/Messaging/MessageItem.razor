@@ -11,7 +11,7 @@
         <img src="@Message.SenderAvatarUrl"
              alt="@Message.SenderUsername"
              class="h-8 w-8 flex-none rounded-full object-cover"
-             onerror="this.src='/img/default-avatar.svg'" />
+             data-fallback-src="/img/default-avatar.svg" />
     }
 
     <div class="max-w-[75%] @(Message.IsOwnMessage ? "items-end" : "items-start") flex flex-col gap-0.5">
@@ -37,7 +37,7 @@
         <img src="@Message.SenderAvatarUrl"
              alt="You"
              class="h-8 w-8 flex-none rounded-full object-cover"
-             onerror="this.src='/img/default-avatar.svg'" />
+             data-fallback-src="/img/default-avatar.svg" />
     }
 </div>
 

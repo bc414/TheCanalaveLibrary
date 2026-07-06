@@ -17,7 +17,7 @@
              alt=""
              class="size-10 rounded-full object-cover flex-shrink-0"
              loading="lazy"
-             onerror="this.src='@DefaultAvatarUrl'" />
+             data-fallback-src="@DefaultAvatarUrl" />
 
         <div class="flex flex-col leading-tight">
             @if (Comment.AuthorId is not null)

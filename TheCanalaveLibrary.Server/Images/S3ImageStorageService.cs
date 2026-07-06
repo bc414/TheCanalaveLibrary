@@ -30,6 +30,7 @@ namespace TheCanalaveLibrary.Server;
 public class S3ImageStorageService(
     IAmazonS3 s3,
     IOptions<S3ImageStorageOptions> options,
+    ImageUploadProcessor processor,
     ILogger<S3ImageStorageService> logger) : IImageStorageService
 {
     private const string Provider = "s3";
@@ -73,33 +74,30 @@ public class S3ImageStorageService(
 
         try
         {
-            string extension = ImageUploadRules.ExtensionFor(contentType);
+            // Sniff + re-encode + size/dimension caps — the shared hardening step; never write
+            // caller-supplied bytes (security.md "Upload Content Pipeline"). Also satisfies the
+            // unchunked-signed-payload need for a known length up front: the processed buffer is
+            // seekable with a fixed size. Stored extension + object ContentType follow the
+            // SNIFFED format, not the browser's claimed content type.
+            using ProcessedImage processed = await processor.ProcessAsync(content, contentType);
 
-            // Buffer before PutObject: browser upload streams are non-seekable, and an unchunked
-            // signed payload needs a known length up front. Buffering also enforces MaxBytes on
-            // non-seekable streams (which the Local impl's CanSeek check cannot); the 10 MB cap
-            // makes the memory cost fine.
-            using MemoryStream buffer = new();
-            await CopyWithLimitAsync(content, buffer);
-            buffer.Position = 0;
-
-            string key = ImageUploadRules.BuildKey(kind, ownerId, extension);
+            string key = ImageUploadRules.BuildKey(kind, ownerId, processed.Extension);
 
             await s3.PutObjectAsync(new PutObjectRequest
             {
                 BucketName = options.Value.BucketName,
                 Key = key,
-                InputStream = buffer,
-                ContentType = contentType,
+                InputStream = processed.Content,
+                ContentType = processed.ContentType,
                 AutoCloseStream = false,       // the using block owns the buffer
                 UseChunkEncoding = false,      // R2: no SigV4 streaming — see class doc
             });
 
-            activity?.SetTag("canalave.image.size_bytes", buffer.Length);
-            CanalaveTelemetry.ImageStorage.RecordUpload(kind, Provider, buffer.Length);
+            activity?.SetTag("canalave.image.size_bytes", processed.Content.Length);
+            CanalaveTelemetry.ImageStorage.RecordUpload(kind, Provider, processed.Content.Length);
             logger.LogInformation(
                 "Saved {ImageKind} image {ImageKey} ({SizeBytes} bytes) via S3",
-                kind, key, buffer.Length);
+                kind, key, processed.Content.Length);
 
             return ImageUploadRules.UploadsPrefix + key;
         }
@@ -141,22 +139,6 @@ public class S3ImageStorageService(
             activity?.AddException(ex);
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
-        }
-    }
-
-
-    private static async Task CopyWithLimitAsync(Stream source, MemoryStream destination)
-    {
-        byte[] rented = new byte[81920];
-        int read;
-        while ((read = await source.ReadAsync(rented)) > 0)
-        {
-            destination.Write(rented, 0, read);
-            if (destination.Length > ImageUploadRules.MaxBytes)
-            {
-                throw new ArgumentException(
-                    $"Image exceeds the {ImageUploadRules.MaxBytes / (1024 * 1024)} MB limit.", nameof(source));
-            }
         }
     }
 }

@@ -12,8 +12,10 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// Render tests for <see cref="TagChip"/> (WU4, updated WU38). The chip injects
 /// <see cref="ISpriteReadService"/> and reads a <see cref="ThemeContext"/> cascading value.
 /// When <see cref="TagChipDto.SpriteIdentifier"/> is non-null and a <see cref="ThemeContext"/>
-/// is cascaded, the chip renders an <c>&lt;img&gt;</c> with the resolved URL and an
-/// <c>onerror</c> fallback. All behaviours are exercisable by constructing the DTO directly.
+/// is cascaded, the chip renders an <c>&lt;img&gt;</c> with the resolved URL and the
+/// <c>data-sprite-fallback</c> marker (delegated fallback via img-fallback.js — inline
+/// <c>onerror</c> is banned under CSP, security.md). All behaviours are exercisable by
+/// constructing the DTO directly.
 /// </summary>
 public class TagChipTests : BunitContext
 {
@@ -86,7 +88,7 @@ public class TagChipTests : BunitContext
     }
 
     [Fact]
-    public void TagChip_WhenSpriteIdentifierIsPresent_RendersOnerrorAttribute()
+    public void TagChip_WhenSpriteIdentifierIsPresent_CarriesTheSpriteFallbackMarker()
     {
         TagChipDto dto = MakeDto(TagTypeEnum.Character, "Bulbasaur", spriteIdentifier: "bulbasaur");
 
@@ -95,8 +97,12 @@ public class TagChipTests : BunitContext
             .AddCascadingValue(DefaultTheme));
 
         IElement img = cut.Find("img");
-        img.GetAttribute("onerror").Should().Contain("spriteFallback",
-            "onerror fallback chain must be wired up for every sprite img");
+        // data-sprite-fallback (not inline onerror — banned under CSP, security.md): the
+        // delegated img-fallback.js listener drives spriteFallback's webp → png → unknown chain.
+        img.HasAttribute("data-sprite-fallback").Should().BeTrue(
+            "the fallback chain must be wired up for every sprite img");
+        img.GetAttribute("data-static").Should().NotBeNullOrEmpty();
+        img.GetAttribute("data-unknown").Should().NotBeNullOrEmpty();
     }
 
     [Fact]
