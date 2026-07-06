@@ -28,9 +28,10 @@ tools, DevLoginBar, dev diagnostics endpoints — work identically under either 
 
 **When to pick which:** server-only for ordinary L1–L4 feature work (faster inner loop, no
 Docker dependency — and the standing workbench DB with hand-built fixtures lives there). Aspire
-when the work touches orchestrated infrastructure (Redis/L7, MinIO/S3 image storage, service
-discovery, OpenTelemetry traces in the dashboard) or when verifying the app boots correctly
-under the orchestration it will resemble in production. **The two paths have separate
+when the work touches orchestrated infrastructure (Garage/S3 image storage, service
+discovery, OpenTelemetry traces in the dashboard, or the deferred N≥2 Valkey/RESP swap of the
+signal buffers — the `cache` container is consumed by nothing at N=1) or when verifying the app
+boots correctly under the orchestration it will resemble in production. **The two paths have separate
 databases** — state built in one does not exist in the other; the "Dev DB lifecycle" keep-or-wipe
 rules below apply to each independently.
 

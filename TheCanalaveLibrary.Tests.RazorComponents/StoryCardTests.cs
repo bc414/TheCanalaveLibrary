@@ -32,6 +32,9 @@ public class StoryCardTests : BunitContext
         Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeService);
         // TagChip (nested in StoryCard) injects ISpriteReadService for sprite URL resolution.
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
+        // StoryViewStats (nested in the caret dropdown, Feature 45) injects IStoryReadService for
+        // its on-demand total-views reveal.
+        Services.AddSingleton<IStoryReadService>(new FakeStoryReadService());
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 

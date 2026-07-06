@@ -69,8 +69,10 @@
 
     private ReportDialog _reportDialog = default!;
 
-    private static readonly IReadOnlyList<DefaultSortOrder> _availableSorts =
-        [DefaultSortOrder.DatePublished, DefaultSortOrder.Random, DefaultSortOrder.Relevance];
+    // Actively Reading additionally offers the viewer-relative "Recently read" sort (its default).
+    private IReadOnlyList<DefaultSortOrder> _availableSorts => Tab == BookshelfTab.ActivelyReading
+        ? [DefaultSortOrder.RecentlyRead, DefaultSortOrder.DatePublished, DefaultSortOrder.Random, DefaultSortOrder.Relevance]
+        : [DefaultSortOrder.DatePublished, DefaultSortOrder.Random, DefaultSortOrder.Relevance];
 
     private string EmptyMessage => $"No stories in {BookshelfTabVisuals.For(Tab).Label}.";
 

@@ -61,6 +61,11 @@
                 <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
                         @onclick="() => InvokeAndClose(OnDownload)">Download/Export</button>
             }
+            @* On-demand view-stats reveal (Feature 45) — non-sortable informational metric,
+               available to anyone, fetched only when asked (keeps the menu open to show it).
+               Self-contained composite that owns its own read — same discipline as the
+               interaction panel below (this card stays injection-free). *@
+            <StoryViewStats StoryId="@Story.StoryId" />
         </div>
     }
 

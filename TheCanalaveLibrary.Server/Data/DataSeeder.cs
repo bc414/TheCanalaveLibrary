@@ -221,7 +221,6 @@ public class DataSeeder(
                 Rating = rating,
                 StoryStatusId = status,
                 WordCount = 0, // real value set when chapters land (SeedChaptersAsync)
-                ViewCount = 25 + 13 * slugIndex,
                 PublishedDate = Now.AddDays(-60 + daysOld),
                 LastUpdatedDate = Now.AddDays(-10 + daysOld % 10),
                 StoryListing = new StoryListing { StoryTitle = title, ShortDescription = shortDesc },

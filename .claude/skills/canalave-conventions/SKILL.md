@@ -5,7 +5,7 @@ description: >
   Use when writing, reviewing, or planning code in this project.
   Covers EF Core (TPT, Npgsql, migrations), Blazor (InteractiveAuto,
   component design, [PersistentState]), CQRS-lite (services, DTOs),
-  Redis, Aspire, naming, code organization, automated testing
+  signal buffering, Aspire, naming, code organization, automated testing
   (Unit / Integration / RazorComponents-bUnit tiers, Testcontainers-Postgres,
   fake IActiveUserContext), logging & telemetry (OpenTelemetry signals,
   structured templates, level semantics, no-silent-catches, CanalaveTelemetry
@@ -27,7 +27,10 @@ what's wrong.
 - **EF Core 10** + `Npgsql.EntityFrameworkCore.PostgreSQL` 10 + `EFCore.NamingConventions` 10.
 - **Aspire 13** (SDK + all `Aspire.*` packages version-aligned) for local orchestration (dev only — never deployed). Two run paths: server-only and Aspire — `run-server/SKILL.md`.
 - **Blazor Web App**, global `InteractiveAuto`.
-- **PostgreSQL** (primary + read replica), **Redis** (write-behind/cache), **Cloudflare R2 / MinIO** (blobs).
+- **PostgreSQL** (primary; read replica when scale demands — the read/write DbContext split is the
+  readiness), **Cloudflare R2 / Garage** (blobs). No external cache/store dependency: in-process
+  signal buffers absorb high-frequency lossy writes (`layer2-services.md` §"Signal Buffering");
+  a shared RESP store (**Valkey**) is the deferred N≥2 body-swap behind those same interfaces.
 
 ## Settled Architectural Axioms
 
@@ -39,7 +42,12 @@ These have documented rationale and rejected alternatives. **Do not propose alte
 4. **`int` user IDs over GUIDs** — `User : IdentityUser<int>`, `ApplicationRole : IdentityRole<int>`.
 5. **snake_case via `EFCore.NamingConventions`** — never hand-name tables/columns.
 6. **CQRS-lite with a DTO firewall** — UI never sees EF Core model classes.
-7. **Write-behind Redis queue** — high-frequency writes go to Redis, drained by background worker.
+7. **Signal buffering for lossy writes; durable-direct for intent** — high-frequency,
+   loss-tolerant, coalescable signals (reading progress, view pings) go through in-process
+   buffers drained by a `BackgroundService` (`layer2-services.md` §"Signal Buffering"); durable
+   user intent (interactions, comments, content) always writes directly. Supersedes the
+   SQL-Server-era "write-behind Redis queue" axiom — its protect-reads-from-locks rationale is
+   void under Postgres MVCC; Valkey is the deferred N≥2 body-swap, never a day-one dependency.
 8. **Global `InteractiveAuto` (end state)** — SSR prerender → SPA via WASM. Set render mode on `<Routes>`/`<HeadOutlet>` in `App.razor` (never on `RouteView`); `InteractiveServer` is the spec-sanctioned dev shortcut until WASM ships. See `cross-cutting.md` §"Render Mode".
 9. **Tailwind CSS v4** — utility-first, no component library. Design tokens in an `@theme` block
    (CSS-first config; see `layer4-style.md`), not `tailwind.config.js`.
@@ -118,8 +126,10 @@ compiler error until some unrelated file's reference happens to break, if ever.
 
 ## Layer Files — Read Before Working
 
-Each file covers one layer of the 8-layer architecture plus cross-cutting concerns. Read the relevant
-file(s) before writing code. **Writing or touching any `class="..."` attribute counts as "writing
+Each file covers one layer of the architecture plus cross-cutting concerns. (Numbering note:
+Layer 7 — formerly "Redis Integration" — was dissolved 2026-07-06 and redistributed: signal
+buffering → L2, index hygiene → L6, the Also-Favorited cache → L8's marts; L8 keeps its historical
+number.) Read the relevant file(s) before writing code. **Writing or touching any `class="..."` attribute counts as "writing
 code" for `layer4-style.md`, even on a one-line wrapper `<div>` for "functional only, no styling"
 work** — see that file's "Bootstrap debris warning." Skipping it because the change feels small is
 exactly how Bootstrap-template classnames (`top-row`, `nav-pills`, …) get copied into new markup.
@@ -132,9 +142,8 @@ exactly how Bootstrap-template classnames (`top-row`, `nav-pills`, …) get copi
 | [layer3.5-structure.md](layer3.5-structure.md) | 3.5 | Markup skeleton: component composition, HTML elements, `@if`/`@foreach`, `@ChildContent`, data flow through `[Parameter]`, `<AuthorizeView>`, dispatcher pattern, desktop/mobile branching |
 | [layer4-style.md](layer4-style.md) | 4 | Tailwind utility classes, sprite resolution, responsive variants, outer margin rule, parameter-based variants, conditional class expressions |
 | [layer5-wasm.md](layer5-wasm.md) | 5 | API endpoints, client services, `PersistentAuthenticationStateProvider` |
-| [layer6-indexes.md](layer6-indexes.md) | 6 | Filtered, composite, golden, GIN indexes — pure DDL |
-| [layer7-redis.md](layer7-redis.md) | 7 | Write-behind buffer, ephemeral store, read-side cache |
-| [layer8-data-marts.md](layer8-data-marts.md) | 8 | Non-EF background workers, raw SQL, table swap |
+| [layer6-indexes.md](layer6-indexes.md) | 6 | Filtered, composite, golden, GIN indexes — pure DDL; MVCC storage tuning (fillfactor, autovacuum) |
+| [layer8-data-marts.md](layer8-data-marts.md) | 8 | Non-EF background workers, raw SQL, table swap (Layer 7 dissolved — see numbering note above; signal buffering lives in [layer2-services.md](layer2-services.md)) |
 | [cross-cutting.md](cross-cutting.md) | All | Render mode, device detection, Identity, Aspire, notifications, badges, UserStats, content rating filtering, delete policies |
 | [logging.md](logging.md) | All | OpenTelemetry three-signal conventions: structured log templates, level semantics, no-silent-catches + sanctioned registry, `CanalaveTelemetry` custom sources/meters + naming, dispatch-boundary scopes (`TelemetryCircuitHandler`), per-surface recipes (external call / worker / hub), telemetry testing patterns |
 | [security.md](security.md) | All | Upload sniff + re-encode pipeline (`ImageUploadProcessor`), service-layer write throttling (`IWriteRateLimitService` — the transport-agnostic enforcement point), HTTP edge rate limiting + bodied-429 rule, response headers/CSP + no-inline-handler rule, Identity lockout/cookie hardening, Data Protection keyring rules, vuln-scan cadence, Phase-7 deferred register |

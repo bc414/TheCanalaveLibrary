@@ -26,8 +26,9 @@ Layers 5–8 are additive. They change method bodies, add new classes, or add DD
 interfaces, DTOs, or component contracts established in 1–4. Nothing in 1–4 has to change to add them,
 and nothing in 1–4 has to change again if you redo them. Layers 5–8 are also naturally batchable: indexes
 are pure DDL applied across many tables at once; WASM enablement applies the same endpoint + HttpClient
-wrapper pattern to N stable interfaces; Redis integration swaps method bodies behind stable signatures;
-data mart workers are standalone classes with no interface callers.
+wrapper pattern to N stable interfaces; data mart workers are standalone classes with no interface
+callers. (The same body-swap property is how a signal-buffer body — an L2 concern — later swaps its
+in-process store for a shared Valkey store at N≥2 nodes, with no contract change.)
 
 ### Horizontal boundary: features requiring real user data
 
@@ -77,7 +78,9 @@ relationship, enum conversions use `.HasConversion<short>()`.
 record per vertical-partition table, composed at the call site for cross-partition needs), the read/write
 split per method (`.Select()` projection on `NoTracking` context vs tracked-entity load/mutate/save),
 `.AsSplitQuery()` for multi-collection includes, and the key branch point for features with high-frequency
-writes: does the MVP write path go through EF Core directly (to be swapped for Redis in Layer 7)?
+writes: durable intent writes directly through EF Core; a **loss-tolerant, coalescable signal** takes the
+in-process signal-buffer body instead (buffer + `BackgroundService` flush — `layer2-services.md`
+§"Signal Buffering"; the buffer store swaps to Valkey at N≥2 behind the same interface).
 
 For features whose *purpose* is background computation — data-mart rebuilds, stat aggregation — Layer 2
 is the worker itself (`IHostedService`/`BackgroundService` with raw SQL), not a service method fronting
@@ -114,8 +117,9 @@ elements (notification bell), user-input-driven queries (tag typeahead), self-co
 
 **Stage-2 planning covers:** component tier classification, parameter/event contract, which services are
 injected and by what principle, `[PersistentState]` decisions, debounce intervals, optimistic update
-strategy, `EditForm` model binding to ViewModels/DTOs (never EF entities), and the key branch point for
-high-frequency writes (direct EF in MVP, Redis-backed in Layer 7 — interface unchanged).
+strategy, `EditForm` model binding to ViewModels/DTOs (never EF entities), and — for high-frequency
+writes — whether the component's writes are durable intent (direct EF) or a buffered lossy signal
+(interface unchanged either way; `layer2-services.md` §"Signal Buffering").
 
 **Stage-5 means:** no double-fetch flicker (`??=` guard on persisted state), interactive elements work under
 current render mode, forms submit with anti-forgery via `EditForm`, components inject interfaces only.
@@ -196,17 +200,18 @@ API endpoints in the **server** project and `ClientXService` implementations in 
 that let WASM-hosted components reach server-side data via HTTP instead of direct DbContext access.
 
 **Stage-2 planning covers:** endpoint shape (derived from the stable `IXService` contract — usually
-mechanical, but the write-behind branch is a real decision: does the WASM endpoint call the same
-`IXService` method, which now internally does `LPUSH`, or does it call a separate Redis-specific path?),
-`ClientXService` responsibilities beyond transport (session-lifetime memoization of rarely-changing
-reference data like tag lists, optimistic URL construction for sprites where `WasmSpriteService` can't
-do `File.Exists()`), and connection-status handling.
+mechanical; a buffered-signal write's WASM endpoint simply calls the same `IXService` method, whose
+server body already does the buffer merge), `ClientXService` responsibilities beyond transport
+(session-lifetime memoization of rarely-changing reference data like tag lists, optimistic URL
+construction for sprites where `WasmSpriteService` can't do `File.Exists()`), and connection-status
+handling.
 
 Most features' Layer 5 is thin — an endpoint whose shape falls out of the interface, and a client impl
 that's `HttpClient` wearing the same method signatures. The exceptions are worth tracking because they're
 the cells with real Stage-2 content:
 
-- **Write-behind features:** where `LPUSH` lives (service body vs endpoint-only path).
+- **Buffered-signal features:** lightweight ping endpoints (reading progress, view pings) — fast,
+  no DbContext, land in the server's in-process buffer.
 - **Resource-gap features:** where WASM can't do what Server does (sprites, file checks) and the
   alternative strategy needs explicit design.
 - **Caching features:** where the client impl memoizes data within the WASM session lifetime.
@@ -235,33 +240,26 @@ query patterns identified in Layer 2.
 
 **Governed by:** `layer6-indexes.md`
 
-### Layer 7 — Redis Integration
+### Layer 7 — dissolved (2026-07-06)
 
-Redis as write-behind buffer, ephemeral store, or read-side cache — plus the `IHostedService` workers
-that bridge Redis and PostgreSQL. Three distinct patterns per the spec:
+The former "Layer 7 — Redis Integration" was a SQL-Server-era + Aspire-template overfit and no longer
+exists as a layer or grid column; L8 keeps its historical number. Its three patterns redistributed on
+first-principles re-derivation against PostgreSQL (MVCC voided the "batch writes to protect readers
+from locks" rationale; what survives is per-pattern):
 
-1. **Write-behind buffer** (UserStoryInteraction, view counts): writes land in a Redis list
-   (`interaction-queue`) via `LPUSH`. A 5-second `IHostedService` worker drains the list, consolidates
-   into `Dictionary<(UserId, StoryId), LatestState>`, and does one batch raw-SQL write to PostgreSQL.
-   View counts use `INCR` per story with the same drain-reset-batch pattern.
+1. **Write-behind buffer** → split by loss-tolerance. Lossy coalescable signals (reading progress,
+   view counts) are **L2 signal buffers** — in-process store + `BackgroundService` flush
+   (`layer2-services.md` §"Signal Buffering"), built and live. Durable intent
+   (UserStoryInteraction toggles) is **L2 direct EF + L6 partial indexes** — no buffer, ever lossy.
+2. **Ephemeral store** (LastReadDate) → not stored at all: "Actively Reading" recency is **derived**
+   (`MAX(user_chapter_interactions.last_interaction_date)` per story — the R1 flush already lands
+   that column; `DefaultSortOrder.RecentlyRead`).
+3. **Read-side cache** (AlsoFavorited top-100) → **the L8 mart is the cache**; services read the
+   precomputed table directly. No app-tier read cache.
 
-2. **Ephemeral store** (LastReadDate): Redis Hash `user:{userId}:lastread` stores volatile reading-
-   position timestamps too frequent for SQL. No corresponding PostgreSQL write — Redis *is* the store.
-   Reading the "In Progress" page queries SQL for in-progress StoryIds, one `HGETALL` for timestamps,
-   merge/sort in C#.
-
-3. **Read-side cache** (AlsoFavorited/AlsoRecommended top-100): Redis sits *in front of* precomputed
-   PostgreSQL cache tables, storing the hot subset for instant retrieval. Service fetches from Redis,
-   applies real-time user-specific exclusion filters in C#.
-
-**Stage-2 planning covers:** which pattern applies, worker schedule/trigger, consolidation algorithm,
-raw-SQL batch shape, and (for pattern 1) whether the MVP's direct-EF-write service method gets its body
-swapped or a parallel path is introduced.
-
-**Stage-5 means:** Redis operations work, workers drain/consolidate correctly, the synchronous MVP
-fallback is fully replaced, batch writes match the expected raw-SQL shape.
-
-**Governed by:** `layer7-redis.md`
+The only Redis-shaped remnant is a forward constraint: at **N≥2 web nodes** each in-process buffer
+body swaps for a shared RESP store (**Valkey** — open-licensed, DO-managed) behind its unchanged
+interface. The Aspire-provisioned `cache` container exists for that day; nothing consumes it at N=1.
 
 ### Layer 8 — Data Mart Workers
 
@@ -286,7 +284,7 @@ top-to-bottom. Read paths and write paths are listed as separate features even w
 data structures, because they have qualitatively different Layer 2 content (different service methods,
 different DTOs, different query patterns) and different Layer 3/4 content (forms vs display pages).
 
-Not every layer applies to every feature. Many features have no Layer 7 or Layer 8 content; simple CRUD
+Not every layer applies to every feature. Most features have no Layer 8 content; simple CRUD
 features may have trivial or empty Layer 5; features that are purely background computation may have no
 Layer 3/4. An N/A cell is not a gap — it's "this layer doesn't apply here."
 
@@ -396,8 +394,10 @@ filter presets. Public/private toggle. Sharing is copy-on-write. `DeleteBehavior
 **16. Story Interaction State Writes** — Toggle `IsFavorite`, `IsHiddenFavorite`, `IsFollowed`,
 `IsIgnored`, `IsReadItLater`, `HasStarted`, `IsCompleted` on the `UserStoryInteraction` hot table
 (sparse: no row = all false). Corresponding date writes to `UserStoryInteractionDate` warm partition.
-MVP implementation: direct EF Core write through service. Final: Redis write-behind queue (Layer 7
-swap, interface unchanged). Component-level 2-second debounce timer absorbs click/unclick churn.
+**Durable user intent → direct EF Core write through the service, permanently** (the old "Redis
+write-behind" plan was a SQL-Server lock-model artifact — void under Postgres MVCC; settled
+2026-07-06, see `audit/UserStoryInteractions.md`). Component-level 2-second debounce timer absorbs
+click/unclick churn; churn-driven MVCC bloat is managed by autovacuum tuning (L6).
 
 **Reading status booleans (§4, §5.12):**
 - `HasStarted` (`Has-` prefix: permanent past event). Set at 90% scroll of Chapter 1. Only cleared by
@@ -545,13 +545,23 @@ read. Panel in layout with flyout preview via notification bell.
 
 ### Reading Experience
 
-**44. Reading Progress Tracking** — Client-side JavaScript tracks scroll percentage.
-`UserChapterInteraction.ReadProgress` (0.0–1.0). Auto-set `IsRead = true` at >90%.
-`HasStarted` set on `UserStoryInteraction` at 90% of Chapter 1. MVP: direct DB write;
-final: Redis batching (Layer 7).
+**44. Reading Progress Tracking** — Client-side JavaScript tracks scroll percentage (300 ms
+throttle). L2 body = the **reading-progress signal buffer** (in-process coalescing store keeping
+max progress + latest timestamp per (user, chapter); 5 s `BackgroundService` flush via
+`unnest … ON CONFLICT`; loss-tolerant contract). `UserChapterInteraction.ReadProgress` (0.0–1.0),
+high-water. `IsRead = true` at ≥90%, sticky. `HasStarted` on `UserStoryInteraction` at 90% of
+Chapter 1 takes the **durable** direct path (never the buffer). Bookshelves "Actively Reading"
+sorts by derived `MAX(uci.last_interaction_date)` (`DefaultSortOrder.RecentlyRead`) — no stored
+LastReadDate anywhere.
 
 **45. View Count Tracking** — Trigger: first client-side ping (5-second timer or first scroll),
-NOT page load. MVP: direct DB increment; final: Redis `INCR` with worker drain.
+NOT page load; anonymous views count. L2 body = the **view-count signal buffer** (per-story sum,
+5 s flush) accumulating into **`daily_story_stats`** (per-story/day; migration-managed raw DDL,
+no EF model — ground truth, not a mart; partition-ready by stat_date). Lifetime total =
+SUM, read on demand only (`GetStoryTotalViewsAsync` → StoryCard dropdown "View stats" reveal).
+**Never a sort key, never a permanent badge** — non-sortable informational metric
+(anti-popularity-snowball; `DefaultSortOrder`'s exclusion note). No `ViewCount` column exists on
+`Story`/`ChapterContent`/`BaseBlogPost` (dropped in `R2_ViewCountToDailyStoryStats`).
 
 
 ### Moderation

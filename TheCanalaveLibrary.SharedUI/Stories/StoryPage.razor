@@ -1,12 +1,16 @@
 @page "/story/{StoryId:int}/{*StorySlug}"
 @namespace TheCanalaveLibrary.SharedUI
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.JSInterop
 @using TheCanalaveLibrary.Core
 @inject IStoryReadService StoryReadService
 @inject IChapterReadService ChapterReadService
 @inject IUserStoryInteractionReadService UsiReadService
+@inject IViewCountWriteService ViewCountWriteService
 @inject IDeviceDetectionService DeviceService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+@implements IAsyncDisposable
 
 @* Read-only story landing page (spec §5.28, content-editing Pattern 1 — view side).
    StorySlug is cosmetic — only StoryId (int) is the authoritative key.
@@ -133,5 +137,54 @@ else
         _usiState = _currentUserId is not null ? await UsiReadService.GetStateAsync(StoryId) : null;
         _isAuthor = _currentUserId.HasValue && Story.AuthorId == _currentUserId;
         _isLoading = false;
+
+        // In-place story change: re-arm the view ping so the new story gets its own view.
+        await DisposeViewPingAsync();
+    }
+
+    // ── View ping (Feature 45) ────────────────────────────────────────────────────────────
+    // First scroll or 5s dwell — never raw page load (filters bots/bounces). Anonymous counts.
+
+    private DotNetObjectReference<StoryPage>? _dotnetRef;
+    private bool _pingRegistered;
+
+    // _pingRegistered is the sole gate (no firstRender check) so re-registration works after an
+    // in-place story change where firstRender is always false (same idiom as ChapterReadingPage).
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_pingRegistered || Story is null || _notFound) return;
+        _pingRegistered = true;
+        _dotnetRef ??= DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeVoidAsync("viewPing.register", _dotnetRef);
+        }
+        catch (JSException)
+        {
+            // JS not available (SSR prerender or test host). View ping silently skipped.
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnViewPing()
+    {
+        if (Story is null) return;
+        await ViewCountWriteService.RecordViewAsync(Story.StoryId);
+    }
+
+    private async Task DisposeViewPingAsync()
+    {
+        if (_pingRegistered)
+        {
+            try { await JS.InvokeVoidAsync("viewPing.dispose"); } catch { /* page already gone or no JS */ }
+            _pingRegistered = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DisposeViewPingAsync();
+        _dotnetRef?.Dispose();
+        _dotnetRef = null;
     }
 }

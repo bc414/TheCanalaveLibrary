@@ -88,7 +88,7 @@ retry-after seconds) when the per-user token bucket for that action kind is exha
 - Every *new* abuse-prone write method (creates content another user sees, or is unbounded)
   adds a call under an existing kind, or adds a kind + limit row here. Edits/deletes and
   bounded toggles are **deliberately unthrottled**: interaction/follow/like toggles
-  (UX-hostile to limit; L7 write-behind absorbs the frequency), vouches / Hidden Gems (hard
+  (UX-hostile to limit; the 2s client debounce absorbs the frequency), vouches / Hidden Gems (hard
   count limits already exist), tag writes (mod-only; HTTP policy covers).
 - L5 endpoint contract (applies at the WASM flip): endpoints translate
   `WriteRateLimitExceededException` → **429** with `Retry-After`, joining `layer5-wasm.md`'s

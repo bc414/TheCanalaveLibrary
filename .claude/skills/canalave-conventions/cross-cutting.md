@@ -157,7 +157,7 @@ Mobile hamburger menu. Login/logout are triggers on the persistent layout, not s
   `@if (_open)` absolute `top-full z-10` flyout panel. NOT the `fixed inset-0` modal pattern (notifications
   are a glanceable peripheral feed, not a blocking action).
 - Panel shows recent `NotificationItem`s + "Mark all read" + "See all → `/notifications`".
-- No live push (post-MVP L7); count refreshes on render/navigation.
+- No live push (a WU-SignalR-era possibility, deliberately unbuilt); count refreshes on render/navigation.
 - Inserted before `<LoginDisplay />` in both `DesktopLayout.razor` and `MobileLayout.razor`.
 
 **Messages nav link** (`SharedUI/Messaging/MessagesNavLink.razor`, WU35) — the second legitimate
@@ -998,8 +998,10 @@ Standing rules, all applied in `AppHost.cs`:
   `ConnectionStrings__canalavedb` as an env var, which overrides `appsettings.Development.json`;
   plain `GetConnectionString("canalavedb")` + `AddDbContext` just works. **No Aspire Npgsql EF
   client package** — `AddNpgsqlDbContext` stays banned per `layer2-services.md` "DbContext
-  Registration" (pooling vs. Scoped `IActiveUserContext`). Redis will consume by logical name
-  `cache` (`layer7-redis.md`).
+  Registration" (pooling vs. Scoped `IActiveUserContext`). The `cache` container is provisioned
+  but consumed by nothing at N=1 — it exists for the deferred N≥2 Valkey/RESP body-swap of the
+  in-process signal buffers (`layer2-services.md` §"Signal Buffering"; Layer 7 dissolved
+  2026-07-06).
 - **The dev S3 endpoint is Garage (`dxflrs/garage`), a plain `AddContainer`** — settled 2026-07-05,
   superseding the spec's MinIO (OSS archived 2026-02; its Aspire toolkit package deprecated).
   `--single-node --default-bucket` bootstraps layout/key/bucket from `GARAGE_DEFAULT_*` env vars

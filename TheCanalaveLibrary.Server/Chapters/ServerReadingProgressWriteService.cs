@@ -1,33 +1,22 @@
-using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
 
 /// <summary>
-/// MVP direct-DB reading-progress writer (Feature 44 L2). L7 replaces this with Redis write-behind.
+/// Buffered reading-progress writer (Feature 44 L2). Pings land in the in-process
+/// <see cref="ReadingProgressBuffer"/> (O(1) coalescing merge, no DB hit);
+/// <see cref="ReadingProgressFlushWorker"/> batch-flushes on its cadence. Contract per the
+/// interface: eventually-durable, loss window = one flush interval.
 /// </summary>
 public class ServerReadingProgressWriteService(
-    ApplicationDbContext writeDb,
+    ReadingProgressBuffer buffer,
     IActiveUserContext activeUser) : IReadingProgressWriteService
 {
-    public async Task RecordProgressAsync(int chapterId, float progress)
+    public Task RecordProgressAsync(int chapterId, float progress)
     {
-        if (activeUser.UserId is not int userId) return;
-
-        UserChapterInteraction? row = await writeDb.UserChapterInteractions
-            .FirstOrDefaultAsync(uci => uci.UserId == userId && uci.ChapterId == chapterId);
-
-        if (row is null)
-        {
-            row = new UserChapterInteraction { UserId = userId, ChapterId = chapterId };
-            writeDb.UserChapterInteractions.Add(row);
-        }
-
-        row.ReadProgress = progress;
-        row.LastInteractionDate = DateTime.UtcNow;
-        if (progress >= 0.9f)
-            row.IsRead = true;
-
-        await writeDb.SaveChangesAsync();
+        // Anonymous viewers no-op (interface contract).
+        if (activeUser.UserId is int userId)
+            buffer.Record(userId, chapterId, progress);
+        return Task.CompletedTask;
     }
 }

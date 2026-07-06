@@ -203,6 +203,13 @@ builder.Services.AddScoped<DataSeeder>();
 builder.Services.AddScoped<IDeviceDetectionService, ServerDeviceDetectionService>();
 builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
+// View-count signal buffer (Feature 45 L2, layer2-services.md "Signal Buffering") — the scoped
+// recorder merges pings into the singleton buffer; the hosted worker batch-flushes into
+// daily_story_stats. TestAppFactory removes the worker (tests flush via ViewCountFlusher).
+builder.Services.AddScoped<IViewCountWriteService, ServerViewCountWriteService>();
+builder.Services.AddSingleton<ViewCountBuffer>();
+builder.Services.AddSingleton<ViewCountFlusher>();
+builder.Services.AddHostedService<ViewCountFlushWorker>();
 builder.Services.AddScoped<IDiscoveryDefaultsReadService, ServerDiscoveryDefaultsReadService>();
 // Singleton: OptimisticSpriteReadService is stateless — pure string builder, no host/disk deps.
 // SpriteBaseUrl defaults to /sprites/themes (dev wwwroot); override in production for R2/CDN.
@@ -250,6 +257,12 @@ builder.Services.AddSingleton<IHtmlSanitizationService, ServerHtmlSanitizationSe
 builder.Services.AddScoped<IChapterReadService, ServerChapterReadService>();
 builder.Services.AddScoped<IChapterWriteService, ServerChapterWriteService>();
 builder.Services.AddScoped<IReadingProgressWriteService, ServerReadingProgressWriteService>();
+// Reading-progress signal buffer (Feature 44 L2, layer2-services.md "Signal Buffering") — the
+// scoped writer above merges pings into this singleton buffer; the hosted worker batch-flushes.
+// TestAppFactory removes the worker so integration tests flush deterministically via the flusher.
+builder.Services.AddSingleton<ReadingProgressBuffer>();
+builder.Services.AddSingleton<ReadingProgressFlusher>();
+builder.Services.AddHostedService<ReadingProgressFlushWorker>();
 // Comments (WU19) — L2 read/write services (Features 23/24/25/26, chapter context only for MVP).
 builder.Services.AddScoped<ICommentReadService, ServerCommentReadService>();
 builder.Services.AddScoped<ICommentWriteService, ServerCommentWriteService>();

@@ -2,7 +2,7 @@
 
 ## Project Identity
 
-Pokémon-fandom fanfiction website. Blazor (.NET 10), EF Core (Code-First), PostgreSQL, Redis, .NET Aspire.
+Pokémon-fandom fanfiction website. Blazor (.NET 10), EF Core (Code-First), PostgreSQL, .NET Aspire.
 
 ## Stage Definitions
 
@@ -18,7 +18,9 @@ Each cell in the Feature × Layer grid holds a Stage or N/A. Stages encode state
 | **6** | Human-verified and frozen | Do not touch | — |
 | **N/A** | Layer does not apply to this feature | Skip | — |
 
-Grid columns: `L1 | L2 | L3-Logic | L3.5-Structure | L4-Style | L5 | L6 | L7 | L8`
+Grid columns: `L1 | L2 | L3-Logic | L3.5-Structure | L4-Style | L4.5-Browser | L5 | L6 | L8`
+(L7 — formerly "Redis Integration" — was dissolved 2026-07-06 and redistributed into L2/L6/L8;
+L8 keeps its historical number. See `grid_axes.md` "Layer 7 — dissolved".)
 
 ## Project Files
 

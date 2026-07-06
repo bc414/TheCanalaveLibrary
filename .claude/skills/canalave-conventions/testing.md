@@ -1,8 +1,8 @@
 # Testing — All Layers
 
 Conventions for automated tests across the project. "Tier" below refers to test kind
-(unit vs. integration vs. component render) — distinct from the architecture's 8 numbered
-*Layers* (data model, services, logic, structure, style, WASM, indexes, Redis); a test tier
+(unit vs. integration vs. component render) — distinct from the architecture's numbered
+*Layers* (data model, services, logic, structure, style, WASM, indexes, data marts); a test tier
 can exercise code from several of those layers.
 
 ## The three test tiers (organized by kind, not by production project)

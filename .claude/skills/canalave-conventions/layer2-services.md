@@ -274,8 +274,54 @@ public async Task UpdateTitleAsync(int storyId, string newTitle)
 }
 ```
 
-High-frequency writes (Favorite/Follow/Ignore) go to Redis write-behind queue, not this path.
-See [layer7-redis.md](layer7-redis.md).
+Durable user intent — including Favorite/Follow/Ignore toggles — always takes this direct path
+(the old "Redis write-behind for interactions" plan was a SQL-Server-era artifact: its
+protect-reads-from-write-locks rationale is void under Postgres MVCC, and the 2s client debounce
+already absorbs the churn). Only **loss-tolerant, coalescable signals** are buffered — see
+"Signal Buffering" below.
+
+## Signal Buffering — in-process write buffers for loss-tolerant signals
+
+The L2 body pattern for **high-frequency · loss-tolerant · coalescable** writes (reading-progress
+pings, view pings). All three criteria must hold — durable intent (interactions, comments,
+content) never buffers. The signal lands in an in-process coalescing store instead of the
+database; a worker batch-flushes on a fixed cadence. Behavior is identical to direct writes
+within the loss window (one flush interval; hard crash loses at most that).
+
+**The four pieces per signal** (canonical pair: `ReadingProgress*` in `Server/Chapters/`,
+`ViewCount*` in `Server/Stories/`):
+
+1. **Buffer** — singleton `ConcurrentDictionary` keyed per signal identity, merged O(1) in
+   `Record(...)` (max+latest for progress; sum for views). `Drain()` removes-and-returns all
+   entries (a racing ping lands in this batch or the next — never lost); `Restore(batch)` merges
+   a failed flush back for retry; `Clear()` is test-only. The constructor registers a buffer-depth
+   `ObservableGauge` on the feature's `CanalaveTelemetry` meter.
+2. **Flusher** — singleton taking the buffer + `IServiceScopeFactory` (fresh scope per flush —
+   never capture a scoped DbContext in a singleton). One batched raw-SQL upsert:
+   `unnest(@arrays…) … ON CONFLICT DO UPDATE` — the Postgres replacement for SQL-Server TVP+MERGE
+   (`MERGE` itself would demand PG 15+; `unnest`+`ON CONFLICT` needs nothing). Guard each batch
+   with `WHERE EXISTS` on FK parents so one mid-window-deleted row can't fail the batch. Prefer
+   idempotent merge functions (`GREATEST`, `OR`) so `EnableRetryOnFailure` replays are safe;
+   an additive `+=` (view counts) accepts a rare replay over-count — say so in a comment.
+   Records flush batch-size + duration histograms; on failure: `Restore`, log, rethrow.
+3. **Worker** — `BackgroundService` + `PeriodicTimer` (5 s), delegating to the flusher; catches and
+   logs so the loop survives a failed cycle; **drains once more after cancellation** (graceful
+   shutdown must not eat the loss window). Singleton-worker discipline: exactly one per process.
+4. **Scoped write service** — the unchanged `I{Feature}WriteService` body becomes
+   `buffer.Record(...)`. The interface doc states the honest contract: *eventually-durable,
+   may lose the last flush interval, not read-your-own-write*.
+
+**Testing** (`testing.md` tiers): the buffer's merge semantics are Unit tests (direct
+construction). The flush path is Integration — `TestAppFactory` **removes the timer workers**
+(they'd race the Respawn reset); tests call `flusher.FlushAsync()` deterministically. Never
+assert on timer behavior.
+
+**N≥2 seam:** at more than one web node, each in-process buffer swaps for a shared RESP store
+(**Valkey** — open-licensed, DO-managed; not Redis, which relicensed off open source) behind the
+same interface: hash/counters replace the dictionary, the same worker drains via RESP reads.
+Body swap only — no interface, caller, UI, or schema change. Until that day, the in-process body
+is strictly better (no network hop, no dependency); the Aspire-provisioned cache container stays
+available for that swap but nothing consumes it.
 
 ## DTO Strategy: Partition-Anchored
 

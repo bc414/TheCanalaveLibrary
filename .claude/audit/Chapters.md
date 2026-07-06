@@ -309,8 +309,40 @@ that actually manages reader settings). See WU5 Stage note "Deferred dependency"
 
 **Feature 44 (Reading Progress Tracking) L2/L3/L3.5 — Stage 5:**
 - `IReadingProgressWriteService` minted in `Core/Chapters/`; `ServerReadingProgressWriteService`
-  in `Server/Chapters/` (direct DB upsert to `UserChapterInteraction` — MVP, no Redis; L7 swaps the
-  body post-MVP). `IReadingProgressWriteService` DI-registered in `Program.cs`.
+  in `Server/Chapters/` (direct DB upsert at WU26; superseded by the signal buffer below).
+  `IReadingProgressWriteService` DI-registered in `Program.cs`.
+
+**Feature 44 L2 body swap — signal buffer (WU-SignalBuffering, 2026-07-06). Supersedes the
+"L7 Redis write-behind" plan** (divergence from spec §3.18/§7 "Redis" sections: the spec's Redis
+hash + write-behind design was a SQL-Server-era plan; under Postgres MVCC its locking rationale is
+void, and the in-process buffer achieves the batching with no external store — see
+`middle_plan_v2.md` Resolved "Layer 7 dissolved"):
+- `ServerReadingProgressWriteService.RecordProgressAsync` body = `ReadingProgressBuffer.Record`
+  (O(1) coalescing merge — max progress + latest timestamp per (user, chapter); no DB hit).
+  Interface unchanged; its doc now states the honest contract (eventually-durable, loss window =
+  one flush interval, not read-your-own-write). HasStarted still takes the durable direct path.
+- `ReadingProgressFlusher` (singleton): one batched `unnest … ON CONFLICT (user_id, chapter_id)
+  DO UPDATE` upsert per cycle — `GREATEST` progress/timestamp merge + sticky `is_read` makes
+  retry-strategy replays idempotent; `WHERE EXISTS` guards drop pings whose chapter/user was
+  deleted mid-window (one stale ping can't fail the batch); failed batches restore to the buffer.
+  `is_read` computed in C# with the same `>= 0.9f` float comparison as the old direct write (SQL
+  `real`→`double` promotion would shift the edge).
+- `ReadingProgressFlushWorker` (`BackgroundService`, 5 s `PeriodicTimer`): drains once more after
+  cancellation (graceful shutdown doesn't eat the loss window). Removed from the test host by
+  `TestAppFactory` — integration tests flush deterministically via the flusher.
+- **No stored LastReadDate anywhere** (settled 2026-07-06): the spec §3.18 Redis hash is dead;
+  Bookshelves "Actively Reading" recency is *derived* — `DefaultSortOrder.RecentlyRead` sorts by
+  `MAX(uci.last_interaction_date)` per story (explicit `Any()` first key = NULLS LAST for
+  never-pinged stories), offered/defaulted only on that tab (`AvailableSorts` is per-surface;
+  never on `/discover`). `UserStoryInteractionDate` keeps its once-per-deliberate-action contract.
+- Telemetry: `CanalaveTelemetry.ReadingProgress` — buffer-depth gauge + flush batch-size/duration
+  histograms + `ReadingProgress.Flush` spans.
+- **Verified:** Unit tier (`ReadingProgressBufferTests` — coalescing/drain/restore semantics),
+  Integration tier (`ReadingProgressFlushTests` — nothing persists pre-flush, high-water +
+  sticky-is_read across flushes, multi-reader batch, anonymous no-op, deleted-chapter guard,
+  RecentlyRead ordering incl. never-pinged-last). Browser-verified 2026-07-06: chapter scroll →
+  flush landed the row (psql), Actively Reading tab ordered most-recently-read-first with
+  "Recently read" default sort.
 - `MarkStartedAsync(int storyId)` added to `IUserStoryInteractionWriteService` +
   `ServerUserStoryInteractionWriteService` (idempotent upsert — flips `HasStarted = true`, never
   clears other flags, no-ops for anonymous).

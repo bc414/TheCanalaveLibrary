@@ -173,6 +173,20 @@ public class ServerStoryReadService(
         return (items, totalCount);
     }
 
+    public async Task<long> GetStoryTotalViewsAsync(int storyId)
+    {
+        // daily_story_stats is migration-managed raw DDL with no EF model (accumulated stat
+        // table, not a mart) — read via SqlQuery; SUM(int) is bigint in Postgres, hence long.
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        return await readDb.Database
+            .SqlQuery<long>($"""
+                SELECT COALESCE(SUM(view_count), 0) AS "Value"
+                FROM daily_story_stats
+                WHERE story_id = {storyId}
+                """)
+            .SingleAsync();
+    }
+
     public async Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId)
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
@@ -200,9 +214,14 @@ public class ServerStoryReadService(
         int totalCount = await query.CountAsync();
 
         // ── Sort + scalar id page (OrderBy on entity fields — Npgsql trap: keep before Select) ──
-        DefaultSortOrder effectiveSort = filter.Sort == DefaultSortOrder.Relevance && !hasFts
-            ? DefaultSortOrder.DatePublished
-            : filter.Sort;
+        DefaultSortOrder effectiveSort = filter.Sort switch
+        {
+            DefaultSortOrder.Relevance when !hasFts => DefaultSortOrder.DatePublished,
+            // Viewer-relative sort needs a viewer (Bookshelves is [Authorize], so only misuse hits this).
+            DefaultSortOrder.RecentlyRead when ActiveUser.UserId is null => DefaultSortOrder.DatePublished,
+            _ => filter.Sort
+        };
+        int viewerId = ActiveUser.UserId ?? 0; // only consumed by the RecentlyRead branch (guarded above)
 
         int[] pageIds = effectiveSort switch
         {
@@ -210,6 +229,22 @@ public class ServerStoryReadService(
                 .OrderByDescending(s => EF.Property<NpgsqlTsVector>(s.StoryListing!, "SearchVector")
                     .Rank(EF.Functions.PlainToTsQuery("english", filter.TextQuery!)))
                 .ThenByDescending(s => s.LastUpdatedDate)
+                .Skip(Math.Max(0, filter.Page - 1) * filter.PageSize)
+                .Take(filter.PageSize)
+                .Select(s => s.StoryId)
+                .ToArrayAsync(),
+
+            // Most-recently-read first: viewer's MAX(UserChapterInteraction.LastInteractionDate)
+            // across the story's chapters. Never-pinged stories sort last via the explicit Any()
+            // first key (R5: Postgres DESC would otherwise put the NULL Max rows FIRST).
+            DefaultSortOrder.RecentlyRead => await query
+                .OrderByDescending(s => s.Chapters
+                    .SelectMany(c => c.UserChapterInteractions)
+                    .Any(u => u.UserId == viewerId))
+                .ThenByDescending(s => s.Chapters
+                    .SelectMany(c => c.UserChapterInteractions)
+                    .Where(u => u.UserId == viewerId)
+                    .Max(u => (DateTime?)u.LastInteractionDate))
                 .Skip(Math.Max(0, filter.Page - 1) * filter.PageSize)
                 .Take(filter.PageSize)
                 .Select(s => s.StoryId)

@@ -22,5 +22,4 @@ public record BlogPostDto(
     DateTime LastUpdatedDate,
     int LikeCount,
     bool IsLikedByCurrentUser,
-    int ViewCount,
     bool IsPublished);

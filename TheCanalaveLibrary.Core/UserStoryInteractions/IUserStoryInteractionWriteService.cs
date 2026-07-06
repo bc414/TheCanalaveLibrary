@@ -13,7 +13,8 @@ public interface IUserStoryInteractionWriteService : IUserStoryInteractionReadSe
     ///   <item>Preserves <c>HasStarted</c> (read-path owned, WU26).</item>
     ///   <item>Stamps / nulls <see cref="UserStoryInteractionDate"/> columns per spec §4.</item>
     ///   <item>Removes the row entirely when all seven bits are false (sparse semantics).</item>
-    ///   <item>Rejects logically impossible combinations per the §4 truth table.</item>
+    ///   <item>Accepts every combination — spec §4's zero-coupling model forbids nothing
+    ///   (ValidateCombination is an empty extension point for future restrictions).</item>
     /// </list>
     /// Throws <see cref="InvalidOperationException"/> when the viewer is anonymous.
     /// </summary>

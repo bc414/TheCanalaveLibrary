@@ -24,8 +24,8 @@ public abstract class BaseBlogPost : IModeratableContent
     [Required]
     public string Content { get; set; } = null!;
 
-    public int ViewCount { get; set; }
-
+    // ViewCount dropped (R2): never written by any path; view counting is stories-only, accumulated
+    // in daily_story_stats. Re-addable via a per-post daily-stat row if blog views are ever wanted.
     public int LikeCount { get; set; }
 
     public int ActiveReportCount { get; set; }

@@ -1,0 +1,49 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@inject IStoryReadService StoryReadService
+
+@* Self-contained on-demand view-stats reveal (Feature 45). Lives inside StoryCard's caret
+   dropdown. Views are a NON-SORTABLE, opt-in informational metric (anti-popularity-snowball):
+   revealed only when a user deliberately asks, visible to anyone, never a permanent badge,
+   never a sort key. Service injection is sanctioned here per layer3-logic.md — a user-input-
+   driven query (same class as tag typeahead / FollowButton), fetched once per reveal, so
+   listing renders never pay the SUM. *@
+
+@if (_totalViews is long views)
+{
+    <div class="px-3 py-1.5 text-sm text-muted">@views.ToString("N0") @(views == 1 ? "view" : "views")</div>
+}
+else
+{
+    <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
+            disabled="@_isLoading" @onclick="RevealAsync">
+        @(_isLoading ? "Loading…" : "View stats")
+    </button>
+}
+
+@code {
+    [Parameter, EditorRequired] public int StoryId { get; set; }
+
+    private long? _totalViews;
+    private bool _isLoading;
+    private int _loadedStoryId;
+
+    protected override void OnParametersSet()
+    {
+        // Blazor reuses component instances by position when a deck pages — reset the reveal
+        // whenever this slot starts representing a different story.
+        if (StoryId != _loadedStoryId)
+        {
+            _loadedStoryId = StoryId;
+            _totalViews = null;
+            _isLoading = false;
+        }
+    }
+
+    private async Task RevealAsync()
+    {
+        _isLoading = true;
+        _totalViews = await StoryReadService.GetStoryTotalViewsAsync(StoryId);
+        _isLoading = false;
+    }
+}

@@ -197,6 +197,9 @@ public enum DefaultSortOrder : short
     DatePublished = 1,
     Relevance = 2,      // Only available when the FTS filter is active
     Score = 3,          // Recommendation / co-occurrence score (specific surfaces)
+    RecentlyRead = 4,   // Viewer-relative: MAX(UserChapterInteraction.LastInteractionDate) per story.
+                        // Bookshelves "Actively Reading" only (personal reading management, not a
+                        // popularity metric) — surfaces opt in via AvailableSorts; never on /discover.
 }
 
 // Groups (WU32) ---------------------------------------------------------------

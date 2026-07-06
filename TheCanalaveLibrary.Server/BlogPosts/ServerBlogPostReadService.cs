@@ -42,7 +42,6 @@ public class ServerBlogPostReadService(
                 p.DateCreated,
                 p.LastUpdatedDate,
                 p.LikeCount,
-                p.ViewCount,
                 p.IsPublished,
                 p.HasSpoilers,
                 p.StoryId,
@@ -73,7 +72,6 @@ public class ServerBlogPostReadService(
             row.LastUpdatedDate,
             row.LikeCount,
             row.IsLikedByCurrentUser,
-            row.ViewCount,
             row.IsPublished);
     }
 

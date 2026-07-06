@@ -35,7 +35,8 @@ One nested class per instrumented component, each owning an `ActivitySource` + `
 `TheCanalaveLibrary.{Component}`. ServiceDefaults subscribes to the wildcard
 `"TheCanalaveLibrary.*"` (string literal, both directions cross-commented — deliberately no
 ServiceDefaults→Core project reference), so a new component lights up with no registration
-change. Existing: `ImageStorage`. Reserved next: `ViewCount` (WU-Redis), `Email` (WU-Email),
+change. Existing: `ImageStorage`, `ReadingProgress` + `ViewCount` (WU-SignalBuffering,
+2026-07-06 — the signal-buffer flush pipelines). Reserved next: `Email` (WU-Email),
 `Marts` (WU-Marts).
 
 - Producers are **`static readonly` process singletons** — `ActivitySource`/`Meter` are
@@ -71,10 +72,12 @@ change. Existing: `ImageStorage`. Reserved next: `ViewCount` (WU-Redis), `Email`
 | Metric | `canalave.` prefix, lowercase dotted, UCUM unit | `canalave.image.uploads` (`{upload}`), `canalave.image.upload.size` (`By`) |
 | Tag | `canalave.{noun}.{property}`, matching log property names modulo prefix/case so traces↔logs correlate; low-cardinality values only | `canalave.user.id`, `canalave.image.kind` |
 
-Reserved metric names (WU-Redis): `canalave.viewcount.queue.depth` (observable gauge),
-`canalave.viewcount.drain.batch.size` (histogram), `canalave.viewcount.drain.duration`
-(histogram, `s`). Instrument choice encodes meaning: `Counter` = only goes up,
-`Histogram` = distribution, `ObservableGauge` = sampled point-in-time level.
+Live signal-buffer metric names (WU-SignalBuffering — the shape both buffers share):
+`canalave.{signal}.buffer.depth` (observable gauge, created by the buffer's constructor),
+`canalave.{signal}.flush.batch_size` (histogram), `canalave.{signal}.flush.duration`
+(histogram, `ms`) — signals: `readingprogress`, `viewcount`. Instrument choice encodes meaning:
+`Counter` = only goes up, `Histogram` = distribution, `ObservableGauge` = sampled
+point-in-time level.
 
 ## Structured log templates
 
@@ -85,8 +88,9 @@ Reserved metric names (WU-Redis): `canalave.viewcount.queue.depth` (observable g
 - IDs the line is *about* go in the template; ambient correlation (circuit, user) comes from
   the scope — don't repeat scope values in templates.
 - Plain `ILogger<T>` calls (constructor-injected) are the default. `[LoggerMessage]`
-  source-generated methods are the convention for hot paths — **mandated starting with
-  WU-Redis's drain worker** (per-cycle code), not retrofitted onto existing sites.
+  source-generated methods are the convention for hot paths (per-cycle worker code), not
+  retrofitted onto existing sites. (The signal-buffer flush pipeline logs only on failure —
+  cold path by design — so plain `ILogger` calls remain correct there.)
 - Services gain loggers when they gain something worth logging — no wholesale injection.
 
 ## Level semantics (this domain)
@@ -140,8 +144,8 @@ boundary**, once, not per-callsite:
 - **HTTP requests** (minimal-API endpoints) — the `EnrichWithHttpResponse` hook in
   ServiceDefaults tags `canalave.user.id` from `HttpContext.User`. Response hook, not request:
   the request span starts before auth middleware has populated the principal.
-- **Workers** (recipe — first instance lands in WU-Redis) — no user; `BeginScope` per cycle
-  with a cycle/batch ID inside the `{Worker}.Cycle` span.
+- **Workers** (first instances: the WU-SignalBuffering flush workers) — no user; per-cycle
+  span (`ReadingProgress.Flush` / `ViewCount.Flush`) carries the batch context.
 
 Rejected (do not reintroduce): OTel log-record enrichment processor (singleton — cannot see
 circuit-scoped identity); per-callsite `BeginScope` in service methods (unenforceable
@@ -157,11 +161,12 @@ carries the span). Best-effort *callers* of the throwing operation log the Warni
 the "loss" context — see the replaced-blob delete sites in `ServerStoryWriteService` /
 `ServerUserSettingsService`).
 
-**Background worker** (WU-Redis lands the first instance): `{Worker}.Cycle` span per drain
-cycle (no ambient parent — the span IS the root); `[LoggerMessage]` methods; per-cycle scope;
-queue-depth observable gauge + batch-size and duration histograms under the reserved
-`canalave.viewcount.*` names; cycle failure = `Error` log + error span, then continue/retry —
-a worker never dies silently.
+**Background worker** (first instances: `ReadingProgressFlushWorker` / `ViewCountFlushWorker`,
+WU-SignalBuffering): a `{Component}.Flush` span per drain cycle (no ambient parent — the span IS
+the root); buffer-depth observable gauge + flush batch-size and duration histograms under the
+`canalave.{signal}.*` names above; cycle failure = `Error` log (from the flusher, with batch
+size) + error span + batch restored to the buffer, then the loop continues — a worker never dies
+silently, and a final drain runs on graceful shutdown.
 
 **Hub method** (stub — WU-SignalR extends): hub-adjacent tracing exists via the Components
 sources; add `AddMeter("Microsoft.AspNetCore.Http.Connections")` when `MessagesHub` lands, and

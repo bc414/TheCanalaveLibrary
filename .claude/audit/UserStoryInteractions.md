@@ -177,8 +177,27 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
   `UserStoryInteractionConfigurations.cs` already target the post-re-model columns (`has_started`,
   `is_completed`, `is_favorite`, `is_hidden_favorite`, `is_followed`, `is_read_it_later`, `is_ignored`)
   — they were regenerated as part of WU0/InitialSchema. No migration or index change needed.
-- **L7 — Stage 2.** Write-behind buffer (pattern 1): `LPUSH interaction-queue` → 5s drain →
-  consolidate `Dictionary<(UserId,StoryId),LatestState>` → batch raw SQL.
+- **L7 — removed with the layer (WU-SignalBuffering, 2026-07-06). F16 stays durable-direct
+  permanently.** The planned write-behind queue's stated rationale ("batch writes to protect the
+  read-hot table from locks") was designed under SQL Server hours before the Postgres switch and is
+  void under MVCC (writers never block readers). Interactions are **durable user intent** — low-
+  write, already churn-absorbed by the 2 s client debounce — so a lossy buffer is the wrong pattern
+  by the signal-buffering criterion (`layer2-services.md` §"Signal Buffering": high-frequency AND
+  loss-tolerant AND coalescable). MVCC churn cost (each flag toggle changes a partial-index
+  predicate → never HOT) is managed by `R4_MvccStorageTuning` autovacuum tuning instead. Any future
+  volume relief must be durability-preserving and measurement-gated — never a lossy queue.
+  Browser-verified 2026-07-06: favorite toggle durably persisted (psql: `is_favorite=t` +
+  `favorite_date` stamped), state survives a hard reload from a fresh DB read.
+
+- **R3 divergence note (2026-07-06): no DB CHECK constraints for flag pairs — deliberately.**
+  The requirements draft assumed mutually-exclusive pairs (e.g. `IsFavorite` vs
+  `IsHiddenFavorite`) enforceable by CHECK. Ground truth: spec §4's zero-coupling model declares
+  **all combinations valid** (all 8 reading-status states including `0,1,x` "read elsewhere";
+  favorite+hidden both-true = "favorite hidden from visitors", handled by the profile queries'
+  `IsFavorite && (includePrivate || !IsHiddenFavorite)` shape), and the write service's
+  `ValidateCombination` is a deliberately empty extension point. There is nothing DB-constrainable.
+  Resolved with Brian 2026-07-06: no CHECKs; the entity/interface comments that overstated
+  ("service rejects impossible combinations") were corrected to match §4.
 
 **Future Design Work, post MVP:** Pokeball needs to be side view
 Hidden favorite should have a mystery texture to it

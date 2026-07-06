@@ -19,7 +19,9 @@ public partial class Story : IModeratableContent
     public Rating Rating { get; set; }
     public StoryStatusEnum StoryStatusId { get; set; }
     public int WordCount { get; set; }
-    public int ViewCount { get; set; }
+    // ViewCount deliberately absent (R2): a high-frequency mutable counter on the hot read row is a
+    // write-amplification trap. Views accumulate in daily_story_stats (per-story/day, raw-SQL table,
+    // no EF model); lifetime total = SUM — see IStoryReadService.GetStoryTotalViewsAsync.
     public DateTime PublishedDate { get; set; }
     public DateTime LastUpdatedDate { get; set; }
     public DateOnly? OriginalPublishedDate { get; set; }

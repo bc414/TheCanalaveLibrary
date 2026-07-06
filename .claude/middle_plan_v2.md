@@ -21,9 +21,9 @@ test and before the feature count grows.
 
 Two deliberate exceptions where feature and platform work are intertwined:
 
-- **WU38b (View Count)** moves *into* the platform phase — it is the chosen minimal
-  battle-test feature for L7 Redis (direct-increment L2 body first, Redis write-behind swap
-  behind the same signature in the same arc).
+- **WU38b (View Count)** moves *into* the platform phase — originally as the "L7 Redis battle
+  test"; landed 2026-07-06 as one of WU-SignalBuffering's two in-process signal buffers after
+  the L7 dissolution (see Resolved "Layer 7 dissolved").
 - **L5 WASM enablement stays *after* feature completeness** — the settled single-global-flip
   economics (Resolved 2026-07-04) are unchanged: once the flip lands, every subsequent L2
   contract change also costs an endpoint + client-impl touch, so the flip belongs after the
@@ -62,7 +62,7 @@ for the full history). Platform groundwork already landed:
 
 ```
 0. Hygiene + CI → 0.5 Convention mini-pass
-      → 1. PLATFORM BUILD-OUT (observability, Redis+worker, indexes, error handling,
+      → 1. PLATFORM BUILD-OUT (observability, signal buffers, indexes, error handling,
            email, security, data-protection, SignalR, marts)
       → 2. MVP-surface completeness → 3. Full L4 sweep + Stage-6 freezes
       → 4. Beta-scope decisions → 5. L5 WASM global flip
@@ -123,35 +123,33 @@ one, same as `testing.md`/`debugging.md` accreted.
    spans); a custom `ActivitySource`/`Meter` primer for domain instrumentation. Test bed: the
    whole app under the Aspire dashboard. Decision row 7 (production telemetry destination)
    resolved 2026-07-06 — Grafana LGTM container, see Resolved; deployment stays Phase 7.
-2. **WU-Redis — L7 end-to-end, two steps** (sequencing settled 2026-07-05, see Resolved):
-   - **Step 1 — WU38b View Count as the isolated battle test** (moves here from v1 Phase 1).
-     Arc: `AddRedisDistributedCache("cache")` client registration → WU38b direct-increment L2 +
-     client ping → Redis `INCR` write-behind swap behind the same signature → the **first**
-     `BackgroundService` drain worker (5 s cadence, `GETSET` read-and-reset, batch UPDATE —
-     `layer7-redis.md` "View Count Tracking"). Deliberately the simplest L7 pattern: it stands
-     up the worker infrastructure, drain cadence, health checks, and queue/drain metrics once,
-     on a genuinely high-frequency, lossy-tolerant write. **This step is also the observability
-     pilot**: queue depth / drain latency / batch size metrics are exactly what a write-behind
-     buffer needs to be trustworthy, and they exercise item 1's conventions on the first
-     component whose correctness is invisible without them.
-   - **Step 2 — the flagship swap on proven scaffolding**: the UserStoryInteraction write-behind
-     queue (F16/17 — `LPUSH` → drain → consolidate per (UserId, StoryId) → one batch MERGE,
-     including the UserStats counter deltas per the transition-delta rule), the LastReadDate
-     ephemeral hash (F44), and the read-side decorator caches — the full v1 Phase 4 item 4
-     batch. Method-body swaps behind unchanged signatures; F16/17's existing integration +
-     browser-verified coverage is the regression baseline.
-   - Refine `layer7-redis.md` from battle-tested reality after each step (the WU-L5Pilot
-     treatment). Test bed: story pages + bookshelves under the Aspire path; ground truth via
-     `redis-cli` + psql. **Considered and rejected as pilots** (2026-07-05): comment likes
-     (low-frequency — write-behind there would be permanent pedagogical complexity with no load
-     justification; Comments L7 stays N/A per the grid) and interactions-first (the everything-
-     at-once first bite: multi-type consolidation + upsert + counter deltas simultaneously with
-     first-ever worker mechanics).
+2. **WU-SignalBuffering — DONE ✓ (2026-07-06). Supersedes WU-Redis** (the 2026-07-05 "L7
+   end-to-end" sequencing — see Resolved "Layer 7 dissolved"). A first-principles audit of the
+   deferred L7 assumptions found the write-behind's protect-reads-from-locks rationale was a
+   SQL-Server artifact (void under Postgres MVCC) and Redis an Aspire-template overfit; the
+   layer dissolved into its correct homes and the genuine work was built directly:
+   - **Reading-progress signal buffer (F44, the flagship)** — in-process coalescing store
+     (max progress + latest ts per (user, chapter)) + 5 s `BackgroundService` flush via
+     `unnest … ON CONFLICT` + shutdown drain + buffer-depth/batch-size/duration telemetry
+     (the observability pilot as planned). Bookshelves "Actively Reading" now sorts by derived
+     `MAX(uci.last_interaction_date)` (`DefaultSortOrder.RecentlyRead`) — no stored LastReadDate.
+   - **View-count signal buffer (F45)** — per-story sum → `daily_story_stats` (per-story/day,
+     migration-managed raw DDL, no EF model; ground truth, not a mart). `ViewCount` columns
+     dropped from `Story`/`ChapterContent`/`BaseBlogPost`; lifetime total = SUM, revealed
+     on-demand from the StoryCard dropdown; **never a sort key** (view-count-not-a-sort settled
+     2026-07-06 — anti-popularity-snowball).
+   - **F16 interactions stay durable-direct permanently** (no lossy buffer for durable intent;
+     the 2s client debounce already absorbs churn); MVCC churn managed by `R4_MvccStorageTuning`
+     (fillfactor + autovacuum; USI index audit: all 7 partial indexes justified, none dropped).
+   - Pattern doc: `layer2-services.md` §"Signal Buffering" (layer7-redis.md deleted). Forward
+     constraint: at N≥2 web nodes each in-process buffer body swaps to a shared **Valkey** store
+     (open-licensed, DO-managed — Redis relicensed off open source) behind unchanged interfaces.
+     `dotnet test` 1335/1335.
 3. **WU-L6 index batch + performance baseline** — the v1 Phase 4 item 2 DDL (UserStoryInteraction
    filtered indexes, comment golden index, StoryTag reverse index; `layer6-indexes.md`) — but
    preceded by a **performance smoke baseline** (NBomber or k6 against Full seed data) so index
    work gets before/after numbers instead of vibes. The baseline script becomes a rerunnable
-   fixture for every later L6/L7/L8 claim. Test bed: `/discover`, story pages, bookshelves under
+   fixture for every later L6/L8 claim. Test bed: `/discover`, story pages, bookshelves under
    load.
 4. **WU-ErrorHandling** — resolve the standing `cross-cutting.md` "Error Handling Strategy
    (Gap — Not Yet Designed)": what a user sees on a circuit crash / unhandled service exception /
@@ -232,7 +230,9 @@ endpoint/client impl (accepted 2026-07-03).
 
 ## Phase 7 — Launch readiness + Launch (DigitalOcean)
 
-Topology settled 2026-07-03 (droplet: server + Redis; managed PostgreSQL; Cloudflare R2 + CDN).
+Topology settled 2026-07-03, amended 2026-07-06 (droplet: **server only** — the Redis component
+was superseded by in-process signal buffers, see Resolved "Layer 7 dissolved"; a Valkey container
+joins the droplet only at the N≥2 / measured-need trigger; managed PostgreSQL; Cloudflare R2 + CDN).
 Decision row 4 is hereby expanded from "deployment mechanics" into the full launch-readiness
 checklist — each bullet becomes a checkable item, most are small:
 
@@ -333,7 +333,8 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   agent-queryable HTTP APIs, which LGTM provides natively (Loki logs / Tempo traces / Prometheus
   metrics, each curl-able over SSH to the droplet with no exposed endpoints; official Grafana MCP
   server available if richer access is ever wanted). Full metrics support retained deliberately —
-  WU-Redis's write-behind worker needs queue-depth/drain-latency metrics to be trustworthy.
+  the signal-buffer flush workers (WU-SignalBuffering) need buffer-depth/flush-latency/batch-size
+  metrics to be trustworthy.
   Alternatives weighed: Seq (best-in-class log search but weak metrics — would need Prometheus
   bolted on anyway), SigNoz/ClickStack (SQL-queryable but heavier ops on a small droplet), SaaS
   free tiers (external account + egress for no ops savings that matter at this scale). The only
@@ -379,13 +380,30 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   above, same trigger). PRs remain available any time Brian wants one (e.g. as a changelog view)
   but are never required to reach master. Rule: this file, Phase 0.
 
-- **L7 pilot = View Count, then interactions** — resolved (2026-07-05, Brian): WU38b view count
-  is the isolated Redis battle test (simplest pattern, genuinely planned + needed, high-frequency,
-  lossy-tolerant), standing up worker infrastructure + observability once; the UserStoryInteraction
-  queue + LastReadDate + read caches follow as step 2 on proven scaffolding. Comment likes
-  rejected (low-frequency, would need a Comments L7 N/A→2 reclassification for purely pedagogical
-  write-behind); interactions-first rejected (first worker + multi-type consolidation + counter
-  deltas in one bite). Rule: this file, Phase 1 item 2.
+- **Layer 7 dissolved; Redis exorcised (supersedes "L7 pilot = View Count")** — resolved
+  (2026-07-06, Brian, WU-SignalBuffering): a first-principles audit of the deferred L7 assumptions
+  found (a) the UserStoryInteraction write-behind's stated rationale ("batch writes to protect the
+  read-hot table from locks") was designed under SQL Server hours before the Postgres switch and is
+  **void under MVCC** (writers never block readers; the surviving costs — index amplification,
+  dead-tuple bloat — scale with write rate, and interactions are low-write durable intent behind a
+  2s client debounce); (b) Redis itself entered via the Aspire template, not a measured need. The
+  layer redistributed: lossy coalescable signals (F44 reading progress — the true flagship, every
+  active reader; F45 view counts) = **in-process L2 signal buffers** (built 2026-07-06, no external
+  store); F16 = durable direct write permanently; LastReadDate = never stored (recency derived via
+  `MAX(uci.last_interaction_date)`, `DefaultSortOrder.RecentlyRead`); Also-Favorited read cache =
+  the L8 mart itself, no app-tier cache ever. **View count is never a sort key** (would recreate
+  the popularity snowball — same philosophy as removed likes/no-sort-by-favorites): non-sortable,
+  on-demand reveal from the StoryCard dropdown, accumulated in `daily_story_stats` (per-story/day,
+  migration-managed raw DDL, no EF model, partition-ready by stat_date; `Story.ViewCount` +
+  chapter/blog copies dropped). Forward constraints: at **N≥2 web nodes** buffer bodies swap to a
+  shared **Valkey** store (open-licensed, DO-managed; Redis relicensed off open source 2024) behind
+  unchanged interfaces — the Aspire `cache` container stays provisioned for that day, nothing
+  consumes it at N=1; when a read replica lands, route `StoryEditorPage`'s post-save reload off the
+  read context (`ServerStoryReadService.GetStoryForEditAsync` — the one read-your-writes-exposed
+  path; all other edit surfaces are optimistic local state). Rules: `layer2-services.md` §"Signal
+  Buffering", `layer6-indexes.md` §"MVCC Storage Tuning", `grid_axes.md` "Layer 7 — dissolved",
+  conventions SKILL.md axiom 7. Prior 2026-07-05 sequencing (Redis battle test, `redis-cli` ground
+  truth, `AddRedisDistributedCache`) is historical.
 
 - **Platform-before-features reordering (this file)** — resolved (2026-07-05, Brian):
   infrastructure lands before new feature work, now that the functional site makes platform
@@ -412,6 +430,8 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   boundary is retired. `grid_axes.md`'s architectural boundaries are unchanged.
 - **DigitalOcean launch topology** — resolved (2026-07-03): one droplet (server + Redis),
   managed PostgreSQL, Cloudflare R2. Mechanics still open (decision row 4). See Phase 7.
+  *Amended 2026-07-06:* the Redis component is superseded ("Layer 7 dissolved" above) — the
+  droplet runs the server alone; a Valkey container joins only at the N≥2 / measured-need trigger.
 - **S3 image storage before launch** — resolved (2026-07-03): `S3ImageStorageService`, dev S3
   endpoint via Aspire (Garage per the 2026-07-05 entry above), R2 in prod, behind the frozen
   `IImageStorageService`. Built 2026-07-05 (WU-S3Garage). See `audit/ImageStorage.md`.

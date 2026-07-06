@@ -26,7 +26,11 @@ public partial class UserStoryInteraction
     public bool IsReadItLater { get; set; }
     public bool IsIgnored { get; set; }
 
-    // Zero-coupling: no flag drives another. The service layer rejects impossible combinations but never cascades.
+    // Zero-coupling (spec §4): no flag drives another; each is set and cleared independently, and
+    // ALL combinations are valid — the 8-state truth table forbids nothing (0,1,x = "read
+    // elsewhere"), and IsFavorite+IsHiddenFavorite both-true is the "favorite hidden from
+    // visitors" state the profile queries handle. Nothing is rejected or cascaded anywhere
+    // (service's ValidateCombination is deliberately an empty extension point).
 
     // --- Navigation Properties ---
     public virtual Story Story { get; set; } = null!;

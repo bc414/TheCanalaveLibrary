@@ -101,6 +101,35 @@ modelBuilder.Entity<StoryListing>()
 
 FTS covers title and short description only. NOT chapter body text.
 
+## MVCC Storage Tuning — fillfactor, HOT updates, autovacuum (R4, 2026-07-06)
+
+Postgres reasoning the SQL-Server-era design never did (under MVCC writers don't block readers —
+the real UPDATE costs are dead tuples, vacuum pressure, and index write-amplification):
+
+- **Every UPDATE writes a new row version.** It is HOT (Heap-Only Tuple — no index maintenance,
+  dead tuple invisible to indexes) only when (a) no indexed column changed — **partial-index
+  predicate columns count** — and (b) the page has free room. Corollaries:
+  - `user_story_interactions`: every flag toggle changes a partial-index predicate → HOT is
+    structurally defeated → `fillfactor` is wasted space there; aggressive autovacuum is the lever.
+  - `user_chapter_interactions` and `daily_story_stats` (the signal-buffer flush targets — the
+    highest-UPDATE tables): their hot-updated columns are deliberately unindexed → HOT-eligible →
+    `fillfactor = 90` reserves same-page room. **Do not index `read_progress` /
+    `last_interaction_date` / `view_count` without re-weighing this** — an index on a hot-updated
+    column re-imposes full index maintenance on every flush.
+- **Index-only scans need a fresh visibility map** — the covered partial indexes below only skip
+  the heap when vacuum has run recently. High-churn tables get
+  `autovacuum_vacuum_scale_factor = 0.05` (vacuum at 5% dead rows, vs the 20% default).
+- Both knobs live in the `R4_MvccStorageTuning` migration (raw `ALTER TABLE … SET (…)`).
+  `fillfactor` applies to future page writes only — no table rewrite.
+
+**Index audit rule (R4):** every index must be justified by a *current query or a spec'd planned
+feature's* query pattern — each one taxes every write and every vacuum. Audit outcome 2026-07-06:
+all 7 `user_story_interactions` partial covering indexes are justified (one per bookshelf tab,
+profile favorites, and the spec §4 discovery-exclusion probes); none dropped. The Bookshelves
+"Actively Reading" recency sort (`MAX(uci.last_interaction_date)` per story) deliberately rides
+the `user_chapter_interactions` PK prefix `(user_id, …)` rather than a new index — per-user row
+counts are small, and indexing `last_interaction_date` would defeat HOT (above).
+
 ## StoryTag Reverse Index
 
 ```
@@ -139,6 +168,6 @@ ix_notifications_recipient_read_date
 |---|---|---|
 | MVP (Layers 1–4) | Two composed queries via service injection | Initial implementation |
 | Post-profiling (Layer 6) | Index added + optional single optimized JOIN | Measurement shows bottleneck |
-| At scale (Layer 7) | Redis cache in front of the query | Database load warrants caching |
+| At scale | In-process cache (HybridCache/FusionCache) in front of the query | Only if a *measured*-hot read path appears (marts already cover precompute; see `middle_plan_v2.md` "Layer 7 dissolved") |
 
 The escape hatch (direct JOIN bypassing composition) is the exception, not the default.

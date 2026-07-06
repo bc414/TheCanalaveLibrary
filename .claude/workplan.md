@@ -1788,9 +1788,9 @@ behind the contracts frozen in Layers 1–4. Batch by pattern when the MVP slice
   `has_started` columns (16/17 L6 Stage 4), comment golden index `(chapter_id, date_posted DESC)`, StoryTag
   reverse index, etc. FTS GIN on `StoryListing.SearchVector` already in `InitialSchema`. Pointers:
   per-folder audit L6 notes. Governed by `layer6-indexes.md`.
-- **L7 — Redis integration.** Write-behind (16/17 interactions, 45 view counts via `INCR`), ephemeral
-  store (44 LastReadDate hash), read-side cache (61 top-100). MVP direct-write bodies get swapped behind
-  unchanged signatures. Governed by `layer7-redis.md`.
+- **L7 — Redis integration.** **SUPERSEDED — see WU-SignalBuffering (2026-07-06) at the end of this
+  file.** Layer 7 dissolved: signal buffering (44/45) built as L2 in-process buffers, 16/17 stays
+  durable-direct, 61's cache is the L8 mart itself. `layer7-redis.md` deleted.
 - **L8 — Data marts (+ horizontal boundary: requires real user data).** 59 Automatic Tree Search, 60 Tree
   Search Data Mart Worker, 61 Also Favorited / Also Recommended, 62 SiteDailyStat Worker. No EF model —
   raw-SQL tables, zero-downtime swap (resolved: `SiteDailyStat`/marts have no EF model). Pointers:
@@ -1802,3 +1802,42 @@ behind the contracts frozen in Layers 1–4. Batch by pattern when the MVP slice
   `S3ImageStorageService` (`AWSSDK.S3`), swapped in behind the same frozen interface — MinIO endpoint
   via Aspire in dev, Cloudflare R2 endpoint in prod (same SDK code, different endpoint config — spec
   §3.17 / `cross-cutting.md`). Additive, no Layer 1–4 change. Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-SignalBuffering — DONE ✓ (2026-07-06)
+
+Supersedes the "L7 — Redis integration" item above (and middle_plan_v2's WU-Redis). First-principles
+audit of the deferred L7 assumptions: the write-behind's protect-reads-from-locks rationale was a
+SQL-Server artifact (void under Postgres MVCC); Redis entered via the Aspire template, not a measured
+need. Layer 7 dissolved — grid column removed; L8 keeps its number.
+
+- **Built:** F44 reading-progress signal buffer (`ReadingProgressBuffer/Flusher/FlushWorker`,
+  Server/Chapters/) + F45 view-count signal buffer (`ViewCountBuffer/Flusher/FlushWorker`,
+  Server/Stories/) — in-process coalescing stores, 5 s `BackgroundService` flush via
+  `unnest … ON CONFLICT`, shutdown drain, restore-on-failure, `CanalaveTelemetry` depth/batch/duration
+  instruments. `DefaultSortOrder.RecentlyRead` (derived `MAX(uci.last_interaction_date)`) defaults the
+  Bookshelves Actively Reading tab. `StoryViewStats` on-demand reveal in StoryCard's caret menu;
+  `view-ping.js` (first scroll / 5 s dwell, never page load).
+- **Migrations:** `R2_ViewCountToDailyStoryStats` (drops `view_count` from
+  stories/chapter_contents/base_blog_posts; creates `daily_story_stats` — migration-managed raw DDL,
+  no EF model, ground truth not a mart) + `R4_MvccStorageTuning` (fillfactor 90 on the two
+  HOT-eligible flush targets; autovacuum_vacuum_scale_factor 0.05 on the three churn tables).
+- **Settled:** F16 interactions durable-direct permanently (no lossy buffer for durable intent); view
+  count never a sort key (non-sortable on-demand metric); no stored LastReadDate; the L8 mart IS the
+  Also-Favorited cache; no CHECK constraints for flag pairs (spec §4 forbids nothing — see
+  `audit/UserStoryInteractions.md` R3 divergence note); Valkey (not Redis) is the deferred N≥2
+  body-swap behind unchanged interfaces.
+- **Verified:** `dotnet test` 1335/1335 (483 Unit + 450 RazorComponents + 402 Integration; 22 new
+  tests across all three tiers). Browser E2E 2026-07-06 with psql ground truth: chapter scroll →
+  buffered flush landed the row; Actively Reading ordered most-recently-read-first; story-page ping →
+  `daily_story_stats` row; "View stats" reveal = "1 view"; `/discover` sort dropdown view-free;
+  favorite toggle durable across hard reload. R5 NULLS-ordering audit: all SQL-translated sort keys
+  non-nullable or explicitly handled; RecentlyRead built NULLS-safe.
+- **Docs:** `layer2-services.md` §"Signal Buffering" (new pattern home); `layer6-indexes.md` §"MVCC
+  Storage Tuning" (+ 7-index audit: all justified); `layer7-redis.md` deleted; conventions SKILL.md
+  axiom 7 + platform line; `grid_axes.md` "Layer 7 — dissolved" + F16/F44/F45 rows; CLAUDE.md grid
+  columns; `status.md` L7 column removed + WU note; `middle_plan_v2.md` Phase 1 item 2 + Resolved
+  "Layer 7 dissolved" (+ topology amendment: droplet runs server only). Spec NOT edited (read-only);
+  divergence notes in `audit/Chapters.md` F44, `audit/Stories.md` F45,
+  `audit/UserStoryInteractions.md` F16, `audit/Discovery.md` F61.

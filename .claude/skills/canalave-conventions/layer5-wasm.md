@@ -77,8 +77,9 @@ app.MapTagEndpoints();
 - **Read endpoints:** public where the page is public; return the same DTOs the service returns.
 - **Write endpoints:** return the service's return value as-is. A `string?` return crosses as a
   raw JSON string/`null` body — do NOT mint a wrapper DTO (Layer 5 never changes contracts).
-- **High-frequency write endpoints ("fast and dumb"):** validate → `LPUSH` to Redis queue →
-  return `202 Accepted`. Do NOT touch `DbContext`. See [layer7-redis.md](layer7-redis.md).
+- **Buffered-signal ping endpoints ("fast and dumb"):** the endpoint calls the same
+  `IXService` method as everywhere else — its server body is already an in-process buffer merge
+  (no `DbContext`); return `202 Accepted`. See `layer2-services.md` §"Signal Buffering".
 - **Cookie auth returns 401/403, not 302 redirects** — configured in `Program.cs`
   (`ConfigureApplicationCookie` `OnRedirectToLogin`/`OnRedirectToAccessDenied`); required so
   WASM API calls fail cleanly.

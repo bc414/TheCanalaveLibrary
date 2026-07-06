@@ -441,10 +441,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("title");
 
-                    b.Property<int>("ViewCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("view_count");
-
                     b.HasKey("BlogPostId");
 
                     b.HasIndex("AuthorId")
@@ -704,10 +700,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)")
                         .HasColumnName("version_name");
-
-                    b.Property<int>("ViewCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("view_count");
 
                     b.Property<int>("WordCount")
                         .HasColumnType("integer")
@@ -2592,10 +2584,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasMaxLength(1024)
                         .HasColumnType("character varying(1024)")
                         .HasColumnName("takedown_reason");
-
-                    b.Property<int>("ViewCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("view_count");
 
                     b.Property<int>("WordCount")
                         .HasColumnType("integer")

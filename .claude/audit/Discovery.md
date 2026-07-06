@@ -394,8 +394,13 @@ Narrowing-within-fixed-source query → WU27/WU30.
 - **L1 — N/A** (Phase A removed the EF models; `also_*_scores` are raw-SQL marts — divergence resolved).
   **L2 — Stage 2.**
   **L3/L3.5 — Stage 2** (embedded sections on story detail, not separate pages). **L4 — Stage 1.
-  L5 — Stage 2. L7 — Stage 2** (read-side cache pattern 3: Redis in front of precomputed tables, real-time
-  exclusion filters in C#). **L8 — Stage 2** (co-occurrence scoring worker).
+  L5 — Stage 2.** **L8 — Stage 2** (co-occurrence scoring worker).
+- **L7 — removed with the layer (WU-SignalBuffering, 2026-07-06): the mart IS the cache.** The
+  planned "Redis in front of the precomputed tables" hot tier is dead — the L8 mart is already the
+  daily cache over ground truth; services read `also_*_scores` directly (indexed, buffer-pool-hot)
+  and apply real-time exclusion filters in C#. No app-tier read cache, ever (settled). An L1+L2
+  cache abstraction (HybridCache/FusionCache) is considered only if a *measured*-hot read path ever
+  appears — see `middle_plan_v2.md` Resolved "Layer 7 dissolved".
 
 ---
 
@@ -446,9 +451,9 @@ Story→Users — matching how each edge is queried. Daily rebuild uses a zero-d
 - `also_favorited_scores`: PK `(story_id, also_favorited_story_id)` + `score` (co-occurrence count).
 - `also_recommended_scores`: PK `(story_id, also_recommended_story_id)` + `score`.
 
-Full matrix both directions; Redis caches the Top-100 per story (Layer-7 read-side cache). Algorithm:
-self-join `user_story_interactions` WHERE `is_favorite = true`; per `(story_a, story_b)` pair, count
-overlapping users = score.
+Full matrix both directions; the mart is read directly — no cache tier in front of it (Layer 7
+dissolved 2026-07-06; see Feature 61's L7 note). Algorithm: self-join `user_story_interactions`
+WHERE `is_favorite = true`; per `(story_a, story_b)` pair, count overlapping users = score.
 
 ### `site_daily_stats` (Feature 62)
 PK `stat_date` (one row/day). Counters: `new_users, total_users, new_stories, total_stories, new_words,

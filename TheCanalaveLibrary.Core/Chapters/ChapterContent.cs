@@ -22,8 +22,8 @@ public partial class ChapterContent
 
     public int WordCount { get; set; }
 
-    public int ViewCount { get; set; }
-    
+    // ViewCount dropped (R2): never written by any path; view counting is stories-only, accumulated
+    // in daily_story_stats. Re-addable via a per-chapter daily-stat row if chapter views are ever wanted.
     public int SortOrder { get; set; }
 
     /// <summary>Nullable — null inherits the parent story's rating (spec §5.2).</summary>

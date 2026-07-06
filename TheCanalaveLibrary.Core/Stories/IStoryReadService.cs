@@ -67,4 +67,13 @@ public interface IStoryReadService
     /// My Stories bookshelf tab.
     /// </summary>
     Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId);
+
+    /// <summary>
+    /// Lifetime total views of a story — <c>SUM</c> over its <c>daily_story_stats</c> rows
+    /// (Feature 45; the per-story/day accumulation the view buffer flushes into). Fetched
+    /// on-demand only (the story-card dropdown reveal) — deliberately not part of any listing
+    /// projection, and <b>never a sort key</b> (non-sortable informational metric by design).
+    /// Approximate by contract: buffered views land within the flush interval.
+    /// </summary>
+    Task<long> GetStoryTotalViewsAsync(int storyId);
 }

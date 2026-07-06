@@ -306,10 +306,39 @@ change).
   both source and target story. **L2/L3/L3.5 — Stage 2.** **L4 — Stage 1. L5 — Stage 2.**
 
 ## Feature 45 — View Count Tracking
-- **L1 — Stage 5.** `Story.ViewCount`. **L2 — Stage 2** (MVP direct increment unbuilt).
-- **L3-Logic — Stage 2.** Client ping (5s timer / first scroll) unbuilt. **L3.5 — N/A** (no dedicated
-  component). **L4 — N/A. L5 — Stage 2.**
-- **L7 — Stage 2.** Redis `INCR` + drain worker (write-behind pattern 1). Interface unchanged from MVP.
+
+**Built end-to-end (WU-SignalBuffering, 2026-07-06).** Divergence from spec (§7 `Story.ViewCount`
+"Updated by Redis background worker"; §5.3's view-count sort exclusion now closes the last gap):
+views are a **non-sortable, on-demand informational metric** — never a sort key, never a permanent
+badge (view-count-not-a-sort settled 2026-07-06, the anti-popularity-snowball philosophy applied to
+the last popularity-shaped surface). `Story.ViewCount` (and the never-written
+`ChapterContent`/`BaseBlogPost` copies) **dropped** — a hot mutable counter on the hot read row is
+a write-amplification trap; accumulation lives in **`daily_story_stats`** (per-story/day,
+migration-managed raw DDL, no EF model — ground truth, NOT a rebuildable mart; PK
+`(story_id, stat_date)`, partition-ready; FK CASCADE cleans history on story delete). Migration:
+`R2_ViewCountToDailyStoryStats`.
+
+- **L1 — Stage 5.** `daily_story_stats` DDL applied + verified (Testcontainers migrate + live dev DB).
+- **L2 — Stage 5.** `IViewCountWriteService.RecordViewAsync` (anonymous counts — no auth gate) →
+  `ViewCountBuffer` (per-story sum, O(1)) → `ViewCountFlusher` (batched `unnest … ON CONFLICT`
+  additive upsert into today's UTC row — the `+=` merge accepts a rare retry-replay over-count on
+  a lossy metric, documented in-file; EXISTS guard vs deleted stories; restore-on-failure) →
+  `ViewCountFlushWorker` (5 s, shutdown drain, removed from the test host by `TestAppFactory`).
+  Lifetime total = `IStoryReadService.GetStoryTotalViewsAsync` (raw `SqlQuery` SUM — on-demand
+  only, never in a listing projection). Telemetry: `CanalaveTelemetry.ViewCount`.
+- **L3-Logic — Stage 5.** `view-ping.js` (fires once on first scroll OR 5 s dwell, never page
+  load — bots/bounces filtered) registered by `StoryPage` (re-arms on in-place story change;
+  `IAsyncDisposable`); `StoryViewStats` composite (sanctioned user-input-driven injection) in
+  `StoryCard`'s caret dropdown — fetches the SUM only when the user asks.
+- **L3.5/L4 — Stage 5.** Dropdown item reuses the caret menu's structure/classes.
+- **L4.5-Browser — Stage 5 (2026-07-06).** Story-page scroll fired the ping → `daily_story_stats`
+  row landed post-flush (psql ground truth); "View stats" reveal showed "1 view" (matches SUM);
+  sort dropdowns verified view-free (`/discover`: Random | Date published only).
+- **L5 — Stage 2** (WASM ping endpoint lands with the global flip). **L8 — N/A.**
+- **Tests:** Unit (`ViewCountBufferTests`), Integration (`ViewCountFlushTests` — buffering,
+  same-day accumulation, cross-day SUM, zero default, deleted-story guard, FK cascade),
+  RazorComponents (`StoryViewStatsTests` — no fetch until asked, formatted reveal,
+  singular/plural, reset on story change).
 
 ### WU-ComponentSoundness Stage note (2026-06-27)
 

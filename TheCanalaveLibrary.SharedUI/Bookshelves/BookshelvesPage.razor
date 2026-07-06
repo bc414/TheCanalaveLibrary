@@ -94,6 +94,11 @@ else
         if (parsed is null) { Nav.NotFound(); return; }
         _tab = parsed.Value;
         _loadedTab = Tab;
+        // Actively Reading defaults to the viewer-relative recency sort (most-recently-read first);
+        // every other tab keeps the StoryFilterDto default (DatePublished).
+        _filter = _tab == BookshelfTab.ActivelyReading
+            ? new() { Sort = DefaultSortOrder.RecentlyRead }
+            : new();
         await LoadPageAsync();
     }
 

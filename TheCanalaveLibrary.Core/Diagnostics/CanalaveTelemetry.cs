@@ -69,9 +69,57 @@ public static class CanalaveTelemetry
         }
     }
 
+    /// <summary>
+    /// Reading-progress in-process write buffer (Feature 44 L2 — the signal-buffering pattern,
+    /// layer2-services.md). A write buffer is trustworthy only when measurable: depth says how much
+    /// is at risk in the loss window, batch size says how well coalescing works, duration says
+    /// whether the flush keeps up with its cadence.
+    /// </summary>
+    public static class ReadingProgress
+    {
+        public const string Name = Prefix + ".ReadingProgress";
+
+        public static readonly ActivitySource Source = new(Name, "1.0.0");
+        public static readonly Meter Meter = new(Name, "1.0.0");
+
+        public static readonly Histogram<int> FlushBatchSize = Meter.CreateHistogram<int>(
+            "canalave.readingprogress.flush.batch_size", unit: "{entry}",
+            description: "Coalesced (user, chapter) entries written per flush cycle.");
+
+        public static readonly Histogram<double> FlushDuration = Meter.CreateHistogram<double>(
+            "canalave.readingprogress.flush.duration", unit: "ms",
+            description: "Wall time of one flush cycle's batched upsert.");
+
+        // The buffer-depth ObservableGauge ("canalave.readingprogress.buffer.depth") is created by
+        // ReadingProgressBuffer's constructor — a gauge needs the live buffer instance to observe,
+        // and that singleton lives in the Server project.
+    }
+
+    /// <summary>
+    /// Story view-count in-process write buffer (Feature 45 L2 — the signal-buffering pattern,
+    /// layer2-services.md). Same instrument shape as <see cref="ReadingProgress"/>: depth = at-risk
+    /// entries in the loss window, batch size = coalescing effectiveness, duration = flush health.
+    /// </summary>
+    public static class ViewCount
+    {
+        public const string Name = Prefix + ".ViewCount";
+
+        public static readonly ActivitySource Source = new(Name, "1.0.0");
+        public static readonly Meter Meter = new(Name, "1.0.0");
+
+        public static readonly Histogram<int> FlushBatchSize = Meter.CreateHistogram<int>(
+            "canalave.viewcount.flush.batch_size", unit: "{story}",
+            description: "Distinct stories whose coalesced views were written per flush cycle.");
+
+        public static readonly Histogram<double> FlushDuration = Meter.CreateHistogram<double>(
+            "canalave.viewcount.flush.duration", unit: "ms",
+            description: "Wall time of one flush cycle's batched upsert.");
+
+        // The buffer-depth ObservableGauge ("canalave.viewcount.buffer.depth") is created by
+        // ViewCountBuffer's constructor — same rationale as ReadingProgress's gauge.
+    }
+
     // Later work-units add their component here (never a new top-level source elsewhere):
-    //   WU-Redis  → ViewCount ("TheCanalaveLibrary.ViewCount"): queue-depth gauge,
-    //               drain batch-size + duration histograms, drain-cycle spans.
     //   WU-Email  → Email ("TheCanalaveLibrary.Email"): Email.Send spans, sent/failed counters.
     //   WU-Marts  → Marts ("TheCanalaveLibrary.Marts"): Mart.Rebuild spans + duration histogram.
 }

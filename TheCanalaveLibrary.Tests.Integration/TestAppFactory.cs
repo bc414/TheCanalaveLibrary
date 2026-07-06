@@ -86,6 +86,16 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
             // re-registers the real ServerWriteRateLimitService to cover the throttle itself.
             services.RemoveAll<IWriteRateLimitService>();
             services.AddSingleton<IWriteRateLimitService, FakeWriteRateLimitService>();
+
+            // Remove the timer-driven signal-buffer flush workers: their 5s cadence would write
+            // mid-test, racing the Respawn reset. Tests flush deterministically by resolving the
+            // corresponding flusher and calling FlushAsync() (testing.md — deterministic flush).
+            foreach (Type workerType in new[] { typeof(ReadingProgressFlushWorker), typeof(ViewCountFlushWorker) })
+            {
+                ServiceDescriptor? flushWorker = services.FirstOrDefault(d =>
+                    d.ServiceType == typeof(IHostedService) && d.ImplementationType == workerType);
+                if (flushWorker is not null) services.Remove(flushWorker);
+            }
         });
     }
 
