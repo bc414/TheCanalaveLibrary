@@ -28,6 +28,21 @@ complete parts of the model.
    (per-user display override of `NotificationType.DefaultCollapsed`, consumed by the notification
    panel). The §5.18 in-app toggle language should be understood as aspirational/stale.
 
+**Notification email fan-out — deferred, hook point documented (WU-Email, 2026-07-06):**
+`EmailEnabled` above is fully plumbed (written/read by the settings page via `SetSettingAsync`/
+`GetSettingsAsync`) but remains genuinely **unconsumed** — the create-core generates only in-app
+`Notification` rows; nothing sends mail off it. WU-Email built the transactional email seam
+(`Server/Identity/SmtpEmailSender.cs`, real send over SMTP — see `audit/Identity.md` WU-Email
+Stage note) but deliberately scoped it to Identity's confirmation/reset/email-change flows only.
+A follow-up work-unit is where this gets consumed: the natural hook is the single funnel
+`ServerNotificationWriteService.CreateCoreAsync` (`cross-cutting.md` "Notification Creation") —
+after the in-app rows are inserted, resolve each recipient's effective `EmailEnabled` (the sparse
+row's value, or `NotificationType.DefaultEmailEnabled` when no row exists) + email address, and
+send best-effort post-commit (never fail the notification on a mail-send error, same posture as
+the rest of this create-core). If volume ever warrants it, that send should route through a
+write-behind worker rather than inline — but build the inline version first and measure before
+adding that. Noted here so the seam isn't re-discovered from scratch.
+
 ## Feature 41 — Notification Generation
 
 - **L1 — Stage 5.** `Notification` + the fully-seeded type/category tables. Sound. **L6 — Stage 2**

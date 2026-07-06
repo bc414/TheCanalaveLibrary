@@ -58,6 +58,16 @@ IResourceBuilder<ContainerResource> garage = builder.AddContainer("garage", "dxf
     .WithHttpEndpoint(port: 3900, targetPort: 3900, name: "s3")
     .WithLifetime(ContainerLifetime.Persistent);
 
+// Mailpit (WU-Email dev inbox): catches every outbound SMTP send from the web app so Identity's
+// confirmation/reset/email-change mail is verifiable end-to-end with zero external provider
+// account. Raw SMTP endpoint (unauthenticated - dev only) on 1025; web UI (view/click links) on
+// 8025. No data volume - mail is ephemeral, safe to lose on restart.
+IResourceBuilder<ContainerResource> mailpit = builder.AddContainer("mailpit", "axllent/mailpit", "v1.28.1")
+    .WithContainerName("canalave-mailpit")
+    .WithEndpoint(port: 1025, targetPort: 1025, scheme: "tcp", name: "smtp")
+    .WithHttpEndpoint(port: 8025, targetPort: 8025, name: "http")
+    .WithLifetime(ContainerLifetime.Persistent);
+
 // launchProfileName pins the web app to Server's "http" profile -> same http://localhost:5028
 // as the server-only path, so every verification flow (curl, browser tools, DevLoginBar, the
 // scripts' port checks) is identical under either path. WithReference injects
@@ -75,7 +85,22 @@ builder.AddProject<Projects.TheCanalaveLibrary_Server>("web", launchProfileName:
     .WithEnvironment("ImageStorage__S3__AccessKey", garageAccessKey)
     .WithEnvironment("ImageStorage__S3__SecretKey", garageS3Secret)
     .WithEnvironment("ImageStorage__S3__BucketName", imagesBucket)
+    // Transactional email (WU-Email): flips the provider switch in Server/Program.cs to Smtp and
+    // points it at Mailpit's SMTP endpoint. Host/Port pulled via the endpoint-property callback
+    // form (not the endpoint reference directly) - the correct way to extract just one property
+    // instead of the full scheme://host:port URL. Mailpit needs no auth and no STARTTLS.
+    .WithEnvironment("Email__Provider", "Smtp")
+    .WithEnvironment(context =>
+    {
+        EndpointReference smtpEndpoint = mailpit.GetEndpoint("smtp");
+        context.EnvironmentVariables["Email__Smtp__Host"] = smtpEndpoint.Property(EndpointProperty.Host);
+        context.EnvironmentVariables["Email__Smtp__Port"] = smtpEndpoint.Property(EndpointProperty.Port);
+    })
+    .WithEnvironment("Email__Smtp__UseStartTls", "false")
+    .WithEnvironment("Email__FromAddress", "noreply@canalave.local")
+    .WithEnvironment("Email__FromName", "The Canalave Library (dev)")
     .WaitFor(canalaveDb)
-    .WaitFor(garage);
+    .WaitFor(garage)
+    .WaitFor(mailpit);
 
 builder.Build().Run();

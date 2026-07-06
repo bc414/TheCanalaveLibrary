@@ -119,7 +119,28 @@ public static class CanalaveTelemetry
         // ViewCountBuffer's constructor — same rationale as ReadingProgress's gauge.
     }
 
+    /// <summary>
+    /// Transactional email (WU-Email) — the send path behind <c>IEmailSender&lt;User&gt;</c>.
+    /// HttpClient/socket auto-instrumentation is blind to SMTP, so this names "one transactional
+    /// email" as its own span; sent/failed counters split by kind (confirmation vs. reset) so a
+    /// provider outage or misconfiguration shows up as a metric, not just an exception trace.
+    /// </summary>
+    public static class Email
+    {
+        public const string Name = Prefix + ".Email";
+
+        public static readonly ActivitySource Source = new(Name, "1.0.0");
+        public static readonly Meter Meter = new(Name, "1.0.0");
+
+        public static readonly Counter<long> Sent = Meter.CreateCounter<long>(
+            "canalave.email.sent", unit: "{email}",
+            description: "Transactional emails successfully sent.");
+
+        public static readonly Counter<long> Failed = Meter.CreateCounter<long>(
+            "canalave.email.failed", unit: "{email}",
+            description: "Transactional emails that failed to send.");
+    }
+
     // Later work-units add their component here (never a new top-level source elsewhere):
-    //   WU-Email  → Email ("TheCanalaveLibrary.Email"): Email.Send spans, sent/failed counters.
     //   WU-Marts  → Marts ("TheCanalaveLibrary.Marts"): Mart.Rebuild spans + duration histogram.
 }

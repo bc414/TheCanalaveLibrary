@@ -158,10 +158,14 @@ one, same as `testing.md`/`debugging.md` accreted.
    conversation, CLAUDE.md Stage-1 venue). Test bed: deliberately-thrown faults across the
    existing surface; the L4.5 browser band re-verifies the worst flows.
 5. **WU-Email** — the sharpest beta blocker: Identity runs `RequireConfirmedAccount = true`
-   against `IdentityNoOpEmailSender`, so real users cannot activate accounts. Provider per
-   decision row 8; real `IEmailSender<User>` (confirmation, password reset), then notification
-   email fan-out (the `EmailEnabled` per-user setting already exists, unconsumed). Test bed:
-   registration + reset flows; a dev inbox (provider sandbox or local catcher via Aspire).
+   against `IdentityNoOpEmailSender`, so real users cannot activate accounts. Mechanism settled
+   2026-07-06 (see Resolved): a provider-agnostic **SMTP** seam (`Email:Provider` = `Smtp`/`NoOp`,
+   mirroring `ImageStorage:Provider`), a real `IEmailSender<User>` over MailKit (confirmation,
+   password reset, email-change), and a **Mailpit** dev inbox via Aspire. **Scope: transactional
+   only** — notification email fan-out (the `EmailEnabled` per-user setting already exists,
+   unconsumed) is deferred to a follow-up WU (see `audit/Notifications.md`). The prod provider +
+   sending domain remain open (decision row 8 residual), deferred to Phase 7. Test bed:
+   registration + reset + email-change flows verified end-to-end against Mailpit (Aspire path).
 6. **WU-Security** — DONE ✓ (2026-07-06) — hardening pass + new
    `canalave-conventions/security.md`. As-built differs from the original wording in one
    settled way: comment/upload writes are NOT HTTP endpoints (SignalR circuit; and
@@ -240,8 +244,10 @@ checklist — each bullet becomes a checkable item, most are small:
   path — one `AddDockerComposeEnvironment` line + generated compose/.env maps onto the settled
   topology; managed PG and R2 replace the postgres/garage resources by connection string).
 - **Config/secrets promotion contract** — the single documented list of every env var the
-  droplet provides (connection strings, `ImageStorage__S3__*` R2 values, email keys, OTLP
-  endpoint, Data Protection). The local pattern (user secrets → env injection) already mirrors it.
+  droplet provides (connection strings, `ImageStorage__S3__*` R2 values, `Email__Provider` +
+  `Email__Smtp__*` (Host/Port/User/Password/UseStartTls) + `Email__FromAddress`/`Email__FromName`
+  for the chosen provider (decision row 8), OTLP endpoint, Data Protection). The local pattern
+  (user secrets → env injection) already mirrors it.
 - **Migration-in-production convention** — migrate as a gated deploy step (backup first), not
   dev's migrate-on-startup; write it into `layer1-data-model.md` or the deploy doc.
 - **Backups you have restored** — managed-PG backup policy + one performed restore drill; R2
@@ -282,7 +288,7 @@ since other docs cite them by number.
 | 3 | **Beta scope for features 8 / 37 / 51 / 55-remainder / 56** — design or defer, per feature. | None — genuine Stage-1 intent gaps. | Product-scope judgment. Phase 4. |
 | 4 | **Launch-readiness mechanics** — now the full Phase 7 checklist: deploy mechanism, config contract, migration-in-prod, backup+restore drill, uptime/alerting, TLS/domain, R2 values. | Topology settled (droplet + managed PG + R2); `aspire publish` compose output is the default deploy candidate. | Operational cost/effort trade-offs. Phase 7. |
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Phase 6 gate. |
-| 8 | **Email provider + sending domain** — transactional provider for confirmation/reset/notification mail. | Postmark or Amazon SES (cheap at this scale); needs a sending domain, which ties into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Gates Phase 1 item 5. |
+| 8 | **Email provider + sending domain** (residual — mechanism resolved 2026-07-06, see Resolved) — which SMTP provider to point the seam at, and the sending domain. | Postmark or Amazon SES (cheap at this scale) or Resend; needs a sending domain, which ties into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Config-only swap once decided (no code change) — gates Phase 7, not Phase 1 anymore. |
 | 9 | **Error-handling UX** — what a user sees on circuit crash / service exception / failed form post (the three dimensions flagged in `cross-cutting.md`'s standing gap). | None designed — Blazor defaults today. | Product-feel decision (CLAUDE.md Stage-1 venue: design conversation in chat). Gates Phase 1 item 4. |
 | 10 | **Legal/policy track ownership + timing** — ToS, privacy policy, DMCA agent/process, moderation obligations for a fanfiction UGC site. | None. | Legal exposure and community policy are yours; engineering only hosts the documents. Gates Phase 7 (lighter obligation defensible for the trusted-audience beta — your call). |
 
@@ -294,6 +300,22 @@ Newest first. Every entry points at the doc that now states the rule. Entries up
 are carried forward from `middle_plan.md` (which carried 2026-07-01-and-earlier entries from
 `forward_plan.md`) — a few long entries lightly condensed with their full technical framing
 intact at the named pointer; `middle_plan.md` remains the unabridged historical record.
+
+- **Email mechanism = pluggable SMTP seam, provider decision deferred to Phase 7 (decision row 8
+  mechanism half)** — resolved (2026-07-06, Brian, WU-Email planning): rather than picking a
+  transactional provider now, the `IEmailSender<User>` seam is provider-agnostic SMTP
+  (`Email:Provider` = `Smtp`/`NoOp`, mirroring the `ImageStorage:Provider` switch) — every
+  candidate provider (Postmark/SES/Resend/SendGrid/Mailgun) exposes SMTP, so the prod choice
+  becomes host+credentials in config with no code change. **Scope is transactional-only**
+  (confirmation, password reset, email-change) — notification email fan-out (the inert
+  `EmailEnabled` per-user setting) is explicitly deferred to a follow-up WU, not bundled in.
+  **Dev inbox: Mailpit via Aspire** (same `AddContainer` shape as Garage), so the whole flow is
+  browser-verifiable with zero external accounts; the server-only path keeps the existing
+  `IdentityNoOpEmailSender` fallback (its on-page confirmation link in `RegisterConfirmation.razor`
+  is already gated on `is IdentityNoOpEmailSender`, so it self-corrects once a real sender is
+  configured — no change needed there). The provider + sending domain choice (decision row 8
+  residual) stays open, moved to Phase 7 since it's now config-only. Rule: `cross-cutting.md`
+  "Identity & Auth"; `audit/Identity.md` WU-Email Stage note.
 
 - **Upload validation = magic-byte sniff + ImageSharp decode/re-encode (WU-Security scope)** —
   resolved (2026-07-06, Brian, WU-Security planning): the Phase 1 item 6 wording ("magic-byte

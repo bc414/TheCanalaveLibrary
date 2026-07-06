@@ -734,7 +734,12 @@ Configured for **401/403 status codes, not 302 redirects** (critical for WASM AP
 `RequireConfirmedAccount = true`.
 
 Data Protection: `PersistKeysToFileSystem` (dev), `PersistKeysToDbContext` (prod).
-Email: `IdentityNoOpEmailSender` (dev), SendGrid (prod, conditionally registered).
+Email: pluggable SMTP seam (`Email:Provider` = `Smtp`/`NoOp`, mirrors `ImageStorage:Provider`) —
+`IdentityNoOpEmailSender` when unconfigured (server-only dev; its `RegisterConfirmation.razor`
+on-page link auto-hides once a real sender is registered), `SmtpEmailSender` (MailKit) against
+Mailpit under the Aspire dev path, and against the real transactional provider (host/credentials
+only, chosen at Phase 7 — decision row 8) in production. See `middle_plan_v2.md` Resolved "Email
+mechanism."
 
 **Identity pages are permanent exceptions to the layer model:**
 - They live in the Server project, not SharedUI.

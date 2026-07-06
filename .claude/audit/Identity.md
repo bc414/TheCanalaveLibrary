@@ -165,3 +165,65 @@ programmatic `form_input` values post empty (matters for future browser passes, 
 tab, `form_input` values serialize into the SSR Login POST and authentication succeeds. The
 original failure was Chrome throttling a backgrounded tab, not the tool or Blazor. Current
 guidance: `run-server/SKILL.md` §"Driving the UI reliably".
+
+## WU-Email Stage note (2026-07-06) — F1 L2 remains Stage 5, `IdentityNoOpEmailSender` beta
+blocker closed
+
+`IdentityNoOpEmailSender` (the only registered `IEmailSender<User>`) meant `RequireConfirmedAccount
+= true` blocked every real registration — the sharpest beta blocker (`middle_plan_v2.md` Phase 1
+item 5). Closed with a provider-agnostic **SMTP** seam, mechanism settled the same day (see
+`middle_plan_v2.md` Resolved "Email mechanism"):
+
+- **`EmailOptions`/`EmailSmtpOptions`** (`Server/Identity/EmailOptions.cs`) bound from `Email`,
+  mirroring `S3ImageStorageOptions`'s shape (`SectionName` const, `IOptions<T>`).
+- **`SmtpEmailSender`** (`Server/Identity/SmtpEmailSender.cs`, MailKit) implements the same three
+  `IEmailSender<User>` methods as `IdentityNoOpEmailSender` — confirmation link, password reset
+  link, password reset code. Instrumented per `logging.md`'s reserved `Email` component
+  (`CanalaveTelemetry.Email`: `Email.Send` span tagged `canalave.email.kind`, `sent`/`failed`
+  counters, no-double-log on failure). Body composition lives in `EmailBodies.cs` (pure, unit-
+  tested without a live SMTP connection).
+- **Provider switch in `Program.cs`** (`Email:Provider` = `Smtp`/`NoOp`, default `NoOp`) —
+  identical shape to the `ImageStorage:Provider` switch. `NoOp` keeps
+  `IdentityNoOpEmailSender` registered; its `RegisterConfirmation.razor` on-page confirmation
+  link (gated on `EmailSender is IdentityNoOpEmailSender`) needed **no code change** — it
+  auto-hides the moment a real sender is active.
+- **Mailpit dev inbox** added to `AppHost.cs` (same `AddContainer` shape as Garage; SMTP on 1025,
+  web UI on 8025), wired via `Email__Provider=Smtp` + `Email__Smtp__Host/Port` (endpoint-property
+  callback form) on the `web` project. Server-only path is unaffected (stays `NoOp`).
+- **Scope: transactional only.** Notification email fan-out (`UserNotificationSetting.EmailEnabled`,
+  still inert) is explicitly deferred to a follow-up WU — see `audit/Notifications.md`. The hook
+  point (`ServerNotificationWriteService.CreateCoreAsync`) is documented there so it isn't
+  re-discovered.
+
+**Real bug found and fixed during live verification, not anticipated in the plan:**
+`EmailBodies.ConfirmationBody`/`PasswordResetLinkBody` originally re-encoded `confirmationLink`/
+`resetLink` via `WebUtility.HtmlEncode`. Every caller (`Register.razor`, `ForgotPassword.razor`,
+`ResendEmailConfirmation.razor`, `ExternalLogin.razor`, `Manage/Email.razor`) already wraps the
+link in `HtmlEncoder.Default.Encode(...)` before calling `IEmailSender<User>` — the framework-
+scaffold contract `IdentityNoOpEmailSender` already relied on (it interpolates the link verbatim).
+Encoding it a second time turned the link's already-escaped `&amp;` (the `userId`/`code` query
+separator) into `&amp;amp;`, which survives exactly one round of browser HTML-decoding as the
+literal text `&amp;` rather than a real `&` — the query-string parser then never sees a second
+parameter and `code` fails to bind. **Confirmed against the live Aspire+Mailpit run**: a user
+registered before the fix (`email_confirmed = f` after clicking its link) vs. a user registered
+after the fix (`email_confirmed = t`) — `psql` ground truth, not page text. Fixed by removing the
+re-encode from the two link-body methods (`resetCode`, the one value no caller pre-encodes, keeps
+its `HtmlEncode` call). Regression test:
+`Tests.Unit/EmailBodiesTests.cs::ConfirmationBody_DoesNotReEncodeAnAlreadyEncodedLink`.
+
+**How verified:** Unit (`EmailOptionsTests.cs` — binding/defaults; `EmailBodiesTests.cs` — body
+composition, verbatim link passthrough, the double-encoding regression, reset-code encoding).
+Integration (`EmailProviderSelectionTests.cs` — DI resolves `IdentityNoOpEmailSender` under
+default config; the `Smtp` branch is **not** integration-tested, deliberately, for the same reason
+`ImageStorage:Provider`'s `S3` branch isn't — both switches read `builder.Configuration` directly
+in `Program.cs`'s top-level code, before `WebApplicationFactory`'s `ConfigureAppConfiguration`
+override can take effect; proving the alternate branch means booting the real process with the env
+var set before start). Manual/browser band (Aspire path + Mailpit, real SMTP, no mocks, 2026-07-06):
+registered a throwaway user → confirmation email landed in Mailpit (`From` = configured
+`Email__FromName`/`FromAddress`) → clicked the decoded link → `email_confirmed` flips true in
+Postgres. Forgot-password → reset email landed in Mailpit → clicked the link → set a new password
+→ logged in with it (fresh `.AspNetCore.Identity.Application` cookie issued). Email-change reuses
+the identical `SendConfirmationLinkAsync`/`ConfirmationBody` path already proven twice, so it was
+not separately re-driven. `dotnet test` 1344/1344 (491 Unit / 450 RazorComponents / 403
+Integration). Rule: `cross-cutting.md` "Identity & Auth"; `run-server/SKILL.md` "Aspire path" +
+"Email ground truth".

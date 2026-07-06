@@ -5,8 +5,8 @@ description: >
   Use whenever asked to run, start, boot, launch, stop, or kill the server, or to verify a
   change works end-to-end against the real database. Two run paths exist: server-only
   (TheCanalaveLibrary.Server directly against local Postgres — the lightweight default) and
-  the Aspire path (AppHost orchestrates containerized Postgres + Redis + Garage S3 + dashboard,
-  with S3-backed image storage).
+  the Aspire path (AppHost orchestrates containerized Postgres + Redis + Garage S3 + Mailpit +
+  dashboard, with S3-backed image storage and a real transactional-email send path).
 ---
 
 # Running the server
@@ -23,6 +23,7 @@ tools, DevLoginBar, dev diagnostics endpoints — work identically under either 
 | Database | Local PostgreSQL 18, port **5432**, `TheCanalaveLibraryDB` | Containerized Postgres 18, port **5433**, `canalavedb` |
 | Redis / S3 (Garage) | none | containers (6379 / 3900) |
 | Image storage | `Local` provider (wwwroot/uploads) | `S3` provider (Garage bucket `canalave-images`) |
+| Email | `NoOp` sender — `RegisterConfirmation.razor` shows the confirmation link on-page | `Smtp` sender (MailKit) → Mailpit inbox, `http://localhost:8025` |
 | Needs Docker | no | yes (Docker Desktop running) |
 | DB wipe | `reset-dev-db.ps1` | `reset-aspire-db.ps1` |
 
@@ -103,18 +104,22 @@ if ($conn) { Stop-Process -Id $conn.OwningProcess -Force }
 ## Aspire path
 
 `AppHost/` (Aspire 13, SDK + hosting packages version-aligned — keep them that way, `aspire update`
-does it) orchestrates four resources: containerized **Postgres 18** (host port **5433** — local
+does it) orchestrates five resources: containerized **Postgres 18** (host port **5433** — local
 PG 18 owns 5432; database `canalavedb`), **Redis** (resource name `cache`, port 6379), **Garage**
 (S3-compatible blob store, S3 API port **3900**, bucket `canalave-images` — supersedes the spec's
-MinIO, see `audit/ImageStorage.md`), and the web project (same `http://localhost:5028`, with the
-`S3` image-storage provider active via injected `ImageStorage__*` env vars — uploads go to the
-Garage bucket and stored `/uploads/…` URLs are served from it by `ImageEndpoints`). The three
-containers are **persistent-lifetime with named volumes** (`canalave-postgres`/`canalave-redis`/
-`canalave-garage`): they keep running and keep data after the AppHost stops, which makes restarts
-fast and the Aspire DB a persistent workbench. On first web-app start against an empty volume,
-migrate + seed runs exactly like the server-only path. Garage self-bootstraps its layout, access
-key, and bucket on start (`--single-node --default-bucket`, restart-idempotent); its config is
-bind-mounted from `AppHost/garage.toml`.
+MinIO, see `audit/ImageStorage.md`), **Mailpit** (dev email inbox, SMTP port **1025**, web UI port
+**8025** — WU-Email), and the web project (same `http://localhost:5028`, with the `S3`
+image-storage provider and `Smtp` email provider both active via injected env vars — uploads go
+to the Garage bucket and stored `/uploads/…` URLs are served from it by `ImageEndpoints`;
+confirmation/reset/email-change mail is sent for real over SMTP to Mailpit instead of surfacing
+as an on-page link). Postgres/Redis/Garage are **persistent-lifetime with named volumes**
+(`canalave-postgres`/`canalave-redis`/`canalave-garage`): they keep running and keep data after
+the AppHost stops, which makes restarts fast and the Aspire DB a persistent workbench. Mailpit is
+persistent-lifetime too (stays up across AppHost restarts) but carries **no data volume** — mail
+is ephemeral and safe to lose, so wiping it is just restarting the container. On first web-app
+start against an empty volume, migrate + seed runs exactly like the server-only path. Garage
+self-bootstraps its layout, access key, and bucket on start (`--single-node --default-bucket`,
+restart-idempotent); its config is bind-mounted from `AppHost/garage.toml`.
 
 Credentials are **AppHost user secrets** (`Parameters:postgres-password` = `butterfree`,
 `Parameters:garage-s3-secret` and `Parameters:garage-rpc-secret` = random hex, all set via
@@ -148,7 +153,12 @@ container logs via the dashboard (per-resource Console/Structured logs + OTel tr
 `docker logs canalave-postgres`. Blob ground truth (Garage has no web console):
 `docker exec canalave-garage /garage bucket info canalave-images` (object count + size), and a
 direct `curl` of the stored `/uploads/…` URL (S3 mode serves it from the bucket — 200 with
-`Cache-Control: immutable` proves the full write→store→serve loop).
+`Cache-Control: immutable` proves the full write→store→serve loop). **Email ground truth:**
+open `http://localhost:8025` (Mailpit's web UI, no auth) — register/reset/email-change flows land
+there as real messages; click the confirmation/reset link directly from Mailpit's rendered HTML
+view to drive the rest of the flow. Mailpit also exposes a JSON API
+(`GET http://localhost:8025/api/v1/messages`) if a script needs to assert on the latest message
+without a browser.
 
 ### Gotchas encoded here
 
@@ -167,6 +177,12 @@ direct `curl` of the stored `/uploads/…` URL (S3 mode serves it from the bucke
   path-style, centralized in `S3ImageStorageService.CreateClient`. Don't "simplify" them away;
   they are what keeps Garage (dev) and Cloudflare R2 (prod) interchangeable. Detail:
   `audit/ImageStorage.md` "R2 interchangeability".
+- **Email differs per path by design, same as image storage:** Aspire = `Smtp` provider →
+  Mailpit (real send, no external account); server-only = `NoOp` provider → the on-page
+  confirmation link in `RegisterConfirmation.razor` (gated on `EmailSender is
+  IdentityNoOpEmailSender`, so it auto-hides the moment a real sender is configured — no code
+  change needed to move between the two). Don't expect a server-only registration to produce a
+  Mailpit message, or vice versa.
 - **`stop-dev-server.ps1` is the wrong stop for this path** — it frees 5028 but leaves the
   AppHost + containers up (and DCP may show the web resource as failed). Use `stop-aspire.ps1`.
 

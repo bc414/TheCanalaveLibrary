@@ -142,7 +142,21 @@ builder.Services.AddScoped<IUserClaimsPrincipalFactory<User>, ApplicationUserCla
 
 // --- END: Corrected Identity Configuration ---
 
-builder.Services.AddSingleton<IEmailSender<User>, IdentityNoOpEmailSender>();
+// Email provider switch (WU-Email): "NoOp" (default — RegisterConfirmation.razor's on-page
+// confirmation link, gated on `EmailSender is IdentityNoOpEmailSender`) or "Smtp" (real send via
+// MailKit against whatever Email:Smtp points at — Mailpit under the Aspire AppHost's env
+// injection, the chosen provider's SMTP endpoint in production). Same shape as the
+// ImageStorage:Provider switch above. See cross-cutting.md "Identity & Auth".
+string emailProvider = builder.Configuration["Email:Provider"] ?? "NoOp";
+if (emailProvider.Equals("Smtp", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
+    builder.Services.AddSingleton<IEmailSender<User>, SmtpEmailSender>();
+}
+else
+{
+    builder.Services.AddSingleton<IEmailSender<User>, IdentityNoOpEmailSender>();
+}
 
 // HTTP edge rate limiting (WU-Security) — covers the surfaces that are plain HTTP today:
 // per-IP window on the /Account/* auth form posts (credential-stuffing damping) and the

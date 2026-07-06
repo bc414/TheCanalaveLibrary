@@ -1841,3 +1841,62 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
   "Layer 7 dissolved" (+ topology amendment: droplet runs server only). Spec NOT edited (read-only);
   divergence notes in `audit/Chapters.md` F44, `audit/Stories.md` F45,
   `audit/UserStoryInteractions.md` F16, `audit/Discovery.md` F61.
+
+---
+
+## WU-Email — Real transactional email (middle_plan_v2 Phase 1 item 5) — DONE ✓ (2026-07-06)
+
+- **Cells:** none flipped (cross-cutting platform work-unit, same shape as WU-Observability/
+  WU-Security — `status.md` Global Condition; Stage note in `audit/Identity.md`). Closes the
+  sharpest beta blocker: `RequireConfirmedAccount = true` against `IdentityNoOpEmailSender`-only
+  meant no real user could confirm an account. Mechanism decision (pluggable SMTP seam, Mailpit
+  dev inbox, transactional-only scope) resolved as Doc-Touch moment 1, before the build — see
+  `middle_plan_v2.md` Resolved "Email mechanism" and the narrowed decision row 8.
+- **Done:**
+  - `Server/Identity/EmailOptions.cs` (`EmailOptions`/`EmailSmtpOptions`, bound from `Email`,
+    same shape as `S3ImageStorageOptions`) + `Server/Identity/EmailBodies.cs` (pure subject/body
+    composition, unit-testable without SMTP) + `Server/Identity/SmtpEmailSender.cs`
+    (`IEmailSender<User>` over MailKit; instrumented via a new `CanalaveTelemetry.Email`
+    component — `Email.Send` span + `sent`/`failed` counters, per logging.md's reserved slot).
+  - Provider switch in `Program.cs` (`Email:Provider` = `Smtp`/`NoOp`, default `NoOp`) — identical
+    shape to `ImageStorage:Provider`; `NoOp` keeps `IdentityNoOpEmailSender` registered and its
+    `RegisterConfirmation.razor` on-page link auto-hides once `Smtp` is active (no code change
+    needed there).
+  - **Mailpit dev inbox** added to `AppHost.cs` (`axllent/mailpit:v1.28.1`, same `AddContainer`
+    shape as Garage; SMTP 1025, web UI 8025) + `Email__*` env wiring on the `web` project
+    (endpoint-property callback form for host/port — the form that correctly resolves
+    cross-resource hostnames). `MailKit` 4.17.0 package added to `TheCanalaveLibrary.Server`.
+  - `run-server/SKILL.md` updated: Aspire-path resource count/description, comparison table
+    "Email" row, Mailpit ground-truth verification technique (web UI + JSON API), a
+    differs-per-path gotcha parallel to image storage's.
+  - **Scope: transactional only** (confirmation, password reset, email-change). Notification
+    email fan-out (`UserNotificationSetting.EmailEnabled`, still inert) explicitly deferred to a
+    follow-up WU — hook point documented in `audit/Notifications.md` so it isn't re-discovered.
+- **Real bug found and fixed during live verification, not anticipated in the plan:**
+  `EmailBodies`' link-body methods re-encoded `confirmationLink`/`resetLink`, which every Identity
+  page caller already HTML-encodes before calling `IEmailSender<User>` (the scaffold contract
+  `IdentityNoOpEmailSender` relies on by interpolating verbatim). Double-encoding turned the
+  link's `&amp;` query separator into `&amp;amp;`, which one round of browser HTML-decoding
+  resolves to literal text instead of a real `&` — `code` then fails to bind on
+  `ConfirmEmail`/`ResetPassword`. Found by comparing a live Mailpit message's raw HTML source
+  against its browser-resolved form, confirmed with `psql` ground truth (pre-fix user:
+  `email_confirmed` stayed `false` after clicking its link; post-fix user: flipped `true`). Fixed
+  by removing the re-encode from the two link methods (`resetCode`, the one un-pre-encoded value,
+  keeps its `HtmlEncode` call). Regression test added same-session
+  (`EmailBodiesTests.ConfirmationBody_DoesNotReEncodeAnAlreadyEncodedLink`).
+- **Verified:** `dotnet build` green (0 warnings). `dotnet test` 1344/1344 (491 Unit + 450
+  RazorComponents + 403 Integration; 9 new — `EmailOptionsTests` 3, `EmailBodiesTests` 5,
+  `EmailProviderSelectionTests` 1). The `Smtp` provider branch is deliberately **not**
+  Integration-tested (same `WebApplicationBuilder`-reads-config-before-`WithWebHostBuilder`-
+  override timing quirk `TestAppFactory`'s own class doc records for the connection string — see
+  `EmailProviderSelectionTests`' class doc); it's proven live instead, matching the existing
+  `ImageStorage:Provider` `S3`-branch precedent. Manual/browser band (Aspire path + Mailpit, real
+  SMTP over MailKit, no mocks): registered a throwaway user → confirmation email landed in Mailpit
+  with the configured From name/address → decoded link clicked → `email_confirmed` true in
+  Postgres; ForgotPassword → reset email in Mailpit → link clicked → new password set → logged in
+  with it (fresh auth cookie issued). Email-change reuses the identical
+  `SendConfirmationLinkAsync`/`ConfirmationBody` path already proven twice, so it was not
+  separately re-driven.
+- **Tool:** Claude Code (Opus; plan approved 2026-07-06). **Pointer:** `cross-cutting.md`
+  "Identity & Auth"; `audit/Identity.md` WU-Email Stage note; `middle_plan_v2.md` Phase 1 item 5 +
+  Resolved "Email mechanism"; `audit/Notifications.md` (deferred notification-email hook point).
