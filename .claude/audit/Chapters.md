@@ -22,6 +22,16 @@ of both `EditorView`'s output and the sanitizer.
 
 ## Feature 6 — Chapter Writing & Versioning
 
+**WU-ErrorHandling note (2026-07-06) — editor draft safety live.** `ChapterEditorPage` embeds
+`DraftAutosave` (`draft:chapter:{contentId}` / `draft:chapter:new:{storyId}`): 10s change-only
+localStorage capture of Title/ChapterText/notes/VersionName, restore banner on return, backup
+cleared on successful submit. `ChapterPropertiesForm` gained `Set*Async` push methods (Quill
+ignores later `Html` parameter changes) and renders errors via `InlineAlert`; all the page's
+catches route through `ExceptionPresenter` (unexpected → `LogError` with IDs). Browser-verified
+end-to-end on the seeded chapter (type → autosave → reload → restore → submit clears; `psql`
+ground truth both ways). Strategy: `cross-cutting.md` §"Error Handling Strategy"; tests:
+`DraftAutosaveTests` (RazorComponents), `ExceptionPresenterTests` (Unit).
+
 **WU26 Phase 0.5 Stage note (2026-06-24) — Rating model reconciliation, DONE ✓.**
 `ChapterContent.Rating` was non-nullable (`Rating`, default E), diverging from spec §5.2 which
 specifies nullable (NULL = inherit story rating). Reconciled as part of WU26 Phase 0.5, before any

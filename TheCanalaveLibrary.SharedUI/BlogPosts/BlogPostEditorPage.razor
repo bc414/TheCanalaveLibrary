@@ -5,9 +5,11 @@
 @inject IBlogPostWriteService BlogPostService
 @inject IStoryReadService StoryService
 @inject NavigationManager NavigationManager
+@inject ILogger<BlogPostEditorPage> Logger
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
 
 @* Blog-post create/edit page — Pattern 1 edit side (cross-cutting.md "Two content-editing patterns").
    View side is BlogPostPage. This page owns routing, auth, data-load, and DTO-mapping.
@@ -32,6 +34,14 @@
                     @(BlogPostId.HasValue ? "Edit Post" : "New Post")
                 </h1>
 
+                @* ── Draft safety (cross-cutting.md §"Error Handling Strategy") ── *@
+                <div class="mb-4">
+                    <DraftAutosave @ref="_autosave" @key="@DraftKey"
+                                   DraftKey="@DraftKey"
+                                   Capture="CaptureDraftAsync"
+                                   OnRestore="RestoreDraftAsync" />
+                </div>
+
                 <BlogPostPropertiesForm @ref="_form"
                                         ViewModel="_viewModel"
                                         AuthorStories="_authorStories"
@@ -51,6 +61,7 @@
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private BlogPostPropertiesForm? _form;
+    private DraftAutosave? _autosave;
     private BlogPostPropertiesViewModel _viewModel = new();
 
     /// <summary>Null suppresses the story-link picker (should not happen once loaded — author always gets at least an empty list).</summary>
@@ -140,6 +151,7 @@
                     StoryId     = _viewModel.StoryId,
                     IsPublished = _viewModel.IsPublished
                 });
+                if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
                 NavigationManager.NavigateTo($"/blog/{BlogPostId.Value}/edit");
             }
             else
@@ -152,6 +164,7 @@
                     HasSpoilers = _viewModel.HasSpoilers,
                     StoryId     = _viewModel.StoryId
                 });
+                if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
                 // Navigate to the view page after creation; slug is cosmetic (derived from title at link time).
                 NavigationManager.NavigateTo($"/blog/{newId}");
             }
@@ -160,18 +173,37 @@
         {
             _forbidden = true;
         }
-        catch (BlogPostValidationException ex)
+        catch (Exception ex)
         {
-            _viewModel.ServerValidationErrors.AddRange(ex.Errors);
-        }
-        catch (Exception)
-        {
-            _viewModel.ServerValidationErrors.Add("An unexpected error occurred. Please try again.");
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Saving blog post {BlogPostId} failed unexpectedly", BlogPostId);
+            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
         }
         finally
         {
             _viewModel.IsLoading = false;
         }
+    }
+
+    // ── Draft safety (DraftAutosave contract) ─────────────────────────────────────
+    private string DraftKey => BlogPostId.HasValue ? $"draft:blogpost:{BlogPostId.Value}" : "draft:blogpost:new";
+
+    private async Task<Dictionary<string, string?>?> CaptureDraftAsync()
+    {
+        if (_form is null || _isLoading) return null;
+        return new Dictionary<string, string?>
+        {
+            ["Title"] = _viewModel.Title,
+            ["Content"] = await _form.GetContentAsync(),
+        };
+    }
+
+    private async Task RestoreDraftAsync(IReadOnlyDictionary<string, string?> fields)
+    {
+        if (_form is null) return;
+        _viewModel.Title = fields.GetValueOrDefault("Title") ?? _viewModel.Title;
+        await _form.SetContentAsync(fields.GetValueOrDefault("Content") ?? string.Empty);
+        StateHasChanged();
     }
 
     private async Task<int?> ResolveCurrentUserIdAsync()

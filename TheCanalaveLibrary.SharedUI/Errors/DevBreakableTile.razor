@@ -1,0 +1,18 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Dev-playground child whose OWN event handler throws — an event-handler exception surfaces at
+   the component that owns the delegate, so breaking "just the island" requires the throwing
+   handler to live inside the island, not on the hosting page. *@
+
+<div class="rounded-md border border-(--color-border) p-3 text-sm">
+    Healthy island content.
+    <button type="button" class="ml-2 font-semibold text-(--color-danger) underline"
+            @onclick="Break">
+        Break just this island
+    </button>
+</div>
+
+@code {
+    private void Break()
+        => throw new InvalidOperationException("Playground: deliberate island fault.");
+}

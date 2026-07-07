@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using TheCanalaveLibrary.Server;
 using TheCanalaveLibrary.Core;
+using TheCanalaveLibrary.SharedUI;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
@@ -14,7 +15,9 @@ builder.AddServiceDefaults();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents()
+    // DetailedErrors is Development-only by contract (logging.md §"Unhandled exceptions"):
+    // prod clients get generic circuit errors; the server log carries the detail.
+    .AddInteractiveServerComponents(options => options.DetailedErrors = builder.Environment.IsDevelopment())
     .AddInteractiveWebAssemblyComponents()
     // SerializeAllClaims: the default set is name + role claims only. WASM components also need
     // the custom claims baked in by ApplicationUserClaimsPrincipalFactory (Theme,
@@ -40,6 +43,13 @@ builder.Services.AddScoped<IActiveUserContext, ServerActiveUserContext>();
 // (CircuitId/UserId) + canalave.user.id trace tag around every inbound circuit activity.
 // See canalave-conventions/logging.md §"Context Scopes".
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, TelemetryCircuitHandler>();
+
+// Error-handling UX seams (WU-ErrorHandling — cross-cutting.md §"Error Handling Strategy"):
+// the transient toast channel (ToastHost in DeviceLayout is the single subscriber) and the
+// localStorage draft store behind DraftAutosave. Both scoped per circuit; both also registered
+// in the Client host so the components survive the L5 WASM flip unchanged.
+builder.Services.AddScoped<IToastService, ToastService>();
+builder.Services.AddScoped<DraftStore>();
 
 // --- Database Contexts ---
 // Plain AddDbContext, never the Aspire Npgsql package's AddNpgsqlDbContext — settled WU12

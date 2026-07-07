@@ -33,6 +33,21 @@
 <body>
 <Routes @rendermode="PageRenderMode"/>
 <ReconnectModal/>
+
+@* Last-resort circuit-teardown bar (cross-cutting.md §"Error Handling Strategy"). Lives HERE,
+   not in a layout: the default layout is DeviceLayout, so a MainLayout-hosted bar (the template
+   default) existed only on Identity Manage pages — interactive pages had NO teardown surface at
+   all. blazor.web.js toggles it via inline style.display, which overrides the `hidden` class;
+   the .reload/.dismiss classes are its required hooks. Faults the error boundaries catch never
+   reach this; only a true circuit teardown shows it. *@
+<div id="blazor-error-ui" data-nosnippet
+     class="hidden fixed bottom-0 left-0 right-0 z-50 border-t border-(--color-danger)/40 bg-(--color-surface-raised) px-4 py-3 text-sm text-(--color-text) shadow-lg">
+    <span class="font-semibold text-(--color-danger)">Something went wrong with your connection.</span>
+    Your last edits may not have been saved.
+    <a href="." class="reload font-semibold text-(--color-primary) underline hover:no-underline">Reload the page</a>
+    <span class="dismiss float-right cursor-pointer px-2 font-semibold" role="button" aria-label="Dismiss">✕</span>
+</div>
+
 <script src="@Assets["_framework/blazor.web.js"]"></script>
 
 <!-- Reference the device detection script from the SharedUI class library -->
@@ -46,6 +61,8 @@
 <!-- Delegated data-* image fallbacks — the CSP-safe replacement for inline onerror attributes
      (security.md "no new raw inline on* attributes"). Must load after sprite-fallback.js. -->
 <script src="_content/TheCanalaveLibrary.SharedUI/js/img-fallback.js"></script>
+<!-- Editor draft autosave to localStorage (DraftAutosave, SharedUI/Drafts/ — WU-ErrorHandling) -->
+<script src="_content/TheCanalaveLibrary.SharedUI/js/draft-autosave.js"></script>
 
 <!-- Quill.js + Blazored.TextEditor's interop (EditorView, SharedUI/RichText/).
      SRI required on every CDN asset (security.md); recompute the hash on any version bump. -->

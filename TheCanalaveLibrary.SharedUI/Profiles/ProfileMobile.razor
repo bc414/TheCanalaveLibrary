@@ -74,8 +74,10 @@
                 {
                     <section>
                         <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Comments</h2>
-                        <CommentSection ProfileUserId="@Header.UserId"
-                                        CurrentUserId="@CurrentUserId" />
+                        <CanalaveErrorBoundary Label="comments" Compact="true">
+                            <CommentSection ProfileUserId="@Header.UserId"
+                                            CurrentUserId="@CurrentUserId" />
+                        </CanalaveErrorBoundary>
                     </section>
                 }
             </div>

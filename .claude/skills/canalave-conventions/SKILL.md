@@ -80,6 +80,9 @@ Cross-cutting clusters and their scope:
 - **`Bookshelves/`** — `BookshelfTab` enum + `BookshelfTabSlug` slug helper consumed by `SharedUI/Bookshelves/` and `Server/UserStoryInteractions/`.
 - **`Recommendations/`** — SVG icon constants and display components spanning submission, display, Hidden Gem, and attribution sub-features.
 - **`Security/`** — `IWriteRateLimitService`/`WriteActionKind` (Core) + `ServerWriteRateLimitService`/`SecurityHeadersMiddleware` (Server): write throttling and response-header hardening consumed by every write service and the whole pipeline; no owning feature (see `security.md`).
+- **`Errors/`** — `ExceptionPresenter` (Core: exception → user-facing message discipline) + `CanalaveErrorBoundary`/`InlineAlert` (SharedUI: layered containment + the standard inline feedback atom); consumed by every form and layout; no owning feature (see `cross-cutting.md` §"Error Handling Strategy").
+- **`Toasts/`** — `IToastService`/`ToastHost` (SharedUI) transient non-blocking system-event channel; deliberately minimal — never for validation errors.
+- **`Drafts/`** — `DraftStore`/`DraftAutosave` (SharedUI) device-local editor draft safety over `draft-autosave.js`; consumed by the long-form edit pages.
 - **`Messaging/`** — Messaging feature cluster; `EditorView` and `UserCard` remain in their own cross-cutting clusters.
 - **`Profiles/`** — projection and settings-edit services *over* the `User` entity. Boundary: Identity = entity + auth plumbing; Profiles = how the entity is read and edited by owner or public viewer.
 

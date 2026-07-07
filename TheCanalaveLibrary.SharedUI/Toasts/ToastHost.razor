@@ -1,0 +1,64 @@
+@namespace TheCanalaveLibrary.SharedUI
+@implements IDisposable
+@inject IToastService Toasts
+
+@* The single toast render surface — placed once, in DeviceLayout, so it exists on every
+   interactive page. Fixed stack, bottom-right; aria-live="polite" so screen readers announce
+   arrivals without interrupting. Auto-dismisses per ToastMessage.Duration; every toast is also
+   manually dismissible. Producers go through IToastService.Show — never render toasts ad hoc. *@
+
+<div aria-live="polite" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-72 flex-col gap-2">
+    @foreach (ToastMessage toast in _toasts)
+    {
+        <div @key="toast.Id" role="status"
+             class="pointer-events-auto flex items-start gap-2 rounded-lg border p-3 text-sm shadow-lg @LevelClasses(toast.Level)">
+            <span class="flex-1">@toast.Text</span>
+            <button type="button" aria-label="Dismiss"
+                    class="shrink-0 font-semibold opacity-60 transition-opacity hover:opacity-100"
+                    @onclick="() => Dismiss(toast.Id)">
+                ✕
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    private readonly List<ToastMessage> _toasts = [];
+
+    protected override void OnInitialized() => Toasts.OnShow += HandleShow;
+
+    private void HandleShow(ToastMessage toast)
+    {
+        // Show may be raised from any circuit dispatch; marshal to the renderer's context.
+        _ = InvokeAsync(() =>
+        {
+            _toasts.Add(toast);
+            StateHasChanged();
+        });
+        _ = AutoDismissAsync(toast);
+    }
+
+    private async Task AutoDismissAsync(ToastMessage toast)
+    {
+        await Task.Delay(toast.Duration);
+        await InvokeAsync(() =>
+        {
+            if (_toasts.RemoveAll(t => t.Id == toast.Id) > 0)
+            {
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void Dismiss(Guid id) => _toasts.RemoveAll(t => t.Id == id);
+
+    private static string LevelClasses(ToastLevel level) => level switch
+    {
+        ToastLevel.Success => "border-(--color-success)/40 bg-(--color-surface-raised) text-(--color-success)",
+        ToastLevel.Warning => "border-(--color-warning)/40 bg-(--color-surface-raised) text-(--color-warning)",
+        ToastLevel.Danger => "border-(--color-danger)/40 bg-(--color-surface-raised) text-(--color-danger)",
+        _ => "border-(--color-border) bg-(--color-surface-raised) text-(--color-text)",
+    };
+
+    public void Dispose() => Toasts.OnShow -= HandleShow;
+}

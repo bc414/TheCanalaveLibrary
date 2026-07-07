@@ -151,12 +151,17 @@ one, same as `testing.md`/`debugging.md` accreted.
    work gets before/after numbers instead of vibes. The baseline script becomes a rerunnable
    fixture for every later L6/L8 claim. Test bed: `/discover`, story pages, bookshelves under
    load.
-4. **WU-ErrorHandling** — resolve the standing `cross-cutting.md` "Error Handling Strategy
-   (Gap — Not Yet Designed)": what a user sees on a circuit crash / unhandled service exception /
-   failed form post (error boundaries, toast vs page, retry affordances), plus the server-side
-   contract (what gets logged — builds on item 1). Gated by decision row 9 (a design
-   conversation, CLAUDE.md Stage-1 venue). Test bed: deliberately-thrown faults across the
-   existing surface; the L4.5 browser band re-verifies the worst flows.
+4. **WU-ErrorHandling — DONE ✓ (2026-07-06).** Decision row 9 resolved same day (four forks —
+   see Resolved "Error-handling UX + strategy"); the standing `cross-cutting.md` gap replaced
+   with the settled strategy: layered `CanalaveErrorBoundary` islands (page/chrome/card/comments),
+   `ExceptionPresenter` message discipline + `InlineAlert`, minimal toast channel, localStorage
+   `DraftAutosave` on all four long-form editors, last-resort surfaces (`#blazor-error-ui` —
+   restored to `App.razor`; interactive pages previously had none — + `ReconnectModal`) restyled,
+   `DetailedErrors` dev-only, logging.md's two stubs filled. Verified by deliberately-thrown
+   faults in a real browser (`/dev/error-playground` is the standing test bed) + the chapter-editor
+   draft loop end-to-end; `dotnet test` 1374/1374. The `ProblemDetails` envelope + client HTTP
+   translation half is deferred to a Phase-5-adjacent follow-up (no testable HTTP error surface
+   until the WASM client makes those calls). Detail: `workplan.md` WU-ErrorHandling.
 5. **WU-Email** — the sharpest beta blocker: Identity runs `RequireConfirmedAccount = true`
    against `IdentityNoOpEmailSender`, so real users cannot activate accounts. Mechanism settled
    2026-07-06 (see Resolved): a provider-agnostic **SMTP** seam (`Email:Provider` = `Smtp`/`NoOp`,
@@ -277,9 +282,9 @@ checklist — each bullet becomes a checkable item, most are small:
 ## Decisions that need you
 
 Rows 1–6 carried from v1 (numbering preserved — existing docs cite these numbers). Row 4 is
-expanded in scope by Phase 7 above. **Row 5 resolved 2026-07-05, row 7 resolved 2026-07-06 —
-both moved to Resolved below** — row numbers are otherwise left as gaps rather than renumbered,
-since other docs cite them by number.
+expanded in scope by Phase 7 above. **Row 5 resolved 2026-07-05; rows 7 and 9 resolved
+2026-07-06 — moved to Resolved below** — row numbers are otherwise left as gaps rather than
+renumbered, since other docs cite them by number.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -289,7 +294,6 @@ since other docs cite them by number.
 | 4 | **Launch-readiness mechanics** — now the full Phase 7 checklist: deploy mechanism, config contract, migration-in-prod, backup+restore drill, uptime/alerting, TLS/domain, R2 values. | Topology settled (droplet + managed PG + R2); `aspire publish` compose output is the default deploy candidate. | Operational cost/effort trade-offs. Phase 7. |
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Phase 6 gate. |
 | 8 | **Email provider + sending domain** (residual — mechanism resolved 2026-07-06, see Resolved) — which SMTP provider to point the seam at, and the sending domain. | Postmark or Amazon SES (cheap at this scale) or Resend; needs a sending domain, which ties into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Config-only swap once decided (no code change) — gates Phase 7, not Phase 1 anymore. |
-| 9 | **Error-handling UX** — what a user sees on circuit crash / service exception / failed form post (the three dimensions flagged in `cross-cutting.md`'s standing gap). | None designed — Blazor defaults today. | Product-feel decision (CLAUDE.md Stage-1 venue: design conversation in chat). Gates Phase 1 item 4. |
 | 10 | **Legal/policy track ownership + timing** — ToS, privacy policy, DMCA agent/process, moderation obligations for a fanfiction UGC site. | None. | Legal exposure and community policy are yours; engineering only hosts the documents. Gates Phase 7 (lighter obligation defensible for the trusted-audience beta — your call). |
 
 ---
@@ -300,6 +304,26 @@ Newest first. Every entry points at the doc that now states the rule. Entries up
 are carried forward from `middle_plan.md` (which carried 2026-07-01-and-earlier entries from
 `forward_plan.md`) — a few long entries lightly condensed with their full technical framing
 intact at the named pointer; `middle_plan.md` remains the unabridged historical record.
+
+- **Error-handling UX + strategy (decision row 9)** — resolved (2026-07-06, Brian, design
+  conversation per the Stage-1 venue): four forks settled. (1) **Scope split** — the circuit-side
+  UX half builds now (testable on today's InteractiveServer surface); the `ProblemDetails`
+  envelope + client HTTP translation defer to a Phase-5-adjacent follow-up (no HTTP error surface
+  exists until the WASM client makes those calls). (2) **Layered island error boundaries** — page
+  + chrome + card + comment-section, not global-only; a fault degrades its island, the circuit
+  and every other island survive. (3) **Hybrid feedback channels** — inline for form/validation,
+  a minimal toast channel only for transient non-blocking system events. (4) **Editor draft
+  safety = device-local localStorage autosave + restore** (survives teardown/reload/crash,
+  identical under Server and WASM; `[PersistentState]` rejected — prerender-handoff-only), on top
+  of editor-scoped containment. Secondary rules: only typed user-facing exceptions surface their
+  message (`ExceptionPresenter`, generic + on-screen error id = trace id otherwise); retry of
+  *user operations* is manual only ("Try again" affordances — never automatic re-submit; the
+  pre-existing Npgsql `EnableRetryOnFailure` connection-level retry is unchanged); the
+  last-resort surfaces
+  (`#blazor-error-ui` — restored to `App.razor`, it was stranded in the Identity-only
+  `MainLayout` leaving interactive pages with no teardown surface — and `ReconnectModal`) adopt
+  the design language. Rule: `cross-cutting.md` §"Error Handling Strategy" (UX + containment),
+  `logging.md` §"Unhandled exceptions" (server-side contract).
 
 - **Email mechanism = pluggable SMTP seam, provider decision deferred to Phase 7 (decision row 8
   mechanism half)** — resolved (2026-07-06, Brian, WU-Email planning): rather than picking a

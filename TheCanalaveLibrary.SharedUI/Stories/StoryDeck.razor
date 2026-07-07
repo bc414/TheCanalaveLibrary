@@ -28,11 +28,14 @@ else
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             @foreach (var story in Stories)
             {
-                <StoryCard @key="story.StoryId"
-                           Story="story"
-                           UserStoryInteractionState="@StateFor(story.StoryId)"
-                           IsOwnStory="@IsOwn(story)"
-                           OnReport="@ReportCallbackFor(story)" />
+                @* Card island — one broken card degrades to a compact tile; the rest of the
+                   deck renders (cross-cutting.md §"Error Handling Strategy" placement map). *@
+                <CanalaveErrorBoundary @key="story.StoryId" Label="story-card" Compact="true">
+                    <StoryCard Story="story"
+                               UserStoryInteractionState="@StateFor(story.StoryId)"
+                               IsOwnStory="@IsOwn(story)"
+                               OnReport="@ReportCallbackFor(story)" />
+                </CanalaveErrorBoundary>
             }
         </div>
         @* PaginationControls self-hides when TotalPages <= 1 — always safe to embed *@

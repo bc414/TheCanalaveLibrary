@@ -1,0 +1,189 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using Microsoft.Extensions.Logging
+@implements IAsyncDisposable
+@inject DraftStore Store
+@inject IToastService Toasts
+@inject ILogger<DraftAutosave> Logger
+
+@* Editor draft-safety component (cross-cutting.md §"Error Handling Strategy"). Embed once inside
+   a long-form edit page's form branch; it (1) offers to restore a device-local backup left by a
+   previous session/teardown, and (2) autosaves the in-progress draft every IntervalSeconds while
+   the user edits. The hosting editor supplies Capture (pull current field values — same
+   pull-don't-push contract as EditorView) and OnRestore (apply a draft back onto the form), and
+   calls ClearAsync via @ref after a successful submit. A no-edit session never writes a draft
+   (current == baseline is skipped), so the banner only ever offers genuinely unsaved work. *@
+
+@if (_pendingRestore is not null)
+{
+    <div role="alert" class="flex flex-wrap items-center gap-3 rounded-md border border-(--color-warning)/40 bg-(--color-warning)/10 px-3 py-2 text-sm text-(--color-text)">
+        <span>
+            You have an unsaved draft from <span class="font-semibold">@RelativeTime(_pendingRestore.SavedAtUtc)</span>
+            that was never submitted.
+        </span>
+        <span class="flex gap-3">
+            <button type="button" class="font-semibold text-(--color-primary) underline hover:no-underline"
+                    @onclick="RestoreAsync">
+                Restore it
+            </button>
+            <button type="button" class="text-(--color-text-muted) underline hover:no-underline"
+                    @onclick="DiscardAsync">
+                Discard
+            </button>
+        </span>
+    </div>
+}
+
+@code {
+    /// <summary>Stable per-target key, e.g. "draft:chapter:123" or "draft:story:new".</summary>
+    [Parameter, EditorRequired] public string DraftKey { get; set; } = default!;
+
+    /// <summary>
+    /// Pulls the editor's current field values. Return null to skip a tick (form not ready).
+    /// May be called before Quill finishes initializing — throwing is tolerated (tick skipped).
+    /// </summary>
+    [Parameter, EditorRequired] public Func<Task<Dictionary<string, string?>?>> Capture { get; set; } = default!;
+
+    /// <summary>Applies a restored draft's fields back onto the form (including Quill content).</summary>
+    [Parameter] public EventCallback<IReadOnlyDictionary<string, string?>> OnRestore { get; set; }
+
+    [Parameter] public int IntervalSeconds { get; set; } = 10;
+
+    private DraftEnvelope? _pendingRestore;
+    private string? _baselineJson;   // the loaded (already-persisted) content — never worth saving
+    private string? _lastSavedJson;
+    private bool _saveFailureLogged;
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource? _cts;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // JS interop is unavailable during prerender; first render after interactivity is the
+        // earliest safe moment for both the localStorage read and the autosave loop.
+        DraftEnvelope? existing = await Store.LoadAsync(DraftKey);
+        _baselineJson = await TryCaptureJsonAsync();
+
+        if (existing is not null)
+        {
+            string existingJson = FieldsJson(existing.Fields);
+            if (_baselineJson is not null && existingJson == _baselineJson)
+            {
+                // Leftover backup identical to what's already loaded (e.g. a save landed but the
+                // clear never ran) — nothing unsaved to offer.
+                await Store.ClearAsync(DraftKey);
+            }
+            else
+            {
+                _pendingRestore = existing;
+                StateHasChanged();
+            }
+        }
+
+        _cts = new CancellationTokenSource();
+        _timer = new PeriodicTimer(TimeSpan.FromSeconds(Math.Max(2, IntervalSeconds)));
+        _ = RunAutosaveLoopAsync(_cts.Token);
+    }
+
+    private async Task RunAutosaveLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (await _timer!.WaitForNextTickAsync(ct))
+            {
+                Dictionary<string, string?>? fields = await TryCaptureAsync();
+                if (fields is null) continue;
+
+                string json = FieldsJson(fields);
+                _baselineJson ??= json; // first successful capture IS the loaded content
+                if (json == _baselineJson || json == _lastSavedJson) continue;
+
+                bool saved = await Store.SaveAsync(DraftKey, new DraftEnvelope(DateTime.UtcNow, fields));
+                if (saved)
+                {
+                    _lastSavedJson = json;
+                }
+                else if (!_saveFailureLogged)
+                {
+                    // Once per component instance — the draft-safety net is quietly absent on
+                    // this device (private mode/quota); the user's normal submit path still works.
+                    Logger.LogWarning("Draft autosave to localStorage failed for {DraftKey} — device refused the write", DraftKey);
+                    _saveFailureLogged = true;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Disposal — expected.
+        }
+    }
+
+    private async Task<Dictionary<string, string?>?> TryCaptureAsync()
+    {
+        try
+        {
+            return await Capture();
+        }
+        catch (Exception)
+        {
+            // Quill not initialized yet / transient interop failure — skip this tick; the loop
+            // retries on the next one. Not a swallow of user work: nothing was captured to lose.
+            return null;
+        }
+    }
+
+    private async Task<string?> TryCaptureJsonAsync()
+    {
+        Dictionary<string, string?>? fields = await TryCaptureAsync();
+        return fields is null ? null : FieldsJson(fields);
+    }
+
+    private async Task RestoreAsync()
+    {
+        if (_pendingRestore is null) return;
+        await OnRestore.InvokeAsync(_pendingRestore.Fields);
+        // Restored content is now unsaved editor state again — keep the backup until submit
+        // clears it, so a second teardown before submit still finds it.
+        _lastSavedJson = FieldsJson(_pendingRestore.Fields);
+        _pendingRestore = null;
+        Toasts.Show("Draft restored.", ToastLevel.Success);
+    }
+
+    private async Task DiscardAsync()
+    {
+        _pendingRestore = null;
+        await Store.ClearAsync(DraftKey);
+    }
+
+    /// <summary>Call via @ref after a successful submit — the persisted save supersedes the backup.</summary>
+    public async Task ClearAsync()
+    {
+        _pendingRestore = null;
+        _lastSavedJson = null;
+        _baselineJson = null; // next capture re-baselines to the just-saved content
+        await Store.ClearAsync(DraftKey);
+    }
+
+    private static string FieldsJson(Dictionary<string, string?> fields)
+        => System.Text.Json.JsonSerializer.Serialize(fields.OrderBy(kv => kv.Key, StringComparer.Ordinal)
+            .ToDictionary(kv => kv.Key, kv => kv.Value));
+
+    private static string RelativeTime(DateTime savedAtUtc)
+    {
+        TimeSpan age = DateTime.UtcNow - savedAtUtc;
+        return age.TotalMinutes < 1 ? "moments ago"
+            : age.TotalHours < 1 ? $"{(int)age.TotalMinutes} minute{((int)age.TotalMinutes == 1 ? "" : "s")} ago"
+            : age.TotalDays < 1 ? $"{(int)age.TotalHours} hour{((int)age.TotalHours == 1 ? "" : "s")} ago"
+            : $"{(int)age.TotalDays} day{((int)age.TotalDays == 1 ? "" : "s")} ago";
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_cts is not null)
+        {
+            await _cts.CancelAsync();
+            _cts.Dispose();
+        }
+        _timer?.Dispose();
+    }
+}

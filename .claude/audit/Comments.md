@@ -227,3 +227,16 @@ Pagination controls present but not depth-exercised (seed corpus is under one pa
 logic is bUnit/Integration-covered). **Server-side observation (not blocking):** the like write
 path accepts likes on one's own comment (UI renders the button on own comments too) — flag for a
 future rules pass if self-likes should be rejected.
+
+## WU-ErrorHandling note (2026-07-06) — error surfaces normalized, rate-limit gap closed
+
+`CommentSection`'s five catch sites now route through `ExceptionPresenter` (single generic
+`catch` + translate; unexpected → `LogError` with entity IDs) instead of surfacing raw
+`ex.Message` — `KeyNotFoundException`'s framework text no longer reaches users, and the old
+*filtered* catches let `WriteRateLimitExceededException` (comment posting is throttled,
+`security.md`) escape to circuit teardown; it now shows its wait-N-seconds message inline. The
+inline error renders via `InlineAlert`; every CommentSection consumer site (chapter / blog post /
+group ×2 / profile ×2) is wrapped in a compact `comments` `CanalaveErrorBoundary` island.
+Strategy + placement map: `cross-cutting.md` §"Error Handling Strategy". Covered by existing
+CommentSection bUnit suites (message text unchanged for typed validation) + the new
+`CanalaveErrorBoundaryTests`/`InlineAlertTests` (RazorComponents tier).

@@ -112,9 +112,11 @@ else
 
         @* Comments *@
         <section aria-label="Comments">
-            <CommentSection ChapterId="@_dto.ChapterId"
-                            CurrentUserId="@_currentUserId"
-                            UserHasCompletedStory="false" />
+            <CanalaveErrorBoundary Label="comments" Compact="true">
+                <CommentSection ChapterId="@_dto.ChapterId"
+                                CurrentUserId="@_currentUserId"
+                                UserHasCompletedStory="false" />
+            </CanalaveErrorBoundary>
         </section>
 
         @* Recommendation helpful-prompt gate: source present + no prior success + Ch.1 scroll ≥90% *@

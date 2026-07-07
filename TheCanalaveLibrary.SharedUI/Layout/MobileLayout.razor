@@ -4,7 +4,10 @@
 <div class="flex min-h-screen flex-col">
     <main class="flex-1">
         <article class="px-4 py-4">
-            @Body
+            @* Page island — mirrors DesktopLayout (cross-cutting.md §"Error Handling Strategy"). *@
+            <CanalaveErrorBoundary Label="page">
+                @Body
+            </CanalaveErrorBoundary>
         </article>
     </main>
 
@@ -12,9 +15,13 @@
         <!-- MOBILE BOTTOM BAR CONTENT / NAV MENU -->
         <span>Home</span> | <span>Search</span> | <span>Profile</span>
         <div class="flex items-center gap-3">
-            <MessagesNavLink />
-            <NotificationBell />
-            <LoginDisplay />
+            <CanalaveErrorBoundary Label="chrome" Compact="true">
+                <MessagesNavLink />
+                <NotificationBell />
+                <LoginDisplay />
+            </CanalaveErrorBoundary>
         </div>
     </div>
+
+    <ToastHost />
 </div>

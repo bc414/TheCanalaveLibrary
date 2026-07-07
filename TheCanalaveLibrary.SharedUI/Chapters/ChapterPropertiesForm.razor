@@ -11,17 +11,7 @@
      - IsPrimary locks the Rating picker to inherit/equal-story (primary invariant).
      - VersionCount drives progressive versioning disclosure. *@
 
-@if (ViewModel.ServerValidationErrors.Count > 0)
-{
-    <div class="rounded-lg bg-(--color-danger)/10 p-4 text-sm text-(--color-danger)" role="alert">
-        <ul class="list-disc pl-4 space-y-1">
-            @foreach (string error in ViewModel.ServerValidationErrors)
-            {
-                <li>@error</li>
-            }
-        </ul>
-    </div>
-}
+<InlineAlert Messages="@ViewModel.ServerValidationErrors" />
 
 <EditForm Model="@ViewModel" OnValidSubmit="HandleValidSubmit" FormName="chapter-properties-form"
           class="flex flex-col gap-6">
@@ -132,6 +122,24 @@
         if (_bottomNoteEditor is null) return null;
         string html = await _bottomNoteEditor.GetHtmlAsync();
         return string.IsNullOrWhiteSpace(html) ? null : html;
+    }
+
+    // Push counterparts for draft restore (DraftAutosave) — Quill ignores later Html parameter
+    // changes, so restored content must go through EditorView.SetHtmlAsync (same reason
+    // CommentSection's composer clears via @ref).
+    public async Task SetChapterTextAsync(string html)
+    {
+        if (_textEditor is not null) await _textEditor.SetHtmlAsync(html);
+    }
+
+    public async Task SetTopNoteAsync(string? html)
+    {
+        if (_topNoteEditor is not null) await _topNoteEditor.SetHtmlAsync(html ?? string.Empty);
+    }
+
+    public async Task SetBottomNoteAsync(string? html)
+    {
+        if (_bottomNoteEditor is not null) await _bottomNoteEditor.SetHtmlAsync(html ?? string.Empty);
     }
 
     private async Task HandleValidSubmit() => await OnValidSubmit.InvokeAsync();

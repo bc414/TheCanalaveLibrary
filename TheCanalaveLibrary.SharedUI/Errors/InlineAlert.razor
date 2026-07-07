@@ -1,0 +1,55 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* The standard inline feedback atom (cross-cutting.md §"Error Handling Strategy" — feedback
+   channels). Renders form/validation/operation feedback NEXT TO what it's about; replaces the
+   hand-rolled per-form danger divs. Self-hides when there is nothing to show — always safe to
+   embed. Leaf component: no service injection. Toasts are the other channel — transient system
+   events only, never validation. Outer Margin Rule: root has no m-*; parent spaces it. *@
+
+@if (Effective.Count > 0)
+{
+    <div role="alert" class="rounded-md border px-3 py-2 text-sm @VariantClasses">
+        @if (Effective.Count == 1)
+        {
+            <p>@Effective[0]</p>
+        }
+        else
+        {
+            <ul class="list-inside list-disc space-y-1">
+                @foreach (string message in Effective)
+                {
+                    <li>@message</li>
+                }
+            </ul>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>Message list (validation errors). Null/empty ⇒ renders nothing.</summary>
+    [Parameter] public IReadOnlyList<string>? Messages { get; set; }
+
+    /// <summary>Single-message convenience. Combined with <see cref="Messages"/> if both set.</summary>
+    [Parameter] public string? Message { get; set; }
+
+    [Parameter] public InlineAlertVariant Variant { get; set; } = InlineAlertVariant.Danger;
+
+    private List<string> Effective
+    {
+        get
+        {
+            List<string> all = [];
+            if (!string.IsNullOrWhiteSpace(Message)) all.Add(Message);
+            if (Messages is not null) all.AddRange(Messages.Where(m => !string.IsNullOrWhiteSpace(m)));
+            return all;
+        }
+    }
+
+    private string VariantClasses => Variant switch
+    {
+        InlineAlertVariant.Success => "border-(--color-success)/40 bg-(--color-success)/10 text-(--color-success)",
+        InlineAlertVariant.Warning => "border-(--color-warning)/40 bg-(--color-warning)/10 text-(--color-warning)",
+        InlineAlertVariant.Info => "border-(--color-border) bg-(--color-surface-raised) text-(--color-text)",
+        _ => "border-(--color-danger)/40 bg-(--color-danger)/10 text-(--color-danger)",
+    };
+}

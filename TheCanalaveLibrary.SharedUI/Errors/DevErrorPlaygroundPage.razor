@@ -1,0 +1,86 @@
+@namespace TheCanalaveLibrary.SharedUI
+@page "/dev/error-playground"
+@using Microsoft.Extensions.Hosting
+@inject IHostEnvironment HostEnv
+@inject IToastService Toasts
+
+@* Development-only fault playground (same compiled-in-but-gated pattern as DevLoginBar) — the
+   standing test bed for WU-ErrorHandling's surfaces: page/island boundary containment, toast
+   channel, and the last-resort #blazor-error-ui bar (via a fault no boundary can catch). Not a
+   test tier — this is the browser-band verification vehicle for deliberately-thrown faults
+   (middle_plan_v2 Phase 1 item 4 "test bed"). Renders nothing outside Development. *@
+
+<PageTitle>Error Playground</PageTitle>
+
+@if (!HostEnv.IsDevelopment())
+{
+    <p class="text-(--color-text-muted)">Not available.</p>
+}
+else
+{
+    <div class="mx-auto flex max-w-lg flex-col gap-6 py-8">
+        <h1 class="text-2xl font-bold text-(--color-text)">Error playground (dev)</h1>
+
+        <section class="flex flex-col gap-2">
+            <h2 class="font-semibold text-(--color-text)">Page island</h2>
+            <p class="text-sm text-(--color-text-muted)">
+                Throws in this page's event handler — the layout's <code>page</code> boundary
+                catches it; header/chrome survive; Try again recovers.
+            </p>
+            <button type="button" class="self-start rounded-md bg-(--color-danger) px-4 py-1.5 text-sm font-semibold text-white"
+                    @onclick="ThrowInEventHandler">
+                Throw in page event handler
+            </button>
+        </section>
+
+        <section class="flex flex-col gap-2">
+            <h2 class="font-semibold text-(--color-text)">Compact island</h2>
+            <p class="text-sm text-(--color-text-muted)">
+                A card-sized island; only the tile below degrades.
+            </p>
+            <CanalaveErrorBoundary Label="playground-island" Compact="true">
+                <DevBreakableTile />
+            </CanalaveErrorBoundary>
+        </section>
+
+        <section class="flex flex-col gap-2">
+            <h2 class="font-semibold text-(--color-text)">Toast channel</h2>
+            <button type="button" class="self-start rounded-md bg-(--color-primary) px-4 py-1.5 text-sm font-semibold text-white"
+                    @onclick='() => Toasts.Show("A transient system event happened.", ToastLevel.Info)'>
+                Show a toast
+            </button>
+        </section>
+
+        <section class="flex flex-col gap-2">
+            <h2 class="font-semibold text-(--color-text)">Circuit teardown (last resort)</h2>
+            <p class="text-sm text-(--color-text-muted)">
+                Throws from an <code>async void</code> continuation — never routed through
+                component dispatch, so no boundary can see it; the circuit dies and the
+                <code>#blazor-error-ui</code> bar appears. (An <code>InvokeAsync</code> fault, by
+                contrast, IS caught by the page boundary — verified live 2026-07-06.)
+            </p>
+            <button type="button" class="self-start rounded-md border border-(--color-danger) px-4 py-1.5 text-sm font-semibold text-(--color-danger)"
+                    @onclick="TearDownCircuit">
+                Tear down the circuit
+            </button>
+        </section>
+    </div>
+}
+
+@code {
+    private void ThrowInEventHandler()
+        => throw new InvalidOperationException("Playground: deliberate page-handler fault.");
+
+    private void TearDownCircuit()
+        // async void: the exception surfaces on the circuit's SynchronizationContext with no
+        // component dispatch to associate it with — boundaries can't see it, the circuit dies.
+        // (InvokeAsync-dispatched faults ARE routed to the boundary — verified live 2026-07-06;
+        // containment is stronger than the naive reading of the docs suggests.)
+        => DoomedAsync();
+
+    private async void DoomedAsync()
+    {
+        await Task.Delay(50);
+        throw new InvalidOperationException("Playground: deliberate circuit teardown.");
+    }
+}

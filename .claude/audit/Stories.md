@@ -39,6 +39,15 @@ column + GIN index `ix_story_listing_search_vector`, slug unique-filtered index.
 
 ## Feature 4 — Story Creation & Editing
 
+**WU-ErrorHandling note (2026-07-06).** `StoryEditorPage` embeds `DraftAutosave`
+(`draft:story:{id|new}`; prose fields only — Title/ShortDescription/LongDescription; structured
+tag/character picker state deliberately excluded, re-selecting is cheap, re-typing is not);
+backup cleared on successful submit. `StoryPropertiesForm` renders errors via `InlineAlert` and
+gained `SetLongDescriptionAsync` (Quill push for restore). The page's generic catch routes
+through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in a compact
+`story-card` boundary island — one broken card degrades to a tile, the deck survives. Strategy:
+`cross-cutting.md` §"Error Handling Strategy"; detail: `workplan.md` WU-ErrorHandling.
+
 - **L1 — Stage 5.** Partition trio + `IEditableStoryProperties` plumbing is sound and matches spec §4/§7.
   Awaiting migration + build verification (no migrations exist). *Settled:* three-table vertical split;
   slug server-generated; explicit-interface edit contract.

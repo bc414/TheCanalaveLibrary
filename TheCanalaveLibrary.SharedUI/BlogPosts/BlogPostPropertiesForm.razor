@@ -11,17 +11,7 @@
        the author has no published stories. Null = suppress the picker entirely.
    Mirrors StoryPropertiesForm (no tags, no cover). *@
 
-@if (ViewModel.ServerValidationErrors.Any())
-{
-    <div class="rounded-lg bg-(--color-danger)/10 p-4 text-sm text-(--color-danger)" role="alert">
-        <ul class="list-disc pl-4 space-y-1">
-            @foreach (string error in ViewModel.ServerValidationErrors)
-            {
-                <li>@error</li>
-            }
-        </ul>
-    </div>
-}
+<InlineAlert Messages="@ViewModel.ServerValidationErrors" />
 
 <EditForm Model="@ViewModel" OnValidSubmit="HandleValidSubmit" FormName="blog-post-properties-form"
           class="flex flex-col gap-6">
@@ -112,6 +102,13 @@
     /// <summary>Pull the current editor HTML. Called by the page on submit before building the DTO.</summary>
     public async Task<string> GetContentAsync() =>
         _editor is not null ? await _editor.GetHtmlAsync() : string.Empty;
+
+    // Push counterpart for draft restore (DraftAutosave) — Quill ignores later Html parameter
+    // changes, so restored content must go through EditorView.SetHtmlAsync.
+    public async Task SetContentAsync(string html)
+    {
+        if (_editor is not null) await _editor.SetHtmlAsync(html);
+    }
 
     private async Task HandleValidSubmit() => await OnValidSubmit.InvokeAsync();
 }

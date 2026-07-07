@@ -1900,3 +1900,70 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
 - **Tool:** Claude Code (Opus; plan approved 2026-07-06). **Pointer:** `cross-cutting.md`
   "Identity & Auth"; `audit/Identity.md` WU-Email Stage note; `middle_plan_v2.md` Phase 1 item 5 +
   Resolved "Email mechanism"; `audit/Notifications.md` (deferred notification-email hook point).
+
+## WU-ErrorHandling — Error-handling strategy (middle_plan_v2 Phase 1 item 4) — DONE ✓ (2026-07-06)
+
+- **Cells:** none flipped (cross-cutting platform work-unit, same shape as WU-Observability/
+  WU-Email — `status.md` Global Condition). Resolved decision row 9 as Doc-Touch moment 1 (design
+  conversation, four forks settled: scope split / layered islands / hybrid channels / localStorage
+  autosave — see `middle_plan_v2.md` Resolved "Error-handling UX + strategy") and replaced
+  `cross-cutting.md`'s "Gap — Not Yet Designed" section with the settled strategy; filled
+  logging.md's two reserved WU-ErrorHandling stubs (level-table `Error` row + "Unhandled
+  exceptions" three-tier contract). The `ProblemDetails` envelope + client HTTP translation half
+  is **deferred to a Phase-5-adjacent follow-up** (no HTTP error surface exists until the WASM
+  client makes those calls).
+- **Done:**
+  - **Containment** — `SharedUI/Errors/CanalaveErrorBoundary.razor` (ErrorBoundary subclass:
+    Error-level log with `{Boundary}` island label + `{ErrorId}` trace id also shown in the
+    fallback; user-gesture `Recover()`; auto-Recover on navigation). Layered placement: `page` +
+    `chrome` islands in DesktopLayout/MobileLayout, per-card in StoryDeck, `comments` around all
+    six CommentSection consumer sites.
+  - **Message discipline** — `Core/Errors/ExceptionPresenter.cs` (typed user-facing exceptions
+    surface their messages; `UnauthorizedAccessException`/`KeyNotFoundException` → fixed friendly
+    text; everything else → generic + trace-id suffix). `SharedUI/Errors/InlineAlert.razor`
+    replaces the hand-rolled per-form danger divs (Story/Chapter/BlogPost properties forms,
+    CommentSection). CommentSection's raw `ex.Message` sites swept through the presenter — which
+    also closed a real gap: its filtered catches let `WriteRateLimitExceededException` (comment
+    posting IS throttled, security.md) escape to circuit teardown; the single-catch translate
+    pattern now shows the rate-limit message inline. Editor pages' generic catches now log
+    Error with entity IDs (logging.md tier-2 contract).
+  - **Toast channel** — `SharedUI/Toasts/` (`IToastService`/`ToastService`/`ToastHost`,
+    aria-live, auto-dismiss, registered in both hosts); host rendered by both layouts. Narrow by
+    contract: transient non-blocking system events only; first consumer is "Draft restored."
+  - **Draft safety** — `SharedUI/Drafts/` (`DraftStore` over new `js/draft-autosave.js`
+    localStorage seam; `DraftAutosave` component: 10s change-only capture ticks, restore banner
+    with relative age, no-edit sessions never write, identical-to-loaded backups silently
+    cleared, `ClearAsync` on successful submit) wired into all four long-form editors
+    (StoryEditorPage, ChapterEditorPage, BlogPostEditorPage, GroupBlogPostEditorPage; prose
+    fields only — structured tag/character picker state deliberately excluded). Properties forms
+    gained `Set*Async` push methods (Quill ignores later `Html` parameter changes).
+  - **Last-resort surfaces** — `#blazor-error-ui` moved from MainLayout (Identity-Manage-only!)
+    to `App.razor` so every page has a teardown surface — interactive pages previously had NONE;
+    restyled to design tokens, mojibaked `??` dismiss glyph fixed; `MainLayout.razor.css`
+    deleted. `ReconnectModal.razor.css` palette swapped to design tokens (structure/hook classes
+    untouched). `CircuitOptions.DetailedErrors` = Development only.
+  - **Test bed** — `SharedUI/Errors/DevErrorPlaygroundPage.razor` (`/dev/error-playground`,
+    DevLoginBar-style Development gate) + `DevBreakableTile`: page fault / island fault / toast /
+    true circuit teardown buttons — the standing browser-band vehicle for this WU's surfaces.
+- **Discovery (containment stronger than expected):** an `InvokeAsync(() => throw)` fault from an
+  event-handler context IS routed to the enclosing boundary (verified live — the log shows the
+  `page` boundary catching it), so the playground's teardown button uses an `async void`
+  continuation, which genuinely bypasses component dispatch and kills the circuit. Recorded in
+  the playground's comments.
+- **Verified:** `dotnet build` green (0 warnings). `dotnet test` 1374/1374 (500 Unit + 471
+  RazorComponents + 403 Integration; 22 new — `ExceptionPresenterTests` 9 Unit;
+  `CanalaveErrorBoundaryTests` 6, `InlineAlertTests` 5 (as counted by xunit cases),
+  `ToastHostTests` 5, `DraftAutosaveTests` 5 RazorComponents). Browser band (server-only path,
+  real circuit, TestUser): island fault degraded one tile while page+chrome+circuit survived;
+  page fault showed the full-panel fallback whose on-screen Error ID **exactly matched** the
+  server log record (`bcff6f63…`); Try again recovered in-place on the same circuit; toast
+  rendered bottom-right in the aria-live region and auto-dismissed; `async void` fault tore the
+  circuit down and the restyled `#blazor-error-ui` bar appeared; chapter-editor draft flow driven
+  end-to-end (typed sentinel → 10s autosave to `draft:chapter:14` → reload → banner → Restore
+  returned the sentinel to Quill + "Draft restored." toast → Save cleared the key), with `psql`
+  ground truth at both ends (sentinel present in `chapter_contents` after save; seed row restored
+  to original text afterwards).
+- **Tool:** Claude Code (Opus; design forks resolved with Brian in chat, 2026-07-06). **Pointer:**
+  `cross-cutting.md` §"Error Handling Strategy" (the settled strategy); `logging.md` §"Unhandled
+  exceptions" (server contract); `middle_plan_v2.md` Phase 1 item 4 + Resolved; audit notes in
+  `audit/Comments.md`, `audit/Chapters.md`, `audit/Stories.md`, `audit/BlogPosts.md`.

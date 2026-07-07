@@ -101,7 +101,7 @@ point-in-time level.
 | `Debug` | Dev-loop diagnostics, deleted or demoted before the WU lands | — |
 | `Information` | A domain event changed state | image saved, story published, drain batch flushed |
 | `Warning` | Degraded but continuing — including **every best-effort swallow** | replaced-blob delete failed (orphaned), notification fan-out failed post-commit, delete no-op on a foreign path |
-| `Error` | An operation the caller asked for failed and wasn't swallowed by design | worker cycle failed and will retry, unhandled service exception logged by WU-ErrorHandling's contract *(section stub — extended there)* |
+| `Error` | An operation the caller asked for failed and wasn't swallowed by design | worker cycle failed and will retry; an error boundary caught an unhandled exception (`CanalaveErrorBoundary`); a component's generic `catch (Exception)` translated an *unexpected* failure to the generic user message (see "Unhandled exceptions" recipe) |
 | `Critical` | The process is unhealthy | startup seed/migration failure in prod |
 
 Settled 2026-07-06 (consistency sweep): best-effort post-commit fan-out failures are
@@ -172,9 +172,26 @@ silently, and a final drain runs on graceful shutdown.
 sources; add `AddMeter("Microsoft.AspNetCore.Http.Connections")` when `MessagesHub` lands, and
 write the per-method conventions here then.
 
-**Unhandled exceptions** (stub — WU-ErrorHandling extends): what gets logged on circuit crash /
-service exception / failed form post is that WU's server-side contract; it extends this file's
-level table rather than inventing its own.
+**Unhandled exceptions** (WU-ErrorHandling, 2026-07-06 — the server-side contract for circuit
+crash / service exception / failed form post; UX half: `cross-cutting.md` §"Error Handling
+Strategy"). Three tiers, outermost-catcher-owns-the-log (no double-log rule unchanged):
+
+1. **Typed user-facing exception caught by a component** (`*ValidationException`,
+   `WriteRateLimitExceededException`, …) — *translate, don't log*. This is expected traffic;
+   the user sees the message via `ExceptionPresenter`, nothing is degraded.
+2. **Unexpected exception caught by a component's generic `catch (Exception)`** (form submit
+   paths that must preserve the draft) — log `Error` with the entity IDs the operation was
+   about, show `ExceptionPresenter`'s generic message. Components gain `ILogger<T>` for this
+   (consistent with "services gain loggers when they gain something worth logging").
+3. **Exception nothing caught** — `CanalaveErrorBoundary` logs `Error`:
+   `"Unhandled exception caught by error boundary {Boundary} ({ErrorId})"` — `Boundary` is the
+   island label (`page`, `chrome`, `story-card`, …), `ErrorId` is the current trace id, which
+   the fallback UI also shows the user, so a user report can be joined to its trace/log.
+   CircuitId/UserId arrive via the `TelemetryCircuitHandler` scope as always. A fault that
+   escapes even the boundaries (framework-level teardown) is logged by
+   `Microsoft.AspNetCore.Components.Server.Circuits` at `Error` — already subscribed; do not
+   re-log. `CircuitOptions.DetailedErrors` stays Development-only (prod clients get generic
+   circuit errors; the server log has the detail).
 
 ## Testing telemetry (pattern reference: `Tests.Unit/ImageStorageTelemetryTests.cs`)
 

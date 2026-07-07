@@ -155,7 +155,9 @@
             @* Comments ──────────────────────────────────────────────────────────── *@
             <section class="flex flex-col gap-3">
                 <h2 class="text-lg font-semibold text-(--color-text)">Comments</h2>
-                <CommentSection GroupId="@((int?)Group.GroupId)" CurrentUserId="CurrentUserId" />
+                <CanalaveErrorBoundary Label="comments" Compact="true">
+                    <CommentSection GroupId="@((int?)Group.GroupId)" CurrentUserId="CurrentUserId" />
+                </CanalaveErrorBoundary>
             </section>
 
         </div>

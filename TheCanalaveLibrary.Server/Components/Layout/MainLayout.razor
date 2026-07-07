@@ -2,13 +2,9 @@
 @using TheCanalaveLibrary.SharedUI
 @inherits LayoutComponentBase
 
+@* #blazor-error-ui moved to App.razor (WU-ErrorHandling) — this layout only hosts Identity
+   Manage pages, so a bar here left every interactive page with no teardown surface. *@
 <div class="flex items-center justify-end gap-4 px-4 py-3">
     <LoginDisplay />
 </div>
 @Body
-
-<div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">??</span>
-</div>

@@ -5,9 +5,11 @@
 @inject IStoryReadService StoryService
 @inject IGroupWriteService GroupService
 @inject NavigationManager Nav
+@inject ILogger<GroupBlogPostEditorPage> Logger
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
 
 @* Group blog post create page — member-only.
    Reuses BlogPostPropertiesForm (no publish toggle, group posts publish immediately).
@@ -42,6 +44,14 @@
                     </p>
                 </div>
 
+                @* ── Draft safety (cross-cutting.md §"Error Handling Strategy") ── *@
+                <div class="mb-4">
+                    <DraftAutosave @ref="_autosave"
+                                   DraftKey="@($"draft:groupblogpost:new:{GroupId}")"
+                                   Capture="CaptureDraftAsync"
+                                   OnRestore="RestoreDraftAsync" />
+                </div>
+
                 <BlogPostPropertiesForm @ref="_form"
                                         ViewModel="_viewModel"
                                         AuthorStories="_authorStories"
@@ -61,6 +71,7 @@
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private BlogPostPropertiesForm? _form;
+    private DraftAutosave? _autosave;
     private BlogPostPropertiesViewModel _viewModel = new();
     private IReadOnlyList<(int Id, string Title)>? _authorStories;
 
@@ -129,24 +140,42 @@
                 StoryId     = _viewModel.StoryId
             });
 
+            if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
             Nav.NavigateTo($"/blog/{newId}");
         }
         catch (UnauthorizedAccessException)
         {
             _forbidden = true;
         }
-        catch (BlogPostValidationException ex)
+        catch (Exception ex)
         {
-            _viewModel.ServerValidationErrors.AddRange(ex.Errors);
-        }
-        catch (Exception)
-        {
-            _viewModel.ServerValidationErrors.Add("An unexpected error occurred. Please try again.");
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Creating a group blog post failed unexpectedly for group {GroupId}", GroupId);
+            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
         }
         finally
         {
             _viewModel.IsLoading = false;
         }
+    }
+
+    // ── Draft safety (DraftAutosave contract) ─────────────────────────────────────
+    private async Task<Dictionary<string, string?>?> CaptureDraftAsync()
+    {
+        if (_form is null || _isLoading) return null;
+        return new Dictionary<string, string?>
+        {
+            ["Title"] = _viewModel.Title,
+            ["Content"] = await _form.GetContentAsync(),
+        };
+    }
+
+    private async Task RestoreDraftAsync(IReadOnlyDictionary<string, string?> fields)
+    {
+        if (_form is null) return;
+        _viewModel.Title = fields.GetValueOrDefault("Title") ?? _viewModel.Title;
+        await _form.SetContentAsync(fields.GetValueOrDefault("Content") ?? string.Empty);
+        StateHasChanged();
     }
 
     private async Task<int?> ResolveCurrentUserIdAsync()

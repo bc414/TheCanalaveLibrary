@@ -7,9 +7,11 @@
 @inject ITagReadService TagReadService
 @inject IImageStorageService ImageStorageService
 @inject NavigationManager NavigationManager
+@inject ILogger<StoryEditorPage> Logger
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Extensions.Logging
 
 @* Story create/edit page — Pattern 1 edit side (cross-cutting.md "Two content-editing patterns").
    View side is StoryPage / WU25. This page owns routing, auth, data-load, cover-upload ordering,
@@ -32,6 +34,14 @@ else
             @(StoryId.HasValue ? "Edit Story" : "New Story")
         </h1>
 
+        @* ── Draft safety (cross-cutting.md §"Error Handling Strategy") ─────────── *@
+        <div class="mb-4">
+            <DraftAutosave @ref="_autosave" @key="@DraftKey"
+                           DraftKey="@DraftKey"
+                           Capture="CaptureDraftAsync"
+                           OnRestore="RestoreDraftAsync" />
+        </div>
+
         <StoryPropertiesForm @ref="_form"
                              ViewModel="_viewModel"
                              InitialTagsByType="_initialTagsByType"
@@ -48,6 +58,7 @@ else
     [Parameter] public int? StoryId { get; set; }
 
     private StoryPropertiesForm? _form;
+    private DraftAutosave? _autosave;
     private StoryPropertiesViewModel _viewModel = new();
     private IReadOnlyDictionary<TagTypeEnum, IReadOnlyList<TagChipDto>>? _initialTagsByType;
     private IReadOnlyList<StoryCharacterDto>? _initialCharacters;
@@ -157,6 +168,7 @@ else
                 }
 
                 await StoryWriteService.UpdateStoryAsync(updateDto);
+                if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
                 NavigationManager.NavigateTo($"/story/{StoryId.Value}/edit");
             }
             else
@@ -205,6 +217,7 @@ else
                     });
                 }
 
+                if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
                 NavigationManager.NavigateTo($"/story/{newStoryId}/edit");
             }
         }
@@ -212,13 +225,11 @@ else
         {
             _forbidden = true;
         }
-        catch (StoryValidationException ex)
+        catch (Exception ex)
         {
-            _viewModel.ServerValidationErrors.AddRange(ex.ValidationErrors);
-        }
-        catch (Exception)
-        {
-            _viewModel.ServerValidationErrors.Add("An unexpected error occurred. Please try again.");
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Saving story {StoryId} failed unexpectedly", StoryId);
+            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
         }
         finally
         {
@@ -226,4 +237,28 @@ else
         }
     }
 
+    // ── Draft safety (DraftAutosave contract). Prose fields only — structured tag/character
+    // selections are picker state, not typed work; re-selecting them is cheap, re-typing a
+    // description is not. ─────────────────────────────────────────────────────────
+    private string DraftKey => StoryId.HasValue ? $"draft:story:{StoryId.Value}" : "draft:story:new";
+
+    private async Task<Dictionary<string, string?>?> CaptureDraftAsync()
+    {
+        if (_form is null || _isLoading) return null;
+        return new Dictionary<string, string?>
+        {
+            ["Title"] = _viewModel.Title,
+            ["ShortDescription"] = _viewModel.ShortDescription,
+            ["LongDescription"] = await _form.GetLongDescriptionAsync(),
+        };
+    }
+
+    private async Task RestoreDraftAsync(IReadOnlyDictionary<string, string?> fields)
+    {
+        if (_form is null) return;
+        _viewModel.Title = fields.GetValueOrDefault("Title") ?? _viewModel.Title;
+        _viewModel.ShortDescription = fields.GetValueOrDefault("ShortDescription") ?? _viewModel.ShortDescription;
+        await _form.SetLongDescriptionAsync(fields.GetValueOrDefault("LongDescription") ?? string.Empty);
+        StateHasChanged();
+    }
 }

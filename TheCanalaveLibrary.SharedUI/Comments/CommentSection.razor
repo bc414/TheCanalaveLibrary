@@ -1,6 +1,8 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
+@using Microsoft.Extensions.Logging
 @inject ICommentWriteService Comments
+@inject ILogger<CommentSection> Logger
 
 @* Coordination composite — owns a paginated comment section for a chapter, blog post, group,
    or user profile wall.
@@ -112,7 +114,9 @@ else
 @* ── Inline error feedback ───────────────────────────────────────────────────── *@
 @if (_error is not null)
 {
-    <p class="mt-2 text-sm text-(--color-danger)">@_error</p>
+    <div class="mt-2">
+        <InlineAlert Message="@_error" />
+    </div>
 }
 
 @code {
@@ -239,9 +243,25 @@ else
             // Rollback
             idx = _comments.FindIndex(c => c.CommentId == id);
             if (idx >= 0) _comments[idx] = original;
-            _error = ex.Message;
+            _error = Translate(ex, "Toggling like on comment {CommentId} failed unexpectedly", id);
             StateHasChanged();
         }
+    }
+
+    /// <summary>
+    /// The catch-site half of the exception-message discipline (logging.md §"Unhandled
+    /// exceptions" tier 2): typed user-facing exceptions translate without logging; anything
+    /// unexpected logs at Error with the entity id before showing the generic message.
+    /// </summary>
+    private string Translate(Exception ex, string unexpectedTemplate, long id)
+    {
+        if (!ExceptionPresenter.IsUserFacing(ex))
+        {
+#pragma warning disable CA2254 // template is one of a fixed set of literals passed by callers
+            Logger.LogError(ex, unexpectedTemplate, id);
+#pragma warning restore CA2254
+        }
+        return ExceptionPresenter.GetUserMessage(ex);
     }
 
     // ── Reply ─────────────────────────────────────────────────────────────────────
@@ -296,9 +316,9 @@ else
             _currentPage = 1;
             await LoadAsync();
         }
-        catch (Exception ex) when (ex is CommentValidationException or KeyNotFoundException)
+        catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = Translate(ex, "Posting a reply to comment {CommentId} failed unexpectedly", parentId);
         }
         finally
         {
@@ -331,9 +351,9 @@ else
             _editingId = null;
             await LoadAsync();
         }
-        catch (Exception ex) when (ex is CommentValidationException or UnauthorizedAccessException or KeyNotFoundException)
+        catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = Translate(ex, "Editing comment {CommentId} failed unexpectedly", _editingId ?? 0);
         }
         finally
         {
@@ -358,9 +378,9 @@ else
             await Comments.DeleteCommentAsync(_pendingDeleteId);
             await LoadAsync();
         }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or KeyNotFoundException)
+        catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = Translate(ex, "Deleting comment {CommentId} failed unexpectedly", _pendingDeleteId);
         }
         finally
         {
@@ -412,13 +432,21 @@ else
             if (_composer is not null)
                 await _composer.ClearAsync();
         }
-        catch (Exception ex) when (ex is CommentValidationException or KeyNotFoundException)
+        catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = Translate(ex, "Posting a comment failed unexpectedly (target {TargetId})", TargetId());
         }
         finally
         {
             _busy = false;
         }
     }
+
+    private long TargetId() => _target switch
+    {
+        CommentTarget.Chapter => ChapterId!.Value,
+        CommentTarget.BlogPost => BlogPostId!.Value,
+        CommentTarget.Group => GroupId!.Value,
+        _ => ProfileUserId!.Value,
+    };
 }

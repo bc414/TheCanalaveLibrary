@@ -13,6 +13,12 @@ WU31 delivers L2/L3/L3.5/L4 for features 35/36 (profile blog posts only); Featur
 
 ## Feature 35 — Blog Post Writing
 - **L1 — Stage 5.** TPT split sound. **L2 — Stage 5.** **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L5 — Stage 2. L6 — Stage 2.**
+- **WU-ErrorHandling note (2026-07-06).** Both editors (`BlogPostEditorPage`,
+  `GroupBlogPostEditorPage`) embed `DraftAutosave` (`draft:blogpost:{id|new}`,
+  `draft:groupblogpost:new:{groupId}`; Title + Content), cleared on successful submit;
+  `BlogPostPropertiesForm` renders errors via `InlineAlert` and gained `SetContentAsync` (Quill
+  push for restore); generic catches route through `ExceptionPresenter` + `LogError`. Strategy:
+  `cross-cutting.md` §"Error Handling Strategy".
 - **Settled constraints (2026-06-24, WU31):**
   - Content-editing Pattern 1: `/blog/new` + `/blog/{id}/edit` (write/auth), `/blog/{id}/{*slug}` (read-only).
     Spec §5 line ~1585 said "in-place editing" — overridden (blog is a multi-field form like Story).

@@ -98,8 +98,10 @@ else
 
     @* ── Comments ─────────────────────────────────────────────────────────────── *@
     <div class="mx-auto max-w-2xl px-4 pb-8">
-        <CommentSection BlogPostId="@((int?)BlogPostId)"
-                        CurrentUserId="@_currentUserId" />
+        <CanalaveErrorBoundary Label="comments" Compact="true">
+            <CommentSection BlogPostId="@((int?)BlogPostId)"
+                            CurrentUserId="@_currentUserId" />
+        </CanalaveErrorBoundary>
     </div>
 }
 

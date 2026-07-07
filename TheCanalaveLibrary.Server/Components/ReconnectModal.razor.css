@@ -20,8 +20,12 @@
 }
 
 
+/* Palette follows the app's design tokens (app.css @theme) — WU-ErrorHandling restyle.
+   Structure/classes/ids are the framework's reconnection hooks; do not rename them. */
 #components-reconnect-modal {
-    background-color: white;
+    background-color: var(--color-surface-raised, white);
+    color: var(--color-text, #1a1a1a);
+    border: 1px solid var(--color-border, #d4d4d4);
     width: 20rem;
     margin: 20vh auto;
     padding: 2rem;
@@ -90,18 +94,18 @@
 
 #components-reconnect-modal button {
     border: 0;
-    background-color: #6b9ed2;
+    background-color: var(--color-primary, #6b9ed2);
     color: white;
     padding: 4px 24px;
     border-radius: 4px;
 }
 
     #components-reconnect-modal button:hover {
-        background-color: #3b6ea2;
+        background-color: var(--color-primary-strong, #3b6ea2);
     }
 
     #components-reconnect-modal button:active {
-        background-color: #6b9ed2;
+        background-color: var(--color-primary, #6b9ed2);
     }
 
 .components-rejoining-animation {
@@ -112,7 +116,7 @@
 
     .components-rejoining-animation div {
         position: absolute;
-        border: 3px solid #0087ff;
+        border: 3px solid var(--color-primary, #0087ff);
         opacity: 1;
         border-radius: 50%;
         animation: components-rejoining-animation 1.5s cubic-bezier(0, 0.2, 0.8, 1) infinite;

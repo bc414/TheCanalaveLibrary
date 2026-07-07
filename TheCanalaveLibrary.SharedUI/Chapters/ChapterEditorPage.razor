@@ -9,6 +9,8 @@
 @inject IChapterWriteService ChapterService
 @inject IStoryReadService StoryReadService
 @inject NavigationManager NavigationManager
+@inject ILogger<ChapterEditorPage> Logger
+@using Microsoft.Extensions.Logging
 
 @* Chapter create/edit page — Pattern 1 edit side (cross-cutting.md "Two content-editing patterns").
    Reading side is ChapterReadingPage (WU26). Three route patterns:
@@ -106,6 +108,14 @@ else
             </div>
         }
 
+        @* ── Draft safety (cross-cutting.md §"Error Handling Strategy") ─────────── *@
+        <div class="mb-4">
+            <DraftAutosave @ref="_autosave" @key="@DraftKey"
+                           DraftKey="@DraftKey"
+                           Capture="CaptureDraftAsync"
+                           OnRestore="RestoreDraftAsync" />
+        </div>
+
         @* ── Main form ───────────────────────────────────────────────────────── *@
         <ChapterPropertiesForm @ref="_form"
                                ViewModel="_viewModel"
@@ -137,6 +147,7 @@ else
     [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
 
     private ChapterPropertiesForm? _form;
+    private DraftAutosave? _autosave;
     private ChapterEditorViewModel _viewModel = new();
     private bool _isNew;
     private bool _isLoading = true;
@@ -302,6 +313,7 @@ else
                 IReadOnlyList<ChapterTocEntryDto> tocAfterCreate =
                     await ChapterService.GetChapterTocAsync(StoryId);
                 int newChapterNumber = tocAfterCreate.Max(t => t.ChapterNumber);
+                if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
                 NavigationManager.NavigateTo($"/story/{StoryId}/chapter/{newChapterNumber}/edit");
             }
             else if (_contentId.HasValue)
@@ -316,6 +328,7 @@ else
                     Rating            = _viewModel.Rating,
                     VersionName       = _viewModel.VersionName
                 });
+                if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
                 // Return to the reading page for this version.
                 string readUrl = _isPrimary || !VersionOrder.HasValue
                     ? $"/story/{StoryId}/{ChapterNumber}"
@@ -327,18 +340,45 @@ else
         {
             _forbidden = true;
         }
-        catch (ChapterValidationException ex)
+        catch (Exception ex)
         {
-            _viewModel.ServerValidationErrors.AddRange(ex.Errors);
-        }
-        catch (Exception)
-        {
-            _viewModel.ServerValidationErrors.Add("An unexpected error occurred. Please try again.");
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Saving chapter failed unexpectedly for story {StoryId}, content {ChapterContentId}", StoryId, _contentId);
+            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
         }
         finally
         {
             _viewModel.IsLoading = false;
         }
+    }
+
+    // ── Draft safety (DraftAutosave contract) ─────────────────────────────────────
+    private string DraftKey => _isNew
+        ? $"draft:chapter:new:{StoryId}"
+        : $"draft:chapter:{_contentId}";
+
+    private async Task<Dictionary<string, string?>?> CaptureDraftAsync()
+    {
+        if (_form is null || _isLoading) return null;
+        return new Dictionary<string, string?>
+        {
+            ["Title"] = _viewModel.Title,
+            ["ChapterText"] = await _form.GetChapterTextAsync(),
+            ["TopAuthorsNote"] = await _form.GetTopNoteAsync(),
+            ["BottomAuthorsNote"] = await _form.GetBottomNoteAsync(),
+            ["VersionName"] = _viewModel.VersionName,
+        };
+    }
+
+    private async Task RestoreDraftAsync(IReadOnlyDictionary<string, string?> fields)
+    {
+        if (_form is null) return;
+        _viewModel.Title = fields.GetValueOrDefault("Title") ?? _viewModel.Title;
+        _viewModel.VersionName = fields.GetValueOrDefault("VersionName");
+        await _form.SetChapterTextAsync(fields.GetValueOrDefault("ChapterText") ?? string.Empty);
+        await _form.SetTopNoteAsync(fields.GetValueOrDefault("TopAuthorsNote"));
+        await _form.SetBottomNoteAsync(fields.GetValueOrDefault("BottomAuthorsNote"));
+        StateHasChanged();
     }
 
     private async Task SetPublishedAsync(bool publish)
@@ -349,9 +389,11 @@ else
             await ChapterService.SetPublishedAsync(_chapterId.Value, publish);
             _isPublished = publish;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            _viewModel.ServerValidationErrors.Add("Could not update publish status. Please try again.");
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Setting publish state failed unexpectedly for chapter {ChapterId}", _chapterId);
+            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
         }
     }
 
@@ -365,9 +407,11 @@ else
             _versions = await ChapterService.GetChapterVersionsAsync(StoryId, ChapterNumber!.Value);
             _currentVersion = _versions.FirstOrDefault(v => v.ChapterContentId == _contentId.Value);
         }
-        catch (ChapterValidationException ex)
+        catch (Exception ex)
         {
-            _viewModel.ServerValidationErrors.AddRange(ex.Errors);
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Setting primary version failed unexpectedly for chapter {ChapterId}", _chapterId);
+            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
         }
     }
 
@@ -389,9 +433,11 @@ else
             if (newVer is not null)
                 NavigationManager.NavigateTo($"/story/{StoryId}/chapter/{ChapterNumber}/{newVer.VersionOrder}/edit");
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            _viewModel.ServerValidationErrors.Add("Could not add alternate version. Please try again.");
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Adding an alternate version failed unexpectedly for chapter {ChapterId}", _chapterId);
+            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
         }
     }
 
