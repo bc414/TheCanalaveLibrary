@@ -147,10 +147,12 @@ one, same as `testing.md`/`debugging.md` accreted.
      `dotnet test` 1335/1335.
 3. **WU-L6 index batch + performance baseline** — the v1 Phase 4 item 2 DDL (UserStoryInteraction
    filtered indexes, comment golden index, StoryTag reverse index; `layer6-indexes.md`) — but
-   preceded by a **performance smoke baseline** (NBomber or k6 against Full seed data) so index
-   work gets before/after numbers instead of vibes. The baseline script becomes a rerunnable
-   fixture for every later L6/L8 claim. Test bed: `/discover`, story pages, bookshelves under
-   load.
+   preceded by a **performance smoke baseline** (NBomber or k6) so index work gets before/after
+   numbers instead of vibes. *Amended 2026-07-07:* the baseline runs against the **SeedTool
+   extended dataset** (WU-Marts item 9), not the tiny Full dev seed — toy volume can't exercise
+   planner index selection; add the F59 rCTE at `MaxDegrees` 2 vs 5 to the test bed. The baseline
+   script becomes a rerunnable fixture for every later L6/L8 claim. Test bed: `/discover`, story
+   pages, bookshelves under load, tree-search traversal.
 4. **WU-ErrorHandling — DONE ✓ (2026-07-06).** Decision row 9 resolved same day (four forks —
    see Resolved "Error-handling UX + strategy"); the standing `cross-cutting.md` gap replaced
    with the settled strategy: layered `CanalaveErrorBoundary` islands (page/chrome/card/comments),
@@ -188,14 +190,18 @@ one, same as `testing.md`/`debugging.md` accreted.
 8. **WU-SignalR** — messaging push (settled WU35 design; first app-level Hub, `MessagesHub`)
    plus the hub integration-test harness that does not exist yet. Test bed: the built messaging
    feature, two browser sessions. Pointer: `cross-cutting.md` "Private Messaging Architecture".
-9. **WU-Marts** — establish the L8 pattern with ONE mart end-to-end (raw SQL, no EF model,
-   table-swap rebuild, worker cadence — `layer8-data-marts.md`): recommend `AlsoFavoritedScore`
-   (feeds F61 later). Sparse dev-seed results are expected and fine — the deliverable is the
-   *pattern* (worker + swap + tests + conventions refined from reality), not meaningful data,
-   which arrives with beta. The remaining marts + their consumers (F59 Automatic Tree Search,
-   F61 Also Favorited/Recommended, workers 57/58/60/62) land as a batch between Phases 5 and 6 —
-   they must exist before beta but benefit most from beta data, so they go last among pre-beta
-   work (unchanged rationale from v1 Phase 4 item 7).
+9. **WU-Marts — DONE ✓ (2026-07-07). Scope expanded same day (supersedes the one-mart-pattern +
+   wait-for-beta sequencing).** The horizontal line is crossed deliberately with synthetic *clustered* data
+   instead of waiting for beta (see Resolved "Horizontal line crossed / discovery mart family").
+   Scope: (a) **`TheCanalaveLibrary.SeedTool`** — standalone bulk-load console (seeded PRNG,
+   taste-communities + power-law + supernodes + hidden-gem chains + spotlight + vouch + consent
+   structure, Npgsql binary `COPY`; never wired into startup or `TestAppFactory`); (b) the full
+   discovery mart family + workers (F60 narrow edge-list mart, F61 co-occurrence marts —
+   raw SQL, `_a`/`_b` swap, `CanalaveTelemetry.Marts`); (c) the F61 ranked-read and F59 rCTE
+   **service layers** (+ diagnostics probes; UI stays deferred); (d) headless verification
+   (Integration graph fixture + Unit + diagnostics JSON). Workers 57/58/62 are NOT in scope
+   (nothing to clean/aggregate yet — they keep the old sequencing). Conventions:
+   `layer8-data-marts.md`; decisions: `audit/Discovery.md` F59/F60/F61 + F33.
 
 ## Phase 2 — MVP-surface completeness (v1 Phase 1, minus WU38b)
 
@@ -486,8 +492,27 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   anti-pooling ruling (plain `AddDbContext`, no Aspire EF client package) survives inside the
   orchestrated setup. Built 2026-07-05 (WU-Aspire).
 - **Marts not required for Manual Tree Search** — resolved (2026-07-03, reaffirming WU28
-  Phase 0): WU40 pivots statelessly over live tables; marts feed only F59/F61 + workers. See
-  `audit/Discovery.md` Feature 33.
+  Phase 0; reaffirmed 2026-07-07 with the marts now actually being built): WU40 pivots statelessly
+  over live tables; marts feed only F59/F61 + workers. Strengthened rationale: manual is degree-1
+  interactive (must be fresh — the mart is a daily rebuild) and needs edge detail (recommendation
+  blurb, spotlight context) the IDs-only mart cannot carry. See `audit/Discovery.md` Feature 33.
+
+- **Horizontal line crossed / discovery mart family design** — resolved (2026-07-07, WU-Marts
+  Phase 0, Brian): F59/F61 are built pre-beta against **synthetic clustered seed data**
+  (`TheCanalaveLibrary.SeedTool`) rather than waiting for real users — uniform-random volume
+  stays degenerate; the clustered distribution (taste-communities, power-law, supernodes,
+  hidden-gem chains) is the actual requirement. Design decision set (full detail:
+  `layer8-data-marts.md` + `audit/Discovery.md` F59/F60/F61/F33): rCTE affirmed over the
+  **narrow** `(user_id, story_id, edge_type)` edge-list mart (supersedes the wide-boolean
+  schema); six-edge taxonomy, **every edge worth 1, no weights** (diverges from spec §5.4's
+  "scoring weights" — two sort orders random/by-degree instead); **vouch = projection onto the
+  vouchee's published stories** in both tree searches (supersedes spec §5.8 "strengthen edge
+  weights"; mid-tier — ≤5 vouchees but unbounded stories each); **author-spotlight first-class**
+  beside hidden-gem (both ≤5-capped = the chain-of-trust deep edges); path materialization
+  service-required, capped-edges-only; hidden favorites → plain Favorite edge iff edge-owner
+  consent (no "boosted" flag); rating + searcher exclusion at the presentation join; Apache
+  AGE / pgvector recorded as deferred future options only; UI + Manual Tree Search build (WU40)
+  stay deferred; verification fully headless.
 - **Community Spotlight display slice belongs to the homepage** — resolved (2026-07-03): spec
   §5.28 puts spotlight stories on `/`; F55 splits into selection + display (WU-Home) vs.
   donation infrastructure (deferred, Phase 4). See Phase 2 item 1.

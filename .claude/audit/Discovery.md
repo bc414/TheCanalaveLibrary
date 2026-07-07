@@ -288,11 +288,19 @@ Narrowing-within-fixed-source query → WU27/WU30.
   privacy: graph never reveals identity, §5.4). **L3/L3.5 — Stage 2** (distinct graph/node visualization —
   NOT `StoryDeck`). **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
 
-  **Moved to WU40 (WU28 Phase 0, 2026-06-25).** Direction settled:
-  - **Four clean edges:** authored-by, public-favorite, recommendation, hidden-gem. No consent-
-    gated hidden-favorite aggregate or author-spotlight in the MVP tree (awkward edges deferred).
-  - **Stateless pivot over live tables** (not the mart — L8 mart is post-MVP). Each pivot is a fresh
-    query; no traversal state is persisted or passed between calls.
+  **Moved to WU40 (WU28 Phase 0, 2026-06-25; edge set amended 2026-07-07, WU-Marts Phase 0).**
+  Direction settled:
+  - **Edge set = the full six-edge taxonomy** (2026-07-07, superseding WU28's "four clean edges /
+    author-spotlight deferred as awkward"): authored-by, favorite (public only — hidden favorites
+    NEVER appear in manual, regardless of owner consent), recommendation, hidden-gem,
+    **author-spotlight** (now first-class, the ≤5 author-conferred mirror of hidden-gem), and
+    **vouch** — computed live as the projection (voucher → vouchee's published stories); a vouch
+    has no story of its own so it cannot be a raw edge. Vouch must appear in both tree searches or
+    the feature is moot (its whole purpose is discovery promotion, not popularity).
+  - **Stateless pivot over live tables** (not the mart — reaffirmed 2026-07-07 with the mart now
+    being built): manual is degree-1 interactive and must be fresh (spec §5.26 principle; the mart
+    is a daily rebuild), and it needs edge *detail* (recommendation blurb, spotlight context) the
+    IDs-only mart cannot carry. Each pivot is a fresh query; no traversal state persisted.
   - **Privacy model:** graph never reveals identity (§5.4). Hidden-gem edge requires the target
     author to have `allow_discovery_consent` opted in.
   - **Distinct graph/node visualization — NOT `StoryDeck`.** The WU40 opusplan must design this
@@ -379,22 +387,103 @@ Narrowing-within-fixed-source query → WU27/WU30.
   standing record. Re-islanding recipe, if a flip-wave bisect needs it: `layer5-wasm.md`
   §"The Island Recipe".
 
-## Feature 59 — Automatic Tree Search (below the line)
+## Feature 59 — Automatic Tree Search (formerly below the line — line crossed 2026-07-07)
 - **L1 — N/A** (Phase A removed the EF model; `user_story_tree_search_entries` is a raw-SQL mart — divergence
-  resolved). **L2 — Stage 2.** **L3/L3.5 — Stage 2** (unified with manual tree search; degree controls +
-  edge-type selector). **L4 — Stage 1. L5 — Stage 2. L6 — N/A** (mart indexes are raw-SQL, see
-  implementation notes below). **L8 — Stage 2** (recursive CTE).
+  resolved). **L2 — Stage 5 (WU-Marts, 2026-07-07 — see Stage note).** **L3/L3.5 — Stage 2** (unified with
+  manual tree search; degree controls + edge-type selector — UI deferred past WU-Marts). **L4 — Stage 1.
+  L5 — Stage 2. L6 — N/A** (mart indexes are raw-SQL, see implementation notes below). **L8 — Stage 5**
+  (live rCTE over the edge-list mart — built with L2, same Stage note).
 
-## Feature 60 — Tree-Search Data-Mart Worker (below the line)
-- **L1 — N/A** (raw-SQL mart). **L6 — N/A.** **L8 — Stage 2** (daily rebuild, zero-downtime `_a/_b`
-  swap, privacy model: only public edges + consented hidden favorites; index design preserved below).
-  All other layers **N/A**.
+  **WU-Marts Stage note — L2/L8 (2026-07-07):**
+  Built: `Core/Discovery/` `TreeSearchEdgeType` (smallint enum 0–5), `TreeSearchRequest`/`TreeSearchHitDto`/
+  `TreeSearchResultDto`/`TreeSearchSortOrder`, `ITreeSearchReadService`;
+  `Server/Discovery/ServerTreeSearchReadService` — one static-SQL recursive CTE over the narrow edge-list
+  mart (PG14 `SEARCH`-free/`CYCLE`-based: `CYCLE is_story, node_id SET is_cycle USING path` gives pruning +
+  native path materialization; LATERAL union with per-arm `LIMIT` = the per-node fan-out cap, each direction
+  riding its covering index; edge selection is `edge_type = ANY(@edges)` — the AD3 payoff, no dynamic SQL).
+  Min degree per story via `GROUP BY`; two sort orders (random / by-degree) over one result set; path
+  returned only for chain-of-trust edge sets; rating + viewer §8.7 exclusions (AutoTreeSearch mode) at the
+  presentation join (raw ADO — EF query filters don't apply, both applied manually and tested);
+  `CanalaveTelemetry.Discovery` span + duration/degrees/results histograms + cap-truncation counter.
+  **How verified:** **Integration** (`DiscoveryMartTests`, Testcontainers Postgres): wide degree-2
+  co-favorite discovery (root excluded, viewer-Ignored excluded), deep hidden-gem chain reached at degrees
+  2/4/6 with shortest paths + depth-4 cutoff, mature-story-as-silent-bridge (SFW viewer routes through but
+  never sees it; mature viewer sees it), vouch projection from a root user. **Unit**
+  (`TreeSearchRequestValidationTests`, 14 asserts with `MartsTelemetryTests`): request-shape rules incl.
+  the paths-only-on-{HiddenGem, AuthorSpotlight} rule. **Headless live check** (2026-07-07, dev DB +
+  SeedTool data via `/dev/discovery/tree-search`): deep chain from a niche story surfaced stories at
+  degrees 2/4/6 with legible paths; wide mode from a hub story returned degree-2 hits with
+  `resultCapTruncated: true` (the flooding indicator firing as designed). Suite: 1398/1398.
 
-## Feature 61 — Also Favorited / Also Recommended (below the line)
+  **Settled (2026-07-07, WU-Marts Phase 0 — do not revisit):**
+  - **rCTE affirmed** after first-principles re-audit against the original deliberations: live
+    recursive traversal over the precomputed *edge list* (never precomputed traversal *results* —
+    combinatorial across edge-selection × depth, destroys paths/freshness). Modernized: PG14+
+    `SEARCH BREADTH FIRST`/`CYCLE`, lean recursive term (IDs + degree only), fan-out `LIMIT` in the
+    recursive step. Apache AGE and pgvector/embeddings recorded as deferred future options only.
+  - **Every edge worth 1 — no edge-type weights, no path score.** *Diverges from spec §5.4* ("applies
+    scoring weights to edge types, returns ranked results") — spec is read-only; this note is the
+    record. Instead: each story carries min degree-to-reach; **two sort orders over one result set**
+    (random shuffle / by-degree ascending), user-toggleable.
+  - **Path materialization** is a required service capability (searcher opts in per request),
+    available only when selected edges ⊆ {HiddenGem, AuthorSpotlight} (truly-capped chain-of-trust);
+    unbounded edges (Favorite, AuthoredBy, Recommendation, Vouch) and private favorites never
+    return paths (combinatorial noise; privacy).
+  - **Rating + active-user exclusion filter at the presentation join** (`story_listings` + live
+    `user_story_interactions`), not in traversal — mature stories may be silent bridge nodes
+    (never shown); strict no-mature-routing is a deferred toggle.
+  - Full conventions: `layer8-data-marts.md` §"The Automatic Tree Search consumer".
+
+## Feature 60 — Tree-Search Data-Mart Worker (formerly below the line — line crossed 2026-07-07)
+- **L1 — N/A** (raw-SQL mart). **L6 — N/A.** **L8 — Stage 5 (WU-Marts, 2026-07-07 — see Stage note)**
+  (narrow edge-list schema settled 2026-07-07 — see implementation notes below, which supersede the
+  wide-boolean design preserved earlier; privacy: public edges + edge-owner-consented hidden favorites
+  as plain Favorite edges + vouch projection). All other layers **N/A**.
+
+  **WU-Marts Stage note — L8 (2026-07-07):**
+  Built: `Server/Discovery/` `DiscoveryMartSchema` (all DDL/build/swap SQL as constants),
+  `DiscoveryMartRebuilder` (scoped; per-mart fresh-staging rebuild — DROP+CREATE staging → bulk
+  INSERT build → index → one-transaction swap with PK/index RENAMEs; the renames are load-bearing,
+  see the schema class doc — instrumented root spans `Marts.{Mart}Rebuild` +
+  duration/rows/swap-outcome metrics), `DiscoveryMartWorker` (hosted: bootstrap live tables at
+  startup, initial rebuild when empty, then daily at `Marts:RebuildHourUtc` 03:00 UTC; a failed
+  rebuild logs Error and the previous live table keeps serving). TestAppFactory removes the worker
+  (tests call the rebuilder directly — same treatment as the flush workers). One deliberate
+  refinement over the earlier TRUNCATE-and-reuse design: fresh-staging-each-run, because index
+  names travel with renamed tables and `CREATE INDEX IF NOT EXISTS` would silently no-op against a
+  name owned by the other table.
+  **How verified:** **Integration** (`DiscoveryMartTests`): the six-edge projection matrix in one
+  test (AuthoredBy / Favorite / consented-hidden-Favorite / no-consent-silent / Recommendation /
+  HiddenGem / AuthorSpotlight / Vouch / anonymized-rec-excluded / draft-story-excluded), plus
+  rebuild-twice (the rename dance against already-swapped tables). **Unit:** `MartsTelemetryTests`
+  (RecordRebuild metric shape). **Headless live check:** `/dev/marts/rebuild` over SeedTool data →
+  46,571 tree edges / 463,090 also-favorited / 527,176 also-recommended pairs. Suite: 1398/1398.
+
+## Feature 61 — Also Favorited / Also Recommended (formerly below the line — line crossed 2026-07-07)
 - **L1 — N/A** (Phase A removed the EF models; `also_*_scores` are raw-SQL marts — divergence resolved).
-  **L2 — Stage 2.**
-  **L3/L3.5 — Stage 2** (embedded sections on story detail, not separate pages). **L4 — Stage 1.
-  L5 — Stage 2.** **L8 — Stage 2** (co-occurrence scoring worker).
+  **L2 — Stage 5 (WU-Marts, 2026-07-07 — see Stage note).**
+  **L3/L3.5 — Stage 2** (embedded sections on story detail, not separate pages — UI deferred past
+  WU-Marts). **L4 — Stage 1. L5 — Stage 2.** **L6 — N/A (reclassified 2026-07-07** — mart indexes are
+  raw-SQL inside the worker, same treatment as F59; the ranked read rides
+  `ix_also_*_scores_story_score`, created by the rebuild, and no EF-migration index is justified —
+  the daily batch self-join is an off-hours sequential scan, which the R4 index-audit rule
+  deliberately does not index for). **L8 — Stage 5** (co-occurrence scoring workers — built with the
+  F60 worker, same rebuild pattern and Stage note; consented hidden favorites contribute per the same
+  edge-owner rule as F60 — spec §5.7 corroborates; anonymized recommendations excluded).
+
+  **WU-Marts Stage note — L2/L8 (2026-07-07):**
+  Built: `Core/Discovery/ICoOccurrenceReadService` + `RelatedStoryScoreDto`;
+  `Server/Discovery/ServerCoOccurrenceReadService` — ranked ADO reads of `also_favorited_scores` /
+  `also_recommended_scores` (score DESC, covering index), visibility + rating + viewer §8.7
+  exclusions (AlsoFavorited/AlsoRecommended modes) applied at read time; a missing mart degrades to
+  empty-with-Warning (never a 500 on a story page — the worker bootstraps the schema at startup so
+  this is a should-never state, not a code path relied on); `canalave.cooccurrence.read.duration`
+  metric. **How verified:** **Integration** (`DiscoveryMartTests`): shared-user ranking both
+  directions, viewer-Ignored exclusion (and anonymous seeing the full list), hidden-favorite
+  consent split (consented pair scored, non-consented silent), Also-Recommended mirror with
+  anonymized recs excluded. **Headless live check:** `/dev/discovery/also-favorited/176` returned a
+  rankable top-5 (scores 17/16/16/16/15) over SeedTool data — the horizontal-line "rankable, not
+  just non-empty" bar. Suite: 1398/1398.
 - **L7 — removed with the layer (WU-SignalBuffering, 2026-07-06): the mart IS the cache.** The
   planned "Redis in front of the precomputed tables" hot tier is dead — the L8 mart is already the
   daily cache over ground truth; services read `also_*_scores` directly (indexed, buffer-pool-hot)
@@ -410,42 +499,39 @@ likely composes into `ResultsFilterPanel`. Distinct from `CustomLists/` (persona
 
 ---
 
-## Layer-8 data-mart implementation notes (preserved from removed EF config)
+## Layer-8 data-mart implementation notes
 
 In Phase A these tables were removed as EF entities (spec §"Cache / Data Mart Tables" — raw-SQL,
-no EF model / DbSet / migration). The schema + index design is preserved verbatim below so the Layer-8
-workers can recreate it in raw SQL when built. Names are snake_case.
+no EF model / DbSet / migration). Names are snake_case. **2026-07-07 (WU-Marts Phase 0): the
+tree-search schema below supersedes the wide-boolean design formerly preserved here** (PK
+`(user_id, story_id)` + six `is_*` edge booleans + ~10 mirrored filtered partial indexes). The
+wide shape was optimal for single-flag access; the rCTE's actual access pattern is multi-type
+dynamic ("from a frontier, follow a *selected subset* of edge types, both directions"), which a
+narrow edge list serves with one covering range scan per direction instead of a BitmapOr across
+partial indexes. Authoritative conventions: `layer8-data-marts.md`.
 
-### `user_story_tree_search_entries` (Features 59/60)
-PK `(user_id, story_id)`. Edge booleans (public edges only; hidden favorites consent-gated via
-`users.allow_discovery_from_hidden_favorites`):
-`is_authored_by_user`, `is_public_favorite`, `is_recommendation`, `is_hidden_gem`,
-`is_author_spotlighted`, `is_hidden_favorite`.
+### `user_story_tree_search_entries` (Features 59/60) — narrow edge list
+One row per edge instance: `(user_id int, story_id int, edge_type smallint)`,
+PK `(user_id, story_id, edge_type)`. Edge types (each worth 1, no weights): 0 AuthoredBy,
+1 Favorite (public + edge-owner-consented hidden), 2 Recommendation, 3 Vouch (projection:
+voucher → each of the vouchee's published stories), 4 HiddenGem (≤5/user),
+5 AuthorSpotlight (≤5/story). IDs only — no story attributes; rating/display resolved at the
+presentation join. Two mirrored covering indexes:
 
-Mirrored filtered covering indexes (both traversal directions):
-
-**Pattern 1 — User → Stories** (key `user_id` INCLUDE `story_id`):
-
-| Index | Filter |
+| Index | Shape |
 |---|---|
-| `ix_user_tree_user_authored` | `is_authored_by_user = true` |
-| `ix_user_tree_user_public_favorite` | `is_public_favorite = true` |
-| `ix_user_tree_user_recommendation` | `is_recommendation = true` |
-| `ix_user_tree_user_hidden_gem` | `is_hidden_gem = true` |
-| `ix_user_tree_user_hidden_favorite` | `is_hidden_favorite = true` |
+| `ix_tree_search_user_edge` | `(user_id, edge_type) INCLUDE (story_id)` |
+| `ix_tree_search_story_edge` | `(story_id, edge_type) INCLUDE (user_id)` |
 
-**Pattern 2 — Story → Users** (key `story_id` INCLUDE `user_id`):
+Build rules: public edges only; hidden favorite → plain Favorite edge iff the *owner* has
+`allow_discovery_from_hidden_favorites = true` (no separate boosted flag — jargon removed);
+anonymized recs excluded; published/approved content only. Daily zero-downtime `_a`/`_b` swap.
 
-| Index | Filter |
-|---|---|
-| `ix_user_tree_story_authored` | `is_authored_by_user = true` |
-| `ix_user_tree_story_public_favorite` | `is_public_favorite = true` |
-| `ix_user_tree_story_recommendation` | `is_recommendation = true` |
-| `ix_user_tree_story_spotlighted` | `is_author_spotlighted = true` |
-| `ix_user_tree_story_hidden_favorite` | `is_hidden_favorite = true` |
-
-Note the deliberate asymmetry: `is_hidden_gem` is indexed only User→Stories; `is_author_spotlighted` only
-Story→Users — matching how each edge is queried. Daily rebuild uses a zero-downtime `_a`/`_b` table swap.
+*Spec §5.8 divergence record (spec read-only):* the spec's "vouches strengthen Tree Search edge
+weights" is dead — there are no edge weights. Vouch participates in both tree searches as the
+projection above (automatic = precomputed `Vouch` edge type; manual = same projection computed
+live, WU40). Vouch has no story→story or people-ranking matrix (anti-popularity philosophy,
+§5.5 decision 16).
 
 ### `also_favorited_scores` / `also_recommended_scores` (Feature 61)
 - `also_favorited_scores`: PK `(story_id, also_favorited_story_id)` + `score` (co-occurrence count).
@@ -453,7 +539,9 @@ Story→Users — matching how each edge is queried. Daily rebuild uses a zero-d
 
 Full matrix both directions; the mart is read directly — no cache tier in front of it (Layer 7
 dissolved 2026-07-06; see Feature 61's L7 note). Algorithm: self-join `user_story_interactions`
-WHERE `is_favorite = true`; per `(story_a, story_b)` pair, count overlapping users = score.
+WHERE `is_favorite = true` (consented hidden favorites included per the F60 edge-owner rule);
+per `(story_a, story_b)` pair, count overlapping users = score. Also-Recommended mirrors on
+`recommendations.recommender_id` (anonymized recs excluded).
 
 ### `site_daily_stats` (Feature 62)
 PK `stat_date` (one row/day). Counters: `new_users, total_users, new_stories, total_stories, new_words,

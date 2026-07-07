@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- Extended-seed track (WU-Marts, layer8-data-marts.md "horizontal line crossed"):
+         standalone bulk-load console that generates synthetic-but-realistically-CLUSTERED
+         interaction data (taste-communities, power-law popularity, supernode recommenders,
+         wired hidden-gem chains, vouches toward low-volume authors, consent-flagged hidden
+         favorites) and loads it via PostgreSQL binary COPY.
+
+         Deliberately NOT referenced by the Server, TestAppFactory, or any test project —
+         it runs manually against the persistent dev database (local :5432 or Aspire :5433)
+         and never participates in app startup or the test suite. References Core only
+         (entities' enums + ChapterText.CountWords + the Identity password hasher). -->
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>TheCanalaveLibrary.SeedTool</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- Version tracks the transitive Npgsql version of the Server's EF provider
+             (Npgsql.EntityFrameworkCore.PostgreSQL 10.0.2 → Npgsql 10.0.x). -->
+        <PackageReference Include="Npgsql" Version="10.0.3" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\TheCanalaveLibrary.Core\TheCanalaveLibrary.Core.csproj" />
+    </ItemGroup>
+
+</Project>

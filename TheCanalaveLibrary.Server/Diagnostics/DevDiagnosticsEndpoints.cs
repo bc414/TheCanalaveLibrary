@@ -94,5 +94,54 @@ public static class DevDiagnosticsEndpoints
             string relativePath = await imageStorage.SaveAsync(ms, "image/png", ImageKind.Cover, 999);
             return Results.Ok(new { relativePath });
         });
+
+        // --- WU-Marts discovery probes — the headless horizontal-line surface (testing.md:
+        // these assert nothing; a human reads the JSON and judges). ---
+
+        // On-demand mart rebuild (the daily worker does this at 03:00 UTC; this lets a human
+        // rebuild right after running the SeedTool instead of waiting).
+        devApi.MapPost("/marts/rebuild", async (DiscoveryMartRebuilder rebuilder, CancellationToken ct) =>
+        {
+            (long treeEdges, long alsoFavorited, long alsoRecommended) = await rebuilder.RebuildAllAsync(ct);
+            return Results.Ok(new { treeEdges, alsoFavorited, alsoRecommended });
+        });
+
+        // F59 Automatic Tree Search. edges = comma-separated TreeSearchEdgeType names or values
+        // (e.g. "HiddenGem,AuthorSpotlight" or "4,5"); sort = Random | ByDegree.
+        devApi.MapGet("/discovery/tree-search", async (
+            int? rootStoryId, int? rootUserId, int maxDegrees, string edges,
+            bool? includePaths, string? sort, int? resultCap,
+            ITreeSearchReadService treeSearch, CancellationToken ct) =>
+        {
+            TreeSearchRequest request = new()
+            {
+                RootStoryId = rootStoryId,
+                RootUserId = rootUserId,
+                MaxDegrees = maxDegrees,
+                EdgeTypes = edges.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(e => Enum.Parse<TreeSearchEdgeType>(e, ignoreCase: true)).ToList(),
+                IncludePaths = includePaths ?? false,
+                Sort = sort is null ? TreeSearchSortOrder.Random : Enum.Parse<TreeSearchSortOrder>(sort, ignoreCase: true),
+                ResultCap = resultCap ?? 100,
+            };
+            try
+            {
+                TreeSearchResultDto result = await treeSearch.TraverseAsync(request, ct);
+                return Results.Ok(result);
+            }
+            catch (ArgumentException ex)
+            {
+                return Results.BadRequest(ex.Message);
+            }
+        });
+
+        // F61 co-occurrence reads.
+        devApi.MapGet("/discovery/also-favorited/{storyId:int}", async (
+                int storyId, int? take, ICoOccurrenceReadService coOccurrence, CancellationToken ct) =>
+            Results.Ok(await coOccurrence.GetAlsoFavoritedAsync(storyId, take ?? 10, ct)));
+
+        devApi.MapGet("/discovery/also-recommended/{storyId:int}", async (
+                int storyId, int? take, ICoOccurrenceReadService coOccurrence, CancellationToken ct) =>
+            Results.Ok(await coOccurrence.GetAlsoRecommendedAsync(storyId, take ?? 10, ct)));
     }
 }

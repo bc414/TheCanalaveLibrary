@@ -36,8 +36,24 @@ One nested class per instrumented component, each owning an `ActivitySource` + `
 `"TheCanalaveLibrary.*"` (string literal, both directions cross-commented — deliberately no
 ServiceDefaults→Core project reference), so a new component lights up with no registration
 change. Existing: `ImageStorage`, `ReadingProgress` + `ViewCount` (WU-SignalBuffering,
-2026-07-06 — the signal-buffer flush pipelines). Reserved next: `Email` (WU-Email),
-`Marts` (WU-Marts).
+2026-07-06 — the signal-buffer flush pipelines), `Marts` + `Discovery` (WU-Marts, 2026-07-07 —
+see below). Reserved next: `Email` (WU-Email).
+
+WU-Marts components (spans are root spans for the workers — background work, no ambient parent):
+- **`Marts`** — the daily mart rebuild workers. Spans: `Marts.TreeSearchRebuild`,
+  `Marts.AlsoFavoritedRebuild`, `Marts.AlsoRecommendedRebuild`. Metrics:
+  `canalave.mart.rebuild.duration` (histogram, `ms`, tag `canalave.mart.name`),
+  `canalave.mart.rebuild.rows` (histogram, `{row}`, tags `canalave.mart.name` +
+  `canalave.mart.edge_type` for the tree mart), `canalave.mart.swap.outcome`
+  (counter, `{swap}`, tags `canalave.mart.name`, `canalave.mart.success`).
+- **`Discovery`** — the F59 traversal + F61 mart reads. Span `Discovery.TreeSearchTraverse`
+  (tags: `canalave.treesearch.max_degrees`, `.edge_types`, `.degrees_reached`, `.result_count`,
+  `.cap_truncated` — low-cardinality only, never story/user IDs in metric dimensions). Metrics:
+  `canalave.treesearch.duration` (histogram, `ms`), `canalave.treesearch.degrees_reached`
+  (histogram, `{degree}`), `canalave.treesearch.results` (histogram, `{story}`),
+  `canalave.treesearch.cap_truncations` (counter, `{traversal}` — the production early-warning
+  for supernode flooding), `canalave.cooccurrence.read.duration` (histogram, `ms`, tag
+  `canalave.mart.name`).
 
 - Producers are **`static readonly` process singletons** — `ActivitySource`/`Meter` are
   thread-safe, stateless funnels (the mirror image of `DbContext`, which is scoped because it

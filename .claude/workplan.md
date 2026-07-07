@@ -1967,3 +1967,67 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
   `cross-cutting.md` §"Error Handling Strategy" (the settled strategy); `logging.md` §"Unhandled
   exceptions" (server contract); `middle_plan_v2.md` Phase 1 item 4 + Resolved; audit notes in
   `audit/Comments.md`, `audit/Chapters.md`, `audit/Stories.md`, `audit/BlogPosts.md`.
+
+## WU-Marts — Extended seed track + discovery mart family (middle_plan_v2 Phase 1 item 9, scope expanded) — DONE ✓ (2026-07-07)
+
+- **Cells flipped:** F59 L2/L8 `2→5`; F60 L8 `2→5`; F61 L2/L8 `2→5`, L6 `2→N/A` (reclassified —
+  mart indexes are raw-SQL in the worker, matching F59's treatment). F59/F61 L3/L3.5 stay Stage 2
+  (UI deferred by design — service layer only). Stage notes: `audit/Discovery.md` F59/F60/F61.
+- **The decision that reshaped the WU (Doc-Touch moment 1, resolved with Brian in chat over
+  several forks):** the horizontal line ("needs real user data") was crossed deliberately with
+  synthetic *clustered* data instead of waiting for beta — uniform-random volume stays degenerate;
+  the clustered distribution is the actual requirement. Full decision set (rCTE affirmed vs. a
+  precomputed story→story matrix after auditing the original GeminiDiscussions deliberations;
+  narrow `(user_id, story_id, edge_type)` mart superseding the wide-boolean design; six-edge
+  taxonomy, every edge worth 1, no weights — two sort orders instead of spec §5.4's "scoring
+  weights"; vouch = projection onto the vouchee's published stories in both tree searches,
+  superseding spec §5.8's "strengthen edge weights"; author-spotlight first-class; hidden-favorite
+  edge-owner consent → plain Favorite edge, "boosted" flag removed; path materialization
+  service-required on chain-of-trust edge sets only; rating + exclusions at the presentation
+  join): `middle_plan_v2.md` Resolved "Horizontal line crossed / discovery mart family",
+  `layer8-data-marts.md`, `audit/Discovery.md`.
+- **Done:**
+  - **`TheCanalaveLibrary.SeedTool`** (new console project, references Core + Npgsql only; never
+    on the startup or test paths): deterministic seeded-PRNG generator of taste-communities,
+    power-law popularity, supernode recommenders, wired hidden-gem chains (curator→curator, ≤5
+    cap respected), author spotlights, vouches biased toward low-volume authors, consent-split
+    hidden favorites, and negative-test rows (drafts, pending, anonymized recs); loads via Npgsql
+    binary COPY with one shared PBKDF2 hash; composes around the existing dev seed (MAX+1 id
+    bases, refuses to run twice); re-syncs identity sequences.
+  - **Marts + workers** (`Server/Discovery/`): `DiscoveryMartSchema` (raw SQL: narrow tree edge
+    list + two covering indexes; `also_*_scores` + ranked covering indexes; fresh-staging swap
+    with the load-bearing PK/index RENAMEs), `DiscoveryMartRebuilder` (scoped, per-mart rebuild,
+    `CanalaveTelemetry.Marts` root spans + metrics), `DiscoveryMartWorker` (hosted: bootstrap +
+    rebuild-when-empty + daily 03:00 UTC; failures keep the previous live table serving).
+  - **F59 service** (`ITreeSearchReadService` / `ServerTreeSearchReadService`): static-SQL
+    recursive CTE (CYCLE clause for pruning + native paths; LATERAL per-node fan-out LIMIT;
+    `edge_type = ANY(@edges)` — no dynamic SQL), min-degree per story, random/by-degree sorts,
+    chain-of-trust-only path materialization, presentation-join filters, `CanalaveTelemetry
+    .Discovery` instrumentation incl. the cap-truncation flooding counter.
+  - **F61 service** (`ICoOccurrenceReadService` / `ServerCoOccurrenceReadService`): ranked mart
+    reads + visibility/rating/§8.7 exclusions; missing-mart degrades to empty-with-Warning.
+  - Wire-up: Program.cs registrations; TestAppFactory removes `DiscoveryMartWorker` (rebuilds are
+    test-deterministic via the rebuilder); `DevDiagnosticsEndpoints` migrated
+    `Server/Endpoints/` → `Server/Diagnostics/` (legacy-folder rule) + four probes
+    (`POST /dev/marts/rebuild`, `GET /dev/discovery/tree-search`, `/also-favorited/{id}`,
+    `/also-recommended/{id}`).
+- **Verified:** `dotnet build` green; `dotnet test` **1398/1398** (514 Unit + 471 RazorComponents
+  + 413 Integration; 24 new — `DiscoveryMartTests` 10 Integration over Testcontainers Postgres:
+  six-edge projection matrix w/ consent + visibility + anonymized rules, rebuild-twice rename
+  dance, ranked co-occurrence both directions, Ignored exclusion, consent split, Also-Recommended
+  mirror, wide degree-2 traversal, deep gem chain at degrees 2/4/6 with paths + depth cutoff,
+  mature-silent-bridge, vouch projection; `TreeSearchRequestValidationTests` 12 +
+  `MartsTelemetryTests` 2 Unit). Headless live band (server-only path + SeedTool data, 2000
+  users / 3000 stories / 38k interactions loaded in 1.8s): `/dev/marts/rebuild` → 46,571 edges +
+  463k/527k score pairs; also-favorited top-5 on a hub story rankable (17/16/16/16/15 — the
+  "rankable, not just non-empty" bar); deep gem-chain traversal surfaced niche stories at degrees
+  2/4/6 with legible paths; wide hub traversal fired `resultCapTruncated: true` (flooding
+  indicator working). No browser band — headless-only by design; UI is deferred.
+- **Deliberately NOT in scope:** F59/F61 UI (embedded sections, graph viz, sort toggles); Manual
+  Tree Search build (WU40 — but its settled design, incl. the vouch live projection and full edge
+  set, is recorded in `audit/Discovery.md` F33); the NBomber/k6 perf baseline (stays WU-L6,
+  amended to run against the SeedTool dataset — now unblocked); workers 57/58/62.
+- **Tool:** Claude Code (plan iterated with Brian through five revisions, 2026-07-06→07).
+  **Pointer:** `layer8-data-marts.md` (authoritative conventions, now battle-tested);
+  `audit/Discovery.md` F59/F60/F61 Stage notes + implementation notes + F33; `logging.md`
+  (Marts/Discovery components); `middle_plan_v2.md` Phase 1 items 3/9 + Resolved.

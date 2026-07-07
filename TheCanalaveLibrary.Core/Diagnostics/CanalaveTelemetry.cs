@@ -141,6 +141,79 @@ public static class CanalaveTelemetry
             description: "Transactional emails that failed to send.");
     }
 
-    // Later work-units add their component here (never a new top-level source elsewhere):
-    //   WU-Marts  → Marts ("TheCanalaveLibrary.Marts"): Mart.Rebuild spans + duration histogram.
+    /// <summary>
+    /// Data-mart rebuild workers (WU-Marts, layer8-data-marts.md). Each rebuild is a ROOT span
+    /// (background work, no ambient parent): <c>Marts.TreeSearchRebuild</c>,
+    /// <c>Marts.AlsoFavoritedRebuild</c>, <c>Marts.AlsoRecommendedRebuild</c>. A daily cache is
+    /// trustworthy only when measurable: duration says the off-hours window is respected, row
+    /// counts say the build produced data, swap outcome says the live table actually flipped.
+    /// </summary>
+    public static class Marts
+    {
+        public const string Name = Prefix + ".Marts";
+
+        public static readonly ActivitySource Source = new(Name, "1.0.0");
+        public static readonly Meter Meter = new(Name, "1.0.0");
+
+        public static readonly Histogram<double> RebuildDuration = Meter.CreateHistogram<double>(
+            "canalave.mart.rebuild.duration", unit: "ms",
+            description: "Wall time of one mart rebuild (staging build + swap).");
+
+        public static readonly Histogram<long> RebuildRows = Meter.CreateHistogram<long>(
+            "canalave.mart.rebuild.rows", unit: "{row}",
+            description: "Rows produced into the mart by one rebuild.");
+
+        public static readonly Counter<long> SwapOutcomes = Meter.CreateCounter<long>(
+            "canalave.mart.swap.outcome", unit: "{swap}",
+            description: "Staging→live table swaps, tagged by mart name and success.");
+
+        /// <summary>One completed rebuild — all instruments, consistently tagged. Every rebuilder
+        /// calls this so the metric shape can't drift between marts.</summary>
+        public static void RecordRebuild(string martName, double durationMs, long rows, bool success)
+        {
+            KeyValuePair<string, object?>[] tags = [new("canalave.mart.name", martName)];
+            RebuildDuration.Record(durationMs, tags);
+            RebuildRows.Record(rows, tags);
+            SwapOutcomes.Add(1,
+                new KeyValuePair<string, object?>("canalave.mart.name", martName),
+                new KeyValuePair<string, object?>("canalave.mart.success", success));
+        }
+    }
+
+    /// <summary>
+    /// Discovery mart consumers (WU-Marts): the F59 tree-search traversal and F61 co-occurrence
+    /// reads. Span <c>Discovery.TreeSearchTraverse</c> carries mode facts as low-cardinality tags
+    /// (max_degrees, edge count, degrees reached, result count, truncation) — never story/user
+    /// IDs in metric dimensions. The cap-truncation counter is the production early-warning for
+    /// supernode flooding that the offline perf baseline cannot observe.
+    /// </summary>
+    public static class Discovery
+    {
+        public const string Name = Prefix + ".Discovery";
+
+        public static readonly ActivitySource Source = new(Name, "1.0.0");
+        public static readonly Meter Meter = new(Name, "1.0.0");
+
+        public static readonly Histogram<double> TraversalDuration = Meter.CreateHistogram<double>(
+            "canalave.treesearch.duration", unit: "ms",
+            description: "Wall time of one tree-search traversal (rCTE + presentation join).");
+
+        public static readonly Histogram<int> DegreesReached = Meter.CreateHistogram<int>(
+            "canalave.treesearch.degrees_reached", unit: "{degree}",
+            description: "Deepest degree at which a returned story was first reached.");
+
+        public static readonly Histogram<int> ResultCount = Meter.CreateHistogram<int>(
+            "canalave.treesearch.results", unit: "{story}",
+            description: "Stories returned by one traversal after filters and the result cap.");
+
+        public static readonly Counter<long> CapTruncations = Meter.CreateCounter<long>(
+            "canalave.treesearch.cap_truncations", unit: "{traversal}",
+            description: "Traversals whose post-filter hit set exceeded the result cap (flooding indicator).");
+
+        public static readonly Histogram<double> CoOccurrenceReadDuration = Meter.CreateHistogram<double>(
+            "canalave.cooccurrence.read.duration", unit: "ms",
+            description: "Wall time of one ranked co-occurrence mart read, tagged by mart name.");
+    }
+
+    // Later work-units add their component here (never a new top-level source elsewhere).
 }

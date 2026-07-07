@@ -235,6 +235,13 @@ builder.Services.AddSingleton<ViewCountBuffer>();
 builder.Services.AddSingleton<ViewCountFlusher>();
 builder.Services.AddHostedService<ViewCountFlushWorker>();
 builder.Services.AddScoped<IDiscoveryDefaultsReadService, ServerDiscoveryDefaultsReadService>();
+// Discovery marts (WU-Marts, layer8-data-marts.md): the scoped rebuilder does the raw-SQL
+// staging-swap rebuilds; the hosted worker drives them daily (+ bootstrap when empty).
+// TestAppFactory removes the worker (tests rebuild deterministically via the rebuilder).
+builder.Services.AddScoped<DiscoveryMartRebuilder>();
+builder.Services.AddHostedService<DiscoveryMartWorker>();
+builder.Services.AddScoped<ICoOccurrenceReadService, ServerCoOccurrenceReadService>();
+builder.Services.AddScoped<ITreeSearchReadService, ServerTreeSearchReadService>();
 // Singleton: OptimisticSpriteReadService is stateless — pure string builder, no host/disk deps.
 // SpriteBaseUrl defaults to /sprites/themes (dev wwwroot); override in production for R2/CDN.
 var spriteBaseUrl = builder.Configuration["Sprites:BaseUrl"] ?? "/sprites/themes";

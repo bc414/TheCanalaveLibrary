@@ -87,14 +87,17 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
             services.RemoveAll<IWriteRateLimitService>();
             services.AddSingleton<IWriteRateLimitService, FakeWriteRateLimitService>();
 
-            // Remove the timer-driven signal-buffer flush workers: their 5s cadence would write
-            // mid-test, racing the Respawn reset. Tests flush deterministically by resolving the
-            // corresponding flusher and calling FlushAsync() (testing.md — deterministic flush).
-            foreach (Type workerType in new[] { typeof(ReadingProgressFlushWorker), typeof(ViewCountFlushWorker) })
+            // Remove the timer/schedule-driven background workers: the flush workers' 5s cadence
+            // would write mid-test racing the Respawn reset, and the mart worker's startup
+            // bootstrap-rebuild would run DDL concurrently with tests. Tests act deterministically
+            // by resolving the corresponding flusher/rebuilder and calling FlushAsync()/
+            // RebuildAllAsync() directly (testing.md — deterministic flush).
+            foreach (Type workerType in new[]
+                     { typeof(ReadingProgressFlushWorker), typeof(ViewCountFlushWorker), typeof(DiscoveryMartWorker) })
             {
-                ServiceDescriptor? flushWorker = services.FirstOrDefault(d =>
+                ServiceDescriptor? backgroundWorker = services.FirstOrDefault(d =>
                     d.ServiceType == typeof(IHostedService) && d.ImplementationType == workerType);
-                if (flushWorker is not null) services.Remove(flushWorker);
+                if (backgroundWorker is not null) services.Remove(backgroundWorker);
             }
         });
     }

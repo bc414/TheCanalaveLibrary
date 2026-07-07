@@ -30,20 +30,26 @@ wrapper pattern to N stable interfaces; data mart workers are standalone classes
 callers. (The same body-swap property is how a signal-buffer body — an L2 concern — later swaps its
 in-process store for a shared Valkey store at N≥2 nodes, with no contract change.)
 
-### Horizontal boundary: features requiring real user data
+### Horizontal boundary: features requiring realistic interaction data
 
 Most features can reach a meaningful Stage 5 with seed data and synthetic test users. A small set cannot
 — even a correct Layer 1–4 implementation can't be meaningfully validated because the feature's output is
-only interesting with real cross-user interaction patterns:
+only interesting with realistic cross-user interaction patterns:
 
 - **Automatic Tree Search** — a recursive CTE against five test users produces a degenerate one-node graph
   regardless of how correct the query is.
 - **Also Favorited / Also Recommended** — co-occurrence scoring with two test users tells you nothing about
   ranking quality, exclusion-filter behavior, or UI density.
 
-The trigger for un-deferring these is concrete and observable: "real interaction data exists now," after a
-beta period. The *signal-producing* features they depend on (Recommendations, Favorites, Following, Manual
-Tree Search) all belong above the line and ship in the MVP pass.
+**The line was crossed deliberately 2026-07-07 (WU-Marts):** instead of waiting for beta data, the
+extended-seed track (`TheCanalaveLibrary.SeedTool`) generates *synthetic but realistically-clustered*
+interaction data — taste-communities, power-law popularity, supernode recommenders, wired hidden-gem
+chains, vouches toward low-volume authors — which is what these features actually need (uniform-random
+volume stays degenerate; the clustered *distribution* is the requirement). The original "real user data
+exists now, after a beta period" trigger remains the bar for judging *ranking quality with real taste*,
+but is no longer a build/verification gate. The *signal-producing* features they depend on
+(Recommendations, Favorites, Following, Manual Tree Search) all belong above the line and ship in the
+MVP pass.
 
 A few other features naturally sort late but for a different reason — there's nothing to operate on yet
 (Notification Cleanup has nothing 60 days old to clean; SiteDailyStat has no usage to aggregate). These
@@ -611,13 +617,20 @@ Group.
 ───────── **Horizontal boundary (requires real user data)** ─────────
 
 
-**59. Automatic Tree Search** — Recursive CTE against `UserStoryTreeSearchEntries` data mart.
-Degree controls and edge type selector. Unified with Manual Tree Search on the same page.
+**59. Automatic Tree Search** — Live recursive CTE (PG14 `SEARCH`/`CYCLE`) over the
+`user_story_tree_search_entries` narrow edge-list mart (never a precomputed story→story matrix —
+that shape is Feature 61). User-chosen `MaxDegrees` + edge-type selector; six edge types, every
+edge worth 1 (no weights); deep chain-of-trust via the ≤5-capped HiddenGem/AuthorSpotlight edges;
+two sort orders (random / by-degree) over one result set; opt-in path materialization on capped
+edges only. Unified with Manual Tree Search on the same page. Detail: `layer8-data-marts.md`.
 
-**60. Tree Search Data Mart Worker** — Daily rebuild of `UserStoryTreeSearchEntries`. Zero-downtime
-table swap. Privacy model: only public edges, hidden favorites with consent.
+**60. Tree Search Data Mart Worker** — Daily rebuild of `user_story_tree_search_entries` (narrow
+`(user_id, story_id, edge_type)` edge list). Zero-downtime table swap. Privacy model: only public
+edges; hidden favorites as plain Favorite edges with edge-owner consent; vouch projected onto the
+vouchee's published stories; author-spotlight first-class alongside hidden-gem.
 
-**61. Also Favorited / Also Recommended** — Co-occurrence scoring. Embedded sections on story detail
-page (not separate pages). `AlsoFavoritedScore` / `AlsoRecommendedScore` cache tables.
+**61. Also Favorited / Also Recommended** — Co-occurrence scoring (story→story result marts,
+`also_favorited_scores` / `also_recommended_scores`). Embedded sections on story detail
+page (not separate pages). The mart IS the cache (L7 dissolved) — read ranked, directly.
 
 **62. SiteDailyStat Worker** — Daily aggregation into `SiteDailyStat` table. No user-facing UI in MVP.

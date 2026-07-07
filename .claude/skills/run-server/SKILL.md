@@ -221,12 +221,27 @@ community content. Seed rows that participate in workflow state machines must ca
 workflow a silent no-op (see the `PostApprovalStatus` comment in `DataSeeder.cs` for the worked
 example).
 
+**Extended seed (volume, on demand — WU-Marts):** when the work needs realistic-volume clustered
+interaction data (discovery marts, tree search, co-occurrence, index/planner behavior), run the
+standalone bulk-load tool against the persistent DB — it composes around the Full seed and never
+touches startup or the test suite:
+
+```powershell
+dotnet run --project TheCanalaveLibrary.SeedTool    # ~2k users / 3k stories in seconds via COPY
+#   --seed N --users N --stories N --communities N --gem-chains N --connection "<npgsql>"  to vary
+```
+
+It refuses to run twice (marker: `seed-user-%` users) — wipe + reseed first to regenerate. After
+loading, `POST /dev/marts/rebuild` (or wait for the daily worker) and probe
+`/dev/discovery/tree-search` + `/dev/discovery/also-favorited/{storyId}`. Detail:
+`layer8-data-marts.md` §"When This Layer Applies".
+
 ## Dev diagnostics endpoints
 
 Some service-layer logic is hard to verify through the real UI flow — e.g. account deletion
 operates on "the currently authenticated user," so testing it against a throwaway fixture user
 would otherwise require logging in as that user (password, email confirmation, antiforgery, the
-works). For cases like this, `TheCanalaveLibrary.Server/Endpoints/DevDiagnosticsEndpoints.cs`
+works). For cases like this, `TheCanalaveLibrary.Server/Diagnostics/DevDiagnosticsEndpoints.cs`
 (`MapDevDiagnosticsEndpoints`) is the standing home for Development-only diagnostic endpoints that
 call a service method directly, bypassing the UI/auth flow. It's mapped only inside the
 `app.Environment.IsDevelopment()` block in `Program.cs` — never reachable outside local dev.
