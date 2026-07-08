@@ -1,0 +1,15 @@
+-- discover_date_published_page1
+-- provenance: ServerStoryReadService.GetListingsAsync (DatePublished sort) + read-context global filters
+
+Limit  (cost=125.22..125.27 rows=20 width=12) (actual time=0.332..0.333 rows=20.00 loops=1)
+  Buffers: shared hit=29
+  ->  Sort  (cost=125.22..130.72 rows=2201 width=12) (actual time=0.331..0.332 rows=20.00 loops=1)
+        Sort Key: published_date DESC
+        Sort Method: top-N heapsort  Memory: 26kB
+        Buffers: shared hit=29
+        ->  Seq Scan on stories s  (cost=0.00..66.65 rows=2201 width=12) (actual time=0.003..0.219 rows=2201.00 loops=1)
+              Filter: ((NOT is_taken_down) AND (rating <= 1))
+              Rows Removed by Filter: 811
+              Buffers: shared hit=29
+Planning Time: 0.022 ms
+Execution Time: 0.338 ms

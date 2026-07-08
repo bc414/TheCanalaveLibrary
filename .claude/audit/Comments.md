@@ -35,8 +35,12 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   `WU31_5b_DropPhantomBaseCommentFKs` drops the 4 columns / 4 indexes / 4 FK constraints.
   Convention recorded in `canalave-conventions/layer1-data-model.md`. Verified: `dotnet test`
   → 298 integration / 414 unit / 397 RazorComponents = 1,109 total, all green.
-  **L5 — Stage 2. L6 — Stage 2** (golden index `(chapter_id, date_posted DESC)` on `chapter_comments`
-  now possible — column is on the child table).
+  **L5 — Stage 2. L6 — Stage 5 (WU-L6, 2026-07-07)** — golden index
+  `ix_chapter_comments_chapter_id_date_posted` built in `L6_IndexBatch` (+ the three sibling
+  contexts, identical query shape). Measured at 324k seeded comments: roots page p50
+  24.32→0.29 ms, p95 136.82→0.38 ms (−98.8% — the before-plan burned ~20 ms on parallel-worker
+  launch + sort; after-plan is an ordered backward index scan into the LIMIT). Detail + plans:
+  `layer6-indexes.md` §"Comment golden indexes", `TheCanalaveLibrary.PerfBaseline/results/`.
 - **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note
   (WU20 is a single integrated work-unit covering 23/24/25/26 L3/L3.5/L4; the components,
   tests, and visual sign-off are described there).
@@ -53,7 +57,8 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   `ICommentReadService`/`ICommentWriteService` without exception.
 
 ## Feature 24 — Comment Display & Pagination
-- **L1 — Stage 5.** **L5 — Stage 2. L6 — Stage 2** (golden index `(chapter_id, date_posted DESC)` — pending).
+- **L1 — Stage 5.** **L5 — Stage 2. L6 — Stage 5 (WU-L6, 2026-07-07** — golden index built +
+  measured −98.8% on the roots page; see the Feature 23 L6 note).
 - **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):**
   Built `CommentEditor` leaf (shared editing surface), `CommentItem` leaf, and `CommentSection`
   coordination composite, all in `TheCanalaveLibrary.SharedUI/Comments/`. The three components cover all

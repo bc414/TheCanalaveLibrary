@@ -41,6 +41,8 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
         await CopyRecommendationsAsync(graph.Recommendations);
         await CopyRecommendationDetailsAsync(graph.Recommendations);
         await CopyVouchesAsync(graph.Vouches);
+        await CopyChapterCommentsAsync(graph.ChapterComments);
+        await CopyNotificationsAsync(graph.Notifications);
         await ResyncSequencesAsync();
     }
 
@@ -126,6 +128,8 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
                 g.Count(i => i.IsCompleted),
                 g.Count(i => i.HasStarted && !i.IsCompleted && !i.IsIgnored),
                 g.Count(i => i.IsIgnored)));
+        Dictionary<int, int> commentsWritten = graph.ChapterComments
+            .GroupBy(c => c.UserId).ToDictionary(g => g.Key, g => g.Count());
 
         const string copy = """
             COPY user_stats (user_id, acknowledged_as_beta_reader_count, acknowledged_as_inspiration_count,
@@ -149,7 +153,7 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // authors_followed
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // blog_posts_written
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // chapters_read
-            await writer.WriteAsync(0, NpgsqlDbType.Integer); // comments_written
+            await writer.WriteAsync(commentsWritten.GetValueOrDefault(user.Id), NpgsqlDbType.Integer);
             await writer.WriteAsync(favsReceived.GetValueOrDefault(user.Id), NpgsqlDbType.Integer);
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // feature_contributions
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // follower_count
@@ -386,6 +390,70 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
         await writer.CompleteAsync();
     }
 
+    private async Task CopyChapterCommentsAsync(List<SeedChapterCommentRow> comments)
+    {
+        // TPT: base row first, child row second (comment_id shared PK/FK).
+        await using (NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync("""
+            COPY base_comments (comment_id, active_report_count, comment_text, is_taken_down,
+                like_count, parent_comment_id, takedown_date, takedown_reason, user_id)
+            FROM STDIN (FORMAT BINARY)
+            """))
+        {
+            foreach (SeedChapterCommentRow comment in comments)
+            {
+                await writer.StartRowAsync();
+                await writer.WriteAsync(comment.Id, NpgsqlDbType.Bigint);
+                await writer.WriteAsync(0, NpgsqlDbType.Integer);
+                await writer.WriteAsync(comment.Text, NpgsqlDbType.Text);
+                await writer.WriteAsync(false, NpgsqlDbType.Boolean);
+                await writer.WriteAsync(0, NpgsqlDbType.Integer); // like_count matches: no like rows generated
+                if (comment.ParentCommentId is long parent) await writer.WriteAsync(parent, NpgsqlDbType.Bigint);
+                else await writer.WriteNullAsync();
+                await writer.WriteNullAsync();
+                await writer.WriteNullAsync();
+                await writer.WriteAsync(comment.UserId, NpgsqlDbType.Integer);
+            }
+            await writer.CompleteAsync();
+        }
+
+        await using (NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync(
+            "COPY chapter_comments (comment_id, chapter_id, date_posted, is_spoiler) FROM STDIN (FORMAT BINARY)"))
+        {
+            foreach (SeedChapterCommentRow comment in comments)
+            {
+                await writer.StartRowAsync();
+                await writer.WriteAsync(comment.Id, NpgsqlDbType.Bigint);
+                await writer.WriteAsync(comment.ChapterId, NpgsqlDbType.Integer);
+                await writer.WriteAsync(comment.DatePostedUtc, NpgsqlDbType.TimestampTz);
+                await writer.WriteAsync(comment.IsSpoiler, NpgsqlDbType.Boolean);
+            }
+            await writer.CompleteAsync();
+        }
+    }
+
+    private async Task CopyNotificationsAsync(List<SeedNotificationRow> notifications)
+    {
+        const string copy = """
+            COPY notifications (notification_id, date_created, is_read, notification_type_id,
+                recipient_user_id, related_entity_id, source_user_id)
+            FROM STDIN (FORMAT BINARY)
+            """;
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync(copy);
+        foreach (SeedNotificationRow notification in notifications)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(notification.Id, NpgsqlDbType.Bigint);
+            await writer.WriteAsync(notification.DateCreatedUtc, NpgsqlDbType.TimestampTz);
+            await writer.WriteAsync(notification.IsRead, NpgsqlDbType.Boolean);
+            await writer.WriteAsync(notification.TypeId, NpgsqlDbType.Smallint);
+            await writer.WriteAsync(notification.RecipientUserId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(notification.RelatedEntityId, NpgsqlDbType.Integer);
+            if (notification.SourceUserId is int source) await writer.WriteAsync(source, NpgsqlDbType.Integer);
+            else await writer.WriteNullAsync();
+        }
+        await writer.CompleteAsync();
+    }
+
     private async Task ResyncSequencesAsync()
     {
         // COPY with explicit IDs bypasses the identity sequences — re-sync them so later
@@ -396,6 +464,8 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             SELECT setval(pg_get_serial_sequence('chapters', 'chapter_id'), (SELECT MAX(chapter_id) FROM chapters));
             SELECT setval(pg_get_serial_sequence('chapter_contents', 'chapter_content_id'), (SELECT MAX(chapter_content_id) FROM chapter_contents));
             SELECT setval(pg_get_serial_sequence('recommendations', 'recommendation_id'), (SELECT MAX(recommendation_id) FROM recommendations));
+            SELECT setval(pg_get_serial_sequence('base_comments', 'comment_id'), (SELECT MAX(comment_id) FROM base_comments));
+            SELECT setval(pg_get_serial_sequence('notifications', 'notification_id'), (SELECT MAX(notification_id) FROM notifications));
             """);
     }
 

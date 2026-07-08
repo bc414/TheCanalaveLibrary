@@ -1,0 +1,32 @@
+-- comment_roots_page1
+-- provenance: ServerCommentReadService.GetChapterCommentsPageAsync roots page (chapter_id + parent NULL, date_posted DESC)
+
+Limit  (cost=3163.74..3306.66 rows=20 width=16) (actual time=19.766..22.559 rows=20.00 loops=1)
+  Buffers: shared hit=144 read=2
+  ->  Nested Loop  (cost=3163.74..13904.03 rows=1503 width=16) (actual time=19.766..22.557 rows=20.00 loops=1)
+        Buffers: shared hit=144 read=2
+        ->  Gather Merge  (cost=3163.32..3360.15 rows=1727 width=16) (actual time=19.723..22.460 rows=28.00 loops=1)
+              Workers Planned: 1
+              Workers Launched: 1
+              Buffers: shared hit=34
+              ->  Sort  (cost=2163.31..2165.85 rows=1016 width=16) (actual time=0.239..0.240 rows=14.00 loops=2)
+                    Sort Key: cc.date_posted DESC
+                    Sort Method: quicksort  Memory: 37kB
+                    Buffers: shared hit=34
+                    Worker 0:  Sort Method: quicksort  Memory: 25kB
+                    ->  Parallel Bitmap Heap Scan on chapter_comments cc  (cost=21.68..2112.57 rows=1016 width=16) (actual time=0.187..0.199 rows=202.00 loops=2)
+                          Recheck Cond: (chapter_id = 1890)
+                          Heap Blocks: exact=3
+                          Buffers: shared hit=26
+                          ->  Bitmap Index Scan on ix_chapter_comments_chapter_id  (cost=0.00..21.25 rows=1727 width=0) (actual time=0.076..0.076 rows=404.00 loops=1)
+                                Index Cond: (chapter_id = 1890)
+                                Index Searches: 1
+                                Buffers: shared hit=2
+        ->  Index Scan using "PK_base_comments" on base_comments bc  (cost=0.42..6.11 rows=1 width=8) (actual time=0.003..0.003 rows=0.71 loops=28)
+              Index Cond: (comment_id = cc.comment_id)
+              Filter: ((parent_comment_id IS NULL) AND (NOT is_taken_down))
+              Rows Removed by Filter: 0
+              Index Searches: 28
+              Buffers: shared hit=110 read=2
+Planning Time: 0.143 ms
+Execution Time: 22.579 ms

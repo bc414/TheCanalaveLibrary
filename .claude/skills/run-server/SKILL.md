@@ -236,6 +236,10 @@ loading, `POST /dev/marts/rebuild` (or wait for the daily worker) and probe
 `/dev/discovery/tree-search` + `/dev/discovery/also-favorited/{storyId}`. Detail:
 `layer8-data-marts.md` §"When This Layer Applies".
 
+For index/query performance claims, pair it with the perf fixture (server NOT required — it
+talks straight to Postgres): `dotnet run --project TheCanalaveLibrary.PerfBaseline -- --label
+<name>`, then `--compare before after`. Detail: `layer6-indexes.md` §"When This Layer Applies".
+
 ## Dev diagnostics endpoints
 
 Some service-layer logic is hard to verify through the real UI flow — e.g. account deletion

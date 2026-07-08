@@ -72,7 +72,9 @@ SeedIdBases bases = new(
     StoryId: 1 + Convert.ToInt32(await Scalar("SELECT COALESCE(MAX(story_id), 0) FROM stories")),
     ChapterId: 1 + Convert.ToInt32(await Scalar("SELECT COALESCE(MAX(chapter_id), 0) FROM chapters")),
     ChapterContentId: 1 + Convert.ToInt64(await Scalar("SELECT COALESCE(MAX(chapter_content_id), 0) FROM chapter_contents")),
-    RecommendationId: 1 + Convert.ToInt32(await Scalar("SELECT COALESCE(MAX(recommendation_id), 0) FROM recommendations")));
+    RecommendationId: 1 + Convert.ToInt32(await Scalar("SELECT COALESCE(MAX(recommendation_id), 0) FROM recommendations")),
+    CommentId: 1 + Convert.ToInt64(await Scalar("SELECT COALESCE(MAX(comment_id), 0) FROM base_comments")),
+    NotificationId: 1 + Convert.ToInt64(await Scalar("SELECT COALESCE(MAX(notification_id), 0) FROM notifications")));
 
 // ── Generate + load ────────────────────────────────────────────────────────────────────────────
 var stopwatch = System.Diagnostics.Stopwatch.StartNew();
@@ -83,7 +85,9 @@ Console.WriteLine($"Generated in {stopwatch.Elapsed.TotalSeconds:F1}s: {graph.Us
                   $"({graph.Recommendations.Count(r => r.IsHiddenGem)} gems / " +
                   $"{graph.Recommendations.Count(r => r.IsHighlightedByAuthor)} spotlights / " +
                   $"{graph.Recommendations.Count(r => r.RecommenderId is null)} anonymized), " +
-                  $"{graph.Vouches.Count} vouches, {graph.HiddenGemChainCount} gem chains");
+                  $"{graph.Vouches.Count} vouches, {graph.HiddenGemChainCount} gem chains, " +
+                  $"{graph.ChapterComments.Count} chapter comments ({graph.ChapterComments.Count(c => c.ParentCommentId is not null)} replies), " +
+                  $"{graph.Notifications.Count} notifications");
 
 // One PBKDF2 hash shared by every seed user — hashing per-user is the known cost DataSeeder's
 // Minimal mode exists to avoid; all seed users share "Password123!" anyway.

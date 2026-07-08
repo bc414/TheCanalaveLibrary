@@ -34,7 +34,13 @@ public sealed class ChapterCommentConfiguration : IEntityTypeConfiguration<Chapt
     {
         builder.ToTable("chapter_comments");
         builder.Property(e => e.DatePosted).HasDefaultValueSql("CURRENT_TIMESTAMP");
-        // Future indexes for querying (e.g., by ChapterId, DatePosted)...
+        // Golden index (L6, measured 2026-07-07): the roots page
+        // (WHERE chapter_id = @c … ORDER BY date_posted DESC LIMIT n) walks this in order and
+        // streams into the LIMIT — kills both the sort and the ~20 ms parallel-worker launch the
+        // planner otherwise reaches for on hub chapters (p50 24 ms → sub-ms at 324k comments).
+        // Supersedes the convention FK index on chapter_id (prefix-covered).
+        builder.HasIndex(e => new { e.ChapterId, e.DatePosted })
+            .HasDatabaseName("ix_chapter_comments_chapter_id_date_posted");
     }
 }
 
@@ -44,7 +50,10 @@ public sealed class BlogPostCommentConfiguration : IEntityTypeConfiguration<Blog
     {
         builder.ToTable("blog_post_comments");
         builder.Property(e => e.DatePosted).HasDefaultValueSql("CURRENT_TIMESTAMP");
-        // Future indexes for querying (e.g., by BlogPostId)...
+        // Same golden shape as chapter_comments — the four comment contexts share a byte-identical
+        // roots-page query (ServerCommentReadService).
+        builder.HasIndex(e => new { e.BlogPostId, e.DatePosted })
+            .HasDatabaseName("ix_blog_post_comments_blog_post_id_date_posted");
     }
 }
 
@@ -54,7 +63,8 @@ public sealed class GroupCommentConfiguration : IEntityTypeConfiguration<GroupCo
     {
         builder.ToTable("group_comments");
         builder.Property(e => e.DatePosted).HasDefaultValueSql("CURRENT_TIMESTAMP");
-        // Future indexes for querying (e.g., by GroupId)...
+        builder.HasIndex(e => new { e.GroupId, e.DatePosted })
+            .HasDatabaseName("ix_group_comments_group_id_date_posted");
     }
 }
 
@@ -64,7 +74,8 @@ public sealed class UserProfileCommentConfiguration : IEntityTypeConfiguration<U
     {
         builder.ToTable("user_profile_comments");
         builder.Property(e => e.DatePosted).HasDefaultValueSql("CURRENT_TIMESTAMP");
-        // Future indexes for querying (e.g., by ProfileUserId)...
+        builder.HasIndex(e => new { e.ProfileUserId, e.DatePosted })
+            .HasDatabaseName("ix_user_profile_comments_profile_user_id_date_posted");
     }
 }
 

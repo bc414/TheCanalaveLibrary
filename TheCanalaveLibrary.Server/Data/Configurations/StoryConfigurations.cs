@@ -108,8 +108,16 @@ public sealed class StoryConfiguration : IEntityTypeConfiguration<Story>
             .HasForeignKey(s => s.StoryStatusId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // This table will have MANY indexes for searching.
-        // Future indexes for querying (e.g., by author_id, rating, story_status_id, dates)...
+        // L6 (2026-07-07): the two discovery sort spines. DatePublished is /discover's default
+        // sorted order; LastUpdated drives GetRecentListingsAsync + the Relevance tie-break.
+        // Both are top-N pages under the global rating/is_taken_down filters — an ordered walk
+        // with residual filtering beats sort-the-world as stories grow. Single-column (no
+        // rating/is_taken_down prefix): the residuals are cheap and a prefixed index would
+        // fragment across the rating ceiling variants.
+        builder.HasIndex(e => e.PublishedDate)
+            .HasDatabaseName("ix_stories_published_date");
+        builder.HasIndex(e => e.LastUpdatedDate)
+            .HasDatabaseName("ix_stories_last_updated_date");
     }
 }
 

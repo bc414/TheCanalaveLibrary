@@ -102,9 +102,13 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
 - **L5 — N/A.** Messaging is stateless for MVP (no REST API endpoints to wasm-enable). SignalR
   realtime push is the deferred post-MVP additive layer — not an L5/REST model.
-- **L6 — Stage 2 (post-MVP).** Spec-prescribed composite `(conversation_id, date_sent DESC)` index
-  for thread paging; a participant index for unread/archived queries. Functionally correct without it
-  for MVP; deferred to the L6 DDL batch.
+- **L6 — Stage 5 (WU-L6, 2026-07-07).** `ix_private_messages_conversation_id_date_sent` built in
+  `L6_IndexBatch` for the thread-page query (supersedes the convention FK index; equality-bound
+  leading column, so DESC rides a backward scan). Not volume-measured — SeedTool generates no
+  messages — but the identical comment-paging shape measured −98.8%, and the indexed columns are
+  INSERT-only (no HOT impact). The once-floated participant index is NOT built: the
+  conversation-list query narrows via the existing convention `ix_conversation_participants_user_id`
+  and per-user conversation counts are small (R4). Detail: `layer6-indexes.md`.
 
 - **Circuit-concurrency fix (2026-07-01) — L2 remains Stage 5; found via browser debugging:**
   `MessagesNavLink` + `NotificationBell` initializing concurrently on one circuit scope crashed

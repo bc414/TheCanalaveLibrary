@@ -2031,3 +2031,53 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
   **Pointer:** `layer8-data-marts.md` (authoritative conventions, now battle-tested);
   `audit/Discovery.md` F59/F60/F61 Stage notes + implementation notes + F33; `logging.md`
   (Marts/Discovery components); `middle_plan_v2.md` Phase 1 items 3/9 + Resolved.
+
+## WU-L6 — Index batch + performance baseline (middle_plan_v2 Phase 1 item 3) — DONE ✓ (2026-07-07)
+
+- **Cells flipped (L6):** F4/F5/F11/F12/F18/F23/F24/F31/F41/F42/F49 `2→5` (built + measured, or
+  resolved as already-covered/rejected under R4 with the reason recorded); F61 L6 was
+  reclassified `→N/A` under WU-Marts. F6/F7 (chapters) L6 stay Stage 2 — chapter-read queries
+  were not assessed this pass. Stage notes in each cluster's audit file.
+- **Headline reality finding — the USI index collapse:** the seven `user_story_interactions`
+  filtered covering indexes, declared since WU0, were declared with UNNAMED
+  `HasIndex(e => e.UserId)` calls — EF collapses unnamed HasIndex calls on the same property set
+  into ONE index (each call overwrites the previous filter/name), so the database contained only
+  `ix_user_story_interactions_has_started`. Six bookshelf tabs ran unindexed for the project's
+  whole life, invisible at dev-seed volume; both the WU15 (2026-06-22) L6 verification and the
+  R4 (2026-07-06) index audit had audited the *config file*, not the database. Corrected in
+  `audit/UserStoryInteractions.md`; the two rules (name argument is load-bearing; verify index
+  claims against `pg_indexes`/the snapshot, never the config) are now in `layer6-indexes.md`.
+- **Done:**
+  - **SeedTool extended** with 323,817 threaded chapter comments (popularity-weighted, 42k
+    replies) + 20,073 notifications (derived from real favorite/rec/vouch actions) — comment and
+    notification indexes are unmeasurable at toy volume.
+  - **`TheCanalaveLibrary.PerfBaseline`** (new console project, Npgsql only, dependency-free by
+    design — NBomber v5 licensing / k6 external binary disqualify them for a forever-rerunnable
+    fixture): 12 SQL scenarios lifted verbatim from the hot service methods (provenance comments
+    = the R4 trail), deterministic hottest-id parameter pools, p50/p95 over 40 iterations,
+    `EXPLAIN (ANALYZE, BUFFERS)` capture per scenario, `--label`/`--compare` workflow; results
+    committed under the project's `results/`.
+  - **`L6_IndexBatch` migration:** the six restored USI filtered indexes (named HasIndex); four
+    comment golden composites (chapter/blog/group/profile × `(owner_id, date_posted)`, superseding
+    their FK indexes); `ix_notifications_recipient_read_date`; `ix_stories_published_date` +
+    `ix_stories_last_updated_date`; `ix_private_messages_conversation_id_date_sent`.
+  - **Rejected under R4, recorded with reasons** (`layer6-indexes.md` §"Rejected"): story-centric
+    USI mirrors (no story-centric query exists — counts denormalized), `user_story_interaction_dates`
+    date indexes (table never read), USI composite-boolean partials (≤0.13 ms measured),
+    `story_tags` reverse composite (PK already optimal — measured neutral), followed_users sort
+    index, tag trigram, rating-prefixed sort spines.
+- **Measured (SeedTool volume, local PG18, p50 of 40 iterations on hottest ids):** comment roots
+  page **24.32→0.29 ms (−98.8%, p95 136.82→0.38 ms** — the before-plan burned ~20 ms on
+  parallel-worker launch + sort; after = backward index scan into the LIMIT, 0.05 ms execution);
+  roots count −97%; discover DatePublished page −76%; §8.7 exclusion probe −68%; unread count
+  −47%; favorites tab −33%. Honest neutrals: notifications newest-first +6.7% (per-user residual
+  sort, by design), tag filter +7% (PK was already optimal — confirms the rejection); tree-search
+  / co-occurrence deltas are cache noise (no mart index changed).
+- **Verified:** `dotnet build` 0 warnings; `dotnet test` **1398/1398** (514 Unit + 471
+  RazorComponents + 413 Integration — the Integration tier migrates through `L6_IndexBatch` on
+  Testcontainers Postgres every test run); `pg_indexes` confirms all seven USI indexes + the new
+  set; before/after EXPLAIN plans committed.
+- **Tool:** Claude Code. **Pointer:** `layer6-indexes.md` (rewritten against reality — the
+  authoritative L6 doc); `TheCanalaveLibrary.PerfBaseline/results/`; audit L6 notes in
+  `UserStoryInteractions.md` (the correction), `Comments.md`, `Notifications.md`, `Messaging.md`,
+  `Stories.md`, `Tags.md`, `Following.md`, `Discovery.md` F31; `middle_plan_v2.md` Phase 1 item 3.

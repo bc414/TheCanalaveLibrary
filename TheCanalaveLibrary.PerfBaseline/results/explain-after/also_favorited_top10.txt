@@ -1,0 +1,32 @@
+-- also_favorited_top10
+-- provenance: ServerCoOccurrenceReadService.GetAlsoFavoritedAsync (ranked mart read)
+
+Limit  (cost=28.11..35.20 rows=10 width=8) (actual time=0.040..0.041 rows=10.00 loops=1)
+  Buffers: shared hit=43
+  ->  Incremental Sort  (cost=28.11..390.96 rows=512 width=8) (actual time=0.040..0.040 rows=10.00 loops=1)
+        Sort Key: m.score DESC, m.also_favorited_story_id
+        Presorted Key: m.score
+        Full-sort Groups: 1  Sort Method: quicksort  Average Memory: 25kB  Peak Memory: 25kB
+        Buffers: shared hit=43
+        ->  Nested Loop  (cost=0.71..373.21 rows=512 width=8) (actual time=0.022..0.037 rows=11.00 loops=1)
+              Buffers: shared hit=43
+              ->  Index Only Scan using ix_also_favorited_scores_story_score on also_favorited_scores m  (cost=0.42..25.39 rows=741 width=8) (actual time=0.003..0.004 rows=13.00 loops=1)
+                    Index Cond: (story_id = 2446)
+                    Heap Fetches: 0
+                    Index Searches: 1
+                    Buffers: shared hit=4
+              ->  Memoize  (cost=0.29..0.53 rows=1 width=4) (actual time=0.002..0.002 rows=0.85 loops=13)
+                    Cache Key: m.also_favorited_story_id
+                    Cache Mode: logical
+                    Hits: 0  Misses: 13  Evictions: 0  Overflows: 0  Memory Usage: 2kB
+                    Buffers: shared hit=39
+                    ->  Index Scan using pk_stories on stories s  (cost=0.28..0.52 rows=1 width=4) (actual time=0.001..0.001 rows=0.85 loops=13)
+                          Index Cond: (story_id = m.also_favorited_story_id)
+                          Filter: ((NOT is_taken_down) AND (story_status_id >= 2) AND (story_status_id <= 7) AND (rating <= 1))
+                          Rows Removed by Filter: 0
+                          Index Searches: 13
+                          Buffers: shared hit=39
+Planning:
+  Buffers: shared hit=6
+Planning Time: 0.112 ms
+Execution Time: 0.051 ms

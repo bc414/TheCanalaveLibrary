@@ -1,0 +1,29 @@
+-- tag_filter_and_include_page1
+-- provenance: ServerStoryReadService.ApplyFilters tag include (AND mode, correlated EXISTS)
+
+Limit  (cost=87.61..87.63 rows=8 width=12) (actual time=0.313..0.314 rows=2.00 loops=1)
+  Buffers: shared hit=31
+  ->  Sort  (cost=87.61..87.63 rows=8 width=12) (actual time=0.313..0.313 rows=2.00 loops=1)
+        Sort Key: s.published_date DESC
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=31
+        ->  Hash Join  (cost=15.05..87.49 rows=8 width=12) (actual time=0.014..0.312 rows=2.00 loops=1)
+              Hash Cond: (s.story_id = st.story_id)
+              Buffers: shared hit=31
+              ->  Seq Scan on stories s  (cost=0.00..66.65 rows=2201 width=12) (actual time=0.005..0.231 rows=2201.00 loops=1)
+                    Filter: ((NOT is_taken_down) AND (rating <= 1))
+                    Rows Removed by Filter: 811
+                    Buffers: shared hit=29
+              ->  Hash  (cost=14.91..14.91 rows=11 width=4) (actual time=0.007..0.007 rows=2.00 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                    Buffers: shared hit=2
+                    ->  Bitmap Heap Scan on story_tags st  (cost=4.24..14.91 rows=11 width=4) (actual time=0.006..0.006 rows=2.00 loops=1)
+                          Recheck Cond: (tag_id = 22)
+                          Heap Blocks: exact=1
+                          Buffers: shared hit=2
+                          ->  Bitmap Index Scan on ix_story_tags_tag_id  (cost=0.00..4.24 rows=11 width=0) (actual time=0.003..0.003 rows=2.00 loops=1)
+                                Index Cond: (tag_id = 22)
+                                Index Searches: 1
+                                Buffers: shared hit=1
+Planning Time: 0.084 ms
+Execution Time: 0.325 ms

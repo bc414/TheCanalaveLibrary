@@ -1,0 +1,10 @@
+-- bookshelf_favorites_tab
+-- provenance: ServerUserStoryInteractionReadService.GetBookshelfStoryIdsAsync (Favorites)
+
+Index Only Scan using ix_user_story_interactions_favorite on user_story_interactions  (cost=0.29..4.99 rows=40 width=4) (actual time=0.006..0.009 rows=53.00 loops=1)
+  Index Cond: (user_id = 1809)
+  Heap Fetches: 0
+  Index Searches: 1
+  Buffers: shared hit=3
+Planning Time: 0.055 ms
+Execution Time: 0.018 ms

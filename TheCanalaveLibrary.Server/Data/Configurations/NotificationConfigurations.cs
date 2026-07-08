@@ -10,7 +10,11 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
     {
         builder.Property(e => e.NotificationTypeId).HasConversion<short>();
         builder.Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
-        // Future indexes for querying (e.g., by RecipientUserId, IsRead, DateCreated)...
+        // L6 (2026-07-07): serves the unread count (recipient + is_read prefix) and the
+        // OldestUnreadFirst feed order exactly; NewestFirst narrows by recipient with a small
+        // per-user residual sort. Supersedes the convention FK index on recipient_user_id.
+        builder.HasIndex(e => new { e.RecipientUserId, e.IsRead, e.DateCreated })
+            .HasDatabaseName("ix_notifications_recipient_read_date");
     }
 }
 

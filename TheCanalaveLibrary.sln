@@ -20,6 +20,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheCanalaveLibrary.Tests.Ra
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheCanalaveLibrary.SeedTool", "TheCanalaveLibrary.SeedTool\TheCanalaveLibrary.SeedTool.csproj", "{666CC198-0598-42CD-A415-A87B49B57B67}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheCanalaveLibrary.PerfBaseline", "TheCanalaveLibrary.PerfBaseline\TheCanalaveLibrary.PerfBaseline.csproj", "{0E9FDC66-4D19-4694-88DC-963F144E1168}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -150,6 +152,18 @@ Global
 		{666CC198-0598-42CD-A415-A87B49B57B67}.Release|x64.Build.0 = Release|Any CPU
 		{666CC198-0598-42CD-A415-A87B49B57B67}.Release|x86.ActiveCfg = Release|Any CPU
 		{666CC198-0598-42CD-A415-A87B49B57B67}.Release|x86.Build.0 = Release|Any CPU
+		{0E9FDC66-4D19-4694-88DC-963F144E1168}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0E9FDC66-4D19-4694-88DC-963F144E1168}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0E9FDC66-4D19-4694-88DC-963F144E1168}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{0E9FDC66-4D19-4694-88DC-963F144E1168}.Debug|x64.Build.0 = Debug|Any CPU
+		{0E9FDC66-4D19-4694-88DC-963F144E1168}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{0E9FDC66-4D19-4694-88DC-963F144E1168}.Debug|x86.Build.0 = Debug|Any CPU
+		{0E9FDC66-4D19-4694-88DC-963F144E1168}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0E9FDC66-4D19-4694-88DC-963F144E1168}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0E9FDC66-4D19-4694-88DC-963F144E1168}.Release|x64.ActiveCfg = Release|Any CPU
+		{0E9FDC66-4D19-4694-88DC-963F144E1168}.Release|x64.Build.0 = Release|Any CPU
+		{0E9FDC66-4D19-4694-88DC-963F144E1168}.Release|x86.ActiveCfg = Release|Any CPU
+		{0E9FDC66-4D19-4694-88DC-963F144E1168}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

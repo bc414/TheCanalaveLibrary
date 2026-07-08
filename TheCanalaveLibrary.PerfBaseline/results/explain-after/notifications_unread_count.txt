@@ -1,0 +1,12 @@
+-- notifications_unread_count
+-- provenance: ServerNotificationReadService.GetUnreadCountAsync
+
+Aggregate  (cost=27.77..27.78 rows=1 width=8) (actual time=0.056..0.056 rows=1.00 loops=1)
+  Buffers: shared hit=5
+  ->  Index Only Scan using ix_notifications_recipient_read_date on notifications  (cost=0.29..26.05 rows=688 width=0) (actual time=0.008..0.037 rows=640.00 loops=1)
+        Index Cond: ((recipient_user_id = 8) AND (is_read = false))
+        Heap Fetches: 0
+        Index Searches: 1
+        Buffers: shared hit=5
+Planning Time: 0.022 ms
+Execution Time: 0.061 ms

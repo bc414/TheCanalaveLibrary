@@ -1,0 +1,17 @@
+-- notifications_unread_count
+-- provenance: ServerNotificationReadService.GetUnreadCountAsync
+
+Aggregate  (cost=231.90..231.91 rows=1 width=8) (actual time=0.230..0.230 rows=1.00 loops=1)
+  Buffers: shared hit=159
+  ->  Bitmap Heap Scan on notifications  (cost=33.60..230.18 rows=688 width=0) (actual time=0.038..0.208 rows=640.00 loops=1)
+        Recheck Cond: (recipient_user_id = 8)
+        Filter: (NOT is_read)
+        Rows Removed by Filter: 1646
+        Heap Blocks: exact=156
+        Buffers: shared hit=159
+        ->  Bitmap Index Scan on ix_notifications_recipient_user_id  (cost=0.00..33.43 rows=2286 width=0) (actual time=0.026..0.026 rows=2286.00 loops=1)
+              Index Cond: (recipient_user_id = 8)
+              Index Searches: 1
+              Buffers: shared hit=3
+Planning Time: 0.023 ms
+Execution Time: 0.236 ms

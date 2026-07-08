@@ -45,8 +45,11 @@ adding that. Noted here so the seam isn't re-discovered from scratch.
 
 ## Feature 41 — Notification Generation
 
-- **L1 — Stage 5.** `Notification` + the fully-seeded type/category tables. Sound. **L6 — Stage 2**
-  (`(recipient_user_id, is_read, date_created)` indexes pending, deferred to Post-MVP L6 batch).
+- **L1 — Stage 5.** `Notification` + the fully-seeded type/category tables. Sound. **L6 — Stage 5
+  (WU-L6, 2026-07-07)** — `ix_notifications_recipient_read_date (recipient_user_id, is_read,
+  date_created)` built in `L6_IndexBatch` (supersedes the recipient FK index); measured at 20k
+  seeded notifications: unread count −47%; newest-first feed neutral by design (per-user residual
+  sort, bounded by the 60-day cleanup worker). Detail: `layer6-indexes.md`.
 
 - **L2 — Stage 2 → 5 (WU22).** Settled constraints (do not revisit):
   - **Mechanism:** direct injected call — `INotificationWriteService` injected into feature write
@@ -98,7 +101,8 @@ adding that. Noted here so the seam isn't re-discovered from scratch.
   - **L3-Logic — Stage 2** (the notification bell in the layout; panel grouped by `NotificationCategory`,
     `DefaultCollapsed`/user-override per type). **L3.5-Structure — Stage 2** (panel + flyout preview).
     **L4 — Stage 1. L5 — Stage 2.** All deferred to WU33.
-  - **L6 — Stage 2** (index `(recipient_user_id, is_read, date_created DESC)` pending L6 batch).
+  - **L6 — Stage 5 (WU-L6, 2026-07-07** — `ix_notifications_recipient_read_date` built + measured;
+    see the Feature 41 L6 note).
 
 - **WU22 Stage-5 note (L2 only, 2026-06-23):** `INotificationReadService.GetUnreadCountAsync()`,
   `GetNotificationsAsync(page, pageSize)` (LEFT JOIN UserNotificationSettings → effective Collapsed),

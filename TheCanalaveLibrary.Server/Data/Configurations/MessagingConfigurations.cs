@@ -39,6 +39,10 @@ public sealed class PrivateMessageConfiguration : IEntityTypeConfiguration<Priva
     public void Configure(EntityTypeBuilder<PrivateMessage> builder)
     {
         builder.Property(e => e.DateSent).HasDefaultValueSql("CURRENT_TIMESTAMP");
-        // Future indexes for querying (e.g., by ConversationId, DateSent)...
+        // L6 (2026-07-07): the hot thread-page query
+        // (WHERE conversation_id = @c ORDER BY date_sent DESC LIMIT n —
+        // ServerMessagingReadService) walks this in order. Supersedes the convention FK index.
+        builder.HasIndex(e => new { e.ConversationId, e.DateSent })
+            .HasDatabaseName("ix_private_messages_conversation_id_date_sent");
     }
 }

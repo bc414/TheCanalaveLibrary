@@ -1,0 +1,15 @@
+-- bookshelf_favorites_tab
+-- provenance: ServerUserStoryInteractionReadService.GetBookshelfStoryIdsAsync (Favorites)
+
+Bitmap Heap Scan on user_story_interactions  (cost=6.20..300.79 rows=125 width=4) (actual time=0.013..0.016 rows=53.00 loops=1)
+  Recheck Cond: (user_id = 1809)
+  Filter: is_favorite
+  Rows Removed by Filter: 8
+  Heap Blocks: exact=1
+  Buffers: shared hit=3
+  ->  Bitmap Index Scan on pk_user_story_interactions  (cost=0.00..6.17 rows=250 width=0) (actual time=0.005..0.005 rows=61.00 loops=1)
+        Index Cond: (user_id = 1809)
+        Index Searches: 1
+        Buffers: shared hit=2
+Planning Time: 0.034 ms
+Execution Time: 0.027 ms

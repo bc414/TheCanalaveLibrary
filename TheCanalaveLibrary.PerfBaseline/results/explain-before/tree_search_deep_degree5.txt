@@ -1,0 +1,70 @@
+-- tree_search_deep_degree5
+-- provenance: ServerTreeSearchReadService.TraverseAsync (HiddenGem+AuthorSpotlight, MaxDegrees 5 — chain of trust)
+
+Limit  (cost=736.67..736.69 rows=9 width=16) (actual time=0.309..0.312 rows=8.00 loops=1)
+  Buffers: shared hit=164
+  CTE traversal
+    ->  Recursive Union  (cost=0.00..650.31 rows=81 width=42) (actual time=0.001..0.261 rows=98.00 loops=1)
+          Storage: Memory  Maximum Storage: 46kB
+          Buffers: shared hit=134
+          ->  Result  (cost=0.00..0.01 rows=1 width=42) (actual time=0.000..0.000 rows=1.00 loops=1)
+          ->  Nested Loop  (cost=8.60..64.95 rows=8 width=42) (actual time=0.008..0.041 rows=16.17 loops=6)
+                Buffers: shared hit=134
+                ->  WorkTable Scan on traversal t_1  (cost=0.00..0.22 rows=2 width=41) (actual time=0.000..0.001 rows=5.67 loops=6)
+                      Filter: ((NOT is_cycle) AND (degree < 5))
+                      Rows Removed by Filter: 11
+                ->  Append  (cost=8.60..32.25 rows=4 width=5) (actual time=0.004..0.006 rows=2.85 loops=34)
+                      Buffers: shared hit=134
+                      ->  Subquery Scan on "*SELECT* 1"  (cost=8.60..16.12 rows=2 width=5) (actual time=0.002..0.003 rows=1.76 loops=34)
+                            Buffers: shared hit=67
+                            ->  Limit  (cost=8.60..16.10 rows=2 width=5) (actual time=0.002..0.003 rows=1.76 loops=34)
+                                  Buffers: shared hit=67
+                                  ->  Result  (cost=8.60..16.10 rows=2 width=5) (actual time=0.002..0.003 rows=1.76 loops=34)
+                                        One-Time Filter: t_1.is_story
+                                        Buffers: shared hit=67
+                                        ->  Bitmap Heap Scan on user_story_tree_search_entries e  (cost=8.60..16.10 rows=2 width=4) (actual time=0.003..0.003 rows=3.16 loops=19)
+                                              Recheck Cond: ((story_id = t_1.node_id) AND (edge_type = ANY ('{4,5}'::integer[])))
+                                              Heap Blocks: exact=29
+                                              Buffers: shared hit=67
+                                              ->  Bitmap Index Scan on ix_tree_search_story_edge  (cost=0.00..8.60 rows=2 width=0) (actual time=0.002..0.002 rows=3.16 loops=19)
+                                                    Index Cond: ((story_id = t_1.node_id) AND (edge_type = ANY ('{4,5}'::integer[])))
+                                                    Index Searches: 19
+                                                    Buffers: shared hit=38
+                      ->  Subquery Scan on "*SELECT* 2"  (cost=8.60..16.12 rows=2 width=5) (actual time=0.002..0.002 rows=1.09 loops=34)
+                            Buffers: shared hit=67
+                            ->  Limit  (cost=8.60..16.10 rows=2 width=5) (actual time=0.002..0.002 rows=1.09 loops=34)
+                                  Buffers: shared hit=67
+                                  ->  Result  (cost=8.60..16.10 rows=2 width=5) (actual time=0.002..0.002 rows=1.09 loops=34)
+                                        One-Time Filter: (NOT t_1.is_story)
+                                        Buffers: shared hit=67
+                                        ->  Bitmap Heap Scan on user_story_tree_search_entries e2  (cost=8.60..16.10 rows=2 width=4) (actual time=0.003..0.003 rows=2.47 loops=15)
+                                              Recheck Cond: ((user_id = t_1.node_id) AND (edge_type = ANY ('{4,5}'::integer[])))
+                                              Heap Blocks: exact=37
+                                              Buffers: shared hit=67
+                                              ->  Bitmap Index Scan on ix_tree_search_user_edge  (cost=0.00..8.60 rows=2 width=0) (actual time=0.002..0.002 rows=2.47 loops=15)
+                                                    Index Cond: ((user_id = t_1.node_id) AND (edge_type = ANY ('{4,5}'::integer[])))
+                                                    Index Searches: 15
+                                                    Buffers: shared hit=30
+  ->  Sort  (cost=86.36..86.38 rows=9 width=16) (actual time=0.309..0.310 rows=8.00 loops=1)
+        Sort Key: (min(t.degree)), (random())
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=164
+        ->  Nested Loop  (cost=2.37..86.21 rows=9 width=16) (actual time=0.291..0.303 rows=8.00 loops=1)
+              Buffers: shared hit=164
+              ->  HashAggregate  (cost=2.09..2.22 rows=13 width=8) (actual time=0.285..0.287 rows=10.00 loops=1)
+                    Group Key: t.node_id
+                    Batches: 1  Memory Usage: 32kB
+                    Buffers: shared hit=134
+                    ->  CTE Scan on traversal t  (cost=0.00..2.02 rows=13 width=8) (actual time=0.041..0.279 rows=27.00 loops=1)
+                          Filter: (is_story AND (degree > 0) AND (node_id <> 423))
+                          Rows Removed by Filter: 71
+                          Storage: Memory  Maximum Storage: 37kB
+                          Buffers: shared hit=134
+              ->  Index Scan using pk_stories on stories s  (cost=0.28..6.46 rows=1 width=4) (actual time=0.001..0.001 rows=0.80 loops=10)
+                    Index Cond: (story_id = t.node_id)
+                    Filter: ((NOT is_taken_down) AND (story_status_id >= 2) AND (story_status_id <= 7) AND (rating <= 1))
+                    Rows Removed by Filter: 0
+                    Index Searches: 10
+                    Buffers: shared hit=30
+Planning Time: 0.289 ms
+Execution Time: 0.366 ms

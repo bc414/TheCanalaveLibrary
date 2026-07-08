@@ -1,0 +1,29 @@
+-- comment_roots_count
+-- provenance: ServerCommentReadService.GetChapterCommentsPageAsync roots count
+
+Finalize Aggregate  (cost=9317.99..9318.00 rows=1 width=8) (actual time=138.738..141.302 rows=1.00 loops=1)
+  Buffers: shared hit=1642
+  ->  Gather  (cost=9317.78..9317.99 rows=2 width=8) (actual time=0.579..141.296 rows=2.00 loops=1)
+        Workers Planned: 1
+        Workers Launched: 1
+        Buffers: shared hit=1642
+        ->  Partial Aggregate  (cost=8317.78..8317.79 rows=1 width=8) (actual time=0.379..0.380 rows=1.00 loops=2)
+              Buffers: shared hit=1642
+              ->  Nested Loop  (cost=22.10..8315.57 rows=884 width=0) (actual time=0.192..0.373 rows=141.50 loops=2)
+                    Buffers: shared hit=1642
+                    ->  Parallel Bitmap Heap Scan on chapter_comments cc  (cost=21.68..2112.57 rows=1016 width=8) (actual time=0.187..0.200 rows=202.00 loops=2)
+                          Recheck Cond: (chapter_id = 1890)
+                          Heap Blocks: exact=3
+                          Buffers: shared hit=26
+                          ->  Bitmap Index Scan on ix_chapter_comments_chapter_id  (cost=0.00..21.25 rows=1727 width=0) (actual time=0.054..0.054 rows=404.00 loops=1)
+                                Index Cond: (chapter_id = 1890)
+                                Index Searches: 1
+                                Buffers: shared hit=2
+                    ->  Index Scan using "PK_base_comments" on base_comments bc  (cost=0.42..6.11 rows=1 width=8) (actual time=0.001..0.001 rows=0.70 loops=404)
+                          Index Cond: (comment_id = cc.comment_id)
+                          Filter: ((parent_comment_id IS NULL) AND (NOT is_taken_down))
+                          Rows Removed by Filter: 0
+                          Index Searches: 404
+                          Buffers: shared hit=1616
+Planning Time: 0.119 ms
+Execution Time: 141.323 ms

@@ -1,0 +1,86 @@
+{
+  "bookshelf_favorites_tab": {
+    "Median": 0.12965,
+    "P95": 0.23307999999999998,
+    "Min": 0.1028,
+    "Max": 0.2632,
+    "Iterations": 40
+  },
+  "bookshelf_actively_reading_tab": {
+    "Median": 0.10625000000000001,
+    "P95": 0.1335799999999999,
+    "Min": 0.1033,
+    "Max": 0.1838,
+    "Iterations": 40
+  },
+  "discover_date_published_page1": {
+    "Median": 0.09225,
+    "P95": 0.15208499999999994,
+    "Min": 0.0887,
+    "Max": 0.1747,
+    "Iterations": 40
+  },
+  "discover_exclusion_probe_page1": {
+    "Median": 0.21555,
+    "P95": 0.3322,
+    "Min": 0.1979,
+    "Max": 0.3614,
+    "Iterations": 40
+  },
+  "tag_filter_and_include_page1": {
+    "Median": 0.42064999999999997,
+    "P95": 0.45874,
+    "Min": 0.3931,
+    "Max": 0.5098,
+    "Iterations": 40
+  },
+  "comment_roots_page1": {
+    "Median": 0.2876,
+    "P95": 0.38236999999999993,
+    "Min": 0.2445,
+    "Max": 0.4083,
+    "Iterations": 40
+  },
+  "comment_roots_count": {
+    "Median": 0.6133500000000001,
+    "P95": 0.713745,
+    "Min": 0.5774,
+    "Max": 0.7771,
+    "Iterations": 40
+  },
+  "notifications_feed_newest_page1": {
+    "Median": 0.19724999999999998,
+    "P95": 0.3324899999999998,
+    "Min": 0.1404,
+    "Max": 0.443,
+    "Iterations": 40
+  },
+  "notifications_unread_count": {
+    "Median": 0.08990000000000001,
+    "P95": 0.11571999999999996,
+    "Min": 0.0857,
+    "Max": 0.1352,
+    "Iterations": 40
+  },
+  "tree_search_wide_degree2": {
+    "Median": 1.9870999999999999,
+    "P95": 2.297635,
+    "Min": 1.6975,
+    "Max": 8.9049,
+    "Iterations": 40
+  },
+  "tree_search_deep_degree5": {
+    "Median": 1.516,
+    "P95": 11.639465,
+    "Min": 0.6469,
+    "Max": 14.3137,
+    "Iterations": 40
+  },
+  "also_favorited_top10": {
+    "Median": 0.2339,
+    "P95": 0.300015,
+    "Min": 0.2174,
+    "Max": 0.3183,
+    "Iterations": 40
+  }
+}

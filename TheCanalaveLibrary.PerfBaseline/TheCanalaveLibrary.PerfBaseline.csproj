@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <!-- WU-L6 performance smoke baseline (middle_plan_v2 Phase 1 item 3): the rerunnable
+         before/after fixture for every L6/L8 claim. Runs the app's REAL hot query shapes
+         (bookshelves, discovery, comments, notifications, tag filter, tree-search rCTE,
+         co-occurrence reads) against the persistent dev database at SeedTool volume, reports
+         latency percentiles, captures EXPLAIN (ANALYZE, BUFFERS) plans, and diffs two runs.
+
+         Deliberately dependency-free (no NBomber — v5 licensing requires registration; no k6 —
+         external binary): a baseline fixture must stay `dotnet run`-able forever with nothing
+         installed. Never referenced by the app or the test suite. -->
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <RootNamespace>TheCanalaveLibrary.PerfBaseline</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Npgsql" Version="10.0.3" />
+    </ItemGroup>
+
+</Project>

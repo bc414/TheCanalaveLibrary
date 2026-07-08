@@ -1,0 +1,15 @@
+-- bookshelf_actively_reading_tab
+-- provenance: ServerUserStoryInteractionReadService.GetBookshelfStoryIdsAsync (ActivelyReading — composite booleans)
+
+Bitmap Heap Scan on user_story_interactions  (cost=5.23..234.32 rows=31 width=4) (actual time=0.007..0.010 rows=25.00 loops=1)
+  Recheck Cond: ((user_id = 1307) AND has_started)
+  Filter: ((NOT is_completed) AND (NOT is_ignored))
+  Rows Removed by Filter: 19
+  Heap Blocks: exact=1
+  Buffers: shared hit=3
+  ->  Bitmap Index Scan on ix_user_story_interactions_has_started  (cost=0.00..5.22 rows=125 width=0) (actual time=0.003..0.003 rows=44.00 loops=1)
+        Index Cond: (user_id = 1307)
+        Index Searches: 1
+        Buffers: shared hit=2
+Planning Time: 0.023 ms
+Execution Time: 0.014 ms

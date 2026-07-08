@@ -43,6 +43,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 - **CI + dependency automation live (Phase 0 WU-CI, 2026-07-05).** `.github/workflows/ci.yml` runs the full `dotnet test` suite on PRs + manual dispatch (not on master pushes — deliberate, see `middle_plan_v2.md` Resolved); `.github/dependabot.yml` groups the Aspire train + EF Core, weekly. `phase-a-foundation` merged into `master`; branch convention settled (commit to master directly). No cell Stage changed. Detail: `middle_plan_v2.md` Phase 0 + Resolved "CI hardening deliberately deferred to launch", `workplan.md` WU-CI.
 - **Layer 7 dissolved; signal buffering live (WU-SignalBuffering, 2026-07-06).** First-principles audit of the deferred "L7 Redis" assumptions (SQL-Server-era lock rationale void under Postgres MVCC): L7 column removed from this grid — signal buffering → L2 (F44 reading-progress + F45 view-count in-process buffers built + tested; `layer2-services.md` §"Signal Buffering"), MVCC storage tuning + index audit → L6 (`R4_MvccStorageTuning`), Also-Favorited cache → L8's mart. F16 interactions stay durable-direct permanently; `Story/ChapterContent/BaseBlogPost.ViewCount` dropped for `daily_story_stats` (`R2_ViewCountToDailyStoryStats`); views are non-sortable/on-demand-only; Bookshelves Actively Reading sorts by derived recency (`RecentlyRead`). Valkey (not Redis) is the deferred N≥2 body-swap. `dotnet test` 1335/1335. Detail: audit notes in `audit/Chapters.md` F44, `audit/Stories.md` F45, `audit/UserStoryInteractions.md` F16, `audit/Discovery.md` F61; `workplan.md` WU-SignalBuffering; `middle_plan_v2.md` Resolved.
 - **Error-handling strategy live (WU-ErrorHandling, 2026-07-06).** Decision row 9 resolved (four forks: scope split circuit-UX-now/HTTP-at-Phase-5, layered island boundaries, hybrid inline+toast, localStorage editor autosave). Layered `CanalaveErrorBoundary` (page/chrome/card/comments islands), `ExceptionPresenter` message discipline (raw `ex.Message` in UI is now a defect), `InlineAlert`, minimal `ToastHost`, `DraftAutosave` on all four long-form editors, `#blazor-error-ui` restored to `App.razor` (was stranded in Identity-only MainLayout — interactive pages had NO teardown surface) + restyled with `ReconnectModal`; `DetailedErrors` dev-only; `/dev/error-playground` is the standing fault test bed. No cell Stage changed. Detail: `cross-cutting.md` §"Error Handling Strategy", `logging.md` §"Unhandled exceptions", `workplan.md` WU-ErrorHandling, `middle_plan_v2.md` Resolved.
+- **L6 index batch + perf baseline live (WU-L6, 2026-07-07).** `L6_IndexBatch` migration (headline: the seven `user_story_interactions` filtered indexes had silently collapsed to ONE in the database — unnamed `HasIndex` calls on the same columns overwrite each other; six restored) + comment/notification/story/message indexes, measured before/after at SeedTool volume via the new rerunnable `TheCanalaveLibrary.PerfBaseline` fixture (comment paging −98.8%). Detail: `layer6-indexes.md` (rewritten against reality), `workplan.md` WU-L6, per-cluster audit L6 notes.
 - **Horizontal line crossed; discovery marts + services live (WU-Marts, 2026-07-07).** The "needs real user data" deferral is superseded: `TheCanalaveLibrary.SeedTool` (standalone bulk-load console, never on startup/test paths) generates clustered synthetic data; the three discovery marts, daily worker, and F59/F61 service layers are built and headlessly verified. UI stays deferred. Detail: `layer8-data-marts.md`, `audit/Discovery.md` F59/F60/F61, `workplan.md` WU-Marts, `middle_plan_v2.md` Resolved.
 - **Real transactional email live (WU-Email, 2026-07-06).** The beta-blocking `IdentityNoOpEmailSender`-only setup is closed: a pluggable SMTP seam (`Email:Provider` = `Smtp`/`NoOp`, mirrors `ImageStorage:Provider`) plus `SmtpEmailSender` (MailKit) sends real confirmation/password-reset/email-change mail; a Mailpit dev inbox joins the Aspire AppHost (server-only path keeps the `NoOp` fallback, whose on-page confirmation link auto-hides once a real sender is active). Scope is transactional-only — notification email fan-out (`EmailEnabled`) stays deferred. A real double-HTML-encoding bug (the confirmation/reset link's already-encoded `&` was encoded a second time, corrupting the `code` query parameter) was found and fixed during live Mailpit verification the same session. F1 Identity L4.5 stays Stage 5 but now genuinely sends mail instead of surfacing a NoOp dev link. `dotnet test` 1344/1344. Detail: `cross-cutting.md` "Identity & Auth", `audit/Identity.md` WU-Email Stage note, `workplan.md` WU-Email, `middle_plan_v2.md` Resolved "Email mechanism".
 
@@ -51,34 +52,34 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |
 | 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
-| 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A |
-| 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 2 | N/A |
+| 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
+| 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 5 | N/A |
 | 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
 | 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
 | 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A |
 | 9 | Series & Ordering | Stories | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A |
 | 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A |
-| 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A |
-| 12 | Story Tagging | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A |
+| 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
+| 12 | Story Tagging | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
 | 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 15 | Saved Tag Selections | Tags | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A |
 | 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
-| 18 | User Following | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
+| 18 | User Following | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 19 | Vouches | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 20 | User Profile Editing | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 21 | User Profile Display | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 22 | User Stats | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
-| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
+| 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
+| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 25 | Comment Likes | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 26 | Spoiler Comments | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 27 | Recommendation Submission | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 28 | Recommendation Display | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 29 | Hidden Gem Management | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 30 | Recommendation Attribution | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 31 | Search Page | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 2 | 2 | N/A |
+| 31 | Search Page | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 2 | 5 | N/A |
 | 32 | Full-Text Search | Discovery | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 5 | N/A |
 | 33 | Manual Tree Search | Discovery | N/A | 2 | 2 | 2 | 1 | 1 | 2 | 2 | N/A |
 | 34 | Tag Directory | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
@@ -88,15 +89,15 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 38 | Group Management | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
 | 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 40 | Group Display | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 41 | Notification Generation | Notifications | 5 | 5 | N/A | N/A | N/A | 5 | N/A | 2 | N/A |
-| 42 | Notification Display | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A |
+| 41 | Notification Generation | Notifications | 5 | 5 | N/A | N/A | N/A | 5 | N/A | 5 | N/A |
+| 42 | Notification Display | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
 | 43 | Notification Settings | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 44 | Reading Progress Tracking | Chapters | 5 | 5 | 5 | 5 | N/A | 5 | N/A | N/A | N/A |
 | 45 | View Count Tracking | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 46 | Content Reporting | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 2 | 5 | N/A |
 | 47 | Moderation Queue & Actions | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | 5 | N/A |
 | 48 | Story Approval Workflow | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | N/A | N/A |
-| 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | 5 | N/A | 2 | N/A |
+| 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | 5 | N/A | 5 | N/A |
 | 50 | Badge System | Badges | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
 | 51 | Custom Lists | CustomLists | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A |
 | 52 | User Account Deletion | Identity | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |

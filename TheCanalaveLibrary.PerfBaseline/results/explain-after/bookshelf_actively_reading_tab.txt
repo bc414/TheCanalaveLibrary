@@ -1,0 +1,11 @@
+-- bookshelf_actively_reading_tab
+-- provenance: ServerUserStoryInteractionReadService.GetBookshelfStoryIdsAsync (ActivelyReading — composite booleans)
+
+Index Scan using ix_user_story_interactions_has_started on user_story_interactions  (cost=0.29..8.88 rows=26 width=4) (actual time=0.004..0.008 rows=25.00 loops=1)
+  Index Cond: (user_id = 1307)
+  Filter: ((NOT is_completed) AND (NOT is_ignored))
+  Rows Removed by Filter: 19
+  Index Searches: 1
+  Buffers: shared hit=3
+Planning Time: 0.040 ms
+Execution Time: 0.012 ms

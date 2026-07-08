@@ -115,7 +115,9 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
   confirmed by the Stage-4 note above). Client `Program.cs:16-17` DI registrations removed. MVP is
   `InteractiveServer`-only; L5 for story read/write is a genuine post-MVP build-to-spec item. No
   architectural blocker remains. Tests: build green (Server + Client); `dotnet test` all 1232 pass.
-- **L6 — Stage 2.** Story search indexes deferred ("to be added by query need").
+- **L6 — Stage 5 (WU-L6, 2026-07-07 — resolved, no creation-side DDL).** The write path needs no
+  index beyond the existing PK/unique/slug set; the story-table read indexes ("to be added by
+  query need") landed as the sort spines under Feature 5 (see its L6 note).
 
 ### Feature 4 / Feature 5 — Filter revamp Stage note (2026-06-27)
 
@@ -296,7 +298,12 @@ change).
   consistent with WU13/WU14/WU24 precedent — bUnit cannot verify layout/responsive breakpoints).
 - **L5 — Stage 4.** Only `GET /api/stories/{id}` mapped; `HttpStoryReadService.GetStoryForEditAsync`
   calls `/{id}/edit` which is unmapped. Listing endpoints absent.
-- **L6 — Stage 2.** Story-centric filtered indexes pending.
+- **L6 — Stage 5 (WU-L6, 2026-07-07).** The two discovery sort spines built in `L6_IndexBatch`:
+  `ix_stories_published_date` (+ `ix_stories_last_updated_date` for `GetRecentListingsAsync` /
+  Relevance tie-break). Measured at 3k seeded stories: DatePublished page-1 p50 0.39→0.09 ms
+  (−76%); the §8.7 exclusion-probe page −68% (riding these + the restored USI `ignored` partial).
+  Story-centric USI mirror indexes were REJECTED under R4 — no story-centric interaction query
+  exists (favorite counts are denormalized on `UserStat`). Detail: `layer6-indexes.md`.
 
 ## Feature 8 — Story Arcs
 - **L1 — Stage 5.** `StoryArc` + unique indexes `(StoryId,Title)`, `(StoryId,SortOrder)`. Overlap/gap

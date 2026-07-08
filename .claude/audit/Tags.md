@@ -61,7 +61,9 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
 - **L1 — Stage 5.** `Tag` shape matches §5.16 (curated, staff-only, hierarchy, sprite key, OC flag,
   tooltip description). Sound. **L2 — Stage 2** (no admin/write service). **L3/L3.5 — Stage 2**
   (mod CRUD behind `AuthorizeView` on Tag Directory). **L4 — Stage 1. L5 — Stage 5 (WU-L5Pilot,
-  see Stage note below). L6 — Stage 2.**
+  see Stage note below). L6 — Stage 5 (WU-L6, 2026-07-07 — resolved as already-covered, no DDL:
+  the tag table is tiny and PK/unique-indexed; a trigram index for the leading-wildcard chip
+  search was REJECTED under R4 until tag counts grow — `layer6-indexes.md` §"Rejected").**
 
   **Settled for sprite redesign (2026-06-27, do not revisit):** `ServerTagWriteService` gains a
   non-blocking sprite-existence warning via `ISpriteAssetProbe.ExistsAsync` (server-only write-time
@@ -181,7 +183,11 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
   field + `CharacterPairingType` enum; new `StoryCharacterPairingMember` first-class join; `UNIQUE(StoryId,
   BaseTagId)` on `SettingDetail`; `TagChipDto.AllowSettingDetails`.
 - **L2 — Stage 5. L3-Logic — Stage 5. L3.5-Structure — Stage 5. L4 — Stage 1** (pending human visual
-  sign-off on sub-component styling). **L5 — Stage 5. L6 — Stage 2.**
+  sign-off on sub-component styling). **L5 — Stage 5. L6 — Stage 5 (WU-L6, 2026-07-07 — resolved
+  as already-covered, no DDL: the tag-filter probes are correlated EXISTS on `(story_id, tag_id)`
+  = the `story_tags` PK, and no probe reads `priority`; the proposed reverse composite
+  `(tag_id, story_id) INCLUDE (priority)` was REJECTED under R4 — measured neutral, the PK was
+  already optimal. `layer6-indexes.md` §"Rejected").**
 
   **WU37 Stage notes (2026-06-25):**
 

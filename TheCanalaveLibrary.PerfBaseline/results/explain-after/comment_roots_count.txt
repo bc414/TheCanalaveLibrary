@@ -1,0 +1,21 @@
+-- comment_roots_count
+-- provenance: ServerCommentReadService.GetChapterCommentsPageAsync roots count
+
+Aggregate  (cost=3883.57..3883.58 rows=1 width=8) (actual time=0.426..0.426 rows=1.00 loops=1)
+  Buffers: shared hit=1873
+  ->  Nested Loop  (cost=0.84..3882.66 rows=366 width=0) (actual time=0.010..0.416 rows=283.00 loops=1)
+        Buffers: shared hit=1873
+        ->  Index Scan using ix_chapter_comments_chapter_id_date_posted on chapter_comments cc  (cost=0.42..689.42 rows=421 width=8) (actual time=0.005..0.062 rows=404.00 loops=1)
+              Index Cond: (chapter_id = 1890)
+              Index Searches: 1
+              Buffers: shared hit=257
+        ->  Index Scan using "PK_base_comments" on base_comments bc  (cost=0.42..7.58 rows=1 width=8) (actual time=0.001..0.001 rows=0.70 loops=404)
+              Index Cond: (comment_id = cc.comment_id)
+              Filter: ((parent_comment_id IS NULL) AND (NOT is_taken_down))
+              Rows Removed by Filter: 0
+              Index Searches: 404
+              Buffers: shared hit=1616
+Planning:
+  Buffers: shared hit=16
+Planning Time: 0.091 ms
+Execution Time: 0.434 ms

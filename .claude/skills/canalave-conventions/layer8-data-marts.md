@@ -18,8 +18,9 @@ They operate on a different cadence than live queries — daily rebuilds during 
 real user data are deferred past beta") is superseded: the extended-seed track
 (`TheCanalaveLibrary.SeedTool`) generates *synthetic but realistically-clustered* data —
 taste-communities, power-law story popularity, supernode recommenders, wired hidden-gem chains,
-author-spotlight edges, vouches toward low-volume authors, consent-flagged hidden favorites — so
-the mart family and its consumers (F59/F61) are buildable and verifiable pre-beta. Uniform-random
+author-spotlight edges, vouches toward low-volume authors, consent-flagged hidden favorites, plus
+threaded chapter comments and action-derived notifications (added for WU-L6 index measurability) —
+so the mart family and its consumers (F59/F61) are buildable and verifiable pre-beta. Uniform-random
 volume is NOT sufficient (co-occurrence stays near-equal noise; graphs stay degenerate); the
 clustered *distribution* is what makes output human-legible.
 

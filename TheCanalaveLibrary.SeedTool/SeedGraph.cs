@@ -54,6 +54,14 @@ public sealed class SeedRecommendationRow(int id, int storyId, int? recommenderI
 
 public sealed record SeedVouchRow(int VouchingUserId, int VouchedUserId, DateTime DateUtc);
 
+/// <summary>TPT: one base_comments row + one chapter_comments row per instance.</summary>
+public sealed record SeedChapterCommentRow(
+    long Id, int ChapterId, int UserId, long? ParentCommentId, string Text, DateTime DatePostedUtc, bool IsSpoiler);
+
+public sealed record SeedNotificationRow(
+    long Id, int RecipientUserId, int? SourceUserId, short TypeId, int RelatedEntityId,
+    bool IsRead, DateTime DateCreatedUtc);
+
 public sealed class SeedGraph
 {
     public required List<SeedUserRow> Users { get; init; }
@@ -63,6 +71,8 @@ public sealed class SeedGraph
     public required List<SeedInteractionRow> Interactions { get; init; }
     public required List<SeedRecommendationRow> Recommendations { get; init; }
     public required List<SeedVouchRow> Vouches { get; init; }
+    public required List<SeedChapterCommentRow> ChapterComments { get; init; }
+    public required List<SeedNotificationRow> Notifications { get; init; }
     public required int HiddenGemChainCount { get; init; }
 }
 
@@ -376,6 +386,63 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
             }
         }
 
+        // ── Chapter comments (threaded, popularity-weighted — L6 comment-paging measurability) ──
+        // Hub stories accumulate hundreds of comments, the tail a handful — the same power law
+        // that makes co-occurrence rankable makes the (chapter_id, date_posted) paging index earn
+        // its keep on hubs.
+        List<SeedChapterCommentRow> comments = [];
+        long commentId = bases.CommentId;
+        Dictionary<int, List<SeedChapterRow>> chaptersByStory = chapters
+            .GroupBy(c => c.StoryId).ToDictionary(g => g.Key, g => g.ToList());
+        foreach (SeedStoryRow story in stories)
+        {
+            if (!story.IsVisible) continue;
+            int commentCount = (int)(story.Popularity * 400) + _rng.Next(5);
+            if (commentCount == 0) continue;
+            List<SeedChapterRow> storyChapters = chaptersByStory[story.Id];
+            List<long> rootsOnChapter = [];
+            int lastChapterId = -1;
+            for (int k = 0; k < commentCount; k++)
+            {
+                SeedChapterRow chapter = storyChapters[_rng.Next(storyChapters.Count)];
+                if (chapter.Id != lastChapterId) { rootsOnChapter.Clear(); lastChapterId = chapter.Id; }
+                int commenter = bases.UserId + _rng.Next(options.Users);
+                long? parent = rootsOnChapter.Count > 0 && _rng.NextDouble() < 0.30
+                    ? rootsOnChapter[_rng.Next(rootsOnChapter.Count)]
+                    : null;
+                SeedChapterCommentRow comment = new(
+                    commentId++, chapter.Id, commenter, parent,
+                    $"<p>Seed comment — {Phrase(8 + _rng.Next(20))}.</p>",
+                    story.PublishedUtc.AddDays(_rng.Next(1, 60)).AddMinutes(_rng.Next(1440)),
+                    IsSpoiler: _rng.NextDouble() < 0.05);
+                comments.Add(comment);
+                if (parent is null) rootsOnChapter.Add(comment.Id);
+            }
+        }
+
+        // ── Notifications (derived from real actions, so recipients/types are semantically sane) ─
+        List<SeedNotificationRow> notifications = [];
+        long notificationId = bases.NotificationId;
+        void Notify(int recipient, int? source, short typeId, int relatedEntityId, DateTime when)
+        {
+            if (source == recipient) return;
+            notifications.Add(new SeedNotificationRow(
+                notificationId++, recipient, source, typeId, relatedEntityId,
+                IsRead: _rng.NextDouble() < 0.70, when));
+        }
+        const short NewStoryFavorite = 20, NewRecommendationOnYourStory = 22, NewVouchOnYou = 32;
+        foreach (SeedInteractionRow row in interactions.Values)
+        {
+            if (!row.IsFavorite || row.FavoriteDateUtc is not DateTime favoriteDate) continue;
+            if (_rng.NextDouble() >= 0.40) continue; // sample — not every favorite notifies
+            Notify(stories[row.StoryId - bases.StoryId].AuthorId, row.UserId, NewStoryFavorite, row.StoryId, favoriteDate);
+        }
+        foreach (SeedRecommendationRow rec in recommendations.Where(r => r.RecommenderId is not null))
+            Notify(stories[rec.StoryId - bases.StoryId].AuthorId, rec.RecommenderId, NewRecommendationOnYourStory,
+                rec.StoryId, rec.DatePostedUtc);
+        foreach (SeedVouchRow vouch in vouches)
+            Notify(vouch.VouchedUserId, vouch.VouchingUserId, NewVouchOnYou, vouch.VouchingUserId, vouch.DateUtc);
+
         return new SeedGraph
         {
             Users = users,
@@ -385,6 +452,8 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
             Interactions = [.. interactions.Values],
             Recommendations = recommendations,
             Vouches = vouches,
+            ChapterComments = comments,
+            Notifications = notifications,
             HiddenGemChainCount = chainCount,
         };
     }
@@ -477,4 +546,5 @@ public sealed record SeedToolOptions
 /// <summary>Starting IDs (MAX+1 read from the target database) so the tool composes with an
 /// existing Full/Minimal dev seed instead of colliding with it.</summary>
 public sealed record SeedIdBases(
-    int UserId, int StoryId, int ChapterId, long ChapterContentId, int RecommendationId);
+    int UserId, int StoryId, int ChapterId, long ChapterContentId, int RecommendationId,
+    long CommentId, long NotificationId);

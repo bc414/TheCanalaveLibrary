@@ -59,7 +59,11 @@ services, no components built.
   no optional callbacks → no buttons in menu; `OnReport` delegate → Report button appears and invokes
   callback. CSS visual rendering (avatar `rounded-full`, caret shape, spacing) remains human sign-off
   for Stage 6. `dotnet test` green.
-- **L6 — Stage 2** (filtered index `(followed_user_id)` for reverse lookups).
+- **L6 — Stage 5 (WU-L6, 2026-07-07 — resolved as already-covered, no DDL).** The reverse-lookup
+  index exists by EF FK convention (`ix_followed_users_followed_user_id` — verified in
+  `pg_indexes`); forward lookups ride the PK. A `(user_id, date_followed)` sort index was
+  REJECTED under R4: per-user follow counts are small (same rationale as the Bookshelves recency
+  ruling). Detail: `layer6-indexes.md` §"Rejected".
 
 ## Feature 19 — Vouches
 - **L1 — Stage 5 (reconciled Phase B, 2026-06-20; was mis-marked Stage 1).** `Vouch` is a dedicated

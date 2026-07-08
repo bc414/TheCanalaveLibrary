@@ -145,14 +145,16 @@ one, same as `testing.md`/`debugging.md` accreted.
      constraint: at N≥2 web nodes each in-process buffer body swaps to a shared **Valkey** store
      (open-licensed, DO-managed — Redis relicensed off open source) behind unchanged interfaces.
      `dotnet test` 1335/1335.
-3. **WU-L6 index batch + performance baseline** — the v1 Phase 4 item 2 DDL (UserStoryInteraction
-   filtered indexes, comment golden index, StoryTag reverse index; `layer6-indexes.md`) — but
-   preceded by a **performance smoke baseline** (NBomber or k6) so index work gets before/after
-   numbers instead of vibes. *Amended 2026-07-07:* the baseline runs against the **SeedTool
-   extended dataset** (WU-Marts item 9), not the tiny Full dev seed — toy volume can't exercise
-   planner index selection; add the F59 rCTE at `MaxDegrees` 2 vs 5 to the test bed. The baseline
-   script becomes a rerunnable fixture for every later L6/L8 claim. Test bed: `/discover`, story
-   pages, bookshelves under load, tree-search traversal.
+3. **WU-L6 index batch + performance baseline — DONE ✓ (2026-07-07).** Delivered as
+   `L6_IndexBatch` + the `TheCanalaveLibrary.PerfBaseline` fixture (custom dependency-free
+   harness — NBomber v5 licensing and k6's external binary disqualified them for a
+   forever-rerunnable `dotnet run` fixture), run against the SeedTool extended dataset per the
+   2026-07-07 amendment, including the F59 rCTE at depth 2 vs 5. Headline finding: the seven USI
+   filtered indexes had silently collapsed to one in the database (unnamed HasIndex calls on the
+   same columns — see `layer6-indexes.md` §"Multiple indexes on the same columns"); six restored.
+   Headline number: comment roots page −98.8% (24.3→0.29 ms). The StoryTag reverse index of the
+   original wording was REJECTED under R4 (the PK already serves the probes — measured neutral).
+   Detail: `workplan.md` WU-L6; `layer6-indexes.md` (rewritten against reality).
 4. **WU-ErrorHandling — DONE ✓ (2026-07-06).** Decision row 9 resolved same day (four forks —
    see Resolved "Error-handling UX + strategy"); the standing `cross-cutting.md` gap replaced
    with the settled strategy: layered `CanalaveErrorBoundary` islands (page/chrome/card/comments),

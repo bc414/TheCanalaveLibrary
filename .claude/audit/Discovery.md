@@ -67,7 +67,10 @@ Narrowing-within-fixed-source query → WU27/WU30.
 ## Feature 31 — Search Page (`/discover`)
 - **L1 — N/A** (queries Story/USI/StoryListing). **L2 — Stage 2** (Source=All query; random preload /
   "give me more" remains WU28). **L3/L3.5 — Stage 5 (WU23, 2026-06-23).** **L4 — Stage 1. L5 — Stage 2.
-  L6 — Stage 2.**
+  L6 — Stage 5 (WU-L6, 2026-07-07):** the DatePublished sort spine + restored USI partials serve
+  the page-1 sorted listing (p50 0.39→0.09 ms) and the §8.7 exclusion probe (0.68→0.22 ms, −68%)
+  at SeedTool volume; FTS GIN pre-existed; tag-probe additions rejected (PK already optimal,
+  measured neutral). Detail: `layer6-indexes.md`, `TheCanalaveLibrary.PerfBaseline/results/`.
 
   **Settled for WU23 (2026-06-23, do not revisit):**
   - **Filter axes are the unit of reuse, not the panel.** `TagFilter` and `UserStoryInteractionFilter`

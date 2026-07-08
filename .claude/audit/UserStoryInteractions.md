@@ -7,7 +7,8 @@
 **Entities (Core/Models/):** `UserStoryInteraction` (the bit-packed hot table, PK `(UserId,StoryId)`),
 `UserStoryInteractionDate` (warm 1-to-1 partition), `UserStoryRecommendationSource` (sparse 1-to-1).
 **Fluent config:** composite keys, partition 1-to-1 cascades, and **seven filtered/covering indexes** on
-`UserId INCLUDE (StoryId)` filtered by each boolean.
+`UserId INCLUDE (StoryId)` filtered by each boolean (NAMED HasIndex calls since WU-L6 2026-07-07 —
+unnamed, they had silently collapsed to one index in the database; see the F17 L6 note).
 
 This is the cluster the audit flagged as the most significant case of **code staleness** (a stale-code
 trap, not an intent contest — see audit-summary §0).
@@ -173,10 +174,18 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
   | `Ignore` | Ignored | `#C04030` Cinnabar Rust | Ban circle: CW outer disk + CCW inner circle (ring hole) + CW diagonal bar | `M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M5 12A7 7 0 0 0 19 12A7 7 0 0 0 5 12Z M5.5 7.5L7.5 5.5L18.5 16.5L16.5 18.5Z` |
 
 - **L5 — Stage 2.**
-- **L6 — Stage 5 (verified during WU15, 2026-06-22).** The seven filtered indexes in
-  `UserStoryInteractionConfigurations.cs` already target the post-re-model columns (`has_started`,
-  `is_completed`, `is_favorite`, `is_hidden_favorite`, `is_followed`, `is_read_it_later`, `is_ignored`)
-  — they were regenerated as part of WU0/InitialSchema. No migration or index change needed.
+- **L6 — Stage 5 (WU-L6, 2026-07-07 — CORRECTS the 2026-06-22 WU15 note and the 2026-07-06 R4
+  audit outcome).** Those earlier verifications audited the *configuration file*, not the
+  database: the seven `HasIndex(e => e.UserId)` calls were UNNAMED, and EF collapses unnamed
+  HasIndex calls on the same property set into ONE index (each call overwrites the previous
+  filter/name) — the database contained only `ix_user_story_interactions_has_started` (the last
+  declared) from WU0/InitialSchema until WU-L6. Six bookshelf tabs ran unindexed the whole time
+  (invisible at dev-seed volume). Fixed in `L6_IndexBatch` via the named `HasIndex(props, "name")`
+  overload; verified against `pg_indexes` (all seven present) and the perf fixture (favorites tab
+  p50 0.19→0.13 ms at 38k rows; discovery-exclusion probe −68% riding the restored `ignored`
+  partial). Convention + gotcha: `layer6-indexes.md` §"Multiple indexes on the same columns".
+  Tiers: Integration (the suite migrates through `L6_IndexBatch` on Testcontainers Postgres);
+  measurement via `TheCanalaveLibrary.PerfBaseline` (committed `results/`).
 - **L7 — removed with the layer (WU-SignalBuffering, 2026-07-06). F16 stays durable-direct
   permanently.** The planned write-behind queue's stated rationale ("batch writes to protect the
   read-hot table from locks") was designed under SQL Server hours before the Postgres switch and is
