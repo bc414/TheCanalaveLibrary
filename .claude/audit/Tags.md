@@ -59,8 +59,8 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
 
 ## Feature 11 — Tag Administration
 - **L1 — Stage 5.** `Tag` shape matches §5.16 (curated, staff-only, hierarchy, sprite key, OC flag,
-  tooltip description). Sound. **L2 — Stage 2** (no admin/write service). **L3/L3.5 — Stage 2**
-  (mod CRUD behind `AuthorizeView` on Tag Directory). **L4 — Stage 1. L5 — Stage 5 (WU-L5Pilot,
+  tooltip description). Sound. **L2 — Stage 5 (WU27.5, see Stage note below).** **L3/L3.5 — Stage 5
+  (WU27.5, see Stage note below)** (mod CRUD behind `AuthorizeView` on Tag Directory). **L4 — Stage 1. L5 — Stage 5 (WU-L5Pilot,
   see Stage note below). L6 — Stage 5 (WU-L6, 2026-07-07 — resolved as already-covered, no DDL:
   the tag table is tiny and PK/unique-indexed; a trigram index for the leading-wildcard chip
   search was REJECTED under R4 until tag counts grow — `layer6-indexes.md` §"Rejected").**

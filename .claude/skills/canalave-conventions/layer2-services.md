@@ -317,11 +317,10 @@ construction). The flush path is Integration — `TestAppFactory` **removes the 
 assert on timer behavior.
 
 **N≥2 seam:** at more than one web node, each in-process buffer swaps for a shared RESP store
-(**Valkey** — open-licensed, DO-managed; not Redis, which relicensed off open source) behind the
-same interface: hash/counters replace the dictionary, the same worker drains via RESP reads.
-Body swap only — no interface, caller, UI, or schema change. Until that day, the in-process body
-is strictly better (no network hop, no dependency); the Aspire-provisioned cache container stays
-available for that swap but nothing consumes it.
+behind the same interface — body swap only, no interface/caller/UI/schema change. Until that day,
+the in-process body is strictly better (no network hop, no dependency). Full detail (why a shared
+store is needed, what it swaps to, load-balancer session affinity, why no SignalR backplane is
+needed): `horizontal-scaling.md`.
 
 ## DTO Strategy: Partition-Anchored
 
@@ -413,7 +412,7 @@ directly. See `layer4-style.md` §"Avatars Are Stored URLs, Not Sprite Keys".
 `ISpriteReadService`. The difference from sprites/tags is *how the relative path got there in the first
 place* — `IImageStorageService.SaveAsync` (Core/Images/) is the write-side counterpart that turns an
 uploaded file into the relative key stored on the entity. `LocalImageStorageService` (MVP) writes under
-`wwwroot/uploads/`; the interface is the seam for the Post-MVP `S3ImageStorageService` swap (MinIO/R2).
+`wwwroot/uploads/`; the interface is the seam for the Post-MVP `S3ImageStorageService` swap (Garage/R2).
 See `audit/ImageStorage.md` for the full contract and URL conventions.
 
 ### User HTML Is Sanitized Once, On Save — Never On Display
@@ -703,7 +702,7 @@ public record StoryFilterDto(
 
 **Excluded by design:**
 - Content rating — applied automatically by `ApplicationDbContext`'s named query filter (`IActiveUserContext`); not a caller concern.
-- The per-`SearchMode` default-settings matrix (§8.7, `DefaultUserStoryInteractionFilterSetting`/`UserStoryInteractionFilterSetting`) — deferred post-WU23.
+- The per-`SearchMode` default-settings matrix (§8.7, `DefaultUserStoryInteractionFilterSetting`/`UserStoryInteractionFilterSetting`) — deferred post-WU23 — **built in WU28**, see "Discovery Defaults + Random Batch (WU28)" above.
 - The **Source** axis — `GetListingsAsync` is `Source=All` only. Narrowed sources (bookshelves, profiles, groups) pass pre-selected IDs to `GetListingsByIdsAsync` instead.
 
 **`GetListingsAsync` two-step (mirrors `GetRecentListingsAsync`):**

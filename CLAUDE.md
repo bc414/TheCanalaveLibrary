@@ -35,6 +35,8 @@ All process artifacts live under `.claude/`. The spec and this file live at repo
 | `.claude/audit/<FolderName>.md` | Per-folder-cluster notes. Shared context header, then per-feature sections with per-layer stages. | Audit creates; working sessions update |
 | `.claude/skills/canalave-conventions/SKILL.md` | Authoritative code conventions (hub file + layer files). Loaded as a skill when writing code. | Refined through implementation |
 | `.claude/middle_plan_v2.md` | Live phased master plan (platform-first → features → beta → launch) + "Decisions that need you" table (open items) and a "Resolved" list (closed items, each pointing at the convention doc that now states the rule). Supersedes the retired `.claude/middle_plan.md` and `.claude/forward_plan.md` (both historical references; v1 phase-number pointers resolve via v2's mapping table). | Whoever resolves a decision or advances a phase |
+| `.claude/grid_axes.md` | Defines the 9 grid layers (columns) and 62 features (rows) in detail, including the MVP-line and post-MVP-line rationale. `status.md`'s rows are drawn from this file. | Rarely — only if a layer/feature axis itself changes (e.g. the 2026-07-06 Layer-7 dissolution) |
+| `.claude/folder_clusters.md` | Folder → feature → per-layer (L3/L3.5/L4) description mapping, used to route work to the right audit file/skill section. | Rarely — only if folder clustering or feature-to-folder assignment changes |
 
 ### Audit file content per stage
 

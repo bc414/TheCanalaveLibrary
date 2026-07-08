@@ -21,7 +21,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 - **L4-Style blocker cleared (Tailwind v4 tokens locked).** Each rides along inside its feature's Phase-E work-unit. Detail: `layer4-style.md` §"Prerequisite: Design Tokens", `forward_plan.md` Phase C "Resolved."
 - **L1 migration-verified.** `InitialSchema` generated clean; every L1 Stage 5 below is migration-verified. Detail: `layer1-data-model.md` §"Fluent API Organization."
 - **Rows 19, 29 reclassified (Phase B).** Detail: `audit/Following.md`, `audit/Recommendations.md`.
-- **Workplan exists.** `.claude/workplan.md` sequences the build; rows 8/37/51/55 blocked/deferred; Layers 5–8 batched post-MVP. Planning artifact — no cell Stage changed by this.
+- **Workplan exists.** `.claude/workplan.md` sequences the build; rows 8/37/51/55 blocked/deferred. Per `middle_plan_v2.md`'s inversion (2026-07-05), platform-layer work (L2 signal buffering, L6 tuning, L8 marts) landed in Phase 1 ahead of several MVP-surface-completeness rows still pending in Phase 2 — "post-MVP" no longer describes the actual sequencing; see `middle_plan_v2.md` "Why v2 exists". Planning artifact — no cell Stage changed by this.
 - **First real app run (WU0) fixed 3 startup bugs; dev pivoted off Aspire for MVP.** Detail: `audit/Stories.md`, `cross-cutting.md` "Render Mode", `forward_plan.md` Aspire-MVP entry, `.claude/skills/run-server/SKILL.md`.
 - **Legacy technical-layer folders being retired to vertical clusters just-in-time (WU2).** No new file added to deprecated folders; touched files migrate as part of each work-unit. Detail: `canalave-conventions/SKILL.md` "Code Organization".
 - **Cross-cutting infra minted (WU12): `IActiveUserContext`, content-rating named query filter, `IImageStorageService`.** Aspire Npgsql EF pooling removed; plain `AddDbContext` is standing registration. Detail: `cross-cutting.md` "Active-User Context"/"Content Rating Filtering", `layer2-services.md` "DbContext Registration".
@@ -41,7 +41,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 - **Logging & telemetry conventions live (WU-Observability, 2026-07-06).** OpenTelemetry additive pass: Npgsql per-query spans + Blazor circuit sources/meters subscribed; `CanalaveTelemetry` per-component custom sources (Core/Diagnostics, pilot: ImageStorage); `TelemetryCircuitHandler` scope enrichment; silent-catch sweep complete (best-effort swallows = Warning with IDs; one sanctioned-silent site). Decision row 7 resolved: Grafana LGTM, deploy Phase 7. No cell Stage changed. Detail: `canalave-conventions/logging.md`, `workplan.md` WU-Observability, `middle_plan_v2.md` Resolved.
 - **Security hardening + Data Protection keyring live (WU-Security + WU-DataProtection, 2026-07-06).** Upload sniff+re-encode (`ImageUploadProcessor`, ImageSharp pinned 3.1.x), per-user write throttle at L2 (`IWriteRateLimitService`), HTTP edge limits on `/Account/*` + tag writes, security headers/CSP (enforced prod, Report-Only dev) with the no-inline-`on*` rule, Identity lockout + cookie flags, keyring persisted to Postgres (`data_protection_keys`; one-time global sign-out on first deploy of this change is expected). No cell Stage changed. Detail: `canalave-conventions/security.md` (new), `workplan.md` WU-Security entry, `audit/ImageStorage.md`, `audit/Identity.md`, `middle_plan_v2.md` Resolved ×3.
 - **CI + dependency automation live (Phase 0 WU-CI, 2026-07-05).** `.github/workflows/ci.yml` runs the full `dotnet test` suite on PRs + manual dispatch (not on master pushes — deliberate, see `middle_plan_v2.md` Resolved); `.github/dependabot.yml` groups the Aspire train + EF Core, weekly. `phase-a-foundation` merged into `master`; branch convention settled (commit to master directly). No cell Stage changed. Detail: `middle_plan_v2.md` Phase 0 + Resolved "CI hardening deliberately deferred to launch", `workplan.md` WU-CI.
-- **Layer 7 dissolved; signal buffering live (WU-SignalBuffering, 2026-07-06).** First-principles audit of the deferred "L7 Redis" assumptions (SQL-Server-era lock rationale void under Postgres MVCC): L7 column removed from this grid — signal buffering → L2 (F44 reading-progress + F45 view-count in-process buffers built + tested; `layer2-services.md` §"Signal Buffering"), MVCC storage tuning + index audit → L6 (`R4_MvccStorageTuning`), Also-Favorited cache → L8's mart. F16 interactions stay durable-direct permanently; `Story/ChapterContent/BaseBlogPost.ViewCount` dropped for `daily_story_stats` (`R2_ViewCountToDailyStoryStats`); views are non-sortable/on-demand-only; Bookshelves Actively Reading sorts by derived recency (`RecentlyRead`). Valkey (not Redis) is the deferred N≥2 body-swap. `dotnet test` 1335/1335. Detail: audit notes in `audit/Chapters.md` F44, `audit/Stories.md` F45, `audit/UserStoryInteractions.md` F16, `audit/Discovery.md` F61; `workplan.md` WU-SignalBuffering; `middle_plan_v2.md` Resolved.
+- **Layer 7 dissolved; signal buffering live (WU-SignalBuffering, 2026-07-06).** First-principles audit of the deferred "L7 Redis" assumptions (SQL-Server-era lock rationale void under Postgres MVCC): L7 column removed from this grid — signal buffering → L2 (F44 reading-progress + F45 view-count in-process buffers built + tested; `layer2-services.md` §"Signal Buffering"), MVCC storage tuning + index audit → L6 (`R4_MvccStorageTuning`), Also-Favorited cache → L8's mart. F16 interactions stay durable-direct permanently; `Story/ChapterContent/BaseBlogPost.ViewCount` dropped for `daily_story_stats` (`R2_ViewCountToDailyStoryStats`); views are non-sortable/on-demand-only; Bookshelves Actively Reading sorts by derived recency (`RecentlyRead`). N≥2 body-swap detail (Valkey, session affinity, no SignalR backplane needed): `canalave-conventions/horizontal-scaling.md`. `dotnet test` 1335/1335. Detail: audit notes in `audit/Chapters.md` F44, `audit/Stories.md` F45, `audit/UserStoryInteractions.md` F16, `audit/Discovery.md` F61; `workplan.md` WU-SignalBuffering; `middle_plan_v2.md` Resolved.
 - **Error-handling strategy live (WU-ErrorHandling, 2026-07-06).** Decision row 9 resolved (four forks: scope split circuit-UX-now/HTTP-at-Phase-5, layered island boundaries, hybrid inline+toast, localStorage editor autosave). Layered `CanalaveErrorBoundary` (page/chrome/card/comments islands), `ExceptionPresenter` message discipline (raw `ex.Message` in UI is now a defect), `InlineAlert`, minimal `ToastHost`, `DraftAutosave` on all four long-form editors, `#blazor-error-ui` restored to `App.razor` (was stranded in Identity-only MainLayout — interactive pages had NO teardown surface) + restyled with `ReconnectModal`; `DetailedErrors` dev-only; `/dev/error-playground` is the standing fault test bed. No cell Stage changed. Detail: `cross-cutting.md` §"Error Handling Strategy", `logging.md` §"Unhandled exceptions", `workplan.md` WU-ErrorHandling, `middle_plan_v2.md` Resolved.
 - **L6 index batch + perf baseline live (WU-L6, 2026-07-07).** `L6_IndexBatch` migration (headline: the seven `user_story_interactions` filtered indexes had silently collapsed to ONE in the database — unnamed `HasIndex` calls on the same columns overwrite each other; six restored) + comment/notification/story/message indexes, measured before/after at SeedTool volume via the new rerunnable `TheCanalaveLibrary.PerfBaseline` fixture (comment paging −98.8%). Detail: `layer6-indexes.md` (rewritten against reality), `workplan.md` WU-L6, per-cluster audit L6 notes.
 - **Horizontal line crossed; discovery marts + services live (WU-Marts, 2026-07-07).** The "needs real user data" deferral is superseded: `TheCanalaveLibrary.SeedTool` (standalone bulk-load console, never on startup/test paths) generates clustered synthetic data; the three discovery marts, daily worker, and F59/F61 service layers are built and headlessly verified. UI stays deferred. Detail: `layer8-data-marts.md`, `audit/Discovery.md` F59/F60/F61, `workplan.md` WU-Marts, `middle_plan_v2.md` Resolved.
@@ -54,8 +54,8 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
 | 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 5 | N/A |
-| 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
-| 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
+| 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A |
+| 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A |
 | 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A |
 | 9 | Series & Ordering | Stories | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A |
 | 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A |
@@ -64,17 +64,17 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 15 | Saved Tag Selections | Tags | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A |
-| 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
-| 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
-| 18 | User Following | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
-| 19 | Vouches | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
+| 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
+| 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
+| 18 | User Following | Following | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
+| 19 | Vouches | Following | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
 | 20 | User Profile Editing | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 21 | User Profile Display | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 22 | User Stats | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
-| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
-| 25 | Comment Likes | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 26 | Spoiler Comments | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
+| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
+| 25 | Comment Likes | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 26 | Spoiler Comments | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 27 | Recommendation Submission | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 28 | Recommendation Display | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 29 | Hidden Gem Management | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
@@ -90,8 +90,8 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 40 | Group Display | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 41 | Notification Generation | Notifications | 5 | 5 | N/A | N/A | N/A | 5 | N/A | 5 | N/A |
-| 42 | Notification Display | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
-| 43 | Notification Settings | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
+| 42 | Notification Display | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 5 | N/A |
+| 43 | Notification Settings | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
 | 44 | Reading Progress Tracking | Chapters | 5 | 5 | 5 | 5 | N/A | 5 | N/A | N/A | N/A |
 | 45 | View Count Tracking | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 46 | Content Reporting | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 2 | 5 | N/A |

@@ -63,7 +63,7 @@ for the full history). Platform groundwork already landed:
 ```
 0. Hygiene + CI → 0.5 Convention mini-pass
       → 1. PLATFORM BUILD-OUT (observability, signal buffers, indexes, error handling,
-           email, security, data-protection, SignalR, marts)
+           email, security, data-protection, marts)
       → 2. MVP-surface completeness → 3. Full L4 sweep + Stage-6 freezes
       → 4. Beta-scope decisions → 5. L5 WASM global flip
       → 6. Beta → 7. Launch readiness + Launch (DigitalOcean)
@@ -142,9 +142,8 @@ one, same as `testing.md`/`debugging.md` accreted.
      the 2s client debounce already absorbs churn); MVCC churn managed by `R4_MvccStorageTuning`
      (fillfactor + autovacuum; USI index audit: all 7 partial indexes justified, none dropped).
    - Pattern doc: `layer2-services.md` §"Signal Buffering" (layer7-redis.md deleted). Forward
-     constraint: at N≥2 web nodes each in-process buffer body swaps to a shared **Valkey** store
-     (open-licensed, DO-managed — Redis relicensed off open source) behind unchanged interfaces.
-     `dotnet test` 1335/1335.
+     constraint: N≥2 body-swap detail (Valkey, session affinity, no SignalR backplane needed) now
+     lives in `canalave-conventions/horizontal-scaling.md`. `dotnet test` 1335/1335.
 3. **WU-L6 index batch + performance baseline — DONE ✓ (2026-07-07).** Delivered as
    `L6_IndexBatch` + the `TheCanalaveLibrary.PerfBaseline` fixture (custom dependency-free
    harness — NBomber v5 licensing and k6's external binary disqualified them for a
@@ -189,9 +188,10 @@ one, same as `testing.md`/`debugging.md` accreted.
    passed (filesystem store moved aside, process replaced, cookie + antiforgery survived).
    One-time global sign-out expected when this first deploys. Detail: `workplan.md` entry;
    `security.md` §"Data Protection Keyring".
-8. **WU-SignalR** — messaging push (settled WU35 design; first app-level Hub, `MessagesHub`)
-   plus the hub integration-test harness that does not exist yet. Test bed: the built messaging
-   feature, two browser sessions. Pointer: `cross-cutting.md` "Private Messaging Architecture".
+8. **WU-SignalR — REMOVED (2026-07-07).** Was tracked here as messaging push (first app-level Hub,
+   `MessagesHub`); permanently ruled out instead, not deferred — see Resolved "SignalR permanently
+   ruled out for private messaging" and `cross-cutting.md` "Private Messaging Architecture". The app
+   has zero app-defined SignalR Hubs, and that's now a permanent property, not a pending build.
 9. **WU-Marts — DONE ✓ (2026-07-07). Scope expanded same day (supersedes the one-mart-pattern +
    wait-for-beta sequencing).** The horizontal line is crossed deliberately with synthetic *clustered* data
    instead of waiting for beta (see Resolved "Horizontal line crossed / discovery mart family").
@@ -456,8 +456,27 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   read context (`ServerStoryReadService.GetStoryForEditAsync` — the one read-your-writes-exposed
   path; all other edit surfaces are optimistic local state). Rules: `layer2-services.md` §"Signal
   Buffering", `layer6-indexes.md` §"MVCC Storage Tuning", `grid_axes.md` "Layer 7 — dissolved",
-  conventions SKILL.md axiom 7. Prior 2026-07-05 sequencing (Redis battle test, `redis-cli` ground
-  truth, `AddRedisDistributedCache`) is historical.
+  conventions SKILL.md axiom 7, `canalave-conventions/horizontal-scaling.md` (full N≥2 story: the
+  Valkey swap, load-balancer session affinity, why no SignalR backplane is needed). Prior
+  2026-07-05 sequencing (Redis battle test, `redis-cli` ground truth, `AddRedisDistributedCache`)
+  is historical.
+
+- **SignalR permanently ruled out for private messaging (supersedes WU-SignalR)** — resolved
+  (2026-07-07, Brian): messaging will never use SignalR — Discord already serves the real-time-chat
+  need, and this site's private messaging is deliberately for substantive, async, long-form
+  conversation, the same reasoning that already kept group conversations off-site. This hardens
+  WU35's original "SignalR deferred post-MVP" framing into a permanent decision: `MessagesHub` (the
+  only app-level SignalR Hub ever proposed anywhere in this project) is cancelled, not shelved.
+  Consequence for horizontal scaling: since no app-defined Hub exists or ever will, there is no
+  SignalR backplane need at N≥2 — only load-balancer session affinity for Blazor Server's own
+  circuits remains relevant, which is a different concern entirely (a backplane routes cross-node
+  Hub broadcasts; affinity keeps a circuit's requests routed to the node that holds it — the two
+  were being conflated). Rule: `cross-cutting.md` §"Private Messaging Architecture",
+  `canalave-conventions/horizontal-scaling.md` (new file — also consolidates the previously
+  scattered Valkey N≥2 body-swap notes from `SKILL.md`, `layer2-services.md`, `cross-cutting.md`,
+  and `grid_axes.md` into one place). `middle_plan_v2.md` Phase 1 item 8 marked REMOVED above;
+  `workplan.md`'s Post-MVP "Messaging realtime push (SignalR)" entry marked REMOVED; `audit/Messaging.md`
+  WU35 note #2 updated; `grid_axes.md`/`folder_clusters.md` Feature 49 descriptions updated.
 
 - **Platform-before-features reordering (this file)** — resolved (2026-07-05, Brian):
   infrastructure lands before new feature work, now that the functional site makes platform

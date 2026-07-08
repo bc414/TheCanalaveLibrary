@@ -1,5 +1,10 @@
 # Next Steps: The Canalave Library
 
+> **RETIRED (2026-07-03) — historical reference only.** Superseded by the successor chain now at
+> `.claude/middle_plan_v2.md`. The step1–6 process and `claude_v3.md`/`features/<name>.md` file
+> names described below no longer match the current process — see `CLAUDE.md` (repo root) for
+> current file names/roles.
+
 ## What you have now
 
 Seven files ready to use:

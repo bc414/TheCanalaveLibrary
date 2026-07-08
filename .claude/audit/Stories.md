@@ -296,8 +296,8 @@ change).
   coverage as Desktop. All 57 RazorComponents tests pass.
 - **L4-Style — Stage 1.** All Tailwind tokens; visual sign-off pending human review (Stage-6 gate,
   consistent with WU13/WU14/WU24 precedent — bUnit cannot verify layout/responsive breakpoints).
-- **L5 — Stage 4.** Only `GET /api/stories/{id}` mapped; `HttpStoryReadService.GetStoryForEditAsync`
-  calls `/{id}/edit` which is unmapped. Listing endpoints absent.
+- **L5 — Stage 2**, same resolution as Feature 4 above — see WU-FilterRevamp (`HttpStoryReadService`/
+  `HttpStoryWriteService` were deleted as dead code, not left with an unmapped endpoint).
 - **L6 — Stage 5 (WU-L6, 2026-07-07).** The two discovery sort spines built in `L6_IndexBatch`:
   `ix_stories_published_date` (+ `ix_stories_last_updated_date` for `GetRecentListingsAsync` /
   Relevance tie-break). Measured at 3k seeded stories: DatePublished page-1 p50 0.39→0.09 ms

@@ -1,6 +1,7 @@
 # Grid Axes — Layers and Features for the SLF Table
 
-Companion to `step3_classify.md`. Defines the columns (layers) and rows (features) of the
+Companion to `step3_classify.md` (a one-time prompt file from the original bootstrapping process,
+never committed to this repo — see the retired `next_steps.md`). Defines the columns (layers) and rows (features) of the
 Feature × Layer grid. Each cell holds a Stage value (1–6) or N/A per CLAUDE.md's definitions.
 
 ---
@@ -28,7 +29,8 @@ and nothing in 1–4 has to change again if you redo them. Layers 5–8 are also
 are pure DDL applied across many tables at once; WASM enablement applies the same endpoint + HttpClient
 wrapper pattern to N stable interfaces; data mart workers are standalone classes with no interface
 callers. (The same body-swap property is how a signal-buffer body — an L2 concern — later swaps its
-in-process store for a shared Valkey store at N≥2 nodes, with no contract change.)
+in-process store for a shared store at N≥2 nodes, with no contract change — see
+`canalave-conventions/horizontal-scaling.md`.)
 
 ### Horizontal boundary: features requiring realistic interaction data
 
@@ -86,7 +88,7 @@ split per method (`.Select()` projection on `NoTracking` context vs tracked-enti
 `.AsSplitQuery()` for multi-collection includes, and the key branch point for features with high-frequency
 writes: durable intent writes directly through EF Core; a **loss-tolerant, coalescable signal** takes the
 in-process signal-buffer body instead (buffer + `BackgroundService` flush — `layer2-services.md`
-§"Signal Buffering"; the buffer store swaps to Valkey at N≥2 behind the same interface).
+§"Signal Buffering"; N≥2 body-swap detail in `canalave-conventions/horizontal-scaling.md`).
 
 For features whose *purpose* is background computation — data-mart rebuilds, stat aggregation — Layer 2
 is the worker itself (`IHostedService`/`BackgroundService` with raw SQL), not a service method fronting
@@ -264,8 +266,10 @@ from locks" rationale; what survives is per-pattern):
    precomputed table directly. No app-tier read cache.
 
 The only Redis-shaped remnant is a forward constraint: at **N≥2 web nodes** each in-process buffer
-body swaps for a shared RESP store (**Valkey** — open-licensed, DO-managed) behind its unchanged
-interface. The Aspire-provisioned `cache` container exists for that day; nothing consumes it at N=1.
+body swaps for a shared RESP store behind its unchanged interface. The Aspire-provisioned `cache`
+container exists for that day; nothing consumes it at N=1. Full N≥2 scale-out story (the Valkey
+swap, load-balancer session affinity, why no SignalR backplane is needed):
+`canalave-conventions/horizontal-scaling.md`.
 
 ### Layer 8 — Data Mart Workers
 
@@ -583,9 +587,11 @@ Import verification.
 
 ### Private Communication
 
-**49. Private Messaging** — Route: `/messages/{ConversationId:int?}`. Three-table model. SignalR
-real-time. `LastReadTimestamp` for unread tracking. Uses full `EditorView` for rich-text composition.
-Respects `AllowPrivateMessages`.
+**49. Private Messaging** — Route: `/messages/{ConversationId:int?}`. Three-table model.
+Deliberately request/response only, permanently — no real-time push; Discord fills the live-chat
+need, this site's messaging is for substantive async conversation (`cross-cutting.md` §"Private
+Messaging Architecture"). `LastReadTimestamp` for unread tracking. Uses full `EditorView` for
+rich-text composition. Respects `AllowPrivateMessages`.
 
 
 ### Auxiliary Features

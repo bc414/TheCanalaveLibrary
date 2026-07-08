@@ -1,7 +1,9 @@
 # Audit — Messaging/
 
 **Feature:** 49 (private messaging). Route `/messages/{ConversationId:int?}`. Uses the full
-`EditorView` for rich-text composition (§5.19). **Stateless MVP — no SignalR.**
+`EditorView` for rich-text composition (§5.19). **Stateless, permanently — no SignalR** (hardened
+2026-07-07 from an earlier "deferred post-MVP" framing; see WU35 note #2 below and
+`cross-cutting.md` "Private Messaging Architecture").
 
 ## Shared Context
 
@@ -40,11 +42,14 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
    single recipient. Group conversations happen off-site (Discord) or in public on-site. No
    group-conversation UI is built; a conversation always has exactly two participants.
 
-2. **Stateless MVP — SignalR deferred post-MVP.** This reverses the spec's "SignalR real-time"
-   framing. Messaging is request/response like every other feature: recipient sees new messages on
-   navigate/refresh; global unread badge refreshes on navigation. SignalR realtime push is a
-   post-MVP additive layer behind the unchanged write service — no L1–L4 rework needed. Feature 49
-   L5 remains N/A.
+2. **Stateless, permanently — SignalR ruled out entirely (hardened 2026-07-07).** This reverses the
+   spec's "SignalR real-time" framing. Messaging is request/response like every other feature:
+   recipient sees new messages on navigate/refresh; global unread badge refreshes on navigation.
+   Originally framed as "SignalR push deferred post-MVP"; settled 2026-07-07 that it's never
+   built at all — Discord already covers real-time chat, and this site's messaging is deliberately
+   async/long-form. `MessagesHub` was the only app-level SignalR Hub ever proposed in this project;
+   with it gone the app has none, permanently (see `canalave-conventions/horizontal-scaling.md` §2
+   for why that also means no SignalR backplane is ever needed). Feature 49 L5 remains N/A.
 
 3. **Global unread-messages badge in the layout chrome.** Placed beside `LoginDisplay` in
    `DesktopLayout.razor` and `MobileLayout.razor`. Derived from the `LastReadTimestamp` watermark
@@ -100,8 +105,8 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
 - **L4-Style — Stage 5 (WU35, 2026-06-24).** Tailwind v4 design-token classes throughout all
   components. Visual sign-off (human) pending — Stage 6 gate still open, consistent with WU8/WU13/
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
-- **L5 — N/A.** Messaging is stateless for MVP (no REST API endpoints to wasm-enable). SignalR
-  realtime push is the deferred post-MVP additive layer — not an L5/REST model.
+- **L5 — N/A.** Messaging is stateless, permanently (no REST API endpoints to wasm-enable). SignalR
+  realtime push was considered and ruled out entirely 2026-07-07 — not deferred, never built.
 - **L6 — Stage 5 (WU-L6, 2026-07-07).** `ix_private_messages_conversation_id_date_sent` built in
   `L6_IndexBatch` for the thread-page query (supersedes the convention FK index; equality-bound
   leading column, so DESC rides a backward scan). Not volume-measured — SeedTool generates no

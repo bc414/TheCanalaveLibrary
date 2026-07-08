@@ -252,7 +252,8 @@ shape and dropdown row classes.
   OnScrollProgress` callback, Ch.1 ≥90% `MarkStartedAsync` trigger, helpful-prompt gate.
 - **L3.5-Structure — Stage 5 (WU26, DONE ✓ 2026-06-24).** Progress tracking wired into `ChapterReadingPage`.
 - **L4 — N/A** (no dedicated visual surface). **L5 — N/A** (write path, server-only).
-- **L7 — Stage 2.** Redis batching of progress writes (write-behind pattern 1; MVP direct DB; L7 swaps body).
+- ~~**L7 — Stage 2.** Redis batching of progress writes (write-behind pattern 1; MVP direct DB; L7 swaps body).~~
+  Superseded — see "Feature 44 L2 body swap — signal buffer" below (Layer 7 dissolved 2026-07-06).
 
 ---
 

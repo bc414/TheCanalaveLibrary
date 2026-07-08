@@ -1,7 +1,8 @@
 # Workplan — Ordered Work-Units (atoms-first)
 
-> New work-units (2026-07-03 onward) are sequenced by `.claude/middle_plan.md`, which superseded
-> `forward_plan.md`; this file remains the work-unit ledger — every unit is still recorded here.
+> New work-units are sequenced by `.claude/middle_plan_v2.md` (the live master plan, since
+> 2026-07-05 — it superseded `.claude/middle_plan.md`, which had itself superseded
+> `forward_plan.md`); this file remains the work-unit ledger — every unit is still recorded here.
 
 Produced by Phase D (`forward_plan.md`, now retired). This is the build sequence for Phase E. Each work-unit names
 its **cell(s)** (Feature # + layer, per `status.md`), its **tool** (per CLAUDE.md Per-Stage Guidance),
@@ -13,14 +14,20 @@ references it, does not restate it.
 
 ## Read this first (ordering preamble)
 
-**Scope of the numbered sequence = Layers 1–4 (the MVP).** `grid_axes.md` §"The Two Boundaries" is
-authoritative: Layers 1–4 are the InteractiveServer MVP (data → service → logic → structure → style);
-Layers 5–8 are *additive and batchable* — they swap method bodies / add DDL / add standalone workers
-behind contracts frozen in 1–4, and never force a 1–4 change. The resolved "Aspire orchestration during
-MVP dev" decision (`forward_plan.md`) confirms this: MVP is InteractiveServer-only, no Redis/WASM,
-Layers 5–8 post-MVP. So **every numbered work-unit below builds L2/L3-Logic/L3.5-Structure/L4-Style**
-(L1 is done — see WU0). **L5–L8 are gathered into the "Post-MVP" section** at the end, unsequenced and
-batched by pattern, not dropped. If this scoping is wrong, stop here — it reshapes everything below.
+**Scope of the numbered sequence, as originally written (through 2026-07-05) = Layers 1–4 (the
+MVP).** `grid_axes.md` §"The Two Boundaries" is authoritative: Layers 1–4 are the InteractiveServer
+MVP (data → service → logic → structure → style); Layers 5–8 are *additive and batchable* — they
+swap method bodies / add DDL / add standalone workers behind contracts frozen in 1–4, and never
+force a 1–4 change. That architectural property is still true. The *scheduling* claim that
+followed from it — "Layers 5–8 post-MVP" — is **superseded**: `middle_plan_v2.md`'s platform-first
+inversion (2026-07-05) moved most L5–L8 work *ahead of* several still-pending MVP-surface rows
+(WU-L5Pilot shipped WASM 2026-07-04; WU-SignalBuffering dissolved the old Redis/L7 plan into L2/L6/L8
+2026-07-06; WU-Marts shipped L8 2026-07-07). So **numbered work-units below through 2026-07-05 build
+L2/L3-Logic/L3.5-Structure/L4-Style** (L1 is done — see WU0); **named work-units from WU-CI onward
+follow `middle_plan_v2.md`'s ordering instead**, and several of those are L5–L8. **The "Post-MVP"
+section below is correspondingly partial** — some of what it once listed has already shipped out of
+sequence (see each bullet's own status). If this scoping is unclear, see `middle_plan_v2.md` "Why v2
+exists" and its v1→v2 phase-mapping table before reading further.
 
 **Topological, bottom-up, three-phase (spec §9.2).** A cell's dependencies appear *earlier in this file*,
 so they're at Stage 5 when reached. Phases:
@@ -1010,8 +1017,10 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 
 ### WU35 — Messaging — DONE ✓ (2026-06-24)
 - **Cells:** 49 L2/L3/L3.5/L4 → Stage 5.
-- **Do:** `/messages/{ConversationId?}`, three-table model, SignalR realtime (InteractiveServer), EditorView
-  composition, `LastReadTimestamp`, `AllowPrivateMessages` gate. **Tool:** opusplan.
+- **Do:** `/messages/{ConversationId?}`, three-table model, stateless request/response (no SignalR —
+  the spec's "real-time" framing was reversed for MVP, see `cross-cutting.md` "Private Messaging
+  Architecture"; hardened to a permanent decision 2026-07-07), EditorView composition,
+  `LastReadTimestamp`, `AllowPrivateMessages` gate. **Tool:** opusplan.
   **Pointer:** `audit/Messaging.md`. **Deps:** WU6.
 
 ### WU36 — Badges — DONE ✓ (2026-06-25)
@@ -1026,7 +1035,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   tests green; pre-existing `ModerationServiceTests` DI failures (7) unrelated to this WU.
   **Pointer:** `audit/Badges.md`. **Deps:** WU30.
 
-### WU37 — Story Tagging — structured authoring (Feature 12)
+### WU37 — Story Tagging — structured authoring (Feature 12) — DONE ✓ (2026-06-25)
 - **Cells:** 12 L2/L3/L3.5 → Stage 5 (L4 → Stage 1, visual sign-off pending). L1 additions
   (`AllowSettingDetails`, `StoryCharacterPairing` rename, `UNIQUE(SettingDetail)`, new
   `StoryCharacterPairingMember`) noted against the existing Stage-5 L1 cell.
@@ -1487,6 +1496,8 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   `layer5-wasm.md` §"The Island Recipe" as a flip-wave debugging technique.
 
 ### WU-Aspire — Orchestration returns: AppHost + Postgres/Redis/MinIO (Phase 4 item 1) — DONE ✓ (2026-07-05)
+*(Snapshot of what this WU stood up that day — MinIO was replaced by Garage a few entries later,
+see WU-S3Garage; treat "Postgres/Redis/MinIO" above as historical, not current.)*
 - **Cells:** none (dev-infrastructure work-unit — no feature cell changes stage; recorded as a
   `status.md` Global Condition). Executes `middle_plan.md` Phase 4 item 1 under its two standing
   constraints: plain `AddDbContext` stays (WU12 anti-pooling ruling — zero Server code changed),
@@ -1642,7 +1653,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Scope philosophy:** conventions + seams, not instrument-everything. Auto-instrumentation
   closes the visibility holes now (Npgsql per-query spans, .NET 10 Blazor circuit/component
   sources — the app's real execution path is the circuit, which the stock template never saw);
-  custom spans only where auto-instrumentation is blind. WU-Redis consumes the seams as the
+  custom spans only where auto-instrumentation is blind. The signal-buffering work consumes the seams as the
   named observability pilot for worker metrics.
 - **Done:**
   - `Core/Diagnostics/CanalaveTelemetry.cs` (new cross-cutting cluster): per-component
@@ -1674,7 +1685,8 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   - `canalave-conventions/logging.md` (new, linked from SKILL.md hub + cluster list): templates,
     level semantics (best-effort swallows = Warning, settled 2026-07-06), no-silent-catches +
     sanctioned registry, dispatch-boundary scopes, per-surface recipes (external call = worked
-    example; worker + hub stubs for WU-Redis/WU-SignalR), telemetry testing patterns,
+    example; worker stub for the signal-buffering work — the hub-stub half never shipped, since
+    SignalR was permanently ruled out for messaging 2026-07-07), telemetry testing patterns,
     dashboard-reading guide.
 - **Verified (2026-07-06):** Unit — `ImageStorageTelemetryTests` (4 tests: span tags/error
   status, metric values+tags via `MetricCollector`, `FakeLogger` level+structured-state;
@@ -1771,14 +1783,12 @@ work-unit into Phase 3 and update `status.md` + the audit file.
 Per `grid_axes.md` §"The Two Boundaries": these swap method bodies / add DDL / add standalone workers
 behind the contracts frozen in Layers 1–4. Batch by pattern when the MVP slice they sit behind is stable.
 
-- **Messaging realtime push (SignalR).** Post-MVP additive layer on top of the stateless WU35 write
-  service (settled WU35, 2026-06-24 — see `forward_plan.md` Resolved, `cross-cutting.md` "Private
-  Messaging Architecture"). Build: first app-level `Hub` class (`MessagesHub`), `AddSignalR()` in
-  `Program.cs`, `MapHub<MessagesHub>("/hubs/messages")`; per-conversation SignalR group join/leave on
-  thread open; broadcast via `IHubContext<MessagesHub>` alongside `SendMessageAsync` in the write
-  service; client-side receive handler calling `InvokeAsync(StateHasChanged)`. No changes to L1–L4 —
-  the write service's sanitize+persist+return-DTO path is unchanged. Hub integration test harness
-  needed (no existing template). Feature 49 L5 stays N/A (this is not a REST-endpoint pattern).
+- **Messaging realtime push (SignalR) — REMOVED (2026-07-07).** Was tracked here as a Post-MVP
+  additive layer on top of the stateless WU35 write service; permanently ruled out instead — Discord
+  already covers real-time chat, and this site's messaging is deliberately async/long-form. Nothing
+  in this project builds it now or later. See `cross-cutting.md` "Private Messaging Architecture" and
+  `canalave-conventions/horizontal-scaling.md` §2 (no app-defined Hub means no SignalR backplane is
+  needed at N≥2 either). Feature 49 L5 stays N/A.
 - **L5 — WASM enablement (all features).** Map endpoints from the stable `IXService` contracts + `Client`
   HTTP impls. Includes the two genuine mechanical Stage-4 cells — **Story L5 endpoint wiring** (4/5 L5:
   `HttpStory*Service` call `/{id}/edit` + write routes `StoryEndpoints` never maps) and **Sprites L5**
@@ -1797,11 +1807,11 @@ behind the contracts frozen in Layers 1–4. Batch by pattern when the MVP slice
   `audit/Discovery.md` L8 notes, `audit/Moderation.md` Feature 62. Governed by `layer8-data-marts.md`.
 - **Deferred workers (nothing to operate on yet — `grid_axes.md` horizontal note).** 57 Notification
   Cleanup Worker (nothing 60 days old), 58 UserStat Recalculation Worker (real-time counters carry MVP).
-- **Image storage cloud backend.** `IImageStorageService` (minted WU12, MVP impl
-  `LocalImageStorageService` writing under `wwwroot/uploads/`) gets a second implementation,
-  `S3ImageStorageService` (`AWSSDK.S3`), swapped in behind the same frozen interface — MinIO endpoint
-  via Aspire in dev, Cloudflare R2 endpoint in prod (same SDK code, different endpoint config — spec
-  §3.17 / `cross-cutting.md`). Additive, no Layer 1–4 change. Pointer: `audit/ImageStorage.md`.
+- **Image storage cloud backend — DONE, see WU-S3Garage (2026-07-05).** Was tracked here as a
+  Post-MVP item (`S3ImageStorageService` behind the frozen `IImageStorageService`, MinIO endpoint in
+  dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved, dev endpoint is
+  Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod. Pointer:
+  `audit/ImageStorage.md`.
 
 ---
 
@@ -1826,8 +1836,8 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
 - **Settled:** F16 interactions durable-direct permanently (no lossy buffer for durable intent); view
   count never a sort key (non-sortable on-demand metric); no stored LastReadDate; the L8 mart IS the
   Also-Favorited cache; no CHECK constraints for flag pairs (spec §4 forbids nothing — see
-  `audit/UserStoryInteractions.md` R3 divergence note); Valkey (not Redis) is the deferred N≥2
-  body-swap behind unchanged interfaces.
+  `audit/UserStoryInteractions.md` R3 divergence note); N≥2 body-swap detail (Valkey, session
+  affinity, no SignalR backplane needed): `canalave-conventions/horizontal-scaling.md`.
 - **Verified:** `dotnet test` 1335/1335 (483 Unit + 450 RazorComponents + 402 Integration; 22 new
   tests across all three tiers). Browser E2E 2026-07-06 with psql ground truth: chapter scroll →
   buffered flush landed the row; Actively Reading ordered most-recently-read-first; story-page ping →

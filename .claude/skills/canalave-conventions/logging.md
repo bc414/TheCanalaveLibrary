@@ -184,9 +184,10 @@ the root); buffer-depth observable gauge + flush batch-size and duration histogr
 size) + error span + batch restored to the buffer, then the loop continues — a worker never dies
 silently, and a final drain runs on graceful shutdown.
 
-**Hub method** (stub — WU-SignalR extends): hub-adjacent tracing exists via the Components
-sources; add `AddMeter("Microsoft.AspNetCore.Http.Connections")` when `MessagesHub` lands, and
-write the per-method conventions here then.
+**Hub method** — moot, permanently: `MessagesHub` (the only app-level SignalR Hub ever proposed in
+this project) was ruled out entirely 2026-07-07 — see `cross-cutting.md` §"Private Messaging
+Architecture." No hub-method tracing conventions are needed unless some future feature proposes a
+new Hub, which nothing today does.
 
 **Unhandled exceptions** (WU-ErrorHandling, 2026-07-06 — the server-side contract for circuit
 crash / service exception / failed form post; UX half: `cross-cutting.md` §"Error Handling

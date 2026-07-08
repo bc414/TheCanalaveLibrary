@@ -30,7 +30,8 @@ what's wrong.
 - **PostgreSQL** (primary; read replica when scale demands — the read/write DbContext split is the
   readiness), **Cloudflare R2 / Garage** (blobs). No external cache/store dependency: in-process
   signal buffers absorb high-frequency lossy writes (`layer2-services.md` §"Signal Buffering");
-  a shared RESP store (**Valkey**) is the deferred N≥2 body-swap behind those same interfaces.
+  the full N≥2 scale-out story (Valkey body-swap, load-balancer session affinity, why no SignalR
+  backplane is needed) lives in `horizontal-scaling.md`.
 
 ## Settled Architectural Axioms
 
@@ -47,7 +48,8 @@ These have documented rationale and rejected alternatives. **Do not propose alte
    buffers drained by a `BackgroundService` (`layer2-services.md` §"Signal Buffering"); durable
    user intent (interactions, comments, content) always writes directly. Supersedes the
    SQL-Server-era "write-behind Redis queue" axiom — its protect-reads-from-locks rationale is
-   void under Postgres MVCC; Valkey is the deferred N≥2 body-swap, never a day-one dependency.
+   void under Postgres MVCC. N≥2 scale-out (Valkey body-swap, session affinity) is never a
+   day-one dependency — see `horizontal-scaling.md`.
 8. **Global `InteractiveAuto` (end state)** — SSR prerender → SPA via WASM. Set render mode on `<Routes>`/`<HeadOutlet>` in `App.razor` (never on `RouteView`); `InteractiveServer` is the spec-sanctioned dev shortcut until WASM ships. See `cross-cutting.md` §"Render Mode".
 9. **Tailwind CSS v4** — utility-first, no component library. Design tokens in an `@theme` block
    (CSS-first config; see `layer4-style.md`), not `tailwind.config.js`.
@@ -152,6 +154,7 @@ exactly how Bootstrap-template classnames (`top-row`, `nav-pills`, …) get copi
 | [security.md](security.md) | All | Upload sniff + re-encode pipeline (`ImageUploadProcessor`), service-layer write throttling (`IWriteRateLimitService` — the transport-agnostic enforcement point), HTTP edge rate limiting + bodied-429 rule, response headers/CSP + no-inline-handler rule, Identity lockout/cookie hardening, Data Protection keyring rules, vuln-scan cadence, Phase-7 deferred register |
 | [testing.md](testing.md) | All | Three test tiers by *kind* (Unit = directly-constructed, no host/DB; Integration = `WebApplicationFactory`/Testcontainers Postgres; RazorComponents = bUnit render tests); Testcontainers-Postgres rule; fake `IActiveUserContext`; what dev-diagnostics endpoints are/aren't for |
 | [debugging.md](debugging.md) | All | Full-breadth debugging methodology: reproduce before fixing, correlating diagnostic surfaces (server log / exception page / browser console+network / psql / dev-diagnostics), re-running the identical repro after a candidate fix (a moved stack trace ≠ fixed), feature-local vs. cross-cutting scope classification, when to reach for browser-based debugging, fix-same-session discipline |
+| [horizontal-scaling.md](horizontal-scaling.md) | All | Going from one web node to N≥2: load-balancer session affinity for Blazor Server circuits (needed), why no SignalR backplane is needed (no app-defined Hub exists — messaging's was permanently dropped), the Valkey signal-buffer body-swap, Data Protection keyring (already solved) |
 
 ## Component Taxonomy Quick Reference
 

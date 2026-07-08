@@ -1,6 +1,13 @@
 # Audit Summary
 
-Human-facing overview of the Step 3 classification pass. Five sections per `step3_classify.md`.
+> **Snapshot as of the initial Step-3 classification pass (pre-2026-06 build-out).** Superseded by
+> `.claude/status.md` for current stage numbers and by `.claude/workplan.md`/`middle_plan_v2.md` for
+> current sequencing — retained only for its historical findings (§2) and reconciliation index
+> (§3), not as a source of current percentages.
+
+Human-facing overview of the Step 3 classification pass. Five sections per `step3_classify.md` (a
+one-time prompt file from the original bootstrapping process, never committed to this repo — see
+the retired `next_steps.md`).
 
 The headline: **Layer 1 is broad and largely finished; Layers 2–4 are a thin vertical slice through
 Stories + Tags only; Layers 5–8 are stubs or pre-staged fragments.** The developer front-loaded the

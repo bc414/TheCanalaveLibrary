@@ -157,7 +157,7 @@ Mobile hamburger menu. Login/logout are triggers on the persistent layout, not s
   `@if (_open)` absolute `top-full z-10` flyout panel. NOT the `fixed inset-0` modal pattern (notifications
   are a glanceable peripheral feed, not a blocking action).
 - Panel shows recent `NotificationItem`s + "Mark all read" + "See all → `/notifications`".
-- No live push (a WU-SignalR-era possibility, deliberately unbuilt); count refreshes on render/navigation.
+- No live push (SignalR is permanently ruled out site-wide — see §"Private Messaging Architecture"); count refreshes on render/navigation.
 - Inserted before `<LoginDisplay />` in both `DesktopLayout.razor` and `MobileLayout.razor`.
 
 **Messages nav link** (`SharedUI/Messaging/MessagesNavLink.razor`, WU35) — the second legitimate
@@ -925,19 +925,22 @@ moderation action).
 
 ## Private Messaging Architecture
 
-### Stateless MVP — SignalR is post-MVP
+### Stateless, permanently — SignalR is ruled out, not deferred
 
-The spec described "real-time via SignalR" for messaging. That framing is **reversed for MVP**:
-messaging is request/response, identical in shape to every other feature. The recipient sees new
-messages on navigate/refresh; the global unread badge refreshes on layout render (navigation). The
-practical rationale: the use-case is substantive and infrequent — the same "Discord handles ambient
-chat, this site handles substantive writing" decision that constrains group conversations. SignalR
-realtime buys very little here and costs a lot (first app-level hub, new test harness, reconnection
-handling — with no existing template).
+The spec described "real-time via SignalR" for messaging. That framing is **permanently reversed**
+(hardened 2026-07-07 from an earlier "deferred post-MVP" framing — see Resolved,
+`middle_plan_v2.md`): messaging is request/response, identical in shape to every other feature. The
+recipient sees new messages on navigate/refresh; the global unread badge refreshes on layout render
+(navigation). The rationale: the use-case is substantive and infrequent, and real-time delivery
+already has an owner — Discord handles ambient chat, this site's messaging is deliberately for
+substantive, async, long-form conversation, the same decision that constrains group conversations
+away from live chat. SignalR realtime buys nothing here and would cost a lot (first and only
+app-level Hub, new test harness, reconnection handling — with no existing template) for a use case
+that doesn't want it.
 
-**Post-MVP:** SignalR push is an additive layer behind the **unchanged** write service. The message
-write path (sanitize → persist → return DTO) doesn't change; a broadcast via `IHubContext` is wired
-alongside it. No L1–L4 rework is needed. See `workplan.md` Post-MVP section.
+**This is not "someday, additive."** `MessagesHub` was the only SignalR Hub ever proposed anywhere
+in this project; with it gone, the app has zero app-defined Hubs, permanently — see
+`horizontal-scaling.md` §2 for why that also means no SignalR backplane is ever needed at N≥2.
 
 ### Two unread systems by design — do not unify
 
@@ -984,8 +987,9 @@ not MVP-blocking, see `layer3.5-structure.md` "Third-Party Wrapper Composite")**
 
 Live since 2026-07-05 (WU-Aspire). AppHost defines dev containers; it **never deploys**. The
 authoritative resource graph is `AppHost/AppHost.cs` itself (Postgres 18 on host port 5433 →
-`canalavedb`; Redis as `cache` on 6379; MinIO pinned-image `AddContainer` on 9000/9001; web =
-Server's `http` launch profile → 5028). Run/stop/wipe workflow: `run-server/SKILL.md` "Aspire path".
+`canalavedb`; Redis as `cache` on 6379 (unconsumed at N=1 — see `horizontal-scaling.md`); Garage
+(S3-compatible, `dxflrs/garage`) on port 3900, superseding the spec's MinIO; web = Server's `http`
+launch profile → 5028). Run/stop/wipe workflow: `run-server/SKILL.md` "Aspire path".
 
 Standing rules, all applied in `AppHost.cs`:
 
@@ -1004,9 +1008,8 @@ Standing rules, all applied in `AppHost.cs`:
   plain `GetConnectionString("canalavedb")` + `AddDbContext` just works. **No Aspire Npgsql EF
   client package** — `AddNpgsqlDbContext` stays banned per `layer2-services.md` "DbContext
   Registration" (pooling vs. Scoped `IActiveUserContext`). The `cache` container is provisioned
-  but consumed by nothing at N=1 — it exists for the deferred N≥2 Valkey/RESP body-swap of the
-  in-process signal buffers (`layer2-services.md` §"Signal Buffering"; Layer 7 dissolved
-  2026-07-06).
+  but consumed by nothing at N=1 — it exists for the deferred N≥2 body-swap of the in-process
+  signal buffers (Layer 7 dissolved 2026-07-06). Full N≥2 scale-out story: `horizontal-scaling.md`.
 - **The dev S3 endpoint is Garage (`dxflrs/garage`), a plain `AddContainer`** — settled 2026-07-05,
   superseding the spec's MinIO (OSS archived 2026-02; its Aspire toolkit package deprecated).
   `--single-node --default-bucket` bootstraps layout/key/bucket from `GARAGE_DEFAULT_*` env vars
@@ -1025,9 +1028,12 @@ at Aspire runtime. The two run paths therefore point at **different databases** 
 
 ## Read Replica Awareness
 
-Reads go to the PostgreSQL read replica; writes hit the primary. Replication is
-near-real-time but **eventually consistent** — UI shows optimistic local state for a few seconds
-after a write rather than immediately re-reading.
+No physical read replica exists today — there is one Postgres instance under both run paths
+(`run-server/SKILL.md`). The `ReadOnlyApplicationDbContext`/`ApplicationDbContext` split is
+architectural **readiness** for a future replica (`SKILL.md`: "read replica when scale demands"),
+not an active replication topology. When a replica does land, the same reasoning applies as today:
+UI shows optimistic local state after a write rather than immediately re-reading through the read
+context, since even a genuine replica would trail the primary slightly.
 
 ## Delete Policy Summary
 
