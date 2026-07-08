@@ -330,7 +330,7 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   last-resort surfaces
   (`#blazor-error-ui` — restored to `App.razor`, it was stranded in the Identity-only
   `MainLayout` leaving interactive pages with no teardown surface — and `ReconnectModal`) adopt
-  the design language. Rule: `cross-cutting.md` §"Error Handling Strategy" (UX + containment),
+  the design language. Rule: `error-handling.md` §"Error Handling Strategy" (UX + containment),
   `logging.md` §"Unhandled exceptions" (server-side contract).
 
 - **Email mechanism = pluggable SMTP seam, provider decision deferred to Phase 7 (decision row 8
@@ -346,7 +346,7 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   `IdentityNoOpEmailSender` fallback (its on-page confirmation link in `RegisterConfirmation.razor`
   is already gated on `is IdentityNoOpEmailSender`, so it self-corrects once a real sender is
   configured — no change needed there). The provider + sending domain choice (decision row 8
-  residual) stays open, moved to Phase 7 since it's now config-only. Rule: `cross-cutting.md`
+  residual) stays open, moved to Phase 7 since it's now config-only. Rule: `identity-and-authorization.md`
   "Identity & Auth"; `audit/Identity.md` WU-Email Stage note.
 
 - **Upload validation = magic-byte sniff + ImageSharp decode/re-encode (WU-Security scope)** —
@@ -558,7 +558,7 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   `"IsTakenDown"`) live on `ReadOnlyApplicationDbContext.OnModelCreating` only. The write context
   (`ApplicationDbContext`) carries no filters and sees ground truth. A `readDb` bypass
   (`IgnoreQueryFilters`) is always a deliberate elevated read, annotated `// elevated read:`.
-  Convention: `cross-cutting.md` "Content Rating Filtering."
+  Convention: `content-safety.md` "Content Rating Filtering."
 - **Read context migration tree** — resolved (2026-06-27, WU-FilterRevamp):
   `ReadOnlyApplicationDbContext` owns no schema and has no migration tree. Deleted
   `Migrations/ReadOnlyApplicationDb/`. Future migrations always target `ApplicationDbContext`.
@@ -571,14 +571,14 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   Theme.Slug column; optimistic URL + onerror; singleton `OptimisticSpriteReadService` in Core;
   component-level resolution via `ThemeContext` + `ISpriteReadService`; `SpriteBaseUrl` config
   seam; assets provisioned out-of-band; `ISpriteAssetProbe` write-time checker; image-orphan
-  fix. See `cross-cutting.md` "ThemeContext Cascading Provider", `layer2-services.md` "Sprite
+  fix. See `render-and-layout.md` "ThemeContext Cascading Provider", `layer2-services.md` "Sprite
   URLs Are Resolved At Render Time", `audit/ImageStorage.md`.
 
 - **WU37 Story Tagging — architecture, scope split, naming** — resolved (2026-06-25):
   F9/10/15 carved to WU41/WU42/WU43; Character→`StoryCharacter` (not `StoryTag`);
   pairing→`StoryCharacterPairing`; `TagTypeEnum.Relationship` removed; service-layer enforcement
-  only; `ApplyFilters` character branch. See `cross-cutting.md` "Structured Tag Authoring &
-  Legality Enforcement", `layer2-services.md` "Structured Tag Authoring — Per-Type Filter Branch."
+  only; `ApplyFilters` character branch. See `layer2-services.md` "Structured Tag Authoring &
+  Legality Enforcement" / "Structured Tag Authoring — Per-Type Filter Branch."
 
 - **WU28 Discovery defaults + random-preload** — resolved (2026-06-25):
   `IDiscoveryDefaultsReadService` merges system defaults + sparse per-user overrides; random
@@ -592,24 +592,24 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
 - **WU34 Moderation — eight design decisions** — resolved (2026-06-25): soft-delete default;
   no auto-hide; `AccountStatus`+`SuspendedUntilUtc`; `ActiveReportCount` on User;
   `ReportedEntityId int→long`; dedup-key fix; `StoryApproved` notification type; WU34/WU39 scope
-  split (F53 → WU39). See `cross-cutting.md` "Moderation Model", `layer2-services.md`
+  split (F53 → WU39). See `content-safety.md` "Moderation Model", `layer2-services.md`
   "Notification Generation", `audit/Moderation.md` Feature 53.
 
 - **Moderator role assignment in dev seed** — resolved (2026-06-24, WU27.5): role *rows* are
   already seeded via `ApplicationRoleConfiguration.HasData`. WU27.5 assigns `AdminUser` to both
   `"Moderator"` and `"Admin"` in `DataSeeder.cs` — role gate is now exercisable end-to-end.
   Admin-inheritance expressed by listing both roles (IsInRole is literal). See
-  `cross-cutting.md` "Role-Based (Moderator) Gating."
+  `identity-and-authorization.md` "Role-Based (Moderator) Gating."
 
 - **WU32 Groups — five decisions** — resolved (2026-06-24): `AudienceRating`/`MaxContentRating`
   split; open join, permanent; Member+Admin only (no Moderator — permanent); group blog posts in
-  WU32; per-context comment methods. See `cross-cutting.md` "Group Audience-Visibility
-  Filter"/"Group Membership and Role Model", `layer2-services.md` "Group Rating
+  WU32; per-context comment methods. See `content-safety.md` "Group Audience-Visibility
+  Filter", `layer2-services.md` "Group Membership and Role Model"/"Group Rating
   Waterfall"/"Group Comments", `audit/Groups.md` WU32.
 
 - **Active-user-conditional handling + two content-editing patterns** — resolved (2026-06-23):
   `IActiveUserContext` server-only; ownership = identity equality, inline `@if`; view/edit-page
-  split for Story/Chapter; in-place inline for comments/recs/vouch. See `cross-cutting.md`
+  split for Story/Chapter; in-place inline for comments/recs/vouch. See `identity-and-authorization.md`
   "Active-User-Conditional Handling", `layer3.5-structure.md` "Owner-Conditional Edit
   Affordances."
 
@@ -645,8 +645,8 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
 
 - **Notification generation mechanism** — resolved (2026-06-23): semantic per-event methods
   injected into write services; best-effort post-commit; private create-core owns drop-self +
-  dedup. See `cross-cutting.md` "Notification Creation", `layer2-services.md` "Notification
-  Generation."
+  dedup. See `layer2-services.md` "Notification Generation" (filtering semantics + generation
+  mechanism).
 
 - **Notification in-app toggle dropped (§5.18 deviation)** — resolved (2026-06-23, WU22): the
   spec §5.18 "in-app toggle" is not implemented. `UserNotificationSetting` stores only
@@ -704,7 +704,7 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   SVG" and [audit/UserStoryInteractions.md](audit/UserStoryInteractions.md) Feature 16.
 - **WU26 chapter routes, versioning, rating** — resolved (2026-06-24):
   `/story/{id}/{ch}[/{versionOrder}]`; edit routes use `/chapter/`; version token = SortOrder;
-  progressive disclosure UX; `ChapterContent.Rating?` nullable. See `cross-cutting.md` "Chapter
+  progressive disclosure UX; `ChapterContent.Rating?` nullable. See `layer3.5-structure.md` "Chapter
   Versioning — Progressive Disclosure."
 
 - **WU33 Notification UI** — resolved (2026-06-24): rich flat DTO + normalized target pair;
@@ -716,7 +716,7 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   `IUserSettingsService` self-referential exception; UserStats counter wiring; profile comment
   wall as 4th `CommentSection` context; tabbed page shape; blog-tab owner/viewer distinction;
   `IThemeReadService.GetThemesAsync`; `Profiles/` cluster added. See `layer2-services.md`
-  "Self-Referential Editing Exception", `cross-cutting.md` "UserStats Updates",
+  "Self-Referential Editing Exception"/"UserStats Updates",
   `layer3.5-structure.md` "Profile Page Composition"/"CommentSection".
 
 - **Integration test isolation foundation** — resolved (2026-06-24): Respawn reset +
@@ -737,7 +737,7 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
 - **WU31 Blog Post** — resolved (2026-06-24): F56 deferred; edit-page pattern for blog posts;
   `GroupBlogPost` UI in WU32; optional story-link picker via `GetStoryIdsByAuthorAsync`;
   content-rating filter on `BaseBlogPost`; `{*slug}` cosmetic only. See `audit/BlogPosts.md`
-  Features 35/36/56, `cross-cutting.md` "Two content-editing patterns."
+  Features 35/36/56, `identity-and-authorization.md` "Two content-editing patterns."
 
 - **Test strategy** — resolved (2026-06-22, updated post-WU12.5): three tiers by kind — Unit
   (directly-constructed, no host/DB), Integration (Testcontainers Postgres +

@@ -104,7 +104,7 @@ Covering tier: **RazorComponents** —
 
 - **L1 — Stage 5** (`UserStat`, keyed on `UserId`).
 - **L2 — Stage 5** (WU30, 2026-06-24). Real-time counter increments wired into 8 existing write
-  services (same-transaction `ExecuteUpdateAsync` pattern per `cross-cutting.md` §"UserStats Updates"):
+  services (same-transaction `ExecuteUpdateAsync` pattern per `layer2-services.md` §"UserStats Updates"):
   - `ServerFollowingWriteService`: `FollowerCount`/`AuthorsFollowed` ±1 on Follow/Unfollow.
   - `ServerStoryWriteService.CreateStoryAsync`: `StoriesWritten` +1.
   - `ServerChapterWriteService.RefreshStoryWordCountAsync`: `WordsWritten` ± word delta.

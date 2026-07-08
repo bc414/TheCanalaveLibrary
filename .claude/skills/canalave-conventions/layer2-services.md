@@ -196,7 +196,7 @@ Mechanics:
 Read services do **not** add a `.Where(s => s.Rating <= ...)` clause themselves. The ceiling is a global
 EF Core named query filter on `Story` (and `GroupAudience` on `Group`, `IsTakenDown` on four roots),
 sourced from `IActiveUserContext` and registered in `ReadOnlyApplicationDbContext.OnModelCreating` only
-(post-WU38 revamp — write context is unfiltered by design). See `cross-cutting.md` "Content Rating
+(post-WU38 revamp — write context is unfiltered by design). See `content-safety.md` "Content Rating
 Filtering" for the principle and mechanism (model invariant vs. per-method
 vigilance). A read service projecting `Story` rows gets the filter automatically; it never re-derives
 it. The two cases where a service deliberately bypasses it:
@@ -369,7 +369,7 @@ carry the **raw `SpriteIdentifier` key** — not a resolved URL. Resolution happ
 component** via two injected/cascaded values:
 
 1. **`[CascadingParameter] ThemeContext`** — a `record ThemeContext(string Slug, bool PrefersAnimated)`
-   cascaded from a root `ThemeContextProvider` component (see `cross-cutting.md` "ThemeContext
+   cascaded from a root `ThemeContextProvider` component (see `render-and-layout.md` "ThemeContext
    Cascading Provider"). The provider reads `canalave:theme` and `canalave:prefers_animated_sprites`
    claims off the cascaded `ClaimsPrincipal`; those claims are present in both the prerender and
    interactive passes, so the resolved `<img src>` is byte-identical across the SSR→interactive
@@ -506,6 +506,34 @@ branch verifies `writeDb.Chapters` + parent-same-chapter cross-check). Sharing a
 method with a `target` parameter does not simplify the verification logic and would produce a branchy
 switch that obscures what each context requires. The per-context pattern already exists; extend it.
 
+## Group Membership and Role Model
+
+Groups are **not gated communities.** The membership and role model is deliberately simple:
+
+- **Open join:** any authenticated user may join any group (subject to `GroupAudience` visibility —
+  you can't join a Mature group if you can't see it; see `content-safety.md` "Group
+  Audience-Visibility Filter"). No approval, no invitation, no waitlist.
+- **Permanent membership:** no kicking mechanism. If a member misbehaves, they are handled by site
+  moderators (WU34) exactly as in any other area of the site. No per-group moderator role.
+- **Two roles: Member and Admin.**
+  - `GroupRole.Member` — can browse the group, add stories (subject to content-rating waterfall),
+    post comments.
+  - `GroupRole.Admin` — additionally can remove stories, manage folders (create/rename/delete/reorder,
+    set `MaxRating ≤ group.MaxContentRating`), and edit the group's name/description/audience type.
+  - The group creator is automatically inserted as Admin on group creation. There is currently no
+    way to transfer Admin status — that is post-MVP if ever needed.
+- **No `GroupRole.Moderator` category.** Do not add one — the decision is permanent, not a
+  deferral. Site moderators handle group-level misconduct.
+
+**Server-side enforcement:** admin-gated write methods load the caller's `GroupMember` row and check
+`role == GroupRole.Admin`, throwing `UnauthorizedAccessException` on mismatch. UI affordances (folder
+management, remove-story buttons) are visibility-only `@if` wired to a page-computed `bool IsAdmin`
+passed down from the dispatcher — not a security gate.
+
+**Leave:** any member may leave. The `GroupMember` row is deleted. If the last admin leaves, the
+group remains but has no admin — currently acceptable (post-MVP: warn on last-admin leave or
+auto-promote).
+
 ## Notification Generation
 
 Feature write services that trigger notifications inject `INotificationWriteService` as a standard
@@ -547,6 +575,26 @@ composes *read* services for recipient resolution (e.g. `IFollowingReadService.G
 keeping the DAG acyclic — see "The DAG rule" below.
 
 **Semantic methods land incrementally** — each method is co-delivered with the work-unit that builds its triggering feature; fan-out methods (new chapter, new story, etc.) land with their respective work-units when the triggering feature is Stage 5.
+
+### Filtering semantics
+
+**In-app delivery is always-on.** The private create-core applies exactly two universal rules: **drop
+self** (`recipient == sourceUser`) and **dedup**. No per-type in-app mute exists in the model.
+
+**Fan-out eligibility (relationship-level gate):** follow-driven notification types (new chapter on a
+followed story, new story by a followed user, etc.) are sent only to followers where
+`FollowedUser.ReceiveAlerts == true`. That filter is part of the recipient-resolution query for each
+semantic method — not a per-type setting.
+
+**`UserNotificationSetting` governs email and display, not in-app generation.** The sparse-override
+table stores exactly two user-settable fields per type — `EmailEnabled` (post-MVP email side-channel)
+and `Collapsed` (display override for the panel — a per-user override of
+`NotificationType.DefaultCollapsed`). NULL for either field means "use the type's default."
+No in-app mute column exists; that toggle was deliberately dropped from spec §5.18 (recorded in
+`audit/Notifications.md`).
+
+9 categories, ~35 types with gap-based numbering. `DefaultEmailEnabled` and `DefaultCollapsed` are
+required non-nullable on all types.
 
 ## Polymorphic RelatedEntityId — Two-Pass Batch Enrichment (WU33)
 
@@ -772,6 +820,33 @@ recommendation like — anti-addictive design (§6.11), same as `CommentLike`.
 
 ## Structured Tag Authoring — Routing and Validation (WU37)
 
+### Per-story routing table
+
+Every tag type uses a **different per-story association table**. Route by `TagChipDto.TagTypeId`:
+
+| Tag type | Per-story target | Entity |
+|---|---|---|
+| Genre, ContentWarning, CrossoverFandom | Flat junction | `StoryTag` |
+| Setting | Flat junction + optional side-row | `StoryTag` + `SettingDetail` |
+| Character | Dedicated entity (replaces StoryTag) | `StoryCharacter` |
+| Pairing (ship) | Structural, named members | `StoryCharacterPairing` + `StoryCharacterPairingMember` |
+
+Character never routes to `StoryTag`. A pairing is not a catalog tag (no `Tag` row; its name derives
+from its members). `TagTypeEnum.Relationship` is removed.
+
+### Table naming — disambiguation from story↔story relationships (Feature 10)
+
+| Concept | Entity | Note |
+|---|---|---|
+| Character-in-story | `StoryCharacter` | Per-story; links to `Tag` (Character type) |
+| Ship/pairing of characters | `StoryCharacterPairing` | Per-story; NOT a catalog tag |
+| Members of a pairing | `StoryCharacterPairingMember` | First-class join; was auto-generated shadow table |
+| **Story-to-story** relationship | `StoryRelationship` | Feature 10; unrelated; leave untouched |
+| Story relationship type | `StoryRelationshipType` | Feature 10; unrelated; leave untouched |
+
+The `Story…Pairing` prefix marks the concept as per-story and eliminates grep collision with the
+Feature-10 `StoryRelationship` / `StoryRelationshipType` entities.
+
 ### Write path — route by tag type
 
 `StoryMappers.UpdateStoryEditableProperties` clears and rebuilds each per-story collection.
@@ -804,8 +879,28 @@ and optionally `SettingDetail` (for per-story custom name/description).
 
 The write service calls `ServerStoryWriteService.ValidateStructuredTagsAsync` (or extends `CanSave()`)
 after loading `Tag` rows for all referenced TagIds. **Never trust DTO-carried `AllowOCDetails` or
-`AllowSettingDetails`** — load fresh from the `Tag` table. See `cross-cutting.md` "Structured Tag
-Authoring & Legality Enforcement" for the full rules table.
+`AllowSettingDetails`** — load fresh from the `Tag` table. Full rules table below.
+
+### Legality rules — enforced at service layer
+
+All rules are enforced by `ServerStoryWriteService` via `StoryValidationException` (same pattern as
+`CanSave()` / author-gate). Server re-reads gates from `Tag` — never trusts client DTO values.
+
+| Rule | Condition | Error |
+|---|---|---|
+| OC details require gate | `IsOc == true` but `Tag.AllowOCDetails == false` | Reject |
+| SettingDetail requires gate | `SettingDetail` submitted but `Tag.AllowSettingDetails == false` | Reject |
+| ContentWarning priority coercion | Priority != Primary | Coerce to Primary (not an error) |
+| Pairing member count | Members < 2 | Reject |
+| Pairing members in-story | Member `StoryCharacterId` must exist in this story's `StoryCharacters` | Reject |
+
+No DB trigger (`TR_StoryCharacters_EnforceOCLogic` is SQL-Server-era; superseded). A DB CHECK is
+post-MVP defense-in-depth if wanted.
+
+### Priority
+
+`TagPriority { Primary=0, Supporting=1 }`. Primary default. No `None` value. ContentWarning gets no
+priority picker and its priority is coerced to `Primary` at service layer.
 
 ### Per-type filter branch in `ApplyFilters`
 
@@ -913,7 +1008,7 @@ ViewModel and EF model. Validation in **static extension methods** in Core.
 `HasQueryFilter("IsTakenDown", e => !e.IsTakenDown)` in `OnModelCreating`. Public reads go through the
 filter automatically. Author views and mod review paths use `IgnoreQueryFilters(["IsTakenDown"])`. The
 filter composes alongside `"ContentRating"` and `"GroupAudience"` on entities that have multiple filters.
-See `cross-cutting.md` "Content Removal" for the column naming rationale and moderator filter behavior.
+See `content-safety.md` "Content Removal" for the column naming rationale and moderator filter behavior.
 
 **`IModeratableContent` interface.** `Story`, `BaseComment`, `BaseBlogPost`, `Recommendation` each implement
 this interface exposing `IsTakenDown`, `TakedownDate`, `TakedownReason`, `ActiveReportCount`, and
@@ -974,6 +1069,89 @@ cycles since `IBadgeWriteService` depends only on `ApplicationDbContext` /
 hide or reorder. `UserCard.razor` caps to 3 badges.
 
 **Post-MVP:** a background worker will replace inline checks without changing callers' interface.
+
+Live `SiteBadges` constants: `Patron`, `Recommender`, `RecommenderSilver`, `BetaReader`, `Architect`,
+`Artist`. Keys are `public const string` fields on `SiteConstants.SiteBadges`.
+
+## UserStats Updates
+
+22+ denormalized counter fields. Updated in real-time by application logic within the same
+transaction as the primary write (same-transaction `ExecuteUpdateAsync`):
+
+```csharp
+await writeDb.UserStats
+    .Where(us => us.UserId == story.AuthorId)
+    .ExecuteUpdateAsync(s => s.SetProperty(us => us.StoryCount, us => us.StoryCount + 1));
+```
+
+Background worker (F58, post-MVP) periodically recalculates to correct drift.
+
+### Counter mutation rule — all denormalized counters
+
+Every denormalized counter — `LikeCount` on `Recommendation` / `BaseComment`, and every `UserStats.*`
+field — must be adjusted with an **atomic** `ExecuteUpdateAsync`:
+
+```csharp
+// ✓ Correct — one SQL `SET counter = counter + delta`; concurrent callers can't collide
+await writeDb.Recommendations
+    .Where(r => r.RecommendationId == id)
+    .ExecuteUpdateAsync(s => s.SetProperty(r => r.LikeCount, r => r.LikeCount + delta));
+
+// ✗ Wrong — tracked read-modify-write; two concurrent readers both see the old value → lost update
+rec.LikeCount++;
+await writeDb.SaveChangesAsync();
+```
+
+The tracked `++` form reads a value into memory, increments it, and writes it back. Two concurrent
+callers reading the same stale value both produce the same written result: one increment is lost.
+`ExecuteUpdateAsync` issues a single `SET like_count = like_count + delta` that the database
+serializes correctly under any isolation level.
+
+### Counter ↔ event map (WU30, wired into already-built write services)
+
+| `UserStat` counter | Owning user | Event / write service | Δ |
+|---|---|---|---|
+| `FollowerCount` | target user | `ServerFollowingWriteService.FollowAsync / UnfollowAsync` | ±1 |
+| `AuthorsFollowed` | acting user | `ServerFollowingWriteService.FollowAsync / UnfollowAsync` | ±1 |
+| `StoriesWritten` | author | `ServerStoryWriteService.CreateStoryAsync` | +1 |
+| `WordsWritten` | author | `ServerChapterWriteService` publish / new version | ± word delta |
+| `CommentsWritten` | commenter | `ServerCommentWriteService.Post*/Delete` (all 4 contexts: chapter/blogpost/group/userprofile) | ±1 |
+| `RecommendationsWritten` | recommender | `ServerRecommendationWriteService.SubmitAsync` | +1 |
+| `RecommendationsReceived` | story author | `ServerRecommendationWriteService.SubmitAsync` | +1 |
+| `RecommendationSuccessesEarned` | recommender | `ServerRecommendationWriteService.RecordSuccessAsync` (new column, WU36) | +1 |
+| `BlogPostsWritten` | author | `ServerBlogPostWriteService` create/delete | ±1 |
+| `GroupsJoined` | member | `ServerGroupWriteService` join/leave | ±1 |
+| `FavoritesOnStories` | story author | `ServerUserStoryInteractionWriteService` | **transition-delta** |
+| `StoriesRead`, `StoriesInProgress`, `StoriesIgnored` | acting user | `ServerUserStoryInteractionWriteService` | **transition-delta** |
+
+**Counters deferred to their own WU** (source feature not yet built):
+- `ViewsOnStories` — WU38 (story view events)
+- `SpotlightCount` — post-MVP
+- `ActiveReportCount` — WU34 (moderation)
+- Acknowledgment/contribution counters — WU37
+
+### Transition-delta rule for UserStoryInteraction-derived counters
+
+`ServerUserStoryInteractionWriteService` toggles boolean columns (`IsFavorite`, `IsCompleted`,
+`IsIgnored`, etc.) rather than appending records. A simple ±1 on every call would double-count;
+the correct rule is **increment or decrement only when the boolean flips**:
+
+```csharp
+// Before writing:
+bool wasFavorite = existing?.IsFavorite ?? false;
+bool willBeFavorite = dto.IsFavorite;
+
+// After SaveChangesAsync:
+if (willBeFavorite && !wasFavorite)
+    // +1 FavoritesOnStories on story.AuthorId
+else if (!willBeFavorite && wasFavorite)
+    // −1 FavoritesOnStories on story.AuthorId
+```
+
+The same flip-check governs `StoriesRead`/`StoriesInProgress`/`StoriesIgnored` — each maps to one
+boolean column (`IsCompleted`, `HasStarted`+`!IsCompleted`, `IsIgnored`); the counter moves only
+when the effective derived state actually changes. Never increment/decrement if the boolean is being
+written to its current value (idempotent call from an optimistic-UI retry).
 
 ## Naming
 

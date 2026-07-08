@@ -18,7 +18,7 @@ WU31 delivers L2/L3/L3.5/L4 for features 35/36 (profile blog posts only); Featur
   `draft:groupblogpost:new:{groupId}`; Title + Content), cleared on successful submit;
   `BlogPostPropertiesForm` renders errors via `InlineAlert` and gained `SetContentAsync` (Quill
   push for restore); generic catches route through `ExceptionPresenter` + `LogError`. Strategy:
-  `cross-cutting.md` §"Error Handling Strategy".
+  `error-handling.md` §"Error Handling Strategy".
 - **Settled constraints (2026-06-24, WU31):**
   - Content-editing Pattern 1: `/blog/new` + `/blog/{id}/edit` (write/auth), `/blog/{id}/{*slug}` (read-only).
     Spec §5 line ~1585 said "in-place editing" — overridden (blog is a multi-field form like Story).
@@ -26,7 +26,7 @@ WU31 delivers L2/L3/L3.5/L4 for features 35/36 (profile blog posts only); Featur
   - Profile blog posts only for WU31; `GroupBlogPost` UI → WU32.
   - ~~Content-rating named query filter extends to `BaseBlogPost`~~ **SUPERSEDED by WU31.5
     (2026-06-24):** named filter removed from `BaseBlogPost`; blog-post content rating enforced via
-    explicit `.Where(p => p.Rating <= max)` projection checks (see `cross-cutting.md` "Content Rating
+    explicit `.Where(p => p.Rating <= max)` projection checks (see `content-safety.md` "Content Rating
     Filtering"). The EF Core 10 TPT + named-filter combination generates broken entity-materialization
     SQL and blocks `ExecuteDeleteAsync`; projection checks + change-tracker stub deletes replace it.
   - Optional story-link picker via `IStoryReadService.GetStoryIdsByAuthorAsync` (bypasses content-rating filter;

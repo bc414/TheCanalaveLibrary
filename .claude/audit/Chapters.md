@@ -29,7 +29,7 @@ cleared on successful submit. `ChapterPropertiesForm` gained `Set*Async` push me
 ignores later `Html` parameter changes) and renders errors via `InlineAlert`; all the page's
 catches route through `ExceptionPresenter` (unexpected → `LogError` with IDs). Browser-verified
 end-to-end on the seeded chapter (type → autosave → reload → restore → submit clears; `psql`
-ground truth both ways). Strategy: `cross-cutting.md` §"Error Handling Strategy"; tests:
+ground truth both ways). Strategy: `error-handling.md` §"Error Handling Strategy"; tests:
 `DraftAutosaveTests` (RazorComponents), `ExceptionPresenterTests` (Unit).
 
 **WU26 Phase 0.5 Stage note (2026-06-24) — Rating model reconciliation, DONE ✓.**
@@ -375,11 +375,11 @@ Integration tests (Phase 0.5 rating invariants) and existing Integration tests o
 
 ### WU26 settled constraints (pre-implementation, 2026-06-24)
 
-**Routes (settled):** See `cross-cutting.md` "Two content-editing patterns" → Chapter route table.
+**Routes (settled):** See `identity-and-authorization.md` "Two content-editing patterns" → Chapter route table.
 Reading routes have no `/chapter/` literal; edit/new use `/chapter/` + chapter number + optional
 `versionOrder`. URL version token = `ChapterContent.SortOrder` (`VersionOrder`), not raw ContentId.
 
-**Versioning UX (settled):** Progressive disclosure on the edit page — see `cross-cutting.md`
+**Versioning UX (settled):** Progressive disclosure on the edit page — see `layer3.5-structure.md`
 "Chapter Versioning — Progressive Disclosure". `IsPrimary` drives the "Primary" badge, never
 `SortOrder == 0`.
 
@@ -391,7 +391,7 @@ the USI write service. No migration needed.
 - `ChapterContent.Rating` is currently `Rating` (non-nullable, E default). Spec §5.2 requires nullable
   (NULL = inherit story rating). WU26 Phase 0.5 reconciles this before any UI is built.
 - Floor invariant: version effective rating ≥ story rating. Primary invariant: primary's effective
-  rating = story rating (naturally via NULL/inherit). Details in `cross-cutting.md` "Chapter Versioning."
+  rating = story rating (naturally via NULL/inherit). Details in `layer3.5-structure.md` "Chapter Versioning."
 - Integration test coverage: floor rejection, primary rejection on create + promote, NULL→story
   inheritance, effective ceiling in reads.
 

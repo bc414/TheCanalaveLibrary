@@ -379,6 +379,50 @@ thread otherwise; found in the L4.5 browser pass, 2026-07-02).
 
 Don't decompose a DTO into individual primitive parameters — that defeats the stable contract.
 
+## Razor Attribute Quoting
+
+**Inner double-quotes inside `@onchange="..."` terminate the attribute early and cause CS1525.**
+
+If you write `@onchange="e => Cast((e.Value ?? "0"))"` the inner `"0"` closes the attribute — the
+Razor parser sees the attribute end there and treats `))"` as stray characters, producing a cryptic
+CS1525 parse error.
+
+**Fix: use a block lambda and `int.TryParse` instead of a default-fallback literal:**
+
+```razor
+@onchange="e => { if (int.TryParse(e.Value?.ToString(), out int rv)) _myEnum = (MyEnum)rv; }"
+```
+
+This avoids any string literal inside the attribute value. The `int.TryParse` block lambda is the
+canonical form for all enum `<select>` onchange handlers in this codebase (e.g. `AuthorSettingsForm`,
+`PrivacySettingsForm`, `AppearanceSettingsForm`).
+
+### Enum `<select>` — two valid patterns, never mix their halves
+
+`@bind` on an enum-typed property **does** work on a `<select>`, but it serializes the current
+value as the enum **name** (`.ToString()`), so it only ever matches `<option>` values that are
+also the enum name. The two coherent patterns:
+
+1. **`@onchange` block lambda + numeric option values** (`value="@((int)v)"` + the `int.TryParse`
+   lambda above) — the canonical settings-form pattern.
+2. **`@bind` on the enum property + name option values** (`value="@type"` inside an
+   `Enum.GetValues<T>()` loop) — `TagEditorForm` is the reference.
+
+Mixing them — `@bind` with numeric option values — compiles clean and renders a **blank select**
+whenever the bound value should be pre-selected, because nothing matches. Found live in the L4.5
+browser pass (`audit/Tags.md`, 2026-07-01).
+
+### String parameters take attribute text literally
+
+For a **string-typed** component parameter, `Param="_myField"` passes the literal text
+`"_myField"` — not the field's value. Only `@`-prefixed values (`Param="@_myField"`) compile as
+expressions. Non-string-typed parameters compile the attribute text as an expression either way —
+that asymmetry is why the trap survives review: identical syntax is correct on the `bool`
+parameter above and wrong on the `string` parameter below it. Rule: **always `@`-prefix identifier
+values regardless of the parameter's type.** Sweep for the bug class with `="_\w+"` (plus
+suspicious PascalCase values on string params) — it was hit seven times before being swept
+(`audit/Messaging.md`, `audit/Tags.md`).
+
 ## Component Tier × Logic Summary
 
 | Tier | Service Injection | Parameters | State | Lifecycle |

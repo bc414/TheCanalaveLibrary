@@ -56,7 +56,7 @@ fully built in WU29 (L2/L3/L3.5/L4 across all four features).
   (optimistic `loaded + delta`). Concurrency fix not automatable (no parallel-request seam); covered by
   existing sequential `ToggleLikeAsync` integration tests confirming correct counter behavior + code review
   that the SQL is now `SET like_count = like_count + delta`. Convention documented in
-  `cross-cutting.md §"Counter mutation rule"`. `dotnet test` 1232/1232 pass.
+  `layer2-services.md §"Counter mutation rule"`. `dotnet test` 1232/1232 pass.
 - **L3/L3.5 — Stage 5 (WU29, 2026-06-23).** `RecommendationCard` leaf: `UserCard` (attribution
   variant, §5.30.7 #2) + `RichTextView` (body) + like button + successful-rec count. Two visual
   states: **Author-spotlighted** (accent border/glow + "Author's Pick" ribbon, Roserade Green or

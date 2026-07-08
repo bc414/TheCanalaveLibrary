@@ -50,7 +50,8 @@ with the actual `InitialSchema` migration (`Database.MigrateAsync()`, not `Ensur
 ## Driving the content-rating filter: fake `IActiveUserContext`, not real auth
 
 `ApplicationDbContext`'s query filter closes over an injected `IActiveUserContext` (see
-`cross-cutting.md` "Content Rating Filtering" / "Active-User Context"). Integration tests need
+`content-safety.md` "Content Rating Filtering" / `identity-and-authorization.md` "Active-User
+Context"). Integration tests need
 to flip `ShowMatureContent`/`UserId`/role flags per-test without a real sign-in flow, cookies,
 or `SecurityStampValidator`. Use a `TestAppFactory : WebApplicationFactory<Program>` that does **two** things in
 `ConfigureWebHost` via `builder.ConfigureServices(...)`:

@@ -664,6 +664,28 @@ shells prove identical to one of the above, extract then — not now.
 `EditorView` and call `await _editor.GetHtmlAsync()` in the submit handler. Never bind two-way.
 The owning composite (never the shell leaf) sanitizes and persists.
 
+## Chapter Versioning — Progressive Disclosure (WU26)
+
+`ChapterContent` rows are **live alternates**, not revision history — one is the reader's default
+(`Chapter.PrimaryContentId`). The guiding principle: **the version concept is invisible until a
+second version exists** (settled WU26).
+
+**Edit page (author):**
+- Single-version (or new): the editor is a plain chapter form with one low-emphasis
+  **"Add an alternate version"** link as the only versioning affordance.
+- Multi-version (`VersionCount > 1`): reveals a compact **version switcher** (which version you're
+  editing + links to per-version edit routes) plus per-version controls: rename, **set as primary**,
+  delete (disabled for the primary — enforced by the Restrict FK), add another.
+
+**"Primary" badge driven by `IsPrimary` DTO field, never by `SortOrder == 0`.** The primary can
+change; SortOrder is stable identity within a chapter's version list and should not carry semantic load.
+
+**Rating floor invariant (WU26):** a version's effective rating must be ≥ the story rating. An M story
+is mature throughout; a T story allows T or M versions, not E. NULL = inherit story rating (always
+passes the floor). The **primary** version's effective rating must equal the story rating (naturally
+satisfied by NULL/inherit) — guarantees any reader who can see the story can always read its primary
+chapters without a content-gate block.
+
 ## CommentSection — Multi-Context Dispatch (WU31 / WU32 / WU30)
 
 `CommentSection` (SharedUI/Comments/) is a coordination composite that dispatches to the correct
@@ -699,7 +721,7 @@ per the profile owner's `PrivacySettings.AllowProfileComments`
 (`Public` → any authenticated user; `UsersOnly` → any authenticated user; `Off` → wall hidden).
 The dispatcher passes the resolved `bool AllowComments` as a `[Parameter]` so `CommentSection`
 can suppress the wall entirely when `Off`. `CommentsWritten` increments on each post here too
-(counter map in `cross-cutting.md` "UserStats Updates").
+(counter map in `layer2-services.md` "UserStats Updates").
 
 ## Notification Presentation Model — Static Presenter + Per-Type Templates (WU33)
 
@@ -728,7 +750,7 @@ from `NotificationCategoryVisuals`, with per-type overrides for distinctive type
 **`NotificationBell`** uses the **UserCard caret pattern**: `relative` container + `@onclick="Toggle"` button
 with unread-count badge + `@if (_open)` `absolute top-full z-10` flyout panel. NOT the `fixed inset-0` modal
 pattern. Wrapped in `<AuthorizeView><Authorized>`. Does NOT inject `IActiveUserContext` — the underlying service
-self-scopes. See `cross-cutting.md` "Notification bell."
+self-scopes. See `render-and-layout.md` "Notification bell."
 
 **`NotificationItem`** (leaf, no injection): inline SVG icon (path from `NotificationPresenter`), composed
 message text with entity link (`<a href="@n.TargetUrl">@n.TargetTitle</a>` when present, else plain text),

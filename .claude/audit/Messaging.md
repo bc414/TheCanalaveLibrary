@@ -123,7 +123,7 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
   all read services) now creates a per-method context from a scoped
   `IDbContextFactory<ReadOnlyApplicationDbContext>` via a protected `ReadDbFactory`. Convention:
   `layer2-services.md` §"Read-Context Concurrency: Factory Per Method"; chrome note:
-  `cross-cutting.md` §"Layout-chrome concurrency". **Verified:** browser (authenticated home
+  `render-and-layout.md` §"Layout-chrome concurrency". **Verified:** browser (authenticated home
   renders with both chrome components, no 500) + Integration `ConcurrentReadAccessTests`.
 
 - **L4.5-Browser verification (2026-07-02) — Feature 49 → L4.5=5.** Full messaging loop driven in a

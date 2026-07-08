@@ -50,7 +50,7 @@ These have documented rationale and rejected alternatives. **Do not propose alte
    SQL-Server-era "write-behind Redis queue" axiom — its protect-reads-from-locks rationale is
    void under Postgres MVCC. N≥2 scale-out (Valkey body-swap, session affinity) is never a
    day-one dependency — see `horizontal-scaling.md`.
-8. **Global `InteractiveAuto` (end state)** — SSR prerender → SPA via WASM. Set render mode on `<Routes>`/`<HeadOutlet>` in `App.razor` (never on `RouteView`); `InteractiveServer` is the spec-sanctioned dev shortcut until WASM ships. See `cross-cutting.md` §"Render Mode".
+8. **Global `InteractiveAuto` (end state)** — SSR prerender → SPA via WASM. Set render mode on `<Routes>`/`<HeadOutlet>` in `App.razor` (never on `RouteView`); `InteractiveServer` is the spec-sanctioned dev shortcut until WASM ships. See `render-and-layout.md` §"Render Mode".
 9. **Tailwind CSS v4** — utility-first, no component library. Design tokens in an `@theme` block
    (CSS-first config; see `layer4-style.md`), not `tailwind.config.js`.
 10. **Three-axis search** — Source × Filter × Sort. FTS is a filter, not a source.
@@ -82,7 +82,7 @@ Cross-cutting clusters and their scope:
 - **`Bookshelves/`** — `BookshelfTab` enum + `BookshelfTabSlug` slug helper consumed by `SharedUI/Bookshelves/` and `Server/UserStoryInteractions/`.
 - **`Recommendations/`** — SVG icon constants and display components spanning submission, display, Hidden Gem, and attribution sub-features.
 - **`Security/`** — `IWriteRateLimitService`/`WriteActionKind` (Core) + `ServerWriteRateLimitService`/`SecurityHeadersMiddleware` (Server): write throttling and response-header hardening consumed by every write service and the whole pipeline; no owning feature (see `security.md`).
-- **`Errors/`** — `ExceptionPresenter` (Core: exception → user-facing message discipline) + `CanalaveErrorBoundary`/`InlineAlert` (SharedUI: layered containment + the standard inline feedback atom); consumed by every form and layout; no owning feature (see `cross-cutting.md` §"Error Handling Strategy").
+- **`Errors/`** — `ExceptionPresenter` (Core: exception → user-facing message discipline) + `CanalaveErrorBoundary`/`InlineAlert` (SharedUI: layered containment + the standard inline feedback atom); consumed by every form and layout; no owning feature (see `error-handling.md` §"Error Handling Strategy").
 - **`Toasts/`** — `IToastService`/`ToastHost` (SharedUI) transient non-blocking system-event channel; deliberately minimal — never for validation errors.
 - **`Drafts/`** — `DraftStore`/`DraftAutosave` (SharedUI) device-local editor draft safety over `draft-autosave.js`; consumed by the long-form edit pages.
 - **`Messaging/`** — Messaging feature cluster; `EditorView` and `UserCard` remain in their own cross-cutting clusters.
@@ -149,7 +149,11 @@ exactly how Bootstrap-template classnames (`top-row`, `nav-pills`, …) get copi
 | [layer5-wasm.md](layer5-wasm.md) | 5 | API endpoints, client services, `PersistentAuthenticationStateProvider` |
 | [layer6-indexes.md](layer6-indexes.md) | 6 | Filtered, composite, golden, GIN indexes — pure DDL; MVCC storage tuning (fillfactor, autovacuum) |
 | [layer8-data-marts.md](layer8-data-marts.md) | 8 | Non-EF background workers, raw SQL, table swap (Layer 7 dissolved — see numbering note above; signal buffering lives in [layer2-services.md](layer2-services.md)) |
-| [cross-cutting.md](cross-cutting.md) | All | Render mode, device detection, Identity, Aspire, notifications, badges, UserStats, content rating filtering, delete policies |
+| [render-and-layout.md](render-and-layout.md) | All | Render mode, route-parameter conventions, `NavigationManager.NotFound()`, JS interop, device detection & layout architecture (notification bell, messages nav link), ThemeContext cascading provider |
+| [identity-and-authorization.md](identity-and-authorization.md) | All | `IActiveUserContext`, the two-identity-source rule, the six kinds of active-user conditionality, security-vs-affordance, cookie/role-based authorization, default-deny posture |
+| [content-safety.md](content-safety.md) | All | Content rating filtering, group audience-visibility filter, moderation model (soft-delete, auto-hide policy, account actions, report targets) |
+| [error-handling.md](error-handling.md) | All | Layered error boundaries, inline/toast feedback channels, exception-message discipline, editor draft safety |
+| [cross-cutting.md](cross-cutting.md) | All | Genuinely cross-cutting infra/misc: private messaging architecture, rich-text sanitization posture, Aspire dev orchestration, read-replica readiness, delete policy, dev-only diagnostic endpoints |
 | [logging.md](logging.md) | All | OpenTelemetry three-signal conventions: structured log templates, level semantics, no-silent-catches + sanctioned registry, `CanalaveTelemetry` custom sources/meters + naming, dispatch-boundary scopes (`TelemetryCircuitHandler`), per-surface recipes (external call / worker / hub), telemetry testing patterns |
 | [security.md](security.md) | All | Upload sniff + re-encode pipeline (`ImageUploadProcessor`), service-layer write throttling (`IWriteRateLimitService` — the transport-agnostic enforcement point), HTTP edge rate limiting + bodied-429 rule, response headers/CSP + no-inline-handler rule, Identity lockout/cookie hardening, Data Protection keyring rules, vuln-scan cadence, Phase-7 deferred register |
 | [testing.md](testing.md) | All | Three test tiers by *kind* (Unit = directly-constructed, no host/DB; Integration = `WebApplicationFactory`/Testcontainers Postgres; RazorComponents = bUnit render tests); Testcontainers-Postgres rule; fake `IActiveUserContext`; what dev-diagnostics endpoints are/aren't for |

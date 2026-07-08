@@ -417,7 +417,7 @@ several other features wait on.
   1. `TagDirectoryDesktop.razor` passed `ServerError="_editorError"` — missing `@`, so the literal
      text "_editorError" rendered in red on every editor open (string-typed params take attribute
      text literally; the neighboring non-string params compile as expressions — the exact
-     `cross-cutting.md` "Razor Attribute Quoting" pitfall recurring).
+     `layer3-logic.md` "Razor Attribute Quoting" pitfall recurring).
   2. `TagEditorForm`'s Tag Type `<option>` values were numeric shorts while `@bind` on a
      `TagTypeEnum` property serializes the enum NAME — no option matched, so the select rendered
      blank when editing an existing tag. Options now use `value="@type"`.

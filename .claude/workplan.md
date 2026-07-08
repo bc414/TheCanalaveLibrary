@@ -68,7 +68,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **State:** code/schema-complete — `InitialSchema` generated, `dotnet build` green, template debris
   cleared, Identity namespaces partially normalized, three first-run runtime bugs fixed: Stories L2
   DI-registration (detail: `audit/Stories.md` row 4/5), render-mode/interactive-routing (detail:
-  `cross-cutting.md` "Render Mode"), `ReadOnlyApplicationDbContext` ctor mismatch. Also pivoted dev
+  `render-and-layout.md` "Render Mode"), `ReadOnlyApplicationDbContext` ctor mismatch. Also pivoted dev
   workflow off Aspire for MVP (detail: `forward_plan.md` "Aspire orchestration during MVP dev").
 - **VERIFIED (2026-06-20):** migration applied to a live local Postgres (`ConnectionStrings:canalavedb`,
   direct `TheCanalaveLibrary.Server` run — not AppHost), `DataSeeder` runs, app boots, Identity pages
@@ -610,7 +610,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   Settings are sparse (upsert when differing from defaults; delete row when returning to defaults).
   Wired `// TODO(WU22)` seams in `ServerFollowingWriteService` (`FollowAsync`/`VouchAsync`).
   Corrected two spec deviations: `SourceUserId` is SET NULL (not RESTRICT); §5.18 in-app toggle
-  dropped (in-app always-on). Detail in `audit/Notifications.md`, `cross-cutting.md`,
+  dropped (in-app always-on). Detail in `audit/Notifications.md`,
   `layer2-services.md`, `forward_plan.md` Resolved.
 - **Verified:** `dotnet build` green (0 errors). `dotnet test` green: 105 Unit + 77 RazorComponents +
   109 Integration = 291 tests total. Integration tier (`Tests.Integration/NotificationServiceTests.cs`,
@@ -652,12 +652,12 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 ### WU24 — Story create/edit pages (`StoryEditorPage` + `StoryPropertiesForm` rebuild) — DONE ✓ (2026-06-23)
 - **Cells:** 4 L3/L3.5/L4 — all now Stage 5.
 - **Architecture settled (WU24 planning, 2026-06-23):** no `AdminControls` component — ownership-conditional
-  affordances are inline `@if` on a page-computed bool (settled in `cross-cutting.md`
-  "Owner-Conditional Edit Affordances"). Editing is author-only (identity-equality, server-enforced),
+  affordances are inline `@if` on a page-computed bool (settled in `identity-and-authorization.md`
+  "Security vs affordance"). Editing is author-only (identity-equality, server-enforced),
   never author-or-mod (moderation is a separate WU34 path). Content-editing pattern for Story/Chapter:
-  **view-page / edit-page split** (see `cross-cutting.md` "Two content-editing patterns").
+  **view-page / edit-page split** (see `identity-and-authorization.md` "Two content-editing patterns").
 - **Do:**
-  - **Doc-touch (moment 1, before code):** update `cross-cutting.md` + `layer3.5-structure.md` with the
+  - **Doc-touch (moment 1, before code):** update `identity-and-authorization.md` + `layer3.5-structure.md` with the
     active-user-conditional handling analysis and two-pattern content-editing rule (done pre-WU24 build).
   - **New `StoryEditorPage.razor`** (Server, both `@page "/story/new"` and `@page "/story/{StoryId:int}/edit"`,
     single responsive page). Thin dispatcher: resolves auth, data-loads for edit, maps ViewModel ↔ DTOs,
@@ -725,7 +725,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   - **Edit/write page** `/story/{id}/chapter/new` + `/story/{id}/chapter/{ch}/edit[/{versionOrder}/]`
     — `EditorView` + progressive-disclosure versioning UI. `[Authorize]` + ownership gate.
   - The two renderers (`RichTextView` / `EditorView`) never co-exist (different routes).
-  - See `cross-cutting.md` "Chapter Versioning — Progressive Disclosure" for the full route table and
+  - See `layer3.5-structure.md` "Chapter Versioning — Progressive Disclosure" for the full route table and
     rating-floor/primary invariants.
 - **Phases:**
   - Phase 0: doc-touch (route docs, versioning rule, WU29 reconcile).
@@ -955,11 +955,11 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   1. **Soft-delete default, narrow hard-delete escape hatch.** Normal mod action = `IsHidden = true`
      (reversible, author notified with reason). Separate explicit "illegal content" path hard-deletes
      (CSAM/piracy only). Rationale: archive mission — mistakes must be reversible; authors are owed the
-     reason. This is the opposite default from attention platforms. See `cross-cutting.md` "Moderation Model."
+     reason. This is the opposite default from attention platforms. See `content-safety.md` "Moderation Model."
   2. **No auto-hide.** `ActiveReportCount` drives mod-only queue ordering (most-reported first) and
      an inline badge — never an automatic action. Deliberations' "3 distinct reporters in 24h" threshold
      is dropped. Report counts are mod-only (no public display — that gamifies reporting and enables
-     brigading). See `cross-cutting.md` "Moderation Model."
+     brigading). See `content-safety.md` "Moderation Model."
   3. **Account actions: model state + notify now; login enforcement staged.** `AccountStatus` enum
      (Active/Warned/Suspended/Banned — no Shadowbanned) + `SuspendedUntilUtc` on `User`. Actions set
      status, record on `Report`, and notify. Login-blocking enforcement is a follow-up slice (see
@@ -982,7 +982,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   auto-hide; SQL trigger on `FavoriteCount`; `DefaultCommentModeration`/`AllowGuestComments` in
   `AuthorSettings`; single "Moderation & Safety" notification category (live: Warnings=7, YourReports=8).
 - **Build phases (for opusplan):**
-  - Phase 0 — Doc-touch: `forward_plan.md` + `cross-cutting.md` + `layer2-services.md` + audit files.
+  - Phase 0 — Doc-touch: `forward_plan.md` + `content-safety.md` + `layer2-services.md` + audit files.
   - Phase 1 — Cluster relocation + schema: move `Report`/`ReportReason`/`ReportStatus` → `Core/Moderation/`
     (StoryImport stays in `Core/Models/` for WU39). One migration: widen `ReportedEntityId`; add soft-delete
     columns; add `User` columns; add `Report(ReportStatusId)` + `Report(ReportedEntityType, ReportedEntityId)`
@@ -1012,7 +1012,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
     approve/reject; soft-hide visibility filter; non-mod → 403); bUnit (ReportDialog, ModReportsPage,
     submissions tab shell).
 - **Ordering:** 0 → 1 → 2 → 3 → 4 → 6 → 5 → 7 → 8 (woven).
-- **Tool:** opusplan. **Pointer:** `audit/Moderation.md` Features 46/47/48; `cross-cutting.md` "Moderation
+- **Tool:** opusplan. **Pointer:** `audit/Moderation.md` Features 46/47/48; `content-safety.md` "Moderation
   Model." **Deps:** WU9, WU12, WU20, WU22, WU24, WU29, WU31, WU35.
 
 ### WU35 — Messaging — DONE ✓ (2026-06-24)
@@ -1094,7 +1094,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
     `BuildSut()` is called after `CreateSpriteFile()` (startup cache requires files to exist at construction).
   - **Phase 4 home placeholder:** Replaced `HomeDesktop.razor` WU13 harness (hardcoded StoryCard sample
     data) and `HomeMobile.razor` stub with honest minimal placeholders. `<DevLoginBar />` retained.
-  - **Phase 5 docs:** `cross-cutting.md`, `layer2-services.md`, `layer1-data-model.md` enum table,
+  - **Phase 5 docs:** `layer2-services.md`, `layer1-data-model.md` enum table,
     `audit/Moderation.md`, `audit/Sprites.md`, `audit/Tags.md` all updated. `forward_plan.md`
     "Decisions that need you" row added.
 - **Migrations:** `PreIntegrationCleanup_TakedownColumns` (column renames on 4 tables);
@@ -1113,7 +1113,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Done (9 phases):**
   - **Phase 0 (doc prep, moment 1):** Skill files updated — `layer2-services.md` (sprite resolution
     moves to render time; `ISpriteReadService` allowed in SharedUI; `ISpriteAssetProbe` server-only),
-    `cross-cutting.md` (ThemeContext cascading provider + SpriteBaseUrl seam),
+    `render-and-layout.md` (ThemeContext cascading provider + SpriteBaseUrl seam),
     `layer1-data-model.md` (`Theme.Slug` convention). Audit files (`Sprites.md`, `Tags.md`,
     `Stories.md`, `ImageStorage.md`) updated with settled decisions. `forward_plan.md` moved sprite
     redesign to Resolved.
@@ -1237,7 +1237,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
     `Client/Program.cs:16-17` removed; stale doc comment in `StoryDetailsDTO.cs:42` updated.
   - **Tests:** `ContentRatingFilterTests` extended (+5 integration tests incl. line-51 regression);
     `ModerationServiceTests` fixture corrected. All 1232 tests pass.
-  - **Docs:** `cross-cutting.md`, `layer1-data-model.md`, `layer2-services.md` skill files updated;
+  - **Docs:** `content-safety.md`, `layer1-data-model.md`, `layer2-services.md` skill files updated;
     `audit/Stories.md` and `audit/Moderation.md` Stage notes written; `status.md` updated.
 - **Pointer:** `audit/Stories.md` §"Feature 4 / Feature 5 — Filter revamp Stage note."
 
@@ -1258,7 +1258,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   - `ServerStoryWriteService`: changed two `activeUser.UserId` references to `ActiveUser.UserId`
     (via the inherited property). The ctor parameter now only appears in the base-ctor argument, not
     as a captured field — CS9107 eliminated.
-  - `cross-cutting.md` §"UserStats Updates": added "Counter mutation rule" subsection documenting
+  - `layer2-services.md` §"UserStats Updates": added "Counter mutation rule" subsection documenting
     the atomic `ExecuteUpdateAsync` requirement for all denormalized counters.
 - **Verified:** `dotnet build` green, zero errors, zero CS9107 warnings. `dotnet test` 1232/1232 pass
   (437 Unit + 443 RazorComponents + 352 Integration). Concurrency fix is not automatable
@@ -1442,7 +1442,8 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   notes; `canalave-conventions/debugging.md` for the methodology.
 - **Docs follow-up (2026-07-02):** methodology learnings institutionalized into the skills tree —
   `run-server` ("Driving the UI reliably" browser mechanics; seed state-machine-invariant rule),
-  `cross-cutting.md` (literal string params, enum-select binding patterns, claim staleness),
+  `layer3-logic.md` (literal string params, enum-select binding patterns), `render-and-layout.md`
+  (claim staleness),
   `layer3-logic.md` (transient UI state on same-route nav), `layer4-style.md` (out-of-band asset
   `onerror` rule), `testing.md` (unmounted-component reachability hole + first L4.5 cross-ref),
   `debugging.md` (recorded-intent-before-fixing principle). Prior "tool limitation" claims from
@@ -1482,7 +1483,7 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   crash is the documented hazard). `dotnet test` green: 448 Unit (+11 `ClientTagServiceTests`) +
   446 RazorComponents + 365 Integration (+10 `TagEndpointsTests`).
 - **Tool:** Claude Code (browser-driven verification per `run-server/SKILL.md`). **Pointer:**
-  `layer5-wasm.md` (rewritten from battle-tested reality — the deliverable), `cross-cutting.md`
+  `layer5-wasm.md` (rewritten from battle-tested reality — the deliverable), `render-and-layout.md`
   §"Render Mode" + §"ThemeContext Cascading Provider", `testing.md` project-setup reference,
   audit notes in `audit/Tags.md` (F11/F13) and `audit/Discovery.md` (F34).
 - **Post-verification decision (2026-07-04):** rollout strategy settled — per-feature L5 builds
@@ -1907,7 +1908,7 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
   with it (fresh auth cookie issued). Email-change reuses the identical
   `SendConfirmationLinkAsync`/`ConfirmationBody` path already proven twice, so it was not
   separately re-driven.
-- **Tool:** Claude Code (Opus; plan approved 2026-07-06). **Pointer:** `cross-cutting.md`
+- **Tool:** Claude Code (Opus; plan approved 2026-07-06). **Pointer:** `identity-and-authorization.md`
   "Identity & Auth"; `audit/Identity.md` WU-Email Stage note; `middle_plan_v2.md` Phase 1 item 5 +
   Resolved "Email mechanism"; `audit/Notifications.md` (deferred notification-email hook point).
 
@@ -1974,7 +1975,7 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
   ground truth at both ends (sentinel present in `chapter_contents` after save; seed row restored
   to original text afterwards).
 - **Tool:** Claude Code (Opus; design forks resolved with Brian in chat, 2026-07-06). **Pointer:**
-  `cross-cutting.md` §"Error Handling Strategy" (the settled strategy); `logging.md` §"Unhandled
+  `error-handling.md` §"Error Handling Strategy" (the settled strategy); `logging.md` §"Unhandled
   exceptions" (server contract); `middle_plan_v2.md` Phase 1 item 4 + Resolved; audit notes in
   `audit/Comments.md`, `audit/Chapters.md`, `audit/Stories.md`, `audit/BlogPosts.md`.
 

@@ -190,7 +190,7 @@ Architecture." No hub-method tracing conventions are needed unless some future f
 new Hub, which nothing today does.
 
 **Unhandled exceptions** (WU-ErrorHandling, 2026-07-06 — the server-side contract for circuit
-crash / service exception / failed form post; UX half: `cross-cutting.md` §"Error Handling
+crash / service exception / failed form post; UX half: `error-handling.md` §"Error Handling
 Strategy"). Three tiers, outermost-catcher-owns-the-log (no double-log rule unchanged):
 
 1. **Typed user-facing exception caught by a component** (`*ValidationException`,

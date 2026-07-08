@@ -28,15 +28,15 @@ conventions. **Do not revisit these.** Pointers:
    Three `GroupAudienceType` presets are a UI/write convention, not stored. Waterfall enforcement
    at write time: tier 1 = `ContentRating` named filter (model-level); tiers 2/3 = `ServerGroupWriteService`
    explicit checks. Violations throw `ContentRatingExceededException`.  
-   See `cross-cutting.md` "Group Audience-Visibility Filter" and `layer2-services.md`
-   "Group Rating Waterfall."
+   See `content-safety.md` "Group Audience-Visibility Filter" and `layer2-services.md`
+   "Group Rating Waterfall"/"Group Membership and Role Model."
 
 2. **Membership — open join, permanent.** No approval, no kicking. Any authenticated user may join
-   any visible group. See `cross-cutting.md` "Group Membership and Role Model."
+   any visible group. See `layer2-services.md` "Group Membership and Role Model."
 
 3. **Roles — Member / Admin only.** Creator auto-added as Admin on create. No `GroupRole.Moderator`
    category — permanent decision, not a deferral. Admin-gated mutations enforced server-side in
-   `ServerGroupWriteService`. See `cross-cutting.md` "Group Membership and Role Model."
+   `ServerGroupWriteService`. See `layer2-services.md` "Group Membership and Role Model."
 
 4. **Group blog posts — in scope for WU32.** Honors `forward_plan.md` decision (2026-06-24). Reuses
    WU31 `BaseBlogPost` / `IBlogPostWriteService` / `BlogPostCard` / `BlogPostPropertiesForm`

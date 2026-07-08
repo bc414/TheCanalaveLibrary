@@ -62,7 +62,7 @@ still flow. Revisit only if 3.1.x stops receiving security patches. Constants li
 `InteractiveAuto` keeps the circuit path alive permanently even post-flip (first visit renders
 over the circuit while WASM downloads). HTTP rate-limiting middleware never sees circuit
 traffic, so the only single enforcement point covering every transport, present and future, is
-the service method itself. This parallels the authorization rule in `cross-cutting.md`
+the service method itself. This parallels the authorization rule in `identity-and-authorization.md`
 §"Authorization Has Two Enforcement Surfaces": UI affordances are UX, the service is the
 boundary.
 

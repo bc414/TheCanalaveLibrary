@@ -46,7 +46,7 @@ backup cleared on successful submit. `StoryPropertiesForm` renders errors via `I
 gained `SetLongDescriptionAsync` (Quill push for restore). The page's generic catch routes
 through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in a compact
 `story-card` boundary island — one broken card degrades to a tile, the deck survives. Strategy:
-`cross-cutting.md` §"Error Handling Strategy"; detail: `workplan.md` WU-ErrorHandling.
+`error-handling.md` §"Error Handling Strategy"; detail: `workplan.md` WU-ErrorHandling.
 
 - **L1 — Stage 5.** Partition trio + `IEditableStoryProperties` plumbing is sound and matches spec §4/§7.
   Awaiting migration + build verification (no migrations exist). *Settled:* three-table vertical split;
@@ -87,7 +87,7 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
   (the client-settable `AuthorId` property is removed from `CreateStoryDTO`) and throws
   `InvalidOperationException` for unauthenticated callers; `UpdateStoryAsync` loads the story, checks
   `story.AuthorId != activeUser.UserId`, and throws `UnauthorizedAccessException` for non-owners. No
-  mod/admin OR in this gate — moderation is a separate WU34 path (see `cross-cutting.md` "Security vs
+  mod/admin OR in this gate — moderation is a separate WU34 path (see `identity-and-authorization.md` "Security vs
   affordance"). `ITagReadService` gains `GetTagChipsByIdsAsync(IReadOnlyList<int>)` — bulk chip lookup
   by exact ID for edit prefill; `ServerTagReadService` implements it following the same
   sprite-resolve-at-projection pattern as `SearchTagChipsAsync`. `StoryPropertiesViewModel` no longer
@@ -183,8 +183,8 @@ change).
   `GetStoryForEditAsync`, both correct `ReadOnlyApplicationDbContext` `.Select()` projections — they
   *work* and match spec/conventions. **WU12 (2026-06-22) closed the listing gap:** the content-rating
   filter is a global EF named query filter (`ApplicationDbContext.OnModelCreating`, named
-  `"ContentRating"`) sourced from a new `IActiveUserContext` (see `cross-cutting.md` "Content Rating
-  Filtering"/"Active-User Context"), not a per-method `.Where` — so it applies automatically to every
+  `"ContentRating"`) sourced from a new `IActiveUserContext` (see `content-safety.md` "Content Rating
+  Filtering", `identity-and-authorization.md` "Active-User Context"), not a per-method `.Where` — so it applies automatically to every
   `Stories` query, including these listing methods, with no per-call vigilance required. Listing scope
   landed minimal as planned: `StoryListingDto` minted, plus `GetListingsByIdsAsync(int[])` (the §6.6
   building block, reorders results to match input id order, silently drops ids the filter excludes) and

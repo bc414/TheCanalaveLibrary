@@ -141,7 +141,7 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   (optimistic `loaded + delta`). Concurrency fix not automatable (no parallel-request seam); covered by
   existing sequential `ToggleLikeAsync` integration tests confirming correct counter behavior + code review
   that the SQL is now `SET like_count = like_count + delta`. Convention documented in
-  `cross-cutting.md §"Counter mutation rule"`. `dotnet test` 1232/1232 pass.
+  `layer2-services.md §"Counter mutation rule"`. `dotnet test` 1232/1232 pass.
 
 ## Feature 26 — Spoiler Comments
 - **L3-Logic / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note.
@@ -242,6 +242,6 @@ future rules pass if self-likes should be rejected.
 `security.md`) escape to circuit teardown; it now shows its wait-N-seconds message inline. The
 inline error renders via `InlineAlert`; every CommentSection consumer site (chapter / blog post /
 group ×2 / profile ×2) is wrapped in a compact `comments` `CanalaveErrorBoundary` island.
-Strategy + placement map: `cross-cutting.md` §"Error Handling Strategy". Covered by existing
+Strategy + placement map: `error-handling.md` §"Error Handling Strategy". Covered by existing
 CommentSection bUnit suites (message text unchanged for typed validation) + the new
 `CanalaveErrorBoundaryTests`/`InlineAlertTests` (RazorComponents tier).

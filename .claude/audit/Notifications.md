@@ -35,7 +35,7 @@ complete parts of the model.
 (`Server/Identity/SmtpEmailSender.cs`, real send over SMTP — see `audit/Identity.md` WU-Email
 Stage note) but deliberately scoped it to Identity's confirmation/reset/email-change flows only.
 A follow-up work-unit is where this gets consumed: the natural hook is the single funnel
-`ServerNotificationWriteService.CreateCoreAsync` (`cross-cutting.md` "Notification Creation") —
+`ServerNotificationWriteService.CreateCoreAsync` (`layer2-services.md` "Notification Generation") —
 after the in-app rows are inserted, resolve each recipient's effective `EmailEnabled` (the sparse
 row's value, or `NotificationType.DefaultEmailEnabled` when no row exists) + email address, and
 send best-effort post-commit (never fail the notification on a mail-send error, same posture as
@@ -54,8 +54,8 @@ adding that. Noted here so the seam isn't re-discovered from scratch.
 - **L2 — Stage 2 → 5 (WU22).** Settled constraints (do not revisit):
   - **Mechanism:** direct injected call — `INotificationWriteService` injected into feature write
     services; called via a semantic per-event method after the primary `SaveChangesAsync` (best-effort
-    post-commit, `try/catch`-with-log). See `cross-cutting.md` "Notification Creation" and
-    `layer2-services.md` "Notification Generation."
+    post-commit, `try/catch`-with-log). See `layer2-services.md` "Notification Generation"
+    (mechanism + filtering semantics).
   - **API:** semantic per-event methods only (`NotifyNewFollowerAsync`, `NotifyNewChapterAsync`, …);
     no public generic `CreateAsync` escape hatch. Methods funnel through one private create-core
     (drop-self, dedup, bulk-insert, single `SaveChangesAsync`).
@@ -95,7 +95,7 @@ adding that. Noted here so the seam isn't re-discovered from scratch.
   - `GetNotificationsAsync` returns `NotificationDto` with effective `Collapsed` (type default
     overridden by the user's sparse setting when a row exists).
   - The bell in the layout injects `INotificationReadService` directly — legitimate cross-cutting
-    injection (§cross-cutting.md).
+    injection (see `render-and-layout.md` "Notification bell").
   - Mark-as-read mutations (`MarkAsReadAsync`, `MarkAllAsReadAsync`) live on `INotificationWriteService`
     (it inherits from `INotificationReadService`).
   - **L3-Logic — Stage 2** (the notification bell in the layout; panel grouped by `NotificationCategory`,

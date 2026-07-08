@@ -22,7 +22,7 @@ URL**. The URL is computed at render time from `(SpriteBaseUrl, slug, id, prefer
   (`File.Exists`); R2 impl deferred.
 - **`ThemeContext` cascading value** (`record ThemeContext(string Slug, bool PrefersAnimated)`) —
   cascaded from a root `ThemeContextProvider` in `Routes.razor`. SharedUI sprite components inject
-  `ISpriteReadService` and take `[CascadingParameter] ThemeContext`. See `cross-cutting.md`
+  `ISpriteReadService` and take `[CascadingParameter] ThemeContext`. See `render-and-layout.md`
   "ThemeContext Cascading Provider."
 
 ---
@@ -61,7 +61,7 @@ URL**. The URL is computed at render time from `(SpriteBaseUrl, slug, id, prefer
   `ISpriteAssetProbe` wired into `ServerTagWriteService` as a non-blocking warning on mod-write.
   **Tier: RazorComponents** (`TagChip`/`TagSelector`/`CharacterEntry` tests updated — assert `<img src>`
   built from cascaded slug/animation, `onerror` present, null identifier renders no `<img>`).
-  See `cross-cutting.md` "ThemeContext Cascading Provider" and `layer2-services.md` "Sprite URLs
+  See `render-and-layout.md` "ThemeContext Cascading Provider" and `layer2-services.md` "Sprite URLs
   Are Resolved At Render Time."
 - **L3-Logic — Stage 5 (WU30, 2026-06-24).** Theme-selection control built inside
   `SharedUI/Profiles/AppearanceSettingsForm.razor` (the Feature-3 theme-selection UI lives in the
@@ -73,7 +73,7 @@ URL**. The URL is computed at render time from `(SpriteBaseUrl, slug, id, prefer
 - **L3.5-Structure — Stage 5 (WU30, 2026-06-24).** `AppearanceSettingsForm` is an injection-free
   leaf-composite with `ThemeId`, `Themes`, `PrefersAnimated`, `PrefersDataSaver` params and
   `OnSave EventCallback<AppearanceModel>`. Theme dropdown uses `@onchange` with `int.TryParse` block
-  lambda (inner-double-quote limitation in Razor attributes — see `cross-cutting.md` §"Razor attribute
+  lambda (inner-double-quote limitation in Razor attributes — see `layer3-logic.md` §"Razor attribute
   quoting"). Visual sign-off pending human run at `/settings`. Stage-6 gate = human visual approval.
 - **L4-Style — Stage 1.** Theme-selection UI visual; blocked on tokens.
 - **L5 — Stage 5 (resolved 2026-06-27).** The prior Stage-4 divergence (two separate impls with

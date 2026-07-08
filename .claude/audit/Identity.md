@@ -225,5 +225,5 @@ Postgres. Forgot-password → reset email landed in Mailpit → clicked the link
 → logged in with it (fresh `.AspNetCore.Identity.Application` cookie issued). Email-change reuses
 the identical `SendConfirmationLinkAsync`/`ConfirmationBody` path already proven twice, so it was
 not separately re-driven. `dotnet test` 1344/1344 (491 Unit / 450 RazorComponents / 403
-Integration). Rule: `cross-cutting.md` "Identity & Auth"; `run-server/SKILL.md` "Aspire path" +
+Integration). Rule: `identity-and-authorization.md` "Identity & Auth"; `run-server/SKILL.md` "Aspire path" +
 "Email ground truth".

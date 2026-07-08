@@ -38,7 +38,7 @@ Both map the same schema. `ApplicationDbContext.OnModelCreating` calls `base.OnM
 `ReadOnlyApplicationDbContext.OnModelCreating` calls `base.OnModelCreating(modelBuilder)` first, then adds
 the four named visibility/display query filters (`"ContentRating"`, `"GroupAudience"`, `"IsTakenDown"` ×4
 roots). These filters don't touch schema and live on the read context **only** — the write context sees
-ground truth with no filters. See `cross-cutting.md` "Content Rating Filtering" for the principle.
+ground truth with no filters. See `content-safety.md` "Content Rating Filtering" for the principle.
 
 **Migrations are `ApplicationDbContext`-only.** `ReadOnlyApplicationDbContext` owns no migration history
 (its `Migrations/ReadOnlyApplicationDb/` folder was deleted post-WU38 revamp). Always generate and apply
