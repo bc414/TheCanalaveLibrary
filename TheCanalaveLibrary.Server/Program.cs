@@ -142,7 +142,12 @@ builder.Services.AddIdentityCore<User>(options =>
     .AddRoles<ApplicationRole>() // Add the Role service
     .AddEntityFrameworkStores<ApplicationDbContext>() // Connect to your DbContext
     .AddApiEndpoints() // Add the new .NET 8 Identity API endpoints
-    .AddDefaultTokenProviders(); // Add token providers for email, 2FA, etc.
+    .AddDefaultTokenProviders() // Add token providers for email, 2FA, etc.
+    // Overrides AddApiEndpoints's SignInManager<User> registration (last registration wins) so
+    // CanSignInAsync enforces AccountStatus (Suspended/Banned) at the one choke point every
+    // sign-in path (password/passkey/2FA/external) shares — WU38a, security.md "Account-Status
+    // Enforcement".
+    .AddSignInManager<CanalaveSignInManager>();
 
 // Override the default IUserClaimsPrincipalFactory<User> (registered above via AddRoles, TryAddScoped)
 // with one that also bakes ShowMatureContent/Theme/PrefersAnimatedSprites into the auth cookie's claims

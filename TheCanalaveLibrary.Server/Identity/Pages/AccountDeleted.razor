@@ -1,0 +1,17 @@
+@page "/Account/AccountDeleted"
+@namespace TheCanalaveLibrary.Server
+
+@* Anonymous-accessible landing page after a successful self-deletion (DeletePersonalData.razor).
+   Deliberately not the [Authorize] Manage page — the user is signed out by the time they land
+   here, and redirecting to an authorized page produced a bare 401 flash (found 2026-07-01 browser
+   pass; fixed here, WU38a). *@
+
+<PageTitle>Account deleted</PageTitle>
+
+<header class="mx-auto flex w-full max-w-md flex-col gap-4 py-8">
+    <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Account deleted</h1>
+    <p class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-2 text-sm text-(--color-text)" role="status">
+        Your account has been permanently deleted. Thanks for being part of the Canalave Library.
+    </p>
+    <a href="/" class="text-(--color-action-ink) hover:underline">Return to the home page</a>
+</header>

@@ -48,4 +48,15 @@ public static class ActiveUserClaimTypes
     public const string ShowMatureContent = "canalave:show_mature_content";
     public const string Theme = "canalave:theme";
     public const string PrefersAnimatedSprites = "canalave:prefers_animated_sprites";
+
+    /// <summary>
+    /// <see cref="AccountStatusEnum"/>'s name (e.g. <c>"Warned"</c>), baked at sign-in — WU38a.
+    /// Not part of <see cref="IActiveUserContext"/> (that interface is scoped to query-shaping
+    /// fields only): this claim exists purely for <c>AccountStatusBanner</c> to read from cascaded
+    /// <c>AuthenticationState</c>, no service injection. Same staleness caveat as the other baked
+    /// claims — stale until next sign-in unless the write path calls
+    /// <c>SignInManager.RefreshSignInAsync</c>; a freshly-Warned user sees the banner starting at
+    /// their next sign-in, with the WU34 notification as the immediate channel meanwhile.
+    /// </summary>
+    public const string AccountStatus = "canalave:account_status";
 }

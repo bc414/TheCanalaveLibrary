@@ -227,3 +227,57 @@ the identical `SendConfirmationLinkAsync`/`ConfirmationBody` path already proven
 not separately re-driven. `dotnet test` 1344/1344 (491 Unit / 450 RazorComponents / 403
 Integration). Rule: `identity-and-authorization.md` "Identity & Auth"; `run-server/SKILL.md` "Aspire path" +
 "Email ground truth".
+
+## WU38a Stage note (2026-07-11) — F1 L2/L3-Logic/L3.5 re-verified (additive); F52 L4-Style → Stage 5
+
+**Scope actually delivered** (the workplan's original "52 L3/L3.5" framing was stale — see
+`workplan.md` WU38a for the reconciliation): (A) `DeletePersonalData.razor` gained a delete-vs-
+anonymize consequence disclosure (account permanently deleted; authored content anonymized, not
+deleted, with orphaned comment threads reading "[Deleted Comment]"; interaction/social data
+permanently deleted) and a dedicated anonymous-accessible `Identity/Pages/AccountDeleted.razor`
+goodbye page, replacing the `RedirectToCurrentPage()` call that used to bounce a just-signed-out
+user back at the `[Authorize]` Manage page and flash a bare 401 (found in the 2026-07-01 browser
+pass, fixed here). (B) Account-status login enforcement, folded in from the deferred follow-up
+noted after WU39 — see `canalave-conventions/security.md` "Account-Status Enforcement" for the
+full mechanism: `CanalaveSignInManager : SignInManager<User>` overrides `CanSignInAsync` to block
+Banned and currently-Suspended users at the single choke point every sign-in path shares
+(`.AddSignInManager<CanalaveSignInManager>()` in `Program.cs`, after `AddApiEndpoints()` so it
+wins); `Login.razor` turns the resulting `SignInResult.NotAllowed` into a specific suspended/banned
+message (re-checking the password first, so a wrong-password guess against a blocked account still
+gets the generic message); `ServerModerationWriteService.ApplyAccountActionAsync`
+(`audit/Moderation.md` Feature 47) bumps the security stamp on Suspend/Ban only, killing an
+already-open session via the existing 30-minute `IdentityRevalidatingAuthenticationStateProvider`
+revalidation; `ApplicationUserClaimsPrincipalFactory` bakes a new `canalave:account_status` claim
+(`ActiveUserClaimTypes.AccountStatus`) alongside the existing baked claims, consumed by the new
+`AccountStatusBanner` (SharedUI/Layout, Indicator role) composed into `DesktopLayout`/
+`MobileLayout` — renders only for `Warned`.
+
+**Verified:** `dotnet build` 0 warnings/errors (8 projects); `dotnet test` 1483/1483 green (530
+Unit / 517 RazorComponents / 436 Integration). New tests: `AccountStatusEnforcementTests`
+(Integration — `CanSignInAsync` direct for Active/Warned/Banned/Suspended-future/Suspended-past;
+`SignInManager<User>` resolves to `CanalaveSignInManager` in the real DI graph;
+`CheckPasswordSignInAsync` surfaces `NotAllowed`/`Succeeded` correctly without touching HttpContext
+— the same HttpContext-free path `PreSignInCheck` uses; `ApplyAccountActionAsync` stamp-bump
+behavior for Suspend/Ban vs. Warn; claims factory bakes the new claim), `AccountStatusBannerTests`
+(RazorComponents — no render anonymous/Active/no-claim, renders for Warned). Mutation-sanity:
+temporarily inverted the Banned branch in `CanalaveSignInManager.CanSignInAsync` → 4 tests failed
+as expected; reverted, suite green again.
+
+**Manual/browser band (2026-07-11, server-only path, real browser + psql ground truth):**
+end-to-end against a throwaway registered-and-confirmed user (`WU38aThrowaway`) — real password
+login → `DeletePersonalData` renders the disclosure correctly under the design tokens → delete →
+lands on `/Account/AccountDeleted` with no 401 flash → `psql` confirms the `AspNetUsers` row is
+gone. Login enforcement driven against the `ReaderGamma` fixture (state restored to Active
+afterward): suspended-until-a-future-date → real login POST blocked with "This account is
+suspended until {date}."; banned → blocked with "This account has been permanently banned.";
+warned → login succeeds and `AccountStatusBanner` renders in the real layout ("Your account has
+received a moderator warning…"). Active-session-kill-via-stamp-bump is Integration-tested only
+(same "what stays manual" carve-out as `SecurityStampValidator` timing elsewhere in this file) —
+proving it live means waiting out the real 30-minute revalidation window, not attempted here.
+
+**Test tier:** Integration (`AccountStatusEnforcementTests.cs`) + RazorComponents
+(`AccountStatusBannerTests.cs`). F52 L4-Style flips **Stage 1 → 5** (visual sign-off of the
+disclosure + goodbye page, above). F1 L2/L3-Logic/L3.5 stay Stage 5, re-verified — additive, no
+Stage change. F1 L4-Style is unchanged (Stage 1) — this WU visually confirmed only the new Login
+error copy and the banner, not a full Identity-feature sign-off. Rule:
+`canalave-conventions/security.md` "Account-Status Enforcement".

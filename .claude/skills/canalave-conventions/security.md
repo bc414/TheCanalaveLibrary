@@ -181,6 +181,38 @@ grow script directives. All non-CSP headers are enforced in every environment.
 - `RequireConfirmedAccount = true` stands; real activation email is WU-Email's deliverable
   (`IdentityNoOpEmailSender` is the current placeholder).
 
+## Account-Status Enforcement (WU38a)
+
+WU34 modeled `User.AccountStatus` (`Active`/`Warned`/`Suspended`/`Banned`) + `SuspendedUntilUtc` and
+wired moderator actions + notifications, but deliberately deferred login-blocking (see
+`audit/Moderation.md` Feature 47). WU38a closes that gap.
+
+- **Single choke point:** `CanalaveSignInManager : SignInManager<User>` overrides
+  `CanSignInAsync(User)` — `Banned` → always `false`; `Suspended` with `SuspendedUntilUtc` still in
+  the future → `false`; otherwise defers to `base.CanSignInAsync` (preserves
+  `RequireConfirmedAccount`, etc.). Registered via `.AddSignInManager<CanalaveSignInManager>()`
+  (last registration for a service type wins, same pattern as
+  `ApplicationUserClaimsPrincipalFactory`). Every sign-in path — password, passkey, 2FA,
+  external-login — funnels through `SignInManager.PreSignInCheck → CanSignInAsync`, so overriding
+  it here covers all of them without touching each page. A blocked attempt surfaces as
+  `SignInResult.NotAllowed`; `Login.razor` re-checks the password and, if it was correct, shows the
+  specific suspended/banned reason instead of "Invalid login attempt."
+- **Expired suspensions are allowed through as-is** — the predicate is read-only (no lazy status
+  restore at the choke point); `AccountStatus` stays `Suspended` in the row until a moderator
+  changes it, but `CanSignInAsync` stops blocking once `SuspendedUntilUtc` has passed.
+- **Active sessions are killed on Suspend/Ban, not on Warn.** `ApplyAccountActionAsync`
+  (`ServerModerationWriteService`) calls `UserManager.UpdateSecurityStampAsync` after setting
+  `Suspended`/`Banned` — the existing 30-minute stamp revalidation
+  (`IdentityRevalidatingAuthenticationStateProvider`) then invalidates the live cookie on its next
+  check, and the following request re-authenticates through the now-blocking `CanSignInAsync`. A
+  `Warned` user is not logged out — the warning surfaces as a banner, not an ejection.
+- **Warned banner:** `canalave:accountstatus` is baked into auth-cookie claims alongside
+  `ShowMatureContent`/`Theme`/`PrefersAnimatedSprites` (`ApplicationUserClaimsPrincipalFactory`,
+  `SerializeAllClaims = true` already covers WASM). `AccountStatusBanner` (SharedUI/Layout, an
+  Indicator-role element) reads the claim from cascaded `AuthenticationState` and renders only when
+  `Warned`. Same staleness caveat as the other baked claims: a freshly-warned user sees the banner
+  starting at their next sign-in, not mid-session — the WU34 notification is the immediate channel.
+
 ## Data Protection Keyring
 
 Auth cookies and antiforgery tokens are encrypted with the Data Protection key ring. Unpersisted

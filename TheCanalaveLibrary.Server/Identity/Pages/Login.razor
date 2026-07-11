@@ -130,10 +130,33 @@
             Logger.LogWarning("User account locked out.");
             RedirectManager.RedirectTo("Account/Lockout");
         }
+        else if (result.IsNotAllowed)
+        {
+            // CanalaveSignInManager.CanSignInAsync blocked this sign-in for a Suspended/Banned
+            // account (WU38a). Re-check the password so a wrong-password guess against a
+            // suspended/banned account still gets the generic message, not a status leak.
+            errorMessage = await BuildAccountStatusMessageAsync();
+        }
         else
         {
             errorMessage = "Error: Invalid login attempt.";
         }
+    }
+
+    private async Task<string> BuildAccountStatusMessageAsync()
+    {
+        User? account = await UserManager.FindByEmailAsync(Input.Email);
+        if (account is null || !await UserManager.CheckPasswordAsync(account, Input.Password))
+        {
+            return "Error: Invalid login attempt.";
+        }
+
+        return account.AccountStatus switch
+        {
+            AccountStatusEnum.Banned => "Error: This account has been permanently banned.",
+            AccountStatusEnum.Suspended => $"Error: This account is suspended until {account.SuspendedUntilUtc:d}.",
+            _ => "Error: Invalid login attempt.",
+        };
     }
 
     private sealed class InputModel

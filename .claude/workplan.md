@@ -1158,13 +1158,52 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   `audit/Tags.md` Feature 11 WU38 note, `audit/ImageStorage.md` WU38 note.
 - **Deps:** WU27.5.
 
-### WU38a — Account Deletion UI
-- **Cells:** 52 L3/L3.5 (deletion UI; service already in WU1).
-- **Tool:** opusplan. **Pointer:** `audit/Identity.md`. **Deps:** WU25.
+### WU38a — Account Deletion UI + Account-Status Login Enforcement — DONE ✓ (2026-07-11)
+- **Cells:** 52 L3/L3.5 stay Stage 5 (deletion UI + service already landed in WU1 — see
+  `audit/Identity.md` Feature 52; that reconciliation is not reopened). **52 L4-Style: 1 → 5**
+  (the one genuinely open Feature-52 cell, closed by this unit). 1 L2/L3-Logic/L3.5 (login
+  enforcement + Warned banner, additive to Identity & Auth) and 47 L2 (stamp-bump, additive to
+  Moderation Queue & Actions) stay Stage 5, re-verified.
+- **Direction settled (2026-07-11, do not revisit):** the workplan's original "52 L3/L3.5" framing
+  was stale doc-drift — those cells were already Stage 5 from WU1, browser-verified 2026-07-01, and
+  tokenized by the 2026-07-10 design sweep. WU38a's real scope, decided with the user: (A) the
+  deletion page keeps its existing password-confirm form and gets a delete-vs-anonymize
+  consequence disclosure only — **no** `ConfirmDialog`/interactive-island rework (Identity pages
+  are static SSR) — plus a goodbye page fixing the known post-deletion 401 flash, then the standing
+  L4-Style visual sign-off; (B) the `workplan.md` deferred "Account-status login enforcement"
+  follow-up (below) is **folded into this unit**, built on WU34's `AccountStatusEnum`/
+  `SuspendedUntilUtc` state — a single `CanalaveSignInManager.CanSignInAsync` choke point blocking
+  every sign-in path, **plus** a security-stamp bump on Suspend/Ban (not Warn) so already-open
+  sessions die via the existing 30-min revalidation, plus a claims-baked Warned banner in layout
+  chrome. No grace period / soft-delete / type-to-confirm — the spec (`§Delete Policy Summary`,
+  `§5.30.9`) doesn't call for any. See `canalave-conventions/security.md` "Account-Status
+  Enforcement" for the mechanism and `audit/Identity.md`/`audit/Moderation.md` Feature 47 for the
+  settled-vs-open notes.
+- **Done:** (A) `DeletePersonalData.razor` disclosure + new anonymous `AccountDeleted.razor`
+  goodbye page (fixes the 401 flash). (B) `CanalaveSignInManager` (`CanSignInAsync` override,
+  registered via `.AddSignInManager<>()`) blocks Banned/currently-Suspended sign-ins;
+  `Login.razor` surfaces the specific reason; `ApplyAccountActionAsync` bumps the security stamp
+  on Suspend/Ban (not Warn); `ApplicationUserClaimsPrincipalFactory` bakes
+  `canalave:account_status`; new `AccountStatusBanner` (SharedUI/Layout) renders the Warned banner
+  in `DesktopLayout`/`MobileLayout`.
+- **Verified:** `dotnet build` 0 warnings (8 projects); `dotnet test` 1483/1483 green (530 Unit /
+  517 RazorComponents / 436 Integration) — new `AccountStatusEnforcementTests` (Integration) +
+  `AccountStatusBannerTests` (RazorComponents); mutation-sanity confirmed (inverted Banned branch →
+  4 tests failed, reverted). Manual/browser band: real password login + delete of a throwaway
+  registered user → goodbye page, no 401 flash, `psql`-confirmed row gone; `ReaderGamma` fixture
+  driven through real login POSTs at Suspended-future/Banned/Warned (state restored to Active
+  after) — blocked with the specific reason message in the first two cases, banner rendered live
+  in the third. Detail in `audit/Identity.md` WU38a Stage note, `audit/Moderation.md` Feature 47
+  WU38a Stage note.
+- **Tool:** opusplan. **Pointer:** `audit/Identity.md`, `audit/Moderation.md` Feature 47. **Deps:** WU25.
 
-### WU38b — View Count
-- **Cells:** 45 L2/L3 (view-count MVP direct increment, first client ping).
-- **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 45. **Deps:** WU25.
+### WU38b — View Count — DONE ✓ (superseded by WU-SignalBuffering, 2026-07-06)
+- **Cells:** 45 L2/L3 — originally scoped as view-count MVP direct increment + first client ping.
+  Shipped instead as part of WU-SignalBuffering's signal-buffer pattern (see that block below):
+  `ViewCountBuffer`/`ViewCountFlusher`/`ViewCountFlushWorker` batching into `daily_story_stats`,
+  not a direct increment. **Pointer:** `audit/Stories.md` Feature 45.
+- **L5** (WASM view-ping endpoint) remains Stage 2, deferred to the global WASM interactivity
+  flip — not WU38b-specific, not pulled forward here.
 
 ### WU38c — Export (epub/pdf)
 - **Cells:** 54 L2 (epub/pdf export, app-layer only).
@@ -1191,10 +1230,12 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   (or `Core/Stories/`) at this point.
 - **Tool:** opusplan. **Pointer:** `audit/Moderation.md` Feature 53. **Deps:** WU24, WU34.
 
-> **Deferred follow-up (not yet sequenced):** Account-status login enforcement — block Suspended (until
-> `SuspendedUntilUtc`) / Banned users at login and surface the Warned banner in layout chrome. WU34 ships
-> the `AccountStatus` state + notifications it builds on; enforcement is a security-surface slice to append
-> as its own WU when scheduled (candidate: alongside WU38 account-deletion UI). No stage number yet.
+> **Account-status login enforcement — folded into WU38a (2026-07-11), no longer deferred.** Was:
+> "block Suspended (until `SuspendedUntilUtc`) / Banned users at login and surface the Warned banner
+> in layout chrome; WU34 ships the `AccountStatus` state + notifications it builds on; enforcement
+> is a security-surface slice to append as its own WU when scheduled (candidate: alongside WU38
+> account-deletion UI)." See WU38a above for the settled mechanism and
+> `canalave-conventions/security.md` "Account-Status Enforcement".
 
 ### WU41 — Series (Feature 9)
 - **Cells:** 9 L2/L3/L3.5/L4 → Stage 5 (L4 pending visual sign-off).

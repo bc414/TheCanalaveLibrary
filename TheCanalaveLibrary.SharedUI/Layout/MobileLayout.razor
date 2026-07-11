@@ -3,6 +3,11 @@
 
 <div class="flex min-h-screen flex-col">
     <main class="flex-1">
+        <div class="px-4 pt-4">
+            <CanalaveErrorBoundary Label="chrome" Compact="true">
+                <AccountStatusBanner />
+            </CanalaveErrorBoundary>
+        </div>
         <article class="px-4 py-4">
             @* Page island — mirrors DesktopLayout (cross-cutting.md §"Error Handling Strategy"). *@
             <CanalaveErrorBoundary Label="page">

@@ -19,8 +19,20 @@
 
     <div class="rounded-md border border-(--color-warning)/40 bg-(--color-warning)/10 px-4 py-2 text-sm text-(--color-warning)" role="alert">
         <p>
-            <strong>Deleting this data will permanently remove your account, and this cannot be recovered.</strong>
+            <strong>Deleting your account cannot be undone.</strong> Here's what happens to your data:
         </p>
+        <ul class="mt-2 list-disc pl-5">
+            <li>Your account and login are <strong>permanently deleted</strong>.</li>
+            <li>
+                Stories, chapters, comments, blog posts, and recommendations you've published are
+                <strong>not deleted</strong> — they're kept and anonymized. Comment replies you left
+                on other threads become <em>"[Deleted Comment]"</em>.
+            </li>
+            <li>
+                Follows, interactions (favorites/likes/read-later), reading lists, memberships,
+                badges, settings, and stats are <strong>permanently deleted</strong>.
+            </li>
+        </ul>
     </div>
 
     <EditForm Model="Input" FormName="delete-user" OnValidSubmit="OnValidSubmitAsync" method="post" class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
@@ -87,7 +99,11 @@
 
         Logger.LogInformation("User with ID '{UserId}' deleted themselves.", userId);
 
-        RedirectManager.RedirectToCurrentPage();
+        // Not RedirectToCurrentPage(): this page is under the [Authorize] Manage section, and the
+        // user is already signed out by this point — redirecting back here produced a bare 401
+        // flash before the anonymous session settled (found 2026-07-01 browser pass). The
+        // anonymous-accessible goodbye page avoids that entirely.
+        RedirectManager.RedirectTo("Account/AccountDeleted");
     }
 
     private sealed class InputModel

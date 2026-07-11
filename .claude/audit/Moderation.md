@@ -55,8 +55,11 @@ L6=5 (composite index `ix_reports_reported_entity_type_reported_entity_id` added
   + interface mutation via `IModeratableContent` in `ServerModerationWriteService` (pre-integration cleanup
   2026-06-26 collapsed the prior triple switch).
 - Account actions: `AccountStatus` enum (Active/Warned/Suspended/Banned — **no Shadowbanned**) +
-  `SuspendedUntilUtc` set on `User`. Status + notification + `Report` record set together. Login-blocking
-  enforcement is a deferred follow-up WU (see `workplan.md` note after WU39).
+  `SuspendedUntilUtc` set on `User`. Status + notification + `Report` record set together.
+  **Login-blocking enforcement landed in WU38a** (`CanalaveSignInManager.CanSignInAsync` +
+  security-stamp bump on Suspend/Ban in `ApplyAccountActionAsync` — see
+  `canalave-conventions/security.md` "Account-Status Enforcement" and this file's WU38a Stage note
+  below).
 - Polymorphic target label + deep-link resolved via two-pass `BatchLoadEntitiesAsync` pattern (one query
   per present target type — same pattern as `GetNotificationsAsync`).
 - `User.ActiveReportCount` added (symmetric with other targets); `AdjustActiveReportCount` switch skips
@@ -68,6 +71,17 @@ flows implemented and covered by `ModerationServiceTests.ResolveNoActionAsync_*`
 `ResolveWithRemovalAsync_SoftHides_*` (Integration). `AdjustActiveReportCount` switch verified — Message
 type is no-op (unit test). L4=3 (functional styling, not design-reviewed). L5=N/A. L6=5 (same migration
 as Feature 46).
+
+**Stage note (WU38a — 2026-07-11):** L2 stays Stage 5, re-verified (additive). `ApplyAccountActionAsync`
+now calls `UserManager.UpdateSecurityStampAsync(targetUser)` after setting `Suspended`/`Banned` (not
+`Warned`) so an already-open session dies via the existing 30-min
+`IdentityRevalidatingAuthenticationStateProvider` stamp revalidation, closing the "login-blocking
+enforcement deferred" gap this section used to point at — see `audit/Identity.md` WU38a Stage note
+and `canalave-conventions/security.md` "Account-Status Enforcement" for the full mechanism (the
+sign-in-side half, `CanalaveSignInManager`, lives in Identity, not here). **Verified:** Integration
+(`AccountStatusEnforcementTests.ApplyAccountActionAsync_SuspendUser_BumpsSecurityStamp`/
+`_BanUser_BumpsSecurityStamp`/`_WarnUser_DoesNotBumpSecurityStamp`) — stamp changes on Suspend/Ban,
+unchanged on Warn. `dotnet test` 1483/1483 green.
 
 ## Feature 48 — Story Approval Workflow
 

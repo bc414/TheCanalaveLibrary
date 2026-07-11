@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using TheCanalaveLibrary.Core;
@@ -34,6 +35,7 @@ public class ServerModerationWriteService(
     IActiveUserContext activeUser,
     INotificationWriteService notifications,
     IWriteRateLimitService rateLimit,
+    UserManager<User> userManager,
     ILogger<ServerModerationWriteService> logger)
     : ServerModerationReadService(readDbFactory), IModerationWriteService
 {
@@ -188,6 +190,13 @@ public class ServerModerationWriteService(
         report.DateResolved = DateTime.UtcNow;
 
         await writeDb.SaveChangesAsync();
+
+        // Kill any already-open session for Suspend/Ban (not Warn — a warning must not log the
+        // user out) — WU38a. IdentityRevalidatingAuthenticationStateProvider re-checks the
+        // security stamp every 30 minutes; a mismatch ends the live circuit, and the next sign-in
+        // attempt is blocked by CanalaveSignInManager.CanSignInAsync.
+        if (newStatus is AccountStatusEnum.Suspended or AccountStatusEnum.Banned)
+            await userManager.UpdateSecurityStampAsync(targetUser);
 
         try
         {

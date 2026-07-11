@@ -1,0 +1,21 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Indicator-role element (layer4-style.md "Element Roles") — reads the canalave:account_status
+   claim baked at sign-in (ApplicationUserClaimsPrincipalFactory) from cascaded
+   AuthenticationState, same pattern as LoginDisplay's claims read: no service injection. Renders
+   only for a Warned account; Suspended/Banned never reach here (CanalaveSignInManager blocks
+   sign-in, and an already-open session for either is killed by the security-stamp bump in
+   ApplyAccountActionAsync — WU38a). Staleness note: a freshly-Warned user sees this starting at
+   their next sign-in, per ActiveUserClaimTypes.AccountStatus's own doc comment. *@
+
+<AuthorizeView>
+    <Authorized>
+        @if (context.User.FindFirst(ActiveUserClaimTypes.AccountStatus)?.Value == nameof(AccountStatusEnum.Warned))
+        {
+            <div class="rounded-md border border-(--color-warning)/40 bg-(--color-warning)/10 px-4 py-2 text-sm text-(--color-warning)" role="alert">
+                Your account has received a moderator warning. Repeated violations may lead to
+                suspension or a permanent ban.
+            </div>
+        }
+    </Authorized>
+</AuthorizeView>

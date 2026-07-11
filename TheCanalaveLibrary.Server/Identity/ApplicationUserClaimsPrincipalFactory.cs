@@ -46,6 +46,7 @@ public class ApplicationUserClaimsPrincipalFactory(
         identity.AddClaim(new Claim(ActiveUserClaimTypes.ShowMatureContent, user.ShowMatureContent.ToString()));
         identity.AddClaim(new Claim(ActiveUserClaimTypes.Theme, themeSlug));
         identity.AddClaim(new Claim(ActiveUserClaimTypes.PrefersAnimatedSprites, user.PrefersAnimatedSprites.ToString()));
+        identity.AddClaim(new Claim(ActiveUserClaimTypes.AccountStatus, user.AccountStatus.ToString()));
 
         return identity;
     }
