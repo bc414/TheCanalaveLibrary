@@ -32,7 +32,8 @@ namespace TheCanalaveLibrary.Server;
 public class ServerTreeSearchReadService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser,
-    IDiscoveryDefaultsReadService discoveryDefaults) : ITreeSearchReadService
+    IDiscoveryDefaultsReadService discoveryDefaults,
+    IStoryReadService storyReadService) : ITreeSearchReadService
 {
     /// <summary>Per-node expansion cap inside the recursive step (wide-mode flooding guard).
     /// Deep chain-of-trust edges never approach it (≤5 structurally).</summary>
@@ -164,6 +165,145 @@ public class ServerTreeSearchReadService(
             DegreesReached = degreesReached,
             ResultCapTruncated = truncated,
         };
+    }
+
+    /// <summary>
+    /// The Automatic Tree Search UI composition (WU44) — see the interface doc and
+    /// `layer2-services.md` "Tree Search — Automatic Tab Composition (WU44)" for the full design.
+    /// Runs the raw-reached traversal (no rating/interaction/cap), hands the reached ids to
+    /// <see cref="IStoryReadService.FilterCandidateIdsAsync"/> for tag/FTS/interaction/rating
+    /// filtering, sorts (Random or ByDegree) and caps on the FILTERED set, then hydrates via
+    /// <see cref="IStoryReadService.GetListingsByIdsAsync"/>.
+    /// </summary>
+    public async Task<TreeSearchListingResultDto> SearchAsync(
+        TreeSearchRequest request, StoryFilterDto filter, CancellationToken ct = default)
+    {
+        Validate(request);
+
+        using Activity? activity = CanalaveTelemetry.Discovery.Source.StartActivity("Discovery.TreeSearchSearch");
+        activity?.SetTag("canalave.treesearch.max_degrees", request.MaxDegrees);
+        activity?.SetTag("canalave.treesearch.edge_type_count", request.EdgeTypes.Count);
+        long startTimestamp = Stopwatch.GetTimestamp();
+
+        IReadOnlyList<(int StoryId, int Degree, string? Path)> raw = await GetRawReachedAsync(request, ct);
+        if (raw.Count == 0)
+        {
+            return new TreeSearchListingResultDto { Items = [], DegreesReached = 0, ResultCapTruncated = false };
+        }
+
+        Dictionary<int, (int Degree, string? Path)> byId = raw.ToDictionary(h => h.StoryId, h => (h.Degree, h.Path));
+
+        IReadOnlyList<int> survivorIds = await storyReadService.FilterCandidateIdsAsync([.. byId.Keys], filter);
+
+        // Sort on the FILTERED set — ByDegree needs the degree map (GetListingsAsync's DefaultSortOrder
+        // has no ByDegree); Random uses a fresh shuffle per call (no shown-id memory, same discipline as
+        // GetRandomBatchAsync). Cap here — NOT inside the raw-reached traversal — so ResultCapTruncated
+        // reflects the filtered candidate count, not the pre-filter traversal count.
+        IEnumerable<int> ordered = request.Sort == TreeSearchSortOrder.ByDegree
+            ? survivorIds.OrderBy(id => byId[id].Degree)
+            : survivorIds.OrderBy(_ => Random.Shared.Next());
+
+        int[] capped = [.. ordered.Take(request.ResultCap)];
+        bool truncated = survivorIds.Count > capped.Length;
+
+        StoryListingDto[] items = await storyReadService.GetListingsByIdsAsync(capped);
+        TreeSearchListingItemDto[] listingItems = [.. items.Select(item => new TreeSearchListingItemDto
+        {
+            Story = item,
+            Degree = byId[item.StoryId].Degree,
+            Path = byId[item.StoryId].Path,
+        })];
+
+        int degreesReached = listingItems.Length > 0 ? listingItems.Max(i => i.Degree) : 0;
+
+        double durationMs = Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;
+        CanalaveTelemetry.Discovery.TraversalDuration.Record(durationMs);
+        CanalaveTelemetry.Discovery.DegreesReached.Record(degreesReached);
+        CanalaveTelemetry.Discovery.ResultCount.Record(listingItems.Length);
+        if (truncated) CanalaveTelemetry.Discovery.CapTruncations.Add(1);
+        activity?.SetTag("canalave.treesearch.degrees_reached", degreesReached);
+        activity?.SetTag("canalave.treesearch.result_count", listingItems.Length);
+        activity?.SetTag("canalave.treesearch.cap_truncated", truncated);
+
+        return new TreeSearchListingResultDto
+        {
+            Items = listingItems,
+            DegreesReached = degreesReached,
+            ResultCapTruncated = truncated,
+        };
+    }
+
+    /// <summary>
+    /// The "raw reached" traversal for <see cref="SearchAsync"/> — same recursive term as
+    /// <see cref="TraverseAsync"/> (kept in sync manually; see that method's doc comment for the
+    /// traversal-shape rationale), but WITHOUT the rating/interaction/cap presentation filter:
+    /// <see cref="SearchAsync"/> composes against <see cref="IStoryReadService.FilterCandidateIdsAsync"/>
+    /// instead (`layer2-services.md` "Tree Search — Automatic Tab Composition (WU44)"). Still joins
+    /// <c>stories</c> for the <see cref="DiscoveryMartSchema.VisibleStory"/> guard — cheap defense in
+    /// depth against a mart edge whose story was taken down since the last daily rebuild; redundant
+    /// with (not a substitute for) the <c>IsTakenDown</c> global query filter <c>FilterCandidateIdsAsync</c>
+    /// applies next. <see cref="TraverseAsync"/> itself is unchanged.
+    /// </summary>
+    private async Task<IReadOnlyList<(int StoryId, int Degree, string? Path)>> GetRawReachedAsync(
+        TreeSearchRequest request, CancellationToken ct)
+    {
+        const string sql = $"""
+            WITH RECURSIVE traversal (is_story, node_id, degree) AS (
+                SELECT @rootIsStory, @rootId, 0
+                UNION ALL
+                SELECT nxt.next_is_story, nxt.next_id, t.degree + 1
+                FROM traversal t
+                JOIN LATERAL (
+                    (SELECT e.user_id AS next_id, false AS next_is_story
+                     FROM {DiscoveryMartSchema.TreeSearchTable} e
+                     WHERE t.is_story AND e.story_id = t.node_id AND e.edge_type = ANY(@edges)
+                     LIMIT @fanOutCap)
+                    UNION ALL
+                    (SELECT e2.story_id AS next_id, true AS next_is_story
+                     FROM {DiscoveryMartSchema.TreeSearchTable} e2
+                     WHERE (NOT t.is_story) AND e2.user_id = t.node_id AND e2.edge_type = ANY(@edges)
+                     LIMIT @fanOutCap)
+                ) nxt ON true
+                WHERE t.degree < @maxDegrees
+            ) CYCLE is_story, node_id SET is_cycle USING path,
+            hits AS (
+                SELECT t.node_id AS story_id,
+                       MIN(t.degree) AS degree,
+                       (array_agg(t.path::text ORDER BY t.degree ASC))[1] AS shortest_path
+                FROM traversal t
+                WHERE t.is_story AND t.degree > 0
+                GROUP BY t.node_id
+            )
+            SELECT h.story_id, h.degree,
+                   CASE WHEN @includePaths THEN h.shortest_path END AS shortest_path
+            FROM hits h
+            JOIN stories s ON s.story_id = h.story_id
+            WHERE {DiscoveryMartSchema.VisibleStory}
+              AND NOT (@rootIsStory AND h.story_id = @rootId)
+            """;
+
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync(ct);
+        await readDb.Database.OpenConnectionAsync(ct);
+        DbConnection connection = readDb.Database.GetDbConnection();
+
+        await using DbCommand command = connection.CreateCommand();
+        command.CommandText = sql;
+        command.Parameters.Add(new NpgsqlParameter("rootIsStory", request.RootStoryId.HasValue));
+        command.Parameters.Add(new NpgsqlParameter("rootId", request.RootStoryId ?? request.RootUserId!.Value));
+        command.Parameters.Add(new NpgsqlParameter("maxDegrees", request.MaxDegrees));
+        command.Parameters.Add(new NpgsqlParameter("fanOutCap", FanOutCap));
+        command.Parameters.Add(new NpgsqlParameter("edges", request.EdgeTypes.Select(e => (short)e).Distinct().ToArray()));
+        command.Parameters.Add(new NpgsqlParameter("includePaths", request.IncludePaths));
+
+        List<(int, int, string?)> hits = [];
+        await using (DbDataReader reader = await command.ExecuteReaderAsync(ct))
+        {
+            while (await reader.ReadAsync(ct))
+            {
+                hits.Add((reader.GetInt32(0), reader.GetInt32(1), reader.IsDBNull(2) ? null : reader.GetString(2)));
+            }
+        }
+        return hits;
     }
 
     /// <summary>Request-shape rules (unit-tested): exactly one root; ≥1 edge type; sane degree

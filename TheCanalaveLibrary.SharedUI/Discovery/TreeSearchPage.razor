@@ -1,0 +1,205 @@
+@namespace TheCanalaveLibrary.SharedUI
+@page "/discover/me"
+@page "/discover/user/{UserId:int}"
+@page "/discover/story/{StoryId:int}"
+@attribute [AllowAnonymous]
+@using Microsoft.AspNetCore.Authorization
+@using System.Security.Claims
+@inject IStoryReadService StoryReadService
+@inject IUserProfileReadService UserProfileReadService
+@inject IUserStoryInteractionReadService InteractionReadService
+@inject IDiscoveryDefaultsReadService DiscoveryDefaults
+@inject ITreeSearchReadService TreeSearchReadService
+@inject IDeviceDetectionService DeviceService
+@inject NavigationManager Nav
+
+@* TreeSearchPage — dispatcher for the Unified Tree Search Page (WU44, spec §5.26).
+   Routes: /discover/me (self as root), /discover/user/{userId}, /discover/story/{storyId}.
+   Resolves the root entity, seeds §8.7 AutoTreeSearch defaults, runs an initial traversal with
+   sensible control defaults (or query-param-seeded ones), and branches mobile/desktop. Manual tab
+   is a placeholder — Feature 33 / WU40 fills it into this same shell.
+
+   URL state (spec §5.26): root/anchor lives in the route; degrees/edges/sort live in the query
+   string (SupplyParameterFromQuery) and are pushed back via NavigateTo(replace: true) on Apply —
+   filter/control changes never grow browser history; only navigating to a different root does
+   (ordinary <a href> navigation, e.g. UserCard's "Discover from this User"). *@
+
+@if (_rootNotFound)
+{
+    <div class="mx-auto max-w-2xl px-4 py-12 text-center text-(--color-text-muted)">
+        <p>We couldn't find that @(StoryId.HasValue ? "story" : "user").</p>
+    </div>
+}
+else if (_requiresLogin)
+{
+    <div class="mx-auto max-w-2xl px-4 py-12 text-center text-(--color-text-muted)">
+        <p>Log in to discover from yourself.</p>
+    </div>
+}
+else if (DeviceService.IsMobile())
+{
+    <TreeSearchMobile RootStory="_rootStory" RootUser="_rootUser"
+                      ActiveTab="_activeTab" OnTabChanged="HandleTabChangedAsync"
+                      Result="_result" InteractionStates="_states" CurrentUserId="_currentUserId"
+                      InitialMaxDegrees="_maxDegrees" InitialEdgeTypes="_edgeTypes" InitialSort="_sort"
+                      InitialFilter="_filter"
+                      OnControlsApply="HandleControlsApplyAsync" OnFilterApply="HandleFilterApplyAsync" />
+}
+else
+{
+    <TreeSearchDesktop RootStory="_rootStory" RootUser="_rootUser"
+                       ActiveTab="_activeTab" OnTabChanged="HandleTabChangedAsync"
+                       Result="_result" InteractionStates="_states" CurrentUserId="_currentUserId"
+                       InitialMaxDegrees="_maxDegrees" InitialEdgeTypes="_edgeTypes" InitialSort="_sort"
+                       InitialFilter="_filter"
+                       OnControlsApply="HandleControlsApplyAsync" OnFilterApply="HandleFilterApplyAsync" />
+}
+
+@code {
+    [Parameter] public int? UserId { get; set; }
+    [Parameter] public int? StoryId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "degrees")] public int? DegreesQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "edges")] public string? EdgesQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? SortQuery { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private int? _currentUserId;
+    private StoryListingDto? _rootStory;
+    private UserCardDto? _rootUser;
+    private bool _rootNotFound;
+    private bool _requiresLogin;
+
+    private TreeSearchTab _activeTab = TreeSearchTab.Automatic;
+    private TreeSearchListingResultDto? _result;
+    private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states =
+        new Dictionary<int, UserStoryInteractionStateDto>();
+
+    private int _maxDegrees = 2;
+    private IReadOnlyList<TreeSearchEdgeType> _edgeTypes = TreeSearchControls.DefaultEdgeTypes;
+    private TreeSearchSortOrder _sort = TreeSearchSortOrder.Random;
+    private StoryFilterDto _filter = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            string? idClaim = state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(idClaim, out int userId)) _currentUserId = userId;
+        }
+
+        // ── Resolve root ──────────────────────────────────────────────────────────────────────
+        bool isSelfRoot = !UserId.HasValue && !StoryId.HasValue;
+        if (isSelfRoot)
+        {
+            if (_currentUserId is null) { _requiresLogin = true; return; }
+            await ResolveUserRootAsync(_currentUserId.Value);
+        }
+        else if (UserId.HasValue)
+        {
+            await ResolveUserRootAsync(UserId.Value);
+        }
+        else if (StoryId.HasValue)
+        {
+            StoryListingDto[] stories = await StoryReadService.GetListingsByIdsAsync([StoryId.Value]);
+            _rootStory = stories.Length > 0 ? stories[0] : null;
+            _rootNotFound = _rootStory is null;
+        }
+
+        if (_rootNotFound || _requiresLogin) return;
+
+        // ── Seed §8.7 AutoTreeSearch defaults ────────────────────────────────────────────────
+        IReadOnlyList<UserStoryInteractionTypeEnum> defaultExclusions =
+            await DiscoveryDefaults.GetDefaultExcludedInteractionsAsync(SiteSearchModes.AutoTreeSearch);
+        _filter = _filter with { ExcludedInteractions = defaultExclusions };
+
+        // ── Seed controls from the query string, if present ─────────────────────────────────
+        if (DegreesQuery is { } d && d >= 1) _maxDegrees = d;
+        if (!string.IsNullOrWhiteSpace(EdgesQuery))
+        {
+            var parsed = EdgesQuery.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(ParseEdgeType).Where(e => e.HasValue).Select(e => e!.Value).ToArray();
+            if (parsed.Length > 0) _edgeTypes = parsed;
+        }
+        if (!string.IsNullOrWhiteSpace(SortQuery) && Enum.TryParse<TreeSearchSortOrder>(SortQuery, true, out var sortParsed))
+            _sort = sortParsed;
+
+        await RunSearchAsync(includePaths: _edgeTypes.All(IsChainOfTrust));
+    }
+
+    private async Task ResolveUserRootAsync(int userId)
+    {
+        ProfileHeaderDto? header = await UserProfileReadService.GetProfileHeaderAsync(userId, includePrivate: false);
+        if (header is null) { _rootNotFound = true; return; }
+
+        _rootUser = new UserCardDto(header.UserId, header.Username, header.Tagline, header.AvatarUrl, header.Badges);
+    }
+
+    private static bool IsChainOfTrust(TreeSearchEdgeType edge) =>
+        edge is TreeSearchEdgeType.HiddenGem or TreeSearchEdgeType.AuthorSpotlight;
+
+    private static TreeSearchEdgeType? ParseEdgeType(string s) =>
+        Enum.TryParse<TreeSearchEdgeType>(s, true, out var e) ? e : null;
+
+    private Task HandleTabChangedAsync(TreeSearchTab tab)
+    {
+        _activeTab = tab;
+        return Task.CompletedTask;
+    }
+
+    private async Task HandleControlsApplyAsync(TreeSearchControlsSelection selection)
+    {
+        _maxDegrees = selection.MaxDegrees;
+        _edgeTypes = selection.EdgeTypes;
+        _sort = selection.Sort;
+        UpdateQueryString();
+        await RunSearchAsync(selection.IncludePaths);
+    }
+
+    private async Task HandleFilterApplyAsync(StoryFilterDto filter)
+    {
+        _filter = filter;
+        await RunSearchAsync(_edgeTypes.All(IsChainOfTrust));
+    }
+
+    private async Task RunSearchAsync(bool includePaths)
+    {
+        _result = null; // loading
+
+        TreeSearchRequest request = new()
+        {
+            RootStoryId = _rootStory?.StoryId,
+            RootUserId = _rootStory is null ? (_rootUser?.UserId) : null,
+            MaxDegrees = _maxDegrees,
+            EdgeTypes = _edgeTypes,
+            IncludePaths = includePaths,
+            Sort = _sort,
+        };
+
+        _result = await TreeSearchReadService.SearchAsync(request, _filter);
+
+        if (_currentUserId.HasValue && _result.Items.Count > 0)
+        {
+            _states = await InteractionReadService.GetStatesByStoryIdsAsync(
+                [.. _result.Items.Select(i => i.Story.StoryId)]);
+        }
+        else
+        {
+            _states = new Dictionary<int, UserStoryInteractionStateDto>();
+        }
+    }
+
+    private void UpdateQueryString()
+    {
+        string edges = string.Join(",", _edgeTypes);
+        string uri = Nav.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["degrees"] = _maxDegrees,
+            ["edges"] = edges,
+            ["sort"] = _sort.ToString(),
+        });
+        Nav.NavigateTo(uri, replace: true);
+    }
+}

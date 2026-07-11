@@ -269,6 +269,18 @@ public class ServerStoryReadService(
         return (items, totalCount);
     }
 
+    public async Task<IReadOnlyList<int>> FilterCandidateIdsAsync(
+        IReadOnlyCollection<int> candidateIds, StoryFilterDto filter)
+    {
+        if (candidateIds.Count == 0) return [];
+
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        IQueryable<Story> query = readDb.Stories.Where(s => candidateIds.Contains(s.StoryId));
+        query = ApplyFilters(query, filter, !string.IsNullOrWhiteSpace(filter.TextQuery));
+
+        return await query.Select(s => s.StoryId).ToListAsync();
+    }
+
     public async Task<StoryListingDto[]> GetRandomBatchAsync(StoryFilterDto filter, int batchSize)
     {
         // Plain random draw from the post-filter valid set. No Sort/Page/PageSize from the DTO is

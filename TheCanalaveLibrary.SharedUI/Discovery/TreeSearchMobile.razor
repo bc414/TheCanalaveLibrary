@@ -1,0 +1,127 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Mobile coordination composite for the Unified Tree Search Page (WU44, spec §5.26).
+   Injection-free — all data arrives as parameters from TreeSearchPage (the dispatcher).
+   Layout: root header → tab strip → controls-toggle button → slide-in drawer (Connections +
+   Filters stacked) → results deck. Outer Margin Rule: root has no m-*; parent controls spacing. *@
+
+<div class="flex flex-col gap-4 px-3 py-4">
+
+    @if (RootStory is not null)
+    {
+        <StoryCard Story="RootStory" IsOwnStory="@IsOwnRootStory" />
+    }
+    else if (RootUser is not null)
+    {
+        <UserCard User="RootUser" />
+    }
+
+    <TreeSearchTabStrip ActiveTab="ActiveTab" OnTabChanged="OnTabChanged" />
+
+    @if (ActiveTab == TreeSearchTab.Manual)
+    {
+        <div class="flex items-center justify-center rounded-lg border border-(--color-border) bg-(--color-surface-raised) py-16 text-(--color-text-muted)">
+            <span>Graph view coming soon.</span>
+        </div>
+    }
+    else
+    {
+        <button type="button"
+                class="flex items-center gap-1.5 self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm transition-colors hover:bg-(--color-surface-hover)"
+                @onclick="ToggleDrawer" aria-expanded="@_drawerOpen" aria-controls="tree-search-drawer">
+            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M4 6h16v2H4zm3 5h10v2H7zm3 5h4v2h-4z" />
+            </svg>
+            Connections &amp; Filters
+        </button>
+
+        @if (Result is not null && Result.ResultCapTruncated)
+        {
+            <p class="rounded-md bg-(--color-warning)/15 px-3 py-2 text-sm text-(--color-warning)">
+                Showing a sample of many connections — try narrowing the filters or lowering degrees.
+            </p>
+        }
+
+        <StoryDeck Stories="@StoryItems"
+                   UserStoryInteractionStates="InteractionStates"
+                   CurrentUserId="CurrentUserId"
+                   EmptyMessage="No connected stories found. Try more connection types, more degrees, or fewer filters."
+                   CurrentPage="1" PageSize="@ItemCount" TotalCount="@ItemCount">
+            <CardOverlay Context="story">
+                <TreeSearchResultBadge Degree="@DegreeFor(story.StoryId)" Path="@PathFor(story.StoryId)" />
+            </CardOverlay>
+        </StoryDeck>
+    }
+
+</div>
+
+@if (_drawerOpen)
+{
+    <div class="fixed inset-0 z-(--z-drawer) bg-(--color-backdrop)" @onclick="CloseDrawer" id="tree-search-drawer"></div>
+
+    <div class="fixed inset-y-0 right-0 z-(--z-drawer) flex w-full max-w-sm flex-col gap-4 overflow-y-auto bg-(--color-surface) p-4 shadow-prominent"
+         @onclick:stopPropagation="true">
+        <div class="flex items-center justify-between border-b border-(--color-border) pb-2">
+            <h2 class="text-sm font-bold">Connections &amp; Filters</h2>
+            <button type="button" class="rounded p-1 text-(--color-text-muted) hover:bg-(--color-surface-hover)"
+                    @onclick="CloseDrawer" aria-label="Close">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                </svg>
+            </button>
+        </div>
+
+        <TreeSearchControls InitialMaxDegrees="InitialMaxDegrees" InitialEdgeTypes="InitialEdgeTypes"
+                            InitialSort="InitialSort" OnApply="HandleControlsApplyAndCloseAsync" />
+
+        <hr class="border-(--color-border)" />
+
+        <ResultsFilterPanel OnSearch="HandleFilterApplyAndCloseAsync"
+                            InitialFilter="InitialFilter"
+                            AvailableSorts="@(Array.Empty<DefaultSortOrder>())"
+                            ShowTextSearch="true"
+                            ShowTagFilter="true"
+                            ShowInteractionFilters="true" />
+    </div>
+}
+
+@code {
+    [Parameter] public StoryListingDto? RootStory { get; set; }
+    [Parameter] public UserCardDto? RootUser { get; set; }
+    [Parameter, EditorRequired] public TreeSearchTab ActiveTab { get; set; }
+    [Parameter] public EventCallback<TreeSearchTab> OnTabChanged { get; set; }
+    [Parameter] public TreeSearchListingResultDto? Result { get; set; }
+    [Parameter] public IReadOnlyDictionary<int, UserStoryInteractionStateDto>? InteractionStates { get; set; }
+    [Parameter] public int? CurrentUserId { get; set; }
+    [Parameter] public int InitialMaxDegrees { get; set; } = 2;
+    [Parameter] public IReadOnlyList<TreeSearchEdgeType> InitialEdgeTypes { get; set; } = TreeSearchControls.DefaultEdgeTypes;
+    [Parameter] public TreeSearchSortOrder InitialSort { get; set; } = TreeSearchSortOrder.Random;
+    [Parameter] public StoryFilterDto? InitialFilter { get; set; }
+    [Parameter] public EventCallback<TreeSearchControlsSelection> OnControlsApply { get; set; }
+    [Parameter] public EventCallback<StoryFilterDto> OnFilterApply { get; set; }
+
+    private bool _drawerOpen;
+
+    private bool IsOwnRootStory => CurrentUserId is not null && RootStory?.AuthorId == CurrentUserId;
+
+    private StoryListingDto[]? StoryItems => Result?.Items.Select(i => i.Story).ToArray();
+    private int ItemCount => Result?.Items.Count ?? 0;
+
+    private int DegreeFor(int storyId) => Result?.Items.FirstOrDefault(i => i.Story.StoryId == storyId)?.Degree ?? 0;
+    private string? PathFor(int storyId) => Result?.Items.FirstOrDefault(i => i.Story.StoryId == storyId)?.Path;
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+    private void CloseDrawer() => _drawerOpen = false;
+
+    private async Task HandleControlsApplyAndCloseAsync(TreeSearchControlsSelection selection)
+    {
+        _drawerOpen = false;
+        await OnControlsApply.InvokeAsync(selection);
+    }
+
+    private async Task HandleFilterApplyAndCloseAsync(StoryFilterDto filter)
+    {
+        _drawerOpen = false;
+        await OnFilterApply.InvokeAsync(filter);
+    }
+}

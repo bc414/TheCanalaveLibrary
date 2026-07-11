@@ -1,0 +1,155 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Coordination composite (WU44) — the Automatic tab's own reachability controls: degree slider,
+   edge-type multi-select (grouped wide/mid/chain-of-trust), and Random/ByDegree sort. Injection-free.
+   Buffers selections in @code and emits ONE TreeSearchControlsSelection on Apply — batched, same
+   discipline as ResultsFilterPanel (live re-filtering would relayout the result set as the edge/degree
+   selection changes — see layer3.5-structure.md "Filter-Axis Component Pattern").
+
+   IncludePaths is NEVER a raw checkbox — auto-derived from the edge selection (true only when every
+   selected edge is chain-of-trust) so the emitted selection can never violate the service's
+   IncludePaths validation rule (ArgumentException on an invalid combination). *@
+
+<div class="flex flex-col gap-4">
+
+    <div class="flex flex-col gap-1">
+        <label for="tsc-degrees" class="text-sm font-bold">Degrees of connection: @_maxDegrees</label>
+        <input id="tsc-degrees" type="range" min="1" max="@MaxDegreesCeiling" value="@_maxDegrees"
+               @oninput="OnDegreesInput" class="w-full" />
+    </div>
+
+    <div class="flex flex-col gap-2">
+        <span class="text-sm font-bold">Connection types</span>
+        @foreach (var group in EdgeGroups)
+        {
+            <div class="flex flex-col gap-1">
+                <span class="text-xs font-medium uppercase tracking-wide text-(--color-text-muted)">@group.Label</span>
+                @foreach (var edge in group.Edges)
+                {
+                    <label class="flex items-center gap-2 text-sm">
+                        <input type="checkbox" checked="@_selectedEdges.Contains(edge)"
+                               @onchange="@(e => ToggleEdge(edge, (bool)e.Value!))" />
+                        @EdgeLabel(edge)
+                    </label>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="flex flex-col gap-1">
+        <label for="tsc-sort" class="text-sm font-bold">Sort by</label>
+        <select id="tsc-sort"
+                class="rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                value="@((short)_sort)" @onchange="OnSortChanged">
+            <option value="@((short)TreeSearchSortOrder.Random)">Random</option>
+            <option value="@((short)TreeSearchSortOrder.ByDegree)">Closest connections first</option>
+        </select>
+    </div>
+
+    <button type="button"
+            class="rounded-md bg-(--color-mission) px-4 py-1.5 text-sm font-medium text-white hover:bg-(--color-mission-hover) active:bg-(--color-mission-hover) transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled="@(_selectedEdges.Count == 0)"
+            @onclick="ApplyAsync">
+        Apply
+    </button>
+    @if (_selectedEdges.Count == 0)
+    {
+        <p class="text-xs text-(--color-danger)">Select at least one connection type.</p>
+    }
+
+</div>
+
+@code {
+    /// <summary>Mirrors <c>ServerTreeSearchReadService.MaxDegreesCeiling</c> — kept in sync manually
+    /// (a UI-side constant, not worth a round trip to discover it).</summary>
+    private const int MaxDegreesCeiling = 8;
+
+    private static readonly IReadOnlySet<TreeSearchEdgeType> ChainOfTrustEdges =
+        new HashSet<TreeSearchEdgeType> { TreeSearchEdgeType.HiddenGem, TreeSearchEdgeType.AuthorSpotlight };
+
+    private static readonly IReadOnlyList<(string Label, TreeSearchEdgeType[] Edges)> EdgeGroups =
+    [
+        ("Wide", [TreeSearchEdgeType.AuthoredBy, TreeSearchEdgeType.Favorite]),
+        ("Mid", [TreeSearchEdgeType.Recommendation, TreeSearchEdgeType.Vouch]),
+        ("Chain of trust", [TreeSearchEdgeType.HiddenGem, TreeSearchEdgeType.AuthorSpotlight]),
+    ];
+
+    public static readonly IReadOnlyList<TreeSearchEdgeType> DefaultEdgeTypes =
+        [TreeSearchEdgeType.AuthoredBy, TreeSearchEdgeType.Favorite];
+
+    [Parameter] public int InitialMaxDegrees { get; set; } = 2;
+    [Parameter] public IReadOnlyList<TreeSearchEdgeType> InitialEdgeTypes { get; set; } = DefaultEdgeTypes;
+    [Parameter] public TreeSearchSortOrder InitialSort { get; set; } = TreeSearchSortOrder.Random;
+    [Parameter] public EventCallback<TreeSearchControlsSelection> OnApply { get; set; }
+
+    private int _maxDegrees;
+    private HashSet<TreeSearchEdgeType> _selectedEdges = [];
+    private TreeSearchSortOrder _sort;
+
+    // Re-sync from Initial* on every parameter set UNTIL the user's first interaction, then stop.
+    // Plain OnInitialized() (a one-time snapshot) is wrong here: the dispatcher (TreeSearchPage)
+    // resolves the root + query-string-seeded degrees/edges/sort inside an async
+    // OnInitializedAsync, so Blazor's synchronous first render passes this component the
+    // not-yet-resolved field defaults — OnInitialized() would freeze on that stale snapshot
+    // forever (same class of bug as the @foreach "OnParametersSet caches once" trap in
+    // layer3.5-structure.md, just without a @foreach). Re-syncing every parameter-set handles the
+    // async race; the interaction flag preserves the user's own edits across the re-renders that
+    // follow an Apply click.
+    private bool _userHasInteracted;
+
+    protected override void OnParametersSet()
+    {
+        if (_userHasInteracted) return;
+        _maxDegrees = InitialMaxDegrees;
+        _selectedEdges = [.. InitialEdgeTypes];
+        _sort = InitialSort;
+    }
+
+    private void OnDegreesInput(ChangeEventArgs e)
+    {
+        _userHasInteracted = true;
+        if (int.TryParse(e.Value?.ToString(), out int v)) _maxDegrees = v;
+    }
+
+    private void ToggleEdge(TreeSearchEdgeType edge, bool isChecked)
+    {
+        _userHasInteracted = true;
+        if (isChecked) _selectedEdges.Add(edge);
+        else _selectedEdges.Remove(edge);
+    }
+
+    private void OnSortChanged(ChangeEventArgs e)
+    {
+        _userHasInteracted = true;
+        if (short.TryParse(e.Value?.ToString(), out short raw)) _sort = (TreeSearchSortOrder)raw;
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (_selectedEdges.Count == 0) return;
+
+        bool includePaths = _selectedEdges.All(ChainOfTrustEdges.Contains);
+
+        TreeSearchControlsSelection selection = new()
+        {
+            MaxDegrees = Math.Clamp(_maxDegrees, 1, MaxDegreesCeiling),
+            EdgeTypes = [.. _selectedEdges],
+            Sort = _sort,
+            IncludePaths = includePaths,
+        };
+
+        await OnApply.InvokeAsync(selection);
+    }
+
+    private static string EdgeLabel(TreeSearchEdgeType edge) => edge switch
+    {
+        TreeSearchEdgeType.AuthoredBy => "Authored by the same person",
+        TreeSearchEdgeType.Favorite => "Favorited by the same reader",
+        TreeSearchEdgeType.Recommendation => "Recommended",
+        TreeSearchEdgeType.Vouch => "Vouched-for author",
+        TreeSearchEdgeType.HiddenGem => "Hidden Gem",
+        TreeSearchEdgeType.AuthorSpotlight => "Author Spotlight",
+        _ => edge.ToString(),
+    };
+}

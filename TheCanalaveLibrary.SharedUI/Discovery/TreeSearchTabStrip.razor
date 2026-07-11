@@ -1,0 +1,29 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Leaf (WU44) — two-tab strip for the Unified Tree Search Page (spec §5.26): Automatic (built)
+   and Manual (placeholder until Feature 33 / WU40 lands its from-scratch graph component). Used
+   identically by TreeSearchDesktop and TreeSearchMobile. Tab selection is ephemeral UI state, not
+   URL state (spec §5.26 "URL state" — only the root anchor lives in the route). Wayfinding role. *@
+
+<div class="flex gap-1 border-b border-(--color-border)" role="tablist">
+    <button type="button" role="tab" aria-selected="@(ActiveTab == TreeSearchTab.Automatic ? "true" : "false")"
+            class="@TabClass(TreeSearchTab.Automatic)"
+            @onclick="() => OnTabChanged.InvokeAsync(TreeSearchTab.Automatic)">
+        Automatic
+    </button>
+    <button type="button" role="tab" aria-selected="@(ActiveTab == TreeSearchTab.Manual ? "true" : "false")"
+            class="@TabClass(TreeSearchTab.Manual)"
+            @onclick="() => OnTabChanged.InvokeAsync(TreeSearchTab.Manual)">
+        Manual <span class="text-(--color-text-muted)">(coming soon)</span>
+    </button>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TreeSearchTab ActiveTab { get; set; }
+    [Parameter] public EventCallback<TreeSearchTab> OnTabChanged { get; set; }
+
+    private string TabClass(TreeSearchTab tab) => ActiveTab == tab
+        ? "px-4 py-2 text-sm font-bold text-(--color-action-ink) border-b-2 border-(--color-action-ink)"
+        : "px-4 py-2 text-sm text-(--color-text-muted) hover:text-text";
+}

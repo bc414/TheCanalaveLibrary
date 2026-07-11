@@ -437,6 +437,130 @@ Narrowing-within-fixed-source query → WU27/WU30.
     (never shown); strict no-mature-routing is a deferred toggle.
   - Full conventions: `layer8-data-marts.md` §"The Automatic Tree Search consumer".
 
+  **Settled (2026-07-11, WU44 Phase 0 — do not revisit):** UI scope + the spec §5.26 filter-
+  composition gap. Spec §5.26 places Automatic Tree Search as one tab on a shared **Unified Tree
+  Search Page** (`/discover/me`, `/discover/user/{userId}`, `/discover/story/{storyId}`) — the
+  other tab is Manual Tree Search (Feature 33, WU40, not yet built; its graph component is
+  designed from scratch there). **WU44 ships the page shell (`TreeSearchPage` dispatcher,
+  root-entity header, two-tab strip) + the working Automatic tab now**; the Manual tab is a
+  "Graph view coming soon" placeholder that WU40 fills into the existing shell — this unblocks the
+  three routes without waiting on the from-scratch graph component. Results reuse `StoryDeck` + a
+  degree badge, **not** a bespoke tree-results list (`StoryDeck` already documents itself as "NOT
+  manual tree search" — the automatic tab is a flat, deck-shaped list, so it is exactly StoryDeck's
+  shape).
+
+  Spec §5.26 also says tags/FTS/interaction filters "compose with the data mart query," but the
+  Stage-5 `TreeSearchRequest` (above) accepts only root/degrees/edge-types/sort/cap — the rCTE
+  applies rating + the viewer's §8.7 `AutoTreeSearch` interaction exclusions internally, with no
+  tag/FTS parameter. First-principles resolution: **reachability parameters** (edge types, degrees)
+  are intrinsic to the walk and stay in `TreeSearchRequest`; **relevance filters** (rating,
+  interaction, tags, FTS) are properties of the *destination story*, not the edges, and pruning the
+  walk on them would sever silent-bridge connections (the same reason a mature story is allowed to
+  be an unshown bridge node today) — so they must apply *after* traversal, never inside the
+  recursive term. This is the project's **Source × Filter × Sort** three-axis model applied to tree
+  search: Source = the rCTE (with edge-types + degrees as its own parameters), Filter = rating +
+  interaction + tags + FTS, Sort = Random / ByDegree.
+
+  The EF `ApplyFilters` predicate (`ServerStoryReadService.cs`) and the rCTE are different
+  execution engines (LINQ vs. static ADO SQL) — the predicate cannot be shared verbatim into the
+  SQL, so composition (not duplication) is the only DRY option, and the cap must apply to the
+  *filtered* set (not the raw traversal) or `ResultCapTruncated` becomes misleading. Settled shape,
+  additive to the Stage-5 service:
+  - **`ITreeSearchReadService.SearchAsync(TreeSearchRequest, StoryFilterDto, ct)`** — new method,
+    injects `IStoryReadService`; server-side, integration-testable. `TraverseAsync` is unchanged
+    and remains the low-level primitive (still used by the `/dev/discovery/tree-search` probe).
+  - A defaulted **raw-reached traversal path** inside the service: the rCTE runs with no
+    rating/interaction filter and no cap (bounded by the existing per-node fan-out `LIMIT`),
+    returning `(story_id, degree, path)` minus the root.
+  - **`IStoryReadService.FilterCandidateIdsAsync(candidateIds, filter)`** — new thin method reusing
+    the existing `ApplyFilters` predicate verbatim; owns rating (global query filter), interaction
+    (seeded from §8.7 `AutoTreeSearch` defaults, user-editable via the panel exactly like
+    `/discover`), tags, and FTS — **and** the cap. `SearchAsync` joins survivors against the degree
+    map, applies Random or ByDegree (`GetListingsAsync`'s `DefaultSortOrder` cannot express
+    ByDegree, so that bundle alone was rejected), computes `ResultCapTruncated` on the filtered
+    set, then hydrates via the existing `GetListingsByIdsAsync`.
+  - Rejected alternatives (kept here, not repeated at length): hand-writing tag/FTS SQL into the
+    rCTE presentation join (reopens the frozen SQL, duplicates the filter in two engines); reusing
+    the whole `GetListingsAsync(filter, restrictToStoryIds)` bundle unmodified (cannot express
+    ByDegree); post-hydration C# filtering over the already-capped `TraverseAsync` output (wrong
+    cap cardinality — filtering after a cap can show far fewer results than actually exist).
+
+  **WU44 Stage note — L2 (additive) / L3-Logic / L3.5 / L4.5-Browser (2026-07-11):**
+
+  Built exactly the settled shape above. **L2 (additive, cell stays Stage 5):**
+  `ServerTreeSearchReadService.SearchAsync` + private `GetRawReachedAsync` (raw-reached traversal,
+  duplicated recursive-term SQL rather than refactoring `TraverseAsync` — deliberately, to leave
+  the frozen/tested query untouched; kept in sync manually per the method's doc comment);
+  `ServerStoryReadService.FilterCandidateIdsAsync`. `Core/Discovery/TreeSearchListingResultDto.cs`
+  (`TreeSearchListingItemDto` + result wrapper), `Core/Discovery/TreeSearchPathParser.cs`
+  (dependency-free parser for the Postgres `CYCLE ... USING path` composite-array text —
+  `StoryIdsOnly` drops user-typed hops entirely, never surfacing an id for them), `Core/Discovery/
+  TreeSearchControlsSelection.cs` (axis-emit contract, mirrors `TagFilterSelection`), `Core/
+  Discovery/TreeSearchTab.cs` (Automatic/Manual, mirrors `BookshelfTab`/`ProfileTab`).
+
+  **L3/L3.5 (`SharedUI/Discovery/`):** `TreeSearchPage` (dispatcher; routes `/discover/me`,
+  `/discover/user/{userId}`, `/discover/story/{storyId}`; resolves the root via
+  `GetListingsByIdsAsync`/`GetProfileHeaderAsync`; seeds §8.7 `AutoTreeSearch` defaults; seeds
+  degrees/edges/sort from `[SupplyParameterFromQuery]` when present; pushes `NavigateTo(...,
+  replace: true)` on Apply per spec §5.26 URL-state rules) → `TreeSearchDesktop`/`TreeSearchMobile`
+  (root header via `StoryCard`/`UserCard`; `TreeSearchTabStrip`; Automatic tab composes
+  `TreeSearchControls` + `ResultsFilterPanel` (`AvailableSorts=[]` suppresses its own, differently-
+  scoped sort dropdown) + `StoryDeck`; Manual tab is the "Graph view coming soon" placeholder WU40
+  will fill in). `TreeSearchControls` (degree slider, grouped edge-type checkboxes, Random/ByDegree
+  select, `IncludePaths` auto-derived — never a raw checkbox). `TreeSearchResultBadge` (degree
+  label + chain-of-trust-only path chip, story hops only, rendered via a new additive
+  `StoryDeck.CardOverlay` `RenderFragment<StoryListingDto>?` slot — default `null` preserves every
+  existing `StoryDeck` consumer unchanged).
+
+  **Runtime bug found + fixed during L4.5 verification (`canalave-conventions/debugging.md`):**
+  `TreeSearchControls` originally snapshotted its `Initial*` parameters once in `OnInitialized()`.
+  Because `TreeSearchPage.OnInitializedAsync` resolves the root and query-string-seeded
+  degrees/edges/sort *asynchronously*, Blazor's synchronous first render passed the component
+  its field defaults, and the one-time snapshot then never picked up the real values — the
+  controls sidebar showed stale defaults (2 / AuthoredBy+Favorite / Random) even though the
+  traversal underneath had correctly used the query-string values (proved by the results: correct
+  degree badges and a correct 3-hop path chip). Fixed by moving the snapshot into
+  `OnParametersSet()`, re-syncing on every parameter set until a `_userHasInteracted` flag flips
+  (set by any control handler) — re-sync during the async race, freeze once the user has an
+  opinion. Regression tests: `TreeSearchControlsTests.ReSyncsFromInitialParams_BeforeUserInteracts`
+  / `StopsResyncing_AfterUserInteracts_PreservingTheirEdit`. **Note (out of scope for this WU):**
+  the same one-time-`OnInitialized()`-snapshot shape exists in the already-Stage-5
+  `ResultsFilterPanel`/`SearchPage` pairing (Feature 31) — not touched here; flagging for whoever
+  next works that cell.
+
+  **How verified (2026-07-11):** `dotnet build` green (0 errors). `dotnet test`: **Unit** 530
+  passing (+`TreeSearchPathParserTests` — composite-array parsing, long-form boolean text,
+  user-hop dropping, is_story-flag mutation sanity). **Integration** 424 passing
+  (`TreeSearchComposeTests`, Testcontainers Postgres — `SearchAsync` composition: tag filter over
+  a co-favorite graph + mutation-sanity untagged control, interaction exclusion applied via the
+  composed filter not the traversal, mature story hidden from a restricted viewer via the EF global
+  rating filter (proving the raw-reached mode carries no rating check of its own), ByDegree sort
+  ordering over a hidden-gem chain, `ResultCapTruncated` computed against the *filtered* set with a
+  cap smaller than the raw reachable set). **RazorComponents** 513 passing
+  (`TreeSearchControlsTests`, `TreeSearchTabStripTests`, `TreeSearchResultBadgeTests`,
+  `TreeSearchDesktopTests`, `TreeSearchMobileTests` — root header story-vs-user branching, Manual
+  placeholder hides controls/deck, degree badge per result item, flooding indicator, Apply/tab
+  callbacks, the async-race regression pair above).
+
+  **L4.5-Browser (real circuit, `run-server/SKILL.md`):** driven against the persistent
+  server-only dev DB already loaded with SeedTool volume data (2,007 users / 3,012 stories /
+  46,565 tree edges) and a fresh mart rebuild. Verified live: `/discover/story/{id}` on a
+  high-favorite-degree hub story (65 favorite edges) — root header, degree badges ("2nd-degree
+  connection") on every result, the flooding indicator banner, and the Filters panel (tags +
+  interaction, no misleading sort dropdown) all render correctly; `/discover/story/{id}` on a
+  hidden-gem-chain root with only Hidden Gem selected — exactly the two expected chain stories
+  returned, each with a correct anonymized path chip (`#20 → #949`, `#20 → #423`) and **no** user
+  id ever rendered; increasing degrees to 4 reached a 3-hop chain (`#20 → #423 → #1390`) at
+  "4th-degree connection", sorted ByDegree; the Manual tab shows the placeholder; `/discover/me`
+  resolves the authenticated viewer as a user root (`UserCard` header) and returns the viewer's own
+  1st-degree AuthoredBy/Favorite connections correctly, including `IsOwnStory` "Edit Story" on
+  their own authored story. No console errors from the feature itself (only stale SignalR-reconnect
+  noise from an in-session dev-server restart, unrelated to the app). **L4-Style stays Stage 1**
+  (visual/CSS sign-off pending, consistent with WU8/WU13/WU23/WU28 precedent) — **L4.5 flips to
+  Stage 5** on the strength of the behavioral verification above, which is independent of the
+  aesthetic pass. **L5 stays Stage 2** (rides the future site-wide `InteractiveAuto` flip, per
+  `/tags`'s precedent — no WASM work done here).
+
 ## Feature 60 — Tree-Search Data-Mart Worker (formerly below the line — line crossed 2026-07-07)
 - **L1 — N/A** (raw-SQL mart). **L6 — N/A.** **L8 — Stage 5 (WU-Marts, 2026-07-07 — see Stage note)**
   (narrow edge-list schema settled 2026-07-07 — see implementation notes below, which supersede the

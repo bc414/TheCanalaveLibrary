@@ -869,6 +869,39 @@ rating global filter still applies inside `GetListingsAsync` — never duplicate
 The `ResultsFilterPanel` is unaware of the candidate constraint; the dispatcher owns the two-step
 composition.
 
+### Unified Tree Search Page — Automatic Tab (WU44)
+
+`TreeSearchPage.razor` (`SharedUI/Discovery/`) is the dispatcher for spec §5.26's Unified Tree
+Search Page — routes `/discover/me`, `/discover/user/{userId:int}`, `/discover/story/{storyId:int}`
+(`[AllowAnonymous]`; `/discover/me` resolves the current user from the auth cascade). It resolves
+the root entity, branches mobile/desktop (`TreeSearchDesktop`/`TreeSearchMobile`, same
+dispatcher-owns-data pattern as `SearchPage`), and renders a root-entity header (story → compact
+story header; user (incl. `/discover/me`) → `UserCard`) above a two-tab strip: **Automatic**
+(built here) and **Manual** ("Graph view coming soon" placeholder — Feature 33 / WU40 fills this in
+without reworking the shell). Tab selection is ephemeral UI state, not URL state.
+
+**Automatic tab controls** (`TreeSearchControls`, injection-free, emits a buffered
+`TreeSearchRequest` on Apply — same batched-Apply discipline as the Filter-Axis pattern below,
+since live re-filtering would relayout results as the edge/degree selection changes):
+- Degree slider (1–8, service ceiling), edge-type multi-select (grouped wide/mid/chain-of-trust
+  per `TreeSearchEdgeType`), Random/ByDegree sort toggle.
+- `IncludePaths` is **never a raw checkbox** — the UI auto-derives it from the edge selection
+  (`true` only when selected edges ⊆ {HiddenGem, AuthorSpotlight}) so it can never send the
+  service's rejected combination.
+- `ResultsFilterPanel` (tags/FTS/interaction) is reused alongside the tree controls, seeded from
+  `IDiscoveryDefaultsReadService` (`SiteSearchModes.AutoTreeSearch`) — see `layer2-services.md`
+  "Tree Search — Automatic Tab Composition (WU44)" for how the panel's `StoryFilterDto` composes
+  with the traversal server-side via `ITreeSearchReadService.SearchAsync`.
+
+**Results** reuse `StoryDeck` (`TreeSearchListingResultDto.Items`, already degree-sorted/hydrated
+by `SearchAsync`) plus:
+- A **degree badge** per card ("2nd-degree connection").
+- A **path chip**, chain-of-trust results only: the raw path alternates user/story ids —
+  render **stories only**, collapsing user hops to a connector (e.g. "Story A → · → Story B").
+  **Never render a username** — the privacy model (§5.4) holds here exactly as it does for
+  Manual tree search below.
+- A flooding-indicator banner when `ResultCapTruncated`.
+
 ## Conditional Rendering Patterns
 
 ### AuthorizeView Gates (authentication + roles only)

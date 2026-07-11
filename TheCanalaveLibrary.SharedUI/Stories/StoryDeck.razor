@@ -31,10 +31,18 @@ else
                 @* Card island — one broken card degrades to a compact tile; the rest of the
                    deck renders (cross-cutting.md §"Error Handling Strategy" placement map). *@
                 <CanalaveErrorBoundary @key="story.StoryId" Label="story-card" Compact="true">
-                    <StoryCard Story="story"
-                               UserStoryInteractionState="@StateFor(story.StoryId)"
-                               IsOwnStory="@IsOwn(story)"
-                               OnReport="@ReportCallbackFor(story)" />
+                    <div class="relative">
+                        <StoryCard Story="story"
+                                   UserStoryInteractionState="@StateFor(story.StoryId)"
+                                   IsOwnStory="@IsOwn(story)"
+                                   OnReport="@ReportCallbackFor(story)" />
+                        @if (CardOverlay is not null)
+                        {
+                            <div class="pointer-events-none absolute top-2 right-2 z-(--z-dropdown)">
+                                @CardOverlay(story)
+                            </div>
+                        }
+                    </div>
                 </CanalaveErrorBoundary>
             }
         </div>
@@ -82,6 +90,13 @@ else
 
     /// <summary>Receives the storyId when a user clicks "Report" in any card's caret menu.</summary>
     [Parameter] public EventCallback<int> OnReport { get; set; }
+
+    /// <summary>
+    /// Optional per-card decoration slot, rendered as a small absolutely-positioned overlay in the
+    /// card's top-right corner (WU44 — Automatic Tree Search's degree badge / path chip). Default
+    /// null preserves every existing consumer's rendering exactly; additive only.
+    /// </summary>
+    [Parameter] public RenderFragment<StoryListingDto>? CardOverlay { get; set; }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────────────────
 

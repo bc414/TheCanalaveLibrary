@@ -1219,6 +1219,33 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   unique constraints).
 - **Tool:** opusplan. **Pointer:** `audit/Tags.md` Feature 15. **Deps:** WU23, WU27.5.
 
+### WU44 — Automatic Tree Search UI (Feature 59) — DONE ✓ (2026-07-11)
+- **Cells:** 59 L3-Logic/L3.5 `2→5`; L4.5-Browser `1→5` (real-circuit verification, see Stage
+  note). L4-Style stays Stage 1 (pending visual sign-off, WU8/WU13/WU23/WU28 precedent). L5 stays
+  Stage 2 (rides the future site-wide `InteractiveAuto` flip, per `/tags`).
+- **Direction settled (2026-07-11, do not revisit):** ship the Unified Tree Search Page shell
+  (`TreeSearchPage` dispatcher, routes `/discover/me` / `/discover/user/{userId}` /
+  `/discover/story/{storyId}`, root-entity header, two-tab strip) + the working **Automatic** tab
+  now. The **Manual** tab (Feature 33 / WU40) is a placeholder ("Graph view coming soon") in the
+  same shell — WU40 fills it in later without reworking the shell. Results reuse `StoryDeck` + a
+  degree badge (not a bespoke tree-results list).
+  **Filter composition (spec §5.26 vs the Stage-5 `TreeSearchRequest` contract gap):** tree search
+  is the **Source** (the rCTE over the mart), `StoryFilterDto`/`ResultsFilterPanel` is the
+  **Filter**, Random/ByDegree is the **Sort**. Composed via a new
+  `ITreeSearchReadService.SearchAsync(TreeSearchRequest, StoryFilterDto, ct)`: the rCTE returns a
+  raw reached set (no rating/interaction filter, no cap — additive, defaulted; existing
+  `TraverseAsync` unchanged), and a new `IStoryReadService.FilterCandidateIdsAsync` reuses the
+  existing `ApplyFilters` predicate verbatim to own every relevance filter (rating, interaction,
+  tags, FTS) **and** the cap, before hydration via `GetListingsByIdsAsync`. Full analysis + rejected
+  alternatives: `audit/Discovery.md` Feature 59, `layer2-services.md` "Tree Search — Automatic Tab
+  Composition (WU44)", `middle_plan_v2.md` Resolved.
+- **Done:** built exactly as settled above, plus a `StoryDeck.CardOverlay` additive slot (degree
+  badge / path chip) and a real runtime bug found + fixed via L4.5 browser verification
+  (`TreeSearchControls`' `OnInitialized()`-snapshot race — see the audit Stage note). `dotnet test`:
+  Unit 530, Integration 424, RazorComponents 513, all green.
+- **Tool:** opusplan. **Pointer:** `audit/Discovery.md` Feature 59. **Deps:** WU-Marts (F59 L2/L8,
+  done), WU23 (`ResultsFilterPanel`/`StoryDeck`), WU28 (`ApplyFilters`/`IDiscoveryDefaultsReadService`).
+
 ---
 
 ### WU-FilterRevamp — Content-visibility filter revamp + two dead-code removals DONE ✓ (2026-06-27)

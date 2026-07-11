@@ -785,6 +785,59 @@ return (items, totalCount);
   the projection step.
 - `Relevance` sort via `Rank()` only when `TextQuery` is non-empty — guard this or the SQL fails.
 
+## Tree Search — Automatic Tab Composition (WU44)
+
+Feature 59's `ITreeSearchReadService.TraverseAsync` (WU-Marts, Stage 5) is a live recursive CTE
+over the `user_story_tree_search_entries` mart, returning story IDs + degree-to-reach + optional
+path. Spec §5.26 says tags/FTS/interaction filters "compose with the data mart query," but
+`TraverseAsync`'s only filters are rating + the viewer's §8.7 `AutoTreeSearch` interaction
+exclusions, applied inside the SQL. Full first-principles resolution: `audit/Discovery.md`
+Feature 59. Summary of the settled shape:
+
+**Two axes, not one.** Edge types + degrees are *reachability* parameters (intrinsic to the walk —
+they decide whether/how-far a story is connected) and stay on `TreeSearchRequest`. Rating,
+interaction, tags, and FTS are *relevance* filters (properties of the destination story) and must
+apply **after** traversal — pruning the walk on them would sever silent-bridge connections, the
+same reason a mature story is already allowed to be an unshown bridge node. This is the Source ×
+Filter × Sort model applied to tree search: **Source** = the rCTE (edge-types + degrees as its own
+params), **Filter** = rating + interaction + tags + FTS (`StoryFilterDto` / `ResultsFilterPanel`),
+**Sort** = Random / ByDegree.
+
+**Composition, not duplication, because the two engines differ.** `ApplyFilters`
+(`ServerStoryReadService.cs`, `IQueryable<Story>` LINQ) cannot be shared verbatim into the rCTE's
+static ADO SQL. Hand-writing an equivalent tag/FTS predicate into the SQL would duplicate the
+filter logic in two places and reopen the frozen Stage-5 query. Instead:
+
+```csharp
+// ITreeSearchReadService — new method, additive; TraverseAsync unchanged
+Task<TreeSearchListingResultDto> SearchAsync(
+    TreeSearchRequest request, StoryFilterDto filter, CancellationToken ct = default);
+```
+
+`SearchAsync` (injects `IStoryReadService`):
+1. Runs a defaulted **raw-reached** traversal path — same rCTE, but with no rating/interaction
+   filter and no `ResultCap` (bounded by the existing per-node fan-out `LIMIT`, so still tractable)
+   — returning `(story_id, degree, path)` minus the root.
+2. Calls a new thin read on `IStoryReadService`:
+   ```csharp
+   Task<IReadOnlyList<int>> FilterCandidateIdsAsync(IReadOnlyCollection<int> candidateIds, StoryFilterDto filter);
+   // body: return ApplyFilters(readDb.Stories.Where(s => candidateIds.Contains(s.StoryId)), filter, hasFts)
+   //           .Select(s => s.StoryId).ToListAsync();
+   ```
+   reusing the existing `ApplyFilters` verbatim — the single implementation of rating (global query
+   filter), interaction exclusion (seeded from §8.7 `AutoTreeSearch` defaults, user-editable via the
+   panel exactly like `/discover`), tag include/exclude, and FTS.
+3. Joins survivors against the degree map, applies `TreeSearchSortOrder` (Random shuffle, or
+   ByDegree ascending — `GetListingsAsync`'s `DefaultSortOrder` has no ByDegree, so reusing that
+   whole bundle instead of just the predicate was rejected), caps on the **filtered** set, and
+   computes `ResultCapTruncated` from the filtered count vs. the cap (capping the raw traversal
+   first, as `TraverseAsync` does, would make truncation misleading once a Filter is layered on).
+4. Hydrates the capped page via the existing `GetListingsByIdsAsync`, then zips degree/path back
+   onto each `StoryListingDto` in `TreeSearchListingResultDto`.
+
+`TraverseAsync` itself is untouched (still backs the `/dev/discovery/tree-search` probe). The only
+change to the Stage-5 tree-search service is additive: the raw-reached mode + `SearchAsync`.
+
 ## Write-Side Reads — Four Cases
 
 | Case | Example | Context used |

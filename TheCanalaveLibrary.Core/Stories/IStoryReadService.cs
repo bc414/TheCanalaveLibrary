@@ -62,6 +62,18 @@ public interface IStoryReadService
     Task<StoryListingDto[]> GetRandomBatchAsync(StoryFilterDto filter, int batchSize);
 
     /// <summary>
+    /// Filters an arbitrary candidate id set down to the ones surviving <paramref name="filter"/>'s
+    /// tag / FTS / interaction-exclusion predicate — the same <c>ApplyFilters</c> helper
+    /// <see cref="GetListingsAsync"/> and <see cref="GetRandomBatchAsync"/> use — plus the always-on
+    /// content-rating global filter. No sort, no pagination, no hydration: this is the thin
+    /// building-block Automatic Tree Search composes against (WU44,
+    /// `layer2-services.md` "Tree Search — Automatic Tab Composition"), for a Source whose candidate
+    /// set comes from somewhere other than a plain <c>Stories</c> query (a graph traversal). Order of
+    /// the returned ids is unspecified — callers that need order project it themselves.
+    /// </summary>
+    Task<IReadOnlyList<int>> FilterCandidateIdsAsync(IReadOnlyCollection<int> candidateIds, StoryFilterDto filter);
+
+    /// <summary>
     /// Returns the IDs of all stories authored by <paramref name="authorId"/>, bypassing the
     /// content-rating filter so authors always see their own mature stories. Used by the
     /// My Stories bookshelf tab.

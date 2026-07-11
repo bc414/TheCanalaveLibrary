@@ -131,7 +131,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 56 | Feature Contributions | BlogPosts | 5 | 2 | 2 | 2 | 1 | 1 | N/A | N/A | N/A |
 | 57 | Notification Cleanup Worker | Notifications | N/A | 2 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 58 | UserStat Recalculation Worker | Profiles | N/A | 2 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| 59 | Automatic Tree Search | Discovery | N/A | 5 | 2 | 2 | 1 | 1 | 2 | N/A | 5 |
+| 59 | Automatic Tree Search | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 2 | N/A | 5 |
 | 60 | Tree Search Data Mart Worker | Discovery | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | 5 |
 | 61 | Also Favorited / Also Recommended | Discovery | N/A | 5 | 2 | 2 | 1 | 1 | 2 | N/A | 5 |
 | 62 | SiteDailyStat Worker | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | N/A | 5 |

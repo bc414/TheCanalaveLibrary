@@ -214,6 +214,8 @@ Ordered as v1, all deps Stage 5, settled directions in the audit files named in 
    conventions (logging, error UX, rate limits) from day one.
 2. **WU41 Series, WU42 Story↔Story Relationships, WU43 Saved Tag Selections.**
 3. **WU40 Manual Tree Search** (stateless pivot; does not wait on marts — settled 2026-07-03).
+   **WU44 Automatic Tree Search UI — DONE ✓ (2026-07-11)** (Feature 59; shipped the unified-page
+   shell + Automatic tab; Manual tab is a placeholder for WU40 to fill in).
 4. **WU38a Account Deletion UI** (surface the existing service from `/settings`).
 5. **WU-AccountEnforcement** (Suspended/Banned at login; Warned banner).
 6. **WU39 Story Import & Verification** (fills the `/mod/submissions` Imports tab).
@@ -307,6 +309,19 @@ renumbered, since other docs cite them by number.
 ---
 
 ## Resolved
+
+- **Automatic Tree Search UI scope + spec §5.26 filter-composition gap (Feature 59, WU44)** —
+  **resolved 2026-07-11** (Brian). Scope: ship the Unified Tree Search Page shell
+  (`/discover/me`, `/discover/user/{userId}`, `/discover/story/{storyId}`) + the working Automatic
+  tab now; the Manual tab (Feature 33 / WU40) is a placeholder in the same shell until its
+  from-scratch graph component lands. Results reuse `StoryDeck` + a degree badge, not a bespoke
+  tree-results list. Filter composition: spec §5.26 says tags/FTS/interaction "compose with the
+  data mart query," but the Stage-5 `TreeSearchRequest` accepts only root/degrees/edge-types/sort/
+  cap. Resolved via the three-axis model — tree search is a **Source** (the rCTE), `StoryFilterDto`
+  is the **Filter**, degree/random are the **Sort** — composed by handing the rCTE's raw reached
+  set to the existing `ApplyFilters` predicate (never duplicating tag/FTS SQL into the rCTE). Full
+  design + rejected alternatives: `audit/Discovery.md` Feature 59, `layer2-services.md` "Tree
+  Search — Automatic Tab Composition (WU44)".
 
 Newest first. Every entry points at the doc that now states the rule. Entries up to 2026-07-05
 are carried forward from `middle_plan.md` (which carried 2026-07-01-and-earlier entries from
