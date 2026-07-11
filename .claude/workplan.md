@@ -1237,11 +1237,60 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 > account-deletion UI)." See WU38a above for the settled mechanism and
 > `canalave-conventions/security.md` "Account-Status Enforcement".
 
-### WU41 — Series (Feature 9)
-- **Cells:** 9 L2/L3/L3.5/L4 → Stage 5 (L4 pending visual sign-off).
-- **Do:** `ISeriesReadService` / `ISeriesWriteService`; `SeriesEntry` ordered membership (position
-  field); series creation/edit/delete (author-gated); series browse page + `StoryDeck`; series
-  membership display on `StoryPage`. L1 already Stage 5 (`Series`, `SeriesEntry` present).
+### WU41 — Series (Feature 9) — DONE ✓ (2026-07-11)
+- **Cells:** 9 L2/L3-Logic/L3.5-Structure/L4.5-Browser → Stage 5. L4-Style stays Stage 1 (pending
+  visual/token sign-off, per WU8/WU13/WU23/WU28/WU37 precedent — L4.5 verified it's *usable*, not
+  polished). L5 stays Stage 2 (rides the future site-wide WASM flip). L1 was already Stage 5
+  (`Series`/`SeriesEntry`); relocated `Core/Models/` → `Core/Series/` cluster (namespace unchanged).
+- **Settled decisions (2026-07-11, Doc-Touch moment 1, before the build — full detail in
+  `audit/Stories.md` Feature 9):** a series holds only the owner's own stories; membership is
+  managed on a dedicated `/series/{id}/edit` page (not the story editor); browse surfaces are a
+  public per-series page + a profile Series tab + an owner "My Series" list (no global directory);
+  the story page shows a "Part of series X — Part N of M" box with Prev/Next in-series nav; a story
+  may belong to more than one series (the existing `SeriesEntry` PK already permits it, no L1
+  change); `StorySeriesMembershipDto`'s Position/Count/Prev/Next are computed over viewer-visible
+  members only (an explicit join through `Story`, not a raw `SeriesEntry` count) so they never
+  expose or link to a story the viewer can't see.
+- **Done:** `Core/Series/` (entities + DTOs + `ISeriesReadService`/`ISeriesWriteService`);
+  `Server/Series/` (`ServerSeriesReadService`/`ServerSeriesWriteService`, CQRS-lite inheritance
+  mirroring Groups; owner-gate; `Description` sanitized once on save; pre-insert duplicate-name
+  check, per-author not global, surfaces as `SeriesValidationException`). `SharedUI/Series/` —
+  `SeriesCard`/`SeriesMembershipBox` (leaves), `SeriesPage` (`/series/{id}/{*Slug}`, public,
+  `StoryDeck` in `OrderIndex` order), `SeriesCreateEditPage` (`/series/new` +
+  `/series/{id}/edit`, owner-gated create/edit/add/remove/reorder/delete), `MySeriesPage`
+  (`/series`, owner listing). Integrated into `StoryPage`/`StoryDesktop`/`StoryMobile` (membership
+  box list), `ProfilePage`/`ProfileDesktop`/`ProfileMobile` (new `ProfileTab.Series` tab),
+  `CreateMenu` ("New Series"), `UserMenu` ("My Series"). `ExceptionPresenter` extended with
+  `SeriesValidationException`. Fixed a test-fixture gap found during full-suite verification:
+  `ProfilePageTests`/`FakeProfileTestServices` didn't register `ISeriesReadService` — added
+  `FakeSeriesReadService`.
+- **Two real runtime bugs found + fixed via the L4.5 browser pass (dispatcher-reload class, same as
+  WU-ComponentSoundness's F1 StoryPage fix):** (1) `SeriesCreateEditPage`'s two `@page` routes
+  ("/series/new" + "/series/{id}/edit") share one component type; the post-create redirect reuses
+  the instance, so `OnInitializedAsync` never re-fired and the edit page rendered blank/create-mode
+  — added `OnParametersSetAsync` with route-changed guards; regression test
+  `SeriesCreateEditPageTests.PostCreateRedirect_OnSameInstance_ReloadsEditModeData`. (2) `StoryPage`'s
+  existing `OnParametersSetAsync` (in-place story nav) reloaded Story/Chapters/UsiState but not the
+  new `_seriesMemberships` — clicking a membership box's "Next" link left the *previous* story's
+  series box on screen; added the missing reload. No dedicated bUnit test (StoryPage has none even
+  for its own original F1 fix); covered by this L4.5 pass. Both confirmed live via
+  `mcp__claude-in-chrome__*` against the dev server + `psql` ground truth (cascade delete correct,
+  member stories survived, reorder persisted) — detail: `audit/Stories.md` Feature 9.
+- **Verified (2026-07-11):** `dotnet build` 0 errors/warnings (8 projects). `dotnet test` full
+  solution green: 541 Unit + 533 RazorComponents + 462 Integration = **1536 tests**, including 26
+  new Integration tests (`SeriesServiceTests` — CRUD owner-gating, cross-author add rejection,
+  append/reorder/remove `OrderIndex`, duplicate-name rejection, cascade delete, multi-series
+  membership, and the content-rating-filter-drop case for Position/Count/Next) + 11 new Unit
+  (`SeriesValidationsTests`) + 16 new RazorComponents (`SeriesCardTests`/`SeriesMembershipBoxTests`/
+  `SeriesCreateEditPageTests`). Mutation-sanity: temporarily stripped the `Story` join out of
+  `GetMembershipsForStoryAsync` (bypassing the ContentRating/IsTakenDown filters) → the mature-drop
+  test failed as expected; reverted, suite green again. `check-design-tokens.ps1` green (the only
+  2 findings it reports are pre-existing in `TreeSearchResultBadge.razor`, unrelated to this unit).
+  **L4.5-Browser Stage 5 (2026-07-11)** — full create/add/reorder/delete/navigate flow driven live;
+  see `audit/Stories.md` Feature 9 for the step-by-step. **Scope note:** beyond the one regression
+  test above, no *general* `SeriesCreateEditPageTests` CRUD-UI coverage was added — matches the
+  existing precedent that `GroupCreateEditPage` has none either; owner-gate/CRUD logic is exercised
+  at the Integration tier (the real authority).
 - **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 9. **Deps:** WU14, WU24.
 
 ### WU42 — Story↔Story Relationships (Feature 10)

@@ -605,10 +605,18 @@ detailed design mostly TBD — likely Stage 1.*
 **52. User Account Deletion** — `DeleteUserService` handling RESTRICT FK conflicts before deletion.
 Content anonymization vs interaction CASCADE.
 
-**53. Story Import & Verification** — `StoryImport` table. Two-way link verification. MVP: manual
-mod verification.
+**53. External Story Links & Verification** — *(renamed from "Story Import & Verification"
+2026-07-11; file-format content ingestion split out as Feature 63.)* "Also posted on" links: a
+story lists the other sites it's also live on (multiple `StoryExternalLink` rows + seeded
+`ExternalPlatform` lookup — remodeled from the single-row `StoryImport` table), displayed
+low-key on the story page. Each link has a `VerificationStatus`; verified links show an
+author-verified checkmark. Anti-theft purpose: community members who recognize a story with
+unverified links report it (Feature 46) for takedown — the site protects non-member authors too.
+Mod verification workflow (two-way link, flipping status) = WU39. Detail: `audit/Moderation.md`
+Feature 53.
 
-**54. Content Download/Export** — Download .epub/.pdf. Pure application-layer, no schema impact.
+**54. Content Download/Export** — Download in six formats: ePub, PDF, HTML, TXT, Markdown, DOCX.
+Pure application-layer, no schema impact. Anyone who can read a story can export it.
 
 **55. Community Spotlight** — Donation infrastructure. Schema TBD.
 
@@ -640,3 +648,13 @@ vouchee's published stories; author-spotlight first-class alongside hidden-gem.
 page (not separate pages). The mart IS the cache (L7 dissolved) — read ranked, directly.
 
 **62. SiteDailyStat Worker** — Daily aggregation into `SiteDailyStat` table. No user-facing UI in MVP.
+
+**63. Chapter Import (file ingestion)** — *(added 2026-07-11; split out of the Feature-53 reframe —
+the community migrates in from other sites, Word docs, and Google Docs, so import is essential
+authoring infrastructure.)* Parse uploaded files (DOCX / EPUB / HTML / TXT / Markdown; PDF
+deferred) into chapter HTML through the sanitizer allowlist (the fidelity contract). Fundamentally
+*chapter* import, not story import: five explicit modes over one backend — into-editor, as
+alternate version, one-file-per-chapter bulk, one-doc-many-chapters (suggest-then-refine
+splitting), and EPUB (spine-defined). Story shell is created via the normal flow first; imported
+chapters land as unpublished drafts. Sits above the MVP line's spirit but scheduled with WU38
+(2026-07-11) because migration UX is a launch-adoption concern. Detail: `audit/Import.md`.

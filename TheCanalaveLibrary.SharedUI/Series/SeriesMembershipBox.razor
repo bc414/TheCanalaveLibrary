@@ -1,0 +1,48 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Leaf component — "Part of series: X — Part N of M" box for the story page, with Previous/Next
+   in-series navigation. No @inject. A story page renders one of these per StorySeriesMembershipDto
+   returned by ISeriesReadService.GetMembershipsForStoryAsync — a story may be in more than one
+   series (WU41 settled decision; see audit/Stories.md Feature 9). Position/Count/Prev/Next are
+   already computed over viewer-visible members by the read service, so this component never needs
+   to re-check visibility itself. *@
+
+<div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-3 flex flex-col gap-1.5 text-sm">
+
+    @* ── Series link + position ──────────────────────────────────────────────── *@
+    <div class="flex flex-wrap items-center gap-1.5">
+        <span class="text-(--color-text-muted)">Part of series:</span>
+        <a href="/series/@Membership.SeriesId/@StorySlug.Slugify(Membership.SeriesName)"
+           class="font-medium text-(--color-action-ink) hover:underline">@Membership.SeriesName</a>
+        <span class="text-(--color-text-muted)">— Part @Membership.Position of @Membership.Count</span>
+    </div>
+
+    @* ── Previous / Next in-series navigation ────────────────────────────────── *@
+    <div class="flex items-center gap-3 text-xs">
+        @if (Membership.PrevStoryId.HasValue)
+        {
+            <a href="/story/@Membership.PrevStoryId"
+               class="text-(--color-action-ink) hover:underline">&lsaquo; @Membership.PrevStoryTitle</a>
+        }
+        else
+        {
+            <span class="text-(--color-text-muted)" aria-disabled="true">&lsaquo; Previous</span>
+        }
+
+        @if (Membership.NextStoryId.HasValue)
+        {
+            <a href="/story/@Membership.NextStoryId"
+               class="ml-auto text-(--color-action-ink) hover:underline">@Membership.NextStoryTitle &rsaquo;</a>
+        }
+        else
+        {
+            <span class="ml-auto text-(--color-text-muted)" aria-disabled="true">Next &rsaquo;</span>
+        }
+    </div>
+
+</div>
+
+@code {
+    [Parameter, EditorRequired] public StorySeriesMembershipDto Membership { get; set; } = null!;
+}

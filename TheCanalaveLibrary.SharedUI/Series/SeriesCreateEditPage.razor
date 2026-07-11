@@ -1,0 +1,456 @@
+@page "/series/new"
+@page "/series/{SeriesId:int}/edit"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@inject ISeriesWriteService SeriesService
+@inject IStoryReadService StoryService
+@inject IToastService Toasts
+@inject NavigationManager Nav
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Series create/edit page — the dedicated management surface for Feature 9 (WU41 settled decision:
+   no field on StoryPropertiesForm/the story editor — series membership is managed here only).
+   Mirrors GroupCreateEditPage's name/description form shape. Story membership (add/reorder/remove)
+   only shown once the series exists (SeriesId.HasValue) — a brand-new series has nothing to add to
+   until it's created, so Create redirects straight into edit mode.
+   Owner-only for edit — UX pre-check here; the real gate is ServerSeriesWriteService. *@
+
+<PageTitle>@(SeriesId.HasValue ? "Edit Series" : "New Series")</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        @if (_isLoading)
+        {
+            <p class="p-4 text-(--color-text-muted)"><em>Loading…</em></p>
+        }
+        else if (_forbidden)
+        {
+            <p class="p-4 text-(--color-danger)">You must be the owner of this series to edit it.</p>
+        }
+        else
+        {
+            <div class="mx-auto max-w-2xl px-4 py-8 flex flex-col gap-6">
+                <h1 class="mb-2 inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+                    @(SeriesId.HasValue ? "Edit Series" : "Create a New Series")
+                </h1>
+
+                @if (_errors.Count > 0)
+                {
+                    <div class="rounded-lg bg-(--color-danger)/10 p-4 text-sm text-(--color-danger)" role="alert">
+                        <ul class="list-disc pl-4 space-y-1">
+                            @foreach (string error in _errors)
+                            {
+                                <li>@error</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                @* ── Name / Description form ─────────────────────────────────────── *@
+                <div class="flex flex-col gap-6 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+
+                    <div class="flex flex-col gap-1">
+                        <label class="text-sm font-semibold text-(--color-text)">Series Name</label>
+                        <input type="text" @bind="_name" maxlength="@SeriesConstants.MaxNameLength"
+                               class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                               placeholder="Enter series name" />
+                        <p class="text-xs text-(--color-text-muted)">@SeriesConstants.MaxNameLength characters max.</p>
+                    </div>
+
+                    <div class="flex flex-col gap-1">
+                        <label class="text-sm font-semibold text-(--color-text)">
+                            Description <span class="font-normal text-(--color-text-muted)">(optional)</span>
+                        </label>
+                        <textarea @bind="_description" rows="4" maxlength="@SeriesConstants.MaxDescriptionLength"
+                                  class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink) resize-y"
+                                  placeholder="Describe this series…"></textarea>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button type="button" @onclick="HandleSubmitAsync"
+                                disabled="@_busy"
+                                class="rounded-md bg-(--color-action) px-5 py-2 font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
+                            @(_busy ? "Saving…" : (SeriesId.HasValue ? "Save Changes" : "Create Series"))
+                        </button>
+                        <a href="@(SeriesId.HasValue ? $"/series/{SeriesId.Value}" : "/series")"
+                           class="rounded-md border border-(--color-border) px-5 py-2 font-medium text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">
+                            Cancel
+                        </a>
+                    </div>
+
+                </div>
+
+                @* ── Story membership management — edit mode only ───────────────── *@
+                @if (SeriesId.HasValue)
+                {
+                    <div class="flex flex-col gap-4 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+                        <h2 class="text-lg font-semibold text-(--color-text)">Stories in This Series</h2>
+
+                        @if (_memberError is not null)
+                        {
+                            <p class="text-sm text-(--color-danger)">@_memberError</p>
+                        }
+
+                        @if (_members.Count == 0)
+                        {
+                            <p class="text-sm text-(--color-text-muted)">No stories yet — add one below.</p>
+                        }
+                        else
+                        {
+                            <ol class="flex flex-col gap-2">
+                                @for (int i = 0; i < _members.Count; i++)
+                                {
+                                    int index = i;
+                                    StoryListingDto member = _members[index];
+                                    <li class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2">
+                                        <span class="w-6 shrink-0 text-sm text-(--color-text-muted)">@(index + 1).</span>
+                                        <span class="flex-1 truncate text-sm text-(--color-text)">@member.Title</span>
+                                        <button type="button" @onclick="() => HandleMoveUpAsync(index)"
+                                                disabled="@(index == 0 || _memberBusy)"
+                                                aria-label="Move up"
+                                                class="rounded p-1 text-(--color-text-muted) hover:bg-(--color-surface-hover) disabled:opacity-30">&uarr;</button>
+                                        <button type="button" @onclick="() => HandleMoveDownAsync(index)"
+                                                disabled="@(index == _members.Count - 1 || _memberBusy)"
+                                                aria-label="Move down"
+                                                class="rounded p-1 text-(--color-text-muted) hover:bg-(--color-surface-hover) disabled:opacity-30">&darr;</button>
+                                        <button type="button" @onclick="() => HandleRemoveAsync(member.StoryId)"
+                                                disabled="@_memberBusy"
+                                                class="rounded px-2 py-1 text-xs text-(--color-danger) hover:bg-(--color-danger)/10 disabled:opacity-30">Remove</button>
+                                    </li>
+                                }
+                            </ol>
+                        }
+
+                        @* ── Add-story picker ─────────────────────────────────────── *@
+                        @if (_addableStories.Count > 0)
+                        {
+                            <div class="flex items-end gap-2 border-t border-(--color-border) pt-4">
+                                <div class="flex flex-1 flex-col gap-1">
+                                    <label class="text-sm font-semibold text-(--color-text)">Add a story</label>
+                                    <select @bind="_addStoryId"
+                                            class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
+                                        <option value="">-- Choose one of your stories --</option>
+                                        @foreach (StoryListingDto candidate in _addableStories)
+                                        {
+                                            <option value="@candidate.StoryId">@candidate.Title</option>
+                                        }
+                                    </select>
+                                </div>
+                                <button type="button" @onclick="HandleAddAsync"
+                                        disabled="@(_addStoryId is null || _memberBusy)"
+                                        class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-medium text-(--color-text) hover:bg-(--color-action-hover) disabled:opacity-50">
+                                    Add
+                                </button>
+                            </div>
+                        }
+                        else if (_members.Count > 0)
+                        {
+                            <p class="border-t border-(--color-border) pt-4 text-xs text-(--color-text-muted)">
+                                All of your stories are already in this series.
+                            </p>
+                        }
+                        else
+                        {
+                            <p class="border-t border-(--color-border) pt-4 text-xs text-(--color-text-muted)">
+                                You don't have any stories to add yet — publish one first.
+                            </p>
+                        }
+                    </div>
+
+                    @* ── Delete series ────────────────────────────────────────────── *@
+                    <div class="flex justify-end">
+                        <button type="button" @onclick="() => _showDeleteConfirm = true"
+                                class="text-sm text-(--color-danger) hover:underline">
+                            Delete this series
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+    </Authorized>
+    <NotAuthorized>
+        <p class="p-4 text-(--color-danger)">You must be signed in to manage series.</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+<ConfirmDialog @bind-IsOpen="_showDeleteConfirm"
+               Title="Delete series"
+               Message="Are you sure you want to delete this series? Your stories themselves will not be deleted — only the grouping. This cannot be undone."
+               ConfirmText="Delete"
+               CancelText="Cancel"
+               IsDestructive="true"
+               OnConfirm="HandleDeleteConfirmAsync" />
+
+@code {
+    [Parameter] public int? SeriesId { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string _name = string.Empty;
+    private string? _description;
+
+    private bool _isLoading = true;
+    private bool _forbidden;
+    private bool _busy;
+    private List<string> _errors = [];
+    private int? _currentUserId;
+
+    // Story membership management (edit mode only).
+    private List<StoryListingDto> _members = [];
+    private List<StoryListingDto> _addableStories = [];
+    private int? _addStoryId;
+    private bool _memberBusy;
+    private string? _memberError;
+    private bool _showDeleteConfirm;
+
+    private bool _initialized;
+    // Sentinel distinguishes "not loaded yet" from "create mode" (both look like null SeriesId) —
+    // use a bool rather than overloading SeriesId itself.
+    private bool _loadedForCreate;
+    private int? _loadedSeriesId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // One-time: resolve the viewer's identity (auth doesn't change mid-session).
+        if (AuthState is not null)
+        {
+            AuthenticationState state = await AuthState;
+            string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            _currentUserId = int.TryParse(idStr, out int id) ? id : null;
+        }
+
+        await LoadForRouteAsync();
+        _initialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // The router reuses this same component instance across its two @page routes
+        // ("/series/new" and "/series/{SeriesId:int}/edit" both resolve to SeriesCreateEditPage) —
+        // OnInitializedAsync does NOT re-fire on that kind of navigation (same trap as
+        // StoryPage/ProfilePage/GroupPage's dispatcher pattern; see
+        // layer3-logic.md §"Route-Parameter Dispatchers"). Guard on an actual SeriesId change so a
+        // create-then-redirect-into-edit (HandleSubmitAsync's post-create NavigateTo) picks up the
+        // new series' data instead of leaving the create-mode blank state on screen.
+        if (!_initialized) return;
+        bool alreadyLoadedThisRoute = SeriesId.HasValue
+            ? SeriesId == _loadedSeriesId
+            : _loadedForCreate;
+        if (alreadyLoadedThisRoute) return;
+
+        _isLoading = true;
+        _forbidden = false;
+        _errors.Clear();
+        await LoadForRouteAsync();
+    }
+
+    private async Task LoadForRouteAsync()
+    {
+        if (SeriesId.HasValue)
+        {
+            _loadedSeriesId = SeriesId;
+            SeriesDetailDto? series = await SeriesService.GetSeriesByIdAsync(SeriesId.Value);
+
+            if (series is null)
+            {
+                Nav.NavigateTo("/not-found");
+                return;
+            }
+
+            // UX-level owner pre-check (real gate is in ServerSeriesWriteService).
+            if (!_currentUserId.HasValue || series.AuthorId != _currentUserId)
+            {
+                _forbidden = true;
+                _isLoading = false;
+                return;
+            }
+
+            _name        = series.Name;
+            _description = series.Description;
+
+            await LoadMembersAsync(series.OrderedStoryIds);
+        }
+        else
+        {
+            _loadedForCreate = true;
+            _name = string.Empty;
+            _description = null;
+            _members = [];
+            _addableStories = [];
+        }
+
+        _isLoading = false;
+    }
+
+    private async Task LoadMembersAsync(IReadOnlyList<int> orderedStoryIds)
+    {
+        _members = orderedStoryIds.Count > 0
+            ? [.. await StoryService.GetListingsByIdsAsync(orderedStoryIds)]
+            : [];
+
+        // Candidates: the owner's own stories not already in this series.
+        if (_currentUserId is not null)
+        {
+            IReadOnlyList<int> authoredIds = await StoryService.GetStoryIdsByAuthorAsync(_currentUserId.Value);
+            HashSet<int> memberIds = [.. _members.Select(m => m.StoryId)];
+            IReadOnlyList<int> candidateIds = [.. authoredIds.Where(id => !memberIds.Contains(id))];
+            _addableStories = candidateIds.Count > 0
+                ? [.. await StoryService.GetListingsByIdsAsync(candidateIds)]
+                : [];
+        }
+    }
+
+    // ── Name/Description save ───────────────────────────────────────────────────
+
+    private async Task HandleSubmitAsync()
+    {
+        _errors.Clear();
+        _busy = true;
+
+        try
+        {
+            if (SeriesId.HasValue)
+            {
+                await SeriesService.UpdateSeriesAsync(new UpdateSeriesDto
+                {
+                    SeriesId    = SeriesId.Value,
+                    Name        = _name,
+                    Description = _description
+                });
+                Nav.NavigateTo($"/series/{SeriesId.Value}/edit");
+            }
+            else
+            {
+                int newId = await SeriesService.CreateSeriesAsync(new CreateSeriesDto
+                {
+                    Name        = _name,
+                    Description = _description
+                });
+                // Straight into edit mode — a brand-new series has nothing to add stories to until
+                // it exists, so this is where membership management picks up.
+                Nav.NavigateTo($"/series/{newId}/edit");
+            }
+        }
+        catch (SeriesValidationException ex)
+        {
+            _errors.AddRange(ex.Errors);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _forbidden = true;
+        }
+        catch (Exception)
+        {
+            _errors.Add("An unexpected error occurred. Please try again.");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ── Story membership ────────────────────────────────────────────────────────
+
+    private async Task HandleAddAsync()
+    {
+        if (_addStoryId is null || !SeriesId.HasValue) return;
+        _memberError = null;
+        _memberBusy = true;
+        try
+        {
+            await SeriesService.AddStoryAsync(SeriesId.Value, _addStoryId.Value);
+            _addStoryId = null;
+            await ReloadMembersAsync();
+        }
+        catch (Exception ex)
+        {
+            _memberError = ExceptionPresenter.GetUserMessage(ex);
+        }
+        finally
+        {
+            _memberBusy = false;
+        }
+    }
+
+    private async Task HandleRemoveAsync(int storyId)
+    {
+        if (!SeriesId.HasValue) return;
+        _memberError = null;
+        _memberBusy = true;
+        try
+        {
+            await SeriesService.RemoveStoryAsync(SeriesId.Value, storyId);
+            await ReloadMembersAsync();
+        }
+        catch (Exception ex)
+        {
+            _memberError = ExceptionPresenter.GetUserMessage(ex);
+        }
+        finally
+        {
+            _memberBusy = false;
+        }
+    }
+
+    private async Task HandleMoveUpAsync(int index)
+    {
+        if (index <= 0) return;
+        await SwapAndReorderAsync(index, index - 1);
+    }
+
+    private async Task HandleMoveDownAsync(int index)
+    {
+        if (index >= _members.Count - 1) return;
+        await SwapAndReorderAsync(index, index + 1);
+    }
+
+    private async Task SwapAndReorderAsync(int indexA, int indexB)
+    {
+        if (!SeriesId.HasValue) return;
+        _memberError = null;
+        _memberBusy = true;
+        try
+        {
+            List<StoryListingDto> reordered = [.. _members];
+            (reordered[indexA], reordered[indexB]) = (reordered[indexB], reordered[indexA]);
+            IReadOnlyList<int> orderedIds = [.. reordered.Select(m => m.StoryId)];
+
+            await SeriesService.ReorderAsync(SeriesId.Value, orderedIds);
+            _members = reordered;
+        }
+        catch (Exception ex)
+        {
+            _memberError = ExceptionPresenter.GetUserMessage(ex);
+        }
+        finally
+        {
+            _memberBusy = false;
+        }
+    }
+
+    private async Task ReloadMembersAsync()
+    {
+        if (!SeriesId.HasValue) return;
+        SeriesDetailDto? series = await SeriesService.GetSeriesByIdAsync(SeriesId.Value);
+        if (series is not null)
+            await LoadMembersAsync(series.OrderedStoryIds);
+    }
+
+    // ── Delete ───────────────────────────────────────────────────────────────────
+
+    private async Task HandleDeleteConfirmAsync()
+    {
+        if (!SeriesId.HasValue) return;
+        try
+        {
+            await SeriesService.DeleteSeriesAsync(SeriesId.Value);
+            Nav.NavigateTo("/series");
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+        }
+    }
+}

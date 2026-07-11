@@ -1,9 +1,10 @@
 namespace TheCanalaveLibrary.Core;
 
 /// <summary>
-/// The five tabs on the public profile page (<c>/user/{UserId}/{*Tab}</c>).
+/// The six tabs on the public profile page (<c>/user/{UserId}/{*Tab}</c>).
 /// Members are ordered by display position (tab bar left-to-right).
 /// Mirrors <see cref="BookshelfTab"/> / <see cref="BookshelfTabSlug"/> in shape (WU27).
+/// <see cref="Series"/> added WU41 (Feature 9) — lists the author's series, public to any viewer.
 /// </summary>
 public enum ProfileTab
 {
@@ -12,6 +13,7 @@ public enum ProfileTab
     Recommendations = 2,
     Authored        = 3,
     Blog            = 4,
+    Series          = 5,
 }
 
 /// <summary>
@@ -30,6 +32,7 @@ public static class ProfileTabSlug
             [ProfileTab.Recommendations] = "recommendations",
             [ProfileTab.Authored]        = "authored",
             [ProfileTab.Blog]            = "blog",
+            [ProfileTab.Series]          = "series",
         };
 
     private static readonly IReadOnlyDictionary<string, ProfileTab> SlugToTab =

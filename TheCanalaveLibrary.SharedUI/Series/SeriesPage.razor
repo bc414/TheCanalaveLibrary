@@ -1,0 +1,140 @@
+@page "/series/{SeriesId:int}/{*Slug}"
+@namespace TheCanalaveLibrary.SharedUI
+@inject ISeriesReadService SeriesService
+@inject IStoryReadService StoryService
+@inject IUserStoryInteractionReadService InteractionService
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Series detail page — public, read-only (WU41, Feature 9). Slug is cosmetic — only SeriesId (int)
+   is the key. Single layout (no Desktop/Mobile split, unlike GroupPage) — StoryDeck is already
+   responsive on its own and this page has no complex multi-column chrome to branch on, same
+   single-layout shape as BlogPostPage/GroupsPage.
+   [SeriesDetailDto.OrderedStoryIds] is the raw membership set; hydrated here via
+   IStoryReadService.GetListingsByIdsAsync, which reorders to match and silently drops ids the
+   viewer can't see (content-rating/takedown filters) — see audit/Stories.md Feature 9 WU41 note.
+   Author-only Edit link — the server gate in ServerSeriesWriteService is the real authority. *@
+
+@if (_isLoading)
+{
+    <PageTitle>Loading…</PageTitle>
+    <p class="mx-auto max-w-4xl px-4 py-8 text-(--color-text-muted)"><em>Loading…</em></p>
+}
+else if (_series is null)
+{
+    <PageTitle>Series not found</PageTitle>
+    <p class="mx-auto max-w-4xl px-4 py-8 text-(--color-danger)">Series not found.</p>
+}
+else
+{
+    <PageTitle>@_series.Name</PageTitle>
+
+    <div class="mx-auto max-w-4xl px-4 py-8 flex flex-col gap-6">
+
+        @* ── Header ───────────────────────────────────────────────────────────── *@
+        <div class="flex items-start justify-between gap-4">
+            <div class="flex flex-col gap-1">
+                <h1 class="text-3xl font-bold text-(--color-text) leading-snug">@_series.Name</h1>
+                <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-(--color-text-muted)">
+                    @if (_series.AuthorId is not null)
+                    {
+                        <span>By
+                            <a href="/user/@_series.AuthorId"
+                               class="text-(--color-action-ink) hover:underline font-medium">@(_series.AuthorName ?? "Unknown")</a>
+                        </span>
+                    }
+                    else
+                    {
+                        <span>By @(_series.AuthorName ?? "Unknown")</span>
+                    }
+                    <span>·</span>
+                    <span>@Stories.Length @(Stories.Length == 1 ? "story" : "stories")</span>
+                    <span>·</span>
+                    <span>Started @_series.DateCreated.ToString("MMM d, yyyy")</span>
+                </div>
+            </div>
+            @if (_isOwner)
+            {
+                <a href="/series/@_series.SeriesId/edit"
+                   class="shrink-0 text-sm text-(--color-action-ink) hover:underline">Edit Series</a>
+            }
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_series.Description))
+        {
+            <ContentSurface Variant="ContentSurfaceVariant.Inline">
+                <RichTextView HtmlContent="@_series.Description" />
+            </ContentSurface>
+        }
+
+        @* ── Member stories, in reading order ────────────────────────────────── *@
+        <StoryDeck Stories="Stories"
+                   UserStoryInteractionStates="_interactionStates"
+                   CurrentUserId="_currentUserId"
+                   EmptyMessage="No stories in this series yet." />
+    </div>
+}
+
+@code {
+    [Parameter] public int SeriesId { get; set; }
+
+    /// <summary>Cosmetic catch-all segment — ignored on load; only SeriesId is the key.</summary>
+    [Parameter] public string? Slug { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private SeriesDetailDto? _series;
+    private StoryListingDto[] Stories { get; set; } = [];
+    private IReadOnlyDictionary<int, UserStoryInteractionStateDto>? _interactionStates;
+
+    private bool _isLoading = true;
+    private int? _currentUserId;
+    private bool _isOwner;
+
+    private bool _initialized;
+    private int _loadedSeriesId = int.MinValue; // sentinel; no real SeriesId equals this
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            AuthenticationState state = await AuthState;
+            string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            _currentUserId = int.TryParse(idStr, out int id) ? id : null;
+        }
+
+        await LoadSeriesAsync();
+        _initialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Fires when the same SeriesPage instance is reused for a different SeriesId.
+        if (!_initialized) return;
+        if (SeriesId == _loadedSeriesId) return;
+        await LoadSeriesAsync();
+    }
+
+    private async Task LoadSeriesAsync()
+    {
+        _isLoading = true;
+        _loadedSeriesId = SeriesId;
+
+        _series = await SeriesService.GetSeriesByIdAsync(SeriesId);
+
+        if (_series is not null)
+        {
+            _isOwner = _currentUserId.HasValue && _series.AuthorId == _currentUserId;
+
+            Stories = _series.OrderedStoryIds.Count > 0
+                ? await StoryService.GetListingsByIdsAsync(_series.OrderedStoryIds)
+                : [];
+
+            _interactionStates = Stories.Length > 0 && _currentUserId is not null
+                ? await InteractionService.GetStatesByStoryIdsAsync([.. Stories.Select(s => s.StoryId)])
+                : null;
+        }
+
+        _isLoading = false;
+    }
+}

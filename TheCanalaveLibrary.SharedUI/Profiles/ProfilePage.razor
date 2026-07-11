@@ -10,6 +10,7 @@
 @inject IUserStoryInteractionReadService InteractionReadService
 @inject IRecommendationReadService RecommendationReadService
 @inject IBlogPostReadService BlogPostReadService
+@inject ISeriesReadService SeriesReadService
 @inject IDeviceDetectionService DeviceService
 @inject NavigationManager Nav
 
@@ -60,7 +61,8 @@ else
                        BlogTotalCount="@_blogTotalCount"
                        BlogPage="@_blogPage"
                        BlogPageSize="@BlogPageSize"
-                       OnBlogPageChanged="HandleBlogPageChanged" />
+                       OnBlogPageChanged="HandleBlogPageChanged"
+                       SeriesItems="@_seriesItems" />
     }
     else
     {
@@ -81,7 +83,8 @@ else
                         BlogTotalCount="@_blogTotalCount"
                         BlogPage="@_blogPage"
                         BlogPageSize="@BlogPageSize"
-                        OnBlogPageChanged="HandleBlogPageChanged" />
+                        OnBlogPageChanged="HandleBlogPageChanged"
+                        SeriesItems="@_seriesItems" />
     }
 }
 
@@ -116,6 +119,9 @@ else
     private BlogPostListingDto[] _blogPosts = [];
     private int _blogTotalCount;
     private int _blogPage = 1;
+
+    // Series tab (WU41) — public to any viewer, always the full list (no pagination/filter).
+    private IReadOnlyList<SeriesListingDto> _seriesItems = [];
 
     private bool _initialized;
     private int _loadedUserId = int.MinValue;      // sentinel; no real UserId equals this
@@ -198,6 +204,7 @@ else
     {
         ProfileTab.Profile => LoadBioAsync(),
         ProfileTab.Blog    => LoadBlogAsync(),
+        ProfileTab.Series  => LoadSeriesAsync(),
         _                  => LoadStoryTabAsync(),
     };
 
@@ -224,6 +231,11 @@ else
     {
         (_blogPosts, _blogTotalCount) = await BlogPostReadService.GetByAuthorAsync(
             UserId, _blogPage, BlogPageSize, includeUnpublished: _isOwner);
+    }
+
+    private async Task LoadSeriesAsync()
+    {
+        _seriesItems = await SeriesReadService.GetSeriesByAuthorAsync(UserId);
     }
 
     private Task<IReadOnlyList<int>> GetCandidateIdsForTabAsync(ProfileTab tab) => tab switch

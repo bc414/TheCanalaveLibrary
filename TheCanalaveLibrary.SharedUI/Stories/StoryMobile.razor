@@ -104,6 +104,17 @@
                 }
             </div>
         }
+
+        @* Series membership box(es) — a story may be in more than one series (WU41) *@
+        @if (SeriesMemberships.Count > 0)
+        {
+            <div class="flex flex-col gap-2">
+                @foreach (var membership in SeriesMemberships)
+                {
+                    <SeriesMembershipBox Membership="membership" />
+                }
+            </div>
+        }
     </div>
 
     @* ── Long description ─────────────────────────────────────────────────────── *@
@@ -142,6 +153,9 @@
 
     /// <summary>Viewer's interaction state, loaded by StoryPage (null = anonymous/all-false).</summary>
     [Parameter] public UserStoryInteractionStateDto? UsiState { get; set; }
+
+    /// <summary>Series this story belongs to (WU41) — a story may be in more than one.</summary>
+    [Parameter] public IReadOnlyList<StorySeriesMembershipDto> SeriesMemberships { get; set; } = [];
 
     private bool _coverArtFailed;
 

@@ -332,6 +332,9 @@ builder.Services.AddScoped<IBlogPostWriteService, ServerBlogPostWriteService>();
 // Groups (WU32) — L2 read/write services (Features 38/39/40).
 builder.Services.AddScoped<IGroupReadService, ServerGroupWriteService>();
 builder.Services.AddScoped<IGroupWriteService, ServerGroupWriteService>();
+// Series (WU41) — L2 read/write services (Feature 9).
+builder.Services.AddScoped<ISeriesReadService, ServerSeriesWriteService>();
+builder.Services.AddScoped<ISeriesWriteService, ServerSeriesWriteService>();
 // Notifications (WU22) — L2 read/write services (Features 41/42/43).
 // WU22 delivers: service infra + NotifyNewFollowerAsync/NotifyNewVouchAsync + Following seam wiring.
 // Fan-out notify methods land incrementally with their triggering work-units (workplan.md WU22).

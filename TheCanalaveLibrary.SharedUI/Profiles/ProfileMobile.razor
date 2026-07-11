@@ -117,6 +117,23 @@
                 }
             </div>
         }
+        else if (Tab == ProfileTab.Series)
+        {
+            @* Series tab (WU41) — stacked grid, no filter (small, unpaginated set) *@
+            @if (SeriesItems.Count == 0)
+            {
+                <p class="text-sm text-(--color-text-muted)">@(IsOwner ? "You haven't created any series yet." : "No series yet.")</p>
+            }
+            else
+            {
+                <div class="flex flex-col gap-3">
+                    @foreach (var series in SeriesItems)
+                    {
+                        <SeriesCard Series="series" EditHref="@(IsOwner ? $"/series/{series.SeriesId}/edit" : null)" />
+                    }
+                </div>
+            }
+        }
         else
         {
             @* Story tabs — full-width StoryDeck *@
@@ -189,6 +206,9 @@
     [Parameter] public int BlogPageSize { get; set; } = 20;
     [Parameter] public EventCallback<int> OnBlogPageChanged { get; set; }
 
+    // Series tab (WU41)
+    [Parameter] public IReadOnlyList<SeriesListingDto> SeriesItems { get; set; } = [];
+
     private ReportDialog _reportDialog = default!;
     private bool _filterOpen;
 
@@ -213,6 +233,7 @@
         ProfileTab.Recommendations => "Recommendations",
         ProfileTab.Authored        => "Stories",
         ProfileTab.Blog            => "Blog",
+        ProfileTab.Series          => "Series",
         _                          => tab.ToString()
     };
 

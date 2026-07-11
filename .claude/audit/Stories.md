@@ -10,8 +10,10 @@ view-count). Largest cluster.
 (cold — long desc, slug, `PostApprovalStatus`). Vertical-partition trio with 1-to-1 cascade. `Story`
 implements `IEditableStoryProperties` via explicit interface implementation (`[NotMapped]` projections
 across the three partitions) — a deliberate, somewhat advanced pattern that lets one object satisfy the
-edit contract. Also here: `StoryArc`, `Series`/`SeriesEntry`, `StoryRelationship` (+type lookup),
-`StoryTag`/`StoryCharacter` live in the model set but belong to Tags.
+edit contract. Also here: `StoryArc`, `StoryRelationship` (+type lookup), `StoryTag`/`StoryCharacter`
+live in the model set but belong to Tags. **`Series`/`SeriesEntry` moved to their own `Core/Series/`
+vertical cluster (WU41, 2026-07-11)** — same namespace (`TheCanalaveLibrary.Core`), separate folder;
+see Feature 9 below.
 
 **DTOs/contracts (Core/Stories/):** `CreateStoryDTO`, `StoryUpdateDTO`, `StoryDetailsDTO`, `StoryTagDTO`,
 `IEditableStoryProperties`, `IStoryTag`, `StoryMappers`, `StoryValidations`, `StoryValidationException`.
@@ -313,8 +315,115 @@ change).
 - **L4 — Stage 1** (blocked). **L5 — Stage 2.**
 
 ## Feature 9 — Series & Ordering
-- **L1 — Stage 5.** `Series` + `SeriesEntry` (composite key `(SeriesId,StoryId)`, `OrderIndex`), unique
-  `(AuthorId,Name)`. **L2/L3/L3.5 — Stage 2.** **L4 — Stage 1. L5 — Stage 2.**
+
+- **L1 — Stage 5.** `Series` (`Core/Series/Series.cs` as of WU41) + `SeriesEntry` (composite key
+  `(SeriesId,StoryId)`, `OrderIndex`), unique `(AuthorId,Name)`.
+
+### WU41 settled-vs-open note (2026-07-11, before build — Doc-Touch moment 1)
+
+The historical Gemini planning discussions only ever modeled "series" as a `StoryRelationship`
+*type* (`RelationshipType = 'Series'` with an `OrderIndex`); the first-class `Series`/`SeriesEntry`
+tables were a later architectural decision, so those notes don't answer WU41's UX questions. The
+following were settled with the user 2026-07-11 and must not be revisited without going back through
+the user:
+
+1. **Membership scope:** a series contains **only the owner's own stories**. The write service gates
+   every add on `story.AuthorId == series.AuthorId == ActiveUser.UserId`.
+2. **Management:** a **dedicated series page** (`/series/{id}/edit`) — no field added to the story
+   editor/`StoryPropertiesForm`. Mirrors `GroupCreateEditPage`.
+3. **Browse surfaces:** public per-series page (`/series/{id}`) + a **Series tab on the profile**
+   (`ProfileTab.Series`) + a **"My Series"** owner list (`/series`). No global `/series` directory
+   (post-MVP, not scoped here).
+4. **Story-page display:** a "Part of series X — Part N of M" box **with prev/next in-series
+   navigation**, rendered on `StoryDesktop`/`StoryMobile`.
+5. **A story may belong to multiple series.** The existing `SeriesEntry` PK `(SeriesId, StoryId)` has
+   no unique constraint on `StoryId` alone — the schema already permits this, so no L1 migration was
+   needed. `StoryPage` therefore renders a *list* of `SeriesMembershipBox` (one per series), each with
+   its own position + prev/next. AO3-style semantics.
+6. **Viewer-visible counting:** `StorySeriesMembershipDto`'s Position/Count/PrevStoryId/NextStoryId are
+   computed only over series members that survive the viewer's `ContentRating`/`IsTakenDown` read
+   filters (an explicit join through `Story` in `ServerSeriesReadService.GetMembershipsForStoryAsync`,
+   not a bare `SeriesEntry.StoryId` projection) — so "Part 2 of 3" always matches what the viewer can
+   actually reach and prev/next never link to a story hidden from them. `SeriesListingDto.StoryCount`
+   and `SeriesDetailDto.OrderedStoryIds`, by contrast, are the raw (unfiltered) entry set — mirroring
+   `GroupDetailDto.StoryIds`/`Group.MemberCount`'s existing precedent of "count is a cheap raw number,
+   the hydrated list (`IStoryReadService.GetListingsByIdsAsync`) is the authority and silently drops
+   what the viewer can't see." This mismatch (a card might say "3 stories" but the deck shows 2) is the
+   same accepted tradeoff Groups already ships with.
+
+**Done (2026-07-11):** built per the above. `Core/Series/` (entities + DTOs + `ISeriesReadService`/
+`ISeriesWriteService`), `Server/Series/` (`ServerSeriesReadService`/`ServerSeriesWriteService`,
+CQRS-lite inheritance mirroring `ServerGroupReadService`/`ServerGroupWriteService`; owner-gate via
+`RequireOwnerAsync`/`RequireAuthenticatedUser`; `Description` sanitized once on save;
+pre-insert duplicate-name check surfaces as `SeriesValidationException`, matching
+`ServerTagWriteService`'s pattern, rather than surfacing the raw unique-index `DbUpdateException`).
+`SharedUI/Series/` — `SeriesCard` (leaf), `SeriesMembershipBox` (leaf), `SeriesPage` (public detail +
+`StoryDeck`), `SeriesCreateEditPage` (owner-gated create/edit/add/remove/reorder/delete),
+`MySeriesPage` (`/series`, owner listing). Integrated into `StoryPage`/`StoryDesktop`/`StoryMobile`
+(membership boxes), `ProfilePage`/`ProfileDesktop`/`ProfileMobile` (Series tab), `CreateMenu` ("New
+Series"), `UserMenu` ("My Series"). `ExceptionPresenter` extended with `SeriesValidationException`.
+`ProfileTab` extended with `Series = 5` / slug `"series"` (additive — not persisted, so no migration
+concern). One test-fixture gap found and fixed during full-suite verification (not anticipated in the
+plan): `ProfilePageTests`/`FakeProfileTestServices` didn't register the newly-required
+`ISeriesReadService`, breaking `TabSwitch_OnSameInstance_ReloadsTabPayload` — added
+`FakeSeriesReadService` (all-empty defaults, same shape as the other Fake*ReadServices there).
+
+**Two real runtime bugs found and fixed via the L4.5 browser-verification pass (not anticipated in
+the plan; both are the same dispatcher-reload class as WU-ComponentSoundness's F1 StoryPage fix):**
+1. `SeriesCreateEditPage` maps two `@page` routes ("/series/new" and "/series/{SeriesId:int}/edit")
+   onto the same component type. `HandleSubmitAsync`'s post-create `Nav.NavigateTo($"/series/{newId}/edit")`
+   reuses the same component instance — `OnInitializedAsync` (which loaded the create-mode blank
+   state) never re-fires; the page only ever implemented that one lifecycle method. Symptom observed
+   live: after creating a series, the "edit" page rendered as if still empty/create-mode (blank name,
+   no member list, no add-story picker) even though the series had actually been created correctly in
+   the DB. Fixed by adding `OnParametersSetAsync` with an initialized-guard + a route-changed guard
+   (`SeriesId` vs. create-mode), mirroring `StoryPage`/`ProfilePage`/`GroupPage`'s dispatcher pattern.
+   Regression test added: `SeriesCreateEditPageTests.PostCreateRedirect_OnSameInstance_ReloadsEditModeData`
+   (bUnit `cut.Render(...)` re-set, same technique as `ProfilePageTests.TabSwitch_OnSameInstance_ReloadsTabPayload`).
+2. `StoryPage.OnParametersSetAsync` (the existing in-place-story-navigation reload path, added
+   WU-ComponentSoundness) reloads `Story`/`Chapters`/`_usiState` on a `StoryId` change but the new
+   `_seriesMemberships` load was only wired into `OnInitializedAsync`. Symptom observed live: clicking
+   the series membership box's "Next" link (an in-place `/story/{id}` navigation, same StoryPage
+   instance) left the *previous* story's series box on screen — "Part 1 of 2" with Next pointing back
+   at the story the viewer was now on. Fixed by adding the `SeriesReadService.GetMembershipsForStoryAsync`
+   reload to `OnParametersSetAsync` alongside the other per-story state. No dedicated bUnit regression
+   test — `StoryPage` has no bUnit suite of its own even for its original F1 fix (WU-ComponentSoundness);
+   covered by this L4.5 pass instead, consistent with that precedent.
+
+- **L2/L3-Logic/L3.5-Structure — Stage 5.** See test tiers below.
+- **L4-Style — Stage 1** (visual sign-off pending, per WU8/WU13/WU23/WU28/WU37/WU42/WU43 precedent —
+  functionally verified live, below, but no dedicated visual/token polish pass).
+- **L4.5-Browser — Stage 5 (2026-07-11).** Real-circuit verification via `mcp__claude-in-chrome__*`
+  against the dev server (`AuthorAlpha`/`TestUser` fixtures): My Series (empty state, owner-scoped) →
+  Create Series → post-create redirect into edit mode (bug 1 above, found + fixed here) → add two
+  stories via the picker → reorder via ↑ (persisted) → public SeriesPage (`StoryDeck` in reordered
+  order, owner Edit link) → StoryPage membership box ("Part 1 of 2", disabled Previous, active Next)
+  → click Next → in-place navigation to the second story (bug 2 above, found + fixed here) — box now
+  correctly reads "Part 2 of 2" with active Previous, no Next → profile Series tab as owner (Edit
+  links present) and as a different viewer (`TestUser`, Edit links correctly absent) → `UserMenu`
+  "My Series" and `CreateMenu` "New Series" entries present → duplicate-name create attempt surfaces
+  "You already have a series named …" inline → delete via `ConfirmDialog` (destructive variant) →
+  redirected to My Series, series gone from the list. Ground truth confirmed via `psql`: the deleted
+  series' `SeriesEntry` rows cascaded away; its two member stories (`story_id` 1, 3, 7 range) survived
+  untouched; the surviving series' `series_entries.order_index` matched the reorder performed in the UI.
+- **L5 — Stage 2** (rides the future site-wide WASM interactivity flip, not WU41-specific).
+- **Verified (2026-07-11):** `dotnet build` 0 errors/warnings (8 projects). `dotnet test` full
+  solution green: 541 Unit + 533 RazorComponents + 462 Integration = **1536 tests**. Mutation-sanity:
+  temporarily replaced the `Story`-joined query in `GetMembershipsForStoryAsync` with a bare
+  `SeriesEntry.StoryId` projection (bypassing `ContentRating`/`IsTakenDown`) —
+  `GetMemberships_MatureMemberHiddenFromMatureDisabledViewer_ExcludedFromPositionCountAndNext` failed
+  as expected; reverted, suite green again. `check-design-tokens.ps1`: the only 2 findings are
+  pre-existing in `TreeSearchResultBadge.razor` (WU44), unrelated to this unit.
+- **Tests:** Unit (`SeriesValidationsTests` — 11 tests, `CreateSeriesDto`/`UpdateSeriesDto.CanSave`);
+  Integration (`SeriesServiceTests` — 26 tests, Testcontainers Postgres — CRUD owner-gating,
+  cross-author add rejection, append/reorder/remove `OrderIndex`, duplicate-name rejection (per-author,
+  not global), cascade delete, multi-series membership, and the content-filter-drop case for
+  Position/Count/Next); RazorComponents (`SeriesCardTests` + `SeriesMembershipBoxTests` — 15 tests,
+  leaf components; `SeriesCreateEditPageTests` — 1 test, the same-instance-reload regression above).
+  **Scope note:** no *general* `SeriesCreateEditPageTests` CRUD-UI coverage was added beyond that one
+  regression test — matching the existing precedent that `GroupCreateEditPage` (the closest analog)
+  has no page-level bUnit suite either; the owner-gate and CRUD logic are exercised at the Integration
+  tier (the real authority — the page's pre-check is only a UX nicety).
 
 ## Feature 10 — Story Relationships
 - **L1 — Stage 5.** `StoryRelationship` composite key `(Source,Target,Type)`, type lookup seeded

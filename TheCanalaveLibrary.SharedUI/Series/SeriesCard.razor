@@ -1,0 +1,44 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Leaf component — displays a single series listing card.
+   No @inject. Data comes from SeriesListingDto (name, description, story count, date).
+   Used by MySeriesPage ("/series", owner listing, with EditHref set) and the profile Series tab
+   (public, EditHref left null). The name anchor and Edit link are siblings, not nested (nested <a>
+   is invalid HTML) — same shape as BlogPostCard's EditHref convention. WU41. *@
+
+<div class="flex flex-col gap-2 rounded-lg border border-(--color-border) bg-(--color-surface) p-4 transition-shadow hover:shadow-subtle">
+
+    @* ── Header row: name ─────────────────────────────────────────────────── *@
+    <a href="/series/@Series.SeriesId/@StorySlug.Slugify(Series.Name)"
+       class="font-semibold text-(--color-text) leading-snug hover:underline hover:text-(--color-action-ink)">
+        @Series.Name
+    </a>
+
+    @* ── Meta row: story count + date ────────────────────────────────────── *@
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-(--color-text-muted)">
+        <span>@Series.StoryCount @(Series.StoryCount == 1 ? "story" : "stories")</span>
+        <span>·</span>
+        <span>Started @Series.DateCreated.ToString("MMM d, yyyy")</span>
+    </div>
+
+    @* ── Description snippet ─────────────────────────────────────────────── *@
+    @if (!string.IsNullOrWhiteSpace(Series.Description))
+    {
+        <p class="text-sm text-(--color-text-muted) leading-relaxed line-clamp-2">@Series.Description</p>
+    }
+
+    @* ── Edit link — owner context only (MySeriesPage passes EditHref; profile tab doesn't) ── *@
+    @if (EditHref is not null)
+    {
+        <a href="@EditHref" class="text-xs font-medium text-(--color-action-ink) hover:underline">Edit</a>
+    }
+
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SeriesListingDto Series { get; set; } = null!;
+
+    /// <summary>Owner-only Edit link target. Null suppresses the link (public profile tab context).</summary>
+    [Parameter] public string? EditHref { get; set; }
+}

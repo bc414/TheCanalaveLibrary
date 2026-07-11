@@ -78,6 +78,15 @@ internal sealed class FakeBlogPostReadService : IBlogPostReadService
         Task.FromResult((Array.Empty<BlogPostListingDto>(), 0));
 }
 
+// ── Series (WU41) ─────────────────────────────────────────────────────────────────────────────
+
+internal sealed class FakeSeriesReadService : ISeriesReadService
+{
+    public Task<SeriesDetailDto?> GetSeriesByIdAsync(int seriesId) => Task.FromResult<SeriesDetailDto?>(null);
+    public Task<IReadOnlyList<SeriesListingDto>> GetSeriesByAuthorAsync(int authorId) => Task.FromResult<IReadOnlyList<SeriesListingDto>>([]);
+    public Task<IReadOnlyList<StorySeriesMembershipDto>> GetMembershipsForStoryAsync(int storyId) => Task.FromResult<IReadOnlyList<StorySeriesMembershipDto>>([]);
+}
+
 // ── Device detection ──────────────────────────────────────────────────────────────────────────
 
 internal sealed class AlwaysDesktopDeviceService : IDeviceDetectionService
