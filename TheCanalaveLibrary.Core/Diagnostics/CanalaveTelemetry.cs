@@ -120,6 +120,31 @@ public static class CanalaveTelemetry
     }
 
     /// <summary>
+    /// <c>User.LastActiveUtc</c> in-process write buffer (WU-SiteDailyStat, Feature 62 L2 — the
+    /// signal-buffering pattern, layer2-services.md). Same instrument shape as
+    /// <see cref="ReadingProgress"/>/<see cref="ViewCount"/>: depth = at-risk entries in the loss
+    /// window, batch size = coalescing effectiveness, duration = flush health.
+    /// </summary>
+    public static class UserActivity
+    {
+        public const string Name = Prefix + ".UserActivity";
+
+        public static readonly ActivitySource Source = new(Name, "1.0.0");
+        public static readonly Meter Meter = new(Name, "1.0.0");
+
+        public static readonly Histogram<int> FlushBatchSize = Meter.CreateHistogram<int>(
+            "canalave.useractivity.flush.batch_size", unit: "{user}",
+            description: "Distinct users whose last-active stamp was written per flush cycle.");
+
+        public static readonly Histogram<double> FlushDuration = Meter.CreateHistogram<double>(
+            "canalave.useractivity.flush.duration", unit: "ms",
+            description: "Wall time of one flush cycle's batched upsert.");
+
+        // The buffer-depth ObservableGauge ("canalave.useractivity.buffer.depth") is created by
+        // UserActivityBuffer's constructor — same rationale as ReadingProgress's gauge.
+    }
+
+    /// <summary>
     /// Transactional email (WU-Email) — the send path behind <c>IEmailSender&lt;User&gt;</c>.
     /// HttpClient/socket auto-instrumentation is blind to SMTP, so this names "one transactional
     /// email" as its own span; sent/failed counters split by kind (confirmation vs. reset) so a

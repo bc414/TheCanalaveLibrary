@@ -143,5 +143,19 @@ public static class DevDiagnosticsEndpoints
         devApi.MapGet("/discovery/also-recommended/{storyId:int}", async (
                 int storyId, int? take, ICoOccurrenceReadService coOccurrence, CancellationToken ct) =>
             Results.Ok(await coOccurrence.GetAlsoRecommendedAsync(storyId, take ?? 10, ct)));
+
+        // WU-SiteDailyStat (Feature 62): on-demand upsert — the daily worker does this at 03:00
+        // UTC; this lets a human trigger it right after seeding instead of waiting. date defaults
+        // to "yesterday" UTC (the normal daily target); pass yyyy-MM-dd to upsert a specific day
+        // (e.g. re-running today's partial day while iterating).
+        devApi.MapPost("/marts/site-daily-stat", async (
+            string? date, SiteDailyStatAggregator aggregator, CancellationToken ct) =>
+        {
+            DateOnly statDate = date is null
+                ? SiteDailyStatWorker.PreviousCompletedUtcDay(DateTime.UtcNow)
+                : DateOnly.Parse(date);
+            await aggregator.UpsertDayAsync(statDate, ct);
+            return Results.Ok(new { statDate });
+        });
     }
 }

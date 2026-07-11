@@ -35,6 +35,7 @@ public class ServerUserProfileReadService(
                 u.Tagline,
                 AvatarUrl        = u.ProfilePictureRelativeUrl,
                 Privacy          = u.PrivacySettings,
+                u.LastActiveUtc,
                 Stats            = u.UserStat,
                 Badges           = u.UserBadges
                     .Where(ub => ub.DisplayOrder > 0)
@@ -100,6 +101,10 @@ public class ServerUserProfileReadService(
                 s.StoriesIgnored);
         }
 
+        // "Last seen" is gated exactly like Stats: hidden from non-owners when the owner opted
+        // out; the owner always sees their own (includePrivate = true bypasses the gate).
+        DateTime? lastSeenUtc = (includePrivate || row.Privacy.ShowActivityStatus) ? row.LastActiveUtc : null;
+
         return new ProfileHeaderDto(
             row.Id,
             row.Username,
@@ -111,7 +116,8 @@ public class ServerUserProfileReadService(
             RelationshipState: null,   // dispatcher overlays via IFollowingReadService
             row.Privacy.ProfileVisibility,
             row.Privacy.AllowProfileComments,
-            row.Privacy.ShowUserStats);
+            row.Privacy.ShowUserStats,
+            lastSeenUtc);
     }
 
     public async Task<string?> GetProfileTextAsync(int userId)

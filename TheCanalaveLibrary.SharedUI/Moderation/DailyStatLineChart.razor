@@ -1,0 +1,96 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Self-contained inline-SVG line chart for the /mod/stats dashboard (Feature 62 — dataviz skill
+   conventions): thin 2px lines, one shared axis per chart (never dual-axis — series sharing this
+   component always share units), a legend only when there is more than one series (a single
+   series names itself via Title), and a visually-hidden data table as the accessible/CVD-safe
+   alternative to the chart (no reliance on color alone). No external chart library — self-hosted
+   inline SVG only, consistent with the app's no-external-CDN constraint. *@
+
+<div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+    <h3 class="mb-2 text-sm font-semibold text-(--color-text)">@Title</h3>
+
+    @if (Dates.Count < 2)
+    {
+        <p class="text-xs text-(--color-text-muted)">Not enough history yet.</p>
+    }
+    else
+    {
+        <svg viewBox="0 0 300 100" preserveAspectRatio="none" class="h-24 w-full" role="img" aria-labelledby="@_titleId">
+            <title id="@_titleId">@Title over time</title>
+            @foreach (var series in Series)
+            {
+                <polyline fill="none" stroke="@series.ColorVar" stroke-width="2"
+                          stroke-linecap="round" stroke-linejoin="round"
+                          points="@BuildPoints(series.Values)" />
+            }
+        </svg>
+
+        @if (Series.Count > 1)
+        {
+            <div class="mt-2 flex flex-wrap gap-3">
+                @foreach (var series in Series)
+                {
+                    <span class="flex items-center gap-1.5 text-xs text-(--color-text-muted)">
+                        <span class="h-2 w-2 rounded-full" style="background-color: @series.ColorVar"></span>
+                        @series.Label
+                    </span>
+                }
+            </div>
+        }
+
+        @* Accessible/CVD-safe alternative — the underlying data, never color-only. *@
+        <table class="sr-only">
+            <caption>@Title, by day</caption>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    @foreach (var series in Series)
+                    {
+                        <th>@series.Label</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < Dates.Count; i++)
+                {
+                    <tr>
+                        <td>@Dates[i].ToString("yyyy-MM-dd")</td>
+                        @foreach (var series in Series)
+                        {
+                            <td>@series.Values[i]</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<DateOnly> Dates { get; set; } = null!;
+
+    /// <summary>One or two series sharing this chart's single axis — never mix series of
+    /// different units/scale in one instance (use a separate chart instead).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<(string Label, string ColorVar, IReadOnlyList<double> Values)> Series { get; set; } = null!;
+
+    private readonly string _titleId = $"chart-title-{Guid.NewGuid():N}";
+
+    private string BuildPoints(IReadOnlyList<double> values)
+    {
+        double min = Series.SelectMany(s => s.Values).DefaultIfEmpty(0).Min();
+        double max = Series.SelectMany(s => s.Values).DefaultIfEmpty(1).Max();
+        double range = max - min;
+        if (range <= 0) range = 1; // flat series — avoid a divide-by-zero collapsing to one point
+
+        var points = new System.Text.StringBuilder();
+        for (int i = 0; i < values.Count; i++)
+        {
+            double x = values.Count == 1 ? 0 : i * (300.0 / (values.Count - 1));
+            double y = 92 - (values[i] - min) / range * 84; // 8px top/bottom padding inside the 100-tall viewBox
+            points.Append(x.ToString("F1")).Append(',').Append(y.ToString("F1")).Append(' ');
+        }
+        return points.ToString();
+    }
+}

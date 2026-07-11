@@ -1,0 +1,14 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* One row of the /mod/stats activity table (ModStatsPage). A plain <tr> component so the parent
+   <table> stays valid markup. *@
+
+<tr class="border-b border-(--color-border) last:border-0">
+    <td class="py-1.5 pr-4 text-(--color-text-muted)">@Label</td>
+    <td class="py-1.5 text-right font-medium text-(--color-text)">@Value.ToString("N0")</td>
+</tr>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = null!;
+    [Parameter, EditorRequired] public int Value { get; set; }
+}

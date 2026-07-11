@@ -1,0 +1,101 @@
+@page "/mod/stats"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize(Roles = "Moderator,Admin")]
+@using Microsoft.AspNetCore.Authorization
+@inject ISiteDailyStatReadService StatsService
+
+@* Site stats dashboard (Feature 62 flourish, WU-SiteDailyStat — beyond MVP, per Brian). Mod/admin
+   -gated, desktop-first, no dispatcher (consistent with the rest of the Moderation cluster).
+   Reads the site_daily_stats mart; charts follow the dataviz skill (one axis per chart, thin
+   lines, legend only for 2+ series, sr-only data table alternative — see DailyStatLineChart). *@
+
+<PageTitle>Mod — Site Stats</PageTitle>
+
+<div class="flex flex-col gap-4 px-4 py-4">
+
+    <h1 class="inline-block w-fit rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+        Site Stats
+    </h1>
+
+    @if (_loading)
+    {
+        <p class="text-sm text-(--color-text-muted)">Loading…</p>
+    }
+    else if (_latest is null)
+    {
+        <p class="text-sm text-(--color-text-muted)">No stats yet — the daily worker hasn't run.</p>
+    }
+    else
+    {
+        @* ── Headline totals (stat tiles — a single number is its own form, no chart needed) ── *@
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <StatTile Label="Total Users" Value="@_latest.TotalUsers.ToString("N0")" />
+            <StatTile Label="Total Stories" Value="@_latest.TotalStories.ToString("N0")" />
+            <StatTile Label="Total Words" Value="@_latest.TotalWords.ToString("N0")" />
+        </div>
+
+        @* ── Growth over time — small multiples: different units/scale, never one dual-axis chart ── *@
+        <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <DailyStatLineChart Title="Total Users" Dates="_dates"
+                                 Series="@(new[] { ("Total users", "var(--color-mission)", (IReadOnlyList<double>)_series.Select(s => (double)s.TotalUsers).ToList()) })" />
+            <DailyStatLineChart Title="Total Stories" Dates="_dates"
+                                 Series="@(new[] { ("Total stories", "var(--color-mission)", (IReadOnlyList<double>)_series.Select(s => (double)s.TotalStories).ToList()) })" />
+            <DailyStatLineChart Title="Total Words" Dates="_dates"
+                                 Series="@(new[] { ("Total words", "var(--color-mission)", (IReadOnlyList<double>)_series.Select(s => (double)s.TotalWords).ToList()) })" />
+        </div>
+
+        @* ── Active users (DAU) — go-forward-only proxy, see layer8-data-marts.md ── *@
+        <DailyStatLineChart Title="Daily Active Users" Dates="_dates"
+                             Series="@(new[] { ("Active users", "var(--color-mission)", (IReadOnlyList<double>)_series.Select(s => (double)(s.ActiveUsers ?? 0)).ToList()) })" />
+
+        @* ── Moderation health — 2 series sharing one axis (both are "report counts") ── *@
+        <DailyStatLineChart Title="Reports Filed vs. Resolved" Dates="_dates"
+                             Series="@(new (string, string, IReadOnlyList<double>)[]
+                             {
+                                 ("Filed", "var(--color-mission)", _series.Select(s => (double)s.ReportsFiled).ToList()),
+                                 ("Resolved", "var(--color-success)", _series.Select(s => (double)s.ReportsResolved).ToList()),
+                             })" />
+
+        @* ── Content/community activity — many disparate categorical counts; a table is more
+           honest here than an 11-color bar chart (dataviz skill: "sometimes the answer is not a
+           chart"). Shows the latest aggregated day. ── *@
+        <div class="overflow-x-auto rounded-xl border border-(--color-border) bg-(--color-surface) p-2">
+            <table class="w-full border-collapse text-sm">
+                <caption class="mb-2 text-left text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
+                    Activity on @_latest.StatDate.ToString("yyyy-MM-dd")
+                </caption>
+                <tbody>
+                    <ActivityRow Label="New stories" Value="@_latest.NewStories" />
+                    <ActivityRow Label="New chapters" Value="@_latest.NewChapters" />
+                    <ActivityRow Label="New words" Value="@((int)Math.Min(_latest.NewWords, int.MaxValue))" />
+                    <ActivityRow Label="New comments" Value="@_latest.NewComments" />
+                    <ActivityRow Label="New blog posts" Value="@_latest.NewBlogPosts" />
+                    <ActivityRow Label="New groups" Value="@_latest.NewGroups" />
+                    <ActivityRow Label="New follows" Value="@_latest.NewFollows" />
+                    <ActivityRow Label="Recommendations written" Value="@_latest.NewRecommendationsWritten" />
+                    <ActivityRow Label="Recommendation successes" Value="@_latest.NewRecommendationSuccesses" />
+                    <ActivityRow Label="Favorites added" Value="@_latest.FavoritesAdded" />
+                    <ActivityRow Label="Chapters read (approx.)" Value="@_latest.ChaptersRead" />
+                    <ActivityRow Label="Story views" Value="@((int)Math.Min(_latest.StoryViews, int.MaxValue))" />
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private const int SeriesDays = 30;
+
+    private bool _loading = true;
+    private SiteDailyStatDto? _latest;
+    private IReadOnlyList<SiteDailyStatDto> _series = [];
+    private IReadOnlyList<DateOnly> _dates = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _latest = await StatsService.GetLatestAsync();
+        _series = await StatsService.GetSeriesAsync(SeriesDays);
+        _dates = _series.Select(s => s.StatDate).ToList();
+        _loading = false;
+    }
+}

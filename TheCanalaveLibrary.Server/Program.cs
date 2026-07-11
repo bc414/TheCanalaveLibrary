@@ -240,6 +240,12 @@ builder.Services.AddScoped<IDiscoveryDefaultsReadService, ServerDiscoveryDefault
 // TestAppFactory removes the worker (tests rebuild deterministically via the rebuilder).
 builder.Services.AddScoped<DiscoveryMartRebuilder>();
 builder.Services.AddHostedService<DiscoveryMartWorker>();
+// SiteDailyStat worker (Feature 62, layer8-data-marts.md): unlike the marts above, this upserts
+// one append-only ground-truth row per completed UTC day (no staging-table swap). TestAppFactory
+// removes the hosted worker (tests upsert deterministically via SiteDailyStatAggregator).
+builder.Services.AddScoped<SiteDailyStatAggregator>();
+builder.Services.AddHostedService<SiteDailyStatWorker>();
+builder.Services.AddScoped<ISiteDailyStatReadService, ServerSiteDailyStatReadService>();
 builder.Services.AddScoped<ICoOccurrenceReadService, ServerCoOccurrenceReadService>();
 builder.Services.AddScoped<ITreeSearchReadService, ServerTreeSearchReadService>();
 // Singleton: OptimisticSpriteReadService is stateless — pure string builder, no host/disk deps.
@@ -294,6 +300,14 @@ builder.Services.AddScoped<IReadingProgressWriteService, ServerReadingProgressWr
 builder.Services.AddSingleton<ReadingProgressBuffer>();
 builder.Services.AddSingleton<ReadingProgressFlusher>();
 builder.Services.AddHostedService<ReadingProgressFlushWorker>();
+// User-activity signal buffer (WU-SiteDailyStat, Feature 62 L2, layer2-services.md "Signal
+// Buffering") — authenticated-only pings feed User.LastActiveUtc, sourcing Feature 62's
+// active_users + the profile "last seen" display. TestAppFactory removes the worker (tests flush
+// deterministically via UserActivityFlusher).
+builder.Services.AddScoped<IUserActivityWriteService, ServerUserActivityWriteService>();
+builder.Services.AddSingleton<UserActivityBuffer>();
+builder.Services.AddSingleton<UserActivityFlusher>();
+builder.Services.AddHostedService<UserActivityFlushWorker>();
 // Comments (WU19) — L2 read/write services (Features 23/24/25/26, chapter context only for MVP).
 builder.Services.AddScoped<ICommentReadService, ServerCommentReadService>();
 builder.Services.AddScoped<ICommentWriteService, ServerCommentWriteService>();

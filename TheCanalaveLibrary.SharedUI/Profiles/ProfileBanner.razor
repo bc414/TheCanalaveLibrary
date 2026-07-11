@@ -45,6 +45,14 @@
                 <p class="text-sm text-(--color-text-muted)">@Header.Tagline</p>
             }
 
+            @* WU-SiteDailyStat (Feature 62): gated server-side by PrivacySettings.ShowActivityStatus
+               (owners always see their own — see ServerUserProfileReadService). Approximate — the
+               stamp only updates on navigation, see UserActivityTracker. *@
+            @if (Header.LastSeenUtc is not null)
+            {
+                <p class="text-xs text-(--color-text-muted)">Last seen @Header.LastSeenUtc.Value.ToString("MMM d, yyyy")</p>
+            }
+
             @* Badges row *@
             @if (Header.Badges.Count > 0)
             {

@@ -93,7 +93,11 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
             // by resolving the corresponding flusher/rebuilder and calling FlushAsync()/
             // RebuildAllAsync() directly (testing.md — deterministic flush).
             foreach (Type workerType in new[]
-                     { typeof(ReadingProgressFlushWorker), typeof(ViewCountFlushWorker), typeof(DiscoveryMartWorker) })
+                     {
+                         typeof(ReadingProgressFlushWorker), typeof(ViewCountFlushWorker),
+                         typeof(DiscoveryMartWorker), typeof(UserActivityFlushWorker),
+                         typeof(SiteDailyStatWorker),
+                     })
             {
                 ServiceDescriptor? backgroundWorker = services.FirstOrDefault(d =>
                     d.ServiceType == typeof(IHostedService) && d.ImplementationType == workerType);

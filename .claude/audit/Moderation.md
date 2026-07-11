@@ -148,9 +148,86 @@ import-verification tab shell lands in WU34; the full import workflow and verifi
 
 **Stages:** L1 — Stage 5. L2 — Stage 2. L3/L3.5 — Stage 2. L4 — Stage 1. L5 — N/A.
 
-## Feature 62 — SiteDailyStat Worker (below the line)
-- **L1 — N/A** (Phase A removed the EF model; `site_daily_stats` is a raw-SQL mart — divergence resolved,
-  matching `AlsoFavoritedScore`/`AlsoRecommendedScore`/`UserStoryTreeSearchEntry`; schema preserved in
-  `Discovery.md`'s Layer-8 implementation notes). `DailyStoryStat` was dropped entirely, not modeled at all.
-- **L8 — Stage 2** (daily aggregation; no user-facing UI in MVP; naturally sorts late — nothing to
-  aggregate yet). All other layers **N/A**.
+## Feature 62 — SiteDailyStat Worker
+
+**Requirements settled 2026-07-10 (WU-SiteDailyStat plan)** — reconciling the Gemini design source
+(`GeminiDiscussions/MyActivity September to November 2025_filtered.md:38146`, 2025-10-29) against
+the live schema. Full counter-by-counter source audit, the `new_`/`total_` rule, and the privacy
+reasoning for `active_users` live at `.claude/skills/canalave-conventions/layer8-data-marts.md`
+§`site_daily_stats` — this note carries the settled-vs-open constraints for the build session, per
+Doc-Touch Timing.
+
+**Settled constraints (do not revisit without a Stage-4 diagnosis):**
+- `site_daily_stats` is an **append-only time-series of ground truth**, upserted
+  (`INSERT … ON CONFLICT (stat_date) DO UPDATE`) — **not** a swap-table rebuild like the three
+  discovery marts. L1 was previously N/A ("Phase A removed the EF model, raw-SQL mart") — that is
+  now reversed: `SiteDailyStat` gets a normal EF entity + `DbSet` + migration (the one documented
+  L8 exception — low-volume ground truth with rich time-series reads, unlike the rebuildable marts
+  or the SUM-only `daily_story_stats`). The worker still writes only via raw SQL, never through the
+  EF change tracker. `DailyStoryStat` (a different, never-built table from the same Gemini
+  discussion) stays dropped/never-modeled — do not confuse the two.
+- Full column set, `new_`/`total_` split, exclusions (series/vouches/badges/messages/likes), and
+  the `stories_approved`/`favorites_added` build-time source verifications: see the skill doc table.
+  `total_stories` counts published/visible stories only.
+- `active_users`/"last seen" requires new `User.CreatedUtc` + `User.LastActiveUtc` columns and a
+  third Signal-Buffering signal (`LastActive*`, `Server/Identity/`) — **authenticated requests
+  only**, no tracking cookie, gated for public display by the existing
+  `PrivacySettings.ShowActivityStatus`. This is a build prerequisite, not part of the worker itself.
+- A **user-facing dashboard is in scope** (`/mod/stats`, mod/admin-gated, per the user — beyond
+  MVP "flourishes"), activating L2/L3-Logic/L3.5/L4/L4.5 for this row (previously N/A). L5 stays
+  server-rendered (no WASM flip as part of this work).
+
+**Resolved during build:** `favorites_added` is sourced from `UserStoryInteractionDate.FavoriteDate`/
+`HiddenFavoriteDate`. `stories_approved` is **dropped** — confirmed no dated column exists anywhere
+on the approval path (`ApproveStoryAsync` flips `StoryStatusId` with no timestamp write); adding one
+is out of this build's scope. The moderation-health panel's approval signal is `reports_resolved`
+only.
+
+**Resolved during build (chart set):** headline totals (users/stories/words); 3 small-multiple
+growth line charts (one axis each — users/stories/words differ in scale, per the dataviz skill's
+"never dual-axis" rule); a DAU line chart; a 2-series Reports-Filed-vs-Resolved line chart (shared
+axis, both are "report counts"); a plain data table for the 12 flow counters — a table was chosen
+over an 11-color bar chart per the dataviz skill's "sometimes the answer is not a chart" guidance
+(too many disparate categorical counts for a legible fixed-hue-order palette).
+
+**Stage note (WU-SiteDailyStat, 2026-07-11):** L1=5, L2=5, L3-Logic=5, L3.5-Structure=5, L4-Style=3
+(functional Tailwind, passes `check-design-tokens.ps1`; not design-reviewed — same convention as
+sibling mod pages), L4.5-Browser=5, L5=N/A (server-rendered only, no WASM flip), L6=N/A (the
+`stat_date` PK is already the covering index for time-series reads — no additional index needed),
+L8=5.
+
+- **Built:** `SiteDailyStat` EF entity/migration + `User.CreatedUtc`/`LastActiveUtc` columns
+  (`AddSiteDailyStatAndUserActivityColumns` migration); `UserActivityBuffer`/`Flusher`/
+  `FlushWorker` + `ServerUserActivityWriteService` (`Server/Identity/`) — a third Signal-Buffering
+  instance; `UserActivityTracker` (non-visual, mounted once in `Routes.razor`, stamps activity on
+  circuit start + every navigation for authenticated users only); `SiteDailyStatAggregator` +
+  `SiteDailyStatWorker` (`Server/Moderation/`) — one raw `INSERT … ON CONFLICT` per completed UTC
+  day, day-boundary comparisons via explicit UTC range parameters (never a `::date` cast, which
+  would be session-timezone-dependent); `ISiteDailyStatReadService`/`ServerSiteDailyStatReadService`
+  (plain LINQ, since this is the one L8 table with an EF model); `/mod/stats` dashboard
+  (`ModStatsPage.razor` + `DailyStatLineChart`/`StatTile`/`ActivityRow`); `ProfileHeaderDto`/
+  `ServerUserProfileReadService`/`ProfileBanner` extended with `LastSeenUtc` (gated by
+  `PrivacySettings.ShowActivityStatus`, same shape as the existing `Stats` gate); a `/dev/marts/
+  site-daily-stat` diagnostic probe.
+- **Test tiers:** Unit — `UserActivityBufferTests` (latest-timestamp coalescing/restore, mirrors
+  `ViewCountBufferTests`), `SiteDailyStatWorkerTests` (`PreviousCompletedUtcDay`/`MissingDays` pure
+  boundary logic, made `public` test seams per the repo's no-`InternalsVisibleTo` convention).
+  Integration — `SiteDailyStatAggregatorTests` (one dated event of every counted kind seeded on a
+  target day plus one deliberately outside the day's range to prove boundary filtering; every
+  column asserted; a second pass proves the upsert **recomputes** rather than accumulates, unlike
+  the view-count flusher's `+=`), `UserActivityFlushTests` (buffer→flush→`GREATEST` no-regression,
+  mirrors `ViewCountFlushTests`). RazorComponents — **no dedicated test for `ModStatsPage`**: its
+  `@code` is a thin init-load (service calls assigned to fields) with no `EventCallback`
+  invocations or non-trivial computed state, which the repo's own testing convention says to skip
+  ("cover what cannot be verified by reading the file"); sibling mod pages (`ModReportsPage`,
+  `ModUsersPage`) — whose `@code` is more complex — carry no RazorComponents test either. The real
+  logic (aggregation math) is covered by the Integration tier above.
+- **Live browser verification (2026-07-11, server-only path, standing dev DB — not wiped):** the
+  migration applied cleanly to 3012 existing stories / 2007 real users (all backfilled to the
+  migration's deploy instant, confirming the documented one-time `new_users` deploy-day-spike
+  limitation); the worker's bounded startup gap-fill backfilled 30 days unprompted, with real
+  varying `new_comments` per day (121–283) proving day-boundary aggregation across genuine history;
+  `/mod/stats` loaded and rendered live as AdminUser (mod-gate passed); the
+  activity-buffer→flush→`active_users`/"Last seen Jul 11, 2026" loop was confirmed end-to-end on a
+  real profile page, for both the owner (AdminUser) and a non-owner viewer (TestUser).
+- `dotnet test`: 1421/1421 (524 Unit + 479 RazorComponents + 418 Integration).

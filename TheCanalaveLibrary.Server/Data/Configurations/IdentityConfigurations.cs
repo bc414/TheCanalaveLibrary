@@ -9,6 +9,11 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 {
     public void Configure(EntityTypeBuilder<User> builder)
     {
+        // WU-SiteDailyStat (Feature 62): CreatedUtc sources new_users/total_users; LastActiveUtc
+        // is signal-buffered (never a tracked write from request code — see UserActivityBuffer).
+        builder.Property(u => u.CreatedUtc).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        builder.HasIndex(u => u.CreatedUtc).HasDatabaseName("ix_users_created_utc");
+
         // 1-to-1 Cascade (Personal data that MUST be deleted with the user)
         builder.HasOne(u => u.UserStat)
             .WithOne(s => s.User)

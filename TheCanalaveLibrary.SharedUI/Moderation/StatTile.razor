@@ -1,0 +1,14 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* A single headline number is its own chart form (dataviz skill "choosing a form" — a stat tile,
+   not a plot, when the job is "show one magnitude"). *@
+
+<div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+    <p class="text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">@Label</p>
+    <p class="mt-1 text-2xl font-bold text-(--color-text)">@Value</p>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = null!;
+    [Parameter, EditorRequired] public string Value { get; set; } = null!;
+}

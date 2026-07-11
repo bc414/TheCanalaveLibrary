@@ -1803,9 +1803,11 @@ behind the contracts frozen in Layers 1–4. Batch by pattern when the MVP slice
   file.** Layer 7 dissolved: signal buffering (44/45) built as L2 in-process buffers, 16/17 stays
   durable-direct, 61's cache is the L8 mart itself. `layer7-redis.md` deleted.
 - **L8 — Data marts (+ horizontal boundary: requires real user data).** 59 Automatic Tree Search, 60 Tree
-  Search Data Mart Worker, 61 Also Favorited / Also Recommended, 62 SiteDailyStat Worker. No EF model —
-  raw-SQL tables, zero-downtime swap (resolved: `SiteDailyStat`/marts have no EF model). Pointers:
-  `audit/Discovery.md` L8 notes, `audit/Moderation.md` Feature 62. Governed by `layer8-data-marts.md`.
+  Search Data Mart Worker, 61 Also Favorited / Also Recommended — no EF model, raw-SQL tables,
+  zero-downtime swap. **62 SiteDailyStat Worker — DONE, see WU-SiteDailyStat (2026-07-11) below —
+  is the one documented exception with an EF model** (superseding the "no EF model" note this bullet
+  used to carry for all four rows). Pointers: `audit/Discovery.md` L8 notes, `audit/Moderation.md`
+  Feature 62. Governed by `layer8-data-marts.md`.
 - **Deferred workers (nothing to operate on yet — `grid_axes.md` horizontal note).** 57 Notification
   Cleanup Worker (nothing 60 days old), 58 UserStat Recalculation Worker (real-time counters carry MVP).
 - **Image storage cloud backend — DONE, see WU-S3Garage (2026-07-05).** Was tracked here as a
@@ -2120,3 +2122,64 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
   `layer4-style.md` §"Element Roles"/"Interaction States"/"Prerequisite: Design Tokens";
   `.claude/design/surface-registry.md` (audit + ratifications + sweep completion);
   plan `~/.claude/plans/transient-tinkering-narwhal.md`; palette artifact (rev 3.1).
+
+## WU-SiteDailyStat — SiteDailyStat worker + user activity tracking + /mod/stats dashboard (Feature 62) — DONE ✓ (2026-07-11)
+
+- **Cells flipped:** F62 L1/L2/L3-Logic/L3.5/L4.5/L8 `→5`; L4 `→3` (functional, not design-reviewed);
+  L5/L6 stay N/A. Row 62 was the last unbuilt Layer-8 mart cell — the mart family is now complete.
+  Stage note: `audit/Moderation.md` Feature 62.
+- **The decision that reshaped the WU (Doc-Touch moment 1, resolved with Brian in chat over several
+  rounds):** reconciled the Gemini design source (2025-10-29 deliberation) against the live schema
+  via a full counter-by-counter source audit. Key calls: **`SiteDailyStat` gets an EF model** — the
+  one documented Layer-8 exception, superseding "no EF model" — because it's append-only ground
+  truth with rich time-series reads (a dashboard), not a rebuildable mart; the worker still writes
+  only via raw SQL. **`new_`/`total_` rule**: a stock (`total_`) column exists only where the
+  cumulative level is a headline platform-size curve AND the population can shrink (deletions/
+  takedowns) — exactly three: users, stories, words; everything else is flow-only. **Active-users
+  privacy stance**: `User.LastActiveUtc` stamped for authenticated requests only, riding the
+  existing auth-session cookie — first-party functional data, no tracking cookie, no consent
+  banner, consistent with the ad-free community ethos; aggregate DAU counts everyone, the public
+  "last seen" *display* alone is gated by the pre-existing `PrivacySettings.ShowActivityStatus`.
+  **User-facing dashboard is in scope** (beyond MVP — "flourishes," per Brian) — activates
+  L2–L4.5 for this row. `stories_approved` dropped at build time (no dated column exists on the
+  approval path); `favorites_added` confirmed sourceable from `UserStoryInteractionDate`.
+  Full detail: `layer8-data-marts.md` §"site_daily_stats", `middle_plan_v2.md` Resolved.
+- **Done:**
+  - **L1** (`AddSiteDailyStatAndUserActivityColumns` migration): `User.CreatedUtc`/`LastActiveUtc`;
+    `SiteDailyStat` EF entity (PK `stat_date`) + Fluent config — applied clean to the standing dev
+    DB (3012 stories, 2007 users, all backfilled to the migration's deploy instant, confirming the
+    documented one-time `new_users` deploy-day-spike limitation).
+  - **L2 signal buffer** (`Server/Identity/`): `UserActivityBuffer`/`UserActivityFlusher`/
+    `UserActivityFlushWorker` + `ServerUserActivityWriteService` — a third Signal-Buffering
+    instance (latest-timestamp coalescing, `GREATEST` null-tolerant merge); `UserActivityTracker`
+    (non-visual, mounted once in `Routes.razor`, stamps on circuit start + every navigation for
+    authenticated users only — an approximate, go-forward-only signal, documented as such).
+  - **L8 worker** (`Server/Moderation/`): `SiteDailyStatAggregator` (one raw
+    `INSERT … ON CONFLICT (stat_date) DO UPDATE`, all ~19 counters via scalar subqueries; day
+    boundaries as explicit UTC range parameters, never a `::date` cast — session-timezone-safe) +
+    `SiteDailyStatWorker` (hosted: bounded 30-day startup gap-fill + daily 03:00 UTC, reusing
+    `DiscoveryMartWorker.DelayUntilNext`); `CanalaveTelemetry.UserActivity` instrumentation.
+  - **L2/L3/L4 dashboard**: `ISiteDailyStatReadService`/`ServerSiteDailyStatReadService` (plain
+    LINQ — the one L8 table with an EF model); `/mod/stats` (`ModStatsPage.razor` — stat tiles,
+    3 small-multiple growth charts, DAU chart, 2-series reports-filed-vs-resolved chart, and a
+    data table for the 12 flow counters in place of an over-wide bar chart, per the dataviz
+    skill); `DailyStatLineChart`/`StatTile`/`ActivityRow` (self-contained inline SVG, no external
+    chart CDN, `sr-only` data-table fallback per component).
+  - **Profile "last seen"**: `ProfileHeaderDto.LastSeenUtc` + `ServerUserProfileReadService` +
+    `ProfileBanner` — same gating shape as the existing `ShowUserStats`/`Stats` pattern.
+  - Wire-up: Program.cs registrations; `TestAppFactory` removes `UserActivityFlushWorker` +
+    `SiteDailyStatWorker`; `POST /dev/marts/site-daily-stat` diagnostic probe.
+- **Verified:** `dotnet build` green; `dotnet test` **1421/1421** (524 Unit + 479 RazorComponents +
+  418 Integration; new: `UserActivityBufferTests`, `SiteDailyStatWorkerTests` (Unit — made the two
+  day-window helpers `public` test seams per the repo's no-`InternalsVisibleTo` convention),
+  `SiteDailyStatAggregatorTests` (every counter + day-boundary exclusion + recompute-not-accumulate
+  idempotency), `UserActivityFlushTests` (Integration)). No RazorComponents test for `ModStatsPage`
+  — its `@code` is a thin init-load with no non-trivial computed state, which the repo's own
+  testing convention says to skip; sibling mod pages carry no RazorComponents test either. Live
+  browser verification (server-only path, standing dev DB, not wiped): the startup gap-fill
+  backfilled 30 real days unprompted (`new_comments` varying 121–283/day); `/mod/stats` rendered
+  live as AdminUser; the activity-buffer→flush→"Last seen Jul 11, 2026" loop confirmed end-to-end
+  for both owner and non-owner profile viewers.
+- **Tool:** Claude Code. **Pointer:** `layer8-data-marts.md` §"site_daily_stats";
+  `audit/Moderation.md` Feature 62 Stage note; `layer2-services.md` §"Signal Buffering";
+  `layer1-data-model.md` §"Column Conventions"; `middle_plan_v2.md` Resolved.

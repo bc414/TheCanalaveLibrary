@@ -80,6 +80,20 @@ public sealed class ReportStatusConfiguration : IEntityTypeConfiguration<ReportS
     }
 }
 
+/// <summary>
+/// Feature 62 — the one Layer-8 exception with an EF model (layer8-data-marts.md
+/// §"site_daily_stats"). <c>stat_date</c> is the PK and is never database-generated: the
+/// aggregator's raw upsert always supplies it explicitly (the previous completed UTC day).
+/// </summary>
+public sealed class SiteDailyStatConfiguration : IEntityTypeConfiguration<SiteDailyStat>
+{
+    public void Configure(EntityTypeBuilder<SiteDailyStat> builder)
+    {
+        builder.HasKey(s => s.StatDate);
+        builder.Property(s => s.StatDate).ValueGeneratedNever();
+    }
+}
+
 public sealed class StoryImportConfiguration : IEntityTypeConfiguration<StoryImport>
 {
     public void Configure(EntityTypeBuilder<StoryImport> builder)

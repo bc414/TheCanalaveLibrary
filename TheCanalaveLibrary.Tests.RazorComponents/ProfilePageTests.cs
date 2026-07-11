@@ -57,7 +57,8 @@ public class ProfilePageTests : BunitContext
             RelationshipState: null,
             ProfileVisibility: ProfileVisibility.Public,
             AllowProfileComments: SocialInteractionPermission.Nobody,
-            ShowUserStats: false);
+            ShowUserStats: false,
+            LastSeenUtc: null);
 
         _profileService = new FakeUserProfileReadService(header) { BioHtml = BioText };
         _blogService = new FakeBlogPostReadService

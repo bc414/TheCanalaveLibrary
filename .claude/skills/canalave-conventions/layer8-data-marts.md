@@ -2,12 +2,24 @@
 > audit against the original deliberations (`Boolean_Logic_Search_Filter_Deliberations.md` §2–3,
 > `GeminiDiscussions/MyActivity …_filtered.md`); the discovery mart family, worker, and F59/F61
 > consumers below are implemented and verified (1398/1398 tests; `audit/Discovery.md` Stage notes).
-> The SiteDailyStat section remains design intent (worker 62 unbuilt).
+>
+> **`SiteDailyStat` requirements settled (2026-07-10, WU-SiteDailyStat plan); build follows.** The
+> earlier "raw-SQL mart, no EF model, matching the other three" framing is **superseded** — see
+> §"`site_daily_stats`" below for the reversal and why. Design source: the same Gemini deliberation
+> above (2025-10-29 entry, `GeminiDiscussions/…_filtered.md:38146`) plus a full counter-by-counter
+> source audit against the current schema. See `audit/Moderation.md` Feature 62.
 
 # Layer 8 — Data Mart Workers
 
 Non-EF-Core background workers: raw SQL table creation, zero-downtime swap, recursive-CTE consumers.
 These tables have NO EF Core model classes, no DbSets, no migrations.
+
+**One documented exception: `site_daily_stats`.** It is not a rebuildable mart — it is an
+append-only time-series of durable ground truth (one immutable row per completed day, never
+swapped/rebuilt). It gets a normal EF entity + `DbSet` + migration so a dashboard can read it with
+LINQ like every other read model; the daily worker still writes it via raw `INSERT … ON CONFLICT`,
+never through the EF change tracker. See §"`site_daily_stats`" below for the full reasoning — don't
+extend this exception to any other table in this layer without the same reasoning applying.
 
 ## When This Layer Applies
 
@@ -29,7 +41,7 @@ clustered *distribution* is what makes output human-legible.
 | Worker | Schedule | Purpose | Folder |
 |---|---|---|---|
 | `DiscoveryMartWorker` (hosted) → `DiscoveryMartRebuilder` (scoped) | Daily off-hours (`Marts:RebuildHourUtc`, default 03:00 UTC) + bootstrap/rebuild-when-empty at startup | Rebuild `user_story_tree_search_entries` + `also_favorited_scores` + `also_recommended_scores` sequentially (no concurrent DDL) | `Discovery/` |
-| SiteDailyStat aggregation (unbuilt) | Daily | Aggregate into `site_daily_stats` | `Moderation/` |
+| `SiteDailyStatWorker` (hosted) → `SiteDailyStatAggregator` (scoped) | Daily off-hours (`Marts:RebuildHourUtc`) + bounded startup gap-fill | Upsert the previous completed UTC day's row into `site_daily_stats` (`INSERT … ON CONFLICT (stat_date) DO UPDATE` — append-only, not a swap rebuild) | `Moderation/` |
 
 The hosted worker/scoped rebuilder split is deliberate: integration tests and the dev probe
 (`POST /dev/marts/rebuild`) trigger rebuilds deterministically via the rebuilder;
@@ -142,10 +154,93 @@ hidden favorites — same edge-owner consent rule as the tree mart); per `(story
 count overlapping users = score. Also-Recommended mirrors on `recommendations.recommender_id`
 (anonymized recs excluded). Exclude self-pairs; store both directions.
 
-### `site_daily_stats` (Feature 62)
+### `site_daily_stats` (Feature 62) — EF read model, not a rebuildable mart
 
-`stat_date` (PK), counters: new_users, total_users, new_stories, total_stories, new_words,
-total_words, page_views, active_users. Daily aggregation worker. (Unchanged; not part of WU-Marts.)
+**Requirements settled 2026-07-10** (design source: Gemini deliberation 2025-10-29,
+`GeminiDiscussions/…_filtered.md:38146`, reconciled against the live schema; full audit and
+ambiguity resolution in `audit/Moderation.md` Feature 62).
+
+**Shape:** an **append-only time-series of durable ground truth** — one immutable row per
+*completed* UTC day, written once by the daily worker and never rebuilt. This is the opposite of
+the three discovery marts above: there is no staging table, no swap, and past days cannot be
+reconstructed once written (a `stat_date` row is the only record of that day's `active_users`).
+
+**EF model (the one Layer-8 exception):** `SiteDailyStat` gets a normal `DbSet<SiteDailyStat>`
+(PK `stat_date`) and an EF migration owns the schema — unlike every other table in this file. This
+is deliberate: low-volume ground truth (~365 rows/year) with **rich time-series reads** (date-range
+queries, ordering, latest-N) is exactly EF/LINQ's job, and is a poor fit for the swap-DDL machinery
+the other marts need (which would fight an EF-tracked table) or for the SUM-only access pattern
+`daily_story_stats` (its own migration-managed-no-EF-model neighbor) was built for. **The worker
+still writes only via raw `INSERT … ON CONFLICT (stat_date) DO UPDATE`, never through the EF change
+tracker** — EF owns schema + reads, the worker owns writes. State this split in the entity's XML
+doc comment so no one adds a tracked write path.
+
+**Columns — flow (`new_`, per-day) vs. stock (`total_`, as-of end-of-day):** a `total_` column
+exists **only** where both hold: (1) it's a headline platform-size curve worth charting, and
+(2) the population can shrink (deletions/takedowns), so the stored snapshot carries information a
+running sum of `new_` can't reconstruct. That's true for exactly three: `total_users`,
+`total_stories` (published/visible only), `total_words`. Everything else is flow-only — a lifetime
+total is either meaningless (`active_users`), already stored elsewhere (`story_views` lifetime =
+`SUM(daily_story_stats)`), or cheaply derivable at read time via a windowed cumulative sum.
+
+| Column | Kind | Source |
+|---|---|---|
+| `stat_date` | PK | the completed UTC day |
+| `total_users` | stock | `COUNT(User WHERE created_utc <= end-of-day)` |
+| `total_stories` | stock | `COUNT(Story WHERE published_date <= end-of-day AND published/visible)` |
+| `total_words` | stock | `SUM(Story.WordCount)` as-of-day |
+| `new_users` | flow | `User.CreatedUtc` |
+| `new_stories` | flow | `Story.PublishedDate` |
+| `new_chapters` | flow | `ChapterContent.PublishDate` |
+| `new_words` | flow | `SUM(ChapterContent.WordCount)` on `PublishDate` |
+| `new_comments` | flow | UNION of the 4 TPT comment children's `DatePosted` |
+| `new_blog_posts` | flow | `ProfileBlogPost`/`GroupBlogPost.DateCreated` |
+| `new_groups` | flow | `Group.DateCreated` |
+| `new_follows` | flow | `FollowedUser.DateFollowed` |
+| `new_recommendations_written` | flow | `Recommendation.DatePosted` |
+| `new_recommendation_successes` | flow | `RecommendationSuccess.DateRecorded` |
+| `reports_filed` | flow | `Report.DateReported` |
+| `reports_resolved` | flow | `Report.DateResolved` |
+| `favorites_added` | flow | `UserStoryInteractionDate.FavoriteDate` OR `HiddenFavoriteDate` — confirmed at build (`ServerModerationWriteService`/`UserStoryInteractionDate.cs`) |
+| `chapters_read` | flow (proxy) | `UserChapterInteraction.LastInteractionDate` — mutable/overwritten stamp, documented as approximate, go-forward only |
+| `story_views` | flow | `SUM(daily_story_stats.view_count)` for the day — **story reads only**, not site-wide page views (no such stream exists) |
+| `active_users` | flow (go-forward only) | `COUNT(DISTINCT User WHERE last_active_utc` is within the day`)` — requires `User.LastActiveUtc`, a new signal-buffered column (see `layer2-services.md` §"Signal Buffering"); nullable/absent for any day before that column existed |
+
+**Deliberately excluded** (settled, not oversights): `new_series` (rearranges existing stories, not
+new content), `new_vouches` (capped ≤5/user and swapped out as authors "make it" — not an
+accumulation metric), `new_badges_awarded` (badge semantics too non-uniform to sum meaningfully),
+message/conversation counts (private content, not tracked), and any **like** count — `CommentLike`
+and its siblings carry no date **by deliberate anti-addictive design**.
+
+**Dropped at build time:** `stories_approved` — confirmed no dated column exists anywhere on the
+approval path (`ServerModerationWriteService.ApproveStoryAsync` flips `Story.StoryStatusId` with no
+timestamp write; no `DateApproved` field on `Story`/`StoryDetail`). Adding one is a schema change
+outside this build's scope — the moderation-health panel's approval signal comes from
+`reports_resolved` only for now. Revisit if a `DateApproved` column is ever added for other reasons.
+
+**Privacy stance for `active_users`/"last seen" (settled):** `User.LastActiveUtc` is stamped for
+**authenticated requests only**, riding the existing strictly-necessary auth-session cookie — no
+new tracking cookie, no third party, no logged-out fingerprinting. First-party functional data is
+consent-exempt under GDPR/ePrivacy; this is the same category of "last seen" feature common to
+first-party community platforms, not ad-tech tracking. The aggregate `active_users` count includes
+every authenticated user regardless of setting (it reveals no individual); the *public per-profile*
+"last seen on …" display alone is gated by the pre-existing `PrivacySettings.ShowActivityStatus`
+toggle.
+
+**Worker:** `SiteDailyStatWorker` (hosted) → `SiteDailyStatAggregator` (scoped) — same
+hosted/scoped split as the discovery marts (deterministic Integration/`/dev`-probe triggering,
+`TestAppFactory` drops the hosted worker), but the aggregator **upserts one day's row**, it does not
+rebuild a table. Runs at the configured off-hours hour against the previous completed UTC day;
+bounded startup gap-fill backfills the backfillable columns for missed days (`active_users` stays
+null for gap-filled days — honest, not reconstructable). Raw SQL via `ExecuteSqlRawAsync`, not LINQ,
+matching every other mart worker's write path. Instrumented via `CanalaveTelemetry` (root span +
+duration/row/outcome), matching the discovery marts.
+
+**Dashboard (Feature 62 flourish, beyond MVP):** a mod/admin-gated `/mod/stats` page reads
+`SiteDailyStat` via LINQ (headline totals, growth-over-time charts, content/community activity, a
+moderation-health panel of reports filed vs. resolved — `stories_approved` dropped, see above).
+Charts follow the `dataviz` skill + the element-role design system; no external chart CDN (CSP) —
+self-contained rendering only.
 
 ## The Automatic Tree Search consumer (Feature 59) — rCTE conventions
 

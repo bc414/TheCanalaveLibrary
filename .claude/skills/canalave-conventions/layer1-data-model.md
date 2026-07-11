@@ -152,6 +152,18 @@ independently. The service layer rejects logically impossible write combinations
   baked into the `canalave:theme` claim and used as the path segment in sprite URLs. Both columns must
   exist; neither substitutes for the other.
 - **Booleans:** `NOT NULL DEFAULT false` (1 byte each in PostgreSQL — no bit-packing, accepted trade-off).
+- **`User.CreatedUtc`** (`datetime`, `.HasDefaultValueSql("CURRENT_TIMESTAMP")`) and
+  **`User.LastActiveUtc`** (`datetime?`, nullable) — added WU-SiteDailyStat (2026-07-10).
+  `CreatedUtc` sources Feature 62's `new_users`/`total_users`; pre-existing rows backfill to the
+  migration's deploy date (real registration date is unrecoverable). `LastActiveUtc` is stamped
+  for **authenticated requests only** via the Signal Buffering pattern
+  (`layer2-services.md` §"Signal Buffering") — never a tracked per-request write — and sources
+  `active_users` + the profile "last seen on" display (gated by the pre-existing
+  `PrivacySettings.ShowActivityStatus`). Full reasoning: `layer8-data-marts.md` §`site_daily_stats`.
+- **`SiteDailyStat`** (PK `stat_date`) is Layer 8's one EF-modeled mart table — an append-only
+  ground-truth time-series, not a rebuildable mart; schema/reads go through EF, writes are raw SQL
+  by the daily worker. See `layer8-data-marts.md` §`site_daily_stats` for why this table alone
+  breaks L8's "no EF model" rule.
 
 ## Relationships & Queries
 

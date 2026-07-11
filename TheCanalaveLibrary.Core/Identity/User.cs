@@ -74,6 +74,16 @@ public class User : IdentityUser<int>
     public AccountStatusEnum AccountStatus { get; set; } = AccountStatusEnum.Active;
     public DateTime? SuspendedUntilUtc { get; set; }
     public int ActiveReportCount { get; set; }
+
+    // --- Site-stats sourcing (WU-SiteDailyStat, Feature 62) ---
+    // CreatedUtc sources new_users/total_users; pre-existing rows backfill to the migration's
+    // deploy date (real registration date is unrecoverable). LastActiveUtc is stamped for
+    // AUTHENTICATED requests only via the Signal Buffering pattern (layer2-services.md) — never a
+    // tracked per-request write — and sources active_users + the profile "last seen" display
+    // (gated by PrivacySettings.ShowActivityStatus below). See layer8-data-marts.md
+    // §"site_daily_stats" for the full privacy reasoning.
+    public DateTime CreatedUtc { get; set; }
+    public DateTime? LastActiveUtc { get; set; }
     
     // --- "WARM" SETTINGS (Stored as JSON) ---
     public ReaderSettings ReaderSettings { get; set; } = new ReaderSettings();

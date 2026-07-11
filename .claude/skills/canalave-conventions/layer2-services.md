@@ -283,16 +283,19 @@ already absorbs the churn). Only **loss-tolerant, coalescable signals** are buff
 ## Signal Buffering — in-process write buffers for loss-tolerant signals
 
 The L2 body pattern for **high-frequency · loss-tolerant · coalescable** writes (reading-progress
-pings, view pings). All three criteria must hold — durable intent (interactions, comments,
+pings, view pings, `User.LastActiveUtc` stamps — WU-SiteDailyStat, feeds Feature 62's
+`active_users`/"last seen" — see `layer8-data-marts.md` §`site_daily_stats`). All three criteria
+must hold — durable intent (interactions, comments,
 content) never buffers. The signal lands in an in-process coalescing store instead of the
 database; a worker batch-flushes on a fixed cadence. Behavior is identical to direct writes
 within the loss window (one flush interval; hard crash loses at most that).
 
 **The four pieces per signal** (canonical pair: `ReadingProgress*` in `Server/Chapters/`,
-`ViewCount*` in `Server/Stories/`):
+`ViewCount*` in `Server/Stories/`; a third, `LastActive*` in `Server/Identity/`, follows the same
+shape keyed per-user with a latest-timestamp merge — see `layer8-data-marts.md`):
 
 1. **Buffer** — singleton `ConcurrentDictionary` keyed per signal identity, merged O(1) in
-   `Record(...)` (max+latest for progress; sum for views). `Drain()` removes-and-returns all
+   `Record(...)` (max+latest for progress and last-active; sum for views). `Drain()` removes-and-returns all
    entries (a racing ping lands in this batch or the next — never lost); `Restore(batch)` merges
    a failed flush back for retry; `Clear()` is test-only. The constructor registers a buffer-depth
    `ObservableGauge` on the feature's `CanalaveTelemetry` meter.

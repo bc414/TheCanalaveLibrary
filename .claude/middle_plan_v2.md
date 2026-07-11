@@ -313,6 +313,21 @@ are carried forward from `middle_plan.md` (which carried 2026-07-01-and-earlier 
 `forward_plan.md`) — a few long entries lightly condensed with their full technical framing
 intact at the named pointer; `middle_plan.md` remains the unabridged historical record.
 
+- **`SiteDailyStat`/`DailyStoryStat` requirements + `active_users`/"last seen" privacy stance
+  (Feature 62)** — **resolved 2026-07-10** (Brian, WU-SiteDailyStat planning session), superseding
+  the earlier "raw-SQL mart, no EF model, matching the other three Layer-8 marts" framing.
+  `SiteDailyStat` now gets an EF entity + `DbSet` + migration — the one documented Layer-8
+  exception, because it's append-only ground truth with rich time-series reads (a user-facing
+  dashboard), not a rebuildable mart; the daily worker still writes it via raw SQL only. Full
+  counter set (incl. the `new_`/`total_` stock-vs-flow rule) settled by counter-by-counter source
+  audit against the live schema. **Privacy stance for `active_users`:** `User.LastActiveUtc` is
+  stamped for authenticated requests only, riding the existing strictly-necessary auth-session
+  cookie — first-party functional data, not tracking-cookie/ad-tech, so no consent banner is
+  needed; consistent with the ad-free community ethos. `DailyStoryStat` (a different, separate
+  table from the same Gemini discussion) stays dropped entirely — not to be confused with this
+  one. Detail: `layer8-data-marts.md` §`site_daily_stats`, `layer2-services.md` §"Signal
+  Buffering", `layer1-data-model.md` §"Column Conventions", `audit/Moderation.md` Feature 62.
+
 - **Error-handling UX + strategy (decision row 9)** — resolved (2026-07-06, Brian, design
   conversation per the Stage-1 venue): four forks settled. (1) **Scope split** — the circuit-side
   UX half builds now (testable on today's InteractiveServer surface); the `ProblemDetails`
@@ -659,10 +674,6 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   `(story_id) WHERE is_published`, not a counter column. See `audit/Chapters.md` Feature 6 L2
   Stage note.
 
-- **`SiteDailyStat`/`DailyStoryStat`** — resolved: raw-SQL marts, no EF model, matching the
-  other three Layer-8 marts. `DailyStoryStat` was dropped entirely. See
-  [audit/Moderation.md](audit/Moderation.md) Feature 62 and
-  [audit/Discovery.md](audit/Discovery.md)'s Layer-8 implementation notes.
 - **JSON settings mapping** — resolved: `ComplexProperty(...).ToJson()`, migrated off the older
   `OwnsOne(...).ToJson()` approach. See [audit/Identity.md](audit/Identity.md) Feature 1 and
   [layer1-data-model.md](skills/canalave-conventions/layer1-data-model.md) §"JSON Complex Types."

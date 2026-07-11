@@ -114,9 +114,16 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     //stores which chapters have been read and read progress for returning to last read portion
     public DbSet<UserChapterInteraction> UserChapterInteractions { get; set; }
 
-    // NOTE: Data-mart / cache tables (AlsoFavoritedScore, AlsoRecommendedScore, UserStoryTreeSearchEntry,
-    // SiteDailyStat) are NOT EF-modeled — raw-SQL, worker-built tables with no DbSets or migrations
-    // (spec §"Cache / Data Mart Tables"). DailyStoryStat was dropped entirely.
+    // NOTE: Data-mart / cache tables (AlsoFavoritedScore, AlsoRecommendedScore, UserStoryTreeSearchEntry)
+    // are NOT EF-modeled — raw-SQL, worker-built swap tables with no DbSets or migrations
+    // (layer8-data-marts.md). DailyStoryStat was dropped entirely.
+    //
+    // SiteDailyStat (below) is the one documented exception: an append-only ground-truth
+    // time-series (not a rebuildable mart) that gets a normal DbSet + migration so the /mod/stats
+    // dashboard can read it with LINQ. The daily worker (SiteDailyStatAggregator) still writes it
+    // only via raw INSERT … ON CONFLICT, never through this DbSet's change tracker. See
+    // layer8-data-marts.md §"site_daily_stats".
+    public DbSet<SiteDailyStat> SiteDailyStats { get; set; }
 
     //Comments
     public DbSet<BaseComment> BaseComments { get; set; }
