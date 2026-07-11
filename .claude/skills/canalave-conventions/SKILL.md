@@ -51,8 +51,16 @@ These have documented rationale and rejected alternatives. **Do not propose alte
    void under Postgres MVCC. N≥2 scale-out (Valkey body-swap, session affinity) is never a
    day-one dependency — see `horizontal-scaling.md`.
 8. **Global `InteractiveAuto` (end state)** — SSR prerender → SPA via WASM. Set render mode on `<Routes>`/`<HeadOutlet>` in `App.razor` (never on `RouteView`); `InteractiveServer` is the spec-sanctioned dev shortcut until WASM ships. See `render-and-layout.md` §"Render Mode".
-9. **Tailwind CSS v4** — utility-first, no component library. Design tokens in an `@theme` block
-   (CSS-first config; see `layer4-style.md`), not `tailwind.config.js`.
+9. **Tailwind CSS v4 + the element-role design system (2026-07-10)** — utility-first, no
+   component library. Every visual element has exactly one of seven roles (Canvas / Wayfinding /
+   Container / Content Surface / Control / Indicator / Overlay); roles define grounds, inks, and
+   state recipes; components look recipes up, never invent them. Locked tokens live in the
+   `@theme` block (CSS-first config, not `tailwind.config.js`); UGC prose always renders inside
+   `ContentSurface`; `action`/`mission` are the Control families (`primary`/`accent` no longer
+   exist). Authoritative: `layer4-style.md` §"Element Roles" + §"Interaction States" +
+   §"Prerequisite: Design Tokens". Live reference: `/dev/design-gallery`.
+   **`scripts/check-design-tokens.ps1` (also in CI) fails the build on violations** — undeclared
+   tokens, raw palette/hex colors, raw shadow/z utilities, UGC outside ContentSurface.
 10. **Three-axis search** — Source × Filter × Sort. FTS is a filter, not a source.
 
 ## Project Boundaries (enforced by references)
@@ -145,7 +153,7 @@ exactly how Bootstrap-template classnames (`top-row`, `nav-pills`, …) get copi
 | [layer2-services.md](layer2-services.md) | 2 | Service interfaces, CQRS split, DTOs, DbContext injection, service composition |
 | [layer3-logic.md](layer3-logic.md) | 3 | `@code` blocks: parameters, services, events, state, `[PersistentState]`, `EditForm`, debounce, optimistic updates, component tier × logic |
 | [layer3.5-structure.md](layer3.5-structure.md) | 3.5 | Markup skeleton: component composition, HTML elements, `@if`/`@foreach`, `@ChildContent`, data flow through `[Parameter]`, `<AuthorizeView>`, dispatcher pattern, desktop/mobile branching |
-| [layer4-style.md](layer4-style.md) | 4 | Tailwind utility classes, sprite resolution, responsive variants, outer margin rule, parameter-based variants, conditional class expressions |
+| [layer4-style.md](layer4-style.md) | 4 | The element-role design system (seven roles, locked tokens, Interaction States recipes, ContentSurface rule, enforcement script), Tailwind utility classes, sprite resolution, responsive variants, outer margin rule, parameter-based variants, conditional class expressions |
 | [layer5-wasm.md](layer5-wasm.md) | 5 | API endpoints, client services, `PersistentAuthenticationStateProvider` |
 | [layer6-indexes.md](layer6-indexes.md) | 6 | Filtered, composite, golden, GIN indexes — pure DDL; MVCC storage tuning (fillfactor, autovacuum) |
 | [layer8-data-marts.md](layer8-data-marts.md) | 8 | Non-EF background workers, raw SQL, table swap (Layer 7 dissolved — see numbering note above; signal buffering lives in [layer2-services.md](layer2-services.md)) |
