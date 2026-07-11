@@ -26,6 +26,11 @@ public class ResultsFilterPanelTests : BunitContext
         Services.AddScoped<ITagReadService>(_ => new FakeTagReadService());
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         JSInterop.Mode = JSRuntimeMode.Loose;
+
+        // TagFilter mounts SavedTagSelectionLoadFlyout/SaveDialog (WU43), both wrapped in a bare
+        // <AuthorizeView> — anonymous/not-authorized by default keeps them off the DOM here (this
+        // suite isn't testing that feature), matching production (hidden for anonymous viewers).
+        this.AddAuthorization();
     }
 
     // ── Show* visibility params ──────────────────────────────────────────────────────

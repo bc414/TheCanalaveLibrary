@@ -83,6 +83,19 @@
                     }
                 </select>
             </div>
+
+            <div class="flex flex-col gap-1">
+                <label for="saved-tag-selection-sort" class="text-sm font-medium text-(--color-text)">Saved tag selections sort</label>
+                <select id="saved-tag-selection-sort"
+                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                        value="@((short)_savedTagSelectionSort)"
+                        @onchange="e => _savedTagSelectionSort = (SavedTagSelectionSortEnum)(short.TryParse((string?)e.Value, out short v) ? v : (short)_savedTagSelectionSort)">
+                    <option value="0">Newest first</option>
+                    <option value="1">Oldest first</option>
+                    <option value="2">Nickname (A–Z)</option>
+                    <option value="3">Nickname (Z–A)</option>
+                </select>
+            </div>
         </div>
 
         @* Boolean toggles *@
@@ -137,6 +150,7 @@
     private int _defaultPageSize = 20;
     private DefaultSortOrder _defaultSort = DefaultSortOrder.DatePublished;
     private ReadingBackgroundEnum _readingBackground = ReadingBackgroundEnum.SiteDefault;
+    private SavedTagSelectionSortEnum _savedTagSelectionSort = SavedTagSelectionSortEnum.DateCreatedDesc;
     private bool _seeded;
 
     protected override void OnParametersSet()
@@ -153,6 +167,7 @@
             _defaultPageSize = Initial.DefaultPaginationSize;
             _defaultSort     = Initial.DefaultSearchSort;
             _readingBackground = Initial.ReadingBackground;
+            _savedTagSelectionSort = Initial.SavedTagSelectionSort;
             _seeded = true;
         }
     }
@@ -161,5 +176,5 @@
         await OnSave.InvokeAsync(new ReaderSettingsDto(
             _fontName, _fontSize, _lineHeight, _textWidth,
             _justifyText, _autoLoadNext, _collapseThreads,
-            _defaultPageSize, _defaultSort, _readingBackground));
+            _defaultPageSize, _defaultSort, _readingBackground, _savedTagSelectionSort));
 }

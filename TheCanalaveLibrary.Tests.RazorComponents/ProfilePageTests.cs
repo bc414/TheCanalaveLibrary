@@ -76,6 +76,9 @@ public class ProfilePageTests : BunitContext
         Services.AddScoped<IRecommendationReadService>(_ => new FakeRecommendationReadService());
         Services.AddScoped<IBlogPostReadService>(_ => _blogService);
         Services.AddScoped<ISeriesReadService>(_ => new FakeSeriesReadService());
+        Services.AddScoped<ISavedTagSelectionReadService>(_ => new FakeSavedTagSelectionReadService());
+        Services.AddScoped<ISavedTagSelectionWriteService>(_ => new FakeSavedTagSelectionWriteService());
+        Services.AddScoped<IToastService>(_ => new ToastService());
         Services.AddScoped<IDeviceDetectionService>(_ => new AlwaysDesktopDeviceService());
 
         // Anonymous AuthenticationState cascading value.

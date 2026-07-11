@@ -1,0 +1,35 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Searchable/sortable flyout — "Load saved" (WU43, Feature 15). DESTRUCTIVELY replaces the on-screen
+   tag selection with a saved one via OnApply — the opposite of SavedTagSelectionSaveDialog, kept as a
+   separate component deliberately (see that file's doc comment). Mounted once in TagFilter's header,
+   so every ResultsFilterPanel consumer (/discover, Tree Search, Bookshelves, Profile story tabs) gets
+   it for free. Hidden for anonymous viewers (bare <AuthorizeView>, no Roles).
+
+   Injection-free wrapper: the real content + @inject services live in SavedTagSelectionLoadFlyoutInner,
+   instantiated only when AuthorizeView renders Authorized — deferring DI resolution until we actually
+   know the viewer is authenticated. See layer3-logic.md "Deferring DI Behind AuthorizeView (WU43)" —
+   @inject on THIS component would resolve at construction time regardless of the AuthorizeView
+   decision, forcing every TagFilter consumer's tests to register these services even when testing an
+   anonymous viewer. Outer Margin Rule: root has no m-* — parent controls spacing. *@
+
+<AuthorizeView>
+    <Authorized>
+        <SavedTagSelectionLoadFlyoutInner CurrentIncludedTagIds="@CurrentIncludedTagIds"
+                                          CurrentExcludedTagIds="@CurrentExcludedTagIds"
+                                          OnApply="@OnApply" />
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    /// <summary>Current on-screen included tag ids — source for "Overwrite tags with current".</summary>
+    [Parameter] public IReadOnlyList<int> CurrentIncludedTagIds { get; set; } = [];
+
+    /// <summary>Current on-screen excluded tag ids — source for "Overwrite tags with current".</summary>
+    [Parameter] public IReadOnlyList<int> CurrentExcludedTagIds { get; set; } = [];
+
+    /// <summary>
+    /// Raised when the user clicks Apply, carrying the hydrated selection (chips for both axes).
+    /// </summary>
+    [Parameter] public EventCallback<SavedTagSelectionDetailDto> OnApply { get; set; }
+}

@@ -134,6 +134,21 @@ The thread page (`WHERE conversation_id = @c ORDER BY date_sent DESC LIMIT n`) w
 order. R4-justified by the query; not measurable yet (SeedTool generates no messages) — volume
 justification inherits from the identical comment-paging shape. Supersedes the FK index.
 
+### saved_tag_selections — per-user sort + public-visibility axes (WU43)
+
+```
+ix_saved_tag_selections_user_id_date_created  ON saved_tag_selections (user_id, date_created)
+ix_saved_tag_selections_user_id_is_public     ON saved_tag_selections (user_id, is_public)
+```
+
+The table aggregates every user's saved tag selections, and every read query is `UserId`-scoped: the
+Load flyout's `GetMySelectionsAsync(sort)` (default `DateCreatedDesc`, so this index also serves
+`DateCreatedAsc` by scanning in reverse) and the profile Tag Selections tab's
+`GetPublicSelectionsByUserAsync` (`WHERE user_id = ? AND is_public`). Nickname sort/lookup is already
+served by the pre-existing unique `ix_saved_tag_selections_user_id_nickname`. No volume measurement yet
+(no per-user saved-selection generator in SeedTool) — added proactively per the "always UserId-scoped,
+sort is a first-class concern" reasoning, same posture as the private_messages entry above.
+
 ## Verified pre-existing (unchanged by WU-L6)
 
 - **GIN FTS**: `ix_story_listing_search_vector` on the generated `SearchVector` tsvector column

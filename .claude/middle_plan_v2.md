@@ -322,6 +322,15 @@ renumbered, since other docs cite them by number.
 
 ## Resolved
 
+- **Saved Tag Selections scope (Feature 15, WU43)** — **resolved 2026-07-11** (Brian). Persists only the
+  tag include/exclude axis (not text/sort/interactions — those are owned elsewhere or transient); one
+  unified selection spans all tag types, not per-type; no per-user cap; `Description` is bounded plain
+  text (280 chars), not rich HTML; Load (searchable/sortable flyout) and Save (compact dialog) are
+  separate surfaces mounted once in `TagFilter`'s header, reaching all four `ResultsFilterPanel`
+  consumers for free; sharing is copy-on-write onto a dedicated profile tab, no public gallery. Full
+  reasoning: `audit/Tags.md` Feature 15, `layer2-services.md` §"Saved Tag Selections Persist Only the
+  Tag Axis".
+
 - **Automatic Tree Search UI scope + spec §5.26 filter-composition gap (Feature 59, WU44)** —
   **resolved 2026-07-11** (Brian). Scope: ship the Unified Tree Search Page shell
   (`/discover/me`, `/discover/user/{userId}`, `/discover/story/{storyId}`) + the working Automatic

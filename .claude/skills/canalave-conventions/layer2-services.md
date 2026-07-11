@@ -397,6 +397,47 @@ viewer's theme and animation preference. Carrying `SpriteIdentifier` keeps the D
 same DTO is valid for all viewers with the same content), and places the per-viewer computation at the
 correct layer (render time). The DTO is therefore freely cacheable across users of the same content.
 
+### Saved Tag Selections Persist Only the Tag Axis (WU43, Feature 15)
+
+A `SavedTagSelection` (`Core/Tags/`) exists solely to populate the tag include/exclude axis of a
+discovery filter — it is **not** a saved query. It deliberately excludes everything else
+`StoryFilterDto` carries:
+
+- **Free-text search / sort order** — transient viewer intent for a single visit, not something worth
+  naming and reusing.
+- **Interaction exclusions** — already have their own persistence mechanism,
+  `UserStoryInteractionFilterSetting` (a sparse per-`(User × SearchMode × filter-kind)` override of
+  `DefaultUserStoryInteractionFilterSetting`, merged into `StoryFilterDto.ExcludedInteractions` by
+  `IDiscoveryDefaultsReadService`). Duplicating that into Saved Tag Selections would create two
+  competing sources of truth for the same per-user setting.
+- **AND/OR include-mode** — a per-request toggle on the include axis (`TagFilter.AllowIncludeModeToggle`),
+  not part of the saved combination.
+
+**One unified selection spans every tag type.** `TagFilter` renders one `TagSelector` per
+`TagTypeEnum` purely as a type-scoped typeahead input surface — that per-type split is not a data
+boundary. Its `EmitAsync` already flattens every type's picks into one pair of id-lists
+(`TagFilterSelection.IncludedTagIds`/`ExcludedTagIds`), and `StoryFilterDto` carries no per-type
+grouping. `SavedTagSelectionEntry` is correspondingly a **flat `(TagId, IsExcluded)` row** — each tag's
+type is recovered from its own `Tag` row when hydrating chips for display/apply. A per-type saved
+selection would fragment the very combination the feature exists to preserve, and has no backing in
+either the filter DTO or the entity.
+
+**Load and Save are separate UI surfaces**, both mounted once in `TagFilter`'s header (so every
+`ResultsFilterPanel` consumer — `/discover`, Tree Search, Bookshelves, Profile story tabs — gets them
+without per-surface wiring): a searchable/sortable **`SavedTagSelectionLoadFlyout`** (destructively
+replaces the on-screen tag selection; owner-gated ⋯ row menu for overwrite/rename/publish/delete) and a
+separate compact **`SavedTagSelectionSaveDialog`** (captures the current tags as a new selection). They
+are not combined into one component — Load and Save are opposite operations (overwrite vs. capture), and
+folding a state-mutating save form into the same list that exists to overwrite that state was assessed
+as unneeded fragility, not a simplification.
+
+**Sharing is copy-on-write, not subscription.** `SavedTagSelection.IsPublic=true` surfaces a selection on
+the owner's `ProfileTab.TagSelections` tab only — there is no public browse/gallery surface. Another
+viewer's "Add to my filters" (`ISavedTagSelectionWriteService.CopyPublicSelectionAsync`) creates a new,
+independently-owned `SavedTagSelection` + copied `SavedTagSelectionEntry` rows; the copy and the source
+never affect each other afterward (no many-to-many "subscription" model — rejected because editing a
+shared row would silently change it for every subscriber).
+
 **`SpriteBaseUrl` is a config seam** (`appsettings` key `Sprites:BaseUrl`, default `/sprites/themes`
 for wwwroot). At R2/CDN time, changing this one config value — together with an Rclone sync of the
 assets — is the complete cutover; no code changes. This is the same public-asset-base seam

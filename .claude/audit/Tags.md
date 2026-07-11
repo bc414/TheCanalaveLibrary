@@ -392,8 +392,102 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
   `dotnet test` green.
 
 ## Feature 15 — Saved Tag Selections
-- **L1 — Stage 5.** `SavedTagSelection`/`Entry` with unique constraints and Restrict-on-Tag; copy-on-write
-  on share is application logic (unbuilt). **L2/L3/L3.5 — Stage 2.** **L4 — Stage 1. L5 — Stage 2.**
+
+**Scope settled (WU43 planning, 2026-07-11, do not revisit):** a Saved Tag Selection's only job is to
+populate the tag include/exclude axis of a discovery filter. It is **not** a saved query — it never
+carries free-text search, sort order, interaction exclusions, or AND/OR include-mode; those are
+per-user/per-surface concerns owned elsewhere (interaction exclusions already persist via
+`UserStoryInteractionFilterSetting` per `(User × SearchMode × filter-kind)`, merged by
+`IDiscoveryDefaultsReadService`; sort/text are transient viewer intent — see `layer2-services.md`
+§"Saved Tag Selections Persist Only the Tag Axis"). **ONE unified selection spans all tag types**
+(Genre + Character + Setting + …), not a per-type artifact — `TagFilter`'s per-type `TagSelector`s are
+purely a type-scoped input affordance; the emitted `TagFilterSelection`/`StoryFilterDto` already flatten
+tags across types, and the frozen L1 entry is a flat `(TagId, IsExcluded)` row.
+
+Settled additively against the Stage-5 L1 (two new columns, no other L1 change):
+- `SavedTagSelectionEntry.IsExcluded` (bool, default false) — captures both the include and exclude axis,
+  where the frozen model only had include (bare `TagId`).
+- `SavedTagSelection.Description` (`[MaxLength(280)]`, nullable) — bounded plain text, not rich HTML (it's
+  semantic metadata/caption, not authored content — no EditorView/RichTextView/sanitize pipeline). Shown
+  both in the load flyout (notes-to-self) and on the profile tab (sharing caption).
+- **No per-user cap** (unlike Vouch's 5) — primary use is personal bookkeeping of arbitrary tag
+  combinations; unbounded is intended.
+- **Load and Save are separate UI surfaces** mounted once in `TagFilter`'s header (so all four
+  `ResultsFilterPanel` consumers — `/discover`, Tree Search, Bookshelves, Profile story tabs — get them
+  for free): a searchable/sortable **Load flyout** (destructive replace of on-screen tags; nickname
+  text-filter + sort by nickname/date-created, default DateCreatedDesc overridable via a
+  `ReaderSettings.SavedTagSelectionSort` preference; full ⋯ row menu — overwrite/rename/publish/delete)
+  and a compact **Save dialog** (capture current tags as new). Both hidden for anonymous viewers.
+  Deliberately not combined into one surface — load (destructive) and save (additive) are opposite
+  operations; a mutating save form inside the overwrite-driven list was assessed as unneeded fragility.
+- **Sharing = copy-on-write** (original Gemini-era decision, carried forward): `IsPublic=true` + a
+  dedicated `ProfileTab.TagSelections` tab (like Recommendations) — **no public browse/gallery surface**.
+  "Add to my filters" on someone else's public selection creates an independent owned copy
+  (`CopyPublicSelectionAsync`); editing/deleting either side never affects the other.
+- **L6 indexes required**: the table aggregates every user's rows and queries are always
+  `UserId`-scoped with sort as a first-class concern — `(UserId, DateCreated)` +
+  `(UserId, IsPublic)` alongside the existing unique `(UserId, Nickname)`. See `layer6-indexes.md`.
+
+**L1 — Stage 5** (extended additively via `WU43_SavedTagSelectionExcludeAndDescription`).
+**L2/L3-Logic/L3.5-Structure — Stage 5** (WU43, verified below). **L4-Style / L4.5-Browser — Stage 1**
+(pending visual/live-browser sign-off, WU8/WU13/WU23 precedent). **L5 — Stage 2** (deferred, MVP is
+InteractiveServer-only). **L6 — Stage 5** (two new indexes, see `layer6-indexes.md` "Saved Tag
+Selections").
+
+### WU43 Stage-5 verification note (2026-07-11)
+
+`dotnet build` full solution green, 0 warnings/errors. `dotnet test` full suite green: 585 Unit + 564
+RazorComponents + 516 Integration = 1665 total. Covering tiers:
+- **Unit** — `SavedTagSelectionValidationsTests`: `CanSave` rules (empty nickname/description-length/
+  empty-tag-set/duplicate-nickname), `DisambiguateCopyNickname` (first collision, escalating suffix,
+  case-insensitivity, truncation at `MaxNicknameLength`).
+- **Integration** (`SavedTagSelectionServiceTests`, Testcontainers Postgres) — create/update/delete
+  round-trip with owner gating; `IsExcluded` persisted on both axes; `UpdateAsync` replaces entries
+  wholesale (not a merge); per-user duplicate-nickname rejection (case-insensitive) vs. same-nickname-
+  different-user success; all four `GetMySelectionsAsync` sort orders; `GetSelectionDetailAsync`'s
+  owner-or-public visibility gate; `GetPublicSelectionsByUserAsync` filters correctly;
+  `CopyPublicSelectionAsync` — independent copy ownership, editing/deleting either side never affects
+  the other, nickname-collision disambiguation (verbatim-if-no-collision, `(copy)`/`(copy N)`
+  escalation), rejection of a private non-owned source, and owner-copying-own-private-selection
+  success; `SavedTagSelection.UserId` Cascade verified via `UserDeletionService.DeleteUserAsync`
+  (entries cascade too; the referenced `Tag` survives).
+- **RazorComponents** (`SavedTagSelectionLoadFlyoutTests`, `SavedTagSelectionSaveDialogTests`,
+  `TagFilterTests`) — hidden for anonymous viewers; list render + nickname text-filter + no-matches
+  state; Apply raises `OnApply` with hydrated chips *and* visually remounts every `TagSelector` (the
+  `@key`-generation fix, proving it actually works end-to-end, not just compiles); Delete via the
+  nested `ConfirmDialog`; Save disabled when the on-screen tag set is empty or nickname is blank;
+  `SavedTagSelectionValidationException` surfaced via `InlineAlert` without closing the dialog.
+
+**Real issues found and fixed during this pass, not anticipated in the plan:**
+1. A first draft of the copy-on-write disambiguation test assumed nickname collision was checked
+   against the *disambiguated* form ("Fluff (copy)") rather than the source's literal nickname
+   ("Fluff") — the actual (correct) service behavior is verbatim-copy-unless-the-source-nickname-
+   itself-collides. Fixed the test, not the service; documented the exact semantics with three
+   dedicated test cases instead of one incorrect one.
+2. **`@inject`-declared properties resolve at component construction time, unconditionally — a
+   same-component `<AuthorizeView>` around markup does not defer it.** `SavedTagSelectionLoadFlyout`/
+   `SaveDialog` originally declared their services at file-top with `<AuthorizeView><Authorized>` only
+   around markup; this broke nine pre-existing bUnit files that render `TagFilter`/`ResultsFilterPanel`
+   (`SearchDesktop/MobileTests`, `BookshelvesDesktop/MobileTests`, `TreeSearchDesktop/MobileTests`,
+   `ResultsFilterPanelTests`, `ProfilePageTests`) with a missing-service `InvalidOperationException`,
+   even though those tests default to an anonymous/unauthorized context. Fixed by splitting each into
+   a thin injection-free wrapper (`<AuthorizeView><Authorized><…Inner/></Authorized></AuthorizeView>`)
+   plus an `…Inner` component holding the real markup and `@inject` — the inner component is a genuine
+   child of the `Authorized` `RenderFragment`, so it's only ever constructed (and only ever injected)
+   when `AuthorizeView` has actually decided "authorized." The nine pre-existing files then needed only
+   `this.AddAuthorization()` (defaulting anonymous), no saved-selection service fakes at all — proving
+   the fix. Full mechanism recorded in `layer3-logic.md` §"Deferring DI Behind AuthorizeView (WU43)".
+3. `TagFilter.ApplySavedSelectionAsync` needed a `@key`-based forced remount of every `TagSelector` —
+   mutating `_included`/`_excluded` alone doesn't visually refresh a child that only seeds itself in
+   `OnInitialized`. Caught by writing `TagFilterTests.ApplyingSavedSelection_ReplacesChipsAndReemitsOnChanged`
+   before assuming the naive state-mutation approach would work; documented in `layer3-logic.md`
+   §"Forcing a Child to Re-Seed via @key (WU43)".
+
+**Scope note:** following the Series (WU41) / `ReaderSettings.DefaultSearchSort` precedent, no
+dedicated `ProfileDesktopTests`/`ProfileMobileTests`/`ReaderSettingsFormTests` files were added for the
+presentational-only Tag Selections tab body / sort dropdown — the meaningful logic (copy-on-write,
+service calls) is Integration-covered; the tab/dropdown markup itself follows the same untested-by-
+convention precedent as Series's tab and the pre-existing sort dropdowns in the same form.
 
 ---
 

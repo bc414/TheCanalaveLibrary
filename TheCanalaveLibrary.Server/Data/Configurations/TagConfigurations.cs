@@ -123,6 +123,16 @@ public sealed class SavedTagSelectionConfiguration : IEntityTypeConfiguration<Sa
         // A user cannot have two selections with the same name
         builder.HasIndex(e => new { e.UserId, e.Nickname }).IsUnique();
 
+        // WU43 — the table aggregates every user's rows and every read query is UserId-scoped, so
+        // sort/lookup axes need their own indexes (see layer6-indexes.md "Saved Tag Selections").
+        // Default sort (DateCreatedDesc) and its ascending counterpart.
+        builder.HasIndex(e => new { e.UserId, e.DateCreated })
+            .HasDatabaseName("ix_saved_tag_selections_user_id_date_created");
+
+        // Profile Tag Selections tab: GetPublicSelectionsByUserAsync filters WHERE UserId = ? AND IsPublic.
+        builder.HasIndex(e => new { e.UserId, e.IsPublic })
+            .HasDatabaseName("ix_saved_tag_selections_user_id_is_public");
+
         // When a User is deleted, delete their saved selections
         builder.HasOne(e => e.User)
             .WithMany()

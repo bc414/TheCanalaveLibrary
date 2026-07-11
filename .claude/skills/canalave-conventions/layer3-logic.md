@@ -187,6 +187,62 @@ that timer internally. `InteractionDebounceMs` (2000ms) governs batching optimis
 coordination composite we own. Same word, two unrelated concerns, two different homes — don't
 conflate them or try to unify the constants.
 
+## Forcing a Child to Re-Seed via `@key` (WU43)
+
+Some children seed their working state **only once**, in `OnInitialized` — `TagSelector` copies its
+`SelectedTags` parameter into a private `_selected` list on init and never re-reads the parameter
+again, by design (it owns the list afterward as the typeahead adds/removes). That's correct for the
+steady-state case (a parent re-rendering with the same initial value shouldn't clobber in-progress
+edits), but it means a parent that needs to **replace** the child's seed wholesale — after init, from a
+new external source — can't just mutate the parameter and expect the child to notice.
+
+`TagFilter.ApplySavedSelectionAsync` (loading a `SavedTagSelection`) is exactly this case: it rewrites
+`_included`/`_excluded` from a saved chip set and needs every `TagSelector` in the loop to visually
+refresh to the new seed. The fix is **not** a bespoke "re-seed" method on `TagSelector` — it's Blazor's
+standard idiom: give each looped `<TagSelector>`'s wrapper a `@key` that's unique per sibling (so
+Blazor doesn't confuse them) **and** changes wholesale on the triggering action (so Blazor tears down
+and recreates every instance, re-running `OnInitialized` with the fresh parameter). `TagFilter` composes
+the key from `{tagType}-{generation}` — the type keeps siblings distinct; a `_selectionGeneration` int
+bumped once per apply forces all of them to remount together. Reach for this pattern whenever a child
+component is deliberately init-only-seeded (typeahead/editor-style "the child owns it after that") but
+a parent later needs to hard-replace its contents from an external source.
+
+## Deferring DI Behind `AuthorizeView` (WU43)
+
+`@inject`-declared properties resolve at **component construction time** — unconditionally, regardless
+of any conditional markup (including `<AuthorizeView>`) *inside that same component*. Wrapping your own
+component's content in `<AuthorizeView><Authorized>...</Authorized></AuthorizeView>` gates what *renders*,
+not whether your `@inject` properties get resolved — the component itself was already constructed (and
+its DI already attempted) the moment its parent placed it in the render tree, before `AuthorizeView` has
+even evaluated anything.
+
+This bit `SavedTagSelectionLoadFlyout`/`SaveDialog` (WU43): both are mounted unconditionally by
+`TagFilter`, and both originally declared `@inject ISavedTagSelectionReadService`/etc. at the file's own
+top level with `<AuthorizeView><Authorized>` only around their markup. Every existing bUnit test that
+renders `TagFilter`/`ResultsFilterPanel` (nine files, spanning `/discover`, Bookshelves, Profile, Tree
+Search) started failing with `Cannot provide a value for property '...'. There is no registered service
+of type '...'` -- even with a default-anonymous `AuthorizeView` context (which correctly rendered
+nothing) -- because construction, and thus injection, happened regardless.
+
+**The fix:** split into two components. A thin **wrapper** (no `@inject`) holds the
+`<AuthorizeView><Authorized><TheRealComponent ... /></Authorized></AuthorizeView>` shell; a separate
+**inner component** (`...Inner`, e.g. `SavedTagSelectionLoadFlyoutInner`) holds all the markup and the
+`@inject` services. The inner component is a genuine child placed *inside* the `Authorized`
+`RenderFragment` -- Blazor only instantiates (and thus only injects) a component when the render
+fragment containing it actually executes, so the inner component's DI resolution is deferred until
+`AuthorizeView` has actually decided "authorized." Consumers only ever reference the wrapper.
+
+**Consequence for testing:** a bUnit test exercising an *unrelated* surface that happens to compose a
+wrapper like this needs only `this.AddAuthorization()` (defaulting to anonymous/not-authorized) -- it
+never needs to register the inner component's services, because the inner component is never
+constructed. Only a test that explicitly authorizes the viewer (to test the gated feature itself) needs
+those service fakes registered too. `NotificationBell` predates this convention and sidesteps the
+failure mode a different way (no `@inject` at file scope at all -- its own services are declared with
+`@inject` written physically inside the `<Authorized>` markup, which Razor still hoists to the class
+regardless of visual placement, so it has the *same* unconditional-construction exposure; it has just
+never been exercised by a test that omits its services). Any new AuthorizeView-gated, DI-consuming leaf
+should use the wrapper/inner split from the start, not `NotificationBell`'s pattern.
+
 ## UserStoryInteractionButton — EventCallback-Driven Behavior
 
 No mode enum. The presence or absence of `OnToggle` determines behavior:

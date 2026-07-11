@@ -1,0 +1,320 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject ISavedTagSelectionReadService ReadService
+@inject ISavedTagSelectionWriteService WriteService
+@inject IUserSettingsService SettingsService
+
+@* The actual authenticated-only content for SavedTagSelectionLoadFlyout (WU43). Split out of the
+   thin AuthorizeView wrapper so its @inject services are resolved ONLY when this component is
+   actually instantiated — i.e. only when AuthorizeView has decided the viewer is authorized.
+   @inject properties resolve at component CONSTRUCTION time, unconditionally, regardless of any
+   conditional markup (including <AuthorizeView>) inside the SAME component — so an
+   injection-requiring child must be a genuinely separate component behind the AuthorizeView, not
+   inline markup in the gated component itself. See layer3-logic.md "Deferring DI Behind AuthorizeView
+   (WU43)". Never rendered directly by a consumer — always via SavedTagSelectionLoadFlyout.razor. *@
+
+<div class="relative inline-block">
+    <button type="button"
+            class="rounded-md border border-(--color-border) bg-surface px-2 py-1 text-xs font-medium text-text transition-colors hover:bg-(--color-surface-hover)"
+            @onclick="ToggleAsync">
+        Load saved
+    </button>
+
+    @if (_open)
+    {
+        <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="Close">
+            <div class="flex max-h-[80vh] w-full max-w-md flex-col rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation="true">
+                <h2 class="mb-3 text-lg font-semibold text-text">Saved tag selections</h2>
+
+                <InlineAlert Messages="@_errors" />
+
+                <div class="mb-3 flex flex-col gap-2 sm:flex-row">
+                    <input type="search"
+                           class="min-w-0 flex-1 rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                           placeholder="Filter by nickname…"
+                           value="@_nicknameFilter"
+                           @oninput="e => _nicknameFilter = e.Value?.ToString() ?? string.Empty" />
+                    <select class="rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                            value="@((short)_sort)"
+                            @onchange="OnSortChangedAsync">
+                        <option value="0">Newest first</option>
+                        <option value="1">Oldest first</option>
+                        <option value="2">Nickname (A–Z)</option>
+                        <option value="3">Nickname (Z–A)</option>
+                    </select>
+                </div>
+
+                <div class="flex-1 overflow-y-auto">
+                    @if (_loading)
+                    {
+                        <p class="text-sm text-(--color-text-muted)">Loading…</p>
+                    }
+                    else if (FilteredSelections.Count == 0)
+                    {
+                        <p class="text-sm text-(--color-text-muted)">
+                            @(_selections.Count == 0 ? "No saved tag selections yet." : "No matches.")
+                        </p>
+                    }
+                    else
+                    {
+                        <ul class="flex flex-col gap-2">
+                            @foreach (SavedTagSelectionSummaryDto row in FilteredSelections)
+                            {
+                                <li class="rounded-md border border-(--color-border) bg-surface p-2">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <div class="min-w-0">
+                                            <p class="truncate text-sm font-medium text-text">
+                                                @row.Nickname
+                                                @if (row.IsPublic)
+                                                {
+                                                    <span class="ml-1 text-xs text-(--color-text-muted)">· public</span>
+                                                }
+                                            </p>
+                                            @if (!string.IsNullOrWhiteSpace(row.Description))
+                                            {
+                                                <p class="truncate text-xs text-(--color-text-muted)">@row.Description</p>
+                                            }
+                                            <p class="text-xs text-(--color-text-muted)">@row.IncludedCount included · @row.ExcludedCount excluded</p>
+                                        </div>
+                                        <div class="relative flex shrink-0 items-center gap-1">
+                                            <button type="button"
+                                                    class="rounded-md bg-(--color-mission) px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-(--color-mission-hover)"
+                                                    @onclick="() => ApplyAsync(row.Id)">
+                                                Apply
+                                            </button>
+                                            <button type="button"
+                                                    class="rounded-md border border-(--color-border) px-2 py-1 text-xs transition-colors hover:bg-(--color-surface-hover)"
+                                                    aria-label="More actions"
+                                                    @onclick="() => ToggleMenu(row.Id)">
+                                                ⋯
+                                            </button>
+                                            @if (_menuOpenId == row.Id)
+                                            {
+                                                <div class="absolute right-0 top-full z-(--z-dropdown) mt-1 w-52 rounded-md border border-(--color-border) bg-(--color-surface-raised) py-1 shadow-prominent">
+                                                    <button type="button" class="block w-full px-3 py-1.5 text-left text-xs text-text transition-colors hover:bg-(--color-surface-hover)" @onclick="() => OverwriteTagsAsync(row)">Overwrite tags with current</button>
+                                                    <button type="button" class="block w-full px-3 py-1.5 text-left text-xs text-text transition-colors hover:bg-(--color-surface-hover)" @onclick="() => BeginRename(row)">Rename / edit note</button>
+                                                    <button type="button" class="block w-full px-3 py-1.5 text-left text-xs text-text transition-colors hover:bg-(--color-surface-hover)" @onclick="() => TogglePublicAsync(row)">@(row.IsPublic ? "Make private" : "Make public")</button>
+                                                    <button type="button" class="block w-full px-3 py-1.5 text-left text-xs text-(--color-danger) transition-colors hover:bg-(--color-surface-hover)" @onclick="() => BeginDelete(row.Id)">Delete</button>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    @if (_renamingId == row.Id)
+                                    {
+                                        <div class="mt-2 flex flex-col gap-2 border-t border-(--color-border) pt-2">
+                                            <input type="text" maxlength="@SavedTagSelectionValidations.MaxNicknameLength"
+                                                   class="rounded-md border border-(--color-border) bg-surface px-2 py-1 text-xs text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                                                   value="@_renameNickname"
+                                                   @oninput="e => _renameNickname = e.Value?.ToString() ?? string.Empty" />
+                                            <textarea rows="2" maxlength="@SavedTagSelectionValidations.MaxDescriptionLength"
+                                                      class="rounded-md border border-(--color-border) bg-surface px-2 py-1 text-xs text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                                                      value="@_renameDescription"
+                                                      @oninput="e => _renameDescription = e.Value?.ToString() ?? string.Empty"></textarea>
+                                            <div class="flex justify-end gap-2">
+                                                <button type="button" class="rounded-md border border-(--color-border) px-2 py-1 text-xs transition-colors hover:bg-(--color-surface-hover)" @onclick="CancelRename">Cancel</button>
+                                                <button type="button" class="rounded-md bg-(--color-mission) px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-(--color-mission-hover)" @onclick="() => SaveRenameAsync(row.Id)">Save</button>
+                                            </div>
+                                        </div>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    }
+                </div>
+
+                <div class="mt-4 flex justify-end">
+                    <button type="button" class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-sm text-text transition-colors hover:bg-(--color-surface-hover)"
+                            @onclick="Close">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<ConfirmDialog IsOpen="@(_confirmDeleteId is not null)"
+               IsOpenChanged="@(open => { if (!open) _confirmDeleteId = null; })"
+               Title="Delete saved tag selection?"
+               Message="@ConfirmDeleteMessage"
+               ConfirmText="Delete"
+               IsDestructive="true"
+               OnConfirm="DeleteConfirmedAsync" />
+
+@code {
+    /// <summary>Current on-screen included tag ids — source for "Overwrite tags with current".</summary>
+    [Parameter] public IReadOnlyList<int> CurrentIncludedTagIds { get; set; } = [];
+
+    /// <summary>Current on-screen excluded tag ids — source for "Overwrite tags with current".</summary>
+    [Parameter] public IReadOnlyList<int> CurrentExcludedTagIds { get; set; } = [];
+
+    /// <summary>
+    /// Raised when the user clicks Apply, carrying the hydrated selection (chips for both axes).
+    /// The parent (<c>TagFilter</c>) rebuilds its per-type buckets from
+    /// <see cref="SavedTagSelectionDetailDto.IncludedTags"/>/<c>ExcludedTags</c> and re-emits.
+    /// </summary>
+    [Parameter] public EventCallback<SavedTagSelectionDetailDto> OnApply { get; set; }
+
+    private bool _open;
+    private bool _loading;
+    private string _nicknameFilter = string.Empty;
+    private SavedTagSelectionSortEnum _sort = SavedTagSelectionSortEnum.DateCreatedDesc;
+    private List<SavedTagSelectionSummaryDto> _selections = [];
+    private List<string> _errors = [];
+    private int? _menuOpenId;
+    private int? _renamingId;
+    private string _renameNickname = string.Empty;
+    private string _renameDescription = string.Empty;
+    private int? _confirmDeleteId;
+
+    private IReadOnlyList<SavedTagSelectionSummaryDto> FilteredSelections =>
+        string.IsNullOrWhiteSpace(_nicknameFilter)
+            ? _selections
+            : [.. _selections.Where(s => s.Nickname.Contains(_nicknameFilter, StringComparison.OrdinalIgnoreCase))];
+
+    private string ConfirmDeleteMessage =>
+        _confirmDeleteId is int id && _selections.FirstOrDefault(s => s.Id == id) is { } row
+            ? $"\"{row.Nickname}\" will be permanently deleted."
+            : "This saved selection will be permanently deleted.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            UserSettingsDto settings = await SettingsService.GetMySettingsAsync();
+            _sort = settings.Reader.SavedTagSelectionSort;
+        }
+        catch (InvalidOperationException)
+        {
+            // Defensive only — this component is only ever instantiated inside
+            // SavedTagSelectionLoadFlyout's <AuthorizeView><Authorized>.
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        if (_open) { Close(); return; }
+        _open = true;
+        await RefreshAsync();
+    }
+
+    private void Close()
+    {
+        _open = false;
+        _menuOpenId = null;
+        _renamingId = null;
+        _confirmDeleteId = null;
+    }
+
+    private async Task RefreshAsync()
+    {
+        _loading = true;
+        _errors = [];
+        try
+        {
+            _selections = await ReadService.GetMySelectionsAsync(_sort);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OnSortChangedAsync(ChangeEventArgs e)
+    {
+        if (short.TryParse(e.Value?.ToString(), out short v))
+            _sort = (SavedTagSelectionSortEnum)v;
+        await RefreshAsync();
+    }
+
+    private void ToggleMenu(int id) => _menuOpenId = _menuOpenId == id ? null : id;
+
+    private async Task ApplyAsync(int id)
+    {
+        _menuOpenId = null;
+        SavedTagSelectionDetailDto? detail = await ReadService.GetSelectionDetailAsync(id);
+        if (detail is null) return;
+        await OnApply.InvokeAsync(detail);
+        Close();
+    }
+
+    private void BeginRename(SavedTagSelectionSummaryDto row)
+    {
+        _menuOpenId = null;
+        _renamingId = row.Id;
+        _renameNickname = row.Nickname;
+        _renameDescription = row.Description ?? string.Empty;
+    }
+
+    private void CancelRename() => _renamingId = null;
+
+    private async Task SaveRenameAsync(int id)
+    {
+        await UpdatePreservingTagsAsync(id, input => input with
+        {
+            Nickname = _renameNickname,
+            Description = _renameDescription
+        });
+        _renamingId = null;
+    }
+
+    private async Task OverwriteTagsAsync(SavedTagSelectionSummaryDto row)
+    {
+        _menuOpenId = null;
+        await UpdatePreservingTagsAsync(row.Id, input => input with
+        {
+            IncludedTagIds = CurrentIncludedTagIds,
+            ExcludedTagIds = CurrentExcludedTagIds
+        });
+    }
+
+    private async Task TogglePublicAsync(SavedTagSelectionSummaryDto row)
+    {
+        _menuOpenId = null;
+        await UpdatePreservingTagsAsync(row.Id, input => input with { IsPublic = !row.IsPublic });
+    }
+
+    private void BeginDelete(int id)
+    {
+        _menuOpenId = null;
+        _confirmDeleteId = id;
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (_confirmDeleteId is not int id) return;
+        await WriteService.DeleteAsync(id);
+        _confirmDeleteId = null;
+        await RefreshAsync();
+    }
+
+    /// <summary>
+    /// Loads the current full detail for <paramref name="id"/>, applies <paramref name="mutate"/> to
+    /// build the new input, then calls UpdateAsync — which replaces entries wholesale — so a
+    /// single-field row action (rename, publish toggle, overwrite tags) never silently drops the rest
+    /// of the selection.
+    /// </summary>
+    private async Task UpdatePreservingTagsAsync(int id, Func<SavedTagSelectionInput, SavedTagSelectionInput> mutate)
+    {
+        _errors = [];
+        try
+        {
+            SavedTagSelectionDetailDto? detail = await ReadService.GetSelectionDetailAsync(id);
+            if (detail is null) return;
+
+            SavedTagSelectionInput current = new(
+                detail.Nickname,
+                detail.Description,
+                detail.IsPublic,
+                [.. detail.IncludedTags.Select(t => t.TagId)],
+                [.. detail.ExcludedTags.Select(t => t.TagId)]);
+
+            await WriteService.UpdateAsync(id, mutate(current));
+            await RefreshAsync();
+        }
+        catch (SavedTagSelectionValidationException ex)
+        {
+            _errors = [.. ex.Errors];
+        }
+    }
+}

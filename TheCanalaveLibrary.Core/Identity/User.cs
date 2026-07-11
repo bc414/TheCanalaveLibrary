@@ -27,6 +27,13 @@ public class ReaderSettings
     public bool CollapseCommentThreads { get; set; } = true;
     public int DefaultPaginationSize { get; set; } = 20;
     public DefaultSortOrder DefaultSearchSort { get; set; } = DefaultSortOrder.DatePublished;
+
+    /// <summary>
+    /// Default sort for the <c>SavedTagSelectionLoadFlyout</c> list (WU43, Feature 15) — stored in the
+    /// existing warm-settings JSON blob, no migration. Seeds the flyout's initial sort; the user can
+    /// still change it per-open without persisting.
+    /// </summary>
+    public SavedTagSelectionSortEnum SavedTagSelectionSort { get; set; } = SavedTagSelectionSortEnum.DateCreatedDesc;
 }
 
 /// <summary>Reading-surface background choices (stored as short in the ReaderSettings JSON).</summary>

@@ -1347,12 +1347,55 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   `StoryRelationshipType` present — unrelated to the `StoryCharacterPairing` introduced in WU37).
 - **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 10. **Deps:** WU24, WU25.
 
-### WU43 — Saved Tag Selections (Feature 15)
-- **Cells:** 15 L2/L3/L3.5/L4 → Stage 5 (L4 pending visual sign-off).
-- **Do:** `ISavedTagSelectionReadService` / `ISavedTagSelectionWriteService`; save/load/delete/share
-  (copy-on-write on public share) of tag filter sets; UI in `ResultsFilterPanel` (load dropdown +
-  save-as affordance). L1 already Stage 5 (`SavedTagSelection`, `SavedTagSelectionEntry` present with
-  unique constraints).
+### WU43 — Saved Tag Selections (Feature 15) — DONE ✓ (2026-07-11)
+- **Cells:** 15 L2/L3-Logic/L3.5-Structure `2→5`; L6 `N/A→5` (new indexes). L4-Style/L4.5-Browser stay
+  Stage 1 (pending visual/live-browser sign-off, WU8/WU13/WU23 precedent). L5 stays Stage 2 (deferred,
+  MVP is InteractiveServer-only). L1 already Stage 5, extended additively (see Done).
+- **Scope settled before build (2026-07-11, do not revisit — see `audit/Tags.md` Feature 15 for full
+  reasoning):** persists only the tag include/exclude axis (not text/sort/interactions); ONE unified
+  selection spans all tag types (not per-type); no per-user cap; `Description` is bounded plain text
+  (280 chars); Load (searchable/sortable flyout) and Save (compact dialog) are separate UI surfaces
+  mounted once in `TagFilter`'s header, reaching all four `ResultsFilterPanel` consumers
+  (`/discover`, Tree Search, Bookshelves, Profile) for free; sharing is copy-on-write onto a dedicated
+  `ProfileTab.TagSelections`, no public gallery.
+- **Done:** Additive migration `WU43_SavedTagSelectionExcludeAndDescription` (`SavedTagSelectionEntry
+  .IsExcluded`, `SavedTagSelection.Description` + two new indexes); moved both entities
+  `Core/Models/` → `Core/Tags/`. New L2: `SavedTagSelectionSummaryDto`/`DetailDto`/`Input`,
+  `SavedTagSelectionSortEnum`, `ISavedTagSelectionReadService`/`WriteService`,
+  `ServerSavedTagSelection{Read,Write}Service`, `SavedTagSelectionValidations` (pure rules +
+  copy-nickname disambiguation helper). New L3/L3.5: `SavedTagSelectionLoadFlyout`/
+  `SavedTagSelectionSaveDialog` — each a thin `<AuthorizeView>` wrapper plus an `…Inner` component
+  holding the real markup/`@inject` (see `layer3-logic.md` "Deferring DI Behind AuthorizeView" — a
+  same-component `@inject` resolves at construction time regardless of `AuthorizeView`'s decision,
+  which broke nine pre-existing bUnit suites until split); both mounted in `TagFilter`'s header.
+  `TagFilter.ApplySavedSelectionAsync` rewrites its per-type buckets and forces every `TagSelector` to
+  remount via a `@key` generation counter (see `layer3-logic.md` "Forcing a Child to Re-Seed via
+  @key" — `TagSelector` only seeds on `OnInitialized`, so mutating state alone doesn't refresh it).
+  New `ReaderSettings.SavedTagSelectionSort` preference (JSON blob, no migration) + `ReaderSettingsForm`
+  dropdown. New `ProfileTab.TagSelections` tab (profile dispatcher + Desktop/Mobile bodies + "Add to
+  my filters" copy-on-write button, toast feedback). New L6 indexes
+  (`ix_saved_tag_selections_user_id_date_created`, `…_user_id_is_public`).
+- **Verified (2026-07-11):** `dotnet build` full solution green, 0 warnings/errors. `dotnet test` full
+  suite green: **585 Unit + 564 RazorComponents + 516 Integration = 1665 total** (+17 Unit / +30
+  Integration / +18 RazorComponents net-new for this WU). Covering tiers: **Unit**
+  (`SavedTagSelectionValidationsTests` — CanSave rules, nickname-disambiguation incl. case-
+  insensitivity and truncation); **Integration** (`SavedTagSelectionServiceTests` — CRUD + owner
+  gating, per-user duplicate-nickname rejection, `IsExcluded` persisted both ways, wholesale entry
+  replacement on update, sort orders, public/private visibility gate, copy-on-write independence
+  [editing/deleting one side never affects the other], nickname-collision disambiguation, and the
+  `SavedTagSelection.UserId` Cascade on user delete via `UserDeletionService`); **RazorComponents**
+  (`SavedTagSelectionLoadFlyoutTests`, `SavedTagSelectionSaveDialogTests`, `TagFilterTests` — hidden
+  for anonymous, list/filter/sort, Apply re-emits + visually remounts `TagSelector`, Delete via nested
+  `ConfirmDialog`, Save-disabled-on-empty-set, validation-error `InlineAlert` surfacing). Also fixed
+  nine pre-existing `ResultsFilterPanel`/`TagFilter`-rendering bUnit files (`SearchDesktop/MobileTests`,
+  `BookshelvesDesktop/MobileTests`, `TreeSearchDesktop/MobileTests`, `ResultsFilterPanelTests`,
+  `ProfilePageTests`) that broke from the new `<AuthorizeView>`-gated children — needed only
+  `this.AddAuthorization()` (defaulting anonymous) post-split, no saved-selection service fakes,
+  confirming the wrapper/inner DI-deferral fix. `scripts/check-design-tokens.ps1` clean (same 3
+  pre-existing, unrelated findings as before this WU). Following Series (WU41)/`DefaultSearchSort`
+  precedent, no dedicated `ProfileDesktop/MobileTests`/`ReaderSettingsFormTests` files were added for
+  the presentational-only tab body / dropdown addition. L4-Style and L4.5-Browser visual/live-browser
+  sign-off remain open — not exercised this session.
 - **Tool:** opusplan. **Pointer:** `audit/Tags.md` Feature 15. **Deps:** WU23, WU27.5.
 
 ### WU44 — Automatic Tree Search UI (Feature 59) — DONE ✓ (2026-07-11)

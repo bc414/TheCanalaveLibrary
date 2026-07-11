@@ -1,0 +1,120 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject ISavedTagSelectionWriteService WriteService
+
+@* The actual authenticated-only content for SavedTagSelectionSaveDialog (WU43). Split out of the
+   thin AuthorizeView wrapper so @inject ISavedTagSelectionWriteService resolves only when this
+   component is actually instantiated (i.e. only when authorized) — see
+   layer3-logic.md "Deferring DI Behind AuthorizeView (WU43)". Never rendered directly by a consumer
+   — always via SavedTagSelectionSaveDialog.razor. *@
+
+<button type="button"
+        class="rounded-md border border-(--color-border) bg-surface px-2 py-1 text-xs font-medium text-text transition-colors hover:bg-(--color-surface-hover)"
+        @onclick="Open">
+    Save current…
+</button>
+
+@if (_open)
+{
+    <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="Close">
+        <div class="w-full max-w-sm rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation="true">
+            <h2 class="mb-3 text-lg font-semibold text-text">Save current tag selection</h2>
+
+            <InlineAlert Messages="@_errors" />
+
+            <div class="flex flex-col gap-3">
+                <div class="flex flex-col gap-1">
+                    <label for="stsd-nickname" class="text-sm font-medium text-text">Nickname</label>
+                    <input id="stsd-nickname" type="text" maxlength="@SavedTagSelectionValidations.MaxNicknameLength"
+                           class="rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                           value="@_nickname"
+                           @oninput="e => _nickname = e.Value?.ToString() ?? string.Empty" />
+                </div>
+
+                <div class="flex flex-col gap-1">
+                    <label for="stsd-description" class="text-sm font-medium text-text">Note (optional)</label>
+                    <textarea id="stsd-description" rows="2" maxlength="@SavedTagSelectionValidations.MaxDescriptionLength"
+                              class="rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                              value="@_description"
+                              @oninput="e => _description = e.Value?.ToString() ?? string.Empty"></textarea>
+                </div>
+
+                <label class="flex cursor-pointer items-center gap-2 text-sm text-text">
+                    <input type="checkbox" class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
+                           checked="@_isPublic"
+                           @onchange="e => _isPublic = (bool)(e.Value ?? false)" />
+                    Make public (appears on your profile's Tag Selections tab)
+                </label>
+            </div>
+
+            <div class="mt-4 flex justify-end gap-2">
+                <button type="button" class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-surface-hover)"
+                        @onclick="Close">
+                    Cancel
+                </button>
+                <button type="button"
+                        class="rounded-md bg-(--color-mission) px-3 py-1 text-white transition-colors hover:bg-(--color-mission-hover) disabled:opacity-50"
+                        disabled="@(_saving || !CanSave)"
+                        @onclick="SaveAsync">
+                    @(_saving ? "Saving…" : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Current on-screen included tag ids (from TagFilter's aggregate, across all types).</summary>
+    [Parameter] public IReadOnlyList<int> IncludedTagIds { get; set; } = [];
+
+    /// <summary>Current on-screen excluded tag ids (from TagFilter's aggregate, across all types).</summary>
+    [Parameter] public IReadOnlyList<int> ExcludedTagIds { get; set; } = [];
+
+    /// <summary>
+    /// Raised after a successful save with the new selection's id. Optional — a hosting page may use
+    /// it to refresh an already-open Load flyout; the flyout also re-reads fresh on its own next open
+    /// regardless, so this is a convenience, not a requirement.
+    /// </summary>
+    [Parameter] public EventCallback<int> OnSaved { get; set; }
+
+    private bool _open;
+    private bool _saving;
+    private string _nickname = string.Empty;
+    private string _description = string.Empty;
+    private bool _isPublic;
+    private List<string> _errors = [];
+
+    private bool CanSave =>
+        (IncludedTagIds.Count > 0 || ExcludedTagIds.Count > 0) && !string.IsNullOrWhiteSpace(_nickname);
+
+    private void Open()
+    {
+        _nickname = string.Empty;
+        _description = string.Empty;
+        _isPublic = false;
+        _errors = [];
+        _open = true;
+    }
+
+    private void Close() => _open = false;
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _errors = [];
+        try
+        {
+            SavedTagSelectionInput input = new(_nickname, _description, _isPublic, IncludedTagIds, ExcludedTagIds);
+            int id = await WriteService.CreateAsync(input);
+            _open = false;
+            await OnSaved.InvokeAsync(id);
+        }
+        catch (SavedTagSelectionValidationException ex)
+        {
+            _errors = [.. ex.Errors];
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

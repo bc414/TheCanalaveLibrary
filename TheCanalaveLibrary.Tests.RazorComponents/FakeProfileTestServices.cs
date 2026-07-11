@@ -96,6 +96,11 @@ internal sealed class FakeSeriesReadService : ISeriesReadService
     public Task<IReadOnlyList<StorySeriesMembershipDto>> GetMembershipsForStoryAsync(int storyId) => Task.FromResult<IReadOnlyList<StorySeriesMembershipDto>>([]);
 }
 
+// Saved Tag Selections (WU43) fakes — FakeSavedTagSelectionReadService/WriteService — live in
+// FakeSavedTagSelectionTestServices.cs (richer, configurable versions shared with
+// SavedTagSelectionLoadFlyoutTests/SaveDialogTests/TagFilterTests). ProfilePageTests registers
+// those same classes.
+
 // ── Device detection ──────────────────────────────────────────────────────────────────────────
 
 internal sealed class AlwaysDesktopDeviceService : IDeviceDetectionService

@@ -120,6 +120,62 @@
                 </div>
             }
         }
+        else if (Tab == ProfileTab.TagSelections)
+        {
+            @* Tag Selections tab (WU43) — public (IsPublic) selections only, full-width grid, no
+               filter sidebar (small, unpaginated set — same shape as Series). No public browse/
+               gallery surface exists; this tab is the sole discovery path for a shared selection. *@
+            @if (TagSelectionItems.Count == 0)
+            {
+                <p class="text-sm text-(--color-text-muted)">@(IsOwner ? "You haven't made any saved tag selections public yet." : "No public saved tag selections yet.")</p>
+            }
+            else
+            {
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    @foreach (SavedTagSelectionDetailDto selection in TagSelectionItems)
+                    {
+                        <div class="flex flex-col gap-2 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+                            <div class="flex items-start justify-between gap-2">
+                                <h3 class="font-semibold text-text">@selection.Nickname</h3>
+                                @if (CurrentUserId.HasValue && !IsOwner)
+                                {
+                                    <button type="button"
+                                            class="shrink-0 rounded-md bg-(--color-mission) px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-(--color-mission-hover)"
+                                            @onclick="() => OnCopyTagSelection.InvokeAsync(selection.Id)">
+                                        Add to my filters
+                                    </button>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(selection.Description))
+                            {
+                                <p class="text-sm text-(--color-text-muted)">@selection.Description</p>
+                            }
+                            @if (selection.IncludedTags.Count > 0)
+                            {
+                                <div class="flex flex-wrap gap-2">
+                                    @foreach (TagChipDto tag in selection.IncludedTags)
+                                    {
+                                        <TagChip Tag="tag" />
+                                    }
+                                </div>
+                            }
+                            @if (selection.ExcludedTags.Count > 0)
+                            {
+                                <div class="flex flex-col gap-1">
+                                    <span class="text-xs font-medium text-(--color-text-muted)">Excludes:</span>
+                                    <div class="flex flex-wrap gap-2">
+                                        @foreach (TagChipDto tag in selection.ExcludedTags)
+                                        {
+                                            <TagChip Tag="tag" />
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        }
         else
         {
             @* Story tabs: Favorites, Recommendations, Authored — deck + filter sidebar *@
@@ -180,6 +236,10 @@
     // Series tab (WU41)
     [Parameter] public IReadOnlyList<SeriesListingDto> SeriesItems { get; set; } = [];
 
+    // Tag Selections tab (WU43)
+    [Parameter] public IReadOnlyList<SavedTagSelectionDetailDto> TagSelectionItems { get; set; } = [];
+    [Parameter] public EventCallback<int> OnCopyTagSelection { get; set; }
+
     private ReportDialog _reportDialog = default!;
 
     private static readonly IReadOnlyList<DefaultSortOrder> _availableSorts =
@@ -201,6 +261,7 @@
         ProfileTab.Authored        => "Stories",
         ProfileTab.Blog            => "Blog",
         ProfileTab.Series          => "Series",
+        ProfileTab.TagSelections   => "Tag Selections",
         _                          => tab.ToString()
     };
 

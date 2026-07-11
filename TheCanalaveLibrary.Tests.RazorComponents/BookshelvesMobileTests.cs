@@ -31,6 +31,11 @@ public class BookshelvesMobileTests : BunitContext
         // ReportDialog (inside BookshelvesMobile) injects IModerationWriteService.
         Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
         JSInterop.Mode = JSRuntimeMode.Loose;
+
+        // TagFilter (inside ResultsFilterPanel) mounts SavedTagSelectionLoadFlyout/SaveDialog
+        // (WU43), both wrapped in a bare <AuthorizeView> — anonymous/not-authorized by default
+        // keeps them off the DOM here (this suite isn't testing that feature).
+        this.AddAuthorization();
     }
 
     // ── Factory helpers ──────────────────────────────────────────────────────────

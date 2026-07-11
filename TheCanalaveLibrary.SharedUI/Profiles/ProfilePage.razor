@@ -11,7 +11,10 @@
 @inject IRecommendationReadService RecommendationReadService
 @inject IBlogPostReadService BlogPostReadService
 @inject ISeriesReadService SeriesReadService
+@inject ISavedTagSelectionReadService TagSelectionReadService
+@inject ISavedTagSelectionWriteService TagSelectionWriteService
 @inject IDeviceDetectionService DeviceService
+@inject IToastService Toasts
 @inject NavigationManager Nav
 
 @* Dispatcher — Feature 21 (User Profile Display), WU30.
@@ -62,7 +65,9 @@ else
                        BlogPage="@_blogPage"
                        BlogPageSize="@BlogPageSize"
                        OnBlogPageChanged="HandleBlogPageChanged"
-                       SeriesItems="@_seriesItems" />
+                       SeriesItems="@_seriesItems"
+                       TagSelectionItems="@_tagSelectionItems"
+                       OnCopyTagSelection="HandleCopyTagSelectionAsync" />
     }
     else
     {
@@ -84,7 +89,9 @@ else
                         BlogPage="@_blogPage"
                         BlogPageSize="@BlogPageSize"
                         OnBlogPageChanged="HandleBlogPageChanged"
-                        SeriesItems="@_seriesItems" />
+                        SeriesItems="@_seriesItems"
+                        TagSelectionItems="@_tagSelectionItems"
+                        OnCopyTagSelection="HandleCopyTagSelectionAsync" />
     }
 }
 
@@ -122,6 +129,11 @@ else
 
     // Series tab (WU41) — public to any viewer, always the full list (no pagination/filter).
     private IReadOnlyList<SeriesListingDto> _seriesItems = [];
+
+    // Tag Selections tab (WU43) — public (IsPublic) selections only, always the full list, same
+    // shape as Series. No public browse/gallery surface exists — this tab is the sole discovery
+    // path for a shared selection (audit/Tags.md Feature 15).
+    private IReadOnlyList<SavedTagSelectionDetailDto> _tagSelectionItems = [];
 
     private bool _initialized;
     private int _loadedUserId = int.MinValue;      // sentinel; no real UserId equals this
@@ -202,10 +214,11 @@ else
 
     private Task LoadTabPayloadAsync() => _tab switch
     {
-        ProfileTab.Profile => LoadBioAsync(),
-        ProfileTab.Blog    => LoadBlogAsync(),
-        ProfileTab.Series  => LoadSeriesAsync(),
-        _                  => LoadStoryTabAsync(),
+        ProfileTab.Profile       => LoadBioAsync(),
+        ProfileTab.Blog          => LoadBlogAsync(),
+        ProfileTab.Series        => LoadSeriesAsync(),
+        ProfileTab.TagSelections => LoadTagSelectionsAsync(),
+        _                        => LoadStoryTabAsync(),
     };
 
     private async Task LoadBioAsync()
@@ -236,6 +249,11 @@ else
     private async Task LoadSeriesAsync()
     {
         _seriesItems = await SeriesReadService.GetSeriesByAuthorAsync(UserId);
+    }
+
+    private async Task LoadTagSelectionsAsync()
+    {
+        _tagSelectionItems = await TagSelectionReadService.GetPublicSelectionsByUserAsync(UserId);
     }
 
     private Task<IReadOnlyList<int>> GetCandidateIdsForTabAsync(ProfileTab tab) => tab switch
@@ -275,5 +293,26 @@ else
         await FollowingWriteService.RemoveVouchAsync(vouchedUserId);
         // Reload the banner's vouch list — refresh the header
         _header = await ProfileReadService.GetProfileHeaderAsync(UserId, includePrivate: _isOwner);
+    }
+
+    // ── Tag Selections tab — copy-on-write share (WU43) ───────────────────────────
+
+    /// <summary>
+    /// "Add to my filters" on a public selection card. Copy-on-write — the new row lands only in the
+    /// copier's own SavedTagSelectionLoadFlyout, never on this profile page, so no local reload is
+    /// needed. Feedback is a toast (transient system event, no inline home on this page) rather than
+    /// InlineAlert/ConfirmDialog — see error-handling.md feedback-channel rules.
+    /// </summary>
+    private async Task HandleCopyTagSelectionAsync(int sourceId)
+    {
+        try
+        {
+            await TagSelectionWriteService.CopyPublicSelectionAsync(sourceId);
+            Toasts.Show("Added to your saved tag selections.", ToastLevel.Success);
+        }
+        catch (Exception ex) when (ex is SavedTagSelectionValidationException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+        }
     }
 }

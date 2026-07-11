@@ -15,4 +15,5 @@ public record ReaderSettingsDto(
     bool CollapseCommentThreads,
     int DefaultPaginationSize,
     DefaultSortOrder DefaultSearchSort,
-    ReadingBackgroundEnum ReadingBackground = ReadingBackgroundEnum.SiteDefault);
+    ReadingBackgroundEnum ReadingBackground = ReadingBackgroundEnum.SiteDefault,
+    SavedTagSelectionSortEnum SavedTagSelectionSort = SavedTagSelectionSortEnum.DateCreatedDesc);

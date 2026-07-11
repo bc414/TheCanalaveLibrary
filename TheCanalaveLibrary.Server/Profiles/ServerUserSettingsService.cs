@@ -67,7 +67,8 @@ public class ServerUserSettingsService(
             row.ReaderSettings.CollapseCommentThreads,
             row.ReaderSettings.DefaultPaginationSize,
             row.ReaderSettings.DefaultSearchSort,
-            row.ReaderSettings.ReadingBackground);
+            row.ReaderSettings.ReadingBackground,
+            row.ReaderSettings.SavedTagSelectionSort);
 
         PrivacySettingsDto privacy = new(
             row.PrivacySettings.ProfileVisibility,
@@ -147,7 +148,8 @@ public class ServerUserSettingsService(
             CollapseCommentThreads   = dto.CollapseCommentThreads,
             DefaultPaginationSize    = dto.DefaultPaginationSize,
             DefaultSearchSort        = dto.DefaultSearchSort,
-            ReadingBackground        = dto.ReadingBackground
+            ReadingBackground        = dto.ReadingBackground,
+            SavedTagSelectionSort    = dto.SavedTagSelectionSort
         };
 
         await writeDb.SaveChangesAsync();

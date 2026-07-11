@@ -10,6 +10,19 @@
    Outer Margin Rule: root has no m-* — parent controls spacing. *@
 
 <div class="flex flex-col gap-4">
+    @* ── Saved tag selections (WU43) — Load flyout + Save dialog, both self-contained and hidden
+       for anonymous viewers. Mounted once here so every TagFilter consumer gets them for free. ──── *@
+    @if (AllowSavedSelections)
+    {
+        <div class="flex flex-wrap items-center gap-2">
+            <SavedTagSelectionLoadFlyout CurrentIncludedTagIds="@CurrentIncludedTagIds"
+                                         CurrentExcludedTagIds="@CurrentExcludedTagIds"
+                                         OnApply="ApplySavedSelectionAsync" />
+            <SavedTagSelectionSaveDialog IncludedTagIds="@CurrentIncludedTagIds"
+                                         ExcludedTagIds="@CurrentExcludedTagIds" />
+        </div>
+    }
+
     @* ── AND/OR include-mode toggle (rendered only when the consumer opts in) ──────────── *@
     @if (AllowIncludeModeToggle)
     {
@@ -36,9 +49,13 @@
         </div>
     }
 
+    @* @key forces TagSelector to remount (re-run OnInitialized) when a saved selection is applied —
+       TagSelector only seeds its chips once at init, so mutating _included/_excluded alone wouldn't
+       visually refresh it. Composite key: unique per type (sibling identity) + _selectionGeneration
+       (changes on every Apply, forcing ALL siblings to remount together). WU43. *@
     @foreach (TagTypeEnum type in TagTypes)
     {
-        <div class="flex flex-col gap-2">
+        <div class="flex flex-col gap-2" @key="@($"{type}-{_selectionGeneration}")">
             <TagSelector TagType="@type"
                          Label="@("Include " + TypeLabel(type) + " tags")"
                          SelectedTags="@(_included.GetValueOrDefault(type, []))"
@@ -75,6 +92,13 @@
     [Parameter]
     public bool AllowIncludeModeToggle { get; set; } = false;
 
+    /// <summary>
+    /// Shows the Saved Tag Selections Load/Save controls in the header. Default true — an opt-out
+    /// seam for a future narrow context that shouldn't offer saving (none exists yet). WU43.
+    /// </summary>
+    [Parameter]
+    public bool AllowSavedSelections { get; set; } = true;
+
     /// <summary>Seed included tags (ids + display data). Applied on first render only.</summary>
     [Parameter]
     public IReadOnlyList<TagChipDto> IncludedTags { get; set; } = [];
@@ -108,6 +132,9 @@
     private Dictionary<TagTypeEnum, List<TagChipDto>> _included = [];
     private Dictionary<TagTypeEnum, List<TagChipDto>> _excluded = [];
     private TagIncludeMode _includeMode = TagIncludeMode.And;
+
+    // Bumped by ApplySavedSelectionAsync to force TagSelector remount — see the @key comment above.
+    private int _selectionGeneration;
 
     protected override void OnInitialized()
     {
@@ -147,6 +174,39 @@
     private async Task SetIncludeModeAsync(TagIncludeMode mode)
     {
         _includeMode = mode;
+        await EmitAsync();
+    }
+
+    // ── Saved tag selections (WU43) ───────────────────────────────────────────────────────────────
+
+    private IReadOnlyList<int> CurrentIncludedTagIds =>
+        [.. _included.Values.SelectMany(l => l.Select(t => t.TagId))];
+
+    private IReadOnlyList<int> CurrentExcludedTagIds =>
+        [.. _excluded.Values.SelectMany(l => l.Select(t => t.TagId))];
+
+    /// <summary>
+    /// Applied when the user clicks Apply in <c>SavedTagSelectionLoadFlyout</c> — DESTRUCTIVELY
+    /// replaces every type's bucket with the saved selection's chips, then re-emits. Tags whose type
+    /// isn't in the currently-shown <see cref="TagTypes"/> (a consumer may pass a narrower list) are
+    /// silently dropped, mirroring how <c>OnInitialized</c> seeds from <see cref="IncludedTags"/>/
+    /// <see cref="ExcludedTags"/>.
+    /// </summary>
+    private async Task ApplySavedSelectionAsync(SavedTagSelectionDetailDto detail)
+    {
+        _included = TagTypes.ToDictionary(t => t, _ => new List<TagChipDto>());
+        _excluded = TagTypes.ToDictionary(t => t, _ => new List<TagChipDto>());
+
+        foreach (TagChipDto tag in detail.IncludedTags)
+            if (_included.TryGetValue(tag.TagTypeId, out List<TagChipDto>? bucket))
+                bucket.Add(tag);
+
+        foreach (TagChipDto tag in detail.ExcludedTags)
+            if (_excluded.TryGetValue(tag.TagTypeId, out List<TagChipDto>? bucket))
+                bucket.Add(tag);
+
+        _selectionGeneration++; // forces every TagSelector to remount with the new seed — see @key above.
+
         await EmitAsync();
     }
 

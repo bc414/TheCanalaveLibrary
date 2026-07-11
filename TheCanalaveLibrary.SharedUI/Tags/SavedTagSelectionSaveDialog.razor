@@ -1,0 +1,32 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Compact dialog — "Save current…" (WU43, Feature 15). Captures the on-screen tag include/exclude
+   id-sets as a NEW SavedTagSelection. Deliberately separate from SavedTagSelectionLoadFlyout — Save
+   (additive capture) and Load (destructive replace) are opposite operations; folding a state-mutating
+   save form into the overwrite-driven list was assessed as unneeded fragility, not a simplification.
+   See layer2-services.md §"Saved Tag Selections Persist Only the Tag Axis".
+
+   Injection-free wrapper: the real content + @inject ISavedTagSelectionWriteService live in
+   SavedTagSelectionSaveDialogInner, instantiated only when AuthorizeView renders Authorized — see
+   layer3-logic.md "Deferring DI Behind AuthorizeView (WU43)". Mounted directly in TagFilter's header.
+   Hidden for anonymous viewers (bare <AuthorizeView>, no Roles) — saving needs an account.
+   Outer Margin Rule: root has no m-* — parent controls spacing. *@
+
+<AuthorizeView>
+    <Authorized>
+        <SavedTagSelectionSaveDialogInner IncludedTagIds="@IncludedTagIds"
+                                          ExcludedTagIds="@ExcludedTagIds"
+                                          OnSaved="@OnSaved" />
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    /// <summary>Current on-screen included tag ids (from TagFilter's aggregate, across all types).</summary>
+    [Parameter] public IReadOnlyList<int> IncludedTagIds { get; set; } = [];
+
+    /// <summary>Current on-screen excluded tag ids (from TagFilter's aggregate, across all types).</summary>
+    [Parameter] public IReadOnlyList<int> ExcludedTagIds { get; set; } = [];
+
+    /// <summary>Raised after a successful save with the new selection's id.</summary>
+    [Parameter] public EventCallback<int> OnSaved { get; set; }
+}

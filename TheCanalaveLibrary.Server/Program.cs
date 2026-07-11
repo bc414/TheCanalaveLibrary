@@ -264,6 +264,9 @@ var spriteBaseUrl = builder.Configuration["Sprites:BaseUrl"] ?? "/sprites/themes
 builder.Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService(spriteBaseUrl));
 builder.Services.AddScoped<ITagReadService, ServerTagReadService>();
 builder.Services.AddScoped<ITagWriteService, ServerTagWriteService>();
+// WU43 — write class serves both interfaces (mirrors ISeriesReadService/Write registration below).
+builder.Services.AddScoped<ISavedTagSelectionReadService, ServerSavedTagSelectionWriteService>();
+builder.Services.AddScoped<ISavedTagSelectionWriteService, ServerSavedTagSelectionWriteService>();
 // Server-only write-time probe — checks File.Exists at mod-write time (never at render time).
 // Post-MVP: replace with R2SpriteAssetProbe behind this same interface. See audit/Sprites.md L2.
 builder.Services.AddSingleton<ISpriteAssetProbe, LocalSpriteAssetProbe>();
