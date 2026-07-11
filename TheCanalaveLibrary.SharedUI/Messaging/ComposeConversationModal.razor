@@ -7,9 +7,9 @@
 
 @if (IsOpen)
 {
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4"
          @onclick="() => OnCancel.InvokeAsync()" role="dialog" aria-modal="true" aria-labelledby="compose-title">
-        <div class="w-full max-w-lg rounded-xl bg-(--color-surface) shadow-xl"
+        <div class="w-full max-w-lg rounded-xl border border-(--color-border) bg-(--color-surface-raised) shadow-prominent"
              @onclick:stopPropagation>
             <div class="border-b border-(--color-border) px-5 py-4">
                 <h2 id="compose-title" class="text-base font-semibold text-(--color-text)">
@@ -37,7 +37,7 @@
                     {
                         <input id="compose-recipient"
                                type="text"
-                               class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) placeholder-(--color-text-muted) focus:border-(--color-primary) focus:outline-none"
+                               class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) placeholder-(--color-text-muted) focus:border-(--color-action-ink) focus:outline-none"
                                placeholder="Username"
                                @bind="RecipientUsername"
                                @bind:event="oninput"
@@ -52,7 +52,7 @@
                     </label>
                     <input id="compose-subject"
                            type="text"
-                           class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) placeholder-(--color-text-muted) focus:border-(--color-primary) focus:outline-none"
+                           class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) placeholder-(--color-text-muted) focus:border-(--color-action-ink) focus:outline-none"
                            placeholder="What's this about?"
                            maxlength="2048"
                            @bind="Subject"
@@ -72,7 +72,7 @@
 
                 @if (!string.IsNullOrEmpty(ErrorMessage))
                 {
-                    <p class="text-sm text-red-600" role="alert">@ErrorMessage</p>
+                    <p class="text-sm text-(--color-danger)" role="alert">@ErrorMessage</p>
                 }
             </div>
         </div>

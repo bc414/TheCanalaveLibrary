@@ -39,7 +39,7 @@ else
         {
             <div class="flex justify-center border-b border-(--color-border) py-2">
                 <button type="button"
-                        class="text-sm text-(--color-primary) hover:underline disabled:opacity-50"
+                        class="text-sm text-(--color-action-ink) hover:underline disabled:opacity-50"
                         disabled="@BusyLoading"
                         @onclick="() => OnLoadOlderMessages.InvokeAsync()">
                     @if (BusyLoading)
@@ -67,7 +67,7 @@ else
         <div class="border-t border-(--color-border) px-4 py-3">
             @if (!string.IsNullOrEmpty(ErrorMessage))
             {
-                <p class="mb-2 text-sm text-red-600" role="alert">@ErrorMessage</p>
+                <p class="mb-2 text-sm text-(--color-danger)" role="alert">@ErrorMessage</p>
             }
             <MessageComposer OnSend="OnSendReply"
                              SendLabel="Send Reply"

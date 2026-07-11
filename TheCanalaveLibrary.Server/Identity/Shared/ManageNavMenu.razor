@@ -3,30 +3,30 @@
 
 @inject SignInManager<User> SignInManager
 
-<ul class="nav nav-pills flex-column">
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage" Match="NavLinkMatch.All">Profile</NavLink>
+<ul class="flex flex-col gap-1 rounded-xl border border-(--color-border) bg-(--color-surface) p-2">
+    <li>
+        <NavLink class="block rounded-md px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)" ActiveClass="bg-(--color-action-ink)/10 font-semibold text-(--color-action-ink)" href="Account/Manage" Match="NavLinkMatch.All">Profile</NavLink>
     </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/Email">Email</NavLink>
+    <li>
+        <NavLink class="block rounded-md px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)" ActiveClass="bg-(--color-action-ink)/10 font-semibold text-(--color-action-ink)" href="Account/Manage/Email">Email</NavLink>
     </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/ChangePassword">Password</NavLink>
+    <li>
+        <NavLink class="block rounded-md px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)" ActiveClass="bg-(--color-action-ink)/10 font-semibold text-(--color-action-ink)" href="Account/Manage/ChangePassword">Password</NavLink>
     </li>
     @if (hasExternalLogins)
     {
-        <li class="nav-item">
-            <NavLink class="nav-link" href="Account/Manage/ExternalLogins">External logins</NavLink>
+        <li>
+            <NavLink class="block rounded-md px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)" ActiveClass="bg-(--color-action-ink)/10 font-semibold text-(--color-action-ink)" href="Account/Manage/ExternalLogins">External logins</NavLink>
         </li>
     }
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/TwoFactorAuthentication">Two-factor authentication</NavLink>
+    <li>
+        <NavLink class="block rounded-md px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)" ActiveClass="bg-(--color-action-ink)/10 font-semibold text-(--color-action-ink)" href="Account/Manage/TwoFactorAuthentication">Two-factor authentication</NavLink>
     </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/Passkeys">Passkeys</NavLink>
+    <li>
+        <NavLink class="block rounded-md px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)" ActiveClass="bg-(--color-action-ink)/10 font-semibold text-(--color-action-ink)" href="Account/Manage/Passkeys">Passkeys</NavLink>
     </li>
-    <li class="nav-item">
-        <NavLink class="nav-link" href="Account/Manage/PersonalData">Personal data</NavLink>
+    <li>
+        <NavLink class="block rounded-md px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)" ActiveClass="bg-(--color-action-ink)/10 font-semibold text-(--color-action-ink)" href="Account/Manage/PersonalData">Personal data</NavLink>
     </li>
 </ul>
 

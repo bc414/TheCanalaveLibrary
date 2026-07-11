@@ -37,7 +37,7 @@
                    OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
 
         <button type="button"
-                class="self-center rounded-md bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 active:bg-sky-800 transition-colors disabled:opacity-50"
+                class="self-center rounded-md bg-(--color-mission) px-5 py-2 text-sm font-medium text-white hover:bg-(--color-mission-hover) active:bg-(--color-mission-hover) transition-colors disabled:opacity-50"
                 disabled="@IsLoadingMore"
                 @onclick="OnLoadMore">
             @(IsLoadingMore ? "Loading…" : "Give me more")
@@ -63,9 +63,9 @@
 @* ── Filter slide-in overlay ─────────────────────────────────────────────────────────── *@
 @if (_filterOpen)
 {
-    <div class="fixed inset-0 z-50 bg-black/50" @onclick="CloseFilter" id="search-filter-overlay"></div>
+    <div class="fixed inset-0 z-(--z-drawer) bg-(--color-backdrop)" @onclick="CloseFilter" id="search-filter-overlay"></div>
 
-    <div class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-(--color-surface) shadow-xl"
+    <div class="fixed inset-y-0 right-0 z-(--z-drawer) flex w-full max-w-sm flex-col bg-(--color-surface) shadow-prominent"
          @onclick:stopPropagation="true">
         <div class="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
             <h2 class="text-sm font-bold">Filters</h2>

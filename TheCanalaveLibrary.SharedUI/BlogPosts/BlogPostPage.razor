@@ -33,7 +33,7 @@ else
             @if (_post.AuthorDisplayName is not null)
             {
                 <a href="/profile/@_post.AuthorId"
-                   class="text-(--color-primary) hover:underline">@_post.AuthorDisplayName</a>
+                   class="text-(--color-action-ink) hover:underline">@_post.AuthorDisplayName</a>
                 <span>·</span>
             }
             <span>@_post.DateCreated.ToString("MMMM d, yyyy")</span>
@@ -57,14 +57,16 @@ else
             <div class="text-sm text-(--color-text-muted)">
                 About:
                 <a href="/story/@_post.StoryId"
-                   class="text-(--color-primary) hover:underline">@_post.LinkedStoryTitle</a>
+                   class="text-(--color-action-ink) hover:underline">@_post.LinkedStoryTitle</a>
             </div>
         }
 
         @* ── Content ───────────────────────────────────────────────────────── *@
-        <div class="prose prose-sm max-w-none text-(--color-text)">
-            <RichTextView HtmlContent="@_post.Content" />
-        </div>
+        <ContentSurface Variant="ContentSurfaceVariant.Reading">
+            <div class="prose prose-sm max-w-none text-(--color-text)">
+                <RichTextView HtmlContent="@_post.Content" />
+            </div>
+        </ContentSurface>
 
         @* ── Like button + author Edit link ─────────────────────────────────── *@
         <div class="flex items-center gap-4">
@@ -73,7 +75,7 @@ else
                 <button type="button"
                         disabled="@_likeBusy"
                         @onclick="HandleLikeAsync"
-                        class="flex items-center gap-1.5 text-sm transition-colors disabled:opacity-50 @(_isLiked ? "text-(--color-primary)" : "text-(--color-text-muted) hover:text-(--color-primary)")">
+                        class="flex items-center gap-1.5 text-sm transition-colors disabled:opacity-50 @(_isLiked ? "text-(--color-action-ink)" : "text-(--color-text-muted) hover:text-(--color-action-ink)")">
                     @(_isLiked ? "♥" : "♡") @_likeCount
                 </button>
             }
@@ -85,7 +87,7 @@ else
             @if (isAuthor)
             {
                 <a href="/blog/@_post.BlogPostId/edit"
-                   class="text-sm text-(--color-primary) hover:underline">Edit</a>
+                   class="text-sm text-(--color-action-ink) hover:underline">Edit</a>
             }
         </div>
 

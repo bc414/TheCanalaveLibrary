@@ -1,0 +1,245 @@
+@namespace TheCanalaveLibrary.SharedUI
+@page "/dev/design-gallery"
+@using Microsoft.Extensions.Hosting
+@inject IHostEnvironment HostEnv
+
+@* Development-only design gallery (same compiled-in-but-gated pattern as DevLoginBar /
+   DevErrorPlaygroundPage). Every element-role recipe composed AS IT WILL BE after the
+   design-solidification sweeps — the Phase A gate review happens here, on real canvas, instead
+   of on real pages that still carry pre-sweep confusion. Persists afterward as the living style
+   reference. Recipes: layer4-style.md §"Element Roles"; plan: transient-tinkering-narwhal. *@
+
+<PageTitle>Design Gallery</PageTitle>
+
+@if (!HostEnv.IsDevelopment())
+{
+    <p class="text-(--color-text-muted)">Not available.</p>
+}
+else
+{
+    <div class="mx-auto flex max-w-4xl flex-col gap-10 px-4 py-8">
+
+        @* ── Wayfinding: the plaque recipe ── *@
+        <div class="flex items-center justify-between gap-4">
+            <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+                Design Gallery <span class="text-sm font-normal text-(--color-text-muted)">(dev)</span>
+            </h1>
+            <div class="flex items-center gap-2 text-sm">
+                <span class="text-(--color-text)">Frame:</span>
+                @for (int i = 1; i <= 3; i++)
+                {
+                    var style = i;
+                    <button type="button"
+                            class="@(FrameButtonClasses(style)) rounded-md border px-3 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-action-ink)"
+                            @onclick="() => _frameStyle = style">
+                        @style — @(style == 1 ? "hairline" : style == 2 ? "side rails" : "bold")
+                    </button>
+                }
+            </div>
+        </div>
+
+        @* ── Canvas candidates (gate round 2: pick the grass) ── *@
+        <section class="flex flex-col gap-3">
+            <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text)">Canvas candidates — A is the live value (locked 2026-07-10); all three kept for beta-tester judgments</h2>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div class="flex flex-col gap-2 rounded-xl p-4" style="background:oklch(0.84 0.13 130)">
+                    <span class="text-xs font-bold text-(--color-text)">A — LIVE: deeper &amp; punchier (0.84 / 0.13 / 130)</span>
+                    <div class="rounded-lg border border-(--color-border) bg-(--color-surface) p-2 text-xs text-(--color-text)">card on A</div>
+                    <div class="rounded-lg border border-(--color-paper-frame)/50 border-x-4 border-x-(--color-paper-frame) bg-(--color-paper) p-2 text-xs text-(--color-text)">paper on A</div>
+                </div>
+                <div class="flex flex-col gap-2 rounded-xl p-4" style="background:oklch(0.86 0.11 136)">
+                    <span class="text-xs font-bold text-(--color-text)">B — brighter alternative (0.86 / 0.11 / 136)</span>
+                    <div class="rounded-lg border border-(--color-border) bg-(--color-surface) p-2 text-xs text-(--color-text)">card on B</div>
+                    <div class="rounded-lg border border-(--color-paper-frame)/50 border-x-4 border-x-(--color-paper-frame) bg-(--color-paper) p-2 text-xs text-(--color-text)">paper on B</div>
+                </div>
+                <div class="flex flex-col gap-2 rounded-xl p-4" style="background:oklch(0.88 0.10 140)">
+                    <span class="text-xs font-bold text-(--color-text)">C — lighter &amp; softer (0.88 / 0.10 / 140)</span>
+                    <div class="rounded-lg border border-(--color-border) bg-(--color-surface) p-2 text-xs text-(--color-text)">card on C</div>
+                    <div class="rounded-lg border border-(--color-paper-frame)/50 border-x-4 border-x-(--color-paper-frame) bg-(--color-paper) p-2 text-xs text-(--color-text)">paper on C</div>
+                </div>
+            </div>
+        </section>
+
+        @* ── Typography (site chrome fonts, now actually shipped) ── *@
+        <section class="flex flex-col gap-2">
+            <h2 class="font-display text-2xl font-semibold text-(--color-text)">Fraunces carries display headings</h2>
+            <p class="text-(--color-text)">Mulish carries body chrome — labels, buttons, cards, this sentence. Reader-facing
+                prose below keeps the reader's own font (Georgia default), untouched by either token.</p>
+        </section>
+
+        @* ── Content Surface: Reading variant ── *@
+        <section class="flex flex-col gap-3">
+            <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text)">Content Surface — Reading</h2>
+            <ContentSurface Variant="ContentSurfaceVariant.Reading" FrameStyle="_frameStyle">
+                <RichTextView HtmlContent="@SampleChapterHtml" />
+            </ContentSurface>
+        </section>
+
+        @* ── Content Surface: Inline variant (comment decomposition: Container header + CS body) ── *@
+        <section class="flex flex-col gap-3">
+            <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text)">Content Surface — Inline (comment decomposition)</h2>
+            <div class="flex flex-col gap-2 rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+                <div class="flex items-center gap-2">
+                    <div class="grid size-8 place-items-center rounded-full bg-(--color-surface-raised) text-xs font-bold text-(--color-text-muted)">RG</div>
+                    <span class="font-bold text-(--color-text)">ReaderGamma</span>
+                    <span class="text-xs text-(--color-text-muted)">Jul 4, 2026</span>
+                </div>
+                <ContentSurface Variant="ContentSurfaceVariant.Inline" FrameStyle="_frameStyle">
+                    <RichTextView HtmlContent="@SampleCommentHtml" />
+                </ContentSurface>
+                <div class="flex gap-3 text-sm text-(--color-text-muted)">
+                    <button type="button" class="hover:text-(--color-text)">Reply</button>
+                    <button type="button" class="hover:text-(--color-danger)">Report</button>
+                </div>
+            </div>
+        </section>
+
+        @* ── Content Surface: Input variant (live Quill) ── *@
+        <section class="flex flex-col gap-3">
+            <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text)">Content Surface — Input (live editor)</h2>
+            <ContentSurface Variant="ContentSurfaceVariant.Input" FrameStyle="_frameStyle">
+                <EditorView Placeholder="Write something on paper..." />
+            </ContentSurface>
+        </section>
+
+        @* ── Container: story-card mock with post-sweep recipes ── *@
+        <section class="flex flex-col gap-3">
+            <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text)">Container — card with Indicators</h2>
+            <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+                    <div class="grid h-28 w-full place-items-center rounded-lg bg-(--color-surface-raised) text-4xl text-(--color-text-muted)">S</div>
+                    <span class="font-bold text-(--color-text)">Seed Story: The Lighthouse Keeper</span>
+                    <span class="text-sm text-(--color-text-muted)">by AuthorAlpha</span>
+                    <div class="flex flex-wrap items-center gap-1.5 text-xs font-medium">
+                        <span class="rounded-full bg-(--color-success)/15 px-2 py-0.5 text-(--color-success) ring-1 ring-(--color-success)/30">Complete</span>
+                        <span class="rounded-full bg-(--color-warning)/15 px-2 py-0.5 text-(--color-warning) ring-1 ring-(--color-warning)/30">On Hiatus</span>
+                        <span class="rounded-full bg-(--color-text-muted)/15 px-2 py-0.5 text-(--color-text-muted) ring-1 ring-(--color-text-muted)/30">Draft</span>
+                        <span class="text-(--color-text-muted)">84K words</span>
+                    </div>
+                    @* Tag chips: SOLID type-color grounds, standard black/white text (ratified at gate:
+                       tint recipe stays for status badges only) *@
+                    <div class="flex flex-wrap gap-1 text-xs font-medium">
+                        <span class="rounded-full bg-(--color-tagtype-character) px-2 py-0.5 text-white">Cynthia</span>
+                        <span class="rounded-full bg-(--color-tagtype-setting) px-2 py-0.5 text-(--color-text)">Canalave City</span>
+                        <span class="rounded-full bg-(--color-tagtype-genre) px-2 py-0.5 text-white">Adventure</span>
+                        <span class="rounded-full bg-(--color-tagtype-warning) px-2 py-0.5 text-white">Violence</span>
+                        <span class="rounded-full bg-(--color-tagtype-crossover) px-2 py-0.5 text-white">Zelda</span>
+                    </div>
+                    <a href="#" class="text-sm text-(--color-action-ink) hover:underline">A link stays green (action-ink) →</a>
+                </div>
+                <div class="flex flex-col gap-4">
+                    <div class="flex flex-col gap-1 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2">
+                        <span class="text-xs uppercase tracking-wide text-(--color-text-muted)">Stat tile — words</span>
+                        <span class="text-lg font-bold tabular-nums text-(--color-text)">84,212</span>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-xs uppercase tracking-wide text-(--color-text-muted)">Reading progress (EXP blue)</span>
+                        <div class="h-2 overflow-hidden rounded-full bg-(--color-surface-raised) ring-1 ring-(--color-border)">
+                            <div class="h-full w-2/3 rounded-full bg-(--color-progress)"></div>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-xs uppercase tracking-wide text-(--color-text-muted)">Interaction squares — active vs read-only passive</span>
+                        <div class="flex gap-2">
+                            <span class="grid size-9 place-items-center rounded-md bg-(--color-interaction-favorite)"><svg viewBox="0 0 24 24" class="size-5 fill-white"><path d="M12 21C-8 10 6 -1 12 6C18 -1 32 10 12 21Z"/></svg></span>
+                            <span class="grid size-9 place-items-center rounded-md bg-(--color-interaction-favorite)/15 ring-1 ring-(--color-interaction-favorite)/30"><svg viewBox="0 0 24 24" class="size-5 fill-(--color-interaction-favorite)"><path d="M12 21C-8 10 6 -1 12 6C18 -1 32 10 12 21Z"/></svg></span>
+                            <span class="grid size-9 place-items-center rounded-md bg-(--color-interaction-follow)"><svg viewBox="0 0 24 24" class="size-5 fill-white"><path d="M6 8A6 6 0 0 1 18 8A6 6 0 0 1 6 8Z M9 14L6 22L9.5 20L12 21.5L14.5 20L18 22L15 14Z"/></svg></span>
+                            <span class="grid size-9 place-items-center rounded-md bg-(--color-interaction-complete)"><svg viewBox="0 0 24 24" class="size-5 fill-white"><path d="M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M6 12.5L5 14L10 19L20 7L18.5 5.5L10 16Z"/></svg></span>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                        <span class="text-xs uppercase tracking-wide text-(--color-text-muted)">Feature accents</span>
+                        <div class="flex gap-2">
+                            <span class="size-6 rounded-full bg-(--color-rec)" title="rec"></span>
+                            <span class="size-6 rounded-full bg-(--color-gem)" title="gem"></span>
+                            <span class="size-6 rounded-full bg-(--color-tab-my-stories)" title="tab-my-stories"></span>
+                            <span class="size-6 rounded-full bg-(--color-tab-reading)" title="tab-reading"></span>
+                            <span class="size-6 rounded-full bg-(--color-tab-abandoned)" title="tab-abandoned"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        @* ── Controls ── *@
+        <section class="flex flex-col gap-3">
+            <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text)">Controls (Tab through for focus rings)</h2>
+            <span class="text-xs uppercase tracking-wide text-(--color-text-muted)">Current tokens</span>
+            <div class="flex flex-wrap items-center gap-3">
+                <button type="button" class="rounded-md bg-(--color-action) px-4 py-1.5 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-action-ink)">Save (action)</button>
+                <button type="button" class="rounded-md bg-(--color-mission) px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-(--color-mission-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-action-ink)">Write (mission)</button>
+                <button type="button" class="rounded-md bg-(--color-danger) px-4 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-(--color-danger-strong) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-action-ink)">Delete (danger)</button>
+                <button type="button" class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-action-ink)">Cancel (neutral)</button>
+                <button type="button" disabled class="cursor-not-allowed rounded-md bg-(--color-action) px-4 py-1.5 text-sm font-semibold text-(--color-text) opacity-50">Disabled</button>
+                <input type="text" placeholder="Token input"
+                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" />
+            </div>
+            <p class="text-xs text-(--color-text-muted)">Lighter action/danger-strong locked (7.9:1 / 5.8:1). Mission stays 0.56 —
+                lighter blues fail AA with any text color (measured 3.7–4.4).</p>
+            <div class="flex flex-col gap-1 rounded-xl border border-(--color-border) bg-(--color-surface) p-3 text-sm">
+                <span class="text-xs uppercase tracking-wide text-(--color-text-muted)">Neutral row hover (the one recipe)</span>
+                <button type="button" class="rounded-md px-3 py-1.5 text-left text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">Menu row — hover me</button>
+                <button type="button" class="rounded-md bg-(--color-surface-hover) px-3 py-1.5 text-left font-semibold text-(--color-text)">Selected row</button>
+            </div>
+        </section>
+
+        @* ── Overlay: panel recipe + modal ── *@
+        <section class="flex flex-col gap-3">
+            <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text)">Overlay</h2>
+            <div class="flex flex-wrap items-start gap-6">
+                <div class="w-52 rounded-xl border border-(--color-border) bg-(--color-surface-raised) py-1 shadow-medium">
+                    <span class="block px-4 py-2 text-xs uppercase tracking-wide text-(--color-text-muted)">Dropdown panel</span>
+                    <button type="button" class="block w-full px-4 py-2 text-left text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">My Profile</button>
+                    <button type="button" class="block w-full px-4 py-2 text-left text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">Bookshelves</button>
+                    <div class="my-1 border-t border-(--color-border)"></div>
+                    <button type="button" class="block w-full px-4 py-2 text-left text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">Log out</button>
+                </div>
+                <button type="button" @onclick="() => _modalOpen = true"
+                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-action-ink)">
+                    Open modal (backdrop + prominent shadow)
+                </button>
+            </div>
+        </section>
+
+        @if (_modalOpen)
+        {
+            <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="() => _modalOpen = false">
+                <div class="w-full max-w-md rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation>
+                    <h3 class="mb-2 text-lg font-semibold text-(--color-text)">Modal on the Overlay recipe</h3>
+                    <p class="mb-4 text-sm text-(--color-text-muted)">Backdrop token, raised ground, border, prominent shadow, z-(--z-modal).</p>
+                    <div class="flex justify-end gap-2">
+                        <button type="button" class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-1.5 text-sm text-(--color-text) hover:bg-(--color-surface-hover)" @onclick="() => _modalOpen = false">Cancel</button>
+                        <button type="button" class="rounded-md bg-(--color-action) px-4 py-1.5 text-sm font-semibold text-(--color-text) hover:bg-(--color-action-hover)" @onclick="() => _modalOpen = false">Confirm</button>
+                    </div>
+                </div>
+            </div>
+        }
+
+        @* ── Indicator alerts (unified tint recipe) ── *@
+        <section class="flex flex-col gap-2">
+            <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text)">Indicator alerts</h2>
+            <div class="rounded-md border border-(--color-success)/40 bg-(--color-success)/10 px-4 py-2 text-sm text-(--color-success)">Saved — success tint recipe.</div>
+            <div class="rounded-md border border-(--color-warning)/40 bg-(--color-warning)/10 px-4 py-2 text-sm text-(--color-warning)">Unsaved draft — warning is now dark enough to be text.</div>
+            <div class="rounded-md border border-(--color-danger)/40 bg-(--color-danger)/10 px-4 py-2 text-sm text-(--color-danger)">Something went wrong — danger tint recipe.</div>
+        </section>
+
+        <p class="text-xs text-(--color-text-muted)">Gallery is Development-only; recipes mirror layer4-style.md §"Element Roles". Real pages adopt them in Phase B.</p>
+    </div>
+}
+
+@code {
+    private int _frameStyle = 2; // ratified default: side rails
+    private bool _modalOpen;
+
+    private string FrameButtonClasses(int style) => style == _frameStyle
+        ? "border-(--color-action-ink) bg-(--color-action) font-semibold text-(--color-text)"
+        : "border-(--color-border) bg-(--color-surface) text-(--color-text) hover:bg-(--color-surface-hover)";
+
+    private const string SampleChapterHtml =
+        "<p>The lighthouse keeper of Canalave had seen every kind of storm the strait could throw at the city, but nothing like the light that rose from Iron Island that night.</p>" +
+        "<p>She set down her tea, marked her place in the logbook, and reached for the lamp crank the way other people reach for a door handle — without looking, certain it would be there. This paragraph exists so you can judge the Reading variant: line length, paper against canvas, the frame at reading scale.</p>" +
+        "<p>Reader-owned typography renders this in Georgia at 16px unless the viewer's ReaderSettings say otherwise; the site's fonts stop at the frame.</p>";
+
+    private const string SampleCommentHtml =
+        "<p>This is a comment body on the Inline variant — same paper, same frame family, compact padding. The header above and actions below are Container metadata.</p>";
+}

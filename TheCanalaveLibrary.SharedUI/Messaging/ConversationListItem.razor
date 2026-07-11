@@ -7,7 +7,7 @@
    a link to /messages/{ConversationId}. No service injection. *@
 
 <a href="/messages/@Conversation.ConversationId"
-   class="block rounded-xl border @(IsSelected ? "border-(--color-primary) bg-(--color-primary)/10" : "border-(--color-border) bg-(--color-surface)") p-3 transition-colors hover:bg-(--color-primary)/10">
+   class="block rounded-xl border @(IsSelected ? "border-(--color-action-ink) bg-(--color-action-ink)/10" : "border-(--color-border) bg-(--color-surface)") p-3 transition-colors hover:bg-(--color-surface-hover)">
     <div class="flex items-start gap-3">
         <img src="@Conversation.OtherParticipant.AvatarUrl"
              alt="@Conversation.OtherParticipant.Username"
@@ -22,7 +22,7 @@
                 <div class="flex flex-none items-center gap-1.5">
                     @if (Conversation.UnreadCount > 0)
                     {
-                        <span class="rounded-full bg-(--color-primary) px-1.5 py-0.5 text-xs font-bold text-white"
+                        <span class="rounded-full bg-(--color-action) px-1.5 py-0.5 text-xs font-bold text-(--color-text)"
                               aria-label="@Conversation.UnreadCount unread messages">
                             @Conversation.UnreadCount
                         </span>

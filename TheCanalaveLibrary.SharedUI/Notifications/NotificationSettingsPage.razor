@@ -25,7 +25,7 @@ else
         <h1 class="text-2xl font-bold text-(--color-text)">Notification Settings</h1>
         <p class="mt-1 text-sm text-(--color-text-muted)">
             Control which notifications you receive by email and how they appear on your
-            <a href="/notifications" class="text-(--color-primary) hover:underline">notifications page</a>.
+            <a href="/notifications" class="text-(--color-action-ink) hover:underline">notifications page</a>.
         </p>
     </div>
 
@@ -70,7 +70,7 @@ else
                             @* Email toggle *@
                             <div class="flex w-16 justify-center">
                                 <input type="checkbox"
-                                       class="size-4 cursor-pointer accent-(--color-primary)"
+                                       class="size-4 cursor-pointer accent-(--color-action-ink)"
                                        checked="@d.EmailEnabled"
                                        title="@(d.EmailEnabled ? "Disable email for this notification type" : "Enable email for this notification type")"
                                        @onchange="async e => await HandleToggleAsync(d, emailEnabled: (bool)(e.Value ?? d.EmailEnabled), collapsed: d.Collapsed)" />
@@ -79,7 +79,7 @@ else
                             @* Collapsed toggle *@
                             <div class="flex w-20 justify-center">
                                 <input type="checkbox"
-                                       class="size-4 cursor-pointer accent-(--color-primary)"
+                                       class="size-4 cursor-pointer accent-(--color-action-ink)"
                                        checked="@d.Collapsed"
                                        title="@(d.Collapsed ? "Show this category expanded by default" : "Show this category collapsed by default")"
                                        @onchange="async e => await HandleToggleAsync(d, emailEnabled: d.EmailEnabled, collapsed: (bool)(e.Value ?? d.Collapsed))" />

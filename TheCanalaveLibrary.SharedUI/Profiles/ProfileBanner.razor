@@ -23,12 +23,13 @@
         {
             <img src="@Header.AvatarUrl"
                  alt="@Header.Username"
-                 class="h-20 w-20 shrink-0 rounded-full object-cover shadow-sm md:h-24 md:w-24" />
+                 class="h-20 w-20 shrink-0 rounded-full object-cover shadow-subtle md:h-24 md:w-24"
+                 data-fallback-src="/img/default-avatar.svg" />
         }
         else
         {
             @* Placeholder initial avatar *@
-            <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-(--color-surface-raised) text-3xl font-bold text-(--color-text-muted) shadow-sm md:h-24 md:w-24">
+            <div class="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-(--color-surface-raised) text-3xl font-bold text-(--color-text-muted) shadow-subtle md:h-24 md:w-24">
                 @Header.Username[0].ToString().ToUpperInvariant()
             </div>
         }
@@ -54,6 +55,7 @@
                              alt="@badge.Name"
                              title="@badge.Name"
                              class="h-5 w-5"
+                             data-hide-on-error
                              role="listitem" />
                     }
                 </div>
@@ -93,7 +95,7 @@
     @if (Header.OutgoingVouches.Count > 0)
     {
         <details class="group" open="@(!IsMobile)">
-            <summary class="cursor-pointer list-none text-sm font-medium text-(--color-text) hover:text-(--color-primary)">
+            <summary class="cursor-pointer list-none text-sm font-medium text-(--color-text) hover:text-(--color-action-ink)">
                 Vouches (@Header.OutgoingVouches.Count)
                 <span class="group-open:hidden text-(--color-text-muted)">▸</span>
                 <span class="hidden group-open:inline text-(--color-text-muted)">▾</span>

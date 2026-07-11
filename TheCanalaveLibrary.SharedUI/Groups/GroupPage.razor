@@ -4,6 +4,7 @@
 @inject IStoryReadService StoryService
 @inject IUserStoryInteractionReadService InteractionService
 @inject IBlogPostReadService BlogPostService
+@inject IToastService Toasts
 @inject IDeviceDetectionService DeviceService
 @inject NavigationManager Nav
 @using TheCanalaveLibrary.Core
@@ -61,13 +62,6 @@ else
 }
 
 @* Inline error strip (join/leave/story errors surface here) *@
-@if (_actionError is not null)
-{
-    <div class="fixed bottom-4 right-4 rounded-lg bg-(--color-danger)/90 px-4 py-2 text-sm text-white shadow-lg">
-        @_actionError
-    </div>
-}
-
 @code {
     [Parameter] public int GroupId { get; set; }
 
@@ -90,7 +84,6 @@ else
     private int _totalBlogPosts;
 
     private bool _isLoading = true;
-    private string? _actionError;
 
     private bool _initialized;
     private int _loadedGroupId = int.MinValue; // sentinel; no real GroupId equals this
@@ -159,7 +152,6 @@ else
 
     private async Task HandleJoinAsync()
     {
-        _actionError = null;
         try
         {
             await GroupService.JoinAsync(GroupId);
@@ -167,13 +159,12 @@ else
         }
         catch (Exception ex)
         {
-            _actionError = ex.Message;
+            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
         }
     }
 
     private async Task HandleLeaveAsync()
     {
-        _actionError = null;
         try
         {
             await GroupService.LeaveAsync(GroupId);
@@ -181,7 +172,7 @@ else
         }
         catch (Exception ex)
         {
-            _actionError = ex.Message;
+            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
         }
     }
 
@@ -189,7 +180,6 @@ else
 
     private async Task HandleStoryAddedAsync(AddGroupStoryDto dto)
     {
-        _actionError = null;
         try
         {
             await GroupService.AddStoryAsync(dto);
@@ -197,17 +187,16 @@ else
         }
         catch (ContentRatingExceededException ex)
         {
-            _actionError = ex.Message;
+            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
         }
         catch (Exception ex)
         {
-            _actionError = ex.Message;
+            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
         }
     }
 
     private async Task HandleStoryRemovedAsync(int groupStoryId)
     {
-        _actionError = null;
         try
         {
             await GroupService.RemoveStoryAsync(groupStoryId);
@@ -215,7 +204,7 @@ else
         }
         catch (Exception ex)
         {
-            _actionError = ex.Message;
+            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
         }
     }
 }

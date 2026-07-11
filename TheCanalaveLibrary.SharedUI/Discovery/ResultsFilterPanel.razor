@@ -26,7 +26,7 @@
             <label for="rfp-text-query" class="text-sm font-bold">Search</label>
             <input id="rfp-text-query"
                    type="search"
-                   class="rounded-md border border-surface-hover bg-surface px-3 py-1.5 text-sm placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-sky-500"
+                   class="rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                    placeholder="Search story titles and descriptions…"
                    value="@_textQuery"
                    @oninput="OnTextInput" />
@@ -58,7 +58,7 @@
         <div class="flex flex-col gap-1">
             <label for="rfp-sort" class="text-sm font-bold">Sort by</label>
             <select id="rfp-sort"
-                    class="rounded-md border border-surface-hover bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                    class="rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                     value="@((short)_sort)"
                     @onchange="OnSortChanged">
                 @foreach (DefaultSortOrder sort in VisibleSorts)
@@ -71,7 +71,7 @@
 
     @* ── Apply button ──────────────────────────────────────────────────────────────────── *@
     <button type="button"
-            class="rounded-md bg-sky-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-sky-700 active:bg-sky-800 transition-colors"
+            class="rounded-md bg-(--color-mission) px-4 py-1.5 text-sm font-medium text-white hover:bg-(--color-mission-hover) active:bg-(--color-mission-hover) transition-colors"
             @onclick="ApplyAsync">
         Apply Filters
     </button>

@@ -6,34 +6,128 @@
 @source "../../TheCanalaveLibrary.Client";
 
 /*
- * Design tokens — locked Phase C (2026-06-20).
- * Palette: green, rooted in Pokémon Gen 4/5 (Torterra, GBA/DS-era grass textures) — not blue,
- * not neon. Fonts: warm and readable, NOT the games' pixelated font.
- * Scope: these font tokens cover site chrome only (nav, labels, buttons, cards, headings).
- * RichTextView/RichTextEditor (all user-generated content) use the reader's own font setting
- * instead — see layer4-style.md "Reader Settings as CSS" for the boundary.
- * See .claude/skills/canalave-conventions/layer4-style.md for the full rationale; update that
- * file (Pattern Accumulation) if these values are tuned later.
+ * Design tokens — role-based manifest (Phase A of the design-solidification plan, 2026-07-10).
+ * Every token belongs to one of the seven element roles (Canvas / Wayfinding / Container /
+ * Content Surface / Control / Indicator / Overlay) — see layer4-style.md §"Element Roles" and
+ * .claude/design/surface-registry.md. Values below are the Phase A gate candidates; tuned live
+ * against /dev/design-gallery before locking.
+ * Fonts are site chrome only; RichTextView/EditorView content uses the reader's own settings
+ * (layer4-style.md "Reader Settings as CSS").
  */
 @theme {
     --font-display: "Fraunces", Georgia, serif;
     --font-body: "Mulish", system-ui, sans-serif;
 
-    --color-surface: oklch(0.97 0.015 95);
-    --color-surface-raised: oklch(0.99 0.008 95);
-    --color-primary: oklch(0.52 0.11 148);
-    --color-primary-strong: oklch(0.42 0.09 150);
-    --color-accent: oklch(0.74 0.12 75);
-    --color-text: oklch(0.27 0.02 120);
-    --color-text-muted: oklch(0.52 0.02 120);
-    --color-border: oklch(0.88 0.02 120);
-    --color-success: oklch(0.62 0.13 150);
-    --color-danger: oklch(0.58 0.20 25);
-    --color-warning: oklch(0.80 0.14 80);
+    /* ── Grounds ── */
+    --color-canvas: oklch(0.88 0.10 140);          /* Canvas */
+    --color-surface: oklch(0.91 0.07 92);          /* Container: path beige */
+    --color-surface-hover: oklch(0.86 0.08 88);    /* THE neutral hover / selected tint */
+    --color-surface-raised: oklch(0.94 0.05 92);   /* Overlay chrome: lighter than surface */
+    --color-paper: oklch(0.965 0.012 95);          /* Content Surface: dialog-box near-white */
+    --color-paper-frame: oklch(0.72 0.09 75);      /* Content Surface frame accent */
+    --color-backdrop: oklch(0.2 0.02 130 / 0.5);   /* Overlay dimming layer */
 
+    /* ── Ink & lines (web-neutral warm grays, contrast-derived) ── */
+    --color-text: oklch(0.25 0.015 90);
+    --color-text-muted: oklch(0.47 0.02 90);       /* ≥4.5:1 on paper AND surface */
+    --color-border: oklch(0.80 0.03 90);
+
+    /* ── Control ── */
+    --color-action: oklch(0.76 0.13 145);          /* everyday green FILL; pairs with --color-text ink (7.9:1) — locked lighter at gate */
+    --color-action-hover: oklch(0.70 0.13 145);
+    --color-action-ink: oklch(0.45 0.12 145);      /* text-shaped: links, active states, focus ring */
+    --color-mission: oklch(0.56 0.185 259);        /* surf blue: mission CTAs. LOCKED at gate — lighter blues (0.58–0.62) fail AA with any text (white 3.7–4.4); 0.56 = 4.77 with white */
+    --color-mission-hover: oklch(0.48 0.16 259);
+    --color-danger-strong: oklch(0.53 0.19 25);    /* destructive-button hover (5.8:1 white) — locked lighter at gate */
+
+    /* ── Indicator (HP trio + progress) ── */
+    --color-success: oklch(0.55 0.15 155);         /* HP green — yellower than action */
+    --color-warning: oklch(0.62 0.13 75);          /* HP amber — dark enough for text duty */
+    --color-danger: oklch(0.55 0.20 27);           /* HP red */
+    --color-progress: oklch(0.72 0.10 235);        /* EXP-bar light blue (NOT mission blue) */
+
+    /* ── Feature accents (deliberate; transcribed verbatim from *Visuals.cs) ── */
+    --color-interaction-favorite: #E8507A;
+    --color-interaction-private: #C040A8;
+    --color-interaction-follow: #E0782F;           /* Follow orange (tuned 2026-07-10: was #2DBBA0 Manaphy Teal — conflicted with rec/gem/my-stories greens) */
+    --color-interaction-complete: #E8B84B;
+    --color-interaction-readlater: #2E6FBF;
+    --color-interaction-ignore: #C04030;
+    --color-rec: #5BB85A;                          /* Roserade Green */
+    --color-gem: #1FA37A;                          /* Torterra Emerald */
+    --color-tab-my-stories: #2F7D4F;               /* Leafeon Green */
+    --color-tab-reading: #2E96A8;                  /* Lake Acuity Blue */
+    --color-tab-abandoned: #9A8580;                /* Wayward Cave Gray */
+    --color-notif-news: #3B82F6;                   /* notification categories (WU33 picks, tokenized at gate) */
+    --color-notif-profile: #6366F1;
+    --color-notif-collab: #0EA5E9;
+    --color-notif-groups: #7C3AED;
+    --color-notif-reports: #F97316;
+
+    /* ── Tag types (Pokémon type colors, ratified mapping 2026-07-10) ── */
+    --color-tagtype-character: #6890F0;            /* Water */
+    --color-tagtype-setting: #E0C068;              /* Ground */
+    --color-tagtype-genre: #F85888;                /* Psychic */
+    --color-tagtype-warning: #F08030;              /* Fire */
+    --color-tagtype-crossover: #7038F8;            /* Dragon */
+
+
+    /* ── Shadows (hybrid elevation: borders at rest; subtle=sticky bar, medium=dropdowns,
+       prominent=modals/drawers/toasts) ── */
     --shadow-subtle: 0 1px 2px oklch(0 0 0 / 0.06);
     --shadow-medium: 0 4px 12px oklch(0 0 0 / 0.10);
     --shadow-prominent: 0 12px 32px oklch(0 0 0 / 0.16);
+
+    /* ── Z ladder (consumed as z-(--z-x)) ── */
+    --z-dropdown: 10;
+    --z-sticky: 20;
+    --z-drawer: 30;
+    --z-modal: 40;
+    --z-toast: 50;
+    --z-error: 60;
+}
+
+/* Self-hosted site-chrome fonts (Phase A; CSP-safe same-origin). Reader-facing content fonts
+   remain ReaderSettings territory and are unaffected. */
+@font-face {
+    font-family: "Fraunces";
+    src: url("/fonts/fraunces-var.woff2") format("woff2");
+    font-weight: 400 700;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Mulish";
+    src: url("/fonts/mulish-var.woff2") format("woff2");
+    font-weight: 400 800;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: "Mulish";
+    src: url("/fonts/mulish-italic-var.woff2") format("woff2");
+    font-weight: 400 800;
+    font-style: italic;
+    font-display: swap;
+}
+
+/* Global keyboard-focus treatment (Phase C): every interactive Control shows the action-ink
+   ring on keyboard focus — the D/P menu-cursor outline, site-wide. :where() keeps specificity
+   at zero so component-level focus: recipes still layer on top. Mouse clicks don't trigger
+   :focus-visible, so pointer users see no change. */
+:where(a, button, [role="button"], input, select, textarea, summary):focus-visible {
+    outline: 2px solid var(--color-action-ink);
+    outline-offset: 2px;
+}
+
+/* The page ground + chrome body font. Nothing else paints the body (Tailwind preflight leaves
+   it transparent → browser-default white), so this single rule owns the site's overall
+   background. Components sit on it with bg-surface et al. RichTextView overrides font-family
+   inline (reader-owned), so the body font never leaks into UGC. */
+body {
+    background-color: var(--color-canvas);
+    font-family: var(--font-body);
+    color: var(--color-text);
 }
 
 /* Hand-written CSS migrated from the old wwwroot/app.css. Bootstrap-variable-dependent rules

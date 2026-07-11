@@ -10,12 +10,12 @@
    are siblings, not nested (nested <a> is invalid HTML). GroupDesktop/GroupMobile pass no owner
    params — they get the pure view-only card with IsPublished always true. *@
 
-<div class="flex flex-col gap-1.5 rounded-lg border border-(--color-border) bg-(--color-surface) p-4 transition-shadow hover:shadow-sm">
+<div class="flex flex-col gap-1.5 rounded-lg border border-(--color-border) bg-(--color-surface) p-4 transition-shadow hover:shadow-subtle">
 
     @* ── Title row ───────────────────────────────────────────────────────────── *@
     <div class="flex items-start justify-between gap-2">
         <a href="/blog/@Post.BlogPostId/@SlugFromTitle(Post.Title)"
-           class="font-semibold text-(--color-text) leading-snug hover:underline hover:text-(--color-primary)">
+           class="font-semibold text-(--color-text) leading-snug hover:underline hover:text-(--color-action-ink)">
             @Post.Title
         </a>
 
@@ -51,7 +51,7 @@
             @if (IsOwner && EditHref is not null)
             {
                 <a href="@EditHref"
-                   class="text-xs font-medium text-(--color-primary) hover:underline">
+                   class="text-xs font-medium text-(--color-action-ink) hover:underline">
                     Edit
                 </a>
             }

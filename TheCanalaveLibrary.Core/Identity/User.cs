@@ -13,12 +13,29 @@ public class ReaderSettings
     public float LineHeight { get; set; } = 1.5f; // Stored as an 'em' multiplier
     public int TextWidth { get; set; } = 800; // Max-width in px
     public bool JustifyText { get; set; } = false;
-    
+
+    /// <summary>
+    /// Reader-owned Content Surface background (Phase E of design solidification, 2026-07-10).
+    /// SiteDefault follows the site's paper tokens (and any future site theme); an explicit
+    /// choice overrides them on every ContentSurface. Precedence: user choice > site theme >
+    /// token default.
+    /// </summary>
+    public ReadingBackgroundEnum ReadingBackground { get; set; } = ReadingBackgroundEnum.SiteDefault;
+
     // Browsing Behavior
     public bool AutoLoadNextChapter { get; set; } = false;
     public bool CollapseCommentThreads { get; set; } = true;
     public int DefaultPaginationSize { get; set; } = 20;
     public DefaultSortOrder DefaultSearchSort { get; set; } = DefaultSortOrder.DatePublished;
+}
+
+/// <summary>Reading-surface background choices (stored as short in the ReaderSettings JSON).</summary>
+public enum ReadingBackgroundEnum : short
+{
+    SiteDefault = 0,
+    Light = 1,
+    Sepia = 2,
+    Dark = 3,
 }
 
 public class PrivacySettings

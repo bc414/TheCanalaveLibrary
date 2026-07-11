@@ -10,26 +10,24 @@
 
 <PageTitle>Profile</PageTitle>
 
-<h3>Profile</h3>
-<StatusMessage/>
+<div class="mx-auto flex w-full max-w-2xl flex-col gap-4 py-4">
+    <h3 class="text-lg font-semibold text-(--color-text)">Profile</h3>
+    <StatusMessage/>
 
-<div class="row">
-    <div class="col-xl-6">
-        <EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post">
-            <DataAnnotationsValidator/>
-            <ValidationSummary class="text-danger" role="alert"/>
-            <div class="form-floating mb-3">
-                <input type="text" value="@username" id="username" class="form-control" placeholder="Choose your username." disabled/>
-                <label for="username" class="form-label">Username</label>
-            </div>
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.PhoneNumber" id="Input.PhoneNumber" class="form-control" placeholder="Enter your phone number"/>
-                <label for="Input.PhoneNumber" class="form-label">Phone number</label>
-                <ValidationMessage For="() => Input.PhoneNumber" class="text-danger"/>
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Save</button>
-        </EditForm>
-    </div>
+    <EditForm Model="Input" FormName="profile" OnValidSubmit="OnValidSubmitAsync" method="post" class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+        <DataAnnotationsValidator/>
+        <ValidationSummary class="text-danger" role="alert"/>
+        <div class="flex flex-col gap-1">
+            <label for="username" class="text-sm font-semibold text-(--color-text)">Username</label>
+            <input type="text" value="@username" id="username" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" placeholder="Choose your username." disabled/>
+        </div>
+        <div class="flex flex-col gap-1">
+            <label for="Input.PhoneNumber" class="text-sm font-semibold text-(--color-text)">Phone number</label>
+            <InputText @bind-Value="Input.PhoneNumber" id="Input.PhoneNumber" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" placeholder="Enter your phone number"/>
+            <ValidationMessage For="() => Input.PhoneNumber" class="text-danger"/>
+        </div>
+        <button type="submit" class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">Save</button>
+    </EditForm>
 </div>
 
 @code {

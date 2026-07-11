@@ -21,8 +21,8 @@
     }
     else
     {
-        <div class="w-full h-36 rounded-lg bg-surface-hover flex items-center justify-center shrink-0">
-            <span class="text-4xl text-muted select-none">@(Story.Title.Length > 0 ? Story.Title[0] : '?')</span>
+        <div class="w-full h-36 rounded-lg bg-(--color-surface-raised) ring-1 ring-(--color-border) flex items-center justify-center shrink-0">
+            <span class="text-4xl text-(--color-text-muted) select-none">@(Story.Title.Length > 0 ? Story.Title[0] : '?')</span>
         </div>
     }
 
@@ -31,14 +31,15 @@
         <a href="@StoryHref" class="flex-1 font-bold text-text hover:underline min-w-0 truncate leading-snug">
             @Story.Title
         </a>
-        <button type="button" class="shrink-0 ml-auto text-muted hover:text-text leading-none"
+        <button type="button" class="shrink-0 ml-auto text-(--color-text-muted) hover:text-text leading-none"
                 @onclick="ToggleMenu" aria-label="Story options" aria-expanded="@_menuOpen">▾</button>
     </div>
 
     @* Caret dropdown *@
     @if (_menuOpen)
     {
-        <div class="absolute right-4 top-12 z-10 min-w-44 rounded-md bg-surface py-1 shadow-medium">
+        <div class="fixed inset-0 z-(--z-dropdown)" data-flyout-catcher @onclick="CloseMenu"></div>
+        <div class="absolute right-4 top-12 z-(--z-dropdown) min-w-44 rounded-xl border border-(--color-border) bg-(--color-surface-raised) py-1 shadow-medium">
             <a href="@StoryHref" class="block px-3 py-1.5 text-sm hover:bg-surface-hover"
                @onclick="CloseMenu">View Story</a>
             @if (OnDiscoverFromStory.HasDelegate)
@@ -72,26 +73,26 @@
     @* Author byline — plain hyperlink, NOT UserCard (spec §5.30.7) *@
     @if (Story.AuthorId is not null)
     {
-        <a href="@AuthorHref" class="text-sm text-muted hover:underline truncate min-w-0 -mt-1">
+        <a href="@AuthorHref" class="text-sm text-(--color-text-muted) hover:underline truncate min-w-0 -mt-1">
             by @Story.AuthorName
         </a>
     }
     else
     {
-        <span class="text-sm text-muted truncate -mt-1">by @Story.AuthorName</span>
+        <span class="text-sm text-(--color-text-muted) truncate -mt-1">by @Story.AuthorName</span>
     }
 
     @* Status, rating, word-count badges *@
     <div class="flex flex-wrap items-center gap-1.5">
         <span class="@StatusBadgeClass px-2 py-0.5 rounded-full text-xs font-medium">@StatusLabel</span>
         <span class="@RatingBadgeClass px-2 py-0.5 rounded-full text-xs font-medium">@RatingLabel</span>
-        <span class="text-xs text-muted">@WordCountDisplay</span>
+        <span class="text-xs text-(--color-text-muted)">@WordCountDisplay</span>
     </div>
 
     @* Short description — truncated preview, full text as tooltip *@
     @if (Story.ShortDescription is not null)
     {
-        <p class="text-sm text-muted line-clamp-3 leading-snug" title="@Story.ShortDescription">
+        <p class="text-sm text-(--color-text-muted) line-clamp-3 leading-snug" title="@Story.ShortDescription">
             @Story.ShortDescription
         </p>
     }
@@ -168,15 +169,7 @@
         _ => "Unknown"
     };
 
-    private string StatusBadgeClass => Story.StoryStatusId switch
-    {
-        StoryStatusEnum.InProgress => "bg-blue-100 text-blue-800",
-        StoryStatusEnum.Completed => "bg-green-100 text-green-800",
-        StoryStatusEnum.OnHiatus => "bg-yellow-100 text-yellow-800",
-        StoryStatusEnum.Cancelled => "bg-red-100 text-red-800",
-        StoryStatusEnum.Rewriting => "bg-purple-100 text-purple-800",
-        _ => "bg-surface-hover text-muted"   // Draft, PendingApproval, OpenBeta, Rejected
-    };
+    private string StatusBadgeClass => StatusBadges.ForStatus(Story.StoryStatusId);
 
     private string RatingLabel => Story.Rating switch
     {
@@ -186,13 +179,7 @@
         _ => "Unknown"
     };
 
-    private string RatingBadgeClass => Story.Rating switch
-    {
-        Rating.E => "bg-green-100 text-green-800",
-        Rating.T => "bg-yellow-100 text-yellow-800",
-        Rating.M => "bg-red-100 text-red-800",
-        _ => "bg-surface-hover text-muted"
-    };
+    private string RatingBadgeClass => StatusBadges.ForRating(Story.Rating);
 
     // ── Caret menu helpers ───────────────────────────────────────────────────────
 

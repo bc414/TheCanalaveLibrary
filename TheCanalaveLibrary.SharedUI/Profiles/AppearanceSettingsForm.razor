@@ -16,7 +16,7 @@
         <div class="flex flex-col gap-1">
             <label for="theme-select" class="text-sm font-medium text-(--color-text)">Theme</label>
             <select id="theme-select"
-                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                     value="@_themeId"
                     @onchange="e => _themeId = int.Parse((string)(e.Value ?? _themeId.ToString()))">
                 @foreach (var theme in Themes)
@@ -29,7 +29,7 @@
         @* Sprite pref *@
         <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
             <input type="checkbox"
-                   class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
+                   class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
                    checked="@_prefersAnimated"
                    @onchange="e => _prefersAnimated = (bool)(e.Value ?? false)" />
             Prefer animated Pokémon sprites
@@ -38,7 +38,7 @@
         @* Data saver *@
         <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
             <input type="checkbox"
-                   class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
+                   class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
                    checked="@_prefersDataSaver"
                    @onchange="e => _prefersDataSaver = (bool)(e.Value ?? false)" />
             Enable data saver mode
@@ -46,7 +46,7 @@
         </label>
 
         <button type="button"
-                class="self-start rounded-md bg-(--color-primary) px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50"
+                class="self-start rounded-md bg-(--color-action) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
                 disabled="@Busy"
                 @onclick="HandleSave">
             @(Busy ? "Saving…" : "Save Appearance")

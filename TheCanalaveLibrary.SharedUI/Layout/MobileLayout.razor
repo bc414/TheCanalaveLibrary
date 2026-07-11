@@ -11,9 +11,14 @@
         </article>
     </main>
 
-    <div class="flex items-center justify-between gap-4 px-4 py-3">
-        <!-- MOBILE BOTTOM BAR CONTENT / NAV MENU -->
-        <span>Home</span> | <span>Search</span> | <span>Profile</span>
+    @* Mobile bottom bar — Overlay role: raised sticky chrome (role treatment applied Phase D
+       2026-07-10; link targets are placeholders until the mobile-nav work-unit). *@
+    <div class="sticky bottom-0 z-(--z-sticky) flex items-center justify-between gap-4 border-t border-(--color-border) bg-(--color-surface-raised) px-4 py-3 shadow-subtle">
+        <nav class="flex items-center gap-4 text-sm" aria-label="Mobile navigation">
+            <a href="/" class="text-(--color-text) hover:text-(--color-action-ink)">Home</a>
+            <a href="/discover" class="text-(--color-text) hover:text-(--color-action-ink)">Search</a>
+            <a href="/bookshelves" class="text-(--color-text) hover:text-(--color-action-ink)">Profile</a>
+        </nav>
         <div class="flex items-center gap-3">
             <CanalaveErrorBoundary Label="chrome" Compact="true">
                 <MessagesNavLink />

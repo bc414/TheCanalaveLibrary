@@ -39,18 +39,24 @@
 
     private string AccentStyle => $"--accent:{AccentColor}";
 
+    // Read-only active squares render PASSIVE (Indicator, not Control — ratified 2026-07-10):
+    // accent tint ground + accent icon + no pointer affordance, so passive state never
+    // impersonates a clickable button. Interactive squares keep the WU7 three-state look,
+    // with the inactive ground on tokens instead of raw grays.
     private string ButtonClasses =>
-        (IsActive
-            ? "bg-[var(--accent)]"
-            : "bg-gray-200") +
+        (IsReadOnly
+            ? "bg-[color-mix(in_oklab,var(--accent)_15%,transparent)] ring-1 ring-[color-mix(in_oklab,var(--accent)_30%,transparent)] cursor-default"
+            : IsActive
+                ? "bg-[var(--accent)]"
+                : "bg-(--color-surface-hover)") +
         " size-9 rounded-md grid place-items-center transition-colors";
 
     private string IconClasses =>
-        (IsActive
-            ? "size-5 fill-white"
-            : IsReadOnly
-                ? "size-5 fill-gray-500"
-                : "size-5 fill-gray-500 group-hover:fill-[var(--accent)]") +
+        (IsReadOnly
+            ? "size-5 fill-[var(--accent)]"
+            : IsActive
+                ? "size-5 fill-white"
+                : "size-5 fill-(--color-text-muted) group-hover:fill-[var(--accent)]") +
         " transition-colors";
 
     private async Task HandleClick()

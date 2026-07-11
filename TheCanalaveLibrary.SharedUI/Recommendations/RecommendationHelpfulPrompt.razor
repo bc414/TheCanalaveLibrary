@@ -9,10 +9,10 @@
 
 @if (!_dismissed)
 {
-    <div class="mt-6 rounded-xl border border-[#5BB85A] bg-(--color-surface) p-4 shadow-sm"
+    <div class="mt-6 rounded-xl border border-(--color-rec) bg-(--color-surface) p-4 shadow-subtle"
          role="region" aria-label="Recommendation feedback">
         <div class="flex items-start gap-3">
-            <svg viewBox="0 0 24 24" class="mt-0.5 size-5 shrink-0" aria-hidden="true" fill="#5BB85A">
+            <svg viewBox="0 0 24 24" class="mt-0.5 size-5 shrink-0" aria-hidden="true" fill="var(--color-rec)">
                 <path d="@RecommendationIcons.RecommendationIconPath" />
             </svg>
             <div class="flex-1 min-w-0">
@@ -21,7 +21,7 @@
                 </p>
                 <div class="flex flex-wrap items-center gap-2">
                     <button type="button"
-                            class="rounded-md bg-[#5BB85A] px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#4aa349]"
+                            class="rounded-md bg-(--color-mission) px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-(--color-mission-hover)"
                             aria-label="Yes, this recommendation was helpful"
                             @onclick="HandleYes">
                         Yes, it was!

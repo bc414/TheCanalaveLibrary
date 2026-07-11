@@ -1,0 +1,60 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IUserSettingsService Settings
+
+@* Layout-level provider for the viewer's ReaderDisplaySettings cascade (Phase E, 2026-07-10).
+   This is the ancestor layer3.5-structure.md "Ambient Viewer Settings via Cascading Slim Bags"
+   always described — it existed as a design intent but was never wired, so RichTextView/
+   EditorView/ContentSurface fell back to defaults for every viewer. Loads the authenticated
+   viewer's ReaderSettings once per circuit and cascades the slim bag; anonymous viewers get
+   null (defaults). Settings changes take effect on next navigation/circuit — acceptable for
+   preference data; the settings page can prompt a reload if that ever feels stale. *@
+
+<CascadingValue Value="@_display">
+    @ChildContent
+</CascadingValue>
+
+@code {
+    [Parameter, EditorRequired] public RenderFragment ChildContent { get; set; } = null!;
+
+    // Cascaded by CascadingAuthenticationState in Routes.razor — the SharedUI convention
+    // (never IActiveUserContext here; see UserMenu).
+    [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
+
+    private ReaderDisplaySettings? _display;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthStateTask is null)
+        {
+            return;
+        }
+
+        AuthenticationState auth = await AuthStateTask;
+        if (auth.User.Identity?.IsAuthenticated != true)
+        {
+            return; // anonymous: cascade null, consumers use their defaults
+        }
+
+        try
+        {
+            UserSettingsDto settings = await Settings.GetMySettingsAsync();
+            _display = new ReaderDisplaySettings
+            {
+                FontName = settings.Reader.FontName,
+                FontSize = settings.Reader.FontSize,
+                LineHeight = settings.Reader.LineHeight,
+                TextWidth = settings.Reader.TextWidth,
+                JustifyText = settings.Reader.JustifyText,
+                ReadingBackground = settings.Reader.ReadingBackground,
+            };
+        }
+        catch (Exception)
+        {
+            // Preference data is best-effort chrome: a failed load falls back to defaults
+            // rather than blocking the page. (No swallow-silently violation: nothing to
+            // surface to the user — the reading experience simply uses defaults.)
+        }
+    }
+}

@@ -1,23 +1,15 @@
 @namespace TheCanalaveLibrary.Server
 <StatusMessage Message="@StatusMessage"/>
-<h3>Recovery codes</h3>
-<div class="alert alert-warning" role="alert">
-    <p>
-        <strong>Put these codes in a safe place.</strong>
-    </p>
-    <p>
-        If you lose your device and don't have the recovery codes you will lose access to your account.
-    </p>
+<h3 class="text-lg font-semibold text-(--color-text)">Recovery codes</h3>
+<div class="rounded-md border border-(--color-warning)/40 bg-(--color-warning)/10 px-4 py-2 text-sm text-(--color-warning)" role="alert">
+    <p><strong>Put these codes in a safe place.</strong></p>
+    <p>If you lose your device and don't have the recovery codes you will lose access to your account.</p>
 </div>
-<div class="row">
-    <div class="col-md-12">
-        @foreach (var recoveryCode in RecoveryCodes)
-        {
-            <div>
-                <code class="recovery-code">@recoveryCode</code>
-            </div>
-        }
-    </div>
+<div class="mt-3 grid grid-cols-1 gap-1 rounded-xl border border-(--color-border) bg-(--color-surface) p-4 sm:grid-cols-2">
+    @foreach (var recoveryCode in RecoveryCodes)
+    {
+        <code class="recovery-code rounded bg-(--color-surface-raised) px-2 py-1 text-sm text-(--color-text)">@recoveryCode</code>
+    }
 </div>
 
 @code {

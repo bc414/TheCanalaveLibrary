@@ -2092,3 +2092,31 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
   authoritative L6 doc); `TheCanalaveLibrary.PerfBaseline/results/`; audit L6 notes in
   `UserStoryInteractions.md` (the correction), `Comments.md`, `Notifications.md`, `Messaging.md`,
   `Stories.md`, `Tags.md`, `Following.md`, `Discovery.md` F31; `middle_plan_v2.md` Phase 1 item 3.
+
+## WU-DesignSystem — Design solidification: role system, token manifest, re-role sweep (plan transient-tinkering-narwhal) — DONE ✓ (2026-07-10)
+
+- **What:** The codebase's first semantics pass over the visual layer (git-verified etiology:
+  Tailwind v4 toolchain from first commit, v3-idiom blind authorship — every role-level choice
+  predates visible rendering). Ratified constitution + seven element roles (Canvave/Wayfinding/
+  Container/Content Surface/Control/Indicator/Overlay); locked role-based `@theme` manifest at a
+  live gate review on `/dev/design-gallery` (canvas vibrant grass, action light-fill+dark-ink,
+  mission surf blue held at 0.56 by the AA-4.5-everywhere contrast policy, HP-trio indicators,
+  Pokémon-type tag tokens, feature accents tokenized, Fraunces/Mulish shipped); built
+  `ContentSurface` (Reading/Inline/Input, side-rails frame) and wrapped all 17 RTV/EV sites
+  (MessageItem de-bubbled per ratification); `ReaderDisplayProvider` wired (cascade finally has
+  a provider) + Phase E `ReadingBackground` reader override (L1 JSON field + migration
+  `ReaderBackgroundOverride`, L2 service mapping, settings select, ContentSurface consumption);
+  action/mission families replaced primary/accent (alias bridge deleted); Interaction States
+  grammar (one neutral hover, global `:focus-visible` ring, z-ladder/backdrop/shadow tokens,
+  uniform dismissal via `dismiss.js`, tint-recipe badges/buttons); Identity fully restyled
+  (31 pages + Shared — Bootstrap debris deleted, carve-out revoked); vessels/plaques on all
+  bare pages; `scripts/check-design-tokens.ps1` wired into CI as the permanent silent-failure
+  feedback loop.
+- **Verified:** `dotnet test` all tiers green (479 RazorComponents incl. new ContentSurfaceTests
+  + 514 Unit + 413 Integration); token check green; browser walk (chapter reading on paper,
+  Discover/Bookshelves/Tags on the new system). Visual sign-off of every swept page remains the
+  standing L4 human pass — L4 cell Stages unchanged by this WU.
+- **Tool:** Claude Code (+ parallel subagents for wraps/vessels/Identity). **Pointer:**
+  `layer4-style.md` §"Element Roles"/"Interaction States"/"Prerequisite: Design Tokens";
+  `.claude/design/surface-registry.md` (audit + ratifications + sweep completion);
+  plan `~/.claude/plans/transient-tinkering-narwhal.md`; palette artifact (rev 3.1).

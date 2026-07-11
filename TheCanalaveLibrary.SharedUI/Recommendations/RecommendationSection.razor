@@ -10,7 +10,7 @@
 
 @* ── Section header ───────────────────────────────────────────────────────────── *@
 <div class="flex items-center gap-2 mb-4">
-    <svg viewBox="0 0 24 24" class="size-5 shrink-0" aria-hidden="true" fill="#5BB85A">
+    <svg viewBox="0 0 24 24" class="size-5 shrink-0" aria-hidden="true" fill="var(--color-rec)">
         <path d="@RecommendationIcons.RecommendationIconPath" />
     </svg>
     <h2 class="text-base font-semibold text-(--color-text)">
@@ -62,10 +62,10 @@ else
         @if (!_composing)
         {
             <button type="button"
-                    class="flex items-center gap-2 rounded-md border border-[#5BB85A] px-4 py-2 text-sm text-[#5BB85A] transition-colors hover:bg-[#5BB85A]/10"
+                    class="flex items-center gap-2 rounded-md border border-(--color-mission) px-4 py-2 text-sm text-(--color-mission) transition-colors hover:bg-(--color-mission)/10"
                     aria-label="Write a recommendation for this story"
                     @onclick="() => _composing = true">
-                <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true" fill="#5BB85A">
+                <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true" fill="var(--color-rec)">
                     <path d="@RecommendationIcons.RecommendationIconPath" />
                 </svg>
                 Recommend this story

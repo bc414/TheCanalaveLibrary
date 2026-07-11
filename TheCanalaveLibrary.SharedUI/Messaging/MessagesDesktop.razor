@@ -7,11 +7,11 @@
 <div class="flex h-[calc(100vh-4rem)] overflow-hidden">
 
     @* ── Left: conversation list sidebar ── *@
-    <aside class="flex w-72 shrink-0 flex-col border-r border-(--color-border)">
+    <aside class="flex w-72 shrink-0 flex-col border-r border-(--color-border) bg-(--color-surface)">
         <div class="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
-            <h1 class="text-base font-semibold text-(--color-text)">Messages</h1>
+            <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Messages</h1>
             <button type="button"
-                    class="rounded-md bg-(--color-primary) px-2.5 py-1 text-xs font-medium text-white hover:bg-(--color-primary-strong)"
+                    class="rounded-md bg-(--color-mission) px-2.5 py-1 text-xs font-medium text-white hover:bg-(--color-mission-hover)"
                     @onclick="() => OnNewConversation.InvokeAsync()">
                 New
             </button>

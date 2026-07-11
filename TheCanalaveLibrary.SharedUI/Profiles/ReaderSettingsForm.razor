@@ -16,7 +16,7 @@
             <div class="flex flex-col gap-1">
                 <label for="font-name" class="text-sm font-medium text-(--color-text)">Font</label>
                 <input id="font-name" type="text"
-                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                        value="@_fontName"
                        @onchange="e => _fontName = (string)(e.Value ?? _fontName)"
                        placeholder="Georgia" />
@@ -25,7 +25,7 @@
             <div class="flex flex-col gap-1">
                 <label for="font-size" class="text-sm font-medium text-(--color-text)">Font size (px)</label>
                 <input id="font-size" type="number" min="12" max="32"
-                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                        value="@_fontSize"
                        @onchange="e => _fontSize = int.TryParse((string?)e.Value, out int v) ? v : _fontSize" />
             </div>
@@ -33,7 +33,7 @@
             <div class="flex flex-col gap-1">
                 <label for="line-height" class="text-sm font-medium text-(--color-text)">Line height (em)</label>
                 <input id="line-height" type="number" min="1.0" max="3.0" step="0.1"
-                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                        value="@_lineHeight"
                        @onchange="e => _lineHeight = float.TryParse((string?)e.Value, out float v) ? v : _lineHeight" />
             </div>
@@ -41,15 +41,28 @@
             <div class="flex flex-col gap-1">
                 <label for="text-width" class="text-sm font-medium text-(--color-text)">Max text width (px)</label>
                 <input id="text-width" type="number" min="400" max="1400" step="50"
-                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                        value="@_textWidth"
                        @onchange="e => _textWidth = int.TryParse((string?)e.Value, out int v) ? v : _textWidth" />
             </div>
 
             <div class="flex flex-col gap-1">
+                <label for="reading-bg" class="text-sm font-medium text-(--color-text)">Reading background</label>
+                <select id="reading-bg"
+                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                        value="@((short)_readingBackground)"
+                        @onchange="e => _readingBackground = short.TryParse((string?)e.Value, out short v) ? (ReadingBackgroundEnum)v : _readingBackground">
+                    <option value="0">Site default</option>
+                    <option value="1">Light</option>
+                    <option value="2">Sepia</option>
+                    <option value="3">Dark</option>
+                </select>
+            </div>
+
+            <div class="flex flex-col gap-1">
                 <label for="page-size" class="text-sm font-medium text-(--color-text)">Default page size</label>
                 <select id="page-size"
-                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                         value="@_defaultPageSize"
                         @onchange="e => _defaultPageSize = int.TryParse((string?)e.Value, out int v) ? v : _defaultPageSize">
                     <option value="10">10</option>
@@ -61,7 +74,7 @@
             <div class="flex flex-col gap-1">
                 <label for="default-sort" class="text-sm font-medium text-(--color-text)">Default search sort</label>
                 <select id="default-sort"
-                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                         value="@((int)_defaultSort)"
                         @onchange="e => _defaultSort = (DefaultSortOrder)(int.TryParse((string?)e.Value, out int v) ? v : (int)_defaultSort)">
                     @foreach (DefaultSortOrder s in Enum.GetValues<DefaultSortOrder>())
@@ -76,7 +89,7 @@
         <div class="flex flex-col gap-2">
             <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
                 <input type="checkbox"
-                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
+                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
                        checked="@_justifyText"
                        @onchange="e => _justifyText = (bool)(e.Value ?? false)" />
                 Justify text
@@ -84,7 +97,7 @@
 
             <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
                 <input type="checkbox"
-                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
+                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
                        checked="@_autoLoadNext"
                        @onchange="e => _autoLoadNext = (bool)(e.Value ?? false)" />
                 Auto-load next chapter when reaching the end
@@ -92,7 +105,7 @@
 
             <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
                 <input type="checkbox"
-                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
+                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
                        checked="@_collapseThreads"
                        @onchange="e => _collapseThreads = (bool)(e.Value ?? false)" />
                 Collapse comment threads by default
@@ -100,7 +113,7 @@
         </div>
 
         <button type="button"
-                class="self-start rounded-md bg-(--color-primary) px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50"
+                class="self-start rounded-md bg-(--color-action) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
                 disabled="@Busy"
                 @onclick="HandleSave">
             @(Busy ? "Saving…" : "Save Reader Preferences")
@@ -123,6 +136,7 @@
     private bool _collapseThreads = true;
     private int _defaultPageSize = 20;
     private DefaultSortOrder _defaultSort = DefaultSortOrder.DatePublished;
+    private ReadingBackgroundEnum _readingBackground = ReadingBackgroundEnum.SiteDefault;
     private bool _seeded;
 
     protected override void OnParametersSet()
@@ -138,6 +152,7 @@
             _collapseThreads = Initial.CollapseCommentThreads;
             _defaultPageSize = Initial.DefaultPaginationSize;
             _defaultSort     = Initial.DefaultSearchSort;
+            _readingBackground = Initial.ReadingBackground;
             _seeded = true;
         }
     }
@@ -146,5 +161,5 @@
         await OnSave.InvokeAsync(new ReaderSettingsDto(
             _fontName, _fontSize, _lineHeight, _textWidth,
             _justifyText, _autoLoadNext, _collapseThreads,
-            _defaultPageSize, _defaultSort));
+            _defaultPageSize, _defaultSort, _readingBackground));
 }

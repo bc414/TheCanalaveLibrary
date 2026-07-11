@@ -48,14 +48,15 @@ public class MessageItemTests : BunitContext
     }
 
     [Fact]
-    public void MessageItem_OwnMessage_DoesNotShowSenderUsername()
+    public void MessageItem_OwnMessage_ShowsSenderUsername()
     {
         IRenderedComponent<MessageItem> cut = Render<MessageItem>(p => p
             .Add(c => c.Message, OwnMessage()));
 
-        // Own messages don't repeat the username (it's you).
-        cut.Markup.Should().NotContain("Me",
-            "own messages must not display the sender username label");
+        // Ratified 2026-07-10 (layer4-style.md "Element Roles"): BOTH sides show avatar + name;
+        // authorship is signaled by alignment, not by hiding the label.
+        cut.Markup.Should().Contain("Me",
+            "own messages display the sender username alongside the avatar");
     }
 
     // ── Other-participant message alignment ───────────────────────────────────────

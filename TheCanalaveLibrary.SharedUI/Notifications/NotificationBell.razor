@@ -23,7 +23,7 @@
 
             @* ── Bell button with unread badge ────────────────────────────────── *@
             <button type="button"
-                    class="relative flex items-center justify-center rounded-full p-2 transition-colors hover:bg-(--color-surface-raised)"
+                    class="relative flex items-center justify-center rounded-full p-2 transition-colors hover:bg-(--color-surface-hover)"
                     aria-label="@(_unreadCount > 0 ? $"{_unreadCount} unread notifications" : "Notifications")"
                     aria-expanded="@_open"
                     @onclick="Toggle">
@@ -32,7 +32,7 @@
                 </svg>
                 @if (_unreadCount > 0)
                 {
-                    <span class="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-(--color-primary) text-[10px] font-bold text-white"
+                    <span class="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-(--color-action) text-[10px] font-bold text-(--color-text)"
                           aria-hidden="true">
                         @(_unreadCount > 9 ? "9+" : _unreadCount.ToString())
                     </span>
@@ -42,7 +42,8 @@
             @* ── Flyout panel ──────────────────────────────────────────────────── *@
             @if (_open)
             {
-                <div class="absolute right-0 top-full z-10 mt-1 w-80 rounded-xl border border-(--color-border) bg-(--color-surface) shadow-medium">
+                <div class="fixed inset-0 z-(--z-dropdown)" data-flyout-catcher @onclick="Close"></div>
+                <div class="absolute right-0 top-full z-(--z-dropdown) mt-1 w-80 rounded-xl border border-(--color-border) bg-(--color-surface-raised) shadow-medium">
                     <div class="flex items-center justify-between border-b border-(--color-border) px-4 py-2">
                         <span class="text-sm font-semibold text-(--color-text)">Notifications</span>
                         <button type="button"
@@ -70,7 +71,7 @@
 
                     <div class="border-t border-(--color-border) px-4 py-2 text-center">
                         <a href="/notifications"
-                           class="text-xs text-(--color-primary) hover:underline transition-colors"
+                           class="text-xs text-(--color-action-ink) hover:underline transition-colors"
                            @onclick="Close">
                             See all notifications
                         </a>

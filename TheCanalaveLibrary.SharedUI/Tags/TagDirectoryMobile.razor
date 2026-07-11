@@ -15,7 +15,7 @@
                     <h2 class="inline text-base font-semibold text-text">@TagTypeLayout.Label(group.TagType)</h2>
                     <span class="ml-2 text-sm text-(--color-text-muted)">(@group.Nodes.Count)</span>
                 </summary>
-                <div class="mt-2">
+                <div class="mt-2 rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
                     <TagDirectorySection Group="group" />
                 </div>
             </details>
@@ -24,7 +24,9 @@
         {
             <section class="mb-4">
                 <h2 class="mb-2 text-base font-semibold text-text">@TagTypeLayout.Label(group.TagType)</h2>
-                <TagDirectorySection Group="group" />
+                <div class="rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+                    <TagDirectorySection Group="group" />
+                </div>
             </section>
         }
     }

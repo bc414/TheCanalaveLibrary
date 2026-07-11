@@ -14,62 +14,44 @@
 
 <PageTitle>Log in</PageTitle>
 
-<h1>Log in</h1>
-<div class="row">
-    <div class="col-lg-6">
-        <section>
-            <StatusMessage Message="@errorMessage"/>
-            <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login">
-                <DataAnnotationsValidator/>
-                <h2>Use a local account to log in.</h2>
-                <hr/>
-                <ValidationSummary class="text-danger" role="alert"/>
-                <div class="form-floating mb-3">
-                    <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username webauthn" aria-required="true" placeholder="name@example.com"/>
-                    <label for="Input.Email" class="form-label">Email</label>
-                    <ValidationMessage For="() => Input.Email" class="text-danger"/>
+<div class="mx-auto flex w-full max-w-2xl flex-col gap-4 py-8">
+    <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Log in</h1>
+    <section class="flex flex-col gap-4">
+        <StatusMessage Message="@errorMessage"/>
+        <EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login">
+            <DataAnnotationsValidator/>
+            <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+                <h2 class="text-base font-semibold text-(--color-text)">Use a local account to log in.</h2>
+                <ValidationSummary class="text-danger text-sm" role="alert"/>
+                <div class="flex flex-col gap-1">
+                    <label for="Input.Email" class="text-sm font-semibold text-(--color-text)">Email</label>
+                    <InputText @bind-Value="Input.Email" id="Input.Email" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" autocomplete="username webauthn" aria-required="true" placeholder="name@example.com"/>
+                    <ValidationMessage For="() => Input.Email" class="text-danger text-sm"/>
                 </div>
-                <div class="form-floating mb-3">
-                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" aria-required="true" placeholder="password"/>
-                    <label for="Input.Password" class="form-label">Password</label>
-                    <ValidationMessage For="() => Input.Password" class="text-danger"/>
+                <div class="flex flex-col gap-1">
+                    <label for="Input.Password" class="text-sm font-semibold text-(--color-text)">Password</label>
+                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" autocomplete="current-password" aria-required="true" placeholder="password"/>
+                    <ValidationMessage For="() => Input.Password" class="text-danger text-sm"/>
                 </div>
-                <div class="checkbox mb-3">
-                    <label class="form-label">
-                        <InputCheckbox @bind-Value="Input.RememberMe" class="darker-border-checkbox form-check-input"/>
-                        Remember me
-                    </label>
+                <label class="flex items-center gap-2 text-sm text-(--color-text)">
+                    <InputCheckbox @bind-Value="Input.RememberMe" class="rounded border-(--color-border) accent-(--color-action-ink)"/>
+                    Remember me
+                </label>
+                <button type="submit" class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">Log in</button>
+                <span class="text-center text-xs uppercase tracking-wide text-(--color-text-muted)">OR</span>
+                <PasskeySubmit Operation="PasskeyOperation.Request" Name="Input.Passkey" EmailName="Input.Email" class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">Log in with a passkey</PasskeySubmit>
+                <div class="flex flex-col gap-1 text-sm">
+                    <a href="Account/ForgotPassword" class="text-(--color-action-ink) hover:underline">Forgot your password?</a>
+                    <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))" class="text-(--color-action-ink) hover:underline">Register as a new user</a>
+                    <a href="Account/ResendEmailConfirmation" class="text-(--color-action-ink) hover:underline">Resend email confirmation</a>
                 </div>
-                <div>
-                    <button type="submit" class="w-100 btn btn-lg btn-primary">Log in</button>
-                </div>
-                <hr/>
-                <div class="d-flex flex-column">
-                    <span class="text-secondary mx-auto mt-2">OR</span>
-                    <PasskeySubmit Operation="PasskeyOperation.Request" Name="Input.Passkey" EmailName="Input.Email" class="btn btn-link mx-auto">Log in with a passkey</PasskeySubmit>
-                </div>
-                <hr/>
-                <div>
-                    <p>
-                        <a href="Account/ForgotPassword">Forgot your password?</a>
-                    </p>
-                    <p>
-                        <a href="@(NavigationManager.GetUriWithQueryParameters("Account/Register", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl }))">Register as a new user</a>
-                    </p>
-                    <p>
-                        <a href="Account/ResendEmailConfirmation">Resend email confirmation</a>
-                    </p>
-                </div>
-            </EditForm>
-        </section>
-    </div>
-    <div class="col-lg-4 col-lg-offset-2">
-        <section>
-            <h3>Use another service to log in.</h3>
-            <hr/>
-            <ExternalLoginPicker/>
-        </section>
-    </div>
+            </div>
+        </EditForm>
+    </section>
+    <section class="flex flex-col gap-3">
+        <h3 class="text-base font-semibold text-(--color-text)">Use another service to log in.</h3>
+        <ExternalLoginPicker/>
+    </section>
 </div>
 
 @code {

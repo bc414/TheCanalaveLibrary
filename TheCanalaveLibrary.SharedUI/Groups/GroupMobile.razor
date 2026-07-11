@@ -33,7 +33,7 @@
             @if (CurrentUserRole is null)
             {
                 <button type="button" @onclick="OnJoin"
-                        class="rounded-md bg-(--color-primary) px-4 py-2 text-sm font-medium text-white">
+                        class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover)">
                     Join Group
                 </button>
             }
@@ -49,7 +49,7 @@
                 @if (CurrentUserRole == GroupRole.Admin)
                 {
                     <a href="/group/@Group.GroupId/edit"
-                       class="text-sm text-(--color-primary) hover:underline">Edit</a>
+                       class="text-sm text-(--color-action-ink) hover:underline">Edit</a>
                 }
             }
         </div>
@@ -62,7 +62,7 @@
             @if (CurrentUserRole is not null)
             {
                 <button type="button" @onclick="ToggleAddStory"
-                        class="text-sm text-(--color-primary) hover:underline">
+                        class="text-sm text-(--color-action-ink) hover:underline">
                     @(_showAddStory ? "Cancel" : "+ Add")
                 </button>
             }
@@ -72,14 +72,14 @@
         {
             <div class="rounded-lg border border-(--color-border) bg-(--color-surface) p-3 flex flex-col gap-2">
                 <input type="number" @bind="_addStoryId" placeholder="Story ID"
-                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)" />
+                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" />
                 @if (_addStoryError is not null)
                 {
                     <p class="text-xs text-(--color-danger)">@_addStoryError</p>
                 }
                 <button type="button" @onclick="HandleAddStoryAsync"
                         disabled="@(_addStoryId is null)"
-                        class="rounded-md bg-(--color-primary) px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
+                        class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
                     Add Story
                 </button>
             </div>
@@ -118,7 +118,7 @@
             @if (CurrentUserRole is not null)
             {
                 <a href="/group/@Group.GroupId/blog/new"
-                   class="text-sm text-(--color-primary) hover:underline">+ New Post</a>
+                   class="text-sm text-(--color-action-ink) hover:underline">+ New Post</a>
             }
         </div>
         @if (BlogPosts.Length == 0)

@@ -13,7 +13,7 @@
     @if (_isVouched)
     {
         <button type="button"
-                class="rounded-lg border border-accent px-3 py-1.5 text-sm font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
+                class="rounded-lg border border-(--color-mission) px-3 py-1.5 text-sm font-medium text-(--color-mission) hover:bg-(--color-mission)/10 disabled:opacity-50"
                 @onclick="HandleRemoveVouch"
                 disabled="@_busy">
             ✓ Vouched
@@ -23,7 +23,7 @@
     {
         <span title="You've used all @FollowingConstants.MaxVouchesPerUser vouches. Remove one to add another.">
             <button type="button"
-                    class="rounded-lg border border-muted px-3 py-1.5 text-sm font-medium text-muted cursor-not-allowed opacity-50"
+                    class="rounded-lg border border-(--color-border) px-3 py-1.5 text-sm font-medium text-(--color-text-muted) cursor-not-allowed opacity-50"
                     disabled="true"
                     aria-disabled="true">
                 Vouch
@@ -33,7 +33,7 @@
     else
     {
         <button type="button"
-                class="rounded-lg border border-accent px-3 py-1.5 text-sm font-medium text-accent hover:bg-accent/10 disabled:opacity-50"
+                class="rounded-lg border border-(--color-mission) px-3 py-1.5 text-sm font-medium text-(--color-mission) hover:bg-(--color-mission)/10 disabled:opacity-50"
                 @onclick="() => _dialogOpen = true"
                 disabled="@_busy">
             Vouch
@@ -47,13 +47,15 @@
                CancelText="Cancel"
                OnConfirm="HandleSubmitVouch"
                OnCancel="() => _editorRef = null!">
-    <p class="mb-2 text-sm text-muted">
+    <p class="mb-2 text-sm text-(--color-text-muted)">
         Vouch to publicly endorse this user. Your vouch will appear on their profile.
         You have @(FollowingConstants.MaxVouchesPerUser - OutgoingVouchCount) vouch
         @(FollowingConstants.MaxVouchesPerUser - OutgoingVouchCount == 1 ? "slot" : "slots") remaining.
     </p>
-    <p class="mb-2 text-sm text-muted">Add an optional note (rich text supported):</p>
-    <EditorView @ref="_editorRef" Placeholder="Why are you vouching for this user? (optional)" />
+    <p class="mb-2 text-sm text-(--color-text-muted)">Add an optional note (rich text supported):</p>
+    <ContentSurface Variant="ContentSurfaceVariant.Input">
+        <EditorView @ref="_editorRef" Placeholder="Why are you vouching for this user? (optional)" />
+    </ContentSurface>
 </ConfirmDialog>
 
 @code {

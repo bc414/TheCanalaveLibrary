@@ -34,13 +34,13 @@ else
 {
     <div class="mx-auto max-w-2xl px-4 py-8">
         <div class="mb-6 flex items-center justify-between gap-4">
-            <h1 class="text-2xl font-bold text-(--color-text)">
+            <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
                 @(_isNew ? "New Chapter" : $"Edit Chapter {ChapterNumber}")
             </h1>
             @if (!_isNew)
             {
                 <a href="/story/@StoryId/@ChapterNumber"
-                   class="text-sm text-(--color-primary) hover:underline">
+                   class="text-sm text-(--color-action-ink) hover:underline">
                     ← Back to reading
                 </a>
             }
@@ -58,7 +58,7 @@ else
                         string versionLabel = version.VersionName ?? (version.IsPrimary ? "Primary" : $"Version {version.VersionOrder}");
                         <a href="@VersionEditUrl(version)"
                            class="@(isCurrent
-                               ? "rounded-md bg-(--color-primary)/10 px-3 py-1.5 text-sm font-semibold text-(--color-primary) ring-1 ring-(--color-primary)"
+                               ? "rounded-md bg-(--color-action-ink)/10 px-3 py-1.5 text-sm font-semibold text-(--color-action-ink) ring-1 ring-(--color-action-ink)"
                                : "rounded-md border border-(--color-border) px-3 py-1.5 text-sm text-(--color-text) hover:bg-(--color-surface-hover)")">
                             @versionLabel
                             @if (version.IsPrimary)
@@ -74,7 +74,7 @@ else
                         @if (!_currentVersion.IsPrimary)
                         {
                             <button type="button"
-                                    class="text-sm text-(--color-primary) hover:underline"
+                                    class="text-sm text-(--color-action-ink) hover:underline"
                                     @onclick="SetAsPrimaryAsync">
                                 Set as default
                             </button>
@@ -102,7 +102,7 @@ else
                 else
                 {
                     <span class="text-sm text-(--color-text-muted)">Draft</span>
-                    <button type="button" class="text-sm text-(--color-primary) hover:underline"
+                    <button type="button" class="text-sm text-(--color-action-ink) hover:underline"
                             @onclick="() => SetPublishedAsync(true)">Publish</button>
                 }
             </div>

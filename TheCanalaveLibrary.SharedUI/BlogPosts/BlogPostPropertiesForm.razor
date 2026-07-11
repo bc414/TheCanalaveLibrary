@@ -21,7 +21,7 @@
     <div class="flex flex-col gap-1">
         <label class="text-sm font-semibold text-(--color-text)">Title</label>
         <InputText @bind-Value="ViewModel.Title"
-                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                    placeholder="Post title" />
         <ValidationMessage For="@(() => ViewModel.Title)" class="text-sm text-(--color-danger)" />
     </div>
@@ -29,7 +29,9 @@
     @* ── Content (rich text) ──────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
         <label class="text-sm font-semibold text-(--color-text)">Content</label>
-        <EditorView @ref="_editor" Html="@ViewModel.Content" Placeholder="Write your post…" />
+        <ContentSurface Variant="ContentSurfaceVariant.Input">
+            <EditorView @ref="_editor" Html="@ViewModel.Content" Placeholder="Write your post…" />
+        </ContentSurface>
     </div>
 
     @* ── Rating + Spoilers (side by side) ────────────────────────────────────── *@
@@ -37,7 +39,7 @@
         <div class="flex flex-col gap-1">
             <label class="text-sm font-semibold text-(--color-text)">Rating</label>
             <InputSelect @bind-Value="ViewModel.Rating"
-                         class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)">
+                         class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                 @foreach (Rating r in Enum.GetValues<Rating>())
                 {
                     <option value="@r">@r.ToString()</option>
@@ -46,7 +48,7 @@
         </div>
         <div class="flex items-center gap-3 pt-6">
             <InputCheckbox @bind-Value="ViewModel.HasSpoilers" id="has-spoilers"
-                           class="h-4 w-4 rounded border-(--color-border) text-(--color-primary) focus:ring-(--color-primary)" />
+                           class="h-4 w-4 rounded border-(--color-border) text-(--color-action-ink) focus:ring-(--color-action-ink)" />
             <label for="has-spoilers" class="text-sm text-(--color-text)">Contains spoilers</label>
         </div>
     </div>
@@ -57,7 +59,7 @@
         <div class="flex flex-col gap-1">
             <label class="text-sm font-semibold text-(--color-text)">Linked Story <span class="font-normal text-(--color-text-muted)">(optional)</span></label>
             <select @bind="ViewModel.StoryId"
-                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)">
+                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                 <option value="">— none —</option>
                 @foreach ((int id, string title) in AuthorStories)
                 {
@@ -71,7 +73,7 @@
     @* ── Publish toggle ───────────────────────────────────────────────────────── *@
     <div class="flex items-center gap-3">
         <InputCheckbox @bind-Value="ViewModel.IsPublished" id="is-published"
-                       class="h-4 w-4 rounded border-(--color-border) text-(--color-primary) focus:ring-(--color-primary)" />
+                       class="h-4 w-4 rounded border-(--color-border) text-(--color-action-ink) focus:ring-(--color-action-ink)" />
         <label for="is-published" class="text-sm text-(--color-text)">
             Publish <span class="text-(--color-text-muted)">(uncheck to save as draft)</span>
         </label>
@@ -80,7 +82,7 @@
     @* ── Submit ──────────────────────────────────────────────────────────────── *@
     <button type="submit"
             disabled="@ViewModel.IsLoading"
-            class="self-start rounded-md bg-(--color-primary) px-5 py-2 font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50">
+            class="self-start rounded-md bg-(--color-action) px-5 py-2 font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
         @(ViewModel.IsLoading ? "Saving…" : SubmitLabel)
     </button>
 </EditForm>

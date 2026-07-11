@@ -7,15 +7,18 @@
 
 <div class="flex flex-col gap-4 px-4 py-4">
 
-    @* ── Tab bar ─────────────────────────────────────────────────────────────────────── *@
-    <nav class="flex flex-wrap gap-1 border-b border-(--color-border) pb-2" aria-label="Bookshelf tabs">
+    @* ── Tab bar ─────────────────────────────────────────────────────────────────────────
+       Grounded Wayfinding bar (ProfileDesktop model). AccentColor is a var(--color-tab-*)
+       token reference since the Phase A lock, so the active tint uses color-mix() — the old
+       {hex}22 alpha-suffix concatenation is impossible with var() and was off-token anyway. *@
+    <nav class="flex flex-wrap gap-1 rounded-t-md border-b border-(--color-border) bg-(--color-surface-raised) px-2 pt-2 pb-0" aria-label="Bookshelf tabs">
         @foreach (BookshelfTab tab in BookshelfTabVisuals.AllTabs)
         {
             var info = BookshelfTabVisuals.For(tab);
             bool isActive = tab == Tab;
             <a href="/bookshelves/@info.Slug"
                class="@TabClasses(isActive)"
-               style="@(isActive ? $"background-color:{info.AccentColor}22;color:{info.AccentColor};border-bottom:2px solid {info.AccentColor};" : "")"
+               style="@(isActive ? $"background-color:color-mix(in oklab, {info.AccentColor} 15%, transparent);color:{info.AccentColor};border-bottom:2px solid {info.AccentColor};" : "")"
                aria-current="@(isActive ? "page" : null)">
                 <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24"
                      style="fill:@(isActive ? info.AccentColor : "currentColor")" aria-hidden="true">

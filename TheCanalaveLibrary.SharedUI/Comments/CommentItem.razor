@@ -52,11 +52,13 @@
         @* Spoiler: blurred content with an overlay reveal button (§5.9.1) *@
         <div class="relative select-none">
             <div class="pointer-events-none blur-md">
-                <RichTextView HtmlContent="@Comment.CommentText" />
+                <ContentSurface Variant="ContentSurfaceVariant.Inline">
+                    <RichTextView HtmlContent="@Comment.CommentText" />
+                </ContentSurface>
             </div>
             <div class="absolute inset-0 flex items-center justify-center">
                 <button type="button"
-                        class="rounded-md bg-(--color-surface) px-4 py-2 text-sm font-medium text-(--color-text) shadow-md"
+                        class="rounded-md bg-(--color-surface) px-4 py-2 text-sm font-medium text-(--color-text) shadow-medium"
                         @onclick="HandleRevealClick"
                         aria-label="Reveal spoiler">
                     ⚠ Reveal spoiler
@@ -74,7 +76,9 @@
     }
     else
     {
-        <RichTextView HtmlContent="@Comment.CommentText" />
+        <ContentSurface Variant="ContentSurfaceVariant.Inline">
+            <RichTextView HtmlContent="@Comment.CommentText" />
+        </ContentSurface>
     }
 
     @* ── Action bar (hidden while editing — Save/Cancel take over) ─────────── *@
@@ -87,8 +91,8 @@
             {
                 <button type="button"
                         class="@(Comment.IsLikedByCurrentUser
-                            ? "text-(--color-accent)"
-                            : "text-(--color-text-muted) hover:text-(--color-accent)") transition-colors"
+                            ? "text-(--color-action-ink)"
+                            : "text-(--color-text-muted) hover:text-(--color-action-ink)") transition-colors"
                         @onclick="() => OnToggleLike.InvokeAsync(Comment.CommentId)"
                         aria-label="@(Comment.IsLikedByCurrentUser ? "Unlike comment" : "Like comment")"
                         aria-pressed="@Comment.IsLikedByCurrentUser">

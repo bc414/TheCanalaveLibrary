@@ -11,7 +11,7 @@
 
 @if (_totalViews is long views)
 {
-    <div class="px-3 py-1.5 text-sm text-muted">@views.ToString("N0") @(views == 1 ? "view" : "views")</div>
+    <div class="px-3 py-1.5 text-sm text-(--color-text-muted)">@views.ToString("N0") @(views == 1 ? "view" : "views")</div>
 }
 else
 {

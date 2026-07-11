@@ -19,7 +19,7 @@
                 <label class="flex items-center gap-1.5 cursor-pointer select-none">
                     <input type="radio"
                            name="tag-include-mode"
-                           class="accent-sky-600"
+                           class="accent-(--color-mission)"
                            checked="@(_includeMode == TagIncludeMode.And)"
                            @onchange="@(() => SetIncludeModeAsync(TagIncludeMode.And))" />
                     <span class="text-sm">All of these (AND)</span>
@@ -27,7 +27,7 @@
                 <label class="flex items-center gap-1.5 cursor-pointer select-none">
                     <input type="radio"
                            name="tag-include-mode"
-                           class="accent-sky-600"
+                           class="accent-(--color-mission)"
                            checked="@(_includeMode == TagIncludeMode.Or)"
                            @onchange="@(() => SetIncludeModeAsync(TagIncludeMode.Or))" />
                     <span class="text-sm">Any of these (OR)</span>

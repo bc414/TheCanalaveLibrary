@@ -7,27 +7,28 @@
 @inject UserManager<User> UserManager
 @inject IdentityRedirectManager RedirectManager
 
-<EditForm Model="Input" OnValidSubmit="Rename" FormName="rename-passkey" method="post">
-    <DataAnnotationsValidator/>
-    @if (passkey?.Name is { } name)
-    {
-        <h4>Enter a new name for your "@name" passkey</h4>
-    }
-    else
-    {
-        <h4>Enter a name for your passkey</h4>
-    }
-    <hr/>
-    <ValidationSummary class="text-danger" role="alert"/>
-    <div class="form-floating mb-3">
-        <InputText @bind-Value="Input.Name" id="Input.Name" class="form-control" aria-required="true" placeholder="My passkey"/>
-        <label for="Input.Name" class="form-label">Passkey name</label>
-        <ValidationMessage For="() => Input.Name" class="text-danger"/>
-    </div>
-    <div>
-        <button type="submit" class="w-100 btn btn-lg btn-primary">Continue</button>
-    </div>
-</EditForm>
+<div class="mx-auto flex w-full max-w-2xl flex-col gap-4 py-4">
+    <EditForm Model="Input" OnValidSubmit="Rename" FormName="rename-passkey" method="post" class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+        <DataAnnotationsValidator/>
+        @if (passkey?.Name is { } name)
+        {
+            <h4 class="text-base font-semibold text-(--color-text)">Enter a new name for your "@name" passkey</h4>
+        }
+        else
+        {
+            <h4 class="text-base font-semibold text-(--color-text)">Enter a name for your passkey</h4>
+        }
+        <ValidationSummary class="text-danger" role="alert"/>
+        <div class="flex flex-col gap-1">
+            <label for="Input.Name" class="text-sm font-semibold text-(--color-text)">Passkey name</label>
+            <InputText @bind-Value="Input.Name" id="Input.Name" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" aria-required="true" placeholder="My passkey"/>
+            <ValidationMessage For="() => Input.Name" class="text-danger"/>
+        </div>
+        <div>
+            <button type="submit" class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">Continue</button>
+        </div>
+    </EditForm>
+</div>
 
 @code {
     private User? user;

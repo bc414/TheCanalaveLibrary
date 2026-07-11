@@ -54,16 +54,16 @@ public class UserStoryInteractionVisualsTests
     // ── Locked accent colors (verbatim from audit table 2026-06-22) ──────────────
 
     [Theory]
-    [InlineData(UserStoryInteractionTypeEnum.Favorite, "#E8507A")]
-    [InlineData(UserStoryInteractionTypeEnum.PrivateFavorite, "#C040A8")]
-    [InlineData(UserStoryInteractionTypeEnum.Follow, "#2DBBA0")]
-    [InlineData(UserStoryInteractionTypeEnum.Complete, "#E8B84B")]
-    [InlineData(UserStoryInteractionTypeEnum.ReadLater, "#2E6FBF")]
-    [InlineData(UserStoryInteractionTypeEnum.Ignore, "#C04030")]
+    [InlineData(UserStoryInteractionTypeEnum.Favorite, "var(--color-interaction-favorite)")]
+    [InlineData(UserStoryInteractionTypeEnum.PrivateFavorite, "var(--color-interaction-private)")]
+    [InlineData(UserStoryInteractionTypeEnum.Follow, "var(--color-interaction-follow)")]
+    [InlineData(UserStoryInteractionTypeEnum.Complete, "var(--color-interaction-complete)")]
+    [InlineData(UserStoryInteractionTypeEnum.ReadLater, "var(--color-interaction-readlater)")]
+    [InlineData(UserStoryInteractionTypeEnum.Ignore, "var(--color-interaction-ignore)")]
     public void For_LockedAccentColors_MatchAuditTable(UserStoryInteractionTypeEnum type, string expectedColor)
     {
         UserStoryInteractionVisuals.For(type).AccentColor.Should().Be(expectedColor,
-            "AccentColors are locked in audit/UserStoryInteractions.md (2026-06-22)");
+            "AccentColors are token references since the Phase A lock (2026-07-10); values live in app.css @theme");
     }
 
     // ── PrivateFavorite reuses Favorite's IconPath (color alone signals privacy) ─

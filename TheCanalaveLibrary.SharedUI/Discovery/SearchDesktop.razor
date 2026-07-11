@@ -38,7 +38,7 @@
                        OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
 
             <button type="button"
-                    class="self-center rounded-md bg-sky-600 px-5 py-2 text-sm font-medium text-white hover:bg-sky-700 active:bg-sky-800 transition-colors disabled:opacity-50"
+                    class="self-center rounded-md bg-(--color-mission) px-5 py-2 text-sm font-medium text-white hover:bg-(--color-mission-hover) active:bg-(--color-mission-hover) transition-colors disabled:opacity-50"
                     disabled="@IsLoadingMore"
                     @onclick="OnLoadMore">
                 @(IsLoadingMore ? "Loading…" : "Give me more")

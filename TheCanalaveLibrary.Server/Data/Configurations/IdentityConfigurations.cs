@@ -186,6 +186,7 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         {
             b.ToJson();
             b.Property(s => s.DefaultSearchSort).HasConversion<short>();
+            b.Property(s => s.ReadingBackground).HasConversion<short>();
         });
 
         builder.ComplexProperty(u => u.PrivacySettings, b =>

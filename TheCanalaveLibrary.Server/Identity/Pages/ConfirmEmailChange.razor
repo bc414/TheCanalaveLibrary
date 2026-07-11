@@ -11,9 +11,10 @@
 
 <PageTitle>Confirm email change</PageTitle>
 
-<h1>Confirm email change</h1>
-
-<StatusMessage Message="@message"/>
+<div class="mx-auto flex w-full max-w-md flex-col gap-4 py-8">
+    <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Confirm email change</h1>
+    <StatusMessage Message="@message"/>
+</div>
 
 @code {
     private string? message;

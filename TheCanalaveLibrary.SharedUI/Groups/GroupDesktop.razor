@@ -25,7 +25,7 @@
                         <span>·</span>
                         <span>Created by
                             <a href="/profile/@Group.CreatorId"
-                               class="text-(--color-primary) hover:underline">@Group.CreatorDisplayName</a>
+                               class="text-(--color-action-ink) hover:underline">@Group.CreatorDisplayName</a>
                         </span>
                     }
                     <span>·</span>
@@ -40,7 +40,7 @@
                     @if (CurrentUserRole is null)
                     {
                         <button type="button" @onclick="OnJoin"
-                                class="rounded-md bg-(--color-primary) px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-(--color-primary-strong)">
+                                class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover)">
                             Join Group
                         </button>
                     }
@@ -50,14 +50,14 @@
                             @(CurrentUserRole == GroupRole.Admin ? "Admin" : "Member")
                         </span>
                         <button type="button" @onclick="OnLeave"
-                                class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-surface-raised)">
+                                class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">
                             Leave
                         </button>
                     }
                     @if (CurrentUserRole == GroupRole.Admin)
                     {
                         <a href="/group/@Group.GroupId/edit"
-                           class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-surface-raised)">
+                           class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">
                             Edit Group
                         </a>
                     }
@@ -84,7 +84,7 @@
                     @if (CurrentUserRole is not null)
                     {
                         <button type="button" @onclick="ToggleAddStory"
-                                class="text-sm text-(--color-primary) hover:underline">
+                                class="text-sm text-(--color-action-ink) hover:underline">
                             @(_showAddStory ? "Cancel" : "+ Add Story")
                         </button>
                     }
@@ -96,19 +96,19 @@
                     <div class="rounded-lg border border-(--color-border) bg-(--color-surface) p-4 flex flex-col gap-3">
                         <label class="text-sm font-semibold text-(--color-text)">Add a story to this group</label>
                         <input type="number" @bind="_addStoryId" placeholder="Story ID"
-                               class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary) w-40" />
+                               class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink) w-40" />
                         @if (_addStoryError is not null)
                         {
                             <p class="text-xs text-(--color-danger)">@_addStoryError</p>
                         }
                         <div class="flex gap-2">
                             <button type="button" @onclick="HandleAddStoryAsync"
-                                    class="rounded-md bg-(--color-primary) px-3 py-1.5 text-sm font-medium text-white hover:bg-(--color-primary-strong) disabled:opacity-50"
+                                    class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) hover:bg-(--color-action-hover) disabled:opacity-50"
                                     disabled="@(_addStoryId is null)">
                                 Add
                             </button>
                             <button type="button" @onclick="() => _showAddStory = false"
-                                    class="rounded-md border border-(--color-border) px-3 py-1.5 text-sm text-(--color-text) hover:bg-(--color-surface-raised)">
+                                    class="rounded-md border border-(--color-border) px-3 py-1.5 text-sm text-(--color-text) hover:bg-(--color-surface-hover)">
                                 Cancel
                             </button>
                         </div>
@@ -130,7 +130,7 @@
                     @if (CurrentUserRole is not null)
                     {
                         <a href="/group/@Group.GroupId/blog/new"
-                           class="text-sm text-(--color-primary) hover:underline">+ New Post</a>
+                           class="text-sm text-(--color-action-ink) hover:underline">+ New Post</a>
                     }
                 </div>
                 @if (BlogPosts.Length == 0)
@@ -172,7 +172,7 @@
                         @if (CurrentUserRole == GroupRole.Admin)
                         {
                             <a href="/group/@Group.GroupId/folders"
-                               class="text-xs text-(--color-primary) hover:underline">Manage</a>
+                               class="text-xs text-(--color-action-ink) hover:underline">Manage</a>
                         }
                     </div>
                     @if (Group.FolderTree.Count == 0)

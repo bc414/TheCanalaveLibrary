@@ -35,12 +35,12 @@
     @* Chapter-select dropdown: each TOC entry is a link to that chapter's primary version.
        Current chapter highlighted with aria-current="page"; chapters that have viewer-accessible
        alternate versions carry a small indicator in their row. *@
-    <details class="relative">
-        <summary class="flex cursor-pointer list-none items-center gap-1 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 text-sm transition-colors hover:bg-(--color-primary)/20">
+    <details class="relative" data-dropdown>
+        <summary class="flex cursor-pointer list-none items-center gap-1 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 text-sm transition-colors hover:bg-(--color-surface-hover)">
             Chapter @CurrentChapterNumber@(CurrentChapterTitle is not null ? $": {CurrentChapterTitle}" : string.Empty)
             <span aria-hidden="true" class="text-(--color-text-muted)">&#9662;</span>
         </summary>
-        <div class="absolute left-0 top-full z-10 mt-1 max-h-64 min-w-48 overflow-y-auto rounded-md border border-(--color-border) bg-(--color-surface) py-1 shadow-md">
+        <div class="absolute left-0 top-full z-(--z-dropdown) mt-1 max-h-64 min-w-48 overflow-y-auto rounded-md border border-(--color-border) bg-(--color-surface) py-1 shadow-medium">
             @foreach (var entry in Toc)
             {
                 <a href="@ChapterUrl(entry.ChapterNumber)"
@@ -62,12 +62,12 @@
        link with their SortOrder (ChapterVersionDto.VersionOrder) in the path. *@
     @if (Versions.Count > 1)
     {
-        <details class="relative">
-            <summary class="flex cursor-pointer list-none items-center gap-1 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 text-sm transition-colors hover:bg-(--color-primary)/20">
+        <details class="relative" data-dropdown>
+            <summary class="flex cursor-pointer list-none items-center gap-1 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 text-sm transition-colors hover:bg-(--color-surface-hover)">
                 @CurrentVersionLabel
                 <span aria-hidden="true" class="text-(--color-text-muted)">&#9662;</span>
             </summary>
-            <div class="absolute left-0 top-full z-10 mt-1 max-h-48 min-w-40 overflow-y-auto rounded-md border border-(--color-border) bg-(--color-surface) py-1 shadow-md">
+            <div class="absolute left-0 top-full z-(--z-dropdown) mt-1 max-h-48 min-w-40 overflow-y-auto rounded-md border border-(--color-border) bg-(--color-surface) py-1 shadow-medium">
                 @foreach (var version in Versions)
                 {
                     bool isCurrent = version.VersionOrder == CurrentVersionOrder;
@@ -141,12 +141,12 @@
     private static string NavLinkClasses(bool disabled) =>
         (disabled
             ? "bg-(--color-surface-raised)/50 border-(--color-border) text-(--color-text-muted) cursor-not-allowed"
-            : "bg-(--color-surface-raised) border-(--color-border) text-(--color-text) hover:bg-(--color-primary)/20") +
+            : "bg-(--color-surface-raised) border-(--color-border) text-(--color-text) hover:bg-(--color-surface-hover)") +
         " inline-grid size-9 place-items-center rounded-md border transition-colors";
 
     private string TocEntryClasses(ChapterTocEntryDto entry) =>
         (entry.ChapterNumber == CurrentChapterNumber
-            ? "bg-(--color-primary)/10 font-semibold text-(--color-primary)"
+            ? "bg-(--color-action-ink)/10 font-semibold text-(--color-action-ink)"
             : (entry.IsPublished
                 ? "text-(--color-text) hover:bg-(--color-surface-hover)"
                 : "pointer-events-none text-(--color-text-muted)")) +
@@ -154,7 +154,7 @@
 
     private static string VersionEntryClasses(bool isCurrent) =>
         (isCurrent
-            ? "bg-(--color-primary)/10 font-semibold text-(--color-primary)"
+            ? "bg-(--color-action-ink)/10 font-semibold text-(--color-action-ink)"
             : "text-(--color-text) hover:bg-(--color-surface-hover)") +
         " block px-3 py-1.5 text-sm";
 }

@@ -17,7 +17,7 @@
         <a href="@ProfileHref" class="block truncate font-bold text-text hover:underline">@User.Username</a>
         @if (User.Tagline is not null)
         {
-            <span class="block truncate text-sm text-muted">@User.Tagline</span>
+            <span class="block truncate text-sm text-(--color-text-muted)">@User.Tagline</span>
         }
         @if (User.Badges.Count > 0)
         {
@@ -33,14 +33,15 @@
         }
     </div>
 
-    <button type="button" class="ml-auto self-start text-muted hover:text-text"
+    <button type="button" class="ml-auto self-start text-(--color-text-muted) hover:text-text"
             @onclick="ToggleMenu" aria-label="More options" aria-expanded="@_menuOpen">
         ▾
     </button>
 
     @if (_menuOpen)
     {
-        <div class="absolute right-0 top-full z-10 min-w-40 rounded-md bg-surface py-1 shadow-medium">
+        <div class="fixed inset-0 z-(--z-dropdown)" data-flyout-catcher @onclick="CloseMenu"></div>
+        <div class="absolute right-0 top-full z-(--z-dropdown) min-w-40 rounded-xl border border-(--color-border) bg-(--color-surface-raised) py-1 shadow-medium">
             <a href="@ProfileHref" class="block px-3 py-1.5 text-sm hover:bg-surface-hover" @onclick="CloseMenu">View Profile</a>
             @if (OnDiscoverFromUser.HasDelegate)
             {

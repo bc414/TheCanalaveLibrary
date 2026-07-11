@@ -15,7 +15,7 @@
         @if (IsAuthor)
         {
             <a href="/story/@Story.StoryId/edit"
-               class="shrink-0 text-sm text-(--color-primary) hover:underline">Edit Story</a>
+               class="shrink-0 text-sm text-(--color-action-ink) hover:underline">Edit Story</a>
         }
     </div>
 
@@ -26,7 +26,7 @@
             @if (Story.AuthorId is not null)
             {
                 <a href="/user/@Story.AuthorId"
-                   class="text-(--color-primary) hover:underline font-medium">@(Story.AuthorName ?? "Unknown")</a>
+                   class="text-(--color-action-ink) hover:underline font-medium">@(Story.AuthorName ?? "Unknown")</a>
             }
             else
             {
@@ -89,7 +89,7 @@
             <div class="flex flex-wrap gap-2 text-sm">
                 @foreach (var pairing in Story.Pairings)
                 {
-                    <span class="px-2 py-0.5 rounded-full bg-(--color-surface-hover) text-(--color-text)">
+                    <span class="px-2 py-0.5 rounded-full bg-(--color-text-muted)/15 text-(--color-text-muted) ring-1 ring-(--color-text-muted)/30">
                         @pairing.DisplayNames
                     </span>
                 }
@@ -106,7 +106,7 @@
     }
     else if (Story.CoverArtRelativeUrl is not null && _coverArtFailed)
     {
-        <div class="w-full h-40 rounded-xl bg-(--color-surface-hover) flex items-center justify-center">
+        <div class="w-full h-40 rounded-xl bg-(--color-surface-raised) ring-1 ring-(--color-border) flex items-center justify-center">
             <span class="text-5xl text-(--color-text-muted) select-none">
                 @(Story.StoryTitle?.Length > 0 ? Story.StoryTitle[0] : '?')
             </span>
@@ -116,9 +116,9 @@
     @* ── Long description ─────────────────────────────────────────────────────── *@
     @if (!string.IsNullOrWhiteSpace(Story.LongDescription))
     {
-        <div class="prose prose-sm max-w-none text-(--color-text)">
+        <ContentSurface Variant="ContentSurfaceVariant.Inline">
             <RichTextView HtmlContent="@Story.LongDescription" />
-        </div>
+        </ContentSurface>
     }
 
     @* ── Chapter selection ────────────────────────────────────────────────────── *@
@@ -177,15 +177,7 @@
         _                               => "Unknown"
     };
 
-    private string StatusBadgeClass => Story.Status switch
-    {
-        StoryStatusEnum.InProgress  => "bg-blue-100 text-blue-800",
-        StoryStatusEnum.Completed   => "bg-green-100 text-green-800",
-        StoryStatusEnum.OnHiatus    => "bg-yellow-100 text-yellow-800",
-        StoryStatusEnum.Cancelled   => "bg-red-100 text-red-800",
-        StoryStatusEnum.Rewriting   => "bg-purple-100 text-purple-800",
-        _                           => "bg-surface-hover text-muted"
-    };
+    private string StatusBadgeClass => StatusBadges.ForStatus(Story.Status);
 
     private string RatingLabel => Story.Rating switch
     {
@@ -195,11 +187,5 @@
         _        => "Unknown"
     };
 
-    private string RatingBadgeClass => Story.Rating switch
-    {
-        Rating.E => "bg-green-100 text-green-800",
-        Rating.T => "bg-yellow-100 text-yellow-800",
-        Rating.M => "bg-red-100 text-red-800",
-        _        => "bg-surface-hover text-muted"
-    };
+    private string RatingBadgeClass => StatusBadges.ForRating(Story.Rating);
 }

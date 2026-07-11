@@ -18,30 +18,29 @@
 
 <PageTitle>Register</PageTitle>
 
-<StatusMessage Message="@message"/>
-<h1>Register</h1>
-<h2>Associate your @ProviderDisplayName account.</h2>
-<hr/>
+<div class="mx-auto flex w-full max-w-md flex-col gap-4 py-8">
+    <StatusMessage Message="@message"/>
+    <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Register</h1>
+    <h2 class="text-base font-semibold text-(--color-text)">Associate your @ProviderDisplayName account.</h2>
 
-<div class="alert alert-info">
-    You've successfully authenticated with <strong>@ProviderDisplayName</strong>.
-    Please enter an email address for this site below and click the Register button to finish
-    logging in.
-</div>
-
-<div class="row">
-    <div class="col-md-4">
-        <EditForm Model="Input" OnValidSubmit="OnValidSubmitAsync" FormName="confirmation" method="post">
-            <DataAnnotationsValidator/>
-            <ValidationSummary class="text-danger" role="alert"/>
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="email" placeholder="Please enter your email."/>
-                <label for="Input.Email" class="form-label">Email</label>
-                <ValidationMessage For="() => Input.Email"/>
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Register</button>
-        </EditForm>
+    <div class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-2 text-sm text-(--color-text)">
+        You've successfully authenticated with <strong>@ProviderDisplayName</strong>.
+        Please enter an email address for this site below and click the Register button to finish
+        logging in.
     </div>
+
+    <EditForm Model="Input" OnValidSubmit="OnValidSubmitAsync" FormName="confirmation" method="post">
+        <DataAnnotationsValidator/>
+        <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+            <ValidationSummary class="text-danger text-sm" role="alert"/>
+            <div class="flex flex-col gap-1">
+                <label for="Input.Email" class="text-sm font-semibold text-(--color-text)">Email</label>
+                <InputText @bind-Value="Input.Email" id="Input.Email" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" autocomplete="email" placeholder="Please enter your email."/>
+                <ValidationMessage For="() => Input.Email" class="text-danger text-sm"/>
+            </div>
+            <button type="submit" class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">Register</button>
+        </div>
+    </EditForm>
 </div>
 
 @code {

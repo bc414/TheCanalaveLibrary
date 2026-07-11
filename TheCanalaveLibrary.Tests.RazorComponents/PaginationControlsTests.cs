@@ -167,10 +167,12 @@ public class PaginationControlsTests : BunitContext
         string activeClass = cut.Find("button[aria-current='page']").GetAttribute("class") ?? string.Empty;
         string inactiveClass = cut.Find("button.size-9:not([aria-current])").GetAttribute("class") ?? string.Empty;
 
-        activeClass.Should().Contain("text-white",
-            "active page button should carry the active-state CSS token 'text-white'");
-        inactiveClass.Should().NotContain("text-white",
-            "inactive page buttons must not carry 'text-white'");
+        // Active fill is the light action green with dark ink since the Phase A lock
+        // (bg-action + text-(--color-text)); the distinct token is the fill, not white text.
+        activeClass.Should().Contain("bg-(--color-action)",
+            "active page button carries the action fill");
+        inactiveClass.Should().NotContain("bg-(--color-action)",
+            "inactive page buttons must not carry the action fill");
     }
 
     // ── Prev / Next buttons ──────────────────────────────────────────────────────

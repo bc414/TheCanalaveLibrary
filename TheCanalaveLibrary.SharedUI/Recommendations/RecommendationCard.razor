@@ -13,9 +13,9 @@
     @* ── Author's Pick ribbon (spotlighted) ──────────────────────────────────── *@
     @if (Rec.IsHighlightedByAuthor)
     {
-        <div class="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-[#5BB85A]"
+        <div class="mb-3 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-(--color-rec)"
              aria-label="Author's Pick">
-            <svg viewBox="0 0 24 24" class="size-3.5 shrink-0" aria-hidden="true" fill="#5BB85A">
+            <svg viewBox="0 0 24 24" class="size-3.5 shrink-0" aria-hidden="true" fill="var(--color-rec)">
                 <path d="@RecommendationIcons.RecommendationIconPath" />
             </svg>
             Author's Pick
@@ -26,7 +26,7 @@
     @if (Rec.IsHiddenGem)
     {
         <div class="absolute right-3 top-3" title="Hidden Gem" aria-label="Hidden Gem">
-            <svg viewBox="0 0 24 24" class="size-5" aria-hidden="false" fill="#1FA37A">
+            <svg viewBox="0 0 24 24" class="size-5" aria-hidden="false" fill="var(--color-gem)">
                 <path d="@RecommendationIcons.HiddenGemIconPath" />
             </svg>
         </div>
@@ -47,7 +47,9 @@
 
     @* ── Recommendation body ──────────────────────────────────────────────────── *@
     <div class="mb-3">
-        <RichTextView HtmlContent="@Rec.BodyHtml" />
+        <ContentSurface Variant="ContentSurfaceVariant.Inline">
+            <RichTextView HtmlContent="@Rec.BodyHtml" />
+        </ContentSurface>
     </div>
 
     @* ── Footer: like, meta, and author/recommender actions ──────────────────── *@
@@ -57,13 +59,13 @@
         @if (OnLike.HasDelegate)
         {
             <button type="button"
-                    class="flex items-center gap-1 transition-colors @(Rec.IsLikedByCurrentUser ? "text-[#5BB85A]" : "hover:text-[#5BB85A]")"
+                    class="flex items-center gap-1 transition-colors @(Rec.IsLikedByCurrentUser ? "text-(--color-action-ink)" : "hover:text-(--color-action-ink)")"
                     aria-label="@(Rec.IsLikedByCurrentUser ? "Unlike" : "Like") recommendation"
                     aria-pressed="@Rec.IsLikedByCurrentUser"
                     @onclick="() => OnLike.InvokeAsync(Rec.RecommendationId)">
                 <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true"
-                     fill="@(Rec.IsLikedByCurrentUser ? "#5BB85A" : "none")"
-                     stroke="@(Rec.IsLikedByCurrentUser ? "#5BB85A" : "currentColor")"
+                     fill="@(Rec.IsLikedByCurrentUser ? "var(--color-rec)" : "none")"
+                     stroke="@(Rec.IsLikedByCurrentUser ? "var(--color-rec)" : "currentColor")"
                      stroke-width="2">
                     <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                 </svg>
@@ -115,12 +117,12 @@
             @if (OnToggleHiddenGem.HasDelegate)
             {
                 <button type="button"
-                        class="flex items-center gap-1 transition-colors @(Rec.IsHiddenGem ? "text-[#1FA37A]" : "hover:text-[#1FA37A]")"
+                        class="flex items-center gap-1 transition-colors @(Rec.IsHiddenGem ? "text-(--color-mission)" : "hover:text-(--color-mission)")"
                         aria-label="@(Rec.IsHiddenGem ? "Remove Hidden Gem" : "Designate as Hidden Gem")"
                         @onclick="() => OnToggleHiddenGem.InvokeAsync(Rec.RecommendationId)">
                     <svg viewBox="0 0 24 24" class="size-4" aria-hidden="true"
-                         fill="@(Rec.IsHiddenGem ? "#1FA37A" : "none")"
-                         stroke="@(Rec.IsHiddenGem ? "none" : "#1FA37A")"
+                         fill="@(Rec.IsHiddenGem ? "var(--color-gem)" : "none")"
+                         stroke="@(Rec.IsHiddenGem ? "none" : "var(--color-gem)")"
                          stroke-width="1.5">
                         <path d="@RecommendationIcons.HiddenGemIconPath" />
                     </svg>
@@ -133,7 +135,7 @@
         @if (OnToggleHighlight.HasDelegate)
         {
             <button type="button"
-                    class="flex items-center gap-1 transition-colors @(Rec.IsHighlightedByAuthor ? "text-[#5BB85A]" : "hover:text-[#5BB85A]")"
+                    class="flex items-center gap-1 transition-colors @(Rec.IsHighlightedByAuthor ? "text-(--color-mission)" : "hover:text-(--color-mission)")"
                     aria-label="@(Rec.IsHighlightedByAuthor ? "Remove from Author's Picks" : "Add to Author's Picks")"
                     @onclick="() => OnToggleHighlight.InvokeAsync(Rec.RecommendationId)">
                 @(Rec.IsHighlightedByAuthor ? "✓ Author's Pick" : "Spotlight")
@@ -154,7 +156,7 @@
     [Parameter] public EventCallback OnDiscoverFromRecommendation { get; set; }
 
     private string CardBorderClass => Rec.IsHighlightedByAuthor
-        ? "border-2 border-[#5BB85A] shadow-[0_0_0_2px_rgba(91,184,90,0.15)]"
+        ? "border-2 border-(--color-rec) ring-2 ring-(--color-rec)/20"
         : "border-(--color-border)";
 
     private string CardShadowClass => Rec.IsHighlightedByAuthor

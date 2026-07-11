@@ -48,14 +48,14 @@ public class BookshelfTabVisualsTests
             .Should().NotBeNullOrWhiteSpace($"{tab} must have a non-empty URL slug");
     }
 
-    // ── Following reskin — must be Manaphy Teal ──────────────────────────────────
+    // ── Following accent — orange token since the Phase A gate (2026-07-10) ──────
 
     [Fact]
-    public void For_Following_AccentColorIsTeal()
+    public void For_Following_AccentColorIsTheFollowToken()
     {
         BookshelfTabVisuals.For(BookshelfTab.Following).AccentColor
-            .Should().Be("#2DBBA0",
-                "Following was reskinned to Manaphy Teal (WU27) — green is reserved for curation tabs");
+            .Should().Be("var(--color-interaction-follow)",
+                "Following was retuned to orange at the gate (teal conflicted with the curation greens); the value lives in app.css @theme");
     }
 
     // ── Slug round-trip ──────────────────────────────────────────────────────────

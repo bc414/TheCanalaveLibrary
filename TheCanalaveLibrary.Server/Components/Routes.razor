@@ -9,7 +9,9 @@
     <Found Context="routeData">
         <CascadingAuthenticationState>
             <ThemeContextProvider>
-                <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(DeviceLayout)" />
+                <ReaderDisplayProvider>
+                    <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(DeviceLayout)" />
+                </ReaderDisplayProvider>
             </ThemeContextProvider>
         </CascadingAuthenticationState>
         <FocusOnNavigate RouteData="routeData" Selector="h1"/>

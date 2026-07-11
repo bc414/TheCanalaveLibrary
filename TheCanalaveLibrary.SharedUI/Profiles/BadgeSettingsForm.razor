@@ -47,10 +47,10 @@
                             <div class="flex shrink-0 items-center gap-1">
                                 <button type="button" title="Move up" disabled="@(idx == 0)"
                                         @onclick="() => MoveUp(idx)"
-                                        class="rounded px-1.5 py-0.5 text-sm text-(--color-text-muted) hover:bg-(--color-surface-hover) hover:text-(--color-text) disabled:opacity-30">↑</button>
+                                        class="rounded px-1.5 py-0.5 text-sm text-(--color-text-muted) hover:bg-(--color-surface-hover) hover:text-(--color-text) disabled:opacity-50">↑</button>
                                 <button type="button" title="Move down" disabled="@(idx == _visibleKeys.Count - 1)"
                                         @onclick="() => MoveDown(idx)"
-                                        class="rounded px-1.5 py-0.5 text-sm text-(--color-text-muted) hover:bg-(--color-surface-hover) hover:text-(--color-text) disabled:opacity-30">↓</button>
+                                        class="rounded px-1.5 py-0.5 text-sm text-(--color-text-muted) hover:bg-(--color-surface-hover) hover:text-(--color-text) disabled:opacity-50">↓</button>
                                 <button type="button" title="Hide this badge"
                                         @onclick="() => Hide(key)"
                                         class="rounded px-1.5 py-0.5 text-xs text-(--color-text-muted) hover:bg-(--color-surface-hover) hover:text-(--color-danger)">Hide</button>
@@ -86,14 +86,14 @@
                             </div>
                             <button type="button" title="Make visible"
                                     @onclick="() => Show(key)"
-                                    class="shrink-0 rounded px-1.5 py-0.5 text-xs text-(--color-text-muted) opacity-100 hover:bg-(--color-surface-hover) hover:text-(--color-primary)">Show</button>
+                                    class="shrink-0 rounded px-1.5 py-0.5 text-xs text-(--color-text-muted) opacity-100 hover:bg-(--color-surface-hover) hover:text-(--color-action-ink)">Show</button>
                         </div>
                     }
                 </div>
             }
 
             <button type="button"
-                    class="self-start rounded-md bg-(--color-primary) px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50"
+                    class="self-start rounded-md bg-(--color-action) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
                     disabled="@Busy"
                     @onclick="HandleSave">
                 @(Busy ? "Saving…" : "Save Badge Display")

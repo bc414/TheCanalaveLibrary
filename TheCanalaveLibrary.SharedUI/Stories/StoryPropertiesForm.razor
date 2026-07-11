@@ -20,7 +20,7 @@
     <div class="flex flex-col gap-1">
         <label class="text-sm font-semibold text-(--color-text)">Title</label>
         <InputText @bind-Value="ViewModel.Title"
-                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                    placeholder="Story title" />
         <ValidationMessage For="@(() => ViewModel.Title)" class="text-sm text-(--color-danger)" />
     </div>
@@ -29,7 +29,7 @@
     <div class="flex flex-col gap-1">
         <label class="text-sm font-semibold text-(--color-text)">Short Description</label>
         <InputTextArea @bind-Value="ViewModel.ShortDescription" rows="2"
-                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                        placeholder="One-line hook shown in story listings (max 500 chars)" />
         <ValidationMessage For="@(() => ViewModel.ShortDescription)" class="text-sm text-(--color-danger)" />
     </div>
@@ -39,7 +39,7 @@
         <div class="flex flex-col gap-1">
             <label class="text-sm font-semibold text-(--color-text)">Rating</label>
             <InputSelect @bind-Value="ViewModel.Rating"
-                         class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)">
+                         class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                 @foreach (Rating r in Enum.GetValues<Rating>())
                 {
                     <option value="@r">@r.ToString()</option>
@@ -49,7 +49,7 @@
         <div class="flex flex-col gap-1">
             <label class="text-sm font-semibold text-(--color-text)">Status</label>
             <InputSelect @bind-Value="ViewModel.StoryStatusId"
-                         class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-primary)">
+                         class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                 @foreach (StoryStatusEnum s in Enum.GetValues<StoryStatusEnum>())
                 {
                     <option value="@s">@s.ToString()</option>
@@ -65,17 +65,19 @@
         {
             <img src="@ViewModel.CoverArtRelativeUrl"
                  alt="Current cover"
-                 class="h-32 w-24 rounded-md object-cover shadow-sm" />
+                 class="h-32 w-24 rounded-md object-cover shadow-subtle" />
         }
         <InputFile OnChange="HandleCoverSelected" accept="image/jpeg,image/png,image/webp"
-                   class="text-sm text-(--color-text-muted) file:mr-3 file:rounded-md file:border-0 file:bg-(--color-primary) file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white file:transition-colors hover:file:bg-(--color-primary-strong)" />
+                   class="text-sm text-(--color-text-muted) file:mr-3 file:rounded-md file:border-0 file:bg-(--color-action) file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-(--color-text) file:transition-colors hover:file:bg-(--color-action-hover)" />
         <p class="text-xs text-(--color-text-muted)">JPEG, PNG, or WebP · max 10 MB</p>
     </div>
 
     @* ── Long description (rich text) ─────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
         <label class="text-sm font-semibold text-(--color-text)">Summary / Long Description</label>
-        <EditorView @ref="_editor" Html="@ViewModel.LongDescription" Placeholder="Full story summary…" />
+        <ContentSurface Variant="ContentSurfaceVariant.Input">
+            <EditorView @ref="_editor" Html="@ViewModel.LongDescription" Placeholder="Full story summary…" />
+        </ContentSurface>
     </div>
 
     @* ── Tags ────────────────────────────────────────────────────────────────── *@
@@ -164,7 +166,7 @@
     @* ── Submit ──────────────────────────────────────────────────────────────── *@
     <button type="submit"
             disabled="@ViewModel.IsLoading"
-            class="self-start rounded-md bg-(--color-primary) px-5 py-2 font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50">
+            class="self-start rounded-md bg-(--color-action) px-5 py-2 font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
         @(ViewModel.IsLoading ? "Saving…" : SubmitLabel)
     </button>
 </EditForm>

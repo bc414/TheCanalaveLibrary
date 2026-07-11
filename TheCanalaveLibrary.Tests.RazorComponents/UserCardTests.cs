@@ -55,8 +55,10 @@ public class UserCardTests : BunitContext
         IRenderedComponent<UserCard> cut = Render<UserCard>(p =>
             p.Add(c => c.User, MakeUser(username: "Gary", tagline: null)));
 
-        // The tagline span has class "text-muted" — should not appear when tagline is null.
-        cut.FindAll("span.text-muted").Should().BeEmpty("tagline is null → the tagline span must be suppressed");
+        // The tagline span has class "text-(--color-text-muted)" — should not appear when tagline is null.
+        // Attribute-substring selector: unescaped parens are invalid in a CSS class selector,
+        // so the paren-form token class can't be targeted with `.text-(--…)` directly.
+        cut.FindAll("span[class*='text-(--color-text-muted)']").Should().BeEmpty("tagline is null → the tagline span must be suppressed");
     }
 
     // ── avatar ────────────────────────────────────────────────────────────────────

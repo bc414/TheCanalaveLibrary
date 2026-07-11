@@ -12,13 +12,13 @@
 @if (Stories is null)
 {
     @* Loading — minimal inline; skeleton-card upgrade is additive behind this same branch *@
-    <div class="flex items-center justify-center py-12 text-muted">
+    <div class="flex items-center justify-center py-12 text-(--color-text-muted)">
         <span>Loading…</span>
     </div>
 }
 else if (Stories.Count == 0)
 {
-    <div class="flex items-center justify-center py-12 text-muted">
+    <div class="flex items-center justify-center py-12 text-(--color-text-muted)">
         <span>@EmptyMessage</span>
     </div>
 }

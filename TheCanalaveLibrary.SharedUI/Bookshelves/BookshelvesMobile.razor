@@ -25,7 +25,7 @@
                 <span class="flex-1 font-medium">@activeInfo.Label</span>
                 <span aria-hidden="true" class="text-(--color-text-muted)">&#9662;</span>
             </summary>
-            <div class="absolute left-0 top-full z-20 mt-1 w-full overflow-hidden rounded-md border border-(--color-border) bg-(--color-surface) shadow-md">
+            <div class="absolute left-0 top-full z-(--z-dropdown) mt-1 w-full overflow-hidden rounded-md border border-(--color-border) bg-(--color-surface) shadow-medium">
                 @foreach (BookshelfTab tab in BookshelfTabVisuals.AllTabs)
                 {
                     var info = BookshelfTabVisuals.For(tab);
@@ -75,10 +75,10 @@
 @if (_filterOpen)
 {
     @* Backdrop — click closes the panel *@
-    <div class="fixed inset-0 z-50 bg-black/50" @onclick="CloseFilter" id="mobile-filter-overlay"></div>
+    <div class="fixed inset-0 z-(--z-drawer) bg-(--color-backdrop)" @onclick="CloseFilter" id="mobile-filter-overlay"></div>
 
     @* Slide-in panel — stopPropagation prevents backdrop from receiving the click *@
-    <div class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-(--color-surface) shadow-xl"
+    <div class="fixed inset-y-0 right-0 z-(--z-drawer) flex w-full max-w-sm flex-col bg-(--color-surface) shadow-prominent"
          @onclick:stopPropagation="true">
         <div class="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
             <h2 class="text-sm font-bold">Filters</h2>

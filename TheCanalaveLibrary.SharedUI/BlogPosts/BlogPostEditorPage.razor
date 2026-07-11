@@ -30,7 +30,7 @@
         else
         {
             <div class="mx-auto max-w-2xl px-4 py-8">
-                <h1 class="mb-6 text-2xl font-bold text-(--color-text)">
+                <h1 class="mb-6 inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
                     @(BlogPostId.HasValue ? "Edit Post" : "New Post")
                 </h1>
 
@@ -42,11 +42,13 @@
                                    OnRestore="RestoreDraftAsync" />
                 </div>
 
-                <BlogPostPropertiesForm @ref="_form"
-                                        ViewModel="_viewModel"
-                                        AuthorStories="_authorStories"
-                                        SubmitLabel="@(BlogPostId.HasValue ? "Save Changes" : "Create Post")"
-                                        OnValidSubmit="HandleValidSubmit" />
+                <div class="rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+                    <BlogPostPropertiesForm @ref="_form"
+                                            ViewModel="_viewModel"
+                                            AuthorStories="_authorStories"
+                                            SubmitLabel="@(BlogPostId.HasValue ? "Save Changes" : "Create Post")"
+                                            OnValidSubmit="HandleValidSubmit" />
+                </div>
             </div>
         }
     </Authorized>

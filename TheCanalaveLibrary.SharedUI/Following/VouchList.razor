@@ -12,18 +12,18 @@
 
 @if (Vouches.Count == 0)
 {
-    <p class="text-sm text-muted">@EmptyMessage</p>
+    <p class="text-sm text-(--color-text-muted)">@EmptyMessage</p>
 }
 else
 {
     <ul class="flex flex-col gap-4">
         @foreach (var vouch in Vouches)
         {
-            <li class="rounded-xl bg-surface p-4 shadow-sm">
+            <li class="rounded-xl bg-surface p-4 shadow-subtle">
                 <div class="flex items-start justify-between gap-2">
                     <UserCard User="vouch.User" />
                     <div class="flex shrink-0 items-center gap-2">
-                        <span class="text-xs text-muted">@vouch.DateVouched.ToString("MMM d, yyyy")</span>
+                        <span class="text-xs text-(--color-text-muted)">@vouch.DateVouched.ToString("MMM d, yyyy")</span>
                         @if (IsEditable)
                         {
                             <button type="button"
@@ -37,8 +37,12 @@ else
                 </div>
                 @if (!string.IsNullOrEmpty(vouch.VouchText))
                 {
-                    <div class="mt-3 text-sm">
-                        <RichTextView HtmlContent="@vouch.VouchText" />
+                    <div class="mt-3">
+                        <ContentSurface Variant="ContentSurfaceVariant.Inline">
+                            <div class="text-sm">
+                                <RichTextView HtmlContent="@vouch.VouchText" />
+                            </div>
+                        </ContentSurface>
                     </div>
                 }
             </li>

@@ -2,16 +2,19 @@
 @inherits LayoutComponentBase
 @layout MainLayout
 
-<h1>Manage your account</h1>
+@* Manage-area chrome — restyled to the role system (Phase D, 2026-07-10; the Bootstrap grid
+   rendered nothing). Nav menu left, page body right; stacks on narrow viewports. *@
 
-<div>
-    <h2>Change your account settings</h2>
-    <hr/>
-    <div class="row">
-        <div class="col-lg-3">
+<div class="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-8">
+    <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+        Manage your account
+    </h1>
+
+    <div class="flex flex-col gap-6 md:flex-row md:items-start">
+        <div class="w-full shrink-0 md:w-56">
             <ManageNavMenu/>
         </div>
-        <div class="col-lg-9">
+        <div class="min-w-0 flex-1">
             @Body
         </div>
     </div>

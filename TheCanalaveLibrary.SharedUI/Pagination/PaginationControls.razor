@@ -113,13 +113,13 @@
     private string NavButtonClasses(bool disabled) =>
         (disabled
             ? "bg-(--color-surface-raised)/50 border-(--color-border) text-(--color-text-muted) cursor-not-allowed"
-            : "bg-(--color-surface-raised) border-(--color-border) text-(--color-text) hover:bg-(--color-primary)/20") +
+            : "bg-(--color-surface-raised) border-(--color-border) text-(--color-text) hover:bg-(--color-surface-hover)") +
         " size-9 rounded-md border grid place-items-center transition-colors";
 
     private string PageButtonClasses(int page) =>
         (page == CurrentPage
-            ? "bg-(--color-primary) border-(--color-primary) text-white"
-            : "bg-(--color-surface-raised) border-(--color-border) hover:bg-(--color-primary)/20 text-(--color-text)") +
+            ? "bg-(--color-action) border-(--color-action-ink) text-(--color-text)"
+            : "bg-(--color-surface-raised) border-(--color-border) hover:bg-(--color-surface-hover) text-(--color-text)") +
         " size-9 rounded-md border grid place-items-center transition-colors";
 
     private async Task HandlePage(int page)

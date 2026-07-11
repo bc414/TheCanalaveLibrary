@@ -67,17 +67,19 @@
     <EditorContent>@((MarkupString)(Html ?? string.Empty))</EditorContent>
 </BlazoredTextEditor>
 
-<button type="button" class="mt-2 rounded-md bg-primary px-3 py-1 text-white transition-colors hover:bg-primary-strong"
+<button type="button" class="mt-2 self-start rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)"
         @onclick="OpenPreview">
     Preview
 </button>
 
 @if (_isPreviewMode)
 {
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @onclick="ClosePreview">
-        <div class="max-h-full max-w-2xl overflow-y-auto rounded-xl bg-surface p-6 shadow-lg" @onclick:stopPropagation="true">
-            <RichTextView HtmlContent="@_previewHtml" />
-            <button type="button" class="mt-4 rounded-md bg-primary px-3 py-1 text-white transition-colors hover:bg-primary-strong"
+    <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="ClosePreview">
+        <div class="max-h-full max-w-2xl overflow-y-auto rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation="true">
+            <ContentSurface Variant="ContentSurfaceVariant.Reading">
+                <RichTextView HtmlContent="@_previewHtml" />
+            </ContentSurface>
+            <button type="button" class="mt-4 rounded-md bg-(--color-action) px-3 py-1 text-(--color-text) transition-colors hover:bg-(--color-action-hover)"
                     @onclick="ClosePreview">
                 Close
             </button>

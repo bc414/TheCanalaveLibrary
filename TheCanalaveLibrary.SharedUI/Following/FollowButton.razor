@@ -100,10 +100,10 @@
     }
 
     private string FollowButtonClass => _isFollowing
-        ? "rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-white hover:bg-primary/80 disabled:opacity-50"
-        : "rounded-lg border border-primary px-3 py-1.5 text-sm font-medium text-primary hover:bg-primary/10 disabled:opacity-50";
+        ? "rounded-lg bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) hover:bg-(--color-action-hover) disabled:opacity-50"
+        : "rounded-lg border border-(--color-action-ink) px-3 py-1.5 text-sm font-medium text-(--color-action-ink) hover:bg-(--color-surface-hover) disabled:opacity-50";
 
     private string BellButtonClass => _receiveAlerts
-        ? "text-accent hover:text-accent/70 disabled:opacity-50"
-        : "text-muted hover:text-text disabled:opacity-50";
+        ? "text-(--color-mission) hover:text-(--color-mission-hover) disabled:opacity-50"
+        : "text-(--color-text-muted) hover:text-text disabled:opacity-50";
 }

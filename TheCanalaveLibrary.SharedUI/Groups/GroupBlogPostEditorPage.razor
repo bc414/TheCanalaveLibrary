@@ -36,11 +36,11 @@
         {
             <div class="mx-auto max-w-2xl px-4 py-8">
                 <div class="mb-6 flex flex-col gap-1">
-                    <h1 class="text-2xl font-bold text-(--color-text)">New Blog Post</h1>
+                    <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">New Blog Post</h1>
                     <p class="text-sm text-(--color-text-muted)">
                         Posting to
                         <a href="/group/@GroupId"
-                           class="text-(--color-primary) hover:underline">@_groupName</a>
+                           class="text-(--color-action-ink) hover:underline">@_groupName</a>
                     </p>
                 </div>
 
@@ -52,11 +52,13 @@
                                    OnRestore="RestoreDraftAsync" />
                 </div>
 
-                <BlogPostPropertiesForm @ref="_form"
-                                        ViewModel="_viewModel"
-                                        AuthorStories="_authorStories"
-                                        SubmitLabel="Publish Post"
-                                        OnValidSubmit="HandleValidSubmit" />
+                <div class="rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+                    <BlogPostPropertiesForm @ref="_form"
+                                            ViewModel="_viewModel"
+                                            AuthorStories="_authorStories"
+                                            SubmitLabel="Publish Post"
+                                            OnValidSubmit="HandleValidSubmit" />
+                </div>
             </div>
         }
     </Authorized>

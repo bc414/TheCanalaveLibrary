@@ -41,12 +41,13 @@ public class TagChipTests : BunitContext
 
     // ── type-specific colour classes ─────────────────────────────────────────────
 
+    // Solid Pokémon-type-color tokens per the Phase A gate ratification (2026-07-10).
     [Theory]
-    [InlineData(TagTypeEnum.Character, "bg-emerald-100")]
-    [InlineData(TagTypeEnum.Setting, "bg-violet-100")]
-    [InlineData(TagTypeEnum.Genre, "bg-sky-100")]
-    [InlineData(TagTypeEnum.ContentWarning, "bg-rose-100")]
-    [InlineData(TagTypeEnum.CrossoverFandom, "bg-amber-100")]
+    [InlineData(TagTypeEnum.Character, "bg-(--color-tagtype-character)")]
+    [InlineData(TagTypeEnum.Setting, "bg-(--color-tagtype-setting)")]
+    [InlineData(TagTypeEnum.Genre, "bg-(--color-tagtype-genre)")]
+    [InlineData(TagTypeEnum.ContentWarning, "bg-(--color-tagtype-warning)")]
+    [InlineData(TagTypeEnum.CrossoverFandom, "bg-(--color-tagtype-crossover)")]
     public void TagChip_AppliesCorrectBackgroundClassForTagType(TagTypeEnum type, string expectedClass)
     {
         IRenderedComponent<TagChip> cut = Render<TagChip>(p =>

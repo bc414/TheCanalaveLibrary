@@ -8,21 +8,21 @@
 
 <PageTitle>Personal Data</PageTitle>
 
-<StatusMessage/>
-<h3>Personal Data</h3>
+<div class="mx-auto flex w-full max-w-2xl flex-col gap-4 py-4">
+    <StatusMessage/>
+    <h3 class="text-lg font-semibold text-(--color-text)">Personal Data</h3>
 
-<div class="row">
-    <div class="col-md-6">
+    <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
         <p>Your account contains personal data that you have given us. This page allows you to download or delete that data.</p>
         <p>
             <strong>Deleting this data will permanently remove your account, and this cannot be recovered.</strong>
         </p>
         <form action="Account/Manage/DownloadPersonalData" method="post">
             <AntiforgeryToken/>
-            <button class="btn btn-primary" type="submit">Download</button>
+            <button class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)" type="submit">Download</button>
         </form>
         <p>
-            <a href="Account/Manage/DeletePersonalData" class="btn btn-danger">Delete</a>
+            <a href="Account/Manage/DeletePersonalData" class="rounded-md bg-(--color-danger) px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-(--color-danger-strong)">Delete</a>
         </p>
     </div>
 </div>

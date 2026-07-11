@@ -41,10 +41,10 @@
    the .reload/.dismiss classes are its required hooks. Faults the error boundaries catch never
    reach this; only a true circuit teardown shows it. *@
 <div id="blazor-error-ui" data-nosnippet
-     class="hidden fixed bottom-0 left-0 right-0 z-50 border-t border-(--color-danger)/40 bg-(--color-surface-raised) px-4 py-3 text-sm text-(--color-text) shadow-lg">
+     class="hidden fixed bottom-0 left-0 right-0 z-(--z-error) border-t border-(--color-danger)/40 bg-(--color-surface-raised) px-4 py-3 text-sm text-(--color-text) shadow-prominent">
     <span class="font-semibold text-(--color-danger)">Something went wrong with your connection.</span>
     Your last edits may not have been saved.
-    <a href="." class="reload font-semibold text-(--color-primary) underline hover:no-underline">Reload the page</a>
+    <a href="." class="reload font-semibold text-(--color-action-ink) underline hover:no-underline">Reload the page</a>
     <span class="dismiss float-right cursor-pointer px-2 font-semibold" role="button" aria-label="Dismiss">✕</span>
 </div>
 
@@ -63,6 +63,9 @@
 <script src="_content/TheCanalaveLibrary.SharedUI/js/img-fallback.js"></script>
 <!-- Editor draft autosave to localStorage (DraftAutosave, SharedUI/Drafts/ — WU-ErrorHandling) -->
 <script src="_content/TheCanalaveLibrary.SharedUI/js/draft-autosave.js"></script>
+
+<!-- Uniform Overlay dismissal: outside-click + Escape for flyouts and details dropdowns (Phase C) -->
+<script src="_content/TheCanalaveLibrary.SharedUI/js/dismiss.js"></script>
 
 <!-- Quill.js + Blazored.TextEditor's interop (EditorView, SharedUI/RichText/).
      SRI required on every CDN asset (security.md); recompute the hash on any version bump. -->

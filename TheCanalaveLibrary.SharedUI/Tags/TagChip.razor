@@ -15,7 +15,7 @@
     @Tag.TagName
     @if (OnRemove.HasDelegate)
     {
-        <button type="button" @onclick="() => OnRemove.InvokeAsync()" aria-label="Remove tag" class="leading-none">✕</button>
+        <button type="button" @onclick="() => OnRemove.InvokeAsync()" aria-label="Remove tag" class="leading-none transition-opacity hover:opacity-60">✕</button>
     }
 </span>
 
@@ -28,13 +28,16 @@
     [Parameter]
     public EventCallback OnRemove { get; set; }
 
+    // Solid Pokémon-type-color grounds with standard black/white text (ratified at the Phase A
+    // gate, 2026-07-10 — layer4-style.md "Element Roles"). Setting's Ground tan is the one light
+    // ground, so it carries dark ink; the rest carry white. Fallback = neutral Indicator tint.
     private string TypeClasses => Tag.TagTypeId switch
     {
-        TagTypeEnum.Character => "bg-emerald-100 text-emerald-800",
-        TagTypeEnum.Setting => "bg-violet-100 text-violet-800",
-        TagTypeEnum.Genre => "bg-sky-100 text-sky-800",
-        TagTypeEnum.ContentWarning => "bg-rose-100 text-rose-800",
-        TagTypeEnum.CrossoverFandom => "bg-amber-100 text-amber-900",
-        _ => "bg-surface text-text"
+        TagTypeEnum.Character => "bg-(--color-tagtype-character) text-white",
+        TagTypeEnum.Setting => "bg-(--color-tagtype-setting) text-(--color-text)",
+        TagTypeEnum.Genre => "bg-(--color-tagtype-genre) text-white",
+        TagTypeEnum.ContentWarning => "bg-(--color-tagtype-warning) text-white",
+        TagTypeEnum.CrossoverFandom => "bg-(--color-tagtype-crossover) text-white",
+        _ => "bg-(--color-text-muted)/15 text-(--color-text-muted) ring-1 ring-(--color-text-muted)/30"
     };
 }

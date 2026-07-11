@@ -81,9 +81,9 @@ public class ConversationListItemTests : BunitContext
             .Add(c => c.Conversation, MakeConversation())
             .Add(c => c.IsSelected, true));
 
-        // Selected items use border-(--color-primary) — Tailwind v4 CSS-variable shorthand
+        // Selected items use border-(--color-action-ink) — Tailwind v4 CSS-variable shorthand
         // (the v3 bracket form compiled to invalid CSS; see layer4-style.md).
-        cut.Markup.Should().Contain("border-(--color-primary)",
+        cut.Markup.Should().Contain("border-(--color-action-ink)",
             "the selected item must have the primary-coloured border");
     }
 
@@ -94,7 +94,7 @@ public class ConversationListItemTests : BunitContext
             .Add(c => c.Conversation, MakeConversation())
             .Add(c => c.IsSelected, false));
 
-        cut.Markup.Should().NotContain("border-(--color-primary)",
+        cut.Markup.Should().NotContain("border-(--color-action-ink)",
             "an unselected item must not use the primary border class");
     }
 

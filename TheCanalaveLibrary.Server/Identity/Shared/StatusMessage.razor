@@ -1,8 +1,10 @@
 @namespace TheCanalaveLibrary.Server
 @if (!string.IsNullOrEmpty(DisplayMessage))
 {
-    var statusMessageClass = DisplayMessage.StartsWith("Error") ? "danger" : "success";
-    <div class="alert alert-@statusMessageClass" role="alert">
+    var statusMessageClass = DisplayMessage.StartsWith("Error")
+        ? "rounded-md border border-(--color-danger)/40 bg-(--color-danger)/10 px-4 py-2 text-sm text-(--color-danger)"
+        : "rounded-md border border-(--color-success)/40 bg-(--color-success)/10 px-4 py-2 text-sm text-(--color-success)";
+    <div class="@statusMessageClass" role="alert">
         @DisplayMessage
     </div>
 }

@@ -7,11 +7,11 @@
    arrivals without interrupting. Auto-dismisses per ToastMessage.Duration; every toast is also
    manually dismissible. Producers go through IToastService.Show — never render toasts ad hoc. *@
 
-<div aria-live="polite" class="pointer-events-none fixed bottom-4 right-4 z-50 flex w-72 flex-col gap-2">
+<div aria-live="polite" class="pointer-events-none fixed bottom-4 right-4 z-(--z-toast) flex w-72 flex-col gap-2">
     @foreach (ToastMessage toast in _toasts)
     {
         <div @key="toast.Id" role="status"
-             class="pointer-events-auto flex items-start gap-2 rounded-lg border p-3 text-sm shadow-lg @LevelClasses(toast.Level)">
+             class="pointer-events-auto flex items-start gap-2 rounded-lg border p-3 text-sm shadow-prominent @LevelClasses(toast.Level)">
             <span class="flex-1">@toast.Text</span>
             <button type="button" aria-label="Dismiss"
                     class="shrink-0 font-semibold opacity-60 transition-opacity hover:opacity-100"

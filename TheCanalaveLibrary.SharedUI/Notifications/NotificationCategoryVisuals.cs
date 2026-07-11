@@ -58,7 +58,7 @@ public static class NotificationCategoryVisuals
         new Dictionary<NotificationCategoryEnum, Info>
         {
             [NotificationCategoryEnum.SiteNews] = new(
-                SiteNewsPath, "#3B82F6", "Site News"),
+                SiteNewsPath, "var(--color-notif-news)", "Site News"),
 
             [NotificationCategoryEnum.YourFollows] = new(
                 UserStoryInteractionVisuals.For(UserStoryInteractionTypeEnum.Follow).IconPath,
@@ -66,10 +66,10 @@ public static class NotificationCategoryVisuals
                 "Your Follows"),
 
             [NotificationCategoryEnum.YourStories] = new(
-                YourStoriesPath, "#2F7D4F", "Your Stories"),
+                YourStoriesPath, "var(--color-tab-my-stories)", "Your Stories"),
 
             [NotificationCategoryEnum.YourProfile] = new(
-                YourProfilePath, "#6366F1", "Your Profile"),
+                YourProfilePath, "var(--color-notif-profile)", "Your Profile"),
 
             [NotificationCategoryEnum.YourRecommendations] = new(
                 RecommendationIcons.RecommendationIconPath,
@@ -77,10 +77,10 @@ public static class NotificationCategoryVisuals
                 "Your Recommendations"),
 
             [NotificationCategoryEnum.Collaborations] = new(
-                CollaborationsPath, "#0EA5E9", "Collaborations"),
+                CollaborationsPath, "var(--color-notif-collab)", "Collaborations"),
 
             [NotificationCategoryEnum.Groups] = new(
-                GroupsPath, "#7C3AED", "Groups"),
+                GroupsPath, "var(--color-notif-groups)", "Groups"),
 
             [NotificationCategoryEnum.Warnings] = new(
                 UserStoryInteractionVisuals.For(UserStoryInteractionTypeEnum.Ignore).IconPath,
@@ -88,7 +88,7 @@ public static class NotificationCategoryVisuals
                 "Warnings"),
 
             [NotificationCategoryEnum.YourReports] = new(
-                YourReportsPath, "#F97316", "Your Reports"),
+                YourReportsPath, "var(--color-notif-reports)", "Your Reports"),
         };
 
     public static Info For(NotificationCategoryEnum category) => Map[category];

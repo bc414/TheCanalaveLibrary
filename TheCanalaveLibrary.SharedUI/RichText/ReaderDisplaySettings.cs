@@ -18,6 +18,13 @@ public class ReaderDisplaySettings
     public float LineHeight { get; set; } = 1.5f;
     public int TextWidth { get; set; } = 800;
     public bool JustifyText { get; set; } = false;
+
+    /// <summary>
+    /// Reader's Content Surface background override (Phase E, 2026-07-10). Consumed by
+    /// ContentSurface (the material), not RichTextView (the typography) — the two halves of
+    /// reader ownership live in the components that own each concern.
+    /// </summary>
+    public ReadingBackgroundEnum ReadingBackground { get; set; } = ReadingBackgroundEnum.SiteDefault;
 }
 
 public static class ReaderSettingsExtensions
@@ -32,6 +39,7 @@ public static class ReaderSettingsExtensions
         FontSize = settings.FontSize,
         LineHeight = settings.LineHeight,
         TextWidth = settings.TextWidth,
-        JustifyText = settings.JustifyText
+        JustifyText = settings.JustifyText,
+        ReadingBackground = settings.ReadingBackground
     };
 }

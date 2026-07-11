@@ -27,7 +27,7 @@
                 <span class="flex-1 font-medium text-(--color-text)">@TabLabel(Tab)</span>
                 <span aria-hidden="true" class="text-(--color-text-muted)">&#9662;</span>
             </summary>
-            <div class="absolute left-0 top-full z-20 mt-1 w-full overflow-hidden rounded-md border border-(--color-border) bg-(--color-surface) shadow-md">
+            <div class="absolute left-0 top-full z-(--z-dropdown) mt-1 w-full overflow-hidden rounded-md border border-(--color-border) bg-(--color-surface) shadow-medium">
                 @foreach (ProfileTab tab in Enum.GetValues<ProfileTab>())
                 {
                     bool isActive = tab == Tab;
@@ -66,7 +66,9 @@
                 {
                     <section>
                         <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">About</h2>
-                        <RichTextView HtmlContent="@BioHtml" />
+                        <ContentSurface Variant="ContentSurfaceVariant.Inline">
+                            <RichTextView HtmlContent="@BioHtml" />
+                        </ContentSurface>
                     </section>
                 }
 
@@ -89,7 +91,7 @@
                 {
                     <div class="flex justify-end">
                         <a href="/blog/new"
-                           class="rounded-md bg-(--color-primary) px-4 py-2 text-sm font-medium text-white hover:bg-(--color-primary-strong)">
+                           class="rounded-md bg-(--color-mission) px-4 py-2 text-sm font-medium text-white hover:bg-(--color-mission-hover)">
                             + New Post
                         </a>
                     </div>
@@ -136,8 +138,8 @@
 @* ── Filter overlay for story tabs ─────────────────────────────────────────── *@
 @if (_filterOpen && IsStoryTab)
 {
-    <div class="fixed inset-0 z-50 bg-black/50" @onclick="CloseFilter" id="mobile-profile-filter-overlay"></div>
-    <div class="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col bg-(--color-surface) shadow-xl"
+    <div class="fixed inset-0 z-(--z-drawer) bg-(--color-backdrop)" @onclick="CloseFilter" id="mobile-profile-filter-overlay"></div>
+    <div class="fixed inset-y-0 right-0 z-(--z-drawer) flex w-full max-w-sm flex-col bg-(--color-surface) shadow-prominent"
          @onclick:stopPropagation="true">
         <div class="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
             <h2 class="text-sm font-bold">Filters</h2>

@@ -11,14 +11,16 @@
    ShowSpoilerToggle is true (chapter-context new comments only, §5.9.1). *@
 
 <div class="flex flex-col gap-3">
-    <EditorView @ref="_editor" Html="@Html" />
+    <ContentSurface Variant="ContentSurfaceVariant.Input">
+        <EditorView @ref="_editor" Html="@Html" />
+    </ContentSurface>
 
     @if (ShowSpoilerToggle)
     {
         <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
             <input type="checkbox"
                    checked="@Spoiler"
-                   class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
+                   class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
                    @onchange="async e => await SpoilerChanged.InvokeAsync((bool)e.Value!)" />
             Contains spoilers for future chapters
         </label>
@@ -26,7 +28,7 @@
 
     <div class="flex items-center gap-2">
         <button type="button"
-                class="rounded-md bg-(--color-primary) px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50"
+                class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
                 disabled="@Busy"
                 aria-label="@SaveLabel"
                 @onclick="HandleSaveAsync">
@@ -36,7 +38,7 @@
         @if (OnCancel.HasDelegate)
         {
             <button type="button"
-                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-primary)/20 disabled:opacity-50"
+                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50"
                     disabled="@Busy"
                     aria-label="Cancel"
                     @onclick="() => OnCancel.InvokeAsync()">

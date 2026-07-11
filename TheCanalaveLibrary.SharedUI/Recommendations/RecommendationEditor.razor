@@ -9,9 +9,11 @@
    binding. No service injection; the owning RecommendationSection sanitizes and persists. *@
 
 <div class="flex flex-col gap-3">
-    <EditorView @ref="_editor"
-                Html="@Html"
-                Placeholder="@($"Share your thoughts on this story (minimum {RecommendationConstants.MinLength} characters)…")" />
+    <ContentSurface Variant="ContentSurfaceVariant.Input">
+        <EditorView @ref="_editor"
+                    Html="@Html"
+                    Placeholder="@($"Share your thoughts on this story (minimum {RecommendationConstants.MinLength} characters)…")" />
+    </ContentSurface>
 
     @* ── Character meter ─────────────────────────────────────────────────────── *@
     <div class="flex items-center gap-2 text-sm" aria-live="polite">
@@ -21,7 +23,7 @@
                  fill="@RecommendationIcons.RecommendationAccentColor">
                 <path d="@RecommendationIcons.RecommendationIconPath" />
             </svg>
-            <span class="text-[#5BB85A]">@_currentLength characters — minimum met</span>
+            <span class="text-(--color-success)">@_currentLength characters — minimum met</span>
         }
         else
         {
@@ -38,7 +40,7 @@
     @* ── Action row ──────────────────────────────────────────────────────────── *@
     <div class="flex items-center gap-2">
         <button type="button"
-                class="rounded-md bg-(--color-primary) px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-(--color-primary-strong) disabled:opacity-50"
+                class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
                 disabled="@(Busy || _currentLength < RecommendationConstants.MinLength)"
                 aria-label="@SaveLabel"
                 @onclick="HandleSaveAsync">
@@ -48,7 +50,7 @@
         @if (OnCancel.HasDelegate)
         {
             <button type="button"
-                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-primary)/20 disabled:opacity-50"
+                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50"
                     disabled="@Busy"
                     aria-label="Cancel"
                     @onclick="() => OnCancel.InvokeAsync()">

@@ -11,8 +11,8 @@
 
 @if (IsOpen)
 {
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @onclick="Cancel">
-        <div class="max-w-md rounded-xl bg-surface p-6 shadow-lg" @onclick:stopPropagation="true">
+    <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="Cancel">
+        <div class="max-w-md rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation="true">
             @if (Title is not null)
             {
                 <h2 class="mb-2 text-lg font-semibold text-text">@Title</h2>
@@ -26,11 +26,11 @@
                 <p class="text-text">@Message</p>
             }
             <div class="mt-4 flex justify-end gap-2">
-                <button type="button" class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-primary)/20"
+                <button type="button" class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-surface-hover)"
                         @onclick="Cancel">
                     @CancelText
                 </button>
-                <button type="button" class="@(IsDestructive ? "bg-danger" : "bg-primary hover:bg-primary-strong") rounded-md px-3 py-1 text-white transition-colors"
+                <button type="button" class="@(IsDestructive ? "bg-danger text-white hover:bg-(--color-danger-strong)" : "bg-(--color-action) text-(--color-text) hover:bg-(--color-action-hover)") rounded-md px-3 py-1 transition-colors"
                         @onclick="Confirm">
                     @ConfirmText
                 </button>

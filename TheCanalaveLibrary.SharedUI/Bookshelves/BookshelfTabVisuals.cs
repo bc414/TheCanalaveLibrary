@@ -5,8 +5,10 @@ namespace TheCanalaveLibrary.SharedUI;
 /// <summary>
 /// Maps each <see cref="BookshelfTab"/> to its icon, accent color, display label, and URL slug.
 /// The six interaction-backed tabs pull <c>IconPath</c> and <c>AccentColor</c> from
-/// <see cref="UserStoryInteractionVisuals"/> (single source of truth — picks up the teal Following
-/// automatically). Labels and slugs are tab-specific (plural forms for Favorites/Private Favorites).
+/// <see cref="UserStoryInteractionVisuals"/> (single source of truth — picks up the orange
+/// Following automatically). AccentColor values are var(--color-tab-*) token references since
+/// the Phase A lock (2026-07-10); color VALUES live in app.css @theme. Labels and slugs are
+/// tab-specific (plural forms for Favorites/Private Favorites).
 ///
 /// IconPath values must not change without updating audit/UserStoryInteractions.md Feature 17 first.
 /// </summary>
@@ -27,7 +29,7 @@ public static class BookshelfTabVisuals
         new Dictionary<BookshelfTab, Info>
         {
             [BookshelfTab.MyStories] = new(
-                MyStoriesPath, "#2F7D4F", "My Stories",
+                MyStoriesPath, "var(--color-tab-my-stories)", "My Stories",
                 BookshelfTabSlug.For(BookshelfTab.MyStories)),
 
             [BookshelfTab.HiddenGems] = new(
@@ -67,7 +69,7 @@ public static class BookshelfTabVisuals
                 BookshelfTabSlug.For(BookshelfTab.Following)),
 
             [BookshelfTab.ActivelyReading] = new(
-                ActivelyReadingPath, "#2E96A8", "Actively Reading",
+                ActivelyReadingPath, "var(--color-tab-reading)", "Actively Reading",
                 BookshelfTabSlug.For(BookshelfTab.ActivelyReading)),
 
             [BookshelfTab.ReadItLater] = new(
@@ -77,7 +79,7 @@ public static class BookshelfTabVisuals
                 BookshelfTabSlug.For(BookshelfTab.ReadItLater)),
 
             [BookshelfTab.Abandoned] = new(
-                AbandonedPath, "#9A8580", "Abandoned",
+                AbandonedPath, "var(--color-tab-abandoned)", "Abandoned",
                 BookshelfTabSlug.For(BookshelfTab.Abandoned)),
 
             [BookshelfTab.Ignored] = new(

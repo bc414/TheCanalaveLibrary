@@ -14,7 +14,7 @@
             <label class="block text-sm font-medium text-text" for="tag-name">Tag Name</label>
             <input id="tag-name"
                    type="text"
-                   class="mt-1 w-full rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                   class="mt-1 w-full rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                    @bind="_model.TagName"
                    maxlength="100" />
         </div>
@@ -53,7 +53,7 @@
         <div>
             <label class="block text-sm font-medium text-text" for="tag-description">Description</label>
             <textarea id="tag-description"
-                      class="mt-1 w-full rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                      class="mt-1 w-full rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                       rows="3"
                       maxlength="512"
                       @bind="_model.Description">
@@ -64,7 +64,7 @@
             <label class="block text-sm font-medium text-text" for="tag-sprite">Sprite Identifier</label>
             <input id="tag-sprite"
                    type="text"
-                   class="mt-1 w-full rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-primary)"
+                   class="mt-1 w-full rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                    @bind="_model.SpriteIdentifier"
                    maxlength="50" />
             <p class="mt-1 text-xs text-(--color-text-muted)">e.g. bulbasaur.png — path key, not a URL.</p>
@@ -73,7 +73,7 @@
         <div class="flex items-center gap-2">
             <input id="tag-is-fanon"
                    type="checkbox"
-                   class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
+                   class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
                    @bind="_model.IsFanon" />
             <label class="text-sm text-text" for="tag-is-fanon">Fanon tag</label>
         </div>
@@ -83,7 +83,7 @@
             <div class="flex items-center gap-2">
                 <input id="tag-allow-oc"
                        type="checkbox"
-                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
+                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
                        @bind="_model.AllowOCDetails" />
                 <label class="text-sm text-text" for="tag-allow-oc">Allow OC details</label>
                 <span class="text-xs text-(--color-text-muted)">(generic Pokémon, OC Trainer/OC Human only)</span>
@@ -95,7 +95,7 @@
             <div class="flex items-center gap-2">
                 <input id="tag-allow-setting-details"
                        type="checkbox"
-                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-primary)"
+                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
                        @bind="_model.AllowSettingDetails" />
                 <label class="text-sm text-text" for="tag-allow-setting-details">Allow setting details</label>
                 <span class="text-xs text-(--color-text-muted)">(original settings or AU-specific locations)</span>
@@ -109,12 +109,12 @@
 
         <div class="flex justify-end gap-2">
             <button type="button"
-                    class="rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text hover:bg-(--color-primary)/10 transition-colors"
+                    class="rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text hover:bg-(--color-surface-hover) transition-colors"
                     @onclick="() => OnCancel.InvokeAsync()">
                 Cancel
             </button>
             <button type="submit"
-                    class="rounded-md bg-(--color-primary) px-3 py-1.5 text-sm text-white hover:bg-(--color-primary-strong) transition-colors"
+                    class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm text-(--color-text) hover:bg-(--color-action-hover) transition-colors"
                     disabled="@_isSaving">
                 @(_isSaving ? "Saving…" : "Save")
             </button>

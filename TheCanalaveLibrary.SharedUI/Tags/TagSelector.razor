@@ -86,13 +86,15 @@
         await OnSelectionChanged.InvokeAsync(_selected);
     }
 
+    // Same type-color family as TagChip's solid grounds (Phase A gate) — the dot IS the type color.
+    // Fallback is a visible muted dot, not surface (the old bg-surface dot was invisible on flyouts).
     private static string DotClass(TagTypeEnum type) => type switch
     {
-        TagTypeEnum.Character => "bg-emerald-500",
-        TagTypeEnum.Setting => "bg-violet-500",
-        TagTypeEnum.Genre => "bg-sky-500",
-        TagTypeEnum.ContentWarning => "bg-rose-500",
-        TagTypeEnum.CrossoverFandom => "bg-amber-500",
-        _ => "bg-surface"
+        TagTypeEnum.Character => "bg-(--color-tagtype-character)",
+        TagTypeEnum.Setting => "bg-(--color-tagtype-setting)",
+        TagTypeEnum.Genre => "bg-(--color-tagtype-genre)",
+        TagTypeEnum.ContentWarning => "bg-(--color-tagtype-warning)",
+        TagTypeEnum.CrossoverFandom => "bg-(--color-tagtype-crossover)",
+        _ => "bg-(--color-text-muted)"
     };
 }

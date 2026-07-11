@@ -14,4 +14,5 @@ public record ReaderSettingsDto(
     bool AutoLoadNextChapter,
     bool CollapseCommentThreads,
     int DefaultPaginationSize,
-    DefaultSortOrder DefaultSearchSort);
+    DefaultSortOrder DefaultSearchSort,
+    ReadingBackgroundEnum ReadingBackground = ReadingBackgroundEnum.SiteDefault);

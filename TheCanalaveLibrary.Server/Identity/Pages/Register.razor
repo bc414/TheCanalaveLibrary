@@ -17,46 +17,43 @@
 
 <PageTitle>Register</PageTitle>
 
-<h1>Register</h1>
-
-<div class="row">
-    <div class="col-lg-6">
+<div class="mx-auto flex w-full max-w-2xl flex-col gap-4 py-8">
+    <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Register</h1>
+    <section class="flex flex-col gap-4">
         <StatusMessage Message="@Message"/>
         <EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register">
             <DataAnnotationsValidator/>
-            <h2>Create a new account.</h2>
-            <hr/>
-            <ValidationSummary class="text-danger" role="alert"/>
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.UserName" id="Input.UserName" class="form-control" autocomplete="username" aria-required="true" placeholder="username"/>
-                <label for="Input.UserName">Username</label>
-                <ValidationMessage For="() => Input.UserName" class="text-danger"/>
+            <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+                <h2 class="text-base font-semibold text-(--color-text)">Create a new account.</h2>
+                <ValidationSummary class="text-danger text-sm" role="alert"/>
+                <div class="flex flex-col gap-1">
+                    <label for="Input.UserName" class="text-sm font-semibold text-(--color-text)">Username</label>
+                    <InputText @bind-Value="Input.UserName" id="Input.UserName" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" autocomplete="username" aria-required="true" placeholder="username"/>
+                    <ValidationMessage For="() => Input.UserName" class="text-danger text-sm"/>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label for="Input.Email" class="text-sm font-semibold text-(--color-text)">Email</label>
+                    <InputText @bind-Value="Input.Email" id="Input.Email" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" autocomplete="email" aria-required="true" placeholder="name@example.com"/>
+                    <ValidationMessage For="() => Input.Email" class="text-danger text-sm"/>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label for="Input.Password" class="text-sm font-semibold text-(--color-text)">Password</label>
+                    <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" autocomplete="new-password" aria-required="true" placeholder="password"/>
+                    <ValidationMessage For="() => Input.Password" class="text-danger text-sm"/>
+                </div>
+                <div class="flex flex-col gap-1">
+                    <label for="Input.ConfirmPassword" class="text-sm font-semibold text-(--color-text)">Confirm Password</label>
+                    <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" autocomplete="new-password" aria-required="true" placeholder="password"/>
+                    <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger text-sm"/>
+                </div>
+                <button type="submit" class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">Register</button>
             </div>
-            <div class="form-floating mb-3">
-                <InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="email" aria-required="true" placeholder="name@example.com"/>
-                <label for="Input.Email">Email</label>
-                <ValidationMessage For="() => Input.Email" class="text-danger"/>
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password"/>
-                <label for="Input.Password">Password</label>
-                <ValidationMessage For="() => Input.Password" class="text-danger"/>
-            </div>
-            <div class="form-floating mb-3">
-                <InputText type="password" @bind-Value="Input.ConfirmPassword" id="Input.ConfirmPassword" class="form-control" autocomplete="new-password" aria-required="true" placeholder="password"/>
-                <label for="Input.ConfirmPassword">Confirm Password</label>
-                <ValidationMessage For="() => Input.ConfirmPassword" class="text-danger"/>
-            </div>
-            <button type="submit" class="w-100 btn btn-lg btn-primary">Register</button>
         </EditForm>
-    </div>
-    <div class="col-lg-4 col-lg-offset-2">
-        <section>
-            <h3>Use another service to register.</h3>
-            <hr/>
-            <ExternalLoginPicker/>
-        </section>
-    </div>
+    </section>
+    <section class="flex flex-col gap-3">
+        <h3 class="text-base font-semibold text-(--color-text)">Use another service to register.</h3>
+        <ExternalLoginPicker/>
+    </section>
 </div>
 
 @code {

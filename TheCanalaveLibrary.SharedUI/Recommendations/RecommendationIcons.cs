@@ -18,7 +18,7 @@ public static class RecommendationIcons
         "M2 20L4 22L15 9L13 7Z " +
         "M5 22L7 22L17 11L15 9Z";
 
-    public const string RecommendationAccentColor = "#5BB85A";
+    public const string RecommendationAccentColor = "var(--color-rec)"; // value in app.css @theme (#5BB85A Roserade Green)
     public const string RecommendationLabel = "Recommendations";
 
     // Faceted gem — kite/diamond silhouette with a CCW crown-facet subpath
@@ -28,6 +28,6 @@ public static class RecommendationIcons
         "M12 2L22 10L12 22L2 10Z " +
         "M12 4L12 10L20 10Z";
 
-    public const string HiddenGemAccentColor = "#1FA37A";
+    public const string HiddenGemAccentColor = "var(--color-gem)"; // value in app.css @theme (#1FA37A Torterra Emerald)
     public const string HiddenGemLabel = "Hidden Gems";
 }

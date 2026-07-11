@@ -3406,6 +3406,8 @@ namespace TheCanalaveLibrary.Server.Migrations
 
                             b1.Property<float>("LineHeight");
 
+                            b1.Property<short>("ReadingBackground");
+
                             b1.Property<int>("TextWidth");
 
                             b1

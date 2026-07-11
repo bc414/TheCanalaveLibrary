@@ -13,7 +13,7 @@
     <Authorized>
         <div class="relative">
             <button type="button"
-                    class="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface) hover:text-(--color-primary)"
+                    class="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) hover:text-(--color-action-ink)"
                     aria-expanded="@_open"
                     @onclick="Toggle">
                 <span>@context.User.Identity?.Name</span>
@@ -25,19 +25,20 @@
 
             @if (_open)
             {
-                <div class="absolute right-0 top-full z-30 mt-1 w-48 rounded-xl border border-(--color-border) bg-(--color-surface-raised) py-1 shadow-medium">
+                <div class="fixed inset-0 z-(--z-dropdown)" data-flyout-catcher @onclick="Close"></div>
+                <div class="absolute right-0 top-full z-(--z-dropdown) mt-1 w-48 rounded-xl border border-(--color-border) bg-(--color-surface-raised) py-1 shadow-medium">
                     <a href="@_profileHref"
-                       class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)"
+                       class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)"
                        @onclick="Close">
                         My Profile
                     </a>
                     <a href="bookshelves"
-                       class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)"
+                       class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)"
                        @onclick="Close">
                         Bookshelves
                     </a>
                     <a href="settings"
-                       class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)"
+                       class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)"
                        @onclick="Close">
                         Settings
                     </a>
@@ -46,7 +47,7 @@
                         <Authorized>
                             <div class="my-1 border-t border-(--color-border)"></div>
                             <a href="mod/reports"
-                               class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)"
+                               class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)"
                                @onclick="Close">
                                 Mod tools
                             </a>
@@ -58,7 +59,7 @@
                         <AntiforgeryToken />
                         <input type="hidden" name="ReturnUrl" value="@_currentUrl" />
                         <button type="submit"
-                                class="block w-full px-4 py-2 text-left text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)">
+                                class="block w-full px-4 py-2 text-left text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">
                             Log out
                         </button>
                     </form>
@@ -68,7 +69,7 @@
     </Authorized>
     <NotAuthorized>
         <a href="Account/Login"
-           class="rounded-md px-2 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface) hover:text-(--color-primary)">
+           class="rounded-md px-2 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) hover:text-(--color-action-ink)">
             Log in
         </a>
     </NotAuthorized>

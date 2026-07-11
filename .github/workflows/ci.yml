@@ -38,6 +38,15 @@ jobs:
       - name: Build
         run: dotnet build TheCanalaveLibrary.sln --no-restore -c Release
 
+      # Design-token enforcement (Phase F, 2026-07-10): fails on undeclared token references,
+      # raw palette/hex colors outside sanctioned files, raw shadow/z/backdrop utilities, and
+      # RichTextView/EditorView rendered outside a ContentSurface. The visual layer's silent
+      # failure modes (bracket forms, bare-name guesses, undeclared tokens) recur with generated
+      # code — this is the permanent feedback loop, not a one-time cleanup.
+      - name: Design-token check
+        shell: pwsh
+        run: ./scripts/check-design-tokens.ps1
+
       # No services:/secrets: block needed — Unit/RazorComponents tests have no external deps,
       # and Integration + the Garage/S3 test spin up their own ephemeral Testcontainers
       # (postgres:18-alpine, dxflrs/garage:v2.3.0) against the Docker daemon ubuntu-latest ships

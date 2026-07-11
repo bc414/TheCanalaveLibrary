@@ -13,13 +13,13 @@
 
 @if (_isOpen)
 {
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @onclick="Cancel">
-        <div class="w-full max-w-sm rounded-xl bg-surface p-6 shadow-lg" @onclick:stopPropagation="true">
+    <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="Cancel">
+        <div class="w-full max-w-sm rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation="true">
             <h2 class="mb-4 text-lg font-semibold text-text">Report Content</h2>
 
             @if (_reasons is null)
             {
-                <p class="text-sm text-muted">Loading…</p>
+                <p class="text-sm text-(--color-text-muted)">Loading…</p>
             }
             else
             {
@@ -57,14 +57,14 @@
 
                 <div class="flex justify-end gap-2">
                     <button type="button"
-                            class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-primary)/20"
+                            class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-surface-hover)"
                             @onclick="Cancel">
                         @(_submitted ? "Close" : "Cancel")
                     </button>
                     @if (!_submitted)
                     {
                         <button type="button"
-                                class="rounded-md bg-primary px-3 py-1 text-white transition-colors hover:bg-primary-strong disabled:opacity-50"
+                                class="rounded-md bg-(--color-action) px-3 py-1 text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
                                 disabled="@(_submitting || _selectedReasonId == 0)"
                                 @onclick="SubmitAsync">
                             @(_submitting ? "Submitting…" : "Submit Report")
