@@ -232,6 +232,11 @@ builder.Services.AddScoped<DataSeeder>();
 builder.Services.AddScoped<IDeviceDetectionService, ServerDeviceDetectionService>();
 builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
+// Story export (Feature 54, WU38c) — composes the read services; "export = what you can read".
+// QuestPDF's Community license is set in PdfWriter's static ctor (covers app + test paths).
+builder.Services.AddScoped<IExportService, ServerExportService>();
+// Chapter import (Feature 63, WU38d) — stateless pipeline over the singleton sanitizer.
+builder.Services.AddSingleton<IContentImportService, ServerContentImportService>();
 // View-count signal buffer (Feature 45 L2, layer2-services.md "Signal Buffering") — the scoped
 // recorder merges pings into the singleton buffer; the hosted worker batch-flushes into
 // daily_story_stats. TestAppFactory removes the worker (tests flush via ViewCountFlusher).
@@ -443,6 +448,7 @@ app.MapAdditionalIdentityEndpoints();
 
 app.MapStoryEndpoints();
 app.MapTagEndpoints();
+app.MapExportEndpoints();
 
 // S3 mode only: stored /uploads/… URLs resolve from the bucket instead of wwwroot. Local mode
 // must NOT map this — without a configured IAmazonS3 the handler can't resolve, and static

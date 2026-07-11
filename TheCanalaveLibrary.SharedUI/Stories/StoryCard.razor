@@ -57,10 +57,17 @@
                 <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
                         @onclick="() => InvokeAndClose(OnReport)">Report</button>
             }
-            @if (OnDownload.HasDelegate)
+            @* Download section (Feature 54, WU38c) — expands to per-format anchor links.
+               Anchors, not an EventCallback: downloads must bypass the circuit
+               (layer2-services.md "File Downloads Bypass the Circuit"). Keeps the menu open,
+               same discipline as StoryViewStats below. *@
+            <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
+                    @onclick="ToggleDownload" aria-expanded="@_downloadOpen">
+                Download @(_downloadOpen ? "▴" : "▾")
+            </button>
+            @if (_downloadOpen)
             {
-                <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
-                        @onclick="() => InvokeAndClose(OnDownload)">Download/Export</button>
+                <StoryDownloadLinks StoryId="@Story.StoryId" ShowLabel="false" Class="px-3 py-1.5" />
             }
             @* On-demand view-stats reveal (Feature 45) — non-sortable informational metric,
                available to anyone, fetched only when asked (keeps the menu open to show it).
@@ -135,12 +142,13 @@
     [Parameter] public bool IsOwnStory { get; set; }
 
     // Optional caret-menu actions — consumers wire only what exists (HasDelegate gating).
+    // (Download is NOT one of these — it's per-format anchor links, never a callback; WU38c.)
     [Parameter] public EventCallback OnDiscoverFromStory { get; set; }
     [Parameter] public EventCallback OnCopyLink { get; set; }
     [Parameter] public EventCallback OnReport { get; set; }
-    [Parameter] public EventCallback OnDownload { get; set; }
 
     private bool _menuOpen;
+    private bool _downloadOpen;
     private bool _coverArtFailed;
 
     private string StoryHref => $"/story/{Story.StoryId}";
@@ -183,8 +191,22 @@
 
     // ── Caret menu helpers ───────────────────────────────────────────────────────
 
-    private void ToggleMenu() => _menuOpen = !_menuOpen;
-    private void CloseMenu() => _menuOpen = false;
+    private void ToggleMenu()
+    {
+        _menuOpen = !_menuOpen;
+        if (!_menuOpen)
+        {
+            _downloadOpen = false;
+        }
+    }
+
+    private void ToggleDownload() => _downloadOpen = !_downloadOpen;
+
+    private void CloseMenu()
+    {
+        _menuOpen = false;
+        _downloadOpen = false;
+    }
 
     private async Task InvokeAndClose(EventCallback callback)
     {

@@ -458,6 +458,44 @@ canonical example is `ChapterText.CountWords(string?)` in `Core/Chapters/`. The 
 `WordCount` therefore always reflects *readable* words — what `RichTextView` would render — not a
 count of markup tokens.
 
+### Export & Import — the Allowlist Is the Interchange Contract (WU38c/WU38d)
+
+The 13-tag sanitizer allowlist is not just a security boundary — it is the **fidelity contract for
+every format conversion** in both directions:
+
+- **Export** (`Export/` cluster, `IExportService`): per-format writers (EPUB/PDF/HTML/TXT/
+  Markdown/DOCX) map exactly the allowlist tags to their format's constructs. What the editor can
+  produce is what exports render. If the toolbar/allowlist ever grows, the writers grow in the
+  same change (third leg of the toolbar↔allowlist contract above).
+- **Import** (`Import/` cluster, `IContentImportService`): per-format readers (Mammoth for DOCX,
+  VersOne.Epub, AngleSharp for HTML, Markdig for Markdown, plain TXT) convert *toward* the
+  allowlist, then **every imported chapter's HTML passes through `IHtmlSanitizationService`
+  before it reaches the editor or a write service** — the sanitizer is the single trust boundary
+  for file-derived content, exactly as it is for editor output. Unrepresentable source formatting
+  is stripped **with an `ImportWarning` surfaced to the author** (e.g. images dropped — the
+  allowlist has no `img`), never silently.
+
+**Export permission rule: "export = what you can read."** `ExportStoryAsync` composes the existing
+read services, so the content-rating master filter is the only gate — no author-only restriction,
+no `[Authorize]` on the endpoint. Anyone who can read a story may download it.
+
+**Licenses:** QuestPDF (Community — free under $1M revenue; `QuestPDF.Settings.License` set once at
+startup in Program.cs), Mammoth (BSD-2), Markdig (BSD-2), VersOne.Epub (free OSS),
+DocumentFormat.OpenXml (MIT). AngleSharp is referenced explicitly (was transitive via
+HtmlSanitizer) because writers/readers use it directly.
+
+### File Downloads Bypass the Circuit
+
+A file download is an ordinary HTTP GET whose response carries `Content-Disposition: attachment`.
+The InteractiveServer SignalR circuit **cannot produce that** — an `EventCallback` runs C# on the
+server and diffs DOM back over the socket; there is no HTTP response for the browser to save. So
+download affordances are **plain `<a href>` anchors pointing at a minimal-API endpoint**
+(`Results.File(bytes, contentType, fileName)` sets the header), never `@onclick` handlers. The
+anchor is a real browser navigation that carries the auth cookie, so `IActiveUserContext` and all
+query filters resolve normally. Canonical example: `Server/Export/ExportEndpoints.cs`
+(`GET /api/stories/{id}/export/{format}`). Do not reach for JS-interop blob downloads
+(base64/`DotNetStreamReference`) when a plain endpoint works — heavier, worse for large files.
+
 ## Group Rating Waterfall — Enforcement at Write Time
 
 Group content addition (`AddStoryAsync`, folder assignment) enforces a **three-tier waterfall** at

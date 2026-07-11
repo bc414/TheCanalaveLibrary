@@ -144,23 +144,70 @@ report→claim→resolve and approve/reject cycles driven in a real browser agai
   NotifiesAuthor`).
 - L4 stays 3 (functional styling, not design-reviewed) — nothing unusable found.
 
-## Feature 53 — Story Import & Verification (→ WU39, deps WU34)
+## Feature 53 — External Story Links & Verification (reframed 2026-07-11)
 
-**Note:** Story import and import verification are **split into WU39** (after WU34). `/mod/submissions`'s
-import-verification tab shell lands in WU34; the full import workflow and verification logic land in WU39.
-`StoryImport` stays in `Core/Models/` until WU39, which will relocate it to `Core/Moderation/` or
-`Core/Stories/`.
+**Reframe (settled 2026-07-11, WU38d plan — supersedes the "Story Import & Verification" scope
+below):** the feature is **"Also posted on" external story links**, plain language, display-first.
+A story lists the other sites it's also live on (X, Y, Z — *multiple* links), shown low-key on the
+story page (after the chapter list, before recommendations — awareness, not an invitation to click
+away). Each link has a `VerificationStatus`; `Verified` links render an author-verified checkmark.
+**Purpose (anti-theft):** anyone can pull a story off AO3/FFN via FicHub and re-upload it under
+their own account — community members who recognize a story and see unverified links report it
+(Feature 46, existing flow) for takedown. The site is anti-predatory even toward non-users: it
+protects the wider Pokémon author population, including inactive authors. File-format *content*
+ingestion (the other thing "import" used to mean here) is now **Feature 63** (`audit/Import.md`).
 
-**WU39 scope (not settled until WU39 opusplan):**
-- Author-facing import submission: `SourcePlatform`/`SourceUrl` + original dates, create `StoryImport` row,
-  route story into `PendingApproval`.
-- Mod verification tab: confirm account holder is original author (MVP = manual review of two-way link;
-  `StoryImport.VerificationStatus` records outcome).
-- Open: whether `OriginalPublishedDate`/`OriginalLastUpdatedDate` need a migration (not in current
-  `StoryImport` model); two-way link mechanism (site publishes a verifiable token the author puts on the
-  source page, vs. purely manual review).
+**Settled (WU38d — author-facing half, do not revisit):**
+- **Data model:** `StoryImport` (one row, single source) remodeled to `StoryExternalLink` (many per
+  story: `StoryExternalLinkId`, `StoryId`, `ExternalPlatformId` FK, `Url`, `VerificationStatus`
+  enum-mapped `short` (`Unverified`/`Verified`/`Rejected`), `DateAdded`) + seeded
+  `ExternalPlatform` lookup (`Name`, nullable `DomainPattern` for paste-a-URL auto-detect;
+  "Other" row displays the URL's host). **Deliberately a lookup table, NOT a hybrid C# enum** —
+  no compile-time branching on platform; the fanfic world's long tail of small archives should be
+  seed rows, not code changes; matches the `ReportReason`/`ReportStatus` pattern. WU39 hangs
+  per-platform verification properties off this table, not code branches. Entities live in
+  `Core/Stories/` (story-page display is the primary use).
+- **WU38d ships:** the remodel migration, story-page "Also posted on" row (checkmark only when
+  `Verified`), `StoryPropertiesForm` repeatable link rows + original-dates edit surface,
+  write-service sync (new links start `Unverified`; editing a verified link's URL resets it to
+  `Unverified`). `Story.OriginalPublishedDate`/`OriginalLastUpdatedDate` already exist — no
+  migration for those.
+- **Dropped by the reframe:** "route the story into `PendingApproval`" — links don't gate story
+  approval (Feature 48 untouched); verification is per-link, display-only.
 
-**Stages:** L1 — Stage 5. L2 — Stage 2. L3/L3.5 — Stage 2. L4 — Stage 1. L5 — N/A.
+**WU39 (re-minted as "External Link Verification (mod workflow)", deps WU34):** the
+`/mod/submissions` link-verification tab (shell stubbed in WU34), moderator review of `Unverified`
+links, the two-way-link authorship mechanism (site publishes a verifiable token the author puts on
+the source page, vs. purely manual review — still open, WU39's question), flipping
+`VerificationStatus` (checkmarks appear on the story page automatically).
+
+**Stages:** L1 — Stage 5 (WU38d remodel migrated). L2 — Stage 2. L3/L3.5 — Stage 2.
+L4 — Stage 1. L5 — N/A. (L2/L3/L3.5 stay 2 because the feature's mod-verification half is WU39;
+the author-facing half below is done.)
+
+**WU38d Stage note (2026-07-11) — author-facing half shipped:**
+- **L1:** migration `WU38d_StoryExternalLinks` (drop `story_imports`, create
+  `story_external_links` + seeded `external_platforms` ×7, unique `(story_id, url)`,
+  Restrict FK to the lookup). Applied cleanly to the 3012-story dev workbench and to
+  Testcontainers in every integration run. Global URL uniqueness (old rule) deliberately
+  dropped — whether two stories claiming one URL is theft is a WU39/Feature-46 judgment, not a
+  schema constraint a thief could use to squat a URL.
+- **Built:** `Core/Stories/{StoryExternalLink, ExternalPlatform}` + `VerificationStatusEnum`;
+  `StoryExternalLinkDto`/`EditDto`/`ExternalPlatformDto`; `GetExternalPlatformsAsync` on
+  `IStoryReadService`; projection into `StoryDetailsDTO.ExternalLinks` and
+  `GetStoryForEditAsync`; write-service sync (match on (platform, URL): unchanged rows keep
+  status, missing rows delete, new rows start Unverified — so editing a verified link's URL
+  resets it); URL validation (absolute http/https); `StoryPropertiesForm` "Also posted on"
+  section (repeatable rows, paste-a-URL platform auto-detect via `DomainPattern`, original-dates
+  inputs); `StoryExternalLinksRow` on the story page (after chapters, before recommendations —
+  settled placement; checkmark + "Author verified" tooltip only when `Verified`; `rel=nofollow`).
+- **Verified:** Integration (`StoryExternalLinkTests`, 7 tests — seeded lookup, Unverified start,
+  dedupe/blank-drop, invalid-URL validation, **verified-kept vs URL-change-reset sync semantics**,
+  row deletion, original-dates round-trip); RazorComponents (`StoryExternalLinksRowTests`, 4 —
+  checkmark gating, absent-when-empty, and the settled after-chapters/before-recommendations
+  placement asserted on `StoryDesktop`); browser (2026-07-11) — add-link with live AO3
+  auto-detect, save, psql-confirmed Unverified row + original date, story-page row rendered in
+  place, psql flip to Verified → checkmark + tooltip appeared.
 
 ## Feature 62 — SiteDailyStat Worker
 

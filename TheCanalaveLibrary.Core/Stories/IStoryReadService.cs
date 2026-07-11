@@ -81,6 +81,12 @@ public interface IStoryReadService
     Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId);
 
     /// <summary>
+    /// The seeded external-platform lookup (Feature 53 reframe, WU38d) — feeds the story form's
+    /// "Also posted on" dropdown and its paste-a-URL platform auto-detection (DomainPattern).
+    /// </summary>
+    Task<IReadOnlyList<ExternalPlatformDto>> GetExternalPlatformsAsync();
+
+    /// <summary>
     /// Lifetime total views of a story — <c>SUM</c> over its <c>daily_story_stats</c> rows
     /// (Feature 45; the per-story/day accumulation the view buffer flushes into). Fetched
     /// on-demand only (the story-card dropdown reveal) — deliberately not part of any listing

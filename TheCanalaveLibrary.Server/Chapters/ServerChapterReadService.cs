@@ -192,6 +192,30 @@ public class ServerChapterReadService(
             .ToList();
     }
 
+    public async Task<IReadOnlyList<ChapterExportDto>> GetChaptersForExportAsync(int storyId)
+    {
+        Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
+
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // Published chapters' primary versions only, viewer's rating ceiling applied
+        // (COALESCE(cc.rating, story.rating) — same effective-rating rule as the reading paths).
+        // The primary invariant (effective(primary) == story.Rating) means the ceiling rarely
+        // bites here, but it stays for defense-in-depth: export must never exceed what reading shows.
+        return await readDb.Chapters
+            .Where(c => c.StoryId == storyId && c.IsPublished && c.PrimaryContentId != null)
+            .Select(c => c.PrimaryContent!)
+            .Where(cc => (cc.Rating ?? cc.Chapter.Story.Rating) <= ratingCeiling)
+            .OrderBy(cc => cc.Chapter.ChapterNumber)
+            .Select(cc => new ChapterExportDto(
+                cc.Chapter.ChapterNumber,
+                cc.Chapter.Title,
+                cc.ChapterText,
+                cc.TopAuthorsNote,
+                cc.BottomAuthorsNote))
+            .ToListAsync();
+    }
+
     private sealed record ChapterRow(int ChapterNumber, string Title, int WordCount, bool IsPublished);
 
     private sealed record AltVersionRow(

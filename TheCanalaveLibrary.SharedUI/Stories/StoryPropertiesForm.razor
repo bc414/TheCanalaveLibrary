@@ -163,6 +163,53 @@
                      OnSelectionChanged="HandleCrossoverChange" />
     </div>
 
+    @* ── "Also posted on" external links + original dates (Feature 53 reframe, WU38d) ── *@
+    <div class="flex flex-col gap-2">
+        <p class="text-sm font-semibold text-(--color-text)">Also posted on</p>
+        <p class="text-xs text-(--color-text-muted)">
+            If this story is also live on other sites, list the links — they'll show on your story
+            page, and a moderator can verify you as the author (✓). Paste the URL; the site is
+            detected automatically.
+        </p>
+        @for (int i = 0; i < ViewModel.ExternalLinks.Count; i++)
+        {
+            int idx = i;
+            StoryExternalLinkEditDto link = ViewModel.ExternalLinks[idx];
+            <div class="flex items-center gap-2">
+                <input value="@link.Url"
+                       @onchange="@(e => HandleLinkUrlChanged(idx, e.Value as string))"
+                       placeholder="https://…"
+                       class="min-w-0 flex-1 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" />
+                <select value="@link.ExternalPlatformId"
+                        @onchange="@(e => link.ExternalPlatformId = short.Parse((string)e.Value!))"
+                        aria-label="Platform"
+                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1.5 text-sm text-(--color-text)">
+                    @foreach (ExternalPlatformDto platform in ExternalPlatforms)
+                    {
+                        <option value="@platform.ExternalPlatformId">@platform.Name</option>
+                    }
+                </select>
+                <button type="button" @onclick="() => RemoveExternalLink(idx)" aria-label="Remove link"
+                        class="shrink-0 text-(--color-text-muted) hover:text-(--color-danger)">✕</button>
+            </div>
+        }
+        <button type="button" @onclick="AddExternalLink"
+                class="self-start text-sm text-(--color-action-ink) hover:underline">+ Add link</button>
+
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div class="flex flex-col gap-1">
+                <label class="text-xs text-(--color-text-muted)">Originally published (elsewhere)</label>
+                <InputDate @bind-Value="ViewModel.OriginalPublishedDate"
+                           class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text)" />
+            </div>
+            <div class="flex flex-col gap-1">
+                <label class="text-xs text-(--color-text-muted)">Original last update</label>
+                <InputDate @bind-Value="ViewModel.OriginalLastUpdatedDate"
+                           class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text)" />
+            </div>
+        </div>
+    </div>
+
     @* ── Submit ──────────────────────────────────────────────────────────────── *@
     <button type="submit"
             disabled="@ViewModel.IsLoading"
@@ -188,6 +235,13 @@
     [Parameter] public IReadOnlyDictionary<int, TagPriority>? InitialGenrePriorities { get; set; }
 
     [Parameter] public string SubmitLabel { get; set; } = "Save";
+
+    /// <summary>
+    /// Seeded platform lookup for the "Also posted on" section (WU38d) — loaded by the page
+    /// (this form stays injection-free). Empty list hides nothing; rows just default to the
+    /// first option.
+    /// </summary>
+    [Parameter] public IReadOnlyList<ExternalPlatformDto> ExternalPlatforms { get; set; } = [];
 
     private EditorView? _editor;
 
@@ -369,6 +423,43 @@
 
     private void HandleCoverSelected(InputFileChangeEventArgs e) =>
         SelectedCoverFile = e.File;
+
+    // ── "Also posted on" link rows (WU38d) ───────────────────────────────────────
+
+    private void AddExternalLink() =>
+        ViewModel.ExternalLinks.Add(new StoryExternalLinkEditDto
+        {
+            // Default to the "Other" row (no DomainPattern) until a URL is pasted and detected.
+            ExternalPlatformId = FallbackPlatformId()
+        });
+
+    private void RemoveExternalLink(int index) =>
+        ViewModel.ExternalLinks.RemoveAt(index);
+
+    /// <summary>
+    /// Paste-a-URL auto-detect: match the URL's host against each platform's DomainPattern and
+    /// stamp the row's platform. Runs on every URL change (a changed host re-detects); the
+    /// dropdown remains manually overridable afterwards.
+    /// </summary>
+    private void HandleLinkUrlChanged(int index, string? url)
+    {
+        StoryExternalLinkEditDto link = ViewModel.ExternalLinks[index];
+        link.Url = url?.Trim() ?? string.Empty;
+
+        if (Uri.TryCreate(link.Url, UriKind.Absolute, out Uri? uri))
+        {
+            ExternalPlatformDto? detected = ExternalPlatforms.FirstOrDefault(p =>
+                p.DomainPattern is not null &&
+                uri.Host.Contains(p.DomainPattern, StringComparison.OrdinalIgnoreCase));
+            link.ExternalPlatformId = detected?.ExternalPlatformId ?? FallbackPlatformId();
+        }
+    }
+
+    /// <summary>The "Other" row (null DomainPattern), or the first platform as a last resort.</summary>
+    private short FallbackPlatformId() =>
+        ExternalPlatforms.FirstOrDefault(p => p.DomainPattern is null)?.ExternalPlatformId
+        ?? ExternalPlatforms.FirstOrDefault()?.ExternalPlatformId
+        ?? (short)0;
 
     private async Task HandleValidSubmit() => await OnValidSubmit.InvokeAsync();
 }

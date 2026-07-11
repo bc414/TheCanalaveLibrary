@@ -125,8 +125,8 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 50 | Badge System | Badges | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
 | 51 | Custom Lists | CustomLists | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A |
 | 52 | User Account Deletion | Identity | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
-| 53 | External Story Links & Verification | Moderation | 4 | 2 | 2 | 2 | 1 | 1 | N/A | N/A | N/A |
-| 54 | Content Download/Export | Export | N/A | 2 | N/A | N/A | N/A | 1 | N/A | N/A | N/A |
+| 53 | External Story Links & Verification | Moderation | 5 | 2 | 2 | 2 | 1 | 1 | N/A | N/A | N/A |
+| 54 | Content Download/Export | Export | N/A | 5 | N/A | N/A | N/A | 5 | N/A | N/A | N/A |
 | 55 | Community Spotlight | Spotlight | 1 | 1 | 1 | 1 | 1 | 1 | N/A | N/A | N/A |
 | 56 | Feature Contributions | BlogPosts | 5 | 2 | 2 | 2 | 1 | 1 | N/A | N/A | N/A |
 | 57 | Notification Cleanup Worker | Notifications | N/A | 2 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
@@ -135,4 +135,4 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 60 | Tree Search Data Mart Worker | Discovery | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | 5 |
 | 61 | Also Favorited / Also Recommended | Discovery | N/A | 5 | 2 | 2 | 1 | 1 | 2 | N/A | 5 |
 | 62 | SiteDailyStat Worker | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | N/A | 5 |
-| 63 | Chapter Import (file ingestion) | Import | N/A | 2 | 2 | 2 | 2 | 1 | N/A | N/A | N/A |
+| 63 | Chapter Import (file ingestion) | Import | N/A | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |

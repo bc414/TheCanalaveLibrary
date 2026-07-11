@@ -1205,9 +1205,52 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **L5** (WASM view-ping endpoint) remains Stage 2, deferred to the global WASM interactivity
   flip — not WU38b-specific, not pulled forward here.
 
-### WU38c — Export (epub/pdf)
-- **Cells:** 54 L2 (epub/pdf export, app-layer only).
+### WU38c — Export (six formats) — DONE ✓ (2026-07-11)
+- **Cells:** 54 L2 → Stage 5; 54 L4.5 → Stage 5. (L3/L3.5 stay N/A — the trigger is anchor links
+  in Stories surfaces, a light Feature-5 touch recorded in `audit/Stories.md`.)
+- **Done (scope expanded same day from "epub/pdf"):** EPUB (zero-dep ZipArchive, OCF-correct) /
+  PDF (QuestPDF, Community license in `PdfWriter`'s static ctor) / HTML / TXT / Markdown / DOCX
+  (Open XML SDK, real heading styles + hyperlink relationships + numbering part) behind
+  `ExportFormat` + per-format writers over one shared AngleSharp DOM walk;
+  `GET /api/stories/{id}/export/{format}` plain-anchor download (bypasses the circuit —
+  `layer2-services.md` §"File Downloads Bypass the Circuit"); "export = what you can read"
+  (read services' rating ceiling is the only gate); additive `GetChaptersForExportAsync` on
+  Chapters; `StoryDownloadLinks` leaf on story page + StoryCard Download submenu (dead
+  `OnDownload` EventCallback removed). New packages: QuestPDF 2026.7.1, DocumentFormat.OpenXml
+  3.5.1, AngleSharp pinned 0.17.1 (HtmlSanitizer hard constraint — csproj note).
+- **Verified:** `dotnet test` green — Unit `ExportWritersTests` (9), Integration
+  `ExportServiceTests` (16, incl. mature-gate both directions + attachment headers + 404s),
+  RazorComponents `StoryCardTests` update. Live curl: all six formats for seed story 1, correct
+  types/signatures/slug filename. Detail: `audit/Export.md` Stage-5 note.
 - **Tool:** opusplan. **Pointer:** `audit/Export.md`. **Deps:** WU25.
+
+### WU38d — Chapter Import (file ingestion) + "Also posted on" external links — DONE ✓ (2026-07-11)
+- **Cells:** 63 L2/L3/L3.5/L4/L4.5 → Stage 5 (new feature row — `audit/Import.md`); 53 L1 → Stage
+  5 (remodel migrated); the author-facing slice of 53 L2/L3/L3.5 shipped (cells stay 2 — the mod
+  verification half is WU39's; split documented in `audit/Moderation.md` F53).
+- **Done:** five explicit import modes (into-editor / as-version / file-per-chapter /
+  one-doc-auto-detect / EPUB) over one backend — readers (Mammoth DOCX incl. working
+  `br[type='page'] => hr` page-break map, VersOne.Epub, AngleSharp HTML, TXT, Markdig MD; PDF
+  deferred) → `ImportHtmlNormalizer` (maps toward the allowlist so the sanitizer's
+  drop-with-children default can't silently delete text; counts images/tables lost) → sanitizer
+  per draft (trust boundary) → suggest-then-refine `ChapterSplitter` (in-memory re-split, no
+  re-upload) → `ImportReviewPanel` (rename/merge/drop/reorder/preview) → existing
+  `IChapterWriteService` (unpublished drafts). Feature-53 reframe shipped: `StoryImport` →
+  `StoryExternalLink` (many per story) + seeded `ExternalPlatform` lookup (deliberately not an
+  enum), migration `WU38d_StoryExternalLinks`, write-service sync (URL edit resets verification),
+  paste-a-URL platform auto-detect, story-page row (after chapters, before recs; checkmark only
+  when Verified). New packages: Mammoth 1.11.0, VersOne.Epub 3.3.6, Markdig 1.3.2.
+- **Verified:** `dotnet test` 1600 green (568 Unit + 546 RazorComponents + 486 Integration; +179
+  this combined WU). Unit `ContentImportTests` (18 — **export→import round-trips across all five
+  formats**, splitter, normalizer, guards); Integration `ImportCommitTests` +
+  `StoryExternalLinkTests` (8); RazorComponents `ImportReviewPanelTests` (8) +
+  `StoryExternalLinksRowTests` (4, incl. the settled placement assertion). Browser (real circuit):
+  mode 4 with a WU38c-exported DOCX end-to-end (split → delimiter switch → commit →
+  psql-confirmed drafts), mode 1 into Quill, links flow with live AO3 auto-detect + verified-flip
+  checkmark. `external_platforms` added to Respawn's TablesToIgnore (seeded lookup). Outstanding
+  manual item: paste-from-Word fidelity (needs real Word; recorded in `audit/Import.md`).
+- **Tool:** opusplan. **Pointer:** `audit/Import.md` + `audit/Moderation.md` Feature 53.
+  **Deps:** WU38c (round-trip test fixtures), WU25.
 
 ### WU40 — Manual Tree Search (Feature 33)
 - **Cells:** 33 L2 / L3-Logic / L3.5 → Stage 5.
@@ -1219,16 +1262,19 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   search and §3 hidden-gem chain-of-trust. See `audit/Discovery.md` Feature 33.
 - **Tool:** opusplan. **Pointer:** `audit/Discovery.md` Feature 33. **Deps:** WU14, WU23, WU4, WU25.
 
-### WU39 — Story Import & Verification
-- **Cells:** 53 L2/L3/L3.5/L4.
-- **Do:** author-facing import submission (re-posting an externally-published own work — not a scraper):
-  supply `SourcePlatform`/`SourceUrl` + `OriginalPublishedDate`/`OriginalLastUpdatedDate`, create the
-  `StoryImport` row (unique `StoryId` + unique `SourceUrl`), route the story into `PendingApproval`.
-  Extend the WU34 `/mod/submissions` tabbed shell with an **import-verification** tab: moderator confirms
-  the account holder is the original author (MVP = manual review of the two-way link / `SourceUrl`;
-  `StoryImport.VerificationStatus` records the outcome). Relocate `StoryImport` → `Core/Moderation/`
-  (or `Core/Stories/`) at this point.
-- **Tool:** opusplan. **Pointer:** `audit/Moderation.md` Feature 53. **Deps:** WU24, WU34.
+### WU39 — External Link Verification (mod workflow) *(re-minted 2026-07-11; was "Story Import & Verification")*
+- **Cells:** the mod-workflow remainder of 53 L2/L3/L3.5/L4 (the author-facing half — link
+  editing, story-page display, `StoryExternalLink`/`ExternalPlatform` remodel — moved into WU38d;
+  file-format content ingestion became Feature 63, also WU38d).
+- **Do:** extend the WU34 `/mod/submissions` tabbed shell with a **link-verification** tab:
+  moderator reviews `Unverified` `StoryExternalLink` rows and flips `VerificationStatus`
+  (`Verified` → the story page's "Also posted on" checkmark appears automatically). Open question
+  owned here: the two-way-link mechanism (site publishes a verifiable token the author puts on
+  the source page, vs. purely manual review). The old "route the story into `PendingApproval`"
+  step is dropped — links don't gate story approval (Feature 48 untouched); verification is
+  per-link, display-only. Per-platform verification properties go on the `ExternalPlatform`
+  lookup as columns, not code branches.
+- **Tool:** opusplan. **Pointer:** `audit/Moderation.md` Feature 53. **Deps:** WU34, WU38d.
 
 > **Account-status login enforcement — folded into WU38a (2026-07-11), no longer deferred.** Was:
 > "block Suspended (until `SuspendedUntilUtc`) / Banned users at login and surface the Warned banner

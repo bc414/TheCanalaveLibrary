@@ -40,6 +40,15 @@ internal sealed class FakeStoryReadService : IStoryReadService
     /// <summary>Configurable knob for StoryViewStats tests (Feature 45 on-demand reveal).</summary>
     public long TotalViews { get; set; }
     public Task<long> GetStoryTotalViewsAsync(int storyId) => Task.FromResult(TotalViews);
+
+    /// <summary>Seeded-lookup mirror for the story form's "Also posted on" dropdown (WU38d).</summary>
+    public Task<IReadOnlyList<ExternalPlatformDto>> GetExternalPlatformsAsync() =>
+        Task.FromResult<IReadOnlyList<ExternalPlatformDto>>(
+        [
+            new ExternalPlatformDto(1, "Archive of Our Own", "archiveofourown.org"),
+            new ExternalPlatformDto(2, "FanFiction.Net", "fanfiction.net"),
+            new ExternalPlatformDto(7, "Other", null)
+        ]);
 }
 
 // ── Interaction (read) ────────────────────────────────────────────────────────────────────────

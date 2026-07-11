@@ -10,9 +10,33 @@ generation: `IExportService` (Core) + `ServerExportService` + per-format writers
 (Server), all in the `Export/` cluster.
 
 ## Feature 54 — Content Download/Export
-- **L1 — N/A** (no schema). **L2 — Stage 2 → building (WU38c, plan approved 2026-07-11).**
+- **L1 — N/A** (no schema). **L2 — Stage 5 (WU38c, 2026-07-11).**
 - **L3-Logic — N/A** (trigger lives in Stories components). **L3.5 — N/A** (no components).
-- **L4 — N/A. L5 — N/A. L6 — N/A. L8 — N/A.**
+- **L4 — N/A. L4.5 — Stage 5. L5 — N/A. L6 — N/A. L8 — N/A.**
+
+### L2 Stage-5 note (2026-07-11, WU38c)
+Built: `Core/Export/` (`ExportFormat`, `StoryExportResult`, `IExportService`) +
+`Server/Export/` (`ServerExportService`, six writers, `ExportEndpoints`, shared `ExportDom`
+AngleSharp helpers) + additive `IChapterReadService.GetChaptersForExportAsync`. Trigger surfaces:
+`StoryDownloadLinks` leaf (SharedUI/Stories — anchor links with the `download` attribute so
+Blazor's router doesn't intercept) on `StoryDesktop`/`StoryMobile` + a StoryCard caret Download
+submenu (the dead `OnDownload` EventCallback parameter was removed).
+**Verified:**
+- **Unit tier** (`ExportWritersTests`, 9 tests): EPUB OCF invariants (mimetype first + stored,
+  well-formed XHTML per chapter — `XDocument.Parse`), PDF magic, DOCX opens via
+  `WordprocessingDocument` with real heading styles + hyperlink relationships, HTML metadata
+  escaping, TXT shape preservation, full MD tag mapping incl. `br` hard breaks.
+- **Integration tier** (`ExportServiceTests`, 16 tests): per-format bytes/content-type/slug
+  filename against real seeded chapters; **"export = what you can read" both directions** (Mature
+  story → null for non-mature viewer, bytes for mature); unpublished chapters excluded; chapter
+  order; endpoint 200 + `Content-Disposition: attachment`, unknown format/missing story → 404.
+- **Live (curl, 2026-07-11):** all six formats downloaded from the running server for seed story 1
+  (5 chapters): correct types, slugified attachment filename
+  (`seed-story-five-chapters-alt-version-t.epub`), valid signatures (PK zip / %PDF / mimetype at
+  byte 30). RazorComponents tier covers the trigger surfaces (`StoryCardTests` download submenu:
+  six anchors, `download` attribute, collapsed-by-default).
+- Import round-trips (ContentImportTests) double as writer-fidelity proof: export → import → the
+  allowlist content survives byte-for-byte in every text format.
 
 ### Settled (WU38c, 2026-07-11 — do not revisit without Stage-4 diagnosis)
 - **Six formats:** EPUB (zero-dep `ZipArchive`), PDF (**QuestPDF**, Community license — free under

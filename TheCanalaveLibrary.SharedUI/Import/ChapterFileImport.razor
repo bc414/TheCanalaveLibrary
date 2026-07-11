@@ -1,0 +1,78 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Forms
+@inject IContentImportService ImportService
+
+@* Single-file chapter import (Feature 63, WU38d — modes 1/2). Parses ONE file into ONE sanitized
+   draft and raises OnImported — the consuming page decides what to do with it (load into the
+   editor, or commit as an alternate version). Never splits (that's the bulk modes' job —
+   StoryChapterImport). EPUBs are refused here by the service (whole-book format). *@
+
+<div class="flex flex-col gap-2">
+    <label class="flex cursor-pointer items-center gap-2 self-start rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">
+        @(_isParsing ? "Importing…" : Label)
+        <InputFile OnChange="HandleFileSelected" accept="@ImportFormats.AcceptSingle"
+                   disabled="@_isParsing" class="hidden" />
+    </label>
+    <p class="text-xs text-(--color-text-muted)">
+        Word (.docx — a downloaded Google Doc is one), HTML, plain text, or Markdown ·
+        max @(ImportLimits.MaxFileBytes / (1024 * 1024)) MB
+    </p>
+
+    <InlineAlert Messages="@_errors" />
+
+    @if (_warnings.Count > 0)
+    {
+        <ul class="flex flex-col gap-0.5 text-xs text-(--color-text-muted)">
+            @foreach (ImportWarning warning in _warnings)
+            {
+                <li>⚠ @warning.Message</li>
+            }
+        </ul>
+    }
+</div>
+
+@code {
+    /// <summary>Fires with the sanitized draft after a successful parse.</summary>
+    [Parameter] public EventCallback<ImportedChapterDraft> OnImported { get; set; }
+
+    [Parameter] public string Label { get; set; } = "Import from file…";
+
+    private bool _isParsing;
+    private readonly List<string> _errors = [];
+    private List<ImportWarning> _warnings = [];
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        _errors.Clear();
+        _warnings = [];
+
+        ImportFormat? format = ImportFormats.TryFromFileName(e.File.Name);
+        if (format is null)
+        {
+            _errors.Add($"\"{e.File.Name}\" isn't a supported file type.");
+            return;
+        }
+
+        _isParsing = true;
+        try
+        {
+            await using Stream stream = e.File.OpenReadStream(ImportLimits.MaxFileBytes);
+            ImportedChapterDraft draft = await ImportService.ParseSingleAsync(stream, e.File.Name, format.Value);
+            _warnings = draft.Warnings.ToList();
+            await OnImported.InvokeAsync(draft);
+        }
+        catch (ImportException ex)
+        {
+            _errors.Add(ex.Message); // presentation-safe by contract (Core/Import/ImportException)
+        }
+        catch (IOException)
+        {
+            _errors.Add($"\"{e.File.Name}\" is larger than {ImportLimits.MaxFileBytes / (1024 * 1024)} MB.");
+        }
+        finally
+        {
+            _isParsing = false;
+        }
+    }
+}

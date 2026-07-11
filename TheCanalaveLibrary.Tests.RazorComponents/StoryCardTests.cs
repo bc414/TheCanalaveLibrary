@@ -255,7 +255,7 @@ public class StoryCardTests : BunitContext
     // ── Caret menu ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Caret_NoCallbacksWired_MenuShowsOnlyViewStory()
+    public void Caret_NoCallbacksWired_MenuShowsOnlyViewStoryAndDownload()
     {
         IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
             .Add(c => c.Story, MakeStory(storyId: 1)));
@@ -263,12 +263,45 @@ public class StoryCardTests : BunitContext
         // Open the menu by clicking the caret button.
         cut.Find("button[aria-label='Story options']").Click();
 
-        // Only "View Story" should appear (all other EventCallbacks have no delegate).
+        // Only "View Story" and the (always-on) Download section should appear —
+        // all optional EventCallbacks have no delegate. Download is anchor-based, not a
+        // callback, so it never gates on HasDelegate (WU38c).
         cut.Markup.Should().Contain("View Story");
+        cut.Markup.Should().Contain("Download");
         cut.Markup.Should().NotContain("Discover from this Story");
         cut.Markup.Should().NotContain("Copy link");
         cut.Markup.Should().NotContain("Report");
-        cut.Markup.Should().NotContain("Download/Export");
+    }
+
+    [Fact]
+    public void Caret_DownloadSection_ExpandsToPerFormatAnchorLinks()
+    {
+        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
+            .Add(c => c.Story, MakeStory(storyId: 7)));
+
+        cut.Find("button[aria-label='Story options']").Click();
+
+        // Collapsed by default — no format links yet.
+        cut.FindAll("a[href^='/api/stories/7/export/']").Should().BeEmpty();
+
+        // Expand the Download section.
+        cut.FindAll("button").First(b => b.TextContent.Contains("Download")).Click();
+
+        // Six per-format anchors with the download attribute (bypasses the Blazor router —
+        // a download is a plain HTTP GET, never a circuit callback).
+        var links = cut.FindAll("a[href^='/api/stories/7/export/']");
+        links.Should().HaveCount(6);
+        links.Select(a => a.GetAttribute("href")).Should().Contain(
+        [
+            "/api/stories/7/export/epub",
+            "/api/stories/7/export/pdf",
+            "/api/stories/7/export/html",
+            "/api/stories/7/export/txt",
+            "/api/stories/7/export/markdown",
+            "/api/stories/7/export/docx"
+        ]);
+        links.Should().OnlyContain(a => a.HasAttribute("download"),
+            "the download attribute keeps Blazor's router from intercepting the click");
     }
 
     [Fact]

@@ -38,6 +38,12 @@ public class StoryDetailsDTO
     public IReadOnlyList<PairingDisplayEntry> Pairings { get; set; } = [];
 
     /// <summary>
+    /// "Also posted on" links (Feature 53 reframe, WU38d) — rendered low-key near the bottom of the
+    /// story page (after chapters, before recommendations). Verified links show a checkmark.
+    /// </summary>
+    public IReadOnlyList<StoryExternalLinkDto> ExternalLinks { get; set; } = [];
+
+    /// <summary>
     /// Legacy: chapter title list from the original L5 JSON-endpoint design. The story landing page
     /// (WU25) uses <see cref="IChapterReadService.GetChapterListAsync"/> instead for richer
     /// per-chapter metadata. This field will be removed when an L5 endpoint is rebuilt (post-MVP).

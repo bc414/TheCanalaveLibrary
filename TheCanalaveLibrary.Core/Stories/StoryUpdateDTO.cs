@@ -19,4 +19,11 @@ public class StoryUpdateDTO : IEditableStoryProperties
     public List<StoryCharacterDto> StoryCharacters { get; set; } = new();
     public List<SettingDetailDto> SettingDetails { get; set; } = new();
     public List<StoryCharacterPairingDto> StoryCharacterPairings { get; set; } = new();
+
+    // "Also posted on" links + original dates (Feature 53 reframe, WU38d). Deliberately NOT on
+    // IEditableStoryProperties — links are separate rows the write service syncs, not story
+    // properties the shared mapper copies.
+    public List<StoryExternalLinkEditDto> ExternalLinks { get; set; } = new();
+    public DateOnly? OriginalPublishedDate { get; set; }
+    public DateOnly? OriginalLastUpdatedDate { get; set; }
 }

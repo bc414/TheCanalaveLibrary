@@ -77,9 +77,11 @@ public sealed class StoryConfiguration : IEntityTypeConfiguration<Story>
             .HasForeignKey(usi => usi.StoryId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne(s => s.StoryImport)
-            .WithOne(si => si.Story)
-            .HasForeignKey<StoryImport>(si => si.StoryId)
+        // "Also posted on" links (Feature 53 reframe, WU38d) — many per story; deleting the story
+        // deletes its links.
+        builder.HasMany(s => s.ExternalLinks)
+            .WithOne(sel => sel.Story)
+            .HasForeignKey(sel => sel.StoryId)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasMany(s => s.SettingDetails)
@@ -118,6 +120,51 @@ public sealed class StoryConfiguration : IEntityTypeConfiguration<Story>
             .HasDatabaseName("ix_stories_published_date");
         builder.HasIndex(e => e.LastUpdatedDate)
             .HasDatabaseName("ix_stories_last_updated_date");
+    }
+}
+
+/// <summary>
+/// "Also posted on" link rows (Feature 53 reframe, WU38d). Uniqueness is per-story-per-URL only —
+/// global URL uniqueness (the old StoryImport rule) was deliberately dropped: whether two stories
+/// claiming the same source URL is theft is a moderation judgment (WU39/Feature 46), not a schema
+/// constraint that could let a thief squat a URL and block the real author.
+/// </summary>
+public sealed class StoryExternalLinkConfiguration : IEntityTypeConfiguration<StoryExternalLink>
+{
+    public void Configure(EntityTypeBuilder<StoryExternalLink> builder)
+    {
+        builder.Property(e => e.VerificationStatus).HasConversion<short>();
+        builder.Property(e => e.DateAdded).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        builder.HasIndex(e => new { e.StoryId, e.Url }).IsUnique();
+
+        builder.HasOne(e => e.ExternalPlatform)
+            .WithMany(p => p.StoryExternalLinks)
+            .HasForeignKey(e => e.ExternalPlatformId)
+            .OnDelete(DeleteBehavior.Restrict); // seeded lookup rows are never deleted from under links
+    }
+}
+
+/// <summary>
+/// Seeded platform lookup — deliberately NOT a hybrid enum (audit/Moderation.md F53: adding an
+/// archive is a seed row, not a code change). "Other" (id 7) has no DomainPattern; the UI shows
+/// the URL's host for it.
+/// </summary>
+public sealed class ExternalPlatformConfiguration : IEntityTypeConfiguration<ExternalPlatform>
+{
+    public void Configure(EntityTypeBuilder<ExternalPlatform> builder)
+    {
+        builder.HasIndex(e => e.Name).IsUnique();
+
+        builder.HasData(
+            new ExternalPlatform { ExternalPlatformId = 1, Name = "Archive of Our Own", DomainPattern = "archiveofourown.org" },
+            new ExternalPlatform { ExternalPlatformId = 2, Name = "FanFiction.Net", DomainPattern = "fanfiction.net" },
+            new ExternalPlatform { ExternalPlatformId = 3, Name = "Wattpad", DomainPattern = "wattpad.com" },
+            new ExternalPlatform { ExternalPlatformId = 4, Name = "SpaceBattles", DomainPattern = "spacebattles.com" },
+            new ExternalPlatform { ExternalPlatformId = 5, Name = "Sufficient Velocity", DomainPattern = "sufficientvelocity.com" },
+            new ExternalPlatform { ExternalPlatformId = 6, Name = "Royal Road", DomainPattern = "royalroad.com" },
+            new ExternalPlatform { ExternalPlatformId = 7, Name = "Other", DomainPattern = null }
+        );
     }
 }
 

@@ -94,16 +94,7 @@ public sealed class SiteDailyStatConfiguration : IEntityTypeConfiguration<SiteDa
     }
 }
 
-public sealed class StoryImportConfiguration : IEntityTypeConfiguration<StoryImport>
-{
-    public void Configure(EntityTypeBuilder<StoryImport> builder)
-    {
-        builder.Property(e => e.DateImported).HasDefaultValueSql("CURRENT_TIMESTAMP");
-
-        // A story can only be imported once (1-to-1)
-        builder.HasIndex(e => e.StoryId).IsUnique();
-        // A specific URL can only be imported once
-        builder.HasIndex(e => e.SourceUrl).IsUnique();
-        // Future indexes for querying...
-    }
-}
+// StoryImportConfiguration removed 2026-07-11 (WU38d): StoryImport was remodeled into
+// StoryExternalLink + ExternalPlatform (Feature 53 reframe — many "Also posted on" links per
+// story). The entities live in Core/Stories/, so their configurations live in
+// StoryConfigurations.cs per the one-file-per-folder-cluster rule.

@@ -55,6 +55,13 @@ public class ServerStoryReadService(
                     .Select(scp => new PairingDetailRow(
                         scp.PairingType, scp.Priority,
                         scp.Members.Select(m => m.StoryCharacter.CharacterTag.TagName).ToList()))
+                    .ToList(),
+                s.ExternalLinks
+                    .OrderBy(el => el.ExternalPlatformId)
+                    .Select(el => new StoryExternalLinkDto(
+                        el.ExternalPlatform.Name,
+                        el.Url,
+                        el.VerificationStatus == VerificationStatusEnum.Verified))
                     .ToList()))
             .FirstOrDefaultAsync();
 
@@ -92,7 +99,8 @@ public class ServerStoryReadService(
                 .ToList(),
             Pairings             = row.Pairings
                 .Select(p => new PairingDisplayEntry(p.PairingType, p.Priority, p.MemberNames))
-                .ToList()
+                .ToList(),
+            ExternalLinks        = row.ExternalLinks
         };
     }
 
@@ -131,9 +139,27 @@ public class ServerStoryReadService(
                     PairingType           = scp.PairingType,
                     Priority              = scp.Priority,
                     MemberCharacterTagIds = scp.Members.Select(m => m.StoryCharacter.CharacterTagId).ToList()
-                }).ToList()
+                }).ToList(),
+                ExternalLinks = s.ExternalLinks
+                    .OrderBy(el => el.ExternalPlatformId)
+                    .Select(el => new StoryExternalLinkEditDto
+                    {
+                        ExternalPlatformId = el.ExternalPlatformId,
+                        Url                = el.Url
+                    }).ToList(),
+                OriginalPublishedDate   = s.OriginalPublishedDate,
+                OriginalLastUpdatedDate = s.OriginalLastUpdatedDate
             })
             .FirstOrDefaultAsync();
+    }
+
+    public async Task<IReadOnlyList<ExternalPlatformDto>> GetExternalPlatformsAsync()
+    {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        return await readDb.ExternalPlatforms
+            .OrderBy(p => p.ExternalPlatformId)
+            .Select(p => new ExternalPlatformDto(p.ExternalPlatformId, p.Name, p.DomainPattern))
+            .ToListAsync();
     }
 
     public async Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds)
@@ -436,7 +462,8 @@ public class ServerStoryReadService(
         Rating Rating, StoryStatusEnum Status, List<string> ChapterNames,
         List<TagListingRow> Tags,
         List<CharacterDetailRow> Characters,
-        List<PairingDetailRow> Pairings);
+        List<PairingDetailRow> Pairings,
+        List<StoryExternalLinkDto> ExternalLinks);
 
     private sealed record TagListingRow(
         int TagId, string TagName, TagTypeEnum TagTypeId, string? Description, string? SpriteIdentifier);

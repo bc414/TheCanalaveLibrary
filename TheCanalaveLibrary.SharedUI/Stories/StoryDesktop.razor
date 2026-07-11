@@ -45,6 +45,9 @@
             <span class="text-xs text-(--color-text-muted)">@WordCountDisplay</span>
         </div>
 
+        @* Per-format download links (Feature 54, WU38c) — plain anchors, bypass the circuit *@
+        <StoryDownloadLinks StoryId="@Story.StoryId" />
+
         @* Interaction panel — Detail context (all six buttons; own-story renders Edit link).
            Mounted in the L4.5 browser pass (2026-07-01): the Detail context existed and was
            bUnit-tested but no page consumed it, leaving Favorite/Follow/Complete unreachable.
@@ -142,6 +145,9 @@
             </div>
         </section>
     }
+
+    @* ── "Also posted on" (Feature 53/WU38d) — settled placement: after chapters, before recs *@
+    <StoryExternalLinksRow Links="@Story.ExternalLinks" />
 
     @* ── Recommendations ──────────────────────────────────────────────────────── *@
     <section>

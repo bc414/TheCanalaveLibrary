@@ -178,6 +178,19 @@ change).
 
 ## Feature 5 — Story Browsing & Display
 
+- **WU38c/WU38d additive touches (2026-07-11), cells stay Stage 5:**
+  - **Download links (Feature 54's trigger):** new `StoryDownloadLinks` leaf (six per-format
+    anchors with the `download` attribute — a file download must bypass the circuit,
+    `layer2-services.md` §"File Downloads Bypass the Circuit") mounted in the metadata block of
+    `StoryDesktop`/`StoryMobile`; `StoryCard`'s dead `OnDownload` EventCallback replaced by an
+    expandable Download submenu of the same links (parameter removed; `StoryCardTests` updated).
+  - **"Also posted on" (Feature 53's display + edit surfaces):** `StoryExternalLinksRow` after the
+    chapter list / before `RecommendationSection` on both story layouts;
+    `StoryPropertiesForm`/`StoryEditorPage` gained the link rows + original-dates section and
+    `ExternalPlatforms` plumbing; `StoryDetailsDTO.ExternalLinks` + `GetExternalPlatformsAsync`
+    added to the read service. Detail + verification: `audit/Moderation.md` Feature 53.
+  - **Bulk chapter import entry point (Feature 63):** `StoryChapterImport` section on
+    `StoryEditorPage` (edit mode). Detail: `audit/Import.md`.
 - **L1 — Stage 5.** `StoryListing` warm partition is the projection anchor; sound.
 - **L2 — Stage 5** (was Stage 2, reclassified from 4 before that). `ServerStoryReadService` (renamed
   from `DbStoryReadService` — see Feature 4's L2 RESOLVED note for the `IDbContextFactory` →

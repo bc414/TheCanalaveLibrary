@@ -64,7 +64,9 @@ public partial class Story : IModeratableContent
     public virtual ICollection<StoryArc> StoryArcs { get; set; } = new List<StoryArc>();
     public virtual ICollection<StoryCharacterPairing> StoryCharacterPairings { get; set; } = new List<StoryCharacterPairing>();
     public virtual ICollection<StoryCharacter> StoryCharacters { get; set; } = new List<StoryCharacter>();
-    public virtual StoryImport? StoryImport { get; set; }
+    // "Also posted on" links (Feature 53 reframe, WU38d) — many per story, remodeled from the
+    // old 1-to-1 StoryImport.
+    public virtual ICollection<StoryExternalLink> ExternalLinks { get; set; } = new List<StoryExternalLink>();
     public virtual ICollection<StoryRelationship> StoryRelationshipSourceStories { get; set; } = new List<StoryRelationship>();
     public virtual ICollection<StoryRelationship> StoryRelationshipTargetStories { get; set; } = new List<StoryRelationship>();
     public virtual ICollection<StoryTag> StoryTags { get; set; } = new List<StoryTag>();

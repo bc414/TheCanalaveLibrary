@@ -15,17 +15,35 @@
              AddDbContext + UseNpgsql is used instead (Program.cs); see layer2-services.md
              "DbContext Registration". Npgsql.EntityFrameworkCore.PostgreSQL below is the provider
              that registration actually needs. -->
+        <!-- Explicit reference for the Export/Import DOM walks (WU38c/WU38d) — was transitive via
+             HtmlSanitizer. PINNED to 0.17.1: HtmlSanitizer 9.x has a hard AngleSharp (= 0.17.1)
+             constraint; floating to 1.x resolves but risks runtime MissingMethodException inside
+             the sanitizer (the trust boundary). Bump only together with an HtmlSanitizer release
+             that targets AngleSharp 1.x. -->
+        <PackageReference Include="AngleSharp" Version="0.17.1" />
         <PackageReference Include="Aspire.StackExchange.Redis.DistributedCaching" Version="13.4.6" />
         <!-- S3-compatible image storage (WU-S3Garage): one client for Garage (dev) and
              Cloudflare R2 (prod). See S3ImageStorageService for the wire-format constraints
              (unchunked uploads, WHEN_REQUIRED checksums) that keep both endpoints working. -->
         <PackageReference Include="AWSSDK.S3" Version="4.0.100.2" />
+        <!-- DOCX export writer (WU38c). MIT, Microsoft. -->
+        <PackageReference Include="DocumentFormat.OpenXml" Version="3.5.1" />
         <PackageReference Include="EFCore.NamingConventions" Version="10.0.1" />
+        <!-- DOCX import reader (WU38d): semantic docx→HTML, style-mapped to the sanitizer
+             allowlist. BSD-2. See layer2-services.md "Export & Import". -->
+        <PackageReference Include="Mammoth" Version="1.11.0" />
+        <!-- Markdown import reader (WU38d). BSD-2. -->
+        <PackageReference Include="Markdig" Version="1.3.2" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+        <!-- PDF export writer (WU38c). Community license — free under $1M annual revenue;
+             QuestPDF.Settings.License is set once at startup (Program.cs). If the project ever
+             crosses the threshold, this needs a paid license or a writer swap — same discipline
+             as the ImageSharp pin below. -->
+        <PackageReference Include="QuestPDF" Version="2026.7.1" />
         <!-- Upload sniff + re-encode pipeline (WU-Security, ImageUploadProcessor). PINNED to the
              3.1.x line deliberately: v4.0 switched to a build-time license-key requirement
              ($(SixLaborsLicenseKey) — build fails without one), while 3.1.x stays on the Split
@@ -33,6 +51,10 @@
              ignore the major bump (.github/dependabot.yml). See security.md "Upload Content
              Pipeline". -->
         <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+        <!-- EPUB import reader (WU38d): battle-tested against wild files (AO3/Calibre/FicHub) —
+             we generate clean EPUBs ourselves (zero-dep ZipArchive in EpubWriter) but parse
+             messy ones with this. Free OSS (Unlicense). -->
+        <PackageReference Include="VersOne.Epub" Version="3.3.6" />
         <ProjectReference Include="..\ServiceDefaults\ServiceDefaults.csproj" />
         <ProjectReference Include="..\TheCanalaveLibrary.Core\TheCanalaveLibrary.Core.csproj" />
         <ProjectReference Include="..\TheCanalaveLibrary.SharedUI\TheCanalaveLibrary.SharedUI.csproj" />

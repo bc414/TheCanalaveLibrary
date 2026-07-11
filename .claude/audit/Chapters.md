@@ -141,6 +141,16 @@ the build, superseding the original spec/skill sketch:
 
 ## Feature 7 — Chapter Reading
 - **L1 — Stage 5.** `UserChapterInteraction` supports progress + read state.
+- **WU38c additive extension (2026-07-11):** `GetChaptersForExportAsync(storyId)` added to
+  `IChapterReadService`/`ServerChapterReadService` — every published chapter's primary-version
+  content in one query, ordered, viewer's rating ceiling applied ("export = what you can read";
+  alternates deliberately excluded — exports carry the canonical text). Integration-covered via
+  `ExportServiceTests` (order, unpublished exclusion, rating gate). Cells stay Stage 5 (additive).
+- **WU38d additive touch (2026-07-11):** `ChapterEditorPage` gained file import (Feature 63 modes
+  1/2): `ChapterFileImport` above the form — new chapter → parsed draft straight into the editor
+  via `SetChapterTextAsync` (+ title from first heading); existing chapter → author chooses
+  replace-editor vs `AddAlternateVersionAsync` (VersionName "Imported"). Browser-verified
+  (mode 1); detail in `audit/Import.md`.
 - **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; extended WU25, 2026-06-24).** `IChapterReadService` with
   `GetChapterForReadingAsync`, `GetChapterTocAsync`, `GetChapterVersionsAsync`, `GetChapterForEditAsync`
   in `ServerChapterReadService` (primary-constructor DI on `ReadOnlyApplicationDbContext`). Per-version

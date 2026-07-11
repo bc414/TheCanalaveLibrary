@@ -55,4 +55,12 @@ public interface IChapterReadService
     /// regardless of rating).
     /// </summary>
     Task<ChapterReadingDto?> GetChapterForEditAsync(long chapterContentId);
+
+    /// <summary>
+    /// Returns every published chapter's primary-version content for story export (WU38c),
+    /// ordered by <c>ChapterNumber</c>, in one query. Applies the viewer's
+    /// <c>ShowMatureContent</c> ceiling like the reading paths ("export = what you can read").
+    /// Alternate versions are deliberately excluded — exports carry the canonical text.
+    /// </summary>
+    Task<IReadOnlyList<ChapterExportDto>> GetChaptersForExportAsync(int storyId);
 }

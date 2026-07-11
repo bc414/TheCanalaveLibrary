@@ -49,8 +49,17 @@ else
                              InitialSettingDetails="_initialSettingDetails"
                              InitialPairings="_initialPairings"
                              InitialGenrePriorities="_initialGenrePriorities"
+                             ExternalPlatforms="_externalPlatforms"
                              SubmitLabel="@(StoryId.HasValue ? "Save Changes" : "Create Story")"
                              OnValidSubmit="HandleValidSubmit" />
+
+        @* ── Bulk chapter import (Feature 63, WU38d) — edit mode only (needs a story id) ── *@
+        @if (StoryId.HasValue)
+        {
+            <div class="mt-8">
+                <StoryChapterImport StoryId="@StoryId.Value" />
+            </div>
+        }
     </div>
 }
 
@@ -65,11 +74,15 @@ else
     private IReadOnlyList<SettingDetailDto>? _initialSettingDetails;
     private IReadOnlyList<StoryCharacterPairingDto>? _initialPairings;
     private IReadOnlyDictionary<int, TagPriority>? _initialGenrePriorities;
+    private IReadOnlyList<ExternalPlatformDto> _externalPlatforms = [];
     private bool _isLoading = true;
     private bool _forbidden;
 
     protected override async Task OnInitializedAsync()
     {
+        // Seeded platform lookup for the "Also posted on" section (WU38d) — needed in both modes.
+        _externalPlatforms = await StoryReadService.GetExternalPlatformsAsync();
+
         if (StoryId.HasValue)
         {
             StoryUpdateDTO? editData = await StoryReadService.GetStoryForEditAsync(StoryId.Value);
@@ -117,6 +130,9 @@ else
         _viewModel.CoverArtRelativeUrl = dto.CoverArtRelativeUrl;
         _viewModel.LongDescription = dto.LongDescription;
         _viewModel.PostApprovalStatus = dto.PostApprovalStatus;
+        _viewModel.ExternalLinks = dto.ExternalLinks;
+        _viewModel.OriginalPublishedDate = dto.OriginalPublishedDate;
+        _viewModel.OriginalLastUpdatedDate = dto.OriginalLastUpdatedDate;
     }
 
     private async Task HandleValidSubmit()
@@ -154,7 +170,10 @@ else
                     StoryTags = flatTags,
                     StoryCharacters = characters,
                     SettingDetails = settingDetails,
-                    StoryCharacterPairings = pairings
+                    StoryCharacterPairings = pairings,
+                    ExternalLinks = _viewModel.ExternalLinks,
+                    OriginalPublishedDate = _viewModel.OriginalPublishedDate,
+                    OriginalLastUpdatedDate = _viewModel.OriginalLastUpdatedDate
                 };
 
                 // Upload new cover if selected (id already exists on edit).
@@ -186,7 +205,10 @@ else
                     StoryTags = flatTags,
                     StoryCharacters = characters,
                     SettingDetails = settingDetails,
-                    StoryCharacterPairings = pairings
+                    StoryCharacterPairings = pairings,
+                    ExternalLinks = _viewModel.ExternalLinks,
+                    OriginalPublishedDate = _viewModel.OriginalPublishedDate,
+                    OriginalLastUpdatedDate = _viewModel.OriginalLastUpdatedDate
                 };
 
                 int newStoryId = await StoryWriteService.CreateStoryAsync(createDto);
@@ -213,7 +235,10 @@ else
                         StoryTags = flatTags,
                         StoryCharacters = characters,
                         SettingDetails = settingDetails,
-                        StoryCharacterPairings = pairings
+                        StoryCharacterPairings = pairings,
+                        ExternalLinks = _viewModel.ExternalLinks,
+                        OriginalPublishedDate = _viewModel.OriginalPublishedDate,
+                        OriginalLastUpdatedDate = _viewModel.OriginalLastUpdatedDate
                     });
                 }
 

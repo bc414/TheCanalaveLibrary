@@ -1,0 +1,346 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using System.Text.RegularExpressions
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Extensions.Logging
+@inject IContentImportService ImportService
+@inject IChapterWriteService ChapterWriteService
+@inject ILogger<StoryChapterImport> Logger
+
+@* Bulk chapter import (Feature 63, WU38d — modes 3/4/5), embedded on the story edit page.
+   Explicit modes over one backend (settled): the author declares intent, so auto-detect splitting
+   runs ONLY in the one-document mode — a single-chapter doc in the file-per-chapter mode can
+   never be shredded. Mode 4 is suggest-then-refine: parse once, show the suggested split, the
+   delimiter picker re-splits in memory (no re-upload). All drafts land as UNPUBLISHED chapters
+   through the normal write service (publish → approval flow untouched). Review state lives in
+   circuit memory; ImportLimits caps protect it. *@
+
+<section class="rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+    <button type="button" @onclick="() => _open = !_open" aria-expanded="@_open"
+            class="text-sm font-semibold text-(--color-text) hover:underline">
+        Import chapters… @(_open ? "▴" : "▾")
+    </button>
+
+    @if (_open)
+    {
+        <div class="mt-3 flex flex-col gap-4">
+
+            @* ── Mode picker (settled: explicit modes, no ambiguity) ────────────── *@
+            <fieldset class="flex flex-col gap-1.5">
+                <legend class="mb-1 text-xs font-medium text-(--color-text-muted)">What are you importing?</legend>
+                @foreach ((BulkMode mode, string label, string detail) in ModeOptions)
+                {
+                    <label class="flex cursor-pointer items-baseline gap-2 text-sm text-(--color-text)">
+                        <input type="radio" name="import-mode" checked="@(_mode == mode)"
+                               @onchange="() => SelectMode(mode)" />
+                        <span><span class="font-medium">@label</span>
+                            <span class="text-xs text-(--color-text-muted)"> — @detail</span></span>
+                    </label>
+                }
+            </fieldset>
+
+            @* ── Upload ─────────────────────────────────────────────────────────── *@
+            <label class="flex cursor-pointer items-center gap-2 self-start rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">
+                @(_isParsing ? "Reading…" : UploadLabel)
+                @if (_mode == BulkMode.FilePerChapter)
+                {
+                    <InputFile OnChange="HandleFilesSelected" accept="@ImportFormats.AcceptBulkFiles"
+                               multiple disabled="@_isParsing" class="hidden" />
+                }
+                else if (_mode == BulkMode.OneDocument)
+                {
+                    <InputFile OnChange="HandleDocumentSelected" accept="@ImportFormats.AcceptDocument"
+                               disabled="@_isParsing" class="hidden" />
+                }
+                else
+                {
+                    <InputFile OnChange="HandleEpubSelected" accept="@ImportFormats.AcceptEpub"
+                               disabled="@_isParsing" class="hidden" />
+                }
+            </label>
+
+            <InlineAlert Messages="@_errors" />
+
+            @* ── EPUB metadata (display-only) ───────────────────────────────────── *@
+            @if (_parsed?.BookTitle is not null)
+            {
+                <p class="text-xs text-(--color-text-muted)">
+                    Book: <span class="font-medium">@_parsed.BookTitle</span>
+                    @if (_parsed.BookAuthor is not null)
+                    {
+                        <text> by @_parsed.BookAuthor</text>
+                    }
+                </p>
+            }
+
+            @* ── Mode 4 delimiter picker (suggest-then-refine; re-splits in memory) ── *@
+            @if (_parsed is not null && _parsed.AvailableStrategies.Count > 1)
+            {
+                <div class="flex flex-wrap items-center gap-2 text-sm">
+                    <label class="text-xs font-medium text-(--color-text-muted)">Split chapters at:</label>
+                    <select value="@_strategy" @onchange="HandleStrategyChanged" aria-label="Split strategy"
+                            class="rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm text-(--color-text)">
+                        @foreach (SplitStrategy strategy in _parsed.AvailableStrategies)
+                        {
+                            <option value="@strategy">@StrategyLabel(strategy)</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            @* ── Document-level warnings ────────────────────────────────────────── *@
+            @if (_documentWarnings.Count > 0)
+            {
+                <ul class="flex flex-col gap-0.5 text-xs text-(--color-text-muted)">
+                    @foreach (ImportWarning warning in _documentWarnings)
+                    {
+                        <li>⚠ @warning.Message</li>
+                    }
+                </ul>
+            }
+
+            @* ── Review + commit ────────────────────────────────────────────────── *@
+            @if (_drafts is not null)
+            {
+                <ImportReviewPanel Drafts="@_drafts" IsCommitting="@_isCommitting" OnCommit="CommitAsync" />
+            }
+
+            @if (_successMessage is not null)
+            {
+                <p class="text-sm text-(--color-text)">✓ @_successMessage</p>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public int StoryId { get; set; }
+
+    /// <summary>Fires after a successful commit (chapter count) so the page can refresh anything chapter-derived.</summary>
+    [Parameter] public EventCallback<int> OnChaptersImported { get; set; }
+
+    private enum BulkMode { FilePerChapter, OneDocument, Epub }
+
+    private static readonly (BulkMode Mode, string Label, string Detail)[] ModeOptions =
+    [
+        (BulkMode.FilePerChapter, "One file per chapter",
+            "select multiple files; each becomes a chapter, ordered by filename"),
+        (BulkMode.OneDocument, "One document holding the whole story",
+            "chapters are detected automatically — you review and adjust before anything is created"),
+        (BulkMode.Epub, "An EPUB",
+            "chapters come from the book's own structure (AO3 downloads, FicHub exports)")
+    ];
+
+    private bool _open;
+    private BulkMode _mode = BulkMode.OneDocument;
+    private bool _isParsing;
+    private bool _isCommitting;
+    private ImportParseResult? _parsed;
+    private SplitStrategy _strategy = SplitStrategy.None;
+    private IReadOnlyList<ImportedChapterDraft>? _drafts;
+    private List<ImportWarning> _documentWarnings = [];
+    private readonly List<string> _errors = [];
+    private string? _successMessage;
+
+    private string UploadLabel => _mode switch
+    {
+        BulkMode.FilePerChapter => "Choose files…",
+        BulkMode.Epub => "Choose an EPUB…",
+        _ => "Choose a document…"
+    };
+
+    private static string StrategyLabel(SplitStrategy strategy) => strategy switch
+    {
+        SplitStrategy.None => "Don't split (one chapter)",
+        SplitStrategy.TopHeading => "Top-level headings",
+        SplitStrategy.SubHeading => "Sub-headings",
+        SplitStrategy.ChapterTextPattern => "\"Chapter N\" text lines",
+        SplitStrategy.PageBreak => "Page breaks",
+        _ => strategy.ToString()
+    };
+
+    private void SelectMode(BulkMode mode)
+    {
+        _mode = mode;
+        ResetResults();
+    }
+
+    private void ResetResults()
+    {
+        _parsed = null;
+        _drafts = null;
+        _documentWarnings = [];
+        _errors.Clear();
+        _successMessage = null;
+    }
+
+    // ── Mode 3: one file per chapter ─────────────────────────────────────────────
+
+    private async Task HandleFilesSelected(InputFileChangeEventArgs e)
+    {
+        ResetResults();
+        if (e.FileCount > ImportLimits.MaxFilesPerBatch)
+        {
+            _errors.Add($"Pick at most {ImportLimits.MaxFilesPerBatch} files at once.");
+            return;
+        }
+
+        _isParsing = true;
+        try
+        {
+            var drafts = new List<ImportedChapterDraft>();
+            // Natural sort: "Chapter 2" before "Chapter 10" (plain lexicographic gets this wrong).
+            foreach (IBrowserFile file in e.GetMultipleFiles(ImportLimits.MaxFilesPerBatch)
+                         .OrderBy(f => NaturalSortKey(f.Name), StringComparer.OrdinalIgnoreCase))
+            {
+                ImportFormat? format = ImportFormats.TryFromFileName(file.Name);
+                if (format is null)
+                {
+                    _errors.Add($"\"{file.Name}\" isn't a supported file type — skipped.");
+                    continue;
+                }
+                try
+                {
+                    await using Stream stream = file.OpenReadStream(ImportLimits.MaxFileBytes);
+                    ImportedChapterDraft draft = await ImportService.ParseSingleAsync(stream, file.Name, format.Value);
+                    // Title: the file's first heading, else the filename (settled).
+                    drafts.Add(draft.Title is not null
+                        ? draft
+                        : draft with { Title = Path.GetFileNameWithoutExtension(file.Name) });
+                }
+                catch (ImportException ex)
+                {
+                    _errors.Add(ex.Message); // per-file failure never aborts the batch
+                }
+            }
+            if (drafts.Count > 0)
+            {
+                _drafts = drafts;
+            }
+        }
+        finally
+        {
+            _isParsing = false;
+        }
+    }
+
+    /// <summary>Pads digit runs so lexicographic order equals numeric order.</summary>
+    private static string NaturalSortKey(string name) =>
+        Regex.Replace(name, @"\d+", m => m.Value.PadLeft(10, '0'));
+
+    // ── Mode 4: one document, suggest-then-refine ────────────────────────────────
+
+    private async Task HandleDocumentSelected(InputFileChangeEventArgs e)
+    {
+        ResetResults();
+        ImportFormat? format = ImportFormats.TryFromFileName(e.File.Name);
+        if (format is null)
+        {
+            _errors.Add($"\"{e.File.Name}\" isn't a supported file type.");
+            return;
+        }
+
+        _isParsing = true;
+        try
+        {
+            await using Stream stream = e.File.OpenReadStream(ImportLimits.MaxFileBytes);
+            _parsed = await ImportService.ParseDocumentAsync(stream, e.File.Name, format.Value);
+            _strategy = _parsed.SuggestedStrategy;
+            _drafts = _parsed.Drafts;
+            _documentWarnings = _parsed.Warnings.ToList();
+        }
+        catch (ImportException ex)
+        {
+            _errors.Add(ex.Message);
+        }
+        catch (IOException)
+        {
+            _errors.Add($"\"{e.File.Name}\" is larger than {ImportLimits.MaxFileBytes / (1024 * 1024)} MB.");
+        }
+        finally
+        {
+            _isParsing = false;
+        }
+    }
+
+    private void HandleStrategyChanged(ChangeEventArgs e)
+    {
+        if (_parsed is null || !Enum.TryParse((string?)e.Value, out SplitStrategy strategy))
+        {
+            return;
+        }
+        _strategy = strategy;
+        _drafts = ImportService.Resplit(_parsed, strategy); // in-memory — no re-upload
+    }
+
+    // ── Mode 5: EPUB ─────────────────────────────────────────────────────────────
+
+    private async Task HandleEpubSelected(InputFileChangeEventArgs e)
+    {
+        ResetResults();
+        _isParsing = true;
+        try
+        {
+            await using Stream stream = e.File.OpenReadStream(ImportLimits.MaxFileBytes);
+            _parsed = await ImportService.ParseEpubAsync(stream);
+            _drafts = _parsed.Drafts;
+            _documentWarnings = _parsed.Warnings.ToList();
+        }
+        catch (ImportException ex)
+        {
+            _errors.Add(ex.Message);
+        }
+        catch (IOException)
+        {
+            _errors.Add($"\"{e.File.Name}\" is larger than {ImportLimits.MaxFileBytes / (1024 * 1024)} MB.");
+        }
+        finally
+        {
+            _isParsing = false;
+        }
+    }
+
+    // ── Commit: existing write service, unpublished drafts ───────────────────────
+
+    private async Task CommitAsync(IReadOnlyList<ImportedChapterDraft> finalDrafts)
+    {
+        _errors.Clear();
+        _isCommitting = true;
+        try
+        {
+            int created = 0;
+            foreach (ImportedChapterDraft draft in finalDrafts)
+            {
+                if (draft.WordCount == 0)
+                {
+                    continue; // empty shells never become chapters
+                }
+                await ChapterWriteService.CreateChapterAsync(new CreateChapterDto
+                {
+                    StoryId = StoryId,
+                    Title = draft.Title,
+                    ChapterText = draft.Html,
+                    Rating = null // inherit the story's rating
+                });
+                created++;
+            }
+
+            _successMessage = $"{created} chapter{(created == 1 ? "" : "s")} created as drafts — " +
+                              "publish each from its chapter page when ready.";
+            _parsed = null;
+            _drafts = null;
+            _documentWarnings = [];
+            await OnChaptersImported.InvokeAsync(created);
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Bulk chapter import commit failed for story {StoryId}", StoryId);
+            _errors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+        }
+        finally
+        {
+            _isCommitting = false;
+        }
+    }
+}

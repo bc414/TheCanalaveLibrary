@@ -25,6 +25,8 @@ public class ServerStoryWriteService(
 
         await ValidateStructuredTagGatesAsync(newStoryDTO, writeDb);
 
+        ValidateExternalLinks(newStoryDTO.ExternalLinks);
+
         Story newStoryDB = newStoryDTO.ToStory();
         newStoryDB.AuthorId = authorId;
         // Server-stamped like AuthorId — the mapper deliberately covers only IEditableStoryProperties,
@@ -32,6 +34,20 @@ public class ServerStoryWriteService(
         // DB and story pages showed "Published Jan 1, 0001" (browser pass 2026-07-01).
         newStoryDB.PublishedDate = DateTime.UtcNow;
         newStoryDB.LastUpdatedDate = DateTime.UtcNow;
+        // "Also posted on" links + original dates (Feature 53 reframe, WU38d) — outside the
+        // IEditableStoryProperties mapper on purpose (links are child rows, not story properties).
+        newStoryDB.OriginalPublishedDate = newStoryDTO.OriginalPublishedDate;
+        newStoryDB.OriginalLastUpdatedDate = newStoryDTO.OriginalLastUpdatedDate;
+        foreach (StoryExternalLinkEditDto link in DedupedLinks(newStoryDTO.ExternalLinks))
+        {
+            newStoryDB.ExternalLinks.Add(new StoryExternalLink
+            {
+                ExternalPlatformId = link.ExternalPlatformId,
+                Url = link.Url.Trim(),
+                VerificationStatus = VerificationStatusEnum.Unverified,
+                DateAdded = DateTime.UtcNow
+            });
+        }
         // Slug is server-only and never client-editable (not on CreateStoryDTO at all) — settled WU12.
         newStoryDB.StoryDetail.Slug = await GenerateUniqueSlugAsync(newStoryDTO.Title);
 
@@ -56,6 +72,8 @@ public class ServerStoryWriteService(
         if (validationErrors.Any())
             throw new StoryValidationException(validationErrors);
 
+        ValidateExternalLinks(dto.ExternalLinks);
+
         Story? storyToUpdate = await writeDb.Stories
             .Include(s => s.StoryListing)
             .Include(s => s.StoryDetail)
@@ -63,6 +81,7 @@ public class ServerStoryWriteService(
             .Include(s => s.StoryCharacters)
             .Include(s => s.StoryCharacterPairings).ThenInclude(scp => scp.Members)
             .Include(s => s.SettingDetails)
+            .Include(s => s.ExternalLinks)
             .FirstOrDefaultAsync(s => s.StoryId == dto.StoryId);
 
         if (storyToUpdate is null)
@@ -82,6 +101,39 @@ public class ServerStoryWriteService(
         // Server-stamped on every successful property edit (same rationale as the create stamp above).
         storyToUpdate.LastUpdatedDate = DateTime.UtcNow;
 
+        // "Also posted on" sync (Feature 53 reframe, WU38d): match on (platform, URL) — unchanged
+        // rows keep their VerificationStatus; rows missing from the DTO are deleted; new rows start
+        // Unverified. Editing a verified link's URL is therefore delete+add → Unverified again
+        // (settled: verification is per exact link).
+        storyToUpdate.OriginalPublishedDate = dto.OriginalPublishedDate;
+        storyToUpdate.OriginalLastUpdatedDate = dto.OriginalLastUpdatedDate;
+        List<StoryExternalLinkEditDto> desired = DedupedLinks(dto.ExternalLinks);
+        List<StoryExternalLink> removed = storyToUpdate.ExternalLinks
+            .Where(existing => !desired.Any(d =>
+                d.ExternalPlatformId == existing.ExternalPlatformId &&
+                d.Url.Trim() == existing.Url))
+            .ToList();
+        foreach (StoryExternalLink link in removed)
+        {
+            storyToUpdate.ExternalLinks.Remove(link);
+            writeDb.Remove(link);
+        }
+        foreach (StoryExternalLinkEditDto link in desired)
+        {
+            if (!storyToUpdate.ExternalLinks.Any(existing =>
+                    existing.ExternalPlatformId == link.ExternalPlatformId &&
+                    existing.Url == link.Url.Trim()))
+            {
+                storyToUpdate.ExternalLinks.Add(new StoryExternalLink
+                {
+                    ExternalPlatformId = link.ExternalPlatformId,
+                    Url = link.Url.Trim(),
+                    VerificationStatus = VerificationStatusEnum.Unverified,
+                    DateAdded = DateTime.UtcNow
+                });
+            }
+        }
+
         await writeDb.SaveChangesAsync();
 
         // Best-effort cleanup of the old cover blob when it changes. A failed delete must not
@@ -98,6 +150,39 @@ public class ServerStoryWriteService(
             }
         }
     }
+
+    /// <summary>
+    /// "Also posted on" link validation (WU38d): every row needs an absolute http/https URL.
+    /// Rows with an empty URL are tolerated here and dropped by <see cref="DedupedLinks"/> —
+    /// the form's blank add-row shouldn't block saving.
+    /// </summary>
+    private static void ValidateExternalLinks(List<StoryExternalLinkEditDto> links)
+    {
+        List<string> errors = [];
+        foreach (StoryExternalLinkEditDto link in links)
+        {
+            string url = link.Url.Trim();
+            if (url.Length == 0)
+            {
+                continue;
+            }
+            if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                errors.Add($"\"{url}\" isn't a valid web address (must start with http:// or https://).");
+            }
+        }
+        if (errors.Count > 0)
+            throw new StoryValidationException(errors);
+    }
+
+    /// <summary>Drops blank rows and duplicate (platform, URL) pairs from the form's link list.</summary>
+    private static List<StoryExternalLinkEditDto> DedupedLinks(List<StoryExternalLinkEditDto> links) =>
+        links
+            .Where(l => l.Url.Trim().Length > 0)
+            .GroupBy(l => (l.ExternalPlatformId, Url: l.Url.Trim()))
+            .Select(g => g.First())
+            .ToList();
 
     /// <summary>
     /// Server-side gate checks that require DB reads.

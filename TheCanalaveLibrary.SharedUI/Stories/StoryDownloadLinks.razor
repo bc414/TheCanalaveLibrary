@@ -1,0 +1,43 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Per-format story download links (Feature 54, WU38c). Plain anchors, deliberately NOT
+   EventCallbacks — a file download is an HTTP GET whose response carries
+   Content-Disposition: attachment, which the SignalR circuit cannot produce
+   (layer2-services.md "File Downloads Bypass the Circuit"). The `download` attribute keeps
+   Blazor's client-side router from intercepting the click (it skips download-attributed
+   anchors); the server's Content-Disposition filename wins over the attribute's empty value.
+   Lives in the Stories cluster: the Export/ cluster owns generation, the consuming feature
+   owns the trigger (audit/Export.md Shared Context). Pure leaf — builds hrefs from StoryId. *@
+
+<div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-text-muted) @Class">
+    @if (ShowLabel)
+    {
+        <span class="font-medium">Download:</span>
+    }
+    @foreach ((string label, string format) in FormatLinks)
+    {
+        <a href="/api/stories/@StoryId/export/@format" download
+           class="text-(--color-action-ink) hover:underline">@label</a>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public int StoryId { get; set; }
+
+    /// <summary>Extra classes appended to the root (consumer-owned spacing per the Outer Margin Rule).</summary>
+    [Parameter] public string Class { get; set; } = string.Empty;
+
+    /// <summary>Hide the "Download:" prefix where the surrounding UI already says it (StoryCard caret).</summary>
+    [Parameter] public bool ShowLabel { get; set; } = true;
+
+    // Labels + route segments for every ExportFormat (route parse is case-insensitive).
+    private static readonly (string Label, string Format)[] FormatLinks =
+    [
+        ("EPUB", "epub"),
+        ("PDF", "pdf"),
+        ("HTML", "html"),
+        ("TXT", "txt"),
+        ("Markdown", "markdown"),
+        ("DOCX", "docx")
+    ];
+}

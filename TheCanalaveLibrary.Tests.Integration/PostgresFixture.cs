@@ -70,7 +70,9 @@ public sealed class PostgresFixture : IAsyncLifetime
                 "story_statuses",
                 "story_relationship_types",
                 "acknowledgment_roles",
-                "tag_types"
+                "tag_types",
+                // "Also posted on" platform lookup (WU38d) — seeded via HasData like the rest.
+                "external_platforms"
             ]
         });
     }

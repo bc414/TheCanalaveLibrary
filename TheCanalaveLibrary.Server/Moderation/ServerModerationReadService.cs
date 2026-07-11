@@ -138,7 +138,8 @@ public class ServerModerationReadService(
                 s.Rating,
                 s.PublishedDate,
                 sd.PostApprovalStatus,
-                readDb.StoryImports.Any(si => si.StoryId == s.StoryId))
+                // WU38d remodel: "is an import" ⇒ the story lists at least one external source link.
+                readDb.StoryExternalLinks.Any(sel => sel.StoryId == s.StoryId))
         ).ToArrayAsync();
     }
 

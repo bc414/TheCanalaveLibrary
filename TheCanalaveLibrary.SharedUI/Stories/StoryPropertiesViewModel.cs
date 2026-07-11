@@ -44,6 +44,11 @@ public class StoryPropertiesViewModel
     public List<SettingDetailDto> SelectedSettingDetails { get; set; } = new();
     public List<StoryCharacterPairingDto> SelectedPairings { get; set; } = new();
 
+    // ── "Also posted on" external links + original dates (Feature 53 reframe, WU38d) ──
+    public List<StoryExternalLinkEditDto> ExternalLinks { get; set; } = new();
+    public DateOnly? OriginalPublishedDate { get; set; }
+    public DateOnly? OriginalLastUpdatedDate { get; set; }
+
     public bool IsLoading { get; set; }
     public List<string> ServerValidationErrors { get; set; } = new();
 }

@@ -1,0 +1,31 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* "Also posted on" links row (Feature 53 reframe, WU38d). Placement is settled: near the bottom
+   of the story page — after the chapter list, before recommendations — in subdued metadata
+   styling. It exists for awareness (and the anti-theft verification signal), not to invite
+   clicking away, so it must never sit prominent at the top. Verified links get a checkmark
+   ("Author verified"); unverified links get nothing — that visible absence is what the community
+   keys off when reporting stolen uploads (Feature 46). Renders nothing when there are no links.
+   rel=nofollow: author-supplied external URLs. Pure leaf — no service injection. *@
+
+@if (Links.Count > 0)
+{
+    <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-(--color-text-muted)">
+        <span class="font-medium">Also posted on:</span>
+        @foreach (StoryExternalLinkDto link in Links)
+        {
+            <a href="@link.Url" target="_blank" rel="noopener noreferrer nofollow"
+               class="text-(--color-action-ink) hover:underline">
+                @link.PlatformName@if (link.IsVerified)
+                {
+                    <span title="Author verified" aria-label="Author verified"> ✓</span>
+                }
+            </a>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<StoryExternalLinkDto> Links { get; set; } = [];
+}

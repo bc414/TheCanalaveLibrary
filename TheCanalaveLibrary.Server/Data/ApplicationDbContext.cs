@@ -164,7 +164,10 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     public DbSet<Series> Series { get; set; } //Series are for splitting a concept across multiple stories
     public DbSet<SeriesEntry> SeriesEntries { get; set; }
     public DbSet<StoryArc> StoryArcs { get; set; } //StoryArcs are the opposite of using series; when the story is too long and needs to be broken down within the story
-    public DbSet<StoryImport> StoryImports { get; set; }
+
+    //"Also posted on" external links (Feature 53 reframe, WU38d) + seeded platform lookup
+    public DbSet<StoryExternalLink> StoryExternalLinks { get; set; }
+    public DbSet<ExternalPlatform> ExternalPlatforms { get; set; }
 
     //Collaboration
     public DbSet<StoryAcknowledgment> StoryAcknowledgments { get; set; }

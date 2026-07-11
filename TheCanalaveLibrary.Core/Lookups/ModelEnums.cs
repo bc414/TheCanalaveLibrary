@@ -81,6 +81,18 @@ public enum ReportStatusEnum : short
     ResolvedActionTaken = 3
 }
 
+/// <summary>
+/// Author-verification state of a <c>StoryExternalLink</c> (Feature 53, WU38d). New links start
+/// <c>Unverified</c>; moderators flip to <c>Verified</c> (story page shows the checkmark) or
+/// <c>Rejected</c> via the WU39 workflow. Editing a verified link's URL resets it to Unverified.
+/// </summary>
+public enum VerificationStatusEnum : short
+{
+    Unverified = 0,
+    Verified = 1,
+    Rejected = 2
+}
+
 public enum NotificationCategoryEnum : short
 {
     SiteNews = 0,

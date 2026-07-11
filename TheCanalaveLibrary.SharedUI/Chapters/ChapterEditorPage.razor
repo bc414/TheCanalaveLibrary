@@ -116,6 +116,25 @@ else
                            OnRestore="RestoreDraftAsync" />
         </div>
 
+        @* ── Import from file (Feature 63, WU38d — modes 1/2). New chapter: the parsed draft
+             loads straight into the editor. Existing chapter: the author chooses replace-editor
+             vs add-as-new-version (AddAlternateVersionAsync). Parse never commits anything. *@
+        <div class="mb-4">
+            <ChapterFileImport OnImported="HandleImportedDraft" />
+            @if (_importedDraft is not null && !_isNew)
+            {
+                <div class="mt-2 flex flex-wrap items-center gap-3 text-sm">
+                    <span class="text-(--color-text-muted)">Imported @_importedDraft.WordCount words —</span>
+                    <button type="button" class="text-(--color-action-ink) hover:underline"
+                            @onclick="ApplyImportToEditorAsync">Replace editor content</button>
+                    <button type="button" class="text-(--color-action-ink) hover:underline"
+                            @onclick="AddImportAsVersionAsync">Add as new version</button>
+                    <button type="button" class="text-(--color-text-muted) hover:underline"
+                            @onclick="() => _importedDraft = null">Cancel</button>
+                </div>
+            }
+        </div>
+
         @* ── Main form ───────────────────────────────────────────────────────── *@
         <ChapterPropertiesForm @ref="_form"
                                ViewModel="_viewModel"
@@ -379,6 +398,64 @@ else
         await _form.SetTopNoteAsync(fields.GetValueOrDefault("TopAuthorsNote"));
         await _form.SetBottomNoteAsync(fields.GetValueOrDefault("BottomAuthorsNote"));
         StateHasChanged();
+    }
+
+    // ── File import (Feature 63, WU38d — modes 1/2) ───────────────────────────────
+
+    private ImportedChapterDraft? _importedDraft;
+
+    private async Task HandleImportedDraft(ImportedChapterDraft draft)
+    {
+        if (_isNew)
+        {
+            await ApplyDraftAsync(draft); // nothing exists yet — straight into the editor
+        }
+        else
+        {
+            _importedDraft = draft; // existing chapter — author picks replace vs new version
+        }
+    }
+
+    private async Task ApplyDraftAsync(ImportedChapterDraft draft)
+    {
+        if (_form is null) return;
+        await _form.SetChapterTextAsync(draft.Html);
+        if (string.IsNullOrWhiteSpace(_viewModel.Title) && draft.Title is not null)
+        {
+            _viewModel.Title = draft.Title;
+        }
+        StateHasChanged();
+    }
+
+    private async Task ApplyImportToEditorAsync()
+    {
+        if (_importedDraft is null) return;
+        await ApplyDraftAsync(_importedDraft);
+        _importedDraft = null;
+    }
+
+    private async Task AddImportAsVersionAsync()
+    {
+        if (_importedDraft is null || _chapterId is null) return;
+        try
+        {
+            await ChapterService.AddAlternateVersionAsync(_chapterId.Value, new CreateChapterDto
+            {
+                StoryId = StoryId,
+                Title = null, // keep the chapter's existing title
+                ChapterText = _importedDraft.Html,
+                Rating = null, // inherit
+                VersionName = "Imported"
+            });
+            _importedDraft = null;
+            await LoadAsync(); // refresh the version switcher
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Import-as-version failed for chapter {ChapterId}", _chapterId);
+            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+        }
     }
 
     private async Task SetPublishedAsync(bool publish)

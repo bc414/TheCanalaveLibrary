@@ -1,0 +1,148 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Interactive review of parsed chapter drafts before commit (Feature 63, WU38d — the
+   suggest-then-refine step's second half). Presentational: no service injection, bUnit-testable.
+   Works on internal row copies of the Drafts parameter (rebuilt whenever the parent hands in a
+   new list, e.g. after a re-split); actions: rename, merge-into-previous, remove, reorder.
+   Preview renders each draft's HTML via RichTextView — safe, drafts are sanitized by contract.
+   Commit hands the final drafts (in display order) back to the parent, which owns the write. *@
+
+<div class="flex flex-col gap-3">
+    @if (_rows.Count == 0)
+    {
+        <p class="text-sm text-(--color-text-muted)">Nothing to import.</p>
+    }
+    else
+    {
+        <ol class="flex flex-col gap-2">
+            @for (int i = 0; i < _rows.Count; i++)
+            {
+                int idx = i;
+                DraftRow row = _rows[idx];
+                <li class="rounded-lg border border-(--color-border) bg-(--color-surface) p-3">
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span class="text-xs text-(--color-text-muted)">@(idx + 1).</span>
+                        <input value="@row.Title"
+                               @onchange="@(e => row.Title = e.Value as string)"
+                               placeholder="(untitled — will become “Chapter N”)"
+                               aria-label="Chapter title"
+                               class="min-w-0 flex-1 rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm text-(--color-text)" />
+                        <span class="shrink-0 text-xs text-(--color-text-muted)">@row.WordCount words</span>
+                    </div>
+
+                    @if (row.Warnings.Count > 0)
+                    {
+                        <ul class="mt-1 flex flex-col gap-0.5 text-xs text-(--color-text-muted)">
+                            @foreach (ImportWarning warning in row.Warnings)
+                            {
+                                <li>⚠ @warning.Message</li>
+                            }
+                        </ul>
+                    }
+
+                    <div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
+                        <button type="button" class="text-(--color-action-ink) hover:underline"
+                                @onclick="() => row.Expanded = !row.Expanded">
+                            @(row.Expanded ? "Hide preview" : "Preview")
+                        </button>
+                        @if (idx > 0)
+                        {
+                            <button type="button" class="text-(--color-text-muted) hover:text-(--color-text) hover:underline"
+                                    @onclick="() => MergeIntoPrevious(idx)">Merge into previous</button>
+                            <button type="button" class="text-(--color-text-muted) hover:text-(--color-text)"
+                                    @onclick="() => Move(idx, -1)" aria-label="Move up">↑</button>
+                        }
+                        @if (idx < _rows.Count - 1)
+                        {
+                            <button type="button" class="text-(--color-text-muted) hover:text-(--color-text)"
+                                    @onclick="() => Move(idx, +1)" aria-label="Move down">↓</button>
+                        }
+                        <button type="button" class="text-(--color-danger) hover:underline"
+                                @onclick="() => Remove(idx)">Remove</button>
+                    </div>
+
+                    @if (row.Expanded)
+                    {
+                        <div class="mt-2 max-h-64 overflow-y-auto rounded-md border border-(--color-border) p-3">
+                            <RichTextView HtmlContent="@row.Html" />
+                        </div>
+                    }
+                </li>
+            }
+        </ol>
+
+        <button type="button"
+                disabled="@IsCommitting"
+                @onclick="CommitAsync"
+                class="self-start rounded-md bg-(--color-action) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
+            @(IsCommitting ? "Importing…" : $"Import {_rows.Count} chapter{(_rows.Count == 1 ? "" : "s")} as drafts")
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>Parsed drafts to review. A NEW list instance resets the working rows (re-split).</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<ImportedChapterDraft> Drafts { get; set; } = [];
+
+    /// <summary>Fires with the final drafts, in display order, when the author commits.</summary>
+    [Parameter] public EventCallback<IReadOnlyList<ImportedChapterDraft>> OnCommit { get; set; }
+
+    /// <summary>Parent-owned busy flag while the commit loop runs.</summary>
+    [Parameter] public bool IsCommitting { get; set; }
+
+    private sealed class DraftRow
+    {
+        public string? Title { get; set; }
+        public string Html { get; set; } = string.Empty;
+        public int WordCount { get; set; }
+        public List<ImportWarning> Warnings { get; set; } = [];
+        public bool Expanded { get; set; }
+    }
+
+    private List<DraftRow> _rows = [];
+    private IReadOnlyList<ImportedChapterDraft>? _sourceDrafts;
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(Drafts, _sourceDrafts))
+        {
+            return;
+        }
+        _sourceDrafts = Drafts;
+        _rows = Drafts.Select(d => new DraftRow
+        {
+            Title = d.Title,
+            Html = d.Html,
+            WordCount = d.WordCount,
+            Warnings = d.Warnings.ToList()
+        }).ToList();
+    }
+
+    private void MergeIntoPrevious(int index)
+    {
+        DraftRow source = _rows[index];
+        DraftRow target = _rows[index - 1];
+        target.Html += source.Html;
+        target.WordCount += source.WordCount;
+        target.Warnings.AddRange(source.Warnings.Where(w => !target.Warnings.Contains(w)));
+        _rows.RemoveAt(index);
+    }
+
+    private void Remove(int index) => _rows.RemoveAt(index);
+
+    private void Move(int index, int delta)
+    {
+        (_rows[index + delta], _rows[index]) = (_rows[index], _rows[index + delta]);
+    }
+
+    private async Task CommitAsync()
+    {
+        IReadOnlyList<ImportedChapterDraft> final = _rows
+            .Select(r => new ImportedChapterDraft(
+                string.IsNullOrWhiteSpace(r.Title) ? null : r.Title!.Trim(),
+                r.Html, r.WordCount, r.Warnings))
+            .ToList();
+        await OnCommit.InvokeAsync(final);
+    }
+}

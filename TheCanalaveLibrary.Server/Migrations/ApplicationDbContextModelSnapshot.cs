@@ -990,6 +990,79 @@ namespace TheCanalaveLibrary.Server.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TheCanalaveLibrary.Core.ExternalPlatform", b =>
+                {
+                    b.Property<short>("ExternalPlatformId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("smallint")
+                        .HasColumnName("external_platform_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<short>("ExternalPlatformId"));
+
+                    b.Property<string>("DomainPattern")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("domain_pattern");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("name");
+
+                    b.HasKey("ExternalPlatformId")
+                        .HasName("pk_external_platforms");
+
+                    b.HasIndex("Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_external_platforms_name");
+
+                    b.ToTable("external_platforms", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            ExternalPlatformId = (short)1,
+                            DomainPattern = "archiveofourown.org",
+                            Name = "Archive of Our Own"
+                        },
+                        new
+                        {
+                            ExternalPlatformId = (short)2,
+                            DomainPattern = "fanfiction.net",
+                            Name = "FanFiction.Net"
+                        },
+                        new
+                        {
+                            ExternalPlatformId = (short)3,
+                            DomainPattern = "wattpad.com",
+                            Name = "Wattpad"
+                        },
+                        new
+                        {
+                            ExternalPlatformId = (short)4,
+                            DomainPattern = "spacebattles.com",
+                            Name = "SpaceBattles"
+                        },
+                        new
+                        {
+                            ExternalPlatformId = (short)5,
+                            DomainPattern = "sufficientvelocity.com",
+                            Name = "Sufficient Velocity"
+                        },
+                        new
+                        {
+                            ExternalPlatformId = (short)6,
+                            DomainPattern = "royalroad.com",
+                            Name = "Royal Road"
+                        },
+                        new
+                        {
+                            ExternalPlatformId = (short)7,
+                            Name = "Other"
+                        });
+                });
+
             modelBuilder.Entity("TheCanalaveLibrary.Core.FeatureContribution", b =>
                 {
                     b.Property<int>("FeatureContributionId")
@@ -2898,53 +2971,50 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.ToTable("story_details", (string)null);
                 });
 
-            modelBuilder.Entity("TheCanalaveLibrary.Core.StoryImport", b =>
+            modelBuilder.Entity("TheCanalaveLibrary.Core.StoryExternalLink", b =>
                 {
-                    b.Property<int>("ImportId")
+                    b.Property<int>("StoryExternalLinkId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
-                        .HasColumnName("import_id");
+                        .HasColumnName("story_external_link_id");
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("ImportId"));
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("StoryExternalLinkId"));
 
-                    b.Property<DateTime>("DateImported")
+                    b.Property<DateTime>("DateAdded")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
-                        .HasColumnName("date_imported")
+                        .HasColumnName("date_added")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("SourcePlatform")
-                        .IsRequired()
-                        .HasMaxLength(255)
-                        .HasColumnType("character varying(255)")
-                        .HasColumnName("source_platform");
-
-                    b.Property<string>("SourceUrl")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .HasColumnName("source_url");
+                    b.Property<short>("ExternalPlatformId")
+                        .HasColumnType("smallint")
+                        .HasColumnName("external_platform_id");
 
                     b.Property<int>("StoryId")
                         .HasColumnType("integer")
                         .HasColumnName("story_id");
 
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("url");
+
                     b.Property<short>("VerificationStatus")
                         .HasColumnType("smallint")
                         .HasColumnName("verification_status");
 
-                    b.HasKey("ImportId")
-                        .HasName("pk_story_imports");
+                    b.HasKey("StoryExternalLinkId")
+                        .HasName("pk_story_external_links");
 
-                    b.HasIndex("SourceUrl")
+                    b.HasIndex("ExternalPlatformId")
+                        .HasDatabaseName("ix_story_external_links_external_platform_id");
+
+                    b.HasIndex("StoryId", "Url")
                         .IsUnique()
-                        .HasDatabaseName("ix_story_imports_source_url");
+                        .HasDatabaseName("ix_story_external_links_story_id_url");
 
-                    b.HasIndex("StoryId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_story_imports_story_id");
-
-                    b.ToTable("story_imports", (string)null);
+                    b.ToTable("story_external_links", (string)null);
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.StoryListing", b =>
@@ -5169,14 +5239,23 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("Story");
                 });
 
-            modelBuilder.Entity("TheCanalaveLibrary.Core.StoryImport", b =>
+            modelBuilder.Entity("TheCanalaveLibrary.Core.StoryExternalLink", b =>
                 {
+                    b.HasOne("TheCanalaveLibrary.Core.ExternalPlatform", "ExternalPlatform")
+                        .WithMany("StoryExternalLinks")
+                        .HasForeignKey("ExternalPlatformId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_story_external_links_external_platforms_external_platform_id");
+
                     b.HasOne("TheCanalaveLibrary.Core.Story", "Story")
-                        .WithOne("StoryImport")
-                        .HasForeignKey("TheCanalaveLibrary.Core.StoryImport", "StoryId")
+                        .WithMany("ExternalLinks")
+                        .HasForeignKey("StoryId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
-                        .HasConstraintName("fk_story_imports_stories_story_id");
+                        .HasConstraintName("fk_story_external_links_stories_story_id");
+
+                    b.Navigation("ExternalPlatform");
 
                     b.Navigation("Story");
                 });
@@ -5692,6 +5771,11 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("CustomListEntries");
                 });
 
+            modelBuilder.Entity("TheCanalaveLibrary.Core.ExternalPlatform", b =>
+                {
+                    b.Navigation("StoryExternalLinks");
+                });
+
             modelBuilder.Entity("TheCanalaveLibrary.Core.Group", b =>
                 {
                     b.Navigation("GroupBlogPosts");
@@ -5780,6 +5864,8 @@ namespace TheCanalaveLibrary.Server.Migrations
 
                     b.Navigation("CustomListEntries");
 
+                    b.Navigation("ExternalLinks");
+
                     b.Navigation("GroupStories");
 
                     b.Navigation("ProfileBlogPosts");
@@ -5800,8 +5886,6 @@ namespace TheCanalaveLibrary.Server.Migrations
 
                     b.Navigation("StoryDetail")
                         .IsRequired();
-
-                    b.Navigation("StoryImport");
 
                     b.Navigation("StoryListing")
                         .IsRequired();
