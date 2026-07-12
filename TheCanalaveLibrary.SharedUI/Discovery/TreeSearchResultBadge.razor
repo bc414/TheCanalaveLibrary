@@ -1,20 +1,46 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
 
-@* Leaf (WU44) — per-result annotation for the Automatic Tree Search tab, rendered through
-   StoryDeck's CardOverlay slot. Degree badge always shown; the path chip appears only when Path
-   is present (chain-of-trust edge sets only — see TreeSearchListingItemDto.Path). The path chip
-   NEVER resolves or displays a user-typed node's identity (privacy model, spec §5.4): it shows
-   only the story-typed hops, labeled generically by id (no per-card title lookup — avoids N+1).
-   Indicator role (badges/icons that color identity, not action) per layer4-style.md "Element Roles". *@
+@* Leaf (WU44; corrected WU40, 2026-07-12) — per-result annotation for the Automatic Tree Search
+   tab, rendered through StoryDeck's CardOverlay slot. Degree badge always shown; the path chip
+   appears only when a path is present (chain-of-trust edge sets only).
+   Privacy correction: chain-of-trust paths (HiddenGem/AuthorSpotlight — the only sets that ever
+   carry a path) contain no anonymized contributor, so BOTH story and user hops render with real,
+   linkable identity via the server-hydrated PathHops. A hop without a label is one the viewer
+   cannot see (rating-gated bridge story) and stays an opaque #id — the silent-bridge rule holds
+   for labels. The legacy ids-only rendering remains as the fallback when only the raw Path is
+   supplied. Indicator role per layer4-style.md "Element Roles". *@
 
 <div class="flex flex-col items-end gap-1">
-    <span class="rounded-full bg-(--color-surface-raised) px-2 py-0.5 text-xs font-medium text-(--color-text-muted) shadow-sm ring-1 ring-(--color-border)">
+    <span class="rounded-full bg-(--color-surface-raised) px-2 py-0.5 text-xs font-medium text-(--color-text-muted) shadow-medium ring-1 ring-(--color-border)">
         @DegreeLabel
     </span>
-    @if (_storyHops.Count > 1)
+    @if (PathHops is { Count: > 1 })
     {
-        <span class="max-w-40 truncate rounded-full bg-(--color-surface-raised) px-2 py-0.5 text-[0.65rem] text-(--color-text-muted) shadow-sm ring-1 ring-(--color-border)"
+        <span class="flex max-w-48 items-center gap-1 overflow-hidden rounded-full bg-(--color-surface-raised) px-2 py-0.5 text-[0.65rem] text-(--color-text-muted) shadow-medium ring-1 ring-(--color-border)"
+              title="@HopsTitle">
+            @for (int i = 0; i < PathHops.Count; i++)
+            {
+                var hop = PathHops[i];
+                if (i > 0)
+                {
+                    <span aria-hidden="true">→</span>
+                }
+                @if (hop.Label is { } label)
+                {
+                    <a href="@(hop.IsStory ? $"/story/{hop.Id}" : $"/user/{hop.Id}")"
+                       class="max-w-16 truncate hover:underline">@label</a>
+                }
+                else
+                {
+                    <span class="shrink-0">#@hop.Id</span>
+                }
+            }
+        </span>
+    }
+    else if (_storyHops.Count > 1)
+    {
+        <span class="max-w-40 truncate rounded-full bg-(--color-surface-raised) px-2 py-0.5 text-[0.65rem] text-(--color-text-muted) shadow-medium ring-1 ring-(--color-border)"
               title="@PathTitle">
             @PathSummary
         </span>
@@ -24,14 +50,18 @@
 @code {
     [Parameter, EditorRequired] public int Degree { get; set; }
 
-    /// <summary>Raw Postgres path text — see <see cref="TreeSearchPathParser"/>. Null unless the
-    /// request's edge set was chain-of-trust with paths included.</summary>
+    /// <summary>Raw Postgres path text — the ids-only fallback when <see cref="PathHops"/> is
+    /// not supplied. See <see cref="TreeSearchPathParser"/>.</summary>
     [Parameter] public string? Path { get; set; }
+
+    /// <summary>Server-hydrated display hops (story titles + usernames) — the preferred input;
+    /// see <see cref="TreeSearchListingItemDto.PathHops"/>.</summary>
+    [Parameter] public IReadOnlyList<TreeSearchPathHopDto>? PathHops { get; set; }
 
     private IReadOnlyList<int> _storyHops = [];
 
     protected override void OnParametersSet() =>
-        _storyHops = TreeSearchPathParser.StoryIdsOnly(Path);
+        _storyHops = PathHops is null ? TreeSearchPathParser.StoryIdsOnly(Path) : [];
 
     private string DegreeLabel => Degree switch
     {
@@ -43,4 +73,7 @@
 
     private string PathSummary => string.Join(" → ", _storyHops.Select(id => $"#{id}"));
     private string PathTitle => $"Connected via {_storyHops.Count} stories";
+    private string HopsTitle => PathHops is null
+        ? ""
+        : string.Join(" → ", PathHops.Select(h => h.Label ?? $"#{h.Id}"));
 }

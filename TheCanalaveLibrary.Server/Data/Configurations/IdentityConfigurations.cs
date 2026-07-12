@@ -153,6 +153,14 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasForeignKey(r => r.ModeratorUserId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // Pinned Story (Feature 33 / WU40): the user's single self-chosen calling-card story.
+        // SetNull — deleting the story silently unpins it. No inverse nav on Story (the
+        // Story→User authorship relationship is already mapped via u.Stories/AuthorId above).
+        builder.HasOne(u => u.PinnedStory)
+            .WithMany()
+            .HasForeignKey(u => u.PinnedStoryId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         // 1-to-Many Restrict (Lookup tables or conflicts)
         builder.HasMany(u => u.UserProfileComments)
             .WithOne(c => c.ProfileUser)

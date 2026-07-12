@@ -25,6 +25,10 @@ public class TreeSearchDesktopTests : BunitContext
         Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeUsiService);
         Services.AddScoped<ITagReadService>(_ => new FakeTagReadService());
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
+        // WU40 tabs (Explore/DeepDive) are self-contained composites that own their reads.
+        Services.AddScoped<IManualTreeSearchReadService>(_ => new FakeManualTreeSearchReadService());
+        Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
+        Services.AddScoped<ManualTreeStore>();
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         // TagFilter (inside ResultsFilterPanel) mounts SavedTagSelectionLoadFlyout/SaveDialog
@@ -79,14 +83,29 @@ public class TreeSearchDesktopTests : BunitContext
     // ── Tab behavior ───────────────────────────────────────────────────────────────
 
     [Fact]
-    public void ManualTab_ShowsPlaceholder_HidesControlsAndDeck()
+    public void ExploreTab_RendersExploreComposite_HidesAutomaticControlsAndDeck()
     {
         IRenderedComponent<TreeSearchDesktop> cut = Render<TreeSearchDesktop>(p => p
             .Add(c => c.RootStory, MakeStory(1))
-            .Add(c => c.ActiveTab, TreeSearchTab.Manual)
+            .Add(c => c.ActiveTab, TreeSearchTab.Explore)
             .Add(c => c.Result, MakeResult()));
 
-        cut.Markup.Should().Contain("Graph view coming soon");
+        cut.FindComponents<ExploreTab>().Should().ContainSingle();
+        cut.FindComponents<DeepDiveTab>().Should().BeEmpty();
+        cut.FindComponents<TreeSearchControls>().Should().BeEmpty();
+        cut.FindComponents<StoryDeck>().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DeepDiveTab_RendersDeepDiveComposite_HidesAutomaticControlsAndDeck()
+    {
+        IRenderedComponent<TreeSearchDesktop> cut = Render<TreeSearchDesktop>(p => p
+            .Add(c => c.RootStory, MakeStory(1))
+            .Add(c => c.ActiveTab, TreeSearchTab.DeepDive)
+            .Add(c => c.Result, MakeResult()));
+
+        cut.FindComponents<DeepDiveTab>().Should().ContainSingle();
+        cut.FindComponents<ExploreTab>().Should().BeEmpty();
         cut.FindComponents<TreeSearchControls>().Should().BeEmpty();
         cut.FindComponents<StoryDeck>().Should().BeEmpty();
     }
@@ -147,7 +166,7 @@ public class TreeSearchDesktopTests : BunitContext
     // ── Callbacks ────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void OnTabChanged_Fires_WhenManualTabClicked()
+    public void OnTabChanged_Fires_WhenExploreTabClicked()
     {
         TreeSearchTab? emitted = null;
         IRenderedComponent<TreeSearchDesktop> cut = Render<TreeSearchDesktop>(p => p
@@ -158,7 +177,7 @@ public class TreeSearchDesktopTests : BunitContext
 
         cut.FindAll("button[role=tab]")[1].Click();
 
-        emitted.Should().Be(TreeSearchTab.Manual);
+        emitted.Should().Be(TreeSearchTab.Explore);
     }
 
     [Fact]
@@ -178,7 +197,7 @@ public class TreeSearchDesktopTests : BunitContext
 
     // Mutation sanity: switching tabs changes which components render.
     [Fact]
-    public void MutationSanity_SwitchingToManual_RemovesDeck()
+    public void MutationSanity_SwitchingToExplore_RemovesDeck()
     {
         IRenderedComponent<TreeSearchDesktop> cut = Render<TreeSearchDesktop>(p => p
             .Add(c => c.RootStory, MakeStory(1))
@@ -187,7 +206,7 @@ public class TreeSearchDesktopTests : BunitContext
 
         cut.FindComponents<StoryDeck>().Should().ContainSingle();
 
-        cut.Render(p => p.Add(c => c.ActiveTab, TreeSearchTab.Manual));
+        cut.Render(p => p.Add(c => c.ActiveTab, TreeSearchTab.Explore));
 
         cut.FindComponents<StoryDeck>().Should().BeEmpty();
     }

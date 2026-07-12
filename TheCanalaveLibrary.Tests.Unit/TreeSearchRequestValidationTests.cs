@@ -18,7 +18,8 @@ public sealed class TreeSearchRequestValidationTests
         new ThrowingContextFactory(),
         new StubActiveUserContext { UserId = 1, IsAuthenticated = true },
         new StubDiscoveryDefaults(),
-        null!); // storyReadService — only SearchAsync (WU44) touches it; these tests exercise TraverseAsync
+        null!,  // storyReadService — only SearchAsync (WU44) touches it; these tests exercise TraverseAsync
+        null!); // manualTreeSearchReadService — only SearchAsync's path-hop hydration (WU40) touches it
 
     private static TreeSearchRequest ValidRequest() => new()
     {

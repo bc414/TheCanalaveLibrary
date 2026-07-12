@@ -8,6 +8,7 @@
 @inject IThemeReadService ThemeReadService
 @inject IActiveUserContext ActiveUser
 @inject IBadgeWriteService BadgeService
+@inject IStoryReadService StoryReadService
 
 @* Feature 20 (profile editing) + Feature 3 (theme-selection UI), WU30.
    Self-referential settings page — the active user edits only their own data.
@@ -65,9 +66,10 @@ else
             Busy="@_privacyBusy"
             OnSave="HandleSavePrivacyAsync" />
 
-        @* Author sub-form *@
+        @* Author sub-form (Pinned Story options = the caller's own published stories, WU40) *@
         <AuthorSettingsForm
             Initial="@_settings.Author"
+            PinnableStories="@_pinnableStories"
             Busy="@_authorBusy"
             OnSave="HandleSaveAuthorAsync" />
 
@@ -94,6 +96,7 @@ else
     private string? _pictureUrl;
     private IReadOnlyList<ThemeDto> _themes = [];
     private IReadOnlyList<EarnedBadgeDto> _earnedBadges = [];
+    private IReadOnlyList<StoryTitleSearchDto> _pinnableStories = [];
     private bool _isLoading = true;
 
     // Per-section busy flags so saving one section doesn't disable the others.
@@ -113,16 +116,18 @@ else
         _settings = await SettingsService.GetMySettingsAsync();
         _pictureUrl = _settings.ProfilePictureRelativeUrl;
 
-        // Bio text, theme list, and badge list can be loaded concurrently.
+        // Bio text, theme list, badge list, and pinnable stories can be loaded concurrently.
         if (ActiveUser.UserId is int userId)
         {
             Task<string?> bioTask        = ProfileReadService.GetProfileTextAsync(userId);
             Task<IReadOnlyList<ThemeDto>> themesTask = ThemeReadService.GetThemesAsync();
             Task<IReadOnlyList<EarnedBadgeDto>> badgesTask = BadgeService.GetMyBadgesForCurationAsync(userId);
-            await Task.WhenAll(bioTask, themesTask, badgesTask);
-            _bioHtml      = bioTask.Result;
-            _themes       = themesTask.Result;
-            _earnedBadges = badgesTask.Result;
+            Task<IReadOnlyList<StoryTitleSearchDto>> pinnableTask = LoadPinnableStoriesAsync(userId);
+            await Task.WhenAll(bioTask, themesTask, badgesTask, pinnableTask);
+            _bioHtml         = bioTask.Result;
+            _themes          = themesTask.Result;
+            _earnedBadges    = badgesTask.Result;
+            _pinnableStories = pinnableTask.Result;
         }
         else
         {
@@ -130,6 +135,24 @@ else
         }
 
         _isLoading = false;
+    }
+
+    /// <summary>
+    /// The caller's own published, pinnable stories (WU40 Pinned Story dropdown): all their
+    /// story ids, hydrated to listings, filtered to publicly-visible statuses (the same
+    /// InProgress..OpenBeta window the write service enforces), sorted by title. The service
+    /// gate remains authoritative — this is affordance-shaping only.
+    /// </summary>
+    private async Task<IReadOnlyList<StoryTitleSearchDto>> LoadPinnableStoriesAsync(int userId)
+    {
+        IReadOnlyList<int> ids = await StoryReadService.GetStoryIdsByAuthorAsync(userId);
+        if (ids.Count == 0) return [];
+
+        StoryListingDto[] listings = await StoryReadService.GetListingsByIdsAsync(ids);
+        return [.. listings
+            .Where(s => s.StoryStatusId is >= StoryStatusEnum.InProgress and <= StoryStatusEnum.OpenBeta)
+            .OrderBy(s => s.Title, StringComparer.OrdinalIgnoreCase)
+            .Select(s => new StoryTitleSearchDto(s.StoryId, s.Title, null))];
     }
 
     // ── Save handlers ────────────────────────────────────────────────────────────

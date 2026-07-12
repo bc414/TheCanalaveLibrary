@@ -1,0 +1,42 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Leaf — the shared (edge, direction)-pair toggle-pill row for BOTH manual tree search modes
+   (WU40). Every pill is one direction-specific pair, independently toggleable — never one flag
+   reinterpreted by anchor type (layer3.5-structure.md §"The shared tree canvas"). The owner
+   supplies the items (Explore swaps the whole set per anchor direction; Deep Dive shows its four
+   whitelisted pairs at once) and receives (key, on) on change. Checkbox accent is mission blue —
+   tree search is a mission-bucket feature (layer4-style.md "Control color families"). *@
+
+<div class="flex flex-wrap items-center gap-x-4 gap-y-2">
+    @foreach (var group in Items.GroupBy(i => i.GroupLabel))
+    {
+        <div class="flex flex-wrap items-center gap-2">
+            @if (group.Key is not null)
+            {
+                <span class="text-[11px] font-bold uppercase tracking-wide text-(--color-text-muted)">@group.Key</span>
+            }
+            @foreach (var item in group)
+            {
+                <label class="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold
+                              @(item.IsOn
+                                  ? "border-(--color-mission) bg-(--color-mission)/10 text-(--color-text)"
+                                  : "border-(--color-border) bg-(--color-surface) text-(--color-text-muted)")">
+                    <input type="checkbox" class="size-3.5 accent-(--color-mission)"
+                           checked="@item.IsOn"
+                           @onchange="e => OnToggled.InvokeAsync((item.Key, e.Value is bool b && b))" />
+                    @item.Label
+                </label>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>One toggle pill: a direction-specific (edge, direction) pair.</summary>
+    public sealed record EdgeToggleItem(string Key, string Label, bool IsOn, string? GroupLabel = null);
+
+    [Parameter, EditorRequired] public IReadOnlyList<EdgeToggleItem> Items { get; set; } = [];
+
+    /// <summary>Raised with (pair key, new checked state) on every toggle.</summary>
+    [Parameter] public EventCallback<(string Key, bool IsOn)> OnToggled { get; set; }
+}

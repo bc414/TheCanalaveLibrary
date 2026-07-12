@@ -936,3 +936,36 @@ primary/accent everywhere (alias bridge deleted); one neutral hover (surface-hov
 scripts/check-design-tokens.ps1 enforces all of it in CI. Remaining known-open: Error.razor
 (Server template page, low priority); Blazored.Typeahead package chrome (documented MVP
 carve-out); visual sign-off of swept pages = the standing L4 human pass.
+
+---
+
+## WU40 additions (2026-07-12) — Manual Tree Search element kinds
+
+New components minting new element kinds (Feature 33: ExploreTab / DeepDiveTab / ManualTreeCanvas
+/ ManualTreeEdgeToggles, `SharedUI/Discovery/`). All token-check clean at land time; visual
+sign-off rides the standing L4 human pass.
+
+#### ManualTreeCanvas.razor (new kind: pannable tree canvas + node chips + SVG edge lines)
+| Element | Current classes | Role | Notes |
+|---|---|---|---|
+| Pan wrap | `relative overflow-hidden cursor-grab touch-none` | Canvas | JS-owned transform on inner div (manual-tree-search.js); Blazor never styles it |
+| Node chip (button) | `size-14 border-2 bg-(--color-surface-raised) shadow-medium rounded-xl` (`rounded-full` for users) | Control | Selected: `border-(--color-mission) ring-(--color-mission)/20`; ghost: `opacity-50 border-dashed` (frontier state) |
+| Edge lines (SVG `<line>`) | `stroke` = `var(--color-gem)` (Hidden Gem) / `var(--color-rec)` (Spotlight) / `var(--color-mission)` (Pinned) / `var(--color-text-muted)` (Author) / `var(--color-border)` (other) | Indicator | Feature accents color identity per the ratified split; ghost edges dashed |
+| Chip caption | `text-[11px] font-bold` + edge label `text-[9px] uppercase text-(--color-text-muted)` | Wayfinding | — |
+| Zoom buttons | `border-(--color-border) bg-(--color-surface-raised) shadow-medium` | Control | — |
+
+#### ManualTreeEdgeToggles.razor (new kind: (edge,direction)-pair pill checkboxes)
+| Element | Current classes | Role | Notes |
+|---|---|---|---|
+| Pill label | on: `border-(--color-mission) bg-(--color-mission)/10`; off: `border-(--color-border) bg-(--color-surface) text-(--color-text-muted)` | Control | Checkbox `accent-(--color-mission)` — tree search is mission-bucket |
+
+#### ExploreTab.razor / DeepDiveTab.razor (composites — mostly delegated)
+| Element | Current classes | Role | Notes |
+|---|---|---|---|
+| Tab vessel | `rounded-lg border border-(--color-border) bg-(--color-surface-raised)` | Container | `h-[70vh]` working height pending L4 pass |
+| Anchor banner / section headings | muted uppercase labels | Wayfinding | — |
+| "Add to tree" button | `bg-(--color-mission) text-white hover:bg-(--color-mission-hover)`; added: border+surface muted | Control | Mission CTA (discovery feature); composed sibling of StoryCard/UserCard, never in the caret |
+| "Show more (N more)" | `border-(--color-border) text-(--color-text-muted)` | Control | Plumbing, not mission — action-neutral outline |
+| Floating info panel (Deep Dive) | `absolute right-4 top-4 z-(--z-dropdown) resize overflow-auto rounded-xl border bg-(--color-surface-raised) shadow-prominent` | Overlay | NON-blocking (no backdrop, deliberate); JS drag by handle, native CSS resize |
+| Compound row (rec family) | `grid md:grid-cols-[minmax(220px,260px)_1fr]` wrapping StoryCard + RecommendationCard | Container | Story half suppressed when it equals the anchor |
+| Pinned badge (Authored row) | `bg-(--color-mission)/10 text-(--color-text) rounded-full` | Indicator | — |

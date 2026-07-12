@@ -50,6 +50,8 @@ builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.Circu
 // in the Client host so the components survive the L5 WASM flip unchanged.
 builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddScoped<DraftStore>();
+// Manual Tree Search gestures + localStorage persistence (WU40; same pattern as DraftStore).
+builder.Services.AddScoped<ManualTreeStore>();
 
 // --- Database Contexts ---
 // Plain AddDbContext, never the Aspire Npgsql package's AddNpgsqlDbContext — settled WU12
@@ -258,6 +260,8 @@ builder.Services.AddHostedService<SiteDailyStatWorker>();
 builder.Services.AddScoped<ISiteDailyStatReadService, ServerSiteDailyStatReadService>();
 builder.Services.AddScoped<ICoOccurrenceReadService, ServerCoOccurrenceReadService>();
 builder.Services.AddScoped<ITreeSearchReadService, ServerTreeSearchReadService>();
+// Manual Tree Search (Feature 33 / WU40): stateless degree-1 pivots over live tables.
+builder.Services.AddScoped<IManualTreeSearchReadService, ServerManualTreeSearchReadService>();
 // Singleton: OptimisticSpriteReadService is stateless — pure string builder, no host/disk deps.
 // SpriteBaseUrl defaults to /sprites/themes (dev wwwroot); override in production for R2/CDN.
 var spriteBaseUrl = builder.Configuration["Sprites:BaseUrl"] ?? "/sprites/themes";

@@ -18,11 +18,13 @@
 
     <TreeSearchTabStrip ActiveTab="ActiveTab" OnTabChanged="OnTabChanged" />
 
-    @if (ActiveTab == TreeSearchTab.Manual)
+    @if (ActiveTab == TreeSearchTab.Explore)
     {
-        <div class="flex items-center justify-center rounded-lg border border-(--color-border) bg-(--color-surface-raised) py-16 text-(--color-text-muted)">
-            <span>Graph view coming soon.</span>
-        </div>
+        <ExploreTab RootStory="RootStory" RootUser="RootUser" CurrentUserId="CurrentUserId" IsMobile="true" />
+    }
+    else if (ActiveTab == TreeSearchTab.DeepDive)
+    {
+        <DeepDiveTab RootStory="RootStory" RootUser="RootUser" CurrentUserId="CurrentUserId" IsMobile="true" />
     }
     else
     {
@@ -48,7 +50,8 @@
                    EmptyMessage="No connected stories found. Try more connection types, more degrees, or fewer filters."
                    CurrentPage="1" PageSize="@ItemCount" TotalCount="@ItemCount">
             <CardOverlay Context="story">
-                <TreeSearchResultBadge Degree="@DegreeFor(story.StoryId)" Path="@PathFor(story.StoryId)" />
+                <TreeSearchResultBadge Degree="@DegreeFor(story.StoryId)" Path="@PathFor(story.StoryId)"
+                                       PathHops="@HopsFor(story.StoryId)" />
             </CardOverlay>
         </StoryDeck>
     }
@@ -109,6 +112,7 @@
 
     private int DegreeFor(int storyId) => Result?.Items.FirstOrDefault(i => i.Story.StoryId == storyId)?.Degree ?? 0;
     private string? PathFor(int storyId) => Result?.Items.FirstOrDefault(i => i.Story.StoryId == storyId)?.Path;
+    private IReadOnlyList<TreeSearchPathHopDto>? HopsFor(int storyId) => Result?.Items.FirstOrDefault(i => i.Story.StoryId == storyId)?.PathHops;
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
     private void CloseDrawer() => _drawerOpen = false;

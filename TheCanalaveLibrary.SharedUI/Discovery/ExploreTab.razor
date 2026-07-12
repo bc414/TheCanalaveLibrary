@@ -1,0 +1,500 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject IManualTreeSearchReadService ManualTree
+@inject IUserStoryInteractionReadService InteractionReadService
+@inject ManualTreeStore TreeStore
+
+@* Explore — Manual Tree Search's "build your own map" paradigm (Feature 33 / WU40).
+   Self-contained coordination composite (CommentSection precedent: owns its reads) — the shell
+   (TreeSearchDesktop/Mobile) passes only the resolved root + viewer id. Two-pane ~50/50: left =
+   the persistent client-curated tree (localStorage, IDs+edges only, rehydrated per load); right =
+   a disposable stateless candidate-results pane for the selected node under the active
+   (edge, direction) toggles. Full design: layer3.5-structure.md §"Manual Tree Search",
+   audit/Discovery.md F33. Outer Margin Rule: root has no m-*; the tab shell owns spacing. *@
+
+<div class="flex h-[70vh] min-h-[480px] flex-col rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
+
+    @if (IsMobile)
+    {
+        @* Tree ⇄ Results toggle — the two panes can't sit side-by-side on small viewports. *@
+        <div class="flex gap-1 border-b border-(--color-border) p-2">
+            <button type="button"
+                    class="flex-1 rounded-md px-3 py-1.5 text-sm font-semibold @(_mobileResultsPane ? "text-(--color-text-muted)" : "bg-(--color-mission)/10 text-(--color-text)")"
+                    @onclick="() => _mobileResultsPane = false">Your Map</button>
+            <button type="button"
+                    class="flex-1 rounded-md px-3 py-1.5 text-sm font-semibold @(_mobileResultsPane ? "bg-(--color-mission)/10 text-(--color-text)" : "text-(--color-text-muted)")"
+                    @onclick="() => _mobileResultsPane = true">Connections</button>
+        </div>
+    }
+
+    <div class="flex min-h-0 flex-1">
+
+        @* ── Left: the curated tree ─────────────────────────────────────────────────────── *@
+        @if (!IsMobile || !_mobileResultsPane)
+        {
+            <div class="flex min-w-0 flex-1 flex-col border-r border-(--color-border) bg-(--color-surface)">
+                <div class="flex items-center justify-between px-4 py-2.5">
+                    <span class="text-xs font-bold uppercase tracking-wide text-(--color-text-muted)">Your Map</span>
+                    <button type="button"
+                            class="rounded-md border border-(--color-border) px-2.5 py-1 text-xs font-semibold text-(--color-text-muted) hover:text-(--color-text)"
+                            @onclick="ResetTreeAsync">Reset</button>
+                </div>
+                @if (_prunedCount > 0)
+                {
+                    <p class="px-4 pb-1 text-[11px] text-(--color-text-muted)">
+                        @_prunedCount saved node@(_prunedCount == 1 ? "" : "s") removed — no longer available.
+                    </p>
+                }
+                <div class="min-h-0 flex-1">
+                    @if (_root is not null)
+                    {
+                        <ManualTreeCanvas Root="_root" Displays="_displays"
+                                          SelectedNodeId="@_selected?.NodeId"
+                                          OnNodeClicked="SelectNodeAsync" />
+                    }
+                </div>
+                <p class="px-4 py-2 text-[11px] leading-snug text-(--color-text-muted)">
+                    Drag to pan · click a node to explore it · dashed nodes haven't been explored yet.
+                </p>
+            </div>
+        }
+
+        @* ── Right: stateless candidate results for the selected node ───────────────────── *@
+        @if (!IsMobile || _mobileResultsPane)
+        {
+            <div class="flex min-w-0 flex-1 flex-col">
+
+                @* Anchor banner — a reminder of which node the results below belong to. *@
+                <div class="flex items-center gap-3 border-b border-(--color-border) px-4 py-3">
+                    <div class="flex size-10 shrink-0 items-center justify-center overflow-hidden border border-(--color-border) bg-(--color-surface)
+                                @(_selected?.IsStory == false ? "rounded-full" : "rounded-lg")">
+                        @if (SelectedDisplay()?.ImageUrl is { } img)
+                        {
+                            <img src="@img" alt="" class="size-full object-cover" loading="lazy" data-hide-on-error />
+                        }
+                        else
+                        {
+                            <span class="font-bold text-(--color-text-muted)">@(SelectedDisplay()?.Title is { Length: > 0 } t ? t[..1] : "?")</span>
+                        }
+                    </div>
+                    <div class="min-w-0">
+                        <div class="text-[10px] font-bold uppercase tracking-wide text-(--color-text-muted)">Currently exploring</div>
+                        <div class="truncate text-sm font-bold text-(--color-text)">@SelectedDisplay()?.Title</div>
+                    </div>
+                </div>
+
+                @* Direction-specific (edge, direction) toggles — the whole row swaps per anchor. *@
+                <div class="border-b border-(--color-border) px-4 py-2.5">
+                    <ManualTreeEdgeToggles Items="BuildToggleItems()" OnToggled="HandleToggleAsync" />
+                </div>
+
+                <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
+                    @if (_loading)
+                    {
+                        <p class="text-sm text-(--color-text-muted)"><em>Loading connections…</em></p>
+                    }
+                    else if (_neighbors is { } n)
+                    {
+                        @* Author (story anchor) *@
+                        @if (n.Author is { } author)
+                        {
+                            <section class="space-y-2">
+                                <h3 class="text-xs font-bold uppercase tracking-wide text-(--color-text-muted)">Author</h3>
+                                <div class="flex items-start gap-2">
+                                    <UserCard User="author" />
+                                    @AddButton(false, author.UserId, ManualTreeEdge.StoryAuthor, author.Username, author.AvatarUrl)
+                                </div>
+                            </section>
+                        }
+
+                        @* Recommendation family — compound rows: StoryCard + RecommendationCard side by
+                           side, stacked; the story half is suppressed when it IS the anchor (story
+                           anchor → every row's story is the anchor shown in the banner above). *@
+                        @if (n.RecommendationFamily is { } family)
+                        {
+                            <section class="space-y-3">
+                                <h3 class="text-xs font-bold uppercase tracking-wide text-(--color-text-muted)">
+                                    Recommendations <span class="font-medium normal-case">(@family.TotalCount)</span>
+                                </h3>
+                                @if (_familyItems.Count == 0)
+                                {
+                                    <p class="text-sm text-(--color-text-muted)">No recommendations match the checked flags.</p>
+                                }
+                                @foreach (var item in _familyItems)
+                                {
+                                    bool storyIsAnchor = _selected is { IsStory: true } sel && sel.EntityId == item.Story.StoryId;
+                                    <div class="grid items-start gap-3 @(storyIsAnchor ? "" : "md:grid-cols-[minmax(220px,260px)_1fr]")">
+                                        @if (!storyIsAnchor)
+                                        {
+                                            <div class="space-y-2">
+                                                <StoryCard Story="item.Story"
+                                                           UserStoryInteractionState="StateFor(item.Story.StoryId)"
+                                                           IsOwnStory="IsOwn(item.Story)" />
+                                                @AddButton(true, item.Story.StoryId, ManualTreeEdge.UserRecommendedStory, item.Story.Title, item.Story.CoverArtRelativeUrl)
+                                            </div>
+                                        }
+                                        <div class="space-y-2">
+                                            <RecommendationCard Rec="item.Recommendation" />
+                                            @if (item.Recommendation.Recommender is { } rec && _selected is { IsStory: true })
+                                            {
+                                                @AddButton(false, rec.UserId, item.Recommendation.IsHighlightedByAuthor ? ManualTreeEdge.StorySpotlightedRecommender : ManualTreeEdge.StoryRecommender, rec.Username, rec.AvatarUrl)
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                                @ShowMore(family.TotalCount, _familyItems.Count, () => { _familyPage++; return LoadPivotAsync(appendFamily: true); })
+                            </section>
+                        }
+
+                        @* Favorited by (story anchor → users) *@
+                        @if (n.Favoriters is { } favoriters)
+                        {
+                            <section class="space-y-2">
+                                <h3 class="text-xs font-bold uppercase tracking-wide text-(--color-text-muted)">
+                                    Favorited by <span class="font-medium normal-case">(@favoriters.TotalCount)</span>
+                                </h3>
+                                @if (_favoriterItems.Count == 0)
+                                {
+                                    <p class="text-sm text-(--color-text-muted)">Nobody's favorited this publicly yet.</p>
+                                }
+                                <div class="grid gap-2 md:grid-cols-2">
+                                    @foreach (UserCardDto u in _favoriterItems)
+                                    {
+                                        <div class="flex items-start gap-2">
+                                            <UserCard User="u" />
+                                            @AddButton(false, u.UserId, ManualTreeEdge.StoryFavoriter, u.Username, u.AvatarUrl)
+                                        </div>
+                                    }
+                                </div>
+                                @ShowMore(favoriters.TotalCount, _favoriterItems.Count, () => { _favoritersPage++; return LoadPivotAsync(appendFavoriters: true); })
+                            </section>
+                        }
+
+                        @* User-anchor story sections *@
+                        @StorySection("Favorites", n.Favorites, _favoriteItems, ManualTreeEdge.UserFavoriteStory,
+                            () => { _favoritesPage++; return LoadPivotAsync(appendFavorites: true); })
+                        @StorySection("Authored", n.Authored, _authoredItems, ManualTreeEdge.UserAuthoredStory,
+                            () => { _authoredPage++; return LoadPivotAsync(appendAuthored: true); })
+                        @StorySection("Vouched-for authors' stories", n.VouchedStories, _vouchedItems, ManualTreeEdge.UserVouchedStory,
+                            () => { _vouchedPage++; return LoadPivotAsync(appendVouched: true); })
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public StoryListingDto? RootStory { get; set; }
+    [Parameter] public UserCardDto? RootUser { get; set; }
+    [Parameter] public int? CurrentUserId { get; set; }
+    [Parameter] public bool IsMobile { get; set; }
+
+    private const int PageSize = 10;
+
+    // ── Tree + display state ─────────────────────────────────────────────────────
+    private ManualTreeNode? _root;
+    private ManualTreeNode? _selected;
+    private readonly Dictionary<(bool IsStory, int EntityId), ManualTreeNodeDisplay> _displays = [];
+    private int _prunedCount;
+    private string TreeKey => ManualTreeStore.TreeKey("explore", RootStory is not null, RootStory?.StoryId ?? RootUser!.UserId);
+
+    // ── Edge toggles — one bool per (edge, direction) pair, per the settled model ─
+    private bool _authorFromStory = true, _recFromStory = true, _gemFromStory = true, _spotlightFromStory = true, _favoriteFromStory = true;
+    private bool _recFromUser = true, _gemFromUser = true, _spotlightFromUser = true, _favoriteFromUser = true, _authoredFromUser = true, _vouchFromUser = true;
+
+    // ── Pivot results (accumulated per section for "Show more" appends) ───────────
+    private ManualTreeNeighborsDto? _neighbors;
+    private readonly List<ManualTreeRecItemDto> _familyItems = [];
+    private readonly List<UserCardDto> _favoriterItems = [];
+    private readonly List<StoryListingDto> _favoriteItems = [];
+    private readonly List<StoryListingDto> _authoredItems = [];
+    private readonly List<StoryListingDto> _vouchedItems = [];
+    private int _familyPage = 1, _favoritersPage = 1, _favoritesPage = 1, _authoredPage = 1, _vouchedPage = 1;
+    private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states = new Dictionary<int, UserStoryInteractionStateDto>();
+    private bool _loading = true;
+    private bool _initialized;
+    private bool _mobileResultsPane;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Everything waits for interactivity: localStorage needs JS (unavailable during
+        // prerender), and there is no point running the first pivot twice.
+        if (!firstRender || _initialized) return;
+        _initialized = true;
+
+        BuildRoot();
+        await TryRestoreTreeAsync();
+        _selected = _root;
+        await LoadPivotAsync();
+        StateHasChanged();
+    }
+
+    private void BuildRoot()
+    {
+        if (RootStory is { } s)
+        {
+            _root = new ManualTreeNode { EntityId = s.StoryId, IsStory = true };
+            _displays[(true, s.StoryId)] = new ManualTreeNodeDisplay(s.Title, s.CoverArtRelativeUrl);
+        }
+        else if (RootUser is { } u)
+        {
+            _root = new ManualTreeNode { EntityId = u.UserId, IsStory = false };
+            _displays[(false, u.UserId)] = new ManualTreeNodeDisplay(u.Username, u.AvatarUrl);
+        }
+    }
+
+    private async Task TryRestoreTreeAsync()
+    {
+        if (_root is null) return;
+        string? json = await TreeStore.LoadTreeAsync(TreeKey);
+        if (json is null || ManualTreeNode.FromJson(json) is not { } restored) return;
+        // Only adopt a saved tree whose root matches this route's root.
+        if (restored.EntityId != _root.EntityId || restored.IsStory != _root.IsStory) return;
+
+        // Rehydrate chip displays (IDs+edges only on disk) and prune what the viewer
+        // can no longer see — vanished, taken down, or rating-gated since the save.
+        List<ManualTreeNode> all = [.. restored.EnumerateAll()];
+        ManualTreeNodeDisplaysDto displays = await ManualTree.GetNodeDisplaysAsync(
+            [.. all.Where(x => x.IsStory).Select(x => x.EntityId).Distinct()],
+            [.. all.Where(x => !x.IsStory).Select(x => x.EntityId).Distinct()]);
+        foreach (ManualTreeNodeDisplayDto d in displays.Stories) _displays[(true, d.EntityId)] = new ManualTreeNodeDisplay(d.Title, d.ImageUrl);
+        foreach (ManualTreeNodeDisplayDto d in displays.Users) _displays[(false, d.EntityId)] = new ManualTreeNodeDisplay(d.Title, d.ImageUrl);
+
+        _prunedCount = restored.PruneMissing(
+            new HashSet<int>(displays.Stories.Select(d => d.EntityId)),
+            new HashSet<int>(displays.Users.Select(d => d.EntityId)));
+        _root = restored;
+        if (_prunedCount > 0) await PersistTreeAsync();
+    }
+
+    private async Task SelectNodeAsync(ManualTreeNode node)
+    {
+        node.Ghost = false; // selecting solidifies the frontier
+        _selected = node;
+        _mobileResultsPane = true; // mobile: jump straight to the connections you just asked for
+        ResetPages();
+        await PersistTreeAsync();
+        await LoadPivotAsync();
+    }
+
+    private void ResetPages()
+    {
+        _familyPage = _favoritersPage = _favoritesPage = _authoredPage = _vouchedPage = 1;
+        _familyItems.Clear(); _favoriterItems.Clear(); _favoriteItems.Clear(); _authoredItems.Clear(); _vouchedItems.Clear();
+    }
+
+    private async Task LoadPivotAsync(
+        bool appendFamily = false, bool appendFavoriters = false, bool appendFavorites = false,
+        bool appendAuthored = false, bool appendVouched = false)
+    {
+        if (_selected is null) return;
+        bool append = appendFamily || appendFavoriters || appendFavorites || appendAuthored || appendVouched;
+        _loading = !append;
+        StateHasChanged();
+
+        if (_selected.IsStory)
+        {
+            _neighbors = await ManualTree.GetStoryNeighborsAsync(new StoryNeighborsRequest
+            {
+                StoryId = _selected.EntityId,
+                IncludeAuthor = _authorFromStory,
+                IncludeRecommendations = _recFromStory,
+                IncludeHiddenGems = _gemFromStory,
+                IncludeSpotlights = _spotlightFromStory,
+                IncludeFavoriters = _favoriteFromStory,
+                RecommendationsPage = _familyPage,
+                FavoritersPage = _favoritersPage,
+                PageSize = PageSize,
+            });
+        }
+        else
+        {
+            _neighbors = await ManualTree.GetUserNeighborsAsync(new UserNeighborsRequest
+            {
+                UserId = _selected.EntityId,
+                IncludeRecommendations = _recFromUser,
+                IncludeHiddenGems = _gemFromUser,
+                IncludeSpotlights = _spotlightFromUser,
+                IncludeFavorites = _favoriteFromUser,
+                IncludeAuthored = _authoredFromUser,
+                IncludeVouchedStories = _vouchFromUser,
+                RecommendationsPage = _familyPage,
+                FavoritesPage = _favoritesPage,
+                AuthoredPage = _authoredPage,
+                VouchedStoriesPage = _vouchedPage,
+                PageSize = PageSize,
+            });
+        }
+
+        // Accumulate ("Show more" appends the next page of ONE section; anything else resets).
+        if (!append) ResetAccumulatedOnly();
+        if (_neighbors.RecommendationFamily is { } f && (!append || appendFamily)) _familyItems.AddRange(f.Items);
+        if (_neighbors.Favoriters is { } fv && (!append || appendFavoriters)) _favoriterItems.AddRange(fv.Items);
+        if (_neighbors.Favorites is { } fa && (!append || appendFavorites)) _favoriteItems.AddRange(fa.Items);
+        if (_neighbors.Authored is { } au && (!append || appendAuthored)) _authoredItems.AddRange(au.Items);
+        if (_neighbors.VouchedStories is { } vo && (!append || appendVouched)) _vouchedItems.AddRange(vo.Items);
+
+        await LoadStatesAsync();
+        _loading = false;
+        StateHasChanged();
+    }
+
+    private void ResetAccumulatedOnly()
+    {
+        _familyItems.Clear(); _favoriterItems.Clear(); _favoriteItems.Clear(); _authoredItems.Clear(); _vouchedItems.Clear();
+    }
+
+    private async Task LoadStatesAsync()
+    {
+        if (CurrentUserId is null) return;
+        int[] storyIds = [.. _familyItems.Select(i => i.Story.StoryId)
+            .Concat(_favoriteItems.Select(s => s.StoryId))
+            .Concat(_authoredItems.Select(s => s.StoryId))
+            .Concat(_vouchedItems.Select(s => s.StoryId))
+            .Distinct()];
+        if (storyIds.Length > 0)
+            _states = await InteractionReadService.GetStatesByStoryIdsAsync(storyIds);
+    }
+
+    private async Task HandleToggleAsync((string Key, bool IsOn) change)
+    {
+        switch (change.Key)
+        {
+            case "authorFromStory": _authorFromStory = change.IsOn; break;
+            case "recFromStory": _recFromStory = change.IsOn; break;
+            case "gemFromStory": _gemFromStory = change.IsOn; break;
+            case "spotlightFromStory": _spotlightFromStory = change.IsOn; break;
+            case "favoriteFromStory": _favoriteFromStory = change.IsOn; break;
+            case "recFromUser": _recFromUser = change.IsOn; break;
+            case "gemFromUser": _gemFromUser = change.IsOn; break;
+            case "spotlightFromUser": _spotlightFromUser = change.IsOn; break;
+            case "favoriteFromUser": _favoriteFromUser = change.IsOn; break;
+            case "authoredFromUser": _authoredFromUser = change.IsOn; break;
+            case "vouchFromUser": _vouchFromUser = change.IsOn; break;
+        }
+        ResetPages();
+        await LoadPivotAsync();
+    }
+
+    private IReadOnlyList<ManualTreeEdgeToggles.EdgeToggleItem> BuildToggleItems()
+    {
+        // The whole row swaps per anchor direction — a control is never ambiguous about
+        // which direction it governs (settled 2026-07-12).
+        const string family = "Recommendation family";
+        return _selected is { IsStory: true }
+            ? [
+                new("authorFromStory", "Author", _authorFromStory),
+                new("recFromStory", "Recommendation", _recFromStory, family),
+                new("gemFromStory", "Hidden Gem", _gemFromStory, family),
+                new("spotlightFromStory", "Author Spotlight", _spotlightFromStory, family),
+                new("favoriteFromStory", "Favorited by", _favoriteFromStory),
+              ]
+            : [
+                new("recFromUser", "Recommendation", _recFromUser, family),
+                new("gemFromUser", "Hidden Gem", _gemFromUser, family),
+                new("spotlightFromUser", "Author Spotlight", _spotlightFromUser, family),
+                new("favoriteFromUser", "Favorite", _favoriteFromUser),
+                new("authoredFromUser", "Authored", _authoredFromUser),
+                new("vouchFromUser", "Vouch", _vouchFromUser),
+              ];
+    }
+
+    // ── Add-to-tree (the deliberate Explore gesture) ──────────────────────────────
+    private async Task AddToTreeAsync(bool isStory, int entityId, ManualTreeEdge edge, string title, string? imageUrl)
+    {
+        if (_selected is null || _selected.HasChildEntity(isStory, entityId)) return;
+        _selected.AddChild(isStory, entityId, edge, ghost: true);
+        _displays[(isStory, entityId)] = new ManualTreeNodeDisplay(title, imageUrl);
+        await PersistTreeAsync();
+    }
+
+    private async Task ResetTreeAsync()
+    {
+        await TreeStore.ClearTreeAsync(TreeKey);
+        _prunedCount = 0;
+        _displays.Clear();
+        BuildRoot();
+        _selected = _root;
+        ResetPages();
+        await LoadPivotAsync();
+    }
+
+    private async Task PersistTreeAsync()
+    {
+        if (_root is not null)
+            await TreeStore.SaveTreeAsync(TreeKey, _root.ToJson());
+    }
+
+    // ── Render helpers ────────────────────────────────────────────────────────────
+    private ManualTreeNodeDisplay? SelectedDisplay() =>
+        _selected is { } s && _displays.TryGetValue((s.IsStory, s.EntityId), out ManualTreeNodeDisplay? d) ? d : null;
+
+    private UserStoryInteractionStateDto? StateFor(int storyId) =>
+        _states.TryGetValue(storyId, out UserStoryInteractionStateDto? s) ? s : null;
+
+    private bool IsOwn(StoryListingDto story) => CurrentUserId is not null && story.AuthorId == CurrentUserId;
+
+    private bool AlreadyInTree(bool isStory, int entityId) =>
+        _selected?.HasChildEntity(isStory, entityId) == true;
+
+    /// <summary>The composed "Add to tree" sibling action (never in a card's caret menu) —
+    /// co-important beside StoryCard's triage row, primary for UserCard results.</summary>
+    private RenderFragment AddButton(bool isStory, int entityId, ManualTreeEdge edge, string title, string? imageUrl) =>
+        @<button type="button" disabled="@AlreadyInTree(isStory, entityId)"
+                 class="shrink-0 rounded-md px-2.5 py-1.5 text-xs font-bold
+                        @(AlreadyInTree(isStory, entityId)
+                            ? "border border-(--color-border) bg-(--color-surface) text-(--color-text-muted)"
+                            : "bg-(--color-mission) text-white hover:bg-(--color-mission-hover)")"
+                 @onclick="() => AddToTreeAsync(isStory, entityId, edge, title, imageUrl)">
+            @(AlreadyInTree(isStory, entityId) ? "✓ In tree" : "+ Add to tree")
+        </button>;
+
+    /// <summary>One user-anchor story section (Favorites / Authored / Vouched) with per-section
+    /// "Show more" paging. Authored shows the Pinned badge on the matching row.</summary>
+    private RenderFragment StorySection(string title, ManualTreeSectionDto<StoryListingDto>? section,
+        List<StoryListingDto> items, ManualTreeEdge edge, Func<Task> onShowMore) =>
+        @<text>
+            @if (section is not null)
+            {
+                <section class="space-y-2">
+                    <h3 class="text-xs font-bold uppercase tracking-wide text-(--color-text-muted)">
+                        @title <span class="font-medium normal-case">(@section.TotalCount)</span>
+                    </h3>
+                    @if (items.Count == 0)
+                    {
+                        <p class="text-sm text-(--color-text-muted)">Nothing here yet.</p>
+                    }
+                    <div class="grid gap-3 md:grid-cols-2">
+                        @foreach (StoryListingDto story in items)
+                        {
+                            <div class="space-y-2" @key="story.StoryId">
+                                <div class="relative">
+                                    <StoryCard Story="story"
+                                               UserStoryInteractionState="StateFor(story.StoryId)"
+                                               IsOwnStory="IsOwn(story)" />
+                                    @if (edge == ManualTreeEdge.UserAuthoredStory && _neighbors?.PinnedStoryId == story.StoryId)
+                                    {
+                                        <span class="absolute right-2 top-2 rounded-full bg-(--color-mission)/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-(--color-text)">📌 Pinned</span>
+                                    }
+                                </div>
+                                @AddButton(true, story.StoryId, edge, story.Title, story.CoverArtRelativeUrl)
+                            </div>
+                        }
+                    </div>
+                    @ShowMore(section.TotalCount, items.Count, onShowMore)
+                </section>
+            }
+        </text>;
+
+    private RenderFragment ShowMore(int totalCount, int shownCount, Func<Task> onShowMore) =>
+        @<text>
+            @if (totalCount - shownCount > 0)
+            {
+                <button type="button"
+                        class="rounded-md border border-(--color-border) px-3 py-1.5 text-xs font-semibold text-(--color-text-muted) hover:text-(--color-text)"
+                        @onclick="onShowMore">
+                    Show more (@(totalCount - shownCount) more)
+                </button>
+            }
+        </text>;
+}

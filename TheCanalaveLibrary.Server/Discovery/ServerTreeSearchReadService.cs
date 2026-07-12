@@ -33,7 +33,8 @@ public class ServerTreeSearchReadService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser,
     IDiscoveryDefaultsReadService discoveryDefaults,
-    IStoryReadService storyReadService) : ITreeSearchReadService
+    IStoryReadService storyReadService,
+    IManualTreeSearchReadService manualTreeSearchReadService) : ITreeSearchReadService
 {
     /// <summary>Per-node expansion cap inside the recursive step (wide-mode flooding guard).
     /// Deep chain-of-trust edges never approach it (≤5 structurally).</summary>
@@ -214,6 +215,8 @@ public class ServerTreeSearchReadService(
             Path = byId[item.StoryId].Path,
         })];
 
+        listingItems = await AttachPathHopsAsync(listingItems, ct);
+
         int degreesReached = listingItems.Length > 0 ? listingItems.Max(i => i.Degree) : 0;
 
         double durationMs = Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;
@@ -231,6 +234,37 @@ public class ServerTreeSearchReadService(
             DegreesReached = degreesReached,
             ResultCapTruncated = truncated,
         };
+    }
+
+    /// <summary>
+    /// Hydrates display labels onto every path hop (WU40 privacy correction, 2026-07-12):
+    /// chain-of-trust paths carry no anonymized contributor — every hop is a public curated
+    /// act — so BOTH story and user hops render real identity. Labels come from
+    /// <see cref="IManualTreeSearchReadService.GetNodeDisplaysAsync"/>, whose story lookup rides
+    /// the viewer-filtered Stories DbSet: a rating-gated bridge story yields no label and the
+    /// UI keeps it an opaque <c>#id</c> — the silent-bridge rule holds for LABELS even though
+    /// hop ids were always present in the raw path.
+    /// </summary>
+    private async Task<TreeSearchListingItemDto[]> AttachPathHopsAsync(
+        TreeSearchListingItemDto[] items, CancellationToken ct)
+    {
+        var parsed = items
+            .Where(i => i.Path is not null)
+            .ToDictionary(i => i.Story.StoryId, i => TreeSearchPathParser.Parse(i.Path));
+        if (parsed.Count == 0) return items;
+
+        int[] storyIds = [.. parsed.Values.SelectMany(p => p).Where(n => n.IsStory).Select(n => n.NodeId).Distinct()];
+        int[] userIds = [.. parsed.Values.SelectMany(p => p).Where(n => !n.IsStory).Select(n => n.NodeId).Distinct()];
+        ManualTreeNodeDisplaysDto displays = await manualTreeSearchReadService.GetNodeDisplaysAsync(storyIds, userIds, ct);
+        Dictionary<int, string> storyLabels = displays.Stories.ToDictionary(d => d.EntityId, d => d.Title);
+        Dictionary<int, string> userLabels = displays.Users.ToDictionary(d => d.EntityId, d => d.Title);
+
+        return [.. items.Select(i => !parsed.TryGetValue(i.Story.StoryId, out var hops) ? i : i with
+        {
+            PathHops = [.. hops.Select(h => new TreeSearchPathHopDto(
+                h.IsStory, h.NodeId,
+                h.IsStory ? storyLabels.GetValueOrDefault(h.NodeId) : userLabels.GetValueOrDefault(h.NodeId)))],
+        })];
     }
 
     /// <summary>

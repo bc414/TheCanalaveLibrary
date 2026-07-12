@@ -1,7 +1,10 @@
 @namespace TheCanalaveLibrary.SharedUI
 
-@* Author settings sub-form (WU30). Currently only DefaultStoryRating; may grow in later WUs.
-   No @inject — current values passed in as a parameter; OnSave raises the updated DTO. *@
+@* Author settings sub-form (WU30; Pinned Story added in WU40 / Feature 33).
+   No @inject — current values + the pinnable-story options are passed in as parameters
+   (the SettingsPage dispatcher loads the caller's own published stories); OnSave raises the
+   updated DTO. PinnedStoryId is a hot FK column on User edited through this form — see
+   AuthorSettingsDto's doc comment. *@
 
 <section class="flex flex-col gap-4">
     <div>
@@ -23,6 +26,30 @@
             </select>
         </div>
 
+        @* Pinned Story (Feature 33): the author's single calling-card story, surfaced first in
+           discovery's Authored sections and walked by Deep Dive tree search. Options are the
+           caller's own published stories, loaded by the dispatcher. Hidden entirely when the
+           user has nothing pinnable — an empty dropdown would only confuse. *@
+        @if (PinnableStories.Count > 0)
+        {
+            <div class="flex flex-col gap-1">
+                <label for="pinned-story" class="text-sm font-medium text-(--color-text)">Pinned story</label>
+                <p class="text-xs text-(--color-text-muted)">
+                    Your one calling-card story — shown first when readers discover you, and followed by Deep Dive tree search.
+                </p>
+                <select id="pinned-story"
+                        class="max-w-xs rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                        value="@(_pinnedStoryId?.ToString() ?? "")"
+                        @onchange="e => _pinnedStoryId = int.TryParse(e.Value?.ToString(), out int sid) ? sid : null">
+                    <option value="">None</option>
+                    @foreach (var story in PinnableStories)
+                    {
+                        <option value="@story.StoryId">@story.Title</option>
+                    }
+                </select>
+            </div>
+        }
+
         <button type="button"
                 class="self-start rounded-md bg-(--color-action) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
                 disabled="@Busy"
@@ -36,10 +63,15 @@
     [Parameter, EditorRequired] public AuthorSettingsDto Initial { get; set; } = new(Rating.T);
     [Parameter] public bool Busy { get; set; }
 
+    /// <summary>The caller's own published (pinnable) stories — options for the Pinned Story
+    /// dropdown. Loaded by the dispatcher; empty hides the pinned-story control entirely.</summary>
+    [Parameter] public IReadOnlyList<StoryTitleSearchDto> PinnableStories { get; set; } = [];
+
     /// <summary>Raised with the updated DTO when the user clicks Save.</summary>
     [Parameter] public EventCallback<AuthorSettingsDto> OnSave { get; set; }
 
     private Rating _defaultRating;
+    private int? _pinnedStoryId;
     private bool _seeded;
 
     protected override void OnParametersSet()
@@ -47,10 +79,11 @@
         if (!_seeded)
         {
             _defaultRating = Initial.DefaultStoryRating;
+            _pinnedStoryId = Initial.PinnedStoryId;
             _seeded = true;
         }
     }
 
     private async Task HandleSave() =>
-        await OnSave.InvokeAsync(new AuthorSettingsDto(_defaultRating));
+        await OnSave.InvokeAsync(new AuthorSettingsDto(_defaultRating, _pinnedStoryId));
 }

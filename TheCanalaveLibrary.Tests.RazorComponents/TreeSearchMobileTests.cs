@@ -21,6 +21,10 @@ public class TreeSearchMobileTests : BunitContext
         Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeUsiService);
         Services.AddScoped<ITagReadService>(_ => new FakeTagReadService());
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
+        // WU40 tabs (Explore/DeepDive) are self-contained composites that own their reads.
+        Services.AddScoped<IManualTreeSearchReadService>(_ => new FakeManualTreeSearchReadService());
+        Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
+        Services.AddScoped<ManualTreeStore>();
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         // TagFilter (inside ResultsFilterPanel) mounts SavedTagSelectionLoadFlyout/SaveDialog
@@ -71,14 +75,27 @@ public class TreeSearchMobileTests : BunitContext
     }
 
     [Fact]
-    public void ManualTab_ShowsPlaceholder_HidesToggleAndDeck()
+    public void ExploreTab_RendersExploreComposite_HidesToggleAndDeck()
     {
         IRenderedComponent<TreeSearchMobile> cut = Render<TreeSearchMobile>(p => p
             .Add(c => c.RootStory, MakeStory(1))
-            .Add(c => c.ActiveTab, TreeSearchTab.Manual)
+            .Add(c => c.ActiveTab, TreeSearchTab.Explore)
             .Add(c => c.Result, MakeResult()));
 
-        cut.Markup.Should().Contain("Graph view coming soon");
+        cut.FindComponents<ExploreTab>().Should().ContainSingle();
+        cut.FindAll("button[aria-controls=tree-search-drawer]").Should().BeEmpty();
+        cut.FindComponents<StoryDeck>().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DeepDiveTab_RendersDeepDiveComposite_HidesToggleAndDeck()
+    {
+        IRenderedComponent<TreeSearchMobile> cut = Render<TreeSearchMobile>(p => p
+            .Add(c => c.RootStory, MakeStory(1))
+            .Add(c => c.ActiveTab, TreeSearchTab.DeepDive)
+            .Add(c => c.Result, MakeResult()));
+
+        cut.FindComponents<DeepDiveTab>().Should().ContainSingle();
         cut.FindAll("button[aria-controls=tree-search-drawer]").Should().BeEmpty();
         cut.FindComponents<StoryDeck>().Should().BeEmpty();
     }

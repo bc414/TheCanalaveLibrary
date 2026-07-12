@@ -287,29 +287,258 @@ Narrowing-within-fixed-source query → WU27/WU30.
     built and verified. All tier assertions the same as Feature 31 WU28 note above.
 
 ## Feature 33 — Manual Tree Search
-- **L1 — N/A** (stateless graph pivots over live tables). **L2 — Stage 2** (per-node stateless query;
-  privacy: graph never reveals identity, §5.4). **L3/L3.5 — Stage 2** (distinct graph/node visualization —
-  NOT `StoryDeck`). **L4 — Stage 1. L5 — Stage 2. L6 — Stage 2.**
+- **L1 — N/A** (stateless graph pivots over live tables, plus one new field —
+  `User.PinnedStoryId`, migration `WU40_PinnedStory`). **L2 — Stage 5 (WU40, 2026-07-12 — see
+  Stage note).** **L3/L3.5 — Stage 5 (WU40)** (distinct graph/node visualization — NOT
+  `StoryDeck`). **L4 — Stage 1** (visual sign-off pending, WU8/WU13/WU23/WU28/WU44 precedent).
+  **L4.5 — Stage 5 (WU40, behavioral browser verification — see Stage note). L5 — Stage 2**
+  (rides the site-wide `InteractiveAuto` flip, per `/tags` precedent). **L6 — Stage 2** (no
+  index work done — the pivots ride existing recommendation/USI/story indexes; whether a
+  dedicated index is justified awaits an R4-rule measurement pass).
 
-  **Moved to WU40 (WU28 Phase 0, 2026-06-25; edge set amended 2026-07-07, WU-Marts Phase 0).**
-  Direction settled:
-  - **Edge set = the full six-edge taxonomy** (2026-07-07, superseding WU28's "four clean edges /
-    author-spotlight deferred as awkward"): authored-by, favorite (public only — hidden favorites
-    NEVER appear in manual, regardless of owner consent), recommendation, hidden-gem,
-    **author-spotlight** (now first-class, the ≤5 author-conferred mirror of hidden-gem), and
-    **vouch** — computed live as the projection (voucher → vouchee's published stories); a vouch
-    has no story of its own so it cannot be a raw edge. Vouch must appear in both tree searches or
-    the feature is moot (its whole purpose is discovery promotion, not popularity).
-  - **Stateless pivot over live tables** (not the mart — reaffirmed 2026-07-07 with the mart now
-    being built): manual is degree-1 interactive and must be fresh (spec §5.26 principle; the mart
-    is a daily rebuild), and it needs edge *detail* (recommendation blurb, spotlight context) the
-    IDs-only mart cannot carry. Each pivot is a fresh query; no traversal state persisted.
-  - **Privacy model:** graph never reveals identity (§5.4). Hidden-gem edge requires the target
-    author to have `allow_discovery_consent` opted in.
-  - **Distinct graph/node visualization — NOT `StoryDeck`.** The WU40 opusplan must design this
-    component from scratch.
+  **Settled for WU40 (2026-07-12 — supersedes the WU28/WU-Marts-era notes below in their entirety;
+  do not revisit unless the Phase 1 mock changes the interaction design):**
+
+  - **Three paradigms, not one graph view:** Automatic (Feature 59, built) | **Explore** |
+    **Deep Dive** — three top-level tabs on the Unified Tree Search Page. Diverges from spec
+    §5.26's literal "two tabs" (spec is read-only; this is the record of the deliberate
+    divergence).
+  - **Privacy model corrected.** §5.4's "graph never reveals identity" protects exactly one
+    thing: anonymized *hidden*-favorite contributors, whose reach is merged into the mart's
+    indistinguishable `Favorite` edge for Automatic. It does NOT mean manual tree search hides
+    identity. Manual excludes hidden favorites entirely (unchanged), so **every edge available in
+    manual is a genuinely public action** — authors, recommenders, public favoriters, hidden-gem/
+    spotlight participants, and vouchers all render as named, clickable nodes.
+  - **The `allow_discovery_consent` gate on Hidden Gem never existed in code** — verified against
+    `DiscoveryMartSchema.TreeSearchBuild` (Server/Discovery/): the only gate on the HiddenGem edge
+    is `EligibleRecommendation` (author-approved, not taken down, not anonymized). A Hidden Gem is
+    an approved recommendation the story's author already consented to by approving it — there is
+    no second consent field anywhere in `User`/`Story`. The prior note claiming this gate existed
+    was stale draft language that never had an implementation; deleted, not superseded.
+  - **Corollary: the Automatic tab's chain-of-trust path chip (`TreeSearchResultBadge`, WU44) was
+    over-anonymized** and is corrected as part of WU40 — see the WU44 Stage note below and the
+    corrected line in `layer3.5-structure.md`.
+  - **Edge × direction boundedness** (governs what's usable in Deep Dive vs. Explore-only — most
+    edges are asymmetric: bounded one way, unbounded the other):
+
+    | Edge | Bounded direction | Unbounded direction |
+    |---|---|---|
+    | AuthoredBy | story → author (1, identity) | author → their stories (unbounded) |
+    | Favorite | — | both directions unbounded |
+    | Recommendation | — | both directions unbounded |
+    | Vouch | user → ≤5 vouchees | vouchee → their stories (unbounded — the *projected* user→story edge is unbounded even though vouchee selection itself is capped) |
+    | HiddenGem | user → their own ≤5 gems | story → everyone who ever gemmed it (unbounded — no cap on how many different readers pick the same story) |
+    | AuthorSpotlight | story → its own ≤5 spotlighted recommenders | user → every story that ever spotlighted them (unbounded — no cap across authors) |
+    | **Pinned** (new) | user → their 1 pinned story | n/a (exactly one owner) |
+
+  - **New edge: Pinned Story.** Exactly one self-chosen story per user
+    (`User.PinnedStoryId`, nullable FK → `Story`, `ON DELETE SET NULL`). Fills the structural gap
+    symmetric to how `AuthoredBy` lets the Hidden Gem chain self-sustain (story→author is a free
+    1:1 connector) — Author Spotlight had no equivalent connector back from a spotlighted
+    recommender to a story. Capped at 1, not 5: preserves the alternating "curated-≤5 /
+    identity-1" chain shape and keeps the self-promotion surface minimal — entry is earned via
+    someone else's Spotlight endorsement, never surfaced as a count, cannot become a second
+    popularity list. Reinforces rather than conflicts with the site's anti-attention-hoarding
+    philosophy (§5.5). Displayed as a badge within the Authored section (sorted first when
+    present), not a separate section. Author-facing edit surface: extends
+    `AuthorSettingsForm.razor`/`AuthorSettingsDto` (same shape as the existing Default Story
+    Rating field). **Sequencing:** manual (live tables) ships in WU40; the mart/Automatic-tab
+    integration (a 7th UNION arm in the frozen `DiscoveryMartSchema`, reopening Feature 59/60) is
+    explicitly deferred — see the forward-pointer in `workplan.md`.
+  - **Edge modeling stays independent of the frozen mart enum.** `TreeSearchEdgeType` is the
+    mart's raw-SQL `smallint` column contract ("never renumber" — Feature 59/60). Manual tree
+    search introduces its own `Core/Discovery/ManualTreeEdgeType` (the same six edges + Pinned),
+    used only for UI tagging and pivot-request shaping. It never touches the mart.
+  - **Stateless pivot over live tables** (reaffirmed, unchanged in substance from the prior
+    direction): each node selection in either manual paradigm is a fresh, stateless query — no
+    traversal state on the server. Manual is degree-1 interactive and must be fresh (the mart is a
+    daily rebuild and IDs-only — it cannot carry edge *detail*, e.g. recommendation blurbs).
+    Client-side accumulation (the curated tree, below) is a separate, compatible concern.
+
+  **Shared tree visualization (settled through the Phase-1 mock, four iterations, 2026-07-12):**
+  a **2D top-down node-link diagram** — root at top, children fan out in a row beneath, straight
+  SVG lines colored by edge type — NOT a nested/indented DOM-outline list. Tidy-tree layout:
+  leaves get sequential horizontal slots, each parent centers over its own children, depth = row;
+  validated at the taxonomy's real ≤5 fan-out. Nodes are compact ~56px squares (circles for
+  users) holding the thumbnail, caption below. One shared node-chip leaf + layout renderer serves
+  both modes; the pane *arrangements* are separate composites (embedded ~50/50 pane vs.
+  full-screen pannable canvas — structurally different, per "separate composites, shared leaf").
+
+  **Edge selection is per (edge, direction) pair — in BOTH modes, every pair independently
+  toggleable.** "Recommendation from a story" (who recommended it) and "Recommendation from a
+  user" (what they recommended) are different traversal semantics and never share one flag.
+  This includes Author(story→author) and Pinned(user→story): an earlier draft made Author
+  "always-on identity, never toggled," which composed with Pinned into an unavoidable identity
+  round-trip (a pinned story is self-authored: user → their pinned story → author → same user).
+  Toggles on every pair are the fix. Explore's toggle row swaps wholesale per anchor direction
+  (a story anchor shows only story→user controls, etc.); Deep Dive shows all four whitelisted
+  pairs at once with direction-annotated labels (the next click can land on either node type).
+
+  **Explore mode** (the primary "build your own map" paradigm):
+  - Two-pane ~50/50 layout: left = the persistent, client-curated tree canvas (root seeded from
+    the route, same resolution `TreeSearchPage` already does; drag-to-pan); right = disposable,
+    stateless "candidate results" pane for the selected node's neighbors under the active
+    (edge, direction) toggles, with the anchor pinned above the results as a reminder of context.
+  - Newly-added-but-unexplored left-tree nodes render in a **ghost state** (dashed) until
+    selected — a visible frontier of "where I could go next"; selecting solidifies.
+  - Persistence: browser `localStorage`, one JSON document per (mode, root entity) — not a DB
+    entity in this WU. **Shape: IDs + edges only** ({entityId, entityType, edgeLabel, ghost,
+    children}) — never display snapshots. On load, one batch rehydration (existing
+    `GetListingsByIdsAsync` + user-header reads) restores titles/covers; entities that are gone,
+    taken down, or rating-gated for the viewer prune silently (small "N removed" note). A
+    durable, cross-device "saved trees" feature was considered (the Gemini deliberations' "come
+    back to results later") and deferred; the *search* stays stateless per the settled direction.
+  - **Section model** replaces any flat deck or priority ranking — one section per underlying
+    table, because most "competing" edges turn out to be flags on the same rows, not independent
+    signals to rank. **Every section is toggle-gated (none hardcoded on), and unbounded sections
+    are paged: first page ≈10 + per-section totalCount + "Show more" paging that section only.**
+    - **Author** (story anchor) — identity, singular.
+    - **Recommendation family** (either anchor) — one query against `recommendations`; the
+      Recommendation / Hidden Gem / Author Spotlight toggles only widen or narrow its `WHERE`
+      clause (`is_hidden_gem`, `is_highlighted_by_author`); a row matching multiple flags shows
+      once with badges stacked, never once per flag. **Rendered as compound rows:** the
+      recommended story's `StoryCard` and the recommendation panel side by side as ONE row,
+      compounds stacked vertically — not a grid of separate cards. The rec half omits
+      `RecommendationCard`'s embedded story reference (the real StoryCard sits beside it) — an
+      additive `ShowStoryReference` param (default true) on `RecommendationCard`, not verbatim
+      reuse. This section is also where the two *unbounded* reverse readings surface as
+      Explore-only informational signals: "who gemmed this story" (story anchor) and "which
+      stories spotlighted this recommender" (user anchor).
+    - **Favorite** — always its own section (separate table; the same target can legitimately
+      also appear in the Recommendation family — two independent signals, not a duplicate).
+    - **Authored** (user anchor) — the user's full catalog; their Pinned Story, if set, is badged
+      and always sorted first within this same list — not a separate section.
+    - **Vouch** (user anchor, forward direction ONLY) — its own section, a genuinely distinct
+      mechanism (voucher → vouchee → vouchee's stories); never usable from a story anchor
+      (incoming vouches are owner-private per §5.8 — traversing from a story to "who vouches for
+      this author" would leak that private view).
+  - **Card reuse, not bespoke cards.** Story results render the real `StoryCard` (triage —
+    favorite/RIL/ignore — stays primary, no immediate-hide since the pane is stateless/
+    disposable). User results render the real `UserCard`. "Add to tree" is a new composed
+    **sibling** action (context-specific augmentation per `layer3.5-structure.md`) —
+    co-important alongside `StoryCard`'s triage row (not in the caret menu), primary action for
+    `UserCard` results (which have no triage equivalent).
+  - Mobile: Tree ⇄ Results toggle (they can't sit side-by-side on small viewports).
+
+  **Deep Dive mode** (bounded chain-of-trust deep-discovery paradigm):
+  - Manual, one click at a time — NOT a recursive/auto-expanding server traversal. **Clicking a
+    node is the ONLY gesture: it selects the node (info display) AND auto-adds its whitelisted
+    bounded connections in the same action.** There is no separate deliberate "add" step (that
+    deliberateness is Explore's defining trait; Deep Dive's is momentum — every edge is ≤5 or 1,
+    so bulk-adding is always safe). No "Explore more" button, no blocking modal.
+  - The info surface is a **floating, resizable panel starting top-right over the canvas** —
+    non-blocking; the canvas stays pannable/clickable beneath it. It shows the selected node's
+    composed card (same StoryCard/UserCard + rec panel composition as Explore's results) plus
+    which toggle-gated groups were skipped.
+  - **Anti-bounce guard:** auto-add skips a child whose entity equals the clicked node's
+    *parent's* entity — kills the default A→B→A ring (e.g. pinned story → author → same user)
+    independent of the toggles. Deeper cycles and cross-branch duplicates remain allowed (dedup
+    stays per-node, per the path-reflecting design).
+  - **Edge whitelist — exactly the four (edge, direction) pairs bounded to ≤1 or ≤5** (from the
+    table above): `AuthoredBy` (story→author, 1) · `HiddenGem` (user→their own ≤5 gems) ·
+    `AuthorSpotlight` (story→its own ≤5 spotlighted recommenders) · `Pinned` (user→their 1 pinned
+    story). Every other (edge, direction) pair — including the two unbounded reverse readings
+    used as Explore-only signals, and Vouch (bounded voucher selection, unbounded resulting
+    stories) — is excluded. This whitelist does not reopen or change the "degree-1 interactive"
+    settled direction; nothing here is auto-expanding or multi-degree on the server.
+  - Full-screen pannable/zoomable canvas (desktop: drag + zoom controls; mobile: native panning).
+  - Separate `localStorage` tree from Explore (different mode, different edge scope).
+
+  **Blazor-gap arbitrations (2026-07-12, settled — do not revisit):**
+  - **Thin JS module + C# layout.** One small `manual-tree-search.js` owns per-frame gestures
+    (CSS-transform pan/zoom, floating-panel drag/resize) and localStorage. The tidy-tree layout,
+    node rendering, SVG lines, and section rendering are C#/Razor over the circuit — the layout
+    is deterministic math (Unit-tier testable) recomputed only on structural change; per-frame
+    gestures never touch SignalR.
+  - **One pivot = one service call.** All sections of a pivot return in one
+    `ManualTreeNeighborsDto`. Direction is enforced by two request types
+    (`StoryNeighborsRequest` / `UserNeighborsRequest`) — the type system, not flag naming,
+    disambiguates direction at the service boundary.
+
+  **Service-layer gap analysis** (confirmed against the actual code, not assumed — 2026-07-12):
+
+  | Section / need | Status |
+  |---|---|
+  | Author (story anchor) | Built — `StoryListingDto.AuthorId`/`AuthorName` |
+  | Recommendation family, story anchor | Built — `IRecommendationReadService.GetForStoryAsync(storyId)` |
+  | Recommendation family, user anchor | **Missing** — needs `GetByRecommenderAsync(userId)` mirroring `GetForStoryAsync`'s shape (existing `GetRecommendedStoryIdsByUserAsync` is IDs-only, can't drive `RecommendationCard`) |
+  | Favorite, story anchor (who favorited it) | **Missing** — only the reverse direction exists today |
+  | Favorite, user anchor | Built — `GetFavoriteStoryIdsAsync(userId, includePrivate:false)` |
+  | Authored, user anchor | Built — `GetStoryIdsByAuthorAsync(userId)` |
+  | Pinned | **New** — field + read exposure + write via `AuthorSettingsDto` |
+  | Vouch, user anchor forward | Partial — `GetOutgoingVouchesAsync(userId)` exists; needs composing with authored-stories-per-vouchee (no new primitive, just a join) |
+  | Hydration | Built — `GetListingsByIdsAsync`, `GetProfileHeaderAsync`, `GetStatesByStoryIdsAsync` |
+
+  Net new: two read-service methods, one new persisted field, one composition — everything else,
+  including the entire "recommendation family with stacked badges" mechanism, already exists.
+
   - Corroborated by the original deliberations: §2 stateless-fresh-search, §3 hidden-gem chain-of-
     trust, §12 "traversal cost dominated by rCTE, not by excluding a few hundred IDs."
+
+  **WU40 Stage note — L2 / L3-Logic / L3.5 / L4.5 (2026-07-12):**
+
+  Built exactly the settled design above. **L2:** `Core/Discovery/` `ManualTreeEdge` (the ten
+  (edge, direction) pairs — UI/tree-state enum, never touches the frozen mart numbering),
+  `StoryNeighborsRequest`/`UserNeighborsRequest` (direction enforced by type),
+  `ManualTreeSectionDto<T>`/`ManualTreeRecItemDto`/`ManualTreeNeighborsDto`/
+  `ManualTreeNodeDisplayDto(s)`, `IManualTreeSearchReadService`;
+  `Server/Discovery/ServerManualTreeSearchReadService` — one call per pivot, all sections; the
+  recommendation family is ONE flag-composed query (rows constrained to viewer-visible stories
+  via a captured filtered-DbSet subquery — global filters don't apply to navigations); per-section
+  count+page in SQL; authored orders pinned-first; vouch traverses forward only; instrumented
+  `Discovery.ManualTreePivot` spans. Also: `User.PinnedStoryId` (+`AuthorSettingsDto`/
+  `AuthorSettingsForm` picker + write gate: own/published/visible only) and the WU44 path-hop
+  hydration (`TreeSearchPathHopDto`, `AttachPathHopsAsync` composing `GetNodeDisplaysAsync` —
+  rating-gated bridge hops stay label-less/opaque).
+
+  **L3/L3.5 (`SharedUI/Discovery/` + `wwwroot/js/manual-tree-search.js`):** `ManualTreeNode`
+  (client tree model; IDs+edges-only JSON; prune-on-rehydrate) + `ManualTreeLayout` (tidy-tree
+  math, C#, Unit-tier) + `ManualTreeCanvas` (shared 2D top-down diagram: SVG edge lines colored
+  per edge token, square/circular chips, ghost state) + `ManualTreeEdgeToggles` (shared pill
+  row) + `ExploreTab` (two-pane; direction-swapped toggles; sectioned results with compound
+  rec rows + per-section Show-more; Add-to-tree sibling action; mobile Tree⇄Results toggle) +
+  `DeepDiveTab` (full-viewport pannable canvas; click = select + auto-add; anti-bounce guard;
+  floating resizable non-blocking panel showing the composed card + the rec that earned the
+  edge) + `ManualTreeStore` (typed JS wrapper: gestures + localStorage). `TreeSearchTab` →
+  three values; strip/Desktop/Mobile route the tabs. JS module loaded in `App.razor`.
+
+  **How verified (2026-07-12):** `dotnet build` green. `dotnet test` green — **Unit 647**
+  (`ManualTreeLayoutTests`: slot/depth at the real ≤5 fan-out, non-overlapping subtrees, chain
+  shape, canvas sizing; `ManualTreeNodeTests`: JSON round-trip, no-display-data-in-storage
+  contract, corrupt-payload nulls — this test caught a real NPE on legacy payloads with a
+  missing children property, fixed same-session; prune semantics; per-node-not-cross-branch
+  dedup). **Integration 574** (`ManualTreeSearchTests`, Testcontainers Postgres: author +
+  public-only favoriters; family flag widen/narrow with badges stacked on one row; toggles-off
+  suppress sections incl. Author — the bounce fix; pinned-first authored + `PinnedStoryId`;
+  public-only favorites + vouch forward projection; honest disjoint paging; rating-gated
+  rehydration displays; Pinned write gate accepts own/rejects foreign/null unpins; `SearchAsync`
+  path hops carry usernames+titles). **RazorComponents 608** (`ManualTreeCanvasTests`,
+  `ManualTreeEdgeTogglesTests`, `ExploreTabTests` — direction-swapped toggle rows, compound row
+  with stacked badges, honest Show-more, ghost add + dedup, IncludeAuthor=false round-trip,
+  pinned badge; `DeepDiveTabTests` — auto-add on open, four direction-labeled toggles,
+  toggle-gated future walks, anti-bounce A→B→A guard, non-blocking panel with no backdrop,
+  gem-node panel shows its earning rec; updated `TreeSearchTabStrip/Desktop/Mobile` +
+  `TreeSearchResultBadge` PathHops tests). Suite total: 1,829.
+
+  **L4.5-Browser (real circuit, `run-server/SKILL.md`, SeedTool-volume dev DB):** fixture:
+  pinned story 265 for its author (user 310, 15 stories, 3 gems, 5 recs written). Verified live
+  at `/discover/story/265`: three-tab strip; **Explore** — root chip, Author section + Add (ghost
+  node with dashed connector + "✓ In tree" dedup), ghost click pivots to the user anchor
+  (toggle row swaps to user direction), compound rec rows (5), Favorites paged "Show more (37
+  more)" of 47, **Authored (15) sorts the pinned story first with the 📌 PINNED badge**, vouch
+  empty state; **Deep Dive** — four direction-labeled pills, root auto-open auto-added the
+  author, clicking the author auto-added exactly the 3 Hidden Gem stories and **skipped the
+  pinned story (= the parent): the anti-bounce guard confirmed on real data**; walking a gem
+  auto-added *its* author (the chain continues); floating panel updates per selection ("Root" /
+  "Reached via Author" / "Reached via Hidden Gem" + the earning recommendation), non-blocking;
+  **localStorage persistence** — separate `canalave.tree.{explore|deepdive}.story.265` keys,
+  full-reload rehydration restored 2/6 nodes respectively via `GetNodeDisplaysAsync`. No console
+  errors. `check-design-tokens.ps1`: WU40 surfaces clean (fixed `shadow-sm`→`shadow-medium`,
+  `z-10`→`z-(--z-dropdown)` during the pass); the one remaining finding (`ImportReviewPanel`,
+  UGC-outside-ContentSurface) pre-exists this WU (untouched Import-cluster file). Surface
+  registry: WU40 element-kind rows appended. **Deferred:** Pinned-Story mart/Automatic-tab
+  integration (forward pointer in `workplan.md`); tag/interaction filter axes on the candidate
+  pane (recorded as not-built in `layer3.5-structure.md`); L6 index measurement.
 
 ## Feature 34 — Tag Directory (`/tags`)
 - **L1 — N/A.** **L2 — Stage 2** (browse query). **L3/L3.5 — Stage 2** (`TagDirectoryPage`: user browse +
@@ -510,7 +739,10 @@ Narrowing-within-fixed-source query → WU27/WU30.
   select, `IncludePaths` auto-derived — never a raw checkbox). `TreeSearchResultBadge` (degree
   label + chain-of-trust-only path chip, story hops only, rendered via a new additive
   `StoryDeck.CardOverlay` `RenderFragment<StoryListingDto>?` slot — default `null` preserves every
-  existing `StoryDeck` consumer unchanged).
+  existing `StoryDeck` consumer unchanged). **Corrected by WU40 (2026-07-12):** "story hops only"
+  was over-anonymization — chain-of-trust paths (the only paths this badge ever renders) carry no
+  anonymized contributor, so user hops should render as named, clickable users, not be collapsed.
+  See Feature 33's WU40 settled note above.
 
   **Runtime bug found + fixed during L4.5 verification (`canalave-conventions/debugging.md`):**
   `TreeSearchControls` originally snapshotted its `Initial*` parameters once in `OnInitialized()`.
@@ -550,7 +782,10 @@ Narrowing-within-fixed-source query → WU27/WU30.
   interaction, no misleading sort dropdown) all render correctly; `/discover/story/{id}` on a
   hidden-gem-chain root with only Hidden Gem selected — exactly the two expected chain stories
   returned, each with a correct anonymized path chip (`#20 → #949`, `#20 → #423`) and **no** user
-  id ever rendered; increasing degrees to 4 reached a 3-hop chain (`#20 → #423 → #1390`) at
+  id ever rendered (**this specific anonymization is corrected by WU40, 2026-07-12** — chain-of-
+  trust path chips carry no private contributor and should show usernames; see Feature 33's WU40
+  settled note above and the corrected line in `layer3.5-structure.md`); increasing degrees to 4
+  reached a 3-hop chain (`#20 → #423 → #1390`) at
   "4th-degree connection", sorted ByDegree; the Manual tab shows the placeholder; `/discover/me`
   resolves the authenticated viewer as a user root (`UserCard` header) and returns the viewer's own
   1st-degree AuthoredBy/Favorite connections correctly, including `IsOwnStory` "Edit Story" on

@@ -50,6 +50,7 @@ public class ServerUserSettingsService(
                 u.PrefersDataSaverMode,
                 u.ShowMatureContent,
                 u.AllowDiscoveryFromHiddenFavorites,
+                u.PinnedStoryId,
                 u.ReaderSettings,
                 u.PrivacySettings,
                 u.AuthorSettings
@@ -80,7 +81,7 @@ public class ServerUserSettingsService(
             row.ShowMatureContent,
             row.AllowDiscoveryFromHiddenFavorites);
 
-        AuthorSettingsDto author = new(row.AuthorSettings.DefaultStoryRating);
+        AuthorSettingsDto author = new(row.AuthorSettings.DefaultStoryRating, row.PinnedStoryId);
 
         return new UserSettingsDto(
             row.Tagline,
@@ -189,6 +190,25 @@ public class ServerUserSettingsService(
         User user = await writeDb.Users.FindAsync(userId)
             ?? throw new InvalidOperationException($"User {userId} not found.");
 
+        // Pinned Story (Feature 33 / WU40): the UI only offers the user's own stories, but the
+        // gate lives here — the pinned story must be the caller's own AND publicly visible
+        // (published statuses 2..7, not taken down; same predicate the discovery mart uses).
+        // writeDb is the ground-truth context (no display filters), so check explicitly.
+        if (dto.PinnedStoryId is int pinnedId)
+        {
+            bool pinnable = await writeDb.Stories.AnyAsync(s =>
+                s.StoryId == pinnedId
+                && s.AuthorId == userId
+                && !s.IsTakenDown
+                && s.StoryStatusId >= StoryStatusEnum.InProgress
+                && s.StoryStatusId <= StoryStatusEnum.OpenBeta);
+
+            if (!pinnable)
+                throw new InvalidOperationException(
+                    $"Story {pinnedId} cannot be pinned by user {userId}: it must be their own, published, visible story.");
+        }
+
+        user.PinnedStoryId = dto.PinnedStoryId;
         user.AuthorSettings = new AuthorSettings
         {
             DefaultStoryRating = dto.DefaultStoryRating

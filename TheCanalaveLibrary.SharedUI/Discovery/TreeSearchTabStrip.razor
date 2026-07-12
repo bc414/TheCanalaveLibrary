@@ -1,10 +1,11 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
 
-@* Leaf (WU44) — two-tab strip for the Unified Tree Search Page (spec §5.26): Automatic (built)
-   and Manual (placeholder until Feature 33 / WU40 lands its from-scratch graph component). Used
-   identically by TreeSearchDesktop and TreeSearchMobile. Tab selection is ephemeral UI state, not
-   URL state (spec §5.26 "URL state" — only the root anchor lives in the route). Wayfinding role. *@
+@* Leaf (WU44; three tabs since WU40) — the Unified Tree Search Page's tab strip: Automatic (the
+   rCTE flat list), Explore (build-your-own-map), Deep Dive (bounded chain-of-trust walking).
+   Used identically by TreeSearchDesktop and TreeSearchMobile. Tab selection is ephemeral UI
+   state, not URL state (spec §5.26 "URL state" — only the root anchor lives in the route).
+   Wayfinding role. *@
 
 <div class="flex gap-1 border-b border-(--color-border)" role="tablist">
     <button type="button" role="tab" aria-selected="@(ActiveTab == TreeSearchTab.Automatic ? "true" : "false")"
@@ -12,10 +13,15 @@
             @onclick="() => OnTabChanged.InvokeAsync(TreeSearchTab.Automatic)">
         Automatic
     </button>
-    <button type="button" role="tab" aria-selected="@(ActiveTab == TreeSearchTab.Manual ? "true" : "false")"
-            class="@TabClass(TreeSearchTab.Manual)"
-            @onclick="() => OnTabChanged.InvokeAsync(TreeSearchTab.Manual)">
-        Manual <span class="text-(--color-text-muted)">(coming soon)</span>
+    <button type="button" role="tab" aria-selected="@(ActiveTab == TreeSearchTab.Explore ? "true" : "false")"
+            class="@TabClass(TreeSearchTab.Explore)"
+            @onclick="() => OnTabChanged.InvokeAsync(TreeSearchTab.Explore)">
+        Explore
+    </button>
+    <button type="button" role="tab" aria-selected="@(ActiveTab == TreeSearchTab.DeepDive ? "true" : "false")"
+            class="@TabClass(TreeSearchTab.DeepDive)"
+            @onclick="() => OnTabChanged.InvokeAsync(TreeSearchTab.DeepDive)">
+        Deep Dive
     </button>
 </div>
 

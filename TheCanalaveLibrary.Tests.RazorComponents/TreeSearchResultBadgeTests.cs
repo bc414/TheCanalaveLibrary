@@ -1,13 +1,15 @@
 using Bunit;
 using FluentAssertions;
+using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.SharedUI;
 
 namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
-/// Render tests for <see cref="TreeSearchResultBadge"/> (WU44). Covers degree-label wording and
-/// the path chip's presence/absence, and that it never surfaces a user-typed node (privacy model,
-/// spec §5.4) — only story hops appear. Tier: RazorComponents (bUnit).
+/// Render tests for <see cref="TreeSearchResultBadge"/> (WU44; PathHops added by WU40's privacy
+/// correction, 2026-07-12). Covers degree-label wording, the ids-only raw-path fallback, and the
+/// hydrated hop rendering: real usernames/titles as links on chain-of-trust paths, opaque #id
+/// for hops the viewer cannot see. Tier: RazorComponents (bUnit).
 /// </summary>
 public class TreeSearchResultBadgeTests : BunitContext
 {
@@ -35,15 +37,17 @@ public class TreeSearchResultBadgeTests : BunitContext
     }
 
     [Fact]
-    public void ChainOfTrustPath_RendersStoryHopsOnly_NeverUserIds()
+    public void RawPathFallback_RendersStoryHopsOnly_ByIds()
     {
-        // (t,1) story, (f,99) user, (t,2) story — the user hop (99) must never appear in the markup.
+        // Ids-only fallback when no hydrated PathHops are supplied — (t,1) story, (f,99) user,
+        // (t,2) story: with no labels available, the user hop stays unrendered (nothing useful
+        // to show for it without hydration).
         IRenderedComponent<TreeSearchResultBadge> cut = Render<TreeSearchResultBadge>(p => p
             .Add(c => c.Degree, 2)
             .Add(c => c.Path, """{"(t,1)","(f,99)","(t,2)"}"""));
 
         cut.Markup.Should().Contain("#1").And.Contain("#2");
-        cut.Markup.Should().NotContain("#99", "user-typed hops must never surface an id — privacy model §5.4");
+        cut.Markup.Should().NotContain("#99");
     }
 
     [Fact]
@@ -55,5 +59,45 @@ public class TreeSearchResultBadgeTests : BunitContext
             .Add(c => c.Path, """{"(t,5)"}"""));
 
         cut.FindAll("span").Should().HaveCount(1);
+    }
+
+    // ── Hydrated PathHops (WU40 privacy correction, 2026-07-12) ─────────────────────────
+
+    [Fact]
+    public void PathHops_RenderUsernamesAndStoryTitles_AsLinks()
+    {
+        // Chain-of-trust paths carry no anonymized contributor — user hops render REAL
+        // usernames (the WU44-era collapse-user-hops behavior was over-anonymization).
+        IRenderedComponent<TreeSearchResultBadge> cut = Render<TreeSearchResultBadge>(p => p
+            .Add(c => c.Degree, 2)
+            .Add(c => c.PathHops, new List<TreeSearchPathHopDto>
+            {
+                new(true, 1, "Root Story"),
+                new(false, 99, "GemmerUser"),
+                new(true, 2, "The Gem"),
+            }));
+
+        cut.Markup.Should().Contain("GemmerUser", "user hops carry real identity on chain-of-trust paths");
+        cut.Markup.Should().Contain("Root Story").And.Contain("The Gem");
+        cut.FindAll("a[href='/user/99']").Should().ContainSingle("hops are clickable links");
+        cut.FindAll("a[href='/story/2']").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void PathHops_UnlabeledHop_StaysOpaqueId()
+    {
+        // A rating-gated bridge story yields no label server-side — the silent-bridge rule
+        // holds for labels: the hop renders as an unlinked #id.
+        IRenderedComponent<TreeSearchResultBadge> cut = Render<TreeSearchResultBadge>(p => p
+            .Add(c => c.Degree, 2)
+            .Add(c => c.PathHops, new List<TreeSearchPathHopDto>
+            {
+                new(true, 1, "Root Story"),
+                new(true, 7, null),
+                new(true, 2, "The Gem"),
+            }));
+
+        cut.Markup.Should().Contain("#7");
+        cut.FindAll("a[href='/story/7']").Should().BeEmpty("an invisible-to-viewer hop is never a link");
     }
 }

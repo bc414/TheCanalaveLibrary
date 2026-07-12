@@ -8,9 +8,11 @@ namespace TheCanalaveLibrary.Core;
 /// recursive CTE, a composite-array literal shaped like <c>{"(f,12)","(t,45)","(f,88)"}</c> where each
 /// tuple is <c>(is_story, node_id)</c>.
 ///
-/// <para>Dependency-free, unit-testable — no DbContext, no host. The privacy model (spec §5.4) means a
-/// user-typed node's id must never be resolved to an identity by a consumer; this parser exposes
-/// <see cref="PathNode.IsStory"/> precisely so renderers can filter to story nodes only.</para>
+/// <para>Dependency-free, unit-testable — no DbContext, no host. Privacy (corrected 2026-07-12,
+/// WU40): chain-of-trust paths — the only paths that exist — carry no anonymized contributor, so
+/// user hops MAY be resolved to identity; the viewer-filtered hydration lives in
+/// <c>ServerTreeSearchReadService.AttachPathHopsAsync</c> (a hop the viewer cannot see gets no
+/// label). <see cref="PathNode.IsStory"/> distinguishes hop kinds for that hydration.</para>
 /// </summary>
 public static class TreeSearchPathParser
 {

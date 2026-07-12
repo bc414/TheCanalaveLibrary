@@ -15,11 +15,24 @@ public sealed record TreeSearchListingItemDto
 
     /// <summary>
     /// Raw Postgres CYCLE-clause path text (only present when the request's edge set was
-    /// chain-of-trust and <c>IncludePaths</c> was set) — parse with <see cref="TreeSearchPathParser"/>
-    /// before rendering. Never render a user-typed node's identity (privacy model, spec §5.4).
+    /// chain-of-trust and <c>IncludePaths</c> was set) — parse with <see cref="TreeSearchPathParser"/>.
+    /// Prefer <see cref="PathHops"/> for display; this raw form remains for consumers that only
+    /// need ids.
     /// </summary>
     public string? Path { get; init; }
+
+    /// <summary>
+    /// Display-hydrated path hops (WU40 privacy correction, 2026-07-12): chain-of-trust paths
+    /// carry no anonymized contributor — every hop is a public curated act — so BOTH story and
+    /// user hops render with real, linkable identity. A hop whose <c>Label</c> is null is one
+    /// the viewer cannot see (e.g. a rating-gated bridge story) and renders as an opaque
+    /// <c>#id</c>. Null when the request carried no paths.
+    /// </summary>
+    public IReadOnlyList<TreeSearchPathHopDto>? PathHops { get; init; }
 }
+
+/// <summary>One display-ready hop of a chain-of-trust path: story (title) or user (username).</summary>
+public sealed record TreeSearchPathHopDto(bool IsStory, int Id, string? Label);
 
 /// <summary>
 /// Outcome of <see cref="ITreeSearchReadService.SearchAsync"/>: the Source (traversal) × Filter

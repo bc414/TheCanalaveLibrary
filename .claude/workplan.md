@@ -1252,15 +1252,50 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Tool:** opusplan. **Pointer:** `audit/Import.md` + `audit/Moderation.md` Feature 53.
   **Deps:** WU38c (round-trip test fixtures), WU25.
 
-### WU40 — Manual Tree Search (Feature 33)
-- **Cells:** 33 L2 / L3-Logic / L3.5 → Stage 5.
-- **Direction settled (WU28 Phase 0, 2026-06-25):** stateless pivot over live tables (not the mart —
-  the mart is post-MVP). Four clean edges: authored-by, public-favorite, recommendation, hidden-gem.
-  Distinct graph/node visualization — **NOT `StoryDeck`**. Stateless fresh search each pivot (no
-  shown-id tracking); privacy model: graph never reveals identity (§5.4); hidden-gem edge requires
-  `allow_discovery_consent`-opted authors. Corroborated by original deliberations' §2 stateless-fresh-
-  search and §3 hidden-gem chain-of-trust. See `audit/Discovery.md` Feature 33.
-- **Tool:** opusplan. **Pointer:** `audit/Discovery.md` Feature 33. **Deps:** WU14, WU23, WU4, WU25.
+### WU40 — Manual Tree Search (Feature 33) — DONE ✓ (2026-07-12)
+- **Cells:** 33 L2/L3-Logic/L3.5 `2→5`; 33 L4.5 `1→5` (behavioral browser verification).
+  L4-Style stays 1 (visual sign-off pending, standing precedent); L5 stays 2 (rides the
+  `InteractiveAuto` flip); L6 stays 2 (pivots ride existing indexes; R4 measurement deferred).
+  Also touched Feature 59's frozen L3.5 cell (additive de-anonymization fix to
+  `TreeSearchResultBadge` — hydrated PathHops with usernames/titles — cell number unaffected).
+- **Did:** all phases complete — Phase 0 doc sweep (privacy-model correction across 6 docs;
+  `allow_discovery_consent` deleted as never-implemented), Phase 1 HTML mock (4 iterations with
+  Brian; final: 2D top-down tidy-tree, per-(edge,direction) toggles everywhere, Deep Dive
+  click-auto-adds + floating panel, compound rec rows), Pinned Story (`User.PinnedStoryId`,
+  migration `WU40_PinnedStory`, AuthorSettings picker + server gate),
+  `IManualTreeSearchReadService`/`ServerManualTreeSearchReadService` (one call per pivot,
+  paged sections, family flag-composition), shared tree canvas + Explore/DeepDive tabs +
+  `manual-tree-search.js` (gestures + localStorage IDs-only persistence w/ rehydration prune),
+  three-tab integration. Suite 1,829 green (647 U / 574 I / 608 RC); E2E browser pass incl. the
+  anti-bounce guard on real data. Detail: `audit/Discovery.md` F33 WU40 Stage note.
+- **Deferred follow-up (not yet sequenced):** Pinned Story mart/Automatic-tab integration — a
+  7th UNION arm in the frozen `DiscoveryMartSchema` + auto-tab chain-of-trust membership
+  (reopens F59/F60); candidate-pane tag/interaction filter axes.
+- **Direction settled 2026-07-12 (supersedes the WU28-Phase-0-era note in its entirety — the "four
+  clean edges" / `allow_discovery_consent` claims below were stale and are corrected, not
+  preserved):** manual tree search is **two distinct interactive paradigms** — **Explore**
+  (two-pane: persistent client-curated tree + stateless candidate-results pane, all edges, section
+  model grouped by underlying table) and **Deep Dive** (full-screen pannable tree + node flyout,
+  restricted to the four edge×direction pairs bounded to ≤1/≤5) — plus **Automatic**, three
+  top-level tabs total (diverges from spec §5.26's literal "two tabs," deliberate). Stateless pivot
+  over live tables, unchanged (not the mart). Distinct graph/node visualization — **NOT
+  `StoryDeck`**. Privacy model corrected: manual excludes hidden favorites, so every edge it
+  exposes is genuinely public — nodes render real, clickable identity; the old "never reveals
+  identity" / `allow_discovery_consent` claims were wrong (the latter never existed in code) and
+  are removed. New edge, **Pinned Story** (`User.PinnedStoryId`, cap 1) — the missing 1:1 connector
+  that lets the Author Spotlight chain self-sustain in Deep Dive, mirroring how `AuthoredBy`
+  already does this for Hidden Gem. Corroborated by original deliberations' §2 stateless-fresh-
+  search and §3 hidden-gem chain-of-trust. Full design, edge×direction boundedness table, section
+  model, and service-layer gap analysis: `audit/Discovery.md` Feature 33.
+- **Sequencing note — Pinned Story is manual-only in WU40.** The mart/Automatic-tab integration (a
+  7th UNION arm in the frozen, Stage-5 `DiscoveryMartSchema`, reopening Feature 59/60) is
+  deliberately deferred to a future work-unit, not yet numbered — flagged here so it isn't lost.
+- **Process note:** WU40 opens with a Phase 0 doc-touch sweep (this entry, `audit/Discovery.md`,
+  `layer3.5-structure.md`) and a throwaway HTML/CSS/JS mock (Phase 1) with an explicit
+  user-review checkpoint before any real Razor/service/schema code — see the plan file for the
+  full phase breakdown if resuming this work-unit.
+- **Tool:** opusplan. **Pointer:** `audit/Discovery.md` Feature 33. **Deps:** WU14, WU23, WU4, WU25,
+  WU44 (shares the `TreeSearchPage` shell and the `TreeSearchResultBadge` fix).
 
 ### WU39 — External Link Verification (mod workflow) *(re-minted 2026-07-11; was "Story Import & Verification")*
 - **Cells:** the mod-workflow remainder of 53 L2/L3/L3.5/L4 (the author-facing half — link
@@ -1436,6 +1471,11 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   now. The **Manual** tab (Feature 33 / WU40) is a placeholder ("Graph view coming soon") in the
   same shell — WU40 fills it in later without reworking the shell. Results reuse `StoryDeck` + a
   degree badge (not a bespoke tree-results list).
+  **Corrected by WU40 (2026-07-12):** the "Manual" placeholder split into two tabs (Explore, Deep
+  Dive) — the strip is three tabs total, not two; and the path-chip badge's "collapse user hops,
+  never render a username" behavior was over-anonymized and is fixed as part of WU40. See
+  `audit/Discovery.md` Feature 33/59 and `layer3.5-structure.md`'s corrected Automatic-tab note.
+  These are additive corrections to an already-shipped, tested cell — no `status.md` regression.
   **Filter composition (spec §5.26 vs the Stage-5 `TreeSearchRequest` contract gap):** tree search
   is the **Source** (the rCTE over the mart), `StoryFilterDto`/`ResultsFilterPanel` is the
   **Filter**, Random/ByDegree is the **Sort**. Composed via a new

@@ -101,6 +101,16 @@ public class User : IdentityUser<int>
     public bool PrefersDataSaverMode { get; set; } = false;
     public bool PrefersAnimatedSprites { get; set; } = true;
     public bool AllowDiscoveryFromHiddenFavorites { get; set; } = false;
+
+    // --- Pinned Story (Feature 33 / WU40) ---
+    // The user's single self-chosen "calling card" story — the bounded (1) user→story connector
+    // that lets the Author Spotlight chain self-sustain in Deep Dive tree search, mirroring how
+    // AuthoredBy(story→author) does for the Hidden Gem chain. Exactly one by construction (a
+    // scalar FK, not a flag on Story — structurally cannot multi-set). Edited via the Author
+    // settings sub-form; service enforces the story is the user's own and publicly visible.
+    // ON DELETE SET NULL: a deleted story silently unpins. See audit/Discovery.md Feature 33.
+    public int? PinnedStoryId { get; set; }
+    public virtual Story? PinnedStory { get; set; }
     
     public int ThemeId { get; set; }
     public Theme Theme { get; set; } = null!;

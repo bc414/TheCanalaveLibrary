@@ -513,10 +513,14 @@ DB state, next batch excludes dismissed stories). Standard offset pagination in 
 FTS is a filter axis (WHERE clause), not a source (§5.3.2). `Rank()` produces relevance score for
 sorting. Searches title and short description only.
 
-**33. Manual Tree Search** — User picks a starting node (story or user) and a criterion. UI shows
-connected nodes as expandable graph. Each pivot is a fresh, stateless query. Unified Tree Search page
-(`/discover/me`, `/discover/user/{userId}`, `/discover/story/{storyId}`) — manual and automatic tabs
-on the same page.
+**33. Manual Tree Search** — User picks a starting node (story or user); each pivot is a fresh,
+stateless query. Two paradigms (settled 2026-07-12, WU40): **Explore** (build-your-own curated
+tree, multiple edge types selectable at once, sectioned candidate results) and **Deep Dive**
+(bounded chain-of-trust edges only, full-screen tree + flyout). Unified Tree Search page
+(`/discover/me`, `/discover/user/{userId}`, `/discover/story/{storyId}`) — Automatic, Explore, and
+Deep Dive tabs (three, not two) on the same page. Every node renders real, clickable identity — no
+edge available to manual is anonymized (see `audit/Discovery.md` Feature 33 for the full privacy
+analysis). Detail: `audit/Discovery.md` Feature 33.
 
 **34. Tag Directory** — Route: `/tags`. User-facing reference page for browsing tags organized by type
 with descriptions and sprites. Moderators see CRUD controls behind `<AuthorizeView>`. One page, two

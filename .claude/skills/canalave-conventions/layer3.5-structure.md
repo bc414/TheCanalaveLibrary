@@ -759,10 +759,20 @@ Outer-margin rule honored.
 
 ## Filter-Axis Component Pattern
 
-**The unit of reuse is the individual filter axis, not the assembled panel.** Manual tree search
-reuses tag + interaction-exclusion filtering but has no `StoryDeck`, no sort, and no FTS. The
-assembled `ResultsFilterPanel` is one *assembler* of the axes; the tree page assembles its own
-subset directly.
+**The unit of reuse is the individual filter axis, not the assembled panel.** The Automatic tree
+search tab reuses the `TagFilter` + `UserStoryInteractionFilter` axes directly (see "Unified Tree
+Search Page — Automatic Tab (WU44)" above) — no `StoryDeck`, no sort, no FTS reuse needed there
+either, but the axes themselves compose in. The assembled `ResultsFilterPanel` is one *assembler*
+of the axes; a page can assemble its own subset directly.
+
+**Corrected 2026-07-12 (WU40):** this section previously stated "Manual tree search reuses tag +
+interaction-exclusion filtering" — that was speculative, written before Feature 33 was designed,
+and does not match the design WU40 actually settled. Manual tree search's two tabs (Explore, Deep
+Dive) are **not** filtered by `TagFilter`/`UserStoryInteractionFilter` — candidate results are
+scoped by **edge-type checkboxes** and rendered through the section model (see "Manual Tree Search
+— Explore & Deep Dive (WU40)" above), not by tag/FTS/interaction axes. Composing those axes into
+the candidate pane is a plausible future enhancement but is explicitly **not** part of WU40's
+initial build — do not assume it exists until a Stage note says otherwise.
 
 Axis components: **emit on every change; never know about `StoryFilterDto`, sort, decks, or graphs.**
 The assembler (panel or tree page) buffers each axis's emitted slice in `@code` and fires one batched
@@ -876,9 +886,12 @@ Search Page — routes `/discover/me`, `/discover/user/{userId:int}`, `/discover
 (`[AllowAnonymous]`; `/discover/me` resolves the current user from the auth cascade). It resolves
 the root entity, branches mobile/desktop (`TreeSearchDesktop`/`TreeSearchMobile`, same
 dispatcher-owns-data pattern as `SearchPage`), and renders a root-entity header (story → compact
-story header; user (incl. `/discover/me`) → `UserCard`) above a two-tab strip: **Automatic**
-(built here) and **Manual** ("Graph view coming soon" placeholder — Feature 33 / WU40 fills this in
-without reworking the shell). Tab selection is ephemeral UI state, not URL state.
+story header; user (incl. `/discover/me`) → `UserCard`) above a tab strip. **Corrected 2026-07-12
+(WU40): three tabs, not two** — **Automatic** (built here), **Explore**, and **Deep Dive** (the
+latter two were a single "Manual" placeholder — "Graph view coming soon" — until WU40 designed and
+split them; see "Manual Tree Search — Explore & Deep Dive (WU40)" below). This diverges from spec
+§5.26's literal "two tabs" (spec is read-only; the divergence is deliberate and recorded in
+`audit/Discovery.md` Feature 33). Tab selection is ephemeral UI state, not URL state.
 
 **Automatic tab controls** (`TreeSearchControls`, injection-free, emits a buffered
 `TreeSearchRequest` on Apply — same batched-Apply discipline as the Filter-Axis pattern below,
@@ -896,11 +909,137 @@ since live re-filtering would relayout results as the edge/degree selection chan
 **Results** reuse `StoryDeck` (`TreeSearchListingResultDto.Items`, already degree-sorted/hydrated
 by `SearchAsync`) plus:
 - A **degree badge** per card ("2nd-degree connection").
-- A **path chip**, chain-of-trust results only: the raw path alternates user/story ids —
-  render **stories only**, collapsing user hops to a connector (e.g. "Story A → · → Story B").
-  **Never render a username** — the privacy model (§5.4) holds here exactly as it does for
-  Manual tree search below.
+- A **path chip**, chain-of-trust results only (HiddenGem/AuthorSpotlight edge sets — the only
+  sets `IncludePaths` ever allows): the raw path alternates user/story ids. **Render both — story
+  AND user hops, with real usernames** (e.g. "Story A → User X → Story B"), each a clickable link
+  (`/story/{id}`, `/user/{id}`). **Corrected 2026-07-12 (WU40) — this previously said "collapse
+  user hops, never render a username."** That was an over-broad reading of §5.4. §5.4's "graph
+  never reveals identity" protects exactly one thing: anonymized *hidden*-favorite contributors,
+  whose reach is merged into the mart's indistinguishable `Favorite` edge. A chain-of-trust path
+  (Hidden Gem, Author Spotlight) carries no anonymized contributor — every hop is a public,
+  human-conferred, curated act (a self-designated gem, or an author publicly rewarding a
+  recommender) — so identity is safe and informative to show. The same reasoning is why Manual
+  Tree Search (below) renders every node with a real name; see `audit/Discovery.md` Feature 33's
+  WU40 settled note for the full privacy-model analysis.
 - A flooding-indicator banner when `ResultCapTruncated`.
+
+### Manual Tree Search — Explore & Deep Dive (WU40)
+
+Feature 33 is **two distinct interactive paradigms**, not one graph view — both share the
+`TreeSearchPage` shell's root resolution and both are entirely client-driven, stateless-pivot
+(each node selection is a fresh server query; no traversal state persisted server-side). Full
+design rationale — the edge × direction boundedness table, the Pinned Story edge, and the
+service-layer gap analysis — lives in `audit/Discovery.md` Feature 33's WU40 settled note; this
+section records the component/composition shape only. (Interaction shape finalized through the
+Phase-1 mock, four iterations, 2026-07-12.)
+
+**Privacy note (do not reintroduce anonymization here):** every edge available in manual is a
+genuinely public action (manual excludes hidden favorites entirely, unlike Automatic). Every node
+— story or user — renders with real, clickable identity. See the corrected Automatic-tab path-chip
+note above for why this isn't a contradiction of §5.4.
+
+#### The shared tree canvas
+
+Both tabs render the curated tree as a **2D top-down node-link diagram** — root at top, children
+fanning out in a row beneath, straight SVG lines colored per edge type — NOT a nested/indented
+DOM-outline (`<details>`/list) structure. **Tidy-tree layout in C#** (leaves take sequential
+horizontal slots; each parent centers over its own children; depth = row): deterministic,
+Unit-tier-testable math, recomputed only on structural change. Nodes are a shared compact
+**node-chip leaf** (~56px square, circular for users; thumbnail + caption below; ghost state =
+dashed). The two pane *arrangements* are separate composites (Explore's embedded pane vs. Deep
+Dive's full-viewport canvas — structurally different, same rule as Desktop/Mobile branching).
+
+**Per-frame gestures live in a thin JS module, never on the circuit** (`manual-tree-search.js`):
+CSS-transform drag-to-pan + zoom on the canvas, drag/resize for Deep Dive's floating panel, and
+`localStorage` persistence. Structural changes (pivot, add-node) go through Blazor normally —
+they're server queries anyway. localStorage persists **IDs + edges only** ({entityId, entityType,
+edgeLabel, ghost, children}, one document per (mode, root)); display data rehydrates on load via
+the existing batch reads, and entities the viewer can no longer see prune silently.
+
+**Edge selection is per (edge, direction) pair — every pair independently toggleable in BOTH
+modes** (shared toggle-pill control). "Recommendation from a story" (who recommended it) and
+"Recommendation from a user" (what they recommended) are different traversal semantics — never
+one flag reinterpreted by anchor type. Author(story→author) and Pinned(user→story) are toggleable
+too — never hardcoded on (Author×Pinned composes into an identity round-trip on any self-pinned
+story; toggles are the escape). Explore's toggle row swaps wholesale per the current anchor's
+direction with direction-annotated labels; Deep Dive shows all four whitelisted pairs at once.
+
+#### Explore tab — coordination composite, two-pane (~50/50)
+
+Left pane: the **persistent, client-curated tree canvas** the user builds by hand, root seeded
+from the route. Right pane: a **disposable, stateless "candidate results" pane** for the
+currently-selected node's neighbors, with the anchor pinned above the results as a reminder of
+context. Injection-free — data flows from `TreeSearchDesktop`/`TreeSearchMobile` exactly as the
+Automatic tab's controls do.
+
+- A node added but not yet selected/explored renders in the **ghost state** — a visible frontier
+  of "where I could go next." Selecting a ghost node solidifies it and populates the right pane.
+- **Section model** (right pane) — one section per underlying table, NOT a ranked/deduped stack;
+  every section toggle-gated (none hardcoded on). **Unbounded sections are paged**: first page
+  ≈10 items + per-section totalCount + a "Show more" that pages that section only. One pivot =
+  ONE service call returning all sections (`ManualTreeNeighborsDto`); direction is enforced by
+  two request types (`StoryNeighborsRequest` / `UserNeighborsRequest`), not flag naming.
+  - **Author** (story anchor only) — identity, singular.
+  - **Recommendation family** (either anchor) — one query against `recommendations`;
+    Recommendation / Hidden Gem / Author Spotlight toggles only widen or narrow its `WHERE`
+    clause; a row matching multiple flags shows **once**, badges stacked. **Rendered as compound
+    rows** — the recommended story's `StoryCard` and the recommendation panel side by side as one
+    row, compounds stacked vertically (not a card grid). The rec half omits the embedded story
+    reference (the real StoryCard sits beside it): additive `ShowStoryReference` param
+    (default `true`) on `RecommendationCard` — existing consumers unchanged.
+  - **Favorite** — always its own section (separate table; a target can legitimately also appear
+    in the Recommendation family section — two independent signals, not a duplicate to dedup).
+  - **Authored** (user anchor only) — the user's full catalog; their Pinned Story, if set, is
+    badged and always sorted first within this list — not a separate section.
+  - **Vouch** (user anchor, forward direction ONLY — never from a story anchor; incoming vouches
+    are owner-private per §5.8) — its own section, a distinct mechanism (voucher → vouchee → their
+    stories), not foldable into anything else.
+- **Card reuse, not bespoke cards.** Story-valued results render the real `StoryCard` (triage —
+  favorite/Read-It-Later/Ignore — stays the primary action, unchanged; **no immediate-hide on
+  triage**, since this pane is stateless/disposable, unlike a persisted deck). User-valued results
+  render the real `UserCard`. **"Add to tree" is a new composed sibling action** (per
+  "Context-specific augmentation" above) — rendered alongside `StoryCard`'s triage row
+  (co-important, NOT in the caret menu), and the **primary** action for `UserCard` results (which
+  have no triage equivalent).
+- **Mobile:** Tree ⇄ Results toggle (structurally different arrangement, per "Separate Desktop/
+  Mobile" above — not a responsive-prefix case).
+
+#### Deep Dive tab — coordination composite, full-viewport canvas + floating panel
+
+Same stateless per-node pivot as Explore — **not** a recursive or auto-expanding server
+traversal. Deep Dive's defining trait is momentum where Explore's is deliberateness:
+
+- **Clicking a node is the ONLY gesture** — it selects the node (info display) AND auto-adds its
+  whitelisted bounded connections in the same action. No separate "add" step, no "Explore more"
+  button, no blocking modal (every walkable edge is ≤5 or 1, so bulk-add is always safe).
+- **Anti-bounce guard:** auto-add skips a child whose entity equals the clicked node's *parent's*
+  entity — kills the default A→B→A ring (pinned story → author → same user) independent of the
+  toggles. Deeper cycles / cross-branch duplicates remain allowed (dedup stays per-node, per the
+  path-reflecting design).
+- **Edge whitelist** — exactly the four (edge, direction) pairs whose immediate result is ≤1 or
+  ≤5 (full boundedness table in `audit/Discovery.md` F33): `AuthoredBy` (story→author, 1),
+  `HiddenGem` (user→their own ≤5 gems), `AuthorSpotlight` (story→its own ≤5 spotlighted
+  recommenders), `Pinned` (user→their 1 pinned story — new field, see below).
+- **The info surface is a floating, resizable panel starting top-right over the canvas** —
+  non-blocking (the canvas stays pannable/clickable beneath it); drag/resize via the JS module.
+  Contents: the selected node's composed card (same StoryCard/UserCard + rec-panel composition as
+  Explore's results, minus the Add button) plus a note of which toggle-gated groups were skipped.
+- Full-viewport pannable/zoomable canvas (desktop: drag + zoom controls; mobile: native panning),
+  reusing **Explore's node-chip leaf component** in a distinct arrangement — separate composite,
+  not a responsive variant (embedded pane vs. full-viewport are structurally different).
+- Separate `localStorage` tree from Explore (different mode, different edge scope, same anchor
+  root may differ in content between the two).
+
+#### Pinned Story (new, `User.PinnedStoryId`)
+
+A nullable FK, exactly one self-chosen story per user (`ON DELETE SET NULL`). Fills the structural
+gap that let the Hidden Gem chain self-sustain via the free `AuthoredBy` story→author connector,
+but which Author Spotlight lacked (no bounded way back from a spotlighted recommender to a story).
+Rendered as a badge on the Authored section's matching entry (always sorted first when present),
+never as its own section — same "flag on a superset row" pattern as Hidden Gem/Spotlight badges
+within the Recommendation family. Author-facing edit surface extends `AuthorSettingsForm.razor` /
+`AuthorSettingsDto` (same shape as the existing Default Story Rating field — a story picker
+sourced from the author's own catalog, with a "None" option).
 
 ## Conditional Rendering Patterns
 

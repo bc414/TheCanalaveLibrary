@@ -1,0 +1,147 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject ManualTreeStore TreeStore
+
+@* The shared 2D top-down tree canvas of Manual Tree Search (WU40) — root at top, children
+   fanning out beneath, straight SVG lines colored per edge type; layout is C# tidy-tree math
+   (ManualTreeLayout), pan/zoom is a client-side CSS transform owned by manual-tree-search.js
+   (never the circuit). Used by ExploreTab (embedded pane) and DeepDiveTab (full-viewport) —
+   same renderer, different-sized viewport (layer3.5-structure.md §"The shared tree canvas").
+   Blazor must NOT set style on the inner canvas div — the JS module owns its transform. *@
+
+<div @ref="_wrapRef" class="relative h-full w-full cursor-grab touch-none overflow-hidden">
+    <div @ref="_canvasRef" class="absolute left-0 top-0 origin-top-left">
+        <svg class="pointer-events-none absolute left-0 top-0" width="@((int)_width)" height="@((int)_height)">
+            @foreach (ManualTreeNode node in _nodes)
+            {
+                if (node.Parent is null) { continue; }
+                var (px, py) = ManualTreeLayout.Center(node.Parent);
+                var (cx, cy) = ManualTreeLayout.Center(node);
+                <line x1="@Px(px)" y1="@Px(py)" x2="@Px(cx)" y2="@Px(cy)"
+                      stroke="@EdgeColor(node.Edge)" stroke-width="2"
+                      stroke-dasharray="@(node.Ghost ? "4 4" : null)" />
+            }
+        </svg>
+
+        @foreach (ManualTreeNode node in _nodes)
+        {
+            var display = DisplayFor(node);
+            var (left, top) = ManualTreeLayout.ItemOrigin(node);
+            bool isSelected = node.NodeId == SelectedNodeId;
+            <div class="absolute flex flex-col items-center gap-1"
+                 style="left:@(Px(left))px; top:@(Px(top))px; width:@(ManualTreeLayout.CaptionWidth)px;">
+                <button type="button" data-tree-node
+                        @key="node.NodeId"
+                        @onclick="() => OnNodeClicked.InvokeAsync(node)"
+                        title="@display.Title"
+                        aria-pressed="@(isSelected ? "true" : "false")"
+                        class="relative flex size-14 shrink-0 items-center justify-center overflow-hidden border-2 bg-(--color-surface-raised) shadow-medium
+                               @(node.IsStory ? "rounded-xl" : "rounded-full")
+                               @(isSelected ? "border-(--color-mission) ring-4 ring-(--color-mission)/20" : "border-(--color-border) hover:border-(--color-mission)")
+                               @(node.Ghost ? "opacity-50 border-dashed" : null)">
+                    @if (display.ImageUrl is not null)
+                    {
+                        <img src="@display.ImageUrl" alt="" class="size-full object-cover" loading="lazy" data-hide-on-error />
+                    }
+                    else
+                    {
+                        <span class="text-xl font-bold text-(--color-text-muted) select-none">@Initial(display.Title)</span>
+                    }
+                </button>
+                <div class="text-center">
+                    <div class="line-clamp-2 text-[11px] font-bold leading-tight text-(--color-text)">@display.Title</div>
+                    @if (node.Edge is { } edge)
+                    {
+                        <div class="text-[9px] font-bold uppercase tracking-wide text-(--color-text-muted)">@EdgeLabel(edge)</div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (ShowZoomControls)
+    {
+        <div class="absolute bottom-3 right-3 flex gap-1.5">
+            <button type="button" aria-label="Zoom out"
+                    class="size-8 rounded-lg border border-(--color-border) bg-(--color-surface-raised) text-(--color-text-muted) shadow-medium hover:text-(--color-text)"
+                    @onclick="() => TreeStore.ZoomAsync(_canvasRef, -0.15)">–</button>
+            <button type="button" aria-label="Zoom in"
+                    class="size-8 rounded-lg border border-(--color-border) bg-(--color-surface-raised) text-(--color-text-muted) shadow-medium hover:text-(--color-text)"
+                    @onclick="() => TreeStore.ZoomAsync(_canvasRef, 0.15)">+</button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ManualTreeNode Root { get; set; } = null!;
+
+    /// <summary>Chip display data keyed by (IsStory, EntityId) — built at add-time from the
+    /// pivot DTOs, or by batch rehydration on load. Missing entries render a placeholder
+    /// (should not persist past rehydration).</summary>
+    [Parameter, EditorRequired] public IReadOnlyDictionary<(bool IsStory, int EntityId), ManualTreeNodeDisplay> Displays { get; set; } = null!;
+
+    [Parameter] public string? SelectedNodeId { get; set; }
+    [Parameter] public EventCallback<ManualTreeNode> OnNodeClicked { get; set; }
+    [Parameter] public bool ShowZoomControls { get; set; }
+    [Parameter] public double InitialPanX { get; set; } = 24;
+    [Parameter] public double InitialPanY { get; set; } = 16;
+
+    private ElementReference _wrapRef;
+    private ElementReference _canvasRef;
+    private List<ManualTreeNode> _nodes = [];
+    private double _width;
+    private double _height;
+
+    protected override void OnParametersSet()
+    {
+        // Re-arrange on every render — structural changes are the only reason the owner
+        // re-renders this component, and the layout is cheap deterministic math.
+        var (leafCount, maxDepth) = ManualTreeLayout.Arrange(Root);
+        (_width, _height) = ManualTreeLayout.CanvasSize(leafCount, maxDepth);
+        _nodes = [.. Root.EnumerateAll()];
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await TreeStore.AttachPanAsync(_wrapRef, _canvasRef, InitialPanX, InitialPanY);
+        }
+    }
+
+    private ManualTreeNodeDisplay DisplayFor(ManualTreeNode node) =>
+        Displays.TryGetValue((node.IsStory, node.EntityId), out ManualTreeNodeDisplay? d)
+            ? d
+            : new ManualTreeNodeDisplay(node.IsStory ? $"Story #{node.EntityId}" : $"User #{node.EntityId}", null);
+
+    private static string Initial(string title) => title.Length > 0 ? title[..1].ToUpperInvariant() : "?";
+
+    private static string Px(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    /// <summary>Edge-line color by provenance — feature-accent tokens color identity
+    /// (Indicator role): gem emerald, spotlight rec-red, pinned/chain mission blue,
+    /// everything else neutral border.</summary>
+    private static string EdgeColor(ManualTreeEdge? edge) => edge switch
+    {
+        ManualTreeEdge.UserGemmedStory => "var(--color-gem)",
+        ManualTreeEdge.StorySpotlightedRecommender => "var(--color-rec)",
+        ManualTreeEdge.UserPinnedStory => "var(--color-mission)",
+        ManualTreeEdge.StoryAuthor => "var(--color-text-muted)",
+        _ => "var(--color-border)",
+    };
+
+    /// <summary>Connector caption under the chip title.</summary>
+    public static string EdgeLabel(ManualTreeEdge edge) => edge switch
+    {
+        ManualTreeEdge.StoryAuthor => "Author",
+        ManualTreeEdge.StoryRecommender => "Recommended by",
+        ManualTreeEdge.StorySpotlightedRecommender => "Author Spotlight",
+        ManualTreeEdge.StoryFavoriter => "Favorited by",
+        ManualTreeEdge.UserRecommendedStory => "Recommends",
+        ManualTreeEdge.UserGemmedStory => "Hidden Gem",
+        ManualTreeEdge.UserFavoriteStory => "Favorite",
+        ManualTreeEdge.UserAuthoredStory => "Authored",
+        ManualTreeEdge.UserPinnedStory => "Pinned",
+        ManualTreeEdge.UserVouchedStory => "Vouch",
+        _ => edge.ToString(),
+    };
+}

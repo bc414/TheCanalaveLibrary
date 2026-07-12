@@ -7,7 +7,8 @@ using TheCanalaveLibrary.SharedUI;
 namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
-/// Render tests for <see cref="TreeSearchTabStrip"/> (WU44). Tier: RazorComponents (bUnit).
+/// Render tests for <see cref="TreeSearchTabStrip"/> (WU44; three tabs since WU40).
+/// Tier: RazorComponents (bUnit).
 /// </summary>
 public class TreeSearchTabStripTests : BunitContext
 {
@@ -18,23 +19,36 @@ public class TreeSearchTabStripTests : BunitContext
             .Add(c => c.ActiveTab, TreeSearchTab.Automatic));
 
         var tabs = cut.FindAll("button[role=tab]");
+        tabs.Count.Should().Be(3);
         tabs[0].GetAttribute("aria-selected").Should().Be("true");
         tabs[1].GetAttribute("aria-selected").Should().Be("false");
+        tabs[2].GetAttribute("aria-selected").Should().Be("false");
     }
 
     [Fact]
-    public void ManualActive_MarksManualTabSelected()
+    public void ExploreActive_MarksExploreTabSelected()
     {
         IRenderedComponent<TreeSearchTabStrip> cut = Render<TreeSearchTabStrip>(p => p
-            .Add(c => c.ActiveTab, TreeSearchTab.Manual));
+            .Add(c => c.ActiveTab, TreeSearchTab.Explore));
 
         var tabs = cut.FindAll("button[role=tab]");
         tabs[0].GetAttribute("aria-selected").Should().Be("false");
         tabs[1].GetAttribute("aria-selected").Should().Be("true");
+        tabs[2].GetAttribute("aria-selected").Should().Be("false");
     }
 
     [Fact]
-    public void ClickingManualTab_EmitsManual()
+    public void DeepDiveActive_MarksDeepDiveTabSelected()
+    {
+        IRenderedComponent<TreeSearchTabStrip> cut = Render<TreeSearchTabStrip>(p => p
+            .Add(c => c.ActiveTab, TreeSearchTab.DeepDive));
+
+        var tabs = cut.FindAll("button[role=tab]");
+        tabs[2].GetAttribute("aria-selected").Should().Be("true");
+    }
+
+    [Fact]
+    public void ClickingExploreTab_EmitsExplore()
     {
         TreeSearchTab? emitted = null;
         IRenderedComponent<TreeSearchTabStrip> cut = Render<TreeSearchTabStrip>(p => p
@@ -43,6 +57,19 @@ public class TreeSearchTabStripTests : BunitContext
 
         cut.FindAll("button[role=tab]")[1].Click();
 
-        emitted.Should().Be(TreeSearchTab.Manual);
+        emitted.Should().Be(TreeSearchTab.Explore);
+    }
+
+    [Fact]
+    public void ClickingDeepDiveTab_EmitsDeepDive()
+    {
+        TreeSearchTab? emitted = null;
+        IRenderedComponent<TreeSearchTabStrip> cut = Render<TreeSearchTabStrip>(p => p
+            .Add(c => c.ActiveTab, TreeSearchTab.Automatic)
+            .Add(c => c.OnTabChanged, EventCallback.Factory.Create<TreeSearchTab>(this, t => emitted = t)));
+
+        cut.FindAll("button[role=tab]")[2].Click();
+
+        emitted.Should().Be(TreeSearchTab.DeepDive);
     }
 }

@@ -1,0 +1,333 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject IManualTreeSearchReadService ManualTree
+@inject IUserStoryInteractionReadService InteractionReadService
+@inject ManualTreeStore TreeStore
+
+@* Deep Dive — Manual Tree Search's bounded chain-of-trust paradigm (Feature 33 / WU40).
+   Momentum where Explore is deliberateness: CLICKING A NODE IS THE ONLY GESTURE — it selects the
+   node (info display) AND auto-adds its whitelisted bounded connections (each ≤5 or 1, so
+   bulk-add is always safe). No separate "add" step, no "Explore more" button, no blocking modal.
+   The info surface is a floating, resizable panel starting top-right over the canvas —
+   non-blocking; the canvas stays pannable/clickable beneath it (drag via manual-tree-search.js,
+   resize via native CSS `resize`). Anti-bounce guard: auto-add skips the clicked node's parent's
+   entity (kills the default A→B→A ring, e.g. pinned story → author → same user).
+   Whitelist: StoryAuthor(1) · UserGemmedStory(≤5) · StorySpotlightedRecommender(≤5) ·
+   UserPinnedStory(1) — every one independently toggleable. layer3.5-structure.md §"Deep Dive". *@
+
+<div class="flex h-[70vh] min-h-[480px] flex-col rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
+
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-(--color-border) px-4 py-2.5">
+        <ManualTreeEdgeToggles Items="ToggleItems()" OnToggled="HandleToggleAsync" />
+        <button type="button"
+                class="rounded-md border border-(--color-border) px-2.5 py-1 text-xs font-semibold text-(--color-text-muted) hover:text-(--color-text)"
+                @onclick="ResetTreeAsync">Reset</button>
+    </div>
+
+    <div class="relative min-h-0 flex-1 overflow-hidden">
+        @if (_root is not null)
+        {
+            <ManualTreeCanvas Root="_root" Displays="_displays"
+                              SelectedNodeId="@_openNode?.NodeId"
+                              OnNodeClicked="OpenNodeAsync"
+                              ShowZoomControls="true"
+                              InitialPanX="60" InitialPanY="24" />
+        }
+
+        <p class="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 text-xs text-(--color-text-muted) shadow-medium">
+            🖐 Drag to pan · click a node — its bounded connections are added automatically
+        </p>
+
+        @* Floating, resizable, NON-blocking info panel — starts top-right; JS owns drag
+           position, native CSS `resize` owns size. Blazor never sets style on this element
+           after first render (the module would race it). *@
+        @if (_openNode is not null)
+        {
+            <div @ref="_panelRef"
+                 class="absolute right-4 top-4 z-(--z-dropdown) flex max-h-[85%] w-80 min-w-56 resize flex-col overflow-auto rounded-xl border border-(--color-border) bg-(--color-surface-raised) shadow-prominent">
+                <div @ref="_panelHandleRef"
+                     class="flex cursor-move items-center justify-between gap-2 border-b border-(--color-border) px-3 py-2">
+                    <span class="text-[10px] font-bold uppercase tracking-wide text-(--color-text-muted)">
+                        @(_openNode.Edge is { } e ? $"Reached via {ManualTreeCanvas.EdgeLabel(e)}" : "Root")
+                    </span>
+                    <button type="button" aria-label="Close panel"
+                            class="size-6 rounded-full bg-(--color-surface) text-xs text-(--color-text-muted) hover:text-(--color-text)"
+                            @onclick="() => _openNode = null">✕</button>
+                </div>
+                <div class="flex flex-col gap-3 p-3">
+                    @if (_openStory is { } story)
+                    {
+                        <StoryCard Story="story"
+                                   UserStoryInteractionState="StateFor(story.StoryId)"
+                                   IsOwnStory="CurrentUserId is not null && story.AuthorId == CurrentUserId" />
+                    }
+                    else if (_openUser is { } user)
+                    {
+                        <UserCard User="user" />
+                    }
+                    @if (_openRec is { } rec)
+                    {
+                        <RecommendationCard Rec="rec" />
+                    }
+                    @if (_lastSkippedNote is { } note)
+                    {
+                        <p class="text-[11px] leading-snug text-(--color-text-muted)">@note</p>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+
+    @if (_prunedCount > 0)
+    {
+        <p class="px-4 py-1.5 text-[11px] text-(--color-text-muted)">
+            @_prunedCount saved node@(_prunedCount == 1 ? "" : "s") removed — no longer available.
+        </p>
+    }
+</div>
+
+@code {
+    [Parameter] public StoryListingDto? RootStory { get; set; }
+    [Parameter] public UserCardDto? RootUser { get; set; }
+    [Parameter] public int? CurrentUserId { get; set; }
+    [Parameter] public bool IsMobile { get; set; }
+
+    // Deep Dive's four whitelisted (edge, direction) pairs — every one toggleable.
+    private bool _author = true, _gem = true, _spotlight = true, _pinned = true;
+
+    private ManualTreeNode? _root;
+    private ManualTreeNode? _openNode;
+    private readonly Dictionary<(bool IsStory, int EntityId), ManualTreeNodeDisplay> _displays = [];
+    // In-session detail for the floating panel (not persisted — re-fetched per open).
+    private StoryListingDto? _openStory;
+    private UserCardDto? _openUser;
+    private RecommendationDto? _openRec;
+    // Recommendation context captured at add-time so a gem/spotlight node's panel can show the
+    // rec that earned it the edge. Session-only (localStorage stays IDs+edges).
+    private readonly Dictionary<string, RecommendationDto> _recByNodeId = [];
+    // Full listings captured at add-time (root param, gem/pinned add sites) so the panel can
+    // render a real StoryCard without an extra fetch. Session-only; a restored-tree node whose
+    // listing was never seen this session degrades to chip-only panel data.
+    private readonly Dictionary<int, StoryListingDto> _listingByStoryId = [];
+    private string? _lastSkippedNote;
+    private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states = new Dictionary<int, UserStoryInteractionStateDto>();
+    private int _prunedCount;
+    private bool _initialized;
+    private bool _panelAttached;
+    private ElementReference _panelRef;
+    private ElementReference _panelHandleRef;
+
+    private string TreeKey => ManualTreeStore.TreeKey("deepdive", RootStory is not null, RootStory?.StoryId ?? RootUser!.UserId);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_initialized)
+        {
+            _initialized = true;
+            BuildRoot();
+            await TryRestoreTreeAsync();
+            // Auto-open the root so the tree isn't a single lonely node on arrival.
+            if (_root is not null && _root.Children.Count == 0)
+                await OpenNodeAsync(_root);
+            StateHasChanged();
+            return;
+        }
+
+        // The floating panel (re)mounts whenever _openNode goes null → non-null; attach its
+        // drag handle each time a fresh element instance appears.
+        if (_openNode is not null && !_panelAttached)
+        {
+            _panelAttached = true;
+            await TreeStore.AttachPanelDragAsync(_panelRef, _panelHandleRef);
+        }
+        else if (_openNode is null)
+        {
+            _panelAttached = false;
+        }
+    }
+
+    private void BuildRoot()
+    {
+        if (RootStory is { } s)
+        {
+            _root = new ManualTreeNode { EntityId = s.StoryId, IsStory = true };
+            _displays[(true, s.StoryId)] = new ManualTreeNodeDisplay(s.Title, s.CoverArtRelativeUrl);
+            _listingByStoryId[s.StoryId] = s;
+        }
+        else if (RootUser is { } u)
+        {
+            _root = new ManualTreeNode { EntityId = u.UserId, IsStory = false };
+            _displays[(false, u.UserId)] = new ManualTreeNodeDisplay(u.Username, u.AvatarUrl);
+        }
+    }
+
+    private async Task TryRestoreTreeAsync()
+    {
+        if (_root is null) return;
+        string? json = await TreeStore.LoadTreeAsync(TreeKey);
+        if (json is null || ManualTreeNode.FromJson(json) is not { } restored) return;
+        if (restored.EntityId != _root.EntityId || restored.IsStory != _root.IsStory) return;
+
+        List<ManualTreeNode> all = [.. restored.EnumerateAll()];
+        ManualTreeNodeDisplaysDto displays = await ManualTree.GetNodeDisplaysAsync(
+            [.. all.Where(x => x.IsStory).Select(x => x.EntityId).Distinct()],
+            [.. all.Where(x => !x.IsStory).Select(x => x.EntityId).Distinct()]);
+        foreach (ManualTreeNodeDisplayDto d in displays.Stories) _displays[(true, d.EntityId)] = new ManualTreeNodeDisplay(d.Title, d.ImageUrl);
+        foreach (ManualTreeNodeDisplayDto d in displays.Users) _displays[(false, d.EntityId)] = new ManualTreeNodeDisplay(d.Title, d.ImageUrl);
+
+        _prunedCount = restored.PruneMissing(
+            new HashSet<int>(displays.Stories.Select(d => d.EntityId)),
+            new HashSet<int>(displays.Users.Select(d => d.EntityId)));
+        _root = restored;
+        if (_prunedCount > 0) await TreeStore.SaveTreeAsync(TreeKey, _root.ToJson());
+    }
+
+    /// <summary>The single Deep Dive gesture: select the node (panel) + auto-add its bounded
+    /// connections, one stateless pivot per click.</summary>
+    private async Task OpenNodeAsync(ManualTreeNode node)
+    {
+        _openNode = node;
+        _openStory = null;
+        _openUser = null;
+        _openRec = _recByNodeId.GetValueOrDefault(node.NodeId);
+        _lastSkippedNote = null;
+
+        // The clicked node's parent entity — auto-add skips it (anti-bounce guard).
+        (bool IsStory, int EntityId)? parentEntity =
+            node.Parent is { } p ? (p.IsStory, p.EntityId) : null;
+
+        List<string> skipped = [];
+
+        if (node.IsStory)
+        {
+            ManualTreeNeighborsDto dto = await ManualTree.GetStoryNeighborsAsync(new StoryNeighborsRequest
+            {
+                StoryId = node.EntityId,
+                IncludeAuthor = _author,
+                IncludeSpotlights = _spotlight,
+                IncludeRecommendations = false,
+                IncludeHiddenGems = false,
+                IncludeFavoriters = false,
+                PageSize = 5, // both walkable story→user edges are ≤5 by construction
+            });
+
+            // Panel detail: the full listing when this session has seen it (root param or an
+            // add-site DTO); a restored-tree node we never hydrated degrades to chip-only data.
+            _openStory = _listingByStoryId.GetValueOrDefault(node.EntityId);
+
+            if (!_author) skipped.Add("Author");
+            if (!_spotlight) skipped.Add("Author Spotlight");
+
+            if (dto.Author is { } author && _author)
+            {
+                if (parentEntity != (false, author.UserId) && !node.HasChildEntity(false, author.UserId))
+                {
+                    node.AddChild(false, author.UserId, ManualTreeEdge.StoryAuthor, ghost: false);
+                    _displays[(false, author.UserId)] = new ManualTreeNodeDisplay(author.Username, author.AvatarUrl);
+                }
+            }
+            foreach (ManualTreeRecItemDto item in dto.RecommendationFamily?.Items ?? [])
+            {
+                if (item.Recommendation.Recommender is not { } rec) continue;
+                if (parentEntity == (false, rec.UserId) || node.HasChildEntity(false, rec.UserId)) continue;
+                ManualTreeNode child = node.AddChild(false, rec.UserId, ManualTreeEdge.StorySpotlightedRecommender, ghost: false);
+                _displays[(false, rec.UserId)] = new ManualTreeNodeDisplay(rec.Username, rec.AvatarUrl);
+                _recByNodeId[child.NodeId] = item.Recommendation;
+            }
+        }
+        else
+        {
+            ManualTreeNeighborsDto dto = await ManualTree.GetUserNeighborsAsync(new UserNeighborsRequest
+            {
+                UserId = node.EntityId,
+                IncludeHiddenGems = _gem,
+                IncludeRecommendations = false,
+                IncludeSpotlights = false,
+                IncludeFavorites = false,
+                // Authored page 1 sorts the pinned story first — that single row is all the
+                // Pinned edge needs; the rest of the catalog is never walked in Deep Dive.
+                IncludeAuthored = _pinned,
+                VouchedStoriesPage = 1,
+                IncludeVouchedStories = false,
+                PageSize = 5,
+            });
+
+            _openUser = _displays.TryGetValue((false, node.EntityId), out ManualTreeNodeDisplay? d)
+                ? new UserCardDto(node.EntityId, d.Title, null, d.ImageUrl, [])
+                : null;
+
+            if (!_gem) skipped.Add("Hidden Gem");
+            if (!_pinned) skipped.Add("Pinned");
+
+            foreach (ManualTreeRecItemDto item in dto.RecommendationFamily?.Items ?? [])
+            {
+                if (!item.Recommendation.IsHiddenGem) continue;
+                _listingByStoryId[item.Story.StoryId] = item.Story;
+                if (parentEntity == (true, item.Story.StoryId) || node.HasChildEntity(true, item.Story.StoryId)) continue;
+                ManualTreeNode child = node.AddChild(true, item.Story.StoryId, ManualTreeEdge.UserGemmedStory, ghost: false);
+                _displays[(true, item.Story.StoryId)] = new ManualTreeNodeDisplay(item.Story.Title, item.Story.CoverArtRelativeUrl);
+                _recByNodeId[child.NodeId] = item.Recommendation;
+            }
+            if (_pinned && dto.PinnedStoryId is int pinnedId
+                && dto.Authored?.Items.FirstOrDefault(s => s.StoryId == pinnedId) is { } pinnedStory)
+            {
+                _listingByStoryId[pinnedId] = pinnedStory;
+                if (parentEntity != (true, pinnedId) && !node.HasChildEntity(true, pinnedId))
+                {
+                    node.AddChild(true, pinnedId, ManualTreeEdge.UserPinnedStory, ghost: false);
+                    _displays[(true, pinnedId)] = new ManualTreeNodeDisplay(pinnedStory.Title, pinnedStory.CoverArtRelativeUrl);
+                }
+            }
+        }
+
+        if (skipped.Count > 0)
+            _lastSkippedNote = $"Not walked (toggled off): {string.Join(" · ", skipped)}.";
+
+        await LoadPanelStatesAsync();
+        await TreeStore.SaveTreeAsync(TreeKey, _root!.ToJson());
+        StateHasChanged();
+    }
+
+    private async Task LoadPanelStatesAsync()
+    {
+        if (CurrentUserId is null || _openStory is null) return;
+        _states = await InteractionReadService.GetStatesByStoryIdsAsync([_openStory.StoryId]);
+    }
+
+    private UserStoryInteractionStateDto? StateFor(int storyId) =>
+        _states.TryGetValue(storyId, out UserStoryInteractionStateDto? s) ? s : null;
+
+    private Task HandleToggleAsync((string Key, bool IsOn) change)
+    {
+        switch (change.Key)
+        {
+            case "author": _author = change.IsOn; break;
+            case "gem": _gem = change.IsOn; break;
+            case "spotlight": _spotlight = change.IsOn; break;
+            case "pinned": _pinned = change.IsOn; break;
+        }
+        // Toggles govern FUTURE clicks — nothing already in the tree is removed.
+        return Task.CompletedTask;
+    }
+
+    private IReadOnlyList<ManualTreeEdgeToggles.EdgeToggleItem> ToggleItems() =>
+    [
+        // All four shown at once, direction in the label — the next click can land on either
+        // node type, so both directions' edges are simultaneously relevant (unlike Explore).
+        new("author", "Author (story → author)", _author, "Bounded edges to auto-walk"),
+        new("gem", "Hidden Gem (user → story)", _gem, "Bounded edges to auto-walk"),
+        new("spotlight", "Author Spotlight (story → user)", _spotlight, "Bounded edges to auto-walk"),
+        new("pinned", "Pinned (user → story)", _pinned, "Bounded edges to auto-walk"),
+    ];
+
+    private async Task ResetTreeAsync()
+    {
+        await TreeStore.ClearTreeAsync(TreeKey);
+        _prunedCount = 0;
+        _openNode = null;
+        _recByNodeId.Clear();
+        _displays.Clear();
+        BuildRoot();
+        if (_root is not null)
+            await OpenNodeAsync(_root);
+    }
+}
