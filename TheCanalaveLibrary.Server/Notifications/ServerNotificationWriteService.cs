@@ -231,6 +231,23 @@ public class ServerNotificationWriteService(
         CreateCoreAsync(NotificationTypeEnum.AccountBanned, moderatorSourceId,
             [(targetUserId, 0)]);
 
+    // ── Semantic generation methods (WU-Spotlight slice) ─────────────────────────
+
+    /// <inheritdoc/>
+    public Task NotifySpotlightSlotGrantedAsync(int awardeeUserId, int grantingModeratorId) =>
+        CreateCoreAsync(NotificationTypeEnum.SpotlightSlotGranted, grantingModeratorId,
+            [(awardeeUserId, 0)]);
+
+    /// <inheritdoc/>
+    public Task NotifyStorySpotlightedAsync(int storyAuthorUserId, int sponsorUserId, int storyId) =>
+        CreateCoreAsync(NotificationTypeEnum.StorySpotlighted, sponsorUserId,
+            [(storyAuthorUserId, storyId)]);
+
+    /// <inheritdoc/>
+    public Task NotifyRecommendationSpotlightedAsync(int recommenderUserId, int sponsorUserId, int storyId) =>
+        CreateCoreAsync(NotificationTypeEnum.RecommendationSpotlighted, sponsorUserId,
+            [(recommenderUserId, storyId)]);
+
     // ── Private create-core ───────────────────────────────────────────────────────
 
     /// <summary>

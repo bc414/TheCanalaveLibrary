@@ -209,9 +209,12 @@ one, same as `testing.md`/`debugging.md` accreted.
 
 Ordered as v1, all deps Stage 5, settled directions in the audit files named in `workplan.md`:
 
-1. **WU-Home** — the front door + Community Spotlight display slice. Still gated by decision
-   row 2 (curation model / homepage design). Features built from here on inherit Phase 1's
-   conventions (logging, error UX, rate limits) from day one.
+1. **WU-Home** — the front door. The Community Spotlight slice split out and landed as
+   **WU-Spotlight (2026-07-11)** — the full feature (slot grants, block booking, homepage display
+   section, mod surfaces), not just a display slice; see `workplan.md` WU-Spotlight and
+   `audit/Spotlight.md`. WU-Home now covers the *remaining* homepage sections, still gated by
+   decision row 2's remaining half (homepage design). Features built from here on inherit
+   Phase 1's conventions (logging, error UX, rate limits) from day one.
 2. **WU41 Series — DONE ✓ (2026-07-11), WU42 Story Lineage (renamed from "Story↔Story
    Relationships," 2026-07-12 — see `audit/Stories.md` Feature 10) — DONE ✓ (2026-07-12), WU43 Saved
    Tag Selections.**
@@ -243,9 +246,11 @@ per-cluster render → fix → Pattern-Accumulate → 5→6 on sign-off); surfac
 
 ## Phase 4 — Beta-scope decisions (v1 Phase 3, unchanged)
 
-Story Arcs (8), Polls (37), Custom Lists (51), Spotlight donation infra (55 remainder),
-Feature Contributions (56): design now or explicitly defer past beta — a deliberate verdict per
-feature (decision row 3). Interleaves with Phases 2–3.
+Story Arcs (8), Polls (37), Custom Lists (51), Feature Contributions (56): design now or
+explicitly defer past beta — a deliberate verdict per feature (decision row 3). Interleaves with
+Phases 2–3. (Spotlight donation infra — 55 remainder — got its verdict 2026-07-11: explicitly
+deferred past beta; the spotlight feature itself was built in Phase 2 as WU-Spotlight. See
+Resolved.)
 
 ## Phase 5 — L5 WASM enablement (v1 Phase 4 item 6, deliberately after features)
 
@@ -313,8 +318,8 @@ renumbered, since other docs cite them by number.
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
 | 1 | **Non-story report-target rating routing** — unchanged from v1 (see `middle_plan.md` row 1 for the full technical framing). | Deferred from pre-integration cleanup (2026-06-26). | Own work-unit; surface during the Phase 3 moderation-queue review. |
-| 2 | **Homepage design, incl. the spotlight curation model.** | Spec §5.28: `/` = Community Spotlight stories; §5.26 has no curation mechanics. | Front-door product design. Gates Phase 2 item 1 (WU-Home). |
-| 3 | **Beta scope for features 8 / 37 / 51 / 55-remainder / 56** — design or defer, per feature. | None — genuine Stage-1 intent gaps. | Product-scope judgment. Phase 4. |
+| 2 | **Homepage design — remaining sections.** The spotlight-curation half was resolved 2026-07-11 (see Resolved "Community Spotlight model"); the spotlight section of `/` is built by WU-Spotlight and no longer gated. What remains open: what else the front door shows (recently updated, featured tags, etc.) and its layout. | Spec §5.28: `/` = Community Spotlight stories; other sections undecided. | Front-door product design. Gates the rest of Phase 2 item 1 (WU-Home). |
+| 3 | **Beta scope for features 8 / 37 / 51 / 56** — design or defer, per feature. (55-remainder's verdict rendered 2026-07-11: the spotlight feature is built now; donation infra explicitly deferred past beta — see Resolved.) | None — genuine Stage-1 intent gaps. | Product-scope judgment. Phase 4. |
 | 4 | **Launch-readiness mechanics** — now the full Phase 7 checklist: deploy mechanism, config contract, migration-in-prod, backup+restore drill, uptime/alerting, TLS/domain, R2 values. | Topology settled (droplet + managed PG + R2); `aspire publish` compose output is the default deploy candidate. | Operational cost/effort trade-offs. Phase 7. |
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Phase 6 gate. |
 | 8 | **Email provider + sending domain** (residual — mechanism resolved 2026-07-06, see Resolved) — which SMTP provider to point the seam at, and the sending domain. | Postmark or Amazon SES (cheap at this scale) or Resend; needs a sending domain, which ties into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Config-only swap once decided (no code change) — gates Phase 7, not Phase 1 anymore. |
@@ -324,6 +329,22 @@ renumbered, since other docs cite them by number.
 
 ## Resolved
 
+- **Community Spotlight model + Feature-55 build scope (row 2's spotlight half; row 3's
+  55-remainder verdict)** — **resolved 2026-07-11** (Brian, in chat over several rounds). The
+  Gemini pledge-drive design (GeminiDiscussions Sept–Nov 2025 §VIII) is requirements-spirit only;
+  implementation is first-principles — spec §5.26's "simplified to direct donations" stands, now
+  with mechanics. Settled: donation-funded slot *grants* with donations DEFERRED
+  (`ISpotlightSlotAllocator` is the seam — mods grant now, the payment pipeline becomes a second
+  grant source later); the donor/awardee picks **someone else's** story (self-recommendation ok,
+  self-story never); the display is an additive composition of existing things (Story + optional
+  Recommendation with its recommender attribution); **discrete calendar blocks × N concurrent
+  homepage positions** (N mod-set now, activity/cost-scaled later), schedulable future start,
+  per-story cooldown; knobs are DB-backed mod-editable `site_settings`; three notifications
+  (grant inline; story-author + recommender at go-live via a worker). No algorithmic homepage —
+  site-mission constraint. Homepage scope: the spotlight section only; row 2's homepage-design
+  remainder stays open. Detail: `audit/Spotlight.md` (settled-vs-open); conventions:
+  `layer2-services.md` §"Community Spotlight" + §"Site Settings"; build: `workplan.md`
+  WU-Spotlight.
 - **Open Graph / social-sharing meta tags (addendum §3 #15/#17, WU-Seo)** — **resolved 2026-07-11**
   (Brian). Scope: OG + Twitter card + `<meta name="description">` on all shareable content pages
   (Stories, Chapters, Profiles, Series, BlogPosts, Groups); mature-content `noindex` (addendum #18)

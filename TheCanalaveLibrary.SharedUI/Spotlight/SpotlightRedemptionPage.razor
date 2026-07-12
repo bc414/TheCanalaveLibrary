@@ -1,0 +1,281 @@
+@page "/spotlight"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@inject ISpotlightWriteService Spotlights
+@inject IRecommendationReadService Recommendations
+@inject IToastService Toasts
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Authorization
+
+@* Awardee redemption page (Feature 55, WU-Spotlight — audit/Spotlight.md). Redeems a granted
+   slot into a booked homepage placement: pick someone else's story (primary path: your own
+   recommendations/hidden gems, which pre-attach themselves; secondary: StoryTitlePicker title
+   search), optionally choose ANY of the story's recommendations to display beside it
+   (self-recommendation is fine — only self-STORY is banned), then pick an open calendar block.
+   Every rule is re-validated server-side in RedeemSlotAsync — this UI is affordance, not a gate. *@
+
+<PageTitle>Community Spotlight</PageTitle>
+
+<div class="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-8">
+    <h1 class="inline-block w-fit rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+        Community Spotlight
+    </h1>
+
+    @if (_loading)
+    {
+        <p class="text-(--color-text-muted)"><em>Loading…</em></p>
+    }
+    else
+    {
+        @* ── Your bookings ─────────────────────────────────────────────────────── *@
+        @if (_bookings.Count > 0)
+        {
+            <section class="flex flex-col gap-3">
+                <h2 class="text-lg font-semibold text-(--color-text)">Your booked spotlights</h2>
+                <ul class="flex flex-col gap-2">
+                    @foreach (SpotlightBookingDto booking in _bookings)
+                    {
+                        <li class="flex flex-wrap items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm">
+                            <a href="/story/@booking.StoryId" class="font-medium text-(--color-action-ink) hover:underline">@booking.StoryTitle</a>
+                            <span class="text-(--color-text-muted)">
+                                @FormatRange(booking.StartDate, booking.EndDate)@(booking.HasRecommendation ? " · with your chosen recommendation" : "")
+                            </span>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+
+        @* ── Redeem a slot ─────────────────────────────────────────────────────── *@
+        <section class="flex flex-col gap-4">
+            <h2 class="text-lg font-semibold text-(--color-text)">Your slots</h2>
+
+            @if (_slots.Count == 0)
+            {
+                <p class="text-sm text-(--color-text-muted)">
+                    You don't have a spotlight slot right now. Slots are awarded to community
+                    members and let you feature <em>someone else's</em> story on the home page.
+                </p>
+            }
+            else
+            {
+                <p class="text-sm text-(--color-text-muted)">
+                    You have <span class="font-semibold text-(--color-text)">@_slots.Count</span>
+                    spotlight slot@(_slots.Count == 1 ? "" : "s") — feature someone else's story
+                    on the home page.
+                </p>
+
+                @* Step 1 — pick the story *@
+                <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+                    <h3 class="text-sm font-semibold uppercase tracking-wide text-(--color-text-muted)">1. Pick a story</h3>
+
+                    @if (_pickedStoryId is null)
+                    {
+                        @if (_candidates.Count > 0)
+                        {
+                            <p class="text-sm text-(--color-text)">From your recommendations:</p>
+                            <ul class="flex flex-col gap-1.5">
+                                @foreach (SpotlightPickCandidateDto candidate in _candidates)
+                                {
+                                    <li>
+                                        <button type="button" disabled="@_busy"
+                                                class="flex w-full flex-wrap items-center gap-2 rounded-md border border-(--color-border) px-3 py-2 text-left text-sm transition-colors hover:bg-(--color-surface-raised)"
+                                                @onclick="() => SelectStoryAsync(candidate.StoryId, candidate.StoryTitle, candidate.RecommendationId)">
+                                            <span class="font-medium text-(--color-text)">@candidate.StoryTitle</span>
+                                            @if (candidate.AuthorName is not null)
+                                            {
+                                                <span class="text-(--color-text-muted)">by @candidate.AuthorName</span>
+                                            }
+                                            @if (candidate.IsHiddenGem)
+                                            {
+                                                <span class="text-xs font-semibold text-(--color-gem)">Hidden Gem</span>
+                                            }
+                                        </button>
+                                    </li>
+                                }
+                            </ul>
+                        }
+
+                        <p class="text-sm text-(--color-text)">@(_candidates.Count > 0 ? "Or search" : "Search") for any story:</p>
+                        <StoryTitlePicker Placeholder="Type to search for a story to spotlight..."
+                                          OnStorySelected="@(dto => SelectStoryAsync(dto.StoryId, dto.Title, null))" />
+                        <p class="text-xs text-(--color-text-muted)">You can spotlight any public story except your own.</p>
+                    }
+                    else
+                    {
+                        <div class="flex flex-wrap items-center gap-2 text-sm">
+                            <span class="font-medium text-(--color-text)">@_pickedStoryTitle</span>
+                            <button type="button" disabled="@_busy"
+                                    class="text-(--color-text-muted) transition-colors hover:text-(--color-text)"
+                                    @onclick="ClearStoryPick">
+                                Change
+                            </button>
+                        </div>
+                    }
+                </div>
+
+                @* Step 2 — optional recommendation to display beside the story *@
+                @if (_pickedStoryId is not null)
+                {
+                    <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-(--color-text-muted)">2. Show a recommendation beside it (optional)</h3>
+
+                        @if (_storyRecs.Count == 0)
+                        {
+                            <p class="text-sm text-(--color-text-muted)">This story has no recommendations yet — the spotlight will show the story on its own.</p>
+                        }
+                        else
+                        {
+                            <div class="flex flex-col gap-1.5 text-sm" role="radiogroup" aria-label="Recommendation to display">
+                                <label class="flex items-center gap-2">
+                                    <input type="radio" name="spotlight-rec" checked="@(_pickedRecommendationId is null)"
+                                           @onchange="() => _pickedRecommendationId = null" />
+                                    <span class="text-(--color-text)">None — story only</span>
+                                </label>
+                                @foreach (RecommendationDto rec in _storyRecs)
+                                {
+                                    <label class="flex items-center gap-2">
+                                        <input type="radio" name="spotlight-rec" checked="@(_pickedRecommendationId == rec.RecommendationId)"
+                                               @onchange="() => _pickedRecommendationId = rec.RecommendationId" />
+                                        <span class="text-(--color-text)">
+                                            by @(rec.Recommender?.Username ?? "[deleted user]") · @rec.DatePosted.ToString("MMM d, yyyy")@(rec.IsOwnRecommendation ? " (yours)" : "")
+                                        </span>
+                                    </label>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    @* Step 3 — pick an open block *@
+                    <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+                        <h3 class="text-sm font-semibold uppercase tracking-wide text-(--color-text-muted)">3. Pick a week</h3>
+
+                        <div class="flex flex-col gap-1.5 text-sm" role="radiogroup" aria-label="Spotlight window">
+                            @foreach (SpotlightBlockDto block in _blocks)
+                            {
+                                <label class="flex items-center gap-2 @(block.HasOpening ? "" : "opacity-50")">
+                                    <input type="radio" name="spotlight-block" disabled="@(!block.HasOpening)"
+                                           checked="@(_pickedBlockStart == block.StartUtc)"
+                                           @onchange="() => _pickedBlockStart = block.StartUtc" />
+                                    <span class="text-(--color-text)">
+                                        @FormatRange(block.StartUtc, block.EndUtc)
+                                        <span class="text-(--color-text-muted)">
+                                            — @(block.HasOpening ? $"{block.Capacity - block.BookedCount} of {block.Capacity} open" : "full")
+                                        </span>
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+
+                    @if (_error is not null)
+                    {
+                        <InlineAlert Message="@_error" />
+                    }
+
+                    <button type="button" disabled="@(_busy || _pickedBlockStart is null)"
+                            class="w-fit rounded-md bg-(--color-action) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
+                            @onclick="RedeemAsync">
+                        Book the spotlight
+                    </button>
+                }
+            }
+        </section>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private string? _error;
+
+    private IReadOnlyList<SpotlightSlotDto> _slots = [];
+    private IReadOnlyList<SpotlightBookingDto> _bookings = [];
+    private IReadOnlyList<SpotlightPickCandidateDto> _candidates = [];
+    private IReadOnlyList<SpotlightBlockDto> _blocks = [];
+
+    private int? _pickedStoryId;
+    private string? _pickedStoryTitle;
+    private int? _pickedRecommendationId;
+    private List<RecommendationDto> _storyRecs = [];
+    private DateTime? _pickedBlockStart;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            // Parallel loading is sanctioned — read services are factory-per-method (layer2-services.md).
+            Task<IReadOnlyList<SpotlightSlotDto>> slots = Spotlights.GetMyAvailableSlotsAsync();
+            Task<IReadOnlyList<SpotlightBookingDto>> bookings = Spotlights.GetMyBookingsAsync();
+            Task<IReadOnlyList<SpotlightPickCandidateDto>> candidates = Spotlights.GetMyPickCandidatesAsync();
+            Task<IReadOnlyList<SpotlightBlockDto>> blocks = Spotlights.GetBlockAvailabilityAsync();
+            await Task.WhenAll(slots, bookings, candidates, blocks);
+            _slots = slots.Result;
+            _bookings = bookings.Result;
+            _candidates = candidates.Result;
+            _blocks = blocks.Result;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SelectStoryAsync(int storyId, string title, int? preselectRecommendationId)
+    {
+        _error = null;
+        _pickedStoryId = storyId;
+        _pickedStoryTitle = title;
+        _storyRecs = await Recommendations.GetForStoryAsync(storyId);
+        // Primary path pre-attaches the candidate's own recommendation; fall back to "none" when
+        // it isn't in the visible list (e.g. taken down since).
+        _pickedRecommendationId = preselectRecommendationId is int recId
+                                  && _storyRecs.Any(r => r.RecommendationId == recId)
+            ? recId
+            : null;
+    }
+
+    private void ClearStoryPick()
+    {
+        _error = null;
+        _pickedStoryId = null;
+        _pickedStoryTitle = null;
+        _pickedRecommendationId = null;
+        _storyRecs = [];
+    }
+
+    private async Task RedeemAsync()
+    {
+        if (_pickedStoryId is not int storyId || _pickedBlockStart is not DateTime blockStart
+            || _slots.Count == 0 || _busy)
+            return;
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            // Oldest slot first (they're ordered by grant date).
+            await Spotlights.RedeemSlotAsync(new RedeemSpotlightSlotDto(
+                _slots[0].SlotId, storyId, _pickedRecommendationId, blockStart));
+
+            Toasts.Show("Spotlight booked!", ToastLevel.Success);
+            ClearStoryPick();
+            _pickedBlockStart = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is SpotlightValidationException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string FormatRange(DateTime startUtc, DateTime endUtc) =>
+        $"{startUtc:MMM d} – {endUtc:MMM d, yyyy}";
+}

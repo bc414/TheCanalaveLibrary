@@ -96,7 +96,7 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
                      {
                          typeof(ReadingProgressFlushWorker), typeof(ViewCountFlushWorker),
                          typeof(DiscoveryMartWorker), typeof(UserActivityFlushWorker),
-                         typeof(SiteDailyStatWorker),
+                         typeof(SiteDailyStatWorker), typeof(SpotlightGoLiveWorker),
                      })
             {
                 ServiceDescriptor? backgroundWorker = services.FirstOrDefault(d =>

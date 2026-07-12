@@ -1307,6 +1307,94 @@ boolean column (`IsCompleted`, `HasStarted`+`!IsCompleted`, `IsIgnored`); the co
 when the effective derived state actually changes. Never increment/decrement if the boolean is being
 written to its current value (idempotent call from an optimistic-UI retry).
 
+## Site Settings (`ISiteSettingsService`) — DB-Backed Mod-Editable Runtime Knobs (WU-Spotlight)
+
+`SiteSettings/` is a cross-cutting cluster (see `SKILL.md` "Code Organization"): **runtime tuning
+values mods change from a mod surface without a deploy.** Distinct from `appsettings` (deploy-time
+config: connection strings, provider switches — things only an operator changes) and from
+`Profiles/` user settings (per-user). First consumer: Community Spotlight's five knobs.
+
+- **Entity:** `SiteSetting { SettingKey (string PK, MaxLength 128), Value (string, MaxLength 256) }`
+  — the string-key lookup pattern (`layer1-data-model.md` enum/lookup framework). Values are stored
+  as strings; typing lives in the service accessors. Seeded via `HasData` in
+  `SiteSettingsConfigurations.cs`.
+- **Keys + defaults live in Core** (`SiteSettingKeys` in `Core/SiteSettings/`): each key constant is
+  paired with its default value; the EF seed and the read-fallback both reference the same constant
+  — one source of truth, and a missing/unparseable row degrades to the default instead of throwing.
+- **CQRS split as usual:** `ISiteSettingsReadService.GetIntAsync(key, fallback)` /
+  `ISiteSettingsWriteService.SetIntAsync(key, value)` (write inherits read). The write side calls
+  `RequireModerator()` (the `ServerModerationWriteService` pattern) — mod-gating is enforced at the
+  service, the `[Authorize]` on the mod page is affordance. Only `int` accessors exist today; add
+  typed accessors when a non-int knob appears, don't pre-build them.
+- **No caching.** Reads are single-row PK lookups on tiny tables; the whole point is that a mod
+  edit takes effect on the next read. Revisit only with measured need.
+- **Editor UI lives on the consuming feature's mod surface** (e.g. `ModSpotlightPage` edits the
+  spotlight knobs) — there is no central "all settings" page; a knob without a feature surface has
+  no reason to exist.
+
+## Community Spotlight — Slot Allocator Seam + Block Booking (WU-Spotlight, Feature 55)
+
+Intent settled 2026-07-11 — `audit/Spotlight.md` holds the requirements record (Gemini discussions
+= spirit only; donations deferred). The L2 shape:
+
+**Two entities, two concerns** (`Core/Spotlight/`): `SpotlightSlot` is the *entitlement* (who was
+granted the right to spotlight, by which source, redeemed or not); `CommunitySpotlight` is the
+*placement* (which story + optional recommendation occupies which booked block). Never conflate
+them — the donation era changes only how slots are granted, never what a placement is.
+
+**The seam — `ISpotlightSlotAllocator`** (`Core/Spotlight/`): `GrantSlotAsync(toUserId, source)`,
+`RevokeSlotAsync(slotId)`, `GetRemainingMonthlyGrantCapacityAsync()`. The mod-grant implementation
+(`ServerSpotlightSlotAllocator`) enforces `RequireModerator()` for `SpotlightSlotSource.ModAward`
+and the monthly grant cap (`site_settings`); `SpotlightSlotSource.Donation` throws until the
+payment pipeline lands — the enum value and `SpotlightSlot.PaymentId` are the reserved seam, not
+dead code. Grant sends `SpotlightSlotGranted` best-effort post-commit (standard notification
+pattern). Slot grants do not expire (deferred — revoke is the mod escape hatch).
+
+**Block grid is computed, never stored.** `SpotlightBlocks` (`Core/Spotlight/`, pure static — the
+`ChapterText.CountWords` precedent) owns the grid math: blocks of `BlockDurationDays` tile forward
+from a fixed epoch (`SpotlightConstants.BlockEpoch`, a Monday, so 7-day blocks align to calendar
+weeks). A block's capacity is `PositionCount` (site setting); its booked count is a query
+(placements overlapping the block), so changing `PositionCount` or `BlockDurationDays` requires no
+data rewrite — existing placements keep their concrete `StartDate`/`EndDate`. Bookable blocks run
+from the *current* block (starts immediately, partial remaining window) through
+`BookingHorizonDays`.
+
+**Redemption is the concurrency-sensitive write.** `ISpotlightWriteService.RedeemSlotAsync(dto)`
+validates inside one transaction serialized by a Postgres advisory lock
+(`pg_advisory_xact_lock(hashtext('canalave_spotlight_booking'))`), wrapped in
+`CreateExecutionStrategy().ExecuteAsync(...)` because `EnableRetryOnFailure` refuses bare
+`BeginTransactionAsync` (the `UserDeletionService` precedent). Two users racing for the last
+opening in a block must not both succeed — count-then-insert is only safe under the lock.
+Validation set (server-authoritative; UI affordances are not gates): slot is mine + `Available`;
+story exists, `AuthorId != me` (no self-spotlight — the UI's `StoryTitlePicker ExcludeStoryId`
+can't express "all my stories", so this is service-enforced), status ∉ {Draft, PendingApproval,
+Rejected}, `!IsTakenDown`; optional recommendation belongs to the picked story, is Approved and
+not taken down (**any** recommender — self-recommendation is allowed; only self-*story* is
+banned); block start is on-grid, not fully past, within the horizon; per-story cooldown
+(`CooldownDays` around the new window in both directions — also prevents double-booking the same
+story into overlapping blocks); block has an opening (< `PositionCount` overlapping placements).
+Rejections throw `SpotlightValidationException` (the `RecommendationValidationException` pattern).
+No `IWriteRateLimitService` on redemption — the consumed slot *is* the rate limit; grants are
+mod-gated.
+
+**Display reads join through the navs so the viewer's filters do the work.** The homepage read
+(`GetActiveSpotlightsAsync`: `StartDate <= now < EndDate`) projects through the required `Story`
+nav and optional `Recommendation` nav on the read context — `ContentRating`/`IsTakenDown` named
+filters apply to the joined entities, so a placement whose story the viewer can't see simply drops
+out (same join-not-bare-projection rule as `ServerStoryLineageReadService`), and a taken-down
+recommendation nulls back to the blank-rec display state. Composition for presentation:
+`IStoryReadService.GetListingsByIdsAsync` for the story cards, `IRecommendationReadService` for
+rec DTOs — the spotlight service never re-implements those projections.
+
+**Go-live notifications come from a worker, not the write path.** Placements are booked for
+*future* blocks; `StorySpotlighted`/`RecommendationSpotlighted` must land when the window opens.
+`SpotlightGoLiveWorker` (Server/Spotlight/, `BackgroundService` — the `SiteDailyStatWorker`
+conventions) periodically sweeps `StartDate <= now < EndDate AND GoLiveNotifiedUtc IS NULL`,
+notifies via `INotificationWriteService`, and stamps `GoLiveNotifiedUtc` (fires-once idempotency
+is the stamp, not the dedup heuristic). A placement whose whole window elapsed while the server
+was down is never notified late — the `EndDate > now` condition ages it out silently.
+`TestAppFactory` removes the worker; integration tests drive the sweep body directly.
+
 ## Naming
 
 - Server impl prefix `Server...`, client impl prefix `Client...`.

@@ -119,7 +119,13 @@ public sealed class NotificationTypeConfiguration : IEntityTypeConfiguration<Not
             // Your Reports (Category 8)
             new { NotificationTypeId = NotificationTypeEnum.ReportReceived, NotificationKey = "ReportReceived", DisplayName = "Report Received", Description = "Thank you, we have received your report.", NotificationCategory = NotificationCategoryEnum.YourReports, DefaultEmailEnabled = false, DefaultCollapsed = false },
             new { NotificationTypeId = NotificationTypeEnum.ReportResolved, NotificationKey = "ReportResolved", DisplayName = "Report Resolved (Action Taken)", Description = "Your report has been resolved and action was taken.", NotificationCategory = NotificationCategoryEnum.YourReports, DefaultEmailEnabled = false, DefaultCollapsed = false },
-            new { NotificationTypeId = NotificationTypeEnum.ReportResolvedNoAction, NotificationKey = "ReportResolvedNoAction", DisplayName = "Report Resolved (No Action)", Description = "Your report was reviewed, but no action was deemed necessary.", NotificationCategory = NotificationCategoryEnum.YourReports, DefaultEmailEnabled = false, DefaultCollapsed = false }
+            new { NotificationTypeId = NotificationTypeEnum.ReportResolvedNoAction, NotificationKey = "ReportResolvedNoAction", DisplayName = "Report Resolved (No Action)", Description = "Your report was reviewed, but no action was deemed necessary.", NotificationCategory = NotificationCategoryEnum.YourReports, DefaultEmailEnabled = false, DefaultCollapsed = false },
+
+            // Community Spotlight (Feature 55, WU-Spotlight) — 90 = SiteNews (staff grant),
+            // 91 = YourStories (author-facing), 92 = YourRecommendations (recommender-facing)
+            new { NotificationTypeId = NotificationTypeEnum.SpotlightSlotGranted, NotificationKey = "SpotlightSlotGranted", DisplayName = "Spotlight Slot Granted", Description = "You have been awarded a Community Spotlight slot.", NotificationCategory = NotificationCategoryEnum.SiteNews, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.StorySpotlighted, NotificationKey = "StorySpotlighted", DisplayName = "Story Spotlighted", Description = "Your story is featured on the Community Spotlight.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true, DefaultCollapsed = false },
+            new { NotificationTypeId = NotificationTypeEnum.RecommendationSpotlighted, NotificationKey = "RecommendationSpotlighted", DisplayName = "Recommendation Spotlighted", Description = "Your recommendation is featured beside a spotlighted story.", NotificationCategory = NotificationCategoryEnum.YourRecommendations, DefaultEmailEnabled = true, DefaultCollapsed = false }
         );
 
         builder.HasIndex(e => e.DisplayName).IsUnique();

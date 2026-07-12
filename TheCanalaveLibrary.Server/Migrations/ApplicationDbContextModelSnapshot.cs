@@ -781,15 +781,17 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("end_date");
 
-                    b.Property<string>("PaymentId")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .HasColumnName("payment_id");
+                    b.Property<DateTime?>("GoLiveNotifiedUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("go_live_notified_utc");
 
-                    b.Property<string>("SponsorComment")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
-                        .HasColumnName("sponsor_comment");
+                    b.Property<int?>("RecommendationId")
+                        .HasColumnType("integer")
+                        .HasColumnName("recommendation_id");
+
+                    b.Property<int>("SlotId")
+                        .HasColumnType("integer")
+                        .HasColumnName("slot_id");
 
                     b.Property<int?>("SponsoringUserId")
                         .HasColumnType("integer")
@@ -806,11 +808,21 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasKey("SpotlightId")
                         .HasName("pk_community_spotlights");
 
+                    b.HasIndex("RecommendationId")
+                        .HasDatabaseName("ix_community_spotlights_recommendation_id");
+
+                    b.HasIndex("SlotId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_community_spotlights_slot_id");
+
                     b.HasIndex("SponsoringUserId")
                         .HasDatabaseName("ix_community_spotlights_sponsoring_user_id");
 
                     b.HasIndex("StoryId")
                         .HasDatabaseName("ix_community_spotlights_story_id");
+
+                    b.HasIndex("StartDate", "EndDate")
+                        .HasDatabaseName("ix_community_spotlights_start_end");
 
                     b.ToTable("community_spotlights", (string)null);
                 });
@@ -1874,6 +1886,36 @@ namespace TheCanalaveLibrary.Server.Migrations
                             DisplayName = "Report Resolved (No Action)",
                             NotificationCategory = (short)8,
                             NotificationKey = "ReportResolvedNoAction"
+                        },
+                        new
+                        {
+                            NotificationTypeId = (short)90,
+                            DefaultCollapsed = false,
+                            DefaultEmailEnabled = true,
+                            Description = "You have been awarded a Community Spotlight slot.",
+                            DisplayName = "Spotlight Slot Granted",
+                            NotificationCategory = (short)0,
+                            NotificationKey = "SpotlightSlotGranted"
+                        },
+                        new
+                        {
+                            NotificationTypeId = (short)91,
+                            DefaultCollapsed = false,
+                            DefaultEmailEnabled = true,
+                            Description = "Your story is featured on the Community Spotlight.",
+                            DisplayName = "Story Spotlighted",
+                            NotificationCategory = (short)2,
+                            NotificationKey = "StorySpotlighted"
+                        },
+                        new
+                        {
+                            NotificationTypeId = (short)92,
+                            DefaultCollapsed = false,
+                            DefaultEmailEnabled = true,
+                            Description = "Your recommendation is featured beside a spotlighted story.",
+                            DisplayName = "Recommendation Spotlighted",
+                            NotificationCategory = (short)4,
+                            NotificationKey = "RecommendationSpotlighted"
                         });
                 });
 
@@ -2705,6 +2747,100 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasName("pk_site_daily_stats");
 
                     b.ToTable("site_daily_stats", (string)null);
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.SiteSetting", b =>
+                {
+                    b.Property<string>("SettingKey")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("setting_key");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("value");
+
+                    b.HasKey("SettingKey")
+                        .HasName("pk_site_settings");
+
+                    b.ToTable("site_settings", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            SettingKey = "Spotlight.BlockDurationDays",
+                            Value = "7"
+                        },
+                        new
+                        {
+                            SettingKey = "Spotlight.PositionCount",
+                            Value = "3"
+                        },
+                        new
+                        {
+                            SettingKey = "Spotlight.CooldownDays",
+                            Value = "90"
+                        },
+                        new
+                        {
+                            SettingKey = "Spotlight.BookingHorizonDays",
+                            Value = "60"
+                        },
+                        new
+                        {
+                            SettingKey = "Spotlight.MonthlyGrantCap",
+                            Value = "12"
+                        });
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.SpotlightSlot", b =>
+                {
+                    b.Property<int>("SlotId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("slot_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SlotId"));
+
+                    b.Property<int?>("GrantedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("granted_by_user_id");
+
+                    b.Property<int?>("GrantedToUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("granted_to_user_id");
+
+                    b.Property<DateTime>("GrantedUtc")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("granted_utc")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("PaymentId")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("payment_id");
+
+                    b.Property<short>("Source")
+                        .HasColumnType("smallint")
+                        .HasColumnName("source");
+
+                    b.Property<short>("Status")
+                        .HasColumnType("smallint")
+                        .HasColumnName("status");
+
+                    b.HasKey("SlotId")
+                        .HasName("pk_spotlight_slots");
+
+                    b.HasIndex("GrantedByUserId")
+                        .HasDatabaseName("ix_spotlight_slots_granted_by_user_id");
+
+                    b.HasIndex("GrantedToUserId", "Status")
+                        .HasDatabaseName("ix_spotlight_slots_granted_to_status");
+
+                    b.ToTable("spotlight_slots", (string)null);
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.Story", b =>
@@ -4616,6 +4752,19 @@ namespace TheCanalaveLibrary.Server.Migrations
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.CommunitySpotlight", b =>
                 {
+                    b.HasOne("TheCanalaveLibrary.Core.Recommendation", "Recommendation")
+                        .WithMany()
+                        .HasForeignKey("RecommendationId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_community_spotlights_recommendations_recommendation_id");
+
+                    b.HasOne("TheCanalaveLibrary.Core.SpotlightSlot", "Slot")
+                        .WithOne("Placement")
+                        .HasForeignKey("TheCanalaveLibrary.Core.CommunitySpotlight", "SlotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_community_spotlights_spotlight_slots_slot_id");
+
                     b.HasOne("TheCanalaveLibrary.Core.User", "SponsoringUser")
                         .WithMany("CommunitySpotlights")
                         .HasForeignKey("SponsoringUserId")
@@ -4628,6 +4777,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_community_spotlights_stories_story_id");
+
+                    b.Navigation("Recommendation");
+
+                    b.Navigation("Slot");
 
                     b.Navigation("SponsoringUser");
 
@@ -5126,6 +5279,25 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("BaseTag");
 
                     b.Navigation("Story");
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.SpotlightSlot", b =>
+                {
+                    b.HasOne("TheCanalaveLibrary.Core.User", "GrantedByUser")
+                        .WithMany()
+                        .HasForeignKey("GrantedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_spotlight_slots_users_granted_by_user_id");
+
+                    b.HasOne("TheCanalaveLibrary.Core.User", "GrantedToUser")
+                        .WithMany()
+                        .HasForeignKey("GrantedToUserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_spotlight_slots_users_granted_to_user_id");
+
+                    b.Navigation("GrantedByUser");
+
+                    b.Navigation("GrantedToUser");
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.Story", b =>
@@ -5867,6 +6039,11 @@ namespace TheCanalaveLibrary.Server.Migrations
             modelBuilder.Entity("TheCanalaveLibrary.Core.Series", b =>
                 {
                     b.Navigation("SeriesEntries");
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.SpotlightSlot", b =>
+                {
+                    b.Navigation("Placement");
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.Story", b =>

@@ -100,6 +100,11 @@ Cross-cutting clusters and their scope:
   tags) + a description-cleaning helper. Consumed by every shareable content page (Stories, Chapters,
   Profiles, Series, BlogPosts, Groups); no single feature owns it. See `render-and-layout.md`
   §"Social Meta Tags (Open Graph)" and `audit/Seo.md`.
+- **`SiteSettings/`** — `ISiteSettingsService` (Core) + `ServerSiteSettingsService` (Server):
+  DB-backed, mod-editable runtime tuning values (`site_settings` string-key rows, seeded defaults).
+  No owning feature — any feature with a "mods tune this without a deploy" knob consumes it (first:
+  Spotlight). Distinct from `Profiles/` user settings and from `appsettings` deploy config. See
+  `layer2-services.md` §"Site Settings (`ISiteSettingsService`)".
 
 API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
 cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/SpriteEndpoints.cs`

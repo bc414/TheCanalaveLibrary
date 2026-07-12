@@ -86,6 +86,13 @@ adding that. Noted here so the seam isn't re-discovered from scratch.
   (fan-out to `ReceiveAlerts` followers, with WU17/chapter-publish flow); `NotifyNewCommentAsync` /
   `NotifyNewRecommendationAsync` / etc. (with WU19/20/29). The create-core and DAG pattern are built
   now; each deferred method is a thin wrapper addition.
+  **WU-Spotlight slice (2026-07-12):** three new types 90–92 (`SpotlightSlotGranted` /
+  `StorySpotlighted` / `RecommendationSpotlighted` — categories SiteNews / YourStories /
+  YourRecommendations, email-default on) + thin semantic wrappers + `KindFor` Story branches for
+  91/92 (90 = None; the redemption page is a fixed route, not an entity link). 91/92 are fired by
+  a worker (`SpotlightGoLiveWorker`) at window-open, not by a write path — first worker-sourced
+  notifications; the create-core's drop-self correctly suppresses 92 when the sponsor attached
+  their own recommendation (browser-verified against the dev DB). Detail: `audit/Spotlight.md`.
 
 ## Feature 42 — Notification Display
 

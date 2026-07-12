@@ -56,6 +56,12 @@ public class ServerNotificationReadService(
         NotificationTypeEnum.YourStoryAddedToGroup  => RelatedEntityKind.Group,
         NotificationTypeEnum.NewGroupBlogPost        => RelatedEntityKind.BlogPost,
 
+        // ── Implemented WU-Spotlight: RelatedEntityId = spotlighted story id ─────
+        // (SpotlightSlotGranted carries no entity — falls to None below; the redemption
+        // page is a fixed route, not an entity link.)
+        NotificationTypeEnum.StorySpotlighted          => RelatedEntityKind.Story,
+        NotificationTypeEnum.RecommendationSpotlighted => RelatedEntityKind.Story,
+
         // ── Forward-compat stubs (no rows until triggering work-units land) ──────
         NotificationTypeEnum.NewChapterOnFollowedStory       => RelatedEntityKind.Chapter,
         NotificationTypeEnum.NewStoryByFollowedUser          => RelatedEntityKind.Story,

@@ -1,0 +1,238 @@
+@page "/mod/spotlight"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize(Roles = "Moderator,Admin")]
+@inject ISpotlightSlotAllocator Allocator
+@inject ISiteSettingsWriteService Settings
+@inject IMessagingReadService UserLookup
+@inject IToastService Toasts
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Authorization
+
+@* Mod surface for Community Spotlight (Feature 55, WU-Spotlight): grant slot entitlements
+   (the mods-now half of the ISpotlightSlotAllocator seam — the donation pipeline is the
+   deferred later half), revoke unredeemed grants, and tune the site_settings knobs. Desktop-
+   first, no dispatcher — the Moderation-cluster page convention. Username resolution reuses
+   IMessagingReadService.FindUserByUsernameAsync (the existing exact-match lookup building
+   block) rather than minting a new user-search service. Grant/settings authorization is
+   enforced in the services; the [Authorize] attribute is affordance. *@
+
+<PageTitle>Mod — Community Spotlight</PageTitle>
+
+<div class="flex flex-col gap-6 px-4 py-4">
+
+    <h1 class="inline-block w-fit rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+        Community Spotlight
+    </h1>
+
+    @if (_loading)
+    {
+        <p class="text-sm text-(--color-text-muted)">Loading…</p>
+    }
+    else
+    {
+        @* ── Grant a slot ──────────────────────────────────────────────────────── *@
+        <section class="flex max-w-xl flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+            <h2 class="text-lg font-semibold text-(--color-text)">Grant a slot</h2>
+            <p class="text-sm text-(--color-text-muted)">
+                <span class="font-semibold text-(--color-text)">@_remainingCapacity</span>
+                grant@(_remainingCapacity == 1 ? "" : "s") left this month (cap models the monthly
+                donation ceiling — keep slots meaningful).
+            </p>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <input type="text" placeholder="Exact username" @bind="_grantUsername" disabled="@_busy"
+                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text)" />
+                <button type="button" disabled="@(_busy || string.IsNullOrWhiteSpace(_grantUsername))"
+                        class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
+                        @onclick="GrantAsync">
+                    Grant slot
+                </button>
+            </div>
+
+            @if (_grantError is not null)
+            {
+                <InlineAlert Message="@_grantError" />
+            }
+        </section>
+
+        @* ── Recent grants ─────────────────────────────────────────────────────── *@
+        <section class="flex max-w-xl flex-col gap-3">
+            <h2 class="text-lg font-semibold text-(--color-text)">Recent grants</h2>
+            @if (_recentGrants.Count == 0)
+            {
+                <p class="text-sm text-(--color-text-muted)">No slots granted yet.</p>
+            }
+            else
+            {
+                <ul class="flex flex-col gap-2">
+                    @foreach (SpotlightSlotAdminDto grant in _recentGrants)
+                    {
+                        <li class="flex flex-wrap items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm">
+                            <span class="font-medium text-(--color-text)">@(grant.GrantedToUserName ?? "[deleted user]")</span>
+                            <span class="text-(--color-text-muted)">@grant.GrantedUtc.ToString("MMM d, yyyy") · @grant.Status</span>
+                            @if (grant.Status == SpotlightSlotStatus.Available)
+                            {
+                                <button type="button" disabled="@_busy"
+                                        class="ml-auto text-xs text-(--color-text-muted) transition-colors hover:text-(--color-danger)"
+                                        @onclick="() => RevokeAsync(grant.SlotId)">
+                                    Revoke
+                                </button>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        @* ── Tuning knobs (site_settings — live at next read, no deploy) ───────── *@
+        <section class="flex max-w-xl flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+            <h2 class="text-lg font-semibold text-(--color-text)">Settings</h2>
+
+            <div class="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+                <label class="flex items-center justify-between gap-2">
+                    <span class="text-(--color-text)">Block duration (days)</span>
+                    <input type="number" min="1" @bind="_blockDurationDays" disabled="@_busy" class="w-20 rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-(--color-text)" />
+                </label>
+                <label class="flex items-center justify-between gap-2">
+                    <span class="text-(--color-text)">Homepage positions</span>
+                    <input type="number" min="1" @bind="_positionCount" disabled="@_busy" class="w-20 rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-(--color-text)" />
+                </label>
+                <label class="flex items-center justify-between gap-2">
+                    <span class="text-(--color-text)">Story cooldown (days)</span>
+                    <input type="number" min="0" @bind="_cooldownDays" disabled="@_busy" class="w-20 rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-(--color-text)" />
+                </label>
+                <label class="flex items-center justify-between gap-2">
+                    <span class="text-(--color-text)">Booking horizon (days)</span>
+                    <input type="number" min="1" @bind="_horizonDays" disabled="@_busy" class="w-20 rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-(--color-text)" />
+                </label>
+                <label class="flex items-center justify-between gap-2">
+                    <span class="text-(--color-text)">Monthly grant cap</span>
+                    <input type="number" min="0" @bind="_monthlyGrantCap" disabled="@_busy" class="w-20 rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-(--color-text)" />
+                </label>
+            </div>
+
+            @if (_settingsError is not null)
+            {
+                <InlineAlert Message="@_settingsError" />
+            }
+
+            <button type="button" disabled="@_busy"
+                    class="w-fit rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
+                    @onclick="SaveSettingsAsync">
+                Save settings
+            </button>
+        </section>
+    }
+</div>
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private string? _grantError;
+    private string? _settingsError;
+
+    private string? _grantUsername;
+    private int _remainingCapacity;
+    private IReadOnlyList<SpotlightSlotAdminDto> _recentGrants = [];
+
+    private int _blockDurationDays;
+    private int _positionCount;
+    private int _cooldownDays;
+    private int _horizonDays;
+    private int _monthlyGrantCap;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            _remainingCapacity = await Allocator.GetRemainingMonthlyGrantCapacityAsync();
+            _recentGrants = await Allocator.GetRecentGrantsAsync();
+            _blockDurationDays = await Settings.GetIntAsync(SiteSettingKeys.SpotlightBlockDurationDays, SiteSettingKeys.SpotlightBlockDurationDaysDefault);
+            _positionCount = await Settings.GetIntAsync(SiteSettingKeys.SpotlightPositionCount, SiteSettingKeys.SpotlightPositionCountDefault);
+            _cooldownDays = await Settings.GetIntAsync(SiteSettingKeys.SpotlightCooldownDays, SiteSettingKeys.SpotlightCooldownDaysDefault);
+            _horizonDays = await Settings.GetIntAsync(SiteSettingKeys.SpotlightBookingHorizonDays, SiteSettingKeys.SpotlightBookingHorizonDaysDefault);
+            _monthlyGrantCap = await Settings.GetIntAsync(SiteSettingKeys.SpotlightMonthlyGrantCap, SiteSettingKeys.SpotlightMonthlyGrantCapDefault);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task GrantAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_grantUsername) || _busy) return;
+
+        _busy = true;
+        _grantError = null;
+        try
+        {
+            MessagingParticipantDto? user = await UserLookup.FindUserByUsernameAsync(_grantUsername.Trim());
+            if (user is null)
+            {
+                _grantError = $"No user named \"{_grantUsername}\" was found (exact match).";
+                return;
+            }
+
+            await Allocator.GrantSlotAsync(user.UserId, SpotlightSlotSource.ModAward);
+            Toasts.Show($"Slot granted to {user.Username}.", ToastLevel.Success);
+            _grantUsername = null;
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is SpotlightValidationException or UnauthorizedAccessException)
+        {
+            _grantError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RevokeAsync(int slotId)
+    {
+        if (_busy) return;
+        _busy = true;
+        _grantError = null;
+        try
+        {
+            await Allocator.RevokeSlotAsync(slotId);
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is SpotlightValidationException or UnauthorizedAccessException)
+        {
+            _grantError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveSettingsAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        _settingsError = null;
+        try
+        {
+            await Settings.SetIntAsync(SiteSettingKeys.SpotlightBlockDurationDays, _blockDurationDays);
+            await Settings.SetIntAsync(SiteSettingKeys.SpotlightPositionCount, _positionCount);
+            await Settings.SetIntAsync(SiteSettingKeys.SpotlightCooldownDays, _cooldownDays);
+            await Settings.SetIntAsync(SiteSettingKeys.SpotlightBookingHorizonDays, _horizonDays);
+            await Settings.SetIntAsync(SiteSettingKeys.SpotlightMonthlyGrantCap, _monthlyGrantCap);
+            Toasts.Show("Spotlight settings saved.", ToastLevel.Success);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException)
+        {
+            _settingsError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

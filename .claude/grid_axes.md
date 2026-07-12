@@ -620,7 +620,9 @@ Feature 53.
 **54. Content Download/Export** — Download in six formats: ePub, PDF, HTML, TXT, Markdown, DOCX.
 Pure application-layer, no schema impact. Anyone who can read a story can export it.
 
-**55. Community Spotlight** — Donation infrastructure. Schema TBD.
+**55. Community Spotlight** — Slot-entitlement grants (mods now, donation pipeline deferred past
+beta) redeemed into block-booked homepage story features (story + optional recommendation).
+Mechanics settled 2026-07-11; built as WU-Spotlight. See `audit/Spotlight.md`.
 
 **56. Feature Contributions** — Admin attribution of accepted suggestions. Tied to "Site Development"
 Group.

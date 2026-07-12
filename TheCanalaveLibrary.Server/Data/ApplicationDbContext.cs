@@ -180,8 +180,12 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     //Statistics
     public DbSet<UserStat> UserStats { get; set; }
 
-    //Other
+    //Community Spotlight (Feature 55)
     public DbSet<CommunitySpotlight> CommunitySpotlights { get; set; }
+    public DbSet<SpotlightSlot> SpotlightSlots { get; set; }
+
+    //Site settings (cross-cutting: mod-editable runtime knobs)
+    public DbSet<SiteSetting> SiteSettings { get; set; }
 
     #endregion
 

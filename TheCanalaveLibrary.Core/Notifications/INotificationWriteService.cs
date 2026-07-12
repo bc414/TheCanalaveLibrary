@@ -165,4 +165,29 @@ public interface INotificationWriteService : INotificationReadService
     /// <c>RelatedEntityId = 0</c>.
     /// </summary>
     Task NotifyAccountBannedAsync(int targetUserId, int moderatorSourceId);
+
+    // ── Semantic generation methods (WU-Spotlight slice) ─────────────────────────
+
+    /// <summary>
+    /// Sends <c>SpotlightSlotGranted = 90</c> to <paramref name="awardeeUserId"/>, inline at
+    /// grant time (called by <c>ServerSpotlightSlotAllocator.GrantSlotAsync</c> after its primary
+    /// commit). <c>RelatedEntityId = 0</c> (the redemption page is a fixed route, not an entity).
+    /// </summary>
+    Task NotifySpotlightSlotGrantedAsync(int awardeeUserId, int grantingModeratorId);
+
+    /// <summary>
+    /// Sends <c>StorySpotlighted = 91</c> to the story author <b>at go-live</b> (called by
+    /// <c>SpotlightGoLiveWorker</c> when a placement's window opens, never at booking).
+    /// <c>RelatedEntityId = storyId</c>. Drop-self covers a sponsor spotlighting… never their own
+    /// story (service-enforced), so this always delivers.
+    /// </summary>
+    Task NotifyStorySpotlightedAsync(int storyAuthorUserId, int sponsorUserId, int storyId);
+
+    /// <summary>
+    /// Sends <c>RecommendationSpotlighted = 92</c> to the attached recommendation's recommender
+    /// <b>at go-live</b>. <c>RelatedEntityId = storyId</c> (recommendations display on the story
+    /// page). When the sponsor attached their own recommendation, the create-core's drop-self
+    /// rule suppresses it — the standing self-generated-notification convention.
+    /// </summary>
+    Task NotifyRecommendationSpotlightedAsync(int recommenderUserId, int sponsorUserId, int storyId);
 }

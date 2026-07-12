@@ -1,0 +1,67 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@inject ISpotlightReadService Spotlights
+
+@* The homepage Community Spotlight section (Feature 55, WU-Spotlight — audit/Spotlight.md).
+   Coordination composite with sanctioned service injection (independent-concern rule, the
+   NotificationBell precedent): the Home page is a device dispatcher only, and this section is
+   slotted into both variants. Each placement is an ADDITIVE COMPOSITION of existing leaves —
+   StoryCard beside the optional endorsing RecommendationCard (no callbacks wired: read-only
+   context). No recommendation attached (or not visible to this viewer) → the rec half simply
+   stays blank, per the settled requirements. *@
+
+<section aria-label="Community Spotlight" class="flex flex-col gap-3">
+    <h2 class="font-display text-lg font-semibold text-(--color-text)">Community Spotlight</h2>
+
+    @if (_loading)
+    {
+        <p class="text-sm text-(--color-text-muted)">Loading…</p>
+    }
+    else if (_spotlights.Count == 0)
+    {
+        <p class="text-sm text-(--color-text-muted)">
+            No stories are in the spotlight right now.
+        </p>
+    }
+    else
+    {
+        <div class="flex flex-col gap-4">
+            @foreach (SpotlightDisplayDto spotlight in _spotlights)
+            {
+                @* min-w-0 wrappers: grid items default to min-width:auto, so an unbreakable
+                   run in a recommendation body would otherwise force the cell (and page) wider
+                   than the viewport — found live during WU-Spotlight browser verification. *@
+                <div @key="spotlight.SpotlightId" class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div class="min-w-0">
+                        <StoryCard Story="@spotlight.Story" />
+                    </div>
+                    @if (spotlight.Recommendation is not null)
+                    {
+                        @* break-words (overflow-wrap) inherits into the card's prose, wrapping
+                           unbreakable runs instead of clipping them. *@
+                        <div class="min-w-0 break-words">
+                            <RecommendationCard Rec="@spotlight.Recommendation" />
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private bool _loading = true;
+    private IReadOnlyList<SpotlightDisplayDto> _spotlights = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _spotlights = await Spotlights.GetActiveSpotlightsAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

@@ -162,6 +162,11 @@ public enum NotificationTypeEnum : short
     ReportReceived = 80, // "Thank you, we have received your report."
     ReportResolved = 81,  // "Your report about '...' has been resolved."
     ReportResolvedNoAction = 82,  // "Your report about '...' has been resolved."
+
+    //Community Spotlight (Feature 55, WU-Spotlight)
+    SpotlightSlotGranted = 90,      // You were awarded a Community Spotlight slot (inline at grant)
+    StorySpotlighted = 91,          // Your story is featured on the Community Spotlight (at go-live, worker)
+    RecommendationSpotlighted = 92, // Your recommendation is featured beside a spotlighted story (at go-live, worker)
 }
 
 public enum SiteRoles : int

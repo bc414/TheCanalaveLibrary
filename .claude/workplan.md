@@ -2465,3 +2465,67 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
 - **Tool:** Claude Code. **Pointer:** `audit/Seo.md`; `render-and-layout.md` §"Social Meta Tags
   (Open Graph)"; `canalave-conventions/SKILL.md` "Seo/" cluster entry; `middle_plan_v2.md` Resolved;
   `middle-addendum.md` §3 items #15/#17.
+
+## WU-Spotlight — Community Spotlight, full feature minus donations (Feature 55) — DONE ✓ (2026-07-12)
+
+- **Cells flipped:** F55 L1/L2/L3-Logic/L3.5/L4.5 `1→5`; L4 `1→3` (functional, not design-reviewed
+  — the row-62 precedent); L5 `N/A→2` (a real browser surface now exists; endpoint+client pair due
+  in the Phase-5 batch). L6/L8 stay N/A (the `(start_date, end_date)` composite index shipped as
+  part of L1 — low-volume table, no measured L6 pass warranted; the go-live worker is an L2-style
+  hosted service, not a mart). Stage notes: `audit/Spotlight.md`.
+- **The decision that shaped the WU (Doc-Touch moment 1, resolved with Brian in chat over three
+  rounds, 2026-07-11):** the Gemini pledge-drive design is requirements-spirit only; implementation
+  is first-principles. Settled model: donation-funded slot grants with donations DEFERRED past beta
+  (`ISpotlightSlotAllocator` is the seam — mods grant now, the payment pipeline grants later);
+  donor picks someone else's story (self-rec fine, self-story never); display = additive
+  composition (StoryCard + optional RecommendationCard); discrete calendar blocks × N mod-set
+  homepage positions; schedulable future start; per-story cooldown; DB-backed mod-editable knobs
+  (the new cross-cutting SiteSettings cluster); three notifications (grant inline, story-author +
+  recommender at go-live via worker). Full record: `audit/Spotlight.md`, `middle_plan_v2.md`
+  Resolved "Community Spotlight model".
+- **Done:**
+  - **L1** (`WU_Spotlight_SlotsAndSiteSettings` migration): two-table split — new `SpotlightSlot`
+    (entitlement: granted-to/by, `Source` ModAward|Donation, `Status`, reserved `PaymentId`) +
+    reshaped `CommunitySpotlight` (placement: unique `SlotId` FK Restrict, `RecommendationId`
+    SetNull, `GoLiveNotifiedUtc` stamp; dropped `SponsorComment`, moved `PaymentId` to the slot);
+    `SiteSetting` string-key table seeded from `SiteSettingKeys` (5 spotlight knobs);
+    `CommunitySpotlight.cs` migrated out of the legacy `Core/Models/` folder to `Core/Spotlight/`;
+    3 seeded `NotificationType` rows (90–92).
+  - **L2:** `ISpotlightReadService`/`ISpotlightWriteService`/`ISpotlightSlotAllocator` +
+    `ISiteSettingsRead/WriteService` (new cross-cutting cluster). Redemption validates inside one
+    `pg_advisory_xact_lock`-serialized transaction under `CreateExecutionStrategy()` (the
+    `UserDeletionService` precedent) — no self-story, public-status story, rec-belongs-to-story,
+    on-grid/horizon block, per-story cooldown (both directions), capacity count-then-insert.
+    `SpotlightBlocks` (Core, pure) owns the epoch-anchored computed grid — never stored, so knob
+    changes rewrite no data. Displays read by joining the filtered DbSets (viewer's
+    ContentRating/IsTakenDown do the work) and compose `GetListingsByIdsAsync` +
+    `IRecommendationReadService` for presentation.
+  - **Worker:** `SpotlightGoLiveWorker` (1-min sweep) / `SpotlightGoLiveSweeper` (testable body,
+    the SiteDailyStat split): fires `StorySpotlighted`/`RecommendationSpotlighted` when a window
+    opens, stamps `GoLiveNotifiedUtc` (fires-once); fully-elapsed windows age out unnotified.
+    `TestAppFactory` removes the worker.
+  - **UI:** `CommunitySpotlightDisplay` slotted into `HomeDesktop`/`HomeMobile` (placeholder home
+    page now carries a real section); `SpotlightRedemptionPage` (`/spotlight`, UserMenu link) —
+    own-recs/hidden-gems primary pick path + `StoryTitlePicker` secondary, any-of-the-story's-recs
+    attach (own rec preselected), block calendar with per-block occupancy; `ModSpotlightPage`
+    (`/mod/spotlight`) — grant-by-exact-username (reuses
+    `IMessagingReadService.FindUserByUsernameAsync`), monthly-cap display, revoke, knob editor.
+- **Verified:** `dotnet test` green across all three tiers — 1782/1782 (Unit 636 incl. 12 new
+  `SpotlightBlocksTests`; RazorComponents 582 incl. 12 new across display/redemption/mod-page;
+  Integration 564 incl. 20 new `SpotlightServiceTests` — grant cap/roles/donation-seam, all
+  redemption rejections, an advisory-lock two-racers-one-opening test, sweep fires-once, FK
+  cascade/SetNull, settings round-trip). Browser band (server-only path, standing dev DB kept, not
+  wiped): migration applied cleanly on startup; as AdminUser granted a slot to TestUser from
+  `/mod/spotlight` (capacity 12→11, grant listed); as TestUser redeemed via the primary pick path
+  into the current block; the placement rendered live on `/` (StoryCard + RecommendationCard);
+  psql ground truth confirmed slot Redeemed, placement row, worker stamp landing within its 1-min
+  cadence unprompted, notification 90→awardee + 91→story author, and NO 92 (sponsor attached their
+  own rec — drop-self correctly suppressed). One runtime bug found + fixed same-session: unbreakable
+  rec text forced the homepage grid wider than the viewport (grid items' `min-width:auto`) —
+  `min-w-0` + inherited `break-words` wrappers in `CommunitySpotlightDisplay`. Token check: no new
+  findings (3 pre-existing in Discovery/Import files belong to their in-flight WUs).
+- **Deferred (Phase-4 verdict rendered):** donation/payment pipeline (second allocator source +
+  `PaymentId`), activity/cost-scaled formula for N, Patron badge (`SpotlightCount`), slot expiry.
+- **Tool:** Claude Code (Fable). **Pointer:** `audit/Spotlight.md`; `layer2-services.md`
+  §"Community Spotlight" + §"Site Settings"; `SKILL.md` "SiteSettings/" cluster entry;
+  `folder_clusters.md` Spotlight/SiteSettings rows; `middle_plan_v2.md` Resolved + Phase 2 item 1.

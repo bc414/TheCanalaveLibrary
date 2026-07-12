@@ -96,7 +96,7 @@ carry no navigations to `ProfileBlogPost`/`GroupBlogPost`/`SitePoll`/`BlogPostPo
 | **Magic enum** (no table) | Tiny, stable, app-coupled, no display name | `Rating`, `ReportedEntityType`, `CharacterPairingType`, `FilterEntityType`, `ProfileVisibility` |
 | **Lookup table** (no enum) | Content-only display; rename/add without deploy | `ReportReason`, `AcknowledgmentRole`, `StoryLineageType`, `Theme` |
 | **Hybrid** (table + enum with `...Enum` suffix) | Both flexible display AND rigid C# logic | `StoryStatusEnum`, `ReportStatusEnum`, `NotificationCategoryEnum`, `NotificationTypeEnum` |
-| **String key** (string PK) | Tiny table; key used directly in C# | `SearchMode.SearchModeKey`, `Badge.BadgeKey`, `UserInteractionFilter.InteractionFilterKey` |
+| **String key** (string PK) | Tiny table; key used directly in C# | `SearchMode.SearchModeKey`, `Badge.BadgeKey`, `UserInteractionFilter.InteractionFilterKey`, `SiteSetting.SettingKey` (mod-editable runtime knobs — value stored as string, typed in `ISiteSettingsService`; see `layer2-services.md` §"Site Settings") |
 
 **Magic enums:** stored as `smallint` via `.HasConversion<short>()`. Underlying type `: short`, 0-indexed:
 
