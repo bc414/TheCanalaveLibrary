@@ -89,12 +89,12 @@ public sealed class StoryConfiguration : IEntityTypeConfiguration<Story>
             .HasForeignKey(sd => sd.StoryId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasMany(s => s.StoryRelationshipSourceStories)
+        builder.HasMany(s => s.StoryLineageSourceStories)
             .WithOne(sr => sr.SourceStory)
             .HasForeignKey(sr => sr.SourceStoryId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasMany(s => s.StoryRelationshipTargetStories)
+        builder.HasMany(s => s.StoryLineageTargetStories)
             .WithOne(sr => sr.TargetStory)
             .HasForeignKey(sr => sr.TargetStoryId)
             .OnDelete(DeleteBehavior.Cascade);
@@ -272,9 +272,9 @@ public sealed class StoryArcConfiguration : IEntityTypeConfiguration<StoryArc>
     }
 }
 
-public sealed class StoryRelationshipConfiguration : IEntityTypeConfiguration<StoryRelationship>
+public sealed class StoryLineageConfiguration : IEntityTypeConfiguration<StoryLineage>
 {
-    public void Configure(EntityTypeBuilder<StoryRelationship> builder)
+    public void Configure(EntityTypeBuilder<StoryLineage> builder)
     {
         builder.Property(e => e.StatusId).HasConversion<short>();
         builder.Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
@@ -284,11 +284,11 @@ public sealed class StoryRelationshipConfiguration : IEntityTypeConfiguration<St
     }
 }
 
-public sealed class StoryRelationshipTypeConfiguration : IEntityTypeConfiguration<StoryRelationshipType>
+public sealed class StoryLineageTypeConfiguration : IEntityTypeConfiguration<StoryLineageType>
 {
-    public void Configure(EntityTypeBuilder<StoryRelationshipType> builder)
+    public void Configure(EntityTypeBuilder<StoryLineageType> builder)
     {
-        builder.HasMany(srt => srt.StoryRelationships)
+        builder.HasMany(srt => srt.StoryLineages)
             .WithOne(sr => sr.RelationshipType)
             .HasForeignKey(sr => sr.RelationshipTypeId)
             .OnDelete(DeleteBehavior.Restrict);

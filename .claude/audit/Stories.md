@@ -1,6 +1,6 @@
 # Audit — Stories/
 
-**Features:** 4, 5, 8, 9, 10, 45 (Story creation/editing, browsing/display, arcs, series, relationships,
+**Features:** 4, 5, 8, 9, 10, 45 (Story creation/editing, browsing/display, arcs, series, lineage,
 view-count). Largest cluster.
 
 ## Shared Context
@@ -10,7 +10,8 @@ view-count). Largest cluster.
 (cold — long desc, slug, `PostApprovalStatus`). Vertical-partition trio with 1-to-1 cascade. `Story`
 implements `IEditableStoryProperties` via explicit interface implementation (`[NotMapped]` projections
 across the three partitions) — a deliberate, somewhat advanced pattern that lets one object satisfy the
-edit contract. Also here: `StoryArc`, `StoryRelationship` (+type lookup), `StoryTag`/`StoryCharacter`
+edit contract. Also here: `StoryArc`, `StoryLineage` (+type lookup, renamed from `StoryRelationship`/
+`StoryRelationshipType` in WU42, 2026-07-12 — see Feature 10 below), `StoryTag`/`StoryCharacter`
 live in the model set but belong to Tags. **`Series`/`SeriesEntry` moved to their own `Core/Series/`
 vertical cluster (WU41, 2026-07-11)** — same namespace (`TheCanalaveLibrary.Core`), separate folder;
 see Feature 9 below.
@@ -438,10 +439,111 @@ the plan; both are the same dispatcher-reload class as WU-ComponentSoundness's F
   has no page-level bUnit suite either; the owner-gate and CRUD logic are exercised at the Integration
   tier (the real authority — the page's pre-check is only a UX nicety).
 
-## Feature 10 — Story Relationships
-- **L1 — Stage 5.** `StoryRelationship` composite key `(Source,Target,Type)`, type lookup seeded
-  (Inspired By/Prequel/Sequel/Companion), `StatusId` enum→short. One-way directional per §5. Cascade from
-  both source and target story. **L2/L3/L3.5 — Stage 2.** **L4 — Stage 1. L5 — Stage 2.**
+## Feature 10 — Story Lineage (WU42, formerly "Story Relationships")
+
+**Renamed 2026-07-12 (settled — do not revisit).** The spec/original entity name
+`StoryRelationship` was ambiguous on this site two ways over: (a) `StoryCharacterPairing` (romantic/
+platonic character pairings, itself renamed off `StoryCharacterRelationship` in WU37 specifically to
+stop colliding with this feature — see `audit/Tags.md`), and (b) `UserStoryInteraction` (a user's
+relationship *to* a story). Renamed feature-wide to **`StoryLineage`** — evokes how stories descend
+from / accompany one another without personifying them, and reads correctly across all four seeded
+type values (Inspired By / Prequel / Sequel / Companion Piece). `SourceStoryId`/`TargetStoryId` were
+kept (spec §939 wording; ancestor/descendant-style names were rejected as wrong for Companion Piece).
+Migration `AddStoryLineageRename` (2026-07-12) renamed the tables/constraints/indexes in place — no
+data loss (verified: 4 seed rows survived, live dev DB rebooted clean, `dotnet build` 0 errors).
+
+- **L1 — Stage 5.** `StoryLineage` (`Core/Stories/StoryLineage.cs`) composite key
+  `(SourceStoryId, TargetStoryId, RelationshipTypeId)`; `StoryLineageType` lookup table seeded
+  (Inspired By/Prequel/Sequel/Companion Piece — unchanged data, only the container renamed);
+  `StoryLineageStatus` enum (`Pending=0/Approved=1/Rejected=2`). One-way directional per §5 — absence
+  of a reverse row means "don't show on the target." Cascade delete from both source and target story.
+  Notification plumbing pre-wired: `NotificationTypeEnum.StoryLineageRequested`/`StoryLineageApproved`
+  (renamed from `StoryRelationshipRequested`/`...Approved`), seed rows, `NotificationPresenter`
+  message arms, and `ServerNotificationReadService.KindFor` → `Story` all already in place before this
+  work-unit — only the two semantic `INotificationWriteService` methods are new (WU42 L2).
+
+**Settled decisions (WU42, do not revisit):**
+1. **Public display** on `StoryPage` (source story only, Approved links only) — a new
+   `StoryLineageBox` leaf mirroring `SeriesMembershipBox`'s placement.
+2. **Management is hybrid:** dedicated user-wide owner page `/story-lineages`
+   (`MyStoryLineagesPage`, mirrors `MySeriesPage`) is the single create + approval-inbox surface;
+   the story edit page (`StoryEditorPage`) carries only a "Manage story lineage →" link to it.
+   Rejected a per-story-edit-page home because incoming approval requests need one aggregated inbox,
+   not one scattered per story.
+3. **Target picker:** a reusable `SharedUI/Stories/StoryTitlePicker` (Blazored.Typeahead, modeled on
+   `TagSelector`) backed by a new `IStoryReadService.SearchStoriesByTitleAsync` (`ILike` substring,
+   capped). **Deliberately not** the discovery FTS path — `StoryListing.SearchVector` is a
+   whole-word/ranked `to_tsvector` GIN index tuned for browse relevance; a picker needs incremental
+   substring/prefix matching, a different access pattern that can't share that index.
+4. **Retrofit scope:** the reusable picker also replaces Groups' raw `<input type="number">`
+   "Story ID" add-story entry (`GroupDesktop.razor`/`GroupMobile.razor`) — the worst existing
+   story-entry UX and an exact fit (cross-author/unbounded). Series' and blog-posts' own-stories
+   `<select>` dropdowns are left as-is (bounded, a dropdown already suffices).
+5. **Self-links auto-approve:** if the requesting author owns both source and target, the link is
+   created already `Approved` with no self-notification (matches the notification drop-self
+   invariant). Only cross-author links start `Pending`.
+
+- **L2/L3-Logic/L3.5-Structure — Stage 5 (2026-07-12).** **L4-Style — Stage 1** (pending human
+  visual sign-off, WU8/WU13/WU23/WU28/WU44 precedent — an agent's own live-browser check does not
+  close this gate). **L4.5-Browser — Stage 5 (2026-07-12, real-circuit verification, see below).
+  L5 — Stage 2** (WASM parity rides the future site-wide `InteractiveAuto` flip, unchanged).
+
+**Done (2026-07-12):** built per the settled decisions above. `Core/Stories/`:
+`IStoryLineageReadService`/`IStoryLineageWriteService`, `StoryLineageDto`/`CreateStoryLineageDto`/
+`StoryLineageManageDto`(+`Outgoing`/`IncomingRequest` rows)/`StoryLineageTypeDto`/
+`StoryTitleSearchDto`, `StoryLineageValidationException`. `Server/Stories/`:
+`ServerStoryLineageReadService`/`ServerStoryLineageWriteService` (primary-ctor chaining, mirrors
+`ServerSeriesReadService`/`WriteService`), plus `IStoryReadService.SearchStoriesByTitleAsync`
+(`ILike` substring, capped at 10, `ServerStoryReadService`). Two new `INotificationWriteService`
+methods (`NotifyStoryLineageRequestedAsync`/`ApprovedAsync`) — the only notification-side gap, since
+the enum members/seed rows/presenter text/`KindFor` mapping were all already in place before this
+work-unit. `SharedUI/Stories/`: `StoryTitlePicker` (reusable Blazored.Typeahead wrapper, modeled on
+`TagSelector`), `StoryLineageBox` (public display leaf, mirrors `SeriesMembershipBox`),
+`MyStoryLineagesPage` (`/story-lineages`, mirrors `MySeriesPage` — incoming-requests inbox +
+outgoing-links list + create form). Wired into `StoryPage`/`StoryDesktop`/`StoryMobile` (new
+`LineageLinks` parameter, loaded alongside `_seriesMemberships`), `StoryEditorPage` ("Manage story
+lineage →" link), `UserMenu`/`CreateMenu` ("My Stories' Lineage" / "New Story Lineage"),
+`ExceptionPresenter` (new arm). **Groups retrofit:** `GroupDesktop.razor`/`GroupMobile.razor`'s
+add-story now uses `StoryTitlePicker` instead of a raw `<input type="number">` Story-ID field
+(`_addStoryId`/`_addStoryError` fields removed — the latter was dead code, never actually assigned).
+
+**Real bug found and fixed during verification, not anticipated in the plan:** `PostgresFixture`'s
+Respawn `TablesToIgnore` list (which protects seeded lookup-table rows from being wiped between
+every integration test) still referenced the pre-rename table name `story_relationship_types`. Since
+this is a literal SQL string, not a C# identifier, it was invisible to the Phase-0 `StoryRelationship`
+rename grep and broke every integration test that requested a lineage type — Respawn was wiping the
+four seeded type rows after the first test's `InitializeAsync`, so all subsequent
+`RequestLineageAsync` calls failed type-existence validation. Fixed by updating the ignore-list entry
+to `story_lineage_types`. Lesson recorded here (not a skill-file change — this is a one-off
+config-string miss, not a recurring convention gap): a table-rename's blast radius includes any
+literal SQL/string table-name reference, not just C# type usages.
+
+**Verified (2026-07-12):** `dotnet build` 0 errors/warnings (8 projects). `dotnet test` full solution
+green: 615 Unit + 570 RazorComponents + 544 Integration = **1729 tests**, including 28 new Integration
+tests (`StoryLineageServiceTests` — cross-author request/notify, self-owned auto-approve/no-notify,
+ownership gating on both request and approve/reject/delete, re-request-after-rejection row reuse,
+cascade delete from either story, viewer-visible display filtering, `SearchStoriesByTitleAsync`
+substring/cap/content-rating) + 6 new Unit (`StoryLineageValidationsTests`) + 8 new RazorComponents
+(`StoryLineageBoxTests`/`StoryTitlePickerTests`). Mutation-sanity: temporarily bypassed the
+`ContentRating` filter on the target-story join in `GetLineageForStoryAsync` → the mature-drop test
+failed as expected; reverted, suite green again.
+**L4.5-Browser Stage 5 (2026-07-12)** — full cross-author flow driven live against the dev DB
+(`AuthorAlpha`/`AuthorBeta` fixtures, `psql` ground truth at each step): AuthorAlpha requests a Sequel
+link from story 1 to AuthorBeta's story 5 → row lands `Pending` → notification
+`StoryLineageRequested` renders correctly for AuthorBeta ("AuthorAlpha requested a story lineage link
+with…") → AuthorBeta approves on `/story-lineages` → row flips to `Approved` →
+`StoryLineageApproved` notification renders for AuthorAlpha → the link now displays on story 1's
+public page ("Story lineage: Sequel of Seed Story: On Hiatus (T)") → AuthorAlpha self-links two own
+stories (2→3, Inspired By) → created `Approved` immediately, zero additional notification rows
+(confirmed via `psql`) → Groups retrofit: `/group/1` add-story typeahead correctly excludes a Mature
+story from search results for a mature-off viewer, then successfully cross-author-adds
+`AuthorBeta`'s "Seed Story: Filler (T)" to `AuthorAlpha`'s group. Reject/Delete were not
+separately driven live (identical button-wiring to the proven Approve path; both are covered by
+dedicated Integration tests with real-DB assertions).
+**Scope note:** no dedicated `MyStoryLineagesPageTests` (RazorComponents) — unlike
+`SeriesCreateEditPage`, this page maps to a single `@page` route with no dispatcher-reuse trap to
+regression-test; CRUD-UI authority for this page is the Integration tier, per the same precedent
+`SeriesCreateEditPageTests`' scope note set.
 
 ## Feature 45 — View Count Tracking
 

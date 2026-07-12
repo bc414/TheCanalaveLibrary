@@ -40,6 +40,7 @@ public static class ExceptionPresenter
         or BlogPostValidationException
         or GroupValidationException
         or SeriesValidationException
+        or StoryLineageValidationException
         or MessagingValidationException
         or TagValidationException
         or VouchLimitException
@@ -60,6 +61,7 @@ public static class ExceptionPresenter
         BlogPostValidationException e => e.Errors,
         GroupValidationException e => e.Errors,
         SeriesValidationException e => e.Errors,
+        StoryLineageValidationException e => e.Errors,
         MessagingValidationException e => e.Errors,
 
         // Single-message typed exceptions whose Message is deliberately user-ready.

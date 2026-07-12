@@ -174,8 +174,8 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     public DbSet<AcknowledgmentRole> AcknowledgmentRoles { get; set; }
     public DbSet<BetaReader> BetaReaders { get; set; }
     public DbSet<CoAuthor> CoAuthors { get; set; }
-    public DbSet<StoryRelationship> StoryRelationships { get; set; }
-    public DbSet<StoryRelationshipType> StoryRelationshipTypes { get; set; }
+    public DbSet<StoryLineage> StoryLineages { get; set; }
+    public DbSet<StoryLineageType> StoryLineageTypes { get; set; }
 
     //Statistics
     public DbSet<UserStat> UserStats { get; set; }

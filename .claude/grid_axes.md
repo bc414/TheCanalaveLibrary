@@ -312,7 +312,8 @@ auth configured for 401/403 (not redirects), `RequireConfirmedAccount = true`, r
 
 **2. Lookup Tables & Seed Data** — All seeded lookup and enum-mirror tables: `StoryStatus`, `TagType`,
 `ReportReason`, `ReportStatus`, `NotificationCategory`, `NotificationType` (~35 types with gap-based
-numbering), `AcknowledgmentRole`, `RecommendationStatus`, `StoryRelationshipType`, `SearchMode`,
+numbering), `AcknowledgmentRole`, `RecommendationStatus`, `StoryLineageType` (renamed from
+`StoryRelationshipType` in WU42, 2026-07-12), `SearchMode`,
 `UserInteractionFilter`, `Theme`, `Badge`, `DefaultSearchSetting` (SearchMode × InteractionFilter
 matrix). Seeded via `HasData()` for enum-backed tables, explicit IDs for non-enum tables. Includes
 `SiteConstants.cs` string-key constants.
@@ -367,7 +368,8 @@ never designed — likely Stage 1 for Layers 3–4.*
 **9. Series & Ordering** — `Series` / `SeriesEntries` for author-defined canonical reading order across
 multiple stories. `OrderIndex` on the junction table.
 
-**10. Story Relationships** — One-way directional `StoryRelationships` links (Inspired By, Prequel,
+**10. Story Lineage** *(renamed from "Story Relationships" in WU42, 2026-07-12 — see
+`audit/Stories.md` Feature 10)* — One-way directional `StoryLineage` links (Inspired By, Prequel,
 Sequel, Companion Piece). Source story displays the link; absence of a reverse entry means the target
 doesn't show it. Status workflow: Pending → Approved/Rejected.
 

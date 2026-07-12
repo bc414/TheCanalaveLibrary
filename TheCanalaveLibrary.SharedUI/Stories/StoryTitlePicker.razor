@@ -1,0 +1,60 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject IStoryReadService StoryService
+@using TheCanalaveLibrary.Core
+
+@* Reusable incremental title-search picker (WU42) — powers the Story Lineage target picker
+   (MyStoryLineagesPage) and the Groups add-story retrofit (GroupDesktop/GroupMobile, replacing a
+   raw numeric Story ID input). Modeled on TagSelector's BlazoredTypeahead wiring, simplified to a
+   single "pick fires a callback" component — no persistent selected-chips list, since each consumer
+   owns what happens after a pick (immediate action for Groups, a pending form field for lineage).
+   Backed by IStoryReadService.SearchStoriesByTitleAsync (ILike substring), deliberately not the
+   discovery FTS path — see layer2-services.md "Story Lineage service (WU42, ...)". *@
+
+<BlazoredTypeahead TItem="StoryTitleSearchDto" TValue="StoryTitleSearchDto"
+                    SearchMethod="SearchMethod"
+                    Value="_picked"
+                    ValueChanged="OnPickedAsync"
+                    ValueExpression="@(() => _picked)"
+                    Debounce="300"
+                    MinimumLength="2"
+                    placeholder="@Placeholder">
+    <ResultTemplate Context="story">
+        <span class="flex flex-col">
+            <span>@story.Title</span>
+            @if (story.AuthorName is not null)
+            {
+                <span class="text-xs text-(--color-text-muted)">by @story.AuthorName</span>
+            }
+        </span>
+    </ResultTemplate>
+    <SelectedTemplate Context="story">@story.Title</SelectedTemplate>
+    <NotFoundTemplate>No stories found</NotFoundTemplate>
+</BlazoredTypeahead>
+
+@code {
+    [Parameter] public string Placeholder { get; set; } = "Type to search for a story...";
+
+    /// <summary>Excludes this story id from results — the caller's own source story, so it can't
+    /// pick itself as a target.</summary>
+    [Parameter] public int? ExcludeStoryId { get; set; }
+
+    [Parameter, EditorRequired] public EventCallback<StoryTitleSearchDto> OnStorySelected { get; set; }
+
+    private StoryTitleSearchDto? _picked;
+
+    private async Task<IEnumerable<StoryTitleSearchDto>> SearchMethod(string term)
+    {
+        IReadOnlyList<StoryTitleSearchDto> results = await StoryService.SearchStoriesByTitleAsync(term);
+        return ExcludeStoryId.HasValue
+            ? results.Where(s => s.StoryId != ExcludeStoryId.Value)
+            : results;
+    }
+
+    private async Task OnPickedAsync(StoryTitleSearchDto? story)
+    {
+        if (story is not null)
+            await OnStorySelected.InvokeAsync(story);
+        // Reset immediately — a pick-to-fire-an-action component, not a persistent selected value.
+        _picked = null;
+    }
+}

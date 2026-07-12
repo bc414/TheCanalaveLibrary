@@ -94,4 +94,16 @@ public interface IStoryReadService
     /// Approximate by contract: buffered views land within the flush interval.
     /// </summary>
     Task<long> GetStoryTotalViewsAsync(int storyId);
+
+    /// <summary>
+    /// Incremental title-search typeahead (WU42) — <c>ILike</c> substring match, capped, ordered by
+    /// title. Powers the reusable <c>StoryTitlePicker</c> component (Story Lineage's target picker,
+    /// and the Groups add-story retrofit). Subject to the read context's
+    /// <c>ContentRating</c>/<c>IsTakenDown</c> filters. <b>Deliberately not</b> the discovery FTS
+    /// path (<see cref="GetListingsAsync"/>'s <c>TextQuery</c>) — <c>StoryListing.SearchVector</c> is
+    /// a whole-word/ranked <c>to_tsvector</c> GIN index tuned for browse relevance, not incremental
+    /// substring matching; the two access patterns don't share an index. Empty/whitespace
+    /// <paramref name="term"/> returns an empty list (no "browse everything" fallback).
+    /// </summary>
+    Task<IReadOnlyList<StoryTitleSearchDto>> SearchStoriesByTitleAsync(string term);
 }

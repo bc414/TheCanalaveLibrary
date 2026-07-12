@@ -969,18 +969,37 @@ Every tag type uses a **different per-story association table**. Route by `TagCh
 Character never routes to `StoryTag`. A pairing is not a catalog tag (no `Tag` row; its name derives
 from its members). `TagTypeEnum.Relationship` is removed.
 
-### Table naming — disambiguation from story↔story relationships (Feature 10)
+### Table naming — disambiguation from story↔story lineage (Feature 10)
 
 | Concept | Entity | Note |
 |---|---|---|
 | Character-in-story | `StoryCharacter` | Per-story; links to `Tag` (Character type) |
 | Ship/pairing of characters | `StoryCharacterPairing` | Per-story; NOT a catalog tag |
 | Members of a pairing | `StoryCharacterPairingMember` | First-class join; was auto-generated shadow table |
-| **Story-to-story** relationship | `StoryRelationship` | Feature 10; unrelated; leave untouched |
-| Story relationship type | `StoryRelationshipType` | Feature 10; unrelated; leave untouched |
+| **Story-to-story** link | `StoryLineage` | Feature 10; unrelated; leave untouched |
+| Story lineage type | `StoryLineageType` | Feature 10; unrelated; leave untouched |
 
 The `Story…Pairing` prefix marks the concept as per-story and eliminates grep collision with the
-Feature-10 `StoryRelationship` / `StoryRelationshipType` entities.
+Feature-10 `StoryLineage`/`StoryLineageType` entities. **WU42 (2026-07-12) additionally renamed
+Feature 10 itself** from `StoryRelationship`/`StoryRelationshipType` to `StoryLineage`/
+`StoryLineageType` — the near-collision this table originally worked around no longer exists at the
+identifier level (neither name contains "Relationship" anymore), but the table is kept as it still
+disambiguates the two *concepts* (character pairing vs. story-to-story link).
+
+### Story Lineage service (WU42, `Core/Stories/` + `Server/Stories/`)
+
+`IStoryLineageReadService`/`IStoryLineageWriteService` — a cross-author request/approve workflow
+(spec §939, Feature 10). A link where the requester owns only the source story is created `Pending`
+and requires the **target** story's author to approve/reject via the owner-wide `/story-lineages`
+page before it displays; a link where the requester owns both stories is created already `Approved`
+(no notification — matches the notification drop-self invariant). Public reads
+(`GetLineageForStoryAsync`) return only `Approved` rows where the queried story is the source, joined
+through `Story` so a link never survives display when its target fails the viewer's
+`ContentRating`/`IsTakenDown` filters (mirrors `ServerSeriesReadService.GetMembershipsForStoryAsync`'s
+join-not-bare-projection rule). Target-story selection goes through a new reusable
+`IStoryReadService.SearchStoriesByTitleAsync` (`ILike` substring typeahead) — deliberately not the
+discovery FTS (`StoryListing.SearchVector`, a whole-word-ranked GIN index tuned for browse relevance,
+not incremental substring matching); the same search method also retrofits Groups' add-story picker.
 
 ### Write path — route by tag type
 

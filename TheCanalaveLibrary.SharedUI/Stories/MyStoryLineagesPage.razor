@@ -1,0 +1,338 @@
+@page "/story-lineages"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@inject IStoryLineageWriteService LineageService
+@inject IStoryReadService StoryService
+@inject IToastService Toasts
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Owner-wide Story Lineage management page (Feature 10, WU42) — the single create + approval-inbox
+   surface (mirrors MySeriesPage/SeriesCreateEditPage's shape; WU42 settled decision: one aggregated
+   inbox, not one scattered per story-edit-page). Two sections: incoming Pending requests targeting
+   any of the caller's stories (Approve/Reject), and outgoing links across all the caller's stories
+   (any status, with Remove). Reachable from UserMenu ("My Stories' Lineage") and a "Manage story
+   lineage →" link on the story edit page. *@
+
+<PageTitle>Story Lineage</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        <div class="mx-auto max-w-3xl px-4 py-8 flex flex-col gap-8">
+            <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text) w-fit">
+                Story Lineage
+            </h1>
+
+            @if (_isLoading)
+            {
+                <p class="text-(--color-text-muted)"><em>Loading…</em></p>
+            }
+            else
+            {
+                @* ── Incoming requests ───────────────────────────────────────────── *@
+                <section class="flex flex-col gap-3">
+                    <h2 class="text-lg font-semibold text-(--color-text)">Requests to your stories</h2>
+
+                    @if (_incomingError is not null)
+                    {
+                        <p class="text-sm text-(--color-danger)">@_incomingError</p>
+                    }
+
+                    @if (_manageData.IncomingRequests.Count == 0)
+                    {
+                        <p class="text-sm text-(--color-text-muted)">No pending requests.</p>
+                    }
+                    else
+                    {
+                        <ul class="flex flex-col gap-2">
+                            @foreach (StoryLineageIncomingRequestDto req in _manageData.IncomingRequests)
+                            {
+                                <li class="flex flex-wrap items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm">
+                                    <span>
+                                        <a href="/story/@req.SourceStoryId" class="font-medium text-(--color-action-ink) hover:underline">@req.SourceTitle</a>
+                                        @(req.RequesterUserName is not null ? $"by {req.RequesterUserName} " : "")
+                                        wants: <span class="font-medium">@req.TypeName</span> of
+                                        <a href="/story/@req.TargetStoryId" class="font-medium text-(--color-action-ink) hover:underline">@req.TargetTitle</a>
+                                    </span>
+                                    <span class="ml-auto flex gap-2">
+                                        <button type="button" @onclick="() => HandleApproveAsync(req)" disabled="@_busy"
+                                                class="rounded-md bg-(--color-action) px-3 py-1 text-xs font-medium text-(--color-text) hover:bg-(--color-action-hover) disabled:opacity-50">
+                                            Approve
+                                        </button>
+                                        <button type="button" @onclick="() => HandleRejectAsync(req)" disabled="@_busy"
+                                                class="rounded-md border border-(--color-border) px-3 py-1 text-xs text-(--color-danger) hover:bg-(--color-danger)/10 disabled:opacity-50">
+                                            Reject
+                                        </button>
+                                    </span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+
+                @* ── Outgoing links ───────────────────────────────────────────────── *@
+                <section class="flex flex-col gap-3">
+                    <h2 class="text-lg font-semibold text-(--color-text)">Your story lineage</h2>
+
+                    @if (_manageData.Outgoing.Count == 0)
+                    {
+                        <p class="text-sm text-(--color-text-muted)">You haven't linked any stories yet.</p>
+                    }
+                    else
+                    {
+                        <ul class="flex flex-col gap-2">
+                            @foreach (StoryLineageOutgoingDto link in _manageData.Outgoing)
+                            {
+                                <li class="flex flex-wrap items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm">
+                                    <span>
+                                        <a href="/story/@link.SourceStoryId" class="font-medium text-(--color-action-ink) hover:underline">@link.SourceTitle</a>
+                                        — <span class="font-medium">@link.TypeName</span> of
+                                        <a href="/story/@link.TargetStoryId" class="font-medium text-(--color-action-ink) hover:underline">@link.TargetTitle</a>
+                                    </span>
+                                    <span class="@StatusBadgeClass(link.Status) px-2 py-0.5 rounded-full text-xs font-medium">@StatusLabel(link.Status)</span>
+                                    <button type="button" @onclick="() => HandleRemoveAsync(link)" disabled="@_busy"
+                                            class="ml-auto rounded px-2 py-1 text-xs text-(--color-danger) hover:bg-(--color-danger)/10 disabled:opacity-30">
+                                        Remove
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+
+                @* ── Create a new lineage link ────────────────────────────────────── *@
+                <section class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+                    <h2 class="text-lg font-semibold text-(--color-text)">Add a lineage link</h2>
+
+                    @if (_createErrors.Count > 0)
+                    {
+                        <div class="rounded-lg bg-(--color-danger)/10 p-3 text-sm text-(--color-danger)" role="alert">
+                            <ul class="list-disc pl-4 space-y-1">
+                                @foreach (string error in _createErrors)
+                                {
+                                    <li>@error</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    @if (_ownStories.Count == 0)
+                    {
+                        <p class="text-sm text-(--color-text-muted)">
+                            You don't have any stories to link yet — publish one first.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="flex flex-col gap-1">
+                            <label class="text-sm font-semibold text-(--color-text)">Your story</label>
+                            <select @bind="_sourceStoryId" @bind:after="HandleSourceChanged"
+                                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
+                                <option value="">-- Choose one of your stories --</option>
+                                @foreach (StoryListingDto story in _ownStories)
+                                {
+                                    <option value="@story.StoryId">@story.Title</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <label class="text-sm font-semibold text-(--color-text)">Lineage type</label>
+                            <select @bind="_typeId"
+                                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
+                                <option value="">-- Choose a type --</option>
+                                @foreach (StoryLineageTypeDto type in _types)
+                                {
+                                    <option value="@type.TypeId">@type.TypeName</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <label class="text-sm font-semibold text-(--color-text)">Target story</label>
+                            @if (_targetStory is not null)
+                            {
+                                <div class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm">
+                                    <span class="flex-1">@_targetStory.Title</span>
+                                    <button type="button" @onclick="() => _targetStory = null"
+                                            class="text-xs text-(--color-action-ink) hover:underline">
+                                        Change
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <StoryTitlePicker OnStorySelected="HandleTargetSelected"
+                                                  ExcludeStoryId="_sourceStoryId"
+                                                  Placeholder="Type to search for a story..." />
+                            }
+                        </div>
+
+                        <button type="button" @onclick="HandleRequestAsync"
+                                disabled="@(_sourceStoryId is null || _typeId is null || _targetStory is null || _busy)"
+                                class="mt-2 w-fit rounded-md bg-(--color-mission) px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-(--color-mission-hover) disabled:opacity-50">
+                            @(_busy ? "Requesting…" : "Request Link")
+                        </button>
+                    }
+                </section>
+            }
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <p class="p-4 text-(--color-danger)">You must be signed in to manage story lineage.</p>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _isLoading = true;
+    private bool _busy;
+    private int? _currentUserId;
+
+    private StoryLineageManageDto _manageData = new([], []);
+    private IReadOnlyList<StoryLineageTypeDto> _types = [];
+    private List<StoryListingDto> _ownStories = [];
+
+    private string? _incomingError;
+    private readonly List<string> _createErrors = [];
+
+    private int? _sourceStoryId;
+    private short? _typeId;
+    private StoryTitleSearchDto? _targetStory;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            AuthenticationState state = await AuthState;
+            string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            _currentUserId = int.TryParse(idStr, out int id) ? id : null;
+        }
+
+        await ReloadAsync();
+        _isLoading = false;
+    }
+
+    private async Task ReloadAsync()
+    {
+        _manageData = await LineageService.GetManageDataForUserAsync();
+        _types = await LineageService.GetLineageTypesAsync();
+
+        if (_currentUserId is not null)
+        {
+            IReadOnlyList<int> ownIds = await StoryService.GetStoryIdsByAuthorAsync(_currentUserId.Value);
+            _ownStories = ownIds.Count > 0 ? [.. await StoryService.GetListingsByIdsAsync(ownIds)] : [];
+        }
+    }
+
+    // Source changed — the target picker's ExcludeStoryId changed too; drop a stale pick that may
+    // now equal the (new) source.
+    private void HandleSourceChanged() => _targetStory = null;
+
+    private void HandleTargetSelected(StoryTitleSearchDto story) => _targetStory = story;
+
+    private async Task HandleRequestAsync()
+    {
+        if (_sourceStoryId is null || _typeId is null || _targetStory is null) return;
+        _createErrors.Clear();
+        _busy = true;
+        try
+        {
+            await LineageService.RequestLineageAsync(new CreateStoryLineageDto
+            {
+                SourceStoryId = _sourceStoryId.Value,
+                TargetStoryId = _targetStory.StoryId,
+                TypeId = _typeId.Value
+            });
+            _targetStory = null;
+            _typeId = null;
+            await ReloadAsync();
+        }
+        catch (StoryLineageValidationException ex)
+        {
+            _createErrors.AddRange(ex.Errors);
+        }
+        catch (Exception ex)
+        {
+            _createErrors.Add(ExceptionPresenter.GetUserMessage(ex));
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task HandleApproveAsync(StoryLineageIncomingRequestDto req)
+    {
+        _incomingError = null;
+        _busy = true;
+        try
+        {
+            await LineageService.ApproveLineageAsync(req.SourceStoryId, req.TargetStoryId, req.TypeId);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _incomingError = ExceptionPresenter.GetUserMessage(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task HandleRejectAsync(StoryLineageIncomingRequestDto req)
+    {
+        _incomingError = null;
+        _busy = true;
+        try
+        {
+            await LineageService.RejectLineageAsync(req.SourceStoryId, req.TargetStoryId, req.TypeId);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _incomingError = ExceptionPresenter.GetUserMessage(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task HandleRemoveAsync(StoryLineageOutgoingDto link)
+    {
+        _busy = true;
+        try
+        {
+            await LineageService.DeleteLineageAsync(link.SourceStoryId, link.TargetStoryId, link.TypeId);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string StatusLabel(StoryLineageStatus status) => status switch
+    {
+        StoryLineageStatus.Pending  => "Pending",
+        StoryLineageStatus.Approved => "Approved",
+        StoryLineageStatus.Rejected => "Rejected",
+        _                           => "Unknown"
+    };
+
+    private static string StatusBadgeClass(StoryLineageStatus status) => status switch
+    {
+        StoryLineageStatus.Pending  => "bg-(--color-text-muted)/15 text-(--color-text-muted)",
+        StoryLineageStatus.Approved => "bg-(--color-action)/15 text-(--color-action-ink)",
+        StoryLineageStatus.Rejected => "bg-(--color-danger)/15 text-(--color-danger)",
+        _                           => "bg-(--color-text-muted)/15 text-(--color-text-muted)"
+    };
+}

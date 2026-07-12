@@ -212,7 +212,9 @@ Ordered as v1, all deps Stage 5, settled directions in the audit files named in 
 1. **WU-Home** — the front door + Community Spotlight display slice. Still gated by decision
    row 2 (curation model / homepage design). Features built from here on inherit Phase 1's
    conventions (logging, error UX, rate limits) from day one.
-2. **WU41 Series, WU42 Story↔Story Relationships, WU43 Saved Tag Selections.**
+2. **WU41 Series — DONE ✓ (2026-07-11), WU42 Story Lineage (renamed from "Story↔Story
+   Relationships," 2026-07-12 — see `audit/Stories.md` Feature 10) — DONE ✓ (2026-07-12), WU43 Saved
+   Tag Selections.**
 3. **WU40 Manual Tree Search** (stateless pivot; does not wait on marts — settled 2026-07-03).
    **WU44 Automatic Tree Search UI — DONE ✓ (2026-07-11)** (Feature 59; shipped the unified-page
    shell + Automatic tab; Manual tab is a placeholder for WU40 to fill in).

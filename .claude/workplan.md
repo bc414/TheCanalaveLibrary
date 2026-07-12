@@ -1339,12 +1339,40 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
   at the Integration tier (the real authority).
 - **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 9. **Deps:** WU14, WU24.
 
-### WU42 — Story↔Story Relationships (Feature 10)
-- **Cells:** 10 L2/L3/L3.5/L4 → Stage 5 (L4 pending visual sign-off).
-- **Do:** `IStoryRelationshipReadService` / `IStoryRelationshipWriteService`; create/accept/reject
-  flow on `StoryRelationship` (`SourceStoryId`, `TargetStoryId`, `RelationshipTypeId`, `StatusId`);
-  related-stories display on `StoryPage`. L1 already Stage 5 (`StoryRelationship`,
-  `StoryRelationshipType` present — unrelated to the `StoryCharacterPairing` introduced in WU37).
+### WU42 — Story Lineage (Feature 10, formerly "Story↔Story Relationships") — DONE ✓ (2026-07-12)
+- **Cells:** 10 L2/L3-Logic/L3.5-Structure → Stage 5; L4.5-Browser → Stage 5. L4-Style stays Stage 1
+  (pending human visual sign-off, WU8/WU13/WU23/WU28/WU44 precedent).
+- **Renamed 2026-07-12 (Doc-Touch moment 1, before the build):** `StoryRelationship`/
+  `StoryRelationshipType`/`StoryRelationshipStatus` → `StoryLineage`/`StoryLineageType`/
+  `StoryLineageStatus` (feature-wide — entity, table, enum, the two pre-existing notification enum
+  members, config classes, `Story` nav collections). The old name collided with both
+  `StoryCharacterPairing` (WU37 renamed *that* away from `StoryCharacterRelationship` for the same
+  reason) and `UserStoryInteraction`. Migration `AddStoryLineageRename` renames tables/constraints/
+  indexes in place (verified no data loss against the live dev DB). Full settled-decisions note:
+  `audit/Stories.md` Feature 10.
+- **Done:** `IStoryLineageReadService`/`IStoryLineageWriteService`; cross-author request/approve/
+  reject flow on `StoryLineage` (`SourceStoryId`, `TargetStoryId`, `RelationshipTypeId`, `StatusId`)
+  — self-owned links auto-approve, no self-notification; a new reusable `SearchStoriesByTitleAsync`
+  + `StoryTitlePicker` typeahead for target selection (also retrofits Groups' add-story numeric-id
+  input); public display on `StoryPage` (`StoryLineageBox`); management on a new user-wide
+  `/story-lineages` owner page (`MyStoryLineagesPage`, mirrors `MySeriesPage`) + a "Manage story
+  lineage →" link from the story edit page. L1 already Stage 5 (`StoryLineage`, `StoryLineageType`
+  present — unrelated to the `StoryCharacterPairing` introduced in WU37). Real bug found + fixed
+  during verification: `PostgresFixture`'s Respawn `TablesToIgnore` list still had the pre-rename
+  table name (a literal SQL string, invisible to the Phase-0 C#-identifier rename grep) — wiping the
+  seeded type rows between every integration test until fixed.
+- **Verified (2026-07-12):** `dotnet build` 0 errors/warnings (8 projects). `dotnet test` full
+  solution green: 615 Unit + 570 RazorComponents + 544 Integration = **1729 tests**, including 28 new
+  Integration (`StoryLineageServiceTests`), 6 new Unit (`StoryLineageValidationsTests`), 8 new
+  RazorComponents (`StoryLineageBoxTests`/`StoryTitlePickerTests`). Mutation-sanity: bypassed the
+  `ContentRating` filter on the target-story join → the mature-drop test failed as expected;
+  reverted, suite green. **L4.5-Browser Stage 5 (2026-07-12)** — full cross-author request → notify →
+  approve → notify → public-display flow driven live (`AuthorAlpha`/`AuthorBeta` fixtures, `psql`
+  ground truth at each step), plus self-owned auto-approve (zero extra notifications) and the Groups
+  retrofit (cross-author add via typeahead, correct content-rating filtering); see `audit/Stories.md`
+  Feature 10 for the full step-by-step. **Scope note:** no dedicated `MyStoryLineagesPageTests`
+  (single-route page, no dispatcher-reuse trap to test) — matches the `SeriesCreateEditPageTests`
+  scope-note precedent; CRUD-UI authority is the Integration tier.
 - **Tool:** opusplan. **Pointer:** `audit/Stories.md` Feature 10. **Deps:** WU24, WU25.
 
 ### WU43 — Saved Tag Selections (Feature 15) — DONE ✓ (2026-07-11)

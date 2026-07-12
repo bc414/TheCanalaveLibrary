@@ -7,6 +7,7 @@
 @inject IChapterReadService ChapterReadService
 @inject IUserStoryInteractionReadService UsiReadService
 @inject ISeriesReadService SeriesReadService
+@inject IStoryLineageReadService StoryLineageReadService
 @inject IViewCountWriteService ViewCountWriteService
 @inject IDeviceDetectionService DeviceService
 @inject NavigationManager NavigationManager
@@ -44,7 +45,8 @@ else
                      CurrentUserId="_currentUserId"
                      IsAuthor="_isAuthor"
                      UsiState="_usiState"
-                     SeriesMemberships="_seriesMemberships" />
+                     SeriesMemberships="_seriesMemberships"
+                     LineageLinks="_lineageLinks" />
     }
     else
     {
@@ -53,7 +55,8 @@ else
                       CurrentUserId="_currentUserId"
                       IsAuthor="_isAuthor"
                       UsiState="_usiState"
-                      SeriesMemberships="_seriesMemberships" />
+                      SeriesMemberships="_seriesMemberships"
+                      LineageLinks="_lineageLinks" />
     }
 }
 
@@ -84,6 +87,9 @@ else
     // Series membership box(es) — WU41. A story may be in more than one series; not persisted
     // (same treatment as _usiState — ephemeral supplementary data, reloaded fresh every time).
     private IReadOnlyList<StorySeriesMembershipDto> _seriesMemberships = [];
+
+    // Approved outgoing lineage links — WU42. Same ephemeral treatment as _seriesMemberships.
+    private IReadOnlyList<StoryLineageDto> _lineageLinks = [];
 
     private bool _initialized;
     private int _loadedStoryId = int.MinValue; // sentinel; no real StoryId equals this
@@ -129,6 +135,7 @@ else
             _usiState = await UsiReadService.GetStateAsync(StoryId);
 
         _seriesMemberships = await SeriesReadService.GetMembershipsForStoryAsync(StoryId);
+        _lineageLinks = await StoryLineageReadService.GetLineageForStoryAsync(StoryId);
 
         _isAuthor  = _currentUserId.HasValue && Story.AuthorId == _currentUserId;
         _isLoading = false;
@@ -159,6 +166,7 @@ else
         Chapters = (await ChapterReadService.GetChapterListAsync(StoryId)).ToArray();
         _usiState = _currentUserId is not null ? await UsiReadService.GetStateAsync(StoryId) : null;
         _seriesMemberships = await SeriesReadService.GetMembershipsForStoryAsync(StoryId);
+        _lineageLinks = await StoryLineageReadService.GetLineageForStoryAsync(StoryId);
         _isAuthor = _currentUserId.HasValue && Story.AuthorId == _currentUserId;
         _isLoading = false;
 

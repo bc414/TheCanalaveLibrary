@@ -59,6 +59,14 @@ else
             <div class="mt-8">
                 <StoryChapterImport StoryId="@StoryId.Value" />
             </div>
+
+            @* Story Lineage management lives on its own owner-wide page (Feature 10, WU42 settled
+               decision) — this is just a discoverable redirect from the editing context. *@
+            <div class="mt-4">
+                <a href="/story-lineages" class="text-sm text-(--color-action-ink) hover:underline">
+                    Manage story lineage →
+                </a>
+            </div>
         }
     </div>
 }

@@ -82,7 +82,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A |
 | 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A |
 | 9 | Series & Ordering | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
-| 10 | Story Relationships | Stories | 5 | 2 | 2 | 2 | 1 | 1 | 2 | N/A | N/A |
+| 10 | Story Lineage | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
 | 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
 | 12 | Story Tagging | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
 | 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |

@@ -36,6 +36,7 @@ internal sealed class FakeStoryReadService : IStoryReadService
     public Task<StoryListingDto[]> GetRandomBatchAsync(StoryFilterDto filter, int batchSize) => Task.FromResult(Array.Empty<StoryListingDto>());
     public Task<IReadOnlyList<int>> FilterCandidateIdsAsync(IReadOnlyCollection<int> candidateIds, StoryFilterDto filter) => Task.FromResult<IReadOnlyList<int>>([.. candidateIds]);
     public Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId) => Task.FromResult<IReadOnlyList<int>>([]);
+    public Task<IReadOnlyList<StoryTitleSearchDto>> SearchStoriesByTitleAsync(string term) => Task.FromResult<IReadOnlyList<StoryTitleSearchDto>>([]);
 
     /// <summary>Configurable knob for StoryViewStats tests (Feature 45 on-demand reveal).</summary>
     public long TotalViews { get; set; }

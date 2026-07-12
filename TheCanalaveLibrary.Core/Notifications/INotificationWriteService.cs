@@ -93,6 +93,23 @@ public interface INotificationWriteService : INotificationReadService
     /// <param name="authorId">The author of the blog post (drop-self source).</param>
     Task NotifyNewGroupBlogPostAsync(int groupId, int blogPostId, int authorId);
 
+    // ── Semantic generation methods (WU42 slice — Story Lineage) ─────────────────
+
+    /// <summary>
+    /// Sends <c>StoryLineageRequested = 50</c> to <paramref name="targetAuthorId"/> when another
+    /// author requests a lineage link from their story to one of the target author's stories.
+    /// <c>RelatedEntityId = sourceStoryId</c> (the requester's story, for the recipient to review).
+    /// Not sent for self-owned (auto-approved) links.
+    /// </summary>
+    Task NotifyStoryLineageRequestedAsync(int targetAuthorId, int requesterId, int sourceStoryId);
+
+    /// <summary>
+    /// Sends <c>StoryLineageApproved = 51</c> to <paramref name="sourceAuthorId"/> when their
+    /// pending lineage request is approved. <c>RelatedEntityId = targetStoryId</c> (the story that
+    /// was approved as a lineage target).
+    /// </summary>
+    Task NotifyStoryLineageApprovedAsync(int sourceAuthorId, int approverId, int targetStoryId);
+
     // ── Semantic generation methods (WU34 slice — moderation) ────────────────────
 
     /// <summary>

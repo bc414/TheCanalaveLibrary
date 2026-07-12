@@ -33,7 +33,7 @@ public enum FilterEntityType : short
 
 
 
-public enum StoryRelationshipStatus : short
+public enum StoryLineageStatus : short
 {
     Pending = 0,
     Approved = 1,
@@ -141,8 +141,8 @@ public enum NotificationTypeEnum : short
     SuccessfulRec = 42,
     
     //Collaborations
-    StoryRelationshipRequested = 50, //someone else is asking to cite your story
-    StoryRelationshipApproved = 51, //your request to cite someone else's story was approved by them
+    StoryLineageRequested = 50, //someone else is asking to cite your story
+    StoryLineageApproved = 51, //your request to cite someone else's story was approved by them
     NewStoryAcknowledgement = 52, //you were acknowleged for helping with a story
     
     //Groups

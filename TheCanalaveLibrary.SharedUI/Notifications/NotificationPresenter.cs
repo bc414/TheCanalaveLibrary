@@ -100,11 +100,11 @@ public static class NotificationPresenter
                 target is not null ? $"{actor} recommended {target}" : $"{actor} wrote a recommendation",
 
             // ── Collaborations category ───────────────────────────────────────────
-            NotificationTypeEnum.StoryRelationshipRequested =>
-                target is not null ? $"{actor} requested a story relationship with {target}" : $"{actor} requested a story relationship",
+            NotificationTypeEnum.StoryLineageRequested =>
+                target is not null ? $"{actor} requested a story lineage link with {target}" : $"{actor} requested a story lineage link",
 
-            NotificationTypeEnum.StoryRelationshipApproved =>
-                target is not null ? $"Your story relationship for {target} was approved" : "Your story relationship was approved",
+            NotificationTypeEnum.StoryLineageApproved =>
+                target is not null ? $"Your story lineage link for {target} was approved" : "Your story lineage link was approved",
 
             // ── Groups category ───────────────────────────────────────────────────
             NotificationTypeEnum.NewGroupStory =>

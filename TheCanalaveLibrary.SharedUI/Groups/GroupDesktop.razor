@@ -90,23 +90,15 @@
                     }
                 </div>
 
-                @* ── Inline add-story form (members only) ──────────────────────── *@
+                @* ── Inline add-story form (members only) — WU42: title typeahead replaces the
+                   old raw numeric Story ID input. *@
                 @if (_showAddStory)
                 {
                     <div class="rounded-lg border border-(--color-border) bg-(--color-surface) p-4 flex flex-col gap-3">
                         <label class="text-sm font-semibold text-(--color-text)">Add a story to this group</label>
-                        <input type="number" @bind="_addStoryId" placeholder="Story ID"
-                               class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink) w-40" />
-                        @if (_addStoryError is not null)
-                        {
-                            <p class="text-xs text-(--color-danger)">@_addStoryError</p>
-                        }
+                        <StoryTitlePicker OnStorySelected="HandleAddStoryAsync"
+                                          Placeholder="Type to search for a story..." />
                         <div class="flex gap-2">
-                            <button type="button" @onclick="HandleAddStoryAsync"
-                                    class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) hover:bg-(--color-action-hover) disabled:opacity-50"
-                                    disabled="@(_addStoryId is null)">
-                                Add
-                            </button>
                             <button type="button" @onclick="() => _showAddStory = false"
                                     class="rounded-md border border-(--color-border) px-3 py-1.5 text-sm text-(--color-text) hover:bg-(--color-surface-hover)">
                                 Cancel
@@ -207,27 +199,17 @@
     // ── Add-story state ────────────────────────────────────────────────────────
     private ReportDialog _reportDialog = default!;
     private bool _showAddStory;
-    private int? _addStoryId;
-    private string? _addStoryError;
 
-    private void ToggleAddStory()
-    {
-        _showAddStory = !_showAddStory;
-        _addStoryId   = null;
-        _addStoryError = null;
-    }
+    private void ToggleAddStory() => _showAddStory = !_showAddStory;
 
-    private async Task HandleAddStoryAsync()
+    private async Task HandleAddStoryAsync(StoryTitleSearchDto story)
     {
-        if (_addStoryId is null) return;
-        _addStoryError = null;
         await OnStoryAdded.InvokeAsync(new AddGroupStoryDto
         {
             GroupId = Group.GroupId,
-            StoryId = _addStoryId.Value
+            StoryId = story.StoryId
         });
         _showAddStory = false;
-        _addStoryId   = null;
     }
 
     // ── Folder tree (inline recursive render fragment) ────────────────────────

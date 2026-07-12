@@ -9,8 +9,10 @@ split, no components. Every other folder FK-references these. L2/L3/L3.5/L4/L5/L
 constants: `SiteBadges`, `SiteSearchModes`, `UserStoryInteractionFilters`), and the lookup/enum-mirror
 entities scattered in `Core/Models/` (`StoryStatus`, `TagType`, `ReportReason`, `ReportStatus`,
 `NotificationCategory`, `NotificationType`, `AcknowledgmentRole`, `RecommendationStatus`,
-`StoryRelationshipType`, `SearchMode`, `UserInteractionFilter`, `Theme`, `Badge`, `DefaultSearchSetting`).
-All seed data lives inline in `ApplicationDbContext.OnModelCreating` via `HasData`.
+`StoryLineageType` (renamed from `StoryRelationshipType` in WU42, 2026-07-12 — moved to
+`Core/Stories/`, not `Core/Models/`), `SearchMode`, `UserInteractionFilter`, `Theme`, `Badge`,
+`DefaultSearchSetting`). All seed data lives inline in `ApplicationDbContext.OnModelCreating` via
+`HasData`.
 
 ---
 
@@ -18,7 +20,7 @@ All seed data lives inline in `ApplicationDbContext.OnModelCreating` via `HasDat
 
 Most of this is excellent and would be Stage 5 on its own: the `~35` `NotificationType` rows with
 gap-based numbering (10/20/30… per category), `StoryStatus`, `TagType`, `ReportReason`/`ReportStatus`,
-`RecommendationStatus`, `StoryRelationshipType`, `AcknowledgmentRole`, `Theme`, role/badge seeds — all
+`RecommendationStatus`, `StoryLineageType`, `AcknowledgmentRole`, `Theme`, role/badge seeds — all
 match spec §4/§5 and use `HasConversion<short>()` enum mirrors correctly.
 
 It is **Stage 4** because of concrete divergences from the revised model — but per the audit-summary §0

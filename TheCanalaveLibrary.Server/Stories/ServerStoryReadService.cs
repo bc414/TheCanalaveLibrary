@@ -225,6 +225,24 @@ public class ServerStoryReadService(
             .ToListAsync();
     }
 
+    private const int MaxTitleSearchResults = 10;
+
+    public async Task<IReadOnlyList<StoryTitleSearchDto>> SearchStoriesByTitleAsync(string term)
+    {
+        if (string.IsNullOrWhiteSpace(term)) return [];
+
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        return await readDb.Stories
+            .Where(s => s.StoryListing != null && EF.Functions.ILike(s.StoryListing.StoryTitle, $"%{term}%"))
+            .OrderBy(s => s.StoryListing!.StoryTitle)
+            .Take(MaxTitleSearchResults)
+            .Select(s => new StoryTitleSearchDto(
+                s.StoryId,
+                s.StoryListing!.StoryTitle,
+                s.Author != null ? s.Author.UserName : null))
+            .ToListAsync();
+    }
+
     public async Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(
         StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null)
     {

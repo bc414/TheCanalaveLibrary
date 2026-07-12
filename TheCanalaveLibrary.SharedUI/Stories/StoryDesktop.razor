@@ -109,6 +109,9 @@
                 }
             </div>
         }
+
+        @* Story lineage — Approved outgoing links only (Feature 10, WU42) *@
+        <StoryLineageBox Links="LineageLinks" />
     </div>
 
     @* ── Cover art ────────────────────────────────────────────────────────────── *@
@@ -169,6 +172,9 @@
 
     /// <summary>Series this story belongs to (WU41) — a story may be in more than one.</summary>
     [Parameter] public IReadOnlyList<StorySeriesMembershipDto> SeriesMemberships { get; set; } = [];
+
+    /// <summary>Approved outgoing lineage links (Feature 10, WU42).</summary>
+    [Parameter] public IReadOnlyList<StoryLineageDto> LineageLinks { get; set; } = [];
 
     private bool _coverArtFailed;
 

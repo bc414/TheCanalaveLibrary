@@ -168,6 +168,22 @@ public class ServerNotificationWriteService(
             await CreateCoreAsync(NotificationTypeEnum.NewGroupBlogPost, authorId, targets);
     }
 
+    // ── Semantic generation methods (WU42 slice — Story Lineage) ─────────────────
+
+    /// <inheritdoc/>
+    public Task NotifyStoryLineageRequestedAsync(int targetAuthorId, int requesterId, int sourceStoryId) =>
+        CreateCoreAsync(
+            NotificationTypeEnum.StoryLineageRequested,
+            sourceUserId: requesterId,
+            targets: [(targetAuthorId, sourceStoryId)]);
+
+    /// <inheritdoc/>
+    public Task NotifyStoryLineageApprovedAsync(int sourceAuthorId, int approverId, int targetStoryId) =>
+        CreateCoreAsync(
+            NotificationTypeEnum.StoryLineageApproved,
+            sourceUserId: approverId,
+            targets: [(sourceAuthorId, targetStoryId)]);
+
     // ── Semantic generation methods (WU34 slice — moderation) ────────────────────
 
     /// <inheritdoc/>

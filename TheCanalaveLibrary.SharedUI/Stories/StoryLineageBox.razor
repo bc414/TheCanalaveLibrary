@@ -1,0 +1,30 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Leaf component — public "story lineage" display for the story page (Feature 10, WU42). No
+   @inject. Renders one line per Approved outgoing StoryLineageDto (already filtered/hydrated by
+   the read service — this component never re-checks visibility). Renders nothing when empty.
+   Mirrors SeriesMembershipBox's role (leaf, pure display, one component per source-story call
+   site) but a single box holds every link (not one box per link) since lineage entries are
+   typically few and don't need Prev/Next-style per-entry chrome. *@
+
+@if (Links.Count > 0)
+{
+    <div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-3 flex flex-col gap-1.5 text-sm">
+        <span class="text-(--color-text-muted)">Story lineage:</span>
+        <ul class="flex flex-col gap-1">
+            @foreach (StoryLineageDto link in Links)
+            {
+                <li>
+                    <span class="text-(--color-text-muted)">@link.TypeName of</span>
+                    <a href="/story/@link.TargetStoryId"
+                       class="font-medium text-(--color-action-ink) hover:underline">@link.TargetTitle</a>
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<StoryLineageDto> Links { get; set; } = [];
+}

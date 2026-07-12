@@ -67,8 +67,8 @@ public partial class Story : IModeratableContent
     // "Also posted on" links (Feature 53 reframe, WU38d) — many per story, remodeled from the
     // old 1-to-1 StoryImport.
     public virtual ICollection<StoryExternalLink> ExternalLinks { get; set; } = new List<StoryExternalLink>();
-    public virtual ICollection<StoryRelationship> StoryRelationshipSourceStories { get; set; } = new List<StoryRelationship>();
-    public virtual ICollection<StoryRelationship> StoryRelationshipTargetStories { get; set; } = new List<StoryRelationship>();
+    public virtual ICollection<StoryLineage> StoryLineageSourceStories { get; set; } = new List<StoryLineage>();
+    public virtual ICollection<StoryLineage> StoryLineageTargetStories { get; set; } = new List<StoryLineage>();
     public virtual ICollection<StoryTag> StoryTags { get; set; } = new List<StoryTag>();
     public virtual ICollection<UserStoryInteraction> UserStoryInteractions { get; set; } = new List<UserStoryInteraction>();
 

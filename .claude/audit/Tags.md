@@ -27,8 +27,9 @@ by the sprite-redesign: read services now project raw `SpriteIdentifier` and dro
 **WU37 naming correction (2026-06-25):** `StoryCharacterRelationship` → **`StoryCharacterPairing`**;
 `CharacterRelationshipType` → **`CharacterPairingType`** (Romantic/Platonic); new first-class join
 `StoryCharacterPairingMember` replaces the EF auto-generated shadow table
-`StoryCharacterStoryCharacterRelationship`. Feature 10's unrelated `StoryRelationship` /
-`StoryRelationshipType` (story-to-story) are unchanged.
+`StoryCharacterStoryCharacterRelationship`. Feature 10's unrelated story-to-story link (renamed
+`StoryLineage`/`StoryLineageType` in WU42, 2026-07-12 — formerly `StoryRelationship`/
+`StoryRelationshipType`) was unchanged by WU37.
 
 **Pre-integration cleanup (2026-06-26):** `CharacterRelationshipType { Romantic, Platonic }` enum in
 `Core/Lookups/ModelEnums.cs` deleted — zero references repo-wide; the live pairing-type enum is
@@ -247,12 +248,13 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
 
   - **Naming disambiguation (WU37 Phase 1).** The existing `StoryCharacterRelationship` entity is
     renamed `StoryCharacterPairing` to eliminate the near-collision with Feature 10's unrelated
-    story-to-story `StoryRelationship` / `StoryRelationshipType`. Other renames in the same pass:
+    story-to-story link (renamed `StoryLineage`/`StoryLineageType` in WU42, 2026-07-12 — formerly
+    `StoryRelationship`/`StoryRelationshipType`). Other renames in the same pass:
     field `RelationshipType` → `PairingType`; enum `CharacterRelationshipType` → `CharacterPairingType`;
     nav `StoryCharacter.StoryCharacterRelationships` → `StoryCharacterPairings`; the implicit EF
     shadow join table `StoryCharacterStoryCharacterRelationship` is replaced by a first-class named
     entity `StoryCharacterPairingMember` (`StoryCharacterPairingId` + `StoryCharacterId`, composite PK).
-    Feature 10's `StoryRelationship` / `StoryRelationshipType` are untouched.
+    Feature 10's entity was untouched by WU37 (it got its own rename later, in WU42).
 
   - **`AllowSettingDetails` gap (closed in WU37 L1).** `Tag_Design_Deliberations.md` §7 calls for a
     gate parallel to `AllowOCDetails`: Setting/AU tags only; gates `SettingDetail` creation. Add
