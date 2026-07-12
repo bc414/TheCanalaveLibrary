@@ -89,6 +89,25 @@ The correct way to reach the concrete subtype from a base instance is to query t
 discriminator (spec §4.3). Reference: `BaseBlogPost` and `BasePoll` are the correct model — they
 carry no navigations to `ProfileBlogPost`/`GroupBlogPost`/`SitePoll`/`BlogPostPoll`.
 
+**Collection navigations TO a TPT child are typed to the child, not the base:** the sibling trap
+on the *other* side of the relationship. Declaring `ICollection<BasePoll> Polls` on
+`BaseBlogPost` prevented EF from pairing it with `BlogPostPoll.BlogPost` — it minted a second
+shadow-FK relationship on `base_polls` that let a `SitePoll` point at a blog post. Type the
+collection to the concrete child (`ICollection<BlogPostPoll>`) and pair it explicitly
+(`HasOne(p => p.BlogPost).WithMany(b => b.Polls)`). Fixed in the WU-Polls L1 reconcile
+(migration `WU_Polls_ConfigLifecycleAndShadowFkFix`, 2026-07-12).
+
+**Cross-child casts in projections need a base-typed source:** a projection that branches across
+sibling child types (`p is SitePoll && ((SitePoll)p).IsArchived`, `p is BlogPostPoll ?
+((BlogPostPoll)p).BlogPostId : null`) only translates when the `IQueryable`'s **static element
+type is the base**. Passing an `OfType<TChild>()` queryable into such a shared projection (legal
+C# via `IQueryable<out T>` covariance) makes EF's expression preprocessor coerce the *other*
+child's cast onto the child-typed parameter and throw `No coercion operator is defined between
+types 'SitePoll' and 'BlogPostPoll'` at runtime. Filter with `Where(p => p is TChild)` (+
+`((TChild)p).Column` predicates) instead of `OfType<TChild>()` whenever the result feeds a
+base-typed shared projection. Reference: `ServerPollReadService` (found live in WU-Polls browser
+verification, 2026-07-12; regression net: `PollServiceTests` list tests).
+
 ## Enum / Lookup Table Decision Framework
 
 | Pattern | When | Examples |

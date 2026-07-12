@@ -38,6 +38,7 @@ public static class ExceptionPresenter
         or CommentValidationException
         or RecommendationValidationException
         or BlogPostValidationException
+        or PollValidationException
         or GroupValidationException
         or SeriesValidationException
         or StoryLineageValidationException
@@ -59,6 +60,7 @@ public static class ExceptionPresenter
         CommentValidationException e => e.Errors,
         RecommendationValidationException e => e.Errors,
         BlogPostValidationException e => e.Errors,
+        PollValidationException e => e.Errors,
         GroupValidationException e => e.Errors,
         SeriesValidationException e => e.Errors,
         StoryLineageValidationException e => e.Errors,

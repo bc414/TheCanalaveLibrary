@@ -468,6 +468,28 @@ Mixing them — `@bind` with numeric option values — compiles clean and render
 whenever the bound value should be pre-selected, because nothing matches. Found live in the L4.5
 browser pass (`audit/Tags.md`, 2026-07-01).
 
+### Bool `<select>` — never `@bind` a bool with `value="true|false"` options
+
+Same failure family as the enum mix above: a bound `bool` serializes as `"True"`/`"False"`
+(C# `ToString()`, capitalized), which never matches lowercase `<option value="true|false">`
+(DOM value match is case-sensitive). The select silently displays the first option regardless of
+the bound value, and depending on event timing the change may not round-trip either — it *looks*
+wired and compiles clean. Use explicit domain-word values + an `@onchange` handler instead:
+
+```razor
+<select value="@(Model.AllowMultiple ? "multiple" : "single")" @onchange="HandleChoicesChanged">
+    <option value="single">Single choice</option>
+    <option value="multiple">Multiple choice</option>
+</select>
+@code {
+    private void HandleChoicesChanged(ChangeEventArgs e) =>
+        Model.AllowMultiple = e.Value?.ToString() == "multiple";
+}
+```
+
+Reference: `PollEditorForm` (found live in WU-Polls browser verification, 2026-07-12 — the
+created poll persisted `AllowMultiple = false` despite "Multiple choice" being selected).
+
 ### String parameters take attribute text literally
 
 For a **string-typed** component parameter, `Param="_myField"` passes the literal text

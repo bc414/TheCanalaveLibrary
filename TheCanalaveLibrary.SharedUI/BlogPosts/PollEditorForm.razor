@@ -1,0 +1,145 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Presentational poll create/edit form (no @inject — bUnit-testable; mirrors
+   BlogPostPropertiesForm). The owning page supplies the PollEditDto, invokes the service,
+   and feeds server validation errors back via Errors. Config fields disable when
+   ConfigLocked (votes exist — the lock itself is service-enforced; this is affordance).
+   Dates are entered as UTC; the page stamps DateTimeKind.Utc before submitting. *@
+
+<div class="flex flex-col gap-4">
+
+    @if (Errors is { Count: > 0 })
+    {
+        <InlineAlert Messages="@Errors" />
+    }
+
+    <label class="flex flex-col gap-1 text-sm text-(--color-text)">
+        <span class="font-medium">Question</span>
+        <input type="text" maxlength="256" @bind="Model.PollName"
+               class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5" />
+    </label>
+
+    <label class="flex flex-col gap-1 text-sm text-(--color-text)">
+        <span class="font-medium">Description <span class="font-normal text-(--color-text-muted)">(optional)</span></span>
+        <textarea rows="2" maxlength="2048" @bind="Model.Description"
+                  class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5"></textarea>
+    </label>
+
+    <div class="flex flex-col gap-2">
+        <span class="text-sm font-medium text-(--color-text)">Options</span>
+        @for (int i = 0; i < Model.Options.Count; i++)
+        {
+            int index = i; // capture for lambdas
+            <div class="flex items-center gap-2">
+                <input type="text" maxlength="2048"
+                       value="@Model.Options[index].Text"
+                       @onchange="e => SetOptionText(index, e.Value?.ToString() ?? string.Empty)"
+                       placeholder="Option @(index + 1)"
+                       class="min-w-0 flex-1 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 text-sm" />
+                <button type="button" @onclick="() => RemoveOption(index)"
+                        disabled="@(Model.Options.Count <= 2)"
+                        title="Remove option" aria-label="Remove option"
+                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm text-(--color-text-muted) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50">
+                    ✕
+                </button>
+            </div>
+        }
+        <button type="button" @onclick="AddOption"
+                class="self-start rounded-md border border-(--color-border) bg-(--color-surface) px-2.5 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">
+            + Add option
+        </button>
+    </div>
+
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label class="flex flex-col gap-1 text-sm text-(--color-text)">
+            <span class="font-medium">Opens <span class="font-normal text-(--color-text-muted)">(UTC; blank = immediately)</span></span>
+            <input type="datetime-local" @bind="Model.DateOpened" disabled="@ConfigLocked"
+                   class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 disabled:opacity-50" />
+        </label>
+        <label class="flex flex-col gap-1 text-sm text-(--color-text)">
+            <span class="font-medium">Closes <span class="font-normal text-(--color-text-muted)">(UTC; blank = until closed manually)</span></span>
+            <input type="datetime-local" @bind="Model.DateClosed"
+                   class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5" />
+        </label>
+    </div>
+
+    @if (ConfigLocked)
+    {
+        <p class="text-xs text-(--color-text-muted)">
+            Voting settings are locked because this poll already has votes.
+        </p>
+    }
+
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <label class="flex flex-col gap-1 text-sm text-(--color-text)">
+            <span class="font-medium">Choices</span>
+            @* Explicit string mapping — a bare bool @bind renders "True"/"False", which never
+               matches lowercase option values (case-sensitive DOM match): the select silently
+               shows the first option and edits don't stick (found via browser verification
+               2026-07-12). *@
+            <select value="@(Model.AllowMultiple ? "multiple" : "single")"
+                    @onchange="HandleChoicesChanged"
+                    disabled="@ConfigLocked"
+                    class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 disabled:opacity-50">
+                <option value="single">Single choice</option>
+                <option value="multiple">Multiple choice</option>
+            </select>
+        </label>
+        <label class="flex flex-col gap-1 text-sm text-(--color-text)">
+            <span class="font-medium">Results visible</span>
+            <select @bind="Model.ResultsVisibility" disabled="@ConfigLocked"
+                    class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 disabled:opacity-50">
+                <option value="@PollResultsVisibility.AfterVote">After voting</option>
+                <option value="@PollResultsVisibility.Always">Always (live)</option>
+                <option value="@PollResultsVisibility.AfterClose">After the poll closes</option>
+            </select>
+        </label>
+        <label class="flex flex-col gap-1 text-sm text-(--color-text)">
+            <span class="font-medium">Voter names</span>
+            <select @bind="Model.AnonymityMode" disabled="@ConfigLocked"
+                    class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 disabled:opacity-50">
+                <option value="@PollAnonymityMode.Anonymous">Anonymous</option>
+                <option value="@PollAnonymityMode.Public">Shown</option>
+                <option value="@PollAnonymityMode.VoterChoice">Voter's choice</option>
+            </select>
+        </label>
+    </div>
+
+    <div class="flex items-center gap-3">
+        <button type="button" disabled="@IsBusy" @onclick="() => OnSubmit.InvokeAsync()"
+                class="rounded-md bg-(--color-mission) px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-(--color-mission-hover) disabled:opacity-50">
+            @SubmitLabel
+        </button>
+        <button type="button" disabled="@IsBusy" @onclick="() => OnCancel.InvokeAsync()"
+                class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50">
+            Cancel
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PollEditDto Model { get; set; } = null!;
+
+    /// <summary>True when the poll already has votes — the three config fields + open date freeze.</summary>
+    [Parameter] public bool ConfigLocked { get; set; }
+
+    [Parameter] public string SubmitLabel { get; set; } = "Save";
+    [Parameter] public bool IsBusy { get; set; }
+    [Parameter] public IReadOnlyList<string>? Errors { get; set; }
+    [Parameter] public EventCallback OnSubmit { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private void HandleChoicesChanged(ChangeEventArgs e) =>
+        Model.AllowMultiple = e.Value?.ToString() == "multiple";
+
+    private void AddOption() => Model.Options.Add(new PollOptionEditDto(null, string.Empty));
+
+    private void RemoveOption(int index)
+    {
+        if (Model.Options.Count > 2) Model.Options.RemoveAt(index);
+    }
+
+    private void SetOptionText(int index, string text) =>
+        Model.Options[index] = Model.Options[index] with { Text = text };
+}

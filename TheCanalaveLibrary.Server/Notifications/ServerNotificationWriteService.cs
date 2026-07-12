@@ -248,6 +248,13 @@ public class ServerNotificationWriteService(
         CreateCoreAsync(NotificationTypeEnum.RecommendationSpotlighted, sponsorUserId,
             [(recommenderUserId, storyId)]);
 
+    // ── Semantic generation methods (WU-Polls slice) ─────────────────────────────
+
+    /// <inheritdoc/>
+    public Task NotifyPollUpdatedAsync(int pollOwnerUserId, IReadOnlyList<int> voterUserIds, int relatedEntityId) =>
+        CreateCoreAsync(NotificationTypeEnum.PollUpdated, pollOwnerUserId,
+            voterUserIds.Select(id => (id, relatedEntityId)).ToArray());
+
     // ── Private create-core ───────────────────────────────────────────────────────
 
     /// <summary>

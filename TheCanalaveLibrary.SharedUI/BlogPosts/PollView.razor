@@ -1,0 +1,343 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject IPollWriteService PollService
+@using TheCanalaveLibrary.Core
+
+@* Self-contained poll display + vote block (Feature 37; settled 2026-07-12 —
+   audit/BlogPosts.md F37). Injects IPollWriteService for the self-contained vote write
+   (the follow-button precedent: self-contained writes may inject). Results visibility is
+   enforced SERVER-side (zeroed tallies when not visible) — this component only decides
+   presentation. Management affordances render only when CanManage; the service gates are
+   the real control. Poll name/description are plain Container text (never RichTextView →
+   no ContentSurface). *@
+
+<div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+
+    @* ── Header: name + status badge ─────────────────────────────────────── *@
+    <div class="flex flex-wrap items-center gap-2">
+        <h3 class="font-semibold text-(--color-text)">@Poll.PollName</h3>
+        <span class="rounded-full px-2 py-0.5 text-xs font-medium @StatusBadgeClasses">@StatusLabel</span>
+        @if (Poll.IsArchived)
+        {
+            <span class="rounded-full bg-(--color-surface-hover) px-2 py-0.5 text-xs text-(--color-text-muted) ring-1 ring-(--color-border)">Archived</span>
+        }
+    </div>
+
+    @* ── Meta: dates + config summary ────────────────────────────────────── *@
+    <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-(--color-text-muted)">
+        @if (Poll.Status == PollStatus.Pending)
+        {
+            <span>Opens @Poll.DateOpened.ToString("MMM d, yyyy HH:mm") UTC</span>
+        }
+        else
+        {
+            <span>Opened @Poll.DateOpened.ToString("MMM d, yyyy")</span>
+        }
+        @if (Poll.DateClosed is DateTime closed)
+        {
+            <span>·</span>
+            <span>@(Poll.Status == PollStatus.Closed ? "Closed" : "Closes") @closed.ToString("MMM d, yyyy HH:mm") UTC</span>
+        }
+        else if (Poll.Status != PollStatus.Closed)
+        {
+            <span>·</span>
+            <span>Open until closed</span>
+        }
+        <span>·</span>
+        <span>@(Poll.AllowMultiple ? "Multiple choice" : "Single choice")</span>
+        @if (Poll.AnonymityMode == PollAnonymityMode.Anonymous)
+        {
+            <span>·</span>
+            <span>Anonymous</span>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Poll.Description))
+    {
+        <p class="text-sm text-(--color-text)">@Poll.Description</p>
+    }
+
+    @* ── Options ─────────────────────────────────────────────────────────── *@
+    <div class="flex flex-col gap-2">
+        @foreach (PollOptionResultDto option in Poll.Options)
+        {
+            <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-2">
+                    @if (CanSelect)
+                    {
+                        <label class="flex min-w-0 flex-1 cursor-pointer items-center gap-2 text-sm text-(--color-text)">
+                            <input type="@(Poll.AllowMultiple ? "checkbox" : "radio")"
+                                   name="poll-@Poll.PollId"
+                                   checked="@_selected.Contains(option.PollOptionId)"
+                                   @onchange="() => ToggleOption(option.PollOptionId)" />
+                            <span class="min-w-0 truncate">@option.Text</span>
+                        </label>
+                    }
+                    else
+                    {
+                        <span class="min-w-0 flex-1 truncate text-sm text-(--color-text) @(Poll.ViewerVotedOptionIds.Contains(option.PollOptionId) ? "font-semibold" : "")">
+                            @option.Text
+                            @if (Poll.ViewerVotedOptionIds.Contains(option.PollOptionId))
+                            {
+                                <span class="text-(--color-action-ink)" title="Your vote">✓</span>
+                            }
+                        </span>
+                    }
+                    @if (Poll.ResultsVisibleToViewer)
+                    {
+                        <span class="shrink-0 text-xs tabular-nums text-(--color-text-muted)">@option.VoteCount</span>
+                    }
+                </div>
+
+                @if (Poll.ResultsVisibleToViewer)
+                {
+                    <div class="h-2 w-full overflow-hidden rounded-full bg-(--color-surface-hover)">
+                        <div class="h-full rounded-full bg-(--color-progress)" style="width: @PercentFor(option)%"></div>
+                    </div>
+                    @if (option.PublicVoters.Length > 0)
+                    {
+                        <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-(--color-text-muted)">
+                            @foreach (PollVoterDto voter in option.PublicVoters)
+                            {
+                                <a href="/profile/@voter.UserId" class="text-(--color-action-ink) hover:underline">@voter.UserName</a>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        }
+    </div>
+
+    @* ── Result summary / visibility hint ────────────────────────────────── *@
+    @if (Poll.ResultsVisibleToViewer)
+    {
+        <p class="text-xs text-(--color-text-muted)">@Poll.TotalVoterCount @(Poll.TotalVoterCount == 1 ? "voter" : "voters")</p>
+    }
+    else if (CurrentUserId is null)
+    {
+        <p class="text-xs text-(--color-text-muted)">
+            <a href="Account/Login" class="text-(--color-action-ink) hover:underline">Sign in</a>
+            to vote@(Poll.ResultsVisibility == PollResultsVisibility.AfterVote ? " and see results" : "").
+        </p>
+    }
+    else if (Poll.ResultsVisibility == PollResultsVisibility.AfterVote)
+    {
+        <p class="text-xs text-(--color-text-muted)">Results are shown after you vote.</p>
+    }
+    else if (Poll.ResultsVisibility == PollResultsVisibility.AfterClose)
+    {
+        <p class="text-xs text-(--color-text-muted)">Results are shown when the poll closes.</p>
+    }
+
+    @* ── Vote controls ───────────────────────────────────────────────────── *@
+    @if (CanSelect)
+    {
+        <div class="flex flex-wrap items-center gap-3">
+            <button type="button"
+                    disabled="@(_busy || !SelectionChanged)"
+                    @onclick="SubmitVoteAsync"
+                    class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
+                @(Poll.ViewerVotedOptionIds.Length > 0 ? "Update vote" : "Vote")
+            </button>
+            @if (Poll.ViewerVotedOptionIds.Length > 0)
+            {
+                <button type="button"
+                        disabled="@_busy"
+                        @onclick="RetractVoteAsync"
+                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50">
+                    Retract vote
+                </button>
+            }
+            @if (Poll.AnonymityMode == PollAnonymityMode.VoterChoice)
+            {
+                <label class="flex cursor-pointer items-center gap-1.5 text-xs text-(--color-text-muted)">
+                    <input type="checkbox" @bind="_voteAnonymously" />
+                    Hide my name from the voter list
+                </label>
+            }
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        <InlineAlert Message="@_error" />
+    }
+
+    @* ── Manage row (owner / mods; service gates are the authority) ───────── *@
+    @if (CanManage)
+    {
+        <div class="flex flex-wrap items-center gap-2 border-t border-(--color-border) pt-2">
+            @if (OnEditRequested.HasDelegate && Poll.Status != PollStatus.Closed)
+            {
+                <button type="button" @onclick="() => OnEditRequested.InvokeAsync(Poll)"
+                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-2.5 py-1 text-xs text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">
+                    Edit
+                </button>
+            }
+            @if (Poll.Status == PollStatus.Open)
+            {
+                <button type="button" disabled="@_busy" @onclick="CloseAsync"
+                        class="rounded-md bg-(--color-warning)/15 px-2.5 py-1 text-xs text-(--color-warning) ring-1 ring-(--color-warning)/30 transition-colors hover:bg-(--color-warning)/25 disabled:opacity-50">
+                    Close now
+                </button>
+            }
+            @if (ShowArchiveToggle)
+            {
+                <button type="button" disabled="@_busy" @onclick="ToggleArchiveAsync"
+                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-2.5 py-1 text-xs text-(--color-text) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50">
+                    @(Poll.IsArchived ? "Unarchive" : "Archive")
+                </button>
+            }
+            <button type="button" disabled="@_busy" @onclick="() => _confirmDelete = true"
+                    class="rounded-md bg-(--color-danger)/15 px-2.5 py-1 text-xs text-(--color-danger) ring-1 ring-(--color-danger)/30 transition-colors hover:bg-(--color-danger)/25 disabled:opacity-50">
+                Delete
+            </button>
+        </div>
+    }
+</div>
+
+<ConfirmDialog IsOpen="@_confirmDelete"
+               Title="Delete poll?"
+               Message="@($"Delete \"{Poll.PollName}\" and all of its votes? This cannot be undone.")"
+               ConfirmText="Delete"
+               IsDestructive="true"
+               OnConfirm="DeleteAsync"
+               OnCancel="() => _confirmDelete = false" />
+
+@code {
+    /// <summary>The poll to render. Parent owns the instance; vote/manage actions replace it via <see cref="OnPollChanged"/>.</summary>
+    [Parameter, EditorRequired] public PollDto Poll { get; set; } = null!;
+
+    /// <summary>Current viewer (null = anonymous). Resolved by the page from the auth cascade.</summary>
+    [Parameter] public int? CurrentUserId { get; set; }
+
+    /// <summary>Shows the manage row (Edit/Close/Archive/Delete). UI affordance only — the service gates authorize.</summary>
+    [Parameter] public bool CanManage { get; set; }
+
+    /// <summary>Site polls only: show the Archive/Unarchive toggle.</summary>
+    [Parameter] public bool ShowArchiveToggle { get; set; }
+
+    /// <summary>Raised with the refreshed poll after a vote/close/archive, or null after delete.</summary>
+    [Parameter] public EventCallback<PollDto?> OnPollChanged { get; set; }
+
+    /// <summary>Raised when the manager clicks Edit — the parent owns the edit form.</summary>
+    [Parameter] public EventCallback<PollDto> OnEditRequested { get; set; }
+
+    private readonly HashSet<int> _selected = [];
+    private bool _voteAnonymously;
+    private bool _busy;
+    private bool _confirmDelete;
+    private string? _error;
+    private int _loadedPollId = int.MinValue;
+
+    private bool CanSelect => CurrentUserId is not null && Poll.Status == PollStatus.Open;
+
+    private bool SelectionChanged => !_selected.SetEquals(Poll.ViewerVotedOptionIds);
+
+    private string StatusLabel => Poll.Status switch
+    {
+        PollStatus.Pending => "Not open yet",
+        PollStatus.Closed => "Closed",
+        _ => "Open",
+    };
+
+    private string StatusBadgeClasses => Poll.Status switch
+    {
+        // Tint recipe per layer4-style.md "Interaction States" (semantic tints, never solid fills).
+        PollStatus.Open => "bg-(--color-success)/15 text-(--color-success) ring-1 ring-(--color-success)/30",
+        PollStatus.Pending => "bg-(--color-warning)/15 text-(--color-warning) ring-1 ring-(--color-warning)/30",
+        _ => "bg-(--color-surface-hover) text-(--color-text-muted) ring-1 ring-(--color-border)",
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (Poll.PollId == _loadedPollId) return;
+        _loadedPollId = Poll.PollId;
+        SeedSelectionFromPoll();
+    }
+
+    private void SeedSelectionFromPoll()
+    {
+        _selected.Clear();
+        foreach (int id in Poll.ViewerVotedOptionIds) _selected.Add(id);
+        _voteAnonymously = Poll.ViewerVotedAnonymously;
+    }
+
+    private void ToggleOption(int optionId)
+    {
+        if (Poll.AllowMultiple)
+        {
+            if (!_selected.Remove(optionId)) _selected.Add(optionId);
+        }
+        else
+        {
+            _selected.Clear();
+            _selected.Add(optionId);
+        }
+    }
+
+    private Task SubmitVoteAsync() => RunAsync(async () =>
+    {
+        PollDto updated = await PollService.VoteAsync(Poll.PollId, [.. _selected], _voteAnonymously);
+        await ApplyUpdatedAsync(updated);
+    });
+
+    private Task RetractVoteAsync() => RunAsync(async () =>
+    {
+        PollDto updated = await PollService.VoteAsync(Poll.PollId, [], _voteAnonymously);
+        await ApplyUpdatedAsync(updated);
+    });
+
+    private Task CloseAsync() => RunAsync(async () =>
+    {
+        await PollService.ClosePollAsync(Poll.PollId);
+        PollDto? updated = await PollService.GetPollAsync(Poll.PollId);
+        if (updated is not null) await ApplyUpdatedAsync(updated);
+    });
+
+    private Task ToggleArchiveAsync() => RunAsync(async () =>
+    {
+        await PollService.SetSitePollArchivedAsync(Poll.PollId, !Poll.IsArchived);
+        PollDto? updated = await PollService.GetPollAsync(Poll.PollId);
+        if (updated is not null) await ApplyUpdatedAsync(updated);
+    });
+
+    private Task DeleteAsync() => RunAsync(async () =>
+    {
+        _confirmDelete = false;
+        await PollService.DeletePollAsync(Poll.PollId);
+        await OnPollChanged.InvokeAsync(null);
+    });
+
+    private async Task ApplyUpdatedAsync(PollDto updated)
+    {
+        Poll = updated;
+        _loadedPollId = updated.PollId;
+        SeedSelectionFromPoll();
+        await OnPollChanged.InvokeAsync(updated);
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        if (_busy) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception ex)
+        {
+            _error = ExceptionPresenter.GetUserMessage(ex);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private int PercentFor(PollOptionResultDto option)
+    {
+        int total = Poll.Options.Sum(o => o.VoteCount);
+        return total == 0 ? 0 : (int)Math.Round(option.VoteCount * 100.0 / total);
+    }
+}

@@ -2569,3 +2569,43 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
 - **Tool:** Claude Code (Fable). **Pointer:** `audit/Spotlight.md`; `layer2-services.md`
   §"Community Spotlight" + §"Site Settings"; `SKILL.md` "SiteSettings/" cluster entry;
   `folder_clusters.md` Spotlight/SiteSettings rows; `middle_plan_v2.md` Resolved + Phase 2 item 1.
+
+## WU-Polls — Polls, full feature (Feature 37; Phase-4 verdict rendered) — DONE ✓ (2026-07-12)
+
+- **Cells:** F37 L1 (Stage 4 reconcile → 5), L2/L3/L3.5/L4/L4.5 (→ 5). L5 stays 2 (codebase-wide
+  InteractiveServer posture, same as F35/F36). Closes spec Open Question #6 and renders row 3's
+  Feature-37 beta-scope verdict (designed + built — `middle_plan_v2.md` Resolved "Polls
+  requirements").
+- **Requirements settled in chat 2026-07-12** (full record: `audit/BlogPosts.md` F37
+  "Requirements settled"): per-poll owner config (AllowMultiple / ResultsVisibility
+  AfterVote·Always·AfterClose / AnonymityMode Anonymous·Public·VoterChoice), config locks after
+  first vote, nullable `DateClosed` lifecycle (scheduled open, indefinite, manual close; archive
+  orthogonal), min-2 options no cap, fully editable while open with a 30-min quiet-period
+  `PollUpdated=100` voter notification batch, retract-hides-AfterVote-results, optimistic-local
+  tallies (no SignalR), mods create Site inline on `/polls`, authors create Blog polls in the
+  editor, blocks after post content.
+- **L1 reconcile:** `WU_Polls_ConfigLifecycleAndShadowFkFix` migration — config columns +
+  `poll_votes.is_anonymous` + nullable `date_closed` + `last_edited_at`/`edit_notified_at`
+  (partial index) + drops the spurious `base_polls.base_blog_post_blog_post_id` shadow FK
+  (`BaseBlogPost.Polls` was `ICollection<BasePoll>`; retyped to child + explicit pairing). Poll
+  entities moved `Core/Models/` → `Core/BlogPosts/`.
+- **L2:** `IPollReadService`/`IPollWriteService` + `ServerPoll{Read,Write}Service`
+  (`Server/BlogPosts/`), `PollDto` family, `PollRules` (Core, dependency-free), staged option
+  reconcile inside an execution-strategy transaction (non-deferred unique indexes), server-side
+  results-visibility zeroing. `PollEditNotificationSweeper`/`Worker` (SpotlightGoLive split;
+  TestAppFactory removes the worker).
+- **UI:** `PollView` (self-contained vote composite), `PollEditorForm` (presentational),
+  `PollsPage` `/polls` (active + archived, inline mod management), `BlogPostPage` poll blocks,
+  `BlogPostEditorPage` Polls section. `PollValidationException` registered in
+  `ExceptionPresenter`.
+- **Verified:** `dotnet test` green all tiers (~38 new: `PollRulesTests`, `PollEditDtoTests`,
+  `PollServiceTests` incl. sweep). Browser band (server-only, standing dev DB kept): full detail
+  in the F37 L4.5 Stage note — create/vote/anonymity/AfterVote-gate/retract/config-lock/
+  multi-vote flows all psql-ground-truthed; the REAL 1-min worker delivered the quiet-period
+  notification unprompted. **Two runtime bugs found via browser and fixed same-session** (TPT
+  cross-child projection coercion on `OfType` sources; bool `<select @bind>` case-mismatch) —
+  conventions recorded in `layer1-data-model.md` §TPT and `layer3-logic.md`, regression tests
+  added. Token check: no new findings (Import's pre-existing in-flight finding only).
+- **Deferred:** home-page SitePoll surfacing (folded into homepage-sections decision row 2).
+- **Tool:** Claude Code (Fable). **Pointer:** `audit/BlogPosts.md` F37; `layer4-style.md`
+  Pattern Accumulation "PollView / PollEditorForm"; `middle_plan_v2.md` Resolved + row 3.

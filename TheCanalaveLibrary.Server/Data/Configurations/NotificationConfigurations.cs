@@ -125,7 +125,11 @@ public sealed class NotificationTypeConfiguration : IEntityTypeConfiguration<Not
             // 91 = YourStories (author-facing), 92 = YourRecommendations (recommender-facing)
             new { NotificationTypeId = NotificationTypeEnum.SpotlightSlotGranted, NotificationKey = "SpotlightSlotGranted", DisplayName = "Spotlight Slot Granted", Description = "You have been awarded a Community Spotlight slot.", NotificationCategory = NotificationCategoryEnum.SiteNews, DefaultEmailEnabled = true, DefaultCollapsed = false },
             new { NotificationTypeId = NotificationTypeEnum.StorySpotlighted, NotificationKey = "StorySpotlighted", DisplayName = "Story Spotlighted", Description = "Your story is featured on the Community Spotlight.", NotificationCategory = NotificationCategoryEnum.YourStories, DefaultEmailEnabled = true, DefaultCollapsed = false },
-            new { NotificationTypeId = NotificationTypeEnum.RecommendationSpotlighted, NotificationKey = "RecommendationSpotlighted", DisplayName = "Recommendation Spotlighted", Description = "Your recommendation is featured beside a spotlighted story.", NotificationCategory = NotificationCategoryEnum.YourRecommendations, DefaultEmailEnabled = true, DefaultCollapsed = false }
+            new { NotificationTypeId = NotificationTypeEnum.RecommendationSpotlighted, NotificationKey = "RecommendationSpotlighted", DisplayName = "Recommendation Spotlighted", Description = "Your recommendation is featured beside a spotlighted story.", NotificationCategory = NotificationCategoryEnum.YourRecommendations, DefaultEmailEnabled = true, DefaultCollapsed = false },
+
+            // Polls (Feature 37, WU-Polls) — 100 = YourFollows (content you engaged with changed;
+            // category reuse per the Spotlight precedent — no new category minted)
+            new { NotificationTypeId = NotificationTypeEnum.PollUpdated, NotificationKey = "PollUpdated", DisplayName = "Poll Updated", Description = "A poll you voted on was changed by its owner.", NotificationCategory = NotificationCategoryEnum.YourFollows, DefaultEmailEnabled = false, DefaultCollapsed = false }
         );
 
         builder.HasIndex(e => e.DisplayName).IsUnique();

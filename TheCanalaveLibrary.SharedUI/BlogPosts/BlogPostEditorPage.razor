@@ -3,6 +3,7 @@
 @namespace TheCanalaveLibrary.SharedUI
 @attribute [Authorize]
 @inject IBlogPostWriteService BlogPostService
+@inject IPollWriteService PollService
 @inject IStoryReadService StoryService
 @inject NavigationManager NavigationManager
 @inject ILogger<BlogPostEditorPage> Logger
@@ -49,6 +50,51 @@
                                             SubmitLabel="@(BlogPostId.HasValue ? "Save Changes" : "Create Post")"
                                             OnValidSubmit="HandleValidSubmit" />
                 </div>
+
+                @* ── Polls (Feature 37) — author manages the post's polls here; the view page
+                     renders them vote-only. New posts must be saved first (polls need the id). *@
+                <div class="mt-6 flex flex-col gap-4">
+                    <h2 class="text-sm font-semibold text-(--color-text)">Polls</h2>
+                    @if (!BlogPostId.HasValue)
+                    {
+                        <p class="text-sm text-(--color-text-muted)">Save the post first to add polls.</p>
+                    }
+                    else
+                    {
+                        @foreach (PollDto poll in _polls)
+                        {
+                            <PollView @key="poll.PollId"
+                                      Poll="poll"
+                                      CurrentUserId="@ResolvedUserId"
+                                      CanManage="true"
+                                      OnPollChanged="p => HandlePollChanged(poll.PollId, p)"
+                                      OnEditRequested="StartPollEdit" />
+                        }
+
+                        @if (_pollEditing is not null)
+                        {
+                            <div class="rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+                                <h3 class="mb-3 text-sm font-semibold text-(--color-text)">
+                                    @(_pollEditingId is null ? "New poll" : "Edit poll")
+                                </h3>
+                                <PollEditorForm Model="_pollEditing"
+                                                ConfigLocked="@_pollEditingConfigLocked"
+                                                SubmitLabel="@(_pollEditingId is null ? "Create Poll" : "Save Changes")"
+                                                IsBusy="@_pollSaving"
+                                                Errors="@_pollErrors"
+                                                OnSubmit="SavePollAsync"
+                                                OnCancel="CancelPollEditor" />
+                            </div>
+                        }
+                        else
+                        {
+                            <button type="button" @onclick="StartPollCreate"
+                                    class="self-start rounded-md bg-(--color-mission) px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-(--color-mission-hover)">
+                                Add Poll
+                            </button>
+                        }
+                    }
+                </div>
             </div>
         }
     </Authorized>
@@ -72,10 +118,20 @@
     private bool _isLoading = true;
     private bool _forbidden;
 
+    // ── Polls (Feature 37) ─────────────────────────────────────────────────────
+    private PollDto[] _polls = [];
+    private PollEditDto? _pollEditing;
+    private int? _pollEditingId;          // null = creating
+    private bool _pollEditingConfigLocked;
+    private bool _pollSaving;
+    private IReadOnlyList<string>? _pollErrors;
+    private int? ResolvedUserId { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         // Resolve the current user's numeric id so we can load their stories for the picker.
         int? currentUserId = await ResolveCurrentUserIdAsync();
+        ResolvedUserId = currentUserId;
 
         if (currentUserId is null)
         {
@@ -105,10 +161,95 @@
             }
 
             PopulateViewModelFromEdit(editData);
+            _polls = await PollService.GetPollsForBlogPostAsync(BlogPostId.Value);
         }
 
         _authorStories = await storiesTask;
         _isLoading = false;
+    }
+
+    // ── Polls (Feature 37) — inline manage panel, mirrors PollsPage's editor flow ──
+
+    private void StartPollCreate()
+    {
+        _pollEditingId = null;
+        _pollEditingConfigLocked = false;
+        _pollErrors = null;
+        _pollEditing = new PollEditDto
+        {
+            Options = [new PollOptionEditDto(null, ""), new PollOptionEditDto(null, "")],
+        };
+    }
+
+    private void StartPollEdit(PollDto poll)
+    {
+        _pollEditingId = poll.PollId;
+        _pollEditingConfigLocked = poll.ConfigLocked;
+        _pollErrors = null;
+        _pollEditing = new PollEditDto
+        {
+            PollName = poll.PollName,
+            Description = poll.Description,
+            DateOpened = poll.DateOpened,
+            DateClosed = poll.DateClosed,
+            AllowMultiple = poll.AllowMultiple,
+            ResultsVisibility = poll.ResultsVisibility,
+            AnonymityMode = poll.AnonymityMode,
+            Options = poll.Options
+                .OrderBy(o => o.SortOrder)
+                .Select(o => new PollOptionEditDto(o.PollOptionId, o.Text))
+                .ToList(),
+        };
+    }
+
+    private void CancelPollEditor()
+    {
+        _pollEditing = null;
+        _pollEditingId = null;
+        _pollErrors = null;
+    }
+
+    private async Task SavePollAsync()
+    {
+        if (_pollEditing is null || _pollSaving || !BlogPostId.HasValue) return;
+        _pollSaving = true;
+        _pollErrors = null;
+
+        try
+        {
+            // datetime-local yields Kind=Unspecified; entered values are UTC by contract
+            // (Npgsql rejects non-UTC writes to timestamptz).
+            if (_pollEditing.DateOpened is DateTime opened)
+                _pollEditing.DateOpened = DateTime.SpecifyKind(opened, DateTimeKind.Utc);
+            if (_pollEditing.DateClosed is DateTime closed)
+                _pollEditing.DateClosed = DateTime.SpecifyKind(closed, DateTimeKind.Utc);
+
+            if (_pollEditingId is int pollId)
+                await PollService.UpdatePollAsync(pollId, _pollEditing);
+            else
+                await PollService.CreateBlogPostPollAsync(BlogPostId.Value, _pollEditing);
+
+            CancelPollEditor();
+            _polls = await PollService.GetPollsForBlogPostAsync(BlogPostId.Value);
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Saving poll {PollId} on blog post {BlogPostId} failed unexpectedly",
+                    _pollEditingId, BlogPostId);
+            _pollErrors = ExceptionPresenter.GetUserMessages(ex);
+        }
+        finally
+        {
+            _pollSaving = false;
+        }
+    }
+
+    private void HandlePollChanged(int pollId, PollDto? updated)
+    {
+        _polls = updated is null
+            ? _polls.Where(p => p.PollId != pollId).ToArray()
+            : _polls.Select(p => p.PollId == pollId ? updated : p).ToArray();
     }
 
     private async Task<IReadOnlyList<(int Id, string Title)>> LoadAuthorStoriesAsync(int authorId)

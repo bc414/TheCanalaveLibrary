@@ -62,6 +62,11 @@ public class ServerNotificationReadService(
         NotificationTypeEnum.StorySpotlighted          => RelatedEntityKind.Story,
         NotificationTypeEnum.RecommendationSpotlighted => RelatedEntityKind.Story,
 
+        // ── Implemented WU-Polls: RelatedEntityId = owning blog post id for blog-post
+        // polls (navigates to the post); site polls carry 0 → no dictionary match → null
+        // title/url, which the display renders as a non-navigating notification. ─────
+        NotificationTypeEnum.PollUpdated => RelatedEntityKind.BlogPost,
+
         // ── Forward-compat stubs (no rows until triggering work-units land) ──────
         NotificationTypeEnum.NewChapterOnFollowedStory       => RelatedEntityKind.Chapter,
         NotificationTypeEnum.NewStoryByFollowedUser          => RelatedEntityKind.Story,

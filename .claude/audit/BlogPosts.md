@@ -99,9 +99,104 @@ auth services; listed in E2E checklist). Convention in
 ---
 
 ## Feature 37 — Polls
-- **L1 — Stage 5** (`BasePoll`/`SitePoll`/`BlogPostPoll`, `PollOption` with `Voters` M:N + unique
-  constraints). **L2 — Stage 2.** **L3 / L3.5 — Stage 1 (conceptual, §8.6):** detailed poll UI was never
-  specified — resolve in chat. **L4 — Stage 1. L5 — Stage 2.**
+
+### Requirements settled 2026-07-12 (chat deliberation; closes spec Open Question #6)
+
+The Gemini discussions (2025-10-31, entries ~#1076) specified schema only — never behavior. The
+detailed-UI Stage-1 gap was resolved in chat 2026-07-12. **These are settled — do not revisit:**
+
+- **Per-poll owner-set config (new columns on `BasePoll`):** `AllowMultiple` (single vs
+  multi-select), `ResultsVisibility` (`AfterVote` / `Always` / `AfterClose`),
+  `AnonymityMode` (`Anonymous` / `Public` / `VoterChoice`; VoterChoice adds
+  `PollVote.IsAnonymous` per-voter opt-in).
+- **Config locks after first vote.** `AllowMultiple`/`ResultsVisibility`/`AnonymityMode` freeze
+  once any vote exists (prevents retroactive anonymity exposure and multi→single vote
+  invalidation). Name/description/options stay editable while open.
+- **Lifecycle:** `DateOpened` may be future (scheduled open; not votable until then).
+  `DateClosed` nullable — null = indefinite, open until manual close (manual close = stamp
+  `DateClosed` = now; no extra flag). Votes changeable/retractable until closed. SitePoll
+  `IsArchived` is display-only (moves it to the `/polls` archive list) — orthogonal to closed.
+- **Options:** min 2 (write-service enforced), no upper cap. Fully editable while open; deleting
+  a voted-on option cascades its votes.
+- **Edit notification:** any material edit to an open voted-on poll notifies prior voters via a
+  **30-minute quiet-period batch** (edits mark the poll dirty; a background sweep notifies once
+  no further edit occurred for 30 min; one notification per burst). `NotificationTypeEnum.PollUpdated = 100`.
+- **Results semantics:** `AfterVote` = viewer sees results iff they *currently* have a vote
+  (retract → hidden again); guests see a "sign in to vote and see results" prompt. Tallies are
+  optimistic-local only (own vote reflected instantly; others' on reload — no SignalR).
+- **Permissions:** SitePolls created/managed by moderators+admins, inline on `/polls` (no
+  separate admin area). BlogPostPolls by the blog post's author, managed in the blog editor,
+  rendered as blocks after post content (multiple per post allowed — matches schema). Voting:
+  any authenticated user.
+- **Surface scope:** `/polls` page (active + archived SitePolls). **Open intent:** SitePolls
+  should eventually surface on the home page — belongs to `middle_plan_v2.md` decision row 2
+  (homepage sections), not this feature's work-unit.
+
+### L1 reconcile note (2026-07-12)
+
+The settled requirements reopened frozen L1 (Stage 5 → 4 → resolved same session):
+1. **Config columns added** to `base_polls` (`AllowMultiple`, `ResultsVisibility`,
+   `AnonymityMode` — enums `: short`) and `poll_votes.IsAnonymous`; `DateClosed` → nullable.
+2. **Shadow-FK diamond fixed:** `BaseBlogPost.Polls` was `ICollection<BasePoll>`, which EF could
+   not pair with `BlogPostPoll.BlogPost` — the snapshot carried a spurious second relationship
+   (`base_polls.base_blog_post_blog_post_id`, letting a SitePoll point at a blog post). Retyped
+   to `ICollection<BlogPostPoll>` + explicit pairing; shadow column dropped.
+3. Poll entities moved `Core/Models/` → `Core/BlogPosts/` (legacy-folder rule).
+
+### Stage-5 note (2026-07-12, WU-Polls)
+
+`dotnet build` green; `dotnet test` green across all three tiers (final run after browser-found
+fixes; ~38 new poll tests). **L5 stays Stage 2** — consistent with F35/F36 (InteractiveServer dev
+posture; no API endpoints/client services exist codebase-wide yet).
+
+- **L1 — Stage 5** (post-reconcile; see L1 reconcile note above). Covering tier: Integration
+  (`PollServiceTests` delete-cascade + FK paths exercise the migrated schema).
+- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`).
+  Covering tier: **Integration** — `PollServiceTests` (18 tests: create permissions both kinds,
+  validation, single/multi vote + replace/retract, pending/closed vote rejection, AfterVote
+  visibility zeroing incl. retract-hides-again, Anonymous/VoterChoice name filtering, config lock
+  pre/post votes, option reconcile (rename/delete/add/reorder with vote preservation),
+  LastEditedAt material-vs-reorder stamping, close/archive orthogonality, delete cascade,
+  non-owner manage gates). Rules helpers covered by **Unit** (`PollRulesTests`,
+  `PollEditDtoTests`).
+- **Edit-notification sweep — Stage 5** (`PollEditNotificationSweeper`/`PollEditNotificationWorker`,
+  the SpotlightGoLiveSweeper worker/body split; `TestAppFactory` removes the worker). Covering
+  tier: **Integration** (quiet-period elapsed → voters notified once, owner drop-self'd,
+  RelatedEntityId = blog post id, idempotent re-sweep; not-elapsed → no-op).
+- **L3/L3.5 — Stage 5** (`PollView` self-contained vote composite — follow-button precedent for
+  the service injection; `PollEditorForm` presentational no-inject; `PollsPage` `/polls` with
+  inline mod management; `BlogPostPage` poll blocks after content; `BlogPostEditorPage` Polls
+  manage section). Page/dispatcher logic covered by Integration + the browser band (components
+  inject services — no bUnit tier, same posture as `BlogPostPage`).
+- **L4 — Stage 5** (element-role compliant: Container card, semantic-tint status badges,
+  Indicator progress bars in `--color-progress`, action-vs-mission button split, ConfirmDialog
+  destructive delete; `check-design-tokens.ps1` — no new findings; the one failing row is
+  Import's pre-existing in-flight-WU finding). Purely-visual polish remains subject to the
+  design-solidification sweeps (5→6 on sign-off), like every other L4 cell.
+- **L4.5 — Stage 5 (browser band, 2026-07-12, server-only path, standing dev DB kept).**
+  As AdminUser: created a Single/AfterVote/VoterChoice site poll inline on `/polls` (mission-blue
+  New Site Poll, mod-only), voted publicly. As TestUser: AfterVote gate verified (no tallies/
+  names/manage row pre-vote), voted anonymously (Piplup name suppressed in the public list while
+  AdminUser's showed — psql: `is_anonymous` t/f per voter), retract → results hid again. Blog
+  flow: created post → editor Polls section (`/blog/new` shows the save-first hint) → created a
+  Multiple/Always/Public poll → flipped config pre-vote → published → poll block rendered on the
+  view page after content, multi-vote counted both options with names, 1 distinct voter. Config
+  lock affordance verified (3 selects + open date disabled once votes exist). Sweep verified
+  end-to-end via the REAL worker: material rename stamped `last_edited_at`; after psql-backdating
+  31 min the 1-min worker delivered `PollUpdated=100` to the voter (owner drop-self'd,
+  `related_entity_id` = blog post id) and stamped `edit_notified_at` — all psql-ground-truthed.
+- **Two runtime bugs found via the browser band and fixed same-session** (per the
+  fix-same-session rule), both with regression coverage:
+  1. `OfType<TChild>()` sources fed into the shared base-typed projection threw `No coercion
+     operator is defined between types 'SitePoll' and 'BlogPostPoll'` — `/polls` crashed on
+     first render. Fixed with base-typed `Where(p => p is TChild)` sources; convention recorded
+     in `layer1-data-model.md` §TPT; regression net: `PollServiceTests` list tests.
+  2. Bool `<select @bind>` with lowercase `value="true|false"` options silently failed
+     (case-sensitive DOM match vs C# `"True"`) — `AllowMultiple` never persisted. Fixed with
+     explicit domain-word values + `@onchange`; convention recorded in `layer3-logic.md`
+     §"Bool `<select>`".
+- **Deferred:** home-page SitePoll surfacing (open intent → homepage-sections decision,
+  `middle_plan_v2.md` row 2). L5 WASM enablement (Phase 5, with everything else).
 
 ## Feature 56 — Feature Contributions
 - **L1 — Stage 5** (`FeatureContribution`; SetNull diamond-breaking FKs to `BaseBlogPost`/`BaseComment`).

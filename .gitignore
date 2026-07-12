@@ -29,3 +29,5 @@ TheCanalaveLibrary.Server/wwwroot/uploads/
 # for anyone who clones without provisioning a full pack. Forks supply their own asset packs.
 TheCanalaveLibrary.Server/wwwroot/sprites/themes/**/static/
 TheCanalaveLibrary.Server/wwwroot/sprites/themes/**/animated/
+
+Fimfiction/

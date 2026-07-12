@@ -596,6 +596,17 @@ follow the same reuse discipline. L4 cells for Features 42/43 remain Stage 1 unt
 class choices for `NotificationItem` / `NotificationBell` / `NotificationsPage` / `NotificationSettingsPage`
 are not locked here and will be added to Pattern Accumulation after visual review.
 
+**`PollView` / `PollEditorForm` (WU-Polls, 2026-07-12):** poll card root is
+`flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-4` — a
+Container (poll name/description are capped plain text, never RichTextView → no ContentSurface).
+Status badge uses the semantic-tint recipe (`bg-(--color-success)/15 …` Open, warning tint
+Pending, neutral surface-hover ring Closed). Result bars are Indicator role:
+`h-2 rounded-full bg-(--color-progress)` fill inside a `bg-(--color-surface-hover)` track — EXP
+blue, never mission blue. Vote/Update = `action` family; Create Poll / New Site Poll / Add Poll =
+`mission` (creation bucket); Close now = warning tint; Delete = danger tint + `ConfirmDialog
+IsDestructive`. Manage row is separated by `border-t border-(--color-border) pt-2`. Voter names
+are standard green links (`text-(--color-action-ink) hover:underline`).
+
 **`DesktopLayout` top bar / `UserMenu` / `CreateMenu` (2026-07-01):** replaced the placeholder
 `w-64` empty sidebar + hardcoded MS "About" link with a single full-width sticky bar —
 `sticky top-0 z-20 flex items-center gap-6 border-b border-(--color-border)

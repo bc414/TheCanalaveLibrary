@@ -1,0 +1,214 @@
+@page "/polls"
+@namespace TheCanalaveLibrary.SharedUI
+@inject IPollWriteService PollService
+@inject ILogger<PollsPage> Logger
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
+
+@* Site polls page (Feature 37; settled 2026-07-12 — audit/BlogPosts.md F37): active list +
+   archived section. Mod management is INLINE here (no separate admin area — settled).
+   Role affordances come from the auth cascade; ServerPollWriteService's gates authorize.
+   Home-page surfacing of active SitePolls is a recorded open intent (middle_plan_v2 row 2). *@
+
+<PageTitle>Polls</PageTitle>
+
+<div class="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
+
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+            Polls
+        </h1>
+        @if (_isManager && _editing is null)
+        {
+            <button type="button" @onclick="StartCreate"
+                    class="rounded-md bg-(--color-mission) px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-(--color-mission-hover)">
+                New Site Poll
+            </button>
+        }
+    </div>
+
+    @if (_editing is not null)
+    {
+        <div class="rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+            <h2 class="mb-3 text-sm font-semibold text-(--color-text)">
+                @(_editingPollId is null ? "New site poll" : "Edit poll")
+            </h2>
+            <PollEditorForm Model="_editing"
+                            ConfigLocked="@_editingConfigLocked"
+                            SubmitLabel="@(_editingPollId is null ? "Create Poll" : "Save Changes")"
+                            IsBusy="@_saving"
+                            Errors="@_editorErrors"
+                            OnSubmit="SaveEditorAsync"
+                            OnCancel="CancelEditor" />
+        </div>
+    }
+
+    @if (_isLoading)
+    {
+        <p class="text-(--color-text-muted)"><em>Loading…</em></p>
+    }
+    else
+    {
+        @if (ActivePolls.Length == 0)
+        {
+            <p class="text-(--color-text-muted)">No polls right now — check back later.</p>
+        }
+        else
+        {
+            <div class="flex flex-col gap-4">
+                @foreach (PollDto poll in ActivePolls)
+                {
+                    <PollView @key="poll.PollId"
+                              Poll="poll"
+                              CurrentUserId="_currentUserId"
+                              CanManage="_isManager"
+                              ShowArchiveToggle="_isManager"
+                              OnPollChanged="p => HandlePollChanged(poll.PollId, p)"
+                              OnEditRequested="StartEdit" />
+                }
+            </div>
+        }
+
+        @if (ArchivedPolls.Length > 0)
+        {
+            <details class="flex flex-col gap-4">
+                <summary class="flex cursor-pointer items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">
+                    Archived polls (@ArchivedPolls.Length)
+                </summary>
+                <div class="mt-4 flex flex-col gap-4">
+                    @foreach (PollDto poll in ArchivedPolls)
+                    {
+                        <PollView @key="poll.PollId"
+                                  Poll="poll"
+                                  CurrentUserId="_currentUserId"
+                                  CanManage="_isManager"
+                                  ShowArchiveToggle="_isManager"
+                                  OnPollChanged="p => HandlePollChanged(poll.PollId, p)"
+                                  OnEditRequested="StartEdit" />
+                    }
+                </div>
+            </details>
+        }
+    }
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private PollDto[] _polls = [];
+    private bool _isLoading = true;
+    private int? _currentUserId;
+    private bool _isManager;
+
+    // Inline editor state (mods only).
+    private PollEditDto? _editing;
+    private int? _editingPollId;          // null = creating
+    private bool _editingConfigLocked;
+    private bool _saving;
+    private IReadOnlyList<string>? _editorErrors;
+
+    private PollDto[] ActivePolls => _polls.Where(p => !p.IsArchived).ToArray();
+    private PollDto[] ArchivedPolls => _polls.Where(p => p.IsArchived).ToArray();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            AuthenticationState state = await AuthState;
+            string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            _currentUserId = int.TryParse(idStr, out int parsedId) ? parsedId : null;
+            _isManager = state.User.IsInRole("Moderator") || state.User.IsInRole("Admin");
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        _polls = await PollService.GetSitePollsAsync(includeArchived: true);
+        _isLoading = false;
+    }
+
+    private void StartCreate()
+    {
+        _editingPollId = null;
+        _editingConfigLocked = false;
+        _editorErrors = null;
+        _editing = new PollEditDto
+        {
+            Options = [new PollOptionEditDto(null, ""), new PollOptionEditDto(null, "")],
+        };
+    }
+
+    private void StartEdit(PollDto poll)
+    {
+        _editingPollId = poll.PollId;
+        _editingConfigLocked = poll.ConfigLocked;
+        _editorErrors = null;
+        _editing = new PollEditDto
+        {
+            PollName = poll.PollName,
+            Description = poll.Description,
+            DateOpened = poll.DateOpened,
+            DateClosed = poll.DateClosed,
+            AllowMultiple = poll.AllowMultiple,
+            ResultsVisibility = poll.ResultsVisibility,
+            AnonymityMode = poll.AnonymityMode,
+            Options = poll.Options
+                .OrderBy(o => o.SortOrder)
+                .Select(o => new PollOptionEditDto(o.PollOptionId, o.Text))
+                .ToList(),
+        };
+    }
+
+    private void CancelEditor()
+    {
+        _editing = null;
+        _editingPollId = null;
+        _editorErrors = null;
+    }
+
+    private async Task SaveEditorAsync()
+    {
+        if (_editing is null || _saving) return;
+        _saving = true;
+        _editorErrors = null;
+
+        try
+        {
+            // datetime-local yields Kind=Unspecified; entered values are UTC by contract
+            // (Npgsql rejects non-UTC writes to timestamptz).
+            if (_editing.DateOpened is DateTime opened)
+                _editing.DateOpened = DateTime.SpecifyKind(opened, DateTimeKind.Utc);
+            if (_editing.DateClosed is DateTime closed)
+                _editing.DateClosed = DateTime.SpecifyKind(closed, DateTimeKind.Utc);
+
+            if (_editingPollId is int pollId)
+                await PollService.UpdatePollAsync(pollId, _editing);
+            else
+                await PollService.CreateSitePollAsync(_editing);
+
+            CancelEditor();
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Saving site poll {PollId} failed unexpectedly", _editingPollId);
+            _editorErrors = ExceptionPresenter.GetUserMessages(ex);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void HandlePollChanged(int pollId, PollDto? updated)
+    {
+        _polls = updated is null
+            ? _polls.Where(p => p.PollId != pollId).ToArray()
+            : _polls.Select(p => p.PollId == pollId ? updated : p).ToArray();
+    }
+}

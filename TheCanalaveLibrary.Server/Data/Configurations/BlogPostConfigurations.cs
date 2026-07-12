@@ -46,15 +46,22 @@ public sealed class BasePollConfiguration : IEntityTypeConfiguration<BasePoll>
     public void Configure(EntityTypeBuilder<BasePoll> builder)
     {
         builder.Property(e => e.DateOpened).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        builder.Property(e => e.ResultsVisibility).HasConversion<short>();
+        builder.Property(e => e.AnonymityMode).HasConversion<short>();
 
         builder.HasMany(p => p.PollOptions)
             .WithOne(o => o.Poll)
             .HasForeignKey(o => o.PollId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Edit-notification sweep: polls where last_edited_at is set scan via this partial index
+        // (PollEditNotificationWorker, 30-min quiet period).
+        builder.HasIndex(e => e.LastEditedAt)
+            .HasFilter("last_edited_at IS NOT NULL")
+            .HasDatabaseName("ix_base_polls_last_edited_at");
+
         // TPT Inheritance setup
         builder.ToTable("base_polls");
-        // Future indexes for querying...
     }
 }
 
@@ -63,7 +70,6 @@ public sealed class SitePollConfiguration : IEntityTypeConfiguration<SitePoll>
     public void Configure(EntityTypeBuilder<SitePoll> builder)
     {
         builder.ToTable("site_polls");
-        // Future indexes for querying (e.g., by IsArchived)...
     }
 }
 
@@ -71,8 +77,15 @@ public sealed class BlogPostPollConfiguration : IEntityTypeConfiguration<BlogPos
 {
     public void Configure(EntityTypeBuilder<BlogPostPoll> builder)
     {
+        // Explicit pairing with BaseBlogPost.Polls (ICollection<BlogPostPoll>) — kills the
+        // spurious shadow-FK relationship the old ICollection<BasePoll> typing created.
+        // Cascade: deleting a blog post deletes its polls (options + votes cascade from there).
+        builder.HasOne(p => p.BlogPost)
+            .WithMany(b => b.Polls)
+            .HasForeignKey(p => p.BlogPostId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.ToTable("blog_post_polls");
-        // Future indexes for querying (e.g., by BlogPostId)...
     }
 }
 

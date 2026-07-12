@@ -353,6 +353,13 @@ builder.Services.AddScoped<IUserStoryInteractionWriteService, ServerUserStoryInt
 // WU31; GroupBlogPost create/view added WU32. Feature 56 (feature contributions) deferred post-MVP.
 builder.Services.AddScoped<IBlogPostReadService, ServerBlogPostWriteService>();
 builder.Services.AddScoped<IBlogPostWriteService, ServerBlogPostWriteService>();
+// Polls (WU-Polls, Feature 37) — L2 read/write services + the edit-notification sweep
+// (30-min quiet-period batch; settled 2026-07-12 — audit/BlogPosts.md F37).
+// TestAppFactory removes the timer worker (tests drive PollEditNotificationSweeper directly).
+builder.Services.AddScoped<IPollReadService, ServerPollReadService>();
+builder.Services.AddScoped<IPollWriteService, ServerPollWriteService>();
+builder.Services.AddScoped<PollEditNotificationSweeper>();
+builder.Services.AddHostedService<PollEditNotificationWorker>();
 // Groups (WU32) — L2 read/write services (Features 38/39/40).
 builder.Services.AddScoped<IGroupReadService, ServerGroupWriteService>();
 builder.Services.AddScoped<IGroupWriteService, ServerGroupWriteService>();

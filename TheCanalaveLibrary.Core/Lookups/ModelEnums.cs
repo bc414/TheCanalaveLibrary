@@ -167,6 +167,9 @@ public enum NotificationTypeEnum : short
     SpotlightSlotGranted = 90,      // You were awarded a Community Spotlight slot (inline at grant)
     StorySpotlighted = 91,          // Your story is featured on the Community Spotlight (at go-live, worker)
     RecommendationSpotlighted = 92, // Your recommendation is featured beside a spotlighted story (at go-live, worker)
+
+    //Polls (Feature 37, WU-Polls)
+    PollUpdated = 100, // A poll you voted on was materially edited (30-min quiet-period batch, worker)
 }
 
 public enum SiteRoles : int
@@ -217,6 +220,37 @@ public enum DefaultSortOrder : short
     RecentlyRead = 4,   // Viewer-relative: MAX(UserChapterInteraction.LastInteractionDate) per story.
                         // Bookshelves "Actively Reading" only (personal reading management, not a
                         // popularity metric) — surfaces opt in via AvailableSorts; never on /discover.
+}
+
+// Polls (Feature 37, WU-Polls) -------------------------------------------------
+
+/// <summary>
+/// When a poll's tallies are visible to a viewer. Stored as <c>short</c> (HasConversion).
+/// Owner-set at creation; locked once any vote exists.
+/// </summary>
+public enum PollResultsVisibility : short
+{
+    /// <summary>Results visible only while the viewer currently has a vote (retract → hidden again).
+    /// Guests see a "sign in to vote and see results" prompt.</summary>
+    AfterVote = 0,
+    /// <summary>Live tallies visible to everyone, before and after voting.</summary>
+    Always = 1,
+    /// <summary>No results until the poll is closed.</summary>
+    AfterClose = 2,
+}
+
+/// <summary>
+/// Whether voter identities are shown with results. Stored as <c>short</c> (HasConversion).
+/// Owner-set at creation; locked once any vote exists (prevents retroactive exposure).
+/// </summary>
+public enum PollAnonymityMode : short
+{
+    /// <summary>Counts/percentages only; voter names never shown.</summary>
+    Anonymous = 0,
+    /// <summary>Voter names shown per option.</summary>
+    Public = 1,
+    /// <summary>Names shown, but each voter may opt out via <c>PollVote.IsAnonymous</c>.</summary>
+    VoterChoice = 2,
 }
 
 // Groups (WU32) ---------------------------------------------------------------

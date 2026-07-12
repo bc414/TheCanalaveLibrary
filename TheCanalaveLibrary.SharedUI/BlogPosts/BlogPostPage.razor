@@ -1,6 +1,7 @@
 @page "/blog/{BlogPostId:int}/{*Slug}"
 @namespace TheCanalaveLibrary.SharedUI
 @inject IBlogPostWriteService BlogPostService
+@inject IPollReadService PollReadService
 @inject IPublicUrlProvider PublicUrlProvider
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Components.Authorization
@@ -102,6 +103,25 @@ else
 
     </article>
 
+    @* ── Polls (Feature 37) — blocks after the post content, before comments.
+         Authors manage polls in the edit page; here they render vote-only. ──── *@
+    @if (_polls.Length > 0)
+    {
+        <div class="mx-auto max-w-2xl px-4 pb-8">
+            <CanalaveErrorBoundary Label="polls" Compact="true">
+                <div class="flex flex-col gap-4">
+                    @foreach (PollDto poll in _polls)
+                    {
+                        <PollView @key="poll.PollId"
+                                  Poll="poll"
+                                  CurrentUserId="_currentUserId"
+                                  OnPollChanged="p => HandlePollChanged(poll.PollId, p)" />
+                    }
+                </div>
+            </CanalaveErrorBoundary>
+        </div>
+    }
+
     @* ── Comments ─────────────────────────────────────────────────────────────── *@
     <div class="mx-auto max-w-2xl px-4 pb-8">
         <CanalaveErrorBoundary Label="comments" Compact="true">
@@ -121,6 +141,7 @@ else
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private BlogPostDto? _post;
+    private PollDto[] _polls = [];
     private bool _isLoading = true;
     private bool _notFound;
 
@@ -172,10 +193,18 @@ else
     {
         _isLoading = true;
         _loadedBlogPostId = BlogPostId;
-        _post = await BlogPostService.GetByIdAsync(BlogPostId);
+
+        // Parallel load is sanctioned (layer2-services.md — factory-per-method read contexts).
+        Task<BlogPostDto?> postTask = BlogPostService.GetByIdAsync(BlogPostId);
+        Task<PollDto[]> pollsTask = PollReadService.GetPollsForBlogPostAsync(BlogPostId);
+        await Task.WhenAll(postTask, pollsTask);
+
+        _post = postTask.Result;
+        _polls = pollsTask.Result;
         if (_post is null)
         {
             _notFound = true;
+            _polls = [];
         }
         else
         {
@@ -183,6 +212,13 @@ else
             _isLiked   = _post.IsLikedByCurrentUser;
         }
         _isLoading = false;
+    }
+
+    private void HandlePollChanged(int pollId, PollDto? updated)
+    {
+        _polls = updated is null
+            ? _polls.Where(p => p.PollId != pollId).ToArray()
+            : _polls.Select(p => p.PollId == pollId ? updated : p).ToArray();
     }
 
     private async Task HandleLikeAsync()

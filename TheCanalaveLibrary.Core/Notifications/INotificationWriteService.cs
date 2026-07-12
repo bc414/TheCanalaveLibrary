@@ -190,4 +190,16 @@ public interface INotificationWriteService : INotificationReadService
     /// rule suppresses it — the standing self-generated-notification convention.
     /// </summary>
     Task NotifyRecommendationSpotlightedAsync(int recommenderUserId, int sponsorUserId, int storyId);
+
+    // ── Semantic generation methods (WU-Polls slice) ─────────────────────────────
+
+    /// <summary>
+    /// Fan-out <c>PollUpdated = 100</c> to a poll's current voters after the 30-minute
+    /// quiet-period edit batch (called by <c>PollEditNotificationSweeper</c>, never inline from
+    /// the write service — edits burst). <paramref name="relatedEntityId"/> is the owning
+    /// blog post's id for blog-post polls (navigates to the post) or 0 for site polls (no
+    /// per-poll page; the notification is informational). Drop-self covers the owner having
+    /// voted on their own poll.
+    /// </summary>
+    Task NotifyPollUpdatedAsync(int pollOwnerUserId, IReadOnlyList<int> voterUserIds, int relatedEntityId);
 }
