@@ -41,6 +41,7 @@ public class ServerStoryReadService(
                 s.Rating,
                 s.StoryStatusId,
                 s.Chapters.Select(c => c.Title).ToList(),
+                s.StoryDetail != null ? s.StoryDetail.Slug : null,
                 s.StoryTags
                     .Select(st => new TagListingRow(
                         st.TagId, st.Tag.TagName, st.Tag.TagTypeId,
@@ -93,6 +94,7 @@ public class ServerStoryReadService(
             Rating               = row.Rating,
             Status               = row.Status,
             ChapterNames         = row.ChapterNames,
+            Slug                 = row.Slug,
             Tags                 = [..row.Tags.Select(ToTagChip), ..characterChips],
             Characters           = row.Characters
                 .Select((c, i) => new CharacterDisplayEntry(characterChips[i], c.Priority, c.IsOc, c.OcName, c.OcBio))
@@ -460,6 +462,7 @@ public class ServerStoryReadService(
         DateOnly? OriginalPublishDate, DateOnly? OriginalLastUpdatedDate,
         int? AuthorId, string? AuthorName, string? CoverArtRelativeUrl,
         Rating Rating, StoryStatusEnum Status, List<string> ChapterNames,
+        string? Slug,
         List<TagListingRow> Tags,
         List<CharacterDetailRow> Characters,
         List<PairingDetailRow> Pairings,

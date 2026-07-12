@@ -80,6 +80,9 @@ public class ProfilePageTests : BunitContext
         Services.AddScoped<ISavedTagSelectionWriteService>(_ => new FakeSavedTagSelectionWriteService());
         Services.AddScoped<IToastService>(_ => new ToastService());
         Services.AddScoped<IDeviceDetectionService>(_ => new AlwaysDesktopDeviceService());
+        // WU-Seo — ProfilePage now renders <SocialMetaTags>, which needs IPublicUrlProvider.
+        // PublicUrlProvider is a pure Core class (no host dependency); a fixed test base is fine.
+        Services.AddScoped<IPublicUrlProvider>(_ => new PublicUrlProvider("https://test.local"));
 
         // Anonymous AuthenticationState cascading value.
         var anonState = Task.FromResult(new AuthenticationState(new ClaimsPrincipal()));

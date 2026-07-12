@@ -1,0 +1,53 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Leaf component (no service injection — receives already-resolved absolute URLs from its
+   dispatcher, same discipline as StoryCard receiving a fully-hydrated DTO). Emits the full
+   Open Graph / Twitter card / meta-description tag set via <HeadContent>, which routes to the
+   root <HeadOutlet> in App.razor from any render depth. Reaches crawlers only when the emitting
+   page's data loads during the server prerender pass — see render-and-layout.md
+   §"Social Meta Tags (Open Graph)". Title/Description/Url/ImageUrl are pre-cleaned/pre-resolved
+   by the caller (SocialDescriptionHelper.Clean, IPublicUrlProvider) — this component does not
+   truncate, strip HTML, or resolve relative paths itself. *@
+
+<HeadContent>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <meta name="description" content="@Description"/>
+    }
+    <meta property="og:site_name" content="The Canalave Library"/>
+    <meta property="og:type" content="@OgType"/>
+    <meta property="og:title" content="@Title"/>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <meta property="og:description" content="@Description"/>
+    }
+    <meta property="og:url" content="@Url"/>
+    <meta property="og:image" content="@ImageUrl"/>
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" content="@Title"/>
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <meta name="twitter:description" content="@Description"/>
+    }
+    <meta name="twitter:image" content="@ImageUrl"/>
+</HeadContent>
+
+@code {
+    /// <summary>Page/content title — same string a caller would put in &lt;PageTitle&gt;.</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = null!;
+
+    /// <summary>
+    /// Pre-cleaned plain-text blurb (see <see cref="SocialDescriptionHelper.Clean"/>). Null omits
+    /// the description/og:description/twitter:description tags entirely rather than emitting empty ones.
+    /// </summary>
+    [Parameter] public string? Description { get; set; }
+
+    /// <summary>Absolute image URL (see <see cref="IPublicUrlProvider.AbsoluteImageUrl"/>) — never a relative path.</summary>
+    [Parameter, EditorRequired] public string ImageUrl { get; set; } = null!;
+
+    /// <summary>Absolute canonical URL of this content (see <see cref="IPublicUrlProvider.AbsolutePageUrl"/>).</summary>
+    [Parameter, EditorRequired] public string Url { get; set; } = null!;
+
+    /// <summary>Open Graph type — "article" (story/chapter/blog post), "profile" (user), or "website" (default).</summary>
+    [Parameter] public string OgType { get; set; } = "website";
+}

@@ -28,6 +28,13 @@ public class StoryDetailsDTO
     public Rating Rating { get; set; }
     public StoryStatusEnum Status { get; set; }
 
+    /// <summary>
+    /// Canonical URL slug (<see cref="StoryDetail.Slug"/>), added for <c>og:url</c> resolution
+    /// (WU-Seo). Not itself a redirect mechanism — the route's slug segment stays cosmetic
+    /// (addendum #16, still unbuilt); this only lets a canonical URL be constructed.
+    /// </summary>
+    public string? Slug { get; set; }
+
     /// <summary>Flat tag chips (Genre/Setting/ContentWarning/CrossoverFandom) + character chips.</summary>
     public IReadOnlyList<TagChipDto> Tags { get; set; } = [];
 

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using TheCanalaveLibrary.Client;
 using TheCanalaveLibrary.Core;
@@ -18,6 +19,12 @@ builder.Services.AddScoped<IDeviceDetectionService, WasmDeviceDetectionService>(
 // OptimisticSpriteReadService is stateless; base URL uses same wwwroot default as Server.
 // Both sides share the Core impl — see audit/Sprites.md L5 and layer2-services.md §"Sprite URLs Are Resolved At Render Time."
 builder.Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
+// Public URL resolution (Seo/, WU-Seo) — Client uses the browser's own origin (NavigationManager
+// isn't available yet at registration time, so resolve it lazily via the factory overload).
+// Crawlers never reach the Client host (they only ever see the Server prerender), so exactness
+// here only matters for already-interactive re-renders — see audit/Seo.md.
+builder.Services.AddScoped<IPublicUrlProvider>(sp =>
+    new PublicUrlProvider(sp.GetRequiredService<NavigationManager>().BaseUri));
 // Tags (L5 WASM pilot) — HttpClient impls over Server/Tags/TagEndpoints.cs. First minted client
 // service pair; the pattern (endpoint + Client{Feature}Service + register here) is layer5-wasm.md's.
 builder.Services.AddScoped<ITagReadService, ClientTagReadService>();

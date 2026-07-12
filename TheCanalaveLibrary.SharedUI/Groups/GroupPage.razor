@@ -7,6 +7,7 @@
 @inject IToastService Toasts
 @inject IDeviceDetectionService DeviceService
 @inject NavigationManager Nav
+@inject IPublicUrlProvider PublicUrlProvider
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Components.Authorization
 
@@ -30,6 +31,7 @@ else if (_group is null)
 else
 {
     <PageTitle>@_group.GroupName</PageTitle>
+    <SocialMetaTags Title="@_group.GroupName" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="website"/>
 
     @if (DeviceService.IsMobile())
     {
@@ -87,6 +89,12 @@ else
 
     private bool _initialized;
     private int _loadedGroupId = int.MinValue; // sentinel; no real GroupId equals this
+
+    // Open Graph/Twitter meta (WU-Seo). No cover field on GroupDetailDto — falls back to the
+    // site-default image (see audit/Seo.md "Open" re: SVG re-use).
+    private string? OgDescription => _group is null ? null : SocialDescriptionHelper.Clean(_group.Description);
+    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(null, "/img/default-cover.svg");
+    private string OgUrl => PublicUrlProvider.AbsolutePageUrl($"/group/{GroupId}");
 
     protected override async Task OnInitializedAsync()
     {

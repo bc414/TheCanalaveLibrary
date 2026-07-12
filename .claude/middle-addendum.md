@@ -163,7 +163,8 @@ compliance theater).
     with many story pages is slow/incomplete to crawl; without per-page titles, every story likely
     shares one generic search-result title. **Cheap, launch-worthy fix** (a few hours): a
     minimal-API sitemap endpoint over published stories + a static `robots.txt` + `PageTitle`/meta
-    per page.
+    per page. **`<meta name="description">` half done 2026-07-11** — `.claude/audit/Seo.md`; rides
+    the same `<SocialMetaTags>` component as item #17. `robots.txt`/`sitemap.xml` remain unbuilt.
 16. **Canonical slug redirect — spec'd but never built.** The spec (§ on story routing) explicitly
     says "redirect to canonical if slug doesn't match," but `StoryPage.razor` states plainly that
     the slug is cosmetic and does no redirect — `/story/42/wrong-slug` and `/story/42/right-slug`
@@ -174,11 +175,14 @@ compliance theater).
     story link currently unfurls as a bare gray URL with no title/image/blurb. OG tags work fine
     with this app's SSR/`HeadOutlet` architecture (Discord doesn't execute JS to unfurl, so
     JS-injected tags wouldn't work anyway — SSR is the right fit here). **Launch-worthy, cheap.**
+    **Built 2026-07-11** — `.claude/audit/Seo.md` (`IPublicUrlProvider` + `<SocialMetaTags>`,
+    `Seo/` cluster). Mature-content `noindex` (item #18 below) was deliberately left for a
+    follow-up unit sharing the same head-content mechanism.
 18. **Mature-content search-engine noindex.** No mapping exists from the `Rating` field to a
     `noindex` directive. Independent of the age-verification legal question above, general practice
     is to keep Mature/Explicit story pages out of general search results (`noindex, follow`, not a
     `robots.txt` blanket block, which would also hide the noindex tag itself). Cheap — same code
-    path as items 15/17, driven off a field the `Story` entity already has.
+    path as items 15/17, driven off a field the `Story` entity already has. Need to understand the ramifications of this suggestion.
 19. **RSS/Atom feeds.** Absent. Real precedent in this exact space (AO3, FFN both offer it) but
     both implementations are widely considered mediocre, and the real retention mechanism for
     "new chapter from a followed author" is the *already-deferred* email-digest feature

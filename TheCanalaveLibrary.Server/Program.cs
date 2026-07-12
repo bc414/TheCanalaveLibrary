@@ -270,6 +270,18 @@ builder.Services.AddScoped<ISavedTagSelectionWriteService, ServerSavedTagSelecti
 // Server-only write-time probe — checks File.Exists at mod-write time (never at render time).
 // Post-MVP: replace with R2SpriteAssetProbe behind this same interface. See audit/Sprites.md L2.
 builder.Services.AddSingleton<ISpriteAssetProbe, LocalSpriteAssetProbe>();
+// Public URL resolution for Open Graph/Twitter meta tags (Seo/, WU-Seo) — singleton, stateless,
+// same pattern as OptimisticSpriteReadService above. Site:PublicBaseUrl is the canonical origin
+// (never NavigationManager.BaseUri server-side — see audit/Seo.md for why: this app sits behind
+// Cloudflare in front of DigitalOcean droplets, and a request-derived base risks leaking an
+// internal proxy/droplet host into a crawler-visible og:image). ImageStorage:PublicBaseUrl
+// defaults to the site base — today every image is same-origin through the app regardless of
+// storage provider (see ImageEndpoints.cs); this setting is the wired-but-unset seam for a future
+// direct-R2/CDN image-serving migration. Set both in production per the Phase-7 config contract.
+var sitePublicBaseUrl = builder.Configuration["Site:PublicBaseUrl"] ?? "https://localhost:7248";
+var imagePublicBaseUrl = builder.Configuration["ImageStorage:PublicBaseUrl"];
+builder.Services.AddSingleton<IPublicUrlProvider>(
+    new PublicUrlProvider(sitePublicBaseUrl, imagePublicBaseUrl));
 // Image storage provider switch (WU-S3Garage): "Local" (default — wwwroot/uploads, static
 // files) or "S3" (Garage in dev via the Aspire AppHost's env injection, Cloudflare R2 in prod)
 // behind the same frozen IImageStorageService. Read eagerly like the connection string above —

@@ -95,6 +95,11 @@ Cross-cutting clusters and their scope:
 - **`Drafts/`** — `DraftStore`/`DraftAutosave` (SharedUI) device-local editor draft safety over `draft-autosave.js`; consumed by the long-form edit pages.
 - **`Messaging/`** — Messaging feature cluster; `EditorView` and `UserCard` remain in their own cross-cutting clusters.
 - **`Profiles/`** — projection and settings-edit services *over* the `User` entity. Boundary: Identity = entity + auth plumbing; Profiles = how the entity is read and edited by owner or public viewer.
+- **`Seo/`** — `IPublicUrlProvider` (Core: absolute-URL resolution) + `ServerPublicUrlProvider`/client
+  impl + `<SocialMetaTags>` (SharedUI: the shared `<HeadContent>` block for Open Graph/Twitter/description
+  tags) + a description-cleaning helper. Consumed by every shareable content page (Stories, Chapters,
+  Profiles, Series, BlogPosts, Groups); no single feature owns it. See `render-and-layout.md`
+  §"Social Meta Tags (Open Graph)" and `audit/Seo.md`.
 
 API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
 cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/SpriteEndpoints.cs`

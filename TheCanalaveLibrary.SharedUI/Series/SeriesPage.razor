@@ -3,6 +3,7 @@
 @inject ISeriesReadService SeriesService
 @inject IStoryReadService StoryService
 @inject IUserStoryInteractionReadService InteractionService
+@inject IPublicUrlProvider PublicUrlProvider
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Components.Authorization
 
@@ -28,6 +29,7 @@ else if (_series is null)
 else
 {
     <PageTitle>@_series.Name</PageTitle>
+    <SocialMetaTags Title="@_series.Name" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="website"/>
 
     <div class="mx-auto max-w-4xl px-4 py-8 flex flex-col gap-6">
 
@@ -93,6 +95,14 @@ else
 
     private bool _initialized;
     private int _loadedSeriesId = int.MinValue; // sentinel; no real SeriesId equals this
+
+    // Open Graph/Twitter meta (WU-Seo). No cover field on SeriesDetailDto — falls back to the
+    // site-default image (see audit/Seo.md "Open" re: SVG re-use).
+    private string? OgDescription => _series is null ? null : SocialDescriptionHelper.Clean(_series.Description);
+    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(null, "/img/default-cover.svg");
+    private string OgUrl => PublicUrlProvider.AbsolutePageUrl(_series is null
+        ? $"/series/{SeriesId}"
+        : $"/series/{_series.SeriesId}");
 
     protected override async Task OnInitializedAsync()
     {

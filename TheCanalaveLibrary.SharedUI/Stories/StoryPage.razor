@@ -11,6 +11,7 @@
 @inject IDeviceDetectionService DeviceService
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
+@inject IPublicUrlProvider PublicUrlProvider
 @implements IAsyncDisposable
 
 @* Read-only story landing page (spec §5.28, content-editing Pattern 1 — view side).
@@ -34,6 +35,7 @@ else if (_notFound || Story is null)
 else
 {
     <PageTitle>@Story.StoryTitle</PageTitle>
+    <SocialMetaTags Title="@OgTitle" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="article"/>
 
     @if (DeviceService.IsMobile())
     {
@@ -85,6 +87,18 @@ else
 
     private bool _initialized;
     private int _loadedStoryId = int.MinValue; // sentinel; no real StoryId equals this
+
+    // Open Graph/Twitter meta (WU-Seo) — computed from Story rather than cached at load time, so
+    // there is no second place to keep in sync across OnInitializedAsync/OnParametersSetAsync.
+    // Only rendered in the `else` branch below, where Story is guaranteed non-null.
+    private string OgTitle => Story?.StoryTitle ?? "Untitled Story";
+    private string? OgDescription => Story is null
+        ? null
+        : SocialDescriptionHelper.Clean(Story.ShortDescription) ?? SocialDescriptionHelper.Clean(Story.LongDescription);
+    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(Story?.CoverArtRelativeUrl, "/img/default-cover.svg");
+    private string OgUrl => PublicUrlProvider.AbsolutePageUrl(Story is null
+        ? $"/story/{StoryId}"
+        : string.IsNullOrEmpty(Story.Slug) ? $"/story/{Story.StoryId}" : $"/story/{Story.StoryId}/{Story.Slug}");
 
     protected override async Task OnInitializedAsync()
     {

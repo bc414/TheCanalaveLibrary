@@ -2389,3 +2389,51 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
 - **Tool:** Claude Code. **Pointer:** `layer8-data-marts.md` §"site_daily_stats";
   `audit/Moderation.md` Feature 62 Stage note; `layer2-services.md` §"Signal Buffering";
   `layer1-data-model.md` §"Column Conventions"; `middle_plan_v2.md` Resolved.
+
+## WU-Seo — Open Graph / social-sharing meta tags (addendum §3 #15/#17) — DONE ✓ (2026-07-11)
+
+- **Cells flipped:** none — `Seo/` is a new cross-cutting cluster with no grid Feature (same shape
+  as `Images/`), so no `status.md` row changes. The consuming features' own cells (Stories F4,
+  Chapters F6, Profiles F20, BlogPosts F35, Groups F38, plus Series/Groups' L3/L3.5) are unaffected:
+  OG tags are additive `<head>` output, not a change to any existing Stage-5 behavior.
+- **Origin:** `.claude/middle-addendum.md` §3 items #15/#17 — flagged "never surfaced anywhere" for
+  a live public UGC site; #17 called Discord-unfurl the single highest-leverage growth item for this
+  audience. Scope confirmed with Brian: OG + Twitter card + `<meta name="description">` on all six
+  shareable content types; mature-content `noindex` (#18) explicitly deferred to a follow-up unit.
+- **Done:**
+  - **Core/Seo/**: `IPublicUrlProvider` + `PublicUrlProvider` (pure string builder, same shared-impl
+    shape as `OptimisticSpriteReadService` — Server constructs it from `Site:PublicBaseUrl`/
+    `ImageStorage:PublicBaseUrl` config, Client from `NavigationManager.BaseUri`); descriptions via a
+    standalone `SocialDescriptionHelper` (HTML strip, entity decode, word-boundary truncation).
+  - **SharedUI/Seo/**: `<SocialMetaTags>` — one `<HeadContent>` component emitting the full tag set,
+    parameterized by `Title`/`Description`/`ImageUrl`/`Url`/`OgType`.
+  - Wired into `StoryPage` (article, real cover, canonical slug), `ChapterReadingPage` (article,
+    falls back to the parent story's cover/blurb via the lightweight
+    `GetListingsByIdsAsync` projection — not the heavier `GetStoryByIdAsync` — loaded in parallel
+    with the page's existing TOC/versions calls), `ProfilePage` (profile, avatar + tagline),
+    `SeriesPage`/`GroupPage` (website, no cover field → site-default image), `BlogPostPage` (article
+    — also gained its first-ever `<PageTitle>`, which the page was missing entirely before this unit).
+  - `StoryDetailsDTO.Slug` added (projection in `ServerStoryReadService.GetStoryByIdAsync`) so
+    `og:url` can be canonical without waiting on the separate, still-unbuilt slug-redirect item
+    (addendum #16).
+  - **Settled, not just built** (Doc-Touch moment 1, before code): base URLs are always configured,
+    never `NavigationManager.BaseUri` server-side — the Cloudflare→DigitalOcean topology and planned
+    N≥2 droplets make request-derived URLs unsafe. A separate `ImageStorage:PublicBaseUrl` (defaults
+    to the site base) was wired in *now*, ahead of need, as the seam for a planned future direct-R2/
+    CDN image-serving migration. Static OG fallback tags in `App.razor` for non-content pages were
+    deliberately **not** added — discovered mid-build that `<HeadOutlet>`/`<HeadContent>` only ever
+    *append* into `<head>`, never override by tag name, so a static default would duplicate
+    `<SocialMetaTags>`'s own tags on every page using it. Full reasoning: `audit/Seo.md`,
+    `render-and-layout.md` §"Social Meta Tags (Open Graph)", `middle_plan_v2.md` Resolved.
+- **Verified:** `dotnet build` green. `dotnet test` green across all three tiers — Unit 609/609
+  (24 new: `PublicUrlProviderTests`, `SocialDescriptionHelperTests`), RazorComponents 564/564
+  (`ProfilePageTests` updated to register `IPublicUrlProvider` — the only one of the six dispatchers
+  with a direct bUnit render test), Integration 516/516 (confirms the `StoryDetailsDTO.Slug`
+  projection change didn't break existing Story read-service coverage). Browser band (server-only
+  path, standing dev DB, not wiped): `curl`'d the **prerendered** HTML (no JS — what a crawler
+  actually sees) for one seeded page of each of the six types; all correctly emit
+  `description`/`og:site_name`/`og:type`/`og:title`/`og:description`/`og:url`/`og:image`/`twitter:*`
+  exactly once each (confirming the App.razor-duplication risk above was correctly avoided).
+- **Tool:** Claude Code. **Pointer:** `audit/Seo.md`; `render-and-layout.md` §"Social Meta Tags
+  (Open Graph)"; `canalave-conventions/SKILL.md` "Seo/" cluster entry; `middle_plan_v2.md` Resolved;
+  `middle-addendum.md` §3 items #15/#17.

@@ -6,12 +6,14 @@
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
 @inject IChapterReadService ChapterReadService
+@inject IStoryReadService StoryReadService
 @inject IReadingProgressWriteService ReadingProgress
 @inject IRecommendationReadService RecommendationReadService
 @inject IRecommendationWriteService RecommendationWriteService
 @inject IUserStoryInteractionWriteService UserStoryInteractionWriteService
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
+@inject IPublicUrlProvider PublicUrlProvider
 
 @* Chapter reading page — Pattern 1 read side (cross-cutting.md "Two content-editing patterns").
    Edit side is ChapterEditorPage (WU26). Dispatcher: loads chapter DTO, TOC, version list,
@@ -19,6 +21,10 @@
    Scroll progress → RecordProgressAsync; Ch.1 ≥90% → MarkStartedAsync + reveal helpful prompt. *@
 
 <PageTitle>@(_dto is not null ? $"{_dto.Title} – Chapter {ChapterNumber}" : "Chapter")</PageTitle>
+@if (_dto is not null)
+{
+    <SocialMetaTags Title="@OgTitle" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="article"/>
+}
 
 @if (_isLoading)
 {
@@ -144,6 +150,10 @@ else
     private ChapterReadingDto? _dto;
     private IReadOnlyList<ChapterTocEntryDto> _toc = [];
     private IReadOnlyList<ChapterVersionDto> _versions = [];
+    // Lightweight listing projection (not the full StoryDetailsDTO) — the chapter DTO has no cover
+    // or blurb of its own; OG tags fall back to the parent story's (WU-Seo). Loaded alongside TOC/
+    // versions below, not via a heavier GetStoryByIdAsync call.
+    private StoryListingDto? _storyListing;
     private int? _currentUserId;
     private bool _isAuthor;
     private int? _recId;
@@ -158,6 +168,15 @@ else
     private int _loadedStoryId      = int.MinValue; // sentinel; no real StoryId equals this
     private int _loadedChapterNumber = int.MinValue; // sentinel; no real ChapterNumber equals this
     private int? _loadedVersionOrder = int.MaxValue; // sentinel; int.MaxValue is never a real VersionOrder
+
+    // Open Graph/Twitter meta (WU-Seo) — cover/blurb fall back to the parent story's listing
+    // projection (_storyListing), since the chapter DTO carries neither.
+    private string OgTitle => _dto is null ? "Chapter" : $"{_dto.Title} – Chapter {ChapterNumber}";
+    private string? OgDescription => _storyListing is null
+        ? null
+        : SocialDescriptionHelper.Clean(_storyListing.ShortDescription);
+    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(_storyListing?.CoverArtRelativeUrl, "/img/default-cover.svg");
+    private string OgUrl => PublicUrlProvider.AbsolutePageUrl($"/story/{StoryId}/{ChapterNumber}");
 
     private string EditUrl =>
         _dto is null ? "#"
@@ -224,12 +243,14 @@ else
 
         _isAuthor = _dto.AuthorId.HasValue && _dto.AuthorId == _currentUserId;
 
-        // Load TOC and accessible versions for ChapterNavigation (top + bottom), in parallel.
+        // Load TOC, accessible versions, and the story listing projection (OG fallback data) in parallel.
         Task<IReadOnlyList<ChapterTocEntryDto>> tocTask     = ChapterReadService.GetChapterTocAsync(StoryId);
         Task<IReadOnlyList<ChapterVersionDto>> versionsTask = ChapterReadService.GetChapterVersionsAsync(StoryId, ChapterNumber);
-        await Task.WhenAll(tocTask, versionsTask);
-        _toc      = tocTask.Result;
-        _versions = versionsTask.Result;
+        Task<StoryListingDto[]> storyListingTask            = StoryReadService.GetListingsByIdsAsync([StoryId]);
+        await Task.WhenAll(tocTask, versionsTask, storyListingTask);
+        _toc           = tocTask.Result;
+        _versions      = versionsTask.Result;
+        _storyListing  = storyListingTask.Result.FirstOrDefault();
 
         // Prompt gate — null when: anonymous, no source, or success already recorded.
         if (_currentUserId.HasValue)

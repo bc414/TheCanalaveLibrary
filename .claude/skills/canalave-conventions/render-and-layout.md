@@ -70,6 +70,30 @@ checked via `HttpContext` endpoint metadata in `App.razor`.
 **Blazor .NET 10:** `blazor.web.js` dropped from 183 KB to 43 KB (76% reduction). Served as a
 static asset with automatic compression and fingerprinting. No code changes required.
 
+## Social Meta Tags (Open Graph) — Prerender Requirement (settled 2026-07-11)
+
+Social crawlers (Discord, Twitter/X, Facebook, iMessage, Slack) never execute JavaScript — they
+read only the raw HTML of the first response. `<SocialMetaTags>` (`Seo/` cluster) emits Open
+Graph/Twitter/description tags via `<HeadContent>`, which routes to the root `<HeadOutlet>` in
+`App.razor` regardless of render mode, **as long as the emitting page's data loads during the
+server prerender pass** (the same pass `<PageTitle>` already relies on).
+
+**This is not endangered by the global InteractiveServer → InteractiveAuto flip** (Axiom 8 above):
+InteractiveAuto still prerenders on the server by default (first visit renders server-side while
+the WASM runtime downloads in the background) — a crawler's single unauthenticated GET always
+lands on that prerendered HTML either way. **The only thing that breaks crawler visibility is
+explicitly setting `prerender: false`** on a shareable page (`StoryPage`, `ChapterReadingPage`,
+`ProfilePage`, `SeriesPage`, `BlogPostPage`, `GroupPage`) — don't do that.
+
+**Absolute-URL rule:** `og:url`/`og:image` must be absolute. Resolve them via `IPublicUrlProvider`
+(`Seo/`, Core) — **never** `NavigationManager.BaseUri` server-side. The site sits behind Cloudflare
+in front of DigitalOcean droplets (heading toward N≥2): request-derived URLs depend on
+`ForwardedHeaders` plumbing being exactly right or an internal `http://`/host leaks into
+`og:image` and crawlers silently reject the card; a configured base (`Site:PublicBaseUrl`) is the
+same canonical value on every droplet by construction. `IPublicUrlProvider.AbsoluteImageUrl`
+additionally reads `ImageStorage:PublicBaseUrl` (falls back to the site base when unset) — this is
+the same seam that will carry a future direct-R2/CDN image base (see `audit/Seo.md`).
+
 ## String-Segment Route Parameters ({Tab}, {*Slug})
 
 **`{Tab}` route convention (WU27):** `/bookshelves/{Tab?}` is the first route in this codebase

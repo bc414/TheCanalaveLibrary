@@ -16,6 +16,7 @@
 @inject IDeviceDetectionService DeviceService
 @inject IToastService Toasts
 @inject NavigationManager Nav
+@inject IPublicUrlProvider PublicUrlProvider
 
 @* Dispatcher — Feature 21 (User Profile Display), WU30.
    Route: /user/{UserId:int}/{*Tab}  (default tab = "profile").
@@ -44,6 +45,7 @@ else if (_header is null)
 else
 {
     <PageTitle>@_header.Username &mdash; Profile</PageTitle>
+    <SocialMetaTags Title="@OgTitle" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="profile"/>
 
     @if (DeviceService.IsMobile())
     {
@@ -138,6 +140,12 @@ else
     private bool _initialized;
     private int _loadedUserId = int.MinValue;      // sentinel; no real UserId equals this
     private ProfileTab _loadedTab = (ProfileTab)(-1); // sentinel; outside valid enum range
+
+    // Open Graph/Twitter meta (WU-Seo).
+    private string OgTitle => _header is null ? "Profile" : $"{_header.Username} — Profile";
+    private string? OgDescription => _header is null ? null : SocialDescriptionHelper.Clean(_header.Tagline);
+    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(_header?.AvatarUrl, "/img/default-avatar.svg");
+    private string OgUrl => PublicUrlProvider.AbsolutePageUrl($"/user/{UserId}");
 
     protected override async Task OnInitializedAsync()
     {

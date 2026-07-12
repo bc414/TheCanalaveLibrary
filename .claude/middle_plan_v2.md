@@ -322,6 +322,16 @@ renumbered, since other docs cite them by number.
 
 ## Resolved
 
+- **Open Graph / social-sharing meta tags (addendum §3 #15/#17, WU-Seo)** — **resolved 2026-07-11**
+  (Brian). Scope: OG + Twitter card + `<meta name="description">` on all shareable content pages
+  (Stories, Chapters, Profiles, Series, BlogPosts, Groups); mature-content `noindex` (addendum #18)
+  deliberately deferred to a follow-up unit. Absolute `og:url`/`og:image` resolve via a **configured**
+  `Site:PublicBaseUrl` (not `NavigationManager.BaseUri`) — request-derived URLs are unsafe behind the
+  Cloudflare→DigitalOcean topology and don't generalize to N≥2 droplets. `og:image` reads a separate
+  `ImageStorage:PublicBaseUrl` (defaults to the site base) — wired now as the seam for a future
+  direct-R2/CDN image-serving migration, even though images are same-origin-through-the-app today.
+  Full reasoning: `audit/Seo.md`, `render-and-layout.md` §"Social Meta Tags (Open Graph)".
+
 - **Saved Tag Selections scope (Feature 15, WU43)** — **resolved 2026-07-11** (Brian). Persists only the
   tag include/exclude axis (not text/sort/interactions — those are owned elsewhere or transient); one
   unified selection spans all tag types, not per-type; no per-user cap; `Description` is bounded plain

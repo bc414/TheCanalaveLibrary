@@ -1,6 +1,7 @@
 @page "/blog/{BlogPostId:int}/{*Slug}"
 @namespace TheCanalaveLibrary.SharedUI
 @inject IBlogPostWriteService BlogPostService
+@inject IPublicUrlProvider PublicUrlProvider
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Components.Authorization
 
@@ -22,6 +23,9 @@ else if (_notFound || _post is null)
 else
 {
     bool isAuthor = _currentUserId.HasValue && _currentUserId == _post.AuthorId;
+
+    <PageTitle>@_post.Title</PageTitle>
+    <SocialMetaTags Title="@_post.Title" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="article"/>
 
     <article class="mx-auto max-w-2xl px-4 py-8 flex flex-col gap-6">
 
@@ -131,6 +135,12 @@ else
 
     private bool _initialized;
     private int _loadedBlogPostId = int.MinValue; // sentinel; no real BlogPostId equals this
+
+    // Open Graph/Twitter meta (WU-Seo). No cover field on BlogPostDto — falls back to the
+    // site-default image (see audit/Seo.md "Open" re: SVG re-use). Content is sanitized HTML.
+    private string? OgDescription => _post is null ? null : SocialDescriptionHelper.Clean(_post.Content);
+    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(null, "/img/default-cover.svg");
+    private string OgUrl => PublicUrlProvider.AbsolutePageUrl($"/blog/{BlogPostId}");
 
     protected override async Task OnInitializedAsync()
     {
