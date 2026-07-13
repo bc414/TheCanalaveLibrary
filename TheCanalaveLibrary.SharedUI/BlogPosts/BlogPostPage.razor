@@ -11,45 +11,47 @@
    Injects IBlogPostWriteService (which : IBlogPostReadService) so the authenticated like-toggle
    can call ToggleLikeAsync. Author-only affordances (Edit link) are controlled by @if (isAuthor);
    the server gate is the real authority (layer3.5-structure.md §"Author-Conditional Rendering").
-   Anonymous visitors can view published posts — no @attribute [Authorize] here. *@
+   Anonymous visitors can view published posts — no @attribute [Authorize] here.
+   [PersistentState] on Post and Polls eliminates the prerender→interactive double-fetch flicker;
+   OnParametersSetAsync's dispatcher reload path stays a plain fetch (WU-ComponentSoundness). *@
 
 @if (_isLoading)
 {
     <p class="text-(--color-text-muted)"><em>Loading…</em></p>
 }
-else if (_notFound || _post is null)
+else if (_notFound || Post is null)
 {
     <p class="text-(--color-danger)">Post not found.</p>
 }
 else
 {
-    bool isAuthor = _currentUserId.HasValue && _currentUserId == _post.AuthorId;
+    bool isAuthor = _currentUserId.HasValue && _currentUserId == Post.AuthorId;
 
-    <PageTitle>@_post.Title</PageTitle>
-    <SocialMetaTags Title="@_post.Title" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="article"/>
+    <PageTitle>@Post.Title</PageTitle>
+    <SocialMetaTags Title="@Post.Title" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="article"/>
 
     <article class="mx-auto max-w-2xl px-4 py-8 flex flex-col gap-6">
 
         @* ── Title ─────────────────────────────────────────────────────────── *@
-        <h1 class="text-3xl font-bold text-(--color-text)">@_post.Title</h1>
+        <h1 class="text-3xl font-bold text-(--color-text)">@Post.Title</h1>
 
         @* ── Meta row ──────────────────────────────────────────────────────── *@
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-(--color-text-muted)">
-            @if (_post.AuthorDisplayName is not null)
+            @if (Post.AuthorDisplayName is not null)
             {
-                <a href="/profile/@_post.AuthorId"
-                   class="text-(--color-action-ink) hover:underline">@_post.AuthorDisplayName</a>
+                <a href="/profile/@Post.AuthorId"
+                   class="text-(--color-action-ink) hover:underline">@Post.AuthorDisplayName</a>
                 <span>·</span>
             }
-            <span>@_post.DateCreated.ToString("MMMM d, yyyy")</span>
+            <span>@Post.DateCreated.ToString("MMMM d, yyyy")</span>
             <span>·</span>
-            <span>@_post.Rating</span>
-            @if (_post.HasSpoilers)
+            <span>@Post.Rating</span>
+            @if (Post.HasSpoilers)
             {
                 <span>·</span>
                 <span class="font-medium text-(--color-warning)">⚠ Spoilers</span>
             }
-            @if (!_post.IsPublished && isAuthor)
+            @if (!Post.IsPublished && isAuthor)
             {
                 <span>·</span>
                 <span class="rounded bg-(--color-surface) px-1.5 py-0.5 text-xs font-medium text-(--color-text-muted) ring-1 ring-(--color-border)">Draft</span>
@@ -57,19 +59,19 @@ else
         </div>
 
         @* ── Linked story ──────────────────────────────────────────────────── *@
-        @if (_post.LinkedStoryTitle is not null && _post.StoryId.HasValue)
+        @if (Post.LinkedStoryTitle is not null && Post.StoryId.HasValue)
         {
             <div class="text-sm text-(--color-text-muted)">
                 About:
-                <a href="/story/@_post.StoryId"
-                   class="text-(--color-action-ink) hover:underline">@_post.LinkedStoryTitle</a>
+                <a href="/story/@Post.StoryId"
+                   class="text-(--color-action-ink) hover:underline">@Post.LinkedStoryTitle</a>
             </div>
         }
 
         @* ── Content ───────────────────────────────────────────────────────── *@
         <ContentSurface Variant="ContentSurfaceVariant.Reading">
             <div class="prose prose-sm max-w-none text-(--color-text)">
-                <RichTextView HtmlContent="@_post.Content" />
+                <RichTextView HtmlContent="@Post.Content" />
             </div>
         </ContentSurface>
 
@@ -91,7 +93,7 @@ else
 
             @if (isAuthor)
             {
-                <a href="/blog/@_post.BlogPostId/edit"
+                <a href="/blog/@Post.BlogPostId/edit"
                    class="text-sm text-(--color-action-ink) hover:underline">Edit</a>
             }
         </div>
@@ -105,12 +107,12 @@ else
 
     @* ── Polls (Feature 37) — blocks after the post content, before comments.
          Authors manage polls in the edit page; here they render vote-only. ──── *@
-    @if (_polls.Length > 0)
+    @if (Polls is { Length: > 0 })
     {
         <div class="mx-auto max-w-2xl px-4 pb-8">
             <CanalaveErrorBoundary Label="polls" Compact="true">
                 <div class="flex flex-col gap-4">
-                    @foreach (PollDto poll in _polls)
+                    @foreach (PollDto poll in Polls)
                     {
                         <PollView @key="poll.PollId"
                                   Poll="poll"
@@ -140,15 +142,21 @@ else
     /// <summary>Provided by the router/layout auth cascade. Null on anonymous render.</summary>
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    private BlogPostDto? _post;
-    private PollDto[] _polls = [];
+    // Persisted across the prerender→interactive handoff — the restore-or-fetch guard in
+    // OnInitializedAsync skips the refetch when [PersistentState] restored these from the
+    // prerender payload (layer5-wasm.md §"Avoiding the double fetch"). Both DTOs carry only
+    // what the page already renders (poll voter lists are pre-filtered server-side per
+    // PollDto's visibility contract), so persisting adds no exposure.
+    [PersistentState] public BlogPostDto? Post { get; set; }
+    [PersistentState] public PollDto[]? Polls { get; set; }
+
     private bool _isLoading = true;
     private bool _notFound;
 
     // Current viewer (null = anonymous).
     private int? _currentUserId;
 
-    // Like state — initialised from _post, then updated optimistically.
+    // Like state — initialised from Post, then updated optimistically.
     private int _likeCount;
     private bool _isLiked;
     private bool _likeBusy;
@@ -159,7 +167,7 @@ else
 
     // Open Graph/Twitter meta (WU-Seo). No cover field on BlogPostDto — falls back to the
     // site-default image (see audit/Seo.md "Open" re: SVG re-use). Content is sanitized HTML.
-    private string? OgDescription => _post is null ? null : SocialDescriptionHelper.Clean(_post.Content);
+    private string? OgDescription => Post is null ? null : SocialDescriptionHelper.Clean(Post.Content);
     private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(null, "/img/default-cover.svg");
     private string OgUrl => PublicUrlProvider.AbsolutePageUrl($"/blog/{BlogPostId}");
 
@@ -173,7 +181,21 @@ else
             _currentUserId = int.TryParse(idStr, out int parsedId) ? parsedId : null;
         }
 
-        await LoadPostAsync();
+        // Restore-or-fetch: when [PersistentState] restored the prerender payload, skip the
+        // refetch and just re-seed the derived like state. LoadPostAsync stays a plain fetch —
+        // it also serves OnParametersSetAsync's param-change reload, which must never
+        // short-circuit on a previous post's persisted state (layer3-logic.md gotcha).
+        if (Post is null || Polls is null)
+        {
+            await LoadPostAsync();
+        }
+        else
+        {
+            _loadedBlogPostId = BlogPostId;
+            _likeCount = Post.LikeCount;
+            _isLiked   = Post.IsLikedByCurrentUser;
+            _isLoading = false;
+        }
         _initialized = true;
     }
 
@@ -199,26 +221,26 @@ else
         Task<PollDto[]> pollsTask = PollReadService.GetPollsForBlogPostAsync(BlogPostId);
         await Task.WhenAll(postTask, pollsTask);
 
-        _post = postTask.Result;
-        _polls = pollsTask.Result;
-        if (_post is null)
+        Post = postTask.Result;
+        Polls = pollsTask.Result;
+        if (Post is null)
         {
             _notFound = true;
-            _polls = [];
+            Polls = [];
         }
         else
         {
-            _likeCount = _post.LikeCount;
-            _isLiked   = _post.IsLikedByCurrentUser;
+            _likeCount = Post.LikeCount;
+            _isLiked   = Post.IsLikedByCurrentUser;
         }
         _isLoading = false;
     }
 
     private void HandlePollChanged(int pollId, PollDto? updated)
     {
-        _polls = updated is null
-            ? _polls.Where(p => p.PollId != pollId).ToArray()
-            : _polls.Select(p => p.PollId == pollId ? updated : p).ToArray();
+        Polls = updated is null
+            ? (Polls ?? []).Where(p => p.PollId != pollId).ToArray()
+            : (Polls ?? []).Select(p => p.PollId == pollId ? updated : p).ToArray();
     }
 
     private async Task HandleLikeAsync()

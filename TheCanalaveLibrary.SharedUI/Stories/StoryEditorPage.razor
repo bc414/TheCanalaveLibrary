@@ -5,7 +5,6 @@
 @inject IStoryReadService StoryReadService
 @inject IStoryWriteService StoryWriteService
 @inject ITagReadService TagReadService
-@inject IImageStorageService ImageStorageService
 @inject NavigationManager NavigationManager
 @inject ILogger<StoryEditorPage> Logger
 @using TheCanalaveLibrary.Core
@@ -49,7 +48,7 @@ else
                              InitialSettingDetails="_initialSettingDetails"
                              InitialPairings="_initialPairings"
                              InitialGenrePriorities="_initialGenrePriorities"
-                             ExternalPlatforms="_externalPlatforms"
+                             ExternalPlatforms="@(ExternalPlatforms ?? [])"
                              SubmitLabel="@(StoryId.HasValue ? "Save Changes" : "Create Story")"
                              OnValidSubmit="HandleValidSubmit" />
 
@@ -91,14 +90,22 @@ else
     private IReadOnlyList<SettingDetailDto>? _initialSettingDetails;
     private IReadOnlyList<StoryCharacterPairingDto>? _initialPairings;
     private IReadOnlyDictionary<int, TagPriority>? _initialGenrePriorities;
-    private IReadOnlyList<ExternalPlatformDto> _externalPlatforms = [];
     private bool _isLoading = true;
     private bool _forbidden;
+
+    // Persisted lookup lists (prerender→interactive, [PersistentState]) — both are rendered by the
+    // form, so persisting adds no browser exposure. The edit-source StoryUpdateDTO is deliberately
+    // NOT persisted: its List<IStoryTag> interface member doesn't survive the default-settings
+    // System.Text.Json round trip [PersistentState] uses (no [JsonDerivedType] config on IStoryTag),
+    // so the edit-mode source fetch runs on both passes until that DTO gets a serializable shape.
+    // The live form/viewmodel and DraftAutosave state are never persisted (editor-page rule).
+    [PersistentState] public IReadOnlyList<ExternalPlatformDto>? ExternalPlatforms { get; set; }
+    [PersistentState] public List<TagChipDto>? TagChips { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         // Seeded platform lookup for the "Also posted on" section (WU38d) — needed in both modes.
-        _externalPlatforms = await StoryReadService.GetExternalPlatformsAsync();
+        ExternalPlatforms ??= await StoryReadService.GetExternalPlatformsAsync();
 
         if (StoryId.HasValue)
         {
@@ -117,13 +124,15 @@ else
             PopulateViewModelFromEdit(editData);
 
             // Load chip data for all tags (flat tags + character tags; TagSelector needs display data).
+            // ??= — chip display data restores from the prerender payload; the grouped dictionary is
+            // derived from it deterministically on every pass.
             List<int> charTagIds = editData.StoryCharacters.Select(c => c.CharacterTagId).ToList();
             List<int> flatTagIds = editData.StoryTags.Select(t => t.TagId).ToList();
             List<int> allTagIds = [..charTagIds, ..flatTagIds];
             if (allTagIds.Count > 0)
             {
-                List<TagChipDto> chips = await TagReadService.GetTagChipsByIdsAsync(allTagIds);
-                _initialTagsByType = chips
+                TagChips ??= await TagReadService.GetTagChipsByIdsAsync(allTagIds);
+                _initialTagsByType = TagChips
                     .GroupBy(c => c.TagTypeId)
                     .ToDictionary(g => g.Key, g => (IReadOnlyList<TagChipDto>)[.. g]);
             }
@@ -198,14 +207,20 @@ else
                 {
                     const long maxBytes = 10 * 1024 * 1024;
                     await using Stream stream = coverFile.OpenReadStream(maxBytes);
-                    updateDto.CoverArtRelativeUrl = await ImageStorageService.SaveAsync(
-                        stream, coverFile.ContentType, ImageKind.Cover, StoryId.Value);
+                    updateDto.CoverArtRelativeUrl = await StoryWriteService.UploadCoverArtAsync(
+                        stream, coverFile.ContentType, StoryId.Value);
                     _viewModel.CoverArtRelativeUrl = updateDto.CoverArtRelativeUrl;
                 }
 
                 await StoryWriteService.UpdateStoryAsync(updateDto);
                 if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
-                NavigationManager.NavigateTo($"/story/{StoryId.Value}/edit");
+                // forceLoad: same-component redirect on a Quill-hosting page. An in-place re-render
+                // fine-grained-diffs around Quill's JS-inserted toolbar DOM and crashes the WASM
+                // renderer with removeChild-of-null (Blazored.TextEditor#71 — the circuit renderer
+                // tolerated it; found in the Global Flip wave). A full document nav tears down the
+                // whole region root-first, which is safe — and [PersistentState] makes the reload
+                // hydrate from the prerender payload, so the cost is invisible.
+                NavigationManager.NavigateTo($"/story/{StoryId.Value}/edit", forceLoad: true);
             }
             else
             {
@@ -235,8 +250,8 @@ else
                 {
                     const long maxBytes = 10 * 1024 * 1024;
                     await using Stream stream = coverFile.OpenReadStream(maxBytes);
-                    string coverUrl = await ImageStorageService.SaveAsync(
-                        stream, coverFile.ContentType, ImageKind.Cover, newStoryId);
+                    string coverUrl = await StoryWriteService.UploadCoverArtAsync(
+                        stream, coverFile.ContentType, newStoryId);
 
                     // Patch the cover URL onto the just-created story.
                     await StoryWriteService.UpdateStoryAsync(new StoryUpdateDTO
@@ -260,7 +275,8 @@ else
                 }
 
                 if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
-                NavigationManager.NavigateTo($"/story/{newStoryId}/edit");
+                // forceLoad: same-component create→edit redirect — see the update path's comment.
+                NavigationManager.NavigateTo($"/story/{newStoryId}/edit", forceLoad: true);
             }
         }
         catch (UnauthorizedAccessException)

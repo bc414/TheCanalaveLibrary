@@ -71,69 +71,72 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 - **Real transactional email live (WU-Email, 2026-07-06).** The beta-blocking `IdentityNoOpEmailSender`-only setup is closed: a pluggable SMTP seam (`Email:Provider` = `Smtp`/`NoOp`, mirrors `ImageStorage:Provider`) plus `SmtpEmailSender` (MailKit) sends real confirmation/password-reset/email-change mail; a Mailpit dev inbox joins the Aspire AppHost (server-only path keeps the `NoOp` fallback, whose on-page confirmation link auto-hides once a real sender is active). Scope is transactional-only — notification email fan-out (`EmailEnabled`) stays deferred. A real double-HTML-encoding bug (the confirmation/reset link's already-encoded `&` was encoded a second time, corrupting the `code` query parameter) was found and fixed during live Mailpit verification the same session. F1 Identity L4.5 stays Stage 5 but now genuinely sends mail instead of surfacing a NoOp dev link. `dotnet test` 1344/1344. Detail: `identity-and-authorization.md` "Identity & Auth", `audit/Identity.md` WU-Email Stage note, `workplan.md` WU-Email, `middle_plan_v2.md` Resolved "Email mechanism".
 - **SiteDailyStat worker built — the Layer-8 mart family is now complete (WU-SiteDailyStat, 2026-07-11).** Row 62 was the last unbuilt L8 cell. `SiteDailyStat` gets an EF model (the one documented Layer-8 exception — append-only ground truth with rich time-series reads, not a rebuildable mart; writes stay raw-SQL upsert); new `User.CreatedUtc`/`LastActiveUtc` columns (a third Signal-Buffering instance, authenticated-only, no tracking cookie — privacy reasoning in `layer8-data-marts.md`); a mod-gated `/mod/stats` dashboard (beyond-MVP flourish) activates row 62's L2–L4.5 cells from N/A. Live-verified in a real browser against the standing dev DB: migration applied cleanly to 3012 existing stories/2007 users; the worker's bounded startup gap-fill backfilled 30 days of real varying counts (comments 121–283/day) unprompted; `/mod/stats` rendered live charts + activity table as AdminUser; the activity-buffer → flush → "Last seen Jul 11, 2026" loop confirmed end-to-end on a real profile page for both owner and non-owner viewers. `dotnet test` 1421/1421 (524 Unit + 479 RazorComponents + 418 Integration). Detail: `layer8-data-marts.md` §"site_daily_stats", `audit/Moderation.md` Feature 62, `workplan.md` WU-SiteDailyStat.
 - **Cross-cutting SiteSettings cluster minted (WU-Spotlight, 2026-07-12): `ISiteSettingsRead/WriteService`** — DB-backed mod-editable runtime knobs (string-key `site_settings` rows, seeded defaults paired with keys in Core). First consumer: Feature 55's five spotlight knobs. Detail: `layer2-services.md` §"Site Settings", `SKILL.md` "SiteSettings/".
+- **L5 grid-mark correction (2026-07-12).** Rows 27–29 (Recommendations) and 38–40 (Groups) were mismarked L5 Stage 5 off service-layer test citations with no endpoint/client ever built; corrected to Stage 2. Detail: `layer5-wasm.md` §"L5 Stage Semantics", per-row audit Stage notes.
+- **Mechanical WASM API sweep (WU-L5Sweep, 2026-07-13): every `ServerXXXService` gets an HTTP endpoint + client impl** (add-only pass — no new per-feature tests, no global render-mode flip). Scope, structural exclusions, and the doc hardening this required: `layer5-wasm.md` (naming rule, extended exception table, POST-for-complex-reads incl. the `[FromQuery]`-sibling-array gotcha, `PagedResult<T>`, stream/multipart pattern). `dotnet build` clean on Core/Client(WASM)/Server; `dotnet test` full solution green (Unit 685/685, RazorComponents 619/619, Integration 650/650) — confirms the sweep compiles and the pre-existing suite still passes, not that the new endpoints/client impls are behaviorally verified. Touched L5 cells stay at their current number — this pass makes the code flip-ready, it does not itself earn Stage 5 verification. Detail: `workplan.md` WU-L5Sweep.
+- **GLOBAL FLIP DONE (WU-GlobalFlip, 2026-07-13): the site runs `InteractiveAuto`** — circuit on first visit, WebAssembly on revisits (verified: `_framework/*.wasm` + zero `_blazor` WebSocket on the cached pass). Full `[PersistentState]` adoption across all data-loading pages/components (hydration confirmed by network log: primary data never refetched). The WASM browser wave found + fixed 7 bugs same-session (empty-body nullable reads, POST array binding, IStoryTag polymorphism, Blazored.Typeahead replaced by in-house `CanalaveTypeahead`, Quill same-component-redirect forceLoads, TreeSearchPage stale root, ReaderDisplayProvider static-SSR persistence 500ing `/Account/*`). L5 column flipped to 5 for all 40 built-surface rows (incl. 49/63 N/A→5 — both gained real client surfaces); rows 51/53/56 keep their unbuilt numbers. Known tooling false-alarm: the browser extension's network reader shows body-less 2xx as "503" — server log/DB are ground truth. Detail: `workplan.md` WU-GlobalFlip; `layer5-wasm.md` (new rules); per-feature audit L5 notes.
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L4.5-Browser | L5 | L6 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|--------------|----|----|----|
 | 1 | Identity & Auth | Identity | 5 | 5 | 5 | 5 | 1 | 5 | N/A | N/A | N/A |
 | 2 | Lookup Tables & Seed Data | Lookups | 5 | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
-| 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
-| 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 5 | N/A |
-| 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 2 | 2 | 2 | N/A |
-| 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 2 | 2 | 2 | N/A |
-| 8 | Story Arcs | Stories | 5 | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
-| 9 | Series & Ordering | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
-| 10 | Story Lineage | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
+| 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
+| 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
+| 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 2 | 5 | 2 | N/A |
+| 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 2 | 5 | 2 | N/A |
+| 8 | Story Arcs | Stories | 5 | 5 | 5 | 5 | 1 | 2 | 5 | N/A | N/A |
+| 9 | Series & Ordering | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
+| 10 | Story Lineage | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
 | 12 | Story Tagging | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
 | 13 | Tag Display & Sprites | Tags | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 15 | Saved Tag Selections | Tags | 5 | 5 | 5 | 5 | 1 | 1 | 2 | 5 | N/A |
-| 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
-| 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
-| 18 | User Following | Following | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
-| 19 | Vouches | Following | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
-| 20 | User Profile Editing | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 21 | User Profile Display | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 22 | User Stats | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
-| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
-| 25 | Comment Likes | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 26 | Spoiler Comments | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 14 | Tag Filtering & Selection UI | Tags | N/A | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 15 | Saved Tag Selections | Tags | 5 | 5 | 5 | 5 | 1 | 1 | 5 | 5 | N/A |
+| 16 | Story Interaction State Writes | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
+| 17 | Interaction Lists & Bookshelves | UserStoryInteractions | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
+| 18 | User Following | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
+| 19 | Vouches | Following | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
+| 20 | User Profile Editing | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 21 | User Profile Display | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 22 | User Stats | Profiles | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 23 | Comment Posting | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
+| 24 | Comment Display & Pagination | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
+| 25 | Comment Likes | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 26 | Spoiler Comments | Comments | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 27 | Recommendation Submission | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 28 | Recommendation Display | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 29 | Hidden Gem Management | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 30 | Recommendation Attribution | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 31 | Search Page | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 2 | 5 | N/A |
-| 32 | Full-Text Search | Discovery | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 5 | N/A |
-| 33 | Manual Tree Search | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 2 | 2 | N/A |
+| 30 | Recommendation Attribution | Recommendations | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 31 | Search Page | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
+| 32 | Full-Text Search | Discovery | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
+| 33 | Manual Tree Search | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A |
 | 34 | Tag Directory | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
-| 35 | Blog Post Writing | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 2 | N/A |
-| 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
-| 37 | Polls | BlogPosts | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 38 | Group Management | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
-| 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 40 | Group Display | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 35 | Blog Post Writing | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A |
+| 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
+| 37 | Polls | BlogPosts | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 38 | Group Management | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A |
+| 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 40 | Group Display | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
 | 41 | Notification Generation | Notifications | 5 | 5 | N/A | N/A | N/A | 5 | N/A | 5 | N/A |
-| 42 | Notification Display | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 5 | N/A |
-| 43 | Notification Settings | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
+| 42 | Notification Display | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
+| 43 | Notification Settings | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 44 | Reading Progress Tracking | Chapters | 5 | 5 | 5 | 5 | N/A | 5 | N/A | N/A | N/A |
-| 45 | View Count Tracking | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 46 | Content Reporting | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 2 | 5 | N/A |
+| 45 | View Count Tracking | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 46 | Content Reporting | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | 5 | 5 | N/A |
 | 47 | Moderation Queue & Actions | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | 5 | N/A |
 | 48 | Story Approval Workflow | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | N/A | N/A |
-| 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | 5 | N/A | 5 | N/A |
-| 50 | Badge System | Badges | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
+| 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
+| 50 | Badge System | Badges | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 51 | Custom Lists | CustomLists | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A |
 | 52 | User Account Deletion | Identity | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
 | 53 | External Story Links & Verification | Moderation | 5 | 2 | 2 | 2 | 1 | 1 | N/A | N/A | N/A |
 | 54 | Content Download/Export | Export | N/A | 5 | N/A | N/A | N/A | 5 | N/A | N/A | N/A |
-| 55 | Community Spotlight | Spotlight | 5 | 5 | 5 | 5 | 3 | 5 | 2 | N/A | N/A |
+| 55 | Community Spotlight | Spotlight | 5 | 5 | 5 | 5 | 3 | 5 | 5 | N/A | N/A |
 | 56 | Feature Contributions | BlogPosts | 5 | 2 | 2 | 2 | 1 | 1 | N/A | N/A | N/A |
 | 57 | Notification Cleanup Worker | Notifications | N/A | 2 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 58 | UserStat Recalculation Worker | Profiles | N/A | 2 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| 59 | Automatic Tree Search | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 2 | N/A | 5 |
+| 59 | Automatic Tree Search | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | N/A | 5 |
 | 60 | Tree Search Data Mart Worker | Discovery | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | 5 |
-| 61 | Also Favorited / Also Recommended | Discovery | N/A | 5 | 2 | 2 | 1 | 1 | 2 | N/A | 5 |
+| 61 | Also Favorited / Also Recommended | Discovery | N/A | 5 | 2 | 2 | 1 | 1 | 5 | N/A | 5 |
 | 62 | SiteDailyStat Worker | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | N/A | 5 |
-| 63 | Chapter Import (file ingestion) | Import | N/A | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
+| 63 | Chapter Import (file ingestion) | Import | N/A | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |

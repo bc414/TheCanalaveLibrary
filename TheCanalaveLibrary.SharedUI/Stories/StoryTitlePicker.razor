@@ -4,20 +4,19 @@
 
 @* Reusable incremental title-search picker (WU42) — powers the Story Lineage target picker
    (MyStoryLineagesPage) and the Groups add-story retrofit (GroupDesktop/GroupMobile, replacing a
-   raw numeric Story ID input). Modeled on TagSelector's BlazoredTypeahead wiring, simplified to a
-   single "pick fires a callback" component — no persistent selected-chips list, since each consumer
-   owns what happens after a pick (immediate action for Groups, a pending form field for lineage).
-   Backed by IStoryReadService.SearchStoriesByTitleAsync (ILike substring), deliberately not the
-   discovery FTS path — see layer2-services.md "Story Lineage service (WU42, ...)". *@
+   raw numeric Story ID input). Rebuilt on CanalaveTypeahead in the Global Flip wave (was
+   Blazored.Typeahead — archived lib whose post-pick Value clear crashed the WASM renderer; see
+   CanalaveTypeahead's header). Already a pick-fires-a-callback component, so the swap is 1:1 —
+   no persistent selected-chips list, each consumer owns what happens after a pick (immediate
+   action for Groups, a pending form field for lineage). Backed by
+   IStoryReadService.SearchStoriesByTitleAsync (ILike substring), deliberately not the discovery
+   FTS path — see layer2-services.md "Story Lineage service (WU42, ...)". *@
 
-<BlazoredTypeahead TItem="StoryTitleSearchDto" TValue="StoryTitleSearchDto"
-                    SearchMethod="SearchMethod"
-                    Value="_picked"
-                    ValueChanged="OnPickedAsync"
-                    ValueExpression="@(() => _picked)"
-                    Debounce="300"
-                    MinimumLength="2"
-                    placeholder="@Placeholder">
+<CanalaveTypeahead TItem="StoryTitleSearchDto"
+                   SearchMethod="SearchMethod"
+                   OnSelected="OnPickedAsync"
+                   Placeholder="@Placeholder"
+                   NotFoundText="No stories found">
     <ResultTemplate Context="story">
         <span class="flex flex-col">
             <span>@story.Title</span>
@@ -27,9 +26,7 @@
             }
         </span>
     </ResultTemplate>
-    <SelectedTemplate Context="story">@story.Title</SelectedTemplate>
-    <NotFoundTemplate>No stories found</NotFoundTemplate>
-</BlazoredTypeahead>
+</CanalaveTypeahead>
 
 @code {
     [Parameter] public string Placeholder { get; set; } = "Type to search for a story...";
@@ -40,8 +37,6 @@
 
     [Parameter, EditorRequired] public EventCallback<StoryTitleSearchDto> OnStorySelected { get; set; }
 
-    private StoryTitleSearchDto? _picked;
-
     private async Task<IEnumerable<StoryTitleSearchDto>> SearchMethod(string term)
     {
         IReadOnlyList<StoryTitleSearchDto> results = await StoryService.SearchStoriesByTitleAsync(term);
@@ -50,11 +45,6 @@
             : results;
     }
 
-    private async Task OnPickedAsync(StoryTitleSearchDto? story)
-    {
-        if (story is not null)
-            await OnStorySelected.InvokeAsync(story);
-        // Reset immediately — a pick-to-fire-an-action component, not a persistent selected value.
-        _picked = null;
-    }
+    private async Task OnPickedAsync(StoryTitleSearchDto story)
+        => await OnStorySelected.InvokeAsync(story);
 }

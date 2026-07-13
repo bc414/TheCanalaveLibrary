@@ -13,6 +13,9 @@
    Audience type is selected as a preset radio (Standard/SFW Only/Mature) which maps to the
    (AudienceRating, MaxContentRating) pair via GroupAudienceTypeMapper on submit.
    Admin-only for edit — UX pre-check here; real gate is in ServerGroupWriteService.
+   [PersistentState] on EditSource (the loaded-for-edit group DTO) eliminates the
+   prerender→interactive double-fetch; live form state (_name/_description/_audienceType) is
+   never persisted — it is re-seeded from EditSource on hydration, before the form is interactive.
    WU32. *@
 
 <PageTitle>@(GroupId.HasValue ? "Edit Group" : "New Group")</PageTitle>
@@ -116,6 +119,11 @@
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
+    // Loaded-for-edit source DTO, persisted across the prerender→interactive handoff (edit mode
+    // only; stays null on /group/new). The live form fields below are transient UI state and are
+    // deliberately NOT persisted.
+    [PersistentState] public GroupDetailDto? EditSource { get; set; }
+
     private string _name = string.Empty;
     private string? _description;
     private GroupAudienceType _audienceType = GroupAudienceType.Standard;
@@ -137,16 +145,18 @@
 
         if (GroupId.HasValue)
         {
-            // Load existing group for edit — verify caller is admin first.
-            GroupDetailDto? group = await GroupService.GetByIdAsync(GroupId.Value);
+            // Load existing group for edit — ??= skips the fetch when [PersistentState] has
+            // already restored it from the prerender payload.
+            EditSource ??= await GroupService.GetByIdAsync(GroupId.Value);
 
-            if (group is null)
+            if (EditSource is null)
             {
                 Nav.NavigateTo("/not-found");
                 return;
             }
 
-            // UX-level admin pre-check (real gate is in ServerGroupWriteService).
+            // UX-level admin pre-check (real gate is in ServerGroupWriteService). Per-viewer
+            // state — always fetched fresh, never persisted.
             GroupRole? role = await GroupService.GetCurrentUserRoleAsync(GroupId.Value);
             if (role != GroupRole.Admin)
             {
@@ -155,9 +165,11 @@
                 return;
             }
 
-            _name         = group.GroupName;
-            _description  = group.Description;
-            _audienceType = group.AudienceType;
+            // Seed the live form state from the source DTO. Safe to re-run on hydration: the
+            // prerendered form was static, so the user cannot have typed anything yet.
+            _name         = EditSource.GroupName;
+            _description  = EditSource.Description;
+            _audienceType = EditSource.AudienceType;
         }
 
         _isLoading = false;

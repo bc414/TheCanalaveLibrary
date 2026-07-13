@@ -96,7 +96,13 @@
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    private PollDto[] _polls = [];
+    // Persisted across the prerender→interactive handoff — restore-or-fetch in OnInitializedAsync
+    // (layer5-wasm.md §"Avoiding the double fetch"). Safe to persist: PollDto carries only what
+    // PollView renders — voter identities appear solely in PollOptionResultDto.PublicVoters, which
+    // the service already zeroes/empties when results aren't visible to the viewer, and anonymous
+    // votes never leave the server as identities. Post-write reloads (LoadAsync) stay plain fetches.
+    [PersistentState] public PollDto[]? Polls { get; set; }
+
     private bool _isLoading = true;
     private int? _currentUserId;
     private bool _isManager;
@@ -108,8 +114,8 @@
     private bool _saving;
     private IReadOnlyList<string>? _editorErrors;
 
-    private PollDto[] ActivePolls => _polls.Where(p => !p.IsArchived).ToArray();
-    private PollDto[] ArchivedPolls => _polls.Where(p => p.IsArchived).ToArray();
+    private PollDto[] ActivePolls => (Polls ?? []).Where(p => !p.IsArchived).ToArray();
+    private PollDto[] ArchivedPolls => (Polls ?? []).Where(p => p.IsArchived).ToArray();
 
     protected override async Task OnInitializedAsync()
     {
@@ -121,13 +127,16 @@
             _isManager = state.User.IsInRole("Moderator") || state.User.IsInRole("Admin");
         }
 
-        await LoadAsync();
+        // ??= restore-or-fetch: skip the fetch when [PersistentState] restored the prerender value.
+        Polls ??= await PollService.GetSitePollsAsync(includeArchived: true);
+        _isLoading = false;
     }
 
+    // Post-write reload — plain assignment on purpose: must not short-circuit on persisted state.
     private async Task LoadAsync()
     {
         _isLoading = true;
-        _polls = await PollService.GetSitePollsAsync(includeArchived: true);
+        Polls = await PollService.GetSitePollsAsync(includeArchived: true);
         _isLoading = false;
     }
 
@@ -207,8 +216,8 @@
 
     private void HandlePollChanged(int pollId, PollDto? updated)
     {
-        _polls = updated is null
-            ? _polls.Where(p => p.PollId != pollId).ToArray()
-            : _polls.Select(p => p.PollId == pollId ? updated : p).ToArray();
+        Polls = updated is null
+            ? (Polls ?? []).Where(p => p.PollId != pollId).ToArray()
+            : (Polls ?? []).Select(p => p.PollId == pollId ? updated : p).ToArray();
     }
 }

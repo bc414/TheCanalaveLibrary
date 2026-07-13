@@ -1,0 +1,29 @@
+@namespace TheCanalaveLibrary.Client
+@using TheCanalaveLibrary.SharedUI
+
+@* Global Flip (layer5-wasm.md §"The Global Flip" step 1): moved Server→Client so the Router can
+   run inside the WASM runtime — the WASM pass of InteractiveAuto cannot execute a component that
+   lives in the Server assembly. Assembly targeting changed with the move:
+   - AppAssembly = SharedUI (every routable page lives there);
+   - AdditionalAssemblies = this Client assembly;
+   - the Server assembly is deliberately ABSENT: WASM can't load it, and its routable components
+     (Identity pages, /Error) are exactly the ones that must stay static SSR — a URL the
+     interactive router can't match falls back to a full-document navigation, which server-side
+     endpoint discovery (MapRazorComponents<App> + AddAdditionalAssemblies in Program.cs) then
+     serves. That fallback IS the Identity-page escape hatch, replacing the old reliance on
+     [ExcludeFromInteractiveRouting] metadata being visible to the router. *@
+<Router AppAssembly="typeof(SharedUIAssemblyIdentifier).Assembly"
+        AdditionalAssemblies="new[] { typeof(WasmClientAssemblyIdentifier).Assembly }"
+        NotFoundPage="typeof(NotFound)">
+    <Found Context="routeData">
+        <CascadingAuthenticationState>
+            <ThemeContextProvider>
+                <ReaderDisplayProvider>
+                    <UserActivityTracker />
+                    <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(DeviceLayout)" />
+                </ReaderDisplayProvider>
+            </ThemeContextProvider>
+        </CascadingAuthenticationState>
+        <FocusOnNavigate RouteData="routeData" Selector="h1"/>
+    </Found>
+</Router>

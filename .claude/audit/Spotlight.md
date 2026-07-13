@@ -96,7 +96,11 @@ Booking" and §"Site Settings (`ISiteSettingsService`)".
   suppressed (sponsor attached their own rec). One runtime bug found + fixed same-session:
   unbreakable rec text blew the homepage grid past the viewport (grid `min-width:auto`) —
   `min-w-0` + inherited `break-words` wrappers.
-- **L5 — Stage 2** (reclassified from N/A — a real browser surface now exists). Endpoint + client
-  pair due in the Phase-5 WASM batch like every other feature.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; homepage display, redemption page, AND the mod page all
+  verified in a real WASM runtime during the flip's browser wave — incl. the new
+  `ISpotlightSlotAllocator` L5 surface (`SpotlightSlotAllocatorEndpoints` +
+  `ClientSpotlightSlotAllocator`), minted at the flip because `ModSpotlightPage` injects the
+  allocator directly. Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 - **L6 / L8 — N/A.** Index shipped with L1 (above); the go-live worker is an L2-style hosted
   service, not a mart.

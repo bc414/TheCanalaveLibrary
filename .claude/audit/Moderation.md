@@ -40,9 +40,15 @@ see Feature 62 below); `DailyStoryStat` was dropped entirely, never modeled.
 `ModerationServiceTests.SubmitReportAsync_CreatesReportRow_IncrementsStoryActiveReportCount` (Integration).
 `ReportDialog.razor` + `OnReport` wired in all StoryDeck composites (BookshelvesDesktop/Mobile,
 GroupDesktop/Mobile, ProfileDesktop/Mobile) and `CommentSection`. L4=3 (functional Tailwind applied; not
-design-reviewed). L5=2 (WASM client service + API endpoint deferred — no `ClientModerationWriteService` yet).
+design-reviewed). L5=2 (WASM client service + API endpoint deferred — no `ClientModerationWriteService` yet;
+superseded, see the L5 note below).
 L6=5 (composite index `ix_reports_reported_entity_type_reported_entity_id` added in migration
 `20260625140459_WU34_Moderation`).
+
+**L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+site now runs global InteractiveAuto; report-queue reads verified as AdminUser in a real WASM
+runtime during the flip's browser wave (`/mod/reports`, `/mod/submissions`, `/mod/users`; report
+submission not driven). Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 
 ## Feature 47 — Moderation Queue & Actions
 

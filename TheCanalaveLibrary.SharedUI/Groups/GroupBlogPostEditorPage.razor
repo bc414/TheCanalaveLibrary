@@ -14,6 +14,9 @@
 @* Group blog post create page — member-only.
    Reuses BlogPostPropertiesForm (no publish toggle, group posts publish immediately).
    Pattern 1 edit side (cross-cutting.md "Two content-editing patterns"); view is BlogPostPage.
+   [PersistentState] on GroupName (the page's only non-per-viewer fetched content) skips the group
+   re-fetch on hydration; the member-role gate and the viewer's story-picker options are per-viewer
+   state and always load fresh. Live form/draft state is never persisted.
    WU32. *@
 
 <PageTitle>New Group Post</PageTitle>
@@ -28,7 +31,7 @@
         {
             <p class="p-4 text-(--color-danger)">You must be a member of this group to post.</p>
         }
-        else if (_groupName is null)
+        else if (GroupName is null)
         {
             <p class="p-4 text-(--color-danger)">Group not found.</p>
         }
@@ -40,7 +43,7 @@
                     <p class="text-sm text-(--color-text-muted)">
                         Posting to
                         <a href="/group/@GroupId"
-                           class="text-(--color-action-ink) hover:underline">@_groupName</a>
+                           class="text-(--color-action-ink) hover:underline">@GroupName</a>
                     </p>
                 </div>
 
@@ -75,9 +78,17 @@
     private BlogPostPropertiesForm? _form;
     private DraftAutosave? _autosave;
     private BlogPostPropertiesViewModel _viewModel = new();
+
+    // Per-viewer picker options — NOT persisted: per-viewer supplementary state (the viewer's own
+    // stories) that reloads flicker-free, and a list of ValueTuples besides (tuples don't survive
+    // the [PersistentState] System.Text.Json round trip).
     private IReadOnlyList<(int Id, string Title)>? _authorStories;
 
-    private string? _groupName;
+    // Persisted across the prerender→interactive handoff — the only fetched content this page
+    // renders that isn't per-viewer. Just the rendered name, not the whole GroupDetailDto
+    // (persist only what the page renders — layer5-wasm.md §"Avoiding the double fetch").
+    [PersistentState] public string? GroupName { get; set; }
+
     private bool _isLoading = true;
     private bool _forbidden;
 
@@ -90,14 +101,23 @@
             return;
         }
 
-        // Verify the group exists and user is a member (GetCurrentUserRoleAsync returns null for non-members).
-        GroupDetailDto? group = await GroupService.GetByIdAsync(GroupId);
-        if (group is null)
+        // Verify the group exists — skipped when [PersistentState] restored GroupName from the
+        // prerender payload (restore-or-fetch idiom; branch form because the persisted value is
+        // a projection of the fetched DTO, not the DTO itself).
+        if (GroupName is null)
         {
-            _isLoading = false;
-            return;
+            GroupDetailDto? group = await GroupService.GetByIdAsync(GroupId);
+            if (group is null)
+            {
+                _isLoading = false;
+                return;
+            }
+
+            GroupName = group.GroupName;
         }
 
+        // Member gate (GetCurrentUserRoleAsync returns null for non-members) — per-viewer state,
+        // always fetched fresh.
         GroupRole? role = await GroupService.GetCurrentUserRoleAsync(GroupId);
         if (role is null)
         {
@@ -106,9 +126,7 @@
             return;
         }
 
-        _groupName = group.GroupName;
-
-        // Populate story picker in parallel with group load above (already have group).
+        // Populate the story picker — per-viewer, always fresh (see _authorStories comment).
         _authorStories = await LoadAuthorStoriesAsync(currentUserId.Value);
 
         _isLoading = false;

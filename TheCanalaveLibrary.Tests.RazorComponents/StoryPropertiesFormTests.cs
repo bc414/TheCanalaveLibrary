@@ -23,7 +23,7 @@ public class StoryPropertiesFormTests : BunitContext
 {
     public StoryPropertiesFormTests()
     {
-        // EditorView (Blazored.TextEditor / Quill.js) and TagSelector (Blazored.Typeahead) both make
+        // EditorView (Blazored.TextEditor / Quill.js) makes
         // JS calls on render. Loose mode accepts any JS invocation without erroring so we can test the
         // form fields without needing a real JS runtime.
         JSInterop.Mode = JSRuntimeMode.Loose;

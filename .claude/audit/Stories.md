@@ -113,11 +113,12 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
   with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
   column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
   bUnit).
-- **L5 — Stage 2 (2026-06-27, filter revamp).** `HttpStoryWriteService` and `HttpStoryReadService`
-  deleted — they were dead code calling endpoints `StoryEndpoints` never mapped (divergence since WU12,
-  confirmed by the Stage-4 note above). Client `Program.cs:16-17` DI registrations removed. MVP is
-  `InteractiveServer`-only; L5 for story read/write is a genuine post-MVP build-to-spec item. No
-  architectural blocker remains. Tests: build green (Server + Client); `dotnet test` all 1232 pass.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** (History: the dead pre-WU12 `HttpStoryReadService`/
+  `HttpStoryWriteService` were deleted 2026-06-27 in the filter revamp; the real surface was rebuilt
+  by WU-L5Sweep.) Endpoints + client impl live (WU-L5Sweep) and the site now runs global
+  InteractiveAuto; story CREATE with tags verified end-to-end in a real WASM runtime during the
+  flip's browser wave (`IStoryTag` polymorphism round-trip; create→edit `forceLoad` fix). Full wave
+  narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 - **L6 — Stage 5 (WU-L6, 2026-07-07 — resolved, no creation-side DDL).** The write path needs no
   index beyond the existing PK/unique/slug set; the story-table read indexes ("to be added by
   query need") landed as the sort spines under Feature 5 (see its L6 note).
@@ -312,8 +313,10 @@ change).
   coverage as Desktop. All 57 RazorComponents tests pass.
 - **L4-Style — Stage 1.** All Tailwind tokens; visual sign-off pending human review (Stage-6 gate,
   consistent with WU13/WU14/WU24 precedent — bUnit cannot verify layout/responsive breakpoints).
-- **L5 — Stage 2**, same resolution as Feature 4 above — see WU-FilterRevamp (`HttpStoryReadService`/
-  `HttpStoryWriteService` were deleted as dead code, not left with an unmapped endpoint).
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; story browse verified in a real WASM runtime during the
+  flip's browser wave (random batch + filtered `POST /query`; story-page persisted-state hydration
+  confirmed by network log). Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 - **L6 — Stage 5 (WU-L6, 2026-07-07).** The two discovery sort spines built in `L6_IndexBatch`:
   `ix_stories_published_date` (+ `ix_stories_last_updated_date` for `GetRecentListingsAsync` /
   Relevance tie-break). Measured at 3k seeded stories: DatePublished page-1 p50 0.39→0.09 ms
@@ -368,7 +371,10 @@ requirements record: WU45 in `workplan.md`. Settled — do not revisit without f
 - **L4.5 — Stage 2.** Browser verification explicitly deferred at WU45 close (2026-07-12, Brian's
   direction) — automated tiers green; the live create-arc → story-page-headers → reading-label
   loop still needs a real-circuit pass.
-- **L5 — Stage 2.**
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; arcs data loading verified in a real WASM runtime during the
+  flip's browser wave (arcs fetched via API on story-page load). Full wave narrative + the 7 bugs
+  found/fixed: `workplan.md` WU-GlobalFlip.
 
 ## Feature 9 — Series & Ordering
 
@@ -462,7 +468,10 @@ the plan; both are the same dispatcher-reload class as WU-ComponentSoundness's F
   redirected to My Series, series gone from the list. Ground truth confirmed via `psql`: the deleted
   series' `SeriesEntry` rows cascaded away; its two member stories (`story_id` 1, 3, 7 range) survived
   untouched; the surviving series' `series_entries.order_index` matched the reorder performed in the UI.
-- **L5 — Stage 2** (rides the future site-wide WASM interactivity flip, not WU41-specific).
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; series memberships fetched via API on story-page load
+  verified in a real WASM runtime during the flip's browser wave. Full wave narrative + the 7 bugs
+  found/fixed: `workplan.md` WU-GlobalFlip.
 - **Verified (2026-07-11):** `dotnet build` 0 errors/warnings (8 projects). `dotnet test` full
   solution green: 541 Unit + 533 RazorComponents + 462 Integration = **1536 tests**. Mutation-sanity:
   temporarily replaced the `Story`-joined query in `GetMembershipsForStoryAsync` with a bare
@@ -527,8 +536,11 @@ data loss (verified: 4 seed rows survived, live dev DB rebooted clean, `dotnet b
 
 - **L2/L3-Logic/L3.5-Structure — Stage 5 (2026-07-12).** **L4-Style — Stage 1** (pending human
   visual sign-off, WU8/WU13/WU23/WU28/WU44 precedent — an agent's own live-browser check does not
-  close this gate). **L4.5-Browser — Stage 5 (2026-07-12, real-circuit verification, see below).
-  L5 — Stage 2** (WASM parity rides the future site-wide `InteractiveAuto` flip, unchanged).
+  close this gate). **L4.5-Browser — Stage 5 (2026-07-12, real-circuit verification, see below).**
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; lineage page + `StoryTitlePicker` verified in a real WASM
+  runtime during the flip's browser wave (picker rebuilt on the new in-house `CanalaveTypeahead`).
+  Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 
 **Done (2026-07-12):** built per the settled decisions above. `Core/Stories/`:
 `IStoryLineageReadService`/`IStoryLineageWriteService`, `StoryLineageDto`/`CreateStoryLineageDto`/
@@ -616,7 +628,10 @@ migration-managed raw DDL, no EF model — ground truth, NOT a rebuildable mart;
 - **L4.5-Browser — Stage 5 (2026-07-06).** Story-page scroll fired the ping → `daily_story_stats`
   row landed post-flush (psql ground truth); "View stats" reveal showed "1 view" (matches SUM);
   sort dropdowns verified view-free (`/discover`: Random | Date published only).
-- **L5 — Stage 2** (WASM ping endpoint lands with the global flip). **L8 — N/A.**
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; the view-count ping verified in a real WASM runtime during
+  the flip's browser wave (202 accepted; server log/DB ground truth). Full wave narrative + the
+  7 bugs found/fixed: `workplan.md` WU-GlobalFlip. **L8 — N/A.**
 - **Tests:** Unit (`ViewCountBufferTests`), Integration (`ViewCountFlushTests` — buffering,
   same-day accumulation, cross-day SUM, zero default, deleted-story guard, FK cascade),
   RazorComponents (`StoryViewStatsTests` — no fetch until asked, formatted reveal,

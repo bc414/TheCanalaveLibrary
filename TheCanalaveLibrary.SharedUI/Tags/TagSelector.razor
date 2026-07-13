@@ -2,6 +2,12 @@
 @inject ITagReadService TagService
 @inject ISpriteReadService Sprites
 
+@* Multi-select tag picker: chips above, typeahead below. Rebuilt on CanalaveTypeahead in the
+   Global Flip wave — the previous Blazored.Typeahead internals crashed the WASM renderer on the
+   post-pick Value clear (archived lib, Blazored/Typeahead#221; see CanalaveTypeahead's header).
+   The pick-fires-a-callback contract removed the _picked bind entirely: OnSelected appends the
+   chip, the typeahead clears itself. *@
+
 <div class="flex flex-col gap-2">
     <label class="text-sm font-bold">@Label</label>
 
@@ -12,14 +18,11 @@
         }
     </div>
 
-    <BlazoredTypeahead TItem="TagChipDto" TValue="TagChipDto"
-                        SearchMethod="SearchMethod"
-                        Value="_picked"
-                        ValueChanged="OnPicked"
-                        ValueExpression="@(() => _picked)"
-                        Debounce="300"
-                        MinimumLength="2"
-                        placeholder="Type to search for a tag...">
+    <CanalaveTypeahead TItem="TagChipDto"
+                       SearchMethod="SearchMethod"
+                       OnSelected="OnPicked"
+                       Placeholder="Type to search for a tag..."
+                       NotFoundText="No tags found">
         <ResultTemplate Context="tag">
             <span class="inline-flex items-center gap-2">
                 <span class="w-2 h-2 rounded-full @DotClass(tag.TagTypeId)"></span>
@@ -36,9 +39,7 @@
                 @tag.TagName
             </span>
         </ResultTemplate>
-        <SelectedTemplate Context="tag">@tag.TagName</SelectedTemplate>
-        <NotFoundTemplate>No tags found</NotFoundTemplate>
-    </BlazoredTypeahead>
+    </CanalaveTypeahead>
 </div>
 
 @code {
@@ -57,7 +58,6 @@
     public EventCallback<IReadOnlyList<TagChipDto>> OnSelectionChanged { get; set; }
 
     private List<TagChipDto> _selected = [];
-    private TagChipDto? _picked;
 
     protected override void OnInitialized()
     {
@@ -70,14 +70,13 @@
         return results.Where(t => _selected.All(s => s.TagId != t.TagId));
     }
 
-    private async Task OnPicked(TagChipDto? tag)
+    private async Task OnPicked(TagChipDto tag)
     {
-        if (tag is not null && _selected.All(s => s.TagId != tag.TagId))
+        if (_selected.All(s => s.TagId != tag.TagId))
         {
             _selected.Add(tag);
             await OnSelectionChanged.InvokeAsync(_selected);
         }
-        _picked = null;
     }
 
     private async Task Remove(TagChipDto tag)

@@ -49,7 +49,9 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
    built at all — Discord already covers real-time chat, and this site's messaging is deliberately
    async/long-form. `MessagesHub` was the only app-level SignalR Hub ever proposed in this project;
    with it gone the app has none, permanently (see `canalave-conventions/horizontal-scaling.md` §2
-   for why that also means no SignalR backplane is ever needed). Feature 49 L5 remains N/A.
+   for why that also means no SignalR backplane is ever needed). Feature 49 L5 was N/A under this
+   framing until 2026-07-13, when the global flip reclassified it — see the L5 note below
+   (statelessness / SignalR-never stands; only the client-impl question changed).
 
 3. **Global unread-messages badge in the layout chrome.** Placed beside `LoginDisplay` in
    `DesktopLayout.razor` and `MobileLayout.razor`. Derived from the `LastReadTimestamp` watermark
@@ -105,8 +107,12 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
 - **L4-Style — Stage 5 (WU35, 2026-06-24).** Tailwind v4 design-token classes throughout all
   components. Visual sign-off (human) pending — Stage 6 gate still open, consistent with WU8/WU13/
   WU24 precedent. Flip to Stage 6 after a visual run on `/messages`.
-- **L5 — N/A.** Messaging is stateless, permanently (no REST API endpoints to wasm-enable). SignalR
-  realtime push was considered and ruled out entirely 2026-07-07 — not deferred, never built.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13 — reclassified from N/A).** The flip makes every
+  injected service need a client impl, so the old "no REST endpoints to wasm-enable" N/A no longer
+  holds: endpoints + client impl live (WU-L5Sweep), and messaging read+send verified in a real WASM
+  runtime during the flip's browser wave (thread render + reply persisted). Statelessness stands —
+  SignalR remains ruled out entirely (2026-07-07), not deferred, never built. Full wave narrative +
+  the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 - **L6 — Stage 5 (WU-L6, 2026-07-07).** `ix_private_messages_conversation_id_date_sent` built in
   `L6_IndexBatch` for the thread-page query (supersedes the convention FK index; equality-bound
   leading column, so DESC rides a backward scan). Not volume-measured — SeedTool generates no

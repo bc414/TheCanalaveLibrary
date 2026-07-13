@@ -16,6 +16,9 @@
    Resolves CurrentUserId from the auth cascade (never injects IActiveUserContext — SharedUI rule).
    Batch-loads: group detail, story listings, interaction states, blog posts in parallel.
    Passes fully loaded data to GroupDesktop / GroupMobile composites.
+   [PersistentState] on Group/Stories/BlogPosts/TotalBlogPosts eliminates the prerender→interactive
+   double-fetch; per-viewer state (_currentUserRole, _interactionStates) stays ephemeral — same
+   judgment as StoryPage's _usiState (deterministic per viewer, re-fetch is flicker-free).
    WU32. *@
 
 @if (_isLoading)
@@ -23,25 +26,25 @@
     <PageTitle>Group</PageTitle>
     <p class="p-4 text-(--color-text-muted)"><em>Loading…</em></p>
 }
-else if (_group is null)
+else if (Group is null)
 {
     <PageTitle>Group not found</PageTitle>
     <p class="p-4 text-(--color-danger)">Group not found.</p>
 }
 else
 {
-    <PageTitle>@_group.GroupName</PageTitle>
-    <SocialMetaTags Title="@_group.GroupName" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="website"/>
+    <PageTitle>@Group.GroupName</PageTitle>
+    <SocialMetaTags Title="@Group.GroupName" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="website"/>
 
     @if (DeviceService.IsMobile())
     {
-        <GroupMobile Group="_group"
+        <GroupMobile Group="Group"
                      CurrentUserId="_currentUserId"
                      CurrentUserRole="_currentUserRole"
-                     Stories="_stories"
+                     Stories="@(Stories ?? [])"
                      InteractionStates="_interactionStates"
-                     BlogPosts="_blogPosts"
-                     TotalBlogPosts="_totalBlogPosts"
+                     BlogPosts="@(BlogPosts ?? [])"
+                     TotalBlogPosts="TotalBlogPosts"
                      OnJoin="HandleJoinAsync"
                      OnLeave="HandleLeaveAsync"
                      OnStoryAdded="HandleStoryAddedAsync"
@@ -49,13 +52,13 @@ else
     }
     else
     {
-        <GroupDesktop Group="_group"
+        <GroupDesktop Group="Group"
                       CurrentUserId="_currentUserId"
                       CurrentUserRole="_currentUserRole"
-                      Stories="_stories"
+                      Stories="@(Stories ?? [])"
                       InteractionStates="_interactionStates"
-                      BlogPosts="_blogPosts"
-                      TotalBlogPosts="_totalBlogPosts"
+                      BlogPosts="@(BlogPosts ?? [])"
+                      TotalBlogPosts="TotalBlogPosts"
                       OnJoin="HandleJoinAsync"
                       OnLeave="HandleLeaveAsync"
                       OnStoryAdded="HandleStoryAddedAsync"
@@ -72,18 +75,23 @@ else
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    private GroupDetailDto? _group;
+    // Persisted across the prerender→interactive handoff — the primary batch (group detail,
+    // member stories, first page of blog posts). Public properties: [PersistentState] requires
+    // them. TotalBlogPosts rides alongside BlogPosts because the service returns a ValueTuple,
+    // which does not survive System.Text.Json — split into separate persisted properties
+    // (layer5-wasm.md §"Avoiding the double fetch").
+    [PersistentState] public GroupDetailDto? Group { get; set; }
+    [PersistentState] public StoryListingDto[]? Stories { get; set; }
+    [PersistentState] public BlogPostListingDto[]? BlogPosts { get; set; }
+    [PersistentState] public int TotalBlogPosts { get; set; }
+
+    // Per-viewer supplementary state — NOT persisted (StoryPage's _usiState judgment):
+    // deterministic per viewer, so the interactive re-fetch is flicker-free, and it must stay
+    // fresh rather than ride a stale prerender payload.
     private GroupRole? _currentUserRole;
     private int? _currentUserId;
-
-    // Story data batch-loaded from GroupDetailDto.StoryIds.
-    private StoryListingDto[] _stories = [];
     private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _interactionStates =
         new Dictionary<int, UserStoryInteractionStateDto>();
-
-    // Group blog posts (first page).
-    private BlogPostListingDto[] _blogPosts = [];
-    private int _totalBlogPosts;
 
     private bool _isLoading = true;
 
@@ -92,7 +100,7 @@ else
 
     // Open Graph/Twitter meta (WU-Seo). No cover field on GroupDetailDto — falls back to the
     // site-default image (see audit/Seo.md "Open" re: SVG re-use).
-    private string? OgDescription => _group is null ? null : SocialDescriptionHelper.Clean(_group.Description);
+    private string? OgDescription => Group is null ? null : SocialDescriptionHelper.Clean(Group.Description);
     private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(null, "/img/default-cover.svg");
     private string OgUrl => PublicUrlProvider.AbsolutePageUrl($"/group/{GroupId}");
 
@@ -106,7 +114,32 @@ else
             _currentUserId = int.TryParse(idStr, out int id) ? id : null;
         }
 
-        await LoadGroupAsync();
+        if (Group is null)
+        {
+            // No persisted prerender value to restore (first pass) — full fresh batch. This is
+            // the restore-or-fetch (??=) idiom in branch form: the page's primary content is one
+            // parallel batch, so the whole batch is skipped or run together, not per-property.
+            await LoadGroupAsync();
+        }
+        else
+        {
+            // [PersistentState] restored the primary batch from the prerender payload — skip the
+            // DB calls it covers and refresh only the per-viewer supplementary state, which is
+            // deliberately ephemeral (flicker-free re-fetch; see field comments).
+            _loadedGroupId = GroupId;
+            Stories ??= [];
+            BlogPosts ??= [];
+
+            _currentUserRole = await GroupService.GetCurrentUserRoleAsync(GroupId);
+            if (Stories.Length > 0 && _currentUserId is not null)
+            {
+                IReadOnlyList<int> storyIds = Stories.Select(s => s.StoryId).ToArray();
+                _interactionStates = await InteractionService.GetStatesByStoryIdsAsync(storyIds);
+            }
+
+            _isLoading = false;
+        }
+
         _initialized = true;
     }
 
@@ -118,20 +151,24 @@ else
         await LoadGroupAsync();
     }
 
+    // Fresh load — plain assignments (not ??=): param-change reloads and post-write refreshes
+    // must never be short-circuited by [PersistentState] values from a previous group
+    // (layer3-logic.md §"Route-Parameter Dispatchers"; internal SPA navs don't prerender, so
+    // there is no persisted state to restore on this path anyway).
     private async Task LoadGroupAsync()
     {
         _isLoading = true;
         _loadedGroupId = GroupId;
 
-        _group = await GroupService.GetByIdAsync(GroupId);
+        Group = await GroupService.GetByIdAsync(GroupId);
 
-        if (_group is not null)
+        if (Group is not null)
         {
             // Role and stories batch-loaded in parallel.
             Task<GroupRole?> roleTask      = GroupService.GetCurrentUserRoleAsync(GroupId);
             Task<StoryListingDto[]> storyTask =
-                _group.StoryIds.Count > 0
-                    ? StoryService.GetListingsByIdsAsync(_group.StoryIds)
+                Group.StoryIds.Count > 0
+                    ? StoryService.GetListingsByIdsAsync(Group.StoryIds)
                     : Task.FromResult(Array.Empty<StoryListingDto>());
             Task<(BlogPostListingDto[], int)> blogTask =
                 BlogPostService.GetByGroupAsync(GroupId, page: 1, pageSize: 10);
@@ -139,16 +176,16 @@ else
             await Task.WhenAll(roleTask, storyTask, blogTask);
 
             _currentUserRole = await roleTask;
-            _stories         = await storyTask;
+            Stories          = await storyTask;
 
             (BlogPostListingDto[] blogItems, int blogTotal) = await blogTask;
-            _blogPosts      = blogItems;
-            _totalBlogPosts = blogTotal;
+            BlogPosts      = blogItems;
+            TotalBlogPosts = blogTotal;
 
             // Interaction states (no-tracking, per-viewer, nullable).
-            if (_stories.Length > 0 && _currentUserId is not null)
+            if (Stories.Length > 0 && _currentUserId is not null)
             {
-                IReadOnlyList<int> storyIds = _stories.Select(s => s.StoryId).ToArray();
+                IReadOnlyList<int> storyIds = Stories.Select(s => s.StoryId).ToArray();
                 _interactionStates = await InteractionService.GetStatesByStoryIdsAsync(storyIds);
             }
         }

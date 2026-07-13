@@ -65,9 +65,13 @@ conventions. **Do not revisit these.** Pointers:
   Test tier: none applicable (pure layout with Authorize guard; server gate is L2's test responsibility).
 - **L4-Style — Stage 5 (2026-06-24, WU32).** Tailwind design-token classes throughout all group
   components. Visual sign-off is human (Stage 6).
-- **L5 — Stage 5 (2026-06-25, WU31_5b).** `GroupServiceTests` (27 tests) — all pass.
-  Blocked until 2026-06-25 by two bugs unmasked once the integration-test DB wiring was
-  corrected (see Global Conditions note in `status.md`):
+- **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5).** The Stage-5 mark below described
+  `GroupServiceTests` (Integration tier, service-layer soundness only) — no endpoint/client impl
+  ever existed. Per `layer5-wasm.md` §"L5 Stage Semantics", L5 Stage 5 means the HTTP body-swap
+  (endpoints + client impl) exists and compiles; service-only soundness is Stage 2, same as every
+  other not-yet-built L5 cell. Prior text, retained as the L2/L3 test record: `GroupServiceTests`
+  (27 tests) — all pass. Blocked until 2026-06-25 by two bugs unmasked once the integration-test DB
+  wiring was corrected (see Global Conditions note in `status.md`):
   (1) `ServerGroupWriteService.AddStoryAsync` fetched the story without
   `IgnoreQueryFilters(["ContentRating"])`, so M-rated stories appeared not-found when the active
   user had `ShowMatureContent=false`, causing `AddStory_Tier2_StoryRatingExceedsGroupMax_Throws`
@@ -78,6 +82,12 @@ conventions. **Do not revisit these.** Pointers:
   `IgnoreQueryFilters().FirstOrDefaultAsync(...)`.
   Verified: `dotnet test --filter "FullyQualifiedName~Group"` → 27/27 green; full
   `dotnet test` → 298 integration / 414 unit / 397 RazorComponents = 1,109 total, all green.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; supersedes the 2026-07-12 correction above — the gap
+  it named is now filled).** Endpoints + client impl live (WU-L5Sweep) and the site now runs global
+  InteractiveAuto; groups listing (`PagedResult<T>` boundary) and group page (member role via the
+  nullable `GroupRole?` read — one of the 18 empty-body-fix sites) verified in a real WASM runtime
+  during the flip's browser wave. Full wave narrative + the 7 bugs found/fixed: `workplan.md`
+  WU-GlobalFlip.
 - L6 — Stage 2.
 
 ## Feature 39 — Group Content & Folders
@@ -100,10 +110,14 @@ conventions. **Do not revisit these.** Pointers:
   to `/group/{GroupId}/folders` (folder management page deferred post-MVP; link is present as
   affordance). Test tier: none applicable (inline rendering in composite; Integration covers the data).
 - **L4-Style — Stage 5 (2026-06-24, WU32).** Tailwind classes. Visual sign-off is human (Stage 6).
-- **L5 — Stage 5 (2026-06-25, WU31_5b).** Waterfall rejection (both content-rating tiers),
-  admin-only folder ops, story add — all covered by `GroupServiceTests`. See F38 L5 note for
-  the root cause of the prior failures; the `AddStoryAsync` `IgnoreQueryFilters` fix is the
-  direct fix for this feature's test assertions.
+- **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5; see F38's L5 note for the general
+  correction).** Prior text, retained as the L2/L3 test record: waterfall rejection (both
+  content-rating tiers), admin-only folder ops, story add — all covered by `GroupServiceTests`.
+  See F38 L5 note for the root cause of the prior failures; the `AddStoryAsync`
+  `IgnoreQueryFilters` fix is the direct fix for this feature's test assertions.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; supersedes the correction above).** Endpoints +
+  client impl live (WU-L5Sweep); stories/folders rendered on the group page under WASM in the
+  flip's browser wave (folder-op writes not driven). Detail: `workplan.md` WU-GlobalFlip.
 
 ## Feature 40 — Group Display
 
@@ -136,9 +150,14 @@ conventions. **Do not revisit these.** Pointers:
 - **L4-Style — Stage 5 (2026-06-24, WU32).** All group components use design-token CSS variables
   (`--color-primary`, `--color-surface`, etc.) and Tailwind v4 utilities throughout. Visual sign-off
   is human (Stage 6).
-- **L5 — Stage 5 (2026-06-25, WU31_5b).** Group comments, blog-post create + read, and
-  notification fan-out (NewGroupStory, YourStoryAddedToGroup, NewGroupBlogPost, drop-self rule)
-  covered by `GroupServiceTests`. See F38 L5 note for root cause of the prior failures.
+- **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5; see F38's L5 note for the general
+  correction).** Prior text, retained as the L2/L3 test record: group comments, blog-post create +
+  read, and notification fan-out (NewGroupStory, YourStoryAddedToGroup, NewGroupBlogPost,
+  drop-self rule) covered by `GroupServiceTests`. See F38 L5 note for root cause of the prior
+  failures.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; supersedes the correction above).** Endpoints +
+  client impl live (WU-L5Sweep); the group page's display composition (detail + stories + blog
+  posts) rendered under WASM in the flip's browser wave. Detail: `workplan.md` WU-GlobalFlip.
 
 ### WU-ComponentSoundness Stage note (2026-06-27)
 

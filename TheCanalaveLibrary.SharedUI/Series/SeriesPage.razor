@@ -21,56 +21,58 @@
     <PageTitle>Loading…</PageTitle>
     <p class="mx-auto max-w-4xl px-4 py-8 text-(--color-text-muted)"><em>Loading…</em></p>
 }
-else if (_series is null)
+else if (Series is null)
 {
     <PageTitle>Series not found</PageTitle>
     <p class="mx-auto max-w-4xl px-4 py-8 text-(--color-danger)">Series not found.</p>
 }
 else
 {
-    <PageTitle>@_series.Name</PageTitle>
-    <SocialMetaTags Title="@_series.Name" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="website"/>
+    StoryListingDto[] stories = Stories ?? [];
+
+    <PageTitle>@Series.Name</PageTitle>
+    <SocialMetaTags Title="@Series.Name" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="website"/>
 
     <div class="mx-auto max-w-4xl px-4 py-8 flex flex-col gap-6">
 
         @* ── Header ───────────────────────────────────────────────────────────── *@
         <div class="flex items-start justify-between gap-4">
             <div class="flex flex-col gap-1">
-                <h1 class="text-3xl font-bold text-(--color-text) leading-snug">@_series.Name</h1>
+                <h1 class="text-3xl font-bold text-(--color-text) leading-snug">@Series.Name</h1>
                 <div class="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-(--color-text-muted)">
-                    @if (_series.AuthorId is not null)
+                    @if (Series.AuthorId is not null)
                     {
                         <span>By
-                            <a href="/user/@_series.AuthorId"
-                               class="text-(--color-action-ink) hover:underline font-medium">@(_series.AuthorName ?? "Unknown")</a>
+                            <a href="/user/@Series.AuthorId"
+                               class="text-(--color-action-ink) hover:underline font-medium">@(Series.AuthorName ?? "Unknown")</a>
                         </span>
                     }
                     else
                     {
-                        <span>By @(_series.AuthorName ?? "Unknown")</span>
+                        <span>By @(Series.AuthorName ?? "Unknown")</span>
                     }
                     <span>·</span>
-                    <span>@Stories.Length @(Stories.Length == 1 ? "story" : "stories")</span>
+                    <span>@stories.Length @(stories.Length == 1 ? "story" : "stories")</span>
                     <span>·</span>
-                    <span>Started @_series.DateCreated.ToString("MMM d, yyyy")</span>
+                    <span>Started @Series.DateCreated.ToString("MMM d, yyyy")</span>
                 </div>
             </div>
             @if (_isOwner)
             {
-                <a href="/series/@_series.SeriesId/edit"
+                <a href="/series/@Series.SeriesId/edit"
                    class="shrink-0 text-sm text-(--color-action-ink) hover:underline">Edit Series</a>
             }
         </div>
 
-        @if (!string.IsNullOrWhiteSpace(_series.Description))
+        @if (!string.IsNullOrWhiteSpace(Series.Description))
         {
             <ContentSurface Variant="ContentSurfaceVariant.Inline">
-                <RichTextView HtmlContent="@_series.Description" />
+                <RichTextView HtmlContent="@Series.Description" />
             </ContentSurface>
         }
 
         @* ── Member stories, in reading order ────────────────────────────────── *@
-        <StoryDeck Stories="Stories"
+        <StoryDeck Stories="stories"
                    UserStoryInteractionStates="_interactionStates"
                    CurrentUserId="_currentUserId"
                    EmptyMessage="No stories in this series yet." />
@@ -85,8 +87,14 @@ else
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    private SeriesDetailDto? _series;
-    private StoryListingDto[] Stories { get; set; } = [];
+    // Persisted across the prerender→interactive handoff ([PersistentState]) — the primary fetched
+    // content this page renders. ??= restore-or-fetch on the initial load; the OnParametersSetAsync
+    // dispatcher reload plain-assigns so a new SeriesId never short-circuits on stale persisted state.
+    [PersistentState] public SeriesDetailDto? Series { get; set; }
+    [PersistentState] public StoryListingDto[]? Stories { get; set; }
+
+    // Per-viewer supplementary state — deliberately NOT persisted (same judgment as StoryPage's
+    // _usiState): deterministic per viewer and reloads without flicker, so it refetches every pass.
     private IReadOnlyDictionary<int, UserStoryInteractionStateDto>? _interactionStates;
 
     private bool _isLoading = true;
@@ -98,11 +106,11 @@ else
 
     // Open Graph/Twitter meta (WU-Seo). No cover field on SeriesDetailDto — falls back to the
     // site-default image (see audit/Seo.md "Open" re: SVG re-use).
-    private string? OgDescription => _series is null ? null : SocialDescriptionHelper.Clean(_series.Description);
+    private string? OgDescription => Series is null ? null : SocialDescriptionHelper.Clean(Series.Description);
     private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(null, "/img/default-cover.svg");
-    private string OgUrl => PublicUrlProvider.AbsolutePageUrl(_series is null
+    private string OgUrl => PublicUrlProvider.AbsolutePageUrl(Series is null
         ? $"/series/{SeriesId}"
-        : $"/series/{_series.SeriesId}");
+        : $"/series/{Series.SeriesId}");
 
     protected override async Task OnInitializedAsync()
     {
@@ -113,7 +121,20 @@ else
             _currentUserId = int.TryParse(idStr, out int id) ? id : null;
         }
 
-        await LoadSeriesAsync();
+        // ??= guard: skip the fetch when [PersistentState] restored the prerender payload
+        // (the "no flicker" invariant — layer3-logic.md §"State Persistence").
+        _loadedSeriesId = SeriesId;
+        Series ??= await SeriesService.GetSeriesByIdAsync(SeriesId);
+
+        if (Series is not null)
+        {
+            Stories ??= Series.OrderedStoryIds.Count > 0
+                ? await StoryService.GetListingsByIdsAsync(Series.OrderedStoryIds)
+                : [];
+            await LoadViewerStateAsync();
+        }
+
+        _isLoading = false;
         _initialized = true;
     }
 
@@ -122,29 +143,38 @@ else
         // Fires when the same SeriesPage instance is reused for a different SeriesId.
         if (!_initialized) return;
         if (SeriesId == _loadedSeriesId) return;
-        await LoadSeriesAsync();
-    }
 
-    private async Task LoadSeriesAsync()
-    {
         _isLoading = true;
         _loadedSeriesId = SeriesId;
 
-        _series = await SeriesService.GetSeriesByIdAsync(SeriesId);
+        // Plain assignment (not ??=) — the [PersistentState] values from the previous series must
+        // not short-circuit the reload for a new SeriesId (layer3-logic.md §"Route-Parameter Dispatchers").
+        Series = await SeriesService.GetSeriesByIdAsync(SeriesId);
 
-        if (_series is not null)
+        if (Series is not null)
         {
-            _isOwner = _currentUserId.HasValue && _series.AuthorId == _currentUserId;
-
-            Stories = _series.OrderedStoryIds.Count > 0
-                ? await StoryService.GetListingsByIdsAsync(_series.OrderedStoryIds)
+            Stories = Series.OrderedStoryIds.Count > 0
+                ? await StoryService.GetListingsByIdsAsync(Series.OrderedStoryIds)
                 : [];
-
-            _interactionStates = Stories.Length > 0 && _currentUserId is not null
-                ? await InteractionService.GetStatesByStoryIdsAsync([.. Stories.Select(s => s.StoryId)])
-                : null;
+            await LoadViewerStateAsync();
+        }
+        else
+        {
+            Stories = [];
+            _isOwner = false;
+            _interactionStates = null;
         }
 
         _isLoading = false;
+    }
+
+    /// <summary>Per-viewer state derived from the loaded series — runs on every pass (ephemeral).</summary>
+    private async Task LoadViewerStateAsync()
+    {
+        _isOwner = _currentUserId.HasValue && Series!.AuthorId == _currentUserId;
+
+        _interactionStates = Stories is { Length: > 0 } && _currentUserId is not null
+            ? await InteractionService.GetStatesByStoryIdsAsync([.. Stories.Select(s => s.StoryId)])
+            : null;
     }
 }

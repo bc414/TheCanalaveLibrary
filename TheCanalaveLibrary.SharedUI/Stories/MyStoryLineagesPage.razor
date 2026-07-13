@@ -24,7 +24,7 @@
                 Story Lineage
             </h1>
 
-            @if (_isLoading)
+            @if (_isLoading || ManageData is null || Types is null || OwnStories is null)
             {
                 <p class="text-(--color-text-muted)"><em>Loading…</em></p>
             }
@@ -39,14 +39,14 @@
                         <p class="text-sm text-(--color-danger)">@_incomingError</p>
                     }
 
-                    @if (_manageData.IncomingRequests.Count == 0)
+                    @if (ManageData.IncomingRequests.Count == 0)
                     {
                         <p class="text-sm text-(--color-text-muted)">No pending requests.</p>
                     }
                     else
                     {
                         <ul class="flex flex-col gap-2">
-                            @foreach (StoryLineageIncomingRequestDto req in _manageData.IncomingRequests)
+                            @foreach (StoryLineageIncomingRequestDto req in ManageData.IncomingRequests)
                             {
                                 <li class="flex flex-wrap items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm">
                                     <span>
@@ -75,14 +75,14 @@
                 <section class="flex flex-col gap-3">
                     <h2 class="text-lg font-semibold text-(--color-text)">Your story lineage</h2>
 
-                    @if (_manageData.Outgoing.Count == 0)
+                    @if (ManageData.Outgoing.Count == 0)
                     {
                         <p class="text-sm text-(--color-text-muted)">You haven't linked any stories yet.</p>
                     }
                     else
                     {
                         <ul class="flex flex-col gap-2">
-                            @foreach (StoryLineageOutgoingDto link in _manageData.Outgoing)
+                            @foreach (StoryLineageOutgoingDto link in ManageData.Outgoing)
                             {
                                 <li class="flex flex-wrap items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm">
                                     <span>
@@ -117,7 +117,7 @@
                         </div>
                     }
 
-                    @if (_ownStories.Count == 0)
+                    @if (OwnStories.Count == 0)
                     {
                         <p class="text-sm text-(--color-text-muted)">
                             You don't have any stories to link yet — publish one first.
@@ -130,7 +130,7 @@
                             <select @bind="_sourceStoryId" @bind:after="HandleSourceChanged"
                                     class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                                 <option value="">-- Choose one of your stories --</option>
-                                @foreach (StoryListingDto story in _ownStories)
+                                @foreach (StoryListingDto story in OwnStories)
                                 {
                                     <option value="@story.StoryId">@story.Title</option>
                                 }
@@ -142,7 +142,7 @@
                             <select @bind="_typeId"
                                     class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                                 <option value="">-- Choose a type --</option>
-                                @foreach (StoryLineageTypeDto type in _types)
+                                @foreach (StoryLineageTypeDto type in Types)
                                 {
                                     <option value="@type.TypeId">@type.TypeName</option>
                                 }
@@ -191,9 +191,13 @@
     private bool _busy;
     private int? _currentUserId;
 
-    private StoryLineageManageDto _manageData = new([], []);
-    private IReadOnlyList<StoryLineageTypeDto> _types = [];
-    private List<StoryListingDto> _ownStories = [];
+    // Persisted across the prerender→interactive handoff — the page's primary fetched content
+    // (all of it is rendered directly, so persisting adds no browser exposure). Restored via the
+    // null check in OnInitializedAsync; post-write reloads (ReloadAsync) plain-assign so fresh
+    // server truth always wins.
+    [PersistentState] public StoryLineageManageDto? ManageData { get; set; }
+    [PersistentState] public IReadOnlyList<StoryLineageTypeDto>? Types { get; set; }
+    [PersistentState] public List<StoryListingDto>? OwnStories { get; set; }
 
     private string? _incomingError;
     private readonly List<string> _createErrors = [];
@@ -211,19 +215,27 @@
             _currentUserId = int.TryParse(idStr, out int id) ? id : null;
         }
 
-        await ReloadAsync();
+        // Restore-or-fetch: the three persisted properties are written together, so a single null
+        // check suffices — when [PersistentState] restored the prerender payload, skip the refetch
+        // entirely (no "Loading…" flash on hydration).
+        if (ManageData is null || Types is null || OwnStories is null)
+            await ReloadAsync();
         _isLoading = false;
     }
 
     private async Task ReloadAsync()
     {
-        _manageData = await LineageService.GetManageDataForUserAsync();
-        _types = await LineageService.GetLineageTypesAsync();
+        ManageData = await LineageService.GetManageDataForUserAsync();
+        Types = await LineageService.GetLineageTypesAsync();
 
         if (_currentUserId is not null)
         {
             IReadOnlyList<int> ownIds = await StoryService.GetStoryIdsByAuthorAsync(_currentUserId.Value);
-            _ownStories = ownIds.Count > 0 ? [.. await StoryService.GetListingsByIdsAsync(ownIds)] : [];
+            OwnStories = ownIds.Count > 0 ? [.. await StoryService.GetListingsByIdsAsync(ownIds)] : [];
+        }
+        else
+        {
+            OwnStories = [];
         }
     }
 

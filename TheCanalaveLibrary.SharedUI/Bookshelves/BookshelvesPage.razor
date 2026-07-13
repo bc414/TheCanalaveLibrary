@@ -20,8 +20,8 @@ else
     {
         <BookshelvesMobile Tab="_tab"
                            CurrentUserId="_currentUserId"
-                           Items="_items"
-                           TotalCount="_totalCount"
+                           Items="@(Items ?? [])"
+                           TotalCount="TotalCount"
                            InteractionStates="_states"
                            Filter="_filter"
                            OnFilterChanged="HandleFilterChanged"
@@ -31,8 +31,8 @@ else
     {
         <BookshelvesDesktop Tab="_tab"
                             CurrentUserId="_currentUserId"
-                            Items="_items"
-                            TotalCount="_totalCount"
+                            Items="@(Items ?? [])"
+                            TotalCount="TotalCount"
                             InteractionStates="_states"
                             Filter="_filter"
                             OnFilterChanged="HandleFilterChanged"
@@ -49,10 +49,18 @@ else
     private StoryFilterDto _filter = new();
 
     // Candidate IDs for the active tab — computed once per tab switch, reused across page turns.
+    // Not rendered, so never persisted (browser-exposure rule: don't persist a superset the UI
+    // pages down before display) — the restore path refetches it so pagination keeps working.
     private IReadOnlyList<int> _candidateIds = [];
 
-    private StoryListingDto[] _items = [];
-    private int _totalCount;
+    // Persisted across the prerender→interactive handoff (layer5-wasm.md §"Avoiding the double
+    // fetch"). Split from the (Items, TotalCount) ValueTuple destructure — tuples don't survive
+    // System.Text.Json persistence. Items-null is the restore signal; TotalCount rides along.
+    [PersistentState] public StoryListingDto[]? Items { get; set; }
+    [PersistentState] public int TotalCount { get; set; }
+
+    // Per-viewer supplementary state — deterministic per viewer, so the prerender→interactive
+    // re-fetch is flicker-free; not persisted (same treatment as StoryPage's _usiState).
     private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states =
         new Dictionary<int, UserStoryInteractionStateDto>();
     private bool _isLoading = true;
@@ -78,6 +86,10 @@ else
         if (!_initialized) return;
         if (Tab == _loadedTab) return;
         _filter = new(); // reset filter state for the incoming tab
+        // Plain reload (not restore-or-fetch): internal SPA navigations never prerender, so the
+        // persisted value from the previous tab must not short-circuit the new tab's fetch
+        // (layer3-logic.md §"Route-Parameter Dispatchers").
+        Items = null;
         await LoadTabAsync();
     }
 
@@ -102,21 +114,32 @@ else
         await LoadPageAsync();
     }
 
-    // Reloads candidate IDs + listings + states. Called on tab switch and filter change.
+    // Reloads candidate IDs + listings + states. Called on initial load and tab switch (the tab
+    // switch path clears Items first, so the restore-or-fetch guard only fires on initial load,
+    // where [PersistentState] may have restored the prerendered listings).
     private async Task LoadPageAsync()
     {
         _isLoading = true;
         _candidateIds = await GetCandidateIdsAsync();
-        await ReloadListingsAsync();
+        if (Items is null)
+            await ReloadListingsAsync();
+        else
+            await LoadStatesAsync(); // restored listings — only the ephemeral per-viewer states need fetching
         _isLoading = false;
     }
 
-    // Re-paginates within the existing candidate set. Called when page or sort changes.
+    // Re-paginates within the existing candidate set. Plain fetch — called when page, sort, or
+    // filter changes (paths that must never be short-circuited by persisted state).
     private async Task ReloadListingsAsync()
     {
-        (_items, _totalCount) = await StoryReadService.GetListingsAsync(_filter, _candidateIds);
-        _states = _items.Length > 0
-            ? await InteractionReadService.GetStatesByStoryIdsAsync([.. _items.Select(i => i.StoryId)])
+        (Items, TotalCount) = await StoryReadService.GetListingsAsync(_filter, _candidateIds);
+        await LoadStatesAsync();
+    }
+
+    private async Task LoadStatesAsync()
+    {
+        _states = Items is { Length: > 0 }
+            ? await InteractionReadService.GetStatesByStoryIdsAsync([.. Items.Select(i => i.StoryId)])
             : new Dictionary<int, UserStoryInteractionStateDto>();
     }
 

@@ -4,10 +4,13 @@
 @using Microsoft.AspNetCore.Authorization
 @inject IModerationWriteService ModerationService
 
-@* Moderator report queue (WU34 Feature 47). Desktop-only, server-rendered, no WASM.
+@* Moderator report queue (WU34 Feature 47). Desktop-only.
    Displays open/under-review reports ordered by TargetActiveReportCount descending.
    Each row shows the target entity label + link, the reporter, reason, and action buttons.
-   Resolved reports are toggled via the "Show resolved" checkbox. *@
+   Resolved reports are toggled via the "Show resolved" checkbox.
+   [PersistentState] on Reports avoids the prerender→interactive double fetch; the persisted
+   payload is exactly what the page renders, and the page is [Authorize(Roles="Moderator,Admin")]
+   so it is only ever served to mods (layer5-wasm.md §"Avoiding the double fetch"). *@
 
 <PageTitle>Mod — Reports</PageTitle>
 
@@ -22,11 +25,11 @@
         </label>
     </div>
 
-    @if (_loading)
+    @if (_loading || Reports is null)
     {
         <p class="text-sm text-(--color-text-muted)">Loading…</p>
     }
-    else if (_reports.Length == 0)
+    else if (Reports.Length == 0)
     {
         <p class="text-sm text-(--color-text-muted)">No open reports.</p>
     }
@@ -47,7 +50,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var r in _reports)
+                    @foreach (var r in Reports)
                     {
                         <tr class="border-b border-(--color-border) align-top hover:bg-(--color-surface-hover)">
                             <td class="py-2 pr-4 font-medium">
@@ -151,7 +154,12 @@
 </div>
 
 @code {
-    private ReportQueueItemDto[] _reports = [];
+    // Persisted across the prerender→interactive handoff — restored via ??= in OnInitializedAsync.
+    // Toggle/post-action reloads go through LoadAsync (plain assignment; persistence only reads
+    // at hydration, later writes are harmless).
+    [PersistentState]
+    public ReportQueueItemDto[]? Reports { get; set; }
+
     private bool _loading = true;
     private bool _showResolved;
 
@@ -160,12 +168,17 @@
     private bool _acting;
     private string? _actionError;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        // ??= — skip the fetch when [PersistentState] restored the prerendered queue.
+        Reports ??= await ModerationService.GetReportQueueAsync(_showResolved);
+        _loading = false;
+    }
 
     private async Task LoadAsync()
     {
         _loading = true;
-        _reports = await ModerationService.GetReportQueueAsync(_showResolved);
+        Reports = await ModerationService.GetReportQueueAsync(_showResolved);
         _loading = false;
     }
 

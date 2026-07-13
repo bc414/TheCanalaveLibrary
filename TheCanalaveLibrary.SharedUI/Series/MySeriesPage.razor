@@ -25,18 +25,18 @@
     </div>
 
     @* ── Listing ──────────────────────────────────────────────────────────────── *@
-    @if (_isLoading)
+    @if (_isLoading || SeriesList is null)
     {
         <p class="text-(--color-text-muted)"><em>Loading series…</em></p>
     }
-    else if (_series.Count == 0)
+    else if (SeriesList.Count == 0)
     {
         <p class="text-(--color-text-muted)">You haven't created any series yet.</p>
     }
     else
     {
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
-            @foreach (SeriesListingDto series in _series)
+            @foreach (SeriesListingDto series in SeriesList)
             {
                 <SeriesCard Series="series" EditHref="@($"/series/{series.SeriesId}/edit")" />
             }
@@ -48,7 +48,11 @@
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    private IReadOnlyList<SeriesListingDto> _series = [];
+    // Persisted across the prerender→interactive handoff ([PersistentState]) — the page's primary
+    // fetched content (the owner's series listing, rendered in full). Auth-derived user id stays
+    // ephemeral — parsing claims is cheap and deterministic.
+    [PersistentState] public IReadOnlyList<SeriesListingDto>? SeriesList { get; set; }
+
     private bool _isLoading = true;
 
     protected override async Task OnInitializedAsync()
@@ -61,8 +65,11 @@
             currentUserId = int.TryParse(idStr, out int id) ? id : null;
         }
 
+        // ??= — restore-or-fetch; skips the query when the prerender payload was restored.
         if (currentUserId is not null)
-            _series = await SeriesService.GetSeriesByAuthorAsync(currentUserId.Value);
+            SeriesList ??= await SeriesService.GetSeriesByAuthorAsync(currentUserId.Value);
+
+        SeriesList ??= []; // unauthenticated edge (page is [Authorize], so normally unreachable)
 
         _isLoading = false;
     }

@@ -107,7 +107,11 @@ adding that. Noted here so the seam isn't re-discovered from scratch.
     (it inherits from `INotificationReadService`).
   - **L3-Logic — Stage 2** (the notification bell in the layout; panel grouped by `NotificationCategory`,
     `DefaultCollapsed`/user-override per type). **L3.5-Structure — Stage 2** (panel + flyout preview).
-    **L4 — Stage 1. L5 — Stage 2.** All deferred to WU33.
+    **L4 — Stage 1.** All deferred to WU33.
+  - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+    site now runs global InteractiveAuto; notifications page + bell badge verified in a real WASM
+    runtime during the flip's browser wave (persisted unread count). Full wave narrative + the 7
+    bugs found/fixed: `workplan.md` WU-GlobalFlip.
   - **L6 — Stage 5 (WU-L6, 2026-07-07** — `ix_notifications_recipient_read_date` built + measured;
     see the Feature 41 L6 note).
 
@@ -194,8 +198,12 @@ adding that. Noted here so the seam isn't re-discovered from scratch.
   - `SetSettingAsync(NotificationTypeEnum type, bool emailEnabled, bool collapsed)` — sparse: upsert
     the override row when either field differs from the type defaults; delete the row when both match
     the defaults (returning to default requires no stored row). Self-scoped via `IActiveUserContext`.
-  - **L3/L3.5 — Stage 2.** Settings page driven by DB data. **L4 — Stage 1. L5 — Stage 2.** All
+  - **L3/L3.5 — Stage 2.** Settings page driven by DB data. **L4 — Stage 1.** All
     deferred to WU33.
+  - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+    site now runs global InteractiveAuto; the notification settings page loads in a real WASM
+    runtime during the flip's browser wave. Full wave narrative + the 7 bugs found/fixed:
+    `workplan.md` WU-GlobalFlip.
 
 - **WU22 Stage-5 note (L2 only, 2026-06-23):** `SetSettingAsync` sparse-model — upserts the override
   row when values differ from type defaults; deletes it when both match defaults (returning to NULL =

@@ -32,7 +32,7 @@ else
     <div class="flex flex-col gap-6">
         @foreach (var cat in NotificationCategoryVisuals.AllCategories)
         {
-            var rows = _settings.Where(s => s.CategoryId == cat).ToList();
+            var rows = (Settings ?? []).Where(s => s.CategoryId == cat).ToList();
             if (rows.Count == 0) continue;
 
             var visuals = NotificationCategoryVisuals.For(cat);
@@ -100,19 +100,23 @@ else
 
 @code {
     private bool _isLoading = true;
-    private NotificationSettingDto[] _settings = [];
+
+    // Persisted across the prerender→interactive handoff ([PersistentState] requires a public
+    // property) — the settings rows hydrate from the prerender payload instead of refetching.
+    [PersistentState] public NotificationSettingDto[]? Settings { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        _settings = await NotificationService.GetSettingsAsync();
+        // ??= — restore-or-fetch idiom; toggles below mutate with plain assignment.
+        Settings ??= await NotificationService.GetSettingsAsync();
         _isLoading = false;
     }
 
     private async Task HandleToggleAsync(NotificationSettingDto dto, bool emailEnabled, bool collapsed)
     {
         // Optimistic local update first (the toggle is already visually toggled by the browser
-        // for a checked input; this keeps _settings in sync for subsequent interactions).
-        _settings = [.. _settings.Select(s =>
+        // for a checked input; this keeps Settings in sync for subsequent interactions).
+        Settings = [.. (Settings ?? []).Select(s =>
             s.TypeId == dto.TypeId ? s with { EmailEnabled = emailEnabled, Collapsed = collapsed } : s)];
 
         // Persist — service handles sparse upsert/delete (no row stored when both match defaults).

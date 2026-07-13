@@ -88,7 +88,11 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   (three `EditorView` instances — top note, chapter text, bottom note), version switcher composite (progressive),
   per-version controls. `ChapterEditorPage` orchestrates all.
 - **L4-Style — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5).**
-- **L5 — Stage 2. L6 — Stage 2.**
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; chapter CREATE verified in a real WASM runtime during the
+  flip's browser wave (incl. the create→edit `forceLoad` redirect fix for Quill-hosting pages).
+  Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
+- **L6 — Stage 2.**
 
 **WU6 Stage note (2026-06-21) — `EditorView` composite + sanitizer allow-list, DONE ✓.** Built
 `EditorView` (`SharedUI/RichText/EditorView.razor`) — a third-party wrapper composite around
@@ -178,7 +182,11 @@ the build, superseding the original spec/skill sketch:
 - **L3.5-Structure — Stage 5 (WU26 page slice, DONE ✓ 2026-06-24; WU18 nav slice and WU5 leaf also Stage 5).**
   `ChapterReadingPage` + `ChapterNavigation` top+bottom + `CommentSection` wired. See WU26 Phase 1–3 Stage note.
 - **L4-Style — Stage 5 (WU26/WU18/WU5, DONE ✓ 2026-06-24; see Stage notes).**
-- **L5 — Stage 2. L6 — Stage 2.**
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; chapter reading page verified in a real WASM runtime during
+  the flip's browser wave (content, TOC, and versions loaded via API). Full wave narrative + the
+  7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
+- **L6 — Stage 2.**
 
 **WU5 Stage note (2026-06-21) — `RichTextView` leaf slice, DONE ✓.** Built the universal read-only
 rich-text renderer (`SharedUI/RichText/RichTextView.razor`) — pure leaf, no service injection, no

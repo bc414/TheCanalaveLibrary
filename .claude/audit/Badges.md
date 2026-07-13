@@ -39,7 +39,9 @@
   (Visible/Hidden), move-up/down + Hide/Show buttons, Save button, empty-state; parameter-driven leaf,
   no `@inject`. Verified same RazorComponents tier as L3.
 - **L4 — Stage 1.** Visual sign-off pending. UI renders but full design-token / responsive pass not done.
-- **L5 — Stage 2.** Client-side badge service deferred (batch post-MVP).
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto (badge surfaces not browser-driven in the flip's wave). Full
+  wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 
 - **L4.5-Browser verification (2026-07-02) — Feature 50 → L4.5=5.** Browser-verifiable surface
   exercised as TestUser against the seeded dev DB:

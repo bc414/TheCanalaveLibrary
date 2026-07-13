@@ -497,6 +497,42 @@ app.MapStoryEndpoints();
 app.MapTagEndpoints();
 app.MapExportEndpoints();
 
+// WU-L5Sweep (2026-07-13): mechanical add-only Layer-5 batch — every remaining ServerXXXService's
+// HTTP surface. See layer5-wasm.md "Rollout Strategy" — this is add-without-verify; the per-feature
+// Integration/browser verification wave is future work, not part of landing these routes.
+app.MapStoryArcEndpoints();
+app.MapStoryLineageEndpoints();
+app.MapViewCountEndpoints();
+app.MapSeriesEndpoints();
+app.MapChapterEndpoints();
+app.MapChapterReadMarkEndpoints();
+app.MapReadingProgressEndpoints();
+app.MapCommentEndpoints();
+app.MapUserStoryInteractionEndpoints();
+app.MapSavedTagSelectionEndpoints();
+app.MapFollowingEndpoints();
+app.MapUserProfileEndpoints();
+app.MapUserSettingsEndpoints();
+app.MapThemeEndpoints();
+app.MapRecommendationEndpoints();
+app.MapBlogPostEndpoints();
+app.MapPollEndpoints();
+app.MapNotificationEndpoints();
+app.MapManualTreeSearchEndpoints();
+app.MapTreeSearchEndpoints();
+app.MapDiscoveryDefaultsEndpoints();
+app.MapCoOccurrenceEndpoints();
+app.MapGroupEndpoints();
+app.MapModerationEndpoints();
+app.MapSiteDailyStatEndpoints();
+app.MapMessagingEndpoints();
+app.MapSpotlightEndpoints();
+app.MapSpotlightSlotAllocatorEndpoints();
+app.MapSiteSettingsEndpoints();
+app.MapBadgeEndpoints();
+app.MapContentImportEndpoints();
+app.MapUserActivityEndpoints();
+
 // S3 mode only: stored /uploads/… URLs resolve from the bucket instead of wwwroot. Local mode
 // must NOT map this — without a configured IAmazonS3 the handler can't resolve, and static
 // files already serve those paths.

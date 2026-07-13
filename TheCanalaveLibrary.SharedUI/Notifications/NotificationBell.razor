@@ -24,17 +24,17 @@
             @* ── Bell button with unread badge ────────────────────────────────── *@
             <button type="button"
                     class="relative flex items-center justify-center rounded-full p-2 transition-colors hover:bg-(--color-surface-hover)"
-                    aria-label="@(_unreadCount > 0 ? $"{_unreadCount} unread notifications" : "Notifications")"
+                    aria-label="@(UnreadCount > 0 ? $"{UnreadCount} unread notifications" : "Notifications")"
                     aria-expanded="@_open"
                     @onclick="Toggle">
                 <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true" fill="currentColor">
                     <path d="M12 2A2 2 0 0 0 10 4A6 6 0 0 0 6 10V16L4 18V19H20V18L18 16V10A6 6 0 0 0 14 4A2 2 0 0 0 12 2Z M10 20A2 2 0 0 0 14 20Z" />
                 </svg>
-                @if (_unreadCount > 0)
+                @if (UnreadCount > 0)
                 {
                     <span class="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-(--color-action) text-[10px] font-bold text-(--color-text)"
                           aria-hidden="true">
-                        @(_unreadCount > 9 ? "9+" : _unreadCount.ToString())
+                        @(UnreadCount > 9 ? "9+" : UnreadCount.ToString())
                     </span>
                 }
             </button>
@@ -87,22 +87,22 @@
     private const int PreviewSize = 8;
 
     private bool _open;
-    private int _unreadCount;
     private NotificationDto[] _preview = [];
+
+    // Persisted across the prerender→interactive handoff ([PersistentState] requires a public
+    // property) so the badge hydrates without a refetch/flash. The flyout preview stays
+    // ephemeral — it isn't rendered at prerender (flyout starts closed), and persisting
+    // unrendered data would put it in the page source for nothing.
+    [PersistentState] public int? UnreadCount { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
-        await RefreshAsync();
-    }
-
-    private async Task RefreshAsync()
-    {
         // Parallel loads are safe: each read-service method creates its own short-lived
         // DbContext from IDbContextFactory (layer2-services.md "Read-context concurrency").
-        var countTask   = NotificationService.GetUnreadCountAsync();
+        // ??= — restore-or-fetch for the count; the preview always loads fresh.
         var previewTask = NotificationService.GetNotificationsAsync(1, PreviewSize);
-        _unreadCount = await countTask;
-        _preview     = await previewTask;
+        UnreadCount ??= await NotificationService.GetUnreadCountAsync();
+        _preview      = await previewTask;
     }
 
     private void Toggle() => _open = !_open;
@@ -115,7 +115,7 @@
         {
             _preview = [.. _preview.Select(x =>
                 x.NotificationId == n.NotificationId ? x with { IsRead = true } : x)];
-            _unreadCount = Math.Max(0, _unreadCount - 1);
+            UnreadCount = Math.Max(0, UnreadCount.GetValueOrDefault() - 1);
             await NotificationService.MarkAsReadAsync(n.NotificationId);
         }
         _open = false;
@@ -126,7 +126,7 @@
     private async Task MarkAllReadAsync()
     {
         await NotificationService.MarkAllAsReadAsync();
-        _preview     = [.. _preview.Select(n => n with { IsRead = true })];
-        _unreadCount = 0;
+        _preview    = [.. _preview.Select(n => n with { IsRead = true })];
+        UnreadCount = 0;
     }
 }

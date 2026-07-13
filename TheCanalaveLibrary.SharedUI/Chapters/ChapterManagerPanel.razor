@@ -17,18 +17,18 @@
     <h2 class="mb-2 text-lg font-semibold text-(--color-text)">Chapters</h2>
     <div class="mb-2"><InlineAlert Message="@_errorMessage"/></div>
 
-    @if (_isLoading)
+    @if (_isLoading || Chapters is null)
     {
         <p class="text-sm text-(--color-text-muted)"><em>Loading…</em></p>
     }
-    else if (_chapters.Count == 0)
+    else if (Chapters.Length == 0)
     {
         <p class="text-sm text-(--color-text-muted)">No chapters yet.</p>
     }
     else
     {
         <div class="overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface)">
-            @foreach (ChapterListEntryDto chapter in _chapters)
+            @foreach (ChapterListEntryDto chapter in Chapters)
             {
                 <div draggable="true"
                      class="@RowClasses(chapter.ChapterNumber)"
@@ -74,8 +74,11 @@
     /// The chapter rows to manage — loaded by this panel itself on init (self-contained panel,
     /// StoryChapterImport precedent) and re-fetched after every mutation so the server's
     /// renumbering (and any arc shifts) is what renders, not a local guess.
+    /// [PersistentState] carries the prerendered rows across the prerender→interactive handoff
+    /// (layer5-wasm.md §"Avoiding the double fetch"); mutations plain-assign, never restore.
+    /// Single instance per page (StoryEditorPage edit mode) — no @key needed at the call site.
     /// </summary>
-    private IReadOnlyList<ChapterListEntryDto> _chapters = [];
+    [PersistentState] public ChapterListEntryDto[]? Chapters { get; set; }
 
     [Inject] private IChapterReadService ChapterReadService { get; set; } = null!;
 
@@ -90,12 +93,19 @@
         : $"\"{_deleteTarget.Title}\" and its comments and reader progress will be permanently " +
           $"deleted; later chapters renumber down. This cannot be undone.";
 
-    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        // ??= restore-or-fetch: skip the fetch when [PersistentState] restored the prerender value.
+        Chapters ??= (await ChapterReadService.GetChapterListAsync(StoryId)).ToArray();
+        _isLoading = false;
+    }
 
     private async Task ReloadAsync()
     {
         _isLoading = true;
-        _chapters = await ChapterReadService.GetChapterListAsync(StoryId);
+        // Plain assignment — post-mutation refresh must show the server's renumbering, never a
+        // restored prerender value.
+        Chapters = (await ChapterReadService.GetChapterListAsync(StoryId)).ToArray();
         _isLoading = false;
     }
 

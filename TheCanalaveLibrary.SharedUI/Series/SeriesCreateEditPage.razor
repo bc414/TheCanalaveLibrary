@@ -85,6 +85,9 @@
                 @* ── Story membership management — edit mode only ───────────────── *@
                 @if (SeriesId.HasValue)
                 {
+                    List<StoryListingDto> members = Members ?? [];
+                    List<StoryListingDto> addableStories = AddableStories ?? [];
+
                     <div class="flex flex-col gap-4 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
                         <h2 class="text-lg font-semibold text-(--color-text)">Stories in This Series</h2>
 
@@ -93,17 +96,17 @@
                             <p class="text-sm text-(--color-danger)">@_memberError</p>
                         }
 
-                        @if (_members.Count == 0)
+                        @if (members.Count == 0)
                         {
                             <p class="text-sm text-(--color-text-muted)">No stories yet — add one below.</p>
                         }
                         else
                         {
                             <ol class="flex flex-col gap-2">
-                                @for (int i = 0; i < _members.Count; i++)
+                                @for (int i = 0; i < members.Count; i++)
                                 {
                                     int index = i;
-                                    StoryListingDto member = _members[index];
+                                    StoryListingDto member = members[index];
                                     <li class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2">
                                         <span class="w-6 shrink-0 text-sm text-(--color-text-muted)">@(index + 1).</span>
                                         <span class="flex-1 truncate text-sm text-(--color-text)">@member.Title</span>
@@ -112,7 +115,7 @@
                                                 aria-label="Move up"
                                                 class="rounded p-1 text-(--color-text-muted) hover:bg-(--color-surface-hover) disabled:opacity-30">&uarr;</button>
                                         <button type="button" @onclick="() => HandleMoveDownAsync(index)"
-                                                disabled="@(index == _members.Count - 1 || _memberBusy)"
+                                                disabled="@(index == members.Count - 1 || _memberBusy)"
                                                 aria-label="Move down"
                                                 class="rounded p-1 text-(--color-text-muted) hover:bg-(--color-surface-hover) disabled:opacity-30">&darr;</button>
                                         <button type="button" @onclick="() => HandleRemoveAsync(member.StoryId)"
@@ -124,7 +127,7 @@
                         }
 
                         @* ── Add-story picker ─────────────────────────────────────── *@
-                        @if (_addableStories.Count > 0)
+                        @if (addableStories.Count > 0)
                         {
                             <div class="flex items-end gap-2 border-t border-(--color-border) pt-4">
                                 <div class="flex flex-1 flex-col gap-1">
@@ -132,7 +135,7 @@
                                     <select @bind="_addStoryId"
                                             class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                                         <option value="">-- Choose one of your stories --</option>
-                                        @foreach (StoryListingDto candidate in _addableStories)
+                                        @foreach (StoryListingDto candidate in addableStories)
                                         {
                                             <option value="@candidate.StoryId">@candidate.Title</option>
                                         }
@@ -145,7 +148,7 @@
                                 </button>
                             </div>
                         }
-                        else if (_members.Count > 0)
+                        else if (members.Count > 0)
                         {
                             <p class="border-t border-(--color-border) pt-4 text-xs text-(--color-text-muted)">
                                 All of your stories are already in this series.
@@ -188,6 +191,9 @@
 
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
+    // Live form fields — never persisted (editor-page rule: the form/viewmodel stays ephemeral);
+    // repopulated deterministically from LoadedSeries on every pass. The form isn't interactive
+    // during prerender, so nothing user-typed can be overwritten by that repopulation.
     private string _name = string.Empty;
     private string? _description;
 
@@ -197,9 +203,15 @@
     private List<string> _errors = [];
     private int? _currentUserId;
 
-    // Story membership management (edit mode only).
-    private List<StoryListingDto> _members = [];
-    private List<StoryListingDto> _addableStories = [];
+    // Persisted across the prerender→interactive handoff ([PersistentState]) — the loaded-for-edit
+    // source DTO plus the membership listings the page renders. Restored via ??=/null checks on the
+    // initial load; the OnParametersSetAsync dispatcher reload and post-write refreshes plain-assign
+    // so stale persisted state never short-circuits a real reload.
+    [PersistentState] public SeriesDetailDto? LoadedSeries { get; set; }
+    [PersistentState] public List<StoryListingDto>? Members { get; set; }
+    [PersistentState] public List<StoryListingDto>? AddableStories { get; set; }
+
+    // Story membership management (edit mode only) — transient UI state, ephemeral.
     private int? _addStoryId;
     private bool _memberBusy;
     private string? _memberError;
@@ -221,7 +233,7 @@
             _currentUserId = int.TryParse(idStr, out int id) ? id : null;
         }
 
-        await LoadForRouteAsync();
+        await LoadForRouteAsync(initialLoad: true);
         _initialized = true;
     }
 
@@ -243,42 +255,53 @@
         _isLoading = true;
         _forbidden = false;
         _errors.Clear();
-        await LoadForRouteAsync();
+        await LoadForRouteAsync(initialLoad: false);
     }
 
-    private async Task LoadForRouteAsync()
+    private async Task LoadForRouteAsync(bool initialLoad)
     {
         if (SeriesId.HasValue)
         {
             _loadedSeriesId = SeriesId;
-            SeriesDetailDto? series = await SeriesService.GetSeriesByIdAsync(SeriesId.Value);
 
-            if (series is null)
+            // Initial (possibly prerendered) load: ??= restore-or-fetch. Dispatcher reload for a
+            // different route: plain fetch — the previous route's [PersistentState] values must not
+            // short-circuit (layer3-logic.md §"Route-Parameter Dispatchers").
+            if (initialLoad)
+                LoadedSeries ??= await SeriesService.GetSeriesByIdAsync(SeriesId.Value);
+            else
+                LoadedSeries = await SeriesService.GetSeriesByIdAsync(SeriesId.Value);
+
+            if (LoadedSeries is null)
             {
                 Nav.NavigateTo("/not-found");
                 return;
             }
 
             // UX-level owner pre-check (real gate is in ServerSeriesWriteService).
-            if (!_currentUserId.HasValue || series.AuthorId != _currentUserId)
+            if (!_currentUserId.HasValue || LoadedSeries.AuthorId != _currentUserId)
             {
                 _forbidden = true;
                 _isLoading = false;
                 return;
             }
 
-            _name        = series.Name;
-            _description = series.Description;
+            _name        = LoadedSeries.Name;
+            _description = LoadedSeries.Description;
 
-            await LoadMembersAsync(series.OrderedStoryIds);
+            // Membership listings: skip the refetch only when both were restored from the
+            // prerender payload; otherwise LoadMembersAsync plain-assigns fresh server truth.
+            if (!initialLoad || Members is null || AddableStories is null)
+                await LoadMembersAsync(LoadedSeries.OrderedStoryIds);
         }
         else
         {
             _loadedForCreate = true;
+            LoadedSeries = null;
             _name = string.Empty;
             _description = null;
-            _members = [];
-            _addableStories = [];
+            Members = [];
+            AddableStories = [];
         }
 
         _isLoading = false;
@@ -286,7 +309,7 @@
 
     private async Task LoadMembersAsync(IReadOnlyList<int> orderedStoryIds)
     {
-        _members = orderedStoryIds.Count > 0
+        Members = orderedStoryIds.Count > 0
             ? [.. await StoryService.GetListingsByIdsAsync(orderedStoryIds)]
             : [];
 
@@ -294,11 +317,15 @@
         if (_currentUserId is not null)
         {
             IReadOnlyList<int> authoredIds = await StoryService.GetStoryIdsByAuthorAsync(_currentUserId.Value);
-            HashSet<int> memberIds = [.. _members.Select(m => m.StoryId)];
+            HashSet<int> memberIds = [.. Members.Select(m => m.StoryId)];
             IReadOnlyList<int> candidateIds = [.. authoredIds.Where(id => !memberIds.Contains(id))];
-            _addableStories = candidateIds.Count > 0
+            AddableStories = candidateIds.Count > 0
                 ? [.. await StoryService.GetListingsByIdsAsync(candidateIds)]
                 : [];
+        }
+        else
+        {
+            AddableStories = [];
         }
     }
 
@@ -402,23 +429,23 @@
 
     private async Task HandleMoveDownAsync(int index)
     {
-        if (index >= _members.Count - 1) return;
+        if (Members is null || index >= Members.Count - 1) return;
         await SwapAndReorderAsync(index, index + 1);
     }
 
     private async Task SwapAndReorderAsync(int indexA, int indexB)
     {
-        if (!SeriesId.HasValue) return;
+        if (!SeriesId.HasValue || Members is null) return;
         _memberError = null;
         _memberBusy = true;
         try
         {
-            List<StoryListingDto> reordered = [.. _members];
+            List<StoryListingDto> reordered = [.. Members];
             (reordered[indexA], reordered[indexB]) = (reordered[indexB], reordered[indexA]);
             IReadOnlyList<int> orderedIds = [.. reordered.Select(m => m.StoryId)];
 
             await SeriesService.ReorderAsync(SeriesId.Value, orderedIds);
-            _members = reordered;
+            Members = reordered;
         }
         catch (Exception ex)
         {

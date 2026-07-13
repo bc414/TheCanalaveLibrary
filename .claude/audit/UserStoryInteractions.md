@@ -173,7 +173,10 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
   | `ReadLater` | Read It Later | `#2E6FBF` Azurite Blue | Open Pokéball (bottom D + raised lid = 2 px gap, center clasp dot) with 3 page-lines entering from top — capturing a story from the discovery stream | `M5 16A7 7 0 0 1 19 16Z M5 14A7 7 0 0 0 19 14Z M10.5 15A1.5 1.5 0 0 1 13.5 15A1.5 1.5 0 0 1 10.5 15Z M9 1L15 1L15 2L9 2Z M9 3L15 3L15 4L9 4Z M9 5L15 5L15 6L9 6Z` |
   | `Ignore` | Ignored | `#C04030` Cinnabar Rust | Ban circle: CW outer disk + CCW inner circle (ring hole) + CW diagonal bar | `M12 2A10 10 0 0 1 22 12A10 10 0 0 1 12 22A10 10 0 0 1 2 12A10 10 0 0 1 12 2Z M5 12A7 7 0 0 0 19 12A7 7 0 0 0 5 12Z M5.5 7.5L7.5 5.5L18.5 16.5L16.5 18.5Z` |
 
-- **L5 — Stage 2.**
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; the favorite toggle verified in a real WASM runtime during
+  the flip's browser wave (psql ground truth for the written row). Full wave narrative + the 7 bugs
+  found/fixed: `workplan.md` WU-GlobalFlip.
 - **L6 — Stage 5 (WU-L6, 2026-07-07 — CORRECTS the 2026-06-22 WU15 note and the 2026-07-06 R4
   audit outcome).** Those earlier verifications audited the *configuration file*, not the
   database: the seven `HasIndex(e => e.UserId)` calls were UNNAMED, and EF collapses unnamed
@@ -246,7 +249,10 @@ Perhaps need to go more texture/color detail instead of totally flat svg, or use
   active tab). Mobile: `<details>` tab dropdown + filter overlay (`fixed inset-0 z-50 bg-black/50`,
   `@onclick:stopPropagation`, renders nothing when closed). Human visual sign-off pending (browser walk-through
   of all 11 tabs + teal Following + mobile overlay) — no automated style check; visual → Stage 6.
-- **L5 — Stage 2. L6 — Stage 5** (same indexes; verified during WU15, 2026-06-22 — see Feature 16 L6 note above).
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; the bookshelves page verified in a real WASM runtime during
+  the flip's browser wave. Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
+- **L6 — Stage 5** (same indexes; verified during WU15, 2026-06-22 — see Feature 16 L6 note above).
 
   **Settled design — 11 tabs, in display order (desktop bar + mobile dropdown both use this order):**
 

@@ -68,6 +68,14 @@ namespace). Only a stale comment remained (fixed). `dotnet build` green; `/Accou
 - **L4-Style — Stage 1.** Default Identity/Bootstrap styling; blocked on tokens (unchanged by WU1).
 - **L5 — N/A** (Identity is permanently server-only). **L6 — N/A** (framework + `NormalizedName`/
   `NormalizedEmail` unique already configured). **L7/L8 — N/A.**
+- **Global-flip note (WU-GlobalFlip, 2026-07-13).** L5 stays N/A by design: Identity pages remain
+  static SSR, reached via full-document navs since the Server assembly left the interactive router
+  (unmatched URLs fall back to full-document loads — the deliberate escape hatch). The flip's
+  browser wave found and fixed every `/Account/*` page 500ing: `ReaderDisplayProvider` (renders on
+  static-SSR Identity pages too) used `[PersistentState]`, whose persistence callback has no
+  inferable render mode on a fully static render — converted to the manual
+  `PersistentComponentState` API with explicit `RenderMode.InteractiveAuto` (workplan WU-GlobalFlip
+  bug 7). `/Account/Manage` verified live post-fix via full-doc nav.
 
 ## Feature 52 — User Account Deletion
 - **L1 — Stage 5.** The delete-policy graph is the most deliberate part of `OnModelCreating`: Cascade for

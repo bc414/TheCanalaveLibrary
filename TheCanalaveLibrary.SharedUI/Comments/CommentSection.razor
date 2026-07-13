@@ -14,7 +14,7 @@
    composite; all writes resolve here. Injects ICommentWriteService (which :ICommentReadService) —
    one injection gives both read and write (layer3-logic.md §"Service Injection Principle"). *@
 
-@if (_page is null)
+@if (Page is null)
 {
     <p class="text-(--color-text-muted) text-sm">Loading comments…</p>
 }
@@ -156,10 +156,18 @@ else
 
     // ── Load state ────────────────────────────────────────────────────────────────
     private ReportDialog _reportDialog = default!;
-    private CommentPageDto? _page;
     private List<CommentDto> _comments = [];
     private int _totalRootCount;
     private int _currentPage = 1;
+
+    /// <summary>
+    /// The initially-loaded first page of comments, persisted across the prerender→interactive
+    /// handoff ([PersistentState] requires a public property). Pagination/reply/post/edit/delete
+    /// refetches assign plainly via LoadAsync. Each parent surface (chapter, blog post, group,
+    /// profile) mounts at most one CommentSection, so instance association is unambiguous
+    /// without @key at the call sites.
+    /// </summary>
+    [PersistentState] public CommentPageDto? Page { get; set; }
 
     // ── Coordination state ────────────────────────────────────────────────────────
     private long? _editingId;
@@ -188,13 +196,24 @@ else
                 : BlogPostId.HasValue   ? CommentTarget.BlogPost
                 : GroupId.HasValue      ? CommentTarget.Group
                                         : CommentTarget.UserProfile;
-        await LoadAsync();
+
+        // Restore-or-fetch: when [PersistentState] restored the prerendered first page,
+        // rebuild the derived working list from it instead of refetching.
+        if (Page is null)
+        {
+            await LoadAsync();
+        }
+        else
+        {
+            _comments       = Page.Comments.ToList();
+            _totalRootCount = Page.TotalRootCount;
+        }
     }
 
     private async Task LoadAsync()
     {
         _error = null;
-        _page = _target switch
+        Page = _target switch
         {
             CommentTarget.Chapter     => await Comments.GetChapterCommentsAsync(ChapterId!.Value, _currentPage, PageSize),
             CommentTarget.BlogPost    => await Comments.GetBlogPostCommentsAsync(BlogPostId!.Value, _currentPage, PageSize),
@@ -202,8 +221,8 @@ else
             CommentTarget.UserProfile => await Comments.GetUserProfileCommentsAsync(ProfileUserId!.Value, _currentPage, PageSize),
             _                         => throw new InvalidOperationException("Unknown CommentTarget.")
         };
-        _comments       = _page.Comments.ToList();
-        _totalRootCount = _page.TotalRootCount;
+        _comments       = Page.Comments.ToList();
+        _totalRootCount = Page.TotalRootCount;
     }
 
     // ── Pagination ────────────────────────────────────────────────────────────────

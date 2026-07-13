@@ -66,8 +66,12 @@ Narrowing-within-fixed-source query → WU27/WU30.
 
 ## Feature 31 — Search Page (`/discover`)
 - **L1 — N/A** (queries Story/USI/StoryListing). **L2 — Stage 2** (Source=All query; random preload /
-  "give me more" remains WU28). **L3/L3.5 — Stage 5 (WU23, 2026-06-23).** **L4 — Stage 1. L5 — Stage 2.
-  L6 — Stage 5 (WU-L6, 2026-07-07):** the DatePublished sort spine + restored USI partials serve
+  "give me more" remains WU28). **L3/L3.5 — Stage 5 (WU23, 2026-06-23).** **L4 — Stage 1.**
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; search page verified in a real WASM runtime during the
+  flip's browser wave (random batch + filtered `POST /query` + sort switch). Full wave narrative +
+  the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
+- **L6 — Stage 5 (WU-L6, 2026-07-07):** the DatePublished sort spine + restored USI partials serve
   the page-1 sorted listing (p50 0.39→0.09 ms) and the §8.7 exclusion probe (0.68→0.22 ms, −68%)
   at SeedTool volume; FTS GIN pre-existed; tag-probe additions rejected (PK already optimal,
   measured neutral). Detail: `layer6-indexes.md`, `TheCanalaveLibrary.PerfBaseline/results/`.
@@ -270,7 +274,11 @@ Narrowing-within-fixed-source query → WU27/WU30.
 - **L1 — Stage 5.** `StoryListing.SearchVector` as a stored generated column from `to_tsvector('english',
   title || short_description)` — exactly the spec pattern (§5.3.2: FTS is a *filter*). Sound.
 - **L6 — Stage 5.** GIN index `ix_story_listing_search_vector` written and correct (awaiting migration).
-- **L2 — Stage 5** (WU28). **L3/L3.5 — Stage 5** (WU28). **L4 — Stage 1. L5 — Stage 2.**
+- **L2 — Stage 5** (WU28). **L3/L3.5 — Stage 5** (WU28). **L4 — Stage 1.**
+  **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; the filtered `POST /query` path that carries the FTS filter
+  and sort verified in a real WASM runtime during the flip's browser wave. Full wave narrative +
+  the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 
   **WU28 Stage note — F32 L2/L3/L3.5 (2026-06-25):**
   FTS was already built in WU23 (`ServerStoryReadService.GetListingsAsync` — `EF.Functions.PlainToTsQuery`
@@ -291,8 +299,11 @@ Narrowing-within-fixed-source query → WU27/WU30.
   `User.PinnedStoryId`, migration `WU40_PinnedStory`). **L2 — Stage 5 (WU40, 2026-07-12 — see
   Stage note).** **L3/L3.5 — Stage 5 (WU40)** (distinct graph/node visualization — NOT
   `StoryDeck`). **L4 — Stage 1** (visual sign-off pending, WU8/WU13/WU23/WU28/WU44 precedent).
-  **L4.5 — Stage 5 (WU40, behavioral browser verification — see Stage note). L5 — Stage 2**
-  (rides the site-wide `InteractiveAuto` flip, per `/tags` precedent). **L6 — Stage 2** (no
+  **L4.5 — Stage 5 (WU40, behavioral browser verification — see Stage note).**
+  **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto (Explore tab not browser-driven in the flip's wave; the
+  sibling Automatic tab was, see F59). Full wave narrative + the 7 bugs found/fixed: `workplan.md`
+  WU-GlobalFlip. **L6 — Stage 2** (no
   index work done — the pivots ride existing recommendation/USI/story indexes; whether a
   dedicated index is justified awaits an R4-rule measurement pass).
 
@@ -622,8 +633,12 @@ Narrowing-within-fixed-source query → WU27/WU30.
 ## Feature 59 — Automatic Tree Search (formerly below the line — line crossed 2026-07-07)
 - **L1 — N/A** (Phase A removed the EF model; `user_story_tree_search_entries` is a raw-SQL mart — divergence
   resolved). **L2 — Stage 5 (WU-Marts, 2026-07-07 — see Stage note).** **L3/L3.5 — Stage 2** (unified with
-  manual tree search; degree controls + edge-type selector — UI deferred past WU-Marts). **L4 — Stage 1.
-  L5 — Stage 2. L6 — N/A** (mart indexes are raw-SQL, see implementation notes below). **L8 — Stage 5**
+  manual tree search; degree controls + edge-type selector — UI deferred past WU-Marts). **L4 — Stage 1.**
+  **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; the Automatic tree-search tab verified in a real WASM
+  runtime during the flip's browser wave, incl. the stale-root dispatcher fix (workplan bug 6).
+  Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
+  **L6 — N/A** (mart indexes are raw-SQL, see implementation notes below). **L8 — Stage 5**
   (live rCTE over the edge-list mart — built with L2, same Stage note).
 
   **WU-Marts Stage note — L2/L8 (2026-07-07):**
@@ -794,7 +809,8 @@ Narrowing-within-fixed-source query → WU27/WU30.
   (visual/CSS sign-off pending, consistent with WU8/WU13/WU23/WU28 precedent) — **L4.5 flips to
   Stage 5** on the strength of the behavioral verification above, which is independent of the
   aesthetic pass. **L5 stays Stage 2** (rides the future site-wide `InteractiveAuto` flip, per
-  `/tags`'s precedent — no WASM work done here).
+  `/tags`'s precedent — no WASM work done here; superseded 2026-07-13 by WU-GlobalFlip — see the
+  F59 L5 Stage-5 line above).
 
 ## Feature 60 — Tree-Search Data-Mart Worker (formerly below the line — line crossed 2026-07-07)
 - **L1 — N/A** (raw-SQL mart). **L6 — N/A.** **L8 — Stage 5 (WU-Marts, 2026-07-07 — see Stage note)**
@@ -825,7 +841,11 @@ Narrowing-within-fixed-source query → WU27/WU30.
 - **L1 — N/A** (Phase A removed the EF models; `also_*_scores` are raw-SQL marts — divergence resolved).
   **L2 — Stage 5 (WU-Marts, 2026-07-07 — see Stage note).**
   **L3/L3.5 — Stage 2** (embedded sections on story detail, not separate pages — UI deferred past
-  WU-Marts). **L4 — Stage 1. L5 — Stage 2.** **L6 — N/A (reclassified 2026-07-07** — mart indexes are
+  WU-Marts). **L4 — Stage 1.**
+  **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto (co-occurrence sections not browser-driven in the flip's
+  wave). Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
+  **L6 — N/A (reclassified 2026-07-07** — mart indexes are
   raw-SQL inside the worker, same treatment as F59; the ranked read rides
   `ix_also_*_scores_story_score`, created by the rebuild, and no EF-migration index is justified —
   the daily batch self-join is an off-hours sequential scan, which the R4 index-audit rule

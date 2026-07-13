@@ -6,8 +6,11 @@
 @inject IModerationWriteService ModerationWriteService
 
 @* Moderator user lookup page (WU34 Feature 47). View a user's report history + apply
-   account actions (warn/suspend/ban). Desktop-only, server-rendered, no WASM.
-   Account-status login enforcement is deferred to a follow-up slice (see forward_plan.md). *@
+   account actions (warn/suspend/ban). Desktop-only.
+   Account-status login enforcement is deferred to a follow-up slice (see forward_plan.md).
+   [PersistentState] on UserReports avoids the prerender→interactive double fetch. The queue is
+   filtered to user-targeted reports BEFORE assignment, so the persisted payload is exactly what
+   renders — never the unfiltered superset (layer5-wasm.md §"Avoiding the double fetch"). *@
 
 <PageTitle>Mod — Users</PageTitle>
 
@@ -15,11 +18,11 @@
 
     <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">User Reports</h1>
 
-    @if (_loading)
+    @if (_loading || UserReports is null)
     {
         <p class="text-sm text-(--color-text-muted)">Loading…</p>
     }
-    else if (_userReports.Length == 0)
+    else if (UserReports.Length == 0)
     {
         <p class="text-sm text-(--color-text-muted)">No reported users.</p>
     }
@@ -36,7 +39,7 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var r in _userReports)
+                @foreach (var r in UserReports)
                 {
                     var report = r;
                     <tr class="border-b border-(--color-border) hover:bg-(--color-surface-hover)">
@@ -137,7 +140,11 @@
 @code {
     [Parameter] public int? UserId { get; set; }
 
-    private ReportQueueItemDto[] _userReports = [];
+    // Persisted across the prerender→interactive handoff — restored via ??= in OnInitializedAsync.
+    // Holds the already-filtered user-targeted subset, never the full queue.
+    [PersistentState]
+    public ReportQueueItemDto[]? UserReports { get; set; }
+
     private bool _loading = true;
 
     private ReportQueueItemDto? _actionReport;
@@ -149,10 +156,16 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Show only user-targeted reports (all statuses to see history).
-        var all = await ModerationService.GetReportQueueAsync(includeResolved: true);
-        _userReports = all.Where(r => r.EntityType == ReportedEntityType.User).ToArray();
+        // ??= — skip the fetch when [PersistentState] restored the prerendered list.
+        UserReports ??= await FetchUserReportsAsync();
         _loading = false;
+    }
+
+    /// <summary>Only user-targeted reports (all statuses, to see history).</summary>
+    private async Task<ReportQueueItemDto[]> FetchUserReportsAsync()
+    {
+        var all = await ModerationService.GetReportQueueAsync(includeResolved: true);
+        return all.Where(r => r.EntityType == ReportedEntityType.User).ToArray();
     }
 
     private void OpenAccountAction(ReportQueueItemDto report, ModeratorActionType action)
@@ -197,9 +210,8 @@
                 _pendingAction == ModeratorActionType.SuspendUser ? _suspendUntil : null);
 
             CancelAccountAction();
-            // Reload.
-            var all = await ModerationService.GetReportQueueAsync(includeResolved: true);
-            _userReports = all.Where(r => r.EntityType == ReportedEntityType.User).ToArray();
+            // Post-action refetch — plain assignment (persistence only reads at hydration).
+            UserReports = await FetchUserReportsAsync();
         }
         catch (Exception ex) { _actionError = ex.Message; }
         finally { _acting = false; }

@@ -14,7 +14,10 @@
    first, no dispatcher — the Moderation-cluster page convention. Username resolution reuses
    IMessagingReadService.FindUserByUsernameAsync (the existing exact-match lookup building
    block) rather than minting a new user-search service. Grant/settings authorization is
-   enforced in the services; the [Authorize] attribute is affordance. *@
+   enforced in the services; the [Authorize] attribute is affordance.
+   [PersistentState] on RemainingCapacity + RecentGrants avoids the prerender→interactive double
+   fetch. The settings knobs are @bind form state, so they stay ephemeral fields and refetch on
+   hydration (cheap site_settings reads; persisting form state is out of scope by convention). *@
 
 <PageTitle>Mod — Community Spotlight</PageTitle>
 
@@ -24,7 +27,7 @@
         Community Spotlight
     </h1>
 
-    @if (_loading)
+    @if (_loading || RemainingCapacity is null || RecentGrants is null)
     {
         <p class="text-sm text-(--color-text-muted)">Loading…</p>
     }
@@ -34,8 +37,8 @@
         <section class="flex max-w-xl flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
             <h2 class="text-lg font-semibold text-(--color-text)">Grant a slot</h2>
             <p class="text-sm text-(--color-text-muted)">
-                <span class="font-semibold text-(--color-text)">@_remainingCapacity</span>
-                grant@(_remainingCapacity == 1 ? "" : "s") left this month (cap models the monthly
+                <span class="font-semibold text-(--color-text)">@RemainingCapacity</span>
+                grant@(RemainingCapacity == 1 ? "" : "s") left this month (cap models the monthly
                 donation ceiling — keep slots meaningful).
             </p>
 
@@ -58,14 +61,14 @@
         @* ── Recent grants ─────────────────────────────────────────────────────── *@
         <section class="flex max-w-xl flex-col gap-3">
             <h2 class="text-lg font-semibold text-(--color-text)">Recent grants</h2>
-            @if (_recentGrants.Count == 0)
+            @if (RecentGrants.Count == 0)
             {
                 <p class="text-sm text-(--color-text-muted)">No slots granted yet.</p>
             }
             else
             {
                 <ul class="flex flex-col gap-2">
-                    @foreach (SpotlightSlotAdminDto grant in _recentGrants)
+                    @foreach (SpotlightSlotAdminDto grant in RecentGrants)
                     {
                         <li class="flex flex-wrap items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm">
                             <span class="font-medium text-(--color-text)">@(grant.GrantedToUserName ?? "[deleted user]")</span>
@@ -132,34 +135,61 @@
     private string? _settingsError;
 
     private string? _grantUsername;
-    private int _remainingCapacity;
-    private IReadOnlyList<SpotlightSlotAdminDto> _recentGrants = [];
 
+    // Persisted across the prerender→interactive handoff (restore-or-fetch ??= in
+    // OnInitializedAsync). int? rather than int so "not yet loaded" is distinguishable from 0.
+    [PersistentState]
+    public int? RemainingCapacity { get; set; }
+
+    [PersistentState]
+    public List<SpotlightSlotAdminDto>? RecentGrants { get; set; }
+
+    // Settings knobs are @bind form state — ephemeral by convention, refetched on hydration.
     private int _blockDurationDays;
     private int _positionCount;
     private int _cooldownDays;
     private int _horizonDays;
     private int _monthlyGrantCap;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
-
-    private async Task LoadAsync()
+    protected override async Task OnInitializedAsync()
     {
-        _loading = true;
         try
         {
-            _remainingCapacity = await Allocator.GetRemainingMonthlyGrantCapacityAsync();
-            _recentGrants = await Allocator.GetRecentGrantsAsync();
-            _blockDurationDays = await Settings.GetIntAsync(SiteSettingKeys.SpotlightBlockDurationDays, SiteSettingKeys.SpotlightBlockDurationDaysDefault);
-            _positionCount = await Settings.GetIntAsync(SiteSettingKeys.SpotlightPositionCount, SiteSettingKeys.SpotlightPositionCountDefault);
-            _cooldownDays = await Settings.GetIntAsync(SiteSettingKeys.SpotlightCooldownDays, SiteSettingKeys.SpotlightCooldownDaysDefault);
-            _horizonDays = await Settings.GetIntAsync(SiteSettingKeys.SpotlightBookingHorizonDays, SiteSettingKeys.SpotlightBookingHorizonDaysDefault);
-            _monthlyGrantCap = await Settings.GetIntAsync(SiteSettingKeys.SpotlightMonthlyGrantCap, SiteSettingKeys.SpotlightMonthlyGrantCapDefault);
+            // ??= — skip the grant fetches when [PersistentState] restored the prerendered data;
+            // the settings knobs always load fresh (not persisted).
+            RemainingCapacity ??= await Allocator.GetRemainingMonthlyGrantCapacityAsync();
+            RecentGrants ??= (await Allocator.GetRecentGrantsAsync()).ToList();
+            await LoadSettingsAsync();
         }
         finally
         {
             _loading = false;
         }
+    }
+
+    /// <summary>Post-grant/revoke refresh — plain assignments (persistence only reads at hydration).</summary>
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            RemainingCapacity = await Allocator.GetRemainingMonthlyGrantCapacityAsync();
+            RecentGrants = (await Allocator.GetRecentGrantsAsync()).ToList();
+            await LoadSettingsAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        _blockDurationDays = await Settings.GetIntAsync(SiteSettingKeys.SpotlightBlockDurationDays, SiteSettingKeys.SpotlightBlockDurationDaysDefault);
+        _positionCount = await Settings.GetIntAsync(SiteSettingKeys.SpotlightPositionCount, SiteSettingKeys.SpotlightPositionCountDefault);
+        _cooldownDays = await Settings.GetIntAsync(SiteSettingKeys.SpotlightCooldownDays, SiteSettingKeys.SpotlightCooldownDaysDefault);
+        _horizonDays = await Settings.GetIntAsync(SiteSettingKeys.SpotlightBookingHorizonDays, SiteSettingKeys.SpotlightBookingHorizonDaysDefault);
+        _monthlyGrantCap = await Settings.GetIntAsync(SiteSettingKeys.SpotlightMonthlyGrantCap, SiteSettingKeys.SpotlightMonthlyGrantCapDefault);
     }
 
     private async Task GrantAsync()

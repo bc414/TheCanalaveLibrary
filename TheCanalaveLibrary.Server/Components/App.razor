@@ -20,10 +20,8 @@
     <link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet"
           integrity="sha384-ecIckRi4QlKYya/FQUbBUjS4qp65jF/J87Guw5uzTbO1C1Jfa/6kYmd6dXUF6D7i"
           crossorigin="anonymous"/>
-    <!-- Blazored.Typeahead (SharedUI/Tags/TagSelector) — package-provided positioning skeleton,
-         see layer4-style.md "Blazored.Typeahead Stylesheet". No DI registration exists for this
-         package (confirmed: no AddBlazoredTypeahead extension in the assembly). -->
-    <link href="_content/Blazored.Typeahead/blazored-typeahead.css" rel="stylesheet"/>
+    @* Blazored.Typeahead removed at the Global Flip wave — replaced by the in-house
+       CanalaveTypeahead (archived lib, crashed the WASM renderer; see that component's header). *@
     @* The nonce authorizes ImportMap's inline <script type="importmap"> under CSP — minted per
        request by SecurityHeadersMiddleware, which lists the same value in script-src. *@
     <ImportMap nonce="@CspNonce"/>
@@ -79,8 +77,8 @@
 <script src="_content/Blazored.TextEditor/quill-blot-formatter.min.js"></script>
 <script src="_content/Blazored.TextEditor/Blazored-BlazorQuill.js"></script>
 
-<!-- Blazored.Typeahead's JS interop (TagSelector, SharedUI/Tags/) -->
-<script src="_content/Blazored.Typeahead/blazored-typeahead.js"></script>
+<!-- CanalaveTypeahead's delegated Enter-suppression (SharedUI/Controls/ — Global Flip wave) -->
+<script src="_content/TheCanalaveLibrary.SharedUI/js/typeahead.js"></script>
 
 <script src="@Assets["Identity/Shared/PasskeySubmit.razor.js"]" type="module"></script>
 </body>
@@ -97,10 +95,12 @@
     // Per-request CSP nonce minted by SecurityHeadersMiddleware — see <ImportMap> above.
     private string? CspNonce => HttpContext.Items[SecurityHeadersMiddleware.NonceItemKey] as string;
 
-    // The site converts to global InteractiveAuto in a single flip (layer5-wasm.md §"The Global
-    // Flip") — this expression is where that flip lands. If a page must run as a WASM island
-    // before then (debug bisect during the flip wave), the pilot-verified recipe is
-    // [ExcludeFromInteractiveRouting] + @rendermode on the page; the same check below covers it.
+    // Global InteractiveAuto — the Global Flip landed here (layer5-wasm.md §"The Global Flip").
+    // First visit: server circuit while the WASM bundle downloads; revisits: WebAssembly. The
+    // AcceptsInteractiveRouting() guard stays — Identity pages ([ExcludeFromInteractiveRouting])
+    // remain static SSR. If a page must be pinned to one runtime for a debug bisect, the
+    // pilot-verified island recipe is [ExcludeFromInteractiveRouting] + @rendermode on the page;
+    // the same check below covers it.
     private IComponentRenderMode? PageRenderMode
-        => HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
+        => HttpContext.AcceptsInteractiveRouting() ? InteractiveAuto : null;
 }

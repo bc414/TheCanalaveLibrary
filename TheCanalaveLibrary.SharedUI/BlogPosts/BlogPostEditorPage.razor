@@ -113,7 +113,15 @@
     private BlogPostPropertiesViewModel _viewModel = new();
 
     /// <summary>Null suppresses the story-link picker (should not happen once loaded — author always gets at least an empty list).</summary>
+    /// <remarks>Deliberately NOT [PersistentState]: ValueTuple state doesn't survive the STJ
+    /// persistence payload, and it's supplementary picker data, not the page's primary content.</remarks>
     private IReadOnlyList<(int Id, string Title)>? _authorStories;
+
+    // Persisted across the prerender→interactive handoff — the loaded-for-edit source only
+    // (layer5-wasm.md §"Avoiding the double fetch"). The ??= guard in OnInitializedAsync skips
+    // the second GetForEditAsync; _viewModel is re-seeded deterministically from this. Live
+    // form/editor state, DraftAutosave, and the polls management list stay ephemeral.
+    [PersistentState] public BlogPostEditDto? EditSource { get; set; }
 
     private bool _isLoading = true;
     private bool _forbidden;
@@ -144,23 +152,25 @@
 
         if (BlogPostId.HasValue)
         {
-            BlogPostEditDto? editData = await BlogPostService.GetForEditAsync(BlogPostId.Value);
+            // ??= restore-or-fetch: skip the refetch when [PersistentState] restored the
+            // prerender pass's load. The owner pre-check and view-model seeding run either way.
+            EditSource ??= await BlogPostService.GetForEditAsync(BlogPostId.Value);
 
-            if (editData is null)
+            if (EditSource is null)
             {
                 NavigationManager.NavigateTo("/not-found");
                 return;
             }
 
             // UX-level owner pre-check (the real gate is in ServerBlogPostWriteService).
-            if (editData.AuthorId.HasValue && editData.AuthorId != currentUserId)
+            if (EditSource.AuthorId.HasValue && EditSource.AuthorId != currentUserId)
             {
                 _forbidden = true;
                 _isLoading = false;
                 return;
             }
 
-            PopulateViewModelFromEdit(editData);
+            PopulateViewModelFromEdit(EditSource);
             _polls = await PollService.GetPollsForBlogPostAsync(BlogPostId.Value);
         }
 
@@ -295,7 +305,10 @@
                     IsPublished = _viewModel.IsPublished
                 });
                 if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
-                NavigationManager.NavigateTo($"/blog/{BlogPostId.Value}/edit");
+                // forceLoad: same-component redirect on a Quill-hosting page — the in-place diff
+                // around Quill's JS-inserted toolbar crashes the WASM renderer (Blazored.TextEditor#71;
+                // Global Flip wave finding — see StoryEditorPage's twin comment).
+                NavigationManager.NavigateTo($"/blog/{BlogPostId.Value}/edit", forceLoad: true);
             }
             else
             {

@@ -22,7 +22,13 @@
    URL state (spec §5.26): root/anchor lives in the route; degrees/edges/sort live in the query
    string (SupplyParameterFromQuery) and are pushed back via NavigateTo(replace: true) on Apply —
    filter/control changes never grow browser history; only navigating to a different root does
-   (ordinary <a href> navigation, e.g. UserCard's "Discover from this User"). *@
+   (ordinary <a href> navigation, e.g. UserCard's "Discover from this User").
+
+   [PersistentState] on the root entity, §8.7 defaults, and the initial automatic traversal Result
+   eliminates the prerender→interactive double fetch on full document loads (layer5-wasm.md
+   §"Avoiding the double fetch"). Traversals triggered by user interaction (controls/filter Apply)
+   are plain assignments to the same Result property — persistence only reads at initial hydration.
+   Per-viewer interaction states (_states) and control/filter state stay ephemeral. *@
 
 @if (_rootNotFound)
 {
@@ -38,18 +44,18 @@ else if (_requiresLogin)
 }
 else if (DeviceService.IsMobile())
 {
-    <TreeSearchMobile RootStory="_rootStory" RootUser="_rootUser"
+    <TreeSearchMobile RootStory="RootStory" RootUser="RootUser"
                       ActiveTab="_activeTab" OnTabChanged="HandleTabChangedAsync"
-                      Result="_result" InteractionStates="_states" CurrentUserId="_currentUserId"
+                      Result="Result" InteractionStates="_states" CurrentUserId="_currentUserId"
                       InitialMaxDegrees="_maxDegrees" InitialEdgeTypes="_edgeTypes" InitialSort="_sort"
                       InitialFilter="_filter"
                       OnControlsApply="HandleControlsApplyAsync" OnFilterApply="HandleFilterApplyAsync" />
 }
 else
 {
-    <TreeSearchDesktop RootStory="_rootStory" RootUser="_rootUser"
+    <TreeSearchDesktop RootStory="RootStory" RootUser="RootUser"
                        ActiveTab="_activeTab" OnTabChanged="HandleTabChangedAsync"
-                       Result="_result" InteractionStates="_states" CurrentUserId="_currentUserId"
+                       Result="Result" InteractionStates="_states" CurrentUserId="_currentUserId"
                        InitialMaxDegrees="_maxDegrees" InitialEdgeTypes="_edgeTypes" InitialSort="_sort"
                        InitialFilter="_filter"
                        OnControlsApply="HandleControlsApplyAsync" OnFilterApply="HandleFilterApplyAsync" />
@@ -66,13 +72,19 @@ else
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private int? _currentUserId;
-    private StoryListingDto? _rootStory;
-    private UserCardDto? _rootUser;
     private bool _rootNotFound;
     private bool _requiresLogin;
 
+    // Persisted across the prerender→interactive handoff ([PersistentState] requires public
+    // properties). Root entity + initial traversal result are exactly what the page renders.
+    [PersistentState] public StoryListingDto? RootStory { get; set; }
+    [PersistentState] public UserCardDto? RootUser { get; set; }
+    [PersistentState] public TreeSearchListingResultDto? Result { get; set; }
+
+    // §8.7 AutoTreeSearch default exclusions — fetched at prerender, restored at hydration.
+    [PersistentState] public UserStoryInteractionTypeEnum[]? DefaultExcludedInteractions { get; set; }
+
     private TreeSearchTab _activeTab = TreeSearchTab.Automatic;
-    private TreeSearchListingResultDto? _result;
     private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states =
         new Dictionary<int, UserStoryInteractionStateDto>();
 
@@ -80,6 +92,15 @@ else
     private IReadOnlyList<TreeSearchEdgeType> _edgeTypes = TreeSearchControls.DefaultEdgeTypes;
     private TreeSearchSortOrder _sort = TreeSearchSortOrder.Random;
     private StoryFilterDto _filter = new();
+
+    // Route-identity tracking for same-component navigation (Global Flip wave finding): the
+    // interactive router reuses this instance across /discover/me ↔ /discover/user/{id} ↔
+    // /discover/story/{id}, so OnInitializedAsync does NOT re-run — without the
+    // OnParametersSetAsync reload below, an in-app nav to a different root rendered the PREVIOUS
+    // root's tree under the new URL (verified live in the flip's browser wave). Same dispatcher
+    // pattern as StoryPage / the WU-ComponentSoundness wave.
+    private bool _initialized;
+    private (int? UserId, int? StoryId) _loadedRoute;
 
     protected override async Task OnInitializedAsync()
     {
@@ -90,7 +111,33 @@ else
             if (int.TryParse(idClaim, out int userId)) _currentUserId = userId;
         }
 
-        // ── Resolve root ──────────────────────────────────────────────────────────────────────
+        _loadedRoute = (UserId, StoryId);
+        await LoadForRouteAsync();
+        _initialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_initialized) return;
+        if (_loadedRoute == (UserId, StoryId)) return;
+        _loadedRoute = (UserId, StoryId);
+
+        // Plain reload, never restore-guarded: the persisted state belongs to the PREVIOUS root
+        // (layer5-wasm.md dispatcher rule — internal SPA navs never carry persisted state anyway).
+        RootStory = null;
+        RootUser = null;
+        Result = null;
+        _rootNotFound = false;
+        _requiresLogin = false;
+        _states = new Dictionary<int, UserStoryInteractionStateDto>();
+        _filter = new StoryFilterDto();
+
+        await LoadForRouteAsync();
+    }
+
+    private async Task LoadForRouteAsync()
+    {
+        // ── Resolve root (skipped when [PersistentState] restored it from the prerender) ─────
         bool isSelfRoot = !UserId.HasValue && !StoryId.HasValue;
         if (isSelfRoot)
         {
@@ -103,17 +150,20 @@ else
         }
         else if (StoryId.HasValue)
         {
-            StoryListingDto[] stories = await StoryReadService.GetListingsByIdsAsync([StoryId.Value]);
-            _rootStory = stories.Length > 0 ? stories[0] : null;
-            _rootNotFound = _rootStory is null;
+            if (RootStory is null)
+            {
+                StoryListingDto[] stories = await StoryReadService.GetListingsByIdsAsync([StoryId.Value]);
+                RootStory = stories.Length > 0 ? stories[0] : null;
+            }
+            _rootNotFound = RootStory is null;
         }
 
         if (_rootNotFound || _requiresLogin) return;
 
-        // ── Seed §8.7 AutoTreeSearch defaults ────────────────────────────────────────────────
-        IReadOnlyList<UserStoryInteractionTypeEnum> defaultExclusions =
-            await DiscoveryDefaults.GetDefaultExcludedInteractionsAsync(SiteSearchModes.AutoTreeSearch);
-        _filter = _filter with { ExcludedInteractions = defaultExclusions };
+        // ── Seed §8.7 AutoTreeSearch defaults (??= restore-or-fetch idiom) ───────────────────
+        DefaultExcludedInteractions ??=
+            [.. await DiscoveryDefaults.GetDefaultExcludedInteractionsAsync(SiteSearchModes.AutoTreeSearch)];
+        _filter = _filter with { ExcludedInteractions = DefaultExcludedInteractions };
 
         // ── Seed controls from the query string, if present ─────────────────────────────────
         if (DegreesQuery is { } d && d >= 1) _maxDegrees = d;
@@ -126,15 +176,22 @@ else
         if (!string.IsNullOrWhiteSpace(SortQuery) && Enum.TryParse<TreeSearchSortOrder>(SortQuery, true, out var sortParsed))
             _sort = sortParsed;
 
-        await RunSearchAsync(includePaths: _edgeTypes.All(IsChainOfTrust));
+        // Initial automatic traversal: restore-or-run. User-triggered traversals (Apply handlers
+        // below) always run — they never see persisted state mid-session.
+        if (Result is null)
+            await RunSearchAsync(includePaths: _edgeTypes.All(IsChainOfTrust));
+        else
+            await LoadInteractionStatesAsync(); // per-viewer, ephemeral — reloaded fresh on restore
     }
 
     private async Task ResolveUserRootAsync(int userId)
     {
+        if (RootUser is not null) return; // restored from the prerender payload — no refetch
+
         ProfileHeaderDto? header = await UserProfileReadService.GetProfileHeaderAsync(userId, includePrivate: false);
         if (header is null) { _rootNotFound = true; return; }
 
-        _rootUser = new UserCardDto(header.UserId, header.Username, header.Tagline, header.AvatarUrl, header.Badges);
+        RootUser = new UserCardDto(header.UserId, header.Username, header.Tagline, header.AvatarUrl, header.Badges);
     }
 
     private static bool IsChainOfTrust(TreeSearchEdgeType edge) =>
@@ -166,24 +223,29 @@ else
 
     private async Task RunSearchAsync(bool includePaths)
     {
-        _result = null; // loading
+        Result = null; // loading
 
         TreeSearchRequest request = new()
         {
-            RootStoryId = _rootStory?.StoryId,
-            RootUserId = _rootStory is null ? (_rootUser?.UserId) : null,
+            RootStoryId = RootStory?.StoryId,
+            RootUserId = RootStory is null ? (RootUser?.UserId) : null,
             MaxDegrees = _maxDegrees,
             EdgeTypes = _edgeTypes,
             IncludePaths = includePaths,
             Sort = _sort,
         };
 
-        _result = await TreeSearchReadService.SearchAsync(request, _filter);
+        Result = await TreeSearchReadService.SearchAsync(request, _filter);
 
-        if (_currentUserId.HasValue && _result.Items.Count > 0)
+        await LoadInteractionStatesAsync();
+    }
+
+    private async Task LoadInteractionStatesAsync()
+    {
+        if (_currentUserId.HasValue && Result is { Items.Count: > 0 })
         {
             _states = await InteractionReadService.GetStatesByStoryIdsAsync(
-                [.. _result.Items.Select(i => i.Story.StoryId)]);
+                [.. Result.Items.Select(i => i.Story.StoryId)]);
         }
         else
         {

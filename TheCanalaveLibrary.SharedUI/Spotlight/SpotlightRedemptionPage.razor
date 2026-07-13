@@ -12,7 +12,10 @@
    recommendations/hidden gems, which pre-attach themselves; secondary: StoryTitlePicker title
    search), optionally choose ANY of the story's recommendations to display beside it
    (self-recommendation is fine — only self-STORY is banned), then pick an open calendar block.
-   Every rule is re-validated server-side in RedeemSlotAsync — this UI is affordance, not a gate. *@
+   Every rule is re-validated server-side in RedeemSlotAsync — this UI is affordance, not a gate.
+   [PersistentState] on Slots/Bookings/Candidates/Blocks avoids the prerender→interactive double
+   fetch; all four load together, so restore is all-or-nothing in OnInitializedAsync. The wizard
+   picks (_picked*, _storyRecs) are interactive-only and stay ephemeral. *@
 
 <PageTitle>Community Spotlight</PageTitle>
 
@@ -21,19 +24,19 @@
         Community Spotlight
     </h1>
 
-    @if (_loading)
+    @if (_loading || Slots is null || Bookings is null || Candidates is null || Blocks is null)
     {
         <p class="text-(--color-text-muted)"><em>Loading…</em></p>
     }
     else
     {
         @* ── Your bookings ─────────────────────────────────────────────────────── *@
-        @if (_bookings.Count > 0)
+        @if (Bookings.Count > 0)
         {
             <section class="flex flex-col gap-3">
                 <h2 class="text-lg font-semibold text-(--color-text)">Your booked spotlights</h2>
                 <ul class="flex flex-col gap-2">
-                    @foreach (SpotlightBookingDto booking in _bookings)
+                    @foreach (SpotlightBookingDto booking in Bookings)
                     {
                         <li class="flex flex-wrap items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm">
                             <a href="/story/@booking.StoryId" class="font-medium text-(--color-action-ink) hover:underline">@booking.StoryTitle</a>
@@ -50,7 +53,7 @@
         <section class="flex flex-col gap-4">
             <h2 class="text-lg font-semibold text-(--color-text)">Your slots</h2>
 
-            @if (_slots.Count == 0)
+            @if (Slots.Count == 0)
             {
                 <p class="text-sm text-(--color-text-muted)">
                     You don't have a spotlight slot right now. Slots are awarded to community
@@ -60,8 +63,8 @@
             else
             {
                 <p class="text-sm text-(--color-text-muted)">
-                    You have <span class="font-semibold text-(--color-text)">@_slots.Count</span>
-                    spotlight slot@(_slots.Count == 1 ? "" : "s") — feature someone else's story
+                    You have <span class="font-semibold text-(--color-text)">@Slots.Count</span>
+                    spotlight slot@(Slots.Count == 1 ? "" : "s") — feature someone else's story
                     on the home page.
                 </p>
 
@@ -71,11 +74,11 @@
 
                     @if (_pickedStoryId is null)
                     {
-                        @if (_candidates.Count > 0)
+                        @if (Candidates.Count > 0)
                         {
                             <p class="text-sm text-(--color-text)">From your recommendations:</p>
                             <ul class="flex flex-col gap-1.5">
-                                @foreach (SpotlightPickCandidateDto candidate in _candidates)
+                                @foreach (SpotlightPickCandidateDto candidate in Candidates)
                                 {
                                     <li>
                                         <button type="button" disabled="@_busy"
@@ -96,7 +99,7 @@
                             </ul>
                         }
 
-                        <p class="text-sm text-(--color-text)">@(_candidates.Count > 0 ? "Or search" : "Search") for any story:</p>
+                        <p class="text-sm text-(--color-text)">@(Candidates.Count > 0 ? "Or search" : "Search") for any story:</p>
                         <StoryTitlePicker Placeholder="Type to search for a story to spotlight..."
                                           OnStorySelected="@(dto => SelectStoryAsync(dto.StoryId, dto.Title, null))" />
                         <p class="text-xs text-(--color-text-muted)">You can spotlight any public story except your own.</p>
@@ -151,7 +154,7 @@
                         <h3 class="text-sm font-semibold uppercase tracking-wide text-(--color-text-muted)">3. Pick a week</h3>
 
                         <div class="flex flex-col gap-1.5 text-sm" role="radiogroup" aria-label="Spotlight window">
-                            @foreach (SpotlightBlockDto block in _blocks)
+                            @foreach (SpotlightBlockDto block in Blocks)
                             {
                                 <label class="flex items-center gap-2 @(block.HasOpening ? "" : "opacity-50")">
                                     <input type="radio" name="spotlight-block" disabled="@(!block.HasOpening)"
@@ -189,10 +192,21 @@
     private bool _busy;
     private string? _error;
 
-    private IReadOnlyList<SpotlightSlotDto> _slots = [];
-    private IReadOnlyList<SpotlightBookingDto> _bookings = [];
-    private IReadOnlyList<SpotlightPickCandidateDto> _candidates = [];
-    private IReadOnlyList<SpotlightBlockDto> _blocks = [];
+    // Persisted across the prerender→interactive handoff. The four lists always load together
+    // (one Task.WhenAll), so OnInitializedAsync restores all-or-nothing rather than per-property
+    // ??=. [PersistentState] payload = the viewer's own slots/bookings/candidates/blocks — exactly
+    // what the page renders (layer5-wasm.md §"Avoiding the double fetch").
+    [PersistentState]
+    public List<SpotlightSlotDto>? Slots { get; set; }
+
+    [PersistentState]
+    public List<SpotlightBookingDto>? Bookings { get; set; }
+
+    [PersistentState]
+    public List<SpotlightPickCandidateDto>? Candidates { get; set; }
+
+    [PersistentState]
+    public List<SpotlightBlockDto>? Blocks { get; set; }
 
     private int? _pickedStoryId;
     private string? _pickedStoryTitle;
@@ -200,8 +214,16 @@
     private List<RecommendationDto> _storyRecs = [];
     private DateTime? _pickedBlockStart;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        // Restore-or-fetch: only fetch when [PersistentState] has nothing to restore.
+        if (Slots is null || Bookings is null || Candidates is null || Blocks is null)
+            await LoadAsync();
+        else
+            _loading = false;
+    }
 
+    /// <summary>Initial load + post-redemption refresh — plain assignments (persistence only reads at hydration).</summary>
     private async Task LoadAsync()
     {
         _loading = true;
@@ -213,10 +235,10 @@
             Task<IReadOnlyList<SpotlightPickCandidateDto>> candidates = Spotlights.GetMyPickCandidatesAsync();
             Task<IReadOnlyList<SpotlightBlockDto>> blocks = Spotlights.GetBlockAvailabilityAsync();
             await Task.WhenAll(slots, bookings, candidates, blocks);
-            _slots = slots.Result;
-            _bookings = bookings.Result;
-            _candidates = candidates.Result;
-            _blocks = blocks.Result;
+            Slots = slots.Result.ToList();
+            Bookings = bookings.Result.ToList();
+            Candidates = candidates.Result.ToList();
+            Blocks = blocks.Result.ToList();
         }
         finally
         {
@@ -250,7 +272,7 @@
     private async Task RedeemAsync()
     {
         if (_pickedStoryId is not int storyId || _pickedBlockStart is not DateTime blockStart
-            || _slots.Count == 0 || _busy)
+            || Slots is null || Slots.Count == 0 || _busy)
             return;
 
         _busy = true;
@@ -259,7 +281,7 @@
         {
             // Oldest slot first (they're ordered by grant date).
             await Spotlights.RedeemSlotAsync(new RedeemSpotlightSlotDto(
-                _slots[0].SlotId, storyId, _pickedRecommendationId, blockStart));
+                Slots[0].SlotId, storyId, _pickedRecommendationId, blockStart));
 
             Toasts.Show("Spotlight booked!", ToastLevel.Success);
             ClearStoryPick();

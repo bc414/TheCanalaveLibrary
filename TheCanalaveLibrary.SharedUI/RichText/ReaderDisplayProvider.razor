@@ -1,7 +1,10 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
 @inject IUserSettingsService Settings
+@inject PersistentComponentState ApplicationState
+@implements IDisposable
 
 @* Layout-level provider for the viewer's ReaderDisplaySettings cascade (Phase E, 2026-07-10).
    This is the ancestor layer3.5-structure.md "Ambient Viewer Settings via Cascading Slim Bags"
@@ -9,23 +12,51 @@
    EditorView/ContentSurface fell back to defaults for every viewer. Loads the authenticated
    viewer's ReaderSettings once per circuit and cascades the slim bag; anonymous viewers get
    null (defaults). Settings changes take effect on next navigation/circuit — acceptable for
-   preference data; the settings page can prompt a reload if that ever feels stale. *@
+   preference data; the settings page can prompt a reload if that ever feels stale.
 
-<CascadingValue Value="@_display">
+   Persistence uses the MANUAL PersistentComponentState API, deliberately NOT [PersistentState]
+   (Global Flip wave finding): this provider wraps the whole tree in Routes.razor, so it also
+   renders on the static-SSR Identity pages — where a [PersistentState] property registers a
+   persistence callback with no inferable render mode and the framework throws
+   InvalidOperationException at persist time, 500ing every /Account/* page. The manual
+   RegisterOnPersisting overload takes an EXPLICIT render mode, which is the framework's
+   sanctioned escape hatch for components that render in both static and interactive trees.
+   This is the one documented exception to layer5-wasm.md's "don't hand-roll the
+   register/dispose dance" rule. *@
+
+<CascadingValue Value="@Display">
     @ChildContent
 </CascadingValue>
 
 @code {
+    private const string PersistKey = "reader-display";
+
     [Parameter, EditorRequired] public RenderFragment ChildContent { get; set; } = null!;
 
     // Cascaded by CascadingAuthenticationState in Routes.razor — the SharedUI convention
     // (never IActiveUserContext here; see UserMenu).
     [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
 
-    private ReaderDisplaySettings? _display;
+    /// <summary>Persisted across the prerender→interactive handoff (manual API — see header).
+    /// This provider sits above the whole tree, so skipping the hydration refetch means the
+    /// reader typography cascade is stable from first paint — no whole-page typography flash.
+    /// Anonymous viewers keep null (nothing persisted; consumers use defaults).</summary>
+    public ReaderDisplaySettings? Display { get; set; }
+
+    private PersistingComponentStateSubscription _persistSub;
 
     protected override async Task OnInitializedAsync()
     {
+        // Register first (explicit render mode makes this legal on static-SSR renders too);
+        // restore-or-fetch below. Disposal ends the subscription.
+        _persistSub = ApplicationState.RegisterOnPersisting(PersistDisplayAsync, RenderMode.InteractiveAuto);
+
+        if (ApplicationState.TryTakeFromJson(PersistKey, out ReaderDisplaySettings? restored) && restored is not null)
+        {
+            Display = restored; // restored from the prerender payload — no refetch
+            return;
+        }
+
         if (AuthStateTask is null)
         {
             return;
@@ -40,7 +71,7 @@
         try
         {
             UserSettingsDto settings = await Settings.GetMySettingsAsync();
-            _display = new ReaderDisplaySettings
+            Display = new ReaderDisplaySettings
             {
                 FontName = settings.Reader.FontName,
                 FontSize = settings.Reader.FontSize,
@@ -57,4 +88,15 @@
             // surface to the user — the reading experience simply uses defaults.)
         }
     }
+
+    private Task PersistDisplayAsync()
+    {
+        if (Display is not null)
+        {
+            ApplicationState.PersistAsJson(PersistKey, Display);
+        }
+        return Task.CompletedTask;
+    }
+
+    public void Dispose() => _persistSub.Dispose();
 }

@@ -71,7 +71,7 @@ else
     </div>
 
     @* ── Content ───────────────────────────────────────────────────────────────── *@
-    @if (_notifications.Length == 0 && _totalCount == 0)
+    @if ((Notifications?.Length ?? 0) == 0 && TotalCount.GetValueOrDefault() == 0)
     {
         <div class="flex flex-col items-center justify-center py-16 text-(--color-text-muted)">
             <svg viewBox="0 0 24 24" class="mb-3 size-10 opacity-30" aria-hidden="true" fill="currentColor">
@@ -84,7 +84,7 @@ else
     else if (_view == NotifView.Date)
     {
         <div class="flex flex-col">
-            @foreach (var n in _notifications)
+            @foreach (var n in Notifications ?? [])
             {
                 <NotificationItem Notification="n" OnActivate="() => ActivateAsync(n)" />
             }
@@ -96,7 +96,7 @@ else
         <div class="flex flex-col gap-2">
             @foreach (var cat in NotificationCategoryVisuals.AllCategories)
             {
-                var group = _notifications.Where(n => n.CategoryId == cat).ToList();
+                var group = (Notifications ?? []).Where(n => n.CategoryId == cat).ToList();
                 if (group.Count == 0) continue;
 
                 bool collapsed = group.Any(n => n.Collapsed) && !group.Any(n => !n.Collapsed);
@@ -122,12 +122,12 @@ else
     }
 
     @* ── Pagination ─────────────────────────────────────────────────────────────── *@
-    @if (_totalCount > PageSize)
+    @if (TotalCount > PageSize)
     {
         <div class="mt-6 flex justify-center">
             <PaginationControls CurrentPage="_page"
                                 PageSize="PageSize"
-                                TotalCount="_totalCount"
+                                TotalCount="@(TotalCount ?? 0)"
                                 OnPageChanged="HandlePageChangedAsync" />
         </div>
     }
@@ -151,15 +151,24 @@ else
         new Dictionary<string, object> { ["open"] = true };
 
     private bool _isLoading = true;
-    private NotificationDto[] _notifications = [];
-    private int _totalCount;
     private int _page = 1;
     private NotifView _view = NotifView.Date;
     private NotificationFeedOrder _order = NotificationFeedOrder.NewestFirst;
 
+    // Persisted across the prerender→interactive handoff — the initial feed page + total count
+    // hydrate from the prerender payload instead of refetching ([PersistentState] requires
+    // public properties). View/sort/page interactions below refetch via plain LoadAsync.
+    [PersistentState] public NotificationDto[]? Notifications { get; set; }
+    [PersistentState] public int? TotalCount { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
-        await LoadAsync();
+        // Restore-or-fetch: skip the initial query when [PersistentState] restored the
+        // prerendered page 1 (default view/sort — the only state a fresh document load has).
+        if (Notifications is null || TotalCount is null)
+            await LoadAsync();
+        else
+            _isLoading = false;
     }
 
     private async Task LoadAsync()
@@ -168,8 +177,8 @@ else
         // Start both queries concurrently; await each to get typed results.
         var notifTask = NotificationService.GetNotificationsAsync(_page, PageSize, _order);
         var countTask = NotificationService.GetTotalCountAsync();
-        _notifications = await notifTask;
-        _totalCount   = await countTask;
+        Notifications = await notifTask;
+        TotalCount    = await countTask;
         _isLoading = false;
     }
 
@@ -204,7 +213,7 @@ else
         if (!n.IsRead)
         {
             // Replace the notification in the local array with IsRead = true.
-            _notifications = [.. _notifications.Select(x =>
+            Notifications = [.. (Notifications ?? []).Select(x =>
                 x.NotificationId == n.NotificationId ? x with { IsRead = true } : x)];
             await NotificationService.MarkAsReadAsync(n.NotificationId);
         }

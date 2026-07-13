@@ -1,0 +1,171 @@
+@namespace TheCanalaveLibrary.SharedUI
+@typeparam TItem
+@implements IDisposable
+
+@* In-house debounced typeahead (Global Flip wave) — replaces the archived Blazored.Typeahead,
+   whose programmatic-Value-clear bug crashed the WASM renderer outright (removeChild-of-null on
+   the re-render after a pick; Blazored/Typeahead#221, repo archived 2024-12 with the bug open —
+   the circuit renderer happened to tolerate it, WASM does not). Design constraints:
+   - 100% Blazor-managed DOM: no JS interop, no focus scripting, nothing a renderer diff can trip
+     over. The ONE JS touchpoint is typeahead.js's delegated document-level keydown listener that
+     preventDefaults Enter on [data-typeahead-input] so a pick doesn't implicit-submit the
+     enclosing EditForm (the same delegated CSP-safe pattern as img-fallback.js — preventDefault
+     doesn't stop propagation, so @onkeydown below still sees the key).
+   - Selection uses @onmousedown (fires before the input's blur) with :preventDefault so focus
+     never leaves the input mid-pick; the dropdown closes explicitly after selection.
+   - "Pick fires a callback" contract: the input clears after every pick; the CALLER owns any
+     persistent selection state (TagSelector's chip list, StoryTitlePicker's action). This is what
+     eliminates the Blazored Value/ValueChanged clear-the-selection dance that caused the crash.
+   Overlay role styling mirrors UserMenu's flyout panel (surface-registry.md: Overlay). *@
+
+<div class="relative"
+     @onfocusout="HandleFocusOut">
+    <input type="text"
+           class="w-full rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) placeholder:text-(--color-text-muted)"
+           placeholder="@Placeholder"
+           value="@_term"
+           autocomplete="off"
+           data-typeahead-input
+           @oninput="HandleInputAsync"
+           @onkeydown="HandleKeyDown" />
+
+    @if (_open)
+    {
+        <div class="absolute left-0 right-0 top-full z-(--z-dropdown) mt-1 max-h-72 overflow-y-auto rounded-xl border border-(--color-border) bg-(--color-surface-raised) py-1 shadow-medium">
+            @if (_searching)
+            {
+                <div class="px-3 py-2 text-sm text-(--color-text-muted)">Searching…</div>
+            }
+            else if (_results.Count == 0)
+            {
+                <div class="px-3 py-2 text-sm text-(--color-text-muted)">@NotFoundText</div>
+            }
+            else
+            {
+                @for (int i = 0; i < _results.Count; i++)
+                {
+                    int index = i; // capture for the lambda
+                    TItem item = _results[index];
+                    <button type="button"
+                            class="@ItemClass(index)"
+                            @onmousedown="() => SelectAsync(item)"
+                            @onmousedown:preventDefault
+                            @onmouseover="() => _highlight = index">
+                        @ResultTemplate(item)
+                    </button>
+                }
+            }
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>Search callback — receives the debounced term, returns the result set.</summary>
+    [Parameter, EditorRequired] public Func<string, Task<IEnumerable<TItem>>> SearchMethod { get; set; } = default!;
+
+    /// <summary>Fired when the user picks a result. The input clears itself after every pick —
+    /// the caller owns persistent selection state.</summary>
+    [Parameter, EditorRequired] public EventCallback<TItem> OnSelected { get; set; }
+
+    /// <summary>Row content for one result.</summary>
+    [Parameter, EditorRequired] public RenderFragment<TItem> ResultTemplate { get; set; } = default!;
+
+    [Parameter] public string Placeholder { get; set; } = "Type to search...";
+    [Parameter] public string NotFoundText { get; set; } = "No results found";
+    [Parameter] public int MinimumLength { get; set; } = 2;
+    [Parameter] public int DebounceMilliseconds { get; set; } = 300;
+
+    private string _term = string.Empty;
+    private bool _open;
+    private bool _searching;
+    private int _highlight;
+    private List<TItem> _results = [];
+    private CancellationTokenSource? _debounce;
+
+    // THE neutral hover token doubles as the keyboard-highlight tint (Interaction States grammar:
+    // one neutral hover) — mouse hover and arrow-key highlight look identical by design.
+    private string ItemClass(int index) =>
+        "block w-full px-3 py-2 text-left text-sm text-(--color-text) transition-colors " +
+        (index == _highlight ? "bg-(--color-surface-hover)" : "hover:bg-(--color-surface-hover)");
+
+    private async Task HandleInputAsync(ChangeEventArgs e)
+    {
+        _term = e.Value?.ToString() ?? string.Empty;
+
+        _debounce?.Cancel();
+        _debounce?.Dispose();
+        _debounce = new CancellationTokenSource();
+        CancellationToken token = _debounce.Token;
+
+        if (_term.Length < MinimumLength)
+        {
+            _open = false;
+            _results = [];
+            return;
+        }
+
+        _open = true;
+        _searching = true;
+
+        try
+        {
+            await Task.Delay(DebounceMilliseconds, token);
+            IEnumerable<TItem> found = await SearchMethod(_term);
+            if (token.IsCancellationRequested) return; // a newer keystroke owns the dropdown now
+            _results = found.ToList();
+            _highlight = 0;
+            _searching = false;
+        }
+        catch (TaskCanceledException)
+        {
+            // superseded by a newer keystroke — nothing to render
+        }
+    }
+
+    private async Task SelectAsync(TItem item)
+    {
+        // Close + clear FIRST so the re-render that OnSelected triggers in the parent never
+        // coincides with a half-open dropdown (the failure geometry of the replaced library).
+        _open = false;
+        _searching = false;
+        _results = [];
+        _term = string.Empty;
+        await OnSelected.InvokeAsync(item);
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (!_open || _results.Count == 0)
+            return;
+
+        switch (e.Key)
+        {
+            case "ArrowDown":
+                _highlight = Math.Min(_highlight + 1, _results.Count - 1);
+                break;
+            case "ArrowUp":
+                _highlight = Math.Max(_highlight - 1, 0);
+                break;
+            case "Enter":
+                // typeahead.js already preventDefault'ed the implicit form submit.
+                await SelectAsync(_results[_highlight]);
+                break;
+            case "Escape":
+                _open = false;
+                break;
+        }
+    }
+
+    private void HandleFocusOut()
+    {
+        // Selection happens on mousedown (before blur, preventDefault keeps focus), so a genuine
+        // focus departure always means "dismiss". No timers, no JS.
+        _open = false;
+    }
+
+    public void Dispose()
+    {
+        _debounce?.Cancel();
+        _debounce?.Dispose();
+    }
+}

@@ -9,6 +9,8 @@
    IGroupWriteService (: IGroupReadService) injected so the Join button on GroupPage can reuse
    the same service scope (page itself only calls the read path here).
    Server-side GroupAudience named filter hides Mature groups from mature-disabled users automatically.
+   [PersistentState] on Groups/TotalCount eliminates the prerender→interactive double-fetch for the
+   initially-loaded page; page-change fetches are user-driven interactive actions (plain assignment).
    WU32. *@
 
 <PageTitle>Groups</PageTitle>
@@ -32,14 +34,14 @@
     {
         <p class="text-(--color-text-muted)"><em>Loading groups…</em></p>
     }
-    else if (_groups.Length == 0)
+    else if (Groups is null || Groups.Length == 0)
     {
         <p class="text-(--color-text-muted)">No groups yet. Be the first to create one!</p>
     }
     else
     {
         <div class="flex flex-col gap-3">
-            @foreach (GroupCardDto group in _groups)
+            @foreach (GroupCardDto group in Groups)
             {
                 <GroupCard Group="group" />
             }
@@ -47,7 +49,7 @@
 
         <PaginationControls CurrentPage="_currentPage"
                             PageSize="_pageSize"
-                            TotalCount="_totalCount"
+                            TotalCount="TotalCount"
                             OnPageChanged="HandlePageChanged" />
     }
 
@@ -56,10 +58,14 @@
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
-    private GroupCardDto[] _groups = [];
+    // Persisted across the prerender→interactive handoff. The service returns a
+    // (Items, TotalCount) ValueTuple, which does not survive System.Text.Json — split into two
+    // persisted properties (layer5-wasm.md §"Avoiding the double fetch").
+    [PersistentState] public GroupCardDto[]? Groups { get; set; }
+    [PersistentState] public int TotalCount { get; set; }
+
     private int _currentPage = 1;
     private const int _pageSize = 20;
-    private int _totalCount;
     private bool _isLoading = true;
     private int? _currentUserId;
 
@@ -72,16 +78,28 @@
             _currentUserId = int.TryParse(idStr, out int id) ? id : null;
         }
 
-        await LoadAsync();
+        if (Groups is null)
+        {
+            // No persisted prerender value to restore — fetch. (Restore-or-fetch ??= idiom in
+            // branch form: the tuple deconstruction in LoadAsync can't be a single ??=.)
+            await LoadAsync();
+        }
+        else
+        {
+            // [PersistentState] restored the initially-loaded page (Groups + TotalCount).
+            _isLoading = false;
+        }
     }
 
+    // Plain assignments — page-change fetches are user-driven interactive actions, never
+    // short-circuited by persisted state.
     private async Task LoadAsync()
     {
         _isLoading = true;
         (GroupCardDto[] items, int total) = await GroupService.GetListingsAsync(_currentPage, _pageSize);
-        _groups     = items;
-        _totalCount = total;
-        _isLoading  = false;
+        Groups     = items;
+        TotalCount = total;
+        _isLoading = false;
     }
 
     private async Task HandlePageChanged(int page)

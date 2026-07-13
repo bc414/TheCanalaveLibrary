@@ -2640,3 +2640,186 @@ need. Layer 7 dissolved — grid column removed; L8 keeps its number.
 - **Deferred:** home-page SitePoll surfacing (folded into homepage-sections decision row 2).
 - **Tool:** Claude Code (Fable). **Pointer:** `audit/BlogPosts.md` F37; `layer4-style.md`
   Pattern Accumulation "PollView / PollEditorForm"; `middle_plan_v2.md` Resolved + row 3.
+
+## WU-L5Sweep — Mechanical Layer-5 add: every ServerXXXService gets an HTTP endpoint + client impl — DONE ✓ (2026-07-13)
+
+- **Goal:** get the whole codebase flip-ready for `InteractiveAuto` — add the minimal-API
+  endpoint + `HttpClient` client-impl pair for every `ServerXXXService` not already built
+  (Tags/Tag Directory were the only pre-existing Layer-5 surface, WU-L5Pilot). Explicitly
+  **add-without-verify**: no per-feature Integration/Unit tests, no browser pass, no
+  `App.razor` render-mode flip — those remain future work. Compile-clean is the only bar.
+- **Doc-Touch moment 1 (before any code):** `layer5-wasm.md` hardened — canonical
+  `/api/{kebab-plural-entity}` naming table; exception→status table extended from Tags' original
+  3 cases to the full ~10-case set actually thrown across the service layer; POST-for-complex-reads
+  rule (non-scalar params can't GET-bind); `PagedResult<T>` ruling for the 6 tuple-returning listing
+  methods; stream/multipart pattern (upload via `MultipartFormDataContent`/`IFormFile`, download via
+  direct anchor-link, never a client service round-trip); self-referential/read-only single-class
+  client shapes. Grid correction: L5 Stage 5 had drifted to mean two things — Groups (F38–40) and
+  Recommendations (F27–29) were marked Stage 5 off service-layer test citations with **no
+  endpoint/client ever built**; corrected to Stage 2 (`status.md`, `audit/Groups.md`,
+  `audit/Recommendations.md`). Also fixed mid-implementation (Doc-Touch moment 2): `StoryEditorPage`
+  injected `IImageStorageService` directly (a stray bypass of the service-owns-the-upload pattern);
+  added `IStoryWriteService.UploadCoverArtAsync` so cover upload flows through the same pattern as
+  `IUserSettingsService.UploadProfilePictureAsync`.
+- **Shared infra (once, used by all 20 clusters below):** `Server/Http/EndpointHelpers.cs`
+  (`ExecuteWriteAsync` — the one copy of the exception→status map, validation-exception matching by
+  type-name suffix since the 13 `{Feature}ValidationException` types share no common base);
+  `Core/Http/PagedResult.cs`; `Client/Http/ClientHttpHelpers.cs` (shared `ProblemDetails.Detail`/
+  `retryAfterSeconds` extraction; exception *construction* stays per-feature). Deleted the stale
+  `Server/Endpoints/StoryEndpoints.cs` (flat deprecated folder, already claiming `/api/stories`).
+- **Swept (20 cluster tasks, one endpoints class + client impl per interface, mostly built via
+  parallel subagents against the hardened doc + the Tags reference implementation):** Stories
+  (Story/StoryArc/StoryLineage/ViewCount-ping), Series, Chapters (Chapter/ChapterReadMark/
+  ReadingProgress-ping), Comments, UserStoryInteractions, SavedTagSelection, Following, Profiles
+  (UserProfile/UserSettings incl. multipart upload) + Sprites/Theme, Recommendations, BlogPosts
+  (BlogPost/Poll), Notifications, Discovery (ManualTreeSearch/TreeSearch/DiscoveryDefaults/
+  CoOccurrence — all POST-reads; minted a small `ResplitRequest`/`TreeSearchListingRequest`
+  transport envelope apiece for the two-complex-param methods), Groups, Moderation
+  (Moderation/SiteDailyStat), Messaging, Spotlight, SiteSettings, Badges, Import (three multipart
+  parse endpoints + `Resplit` — confirmed server-only via its `IHtmlSanitizationService` dependency,
+  so it could NOT skip the network hop despite being synchronous/pure-looking), UserActivity-ping.
+  `IExportService` needed no work — already fully built (`Server/Export/ExportEndpoints.cs`,
+  anchor-link download, never `@inject`ed). Structural exclusions unchanged from the plan:
+  `IImageStorageService`, `IHtmlSanitizationService`, `IWriteRateLimitService` (server-only infra),
+  `IDeviceDetectionService`/`ISpriteReadService` (already WASM-native via shared impls), all of
+  Identity's static-SSR surface.
+  - **Known, documented, NOT fixed (out of scope for a mechanical add-only pass):**
+    `EndpointHelpers`' blanket `InvalidOperationException → 401` is imprecise for several clusters
+    (Following's self-follow/self-vouch guards, Badges'/Moderation's/Recommendations' business-rule
+    limit checks) that also throw `InvalidOperationException` for non-auth reasons — the message
+    still survives verbatim via `ProblemDetails.Detail`, only the status code is generic. Each
+    affected `*Endpoints.cs` documents this locally. `ServerBadgeReadService`/`WriteService` have no
+    ownership/role check at all (any caller can act on any userId) — pre-existing gap, surfaced in
+    `BadgeEndpoints.cs`'s doc comment, not fixed here.
+- **Program.cs wiring:** all 33 `app.Map{X}Endpoints();` calls added to `Server/Program.cs`; all 51
+  `AddScoped<I,Client>()` registrations added to `Client/Program.cs` (both under one `WU-L5Sweep`
+  comment block) — consolidated by the orchestrating session after the parallel cluster work landed,
+  specifically to avoid concurrent edits to these two shared files.
+- **Verified:** `dotnet build` clean (0 warnings/0 errors) on `TheCanalaveLibrary.Core`,
+  `TheCanalaveLibrary.Client` (the WASM compile — confirms every client impl fully satisfies its
+  interface with no server-only type leakage), and `TheCanalaveLibrary.Server`, each built to an
+  isolated output path to route around a live dev-server file lock. One cross-cluster defect caught
+  at this stage and fixed: `ClientGroupReadService.GetMembersAsync` read a nonexistent `.Members`
+  field off `PagedResult<T>` (the record only has `.Items`) — a concurrent-agent-authoring
+  side-effect, not a doc gap.
+  **A real, more serious bug surfaced only by `dotnet test`, not `dotnet build`:**
+  `StoryEndpoints.cs`'s `/query` and `/filter-candidates` handlers each combine the body-inferred
+  `StoryFilterDto filter` with an unattributed sibling array (`restrictToStoryIds`/`candidateIds`).
+  `RequestDelegateFactory` can't disambiguate an array parameter's binding source once another
+  parameter in the same handler is already inferred as `[FromBody]` — it resolved to an un-bindable
+  "UNKNOWN" source and **threw at app startup** (`AuthorizationPolicyCache` builds every endpoint's
+  metadata eagerly, so one bad handler crashed `WebApplicationFactory` for the whole app). This
+  looked like a mass regression (642 of 650 Integration tests failed with an identical
+  `IntegrationTestBase.InitializeAsync` stack trace) but was one root cause. Fixed with explicit
+  `Microsoft.AspNetCore.Mvc.FromQueryAttribute` on both array parameters (a first attempt using
+  `Microsoft.AspNetCore.Http`'s namespace was the wrong one — `[FromQuery]` lives in `Mvc`); the
+  gotcha and rule ("array param sharing a handler with a body-inferred DTO always needs explicit
+  `[FromQuery]`") are now recorded in `layer5-wasm.md` §"Reads with non-scalar parameters" so future
+  POST-read handlers don't repeat it. `dotnet test`, full solution, after both fixes: **Unit
+  685/685, RazorComponents 619/619, Integration 650/650 — all green.**
+- **Explicitly not done (by design — see `layer5-wasm.md` "Rollout Strategy" WU-L5Sweep bullet):**
+  the `App.razor` → `InteractiveAuto` flip, `[PersistentState]` adoption, per-feature
+  `{Feature}EndpointsTests`/`Client{Feature}ServiceTests`, any browser verification. No L5 grid cell
+  moves to Stage 5 from this work-unit — cells stay at their current number (mostly Stage 2) until
+  the future verification wave lands per-feature.
+- **Tool:** Claude Code (Opus), orchestrating 20 parallel `general-purpose` subagents for the
+  mechanical per-cluster authoring. **Pointer:** `layer5-wasm.md` (hardened this WU);
+  `status.md` Global Conditions "Mechanical WASM API sweep."
+
+## WU-GlobalFlip — InteractiveAuto flip + full [PersistentState] adoption + WASM browser wave — DONE ✓ (2026-07-13)
+
+The Layer-5 endgame (layer5-wasm.md §"The Global Flip"), executed same-day on top of WU-L5Sweep:
+the whole site now runs `InteractiveAuto` (server circuit on first visit, WebAssembly on revisits),
+with declarative prerender-state persistence adopted across every data-loading page, verified by a
+WASM-focused whole-site browser wave that found and fixed seven real bugs.
+
+- **Doc-Touch moment 1:** `layer5-wasm.md` §"[PersistentState]" hardened against the official
+  .NET 10 doc (learn.microsoft.com "Blazor prerendered state persistence") before implementation:
+  public-property requirement, ValueTuple-doesn't-survive-STJ, browser-exposure rule
+  (persist-only-what-renders), no-prerender-on-internal-SPA-navs (dispatcher param-change reloads
+  stay plain fetches), `@key` instance association, `AllowUpdates`/`RestoreBehavior` options.
+- **The flip (checklist steps 1–3):** `Routes.razor` moved Server→Client with retargeted
+  assemblies (AppAssembly = SharedUI, Additional = Client; the Server assembly deliberately absent —
+  URLs the interactive router can't match fall back to full-document navs, which IS the Identity
+  static-SSR escape hatch). `UserActivityTracker` moved Server→SharedUI. `App.razor`
+  `PageRenderMode` → `InteractiveAuto` (the `AcceptsInteractiveRouting()` guard stays). The
+  client-registration sweep surfaced four DI gaps, all fixed: `WasmActiveUserContext`
+  (claims-only twin of `ServerActiveUserContext` over the deserialized auth state — 8 components
+  inject `IActiveUserContext`), `WasmHostEnvironmentAdapter` (`IHostEnvironment` →
+  `IWebAssemblyHostEnvironment`, unblocks DevLoginBar), `ManualTreeStore` client registration, and
+  `ISpotlightSlotAllocator` (which needed its own full L5 surface:
+  `SpotlightSlotAllocatorEndpoints` + `ClientSpotlightSlotAllocator`, mod-role-gated).
+- **[PersistentState] adoption (checklist step 4):** all ~30 data-loading pages + 9 self-loading
+  components converted by 8 parallel agents (StoryPage/TagDirectoryPage were the pre-existing
+  references). Primary fetched content persists; per-viewer supplementary state stays ephemeral
+  (StoryPage's `_usiState` judgment); ValueTuple pairs split into separate persisted properties;
+  dispatcher pages keep plain-assign param-change reloads. Two exposure fixes landed en route
+  (ChapterEditorPage's forbidden-branch no longer persists unrendered chapter source;
+  ModUsersPage filters before persisting). Home fetch confirmed to live entirely in
+  `CommunitySpotlightDisplay`.
+- **The wave (checklist step 5) — WASM-focused per the runtime check (network shows
+  `_framework/*.wasm` + zero `_blazor` WebSocket on the cached-runtime pass). Seven bugs found
+  live, all fixed same-session:**
+  1. **Empty-body 200s crashed every nullable-returning read** (`GetViewerLastInteractionUtcAsync`
+     broke StoryPage for viewers with no read history): ASP.NET writes an EMPTY body for a null
+     result value under BOTH `Results.Ok(null)` and `Results.Json(null)`, and
+     `GetFromJsonAsync<T?>` throws `ExpectedJsonTokens`. Fixed client-side:
+     `ClientHttpHelpers.GetNullableFromJsonAsync`/`ReadNullableFromJsonAsync` (empty→null), swapped
+     into all 18 nullable reads + `ClientTagWriteService.UpdateTagAsync` (a latent pilot bug whose
+     null branch had never been hit). Rule: layer5-wasm.md §"Error-Translation Contract".
+  2. **Poll voting 400'd every vote**: on POST, a bare `int[]` infers as `[FromBody]` (query
+     inference is GET-only) — `PollEndpoints`' vote handler demanded a body the client never sends.
+     Fixed with `[FromQuery]`; rule extended in layer5-wasm.md (both inference failure modes now
+     documented).
+  3. **`IStoryTag` polymorphism** (flagged during [PersistentState] work, fixed pre-wave):
+     `CreateStoryDTO`/`StoryUpdateDTO` carry `List<IStoryTag>` across HTTP; interface-typed members
+     can't round-trip STJ without `[JsonPolymorphic]`/`[JsonDerivedType(typeof(StoryTagDTO))]`.
+     Verified live: story create with Setting+Genre tags → 201-equivalent → tags persisted.
+  4. **Blazored.Typeahead crashed the WASM renderer** (archived lib, Blazored/Typeahead#221 —
+     programmatic Value-clear after a pick, the TagSelector pattern; first-ever WASM exposure).
+     REPLACED with in-house `SharedUI/Controls/CanalaveTypeahead.razor` (100% Blazor-managed DOM,
+     one delegated `typeahead.js` Enter-suppression listener, token-styled Overlay dropdown,
+     debounced, keyboard nav) — TagSelector + StoryTitlePicker rebuilt on it, package/CSS/JS refs
+     removed, `CanalaveTypeaheadTests` (7 tests) covers the search→select path bUnit never could.
+     `layer4-style.md`'s old leave-as-is stylesheet carve-out closed.
+  5. **Same-component route redirects on Quill-hosting pages crashed the WASM renderer**
+     (`removeChild` of null — Blazored.TextEditor#71 geometry: in-place fine-grained diffs walk
+     sibling lists Quill altered; cross-component teardown is root-first and safe). Fixed with
+     `forceLoad: true` on Story/Chapter/BlogPost editor create→edit + version-switch redirects —
+     [PersistentState] makes the full-load hydration invisible. Verified: story AND chapter
+     create→edit both land clean.
+  6. **TreeSearchPage stale root**: no `OnParametersSetAsync` reload path, so an in-app nav
+     `/discover/me` → `/discover/user/2` reused the instance and rendered the OLD root's tree
+     under the new URL. Fixed with the standard WU-ComponentSoundness dispatcher pattern
+     (route-identity tracking + plain-assign reload); verified live both directions.
+  7. **Every `/Account/*` page 500'd**: `ReaderDisplayProvider` (tree-wrapping provider, renders on
+     static-SSR Identity pages too) used `[PersistentState]`, whose persistence callback has no
+     inferable render mode on a fully static render → framework throw at persist time. Converted
+     to the manual `PersistentComponentState` API with the explicit
+     `RegisterOnPersisting(cb, RenderMode.InteractiveAuto)` overload — the one sanctioned
+     exception to the "don't hand-roll" rule (now documented in layer5-wasm.md).
+- **Verified working under real WASM in the wave** (each with zero console errors + psql ground
+  truth for writes): home/spotlight, discover (random batch + filtered `POST /query` + sort),
+  story page (persisted-state hydration confirmed by network log: primary data never refetched,
+  only ephemeral per-viewer calls fire), favorite toggle (DB row), chapter reading, comment post
+  (sanitized row 323825), tags directory, tag typeahead search/select, bookshelves, profile
+  (LastActive loop live), settings read+write (tagline round-trip), groups list/page (PagedResult +
+  nullable GroupRole), polls vote→results→retract, notifications page/bell, messages read+send,
+  story create/edit incl. tags, chapter create, story lineage page + StoryTitlePicker, tree search
+  auto tab + root switching, all five mod pages as AdminUser (incl. `/mod/stats` charts + slot
+  grants via `ClientSpotlightSlotAllocator`), spotlight redemption page, Identity `/Account/Manage`
+  (static SSR via full-doc nav), EPUB export download (200 + attachment headers), DevLoginBar user
+  switching, DraftAutosave restore banner.
+- **Known false-alarm recorded:** the claude-in-chrome network reader reports body-less success
+  responses (202/204/200-empty) as "503" — server log + DB are the ground truth (all such
+  requests executed correctly). Also noted as pre-existing (not flip regressions, not fixed):
+  MessageComposer doesn't clear after send (never did); ModSpotlightPage's unpersisted settings
+  knobs still gate its loading flash.
+- **Verified:** `dotnet build` clean; RazorComponents tier 626/626 mid-wave after the typeahead
+  swap; full `dotnet test` re-run at wave end (Unit + RazorComponents + Integration) — result
+  recorded in the final session summary. Test stories/chapters created by the wave were removed
+  from the standing dev DB (psql); the wave's test comment and favorite row on story 2385 remain
+  as ordinary TestUser data.
+- **Tool:** Claude Code (Opus) driving Chrome via MCP browser tools; 8 parallel agents for the
+  [PersistentState] adoption. **Pointer:** `layer5-wasm.md` (all new rules recorded);
+  `status.md` grid + Global Conditions "Global Flip".

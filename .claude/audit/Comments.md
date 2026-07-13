@@ -35,7 +35,10 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   `WU31_5b_DropPhantomBaseCommentFKs` drops the 4 columns / 4 indexes / 4 FK constraints.
   Convention recorded in `canalave-conventions/layer1-data-model.md`. Verified: `dotnet test`
   → 298 integration / 414 unit / 397 RazorComponents = 1,109 total, all green.
-  **L5 — Stage 2. L6 — Stage 5 (WU-L6, 2026-07-07)** — golden index
+  **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; comment posting verified in a real WASM runtime during the
+  flip's browser wave (sanitized row 323825, psql ground truth). Full wave narrative + the 7 bugs
+  found/fixed: `workplan.md` WU-GlobalFlip. **L6 — Stage 5 (WU-L6, 2026-07-07)** — golden index
   `ix_chapter_comments_chapter_id_date_posted` built in `L6_IndexBatch` (+ the three sibling
   contexts, identical query shape). Measured at 324k seeded comments: roots page p50
   24.32→0.29 ms, p95 136.82→0.38 ms (−98.8% — the before-plan burned ~20 ms on parallel-worker
@@ -57,7 +60,10 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   `ICommentReadService`/`ICommentWriteService` without exception.
 
 ## Feature 24 — Comment Display & Pagination
-- **L1 — Stage 5.** **L5 — Stage 2. L6 — Stage 5 (WU-L6, 2026-07-07** — golden index built +
+- **L1 — Stage 5.** **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live
+  (WU-L5Sweep) and the site now runs global InteractiveAuto; comment display + pagination verified
+  in a real WASM runtime during the flip's browser wave. Full wave narrative + the 7 bugs
+  found/fixed: `workplan.md` WU-GlobalFlip. **L6 — Stage 5 (WU-L6, 2026-07-07** — golden index built +
   measured −98.8% on the roots page; see the Feature 23 L6 note).
 - **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):**
   Built `CommentEditor` leaf (shared editing surface), `CommentItem` leaf, and `CommentSection`
@@ -119,7 +125,11 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
 ## Feature 25 — Comment Likes
 - **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note.
   Optimistic like reconciliation + `CommentItem` like affordance (`.HasDelegate` gated) built as part
-  of the integrated WU20 delivery. **L5 — Stage 2.**
+  of the integrated WU20 delivery.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto (like toggle itself not browser-driven in the flip's wave;
+  the comment read/post flows were). Full wave narrative + the 7 bugs found/fixed: `workplan.md`
+  WU-GlobalFlip.
 - **L1 — Stage 5 (WU19, 2026-06-23; stale-code trap resolved).** Prior note: the code used an implicit EF
   many-to-many (`BaseComment.LikedByUsers` ⇄ `User.LikedComments`) instead of the explicit `CommentLike`
   junction called for in spec §6.11. WU19 introduced `CommentLike.cs` in `Core/Comments/` (with `CommentId`
@@ -149,7 +159,10 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   `UserHasCompletedStory`, else sets `_showSpoilerConfirm` (in-item `ConfirmDialog` — no service
   needed); `_isRevealed` is ephemeral (re-hides on page load, §5.9.1). Blur cover uses Tailwind
   `blur-md` + `pointer-events-none` overlay; "Reveal spoiler" button carries `aria-label="Reveal spoiler"`.
-  **L3.5 — Stage 5** (WU9, 2026-06-21 — see note below). **L5 — Stage 2.**
+  **L3.5 — Stage 5** (WU9, 2026-06-21 — see note below). **L5 — Stage 5 (WU-GlobalFlip,
+  2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the site now runs global
+  InteractiveAuto (spoiler reveal not browser-driven in the flip's wave; the comment read/post flows
+  were). Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 - **L1 — Stage 5 (gap found and closed in WU19, 2026-06-23).** `IsSpoiler` is on `ChapterComment` only
   (chapter-scoped, not `BaseComment`) — exactly §5.9.1. However the property was **missing from the entity**
   and the DB had no `is_spoiler` column despite L1 being previously marked Stage 5. WU19 added

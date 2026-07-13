@@ -10,18 +10,18 @@
     <Authorized>
         <a href="/messages"
            class="relative flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) hover:text-(--color-action-ink)"
-           aria-label="@(_unreadCount > 0 ? $"Messages — {_unreadCount} unread" : "Messages")">
+           aria-label="@(UnreadCount > 0 ? $"Messages — {UnreadCount} unread" : "Messages")">
             <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true"
                  fill="none" stroke="currentColor" stroke-width="1.5">
                 <path stroke-linecap="round" stroke-linejoin="round"
                       d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
             </svg>
             <span class="hidden sm:inline">Messages</span>
-            @if (_unreadCount > 0)
+            @if (UnreadCount > 0)
             {
                 <span class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-(--color-action) px-1 text-[10px] font-bold leading-none text-(--color-text)"
                       aria-hidden="true">
-                    @(_unreadCount > 99 ? "99+" : _unreadCount.ToString())
+                    @(UnreadCount > 99 ? "99+" : UnreadCount.ToString())
                 </span>
             }
         </a>
@@ -29,12 +29,17 @@
 </AuthorizeView>
 
 @code {
-    private int _unreadCount;
+    // Persisted across the prerender→interactive handoff ([PersistentState] requires a public
+    // property) so the badge hydrates without a refetch/flash. LocationChanged refreshes stay
+    // plain assignments (internal SPA navs never see persisted state anyway).
+    [PersistentState] public int? UnreadCount { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
         Nav.LocationChanged += OnLocationChangedAsync;
-        await RefreshCountAsync();
+        // Restore-or-fetch: skip the initial count query when the prerendered value was restored.
+        if (UnreadCount is null)
+            await RefreshCountAsync();
     }
 
     // async void is the correct pattern for Blazor Server event handlers;
@@ -49,12 +54,12 @@
     {
         try
         {
-            _unreadCount = await ReadService.GetUnreadConversationCountAsync();
+            UnreadCount = await ReadService.GetUnreadConversationCountAsync();
         }
         catch
         {
             // Swallow — unauthenticated or transient error; badge stays at 0.
-            _unreadCount = 0;
+            UnreadCount = 0;
         }
     }
 

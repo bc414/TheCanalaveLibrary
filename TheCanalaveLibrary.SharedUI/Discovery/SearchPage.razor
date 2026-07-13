@@ -13,12 +13,18 @@
    to SearchDesktop / SearchMobile. AllowAnonymous: discovery is public.
 
    Two modes keyed on _filter.Sort:
-   - Random: _items accumulates across batches; "Give me more" appends a fresh draw.
-   - Sorted (DatePublished / Relevance): offset pagination via GetListingsAsync. *@
+   - Random: Items accumulates across batches; "Give me more" appends a fresh draw.
+   - Sorted (DatePublished / Relevance): offset pagination via GetListingsAsync.
+
+   [PersistentState] on DefaultExcludedInteractions and Items eliminates the prerender→interactive
+   double fetch on full document loads (layer5-wasm.md §"Avoiding the double fetch"). Only the
+   INITIAL load reads the persisted payload — every user-driven search/page/batch afterward is a
+   plain assignment to the same properties. Per-viewer interaction states (_states) stay ephemeral
+   and are reloaded on hydration. *@
 
 @if (DeviceService.IsMobile())
 {
-    <SearchMobile Items="_items"
+    <SearchMobile Items="@(Items ?? [])"
                   TotalCount="_totalCount"
                   InteractionStates="_states"
                   CurrentUserId="_currentUserId"
@@ -33,7 +39,7 @@
 }
 else
 {
-    <SearchDesktop Items="_items"
+    <SearchDesktop Items="@(Items ?? [])"
                    TotalCount="_totalCount"
                    InteractionStates="_states"
                    CurrentUserId="_currentUserId"
@@ -55,8 +61,20 @@ else
     private int? _currentUserId;
     private StoryFilterDto _filter = new() { Sort = DefaultSortOrder.Random };
 
-    // Accumulation list — appended to in random mode; replaced on sort change or filter change.
-    private StoryListingDto[] _items = [];
+    // §8.7 default exclusions for the SearchPage surface — fetched at prerender, restored at
+    // hydration ([PersistentState] requires a public property). Array, not IReadOnlyList: STJ
+    // round-trips concrete types most predictably in the persisted payload.
+    [PersistentState]
+    public UserStoryInteractionTypeEnum[]? DefaultExcludedInteractions { get; set; }
+
+    // Accumulation array — appended to in random mode; replaced on sort change or filter change.
+    // Persisted so the initial random batch survives the prerender→interactive handoff; later
+    // batches/pages overwrite it with plain assignments.
+    [PersistentState]
+    public StoryListingDto[]? Items { get; set; }
+
+    // In random mode TotalCount is Items.Length (deterministic proxy — see LoadRandomBatchAsync),
+    // so it is recomputed on restore rather than persisted.
     private int _totalCount;
     private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states =
         new Dictionary<int, UserStoryInteractionStateDto>();
@@ -77,14 +95,26 @@ else
             if (int.TryParse(idClaim, out int userId)) _currentUserId = userId;
         }
 
-        // Seed filter with §8.7 defaults for the SearchPage surface.
-        IReadOnlyList<UserStoryInteractionTypeEnum> defaultExclusions =
-            await DiscoveryDefaults.GetDefaultExcludedInteractionsAsync(SiteSearchModes.SearchPage);
+        // Seed filter with §8.7 defaults for the SearchPage surface (??= restore-or-fetch idiom).
+        DefaultExcludedInteractions ??=
+            [.. await DiscoveryDefaults.GetDefaultExcludedInteractionsAsync(SiteSearchModes.SearchPage)];
 
-        _filter = _filter with { ExcludedInteractions = defaultExclusions };
+        _filter = _filter with { ExcludedInteractions = DefaultExcludedInteractions };
 
-        // Pre-load initial random batch — spec §5.28: area is never blank on load.
-        await LoadRandomBatchAsync(append: false);
+        if (Items is null)
+        {
+            // Pre-load initial random batch — spec §5.28: area is never blank on load.
+            await LoadRandomBatchAsync(append: false);
+        }
+        else
+        {
+            // Restored from the prerender payload: no listing refetch. Recompute the random-mode
+            // TotalCount proxy and reload only the per-viewer interaction states — ephemeral
+            // supplementary state, deterministic per viewer, so the re-fetch is flicker-free
+            // (same treatment as StoryPage's _usiState).
+            _totalCount = Items.Length;
+            await LoadInteractionStatesAsync();
+        }
     }
 
     // ── Filter changes (panel Apply) ──────────────────────────────────────────────────────────────
@@ -97,7 +127,7 @@ else
         await ResolveTagChipsAsync();
 
         // Reset accumulation on any filter/mode change.
-        _items = [];
+        Items = [];
         _totalCount = 0;
 
         if (_filter.Sort == DefaultSortOrder.Random)
@@ -116,7 +146,7 @@ else
 
     private async Task LoadSortedPageAsync()
     {
-        (_items, _totalCount) = await StoryReadService.GetListingsAsync(_filter);
+        (Items, _totalCount) = await StoryReadService.GetListingsAsync(_filter);
         await LoadInteractionStatesAsync();
     }
 
@@ -133,10 +163,11 @@ else
     {
         StoryListingDto[] batch = await StoryReadService.GetRandomBatchAsync(_filter, RandomBatchSize);
 
-        _items = append ? [.. _items, .. batch] : batch;
+        StoryListingDto[] items = append ? [.. Items ?? [], .. batch] : batch;
+        Items = items;
         // In random mode TotalCount is not meaningful (stateless draw); use item count as a proxy
         // so StoryDeck's PaginationControls self-hides (TotalCount == PageSize == Items.Count → TotalPages=1).
-        _totalCount = _items.Length;
+        _totalCount = items.Length;
 
         await LoadInteractionStatesAsync();
     }
@@ -145,10 +176,10 @@ else
 
     private async Task LoadInteractionStatesAsync()
     {
-        if (_currentUserId.HasValue && _items.Length > 0)
+        if (_currentUserId.HasValue && Items is { Length: > 0 })
         {
             _states = await InteractionReadService.GetStatesByStoryIdsAsync(
-                [.. _items.Select(i => i.StoryId)]);
+                [.. Items.Select(i => i.StoryId)]);
         }
         else
         {

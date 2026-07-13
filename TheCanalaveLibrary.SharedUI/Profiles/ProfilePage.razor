@@ -29,6 +29,10 @@
    3. Load the tab payload on init, then reload only the payload on tab switch.
    4. Device-branch to ProfileDesktop / ProfileMobile.
 
+   [PersistentState] on the header + initially-loaded tab payload eliminates the
+   prerender→interactive double fetch on full document loads; tab clicks and UserId changes are
+   internal SPA navigations (never prerendered) and reload plain via ClearTabPayload().
+
    ProfileBanner always receives RelationshipState = null for anonymous or owner — no Follow/Vouch
    controls. The owner receives IsOwner = true; no other viewer does. *@
 
@@ -37,62 +41,62 @@
     <PageTitle>Profile</PageTitle>
     <p class="text-(--color-text-muted)"><em>Loading profile…</em></p>
 }
-else if (_header is null)
+else if (Header is null)
 {
     <PageTitle>Not Found</PageTitle>
     <p class="text-(--color-text-muted)">This profile doesn't exist or isn't visible to you.</p>
 }
 else
 {
-    <PageTitle>@_header.Username &mdash; Profile</PageTitle>
+    <PageTitle>@Header.Username &mdash; Profile</PageTitle>
     <SocialMetaTags Title="@OgTitle" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="profile"/>
 
     @if (DeviceService.IsMobile())
     {
-        <ProfileMobile Header="@_header"
+        <ProfileMobile Header="@Header"
                        Tab="@_tab"
                        IsOwner="@_isOwner"
                        CurrentUserId="@_currentUserId"
                        RelationshipState="@_relationship"
                        OnRemoveVouch="HandleRemoveVouchAsync"
-                       BioHtml="@_bioHtml"
-                       StoryItems="@_storyItems"
-                       StoryTotalCount="@_storyTotalCount"
+                       BioHtml="@BioHtml"
+                       StoryItems="@(StoryItems ?? [])"
+                       StoryTotalCount="@StoryTotalCount"
                        InteractionStates="@_interactionStates"
                        StoryFilter="@_storyFilter"
                        OnStoryFilterChanged="HandleStoryFilterChanged"
                        OnStoryPageChanged="HandleStoryPageChanged"
-                       BlogPosts="@_blogPosts"
-                       BlogTotalCount="@_blogTotalCount"
+                       BlogPosts="@(BlogPosts ?? [])"
+                       BlogTotalCount="@BlogTotalCount"
                        BlogPage="@_blogPage"
                        BlogPageSize="@BlogPageSize"
                        OnBlogPageChanged="HandleBlogPageChanged"
-                       SeriesItems="@_seriesItems"
-                       TagSelectionItems="@_tagSelectionItems"
+                       SeriesItems="@(SeriesItems ?? [])"
+                       TagSelectionItems="@(TagSelectionItems ?? [])"
                        OnCopyTagSelection="HandleCopyTagSelectionAsync" />
     }
     else
     {
-        <ProfileDesktop Header="@_header"
+        <ProfileDesktop Header="@Header"
                         Tab="@_tab"
                         IsOwner="@_isOwner"
                         CurrentUserId="@_currentUserId"
                         RelationshipState="@_relationship"
                         OnRemoveVouch="HandleRemoveVouchAsync"
-                        BioHtml="@_bioHtml"
-                        StoryItems="@_storyItems"
-                        StoryTotalCount="@_storyTotalCount"
+                        BioHtml="@BioHtml"
+                        StoryItems="@(StoryItems ?? [])"
+                        StoryTotalCount="@StoryTotalCount"
                         InteractionStates="@_interactionStates"
                         StoryFilter="@_storyFilter"
                         OnStoryFilterChanged="HandleStoryFilterChanged"
                         OnStoryPageChanged="HandleStoryPageChanged"
-                        BlogPosts="@_blogPosts"
-                        BlogTotalCount="@_blogTotalCount"
+                        BlogPosts="@(BlogPosts ?? [])"
+                        BlogTotalCount="@BlogTotalCount"
                         BlogPage="@_blogPage"
                         BlogPageSize="@BlogPageSize"
                         OnBlogPageChanged="HandleBlogPageChanged"
-                        SeriesItems="@_seriesItems"
-                        TagSelectionItems="@_tagSelectionItems"
+                        SeriesItems="@(SeriesItems ?? [])"
+                        TagSelectionItems="@(TagSelectionItems ?? [])"
                         OnCopyTagSelection="HandleCopyTagSelectionAsync" />
     }
 }
@@ -107,44 +111,59 @@ else
     private const int StoryPageSize = 20;
 
     private ProfileTab _tab;
-    private ProfileHeaderDto? _header;
     private bool _isLoading = true;
 
-    private int? _currentUserId;
-    private bool _isOwner;
-    private UserRelationshipStateDto? _relationship; // null = anonymous or owner
+    // Persisted across the prerender→interactive handoff (layer5-wasm.md §"Avoiding the double
+    // fetch"): the banner header plus the initially-loaded tab payload — exactly what the page
+    // renders on a full document load, no superset. Only the initial load restores; tab clicks
+    // and UserId changes are internal SPA navigations (never prerendered), so those paths clear
+    // the persisted properties and fetch plain.
+    [PersistentState] public ProfileHeaderDto? Header { get; set; }
 
-    // Profile tab
-    private string? _bioHtml;
+    // Profile tab. Null is ambiguous here (a legitimately-empty bio is also null), so a restore
+    // miss just refetches — harmless and flicker-free either way.
+    [PersistentState] public string? BioHtml { get; set; }
 
-    // Story tabs
-    private IReadOnlyList<int> _candidateIds = [];
-    private StoryListingDto[] _storyItems = [];
-    private int _storyTotalCount;
-    private IReadOnlyDictionary<int, UserStoryInteractionStateDto>? _interactionStates;
-    private StoryFilterDto _storyFilter = new StoryFilterDto { PageSize = StoryPageSize };
+    // Story tabs — split from the (Items, TotalCount) ValueTuple destructure (tuples don't
+    // survive System.Text.Json persistence). StoryItems-null is the restore signal.
+    [PersistentState] public StoryListingDto[]? StoryItems { get; set; }
+    [PersistentState] public int StoryTotalCount { get; set; }
 
-    // Blog tab
-    private BlogPostListingDto[] _blogPosts = [];
-    private int _blogTotalCount;
-    private int _blogPage = 1;
+    // Blog tab — same tuple split as the story tabs.
+    [PersistentState] public BlogPostListingDto[]? BlogPosts { get; set; }
+    [PersistentState] public int BlogTotalCount { get; set; }
 
     // Series tab (WU41) — public to any viewer, always the full list (no pagination/filter).
-    private IReadOnlyList<SeriesListingDto> _seriesItems = [];
+    [PersistentState] public IReadOnlyList<SeriesListingDto>? SeriesItems { get; set; }
 
     // Tag Selections tab (WU43) — public (IsPublic) selections only, always the full list, same
     // shape as Series. No public browse/gallery surface exists — this tab is the sole discovery
     // path for a shared selection (audit/Tags.md Feature 15).
-    private IReadOnlyList<SavedTagSelectionDetailDto> _tagSelectionItems = [];
+    [PersistentState] public IReadOnlyList<SavedTagSelectionDetailDto>? TagSelectionItems { get; set; }
+
+    private int? _currentUserId;
+    private bool _isOwner;
+
+    // Per-viewer supplementary state — deterministic per viewer, so the prerender→interactive
+    // re-fetch is flicker-free; not persisted (same treatment as StoryPage's _usiState).
+    private UserRelationshipStateDto? _relationship; // null = anonymous or owner
+    private IReadOnlyDictionary<int, UserStoryInteractionStateDto>? _interactionStates;
+
+    // Candidate IDs — not rendered, so never persisted (browser-exposure rule: don't persist a
+    // superset the UI pages down); the restore path refetches them so pagination keeps working.
+    private IReadOnlyList<int> _candidateIds = [];
+    private StoryFilterDto _storyFilter = new StoryFilterDto { PageSize = StoryPageSize };
+
+    private int _blogPage = 1;
 
     private bool _initialized;
     private int _loadedUserId = int.MinValue;      // sentinel; no real UserId equals this
     private ProfileTab _loadedTab = (ProfileTab)(-1); // sentinel; outside valid enum range
 
     // Open Graph/Twitter meta (WU-Seo).
-    private string OgTitle => _header is null ? "Profile" : $"{_header.Username} — Profile";
-    private string? OgDescription => _header is null ? null : SocialDescriptionHelper.Clean(_header.Tagline);
-    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(_header?.AvatarUrl, "/img/default-avatar.svg");
+    private string OgTitle => Header is null ? "Profile" : $"{Header.Username} — Profile";
+    private string? OgDescription => Header is null ? null : SocialDescriptionHelper.Clean(Header.Tagline);
+    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(Header?.AvatarUrl, "/img/default-avatar.svg");
     private string OgUrl => PublicUrlProvider.AbsolutePageUrl($"/user/{UserId}");
 
     protected override async Task OnInitializedAsync()
@@ -161,7 +180,7 @@ else
         _tab = parsed.Value;
 
         await LoadHeaderAsync();
-        if (_header is not null)
+        if (Header is not null)
             await LoadTabPayloadAsync();
 
         _loadedUserId = UserId;
@@ -186,15 +205,21 @@ else
         _tab = newTab;
         _isLoading = true;
 
+        // Internal SPA navigations never prerender, so persisted values from the previous
+        // user/tab must not short-circuit the reload — clear them and let the loaders fetch
+        // plain (layer3-logic.md §"Route-Parameter Dispatchers").
+        ClearTabPayload();
+
         if (userChanged)
         {
             // Banner + relationship are tied to UserId — reload both.
+            Header = null;
             _isOwner = _currentUserId.HasValue && _currentUserId.Value == UserId;
             _loadedUserId = UserId;
             _storyFilter = new StoryFilterDto { PageSize = StoryPageSize };
             _blogPage = 1;
             await LoadHeaderAsync();
-            if (_header is not null)
+            if (Header is not null)
                 await LoadTabPayloadAsync();
         }
         else
@@ -209,13 +234,28 @@ else
         _isLoading = false;
     }
 
-    // Loads (or reloads) the tab-independent banner and relationship state.
+    // Loads the tab-independent banner and relationship state. Restore-or-fetch on Header (??=):
+    // the initial load may restore it from the prerender payload; the userChanged reload path
+    // clears Header first, so it fetches plain there. The relationship overlay is per-viewer
+    // ephemeral and always fetches.
     private async Task LoadHeaderAsync()
     {
-        _header = await ProfileReadService.GetProfileHeaderAsync(UserId, includePrivate: _isOwner);
+        Header ??= await ProfileReadService.GetProfileHeaderAsync(UserId, includePrivate: _isOwner);
         _relationship = null;
-        if (_header is not null && _currentUserId.HasValue && !_isOwner)
+        if (Header is not null && _currentUserId.HasValue && !_isOwner)
             _relationship = await FollowingReadService.GetRelationshipStateAsync(UserId);
+    }
+
+    // Clears every persisted tab payload — called before any non-initial reload so the loaders'
+    // restore-or-fetch guards fetch plain (persisted state only ever applies to the initial
+    // full-document load).
+    private void ClearTabPayload()
+    {
+        BioHtml = null;
+        StoryItems = null;
+        BlogPosts = null;
+        SeriesItems = null;
+        TagSelectionItems = null;
     }
 
     // ── Tab payload loading ───────────────────────────────────────────────────────
@@ -231,37 +271,54 @@ else
 
     private async Task LoadBioAsync()
     {
-        _bioHtml = await ProfileReadService.GetProfileTextAsync(UserId);
+        // ??= restore-or-fetch. A legitimately-null bio refetches (null is ambiguous) — harmless.
+        BioHtml ??= await ProfileReadService.GetProfileTextAsync(UserId);
     }
 
     private async Task LoadStoryTabAsync()
     {
+        // Candidate IDs always fetch (not persisted) so filter/page changes keep working.
         _candidateIds = await GetCandidateIdsForTabAsync(_tab);
-        await ReloadStoryListingsAsync();
+        if (StoryItems is null)
+            await ReloadStoryListingsAsync();
+        else
+            await LoadInteractionStatesAsync(); // restored listings — only the per-viewer states need fetching
     }
 
+    // Plain fetch — also the filter/page-change path, which must never be short-circuited by
+    // persisted state.
     private async Task ReloadStoryListingsAsync()
     {
-        (_storyItems, _storyTotalCount) = await StoryReadService.GetListingsAsync(_storyFilter, _candidateIds);
-        _interactionStates = _storyItems.Length > 0 && _currentUserId.HasValue
-            ? await InteractionReadService.GetStatesByStoryIdsAsync([.. _storyItems.Select(i => i.StoryId)])
+        (StoryItems, StoryTotalCount) = await StoryReadService.GetListingsAsync(_storyFilter, _candidateIds);
+        await LoadInteractionStatesAsync();
+    }
+
+    private async Task LoadInteractionStatesAsync()
+    {
+        _interactionStates = StoryItems is { Length: > 0 } && _currentUserId.HasValue
+            ? await InteractionReadService.GetStatesByStoryIdsAsync([.. StoryItems.Select(i => i.StoryId)])
             : new Dictionary<int, UserStoryInteractionStateDto>();
     }
 
     private async Task LoadBlogAsync()
     {
-        (_blogPosts, _blogTotalCount) = await BlogPostReadService.GetByAuthorAsync(
-            UserId, _blogPage, BlogPageSize, includeUnpublished: _isOwner);
+        // Restore-or-fetch: BlogPosts is cleared by every non-initial path (ClearTabPayload /
+        // HandleBlogPageChanged), so non-null here means the initial load restored it.
+        if (BlogPosts is null)
+        {
+            (BlogPosts, BlogTotalCount) = await BlogPostReadService.GetByAuthorAsync(
+                UserId, _blogPage, BlogPageSize, includeUnpublished: _isOwner);
+        }
     }
 
     private async Task LoadSeriesAsync()
     {
-        _seriesItems = await SeriesReadService.GetSeriesByAuthorAsync(UserId);
+        SeriesItems ??= await SeriesReadService.GetSeriesByAuthorAsync(UserId);
     }
 
     private async Task LoadTagSelectionsAsync()
     {
-        _tagSelectionItems = await TagSelectionReadService.GetPublicSelectionsByUserAsync(UserId);
+        TagSelectionItems ??= await TagSelectionReadService.GetPublicSelectionsByUserAsync(UserId);
     }
 
     private Task<IReadOnlyList<int>> GetCandidateIdsForTabAsync(ProfileTab tab) => tab switch
@@ -291,6 +348,7 @@ else
     private async Task HandleBlogPageChanged(int page)
     {
         _blogPage = page;
+        BlogPosts = null; // force a plain fetch — persisted state never applies to page turns
         await LoadBlogAsync();
     }
 
@@ -299,8 +357,9 @@ else
     private async Task HandleRemoveVouchAsync(int vouchedUserId)
     {
         await FollowingWriteService.RemoveVouchAsync(vouchedUserId);
-        // Reload the banner's vouch list — refresh the header
-        _header = await ProfileReadService.GetProfileHeaderAsync(UserId, includePrivate: _isOwner);
+        // Reload the banner's vouch list — refresh the header (plain assignment: this is a
+        // post-write refresh, never a restore site).
+        Header = await ProfileReadService.GetProfileHeaderAsync(UserId, includePrivate: _isOwner);
     }
 
     // ── Tag Selections tab — copy-on-write share (WU43) ───────────────────────────

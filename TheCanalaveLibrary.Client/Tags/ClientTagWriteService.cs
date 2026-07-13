@@ -28,8 +28,9 @@ public sealed class ClientTagWriteService(HttpClient http) : ClientTagReadServic
     {
         HttpResponseMessage response = await Http.PutAsJsonAsync($"api/tags/{dto.TagId}", dto);
         await ThrowIfWriteFailedAsync(response);
-        // Body is the raw sprite-warning string or JSON null (see TagEndpoints — no wrapper DTO).
-        return await response.Content.ReadFromJsonAsync<string?>();
+        // Body is the raw sprite-warning string — or EMPTY when the service returned null
+        // (HttpResultsHelper writes nothing for a null result value; Global Flip wave finding).
+        return await ClientHttpHelpers.ReadNullableFromJsonAsync<string?>(response.Content);
     }
 
     public async Task DeleteTagAsync(int tagId)

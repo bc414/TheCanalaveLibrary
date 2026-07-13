@@ -21,7 +21,7 @@
 {
     <p class="text-(--color-text-muted)"><em>Loading settings…</em></p>
 }
-else if (_settings is null)
+else if (Settings is null)
 {
     <p class="text-(--color-danger)">Could not load your settings. Please try refreshing the page.</p>
 }
@@ -46,8 +46,8 @@ else
 
         @* Profile sub-form *@
         <ProfileSettingsForm
-            InitialTagline="@_settings.Tagline"
-            InitialBioHtml="@_bioHtml"
+            InitialTagline="@Settings.Tagline"
+            InitialBioHtml="@BioHtml"
             InitialPictureUrl="@_pictureUrl"
             Busy="@_profileBusy"
             UploadBusy="@_uploadBusy"
@@ -56,47 +56,55 @@ else
 
         @* Reader sub-form *@
         <ReaderSettingsForm
-            Initial="@_settings.Reader"
+            Initial="@Settings.Reader"
             Busy="@_readerBusy"
             OnSave="HandleSaveReaderAsync" />
 
         @* Privacy sub-form *@
         <PrivacySettingsForm
-            Initial="@_settings.Privacy"
+            Initial="@Settings.Privacy"
             Busy="@_privacyBusy"
             OnSave="HandleSavePrivacyAsync" />
 
         @* Author sub-form (Pinned Story options = the caller's own published stories, WU40) *@
         <AuthorSettingsForm
-            Initial="@_settings.Author"
-            PinnableStories="@_pinnableStories"
+            Initial="@Settings.Author"
+            PinnableStories="@(PinnableStories ?? [])"
             Busy="@_authorBusy"
             OnSave="HandleSaveAuthorAsync" />
 
         @* Appearance sub-form (Feature 3 — theme selection) *@
         <AppearanceSettingsForm
-            Themes="@_themes"
-            InitialThemeId="@_settings.ThemeId"
-            InitialPrefersAnimated="@_settings.PrefersAnimatedSprites"
-            InitialPrefersDataSaver="@_settings.PrefersDataSaverMode"
+            Themes="@(Themes ?? [])"
+            InitialThemeId="@Settings.ThemeId"
+            InitialPrefersAnimated="@Settings.PrefersAnimatedSprites"
+            InitialPrefersDataSaver="@Settings.PrefersDataSaverMode"
             Busy="@_appearanceBusy"
             OnSave="HandleSaveAppearanceAsync" />
 
         @* Badges sub-form (Feature 50 — badge curation, WU36) *@
         <BadgeSettingsForm
-            EarnedBadges="@_earnedBadges"
+            EarnedBadges="@(EarnedBadges ?? [])"
             Busy="@_badgesBusy"
             OnSave="HandleSaveBadgesAsync" />
     </div>
 }
 
 @code {
-    private UserSettingsDto? _settings;
-    private string? _bioHtml;
+    // Persisted across the prerender→interactive handoff (layer5-wasm.md §"Avoiding the double
+    // fetch"). These are the PRISTINE loaded values — the sub-forms copy their Initial* parameters
+    // into their own edit models, so no in-progress form edits ever live here (and none are
+    // persisted). Browser-exposure note: this is the user's own data rendered on their own
+    // [Authorize] page, so the persisted payload adds no exposure beyond the prerendered HTML.
+    [PersistentState] public UserSettingsDto? Settings { get; set; }
+    [PersistentState] public string? BioHtml { get; set; }
+    [PersistentState] public IReadOnlyList<ThemeDto>? Themes { get; set; }
+    [PersistentState] public IReadOnlyList<EarnedBadgeDto>? EarnedBadges { get; set; }
+    [PersistentState] public IReadOnlyList<StoryTitleSearchDto>? PinnableStories { get; set; }
+
+    // Live upload state — starts from Settings.ProfilePictureRelativeUrl (recomputed each init,
+    // so it needs no persistence) and mutates on upload; never persisted (transient UI state).
     private string? _pictureUrl;
-    private IReadOnlyList<ThemeDto> _themes = [];
-    private IReadOnlyList<EarnedBadgeDto> _earnedBadges = [];
-    private IReadOnlyList<StoryTitleSearchDto> _pinnableStories = [];
     private bool _isLoading = true;
 
     // Per-section busy flags so saving one section doesn't disable the others.
@@ -113,25 +121,35 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _settings = await SettingsService.GetMySettingsAsync();
-        _pictureUrl = _settings.ProfilePictureRelativeUrl;
+        // ??= restore-or-fetch: skip the reload when [PersistentState] already restored the
+        // prerender payload. This page has no OnParametersSetAsync reload path (no route params),
+        // so every load site is restore-aware.
+        Settings ??= await SettingsService.GetMySettingsAsync();
+        _pictureUrl = Settings.ProfilePictureRelativeUrl;
 
         // Bio text, theme list, badge list, and pinnable stories can be loaded concurrently.
+        // The three list properties restore together with Settings (all persisted from the same
+        // prerender pass), so any of them being null means there was no payload to restore.
+        // (BioHtml alone is ambiguous — a legitimately-empty bio is also null — so it is not
+        // used as the restore signal, only carried along.)
         if (ActiveUser.UserId is int userId)
         {
-            Task<string?> bioTask        = ProfileReadService.GetProfileTextAsync(userId);
-            Task<IReadOnlyList<ThemeDto>> themesTask = ThemeReadService.GetThemesAsync();
-            Task<IReadOnlyList<EarnedBadgeDto>> badgesTask = BadgeService.GetMyBadgesForCurationAsync(userId);
-            Task<IReadOnlyList<StoryTitleSearchDto>> pinnableTask = LoadPinnableStoriesAsync(userId);
-            await Task.WhenAll(bioTask, themesTask, badgesTask, pinnableTask);
-            _bioHtml         = bioTask.Result;
-            _themes          = themesTask.Result;
-            _earnedBadges    = badgesTask.Result;
-            _pinnableStories = pinnableTask.Result;
+            if (Themes is null || EarnedBadges is null || PinnableStories is null)
+            {
+                Task<string?> bioTask        = ProfileReadService.GetProfileTextAsync(userId);
+                Task<IReadOnlyList<ThemeDto>> themesTask = ThemeReadService.GetThemesAsync();
+                Task<IReadOnlyList<EarnedBadgeDto>> badgesTask = BadgeService.GetMyBadgesForCurationAsync(userId);
+                Task<IReadOnlyList<StoryTitleSearchDto>> pinnableTask = LoadPinnableStoriesAsync(userId);
+                await Task.WhenAll(bioTask, themesTask, badgesTask, pinnableTask);
+                BioHtml         = bioTask.Result;
+                Themes          = themesTask.Result;
+                EarnedBadges    = badgesTask.Result;
+                PinnableStories = pinnableTask.Result;
+            }
         }
         else
         {
-            _themes = await ThemeReadService.GetThemesAsync();
+            Themes ??= await ThemeReadService.GetThemesAsync();
         }
 
         _isLoading = false;

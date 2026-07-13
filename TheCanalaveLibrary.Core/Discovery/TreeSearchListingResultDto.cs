@@ -51,3 +51,14 @@ public sealed record TreeSearchListingResultDto
     /// the candidate set below the cap even when the raw traversal itself was truncated by fan-out).</summary>
     public required bool ResultCapTruncated { get; init; }
 }
+
+/// <summary>
+/// Layer-5 request envelope for <see cref="ITreeSearchReadService.SearchAsync"/> — a POST-read
+/// (layer5-wasm.md §"Reads with non-scalar parameters") whose service signature takes TWO complex
+/// objects (<see cref="TreeSearchRequest"/>, <see cref="StoryFilterDto"/>). Minimal APIs only bind
+/// one complex parameter from the JSON body, so the pair is wrapped into one shape at the HTTP
+/// boundary only — this is a transport envelope, not a service-contract change: the interface
+/// signature stays two separate parameters; only <c>TreeSearchEndpoints</c>/
+/// <c>ClientTreeSearchReadService</c> construct/deconstruct it.
+/// </summary>
+public sealed record TreeSearchListingRequest(TreeSearchRequest Request, StoryFilterDto Filter);

@@ -12,7 +12,11 @@ diamond-breaking to blog/comment). All blog posts support comments (see Comments
 WU31 delivers L2/L3/L3.5/L4 for features 35/36 (profile blog posts only); Feature 56 deferred.
 
 ## Feature 35 — Blog Post Writing
-- **L1 — Stage 5.** TPT split sound. **L2 — Stage 5.** **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L5 — Stage 2. L6 — Stage 2.**
+- **L1 — Stage 5.** TPT split sound. **L2 — Stage 5.** **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; blog-post editor got the create→edit `forceLoad` fix for
+  Quill-hosting pages (editor page not browser-driven in the flip's wave). Full wave narrative +
+  the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 - **WU-ErrorHandling note (2026-07-06).** Both editors (`BlogPostEditorPage`,
   `GroupBlogPostEditorPage`) embed `DraftAutosave` (`draft:blogpost:{id|new}`,
   `draft:groupblogpost:new:{groupId}`; Title + Content), cleared on successful submit;
@@ -58,7 +62,11 @@ WU31 delivers L2/L3/L3.5/L4 for features 35/36 (profile blog posts only); Featur
 
 ## Feature 36 — Blog Post Display
 - **L1 — Stage 5.** **L2 — Stage 5** (profile context for WU31; story/group contexts → WU30/WU32).
-  **L3/L3.5 — Stage 5. L4 — Stage 1** (visual sign-off pending). **L5 — Stage 2.**
+  **L3/L3.5 — Stage 5. L4 — Stage 1** (visual sign-off pending).
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto (blog-post display not browser-driven in the flip's wave;
+  the F37 poll blocks that render on it were). Full wave narrative + the 7 bugs found/fixed:
+  `workplan.md` WU-GlobalFlip.
 - **Settled constraints (2026-06-24, WU31):** `BlogPostCard` (leaf, profile feed), `BlogPostPage`
   (read-only view dispatcher), `BlogPostListingDto` for the feed. Author byline: plain hyperlink,
   not `UserCard` (mirrors StoryCard — too compact). `CommentSection` generalized for blog-post context
@@ -146,8 +154,8 @@ The settled requirements reopened frozen L1 (Stage 5 → 4 → resolved same ses
 ### Stage-5 note (2026-07-12, WU-Polls)
 
 `dotnet build` green; `dotnet test` green across all three tiers (final run after browser-found
-fixes; ~38 new poll tests). **L5 stays Stage 2** — consistent with F35/F36 (InteractiveServer dev
-posture; no API endpoints/client services exist codebase-wide yet).
+fixes; ~38 new poll tests). (This note's original "L5 stays Stage 2" is superseded by the L5
+bullet below, 2026-07-13.)
 
 - **L1 — Stage 5** (post-reconcile; see L1 reconcile note above). Covering tier: Integration
   (`PollServiceTests` delete-cascade + FK paths exercise the migrated schema).
@@ -185,6 +193,11 @@ posture; no API endpoints/client services exist codebase-wide yet).
   end-to-end via the REAL worker: material rename stamped `last_edited_at`; after psql-backdating
   31 min the 1-min worker delivered `PollUpdated=100` to the voter (owner drop-self'd,
   `related_entity_id` = blog post id) and stamped `edit_notified_at` — all psql-ground-truthed.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; polls verified end-to-end in a real WASM runtime during the
+  flip's browser wave (vote → results with public voter list → retract; the `[FromQuery]`
+  vote-binding fix, workplan bug 2). Full wave narrative + the 7 bugs found/fixed: `workplan.md`
+  WU-GlobalFlip.
 - **Two runtime bugs found via the browser band and fixed same-session** (per the
   fix-same-session rule), both with regression coverage:
   1. `OfType<TChild>()` sources fed into the shared base-typed projection threw `No coercion
@@ -196,7 +209,8 @@ posture; no API endpoints/client services exist codebase-wide yet).
      explicit domain-word values + `@onchange`; convention recorded in `layer3-logic.md`
      §"Bool `<select>`".
 - **Deferred:** home-page SitePoll surfacing (open intent → homepage-sections decision,
-  `middle_plan_v2.md` row 2). L5 WASM enablement (Phase 5, with everything else).
+  `middle_plan_v2.md` row 2). (The formerly-deferred L5 WASM enablement landed with WU-GlobalFlip —
+  see the L5 bullet above.)
 
 ## Feature 56 — Feature Contributions
 - **L1 — Stage 5** (`FeatureContribution`; SetNull diamond-breaking FKs to `BaseBlogPost`/`BaseComment`).

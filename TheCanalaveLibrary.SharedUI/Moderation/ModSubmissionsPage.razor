@@ -5,10 +5,12 @@
 @inject IModerationWriteService ModerationService
 
 @* Story submission queue (WU34 Feature 48). Tabbed shell — Stories tab is the active tab;
-   Imports tab is a placeholder for WU39. Desktop-only, server-rendered, no WASM.
+   Imports tab is a placeholder for WU39. Desktop-only.
 
    Approve: sets StoryStatusId = PostApprovalStatus + fires StoryApproved notification.
-   Reject: sets StoryStatusId = Rejected + records reason + fires StoryRejected notification. *@
+   Reject: sets StoryStatusId = Rejected + records reason + fires StoryRejected notification.
+   [PersistentState] on Submissions avoids the prerender→interactive double fetch; persisted
+   payload = rendered content, mod-gated page (layer5-wasm.md §"Avoiding the double fetch"). *@
 
 <PageTitle>Mod — Submissions</PageTitle>
 
@@ -33,18 +35,18 @@
     @if (_tab == SubmissionTab.Stories)
     {
         @* ── Stories tab ─────────────────────────────────────────────────────── *@
-        @if (_loading)
+        @if (_loading || Submissions is null)
         {
             <p class="text-sm text-(--color-text-muted)">Loading…</p>
         }
-        else if (_submissions.Length == 0)
+        else if (Submissions.Length == 0)
         {
             <p class="text-sm text-(--color-text-muted)">No pending submissions.</p>
         }
         else
         {
             <div class="flex flex-col gap-3">
-                @foreach (var s in _submissions)
+                @foreach (var s in Submissions)
                 {
                     var sub = s;
                     <div class="rounded-lg border border-(--color-border) bg-surface p-4">
@@ -127,7 +129,12 @@
     private enum SubmissionTab { Stories, Imports }
 
     private SubmissionTab _tab = SubmissionTab.Stories;
-    private StorySubmissionQueueItemDto[] _submissions = [];
+
+    // Persisted across the prerender→interactive handoff — restored via ??= in OnInitializedAsync.
+    // Post-approve/reject refetches go through LoadAsync (plain assignment).
+    [PersistentState]
+    public StorySubmissionQueueItemDto[]? Submissions { get; set; }
+
     private bool _loading = true;
 
     private int? _actingStoryId;
@@ -135,12 +142,17 @@
     private string? _rejectReason;
     private string? _rejectError;
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        // ??= — skip the fetch when [PersistentState] restored the prerendered queue.
+        Submissions ??= await ModerationService.GetPendingSubmissionsAsync();
+        _loading = false;
+    }
 
     private async Task LoadAsync()
     {
         _loading = true;
-        _submissions = await ModerationService.GetPendingSubmissionsAsync();
+        Submissions = await ModerationService.GetPendingSubmissionsAsync();
         _loading = false;
     }
 

@@ -33,7 +33,10 @@ JSON on `User` (see Identity audit). Spec calls for `IUserProfileReadService` (p
 - **L4-Style — Stage 5** (WU30). Tailwind v4 token-based styling throughout; sub-forms use
   `--color-*` tokens, `focus:ring-2 focus:ring-[--color-primary]`, `border-[--color-border]`.
   Visual sign-off pending human run at `/settings`. Stage-6 gate = human visual approval.
-- **L5 — Stage 2.** Client HTTP impl deferred (MVP = InteractiveServer, no API controllers yet).
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; settings read+write verified in a real WASM runtime during
+  the flip's browser wave (tagline round-trip, psql ground truth). Full wave narrative + the 7 bugs
+  found/fixed: `workplan.md` WU-GlobalFlip.
 
 ---
 
@@ -68,7 +71,10 @@ JSON on `User` (see Identity audit). Spec calls for `IUserProfileReadService` (p
 - **L4-Style — Stage 5** (WU30). Tailwind v4 token-based styling; banner avatar initials placeholder;
   stats strip with bold counter values; badge row; action buttons (follow/vouch/edit). Visual sign-off
   pending human run at `/user/{id}`. Stage-6 gate = human visual approval.
-- **L5 — Stage 2.** Client HTTP impl deferred.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; profile page verified in a real WASM runtime during the
+  flip's browser wave (header, stats, vouches, tabs). Full wave narrative + the 7 bugs found/fixed:
+  `workplan.md` WU-GlobalFlip.
 
 ---
 
@@ -127,7 +133,10 @@ Covering tier: **RazorComponents** —
   Verified: build green.
 - **L4-Style — Stage 5** (WU30). Counter display uses `font-bold text-[--color-text]` + muted labels.
   Visual sign-off pending human run. Stage-6 gate = human visual approval.
-- **L5 — Stage 2.** Client HTTP impl deferred.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; the profile stats strip rendered in a real WASM runtime
+  during the flip's browser wave (profile-page verification). Full wave narrative + the 7 bugs
+  found/fixed: `workplan.md` WU-GlobalFlip.
 
 ---
 

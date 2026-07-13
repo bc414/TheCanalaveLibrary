@@ -1,10 +1,13 @@
-@namespace TheCanalaveLibrary.Server
+@namespace TheCanalaveLibrary.SharedUI
 @* WU-SiteDailyStat (Feature 62): stamps User.LastActiveUtc for authenticated users only, on
    circuit start and on every subsequent internal navigation. This is a go-forward, approximate
    "was the user doing something recently" signal — not a login/session/tracking mechanism — and
    is the honest limitation documented in layer8-data-marts.md §"site_daily_stats": a user who
    never navigates away from one page for the whole visit is stamped only once. Renders nothing;
-   mounted once in Routes.razor so every route gets the same coverage. *@
+   mounted once in Routes.razor so every route gets the same coverage.
+   Moved Server→SharedUI at the Global Flip: Routes.razor now lives in a client-reachable assembly,
+   so everything it mounts must too. Under WASM the ping travels ClientUserActivityWriteService →
+   POST /api/user-activity; under the circuit it stays the in-process buffer merge. *@
 @using TheCanalaveLibrary.Core
 @implements IDisposable
 @inject NavigationManager Navigation
@@ -25,8 +28,8 @@
     {
         if (ActiveUser.IsAuthenticated && ActiveUser.UserId is int userId)
         {
-            // Buffered — fire-and-forget is safe: RecordActivityAsync only merges into an
-            // in-process ConcurrentDictionary (see UserActivityBuffer), never awaits I/O.
+            // Buffered on the server (in-process ConcurrentDictionary merge); a fire-and-forget
+            // HTTP POST on the WASM side. Both are safe to not await — loss-tolerant by contract.
             _ = UserActivityWriteService.RecordActivityAsync(userId);
         }
     }

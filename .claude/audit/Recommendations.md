@@ -30,11 +30,21 @@ fully built in WU29 (L2/L3/L3.5/L4 across all four features).
   rich-text editor shells exist; defer abstraction until a 3rd — BlogPosts/Messaging/Profiles —
   clarifies the shared part; WU9 ConfirmDialog precedent). Covering tier: RazorComponents.
 - **L4 — Stage 5 (WU29, visual sign-off 2026-06-23).**
-- **L5 — Stage 5 (2026-06-24).** `RecommendationWriteServiceTests` (Integration tier): `SubmitAsync`
-  creates row with correct fields; one-per-user unique-index guard (duplicate → `RecommendationValidationException`);
+- **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5).** The Stage-5 mark below described
+  `RecommendationWriteServiceTests` (Integration tier, service-layer soundness only) — no
+  endpoint/client impl ever existed. Per `layer5-wasm.md` §"L5 Stage Semantics", L5 Stage 5 means
+  the HTTP body-swap (endpoints + client impl) exists and compiles; service-only soundness is
+  Stage 2, same as every other not-yet-built L5 cell. Prior text, retained as the L2/L3 test
+  record: `RecommendationWriteServiceTests` (Integration tier): `SubmitAsync` creates row with
+  correct fields; one-per-user unique-index guard (duplicate → `RecommendationValidationException`);
   `EditAsync` author-only; `DeleteAsync` author-only, cascades likes; `ToggleLikeAsync` increments/
   decrements `LikeCount` + creates/removes `RecommendationLike` row. 190/190 green twice.
   Enabled by Respawn isolation overhaul (2026-06-24).
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; supersedes the 2026-07-12 correction above — the gap
+  it named is now filled).** Endpoints + client impl live (WU-L5Sweep) and the site now runs global
+  InteractiveAuto; the recommendations section rendered under WASM on the story page during the
+  flip's browser wave (submission writes not driven). Full wave narrative + the 7 bugs found/fixed:
+  `workplan.md` WU-GlobalFlip.
 - **L6 — Stage 5 (WU29, 2026-06-23).** Unique index `ix_recommendations_recommender_id_story_id` on
   `(recommender_id, story_id) WHERE recommender_id IS NOT NULL` in `RecommendationLikesAndConstraints`
   migration. Verified via integration test: duplicate submit raises `RecommendationValidationException`.
@@ -68,10 +78,17 @@ fully built in WU29 (L2/L3/L3.5/L4 across all four features).
   like with rollback (`CommentSection.HandleLike` pattern), Hidden-Gem toggle, `ConfirmDialog` delete.
   This is the surface WU25 embeds. Covering tier: RazorComponents.
 - **L4 — Stage 5 (WU29, visual sign-off 2026-06-23).**
-- **L5 — Stage 5 (2026-06-24).** `RecommendationReadServiceTests` (Integration): `GetForStoryAsync`
-  returns Approved-only recs with correct projection (spotlighted first, per-viewer `IsLikedByCurrentUser`).
-  `RecommendationWriteServiceTests`: `ToggleLikeAsync` like/unlike updates `LikeCount` + `RecommendationLike` row.
-  `BookshelfStoryIdsTests`: approved recs visible in bookshelf; pending recs excluded. 190/190 green twice.
+- **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5; see F27's L5 note for the general
+  correction).** Prior text, retained as the L2/L3 test record: `RecommendationReadServiceTests`
+  (Integration): `GetForStoryAsync` returns Approved-only recs with correct projection (spotlighted
+  first, per-viewer `IsLikedByCurrentUser`). `RecommendationWriteServiceTests`: `ToggleLikeAsync`
+  like/unlike updates `LikeCount` + `RecommendationLike` row. `BookshelfStoryIdsTests`: approved
+  recs visible in bookshelf; pending recs excluded. 190/190 green twice.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; supersedes the 2026-07-12 correction above).**
+  Endpoints + client impl live (WU-L5Sweep) and the site now runs global InteractiveAuto;
+  recommendations display verified in a real WASM runtime during the flip's browser wave (section
+  rendered 4 recs on the story page). Full wave narrative + the 7 bugs found/fixed: `workplan.md`
+  WU-GlobalFlip.
 
 ## Feature 29 — Hidden Gem Management
 - **L1 — Stage 5** (`IsHiddenGem`). **L2 — Stage 5 (WU29, 2026-06-23).** 5-per-user limit in C#:
@@ -84,10 +101,16 @@ fully built in WU29 (L2/L3/L3.5/L4 across all four features).
   `INotificationWriteService` / `ServerNotificationWriteService` in WU29.
 - **L3.5/L4 — Stage 5 (WU29, 2026-06-23).** Inline Hidden-Gem toggle on `RecommendationCard`
   (recommender-only via `OnToggleHiddenGem.HasDelegate`). Covering tier: RazorComponents.
-- **L5 — Stage 5 (2026-06-24).** `RecommendationWriteServiceTests` (Integration): `SetHiddenGemAsync`
-  sets `IsHiddenGem=true`; emits `HiddenGem` notification; rejects at 5 (`InvalidOperationException`
-  citing the limit) — mutation-tested (disabled guard → test fails; re-enabled → passes).
-  `SetHighlightedByAuthorAsync` spotlight ≤5 limit enforced. 190/190 green twice.
+- **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5; see F27's L5 note for the general
+  correction).** Prior text, retained as the L2/L3 test record: `RecommendationWriteServiceTests`
+  (Integration): `SetHiddenGemAsync` sets `IsHiddenGem=true`; emits `HiddenGem` notification;
+  rejects at 5 (`InvalidOperationException` citing the limit) — mutation-tested (disabled guard →
+  test fails; re-enabled → passes). `SetHighlightedByAuthorAsync` spotlight ≤5 limit enforced.
+  190/190 green twice.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; supersedes the 2026-07-12 correction above).**
+  Endpoints + client impl live (WU-L5Sweep) and the site now runs global InteractiveAuto (Hidden-Gem
+  toggle writes not driven in the flip's browser wave; the recommendations section rendered under
+  WASM). Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 
 ### WU-ComponentSoundness Stage note (2026-06-27)
 
@@ -125,8 +148,10 @@ behavior is exercised by existing `RecommendationSectionTests`.
   `RecommendationSuccess`) owned by WU26's reading page. Takes `recommendationId`; raises
   `OnRespond(bool helpful)` / `OnDismiss`. Spec §5.6 wording "helpful" is canonical (not "useful").
 - **L3.5/L4 — Stage 5 (WU29, 2026-06-23).** Covering tier: RazorComponents (dismiss + respond events).
-- **L5 — Stage 2.** Attribution trigger wired in WU26 (chapter reading page, after 90% of Ch.1 `IsRead`).
-  Integration test pending until WU26 is done. Service methods callable now; not yet exercised from UI.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto (attribution writes not driven in the flip's browser wave —
+  trigger lives in the chapter reading page, WU26, which was verified under WASM). Full wave
+  narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 
 ## L4.5-Browser verification (2026-07-01/02) — F27 + F28 + F29 + F30 → Stage 5
 

@@ -19,7 +19,12 @@ chapters created through `IChapterWriteService`; external story links belong to 
 ## Feature 63 — Chapter Import (file ingestion)
 - **L1 — N/A** (no schema; commits go through existing Chapters tables).
 - **L2 / L3-Logic / L3.5 / L4 — Stage 5 (WU38d, 2026-07-11).** **L4.5 — Stage 5** (see note).
-- **L5 — N/A** (MVP InteractiveServer; file upload over the circuit). **L6/L8 — N/A.**
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13 — reclassified from N/A; the flip makes every injected
+  service need a client impl).** Endpoints + client impl live (WU-L5Sweep), incl. the three
+  multipart parse endpoints + `Resplit` — which stays a real network hop despite its
+  synchronous/pure look (server-only `IHtmlSanitizationService` dependency; see WU-L5Sweep's Import
+  notes). Not browser-driven in the flip's wave. Full wave narrative: `workplan.md` WU-GlobalFlip.
+  **L6/L8 — N/A.**
 
 ### Stage-5 note (2026-07-11, WU38d)
 Built: `Core/Import/` contracts; `Server/Import/` (`ServerContentImportService` singleton,

@@ -9,7 +9,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <summary>
 /// Render tests for <see cref="StoryTitlePicker"/> (WU42) — the reusable title-search typeahead
 /// (Story Lineage's target picker; also retrofits Groups' add-story entry). Wraps
-/// <c>Blazored.Typeahead</c> internally, same as <see cref="TagSelector"/>.
+/// <c>CanalaveTypeahead</c> internally (in-house, Global Flip wave), same as <see cref="TagSelector"/>.
 ///
 /// <b>What is NOT tested here:</b> picking a story via the typeahead (keyboard input → search →
 /// selection → <see cref="StoryTitlePicker.OnStorySelected"/> firing) requires JavaScript
@@ -18,7 +18,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// is covered at the Integration tier (<c>StoryLineageServiceTests.SearchStoriesByTitle_*</c>); the
 /// add-via-typeahead path is covered by manual/live-browser verification.
 ///
-/// JSInterop is configured with <see cref="JSRuntimeMode.Loose"/> so Blazored Typeahead's internal
+/// JSInterop is configured with <see cref="JSRuntimeMode.Loose"/> so any residual
 /// JS focus calls don't cause the test to throw.
 /// Tier: RazorComponents (bUnit, no host or DB).
 /// </summary>

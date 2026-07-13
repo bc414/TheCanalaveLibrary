@@ -72,11 +72,11 @@
             @* ── Live preview — read-only chapter list, spans highlighted from the CURRENT
                  (possibly unsaved) row inputs so the author sees exactly what a range covers. ── *@
             <div class="overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface)">
-                @if (_chapters.Count == 0)
+                @if (Chapters is null || Chapters.Count == 0)
                 {
                     <p class="px-3 py-4 text-sm text-(--color-text-muted)">No chapters yet.</p>
                 }
-                @foreach (ChapterListEntryDto chapter in _chapters)
+                @foreach (ChapterListEntryDto chapter in Chapters ?? [])
                 {
                     ArcRowModel? covering = CoveringRow(chapter.ChapterNumber);
                     <div class="flex items-center gap-2 border-b border-(--color-border) px-3 py-1.5 text-sm last:border-b-0 @(covering is not null ? "border-l-2 border-l-(--color-action) bg-(--color-action)/5" : string.Empty)">
@@ -104,22 +104,37 @@
         public int End = 1;
     }
 
+    // Editable row state — never persisted (form-input state); rebuilt deterministically from the
+    // persisted Arcs list on every pass, so unsaved edits are the only thing hydration discards
+    // (and prerendered markup is never interactive, so there are none to discard).
     private readonly List<ArcRowModel> _rows = [];
-    private IReadOnlyList<ChapterListEntryDto> _chapters = [];
     private List<string> _errorMessages = [];
     private bool _isLoading = true;
 
+    // Persisted across the prerender→interactive handoff ([PersistentState]) — the panel's primary
+    // fetched content, both rendered directly (chapter-list preview + arc rows' initial values).
+    [PersistentState] public IReadOnlyList<ChapterListEntryDto>? Chapters { get; set; }
+    [PersistentState] public IReadOnlyList<StoryArcDto>? Arcs { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
-        _chapters = await ChapterReadService.GetChapterListAsync(StoryId);
-        await ReloadArcsAsync();
+        // ??= — restore-or-fetch; post-write reloads (ReloadArcsAsync) plain-assign instead.
+        Chapters ??= await ChapterReadService.GetChapterListAsync(StoryId);
+        Arcs ??= await StoryArcWriteService.GetArcsForStoryAsync(StoryId);
+        BuildRowsFromArcs();
         _isLoading = false;
     }
 
     private async Task ReloadArcsAsync()
     {
+        Arcs = await StoryArcWriteService.GetArcsForStoryAsync(StoryId);
+        BuildRowsFromArcs();
+    }
+
+    private void BuildRowsFromArcs()
+    {
         _rows.Clear();
-        foreach (StoryArcDto arc in await StoryArcWriteService.GetArcsForStoryAsync(StoryId))
+        foreach (StoryArcDto arc in Arcs ?? [])
         {
             _rows.Add(new ArcRowModel
             {

@@ -10,7 +10,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <summary>
 /// Render tests for <see cref="TagSelector"/> (WU11). The selector injects
 /// <see cref="ITagReadService"/> for typeahead search and uses
-/// <c>Blazored.Typeahead</c> internally. Tests here cover:
+/// <c>CanalaveTypeahead</c> internally (in-house, Global Flip wave). Tests here cover:
 /// <list type="bullet">
 ///   <item>Pre-selected tags from <see cref="TagSelector.SelectedTags"/> are rendered as chips on
 ///   init.</item>
@@ -19,7 +19,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 ///   <item>Label parameter is rendered.</item>
 /// </list>
 ///
-/// <b>What is NOT tested here:</b> adding a tag via the Blazored Typeahead typeahead (keyboard
+/// <b>What is NOT tested here:</b> adding a tag via the typeahead (keyboard
 /// input → search → selection) requires JavaScript simulation (focus/blur events + JSInterop)
 /// that is not straightforward in bUnit. The add-via-search path is covered by manual interaction
 /// testing and by the integration-level <c>TagReadServiceTests</c> (which validates the
@@ -27,7 +27,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// <c>CreateStoryDTO.CanSave()</c> and is covered by <c>StoryValidationsTests</c> in the Unit
 /// tier — it is not enforced inside <c>TagSelector</c> itself.
 ///
-/// JSInterop is configured with <see cref="JSRuntimeMode.Loose"/> so that Blazored Typeahead's
+/// JSInterop is configured with <see cref="JSRuntimeMode.Loose"/> so that any residual
 /// internal JS focus calls don't cause the test to throw.
 /// </summary>
 public class TagSelectorTests : BunitContext
@@ -36,7 +36,7 @@ public class TagSelectorTests : BunitContext
 
     public TagSelectorTests()
     {
-        // Loose JSInterop: Blazored.Typeahead makes JS calls for input focus/blur management.
+        // Loose JSInterop kept for uniformity with sibling suites (CanalaveTypeahead itself is JS-free).
         // Loose mode silently ignores unexpected calls rather than throwing.
         JSInterop.Mode = JSRuntimeMode.Loose;
 

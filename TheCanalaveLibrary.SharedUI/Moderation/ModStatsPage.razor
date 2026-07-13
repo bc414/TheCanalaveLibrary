@@ -7,7 +7,9 @@
 @* Site stats dashboard (Feature 62 flourish, WU-SiteDailyStat — beyond MVP, per Brian). Mod/admin
    -gated, desktop-first, no dispatcher (consistent with the rest of the Moderation cluster).
    Reads the site_daily_stats mart; charts follow the dataviz skill (one axis per chart, thin
-   lines, legend only for 2+ series, sr-only data table alternative — see DailyStatLineChart). *@
+   lines, legend only for 2+ series, sr-only data table alternative — see DailyStatLineChart).
+   [PersistentState] on Latest + Series avoids the prerender→interactive double fetch; _dates is
+   derived from Series after restore-or-fetch, so it is never persisted itself. *@
 
 <PageTitle>Mod — Site Stats</PageTitle>
 
@@ -21,7 +23,7 @@
     {
         <p class="text-sm text-(--color-text-muted)">Loading…</p>
     }
-    else if (_latest is null)
+    else if (Latest is null || Series is null)
     {
         <p class="text-sm text-(--color-text-muted)">No stats yet — the daily worker hasn't run.</p>
     }
@@ -29,31 +31,31 @@
     {
         @* ── Headline totals (stat tiles — a single number is its own form, no chart needed) ── *@
         <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <StatTile Label="Total Users" Value="@_latest.TotalUsers.ToString("N0")" />
-            <StatTile Label="Total Stories" Value="@_latest.TotalStories.ToString("N0")" />
-            <StatTile Label="Total Words" Value="@_latest.TotalWords.ToString("N0")" />
+            <StatTile Label="Total Users" Value="@Latest.TotalUsers.ToString("N0")" />
+            <StatTile Label="Total Stories" Value="@Latest.TotalStories.ToString("N0")" />
+            <StatTile Label="Total Words" Value="@Latest.TotalWords.ToString("N0")" />
         </div>
 
         @* ── Growth over time — small multiples: different units/scale, never one dual-axis chart ── *@
         <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
             <DailyStatLineChart Title="Total Users" Dates="_dates"
-                                 Series="@(new[] { ("Total users", "var(--color-mission)", (IReadOnlyList<double>)_series.Select(s => (double)s.TotalUsers).ToList()) })" />
+                                 Series="@(new[] { ("Total users", "var(--color-mission)", (IReadOnlyList<double>)Series.Select(s => (double)s.TotalUsers).ToList()) })" />
             <DailyStatLineChart Title="Total Stories" Dates="_dates"
-                                 Series="@(new[] { ("Total stories", "var(--color-mission)", (IReadOnlyList<double>)_series.Select(s => (double)s.TotalStories).ToList()) })" />
+                                 Series="@(new[] { ("Total stories", "var(--color-mission)", (IReadOnlyList<double>)Series.Select(s => (double)s.TotalStories).ToList()) })" />
             <DailyStatLineChart Title="Total Words" Dates="_dates"
-                                 Series="@(new[] { ("Total words", "var(--color-mission)", (IReadOnlyList<double>)_series.Select(s => (double)s.TotalWords).ToList()) })" />
+                                 Series="@(new[] { ("Total words", "var(--color-mission)", (IReadOnlyList<double>)Series.Select(s => (double)s.TotalWords).ToList()) })" />
         </div>
 
         @* ── Active users (DAU) — go-forward-only proxy, see layer8-data-marts.md ── *@
         <DailyStatLineChart Title="Daily Active Users" Dates="_dates"
-                             Series="@(new[] { ("Active users", "var(--color-mission)", (IReadOnlyList<double>)_series.Select(s => (double)(s.ActiveUsers ?? 0)).ToList()) })" />
+                             Series="@(new[] { ("Active users", "var(--color-mission)", (IReadOnlyList<double>)Series.Select(s => (double)(s.ActiveUsers ?? 0)).ToList()) })" />
 
         @* ── Moderation health — 2 series sharing one axis (both are "report counts") ── *@
         <DailyStatLineChart Title="Reports Filed vs. Resolved" Dates="_dates"
                              Series="@(new (string, string, IReadOnlyList<double>)[]
                              {
-                                 ("Filed", "var(--color-mission)", _series.Select(s => (double)s.ReportsFiled).ToList()),
-                                 ("Resolved", "var(--color-success)", _series.Select(s => (double)s.ReportsResolved).ToList()),
+                                 ("Filed", "var(--color-mission)", Series.Select(s => (double)s.ReportsFiled).ToList()),
+                                 ("Resolved", "var(--color-success)", Series.Select(s => (double)s.ReportsResolved).ToList()),
                              })" />
 
         @* ── Content/community activity — many disparate categorical counts; a table is more
@@ -62,21 +64,21 @@
         <div class="overflow-x-auto rounded-xl border border-(--color-border) bg-(--color-surface) p-2">
             <table class="w-full border-collapse text-sm">
                 <caption class="mb-2 text-left text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
-                    Activity on @_latest.StatDate.ToString("yyyy-MM-dd")
+                    Activity on @Latest.StatDate.ToString("yyyy-MM-dd")
                 </caption>
                 <tbody>
-                    <ActivityRow Label="New stories" Value="@_latest.NewStories" />
-                    <ActivityRow Label="New chapters" Value="@_latest.NewChapters" />
-                    <ActivityRow Label="New words" Value="@((int)Math.Min(_latest.NewWords, int.MaxValue))" />
-                    <ActivityRow Label="New comments" Value="@_latest.NewComments" />
-                    <ActivityRow Label="New blog posts" Value="@_latest.NewBlogPosts" />
-                    <ActivityRow Label="New groups" Value="@_latest.NewGroups" />
-                    <ActivityRow Label="New follows" Value="@_latest.NewFollows" />
-                    <ActivityRow Label="Recommendations written" Value="@_latest.NewRecommendationsWritten" />
-                    <ActivityRow Label="Recommendation successes" Value="@_latest.NewRecommendationSuccesses" />
-                    <ActivityRow Label="Favorites added" Value="@_latest.FavoritesAdded" />
-                    <ActivityRow Label="Chapters read (approx.)" Value="@_latest.ChaptersRead" />
-                    <ActivityRow Label="Story views" Value="@((int)Math.Min(_latest.StoryViews, int.MaxValue))" />
+                    <ActivityRow Label="New stories" Value="@Latest.NewStories" />
+                    <ActivityRow Label="New chapters" Value="@Latest.NewChapters" />
+                    <ActivityRow Label="New words" Value="@((int)Math.Min(Latest.NewWords, int.MaxValue))" />
+                    <ActivityRow Label="New comments" Value="@Latest.NewComments" />
+                    <ActivityRow Label="New blog posts" Value="@Latest.NewBlogPosts" />
+                    <ActivityRow Label="New groups" Value="@Latest.NewGroups" />
+                    <ActivityRow Label="New follows" Value="@Latest.NewFollows" />
+                    <ActivityRow Label="Recommendations written" Value="@Latest.NewRecommendationsWritten" />
+                    <ActivityRow Label="Recommendation successes" Value="@Latest.NewRecommendationSuccesses" />
+                    <ActivityRow Label="Favorites added" Value="@Latest.FavoritesAdded" />
+                    <ActivityRow Label="Chapters read (approx.)" Value="@Latest.ChaptersRead" />
+                    <ActivityRow Label="Story views" Value="@((int)Math.Min(Latest.StoryViews, int.MaxValue))" />
                 </tbody>
             </table>
         </div>
@@ -87,15 +89,25 @@
     private const int SeriesDays = 30;
 
     private bool _loading = true;
-    private SiteDailyStatDto? _latest;
-    private IReadOnlyList<SiteDailyStatDto> _series = [];
+
+    // Persisted across the prerender→interactive handoff — the chart series data is the page's
+    // primary fetched content. Latest may legitimately be null (mart empty); the ??= then simply
+    // re-runs a cheap fetch that returns null again — harmless.
+    [PersistentState]
+    public SiteDailyStatDto? Latest { get; set; }
+
+    [PersistentState]
+    public List<SiteDailyStatDto>? Series { get; set; }
+
+    // Derived from Series after restore-or-fetch — never persisted (no independent fetch).
     private IReadOnlyList<DateOnly> _dates = [];
 
     protected override async Task OnInitializedAsync()
     {
-        _latest = await StatsService.GetLatestAsync();
-        _series = await StatsService.GetSeriesAsync(SeriesDays);
-        _dates = _series.Select(s => s.StatDate).ToList();
+        // ??= — skip the fetches when [PersistentState] restored the prerendered data.
+        Latest ??= await StatsService.GetLatestAsync();
+        Series ??= (await StatsService.GetSeriesAsync(SeriesDays)).ToList();
+        _dates = Series.Select(s => s.StatDate).ToList();
         _loading = false;
     }
 }

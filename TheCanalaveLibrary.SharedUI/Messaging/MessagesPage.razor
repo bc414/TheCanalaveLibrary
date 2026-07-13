@@ -21,7 +21,7 @@
 }
 else if (DeviceService.IsMobile())
 {
-    <MessagesMobile Conversations="_conversations"
+    <MessagesMobile Conversations="@(Conversations ?? [])"
                     SelectedConversationId="ConversationId"
                     Thread="EffectiveThread"
                     BusySendReply="_replying"
@@ -39,7 +39,7 @@ else if (DeviceService.IsMobile())
 }
 else
 {
-    <MessagesDesktop Conversations="_conversations"
+    <MessagesDesktop Conversations="@(Conversations ?? [])"
                      SelectedConversationId="ConversationId"
                      Thread="EffectiveThread"
                      BusySendReply="_replying"
@@ -69,7 +69,11 @@ else
 
     // ── Conversation list ─────────────────────────────────────────────────────
 
-    private IReadOnlyList<ConversationSummaryDto> _conversations = [];
+    // Persisted across the prerender→interactive handoff ([PersistentState] requires a public
+    // property) — the sidebar listing hydrates from the prerender payload. Thread state below
+    // stays ephemeral: loading it bundles a MarkConversationReadAsync write plus a post-mark-read
+    // listing refresh, both of which must run (plain assignments) on every load.
+    [PersistentState] public IReadOnlyList<ConversationSummaryDto>? Conversations { get; set; }
 
     // ── Thread state ──────────────────────────────────────────────────────────
 
@@ -113,7 +117,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _conversations = await WriteService.GetConversationsAsync();
+        // ??= — restore-or-fetch idiom; every later listing refresh is a plain assignment.
+        Conversations ??= await WriteService.GetConversationsAsync();
 
         // Resolve compose preset when arriving from a UserCard "Send PM" action.
         if (!string.IsNullOrWhiteSpace(ComposeForUsername))
@@ -175,7 +180,7 @@ else
 
             // Mark read + refresh list (updates unread counts in sidebar).
             await WriteService.MarkConversationReadAsync(ConversationId.Value);
-            _conversations = await WriteService.GetConversationsAsync();
+            Conversations = await WriteService.GetConversationsAsync();
         }
         catch (KeyNotFoundException)
         {
@@ -199,7 +204,7 @@ else
             _allMessages.Insert(0, sent);
             _totalMessageCount++;
             // Refresh sidebar preview.
-            _conversations = await WriteService.GetConversationsAsync();
+            Conversations = await WriteService.GetConversationsAsync();
         }
         catch (MessagingValidationException ex)
         {

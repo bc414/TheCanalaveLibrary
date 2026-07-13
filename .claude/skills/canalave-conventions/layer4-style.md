@@ -360,17 +360,16 @@ interact unexpectedly with Quill's element selectors. Test the editor early in a
 with full CSS applied. Override Quill styles via CSS custom properties or a scoped stylesheet
 rather than fighting specificity.
 
-## Blazored.Typeahead Stylesheet (same category as Quill, WU11)
+## Typeahead styling (CanalaveTypeahead — superseded Blazored.Typeahead at the Global Flip)
 
-`Blazored.Typeahead`'s package CSS (`_content/Blazored.Typeahead/blazored-typeahead.css`) provides
-the input/dropdown **positioning skeleton** (`.blazored-typeahead` relative-positioned wrapper,
-`.blazored-typeahead__results` absolute-positioned dropdown with its own `box-shadow`/`z-index`) —
-keep it for the behavior it implements, but it also ships hardcoded brand colors (`#007bff` hover,
-grey borders) that read as foreign next to the site's Tailwind tokens. `TagSelector`'s `ResultTemplate`
-content (dot/sprite/name) is fully ours and already token-driven; the *chrome* around it (input border,
-hover highlight, focus ring) is the package's — leave it as-is for MVP rather than fighting its
-specificity with `!important` overrides. Revisit only if a future visual pass calls for full skeleton
-replacement, the same way Quill's CSS is flagged for later scrutiny, not solved now.
+Blazored.Typeahead (and its package CSS + hardcoded `#007bff` chrome, which this section used to
+sanction as a leave-as-is skeleton) was removed in the Global Flip wave: the archived library's
+programmatic-Value-clear bug crashed the WASM renderer outright (Blazored/Typeahead#221). Its
+replacement, `SharedUI/Controls/CanalaveTypeahead.razor`, is fully token-driven — Control-role
+input chrome, Overlay-role dropdown panel matching `UserMenu`'s flyout grammar
+(`z-(--z-dropdown)`, `bg-(--color-surface-raised)`, `shadow-medium`), and the one neutral
+`--color-surface-hover` doubling as the keyboard-highlight tint. No foreign CSS remains; the
+old "revisit at a future visual pass" flag is closed.
 
 ## Reader Settings as CSS (font-scope boundary)
 

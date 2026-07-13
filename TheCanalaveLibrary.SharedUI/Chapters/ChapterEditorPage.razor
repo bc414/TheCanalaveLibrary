@@ -52,7 +52,7 @@ else
             <div class="mb-6 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
                 <h2 class="mb-2 text-sm font-semibold text-(--color-text)">Versions</h2>
                 <div class="flex flex-wrap gap-2">
-                    @foreach (ChapterVersionDto version in _versions)
+                    @foreach (ChapterVersionDto version in Versions ?? [])
                     {
                         bool isCurrent = version.ChapterContentId == _contentId;
                         string versionLabel = version.VersionName ?? (version.IsPrimary ? "Primary" : $"Version {version.VersionOrder}");
@@ -93,7 +93,7 @@ else
         {
             <div class="mb-4 flex items-center gap-3">
                 <span class="text-sm font-semibold text-(--color-text)">Status:</span>
-                @if (_isPublished)
+                @if (IsPublished == true)
                 {
                     <span class="text-sm text-(--color-text-muted)">Published</span>
                     <button type="button" class="text-sm text-(--color-danger) hover:underline"
@@ -138,7 +138,7 @@ else
         @* ── Main form ───────────────────────────────────────────────────────── *@
         <ChapterPropertiesForm @ref="_form"
                                ViewModel="_viewModel"
-                               StoryRating="@_storyRating"
+                               StoryRating="@(StoryRating ?? Rating.E)"
                                IsPrimary="@_isPrimary"
                                VersionCount="@_versionCount"
                                SubmitLabel="@(_isNew ? "Create Chapter" : "Save Changes")"
@@ -171,14 +171,22 @@ else
     private bool _isNew;
     private bool _isLoading = true;
     private bool _forbidden;
-    private Rating _storyRating = Rating.E;
     private bool _isPrimary = true;
     private int _versionCount = 1;
-    private bool _isPublished;
     private int? _chapterId;
     private long? _contentId;
-    private IReadOnlyList<ChapterVersionDto> _versions = [];
     private ChapterVersionDto? _currentVersion;
+
+    // Persisted loaded-for-edit SOURCE data only (layer5-wasm.md §"Avoiding the double fetch") —
+    // the restore-or-fetch guards in LoadAsync skip the hydration re-fetch on full document loads.
+    // The live editor state (_viewModel / ChapterPropertiesForm content / DraftAutosave) is never
+    // persisted; it is re-seeded from EditSource. StoryRating is the one scalar the form needs
+    // from StoryUpdateDTO — persisting the whole DTO would embed a superset this page never
+    // renders (browser-exposure rule), so only the rating is kept.
+    [PersistentState] public Rating? StoryRating { get; set; }
+    [PersistentState] public ChapterVersionDto[]? Versions { get; set; }
+    [PersistentState] public ChapterReadingDto? EditSource { get; set; }
+    [PersistentState] public bool? IsPublished { get; set; }
 
     // Route-param tracking for same-component navigation (create → edit, or version switch).
     // Router-intercepted <a>/NavigateTo between routes served by THIS component reuses the
@@ -191,7 +199,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        await LoadAsync();
+        await LoadAsync(initialLoad: true);
         _initialized = true;
     }
 
@@ -200,52 +208,64 @@ else
         if (!_initialized) return;
         if (StoryId == _loadedStoryId && ChapterNumber == _loadedChapterNumber
             && VersionOrder == _loadedVersionOrder) return;
-        await LoadAsync();
+        await LoadAsync(initialLoad: false);
     }
 
-    private async Task LoadAsync()
+    // initialLoad: true from OnInitializedAsync — restore-or-fetch (??=) so [PersistentState]
+    // values from the prerender pass short-circuit the hydration re-fetch. false from
+    // OnParametersSetAsync/post-mutation refreshes — internal SPA navigations never prerender,
+    // so the previous route's persisted values must NOT short-circuit: clear, then plain fetch
+    // (layer3-logic.md §"Route-Parameter Dispatchers").
+    private async Task LoadAsync(bool initialLoad)
     {
         _isLoading = true;
         _forbidden = false;
         _viewModel = new();
         _chapterId = null;
         _contentId = null;
-        _versions = [];
         _currentVersion = null;
         _isPrimary = true;
         _versionCount = 1;
-        _isPublished = false;
+        if (!initialLoad)
+        {
+            StoryRating = null;
+            Versions = null;
+            EditSource = null;
+            IsPublished = null;
+        }
         _loadedStoryId = StoryId;
         _loadedChapterNumber = ChapterNumber;
         _loadedVersionOrder = VersionOrder;
 
         _isNew = !ChapterNumber.HasValue;
 
-        // Load story rating for the form's floor/primary invariant UI.
-        StoryUpdateDTO? story = await StoryReadService.GetStoryForEditAsync(StoryId);
-        if (story is null)
+        // Load story rating for the form's floor/primary invariant UI (skipped when restored).
+        if (StoryRating is null)
         {
-            NavigationManager.NavigateTo("/not-found");
-            return;
+            StoryUpdateDTO? story = await StoryReadService.GetStoryForEditAsync(StoryId);
+            if (story is null)
+            {
+                NavigationManager.NavigateTo("/not-found");
+                return;
+            }
+            StoryRating = story.Rating;
         }
-        _storyRating = story.Rating;
 
         if (!_isNew)
         {
             // Resolve the ChapterContentId from (ChapterNumber, VersionOrder).
-            IReadOnlyList<ChapterVersionDto> allVersions =
-                await ChapterService.GetChapterVersionsAsync(StoryId, ChapterNumber!.Value);
+            Versions ??= (await ChapterService.GetChapterVersionsAsync(StoryId, ChapterNumber!.Value)).ToArray();
 
             long resolvedContentId;
             if (VersionOrder.HasValue)
             {
-                ChapterVersionDto? v = allVersions.FirstOrDefault(v => v.VersionOrder == VersionOrder.Value);
+                ChapterVersionDto? v = Versions.FirstOrDefault(v => v.VersionOrder == VersionOrder.Value);
                 resolvedContentId = v?.ChapterContentId
-                    ?? allVersions.FirstOrDefault(v => v.IsPrimary)?.ChapterContentId ?? 0;
+                    ?? Versions.FirstOrDefault(v => v.IsPrimary)?.ChapterContentId ?? 0;
             }
             else
             {
-                resolvedContentId = allVersions.FirstOrDefault(v => v.IsPrimary)?.ChapterContentId ?? 0;
+                resolvedContentId = Versions.FirstOrDefault(v => v.IsPrimary)?.ChapterContentId ?? 0;
             }
 
             if (resolvedContentId == 0)
@@ -255,14 +275,13 @@ else
             }
 
             _contentId = resolvedContentId;
-            _versions   = allVersions;
-            _versionCount = allVersions.Count;
-            _currentVersion = allVersions.FirstOrDefault(v => v.ChapterContentId == resolvedContentId);
+            _versionCount = Versions.Length;
+            _currentVersion = Versions.FirstOrDefault(v => v.ChapterContentId == resolvedContentId);
             _isPrimary = _currentVersion?.IsPrimary ?? false;
 
             // Load chapter content for the form (no rating ceiling — authors see their own).
-            ChapterReadingDto? chapterDto = await ChapterService.GetChapterForEditAsync(resolvedContentId);
-            if (chapterDto is null)
+            EditSource ??= await ChapterService.GetChapterForEditAsync(resolvedContentId);
+            if (EditSource is null)
             {
                 NavigationManager.NavigateTo("/not-found");
                 return;
@@ -276,26 +295,36 @@ else
                 string? idStr = auth.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
                 if (int.TryParse(idStr, out int parsedId)) currentUserId = parsedId;
             }
-            if (chapterDto.AuthorId.HasValue && currentUserId.HasValue && chapterDto.AuthorId != currentUserId)
+            if (EditSource.AuthorId.HasValue && currentUserId.HasValue && EditSource.AuthorId != currentUserId)
             {
                 _forbidden = true;
+                // The forbidden page renders none of the fetched data — clear the persisted
+                // properties so the prerender payload doesn't carry unrendered chapter source
+                // (browser-exposure rule: persist only what the page renders).
+                EditSource = null;
+                Versions = null;
                 _isLoading = false;
                 return;
             }
 
-            _chapterId = chapterDto.ChapterId;
+            _chapterId = EditSource.ChapterId;
 
-            // Publish state from TOC (GetChapterForEditAsync doesn't carry IsPublished).
-            IReadOnlyList<ChapterTocEntryDto> toc = await ChapterService.GetChapterTocAsync(StoryId);
-            _isPublished = toc.FirstOrDefault(e => e.ChapterNumber == ChapterNumber!.Value)?.IsPublished ?? false;
+            // Publish state from TOC (GetChapterForEditAsync doesn't carry IsPublished; skipped
+            // when restored).
+            if (IsPublished is null)
+            {
+                IReadOnlyList<ChapterTocEntryDto> toc = await ChapterService.GetChapterTocAsync(StoryId);
+                IsPublished = toc.FirstOrDefault(e => e.ChapterNumber == ChapterNumber!.Value)?.IsPublished ?? false;
+            }
 
-            // Populate the ViewModel. RawRating = null means "Same as story (inherit)".
-            _viewModel.Title             = chapterDto.Title;
-            _viewModel.ChapterText       = chapterDto.ChapterText;
-            _viewModel.TopAuthorsNote    = chapterDto.TopAuthorsNote;
-            _viewModel.BottomAuthorsNote = chapterDto.BottomAuthorsNote;
-            _viewModel.Rating            = chapterDto.RawRating;
-            _viewModel.VersionName       = chapterDto.VersionName;
+            // Populate the ViewModel (live editor state — never persisted) from the loaded-for-edit
+            // source. RawRating = null means "Same as story (inherit)".
+            _viewModel.Title             = EditSource.Title;
+            _viewModel.ChapterText       = EditSource.ChapterText;
+            _viewModel.TopAuthorsNote    = EditSource.TopAuthorsNote;
+            _viewModel.BottomAuthorsNote = EditSource.BottomAuthorsNote;
+            _viewModel.Rating            = EditSource.RawRating;
+            _viewModel.VersionName       = EditSource.VersionName;
         }
 
         _isLoading = false;
@@ -333,7 +362,11 @@ else
                     await ChapterService.GetChapterTocAsync(StoryId);
                 int newChapterNumber = tocAfterCreate.Max(t => t.ChapterNumber);
                 if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
-                NavigationManager.NavigateTo($"/story/{StoryId}/chapter/{newChapterNumber}/edit");
+                // forceLoad: same-component create→edit redirect on a Quill-hosting page — an
+                // in-place re-render fine-grained-diffs around Quill's JS-inserted toolbar and
+                // crashes the WASM renderer (Blazored.TextEditor#71; Global Flip wave finding —
+                // see StoryEditorPage's twin comment). [PersistentState] hydrates the reload.
+                NavigationManager.NavigateTo($"/story/{StoryId}/chapter/{newChapterNumber}/edit", forceLoad: true);
             }
             else if (_contentId.HasValue)
             {
@@ -448,7 +481,7 @@ else
                 VersionName = "Imported"
             });
             _importedDraft = null;
-            await LoadAsync(); // refresh the version switcher
+            await LoadAsync(initialLoad: false); // refresh the version switcher (plain re-fetch)
         }
         catch (Exception ex)
         {
@@ -464,7 +497,7 @@ else
         try
         {
             await ChapterService.SetPublishedAsync(_chapterId.Value, publish);
-            _isPublished = publish;
+            IsPublished = publish;
         }
         catch (Exception ex)
         {
@@ -481,8 +514,9 @@ else
         {
             await ChapterService.SetPrimaryVersionAsync(_chapterId.Value, _contentId.Value);
             _isPrimary = true;
-            _versions = await ChapterService.GetChapterVersionsAsync(StoryId, ChapterNumber!.Value);
-            _currentVersion = _versions.FirstOrDefault(v => v.ChapterContentId == _contentId.Value);
+            // Plain assignment — post-mutation refresh must re-fetch, never restore.
+            Versions = (await ChapterService.GetChapterVersionsAsync(StoryId, ChapterNumber!.Value)).ToArray();
+            _currentVersion = Versions.FirstOrDefault(v => v.ChapterContentId == _contentId.Value);
         }
         catch (Exception ex)
         {
@@ -508,7 +542,9 @@ else
                 await ChapterService.GetChapterVersionsAsync(StoryId, ChapterNumber!.Value);
             ChapterVersionDto? newVer = updated.FirstOrDefault(v => v.ChapterContentId == altContentId);
             if (newVer is not null)
-                NavigationManager.NavigateTo($"/story/{StoryId}/chapter/{ChapterNumber}/{newVer.VersionOrder}/edit");
+                // forceLoad: same-component version-switch redirect — Quill diff hazard, see the
+                // create path's comment above.
+                NavigationManager.NavigateTo($"/story/{StoryId}/chapter/{ChapterNumber}/{newVer.VersionOrder}/edit", forceLoad: true);
         }
         catch (Exception ex)
         {

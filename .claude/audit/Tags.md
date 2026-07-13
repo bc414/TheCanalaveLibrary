@@ -375,7 +375,11 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
 - **L4-Style — Stage 5 (WU11, 2026-06-21/22).** No outer margin (the discarded `mb-4` was the
   violation that motivated the rule); dot-color table in `layer4-style.md` Pattern Accumulation;
   package's own CSS skeleton kept as-is (see `layer4-style.md` "Blazored.Typeahead Stylesheet").
-  **L5 — Stage 2.**
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; TagSelector typeahead search/select verified under WASM for
+  the first time — on the NEW in-house `CanalaveTypeahead` (Blazored.Typeahead removed after it
+  crashed the WASM renderer; see workplan). Full wave narrative + the 7 bugs found/fixed:
+  `workplan.md` WU-GlobalFlip.
 - **Verified:** `dotnet build` green (4 projects, 0 errors); live server run (`run-server` skill),
   homepage `200`, no exceptions in server log across multiple boot/request cycles. User-confirmed
   visual + interactive check against the live server via a throwaway `HomeDesktop.razor` harness
@@ -432,8 +436,10 @@ Settled additively against the Stage-5 L1 (two new columns, no other L1 change):
 
 **L1 — Stage 5** (extended additively via `WU43_SavedTagSelectionExcludeAndDescription`).
 **L2/L3-Logic/L3.5-Structure — Stage 5** (WU43, verified below). **L4-Style / L4.5-Browser — Stage 1**
-(pending visual/live-browser sign-off, WU8/WU13/WU23 precedent). **L5 — Stage 2** (deferred, MVP is
-InteractiveServer-only). **L6 — Stage 5** (two new indexes, see `layer6-indexes.md` "Saved Tag
+(pending visual/live-browser sign-off, WU8/WU13/WU23 precedent). **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
+site now runs global InteractiveAuto; the saved-selection flyout fetch is interactive-only and was
+not browser-driven in the flip's wave. Full wave narrative + the 7 bugs found/fixed: `workplan.md`
+WU-GlobalFlip. **L6 — Stage 5** (two new indexes, see `layer6-indexes.md` "Saved Tag
 Selections").
 
 ### WU43 Stage-5 verification note (2026-07-11)

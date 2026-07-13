@@ -19,10 +19,13 @@
 @* Chapter reading page — Pattern 1 read side (cross-cutting.md "Two content-editing patterns").
    Edit side is ChapterEditorPage (WU26). Dispatcher: loads chapter DTO, TOC, version list,
    prompt-gate recommendation id, and wires reading-progress scroll JS.
-   Scroll progress → RecordProgressAsync; Ch.1 ≥90% → MarkStartedAsync + reveal helpful prompt. *@
+   Scroll progress → RecordProgressAsync; Ch.1 ≥90% → MarkStartedAsync + reveal helpful prompt.
+   [PersistentState] on Chapter/Toc/Versions eliminates the prerender→interactive double fetch;
+   every reading-progress/read-mark signal stays ephemeral (layer5-wasm.md §"Avoiding the double
+   fetch"). *@
 
-<PageTitle>@(_dto is not null ? $"{_dto.Title} – Chapter {ChapterNumber}" : "Chapter")</PageTitle>
-@if (_dto is not null)
+<PageTitle>@(Chapter is not null ? $"{Chapter.Title} – Chapter {ChapterNumber}" : "Chapter")</PageTitle>
+@if (Chapter is not null)
 {
     <SocialMetaTags Title="@OgTitle" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="article"/>
 }
@@ -38,7 +41,7 @@ else if (_gatedByRating)
         <a href="/story/@StoryId/@ChapterNumber" class="mt-4 inline-block text-(--color-action-ink) hover:underline">Read the default version instead</a>
     </div>
 }
-else if (_dto is null)
+else if (Chapter is null)
 {
     <p class="text-(--color-text-muted)">Chapter not found.</p>
 }
@@ -46,7 +49,7 @@ else
 {
     <div class="mx-auto max-w-2xl px-4 py-6">
 
-        <h1 class="mb-1 text-xl font-bold text-(--color-text)">@_dto.Title</h1>
+        <h1 class="mb-1 text-xl font-bold text-(--color-text)">@Chapter.Title</h1>
         @* Current-arc landmark (WU45 settled): directly under the chapter title, "Arc X — name";
            nothing rendered for gap chapters (no arc contains this chapter number). *@
         @if (CurrentArcLabel is string arcLabel)
@@ -54,22 +57,22 @@ else
             <p class="mb-1 text-sm font-medium text-(--color-text-muted)">@arcLabel</p>
         }
         <p class="mb-4 text-sm text-(--color-text-muted)">
-            Chapter @_dto.ChapterNumber
-            @if (_dto.VersionName is not null)
+            Chapter @Chapter.ChapterNumber
+            @if (Chapter.VersionName is not null)
             {
-                <span> — @_dto.VersionName</span>
+                <span> — @Chapter.VersionName</span>
             }
         </p>
 
         @* Exceeds-story-rating heads-up: mature reader on an alternate that exceeds the story's
            floor rating. The primary invariant guarantees the primary never triggers this. *@
-        @if (_dto.Rating > _dto.StoryRating)
+        @if (Chapter.Rating > Chapter.StoryRating)
         {
             <div class="mb-4 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-3 text-sm text-(--color-text-muted)">
-                This version is rated @_dto.Rating and exceeds the story's @_dto.StoryRating rating.
-                @if (_dto.NextChapterNumber.HasValue)
+                This version is rated @Chapter.Rating and exceeds the story's @Chapter.StoryRating rating.
+                @if (Chapter.NextChapterNumber.HasValue)
                 {
-                    <a href="/story/@StoryId/@_dto.NextChapterNumber.Value" class="ml-1 text-(--color-action-ink) hover:underline">Skip to the next chapter</a>
+                    <a href="/story/@StoryId/@Chapter.NextChapterNumber.Value" class="ml-1 text-(--color-action-ink) hover:underline">Skip to the next chapter</a>
                 }
             </div>
         }
@@ -77,35 +80,35 @@ else
         @* Top navigation *@
         <div class="mb-6">
             <ChapterNavigation StoryId="@StoryId"
-                               CurrentChapterNumber="@_dto.ChapterNumber"
-                               CurrentVersionOrder="@_dto.VersionOrder"
-                               PreviousChapterNumber="@_dto.PreviousChapterNumber"
-                               NextChapterNumber="@_dto.NextChapterNumber"
-                               Toc="@_toc"
-                               Versions="@_versions" />
+                               CurrentChapterNumber="@Chapter.ChapterNumber"
+                               CurrentVersionOrder="@Chapter.VersionOrder"
+                               PreviousChapterNumber="@Chapter.PreviousChapterNumber"
+                               NextChapterNumber="@Chapter.NextChapterNumber"
+                               Toc="@(Toc ?? [])"
+                               Versions="@(Versions ?? [])" />
         </div>
 
         @* Chapter body — chapter-body id is the scroll-tracking anchor for reading-progress.js *@
-        @if (_dto.TopAuthorsNote is not null)
+        @if (Chapter.TopAuthorsNote is not null)
         {
             <div class="mb-4">
                 <ContentSurface Variant="ContentSurfaceVariant.Inline">
-                    <RichTextView HtmlContent="@_dto.TopAuthorsNote" />
+                    <RichTextView HtmlContent="@Chapter.TopAuthorsNote" />
                 </ContentSurface>
             </div>
         }
 
         <article id="chapter-body" class="mb-6">
             <ContentSurface Variant="ContentSurfaceVariant.Reading">
-                <RichTextView HtmlContent="@_dto.ChapterText" />
+                <RichTextView HtmlContent="@Chapter.ChapterText" />
             </ContentSurface>
         </article>
 
-        @if (_dto.BottomAuthorsNote is not null)
+        @if (Chapter.BottomAuthorsNote is not null)
         {
             <div class="mb-6">
                 <ContentSurface Variant="ContentSurfaceVariant.Inline">
-                    <RichTextView HtmlContent="@_dto.BottomAuthorsNote" />
+                    <RichTextView HtmlContent="@Chapter.BottomAuthorsNote" />
                 </ContentSurface>
             </div>
         }
@@ -113,12 +116,12 @@ else
         @* Bottom navigation *@
         <div class="mb-8">
             <ChapterNavigation StoryId="@StoryId"
-                               CurrentChapterNumber="@_dto.ChapterNumber"
-                               CurrentVersionOrder="@_dto.VersionOrder"
-                               PreviousChapterNumber="@_dto.PreviousChapterNumber"
-                               NextChapterNumber="@_dto.NextChapterNumber"
-                               Toc="@_toc"
-                               Versions="@_versions" />
+                               CurrentChapterNumber="@Chapter.ChapterNumber"
+                               CurrentVersionOrder="@Chapter.VersionOrder"
+                               PreviousChapterNumber="@Chapter.PreviousChapterNumber"
+                               NextChapterNumber="@Chapter.NextChapterNumber"
+                               Toc="@(Toc ?? [])"
+                               Versions="@(Versions ?? [])" />
         </div>
 
         @* Author-only edit link — visibility only; the write service is the real gate. *@
@@ -132,7 +135,7 @@ else
         @* Comments *@
         <section aria-label="Comments">
             <CanalaveErrorBoundary Label="comments" Compact="true">
-                <CommentSection ChapterId="@_dto.ChapterId"
+                <CommentSection ChapterId="@Chapter.ChapterId"
                                 CurrentUserId="@_currentUserId"
                                 UserHasCompletedStory="false" />
             </CanalaveErrorBoundary>
@@ -154,9 +157,18 @@ else
 
     [CascadingParameter] private Task<AuthenticationState>? AuthStateTask { get; set; }
 
-    private ChapterReadingDto? _dto;
-    private IReadOnlyList<ChapterTocEntryDto> _toc = [];
-    private IReadOnlyList<ChapterVersionDto> _versions = [];
+    // Persisted across the prerender→interactive handoff — the ??= guard in LoadChapterAsync's
+    // initial-load path ensures the fetch runs once (prerender), not again on hydration.
+    // Size note: Chapter.ChapterText is large HTML, so persisting it embeds a second copy in the
+    // page source (once rendered, once in the persisted payload). Accepted per layer5-wasm.md
+    // §"Avoiding the double fetch": it is exactly what the page renders (no added exposure), and
+    // it buys zero HTTP calls on first interactive paint.
+    [PersistentState] public ChapterReadingDto? Chapter { get; set; }
+    [PersistentState] public ChapterTocEntryDto[]? Toc { get; set; }
+    [PersistentState] public ChapterVersionDto[]? Versions { get; set; }
+
+    // Ephemeral supplementary state — deterministic per viewer, re-fetch is flicker-free (same
+    // judgment as StoryPage's _seriesMemberships/_arcs). Not persisted.
     private IReadOnlyList<StoryArcDto> _arcs = [];
 
     // "Arc X — Title" when the current chapter falls inside an arc; ordinal = list position
@@ -165,12 +177,12 @@ else
     {
         get
         {
-            if (_dto is null) return null;
+            if (Chapter is null) return null;
             for (int i = 0; i < _arcs.Count; i++)
             {
                 StoryArcDto arc = _arcs[i];
-                if (_dto.ChapterNumber >= arc.StartChapterNumber &&
-                    _dto.ChapterNumber <= arc.EndChapterNumber)
+                if (Chapter.ChapterNumber >= arc.StartChapterNumber &&
+                    Chapter.ChapterNumber <= arc.EndChapterNumber)
                 {
                     return $"Arc {i + 1} — {arc.Title}";
                 }
@@ -180,7 +192,8 @@ else
     }
     // Lightweight listing projection (not the full StoryDetailsDTO) — the chapter DTO has no cover
     // or blurb of its own; OG tags fall back to the parent story's (WU-Seo). Loaded alongside TOC/
-    // versions below, not via a heavier GetStoryByIdAsync call.
+    // versions below, not via a heavier GetStoryByIdAsync call. Ephemeral: feeds head meta only,
+    // so the prerender→interactive re-fetch is invisible.
     private StoryListingDto? _storyListing;
     private int? _currentUserId;
     private bool _isAuthor;
@@ -199,7 +212,7 @@ else
 
     // Open Graph/Twitter meta (WU-Seo) — cover/blurb fall back to the parent story's listing
     // projection (_storyListing), since the chapter DTO carries neither.
-    private string OgTitle => _dto is null ? "Chapter" : $"{_dto.Title} – Chapter {ChapterNumber}";
+    private string OgTitle => Chapter is null ? "Chapter" : $"{Chapter.Title} – Chapter {ChapterNumber}";
     private string? OgDescription => _storyListing is null
         ? null
         : SocialDescriptionHelper.Clean(_storyListing.ShortDescription);
@@ -207,10 +220,10 @@ else
     private string OgUrl => PublicUrlProvider.AbsolutePageUrl($"/story/{StoryId}/{ChapterNumber}");
 
     private string EditUrl =>
-        _dto is null ? "#"
-        : _dto.VersionOrder == 0
+        Chapter is null ? "#"
+        : Chapter.VersionOrder == 0
             ? $"/story/{StoryId}/chapter/{ChapterNumber}/edit"
-            : $"/story/{StoryId}/chapter/{ChapterNumber}/{_dto.VersionOrder}/edit";
+            : $"/story/{StoryId}/chapter/{ChapterNumber}/{Chapter.VersionOrder}/edit";
 
     protected override async Task OnInitializedAsync()
     {
@@ -223,7 +236,7 @@ else
                 _currentUserId = parsedId;
         }
 
-        await LoadChapterAsync();
+        await LoadChapterAsync(initialLoad: true);
         _initialized = true;
     }
 
@@ -237,18 +250,19 @@ else
         // Dispose the existing JS scroll-progress registration before loading the new chapter
         // so readingProgress.register binds to the new chapter body, not the old one.
         await DisposeJsRegistrationAsync();
-        await LoadChapterAsync();
+        await LoadChapterAsync(initialLoad: false);
     }
 
     // Loads chapter content, TOC, versions, prompt gate, and attribution.
-    // Called from both OnInitializedAsync (first load) and OnParametersSetAsync (chapter change).
-    private async Task LoadChapterAsync()
+    // initialLoad: true from OnInitializedAsync — restore-or-fetch (??=) so [PersistentState]
+    // values from the prerender pass short-circuit the re-fetch. false from OnParametersSetAsync —
+    // internal SPA navigations never prerender, so the previous chapter's persisted values must
+    // NOT short-circuit: plain assignment (layer3-logic.md §"Route-Parameter Dispatchers").
+    private async Task LoadChapterAsync(bool initialLoad)
     {
         _isLoading = true;
-        _dto = null;
-        _toc = [];
-        _versions = [];
         _arcs = [];
+        _storyListing = null;
         _isAuthor = false;
         _recId = null;
         _progressReached90 = false;
@@ -258,9 +272,18 @@ else
         _loadedChapterNumber = ChapterNumber;
         _loadedVersionOrder  = VersionOrder;
 
-        _dto = await ChapterReadService.GetChapterForReadingAsync(StoryId, ChapterNumber, VersionOrder);
+        if (initialLoad)
+        {
+            Chapter ??= await ChapterReadService.GetChapterForReadingAsync(StoryId, ChapterNumber, VersionOrder);
+        }
+        else
+        {
+            Chapter  = await ChapterReadService.GetChapterForReadingAsync(StoryId, ChapterNumber, VersionOrder);
+            Toc      = null;   // force the plain re-fetch below for the new chapter
+            Versions = null;
+        }
 
-        if (_dto is null)
+        if (Chapter is null)
         {
             // Distinguish: versioned URL (non-mature reader blocked) vs truly absent chapter.
             _gatedByRating = VersionOrder.HasValue;
@@ -270,16 +293,26 @@ else
             return;
         }
 
-        _isAuthor = _dto.AuthorId.HasValue && _dto.AuthorId == _currentUserId;
+        _isAuthor = Chapter.AuthorId.HasValue && Chapter.AuthorId == _currentUserId;
 
-        // Load TOC, accessible versions, and the story listing projection (OG fallback data) in parallel.
-        Task<IReadOnlyList<ChapterTocEntryDto>> tocTask     = ChapterReadService.GetChapterTocAsync(StoryId);
-        Task<IReadOnlyList<ChapterVersionDto>> versionsTask = ChapterReadService.GetChapterVersionsAsync(StoryId, ChapterNumber);
+        // Load TOC + accessible versions (skipped when [PersistentState] restored them) and the
+        // ephemeral story listing projection (OG fallback data) + arcs in parallel.
+        Task<IReadOnlyList<ChapterTocEntryDto>>? tocTask = Toc is null
+            ? ChapterReadService.GetChapterTocAsync(StoryId)
+            : null;
+        Task<IReadOnlyList<ChapterVersionDto>>? versionsTask = Versions is null
+            ? ChapterReadService.GetChapterVersionsAsync(StoryId, ChapterNumber)
+            : null;
         Task<StoryListingDto[]> storyListingTask            = StoryReadService.GetListingsByIdsAsync([StoryId]);
         Task<IReadOnlyList<StoryArcDto>> arcsTask           = StoryArcReadService.GetArcsForStoryAsync(StoryId);
-        await Task.WhenAll(tocTask, versionsTask, storyListingTask, arcsTask);
-        _toc           = tocTask.Result;
-        _versions      = versionsTask.Result;
+
+        List<Task> pending = [storyListingTask, arcsTask];
+        if (tocTask is not null) pending.Add(tocTask);
+        if (versionsTask is not null) pending.Add(versionsTask);
+        await Task.WhenAll(pending);
+
+        if (tocTask is not null)      Toc      = tocTask.Result.ToArray();
+        if (versionsTask is not null) Versions = versionsTask.Result.ToArray();
         _storyListing  = storyListingTask.Result.FirstOrDefault();
         _arcs          = arcsTask.Result;
 
@@ -300,7 +333,7 @@ else
     // an in-place chapter change where firstRender is always false.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_jsRegistered || _dto is null) return;
+        if (_jsRegistered || Chapter is null) return;
         _jsRegistered = true;
         _dotnetRef = DotNetObjectReference.Create(this);
         try
@@ -316,8 +349,8 @@ else
     [JSInvokable]
     public async Task OnScrollProgress(float progress)
     {
-        if (_dto is null) return;
-        await ReadingProgress.RecordProgressAsync(_dto.ChapterId, progress);
+        if (Chapter is null) return;
+        await ReadingProgress.RecordProgressAsync(Chapter.ChapterId, progress);
         if (ChapterNumber == 1 && progress >= 0.9f && !_progressReached90)
         {
             _progressReached90 = true;

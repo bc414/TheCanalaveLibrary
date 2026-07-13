@@ -51,7 +51,11 @@ services, no components built.
   default-fallback, linked bold username, conditional tagline/badges, caret open/close, only wired
   menu items render, no doubled spacing); harness removed after confirmation; no real consumer
   exists yet (lands in WU21/WU30/…), so those stay Stage 2 — the DTO contract alone doesn't flip
-  them, same as WU4's `TagChip`. **L5 — Stage 2.**
+  them, same as WU4's `TagChip`.
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; relationship data rendered on the profile page verified in a
+  real WASM runtime during the flip's browser wave (follow writes not driven this wave). Full wave
+  narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
   **2026-06-22 (WU12.5 backfill):** verification migrated into asserted tests — `UserCardTests` in
   `TheCanalaveLibrary.Tests.RazorComponents` (tier: **RazorComponents**). Covers: username renders;
   profile link `href` correct (`/user/{UserId}`); tagline shown/hidden; avatar URL vs. default
@@ -100,7 +104,11 @@ services, no components built.
   render, null VouchText omits RichTextView div, IsEditable gate, OnRemoveVouch callback).
   CSS visual rendering (avatar layout, spacing, disabled tooltip appearance) is human sign-off
   for Stage 6. `dotnet test` green (64/64).
-- **L5 — Stage 2. L6 — Stage 5** (see above; existing composite PK + `ix_vouches_vouched_user_id`).
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+  site now runs global InteractiveAuto; vouch data rendered on the profile page verified in a real
+  WASM runtime during the flip's browser wave (vouch writes not driven this wave). Full wave
+  narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
+- **L6 — Stage 5** (see above; existing composite PK + `ix_vouches_vouched_user_id`).
 - **L6 — Stage 5 (reconciled Phase B).** The migration-verified indexes for the new shape: the
   composite PK `(vouching_user_id, vouched_user_id)` covers outgoing-vouch lookups, and
   `ix_vouches_vouched_user_id` covers incoming-vouch lookups. The spec's old filtered-index pair on

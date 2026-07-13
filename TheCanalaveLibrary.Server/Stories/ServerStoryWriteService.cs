@@ -151,6 +151,23 @@ public class ServerStoryWriteService(
         }
     }
 
+    public async Task<string> UploadCoverArtAsync(Stream content, string contentType, int storyId)
+    {
+        int? authorId = await writeDb.Stories
+            .Where(s => s.StoryId == storyId)
+            .Select(s => (int?)s.AuthorId)
+            .FirstOrDefaultAsync();
+
+        if (authorId is null)
+            throw new KeyNotFoundException($"Story with ID {storyId} not found.");
+
+        // Same author-only gate as UpdateStoryAsync — moderation actions never call this path.
+        if (authorId != ActiveUser.UserId)
+            throw new UnauthorizedAccessException("You can only upload a cover for your own story.");
+
+        return await imageStorage.SaveAsync(content, contentType, ImageKind.Cover, storyId);
+    }
+
     /// <summary>
     /// "Also posted on" link validation (WU38d): every row needs an absolute http/https URL.
     /// Rows with an empty URL are tolerated here and dropped by <see cref="DedupedLinks"/> —
