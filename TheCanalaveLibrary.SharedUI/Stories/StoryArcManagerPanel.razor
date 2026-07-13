@@ -1,0 +1,189 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@inject IStoryArcWriteService StoryArcWriteService
+@inject IChapterReadService ChapterReadService
+
+@* Arc manager (Feature 8, WU45 — settled shape: editable arc rows BESIDE a live read-only
+   chapter-list preview that highlights each arc's span as ranges are edited). A separate panel
+   from chapter reorder (settled: not merged into the chapter list), mounted on the story editor
+   page's edit mode. The range fields are the source of truth; the preview is a sanity-check
+   surface, not an alternate input. Arc order is a consequence of StartChapterNumber (SortOrder
+   was eliminated) — there is deliberately no drag-reorder here. Server-side validation
+   (no-overlap, Start ≤ End, unique title) is the authority; errors surface via InlineAlert.
+   Outer Margin Rule: no outer margin on the root; the parent spaces the panel. *@
+
+<section>
+    <h2 class="mb-2 text-lg font-semibold text-(--color-text)">Story Arcs</h2>
+    <p class="mb-2 text-sm text-(--color-text-muted)">
+        Group chapters into volumes ("Book 1", "Book 2"). Chapters outside every arc are fine —
+        prologues and interludes don't need one.
+    </p>
+    <div class="mb-2"><InlineAlert Messages="_errorMessages"/></div>
+
+    @if (_isLoading)
+    {
+        <p class="text-sm text-(--color-text-muted)"><em>Loading…</em></p>
+    }
+    else
+    {
+        <div class="grid gap-4 sm:grid-cols-2">
+            @* ── Editable arc rows (source of truth) ─────────────────────────────── *@
+            <div class="space-y-2">
+                @foreach (ArcRowModel row in _rows)
+                {
+                    <div class="rounded-xl border border-(--color-border) bg-(--color-surface) p-3" @key="row">
+                        <input class="mb-2 w-full rounded-md border border-(--color-border) bg-(--color-surface-raised) px-2 py-1 text-sm text-(--color-text)"
+                               placeholder="Arc title (e.g. Book 1: Beginnings)"
+                               maxlength="255"
+                               @bind="row.Title" @bind:event="oninput"/>
+                        <div class="flex items-center gap-2 text-sm text-(--color-text-muted)">
+                            <label class="flex items-center gap-1">Ch.
+                                <input type="number" min="1"
+                                       class="w-16 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-2 py-1 text-sm text-(--color-text)"
+                                       @bind="row.Start" @bind:event="oninput"/>
+                            </label>
+                            <span>–</span>
+                            <input type="number" min="1"
+                                   class="w-16 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-2 py-1 text-sm text-(--color-text)"
+                                   @bind="row.End" @bind:event="oninput"/>
+                            <span class="ml-auto flex items-center gap-2">
+                                <button type="button"
+                                        class="rounded-md bg-(--color-action) px-2.5 py-1 text-xs font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover)"
+                                        @onclick="() => SaveRowAsync(row)">@(row.StoryArcId is null ? "Add" : "Save")</button>
+                                @if (row.StoryArcId is not null)
+                                {
+                                    <button type="button"
+                                            class="rounded-md px-2 py-1 text-xs text-(--color-danger) transition-colors hover:bg-(--color-danger)/10"
+                                            @onclick="() => DeleteRowAsync(row)">Delete</button>
+                                }
+                            </span>
+                        </div>
+                    </div>
+                }
+
+                @if (!_rows.Any(r => r.StoryArcId is null))
+                {
+                    <button type="button"
+                            class="w-full rounded-xl border border-dashed border-(--color-border) px-3 py-2 text-sm text-(--color-text-muted) transition-colors hover:bg-(--color-surface-hover) hover:text-(--color-text)"
+                            @onclick="AddBlankRow">+ Add arc</button>
+                }
+            </div>
+
+            @* ── Live preview — read-only chapter list, spans highlighted from the CURRENT
+                 (possibly unsaved) row inputs so the author sees exactly what a range covers. ── *@
+            <div class="overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface)">
+                @if (_chapters.Count == 0)
+                {
+                    <p class="px-3 py-4 text-sm text-(--color-text-muted)">No chapters yet.</p>
+                }
+                @foreach (ChapterListEntryDto chapter in _chapters)
+                {
+                    ArcRowModel? covering = CoveringRow(chapter.ChapterNumber);
+                    <div class="flex items-center gap-2 border-b border-(--color-border) px-3 py-1.5 text-sm last:border-b-0 @(covering is not null ? "border-l-2 border-l-(--color-action) bg-(--color-action)/5" : string.Empty)">
+                        <span class="w-6 shrink-0 text-right text-xs tabular-nums text-(--color-text-muted)">@chapter.ChapterNumber.</span>
+                        <span class="min-w-0 flex-1 truncate text-(--color-text)">@chapter.Title</span>
+                        @if (covering is not null && chapter.ChapterNumber == covering.Start)
+                        {
+                            <span class="shrink-0 truncate text-xs font-medium text-(--color-action-ink)">@(string.IsNullOrWhiteSpace(covering.Title) ? "(untitled arc)" : covering.Title)</span>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public int StoryId { get; set; }
+
+    private sealed class ArcRowModel
+    {
+        public int? StoryArcId;   // null = not yet persisted (the blank "+ Add arc" row)
+        public string Title = string.Empty;
+        public int Start = 1;
+        public int End = 1;
+    }
+
+    private readonly List<ArcRowModel> _rows = [];
+    private IReadOnlyList<ChapterListEntryDto> _chapters = [];
+    private List<string> _errorMessages = [];
+    private bool _isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _chapters = await ChapterReadService.GetChapterListAsync(StoryId);
+        await ReloadArcsAsync();
+        _isLoading = false;
+    }
+
+    private async Task ReloadArcsAsync()
+    {
+        _rows.Clear();
+        foreach (StoryArcDto arc in await StoryArcWriteService.GetArcsForStoryAsync(StoryId))
+        {
+            _rows.Add(new ArcRowModel
+            {
+                StoryArcId = arc.StoryArcId,
+                Title      = arc.Title,
+                Start      = arc.StartChapterNumber,
+                End        = arc.EndChapterNumber
+            });
+        }
+    }
+
+    private void AddBlankRow()
+    {
+        // Seed the new range right after the last existing arc (or at chapter 1) — a sane
+        // starting point the author immediately adjusts with the live preview as feedback.
+        int nextStart = _rows.Count > 0 ? _rows.Max(r => r.End) + 1 : 1;
+        _rows.Add(new ArcRowModel { Start = nextStart, End = nextStart });
+    }
+
+    /// <summary>First (by Start) current row whose UNSAVED range covers this chapter number.</summary>
+    private ArcRowModel? CoveringRow(int chapterNumber) =>
+        _rows.Where(r => chapterNumber >= r.Start && chapterNumber <= r.End)
+             .OrderBy(r => r.Start)
+             .FirstOrDefault();
+
+    private async Task SaveRowAsync(ArcRowModel row)
+    {
+        try
+        {
+            _errorMessages = [];
+            if (row.StoryArcId is int arcId)
+                await StoryArcWriteService.UpdateArcAsync(
+                    new UpdateStoryArcDto(arcId, row.Title, row.Start, row.End));
+            else
+                await StoryArcWriteService.CreateArcAsync(
+                    new CreateStoryArcDto(StoryId, row.Title, row.Start, row.End));
+            await ReloadArcsAsync(); // server truth: assigned ids + StartChapterNumber ordering
+        }
+        catch (StoryArcValidationException ex)
+        {
+            _errorMessages = [.. ex.Errors];
+        }
+        catch (Exception ex)
+        {
+            _errorMessages = ExceptionPresenter.IsUserFacing(ex)
+                ? [.. ExceptionPresenter.GetUserMessages(ex)]
+                : ["Couldn't save the arc. Please try again."];
+        }
+    }
+
+    private async Task DeleteRowAsync(ArcRowModel row)
+    {
+        if (row.StoryArcId is not int arcId) return;
+        try
+        {
+            _errorMessages = [];
+            await StoryArcWriteService.DeleteArcAsync(arcId);
+            await ReloadArcsAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessages = ExceptionPresenter.IsUserFacing(ex)
+                ? [.. ExceptionPresenter.GetUserMessages(ex)]
+                : ["Couldn't delete the arc. Please try again."];
+        }
+    }
+}

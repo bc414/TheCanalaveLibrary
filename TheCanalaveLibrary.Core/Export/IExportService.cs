@@ -16,4 +16,13 @@ public interface IExportService
     /// current viewer (content-rating filter) — the endpoint maps <c>null</c> to 404.
     /// </returns>
     Task<StoryExportResult?> ExportStoryAsync(int storyId, ExportFormat format);
+
+    /// <summary>
+    /// Generates a single published chapter as <paramref name="format"/> (WU45 — the chapter
+    /// list's per-row download menu). Same permission model as the story export: what you can
+    /// read, you can download.
+    /// </summary>
+    /// <returns><c>null</c> when the story/chapter doesn't exist, isn't published, or is
+    /// filtered by the viewer's content-rating ceiling — mapped to 404.</returns>
+    Task<StoryExportResult?> ExportChapterAsync(int storyId, int chapterNumber, ExportFormat format);
 }

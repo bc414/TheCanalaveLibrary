@@ -26,6 +26,8 @@ public class StoryDesktopTests : BunitContext
         Services.AddScoped<IRecommendationWriteService>(_ => _fakeRecommendations);
         // TagChip (nested in StoryDesktop) injects ISpriteReadService.
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
+        // ChapterList (WU45) injects the manual read-mark write service.
+        Services.AddSingleton<IChapterReadMarkWriteService>(new FakeChapterReadMarkWriteService());
         // RichTextView and EditorView inside RecommendationEditor use JS interop.
         JSInterop.Mode = JSRuntimeMode.Loose;
         // Start with an empty recommendation list unless a test overrides this.
@@ -65,7 +67,8 @@ public class StoryDesktopTests : BunitContext
         new() { TagId = id, TagName = name, TagTypeId = type };
 
     private static ChapterListEntryDto MakeChapter(int num = 1, string title = "Chapter One") =>
-        new(num, title, 3_000, IsPublished: true, AlternateVersions: []);
+        new(ChapterId: 100 + num, num, title, 3_000, IsPublished: true, PublishDate: null,
+            IsRead: false, ReadProgress: 0f, AlternateVersions: []);
 
     // ── Title ─────────────────────────────────────────────────────────────────────
 

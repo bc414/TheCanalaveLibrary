@@ -40,6 +40,51 @@ public class ServerExportService(
             slug = $"story-{storyId}";
         }
 
+        return WriteAs(model, format, slug);
+    }
+
+    public async Task<StoryExportResult?> ExportChapterAsync(
+        int storyId, int chapterNumber, ExportFormat format)
+    {
+        StoryDetailsDTO? story = await storyReadService.GetStoryByIdAsync(storyId);
+        if (story is null)
+        {
+            return null; // not found, or filtered out by the viewer's content-rating ceiling
+        }
+
+        // Reuses the story export query (published + ceiling-filtered), narrowed to one chapter —
+        // an unpublished/nonexistent/over-ceiling chapter is simply absent here → 404.
+        IReadOnlyList<ChapterExportDto> chapters =
+            await chapterReadService.GetChaptersForExportAsync(storyId);
+        ChapterExportDto? chapter = chapters.FirstOrDefault(c => c.ChapterNumber == chapterNumber);
+        if (chapter is null)
+        {
+            return null;
+        }
+
+        var model = new StoryExportModel(
+            storyId,
+            story.StoryTitle ?? "Untitled",
+            story.AuthorName ?? "Unknown",
+            story.Rating,
+            story.LongDescription,
+            story.PublishDate,
+            story.LastUpdatedDate,
+            [chapter]);
+
+        string slug = StorySlug.Slugify(model.Title);
+        if (slug.Length == 0)
+        {
+            slug = $"story-{storyId}";
+        }
+
+        return WriteAs(model, format, $"{slug}-ch{chapterNumber}");
+    }
+
+    // One dispatch for both granularities — the writers are pure functions over the model, so a
+    // single-chapter model exports through the identical code path (WU45).
+    private static StoryExportResult WriteAs(StoryExportModel model, ExportFormat format, string slug)
+    {
         return format switch
         {
             ExportFormat.Epub => new StoryExportResult(

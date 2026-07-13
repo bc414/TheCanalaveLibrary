@@ -6,6 +6,7 @@
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
 @inject IChapterReadService ChapterReadService
+@inject IStoryArcReadService StoryArcReadService
 @inject IStoryReadService StoryReadService
 @inject IReadingProgressWriteService ReadingProgress
 @inject IRecommendationReadService RecommendationReadService
@@ -46,6 +47,12 @@ else
     <div class="mx-auto max-w-2xl px-4 py-6">
 
         <h1 class="mb-1 text-xl font-bold text-(--color-text)">@_dto.Title</h1>
+        @* Current-arc landmark (WU45 settled): directly under the chapter title, "Arc X — name";
+           nothing rendered for gap chapters (no arc contains this chapter number). *@
+        @if (CurrentArcLabel is string arcLabel)
+        {
+            <p class="mb-1 text-sm font-medium text-(--color-text-muted)">@arcLabel</p>
+        }
         <p class="mb-4 text-sm text-(--color-text-muted)">
             Chapter @_dto.ChapterNumber
             @if (_dto.VersionName is not null)
@@ -150,6 +157,27 @@ else
     private ChapterReadingDto? _dto;
     private IReadOnlyList<ChapterTocEntryDto> _toc = [];
     private IReadOnlyList<ChapterVersionDto> _versions = [];
+    private IReadOnlyList<StoryArcDto> _arcs = [];
+
+    // "Arc X — Title" when the current chapter falls inside an arc; ordinal = list position
+    // (arcs arrive ordered by StartChapterNumber; StoryArc has no stored SortOrder — WU45).
+    private string? CurrentArcLabel
+    {
+        get
+        {
+            if (_dto is null) return null;
+            for (int i = 0; i < _arcs.Count; i++)
+            {
+                StoryArcDto arc = _arcs[i];
+                if (_dto.ChapterNumber >= arc.StartChapterNumber &&
+                    _dto.ChapterNumber <= arc.EndChapterNumber)
+                {
+                    return $"Arc {i + 1} — {arc.Title}";
+                }
+            }
+            return null;
+        }
+    }
     // Lightweight listing projection (not the full StoryDetailsDTO) — the chapter DTO has no cover
     // or blurb of its own; OG tags fall back to the parent story's (WU-Seo). Loaded alongside TOC/
     // versions below, not via a heavier GetStoryByIdAsync call.
@@ -220,6 +248,7 @@ else
         _dto = null;
         _toc = [];
         _versions = [];
+        _arcs = [];
         _isAuthor = false;
         _recId = null;
         _progressReached90 = false;
@@ -247,10 +276,12 @@ else
         Task<IReadOnlyList<ChapterTocEntryDto>> tocTask     = ChapterReadService.GetChapterTocAsync(StoryId);
         Task<IReadOnlyList<ChapterVersionDto>> versionsTask = ChapterReadService.GetChapterVersionsAsync(StoryId, ChapterNumber);
         Task<StoryListingDto[]> storyListingTask            = StoryReadService.GetListingsByIdsAsync([StoryId]);
-        await Task.WhenAll(tocTask, versionsTask, storyListingTask);
+        Task<IReadOnlyList<StoryArcDto>> arcsTask           = StoryArcReadService.GetArcsForStoryAsync(StoryId);
+        await Task.WhenAll(tocTask, versionsTask, storyListingTask, arcsTask);
         _toc           = tocTask.Result;
         _versions      = versionsTask.Result;
         _storyListing  = storyListingTask.Result.FirstOrDefault();
+        _arcs          = arcsTask.Result;
 
         // Prompt gate — null when: anonymous, no source, or success already recorded.
         if (_currentUserId.HasValue)

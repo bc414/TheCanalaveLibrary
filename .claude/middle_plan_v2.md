@@ -246,11 +246,12 @@ per-cluster render → fix → Pattern-Accumulate → 5→6 on sign-off); surfac
 
 ## Phase 4 — Beta-scope decisions (v1 Phase 3, unchanged)
 
-Story Arcs (8), Polls (37), Custom Lists (51), Feature Contributions (56): design now or
-explicitly defer past beta — a deliberate verdict per feature (decision row 3). Interleaves with
-Phases 2–3. (Spotlight donation infra — 55 remainder — got its verdict 2026-07-11: explicitly
-deferred past beta; the spotlight feature itself was built in Phase 2 as WU-Spotlight. See
-Resolved.)
+Custom Lists (51), Feature Contributions (56): design now or explicitly defer past beta — a
+deliberate verdict per feature (decision row 3). Interleaves with Phases 2–3. (Spotlight donation
+infra — 55 remainder — got its verdict 2026-07-11: explicitly deferred past beta; the spotlight
+feature itself was built in Phase 2 as WU-Spotlight. Polls — 37 — designed + built 2026-07-12.
+Story Arcs — 8 — designed + built 2026-07-12 as WU45, scope widened to include the chapter-list
+presentation upgrade and chapter reorder/delete. See Resolved.)
 
 ## Phase 5 — L5 WASM enablement (v1 Phase 4 item 6, deliberately after features)
 
@@ -319,7 +320,7 @@ renumbered, since other docs cite them by number.
 |---|----------|----------------------|----------------|
 | 1 | **Non-story report-target rating routing** — unchanged from v1 (see `middle_plan.md` row 1 for the full technical framing). | Deferred from pre-integration cleanup (2026-06-26). | Own work-unit; surface during the Phase 3 moderation-queue review. |
 | 2 | **Homepage design — remaining sections.** The spotlight-curation half was resolved 2026-07-11 (see Resolved "Community Spotlight model"); the spotlight section of `/` is built by WU-Spotlight and no longer gated. What remains open: what else the front door shows (recently updated, featured tags, active SitePolls — open intent recorded 2026-07-12, see `audit/BlogPosts.md` F37 — etc.) and its layout. | Spec §5.28: `/` = Community Spotlight stories; other sections undecided. | Front-door product design. Gates the rest of Phase 2 item 1 (WU-Home). |
-| 3 | **Beta scope for features 8 / 51 / 56** — design or defer, per feature. (55-remainder's verdict rendered 2026-07-11: spotlight built, donation infra deferred. **37 Polls' verdict rendered 2026-07-12: designed + built — see Resolved "Polls requirements".**) | None — genuine Stage-1 intent gaps. | Product-scope judgment. Phase 4. |
+| 3 | **Beta scope for features 51 / 56** — design or defer, per feature. (55-remainder's verdict rendered 2026-07-11: spotlight built, donation infra deferred. **37 Polls' verdict rendered 2026-07-12: designed + built — see Resolved "Polls requirements". 8 Story Arcs' verdict rendered 2026-07-12: designed + built — see Resolved "Story Arcs + chapter presentation".**) | None — genuine Stage-1 intent gaps. | Product-scope judgment. Phase 4. |
 | 4 | **Launch-readiness mechanics** — now the full Phase 7 checklist: deploy mechanism, config contract, migration-in-prod, backup+restore drill, uptime/alerting, TLS/domain, R2 values. | Topology settled (droplet + managed PG + R2); `aspire publish` compose output is the default deploy candidate. | Operational cost/effort trade-offs. Phase 7. |
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Phase 6 gate. |
 | 8 | **Email provider + sending domain** (residual — mechanism resolved 2026-07-06, see Resolved) — which SMTP provider to point the seam at, and the sending domain. | Postmark or Amazon SES (cheap at this scale) or Resend; needs a sending domain, which ties into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Config-only swap once decided (no code change) — gates Phase 7, not Phase 1 anymore. |
@@ -328,6 +329,19 @@ renumbered, since other docs cite them by number.
 ---
 
 ## Resolved
+
+- **Story Arcs + chapter presentation + chapter reorder/delete (row 3's Feature-8 verdict)** —
+  **resolved 2026-07-12** (Brian, in chat over many rounds; two real Fimfiction story pages
+  inspected DOM/CSS/JS as behavioral reference, deliberately not ported — Blazor-first-principles
+  re-derivation). Designed and built now, not deferred, with scope deliberately widened twice:
+  (1) the `ChapterList` presentation upgrade (per-viewer read/progress state from Feature 44, one
+  pure shared segmenter for frontier-window collapse + arc headers, strict-chain "New" badge,
+  progress fill-bar, manual read-marks as a new durable-direct seam) is a prerequisite that ships
+  with arcs, and (2) chapter drag-reorder + deletion (Feature 6) is a co-requisite because arc
+  ranges are `ChapterNumber`-keyed and reordering didn't exist (append-only writes). `StoryArc.
+  SortOrder` eliminated. Reorder/delete warnings explicitly waived. Settled-vs-open detail:
+  `audit/Stories.md` Feature 8 + `audit/Chapters.md` "WU45 settled design"; build: `workplan.md`
+  WU45.
 
 - **Polls requirements + build scope (row 3's Feature-37 verdict)** — **resolved 2026-07-12**
   (Brian, in chat). Designed and built now, not deferred. Full settled requirements (per-poll

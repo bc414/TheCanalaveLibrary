@@ -89,6 +89,21 @@ public sealed class ReadingProgressBuffer
         }
     }
 
+    /// <summary>
+    /// Discards any pending ping for one (user, chapter). Called by the durable manual-mark path
+    /// (WU45, <c>ServerChapterReadMarkWriteService</c>) so an in-flight scroll ping can't flush
+    /// after a manual mark and resurrect the overridden read state (the flusher's high-water merge
+    /// would otherwise re-raise a manually-reset ReadProgress).
+    /// </summary>
+    public void Discard(int userId, int chapterId) => _entries.TryRemove((userId, chapterId), out _);
+
+    /// <summary>Bulk <see cref="Discard(int,int)"/> for mark-all (WU45).</summary>
+    public void Discard(int userId, IEnumerable<int> chapterIds)
+    {
+        foreach (int chapterId in chapterIds)
+            _entries.TryRemove((userId, chapterId), out _);
+    }
+
     /// <summary>Discards all pending entries. Test isolation only — never called in production.</summary>
     public void Clear() => _entries.Clear();
 }

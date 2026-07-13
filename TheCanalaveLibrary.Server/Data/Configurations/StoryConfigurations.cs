@@ -266,9 +266,10 @@ public sealed class StoryArcConfiguration : IEntityTypeConfiguration<StoryArc>
     {
         // A story cannot have two arcs with the same title
         builder.HasIndex(e => new { e.StoryId, e.Title }).IsUnique();
-        // A story cannot have two arcs with the same sort order
-        builder.HasIndex(e => new { e.StoryId, e.SortOrder }).IsUnique();
-        // Future indexes for querying...
+        // Non-overlapping ranges cannot share a start chapter; this index is also the ordering
+        // spine for "arcs of story N, in reading order" (WU45 — replaces the former unique
+        // (StoryId, SortOrder): display order is derived from StartChapterNumber, not stored).
+        builder.HasIndex(e => new { e.StoryId, e.StartChapterNumber }).IsUnique();
     }
 }
 

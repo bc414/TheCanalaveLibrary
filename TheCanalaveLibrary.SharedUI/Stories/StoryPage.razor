@@ -8,6 +8,7 @@
 @inject IUserStoryInteractionReadService UsiReadService
 @inject ISeriesReadService SeriesReadService
 @inject IStoryLineageReadService StoryLineageReadService
+@inject IStoryArcReadService StoryArcReadService
 @inject IViewCountWriteService ViewCountWriteService
 @inject IDeviceDetectionService DeviceService
 @inject NavigationManager NavigationManager
@@ -46,7 +47,9 @@ else
                      IsAuthor="_isAuthor"
                      UsiState="_usiState"
                      SeriesMemberships="_seriesMemberships"
-                     LineageLinks="_lineageLinks" />
+                     LineageLinks="_lineageLinks"
+                     Arcs="_arcs"
+                     ViewerWatermarkUtc="_viewerWatermarkUtc" />
     }
     else
     {
@@ -56,7 +59,9 @@ else
                       IsAuthor="_isAuthor"
                       UsiState="_usiState"
                       SeriesMemberships="_seriesMemberships"
-                      LineageLinks="_lineageLinks" />
+                      LineageLinks="_lineageLinks"
+                      Arcs="_arcs"
+                      ViewerWatermarkUtc="_viewerWatermarkUtc" />
     }
 }
 
@@ -90,6 +95,11 @@ else
 
     // Approved outgoing lineage links — WU42. Same ephemeral treatment as _seriesMemberships.
     private IReadOnlyList<StoryLineageDto> _lineageLinks = [];
+
+    // Story arcs + the viewer's New-badge watermark — WU45. Ephemeral like _seriesMemberships:
+    // both are deterministic per viewer, so the prerender→interactive re-fetch is flicker-free.
+    private IReadOnlyList<StoryArcDto> _arcs = [];
+    private DateTime? _viewerWatermarkUtc;
 
     private bool _initialized;
     private int _loadedStoryId = int.MinValue; // sentinel; no real StoryId equals this
@@ -136,6 +146,8 @@ else
 
         _seriesMemberships = await SeriesReadService.GetMembershipsForStoryAsync(StoryId);
         _lineageLinks = await StoryLineageReadService.GetLineageForStoryAsync(StoryId);
+        _arcs = await StoryArcReadService.GetArcsForStoryAsync(StoryId);
+        _viewerWatermarkUtc = await ChapterReadService.GetViewerLastInteractionUtcAsync(StoryId);
 
         _isAuthor  = _currentUserId.HasValue && Story.AuthorId == _currentUserId;
         _isLoading = false;
@@ -167,6 +179,8 @@ else
         _usiState = _currentUserId is not null ? await UsiReadService.GetStateAsync(StoryId) : null;
         _seriesMemberships = await SeriesReadService.GetMembershipsForStoryAsync(StoryId);
         _lineageLinks = await StoryLineageReadService.GetLineageForStoryAsync(StoryId);
+        _arcs = await StoryArcReadService.GetArcsForStoryAsync(StoryId);
+        _viewerWatermarkUtc = await ChapterReadService.GetViewerLastInteractionUtcAsync(StoryId);
         _isAuthor = _currentUserId.HasValue && Story.AuthorId == _currentUserId;
         _isLoading = false;
 

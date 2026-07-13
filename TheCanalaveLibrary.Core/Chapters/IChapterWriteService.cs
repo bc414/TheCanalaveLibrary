@@ -51,4 +51,29 @@ public interface IChapterWriteService : IChapterReadService
     /// </summary>
     /// <exception cref="KeyNotFoundException">Chapter not found.</exception>
     Task SetPublishedAsync(int chapterId, bool isPublished);
+
+    /// <summary>
+    /// Moves the chapter at <paramref name="fromNumber"/> to <paramref name="toNumber"/>,
+    /// renumbering every chapter between them by ±1 (WU45 — drag-to-reorder; creation stays
+    /// append-only). Only <c>Chapter.ChapterNumber</c> changes — content, comments, and read
+    /// state key on the stable <c>ChapterId</c>. Applies silently to published and draft
+    /// chapters alike (link/arc-crossing warnings explicitly waived, WU45 settled). StoryArc
+    /// bounds shift in the same transaction (remove-at-from + insert-at-to composition; an arc
+    /// emptied by the move is auto-deleted). Author-gated. No-op when from == to.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">Story or source chapter not found.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the story's author.</exception>
+    /// <exception cref="ChapterValidationException">toNumber outside [1, chapter count].</exception>
+    Task MoveChapterAsync(int storyId, int fromNumber, int toNumber);
+
+    /// <summary>
+    /// Deletes a chapter and renumbers every later chapter down by one (WU45). Cascades remove
+    /// the chapter's contents/comments/read state; <c>Chapter.PrimaryContentId</c>'s Restrict FK
+    /// is released first (mirror of the two-step create). StoryArc bounds shrink in the same
+    /// transaction; an arc emptied by the deletion is auto-deleted. Refreshes
+    /// <c>Story.WordCount</c>. Author-gated.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">Chapter not found.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the story's author.</exception>
+    Task DeleteChapterAsync(int chapterId);
 }

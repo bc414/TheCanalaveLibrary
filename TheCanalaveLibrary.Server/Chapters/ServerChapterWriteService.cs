@@ -219,6 +219,166 @@ public class ServerChapterWriteService(
         // in EF projections. No counter to maintain here (forward_plan.md "Story.ChapterCount" Resolved).
     }
 
+    public async Task MoveChapterAsync(int storyId, int fromNumber, int toNumber)
+    {
+        int userId = RequireAuthenticatedUser();
+        if (fromNumber == toNumber) return;
+
+        Story? story = await writeDb.Stories.FirstOrDefaultAsync(s => s.StoryId == storyId);
+        if (story is null) throw new KeyNotFoundException($"Story {storyId} not found.");
+        if (story.AuthorId != userId)
+            throw new UnauthorizedAccessException("You must be the author of this story.");
+
+        int chapterCount = await writeDb.Chapters.CountAsync(c => c.StoryId == storyId);
+        if (toNumber < 1 || toNumber > chapterCount)
+            throw new ChapterValidationException(
+                [$"Target position must be between 1 and {chapterCount}."]);
+
+        // EnableRetryOnFailure refuses bare user transactions — the whole unit runs through the
+        // execution strategy (UserDeletionService precedent).
+        var strategy = writeDb.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await writeDb.Database.BeginTransactionAsync();
+
+            int lo = Math.Min(fromNumber, toNumber);
+            int hi = Math.Max(fromNumber, toNumber);
+            List<Chapter> affected = await writeDb.Chapters
+                .Where(c => c.StoryId == storyId && c.ChapterNumber >= lo && c.ChapterNumber <= hi)
+                .ToListAsync();
+            Chapter? moved = affected.FirstOrDefault(c => c.ChapterNumber == fromNumber);
+            if (moved is null) throw new KeyNotFoundException(
+                $"Story {storyId} has no chapter {fromNumber}.");
+
+            // Compute final numbers, then land them via a negative pass. The unique
+            // (story_id, chapter_number) index is checked per-row inside a single UPDATE too, so
+            // a direct ±1 range shift can transiently collide; negating the affected range first
+            // frees every positive slot, then each row lands on its final number conflict-free.
+            Dictionary<int, int> finalByChapterId = affected.ToDictionary(
+                c => c.ChapterId,
+                c => c.ChapterNumber == fromNumber
+                    ? toNumber
+                    : toNumber < fromNumber ? c.ChapterNumber + 1 : c.ChapterNumber - 1);
+
+            foreach (Chapter c in affected) c.ChapterNumber = -c.ChapterNumber;
+            await writeDb.SaveChangesAsync();
+            foreach (Chapter c in affected) c.ChapterNumber = finalByChapterId[c.ChapterId];
+            await writeDb.SaveChangesAsync();
+
+            await ShiftArcsForMoveAsync(storyId, fromNumber, toNumber);
+            await tx.CommitAsync();
+        });
+    }
+
+    public async Task DeleteChapterAsync(int chapterId)
+    {
+        int userId = RequireAuthenticatedUser();
+
+        Chapter? chapter = await writeDb.Chapters
+            .Include(c => c.Story)
+            .FirstOrDefaultAsync(c => c.ChapterId == chapterId);
+        if (chapter is null) throw new KeyNotFoundException($"Chapter {chapterId} not found.");
+        if (chapter.Story.AuthorId != userId)
+            throw new UnauthorizedAccessException("You must be the author of this story.");
+
+        int storyId = chapter.StoryId;
+        int deletedNumber = chapter.ChapterNumber;
+
+        var strategy = writeDb.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await writeDb.Database.BeginTransactionAsync();
+
+            // TPT trap: the DB cascade Chapter→chapter_comments removes only the CHILD table's
+            // rows and would orphan their base_comments rows. Deleting through EF removes both
+            // tables' rows per entity. Replies are also ChapterComments of the same chapter, so
+            // this set is closed under the parent/reply relationship.
+            List<ChapterComment> comments = await writeDb.ChapterComments
+                .Where(cc => cc.ChapterId == chapterId)
+                .ToListAsync();
+            if (comments.Count > 0) writeDb.ChapterComments.RemoveRange(comments);
+
+            // Release the Restrict FK before the row delete (mirror of the two-step create),
+            // then let the delete cascade to contents / read state.
+            chapter.PrimaryContentId = null;
+            await writeDb.SaveChangesAsync();
+            writeDb.Chapters.Remove(chapter);
+            await writeDb.SaveChangesAsync();
+
+            // Shift later chapters down. Same negative-pass discipline as MoveChapterAsync —
+            // a direct "-1 everything above D" UPDATE can transiently collide per-row.
+            List<Chapter> later = await writeDb.Chapters
+                .Where(c => c.StoryId == storyId && c.ChapterNumber > deletedNumber)
+                .ToListAsync();
+            if (later.Count > 0)
+            {
+                foreach (Chapter c in later) c.ChapterNumber = -c.ChapterNumber;
+                await writeDb.SaveChangesAsync();
+                foreach (Chapter c in later) c.ChapterNumber = -c.ChapterNumber - 1;
+                await writeDb.SaveChangesAsync();
+            }
+
+            // Arc bounds shrink: Start moves when the deletion was before it, End when at/before.
+            // An arc reduced to Start > End covered only the deleted chapter — auto-delete (WU45).
+            List<StoryArc> arcs = await writeDb.StoryArcs
+                .Where(a => a.StoryId == storyId)
+                .ToListAsync();
+            foreach (StoryArc arc in arcs)
+            {
+                if (deletedNumber < arc.StartChapterNumber) arc.StartChapterNumber--;
+                if (deletedNumber <= arc.EndChapterNumber) arc.EndChapterNumber--;
+                if (arc.StartChapterNumber > arc.EndChapterNumber)
+                    writeDb.StoryArcs.Remove(arc);
+            }
+            await writeDb.SaveChangesAsync();
+
+            await tx.CommitAsync();
+        });
+
+        await RefreshStoryWordCountAsync(storyId);
+    }
+
+    /// <summary>
+    /// Applies a P→Q move to every arc of the story as the remove-at-P + insert-at-Q composition
+    /// (WU45 settled rule — Start/End each move independently by whether the change point falls
+    /// at/before them; applied uniformly so no-overlap and ordering invariants are preserved).
+    /// An arc emptied by the removal step (its only chapter was moved away) is auto-deleted.
+    /// </summary>
+    private async Task ShiftArcsForMoveAsync(int storyId, int fromNumber, int toNumber)
+    {
+        List<StoryArc> arcs = await writeDb.StoryArcs
+            .Where(a => a.StoryId == storyId)
+            .ToListAsync();
+
+        foreach (StoryArc arc in arcs)
+        {
+            int s = arc.StartChapterNumber;
+            int e = arc.EndChapterNumber;
+
+            // Remove at fromNumber…
+            if (fromNumber < s) s--;
+            if (fromNumber <= e) e--;
+            if (s > e) { writeDb.StoryArcs.Remove(arc); continue; } // single-chapter arc vacated
+
+            // …then insert at toNumber (same composition verified in the WU45 deliberation:
+            // moving a chapter INTO an arc's span grows it; moving one out shrinks it; arcs
+            // wholly before/after the affected range are untouched).
+            if (toNumber <= s) s++;
+            if (toNumber <= e) e++;
+
+            arc.StartChapterNumber = s;
+            arc.EndChapterNumber   = e;
+        }
+        await writeDb.SaveChangesAsync();
+    }
+
+    private int RequireAuthenticatedUser()
+    {
+        if (ActiveUser.UserId is not int id)
+            throw new InvalidOperationException("This operation requires an authenticated user.");
+        return id;
+    }
+
     // Recomputes Story.WordCount as the sum of each primary ChapterContent's WordCount.
     // Called after any operation that may change a chapter's primary word count.
     // Also updates the author's WordsWritten UserStat by the delta (cross-cutting.md §"UserStats Updates").

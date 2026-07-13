@@ -56,6 +56,15 @@ else
         @* ── Bulk chapter import (Feature 63, WU38d) — edit mode only (needs a story id) ── *@
         @if (StoryId.HasValue)
         {
+            @* Chapter reorder/delete + arc management (WU45) — edit-mode-only panels; the write
+               services author-gate every mutation (server authority, WU24 principle). *@
+            <div class="mt-8">
+                <ChapterManagerPanel StoryId="@StoryId.Value" />
+            </div>
+            <div class="mt-8">
+                <StoryArcManagerPanel StoryId="@StoryId.Value" />
+            </div>
+
             <div class="mt-8">
                 <StoryChapterImport StoryId="@StoryId.Value" />
             </div>

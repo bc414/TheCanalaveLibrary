@@ -79,9 +79,9 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 5 | N/A |
 | 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 2 | 5 | N/A |
-| 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A |
-| 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A |
-| 8 | Story Arcs | Stories | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A |
+| 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 2 | 2 | 2 | N/A |
+| 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 2 | 2 | 2 | N/A |
+| 8 | Story Arcs | Stories | 5 | 5 | 5 | 5 | 1 | 2 | 2 | N/A | N/A |
 | 9 | Series & Ordering | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
 | 10 | Story Lineage | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 2 | N/A | N/A |
 | 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |

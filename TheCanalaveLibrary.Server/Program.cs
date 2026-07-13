@@ -323,6 +323,9 @@ builder.Services.AddSingleton<IHtmlSanitizationService, ServerHtmlSanitizationSe
 builder.Services.AddScoped<IChapterReadService, ServerChapterReadService>();
 builder.Services.AddScoped<IChapterWriteService, ServerChapterWriteService>();
 builder.Services.AddScoped<IReadingProgressWriteService, ServerReadingProgressWriteService>();
+// Manual read-marks (WU45) — durable-direct seam, deliberately separate from the buffered
+// progress pipeline above (durable user intent never buffers; discards pending pings on mark).
+builder.Services.AddScoped<IChapterReadMarkWriteService, ServerChapterReadMarkWriteService>();
 // Reading-progress signal buffer (Feature 44 L2, layer2-services.md "Signal Buffering") — the
 // scoped writer above merges pings into this singleton buffer; the hosted worker batch-flushes.
 // TestAppFactory removes the worker so integration tests flush deterministically via the flusher.
@@ -369,6 +372,9 @@ builder.Services.AddScoped<ISeriesWriteService, ServerSeriesWriteService>();
 // Story Lineage (WU42) — L2 read/write services (Feature 10, formerly "Story Relationships").
 builder.Services.AddScoped<IStoryLineageReadService, ServerStoryLineageWriteService>();
 builder.Services.AddScoped<IStoryLineageWriteService, ServerStoryLineageWriteService>();
+// Story Arcs (WU45) — L2 read/write services (Feature 8).
+builder.Services.AddScoped<IStoryArcReadService, ServerStoryArcWriteService>();
+builder.Services.AddScoped<IStoryArcWriteService, ServerStoryArcWriteService>();
 // Site settings (WU-Spotlight) — cross-cutting mod-editable runtime knobs (layer2-services.md
 // "Site Settings"). First consumer: the spotlight tuning values.
 builder.Services.AddScoped<ISiteSettingsReadService, ServerSiteSettingsReadService>();

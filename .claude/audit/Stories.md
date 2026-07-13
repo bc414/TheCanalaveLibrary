@@ -322,11 +322,53 @@ change).
   exists (favorite counts are denormalized on `UserStat`). Detail: `layer6-indexes.md`.
 
 ## Feature 8 — Story Arcs
-- **L1 — Stage 5.** `StoryArc` + unique indexes `(StoryId,Title)`, `(StoryId,SortOrder)`. Overlap/gap
-  validation is C#-side (not yet written).
-- **L2 — Stage 2.** No arc service.
-- **L3 / L3.5 — Stage 1 (conceptual, §8.2).** Arc-management UI was never designed. Resolve in chat.
-- **L4 — Stage 1** (blocked). **L5 — Stage 2.**
+
+**Design settled 2026-07-12 (chat deliberation with Brian; resolves the §8.2 Stage-1 gap). Full
+requirements record: WU45 in `workplan.md`. Settled — do not revisit without flagging:**
+- **Model:** range-based (`StartChapterNumber`/`EndChapterNumber`) as built; the early "join table
+  linking chapters" alternative from the source conversations was considered and rejected.
+  **`SortOrder` is eliminated** (redundant: non-overlapping ranges order by `StartChapterNumber`;
+  ordinal "Arc X" labels are computed, not stored). Unique `(StoryId,Title)` stays; the
+  `(StoryId,SortOrder)` unique index is replaced by unique `(StoryId,StartChapterNumber)`.
+- **Coverage:** no overlap (service-layer validation, not DB); gaps allowed (prologue/interlude/
+  epilogue chapters may belong to no arc); `Start ≤ End`.
+- **Renumbering:** chapter reorder/delete (added by WU45 to Feature 6) shifts arc bounds
+  independently: `Start`/`End` each move when the change point falls at/before them; empty arcs
+  (`Start > End`) auto-delete. Applied uniformly to all arcs → invariants preserved. Silent (no
+  warning flow — explicitly waived 2026-07-12, including for published-chapter URL changes).
+- **Reader UI:** arc headers compose into the `ChapterList` flat segmenter output (see
+  `audit/Chapters.md` WU45 note) — sticky (always shown even fully-read), independently
+  toggleable, frontier arc expanded by default, others collapsed; no windowing *inside* an
+  expanded arc (arcs supersede the auto-collapse for chapters they cover). Reading page shows
+  `Arc X — [name]` under the chapter title (gap chapters: nothing).
+- **Author UI:** separate arc-manager panel (not merged into chapter reorder UI): editable rows
+  (Title/Start/End) + live read-only chapter-list preview highlighting each arc's span. Range
+  fields are the source of truth; no drag-reorder of arcs (order follows ranges).
+
+**Cell status (WU45 build landed 2026-07-12):**
+- **L1 — Stage 5.** Migration `WU45_StoryArcDropSortOrder`: `sort_order` column + its unique index
+  dropped; unique `(story_id, start_chapter_number)` added (ordering spine + non-overlap backstop).
+  `StoryArc.cs` moved `Core/Models/` → `Core/Stories/` (legacy-folder rule). Verified: migration
+  applies via the Integration suite's Testcontainers migrate; `dotnet build` green.
+- **L2 — Stage 5.** `IStoryArcReadService`/`IStoryArcWriteService` (`Core/Stories/`),
+  `ServerStoryArcReadService`/`ServerStoryArcWriteService` (`Server/Stories/`, Series-template
+  shape: factory-per-method reads, author-gated writes, `StoryArcValidationException`).
+  Verified: Integration tier — `StoryArcServiceTests` (23 tests: CRUD, author/anon gates, range
+  rules incl. 5 overlap theories + adjacent/gapped legality, update-excludes-self, ordering by
+  StartChapterNumber, delete). Arc-bound shifts under chapter reorder/delete are covered in
+  `ChapterReorderDeleteTests` (see `audit/Chapters.md` WU45 note).
+- **L3-Logic / L3.5 — Stage 5.** Reader side: arc headers/rows compose into the shared
+  `ChapterListSegmenter` flat walk rendered by `ChapterList` (Unit: `ChapterListSegmenterTests`
+  17; RazorComponents: `ChapterListTests` WU45 region — sticky header, frontier-arc expansion,
+  toggle collapse). Reading page: `Arc X — [name]` under the chapter title
+  (`ChapterReadingPage`). Author side: `StoryArcManagerPanel` (rows + live preview) on
+  `StoryEditorPage` edit mode.
+- **L4 — Stage 1.** All design tokens (`check-design-tokens.ps1` clean for these files); visual
+  sign-off pending human review (WU13/WU14/WU24 precedent).
+- **L4.5 — Stage 2.** Browser verification explicitly deferred at WU45 close (2026-07-12, Brian's
+  direction) — automated tiers green; the live create-arc → story-page-headers → reading-label
+  loop still needs a real-circuit pass.
+- **L5 — Stage 2.**
 
 ## Feature 9 — Series & Ordering
 

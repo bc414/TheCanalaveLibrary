@@ -27,6 +27,8 @@ public class StoryMobileTests : BunitContext
         Services.AddScoped<IRecommendationWriteService>(_ => _fakeRecommendations);
         // TagChip (nested in StoryMobile) injects ISpriteReadService.
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
+        // ChapterList (WU45) injects the manual read-mark write service.
+        Services.AddSingleton<IChapterReadMarkWriteService>(new FakeChapterReadMarkWriteService());
         JSInterop.Mode = JSRuntimeMode.Loose;
         _fakeRecommendations.SetGetForStoryResult([]);
     }
@@ -64,7 +66,8 @@ public class StoryMobileTests : BunitContext
         new() { TagId = id, TagName = name, TagTypeId = TagTypeEnum.Character };
 
     private static ChapterListEntryDto MakeChapter(int num = 1, string title = "Chapter One") =>
-        new(num, title, 2_000, IsPublished: true, AlternateVersions: []);
+        new(ChapterId: 100 + num, num, title, 2_000, IsPublished: true, PublishDate: null,
+            IsRead: false, ReadProgress: 0f, AlternateVersions: []);
 
     // ── Title ─────────────────────────────────────────────────────────────────────
 

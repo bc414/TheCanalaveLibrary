@@ -1,62 +1,104 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
+@inject IChapterReadMarkWriteService ReadMarkWriteService
 
-@* Chapter list for the story landing page (WU25 / spec §5.28). Pure leaf — no service injection;
-   all data arrives as parameters from StoryPage via StoryDesktop/StoryMobile.
+@* Stateful chapter list for the story landing page (WU25, rebuilt in WU45 / spec §5.28 + the
+   WU45 settled design in audit/Chapters.md). Coordination composite (was a pure leaf): injects
+   ONLY the durable manual-mark write service (UserStoryInteractionPanel precedent — state flows
+   in as parameters, N+1 rule preserved); all display data arrives from StoryPage via
+   StoryDesktop/StoryMobile.
 
-   Layout:
-   - One main row per chapter → links to primary version /story/{StoryId}/{ChapterNumber}.
-   - Non-primary alternates: indented sub-rows labeled "Title - VersionName"
-     → /story/{StoryId}/{ChapterNumber}/{VersionOrder}. Empty for the 95% single-version case.
+   Structure — ONE flat item walk from the shared pure segmenter (ChapterListSegmenter, the same
+   function the server ran for the SSR paint; re-run locally after every read-state mutation):
+   - ArcHeader items: sticky toggleable "Arc X — Title" rows (frontier arc expanded by default);
+     rows tagged with that arc are skipped while it is collapsed. No windowing inside arcs.
+   - CollapsedRun items: counted expanders ("N read chapters hidden. Show") whose hidden rows
+     expand in place — pure local view-state, zero round-trips.
+   - Row items: chapter rows. Fill-bar = ReadProgress as an absolutely-positioned background wash
+     (Indicator role, --color-progress tint) behind the row content; read/unread toggle (Control,
+     action family — CanMarkRead-gated); strict-chain "New" badge (Indicator tint recipe);
+     per-chapter download menu (plain <a href> anchors to the export endpoint — downloads bypass
+     the circuit, layer2-services.md).
+   - Non-primary alternates: indented sub-rows as before. Empty for the ~95% single-version case.
    - ShowDrafts=true (author only) reveals unpublished chapters with a "Draft" marker.
-     Filter: entry.IsPublished || ShowDrafts.
    - Outer Margin Rule: no outer margin on the root element; spacing is the parent's concern.
 
-   NOTE: ChapterNavigation (WU18) is NOT used here — it is reading-context-only (requires a
-   CurrentChapterNumber; shows prev/next arrows and a "Chapter N" dropdown for the reading page).
-   This component is the story-landing-page sibling. *@
-
-@{
-    IEnumerable<ChapterListEntryDto> visible = Chapters.Where(c => c.IsPublished || ShowDrafts);
-}
+   View-state (_arcToggles / _revealedRuns / _readOverrides) is ephemeral and deterministic from
+   read state on a fresh load — SSR output is correct before the circuit/WASM attaches
+   (InteractiveAuto-safe by construction). *@
 
 <div>
-    @foreach (var chapter in visible)
-    {
-        @* Primary chapter row — always links to the primary version (no version segment in URL). *@
-        <div class="border-b border-(--color-border) last:border-b-0">
-            <a href="/story/@StoryId/@chapter.ChapterNumber"
-               class="flex items-center justify-between gap-3 px-3 py-3 text-sm hover:bg-(--color-surface-hover) transition-colors">
-                <span class="flex items-center gap-2 min-w-0">
-                    <span class="shrink-0 w-6 text-right text-(--color-text-muted) tabular-nums text-xs">@chapter.ChapterNumber.</span>
-                    <span class="truncate text-(--color-text)">@chapter.Title</span>
-                    @if (!chapter.IsPublished)
-                    {
-                        <span class="shrink-0 rounded bg-(--color-surface) px-1.5 py-0.5 text-xs font-medium text-(--color-text-muted) ring-1 ring-(--color-border)">Draft</span>
-                    }
-                </span>
-                <span class="shrink-0 text-xs text-(--color-text-muted) tabular-nums">@WordCountDisplay(chapter.WordCount) &rsaquo;</span>
-            </a>
+    <InlineAlert Message="@_errorMessage"/>
 
-            @* Alternate (non-primary) versions — indented sub-rows, same vertical structure on
-               desktop and mobile. Empty for the common single-version case — no DOM overhead. *@
-            @foreach (var alt in chapter.AlternateVersions)
+    @{ bool currentArcCollapsed = false; }
+    @foreach (ChapterListItem item in BuildItems())
+    {
+        @switch (item)
+        {
+            case ChapterListArcHeaderItem header:
             {
-                <a href="/story/@StoryId/@chapter.ChapterNumber/@alt.VersionOrder"
-                   class="flex items-center justify-between gap-3 pl-10 pr-3 py-2 text-sm hover:bg-(--color-surface-hover) transition-colors border-t border-(--color-border)/50">
-                    <span class="flex items-center gap-2 min-w-0">
-                        <span class="shrink-0 text-(--color-text-muted)">&#8627;</span>
-                        <span class="truncate text-(--color-text-muted)">@chapter.Title — @AltVersionLabel(alt)</span>
+                bool collapsed = IsArcCollapsed(header);
+                currentArcCollapsed = collapsed; // rows always follow their header in the walk
+                <button type="button"
+                        class="flex w-full items-center justify-between gap-3 border-b border-(--color-border) bg-(--color-surface-hover) px-3 py-2 text-sm transition-colors hover:bg-(--color-surface-raised)"
+                        aria-expanded="@(!collapsed)"
+                        @onclick="() => ToggleArc(header)">
+                    <span class="flex min-w-0 items-center gap-2">
+                        <span aria-hidden="true"
+                              class="shrink-0 text-(--color-text-muted) transition-transform @(collapsed ? string.Empty : "rotate-90")">&#9656;</span>
+                        <span class="truncate font-medium text-(--color-text)">Arc @header.Ordinal — @header.Title</span>
                     </span>
-                    <span class="shrink-0 text-xs text-(--color-text-muted) tabular-nums">@WordCountDisplay(alt.WordCount) &rsaquo;</span>
-                </a>
+                    <span class="shrink-0 text-xs text-(--color-text-muted) tabular-nums">@header.ReadCount/@header.ChapterCount read</span>
+                </button>
+                break;
             }
-        </div>
+
+            case ChapterListCollapsedRunItem run:
+            {
+                @if (_revealedRuns.Contains(run.Key))
+                {
+                    @foreach (ChapterListRowItem hiddenRow in run.HiddenRows)
+                    {
+                        @RenderRow(hiddenRow)
+                    }
+                }
+                else
+                {
+                    <button type="button"
+                            class="block w-full border-b border-(--color-border) px-3 py-2 text-center text-sm text-(--color-text-muted) transition-colors hover:bg-(--color-surface-hover)"
+                            @onclick="() => _revealedRuns.Add(run.Key)">
+                        @run.Count @(run.IsReadRun ? "read chapters" : "chapters") hidden — <span class="text-(--color-action-ink)">Show</span>
+                    </button>
+                }
+                break;
+            }
+
+            case ChapterListRowItem row:
+            {
+                // Rows inside a collapsed arc are skipped — the flat-list form of containment.
+                @if (row.StoryArcId is null || !currentArcCollapsed)
+                {
+                    @RenderRow(row)
+                }
+                break;
+            }
+        }
     }
 
-    @if (!visible.Any())
+    @if (!VisibleEntries().Any())
     {
         <p class="px-3 py-4 text-sm text-(--color-text-muted)">No chapters yet.</p>
+    }
+    else if (CanMarkRead)
+    {
+        <div class="flex items-center justify-end gap-3 px-3 py-2">
+            <button type="button"
+                    class="text-xs text-(--color-text-muted) transition-colors hover:text-(--color-action-ink)"
+                    @onclick="() => MarkAllAsync(true)">Mark all read</button>
+            <button type="button"
+                    class="text-xs text-(--color-text-muted) transition-colors hover:text-(--color-action-ink)"
+                    @onclick="() => MarkAllAsync(false)">Mark all unread</button>
+        </div>
     }
 </div>
 
@@ -65,10 +107,197 @@
     [Parameter, EditorRequired] public int StoryId { get; set; }
 
     /// <summary>
-    /// When true (author-only), shows unpublished chapters with a "Draft" marker.
+    /// When true (author only), shows unpublished chapters with a "Draft" marker.
     /// When false (default, all other viewers), only published chapters are shown.
     /// </summary>
     [Parameter] public bool ShowDrafts { get; set; }
+
+    /// <summary>The story's arcs in reading order (empty for the ~95% no-arc case).</summary>
+    [Parameter] public IReadOnlyList<StoryArcDto> Arcs { get; set; } = [];
+
+    /// <summary>
+    /// The viewer's New-badge watermark (<c>GetViewerLastInteractionUtcAsync</c>); null (anonymous
+    /// or first visit) suppresses every New badge per the strict chain rule.
+    /// </summary>
+    [Parameter] public DateTime? ViewerWatermarkUtc { get; set; }
+
+    /// <summary>
+    /// True when the viewer is authenticated — gates the per-row read toggle and mark-all
+    /// controls. A parent-computed bool (the dispatcher already resolves identity), NOT an
+    /// AuthorizeView, so this composite stays renderable without an auth cascade.
+    /// </summary>
+    [Parameter] public bool CanMarkRead { get; set; }
+
+    // ── Ephemeral view-state (deterministically re-derived defaults on a fresh load) ──
+    private readonly Dictionary<int, bool> _arcToggles = [];       // user overrides of DefaultCollapsed
+    private readonly HashSet<string> _revealedRuns = [];           // expander keys shown in place
+    private readonly Dictionary<int, (bool IsRead, float Progress)> _readOverrides = []; // post-mark overlay
+    private string? _errorMessage;
+
+    private IEnumerable<ChapterListEntryDto> VisibleEntries() =>
+        Chapters.Where(c => c.IsPublished || ShowDrafts)
+                .Select(c => _readOverrides.TryGetValue(c.ChapterId, out (bool IsRead, float Progress) o)
+                    ? c with { IsRead = o.IsRead, ReadProgress = o.Progress }
+                    : c);
+
+    // The same pure function the server ran for the initial paint — local mutations re-run it
+    // here (one function, two call sites, zero drift — the WU45 interactivity architecture).
+    private IReadOnlyList<ChapterListItem> BuildItems() =>
+        ChapterListSegmenter.Build([.. VisibleEntries()], Arcs, ViewerWatermarkUtc);
+
+    private bool IsArcCollapsed(ChapterListArcHeaderItem header) =>
+        _arcToggles.TryGetValue(header.StoryArcId, out bool toggled) ? toggled : header.DefaultCollapsed;
+
+    private void ToggleArc(ChapterListArcHeaderItem header) =>
+        _arcToggles[header.StoryArcId] = !IsArcCollapsed(header);
+
+    // ── Manual read-marks (durable-direct seam; optimism-free: write, then overlay) ──
+
+    private async Task ToggleReadAsync(ChapterListEntryDto entry)
+    {
+        bool target = !EffectiveIsRead(entry);
+        try
+        {
+            _errorMessage = null;
+            await ReadMarkWriteService.SetChapterReadAsync(entry.ChapterId, target);
+            _readOverrides[entry.ChapterId] = (target, target ? 1f : 0f);
+        }
+        catch (Exception)
+        {
+            _errorMessage = "Couldn't update the chapter's read state. Please try again.";
+        }
+    }
+
+    private async Task MarkAllAsync(bool isRead)
+    {
+        try
+        {
+            _errorMessage = null;
+            await ReadMarkWriteService.SetAllChaptersReadAsync(StoryId, isRead);
+            foreach (ChapterListEntryDto c in Chapters.Where(c => c.IsPublished))
+                _readOverrides[c.ChapterId] = (isRead, isRead ? 1f : 0f);
+        }
+        catch (Exception)
+        {
+            _errorMessage = "Couldn't update the chapters' read state. Please try again.";
+        }
+    }
+
+    private bool EffectiveIsRead(ChapterListEntryDto entry) =>
+        _readOverrides.TryGetValue(entry.ChapterId, out (bool IsRead, float Progress) o)
+            ? o.IsRead
+            : entry.IsRead;
+
+    private float EffectiveProgress(ChapterListEntryDto entry) =>
+        _readOverrides.TryGetValue(entry.ChapterId, out (bool IsRead, float Progress) o)
+            ? o.Progress
+            : entry.ReadProgress;
+
+    // ── Row rendering ─────────────────────────────────────────────────────────────
+
+    private RenderFragment RenderRow(ChapterListRowItem row)
+    {
+        ChapterListEntryDto chapter = row.Entry;
+        bool isRead = EffectiveIsRead(chapter);
+        float progress = EffectiveProgress(chapter);
+
+        return @<div class="relative border-b border-(--color-border) last:border-b-0">
+            @* ReadProgress fill-bar — Indicator role: an absolutely-positioned background wash
+               behind the row content (the Fimfiction read-progress pattern, driven by our own
+               granular float). Zero-width for unread; full for read. *@
+            @if (progress > 0f)
+            {
+                <span class="absolute inset-y-0 left-0 bg-(--color-progress)/20"
+                      style="width:@(Math.Clamp(progress * 100f, 0f, 100f).ToString("0", System.Globalization.CultureInfo.InvariantCulture))%"
+                      aria-hidden="true"></span>
+            }
+
+            <div class="relative flex items-center gap-2 px-3">
+                @if (CanMarkRead)
+                {
+                    <button type="button"
+                            class="@ReadToggleClasses(isRead)"
+                            title="Mark read / unread"
+                            aria-pressed="@(isRead ? "true" : "false")"
+                            @onclick="() => ToggleReadAsync(chapter)">
+                        <svg viewBox="0 0 24 24" class="size-3" fill="currentColor" aria-hidden="true">
+                            <path d="M6 12.5L5 14L10 19L20 7L18.5 5.5L10 16Z"/>
+                        </svg>
+                    </button>
+                }
+
+                <a href="/story/@StoryId/@chapter.ChapterNumber"
+                   class="flex min-w-0 flex-1 items-center justify-between gap-3 py-3 text-sm transition-colors hover:bg-(--color-surface-hover)">
+                    <span class="flex min-w-0 items-center gap-2">
+                        <span class="w-6 shrink-0 text-right text-xs tabular-nums text-(--color-text-muted)">@chapter.ChapterNumber.</span>
+                        <span class="truncate text-(--color-text)">@chapter.Title</span>
+                        @if (row.IsNew)
+                        {
+                            <span class="shrink-0 rounded bg-(--color-success)/15 px-1.5 py-0.5 text-xs font-medium text-(--color-success) ring-1 ring-(--color-success)/30">New</span>
+                        }
+                        @if (!chapter.IsPublished)
+                        {
+                            <span class="shrink-0 rounded bg-(--color-surface) px-1.5 py-0.5 text-xs font-medium text-(--color-text-muted) ring-1 ring-(--color-border)">Draft</span>
+                        }
+                    </span>
+                    <span class="shrink-0 text-xs tabular-nums text-(--color-text-muted)">
+                        @if (chapter.PublishDate is DateTime published)
+                        {
+                            <span>@published.ToString("MMM d, yyyy") &middot; </span>
+                        }
+                        @WordCountDisplay(chapter.WordCount) &rsaquo;
+                    </span>
+                </a>
+
+                @if (chapter.IsPublished)
+                {
+                    @* Per-chapter download — plain anchors to the export endpoint; a download is
+                       an HTTP GET with Content-Disposition, never an @onclick (circuit rule). *@
+                    <details class="relative shrink-0" data-dropdown>
+                        <summary class="flex cursor-pointer list-none items-center rounded-md px-1.5 py-1.5 text-(--color-text-muted) transition-colors hover:bg-(--color-surface-hover) hover:text-(--color-text)"
+                                 title="Download chapter" aria-label="Download chapter">
+                            <svg viewBox="0 0 24 24" class="size-4" fill="currentColor" aria-hidden="true">
+                                <path d="M11 3h2v10l3.5-3.5 1.4 1.4L12 16.8 6.1 10.9l1.4-1.4L11 13V3zM4 19h16v2H4z"/>
+                            </svg>
+                        </summary>
+                        <div class="absolute right-0 top-full z-(--z-dropdown) mt-1 min-w-32 rounded-md border border-(--color-border) bg-(--color-surface) py-1 shadow-medium">
+                            @foreach ((string label, string format) in DownloadFormats)
+                            {
+                                <a href="/api/stories/@StoryId/chapters/@chapter.ChapterNumber/export/@format"
+                                   class="block px-3 py-1.5 text-sm text-(--color-text) hover:bg-(--color-surface-hover)">@label</a>
+                            }
+                        </div>
+                    </details>
+                }
+            </div>
+
+            @* Alternate (non-primary) versions — indented sub-rows, same vertical structure on
+               desktop and mobile. Empty for the common single-version case — no DOM overhead. *@
+            @foreach (ChapterVersionDto alt in chapter.AlternateVersions)
+            {
+                <a href="/story/@StoryId/@chapter.ChapterNumber/@alt.VersionOrder"
+                   class="relative flex items-center justify-between gap-3 border-t border-(--color-border)/50 py-2 pl-10 pr-3 text-sm transition-colors hover:bg-(--color-surface-hover)">
+                    <span class="flex min-w-0 items-center gap-2">
+                        <span class="shrink-0 text-(--color-text-muted)">&#8627;</span>
+                        <span class="truncate text-(--color-text-muted)">@chapter.Title — @AltVersionLabel(alt)</span>
+                    </span>
+                    <span class="shrink-0 text-xs tabular-nums text-(--color-text-muted)">@WordCountDisplay(alt.WordCount) &rsaquo;</span>
+                </a>
+            }
+        </div>;
+    }
+
+    private static string ReadToggleClasses(bool isRead) =>
+        (isRead
+            ? "bg-(--color-action) ring-(--color-action) text-(--color-text)"
+            : "ring-(--color-border) text-transparent hover:ring-(--color-action-ink) hover:text-(--color-action-ink)/40") +
+        " grid size-5 shrink-0 place-items-center rounded-full ring-1 transition-colors";
+
+    private static readonly (string Label, string Format)[] DownloadFormats =
+    [
+        ("EPUB", "epub"), ("PDF", "pdf"), ("HTML", "html"),
+        ("Text", "txt"), ("Markdown", "markdown"), ("DOCX", "docx")
+    ];
 
     private static string WordCountDisplay(int wordCount) => wordCount switch
     {

@@ -436,3 +436,103 @@ alternate with switcher state) all behave per the WU26 notes. F44: as TestUser o
 story (`/story/6/1`), the `readingProgress` JS threshold fired and
 `user_story_interactions.has_started` flipped to true (psql-verified) — the JS-interop band no
 automated tier covers.
+
+---
+
+## WU45 settled design (2026-07-12) — chapter presentation, manual read-marks, reorder/delete
+
+Chat deliberation with Brian (Fimfiction reference pages inspected directly: DOM + CSS + JS of two
+real story pages — behavioral reference only, deliberately NOT a mechanism port; Fimfiction is
+progressive-enhancement JS, TCL re-derives from Blazor first principles). Full requirements record:
+WU45 in `workplan.md`. **Settled — do not revisit without flagging:**
+
+**Feature 7 surface — `ChapterList` upgrade (L3/L3.5/L4 reopen to Stage 2):**
+- Per-row: title link, publish date, word count, read/in-progress/unread state, "New" badge,
+  per-chapter download menu (chapter-granular reuse of WU38c export writers), progress fill-bar
+  (`ReadProgress` rendered as an absolutely-positioned background wash behind row content —
+  Indicator role composed onto the row Control; design tokens, no ad-hoc color).
+- **Segmentation is one pure shared function** (no EF/JS deps): `(chapters, arc ranges, per-viewer
+  read state, watermark, constants) → flat render-item list` (chapter rows + arc-header +
+  expander markers). Server runs it for initial paint (via the existing `[PersistentState]`
+  StoryPage pattern); the interactive component re-runs the SAME function locally after a
+  read-state mutation. Collapse/expand + arc toggles are ephemeral local view-state, always
+  re-derivable from read state (SSR output correct before circuit/WASM attaches).
+- **Collapse rule (one model, no special cases):** every chapter is governed either by its arc
+  (whole-arc granularity, sticky always-visible header, toggleable; frontier arc expanded by
+  default, others collapsed; NO windowing inside an expanded arc) or by frontier-windowing (gap
+  segments and the no-arc case): read runs collapse behind counted expanders; `HeadWindow` (3)
+  chapters stay visible from the frontier (first not-fully-read chapter; ch.1 for
+  zero-read/anonymous); `TailWindow` (3) last-of-story chapters stay visible ONLY when the story
+  tail is a gap segment (arcs fully govern their regions); nothing collapses under
+  `CollapseMinimum` (~10). All three are named tunable constants.
+- **"New" badge — strict chain rule:** `PublishDate > MAX(user_chapter_interactions.
+  last_interaction_date)` AND every earlier chapter is read or itself New (the contiguous
+  fresh run starting at the frontier). No interaction rows → no watermark → no badges. Cosmetic
+  only — never pierces collapse.
+
+**Feature 44 — manual read-marks (new durable-direct seam in `Chapters/`):**
+- Per-row mark read/unread + mark-all. Durable user intent → direct EF write service, NEVER the
+  buffered `RecordProgressAsync` pipeline (durability rule in this file's signal-buffer note).
+- Manual marks set BOTH fields (read → `IsRead=true, ReadProgress=1`; unread → `false, 0`) —
+  required because the flusher recomputes `is_read = progress ≥ 0.9` from high-water progress and
+  would silently resurrect an overridden state. The write also discards pending buffered pings for
+  that (user, chapter).
+- Manual mark-read calls the existing idempotent `MarkStartedAsync(storyId)` ("read elsewhere"
+  case); mark-unread never un-sets `HasStarted`.
+
+**Feature 6 — chapter reorder + delete (new capability; L2 reopens to Stage 2):**
+- Creation stays append-only (`MAX+1`). Reorder = drag-to-reorder of existing chapters only
+  (published AND drafts), on the author edit surface. Move P→Q shifts the intervening range ±1;
+  only `ChapterNumber` changes (all children key on `ChapterId`). Unique `(StoryId,ChapterNumber)`
+  requires a transient-collision-safe update order. **Silent — no link-breakage or arc-crossing
+  warning (explicitly waived 2026-07-12).**
+- `DeleteChapterAsync`: author-gated, `ConfirmDialog` in UI; later chapters shift −1;
+  `PrimaryContentId` (Restrict FK) nulled before row delete (mirror of two-step create);
+  `Story.WordCount` refreshed. Arc bounds shift per the rule in `audit/Stories.md` F8; empty arcs
+  auto-delete.
+
+### WU45 build Stage note (2026-07-12) — DONE except L4.5 (deferred)
+
+**Cells: F6 L2 additive (reorder/delete), F7 L3/L3.5 (ChapterList rebuild), F44 L2 additive
+(manual marks). All automated tiers green: Unit 685 / Integration 650 / RazorComponents 619.
+`check-design-tokens.ps1`: the only finding is pre-existing (`ImportReviewPanel.razor`, untouched
+by WU45). L4.5-Browser verification explicitly deferred at WU45 close (Brian's direction) — F6/F7
+L4.5 flipped 5→2 in `status.md` until the new surfaces get a real-circuit pass.**
+
+- **Segmenter (the WU45 heart):** `ChapterListSegmenter` + `ChapterListItem` union +
+  `ChapterListCollapseOptions` (`CollapseMinimum=10`/`HeadWindow=3`/`TailWindow=3`, named
+  constants) in `Core/Chapters/` — pure, dependency-free, same function runs server-side (SSR
+  paint) and client-side (post-mark re-segment). Covered: Unit `ChapterListSegmenterTests` (17 —
+  frontier windowing incl. zero-read/partial/fully-read/in-progress-frontier, read-run labeling,
+  stable reveal keys, strict-chain New incl. broken-chain + no-watermark suppression, arc
+  segments incl. sticky fully-read headers / frontier-arc default expansion / no-windowing-inside
+  / zero-visible-chapter arcs skipped / gap rows / arcs-govern-the-tail).
+- **F7 read path:** `ChapterListEntryDto` enriched (`ChapterId`, `PublishDate`, `IsRead`,
+  `ReadProgress`); `GetChapterListAsync` viewer-aware (one extra query, empty dict for
+  anonymous); new `GetViewerLastInteractionUtcAsync` (New-badge watermark). Covered: Integration
+  `ChapterReadMarkServiceTests` round-trip tests; existing `StoryDetailTests` unchanged and green.
+- **F44 manual marks:** `IChapterReadMarkWriteService` / `ServerChapterReadMarkWriteService`
+  (`Chapters/`) — durable-direct, both-fields writes, `ReadingProgressBuffer.Discard` (new seam)
+  before save, `MarkStartedAsync` on read, mark-all published-only + sparse-unread. Covered:
+  Integration `ChapterReadMarkServiceTests` (13, incl. both buffer-resurrection guards).
+- **F6 reorder/delete:** `MoveChapterAsync` (negative-pass renumbering against the unique
+  `(story_id, chapter_number)` index; arc remove-at-P + insert-at-Q composition; silent per the
+  waived-warnings decision) and `DeleteChapterAsync` (TPT-safe comment removal — EF RemoveRange so
+  base_comments rows go too; Restrict-FK two-step; −1 shift; arc shrink + empty-arc auto-delete;
+  WordCount refresh), both in execution-strategy transactions (EnableRetryOnFailure precedent).
+  Covered: Integration `ChapterReorderDeleteTests` (17).
+- **UI:** `ChapterList` rebuilt (coordination composite — injects only the read-mark write
+  service, UserStoryInteractionPanel precedent; fill-bar Indicator wash `--color-progress`/20;
+  action-family read toggle; success-tint New badge; per-chapter download `<details>` menu of
+  plain anchors). Per-chapter export: `ExportChapterAsync` + endpoint
+  `GET /api/stories/{id}/chapters/{n}/export/{format}` (writers reused via the extracted
+  `WriteAs`). `ChapterManagerPanel` (HTML5 drag reorder + ConfirmDialog delete) and
+  `StoryArcManagerPanel` mounted on `StoryEditorPage` edit mode. `StoryPage` loads arcs +
+  watermark (ephemeral, deterministic — no PersistentState needed) and passes `CanMarkRead`.
+  Covered: RazorComponents `ChapterListTests` (25 = 14 preserved WU25 + 11 WU45: collapse/expander
+  reveal/read-run label/fill width/toggle-service-call + aria-pressed/mark-all/arc header
+  toggle/sticky collapsed arc/New badge/download links published-only).
+- **Not covered by automated tiers (the deferred L4.5 band):** real-circuit drag-and-drop
+  reorder, live mark→fill-bar repaint, arc-manager live preview interactivity, download
+  Content-Disposition; plus `DataSeeder` has no arced story yet — manual verification needs an
+  arc created via the panel first (or a seeder addition later).

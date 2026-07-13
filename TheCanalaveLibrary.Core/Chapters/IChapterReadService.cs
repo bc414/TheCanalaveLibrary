@@ -50,6 +50,14 @@ public interface IChapterReadService
     Task<IReadOnlyList<ChapterListEntryDto>> GetChapterListAsync(int storyId);
 
     /// <summary>
+    /// The viewer's most recent <c>UserChapterInteraction.LastInteractionDate</c> across all
+    /// chapters of a story — the "New"-badge watermark (WU45). <c>null</c> for anonymous viewers
+    /// or when the viewer has never interacted with the story (which suppresses all New badges
+    /// per the strict chain rule; see <c>ChapterListSegmenter</c>).
+    /// </summary>
+    Task<DateTime?> GetViewerLastInteractionUtcAsync(int storyId);
+
+    /// <summary>
     /// Loads a specific <c>ChapterContent</c> row for the author's edit form.
     /// Does not apply the <c>ShowMatureContent</c> ceiling (authors see their own versions
     /// regardless of rating).

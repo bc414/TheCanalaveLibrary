@@ -16,6 +16,8 @@ public class StoryExternalLinksRowTests : BunitContext
 {
     public StoryExternalLinksRowTests()
     {
+        // ChapterList (WU45) injects the manual read-mark write service.
+        Services.AddSingleton<IChapterReadMarkWriteService>(new FakeChapterReadMarkWriteService());
         // StoryDesktop composition needs the same fakes as StoryDesktopTests.
         Services.AddScoped<IRecommendationWriteService>(_ => new FakeRecommendationWriteService());
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
@@ -80,7 +82,7 @@ public class StoryExternalLinksRowTests : BunitContext
             .Add(c => c.Story, story)
             .Add(c => c.Chapters, (IReadOnlyList<ChapterListEntryDto>)
             [
-                new ChapterListEntryDto(1, "Chapter One", 100, true, [])
+                new ChapterListEntryDto(101, 1, "Chapter One", 100, true, null, false, 0f, [])
             ]));
 
         int chaptersIndex = cut.Markup.IndexOf("Chapters", StringComparison.Ordinal);

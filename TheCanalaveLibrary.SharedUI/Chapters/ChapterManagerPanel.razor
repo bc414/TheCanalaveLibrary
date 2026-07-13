@@ -1,0 +1,157 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@inject IChapterWriteService ChapterWriteService
+
+@* Author chapter manager (WU45) — drag-to-reorder + delete, mounted on the story editor page's
+   edit mode (StoryChapterImport precedent: self-contained panel taking StoryId; the page is
+   [Authorize] and ServerChapterWriteService author-gates every mutation — the real authority).
+
+   Reorder is HTML5 drag-and-drop on the row elements (native Blazor @ondrag* events — no JS
+   library; first-principles per the WU45 settled direction). Moves apply IMMEDIATELY and
+   silently — no link-breakage or arc-crossing warning (explicitly waived 2026-07-12); the
+   re-rendered list is the feedback. Deletion is destructive → ConfirmDialog (universal shell).
+   Arc ranges shift server-side in the same transaction (IChapterWriteService contract).
+   Outer Margin Rule: no outer margin on the root; the parent spaces the panel. *@
+
+<section>
+    <h2 class="mb-2 text-lg font-semibold text-(--color-text)">Chapters</h2>
+    <div class="mb-2"><InlineAlert Message="@_errorMessage"/></div>
+
+    @if (_isLoading)
+    {
+        <p class="text-sm text-(--color-text-muted)"><em>Loading…</em></p>
+    }
+    else if (_chapters.Count == 0)
+    {
+        <p class="text-sm text-(--color-text-muted)">No chapters yet.</p>
+    }
+    else
+    {
+        <div class="overflow-hidden rounded-xl border border-(--color-border) bg-(--color-surface)">
+            @foreach (ChapterListEntryDto chapter in _chapters)
+            {
+                <div draggable="true"
+                     class="@RowClasses(chapter.ChapterNumber)"
+                     @key="chapter.ChapterId"
+                     @ondragstart="() => _dragFromNumber = chapter.ChapterNumber"
+                     @ondragend="() => { _dragFromNumber = null; _dragOverNumber = null; }"
+                     @ondragenter="() => _dragOverNumber = chapter.ChapterNumber"
+                     @ondragover:preventDefault
+                     @ondrop="() => DropOnAsync(chapter.ChapterNumber)"
+                     @ondrop:preventDefault>
+                    <span class="cursor-grab select-none text-(--color-text-muted)" title="Drag to reorder"
+                          aria-label="Drag to reorder">&#8942;&#8942;</span>
+                    <span class="w-6 shrink-0 text-right text-xs tabular-nums text-(--color-text-muted)">@chapter.ChapterNumber.</span>
+                    <span class="min-w-0 flex-1 truncate text-sm text-(--color-text)">@chapter.Title</span>
+                    @if (!chapter.IsPublished)
+                    {
+                        <span class="shrink-0 rounded bg-(--color-surface) px-1.5 py-0.5 text-xs font-medium text-(--color-text-muted) ring-1 ring-(--color-border)">Draft</span>
+                    }
+                    <a href="/story/@StoryId/chapter/@chapter.ChapterNumber/edit"
+                       class="shrink-0 text-xs text-(--color-action-ink) hover:underline">Edit</a>
+                    <button type="button"
+                            class="shrink-0 rounded px-1.5 py-0.5 text-xs text-(--color-danger) transition-colors hover:bg-(--color-danger)/10"
+                            @onclick="() => RequestDelete(chapter)">Delete</button>
+                </div>
+            }
+        </div>
+    }
+
+    <ConfirmDialog IsOpen="_deleteTarget is not null"
+                   IsOpenChanged="open => { if (!open) _deleteTarget = null; }"
+                   Title="Delete chapter?"
+                   Message="@DeleteMessage"
+                   ConfirmText="Delete"
+                   IsDestructive="true"
+                   OnConfirm="DeleteConfirmedAsync"
+                   OnCancel="() => _deleteTarget = null"/>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public int StoryId { get; set; }
+
+    /// <summary>
+    /// The chapter rows to manage — loaded by this panel itself on init (self-contained panel,
+    /// StoryChapterImport precedent) and re-fetched after every mutation so the server's
+    /// renumbering (and any arc shifts) is what renders, not a local guess.
+    /// </summary>
+    private IReadOnlyList<ChapterListEntryDto> _chapters = [];
+
+    [Inject] private IChapterReadService ChapterReadService { get; set; } = null!;
+
+    private bool _isLoading = true;
+    private string? _errorMessage;
+    private int? _dragFromNumber;
+    private int? _dragOverNumber;
+    private ChapterListEntryDto? _deleteTarget;
+
+    private string DeleteMessage => _deleteTarget is null
+        ? string.Empty
+        : $"\"{_deleteTarget.Title}\" and its comments and reader progress will be permanently " +
+          $"deleted; later chapters renumber down. This cannot be undone.";
+
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        _isLoading = true;
+        _chapters = await ChapterReadService.GetChapterListAsync(StoryId);
+        _isLoading = false;
+    }
+
+    private string RowClasses(int chapterNumber) =>
+        (_dragOverNumber == chapterNumber && _dragFromNumber is not null && _dragFromNumber != chapterNumber
+            ? "bg-(--color-surface-hover) "
+            : string.Empty) +
+        "flex items-center gap-2 border-b border-(--color-border) px-3 py-2 last:border-b-0";
+
+    private async Task DropOnAsync(int targetNumber)
+    {
+        if (_dragFromNumber is not int from || from == targetNumber)
+        {
+            _dragFromNumber = null;
+            _dragOverNumber = null;
+            return;
+        }
+        try
+        {
+            _errorMessage = null;
+            await ChapterWriteService.MoveChapterAsync(StoryId, from, targetNumber);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ExceptionPresenter.IsUserFacing(ex)
+                ? string.Join(" ", ExceptionPresenter.GetUserMessages(ex))
+                : "Couldn't reorder the chapters. Please try again.";
+        }
+        finally
+        {
+            _dragFromNumber = null;
+            _dragOverNumber = null;
+        }
+    }
+
+    private void RequestDelete(ChapterListEntryDto chapter) => _deleteTarget = chapter;
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (_deleteTarget is null) return;
+        try
+        {
+            _errorMessage = null;
+            await ChapterWriteService.DeleteChapterAsync(_deleteTarget.ChapterId);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ExceptionPresenter.IsUserFacing(ex)
+                ? string.Join(" ", ExceptionPresenter.GetUserMessages(ex))
+                : "Couldn't delete the chapter. Please try again.";
+        }
+        finally
+        {
+            _deleteTarget = null;
+        }
+    }
+}

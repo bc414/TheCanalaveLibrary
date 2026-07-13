@@ -1495,7 +1495,38 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 
 ---
 
-### WU-FilterRevamp — Content-visibility filter revamp + two dead-code removals DONE ✓ (2026-06-27)
+### WU45 — Story Arcs + chapter-presentation upgrade + chapter reorder/delete (Features 8, 6, 7-surface, 44-surface) — BUILT ✓ (2026-07-12; L4.5 browser pass deferred)
+- **Cells:** 8 L1 `5→2→5-target` (SortOrder-drop migration), 8 L2/L3/L3.5/L4 → build (design
+  settled 2026-07-12 — resolves the long-standing §8.2 Stage-1 gap); 6 L2 reopened (reorder +
+  delete are new capability); 7 L3/L3.5/L4 reopened (`ChapterList` rewrite); 44 L2 additive
+  (manual read-mark durable-direct seam).
+- **Direction settled 2026-07-12 (Brian, extensive chat deliberation; do not revisit):**
+  one flat pure segmenter (arc + frontier-window boundaries over one ordered list; constants
+  `CollapseMinimum≈10` / `HeadWindow=3` / `TailWindow=3`, named + tunable); arcs sticky/toggleable,
+  supersede windowing inside themselves; strict-chain "New" badge; progress fill-bar; manual marks
+  set both `IsRead`+`ReadProgress` and call `MarkStartedAsync`, discard pending buffer pings;
+  reorder = drag-only, silent (link/arc warnings explicitly waived), append-only creation stays;
+  delete shifts −1 with Restrict-FK two-step; `StoryArc.SortOrder` eliminated; arc manager =
+  separate panel, rows + live preview; reading page shows `Arc X — [name]` under the title.
+  Fimfiction inspected as behavioral reference only (DOM/CSS/JS of two real pages) — Blazor
+  first-principles implementation, not a port.
+- **Settled-vs-open:** `audit/Stories.md` Feature 8; `audit/Chapters.md` "WU45 settled design".
+- **Did (2026-07-12):** all of the above, in one pass. L1: `WU45_StoryArcDropSortOrder` migration
+  + `StoryArc` move to `Core/Stories/`. L2: `IStoryArc{Read,Write}Service`,
+  `IChapterReadMarkWriteService` (+ `ReadingProgressBuffer.Discard` seam), viewer-aware
+  `GetChapterListAsync` + `GetViewerLastInteractionUtcAsync`, `MoveChapterAsync`/
+  `DeleteChapterAsync` (negative-pass renumbering, arc shift composition, TPT-safe comment
+  delete), `ExportChapterAsync` + per-chapter endpoint. Shared: `ChapterListSegmenter` (pure, one
+  function for SSR + client re-segment). UI: `ChapterList` rebuilt (fill-bar, toggles, expanders,
+  sticky arc headers, download menu), `ChapterManagerPanel` (drag reorder + delete),
+  `StoryArcManagerPanel` (rows + live preview), `StoryPage` wiring, reading-page `Arc X — [name]`
+  label. `dotnet test` green: Unit 685 / Integration 650 / RazorComponents 619 (70 new tests
+  across the tiers). `check-design-tokens.ps1`: only the pre-existing `ImportReviewPanel` finding.
+  **L4.5-Browser verification deferred at close (Brian's direction)** — F6/F7 L4.5 `5→2`, F8
+  L4.5 `2` in `status.md`; details + the not-covered list in `audit/Chapters.md` WU45 Stage note.
+- **Tool:** Claude Code (requirements deliberated in chat, same session). **Deps:** WU25
+  (`StoryPage`/`ChapterList`), WU26 (reading page, F44 pipeline), WU38c (export writers, for
+  per-chapter download).
 - **Cells changed:** F4/F5 L5 `4 → 2`. All other affected cells (Moderation/Groups/Recommendations/
   BlogPosts L2) were already Stage 5 and remain so — this work corrected the code underlying them.
 - **Done:**

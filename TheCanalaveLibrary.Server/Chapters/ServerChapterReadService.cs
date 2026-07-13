@@ -140,13 +140,27 @@ public class ServerChapterReadService(
             .Where(c => c.StoryId == storyId)
             .OrderBy(c => c.ChapterNumber)
             .Select(c => new ChapterRow(
+                c.ChapterId,
                 c.ChapterNumber,
                 c.Title,
                 c.PrimaryContent != null ? c.PrimaryContent.WordCount : 0,
-                c.IsPublished))
+                c.IsPublished,
+                c.PrimaryContent != null ? c.PrimaryContent.PublishDate : null))
             .ToListAsync();
 
         if (chapters.Count == 0) return [];
+
+        // Step 1b (WU45): the viewer's Feature-44 read state for this story, one query.
+        // Anonymous viewers get the empty dictionary → every row projects false/0.
+        Dictionary<int, (bool IsRead, float Progress)> readState = [];
+        if (ActiveUser.UserId is int viewerId)
+        {
+            readState = (await readDb.UserChapterInteractions
+                    .Where(i => i.UserId == viewerId && i.Chapter.StoryId == storyId)
+                    .Select(i => new { i.ChapterId, i.IsRead, i.ReadProgress })
+                    .ToListAsync())
+                .ToDictionary(x => x.ChapterId, x => (x.IsRead, x.ReadProgress));
+        }
 
         // Step 2: All non-primary alternate versions accessible to the viewer, across all chapters
         // of the story in one query. Mirrors the SelectMany pattern from GetChapterVersionsAsync:
@@ -182,14 +196,31 @@ public class ServerChapterReadService(
 
         return chapters
             .Select(c => new ChapterListEntryDto(
+                c.ChapterId,
                 c.ChapterNumber,
                 c.Title,
                 c.WordCount,
                 c.IsPublished,
+                c.PublishDate,
+                readState.TryGetValue(c.ChapterId, out (bool IsRead, float Progress) rs) && rs.IsRead,
+                readState.TryGetValue(c.ChapterId, out (bool IsRead, float Progress) rp) ? rp.Progress : 0f,
                 altsByChapter.TryGetValue(c.ChapterNumber, out List<ChapterVersionDto>? alts)
                     ? alts
                     : []))
             .ToList();
+    }
+
+    public async Task<DateTime?> GetViewerLastInteractionUtcAsync(int storyId)
+    {
+        // The "New"-badge watermark (WU45): the viewer's most recent chapter interaction on this
+        // story. Null for anonymous viewers or a first-ever visit (no rows) — the strict chain
+        // rule then suppresses every New badge (no watermark = nothing is meaningfully "new").
+        if (ActiveUser.UserId is not int viewerId) return null;
+
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        return await readDb.UserChapterInteractions
+            .Where(i => i.UserId == viewerId && i.Chapter.StoryId == storyId)
+            .MaxAsync(i => (DateTime?)i.LastInteractionDate);
     }
 
     public async Task<IReadOnlyList<ChapterExportDto>> GetChaptersForExportAsync(int storyId)
@@ -216,7 +247,9 @@ public class ServerChapterReadService(
             .ToListAsync();
     }
 
-    private sealed record ChapterRow(int ChapterNumber, string Title, int WordCount, bool IsPublished);
+    private sealed record ChapterRow(
+        int ChapterId, int ChapterNumber, string Title, int WordCount, bool IsPublished,
+        DateTime? PublishDate);
 
     private sealed record AltVersionRow(
         int ChapterNumber, long ChapterContentId, int VersionOrder,

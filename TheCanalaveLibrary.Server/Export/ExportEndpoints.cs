@@ -32,5 +32,25 @@ public static class ExportEndpoints
                 ? Results.NotFound()
                 : Results.File(result.Content, result.ContentType, result.FileName);
         });
+
+        // Per-chapter download (WU45) — same anchor-not-circuit rule, same permission model.
+        app.MapGet("/api/stories/{storyId:int}/chapters/{chapterNumber:int}/export/{format}", async (
+            int storyId,
+            int chapterNumber,
+            string format,
+            IExportService exportService) =>
+        {
+            if (format.Length == 0 || !format.All(char.IsLetter) ||
+                !Enum.TryParse(format, ignoreCase: true, out ExportFormat parsed))
+            {
+                return Results.NotFound();
+            }
+
+            StoryExportResult? result =
+                await exportService.ExportChapterAsync(storyId, chapterNumber, parsed);
+            return result is null
+                ? Results.NotFound()
+                : Results.File(result.Content, result.ContentType, result.FileName);
+        });
     }
 }
