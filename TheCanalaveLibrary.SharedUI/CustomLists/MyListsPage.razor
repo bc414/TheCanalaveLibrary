@@ -1,0 +1,138 @@
+@page "/my-lists"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@using Microsoft.AspNetCore.Authorization
+@using TheCanalaveLibrary.Core
+@inject ICustomListWriteService CustomListService
+
+@* Page — Feature 51 (Custom Lists), WU-CustomLists. The owner's list-of-lists management surface
+   (settled 2026-07-13: a separate "My Lists" section, NOT dynamic Bookshelves tabs). Create +
+   delete live here; rename/visibility/entry management live on each list's own page. One
+   responsive layout, no desktop/mobile split — simple stacked content with no divergent
+   structure (unlike Bookshelves' tab strips). [PersistentState] on the fetched list set
+   eliminates the prerender→interactive double fetch. *@
+
+<PageTitle>My Lists</PageTitle>
+
+<div class="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 md:px-6">
+
+    <h1 class="text-2xl font-bold text-text">My Lists</h1>
+
+    @* Create form *@
+    <div class="flex flex-col gap-2 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+        <div class="flex flex-wrap items-center gap-2">
+            <input class="min-w-0 flex-1 rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text"
+                   placeholder="New list name" maxlength="@CustomListValidations.MaxListNameLength"
+                   aria-label="New list name" @bind="_newListName" @bind:event="oninput" />
+            <label class="flex shrink-0 items-center gap-1.5 text-sm text-text">
+                <input type="checkbox" @bind="_newListIsPublic" />
+                Public
+            </label>
+            <button type="button"
+                    class="shrink-0 rounded-md bg-(--color-mission) px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-(--color-mission-hover)"
+                    aria-label="Create list"
+                    disabled="@(string.IsNullOrWhiteSpace(_newListName))"
+                    @onclick="CreateListAsync">
+                Create list
+            </button>
+        </div>
+        <InlineAlert Messages="@_createErrors" />
+    </div>
+
+    @* Lists *@
+    @if (MyLists is null)
+    {
+        <p class="text-(--color-text-muted)"><em>Loading…</em></p>
+    }
+    else if (MyLists.Count == 0)
+    {
+        <p class="text-(--color-text-muted)">No lists yet — create one above, or use "Add to list" in any story card's ▾ menu.</p>
+    }
+    else
+    {
+        <div class="flex flex-col gap-3">
+            @foreach (var list in MyLists)
+            {
+                <div class="flex items-center gap-3 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+                    <div class="min-w-0 flex-1">
+                        <a href="/lists/@list.CustomListId" class="font-semibold text-(--color-action-ink) hover:underline">
+                            @list.ListName
+                        </a>
+                        <p class="text-xs text-(--color-text-muted)">
+                            @(list.StoryCount == 1 ? "1 story" : $"{list.StoryCount} stories") ·
+                            created @list.DateCreated.ToString("MMM d, yyyy")
+                        </p>
+                    </div>
+                    <span class="@VisibilityBadgeClasses(list.IsPublic) shrink-0 rounded-full px-2 py-0.5 text-xs font-medium">
+                        @(list.IsPublic ? "Public" : "Private")
+                    </span>
+                    <button type="button"
+                            class="shrink-0 rounded-md border border-(--color-border) bg-surface px-2 py-1 text-sm text-(--color-danger) transition-colors hover:bg-(--color-surface-hover)"
+                            aria-label="@($"Delete list {list.ListName}")"
+                            @onclick="() => _pendingDelete = list">
+                        Delete
+                    </button>
+                </div>
+            }
+        </div>
+    }
+
+    <ConfirmDialog IsOpen="@(_pendingDelete is not null)"
+                   IsOpenChanged="@(open => { if (!open) _pendingDelete = null; })"
+                   Title="Delete list?"
+                   Message="@($"\"{_pendingDelete?.ListName}\" and its {_pendingDelete?.StoryCount} saved entries will be deleted. The stories themselves are not affected.")"
+                   ConfirmText="Delete"
+                   IsDestructive="true"
+                   OnConfirm="DeleteConfirmedAsync" />
+</div>
+
+@code {
+    // Persisted across the prerender→interactive handoff (layer5-wasm.md §"Avoiding the double
+    // fetch") — exactly what the page renders, no superset.
+    [PersistentState] public List<CustomListSummaryDto>? MyLists { get; set; }
+
+    private string _newListName = "";
+    private bool _newListIsPublic; // default private (settled 2026-07-13)
+    private IReadOnlyList<string>? _createErrors;
+    private CustomListSummaryDto? _pendingDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        MyLists ??= await CustomListService.GetMyListsAsync(); // restore-or-fetch
+    }
+
+    private async Task CreateListAsync()
+    {
+        _createErrors = null;
+        try
+        {
+            await CustomListService.CreateListAsync(_newListName, _newListIsPublic);
+            _newListName = "";
+            _newListIsPublic = false;
+            MyLists = await CustomListService.GetMyListsAsync(); // post-write refresh — plain assignment
+        }
+        catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
+        {
+            _createErrors = ExceptionPresenter.GetUserMessages(ex);
+        }
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (_pendingDelete is null) return;
+        try
+        {
+            await CustomListService.DeleteListAsync(_pendingDelete.CustomListId);
+            MyLists = await CustomListService.GetMyListsAsync();
+        }
+        catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
+        {
+            _createErrors = ExceptionPresenter.GetUserMessages(ex);
+        }
+        _pendingDelete = null;
+    }
+
+    private static string VisibilityBadgeClasses(bool isPublic) => isPublic
+        ? "bg-(--color-action)/60 text-(--color-text)"
+        : "bg-(--color-surface) text-(--color-text-muted) border border-(--color-border)";
+}

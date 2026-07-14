@@ -605,8 +605,10 @@ rich-text composition. Respects `AllowPrivateMessages`.
 **50. Badge System** — `Badge` table with string PK. `UserBadge` junction with `DisplayOrder`.
 MVP: synchronous inline checks.
 
-**51. Custom Lists** — User-created collections beyond system lists. Public/private. *Spec §8.7:
-detailed design mostly TBD — likely Stage 1.*
+**51. Custom Lists** — User-created, named, shareable story collections beyond system lists.
+Public/private per list; public lists are viewable + cloneable (independent snapshot). *Design
+settled 2026-07-13 — see `audit/CustomLists.md` "Settled design" (filter-template integration
+dropped; §8.7's filter-composition question dissolved).*
 
 **52. User Account Deletion** — `DeleteUserService` handling RESTRICT FK conflicts before deletion.
 Content anonymization vs interaction CASCADE.

@@ -176,6 +176,32 @@
                 </div>
             }
         }
+        else if (Tab == ProfileTab.Lists)
+        {
+            @* Lists tab (WU-CustomLists, Feature 51) — public (IsPublic) custom lists only,
+               full-width, no filter sidebar (small, unpaginated set — same shape as Series).
+               Each card links to the list's own /lists/{id} page, where viewing/cloning lives. *@
+            @if (PublicListItems.Count == 0)
+            {
+                <p class="text-sm text-(--color-text-muted)">@(IsOwner ? "You haven't made any lists public yet." : "No public lists yet.")</p>
+            }
+            else
+            {
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    @foreach (CustomListSummaryDto list in PublicListItems)
+                    {
+                        <a href="/lists/@list.CustomListId"
+                           class="flex flex-col gap-1 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4 transition-colors hover:bg-(--color-surface-hover)">
+                            <h3 class="font-semibold text-(--color-action-ink)">@list.ListName</h3>
+                            <p class="text-xs text-(--color-text-muted)">
+                                @(list.StoryCount == 1 ? "1 story" : $"{list.StoryCount} stories") ·
+                                created @list.DateCreated.ToString("MMM d, yyyy")
+                            </p>
+                        </a>
+                    }
+                </div>
+            }
+        }
         else
         {
             @* Story tabs: Favorites, Recommendations, Authored — deck + filter sidebar *@
@@ -240,6 +266,9 @@
     [Parameter] public IReadOnlyList<SavedTagSelectionDetailDto> TagSelectionItems { get; set; } = [];
     [Parameter] public EventCallback<int> OnCopyTagSelection { get; set; }
 
+    // Lists tab (WU-CustomLists, Feature 51)
+    [Parameter] public IReadOnlyList<CustomListSummaryDto> PublicListItems { get; set; } = [];
+
     private ReportDialog _reportDialog = default!;
 
     private static readonly IReadOnlyList<DefaultSortOrder> _availableSorts =
@@ -262,6 +291,7 @@
         ProfileTab.Blog            => "Blog",
         ProfileTab.Series          => "Series",
         ProfileTab.TagSelections   => "Tag Selections",
+        ProfileTab.Lists           => "Lists",
         _                          => tab.ToString()
     };
 

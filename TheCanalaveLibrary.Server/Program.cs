@@ -271,6 +271,9 @@ builder.Services.AddScoped<ITagWriteService, ServerTagWriteService>();
 // WU43 — write class serves both interfaces (mirrors ISeriesReadService/Write registration below).
 builder.Services.AddScoped<ISavedTagSelectionReadService, ServerSavedTagSelectionWriteService>();
 builder.Services.AddScoped<ISavedTagSelectionWriteService, ServerSavedTagSelectionWriteService>();
+// WU-CustomLists (Feature 51) — same both-interfaces shape as SavedTagSelections above.
+builder.Services.AddScoped<ICustomListReadService, ServerCustomListWriteService>();
+builder.Services.AddScoped<ICustomListWriteService, ServerCustomListWriteService>();
 // Server-only write-time probe — checks File.Exists at mod-write time (never at render time).
 // Post-MVP: replace with R2SpriteAssetProbe behind this same interface. See audit/Sprites.md L2.
 builder.Services.AddSingleton<ISpriteAssetProbe, LocalSpriteAssetProbe>();
@@ -510,6 +513,7 @@ app.MapReadingProgressEndpoints();
 app.MapCommentEndpoints();
 app.MapUserStoryInteractionEndpoints();
 app.MapSavedTagSelectionEndpoints();
+app.MapCustomListEndpoints();
 app.MapFollowingEndpoints();
 app.MapUserProfileEndpoints();
 app.MapUserSettingsEndpoints();

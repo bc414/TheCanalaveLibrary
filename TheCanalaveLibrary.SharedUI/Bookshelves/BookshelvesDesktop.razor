@@ -27,6 +27,12 @@
                 <span>@info.Label</span>
             </a>
         }
+        @* Cross-link to the separate My Lists section (WU-CustomLists — custom lists are
+           deliberately NOT dynamic tabs here; the closed BookshelfTab enum stays closed). *@
+        <a href="/my-lists"
+           class="ml-auto flex items-center gap-1 px-3 py-2 text-sm text-(--color-action-ink) hover:underline">
+            My Lists →
+        </a>
     </nav>
 
     @* ── Main content + right sidebar ────────────────────────────────────────────────── *@

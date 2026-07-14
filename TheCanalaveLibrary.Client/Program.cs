@@ -63,6 +63,8 @@ builder.Services.AddScoped<IUserStoryInteractionReadService, ClientUserStoryInte
 builder.Services.AddScoped<IUserStoryInteractionWriteService, ClientUserStoryInteractionWriteService>();
 builder.Services.AddScoped<ISavedTagSelectionReadService, ClientSavedTagSelectionReadService>();
 builder.Services.AddScoped<ISavedTagSelectionWriteService, ClientSavedTagSelectionWriteService>();
+builder.Services.AddScoped<ICustomListReadService, ClientCustomListReadService>();
+builder.Services.AddScoped<ICustomListWriteService, ClientCustomListWriteService>();
 builder.Services.AddScoped<IFollowingReadService, ClientFollowingReadService>();
 builder.Services.AddScoped<IFollowingWriteService, ClientFollowingWriteService>();
 builder.Services.AddScoped<IUserProfileReadService, ClientUserProfileReadService>();

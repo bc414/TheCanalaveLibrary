@@ -43,6 +43,7 @@ public static class ExceptionPresenter
         or SeriesValidationException
         or StoryLineageValidationException
         or MessagingValidationException
+        or CustomListValidationException
         or TagValidationException
         or VouchLimitException
         or ContentRatingExceededException
@@ -65,6 +66,7 @@ public static class ExceptionPresenter
         SeriesValidationException e => e.Errors,
         StoryLineageValidationException e => e.Errors,
         MessagingValidationException e => e.Errors,
+        CustomListValidationException e => e.Errors,
 
         // Single-message typed exceptions whose Message is deliberately user-ready.
         TagValidationException or VouchLimitException or ContentRatingExceededException

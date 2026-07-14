@@ -19,6 +19,7 @@ public enum ProfileTab
     Blog            = 4,
     Series          = 5,
     TagSelections   = 6,
+    Lists           = 7,   // WU-CustomLists (Feature 51) — the user's IsPublic custom lists
 }
 
 /// <summary>
@@ -39,6 +40,7 @@ public static class ProfileTabSlug
             [ProfileTab.Blog]            = "blog",
             [ProfileTab.Series]          = "series",
             [ProfileTab.TagSelections]   = "tag-selections",
+            [ProfileTab.Lists]           = "lists",
         };
 
     private static readonly IReadOnlyDictionary<string, ProfileTab> SlugToTab =

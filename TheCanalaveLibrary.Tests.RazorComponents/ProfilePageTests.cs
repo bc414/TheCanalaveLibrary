@@ -78,6 +78,8 @@ public class ProfilePageTests : BunitContext
         Services.AddScoped<ISeriesReadService>(_ => new FakeSeriesReadService());
         Services.AddScoped<ISavedTagSelectionReadService>(_ => new FakeSavedTagSelectionReadService());
         Services.AddScoped<ISavedTagSelectionWriteService>(_ => new FakeSavedTagSelectionWriteService());
+        // WU-CustomLists — ProfilePage now loads the Lists tab via ICustomListReadService.
+        Services.AddScoped<ICustomListReadService>(_ => new FakeCustomListWriteService());
         Services.AddScoped<IToastService>(_ => new ToastService());
         Services.AddScoped<IDeviceDetectionService>(_ => new AlwaysDesktopDeviceService());
         // WU-Seo — ProfilePage now renders <SocialMetaTags>, which needs IPublicUrlProvider.

@@ -879,6 +879,14 @@ Narrowing-within-fixed-source query → WU27/WU30.
 The user-level filter-override UI (formerly tracked as `Filtering/`) is **Missing/Stage 2** (§8.7) — it
 likely composes into `ResultsFilterPanel`. Distinct from `CustomLists/` (personal organization).
 
+**Custom-lists-as-filter-source DROPPED (2026-07-13, Brian):** the Feature-51 design settlement
+removed public custom lists as `UserCustomFilter` blacklist/whitelist sources (shared blocklists cut
+against the site ethos; whitelists are redundant with the list view + clone surface — full rationale:
+`audit/CustomLists.md` §"Settled design"). Consequence for this cluster: `UserCustomFilter`'s
+list-reference half loses its rationale — when the filter-override UI is designed, re-derive whether
+the entity keeps group/folder sources only, or is trimmed/dropped. Nothing here consumes it yet;
+no code change made.
+
 ---
 
 ## Layer-8 data-mart implementation notes

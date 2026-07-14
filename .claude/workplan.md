@@ -2074,10 +2074,13 @@ see WU-S3Garage; treat "Postgres/Redis/MinIO" above as historical, not current.)
 These have an undesigned UI; resolve the design (chat with skill files) before they can be sequenced.
 Their non-UI layers (L1/L2) may already be Stage 5/2 but the *UI cells* are blocked.
 
-- **Story Arcs UI** (8 L3/L3.5) — §8.2 arc-management UI never designed. (L1 Stage 5, L2 Stage 2.)
-- **Polls UI** (37 L3/L3.5) — §8.6 detailed poll UI unspecified.
-- **Custom Lists** (51 L3/L3.5) — §8.7 creation flow + filter composition TBD.
 - **Community Spotlight** (55, all layers) — §5.26 donation infra TBD; entity is a placeholder.
+  (Feature built as WU-Spotlight 2026-07-12; the donation-infra remainder got its Phase-4 verdict
+  2026-07-11: deferred past beta.)
+
+Formerly listed here, since resolved: Story Arcs UI (8) → WU45 (2026-07-12); Polls UI (37) →
+WU-Polls (2026-07-12); Custom Lists (51) → design settled 2026-07-13
+(`audit/CustomLists.md` §"Settled design") → WU-CustomLists.
 
 When a gap resolves: it becomes Stage 2 (or 3 if the conversation yields a build-ready spec); insert a
 work-unit into Phase 3 and update `status.md` + the audit file.
@@ -2823,3 +2826,45 @@ WASM-focused whole-site browser wave that found and fixed seven real bugs.
 - **Tool:** Claude Code (Opus) driving Chrome via MCP browser tools; 8 parallel agents for the
   [PersistentState] adoption. **Pointer:** `layer5-wasm.md` (all new rules recorded);
   `status.md` grid + Global Conditions "Global Flip".
+
+## WU-CustomLists — Custom Lists, full feature (Feature 51; Phase-4 verdict rendered) — DONE ✓ (2026-07-13)
+
+- **Cells:** F51 L2/L3/L3.5/L4/L4.5/L5 (2·1·1·1·1·2 → all 5); L1 stays 5 (zero schema change).
+  Renders row 3's Feature-51 beta-scope verdict (designed + built — `middle_plan_v2.md` Resolved
+  "Custom Lists requirements").
+- **Requirements settled in chat 2026-07-13** (full record: `audit/CustomLists.md` §"Settled
+  design"): positioning = *named shareable shelves* (privacy demoted — Private Favorites own the
+  zero-effect save, verified against the code); filter-template integration DROPPED (ethos:
+  shared blocklists; whitelists redundant with view+clone — dissolves spec §8 row 7);
+  sharing = view + optional clone (visible-entries-only, private-start, "(copy N)"
+  disambiguation, self-clone OK); add via StoryCard caret expander (NOT prime real estate) +
+  in-list `StoryTitlePicker`; separate `/my-lists` section (closed `BookshelfTab` enum stays
+  closed; UserMenu item + Bookshelves cross-link); `ProfileTab.Lists`; user-selectable sort
+  (DateAdded↑↓/Title↑↓ — no `SortOrder` column, no content-rating sort); 100-list cap, entries
+  uncapped; 256-char names (schema kept; the design log's 100 superseded); no per-list email
+  alerts, no collaboration, **no author notification on add** (deliberately unlike GroupStory);
+  no rate limiting (matches SavedTagSelections).
+- **Structural template:** SavedTagSelections (Feature 15) end-to-end — service/DI/endpoint/
+  client/validation/exception shapes mirrored with story entries. Entities moved
+  `Core/Models/` → `Core/CustomLists/` (legacy-folder retirement).
+- **Did:** Core (`CustomListDtos`, `CustomListSortEnum`, `CustomListValidations`,
+  `CustomListValidationException` + `ExceptionPresenter` registration, `ICustomListRead/
+  WriteService`); Server (`ServerCustomList{Read,Write}Service` — viewer-visible counts/ids via
+  filtered-`Stories` joins so counts never phantom; clone reads source entries through the READ
+  context = visible-only by construction; `CustomListEndpoints`); Client
+  (`ClientCustomList{Read,Write}Service` + registrations); SharedUI (`MyListsPage`,
+  `CustomListPage`, `AddToCustomListMenu` caret composite, profile Lists tab across
+  ProfilePage/Desktop/Mobile, UserMenu + Bookshelves nav seams); `[PersistentState]` on both new
+  pages per the post-GlobalFlip rules.
+- **Verified:** `dotnet test` green all tiers — Unit 712 (incl. `CustomListValidationsTests`,
+  `ClientCustomListServiceTests`), RazorComponents 632 (incl. `AddToCustomListMenuTests`;
+  Bookshelves tab-count tests updated for the cross-link; `StoryCardTests`/`ProfilePageTests`
+  gained the new fake/auth registrations), Integration 680 (incl. `CustomListServiceTests`
+  ~28). Token check: no new findings. **Browser band: full loop driven under InteractiveAuto
+  with the later flows confirmed on the real WASM runtime** — detail in `audit/CustomLists.md`
+  F51 L4.5 Stage note (create/toggle/clone/delete through the client impls, psql ground truth,
+  rating-filter + anonymous checks, zero console errors).
+- **Tool:** Claude Code (Fable) driving Chrome via MCP browser tools. **Pointer:**
+  `audit/CustomLists.md` (settled design + Stage notes); `audit/Discovery.md` §"Note on
+  search-result narrowing" (lists-as-filter-source dropped — `UserCustomFilter` rationale to
+  re-derive); `folder_clusters.md` CustomLists row; `middle_plan_v2.md` Resolved + Phase 4.

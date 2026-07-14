@@ -13,6 +13,7 @@
 @inject ISeriesReadService SeriesReadService
 @inject ISavedTagSelectionReadService TagSelectionReadService
 @inject ISavedTagSelectionWriteService TagSelectionWriteService
+@inject ICustomListReadService CustomListReadService
 @inject IDeviceDetectionService DeviceService
 @inject IToastService Toasts
 @inject NavigationManager Nav
@@ -73,7 +74,8 @@ else
                        OnBlogPageChanged="HandleBlogPageChanged"
                        SeriesItems="@(SeriesItems ?? [])"
                        TagSelectionItems="@(TagSelectionItems ?? [])"
-                       OnCopyTagSelection="HandleCopyTagSelectionAsync" />
+                       OnCopyTagSelection="HandleCopyTagSelectionAsync"
+                       PublicListItems="@(PublicListItems ?? [])" />
     }
     else
     {
@@ -97,7 +99,8 @@ else
                         OnBlogPageChanged="HandleBlogPageChanged"
                         SeriesItems="@(SeriesItems ?? [])"
                         TagSelectionItems="@(TagSelectionItems ?? [])"
-                        OnCopyTagSelection="HandleCopyTagSelectionAsync" />
+                        OnCopyTagSelection="HandleCopyTagSelectionAsync"
+                        PublicListItems="@(PublicListItems ?? [])" />
     }
 }
 
@@ -140,6 +143,10 @@ else
     // shape as Series. No public browse/gallery surface exists — this tab is the sole discovery
     // path for a shared selection (audit/Tags.md Feature 15).
     [PersistentState] public IReadOnlyList<SavedTagSelectionDetailDto>? TagSelectionItems { get; set; }
+
+    // Lists tab (WU-CustomLists, Feature 51) — public (IsPublic) custom lists only, always the
+    // full list, same shape as Series/TagSelections. Each links to its own /lists/{id} page.
+    [PersistentState] public IReadOnlyList<CustomListSummaryDto>? PublicListItems { get; set; }
 
     private int? _currentUserId;
     private bool _isOwner;
@@ -256,6 +263,7 @@ else
         BlogPosts = null;
         SeriesItems = null;
         TagSelectionItems = null;
+        PublicListItems = null;
     }
 
     // ── Tab payload loading ───────────────────────────────────────────────────────
@@ -266,6 +274,7 @@ else
         ProfileTab.Blog          => LoadBlogAsync(),
         ProfileTab.Series        => LoadSeriesAsync(),
         ProfileTab.TagSelections => LoadTagSelectionsAsync(),
+        ProfileTab.Lists         => LoadPublicListsAsync(),
         _                        => LoadStoryTabAsync(),
     };
 
@@ -319,6 +328,11 @@ else
     private async Task LoadTagSelectionsAsync()
     {
         TagSelectionItems ??= await TagSelectionReadService.GetPublicSelectionsByUserAsync(UserId);
+    }
+
+    private async Task LoadPublicListsAsync()
+    {
+        PublicListItems ??= await CustomListReadService.GetPublicListsByUserAsync(UserId);
     }
 
     private Task<IReadOnlyList<int>> GetCandidateIdsForTabAsync(ProfileTab tab) => tab switch

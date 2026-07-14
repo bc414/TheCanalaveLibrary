@@ -1,0 +1,362 @@
+@page "/lists/{ListId:int}"
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@inject ICustomListWriteService CustomListService
+@inject IStoryReadService StoryReadService
+@inject IUserStoryInteractionReadService InteractionReadService
+@inject IToastService Toasts
+@inject NavigationManager Nav
+
+@* Page — Feature 51 (Custom Lists), WU-CustomLists. One list's own page. Public — anonymous
+   viewers can open public lists (same posture as public profile tabs); the read service returns
+   null for private lists to non-owners (missing and not-visible are indistinguishable).
+
+   Load model (mirrors BookshelvesPage): the sorted viewer-visible id set is the candidate list
+   (not persisted — refetched on restore so pagination keeps working); the current page of ids
+   hydrates via GetListingsByIdsAsync (order-preserving); per-viewer interaction states are
+   ephemeral. Owner affordances: rename inline, visibility toggle, delete (ConfirmDialog →
+   /my-lists), StoryTitlePicker to add, per-card ✕ overlay to remove. Non-owner authenticated
+   viewers get Clone (mission — same copy-on-write CTA family as the profile tab's "Add to my
+   filters"). Route-param dispatcher: /lists/{a} → /lists/{b} (e.g. after clone) reloads via
+   OnParametersSetAsync (WU-ComponentSoundness pattern). One responsive layout — simple stacked
+   content, no desktop/mobile structural divergence. *@
+
+@if (_isLoading)
+{
+    <PageTitle>List</PageTitle>
+    <p class="mx-auto w-full max-w-5xl px-4 py-6 text-(--color-text-muted) md:px-6"><em>Loading…</em></p>
+}
+else if (Detail is null)
+{
+    <PageTitle>Not Found</PageTitle>
+    <p class="mx-auto w-full max-w-5xl px-4 py-6 text-(--color-text-muted) md:px-6">
+        This list doesn't exist or isn't visible to you.
+    </p>
+}
+else
+{
+    <PageTitle>@Detail.ListName &mdash; Lists</PageTitle>
+
+    <div class="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-6 md:px-6">
+
+        @* ── Header ─────────────────────────────────────────────────────────────── *@
+        <div class="flex flex-col gap-2">
+            @if (_renaming)
+            {
+                <div class="flex flex-wrap items-center gap-2">
+                    <input class="min-w-0 flex-1 rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-lg font-bold text-text"
+                           maxlength="@CustomListValidations.MaxListNameLength"
+                           aria-label="List name" @bind="_renameValue" @bind:event="oninput" />
+                    <button type="button"
+                            class="shrink-0 rounded-md bg-(--color-action) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-action-hover)"
+                            aria-label="Save name" @onclick="SaveRenameAsync">Save</button>
+                    <button type="button"
+                            class="shrink-0 rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text transition-colors hover:bg-(--color-surface-hover)"
+                            aria-label="Cancel rename" @onclick="() => _renaming = false">Cancel</button>
+                </div>
+            }
+            else
+            {
+                <div class="flex flex-wrap items-center gap-3">
+                    <h1 class="text-2xl font-bold text-text">@Detail.ListName</h1>
+                    <span class="@(Detail.IsPublic ? "bg-(--color-action)/60 text-(--color-text)" : "border border-(--color-border) bg-(--color-surface) text-(--color-text-muted)") rounded-full px-2 py-0.5 text-xs font-medium">
+                        @(Detail.IsPublic ? "Public" : "Private")
+                    </span>
+                </div>
+            }
+            <p class="text-sm text-(--color-text-muted)">
+                a list by <a href="/user/@Detail.OwnerUserId" class="text-(--color-action-ink) hover:underline">@Detail.OwnerUserName</a>
+                · @(Detail.StoryCount == 1 ? "1 story" : $"{Detail.StoryCount} stories")
+            </p>
+
+            @* Owner / viewer action row *@
+            <div class="flex flex-wrap items-center gap-2">
+                @if (IsOwner)
+                {
+                    <button type="button"
+                            class="rounded-md border border-(--color-border) bg-surface px-2 py-1 text-sm text-text transition-colors hover:bg-(--color-surface-hover)"
+                            aria-label="Rename list" @onclick="StartRename">Rename</button>
+                    <button type="button"
+                            class="rounded-md border border-(--color-border) bg-surface px-2 py-1 text-sm text-text transition-colors hover:bg-(--color-surface-hover)"
+                            aria-label="@(Detail.IsPublic ? "Make private" : "Make public")"
+                            @onclick="ToggleVisibilityAsync">
+                        @(Detail.IsPublic ? "Make private" : "Make public")
+                    </button>
+                    <button type="button"
+                            class="rounded-md border border-(--color-border) bg-surface px-2 py-1 text-sm text-(--color-danger) transition-colors hover:bg-(--color-surface-hover)"
+                            aria-label="Delete list" @onclick="() => _confirmingDelete = true">Delete</button>
+                }
+                else if (_currentUserId is not null)
+                {
+                    <button type="button"
+                            class="rounded-md bg-(--color-mission) px-3 py-1 text-sm font-medium text-white transition-colors hover:bg-(--color-mission-hover)"
+                            aria-label="Clone list" @onclick="CloneAsync">
+                        Clone to my lists
+                    </button>
+                }
+            </div>
+            <InlineAlert Messages="@_errors" />
+        </div>
+
+        @* ── Owner: add stories ─────────────────────────────────────────────────── *@
+        @if (IsOwner)
+        {
+            <div class="flex flex-col gap-2 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+                <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Add a story</h2>
+                <StoryTitlePicker Placeholder="Type to search for a story to add..."
+                                  OnStorySelected="AddPickedStoryAsync" />
+            </div>
+        }
+
+        @* ── Sort + deck ────────────────────────────────────────────────────────── *@
+        <div class="flex items-center justify-end gap-2">
+            <label class="text-sm text-(--color-text-muted)" for="list-sort">Sort</label>
+            <select id="list-sort" class="rounded-md border border-(--color-border) bg-surface px-2 py-1 text-sm text-text"
+                    value="@_sort" @onchange="HandleSortChangedAsync">
+                <option value="@CustomListSortEnum.DateAddedDesc">Recently added</option>
+                <option value="@CustomListSortEnum.DateAddedAsc">First added</option>
+                <option value="@CustomListSortEnum.TitleAsc">Title A–Z</option>
+                <option value="@CustomListSortEnum.TitleDesc">Title Z–A</option>
+            </select>
+        </div>
+
+        <StoryDeck Stories="@Items"
+                   UserStoryInteractionStates="@_states"
+                   CurrentUserId="@_currentUserId"
+                   EmptyMessage="@(IsOwner ? "Nothing here yet — add stories above, or from any story card's ▾ menu." : "This list is empty.")"
+                   CurrentPage="@_page"
+                   PageSize="@PageSize"
+                   TotalCount="@_storyIds.Count"
+                   OnPageChanged="HandlePageChangedAsync"
+                   CardOverlay="@OwnerRemoveOverlay" />
+
+        <ConfirmDialog IsOpen="@_confirmingDelete"
+                       IsOpenChanged="@(open => _confirmingDelete = open)"
+                       Title="Delete list?"
+                       Message="@($"\"{Detail.ListName}\" will be deleted. The stories themselves are not affected.")"
+                       ConfirmText="Delete"
+                       IsDestructive="true"
+                       OnConfirm="DeleteConfirmedAsync" />
+    </div>
+}
+
+@code {
+    [Parameter] public int ListId { get; set; }
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = default!;
+
+    private const int PageSize = 20;
+
+    // Persisted across the prerender→interactive handoff: the header + the rendered page of
+    // listings. The id set is NOT persisted (superset the UI pages down — browser-exposure rule);
+    // the restore path refetches it so pagination keeps working.
+    [PersistentState] public CustomListDetailDto? Detail { get; set; }
+    [PersistentState] public StoryListingDto[]? Items { get; set; }
+
+    private IReadOnlyList<int> _storyIds = [];
+    private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states =
+        new Dictionary<int, UserStoryInteractionStateDto>();
+    private CustomListSortEnum _sort = CustomListSortEnum.DateAddedDesc;
+    private int _page = 1;
+    private bool _isLoading = true;
+    private int? _currentUserId;
+    private IReadOnlyList<string>? _errors;
+
+    private bool _renaming;
+    private string _renameValue = "";
+    private bool _confirmingDelete;
+
+    private bool _initialized;
+    private int _loadedListId = int.MinValue; // sentinel; no real ListId equals this
+
+    private bool IsOwner => Detail is not null && _currentUserId == Detail.OwnerUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState;
+        string? idClaim = authState.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(idClaim, out int id)) _currentUserId = id;
+
+        await LoadListAsync(restore: true);
+        _loadedListId = ListId;
+        _initialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Route-param dispatcher: /lists/{a} → /lists/{b} reuses this instance. Internal SPA
+        // navigations never prerender, so persisted values must not short-circuit the reload.
+        if (!_initialized || ListId == _loadedListId) return;
+        Detail = null;
+        Items = null;
+        _sort = CustomListSortEnum.DateAddedDesc;
+        _page = 1;
+        _renaming = false;
+        _errors = null;
+        await LoadListAsync(restore: false);
+        _loadedListId = ListId;
+    }
+
+    private async Task LoadListAsync(bool restore)
+    {
+        _isLoading = true;
+        if (restore) Detail ??= await CustomListService.GetListDetailAsync(ListId);
+        else Detail = await CustomListService.GetListDetailAsync(ListId);
+
+        if (Detail is null) { _isLoading = false; return; }
+
+        // Candidate ids always fetch (not persisted) so sort/page changes keep working.
+        _storyIds = await CustomListService.GetListStoryIdsAsync(ListId, _sort);
+        if (Items is null)
+            await ReloadPageAsync();
+        else
+            await LoadStatesAsync(); // restored listings — only per-viewer states need fetching
+        _isLoading = false;
+    }
+
+    // Plain fetch — also the sort/page-change path, never short-circuited by persisted state.
+    private async Task ReloadPageAsync()
+    {
+        int[] pageIds = [.. _storyIds.Skip((_page - 1) * PageSize).Take(PageSize)];
+        Items = await StoryReadService.GetListingsByIdsAsync(pageIds); // order-preserving
+        await LoadStatesAsync();
+    }
+
+    private async Task LoadStatesAsync()
+    {
+        _states = Items is { Length: > 0 } && _currentUserId is not null
+            ? await InteractionReadService.GetStatesByStoryIdsAsync([.. Items.Select(i => i.StoryId)])
+            : new Dictionary<int, UserStoryInteractionStateDto>();
+    }
+
+    private async Task HandleSortChangedAsync(ChangeEventArgs e)
+    {
+        if (!Enum.TryParse(e.Value?.ToString(), out CustomListSortEnum parsed)) return;
+        _sort = parsed;
+        _page = 1;
+        _storyIds = await CustomListService.GetListStoryIdsAsync(ListId, _sort);
+        await ReloadPageAsync();
+    }
+
+    private async Task HandlePageChangedAsync(int page)
+    {
+        _page = page;
+        await ReloadPageAsync();
+    }
+
+    // ── Owner actions ─────────────────────────────────────────────────────────────
+
+    private void StartRename()
+    {
+        _renameValue = Detail!.ListName;
+        _renaming = true;
+    }
+
+    private async Task SaveRenameAsync()
+    {
+        _errors = null;
+        try
+        {
+            await CustomListService.RenameListAsync(ListId, _renameValue);
+            Detail = Detail! with { ListName = _renameValue.Trim() };
+            _renaming = false;
+        }
+        catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
+        {
+            _errors = ExceptionPresenter.GetUserMessages(ex);
+        }
+    }
+
+    private async Task ToggleVisibilityAsync()
+    {
+        _errors = null;
+        try
+        {
+            bool newValue = !Detail!.IsPublic;
+            await CustomListService.SetListVisibilityAsync(ListId, newValue);
+            Detail = Detail with { IsPublic = newValue };
+        }
+        catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
+        {
+            _errors = ExceptionPresenter.GetUserMessages(ex);
+        }
+    }
+
+    private async Task DeleteConfirmedAsync()
+    {
+        try
+        {
+            await CustomListService.DeleteListAsync(ListId);
+            Nav.NavigateTo("/my-lists");
+        }
+        catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
+        {
+            _errors = ExceptionPresenter.GetUserMessages(ex);
+        }
+    }
+
+    private async Task AddPickedStoryAsync(StoryTitleSearchDto story)
+    {
+        _errors = null;
+        try
+        {
+            await CustomListService.AddStoryAsync(ListId, story.StoryId);
+            await RefreshAfterEntryChangeAsync();
+        }
+        catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
+        {
+            _errors = ExceptionPresenter.GetUserMessages(ex);
+        }
+    }
+
+    private async Task RemoveStoryAsync(int storyId)
+    {
+        _errors = null;
+        try
+        {
+            await CustomListService.RemoveStoryAsync(ListId, storyId);
+            await RefreshAfterEntryChangeAsync();
+        }
+        catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
+        {
+            _errors = ExceptionPresenter.GetUserMessages(ex);
+        }
+    }
+
+    // Post-write refresh: re-derive ids, clamp the page, refresh header count. Plain assignments —
+    // never a restore site.
+    private async Task RefreshAfterEntryChangeAsync()
+    {
+        _storyIds = await CustomListService.GetListStoryIdsAsync(ListId, _sort);
+        int lastPage = Math.Max(1, (int)Math.Ceiling(_storyIds.Count / (double)PageSize));
+        _page = Math.Min(_page, lastPage);
+        Detail = await CustomListService.GetListDetailAsync(ListId);
+        await ReloadPageAsync();
+    }
+
+    // ── Viewer action ─────────────────────────────────────────────────────────────
+
+    private async Task CloneAsync()
+    {
+        _errors = null;
+        try
+        {
+            int newListId = await CustomListService.CloneListAsync(ListId);
+            Toasts.Show("List cloned — it's yours now, private until you publish it.", ToastLevel.Success);
+            Nav.NavigateTo($"/lists/{newListId}");
+        }
+        catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
+        {
+            _errors = ExceptionPresenter.GetUserMessages(ex);
+        }
+    }
+
+    // ── Owner per-card remove overlay (StoryDeck CardOverlay slot) ───────────────
+
+    private RenderFragment<StoryListingDto>? OwnerRemoveOverlay => !IsOwner ? null : story =>
+        @<button type="button"
+                 class="pointer-events-auto rounded-full border border-(--color-border) bg-(--color-surface-raised) px-2 py-0.5 text-xs text-(--color-danger) shadow-medium transition-colors hover:bg-(--color-surface-hover)"
+                 aria-label="@($"Remove {story.Title} from list")"
+                 @onclick="() => RemoveStoryAsync(story.StoryId)">
+            ✕ Remove
+        </button>;
+}

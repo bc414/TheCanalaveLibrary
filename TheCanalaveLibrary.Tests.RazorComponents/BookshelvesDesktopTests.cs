@@ -61,9 +61,14 @@ public class BookshelvesDesktopTests : BunitContext
     {
         IRenderedComponent<BookshelvesDesktop> cut = RenderDesktop();
 
-        // Each tab is an <a> inside the nav
-        int tabLinkCount = cut.FindAll("nav[aria-label='Bookshelf tabs'] a").Count;
-        tabLinkCount.Should().Be(11, "there are 11 bookshelf tabs");
+        // Each tab is an <a> inside the nav, plus the My Lists cross-link (WU-CustomLists —
+        // custom lists are a separate section, not tabs). LINQ filter, not an attribute-value
+        // CSS selector (AngleSharp fragility — see testing.md).
+        var navLinks = cut.FindAll("nav[aria-label='Bookshelf tabs'] a");
+        navLinks.Count(a => a.GetAttribute("href") != "/my-lists")
+            .Should().Be(11, "there are 11 bookshelf tabs");
+        navLinks.Count(a => a.GetAttribute("href") == "/my-lists")
+            .Should().Be(1, "the My Lists cross-link is present");
     }
 
     [Fact]
@@ -83,7 +88,8 @@ public class BookshelvesDesktopTests : BunitContext
     {
         IRenderedComponent<BookshelvesDesktop> cut = RenderDesktop(BookshelfTab.Favorites);
 
-        var inactiveLinks = cut.FindAll("nav a:not([aria-current])");
+        var inactiveLinks = cut.FindAll("nav a:not([aria-current])")
+            .Where(a => a.GetAttribute("href") != "/my-lists"); // cross-link is not a tab
         inactiveLinks.Should().HaveCount(10, "10 tabs are inactive");
     }
 

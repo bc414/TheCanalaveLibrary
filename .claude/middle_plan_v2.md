@@ -246,12 +246,13 @@ per-cluster render → fix → Pattern-Accumulate → 5→6 on sign-off); surfac
 
 ## Phase 4 — Beta-scope decisions (v1 Phase 3, unchanged)
 
-Custom Lists (51), Feature Contributions (56): design now or explicitly defer past beta — a
+Feature Contributions (56): design now or explicitly defer past beta — a
 deliberate verdict per feature (decision row 3). Interleaves with Phases 2–3. (Spotlight donation
 infra — 55 remainder — got its verdict 2026-07-11: explicitly deferred past beta; the spotlight
 feature itself was built in Phase 2 as WU-Spotlight. Polls — 37 — designed + built 2026-07-12.
 Story Arcs — 8 — designed + built 2026-07-12 as WU45, scope widened to include the chapter-list
-presentation upgrade and chapter reorder/delete. See Resolved.)
+presentation upgrade and chapter reorder/delete. Custom Lists — 51 — designed 2026-07-13, built as
+WU-CustomLists. See Resolved.)
 
 ## Phase 5 — L5 WASM enablement (v1 Phase 4 item 6, deliberately after features)
 
@@ -329,6 +330,17 @@ renumbered, since other docs cite them by number.
 ---
 
 ## Resolved
+
+- **Custom Lists requirements + build scope (row 3's Feature-51 verdict)** — **resolved 2026-07-13**
+  (Brian, in chat; ground-truthed against the Gemini design log and reconciled with code reality).
+  Designed and built now, not deferred, as WU-CustomLists. Headline decisions: positioning is
+  *named shareable shelves* (privacy demoted — Private Favorites already own the zero-effect save);
+  the public-list-as-search-filter integration is **dropped** (shared blocklists cut against the
+  site ethos; whitelists are redundant with view+clone), dissolving §8.7's filter-composition open
+  question with zero schema change; sharing = view + optional clone (clone copies only
+  cloner-visible entries, starts private); separate `/my-lists` surface, not Bookshelves tabs;
+  user-selectable sort, no manual ordering. Full settled record: `audit/CustomLists.md`
+  §"Settled design".
 
 - **Story Arcs + chapter presentation + chapter reorder/delete (row 3's Feature-8 verdict)** —
   **resolved 2026-07-12** (Brian, in chat over many rounds; two real Fimfiction story pages

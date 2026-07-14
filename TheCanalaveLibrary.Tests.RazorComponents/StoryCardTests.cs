@@ -1,4 +1,5 @@
 using Bunit;
+using Bunit.TestDoubles;
 using FluentAssertions;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +36,10 @@ public class StoryCardTests : BunitContext
         // StoryViewStats (nested in the caret dropdown, Feature 45) injects IStoryReadService for
         // its on-demand total-views reveal.
         Services.AddSingleton<IStoryReadService>(new FakeStoryReadService());
+        // AddToCustomListMenu (nested in the caret dropdown, Feature 51) injects
+        // ICustomListWriteService and wraps itself in AuthorizeView (anonymous default → hidden).
+        Services.AddScoped<ICustomListWriteService>(_ => new FakeCustomListWriteService());
+        this.AddAuthorization();
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 

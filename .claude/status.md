@@ -127,7 +127,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 48 | Story Approval Workflow | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | N/A | N/A |
 | 49 | Private Messaging | Messaging | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 50 | Badge System | Badges | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
-| 51 | Custom Lists | CustomLists | 5 | 2 | 1 | 1 | 1 | 1 | 2 | N/A | N/A |
+| 51 | Custom Lists | CustomLists | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 52 | User Account Deletion | Identity | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A | N/A |
 | 53 | External Story Links & Verification | Moderation | 5 | 2 | 2 | 2 | 1 | 1 | N/A | N/A | N/A |
 | 54 | Content Download/Export | Export | N/A | 5 | N/A | N/A | N/A | 5 | N/A | N/A | N/A |

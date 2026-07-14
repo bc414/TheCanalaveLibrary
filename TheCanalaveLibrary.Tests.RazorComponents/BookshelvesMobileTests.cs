@@ -62,8 +62,12 @@ public class BookshelvesMobileTests : BunitContext
     {
         IRenderedComponent<BookshelvesMobile> cut = RenderMobile();
 
-        int linkCount = cut.FindAll("details a").Count;
-        linkCount.Should().Be(11, "there are 11 bookshelf tabs in the dropdown");
+        // 11 tab links + the My Lists cross-link (WU-CustomLists — separate section, not a tab).
+        var dropdownLinks = cut.FindAll("details a");
+        dropdownLinks.Count(a => a.GetAttribute("href") != "/my-lists")
+            .Should().Be(11, "there are 11 bookshelf tabs in the dropdown");
+        dropdownLinks.Count(a => a.GetAttribute("href") == "/my-lists")
+            .Should().Be(1, "the My Lists cross-link is present");
     }
 
     [Fact]

@@ -57,6 +57,10 @@
                 <button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-surface-hover"
                         @onclick="() => InvokeAndClose(OnReport)">Report</button>
             }
+            @* Add-to-custom-list expander (Feature 51, WU-CustomLists) — self-contained composite
+               that owns its own write (AuthorizeView-gated inside; anonymous viewers see nothing).
+               Keeps the menu open, same discipline as Download/StoryViewStats below. *@
+            <AddToCustomListMenu StoryId="@Story.StoryId" />
             @* Download section (Feature 54, WU38c) — expands to per-format anchor links.
                Anchors, not an EventCallback: downloads must bypass the circuit
                (layer2-services.md "File Downloads Bypass the Circuit"). Keeps the menu open,
