@@ -138,11 +138,11 @@ public static class DevDiagnosticsEndpoints
         // F61 co-occurrence reads.
         devApi.MapGet("/discovery/also-favorited/{storyId:int}", async (
                 int storyId, int? take, ICoOccurrenceReadService coOccurrence, CancellationToken ct) =>
-            Results.Ok(await coOccurrence.GetAlsoFavoritedAsync(storyId, take ?? 10, ct)));
+            Results.Ok(await coOccurrence.GetAlsoFavoritedAsync(storyId, take ?? 10, ct: ct)));
 
         devApi.MapGet("/discovery/also-recommended/{storyId:int}", async (
                 int storyId, int? take, ICoOccurrenceReadService coOccurrence, CancellationToken ct) =>
-            Results.Ok(await coOccurrence.GetAlsoRecommendedAsync(storyId, take ?? 10, ct)));
+            Results.Ok(await coOccurrence.GetAlsoRecommendedAsync(storyId, take ?? 10, ct: ct)));
 
         // WU-SiteDailyStat (Feature 62): on-demand upsert — the daily worker does this at 03:00
         // UTC; this lets a human trigger it right after seeding instead of waiting. date defaults

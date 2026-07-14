@@ -2868,3 +2868,52 @@ WASM-focused whole-site browser wave that found and fixed seven real bugs.
   `audit/CustomLists.md` (settled design + Stage notes); `audit/Discovery.md` §"Note on
   search-result narrowing" (lists-as-filter-source dropped — `UserCustomFilter` rationale to
   re-derive); `folder_clusters.md` CustomLists row; `middle_plan_v2.md` Resolved + Phase 4.
+
+## WU-RelatedStories — Also Favorited / Also Recommended UI (Feature 61) — DONE ✓ (2026-07-13)
+
+- **Cells:** F61 L3-Logic/L3.5-Struct/L4.5 (2·2·1 → 5·5·5); L2/L5 stay 5 (extended additively);
+  L4 stays 1 (visual sign-off pending, standard precedent). The L8 marts + L2 read service were
+  already Stage 5 (WU-Marts, 2026-07-07) — this WU builds the missing embedded-section UI spec
+  §5.28/§5.30 always called for, closing the last unbuilt slice of the feature.
+- **Settled in chat 2026-07-13** (full record: `audit/Discovery.md` F61 "Settled for
+  WU-RelatedStories"): reuse `StoryDeck` (not a bespoke strip), `take=6` per subsection; score
+  never displayed; one shared `UserStoryInteractionFilter` (not `ResultsFilterPanel` — no tag/FTS
+  axes apply to a co-occurrence read scoped to one story), collapsed `<details>` disclosure,
+  authenticated-only; placement after `RecommendationSection` on both StoryDesktop/StoryMobile.
+  This resolves spec §5.28's floated "simplified ResultsFilterPanel" open item.
+- **Architectural consequence (additive, not a contradiction of the WU-Marts Stage-5 note):**
+  making the filter live required `ICoOccurrenceReadService`'s two methods to accept an optional
+  trailing `excludedInteractions` parameter (`null` preserves the old internal-defaults-resolution
+  behavior). The two endpoints converted `MapGet`→`MapPost` to carry the new
+  `CoOccurrenceRequest` record (array parameter isn't GET-bindable per `layer5-wasm.md`). Detail:
+  `layer2-services.md` §"Optional caller-supplied exclusions".
+- **Did:** `Core/Discovery/CoOccurrenceRequest.cs` (new); `ICoOccurrenceReadService` +
+  `ServerCoOccurrenceReadService` (optional exclusions param); `CoOccurrenceEndpoints` (POST) +
+  `ClientCoOccurrenceReadService` (`PostAsJsonAsync`); `DevDiagnosticsEndpoints`'s two F61 probes
+  fixed to pass `ct` by name (positional binding would've silently mis-bound to the new param);
+  `SharedUI/Discovery/RelatedStoriesSection.razor` (new, self-loading composite, pattern:
+  `RecommendationSection`) wired into `StoryDesktop.razor`/`StoryMobile.razor`.
+- **Verified:** `dotnet build` clean (0 errors). `dotnet test` green — Unit 712 (unchanged),
+  Integration 681 (incl. new `AlsoFavorited_ExplicitExclusions_OverrideTheDefaultEntirely` —
+  explicit `[]` un-hides a default-excluded story, explicit `[Favorite]` hides a non-default one,
+  `null` still resolves §8.7 defaults), RazorComponents 639 (incl. new `RelatedStoriesSectionTests`
+  ×7 + `FakeRelatedStoriesTestServices.cs`; fixed `StoryDesktopTests`/`StoryMobileTests`/
+  `StoryExternalLinksRowTests` for the new nested injections, same treatment as WU28's
+  `IModerationWriteService` fix). Token check: clean except the pre-existing `ImportReviewPanel`
+  finding (WU40, untouched Import-cluster file).
+- **Browser band (real circuit, SeedTool-volume dev DB):** scanned `/dev/discovery/also-favorited/
+  {id}` + `/also-recommended/{id}` across several IDs for a story with both marts populated —
+  story 500 (6+ scored rows each). Live at `/story/500`: authenticated (ReaderGamma) — both decks
+  rendered (6 cards each), no score in markup, filter disclosure collapsed with all six USI
+  checkboxes unchecked; opening it and toggling "ignored" fired exactly one `POST .../
+  also-favorited` + `.../also-recommended` round-trip per the server log, while the *initial* page
+  load took zero HTTP hits (`[PersistentState]` restored the SSR-prerendered listings — the
+  no-double-fetch contract holds); rendered set was unchanged post-toggle because none of story
+  500's related stories happened to be Ignored by this viewer (correct, not a bug). Anonymous
+  (logged out): both decks rendered identically, no filter disclosure, no Recommend CTA. Zero
+  console errors traced to any F61 code path; two unrelated pre-existing 401s from
+  `NotificationBell` (stale WASM auth state immediately post-logout) observed and left as
+  out-of-scope, not filed against this feature.
+- **Tool:** Claude Code (Sonnet) driving Chrome via MCP browser tools. **Pointer:**
+  `audit/Discovery.md` F61 Stage notes (settled design + verification); `layer2-services.md`
+  §"Optional caller-supplied exclusions"; `layer5-wasm.md` "Reads with non-scalar parameters".

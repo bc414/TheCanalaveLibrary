@@ -839,12 +839,12 @@ Narrowing-within-fixed-source query → WU27/WU30.
 
 ## Feature 61 — Also Favorited / Also Recommended (formerly below the line — line crossed 2026-07-07)
 - **L1 — N/A** (Phase A removed the EF models; `also_*_scores` are raw-SQL marts — divergence resolved).
-  **L2 — Stage 5 (WU-Marts, 2026-07-07 — see Stage note).**
-  **L3/L3.5 — Stage 2** (embedded sections on story detail, not separate pages — UI deferred past
-  WU-Marts). **L4 — Stage 1.**
-  **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
-  site now runs global InteractiveAuto (co-occurrence sections not browser-driven in the flip's
-  wave). Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
+  **L2 — Stage 5** (WU-Marts, 2026-07-07; extended additively WU-RelatedStories — see Stage notes).
+  **L3/L3.5 — Stage 5 (WU-RelatedStories — see Stage note below).**
+  **L4 — Stage 1** (visual sign-off pending, WU8/WU13/WU23/WU28/WU40 precedent).
+  **L4.5 — Stage 5 (WU-RelatedStories — see Stage note below).**
+  **L5 — Stage 5** (WU-GlobalFlip, 2026-07-13 endpoints/client; converted GET→POST and re-verified
+  WU-RelatedStories — see Stage note below).
   **L6 — N/A (reclassified 2026-07-07** — mart indexes are
   raw-SQL inside the worker, same treatment as F59; the ranked read rides
   `ix_also_*_scores_story_score`, created by the rebuild, and no EF-migration index is justified —
@@ -852,6 +852,39 @@ Narrowing-within-fixed-source query → WU27/WU30.
   deliberately does not index for). **L8 — Stage 5** (co-occurrence scoring workers — built with the
   F60 worker, same rebuild pattern and Stage note; consented hidden favorites contribute per the same
   edge-owner rule as F60 — spec §5.7 corroborates; anonymized recommendations excluded).
+
+  **Settled for WU-RelatedStories (2026-07-13, do not revisit unless the user re-opens it):**
+  - **Presentation: reuse `StoryDeck`**, not a bespoke compact/horizontal strip. Two grids, one per
+    subsection ("Also Favorited" / "Also Recommended"), `take=6` each. Matches spec §5.30 which names
+    `StoryDeck` as the Also-Favorited-section consumer.
+  - **Score is never displayed.** `RelatedStoryScoreDto.Score` stays server-side, `ORDER BY` only —
+    consistent with the site's anti-attention-hoarding stance (§5.5). `StoryCard` needed no change
+    (it never rendered score).
+  - **Interaction filter: one shared `UserStoryInteractionFilter` component, not `ResultsFilterPanel`.**
+    No tag filter, no FTS — those axes don't apply to a co-occurrence read scoped to one story. This
+    resolves spec §5.28's floated "simplified ResultsFilterPanel" — the resolution is "just the USI
+    axis component," not a stripped-down panel wrapper. Rendered inside a collapsed `<details>`
+    (§5.28 "filters may default to hidden"); gated on `CurrentUserId is not null` (exclusions are
+    inert for anonymous viewers, who get no filter surface).
+  - **Architectural consequence, additive:** `ICoOccurrenceReadService`'s two methods previously had
+    no way for a caller to override the internally-resolved §8.7 defaults. A live filter needs that,
+    so both gained an optional trailing `IReadOnlyList<UserStoryInteractionTypeEnum>?
+    excludedInteractions = null` parameter — `null` preserves prior behavior (resolve defaults
+    internally; the `/dev/discovery/also-favorited/{storyId}` probe and all existing tests are
+    unaffected), non-null bypasses the defaults lookup and is used as-is. Detail:
+    `layer2-services.md` §"Optional caller-supplied exclusions". Client-side-only filtering was
+    rejected — the server already drops default-excluded rows, so a client-side filter could add
+    exclusions but could never *un-hide* a default-excluded story, breaking the checkbox contract.
+  - **L5 consequence:** the two endpoints converted `MapGet`→`MapPost` (the exclusions array
+    sibling to scalar params isn't GET-bindable per `layer5-wasm.md` "Reads with non-scalar
+    parameters"), carrying a new `CoOccurrenceRequest` record. Client converted to `PostAsJsonAsync`.
+  - **Placement:** after `RecommendationSection` on both `StoryDesktop`/`StoryMobile` — a page-end
+    "keep discovering" tail. (Spec's route table lists Also-Favorited before Recommendations; this
+    is a deliberate placement choice, not a spec violation — §5.28 only requires "embedded, not a
+    separate page," not a specific order.)
+  - **Empty-subsection handling:** a subsection with zero related stories (sparse mart) hides its
+    heading + deck entirely; if both subsections are empty the whole component renders nothing (no
+    "no results" filler on a page that's otherwise complete).
 
   **WU-Marts Stage note — L2/L8 (2026-07-07):**
   Built: `Core/Discovery/ICoOccurrenceReadService` + `RelatedStoryScoreDto`;
@@ -866,6 +899,63 @@ Narrowing-within-fixed-source query → WU27/WU30.
   anonymized recs excluded. **Headless live check:** `/dev/discovery/also-favorited/176` returned a
   rankable top-5 (scores 17/16/16/16/15) over SeedTool data — the horizontal-line "rankable, not
   just non-empty" bar. Suite: 1398/1398.
+
+  **WU-RelatedStories Stage note — L2/L3/L3.5/L4.5/L5 (2026-07-13):**
+
+  Built: `RelatedStoriesSection.razor` (`SharedUI/Discovery/`) — self-loading coordination
+  composite (pattern: `RecommendationSection`), injecting `ICoOccurrenceReadService`,
+  `IStoryReadService`, `IUserStoryInteractionReadService`, `IDiscoveryDefaultsReadService`. Seeds
+  the shared `UserStoryInteractionFilter` from `GetDefaultExcludedInteractionsAsync(
+  SiteSearchModes.AlsoFavorited)` (both subsections share one filter and one default set — the
+  seeded default happens to be identical for `AlsoFavorited`/`AlsoRecommended` today; if they ever
+  diverge, split the filter). On toggle, re-queries both `GetAlso*Async` calls with the chosen
+  exclusion set and re-hydrates via `GetListingsByIdsAsync` + `GetStatesByStoryIdsAsync`.
+  `[PersistentState]` on both hydrated listing arrays — no prerender→interactive double-fetch on
+  first load. Wired into `StoryDesktop.razor`/`StoryMobile.razor` after `RecommendationSection`.
+
+  `Core/Discovery/CoOccurrenceRequest.cs` new (`StoryId`, `Take`, `ExcludedInteractions`).
+  `ICoOccurrenceReadService`/`ServerCoOccurrenceReadService` extended per the settled note above.
+  `CoOccurrenceEndpoints` converted `MapGet`→`MapPost`; `ClientCoOccurrenceReadService` converted to
+  `PostAsJsonAsync`.
+
+  **How verified:** `dotnet build` clean (0 errors). `dotnet test` green — **Unit** 712/712
+  (unchanged). **Integration** 681/681, incl. new `AlsoFavorited_ExplicitExclusions_
+  OverrideTheDefaultEntirely` (`DiscoveryMartTests`): explicit `[]` bypasses the §8.7 default
+  entirely (the viewer's own Ignored story reappears); explicit `[Favorite]` excludes a
+  non-default kind (the viewer's own Favorited story, not previously excluded); `null` (omitted)
+  still resolves the §8.7 defaults exactly as before — regression guard on the pre-WU-RelatedStories
+  behavior. **RazorComponents** 639/639, incl. new `RelatedStoriesSectionTests` (7 tests, new fakes
+  in `FakeRelatedStoriesTestServices.cs`): both decks render from a faked service; score never
+  appears in rendered markup; filter hidden for anonymous, shown for authenticated; toggling
+  re-queries (fake returns a different set on the second call, exclusion set asserted on the
+  second call); a subsection with zero results hides its heading; both-empty renders nothing.
+  Fixed 3 pre-existing test files broken by the new nested injections (`StoryDesktopTests`,
+  `StoryMobileTests`, `StoryExternalLinksRowTests` — registered the four fakes at empty defaults
+  so the section resolves `BothEmpty` and renders nothing, same treatment as the WU28
+  `IModerationWriteService` fix).
+
+  **L4.5-Browser** (real circuit, SeedTool-volume dev DB, `run-server` skill): scanned several
+  story IDs via `/dev/discovery/also-favorited/{id}` + `/also-recommended/{id}` for one with both
+  mart tables populated; story 500 had 6+ scored rows in each. Drove `/story/500` live:
+  **authenticated (ReaderGamma)** — both "Also Favorited" (6 cards) and "Also Recommended" (6
+  cards) rendered below Recommendations, no score anywhere in the markup, "Filter these
+  suggestions" `<details>` collapsed by default with all six USI checkboxes present and unchecked
+  (this viewer had no seeded overrides); opening the disclosure and checking "Hide stories I've
+  ignored" fired exactly one fresh `POST /api/co-occurrence/also-favorited` +
+  `/also-recommended` round-trip per the server log (the *initial* page load took zero HTTP hits —
+  `[PersistentState]` restored the SSR-prerendered listings, confirming the no-double-fetch
+  contract; the toggle's round-trip is the only POST pair logged) — the rendered set was unchanged
+  because none of story 500's related stories happened to be Ignored by this viewer, which is the
+  correct outcome, not a bug. **Anonymous** (logged out): both decks still rendered with identical
+  content, no "Filter these suggestions" disclosure, no "Recommend this story" CTA. No console
+  errors traced to any Feature 61 code path (`ClientCoOccurrenceReadService`,
+  `RelatedStoriesSection`, `ServerCoOccurrenceReadService`); two unrelated pre-existing 401s from
+  `NotificationBell`/`ClientNotificationReadService` fetching notifications with stale WASM auth
+  state immediately post-logout were observed and are out of scope for this feature — not
+  filed against F61. `check-design-tokens.ps1`: clean except the pre-existing `ImportReviewPanel`
+  finding (documented in the WU40 note, untouched Import-cluster file).
+
+  Suite totals and full narrative: `workplan.md` WU-RelatedStories.
 - **L7 — removed with the layer (WU-SignalBuffering, 2026-07-06): the mart IS the cache.** The
   planned "Redis in front of the precomputed tables" hot tier is dead — the L8 mart is already the
   daily cache over ground truth; services read `also_*_scores` directly (indexed, buffer-pool-hot)

@@ -21,6 +21,12 @@ public class StoryExternalLinksRowTests : BunitContext
         // StoryDesktop composition needs the same fakes as StoryDesktopTests.
         Services.AddScoped<IRecommendationWriteService>(_ => new FakeRecommendationWriteService());
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
+        // RelatedStoriesSection (Feature 61, nested in StoryDesktop) injects these four; left at
+        // their empty defaults so the section renders nothing (BothEmpty).
+        Services.AddScoped<ICoOccurrenceReadService>(_ => new FakeCoOccurrenceReadService());
+        Services.AddScoped<IStoryReadService>(_ => new FakeRelatedStoriesStoryReadService());
+        Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeRelatedStoriesInteractionReadService());
+        Services.AddScoped<IDiscoveryDefaultsReadService>(_ => new FakeDiscoveryDefaultsReadService());
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
 

@@ -18,9 +18,23 @@ public sealed record RelatedStoryScoreDto
 /// </summary>
 public interface ICoOccurrenceReadService
 {
-    /// <summary>"Users who favorited this story also favorited…" — top <paramref name="take"/> by score.</summary>
-    Task<IReadOnlyList<RelatedStoryScoreDto>> GetAlsoFavoritedAsync(int storyId, int take = 10, CancellationToken ct = default);
+    /// <summary>
+    /// "Users who favorited this story also favorited…" — top <paramref name="take"/> by score.
+    /// <paramref name="excludedInteractions"/> null (default) resolves the viewer's §8.7 defaults
+    /// internally (unchanged prior behavior); non-null bypasses that lookup and is used as-is —
+    /// lets a caller-driven filter (e.g. <c>UserStoryInteractionFilter</c>) override the default.
+    /// </summary>
+    Task<IReadOnlyList<RelatedStoryScoreDto>> GetAlsoFavoritedAsync(
+        int storyId, int take = 10,
+        IReadOnlyList<UserStoryInteractionTypeEnum>? excludedInteractions = null,
+        CancellationToken ct = default);
 
-    /// <summary>"Users who recommended this story also recommended…" — top <paramref name="take"/> by score.</summary>
-    Task<IReadOnlyList<RelatedStoryScoreDto>> GetAlsoRecommendedAsync(int storyId, int take = 10, CancellationToken ct = default);
+    /// <summary>
+    /// "Users who recommended this story also recommended…" — top <paramref name="take"/> by score.
+    /// See <see cref="GetAlsoFavoritedAsync"/> for the <paramref name="excludedInteractions"/> contract.
+    /// </summary>
+    Task<IReadOnlyList<RelatedStoryScoreDto>> GetAlsoRecommendedAsync(
+        int storyId, int take = 10,
+        IReadOnlyList<UserStoryInteractionTypeEnum>? excludedInteractions = null,
+        CancellationToken ct = default);
 }

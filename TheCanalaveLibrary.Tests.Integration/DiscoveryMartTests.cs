@@ -273,6 +273,46 @@ public sealed class DiscoveryMartTests(PostgresFixture postgres) : IntegrationTe
     }
 
     [Fact]
+    public async Task AlsoFavorited_ExplicitExclusions_OverrideTheDefaultEntirely()
+    {
+        // storyB and storyC are both co-favorited with storyA by other users. The viewer has
+        // Ignored storyB (the seeded §8.7 default exclusion for AlsoFavorited) and separately
+        // Favorited storyC themselves (not a default-excluded kind).
+        int storyA = await SeedStoryAsync();
+        int storyB = await SeedStoryAsync();
+        int storyC = await SeedStoryAsync();
+        int user1 = await SeedUserAsync();
+        int user2 = await SeedUserAsync();
+        await FavoriteAsync(user1, storyA); await FavoriteAsync(user1, storyB);
+        await FavoriteAsync(user2, storyA); await FavoriteAsync(user2, storyC);
+
+        int viewer = await SeedUserAsync("viewer");
+        await MarkInteractionAsync(viewer, storyB, r => r.IsIgnored = true);
+        await FavoriteAsync(viewer, storyC);
+
+        await RebuildMartsAsync();
+        SetActiveUser(viewer);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ICoOccurrenceReadService service = scope.ServiceProvider.GetRequiredService<ICoOccurrenceReadService>();
+
+        // null (unspecified): resolves the §8.7 defaults internally — Ignored is excluded,
+        // Favorite is not. Regression guard on the pre-WU-RelatedStories behavior.
+        (await service.GetAlsoFavoritedAsync(storyA))
+            .Should().ContainSingle(r => r.RelatedStoryId == storyC);
+
+        // Explicit empty list bypasses the defaults lookup entirely — the Ignored story is no
+        // longer excluded because nothing overrides the default now.
+        (await service.GetAlsoFavoritedAsync(storyA, excludedInteractions: []))
+            .Select(r => r.RelatedStoryId).Should().BeEquivalentTo([storyB, storyC]);
+
+        // Explicit non-default exclusion set: excludes Favorite (dropping storyC) while leaving
+        // the Ignored story visible (Ignored is no longer in the effective set at all).
+        (await service.GetAlsoFavoritedAsync(
+                storyA, excludedInteractions: [UserStoryInteractionTypeEnum.Favorite]))
+            .Should().ContainSingle(r => r.RelatedStoryId == storyB);
+    }
+
+    [Fact]
     public async Task AlsoRecommended_MirrorsOnRecommenders_ExcludingAnonymized()
     {
         int storyA = await SeedStoryAsync();

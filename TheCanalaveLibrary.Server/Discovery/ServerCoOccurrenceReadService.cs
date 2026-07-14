@@ -26,17 +26,22 @@ public class ServerCoOccurrenceReadService(
     ILogger<ServerCoOccurrenceReadService> logger) : ICoOccurrenceReadService
 {
     public Task<IReadOnlyList<RelatedStoryScoreDto>> GetAlsoFavoritedAsync(
-        int storyId, int take = 10, CancellationToken ct = default) =>
+        int storyId, int take = 10,
+        IReadOnlyList<UserStoryInteractionTypeEnum>? excludedInteractions = null,
+        CancellationToken ct = default) =>
         QueryAsync(DiscoveryMartSchema.AlsoFavoritedTable, "also_favorited_story_id",
-            SiteSearchModes.AlsoFavorited, storyId, take, ct);
+            SiteSearchModes.AlsoFavorited, storyId, take, excludedInteractions, ct);
 
     public Task<IReadOnlyList<RelatedStoryScoreDto>> GetAlsoRecommendedAsync(
-        int storyId, int take = 10, CancellationToken ct = default) =>
+        int storyId, int take = 10,
+        IReadOnlyList<UserStoryInteractionTypeEnum>? excludedInteractions = null,
+        CancellationToken ct = default) =>
         QueryAsync(DiscoveryMartSchema.AlsoRecommendedTable, "also_recommended_story_id",
-            SiteSearchModes.AlsoRecommended, storyId, take, ct);
+            SiteSearchModes.AlsoRecommended, storyId, take, excludedInteractions, ct);
 
     private async Task<IReadOnlyList<RelatedStoryScoreDto>> QueryAsync(
         string martTable, string relatedColumn, string searchModeKey, int storyId, int take,
+        IReadOnlyList<UserStoryInteractionTypeEnum>? excludedInteractions,
         CancellationToken ct)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(take);
@@ -45,8 +50,10 @@ public class ServerCoOccurrenceReadService(
         activity?.SetTag("canalave.mart.name", martTable);
         long startTimestamp = Stopwatch.GetTimestamp();
 
-        IReadOnlyList<UserStoryInteractionTypeEnum> exclusions =
-            await discoveryDefaults.GetDefaultExcludedInteractionsAsync(searchModeKey);
+        // null = resolve the viewer's §8.7 defaults internally (unchanged prior behavior);
+        // non-null = caller (e.g. a live UserStoryInteractionFilter) overrides the default outright.
+        IReadOnlyList<UserStoryInteractionTypeEnum> exclusions = excludedInteractions
+            ?? await discoveryDefaults.GetDefaultExcludedInteractionsAsync(searchModeKey);
 
         // martTable / relatedColumn come from compile-time constants above, never user input.
         string sql = $"""

@@ -176,7 +176,11 @@ app.MapTagEndpoints();
 `IStoryReadService.GetListingsAsync(StoryFilterDto, ...)`,
 `IManualTreeSearchReadService.GetStoryNeighborsAsync(StoryNeighborsRequest, ...)`,
 `ITreeSearchReadService.TraverseAsync(TreeSearchRequest, ...)`,
-`IStoryReadService.FilterCandidateIdsAsync(ids, StoryFilterDto)` — is **not** GET-bindable.
+`IStoryReadService.FilterCandidateIdsAsync(ids, StoryFilterDto)`,
+`ICoOccurrenceReadService.GetAlsoFavoritedAsync`/`GetAlsoRecommendedAsync` (F61, WU-RelatedStories —
+the optional `excludedInteractions` array added an array parameter alongside the scalar `storyId`/
+`take`, so the pair converted from `MapGet` to `MapPost` carrying a `CoOccurrenceRequest`) —
+is **not** GET-bindable.
 Trigger: any parameter beyond scalar/enum/`int[]`/`IReadOnlyCollection<int>`.
 
 ```csharp

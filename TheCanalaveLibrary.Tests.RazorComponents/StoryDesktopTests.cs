@@ -28,6 +28,14 @@ public class StoryDesktopTests : BunitContext
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         // ChapterList (WU45) injects the manual read-mark write service.
         Services.AddSingleton<IChapterReadMarkWriteService>(new FakeChapterReadMarkWriteService());
+        // RelatedStoriesSection (Feature 61, nested in StoryDesktop) injects these four; left at
+        // their empty defaults here so the section renders nothing (BothEmpty), keeping these
+        // tests' fake surface scoped to what StoryDesktop itself needs — see
+        // RelatedStoriesSectionTests for the section's own dedicated coverage.
+        Services.AddScoped<ICoOccurrenceReadService>(_ => new FakeCoOccurrenceReadService());
+        Services.AddScoped<IStoryReadService>(_ => new FakeRelatedStoriesStoryReadService());
+        Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeRelatedStoriesInteractionReadService());
+        Services.AddScoped<IDiscoveryDefaultsReadService>(_ => new FakeDiscoveryDefaultsReadService());
         // RichTextView and EditorView inside RecommendationEditor use JS interop.
         JSInterop.Mode = JSRuntimeMode.Loose;
         // Start with an empty recommendation list unless a test overrides this.

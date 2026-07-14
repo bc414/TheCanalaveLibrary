@@ -4,10 +4,15 @@ namespace TheCanalaveLibrary.Server;
 
 /// <summary>
 /// Layer-5 API surface for <see cref="ICoOccurrenceReadService"/>. Thin pass-throughs — no
-/// business logic here; the viewer's rating/interaction filters are resolved internally from
+/// business logic here; the viewer's rating filter is resolved internally from
 /// <see cref="IActiveUserContext"/>, so nothing sensitive crosses the HTTP boundary. Public reads:
 /// Also Favorited / Also Recommended are public story-page strips — no auth gate, same treatment
 /// as <see cref="ITagReadService"/>'s public reads.
+///
+/// <para>POST, not GET: <see cref="CoOccurrenceRequest.ExcludedInteractions"/> is an optional
+/// array sibling to scalar params, which isn't GET-bindable (<c>layer5-wasm.md</c> "Reads with
+/// non-scalar parameters" — WU-RelatedStories added the array to let a live
+/// <c>UserStoryInteractionFilter</c> override the server-resolved §8.7 default).</para>
 /// </summary>
 public static class CoOccurrenceEndpoints
 {
@@ -15,17 +20,15 @@ public static class CoOccurrenceEndpoints
     {
         RouteGroupBuilder group = app.MapGroup("/api/co-occurrence");
 
-        // Both params are scalars — plain GET, query-bound. `take`'s C# default (10) mirrors the
-        // service's own default — ASP.NET Core minimal APIs treat a delegate parameter with a
-        // default value as optional, so an omitted query value binds identically to a direct
-        // service call.
-        group.MapGet("/also-favorited", async (
-                ICoOccurrenceReadService coOccurrence, int storyId, int take = 10, CancellationToken ct = default) =>
-            Results.Ok(await coOccurrence.GetAlsoFavoritedAsync(storyId, take, ct)));
+        group.MapPost("/also-favorited", async (
+                ICoOccurrenceReadService coOccurrence, CoOccurrenceRequest request, CancellationToken ct) =>
+            Results.Ok(await coOccurrence.GetAlsoFavoritedAsync(
+                request.StoryId, request.Take, request.ExcludedInteractions, ct)));
 
-        group.MapGet("/also-recommended", async (
-                ICoOccurrenceReadService coOccurrence, int storyId, int take = 10, CancellationToken ct = default) =>
-            Results.Ok(await coOccurrence.GetAlsoRecommendedAsync(storyId, take, ct)));
+        group.MapPost("/also-recommended", async (
+                ICoOccurrenceReadService coOccurrence, CoOccurrenceRequest request, CancellationToken ct) =>
+            Results.Ok(await coOccurrence.GetAlsoRecommendedAsync(
+                request.StoryId, request.Take, request.ExcludedInteractions, ct)));
 
         return app;
     }

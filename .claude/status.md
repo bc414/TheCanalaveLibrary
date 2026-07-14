@@ -137,6 +137,6 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 58 | UserStat Recalculation Worker | Profiles | N/A | 2 | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
 | 59 | Automatic Tree Search | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | N/A | 5 |
 | 60 | Tree Search Data Mart Worker | Discovery | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | 5 |
-| 61 | Also Favorited / Also Recommended | Discovery | N/A | 5 | 2 | 2 | 1 | 1 | 5 | N/A | 5 |
+| 61 | Also Favorited / Also Recommended | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | N/A | 5 |
 | 62 | SiteDailyStat Worker | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | N/A | 5 |
 | 63 | Chapter Import (file ingestion) | Import | N/A | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |

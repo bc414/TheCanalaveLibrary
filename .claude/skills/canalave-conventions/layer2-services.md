@@ -788,6 +788,28 @@ documented in the service.
 **Seed is authoritative and unchanged** (Ignored=true on the 5 discovery surfaces; profiles=none).
 No migration. Per-user override *editing* UI is deferred post-MVP (entity supports it).
 
+### Optional caller-supplied exclusions — `ICoOccurrenceReadService` (F61, WU-RelatedStories)
+
+`GetAlsoFavoritedAsync`/`GetAlsoRecommendedAsync` originally resolved the viewer's §8.7 defaults
+internally with no way for a caller to override them — fine for a static read, but the embedded
+story-page sections need a live `UserStoryInteractionFilter` toggle to actually change the result
+set. Both methods gained an additive optional parameter:
+
+```csharp
+Task<IReadOnlyList<RelatedStoryScoreDto>> GetAlsoFavoritedAsync(
+    int storyId, int take = 10,
+    IReadOnlyList<UserStoryInteractionTypeEnum>? excludedInteractions = null,
+    CancellationToken ct = default);
+```
+
+**`null` (the default) preserves existing behavior** — resolve `IDiscoveryDefaultsReadService`
+internally, exactly as before (the dev-diagnostics probe and every existing caller pass no
+argument). **Non-null bypasses the defaults lookup entirely** and is used as-is — the caller
+(`RelatedStoriesSection`) seeds its filter checkboxes from the same §8.7 defaults read up front,
+then passes the user's live edits straight through. This is the general pattern for adding
+"caller can override the server-resolved default" to a read service: an optional trailing
+parameter defaulting to `null`/"use the server default," never a second overloaded method.
+
 ### Tag include-mode boolean lattice
 
 The 2×2 lattice (Include × Exclude), with the dead ALL-exclude cell intentionally unbuilt:

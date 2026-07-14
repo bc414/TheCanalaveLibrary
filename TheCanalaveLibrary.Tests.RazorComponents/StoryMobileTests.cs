@@ -29,6 +29,13 @@ public class StoryMobileTests : BunitContext
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         // ChapterList (WU45) injects the manual read-mark write service.
         Services.AddSingleton<IChapterReadMarkWriteService>(new FakeChapterReadMarkWriteService());
+        // RelatedStoriesSection (Feature 61, nested in StoryMobile) injects these four; left at
+        // their empty defaults here so the section renders nothing (BothEmpty) — see
+        // RelatedStoriesSectionTests for the section's own dedicated coverage.
+        Services.AddScoped<ICoOccurrenceReadService>(_ => new FakeCoOccurrenceReadService());
+        Services.AddScoped<IStoryReadService>(_ => new FakeRelatedStoriesStoryReadService());
+        Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeRelatedStoriesInteractionReadService());
+        Services.AddScoped<IDiscoveryDefaultsReadService>(_ => new FakeDiscoveryDefaultsReadService());
         JSInterop.Mode = JSRuntimeMode.Loose;
         _fakeRecommendations.SetGetForStoryResult([]);
     }
