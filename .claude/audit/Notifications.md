@@ -28,20 +28,25 @@ complete parts of the model.
    (per-user display override of `NotificationType.DefaultCollapsed`, consumed by the notification
    panel). The §5.18 in-app toggle language should be understood as aspirational/stale.
 
-**Notification email fan-out — deferred, hook point documented (WU-Email, 2026-07-06):**
-`EmailEnabled` above is fully plumbed (written/read by the settings page via `SetSettingAsync`/
-`GetSettingsAsync`) but remains genuinely **unconsumed** — the create-core generates only in-app
-`Notification` rows; nothing sends mail off it. WU-Email built the transactional email seam
-(`Server/Identity/SmtpEmailSender.cs`, real send over SMTP — see `audit/Identity.md` WU-Email
-Stage note) but deliberately scoped it to Identity's confirmation/reset/email-change flows only.
-A follow-up work-unit is where this gets consumed: the natural hook is the single funnel
+**Notification email fan-out — deferred, hook point documented (WU-Email, 2026-07-06); sequenced as
+WU-NotifEmail (2026-07-15):** `EmailEnabled` above is fully plumbed (written/read by the settings
+page via `SetSettingAsync`/`GetSettingsAsync`) but remains genuinely **unconsumed** — the
+create-core generates only in-app `Notification` rows; nothing sends mail off it. WU-Email built
+the transactional email seam (`Server/Identity/SmtpEmailSender.cs`, real send over SMTP — see
+`audit/Identity.md` WU-Email Stage note) but deliberately scoped it to Identity's
+confirmation/reset/email-change flows only. **WU-NotifEmail** is where this gets consumed —
+sequenced into `middle_plan_v2.md` Phase 6 (the Beta gate: fan-out email only matters once there's
+a real audience to notify) and `workplan.md` "Planned / not-yet-built named WUs." Settled hook
+(unchanged from 2026-07-06): the natural hook is the single funnel
 `ServerNotificationWriteService.CreateCoreAsync` (`layer2-services.md` "Notification Generation") —
 after the in-app rows are inserted, resolve each recipient's effective `EmailEnabled` (the sparse
 row's value, or `NotificationType.DefaultEmailEnabled` when no row exists) + email address, and
 send best-effort post-commit (never fail the notification on a mail-send error, same posture as
 the rest of this create-core). If volume ever warrants it, that send should route through a
 write-behind worker rather than inline — but build the inline version first and measure before
-adding that. Noted here so the seam isn't re-discovered from scratch.
+adding that. WU-NotifEmail also folds in the untested anonymous-`NotificationBell` RazorComponents
+gap noted below (Feature 42, "follow-up work, not done here") — small enough to ride along rather
+than get its own WU.
 
 ## Feature 41 — Notification Generation
 

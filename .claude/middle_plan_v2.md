@@ -237,12 +237,20 @@ Ordered as v1, all deps Stage 5, settled directions in the audit files named in 
    `StoryExternalLink`/`ExternalPlatform` remodel). 1600 tests green; export/import round-trips +
    browser-verified. WU39 (item 6) now owns only the mod link-verification tab. See
    `audit/Export.md`, `audit/Import.md`, `audit/Moderation.md` F53, `workplan.md` WU38c/WU38d.
+8. **WU-SeoSite** *(added 2026-07-15, Feature 64, minted from `middle-addendum.md` §3 #15/#16/#18).*
+   `robots.txt`, a `sitemap.xml` endpoint over published stories, and the spec'd-but-never-built
+   canonical-slug 301 redirect. The mature-content `noindex` half of this feature is gated on
+   decision row 11 (ramifications not yet assessed) — build the redirect/robots/sitemap slice
+   first, add `noindex` once row 11 resolves. See `audit/Seo.md`.
 
 ## Phase 3 — Full L4 sweep + Stage-6 freezes (v1 Phase 2, unchanged)
 
 After Phase 2, so freezes happen once on final surface. L4-Style freeze sweep (Brian-driven,
 per-cluster render → fix → Pattern-Accumulate → 5→6 on sign-off); surface decision row 1
-(non-story report-target rating routing) during the moderation-queue review.
+(non-story report-target rating routing) during the moderation-queue review. **WU-A11y**
+*(added 2026-07-15, Feature 65, minted from `middle-addendum.md` §3 #22)* pairs naturally with
+this sweep — both are a final whole-site pass over already-built surfaces — but its scope/depth is
+gated on decision row 12; see `audit/Accessibility.md`.
 
 ## Phase 4 — Beta-scope decisions (v1 Phase 3, unchanged)
 
@@ -252,7 +260,11 @@ infra — 55 remainder — got its verdict 2026-07-11: explicitly deferred past 
 feature itself was built in Phase 2 as WU-Spotlight. Polls — 37 — designed + built 2026-07-12.
 Story Arcs — 8 — designed + built 2026-07-12 as WU45, scope widened to include the chapter-list
 presentation upgrade and chapter reorder/delete. Custom Lists — 51 — designed 2026-07-13, built as
-WU-CustomLists. See Resolved.)
+WU-CustomLists. See Resolved.) Two Chapters-cluster (Feature 6) items follow the same
+design-now-or-defer pattern, carried from WU6's original scope notes rather than decision row 3:
+**WU-EditorSprite** (inline Pokémon-sprite Quill blot, spec §5.30.2, deferred at WU6 "its own
+future work-unit") and **WU-EditorMobile** (mobile `EditorView` toolbar / device-specific
+composition, deferred at WU6 alongside the rest of the desktop/mobile axis). See `audit/Chapters.md`.
 
 ## Phase 5 — L5 WASM enablement (v1 Phase 4 item 6, deliberately after features)
 
@@ -261,12 +273,25 @@ pairs built headlessly for the *final* Phase-2 surface, then the single global `
 flip + one whole-site browser wave, per `layer5-wasm.md` §"Rollout Strategy" / §"The Global
 Flip". Battle-tested pattern (WU-L5Pilot); this batch is application, not discovery.
 
+**WU-ErrorHandling2** *(Phase-5-adjacent follow-up, named 2026-07-15)* — the `ProblemDetails`
+envelope + client HTTP error translation half WU-ErrorHandling deliberately deferred (no HTTP
+error surface existed until the WASM client made calls). The global flip (WU-GlobalFlip,
+2026-07-13) already landed, so this follow-up is now unblocked; sequenced here rather than
+earlier because it completes the WASM-era error story right after the flip that created its need.
+See `error-handling.md`.
+
 ## Phase 6 — Beta
 
 Small audience from the existing community (logistics: decision row 6). Entry gate: Phases 0–3
 and 5 done; every Phase 4 item resolved or explicitly deferred; email (Phase 1 item 5) live.
 L2/L3 changes from feedback remain normal and planned for — each also touches its L5
 endpoint/client impl (accepted 2026-07-03).
+
+**WU-NotifEmail** *(named 2026-07-15)* — notification email fan-out over the inert
+`UserNotificationSetting.EmailEnabled` setting, explicitly deferred out of WU-Email's
+transactional-only scope. A live beta audience is the natural trigger for this (digest/fan-out
+email only matters once there's a real audience to notify), so it's sequenced at the Beta gate
+rather than earlier. Hook point: `audit/Notifications.md`.
 
 ## Phase 7 — Launch readiness + Launch (DigitalOcean)
 
@@ -326,6 +351,8 @@ renumbered, since other docs cite them by number.
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Phase 6 gate. |
 | 8 | **Email provider + sending domain** (residual — mechanism resolved 2026-07-06, see Resolved) — which SMTP provider to point the seam at, and the sending domain. | Postmark or Amazon SES (cheap at this scale) or Resend; needs a sending domain, which ties into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Config-only swap once decided (no code change) — gates Phase 7, not Phase 1 anymore. |
 | 10 | **Legal/policy track ownership + timing** — ToS, privacy policy, DMCA agent/process, moderation obligations for a fanfiction UGC site. | None. | Legal exposure and community policy are yours; engineering only hosts the documents. Gates Phase 7 (lighter obligation defensible for the trusted-audience beta — your call). |
+| 11 | **Mature-content `noindex` ramifications** — whether `noindex, follow` on Mature/Explicit story pages risks de-listing legitimate content, how it interacts with the still-open age-verification legal question (decision row 10 / `middle-addendum.md` §3 #2), and any crawl-budget effect. Raised, not answered, 2026-07-15 (Brian: "need to understand the ramifications of this suggestion" — `middle-addendum.md` §3 #18). | None — genuine open question. | Product/legal judgment call. Gates WU-SeoSite's `noindex` half (Phase 2 item 8); the robots/sitemap/redirect half of that WU is unaffected and can proceed. |
+| 12 | **Accessibility scope/depth** — a full WCAG AA audit vs. a targeted axe-DevTools pass over the highest-traffic pages (search, story, chapter reading, signup/login); which pages if targeted; whether to add an automated a11y test tier (axe-core/Lighthouse-CI) to the three-tier test suite. | None — genuine Stage-1 intent gap (`middle-addendum.md` §3 #22 names the gap but not a scope). | Product/effort trade-off; solo-dev realistic scope is yours to set. Gates WU-A11y (Phase 3). |
 
 ---
 

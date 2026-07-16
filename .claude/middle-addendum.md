@@ -165,11 +165,14 @@ compliance theater).
     minimal-API sitemap endpoint over published stories + a static `robots.txt` + `PageTitle`/meta
     per page. **`<meta name="description">` half done 2026-07-11** — `.claude/audit/Seo.md`; rides
     the same `<SocialMetaTags>` component as item #17. `robots.txt`/`sitemap.xml` remain unbuilt.
+    **→ formalized 2026-07-15: Feature 64 (Site SEO), WU-SeoSite, `middle_plan_v2.md` Phase 2 item 8,
+    `audit/Seo.md`.**
 16. **Canonical slug redirect — spec'd but never built.** The spec (§ on story routing) explicitly
     says "redirect to canonical if slug doesn't match," but `StoryPage.razor` states plainly that
     the slug is cosmetic and does no redirect — `/story/42/wrong-slug` and `/story/42/right-slug`
     both resolve with no 301. This is a documented-but-unbuilt gap, not a never-considered one, and
-    it's exactly the duplicate-content pattern that hurts SEO.
+    it's exactly the duplicate-content pattern that hurts SEO. **→ formalized 2026-07-15: Feature 64
+    (Site SEO), WU-SeoSite, same pointers as #15.**
 17. **Open Graph tags for social sharing.** Confirmed absent. Arguably the single highest-leverage
     item on this whole list for *this* audience — fandom communities live in Discord, and a shared
     story link currently unfurls as a bare gray URL with no title/image/blurb. OG tags work fine
@@ -182,11 +185,17 @@ compliance theater).
     `noindex` directive. Independent of the age-verification legal question above, general practice
     is to keep Mature/Explicit story pages out of general search results (`noindex, follow`, not a
     `robots.txt` blanket block, which would also hide the noindex tag itself). Cheap — same code
-    path as items 15/17, driven off a field the `Story` entity already has. Need to understand the ramifications of this suggestion.
+    path as items 15/17, driven off a field the `Story` entity already has. Need to understand the
+    ramifications of this suggestion. **→ formalized 2026-07-15: Feature 64 (Site SEO), WU-SeoSite;
+    the ramifications question itself is now `middle_plan_v2.md` decision row 11 — see `audit/Seo.md`
+    "Feature 64 — settled vs. open."**
 19. **RSS/Atom feeds.** Absent. Real precedent in this exact space (AO3, FFN both offer it) but
     both implementations are widely considered mediocre, and the real retention mechanism for
     "new chapter from a followed author" is the *already-deferred* email-digest feature
-    (`EmailEnabled`), not RSS. **Low priority, safe to skip at launch.**
+    (`EmailEnabled`), not RSS. **Low priority, safe to skip at launch.** **The email-digest half is
+    now WU-NotifEmail** (`middle_plan_v2.md` Phase 6, `audit/Notifications.md`) — RSS itself remains
+    consciously un-formalized (no WU, no grid row); revisit only if WU-NotifEmail's fan-out doesn't
+    satisfy the retention need it was meant to cover.
 20. **Analytics.** No traffic-counting tool of any kind exists. Given the project already runs a
     self-hosted Grafana LGTM stack for app observability, a lightweight self-hosted option (Umami)
     or piping pageview counts into the existing OTel/Prometheus pipeline avoids standing up a
@@ -194,6 +203,8 @@ compliance theater).
 21. **PWA manifest.json.** Absent. The full offline/service-worker PWA story targets Blazor WASM
     standalone apps, not this server-rendered app, so it doesn't map cleanly here anyway. A bare
     manifest (icons, name, theme-color, no service worker) is cheap cosmetic polish. **Low priority.**
+    Consciously un-formalized in the 2026-07-15 pass (no WU, no grid row) — low enough priority that
+    a decision row/WU would outweigh the item itself; revisit opportunistically.
 
 ### Accessibility
 
@@ -212,7 +223,10 @@ compliance theater).
     pass with a browser extension (axe DevTools) over the handful of highest-traffic pages
     (search, story page, chapter reading, signup/login) before public launch, plus a one-line
     addition to `layer4-style.md`'s Stage-5 criteria ("keyboard-navigable, visible focus states")
-    so it stops being invisible to the process entirely.
+    so it stops being invisible to the process entirely. **→ formalized 2026-07-15: Feature 65
+    (Accessibility), WU-A11y, `middle_plan_v2.md` Phase 3 + decision row 12 (scope/depth still
+    open), `audit/Accessibility.md`. The Stage-5-criteria addition suggested here landed the same
+    day in `layer4-style.md` "Interaction States."**
 
 ### Not flagged as gaps (deliberately out of scope, reasonably so)
 

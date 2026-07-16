@@ -2087,6 +2087,45 @@ work-unit into Phase 3 and update `status.md` + the audit file.
 
 ---
 
+## Planned / not-yet-built named WUs (2026-07-15)
+
+Named and sequenced into `middle_plan_v2.md`'s phases (Doc-Touch moment 1 formalization of the
+2026-07-07 `middle-addendum.md` §3 findings), but **no code has been written yet** — distinct from
+the DONE ✓ units above and from the "Post-MVP — Layers 5–8" section below (which is unsequenced by
+design). Each entry names its cell(s)/feature, phase, audit pointer, and deps; flip to a DONE ✓
+entry above (with cells/verification) when built.
+
+- **WU-SeoSite** — **Cells:** Feature 64 (new), all layers currently Stage 1–2 per `status.md`.
+  **Phase:** 2, item 8. **Scope:** `robots.txt`, `sitemap.xml` endpoint, canonical-slug 301
+  redirect (unblocked now); mature-content `noindex` (blocked on decision row 11). **Pointer:**
+  `audit/Seo.md`. **Deps:** none — the existing `Seo/` cluster (`IPublicUrlProvider`) and
+  `StoryPage` routing are both Stage 5.
+- **WU-A11y** — **Cells:** Feature 65 (new), L4/L4.5 currently Stage 1. **Phase:** 3, paired with
+  the L4 freeze sweep. **Scope:** blocked on decision row 12 (scope/depth). **Pointer:**
+  `audit/Accessibility.md`. **Deps:** Phase 3's L4 freeze sweep (same pass).
+- **WU-EditorSprite** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
+  inline Pokémon-sprite Quill blot (spec §5.30.2), deferred at WU6. **Pointer:**
+  `audit/Chapters.md` Feature 6. **Deps:** WU6 (`EditorView`, Stage 5).
+- **WU-EditorMobile** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
+  mobile `EditorView` toolbar / desktop-mobile device composition, deferred at WU6. **Pointer:**
+  `audit/Chapters.md` Feature 6. **Deps:** WU6.
+- **WU-ErrorHandling2** — **Cells:** none (cross-cutting, extends `Errors/`). **Phase:** 5,
+  Phase-5-adjacent. **Scope:** `ProblemDetails` envelope + client HTTP error translation, deferred
+  at WU-ErrorHandling. **Pointer:** `error-handling.md`. **Deps:** WU-GlobalFlip (DONE ✓
+  2026-07-13 — the WASM client now makes the HTTP calls this envelope translates).
+- **WU-NotifEmail** — **Cells:** Features 41–43 (extends, no new cell). **Phase:** 6, Beta gate.
+  **Scope:** notification email fan-out over `UserNotificationSetting.EmailEnabled`, deferred at
+  WU-Email; also folds in the untested anonymous-`NotificationBell` RazorComponents gap noted in
+  `audit/Notifications.md` Feature 42. **Pointer:** `audit/Notifications.md`. **Deps:** WU-Email
+  (DONE ✓ 2026-07-06).
+- **WU-AccountEnforcement** — already listed as Phase 2 item 5 in `middle_plan_v2.md` (unchanged by
+  this pass — recorded here only so every phase-sequenced named WU has one ledger entry). **Cells:**
+  Feature 1 (Identity, extends). **Scope:** login-blocking (Suspended until `SuspendedUntilUtc`,
+  Banned permanently) + Warned banner in layout chrome — staged and deferred at WU34. **Pointer:**
+  `canalave-conventions/content-safety.md` "Login enforcement is staged". **Deps:** WU34 (DONE ✓).
+
+---
+
 ## Post-MVP — Layers 5–8 (additive, batchable; not sequenced here)
 
 Per `grid_axes.md` §"The Two Boundaries": these swap method bodies / add DDL / add standalone workers

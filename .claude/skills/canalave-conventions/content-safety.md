@@ -203,7 +203,10 @@ that shadowbans lies to its members. This is a design axiom, not a deferred deci
 
 **Login enforcement is staged.** WU34 ships the state columns and notifications. Actual login-blocking
 (block Suspended users until `SuspendedUntilUtc`; block Banned users permanently; surface Warned banner
-in layout chrome) is a dedicated follow-up WU — it's a security surface that deserves its own careful slice.
+in layout chrome) is a dedicated follow-up WU — it's a security surface that deserves its own careful
+slice. **Named and sequenced (2026-07-15): WU-AccountEnforcement**, already listed as
+`middle_plan_v2.md` Phase 2 item 5 (predates this formalization pass — recorded here and in
+`workplan.md` "Planned / not-yet-built named WUs" so every phase-sequenced WU has one ledger entry).
 
 ### Report Targets and `ActiveReportCount`
 

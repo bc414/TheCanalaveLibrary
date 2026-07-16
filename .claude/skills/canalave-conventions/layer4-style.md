@@ -654,6 +654,16 @@ resolved by this grammar. Components look these up; they never invent states.
 | **Disabled** | `disabled:opacity-50 cursor-not-allowed` (or `opacity-50` on non-button roots) | One opacity everywhere; the 30/40 variants are retired. |
 | **Links** | `text-(--color-action-ink) hover:underline` | Green links, ratified. |
 
+**Accessibility as a Stage-5 criterion (added 2026-07-15, Feature 65 / WU-A11y, `middle-addendum.md`
+§3 #22).** The global focus-visible rule and the WCAG AA 4.5:1 contrast policy above are necessary
+but not sufficient — neither is currently *verified* as part of any Stage-5 sign-off. A component's
+L4 Stage 5 claim should additionally mean: interactive elements are keyboard-navigable (reachable
+and operable via Tab/Enter/Space, not just clickable), the global focus-visible ring is not
+suppressed, and form inputs have an associated `<label>` (or `aria-label`) — not full WCAG AA
+verification per component, which is out of scope until WU-A11y's whole-site pass (gated on
+`middle_plan_v2.md` decision row 12; see `audit/Accessibility.md`) sets the real bar and revisits
+already-shipped components.
+
 **Overlay recipe (one chrome, one z-ladder, one dismissal):**
 - Dropdown/flyout panels: `absolute … z-(--z-dropdown) rounded-xl border border-(--color-border) bg-(--color-surface-raised) py-1 shadow-medium`.
 - Modals: backdrop `fixed inset-0 z-(--z-modal) bg-(--color-backdrop)`; panel `rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent`.

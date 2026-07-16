@@ -143,6 +143,22 @@ the build, superseding the original spec/skill sketch:
   Mutation-sanity confirmed: adding `"script"` to the allow-list → `Sanitize_ScriptTag_IsStrippedCompletely`
   fails. `dotnet test` green.
 
+**WU6's two deferrals formalized as named WUs (2026-07-15, no code change).** Both items above
+("Inline Pokémon-sprite Quill blot … its own future work-unit" and "the mobile-compact variant is
+deferred") were real but unsequenced since 2026-06-21. Now sequenced into `middle_plan_v2.md`
+Phase 4 (beta-scope-decision pattern) and `workplan.md` "Planned / not-yet-built named WUs":
+- **WU-EditorSprite** — the inline sprite blot (spec §5.30.2). Settled: extends `EditorView`'s
+  existing Quill toolbar contract, does not touch the sanitizer allow-list's tag set (a blot is a
+  custom embed, not one of the 11 allowed HTML tags — the allow-list's sanitize-on-save trust
+  boundary needs its own extension to permit whatever markup the blot serializes to, which is not
+  yet designed). Open: blot serialization format (custom `<img>`-like embed vs. a text placeholder
+  token), sprite picker UI, and the resulting sanitizer allow-list change.
+- **WU-EditorMobile** — the mobile toolbar / device-specific `EditorView` composition, deferred for
+  the same reason `HomeDesktop`/`HomeMobile` split (Quill's toolbar listeners bind once at
+  construction — see above). Settled: follows the existing desktop/mobile composition pattern
+  already used elsewhere, not a runtime toggle. Open: nothing design-blocking: this is
+  build-when-scheduled, same as `HomeMobile`.
+
 ## Feature 7 — Chapter Reading
 - **L1 — Stage 5.** `UserChapterInteraction` supports progress + read state.
 - **WU38c additive extension (2026-07-11):** `GetChaptersForExportAsync(storyId)` added to

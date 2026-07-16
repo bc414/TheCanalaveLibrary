@@ -1,12 +1,16 @@
 # Audit — Seo/
 
-**No own grid Feature.** Cross-cutting cluster (same shape as `Images/`, `Errors/`, `Toasts/`) — its
-"feature" is a shared service + component, not a row in `status.md`'s grid. It is consumed by every
-shareable content page (Stories Feature 4, Chapters Feature 6, Profiles Feature 20, Series, BlogPosts
-Feature 35, Groups Feature 38) but owned by none of them. Addendum-sourced: `.claude/middle-addendum.md`
-§3 items **#15** (`<meta name="description">`) and **#17** (Open Graph) — "never surfaced anywhere"
-before this file. Item **#18** (mature-content `noindex`) shares the same code path but is explicitly
-**out of scope** here — see "Open" below.
+**Two-part ownership (revised 2026-07-15).** The already-shipped per-page slice (`IPublicUrlProvider`,
+`<SocialMetaTags>` — OG/Twitter/`<meta description>`) is a cross-cutting cluster with no own grid
+Feature (same shape as `Images/`, `Errors/`, `Toasts/`) — consumed by every shareable content page
+(Stories Feature 4, Chapters Feature 6, Profiles Feature 20, Series, BlogPosts Feature 35, Groups
+Feature 38) but owned by none of them. The remaining site-level work below (robots/sitemap/canonical
+redirect/`noindex`) is tracked as **Feature 64 — Site SEO** (`grid_axes.md`, `status.md`,
+`folder_clusters.md`'s new `Seo/` row) and sequenced as **WU-SeoSite** (`middle_plan_v2.md` Phase 2
+item 8, `workplan.md` "Planned / not-yet-built named WUs"). Addendum-sourced:
+`.claude/middle-addendum.md` §3 items **#15** (`<meta name="description">`, description shipped;
+sitemap/robots half now Feature 64), **#16** (canonical-slug redirect, now Feature 64), **#17** (Open
+Graph, shipped), and **#18** (mature-content `noindex`, now Feature 64, gated on decision row 11).
 
 ## Shared Context
 
@@ -133,12 +137,24 @@ additive `<head>` output, not a change to any of those features' existing Stage-
   card docs both assume PNG/JPG/WEBP/GIF. A proper branded raster asset (1200×630, the OG-recommended
   aspect ratio) should replace this before the OG rollout is genuinely launch-ready; not fabricated
   here since it's a design asset, not a code decision.
-- Mature-content `noindex` (addendum #18) — same code path (`Rating` field, per-page head tags), not
-  built here. Next unit to touch `Seo/` should extend `<SocialMetaTags>` or add a sibling tag rather
-  than duplicate the head-content mechanism.
-- Canonical-slug 301 redirect (addendum #16) is a separate, still-unbuilt item — `StoryPage`'s slug
-  segment stays cosmetic. `og:url` uses whatever slug is available (added to `StoryDetailsDTO` this
-  unit) but does not itself redirect non-canonical requests.
 - Direct-R2/CDN `<img>`-display migration — see "The migration this does NOT do" above.
 - Production values for `Site:PublicBaseUrl` (and `ImageStorage:PublicBaseUrl` if/when it diverges)
   are a Phase-7 config/secrets-promotion concern (`middle_plan_v2.md`), not a code gap.
+
+## Feature 64 — Site SEO: settled vs. open (WU-SeoSite, 2026-07-15)
+
+**Settled (do not revisit at build time):**
+- Scope is exactly `robots.txt` (static) + `sitemap.xml` (minimal-API endpoint over published-story
+  listings) + canonical-slug 301 redirect (`StoryPage`'s routing check) — three independent,
+  unblocked pieces.
+- `noindex` extends `<SocialMetaTags>` or adds a sibling head tag — do not duplicate the
+  head-content mechanism (same append-only `<HeadContent>` constraint documented above for OG).
+- `IPublicUrlProvider`/`Site:PublicBaseUrl` is the existing seam for any absolute-URL need
+  (sitemap `<loc>` entries) — do not mint a second base-URL resolver.
+
+**Open (blocks part of the build):**
+- **Mature-content `noindex` ramifications — `middle_plan_v2.md` decision row 11.** Whether
+  `noindex, follow` on Mature/Explicit pages risks de-listing legitimate content, its interaction
+  with the still-open age-verification legal question (decision row 10), and crawl-budget effects.
+  Raised 2026-07-15, not yet answered. **The robots.txt/sitemap.xml/canonical-redirect slice does
+  not depend on this and can be built first.**

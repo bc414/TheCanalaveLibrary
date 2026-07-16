@@ -57,6 +57,12 @@ A few other features naturally sort late but for a different reason — there's 
 (Notification Cleanup has nothing 60 days old to clean; SiteDailyStat has no usage to aggregate). These
 don't need their own line; they fall out of normal workplan sequencing.
 
+**Features 64–65 are cross-cutting quality rows, minted 2026-07-15 from `middle-addendum.md` §3**
+(a point-in-time "what's missing for a live website" audit), not features discovered through the
+original bottom-up feature decomposition. They sit above the MVP line's spirit — the site functions
+without them — but are sequenced into `middle_plan_v2.md`'s existing phases rather than held in a
+separate list, per the addendum-formalization pass.
+
 ---
 
 ## Layers (Columns)
@@ -668,3 +674,24 @@ alternate version, one-file-per-chapter bulk, one-doc-many-chapters (suggest-the
 splitting), and EPUB (spine-defined). Story shell is created via the normal flow first; imported
 chapters land as unpublished drafts. Sits above the MVP line's spirit but scheduled with WU38
 (2026-07-11) because migration UX is a launch-adoption concern. Detail: `audit/Import.md`.
+
+**64. Site SEO** — *(added 2026-07-15, minted from `middle-addendum.md` §3 #15/#16/#18.)*
+Site-level crawlability surface not owned by any content feature: `robots.txt`, a `sitemap.xml`
+endpoint over published stories, the spec'd-but-never-built canonical-slug 301 redirect (a story
+reached via a stale/wrong slug segment should redirect to its current canonical URL — currently
+cosmetic-only, see Feature 5/10), and mature-content `noindex, follow` head output keyed off
+`Rating`. Distinct from the already-shipped per-page OG/`<meta description>` slice (attributed to
+the consuming content features — Stories, Chapters, Profiles, Series, BlogPosts, Groups — per
+`audit/Seo.md`); this row is the remaining site-wide work. The `noindex` half is gated on
+`middle_plan_v2.md` decision row 11 (ramifications not yet assessed). Scheduled as WU-SeoSite.
+Detail: `audit/Seo.md`.
+
+**65. Accessibility** — *(added 2026-07-15, minted from `middle-addendum.md` §3 #22.)*
+Cross-cutting quality attribute, not a vertical feature — no owning folder, no L1–L3 surface of its
+own. Today: 237 incidental `aria-`/`role=`/`<label>`/`tabindex` occurrences exist from ordinary
+semantic HTML and Blazor `EditForm` scaffolding, but no deliberate program — no WCAG reference, no
+keyboard-nav/screen-reader check in `layer4-style.md`'s tier rules, no accessibility test tier, and
+the L4.5-Browser band's own definition never mentions keyboard-only or screen-reader navigation.
+Scope/depth (full WCAG AA audit vs. a targeted axe-DevTools pass over the highest-traffic pages) is
+gated on `middle_plan_v2.md` decision row 12. Scheduled as WU-A11y, paired with the Phase 3 L4
+freeze sweep. Detail: `audit/Accessibility.md`.
