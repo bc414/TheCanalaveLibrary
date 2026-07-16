@@ -2917,3 +2917,36 @@ WASM-focused whole-site browser wave that found and fixed seven real bugs.
 - **Tool:** Claude Code (Sonnet) driving Chrome via MCP browser tools. **Pointer:**
   `audit/Discovery.md` F61 Stage notes (settled design + verification); `layer2-services.md`
   §"Optional caller-supplied exclusions"; `layer5-wasm.md` "Reads with non-scalar parameters".
+
+## NotificationBell anonymous-viewer 401 fix (Feature 42) — DONE ✓ (2026-07-13)
+
+- **Cells:** F42 L3-Logic/L5 stay Stage 5 — this is a same-cell bug fix (`debugging.md`
+  "Runtime bug surfaces during verification"), not a stage transition. Closes the "unrelated
+  pre-existing 401s from `NotificationBell`" observed and deferred as out-of-scope in
+  WU-RelatedStories above (same day).
+- **Reported as:** unhandled 401 immediately after logout, hypothesized as stale WASM auth
+  state. **Actual root cause (browser-verified, not the reported hypothesis):** reproduces for
+  ANY anonymous viewer under the WASM runtime, not only post-logout — confirmed cold in a
+  browser tab that had never authenticated. `NotificationBell`'s own `<AuthorizeView>` gated its
+  markup but not its `OnInitializedAsync`, which called `INotificationWriteService`
+  unconditionally; `@inject` and lifecycle methods resolve/run at component construction
+  regardless of conditional markup inside the same component. Exactly the gap
+  `layer3-logic.md` "Deferring DI Behind AuthorizeView (WU43)" already named `NotificationBell`
+  as exposed to, predating a test that would have caught it — the WU-L5Sweep/WU-GlobalFlip WASM
+  client impl (2026-07-12/13) turned the latent gap into a live crash by hitting a real
+  `RequireAuthorization()` endpoint instead of the server impl's anonymous-safe zero/empty return.
+- **Did:** split `NotificationBell.razor` into a thin `<AuthorizeView>` wrapper (no `@inject`)
+  and `NotificationBellInner.razor` (all markup/services/`[PersistentState] UnreadCount`) per
+  the established wrapper/inner pattern — not a defensive auth re-check inside the one component.
+  `layer3-logic.md`'s WU43 section updated to record the fix and drop the stale "predates this
+  convention" caveat.
+- **Verified:** `dotnet build` clean, `dotnet test` RazorComponents 639/639 green (no test
+  exercised this path before or after — `FakeNotificationWriteService` still isn't in the fakes
+  catalog, same gap `layer3-logic.md` flagged; adding it + an anonymous-viewer test is follow-up,
+  not done here). Browser: cold anonymous tab loads clean ("Log in" shown, zero console errors);
+  full dev-bar TestUser login → logout cycle shows the chrome island correctly flip to "Log in"
+  with zero console errors; flyout preview/mark-all-read still work for an authenticated viewer
+  post-split.
+- **Tool:** Claude Code (Sonnet) driving Chrome via MCP browser tools. **Pointer:**
+  `audit/Notifications.md` F42 "Anonymous-viewer crash fix" Stage note; `layer3-logic.md`
+  "Deferring DI Behind AuthorizeView (WU43)".

@@ -236,12 +236,20 @@ fragment containing it actually executes, so the inner component's DI resolution
 wrapper like this needs only `this.AddAuthorization()` (defaulting to anonymous/not-authorized) -- it
 never needs to register the inner component's services, because the inner component is never
 constructed. Only a test that explicitly authorizes the viewer (to test the gated feature itself) needs
-those service fakes registered too. `NotificationBell` predates this convention and sidesteps the
-failure mode a different way (no `@inject` at file scope at all -- its own services are declared with
-`@inject` written physically inside the `<Authorized>` markup, which Razor still hoists to the class
-regardless of visual placement, so it has the *same* unconditional-construction exposure; it has just
-never been exercised by a test that omits its services). Any new AuthorizeView-gated, DI-consuming leaf
-should use the wrapper/inner split from the start, not `NotificationBell`'s pattern.
+those service fakes registered too.
+
+**`NotificationBell` was the pre-WU43 example of the failure mode this section warns about** -- no
+`@inject` at file scope, but its services were declared with `@inject` written physically inside the
+`<Authorized>` markup, which Razor still hoists to the class regardless of visual placement, so its
+`OnInitializedAsync` ran (and called the notification service) unconditionally too. This went
+unnoticed for months because the server impl was anonymous-safe (zero/empty return for an
+unauthenticated caller) -- it only became a live, user-facing unhandled-401 crash once the WU-L5Sweep/
+WU-GlobalFlip (2026-07-12/13) WASM client impl started hitting the real `RequireAuthorization()`
+endpoint, including for anonymous users (any anonymous WASM render, not just post-logout -- the
+`<AuthorizeView>` gate never prevented the fetch). Converted to the wrapper/inner split
+(`NotificationBell.razor` + `NotificationBellInner.razor`) on 2026-07-13 once this surfaced --
+see `audit/Notifications.md` F42 Stage note. Any new AuthorizeView-gated, DI-consuming leaf
+must use the wrapper/inner split from the start.
 
 ## UserStoryInteractionButton — EventCallback-Driven Behavior
 

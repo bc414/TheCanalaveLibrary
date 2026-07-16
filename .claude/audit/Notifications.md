@@ -172,6 +172,29 @@ adding that. Noted here so the seam isn't re-discovered from scratch.
   plumbing/contract (compile-clean, ordering correct); the enrichment is an additive
   implementation detail to complete before the notification UI work-unit (WU33).
 
+- **Anonymous-viewer crash fix (2026-07-13) — L3/L5 remain Stage 5; found via browser debugging:**
+  `NotificationBell` threw an unhandled 401 (`CanalaveErrorBoundary` "chrome" island wiped —
+  `CreateMenu`/`MessagesNavLink`/`NotificationBell`/`UserMenu` all disappeared together) for any
+  anonymous viewer under the WASM runtime, not only right after logout — reproduced cold in a
+  browser tab that had never authenticated at all. Root cause: `NotificationBell`'s own
+  `<AuthorizeView>` gated its *markup* but not its `OnInitializedAsync`, which called
+  `INotificationWriteService.GetNotificationsAsync`/`GetUnreadCountAsync` unconditionally —
+  `@inject` (even written physically inside `<Authorized>` markup) and lifecycle methods resolve/run
+  at component construction regardless of conditional markup. The server impl silently tolerated this
+  (anonymous-safe zero/empty return); the WU-L5Sweep/WU-GlobalFlip (2026-07-12/13) WASM client impl
+  hits the real `RequireAuthorization()` endpoint and throws instead. This exact latent defect was
+  already named in `layer3-logic.md` "Deferring DI Behind AuthorizeView (WU43)" as a known gap in
+  `NotificationBell` specifically, predating a test that would have caught it. **Fix:** split into
+  `NotificationBell.razor` (thin `<AuthorizeView>` wrapper, no `@inject`) +
+  `NotificationBellInner.razor` (all markup/services/`[PersistentState] UnreadCount`, instantiated
+  only when authorized) — the standard wrapper/inner pattern, not a defensive auth re-check. **Verified:**
+  browser — cold anonymous tab loads clean (no crash, "Log in" shown); login → logout cycle
+  (dev-bar TestUser) shows the chrome island correctly flip to "Log in" with zero console errors;
+  flyout preview/mark-all-read still work for an authenticated viewer post-split. RazorComponents
+  tier: full 639-test suite green before and after (no test exercised this path — the fakes-catalog
+  gap `layer3-logic.md` flagged still stands; adding `FakeNotificationWriteService` + an anonymous-
+  viewer NotificationBell test is follow-up work, not done here).
+
 - **Circuit-concurrency fix (2026-07-01) — L2 remains Stage 5; found via browser debugging:**
   First real browser login (dev-bar TestUser) crashed with `InvalidOperationException: A second
   operation was started on this context instance` — `NotificationBell` + `MessagesNavLink` both

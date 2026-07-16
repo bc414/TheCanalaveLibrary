@@ -1,0 +1,125 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@inject INotificationWriteService NotificationService
+@inject NavigationManager Nav
+
+@* The actual authenticated-only content for NotificationBell (see that file's doc comment).
+   Split out of the thin AuthorizeView wrapper so its @inject services — and the notification
+   fetch in OnInitializedAsync below — resolve/run ONLY when this component is actually
+   instantiated, i.e. only when AuthorizeView has decided the viewer is authorized. Never
+   rendered directly by a consumer — always via NotificationBell.razor.
+
+   Does NOT inject IActiveUserContext — the service is self-scoped (uses its own
+   IActiveUserContext via DI) so we avoid double-injection.
+
+   No live push (post-MVP L7). Count and preview refresh on mount / navigation. *@
+
+<div class="relative">
+
+    @* ── Bell button with unread badge ────────────────────────────────── *@
+    <button type="button"
+            class="relative flex items-center justify-center rounded-full p-2 transition-colors hover:bg-(--color-surface-hover)"
+            aria-label="@(UnreadCount > 0 ? $"{UnreadCount} unread notifications" : "Notifications")"
+            aria-expanded="@_open"
+            @onclick="Toggle">
+        <svg viewBox="0 0 24 24" class="size-5" aria-hidden="true" fill="currentColor">
+            <path d="M12 2A2 2 0 0 0 10 4A6 6 0 0 0 6 10V16L4 18V19H20V18L18 16V10A6 6 0 0 0 14 4A2 2 0 0 0 12 2Z M10 20A2 2 0 0 0 14 20Z" />
+        </svg>
+        @if (UnreadCount > 0)
+        {
+            <span class="absolute right-0.5 top-0.5 flex size-4 items-center justify-center rounded-full bg-(--color-action) text-[10px] font-bold text-(--color-text)"
+                  aria-hidden="true">
+                @(UnreadCount > 9 ? "9+" : UnreadCount.ToString())
+            </span>
+        }
+    </button>
+
+    @* ── Flyout panel ──────────────────────────────────────────────────── *@
+    @if (_open)
+    {
+        <div class="fixed inset-0 z-(--z-dropdown)" data-flyout-catcher @onclick="Close"></div>
+        <div class="absolute right-0 top-full z-(--z-dropdown) mt-1 w-80 rounded-xl border border-(--color-border) bg-(--color-surface-raised) shadow-medium">
+            <div class="flex items-center justify-between border-b border-(--color-border) px-4 py-2">
+                <span class="text-sm font-semibold text-(--color-text)">Notifications</span>
+                <button type="button"
+                        class="text-xs text-(--color-text-muted) hover:text-(--color-text) transition-colors"
+                        @onclick="MarkAllReadAsync">
+                    Mark all read
+                </button>
+            </div>
+
+            @if (_preview.Length == 0)
+            {
+                <p class="px-4 py-6 text-center text-sm text-(--color-text-muted)">
+                    You're all caught up.
+                </p>
+            }
+            else
+            {
+                <div class="flex flex-col py-1">
+                    @foreach (var n in _preview)
+                    {
+                        <NotificationItem Notification="n" OnActivate="() => ActivateAsync(n)" />
+                    }
+                </div>
+            }
+
+            <div class="border-t border-(--color-border) px-4 py-2 text-center">
+                <a href="/notifications"
+                   class="text-xs text-(--color-action-ink) hover:underline transition-colors"
+                   @onclick="Close">
+                    See all notifications
+                </a>
+            </div>
+        </div>
+    }
+
+</div>
+
+@code {
+    private const int PreviewSize = 8;
+
+    private bool _open;
+    private NotificationDto[] _preview = [];
+
+    // Persisted across the prerender→interactive handoff ([PersistentState] requires a public
+    // property) so the badge hydrates without a refetch/flash. The flyout preview stays
+    // ephemeral — it isn't rendered at prerender (flyout starts closed), and persisting
+    // unrendered data would put it in the page source for nothing.
+    [PersistentState] public int? UnreadCount { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Parallel loads are safe: each read-service method creates its own short-lived
+        // DbContext from IDbContextFactory (layer2-services.md "Read-context concurrency").
+        // ??= — restore-or-fetch for the count; the preview always loads fresh.
+        var previewTask = NotificationService.GetNotificationsAsync(1, PreviewSize);
+        UnreadCount ??= await NotificationService.GetUnreadCountAsync();
+        _preview      = await previewTask;
+    }
+
+    private void Toggle() => _open = !_open;
+
+    private void Close() => _open = false;
+
+    private async Task ActivateAsync(NotificationDto n)
+    {
+        if (!n.IsRead)
+        {
+            _preview = [.. _preview.Select(x =>
+                x.NotificationId == n.NotificationId ? x with { IsRead = true } : x)];
+            UnreadCount = Math.Max(0, UnreadCount.GetValueOrDefault() - 1);
+            await NotificationService.MarkAsReadAsync(n.NotificationId);
+        }
+        _open = false;
+        if (n.TargetUrl is not null)
+            Nav.NavigateTo(n.TargetUrl);
+    }
+
+    private async Task MarkAllReadAsync()
+    {
+        await NotificationService.MarkAllAsReadAsync();
+        _preview    = [.. _preview.Select(n => n with { IsRead = true })];
+        UnreadCount = 0;
+    }
+}
