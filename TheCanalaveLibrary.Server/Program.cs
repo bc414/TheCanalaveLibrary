@@ -258,6 +258,12 @@ builder.Services.AddHostedService<DiscoveryMartWorker>();
 builder.Services.AddScoped<SiteDailyStatAggregator>();
 builder.Services.AddHostedService<SiteDailyStatWorker>();
 builder.Services.AddScoped<ISiteDailyStatReadService, ServerSiteDailyStatReadService>();
+// UserStat recalculation worker (Feature 58, layer2-services.md "Recalculation worker (F58)"):
+// the scoped recalculator does the raw-SQL drift-correction pass; the hosted worker drives it
+// daily. TestAppFactory removes the worker (tests recalculate deterministically via
+// UserStatRecalculator).
+builder.Services.AddScoped<UserStatRecalculator>();
+builder.Services.AddHostedService<UserStatRecalculationWorker>();
 builder.Services.AddScoped<ICoOccurrenceReadService, ServerCoOccurrenceReadService>();
 builder.Services.AddScoped<ITreeSearchReadService, ServerTreeSearchReadService>();
 // Manual Tree Search (Feature 33 / WU40): stateless degree-1 pivots over live tables.

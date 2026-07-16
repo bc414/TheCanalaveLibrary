@@ -122,8 +122,12 @@ Covering tier: **RazorComponents** —
   - `ServerUserStoryInteractionWriteService`: `FavoritesOnStories` (story author) + `StoriesRead`/
     `StoriesInProgress`/`StoriesIgnored` (actor) via transition-delta (increment/decrement only when
     the effective boolean state flips).
-  Counters deferred to their own WU (not yet built): `ViewsOnStories` (WU38),
-  `SpotlightCount` (post-MVP), `ActiveReportCount` (WU34), acknowledgment counters (WU37).
+  Counters deferred (producer not yet built): `ViewsOnStories` (WU38), `SpotlightCount` (post-MVP,
+  definition unsettled), acknowledgment counters (no assigned WU — the acknowledgment/beta-reader
+  producer is unbuilt; NOT WU37, which is Story Tagging — stale cross-reference corrected
+  2026-07-15), `FeatureContributions` (producer is Feature 56, Stage 2). `ActiveReportCount` was
+  found to be an orphaned duplicate (never written; live data is `User.ActiveReportCount` on
+  `AspNetUsers`) and dropped via migration in WU-UserStatRecalc — see Feature 58 below.
   Verified: `dotnet build` green; 373 RazorComponents pass; integration counter-specific tests deferred
   to Phase 5.
 - **L3-Logic — Stage 5** (WU30). `ProfileBanner` receives `UserStatsDto?` from header; null means
@@ -142,9 +146,62 @@ Covering tier: **RazorComponents** —
 
 ## Feature 58 — UserStat Recalculation Worker
 
-- **L2 — Stage 2.** Periodic `IHostedService`/`BackgroundService` reconciling the denormalized counters.
-  Pure background computation — Layer 2 *is* the worker (grid_axes). All UI layers **N/A**; **L8 — N/A**
-  (EF-based recalculation, not a raw-SQL data mart).
+- **L2 — Stage 5 (WU-UserStatRecalc, 2026-07-15).** Periodic `IHostedService`/`BackgroundService`
+  reconciling the denormalized counters. Pure background computation — Layer 2 *is* the worker
+  (grid_axes). All UI layers **N/A**. **L8 revised (2026-07-15):** mostly set-based raw SQL, not
+  EF LINQ (mirrors `SiteDailyStatAggregator`'s style); one counter, `ViewsOnStories`, reads the
+  `daily_story_stats` L8 mart directly (no EF model exists for it), so this cell touches L8 rather
+  than being N/A — still N/A in the sense that it doesn't *build* new mart tables.
+  - **Settled counter scope (2026-07-15, replaces the "EF-based" note):**
+    - **Recompute — 14 already-wired counters:** `StoriesRead`, `StoriesInProgress`,
+      `StoriesIgnored`, `StoriesWritten`, `WordsWritten`, `CommentsWritten`,
+      `RecommendationsWritten`, `BlogPostsWritten`, `FollowerCount`, `AuthorsFollowed`,
+      `FavoritesOnStories`, `GroupsJoined`, `RecommendationsReceived`,
+      `RecommendationSuccessesEarned` — see `layer2-services.md` "Recalculation worker (F58)" for
+      the mirror-the-wired-formula nuances each one must honor.
+    - **Recompute — 3 unwired-but-populated counters** (worker becomes their first populator):
+      `ChaptersRead` (`UserChapterInteraction.IsRead`), `WordsRead` (`ChapterContent.WordCount`
+      summed over read chapters), `RecommendationsFoundUseful` (reader-side `RecommendationSuccess`
+      count).
+    - **Recompute — 1 raw-SQL counter:** `ViewsOnStories` (`daily_story_stats` mart, joined to the
+      author's stories).
+    - **Deferred, no recompute query:** `SpotlightCount`, `AcknowledgedAsBetaReaderCount`,
+      `AcknowledgedAsInspirationCount`, `FeatureContributions` — producers unbuilt/unsettled, see
+      Feature 22's deferred-counters note above. Recomputing these to 0 would mask missing
+      producers, not correct drift.
+    - **Dropped:** `ActiveReportCount` — orphaned duplicate column, removed via migration (not
+      recomputed).
+  - Insert-then-recompute: the worker also inserts any missing `UserStat` row before recomputing
+    (heals the latent silent-no-op in the real-time `ExecuteUpdateAsync` path for users without a
+    row). **Real finding, not anticipated in the plan:** no production write path creates a
+    `UserStat` row at user registration either (checked `DataSeeder` and the Identity registration
+    flow) — a stale code comment in `ServerRecommendationWriteService.RecordSuccessAsync` claimed
+    otherwise and was corrected. So this step isn't just a safety net; it's the only mechanism by
+    which most real users get a `UserStat` row at all.
+  - **Built:** `Server/Profiles/UserStatRecalculator.cs` (scoped, one pair of `IS DISTINCT FROM`-
+    guarded `UPDATE ... FROM` statements per counter — a match-and-correct pass plus a
+    zero-unmatched pass, since a plain inner join would silently skip a user who drifted to a wrong
+    positive value but has zero true occurrences); `Server/Profiles/UserStatRecalculationWorker.cs`
+    (`BackgroundService`, daily off-hours loop sharing `Marts:RebuildHourUtc` with
+    `DiscoveryMartWorker`/`SiteDailyStatWorker` — deliberately the same config key, not a dedicated
+    one, since all three are low-urgency off-hours reconciliation passes). New telemetry component
+    `CanalaveTelemetry.UserStatRecalc` (duration/users-touched/outcome, same shape as `Marts`) —
+    doc-touched into `logging.md`. DI in `Program.cs`; `TestAppFactory` removes the hosted worker
+    (same treatment as the other daily workers) so tests recalculate deterministically via
+    `UserStatRecalculator` directly.
+  - **`ActiveReportCount` drop, mechanically:** removed the property from `UserStat.cs`, migration
+    `WU_UserStatRecalc_DropActiveReportCount` (`DropColumn`), corrected the stale comment on
+    `UserStatsDto` that referenced it.
+- **Verified (2026-07-15):** `dotnet build` green (0 warnings/errors). `dotnet test` green: 712
+  Unit (unchanged) + 639 RazorComponents (unchanged) + 694 Integration (was 683 — 11 new tests in
+  `UserStatRecalculatorTests.cs`). Covering tier: **Integration** — drift-correction per counter
+  family (interaction-derived, authored-content, following, groups, recommendations incl.
+  anti-self-farm exclusion, reading-progress, raw-SQL views), insert-then-recompute for a
+  no-row user, idempotency (second pass corrects 0), zero-with-no-ground-truth (proves the
+  zero-unmatched pass fires), and deferred-counters-untouched. Mutation sanity: inverted
+  `StoriesInProgress`'s formula to also exclude `IsIgnored` (matching the *wrong*, display-filter
+  formula) → `RecalculateAllAsync_MirrorsWiredFormula_ForInteractionDerivedCounters` failed as
+  expected; reverted, suite green again.
 
 ## L4.5-Browser verification (2026-07-01) — F20 + F21 + F22 → Stage 5, no bugs
 

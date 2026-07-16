@@ -240,5 +240,40 @@ public static class CanalaveTelemetry
             description: "Wall time of one ranked co-occurrence mart read, tagged by mart name.");
     }
 
+    /// <summary>
+    /// UserStat recalculation worker (Feature 58, WU-UserStatRecalc). Same shape as
+    /// <see cref="Marts"/>: a daily recompute is trustworthy only when measurable — duration says
+    /// the off-hours window is respected, users-touched says the pass actually reconciled
+    /// something, outcome says whether it completed or failed (previous values keep serving on
+    /// failure, per the worker's resilience contract).
+    /// </summary>
+    public static class UserStatRecalc
+    {
+        public const string Name = Prefix + ".UserStatRecalc";
+
+        public static readonly ActivitySource Source = new(Name, "1.0.0");
+        public static readonly Meter Meter = new(Name, "1.0.0");
+
+        public static readonly Histogram<double> RecalcDuration = Meter.CreateHistogram<double>(
+            "canalave.userstatrecalc.duration", unit: "ms",
+            description: "Wall time of one full UserStat recalculation pass.");
+
+        public static readonly Histogram<long> UsersTouched = Meter.CreateHistogram<long>(
+            "canalave.userstatrecalc.users_touched", unit: "{user}",
+            description: "Distinct users whose UserStat row was inserted or had a counter corrected in one pass.");
+
+        public static readonly Counter<long> Outcomes = Meter.CreateCounter<long>(
+            "canalave.userstatrecalc.outcome", unit: "{run}",
+            description: "Completed recalculation passes, tagged by success.");
+
+        /// <summary>One completed pass — all instruments, consistently tagged.</summary>
+        public static void RecordPass(double durationMs, long usersTouched, bool success)
+        {
+            RecalcDuration.Record(durationMs);
+            UsersTouched.Record(usersTouched);
+            Outcomes.Add(1, new KeyValuePair<string, object?>("canalave.userstatrecalc.success", success));
+        }
+    }
+
     // Later work-units add their component here (never a new top-level source elsewhere).
 }

@@ -1300,11 +1300,40 @@ serializes correctly under any isolation level.
 | `FavoritesOnStories` | story author | `ServerUserStoryInteractionWriteService` | **transition-delta** |
 | `StoriesRead`, `StoriesInProgress`, `StoriesIgnored` | acting user | `ServerUserStoryInteractionWriteService` | **transition-delta** |
 
-**Counters deferred to their own WU** (source feature not yet built):
-- `ViewsOnStories` — WU38 (story view events)
-- `SpotlightCount` — post-MVP
-- `ActiveReportCount` — WU34 (moderation)
-- Acknowledgment/contribution counters — WU37
+**Counters deferred — producer not yet built:**
+- `ViewsOnStories` — WU38 (story view events); recomputable today only via raw SQL over the
+  `daily_story_stats` L8 mart (no EF model) — WU-UserStatRecalc reads it that way.
+- `SpotlightCount` — post-MVP (source now exists post WU-Spotlight, but the counter's exact
+  definition is unsettled).
+- Acknowledgment counters (`AcknowledgedAsBetaReaderCount`, `AcknowledgedAsInspirationCount`) — the
+  story-acknowledgment/beta-reader-crediting producer has **no assigned WU** and is unbuilt (not
+  WU37 — WU37 is Story Tagging, done; this was a stale cross-reference, corrected 2026-07-15).
+  Source ambiguity also unsettled: `BetaReader` entity vs. `StoryAcknowledgment` role 1.
+- `FeatureContributions` — producer is **Feature 56** (status.md: L1 Stage 5, L2/L3 Stage 2,
+  unbuilt), not WU37.
+
+**`ActiveReportCount` — dropped (WU-UserStatRecalc, 2026-07-15).** `UserStat.ActiveReportCount` was
+an orphaned duplicate column that no write path ever populated — the live moderation path writes
+`User.ActiveReportCount` on `AspNetUsers` instead. Removed via migration rather than wired; see
+`audit/Profiles.md` Feature 58.
+
+### Recalculation worker (F58) — mirror the wired formula
+
+A recompute aggregate must reproduce the **exact** semantics the real-time delta path maintains, not
+just "COUNT the obvious rows" — otherwise the worker fights the increment path and "corrects" a
+value that was already right. Settled nuances (`WU-UserStatRecalc`):
+- `StoriesInProgress` — `HasStarted && !IsCompleted` (the wired path does not additionally exclude
+  `IsIgnored`; neither does the recompute).
+- `FavoritesOnStories` — counts public `IsFavorite` only, never `IsHiddenFavorite`.
+- `CommentsWritten` — counts all extant `BaseComment` rows by the user; moderation takedown doesn't
+  delete the row or decrement the wired counter, so the recompute doesn't exclude it either.
+- `RecommendationSuccessesEarned` — anti-self-farm join (`RecommendationSuccess.UserId ≠
+  Recommendation.RecommenderId`); anonymous recs (null `RecommenderId`) drop out.
+
+Recompute is set-based raw SQL (`UserStatRecalculator`, `Server/Profiles/`), following
+`SiteDailyStatAggregator`'s style — one `UPDATE ... FROM (SELECT ... GROUP BY owner_id)` per counter
+family, not a per-user loop. Step 1 inserts any missing `UserStat` rows first (real-time
+`ExecuteUpdateAsync` silently no-ops when the row doesn't exist).
 
 ### Transition-delta rule for UserStoryInteraction-derived counters
 

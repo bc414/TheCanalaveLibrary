@@ -37,7 +37,8 @@ One nested class per instrumented component, each owning an `ActivitySource` + `
 ServiceDefaults→Core project reference), so a new component lights up with no registration
 change. Existing: `ImageStorage`, `ReadingProgress` + `ViewCount` (WU-SignalBuffering,
 2026-07-06 — the signal-buffer flush pipelines), `Marts` + `Discovery` (WU-Marts, 2026-07-07 —
-see below). Reserved next: `Email` (WU-Email).
+see below), `UserStatRecalc` (WU-UserStatRecalc, Feature 58 — see below). Reserved next: `Email`
+(WU-Email).
 
 WU-Marts components (spans are root spans for the workers — background work, no ambient parent):
 - **`Marts`** — the daily mart rebuild workers. Spans: `Marts.TreeSearchRebuild`,
@@ -54,6 +55,11 @@ WU-Marts components (spans are root spans for the workers — background work, n
   `canalave.treesearch.cap_truncations` (counter, `{traversal}` — the production early-warning
   for supernode flooding), `canalave.cooccurrence.read.duration` (histogram, `ms`, tag
   `canalave.mart.name`).
+- **`UserStatRecalc`** — the daily UserStat recalculation worker (Feature 58). Span shape mirrors
+  `Marts` (root span, no ambient parent). Metrics: `canalave.userstatrecalc.duration` (histogram,
+  `ms`), `canalave.userstatrecalc.users_touched` (histogram, `{user}` — rows inserted or
+  corrected in one pass, the drift-detected signal), `canalave.userstatrecalc.outcome` (counter,
+  `{run}`, tag `canalave.userstatrecalc.success`).
 
 - Producers are **`static readonly` process singletons** — `ActivitySource`/`Meter` are
   thread-safe, stateless funnels (the mirror image of `DbContext`, which is scoped because it

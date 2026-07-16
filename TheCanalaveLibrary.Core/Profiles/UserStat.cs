@@ -56,7 +56,5 @@ public partial class UserStat
 
     public int SpotlightCount { get; set; }
 
-    public int ActiveReportCount { get; set; }
-
     public virtual User User { get; set; } = null!;
 }

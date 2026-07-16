@@ -98,9 +98,9 @@ DisplayOrder for that user) + 1` — visible by default. The curation UI lets us
 **Deferred award triggers:**
 | Badge | Status | Blocking reason |
 |---|---|---|
-| `Patron` | Deferred | `FeatureContributions` counter not populated (WU37) |
-| `BetaReader` | Deferred | `AcknowledgedAsBetaReaderCount` counter not populated (WU37) |
-| `Architect` | Deferred | `FeatureContributions` counter not populated (WU37) |
-| `Artist` | Deferred | `FeatureContributions` counter not populated (WU37) |
+| `Patron` | Deferred | `FeatureContributions` counter not populated (producer is Feature 56, Stage 2 — not WU37, which is Story Tagging; stale cross-reference corrected 2026-07-15) |
+| `BetaReader` | Deferred | `AcknowledgedAsBetaReaderCount` counter not populated (acknowledgment/beta-reader producer has no assigned WU) |
+| `Architect` | Deferred | `FeatureContributions` counter not populated (producer is Feature 56, Stage 2) |
+| `Artist` | Deferred | `FeatureContributions` counter not populated (producer is Feature 56, Stage 2) |
 
 **Open:** none. All WU36 decisions are settled.

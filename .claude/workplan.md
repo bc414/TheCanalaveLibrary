@@ -2976,3 +2976,50 @@ WASM-focused whole-site browser wave that found and fixed seven real bugs.
   TestUser rendered exactly the two survivors (unread 2mo-old with unread dot; read 1m-old
   without).
 - **Tool:** Claude Code. **Pointer:** `audit/Notifications.md` F57 Stage note.
+
+## WU-UserStatRecalc — UserStat Recalculation Worker (Feature 58) — DONE ✓ (2026-07-15)
+
+- **Cells:** F58 L2 (2 → 5). The feature's only applicable layer — the worker IS the feature
+  (all other layers N/A per `grid_axes.md` #58).
+- **Pre-implementation doc-touch:** a per-counter ground-truth audit across all 23 `UserStat`
+  counters found the docs' "acknowledgment/contribution counters deferred to WU37" pointer was
+  **wrong** — WU37 is Story Tagging (Feature 12), unrelated; the acknowledgment/beta-reader
+  producer has no assigned WU at all, and `FeatureContributions`' producer is Feature 56 (Stage 2).
+  Fixed in `layer2-services.md`, `audit/Profiles.md`, `audit/Badges.md`. Also found
+  `UserStat.ActiveReportCount` was an orphaned duplicate — nothing ever wrote it; the live
+  moderation path writes `User.ActiveReportCount` on `AspNetUsers` instead — dropped via migration
+  rather than wired.
+- **Settled scope (user decisions):** recompute the 14 already-wired counters (mirroring each
+  one's exact wired formula — `StoriesInProgress` deliberately doesn't exclude `IsIgnored`,
+  `FavoritesOnStories` never counts `IsHiddenFavorite`, `CommentsWritten` doesn't exclude
+  takedowns, `RecommendationSuccessesEarned` keeps the anti-self-farm join) plus 3 unwired-but-
+  populated counters (`ChaptersRead`, `WordsRead`, `RecommendationsFoundUseful` — this worker is
+  their first populator) plus 1 raw-SQL counter (`ViewsOnStories`, reading the `daily_story_stats`
+  L8 mart directly — no EF model exists for it). Deferred, not recomputed: `SpotlightCount`
+  (definition unsettled), the two acknowledgment counters and `FeatureContributions` (producers
+  unbuilt — recomputing to 0 would mask that, not correct drift). Insert-then-recompute: the
+  worker also inserts any missing `UserStat` row first, since no production write path creates one
+  at registration either (a stale comment in `ServerRecommendationWriteService` claimed otherwise;
+  corrected).
+- **Did:** `Server/Profiles/UserStatRecalculator.cs` (scoped; one pair of `IS DISTINCT FROM`-
+  guarded `UPDATE ... FROM` statements per counter — a match-and-correct pass plus a
+  zero-unmatched pass, since a plain inner join would silently skip a user who drifted to a wrong
+  positive value but has zero true occurrences today) + `Server/Profiles/UserStatRecalculationWorker.cs`
+  (`BackgroundService`, daily off-hours loop deliberately sharing `Marts:RebuildHourUtc` with
+  `DiscoveryMartWorker`/`SiteDailyStatWorker` rather than a dedicated config key — same shape
+  as `SiteDailyStatWorker`/`SiteDailyStatAggregator`). New telemetry component
+  `CanalaveTelemetry.UserStatRecalc` (duration/users-touched/outcome, same shape as `Marts`),
+  doc-touched into `logging.md`. DI in `Program.cs`; `TestAppFactory` removes the hosted worker.
+  Migration `WU_UserStatRecalc_DropActiveReportCount` drops `UserStat.ActiveReportCount`; removed
+  the property from `UserStat.cs` and corrected the stale `UserStatsDto` comment referencing it.
+- **Verified:** `dotnet build` green (0 warnings/errors). `dotnet test` green — Unit 712
+  (unchanged) / RazorComponents 639 (unchanged) / Integration 694 (was 683 — 11 new tests in
+  `UserStatRecalculatorTests.cs`): drift-correction per counter family (interaction-derived,
+  authored-content, following, groups, recommendations incl. anti-self-farm exclusion,
+  reading-progress, raw-SQL views), insert-then-recompute for a no-row user, idempotency (second
+  pass corrects 0), zero-with-no-ground-truth (proves the zero-unmatched pass fires), and
+  deferred-counters-untouched. Mutation sanity: inverted `StoriesInProgress`'s aggregate to also
+  exclude `IsIgnored` (the wrong, display-filter formula) → the mirror-wired-formula test failed as
+  expected; reverted, suite green again.
+- **Tool:** Claude Code (Opus). **Pointer:** `audit/Profiles.md` Feature 58 Stage-5 note;
+  `layer2-services.md` "Recalculation worker (F58)".
