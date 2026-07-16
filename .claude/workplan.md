@@ -2950,3 +2950,29 @@ WASM-focused whole-site browser wave that found and fixed seven real bugs.
 - **Tool:** Claude Code (Sonnet) driving Chrome via MCP browser tools. **Pointer:**
   `audit/Notifications.md` F42 "Anonymous-viewer crash fix" Stage note; `layer3-logic.md`
   "Deferring DI Behind AuthorizeView (WU43)".
+
+## WU-NotificationCleanup — Notification Cleanup Worker (Feature 57) — DONE ✓ (2026-07-15)
+
+- **Cells:** F57 L2 (2 → 5). The feature's only applicable layer — the worker IS the feature
+  (all other layers N/A per `grid_axes.md` #57).
+- **Did:** `Server/Notifications/NotificationCleanupSweeper.cs` (new; body — one set-based
+  `ExecuteDeleteAsync` on `IsRead && DateCreated < now − RetentionPeriod`, 60 days, `public
+  static readonly` so tests age rows against the real constant, the `QuietPeriod` precedent) +
+  `Server/Notifications/NotificationCleanupWorker.cs` (new; `BackgroundService` timer driver,
+  24 h `PeriodicTimer`, first sweep ~5 s after startup — the `SpotlightGoLiveWorker`/`Sweeper`
+  worker/body split verbatim). Registered in `Program.cs`; worker added to `TestAppFactory`'s
+  removal list. Unread notifications are kept indefinitely regardless of age. **No new index**
+  backs the `is_read + date_created` predicate (existing `ix_notifications_recipient_read_date`
+  leads with recipient, doesn't serve the global scan): a once-daily sweep over a table pruned
+  to ≤60 days of read rows makes a scan negligible; a partial index would tax every insert —
+  rationale recorded in the audit Stage note.
+- **Verified:** `dotnet build` clean; `dotnet test` green — Unit 712 / RazorComponents 639 /
+  Integration 683 (incl. new `NotificationCleanupTests` ×2: four-quadrant read×age matrix
+  deletes exactly the read+aged row; nothing-eligible sweep deletes zero). End-to-end
+  (server-only path, SeedTool-volume dev DB): three psql marker rows for TestUser
+  (read+61d / unread+61d / read+now); boot sweep logged "deleted 13520 read notification(s)
+  older than 60 days" (13,519 aged bulk-seed rows + the read+61d marker, seed-user ownership
+  psql-confirmed before start), survivors psql-verified, and `/notifications` in Chrome as
+  TestUser rendered exactly the two survivors (unread 2mo-old with unread dot; read 1m-old
+  without).
+- **Tool:** Claude Code. **Pointer:** `audit/Notifications.md` F57 Stage note.

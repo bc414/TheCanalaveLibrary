@@ -250,9 +250,23 @@ adding that. Noted here so the seam isn't re-discovered from scratch.
 
 ## Feature 57 — Notification Cleanup Worker
 
-- **L2 — Stage 2.** `IHostedService` deleting read notifications older than 60 days. Pure background
-  computation (Layer 2 *is* the worker). Nothing to clean until data ages — naturally sorts late. All
-  other layers **N/A**.
+- **L2 — Stage 5 (WU-NotificationCleanup, 2026-07-15).** Built as the standard worker/body split
+  (the `SpotlightGoLiveWorker`/`SpotlightGoLiveSweeper` pattern): `NotificationCleanupWorker`
+  (`BackgroundService`, 24 h `PeriodicTimer`, first sweep ~5 s after startup, survives a failed
+  cycle) delegates to `NotificationCleanupSweeper.SweepAsync` — one set-based `ExecuteDeleteAsync`
+  on `IsRead && DateCreated < now − RetentionPeriod` (60 days, `public static readonly` so tests
+  reference the real constant). Unread notifications are kept indefinitely regardless of age — the
+  user hasn't seen them, and the unread count must stay truthful. `TestAppFactory` removes the
+  worker; tests drive the sweeper directly. **No new index** for the `is_read + date_created`
+  predicate: `ix_notifications_recipient_read_date` leads with recipient so the sweep scans, but a
+  once-daily sweep over a table pruned to ≤60 days of read rows is negligible, and a dedicated
+  partial index would tax every notification insert to save a background job milliseconds.
+  **Test tiers:** Integration (`NotificationCleanupTests` ×2 — four-quadrant read×age matrix
+  deletes exactly the read+aged row; nothing-eligible sweep deletes zero). The timer loop itself is
+  the shared, already-proven `BackgroundService` scaffold (no automated tier exercises cadence).
+  Also verified end-to-end 2026-07-15 against the dev DB: boot sweep deleted 13,520 aged read rows
+  (bulk-seed data + a psql marker), survivors confirmed via psql and the rendered `/notifications`
+  page. All other layers **N/A** (pure background computation — Layer 2 *is* the worker).
 
 ## L4.5-Browser verification (2026-07-01/02) — F41 + F42 + F43 → Stage 5
 

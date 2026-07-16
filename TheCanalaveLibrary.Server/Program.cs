@@ -395,6 +395,10 @@ builder.Services.AddHostedService<SpotlightGoLiveWorker>();
 // Fan-out notify methods land incrementally with their triggering work-units (workplan.md WU22).
 builder.Services.AddScoped<INotificationReadService, ServerNotificationWriteService>();
 builder.Services.AddScoped<INotificationWriteService, ServerNotificationWriteService>();
+// Notification cleanup (Feature 57) — daily prune of read notifications older than 60 days.
+// TestAppFactory removes the worker (tests drive NotificationCleanupSweeper directly).
+builder.Services.AddScoped<NotificationCleanupSweeper>();
+builder.Services.AddHostedService<NotificationCleanupWorker>();
 // Messaging (WU35) — L2 read/write services (Feature 49). Stateless MVP; SignalR post-MVP.
 // No Notification rows for PMs — messaging has its own LastReadTimestamp watermark bookkeeping.
 // See cross-cutting.md "Private Messaging Architecture" and layer2-services.md "AllowPrivateMessages Gate".
