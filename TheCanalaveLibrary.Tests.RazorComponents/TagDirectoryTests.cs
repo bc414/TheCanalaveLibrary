@@ -8,8 +8,9 @@ using TheCanalaveLibrary.SharedUI;
 namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
-/// Render tests for <see cref="TagDirectoryDesktop"/> (WU27.5; mobile variant deleted
-/// 2026-07-18, WU-ResponsiveMerge — single responsive tree).
+/// Render tests for <see cref="TagDirectoryPage"/> (WU27.5; retargeted from the former
+/// TagDirectoryDesktop composite 2026-07-18, WU-ResponsiveMerge — the page now owns its markup
+/// and loads the directory via <see cref="ITagReadService"/>).
 /// Covers:
 /// - Sections render per type with correct heading.
 /// - Parent chip rendered; child chip nested beneath parent.
@@ -24,7 +25,8 @@ public class TagDirectoryTests : BunitContext
     public TagDirectoryTests()
     {
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
-        Services.AddScoped<ITagWriteService>(_ => new FakeTagWriteService());
+        Services.AddScoped<ITagReadService>(_ => new FakeTagWriteService(MakeDirectory()));
+        Services.AddScoped<ITagWriteService>(_ => new FakeTagWriteService(MakeDirectory()));
         JSInterop.Mode = JSRuntimeMode.Loose;
         _auth = this.AddAuthorization(); // anonymous/not-authorized by default
     }
@@ -60,27 +62,25 @@ public class TagDirectoryTests : BunitContext
         new() { TagType = TagTypeEnum.CrossoverFandom, Nodes = [] },
     ];
 
-    // ── Desktop — parent chip + nested child ─────────────────────────────────
+    // ── Parent chip + nested child ────────────────────────────────────────────
 
     [Fact]
-    public void Desktop_RendersBulbasaurChipWithNestedChild()
+    public void Page_RendersBulbasaurChipWithNestedChild()
     {
-        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
-            .Add(c => c.Directory, MakeDirectory()));
+        IRenderedComponent<TagDirectoryPage> cut = Render<TagDirectoryPage>();
 
         string markup = cut.Markup;
         markup.Should().Contain("Bulbasaur", "parent chip must render");
         markup.Should().Contain("Bulbachild", "child chip must render nested beneath parent");
     }
 
-    // ── Desktop — unbounded vs bounded rendering ──────────────────────────────
+    // ── Unbounded vs bounded rendering ────────────────────────────────────────
 
     [Fact]
-    public void Desktop_UnboundedType_RenderedInDetails()
+    public void Page_UnboundedType_RenderedInDetails()
     {
         // Character is unbounded — its section should be in a <details> element.
-        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
-            .Add(c => c.Directory, MakeDirectory()));
+        IRenderedComponent<TagDirectoryPage> cut = Render<TagDirectoryPage>();
 
         // Find a <details> that contains the word "Characters"
         bool hasDetails = cut.FindAll("details").Any(d => d.InnerHtml.Contains("Characters"));
@@ -88,11 +88,10 @@ public class TagDirectoryTests : BunitContext
     }
 
     [Fact]
-    public void Desktop_BoundedType_RenderedAsSection_NotDetails()
+    public void Page_BoundedType_RenderedAsSection_NotDetails()
     {
         // Genre is bounded — its section should be a plain <section>, not a <details>.
-        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
-            .Add(c => c.Directory, MakeDirectory()));
+        IRenderedComponent<TagDirectoryPage> cut = Render<TagDirectoryPage>();
 
         // There should be a <section> containing "Genres" and no <details> containing it.
         bool sectionWithGenres = cut.FindAll("section").Any(s => s.InnerHtml.Contains("Genres"));
@@ -102,14 +101,13 @@ public class TagDirectoryTests : BunitContext
         detailsWithGenres.Should().BeFalse("Genre (bounded) must not be in a <details>");
     }
 
-    // ── Desktop — mod controls: AuthorizeView gating ─────────────────────────
+    // ── Mod controls: AuthorizeView gating ────────────────────────────────────
 
     [Fact]
-    public void Desktop_Anonymous_DoesNotRenderModControls()
+    public void Page_Anonymous_DoesNotRenderModControls()
     {
         // No auth context → no edit/delete buttons, no "+ New Tag".
-        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
-            .Add(c => c.Directory, MakeDirectory()));
+        IRenderedComponent<TagDirectoryPage> cut = Render<TagDirectoryPage>();
 
         cut.FindAll("button[title^='Edit']").Should().BeEmpty("anonymous sees no edit buttons");
         cut.FindAll("button[title^='Delete']").Should().BeEmpty("anonymous sees no delete buttons");
@@ -118,41 +116,37 @@ public class TagDirectoryTests : BunitContext
     }
 
     [Fact]
-    public void Desktop_Moderator_RendersModControls()
+    public void Page_Moderator_RendersModControls()
     {
         _auth.SetAuthorized("mod-user").SetRoles("Moderator");
 
-        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
-            .Add(c => c.Directory, MakeDirectory()));
+        IRenderedComponent<TagDirectoryPage> cut = Render<TagDirectoryPage>();
 
         // "+ New Tag" button should be present.
         cut.FindAll("button").Any(b => b.TextContent.Contains("New Tag"))
             .Should().BeTrue("Moderator sees the New Tag button");
     }
-
 }
 
 /// <summary>
-/// No-op <see cref="ITagWriteService"/> for bUnit tests that don't exercise writes.
+/// <see cref="ITagWriteService"/> fake (which includes the <see cref="ITagReadService"/> half —
+/// integrated read+write interface). Directory payload is configurable — the page under test
+/// loads it in <c>OnInitializedAsync</c>; writes are no-ops; all other reads return empty.
 /// </summary>
-internal sealed class FakeTagWriteService : ITagWriteService
+internal sealed class FakeTagWriteService(List<TagDirectoryGroupDto>? directory = null) : ITagWriteService
 {
+    // ── Write half ────────────────────────────────────────────────────────────
     public Task<TagSaveResult> CreateTagAsync(CreateTagDto dto) => Task.FromResult(new TagSaveResult(0, null));
     public Task<string?> UpdateTagAsync(UpdateTagDto dto) => Task.FromResult<string?>(null);
     public Task DeleteTagAsync(int tagId) => Task.CompletedTask;
 
-    // ITagReadService pass-through — not exercised in desktop/mobile render tests.
-    public Task<List<TagDropDownDTO>> GetTagsByTypeAsync(TagTypeEnum type) => Empty();
-    public Task<List<TagDropDownDTO>> GetAllCharacterTagsAsync() => Empty();
-    public Task<List<TagDropDownDTO>> GetAllSettingTagsAsync() => Empty();
-    public Task<List<TagDropDownDTO>> GetAllGenreTagsAsync() => Empty();
-    public Task<List<TagDropDownDTO>> GetAllContentWarningTagsAsync() => Empty();
-    public Task<List<TagChipDto>> SearchTagChipsAsync(TagTypeEnum type, string term) =>
-        Task.FromResult(new List<TagChipDto>());
-    public Task<List<TagChipDto>> GetTagChipsByIdsAsync(IReadOnlyList<int> tagIds) =>
-        Task.FromResult(new List<TagChipDto>());
-    public Task<List<TagDirectoryGroupDto>> GetTagDirectoryAsync() =>
-        Task.FromResult(new List<TagDirectoryGroupDto>());
-
-    private static Task<List<TagDropDownDTO>> Empty() => Task.FromResult(new List<TagDropDownDTO>());
+    // ── Read half (ITagWriteService : ITagReadService) ────────────────────────
+    public Task<List<TagDropDownDTO>> GetTagsByTypeAsync(TagTypeEnum type) => Task.FromResult(new List<TagDropDownDTO>());
+    public Task<List<TagDropDownDTO>> GetAllCharacterTagsAsync() => Task.FromResult(new List<TagDropDownDTO>());
+    public Task<List<TagDropDownDTO>> GetAllSettingTagsAsync() => Task.FromResult(new List<TagDropDownDTO>());
+    public Task<List<TagDropDownDTO>> GetAllGenreTagsAsync() => Task.FromResult(new List<TagDropDownDTO>());
+    public Task<List<TagDropDownDTO>> GetAllContentWarningTagsAsync() => Task.FromResult(new List<TagDropDownDTO>());
+    public Task<List<TagChipDto>> SearchTagChipsAsync(TagTypeEnum type, string term) => Task.FromResult(new List<TagChipDto>());
+    public Task<List<TagChipDto>> GetTagChipsByIdsAsync(IReadOnlyList<int> tagIds) => Task.FromResult(new List<TagChipDto>());
+    public Task<List<TagDirectoryGroupDto>> GetTagDirectoryAsync() => Task.FromResult(directory ?? []);
 }

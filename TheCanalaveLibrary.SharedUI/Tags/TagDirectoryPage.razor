@@ -1,12 +1,12 @@
 @page "/tags"
 @namespace TheCanalaveLibrary.SharedUI
+@using Microsoft.AspNetCore.Components.Authorization
 @inject ITagReadService TagReadService
 @inject ITagWriteService TagWriteService
 
-@* Tag Directory dispatcher — Pattern 2 dispatcher (layer3.5-structure.md §"Dispatcher Pattern").
-   Public route (no [Authorize]). Injects both read + write services; write calls owned here
-   and triggered via EventCallbacks from TagDirectoryDesktop. Reloads the directory after
-   create/update/delete so state stays fresh without a full page navigation. WU27.5.
+@* Tag Directory — /tags browse + mod-edit page (WU27.5; former TagDirectoryDesktop composite
+   folded in 2026-07-18, WU-ResponsiveMerge — single responsive tree, page owns its markup).
+   Public route (no [Authorize]); mod CRUD controls gated by AuthorizeView at every viewport.
 
    L5 status (WU-L5Pilot, 2026-07-04): this page ran end-to-end as an InteractiveWebAssembly
    island to battle-test layer5-wasm.md, then the island directives were removed by decision —
@@ -33,10 +33,97 @@ else
         </div>
     }
 
-    <TagDirectoryDesktop Directory="Directory"
-                         OnTagCreated="HandleTagCreatedAsync"
-                         OnTagUpdated="HandleTagUpdatedAsync"
-                         OnTagDeleted="HandleTagDeletedAsync" />
+    <div class="mx-auto max-w-5xl px-3 py-4 md:px-4 md:py-6">
+
+        @* Jump-nav for unbounded sections *@
+        @{
+            var unboundedGroups = Directory.Where(g => TagTypeLayout.IsUnbounded(g.TagType) && g.Nodes.Count > 0).ToList();
+        }
+        @if (unboundedGroups.Count > 0)
+        {
+            <nav class="mb-6 flex flex-wrap gap-2" aria-label="Tag type navigation">
+                @foreach (var g in unboundedGroups)
+                {
+                    <a href="#tag-section-@g.TagType.ToString().ToLowerInvariant()"
+                       class="rounded-full border border-(--color-border) px-3 py-1 text-sm text-text hover:bg-(--color-surface-hover) transition-colors">
+                        @TagTypeLayout.Label(g.TagType)
+                    </a>
+                }
+            </nav>
+        }
+
+        @* Mod "New Tag" button *@
+        <AuthorizeView Roles="Moderator,Admin">
+            <Authorized>
+                <div class="mb-4 flex justify-end">
+                    <button type="button"
+                            class="rounded-md bg-(--color-action) px-4 py-1.5 text-sm text-(--color-text) hover:bg-(--color-action-hover) transition-colors"
+                            @onclick="OpenCreateModal">
+                        + New Tag
+                    </button>
+                </div>
+            </Authorized>
+        </AuthorizeView>
+
+        @* Sections per type *@
+        @foreach (var group in Directory)
+        {
+            bool unbounded = TagTypeLayout.IsUnbounded(group.TagType);
+            string sectionId = $"tag-section-{group.TagType.ToString().ToLowerInvariant()}";
+
+            @if (unbounded)
+            {
+                <details id="@sectionId" class="mb-6 group" open="@(group.Nodes.Count <= 20)">
+                    <summary class="cursor-pointer list-none">
+                        <h2 class="inline text-lg font-semibold text-text">@TagTypeLayout.Label(group.TagType)</h2>
+                        <span class="ml-2 text-sm text-(--color-text-muted)">(@group.Nodes.Count)</span>
+                    </summary>
+                    <div class="mt-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+                        <TagDirectorySection Group="group" OnEditTag="OpenEditModal" OnDeleteTag="OpenDeleteModal" />
+                    </div>
+                </details>
+            }
+            else
+            {
+                <section id="@sectionId" class="mb-6">
+                    <h2 class="mb-3 text-lg font-semibold text-text">@TagTypeLayout.Label(group.TagType)</h2>
+                    <div class="rounded-xl border border-(--color-border) bg-(--color-surface) p-4">
+                        <TagDirectorySection Group="group" OnEditTag="OpenEditModal" OnDeleteTag="OpenDeleteModal" />
+                    </div>
+                </section>
+            }
+        }
+    </div>
+
+    @* Create / Edit modal *@
+    @if (_editorOpen)
+    {
+        <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="CloseEditor">
+            <div class="max-w-lg w-full rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation="true">
+                <h2 class="mb-4 text-lg font-semibold text-text">
+                    @(_editingTag is null ? "New Tag" : $"Edit: {_editingTag.TagName}")
+                </h2>
+                @* ServerError needs @: string-typed parameters take attribute text LITERALLY (the
+                   form rendered the text "_editorError" in red on every open — browser pass
+                   2026-07-01). Non-string params (EditingTag/Directory) compile as expressions. *@
+                <TagEditorForm Directory="Directory"
+                               EditingTag="_editingTag"
+                               ServerError="@_editorError"
+                               OnSave="HandleEditorSaveAsync"
+                               OnCancel="CloseEditor" />
+            </div>
+        </div>
+    }
+
+    @* Delete confirmation modal *@
+    <ConfirmDialog IsOpen="_deleteOpen"
+                   IsOpenChanged="v => _deleteOpen = v"
+                   Title="Delete Tag"
+                   Message="@($"Delete \"{_deletingTag?.TagName}\"? This cannot be undone.")"
+                   ConfirmText="Delete"
+                   IsDestructive="true"
+                   OnConfirm="ConfirmDeleteAsync"
+                   OnCancel="() => { _deleteOpen = false; _deletingTag = null; }" />
 }
 
 @code {
@@ -46,6 +133,15 @@ else
     public List<TagDirectoryGroupDto>? Directory { get; set; }
 
     private string? _spriteWarning;
+
+    // ── Editor modal state ────────────────────────────────────────────────────
+    private bool _editorOpen;
+    private TagChipDto? _editingTag;   // null = create mode; carries admin fields when from directory
+    private string? _editorError;
+
+    // ── Delete modal state ────────────────────────────────────────────────────
+    private bool _deleteOpen;
+    private TagChipDto? _deletingTag;
 
     protected override async Task OnInitializedAsync()
     {
@@ -59,23 +155,111 @@ else
         Directory = await TagReadService.GetTagDirectoryAsync();
     }
 
-    private async Task HandleTagCreatedAsync(CreateTagDto dto)
+    // ── Write paths (throw TagValidationException on rule violations) ─────────
+
+    private async Task CreateTagAsync(CreateTagDto dto)
     {
         TagSaveResult result = await TagWriteService.CreateTagAsync(dto);
         _spriteWarning = result.SpriteWarning;
         await LoadDirectoryAsync();
     }
 
-    private async Task HandleTagUpdatedAsync(UpdateTagDto dto)
+    private async Task UpdateTagAsync(UpdateTagDto dto)
     {
         _spriteWarning = await TagWriteService.UpdateTagAsync(dto);
         await LoadDirectoryAsync();
     }
 
-    private async Task HandleTagDeletedAsync(int tagId)
+    private async Task DeleteTagAsync(int tagId)
     {
         _spriteWarning = null;
         await TagWriteService.DeleteTagAsync(tagId);
         await LoadDirectoryAsync();
+    }
+
+    // ── Modal handlers ────────────────────────────────────────────────────────
+
+    private void OpenCreateModal()
+    {
+        _editingTag = null;
+        _editorError = null;
+        _editorOpen = true;
+    }
+
+    private void OpenEditModal(TagChipDto chip)
+    {
+        _editingTag = chip;
+        _editorError = null;
+        _editorOpen = true;
+    }
+
+    private void OpenDeleteModal(TagChipDto chip)
+    {
+        _deletingTag = chip;
+        _deleteOpen = true;
+    }
+
+    private void CloseEditor()
+    {
+        _editorOpen = false;
+        _editingTag = null;
+        _editorError = null;
+    }
+
+    private async Task HandleEditorSaveAsync(TagEditorFormResult result)
+    {
+        _editorError = null;
+        try
+        {
+            if (_editingTag is null)
+            {
+                await CreateTagAsync(new CreateTagDto
+                {
+                    TagName = result.TagName,
+                    TagTypeId = result.TagTypeId,
+                    Description = result.Description,
+                    SpriteIdentifier = result.SpriteIdentifier,
+                    IsFanon = result.IsFanon,
+                    AllowOCDetails = result.AllowOCDetails,
+                    ParentTagId = result.ParentTagId
+                });
+            }
+            else
+            {
+                await UpdateTagAsync(new UpdateTagDto
+                {
+                    TagId = _editingTag.TagId,
+                    TagName = result.TagName,
+                    TagTypeId = result.TagTypeId,
+                    Description = result.Description,
+                    SpriteIdentifier = result.SpriteIdentifier,
+                    IsFanon = result.IsFanon,
+                    AllowOCDetails = result.AllowOCDetails,
+                    ParentTagId = result.ParentTagId
+                });
+            }
+            CloseEditor();
+        }
+        catch (TagValidationException ex)
+        {
+            _editorError = ex.Message;
+        }
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deletingTag is null) return;
+        try
+        {
+            await DeleteTagAsync(_deletingTag.TagId);
+        }
+        catch (TagValidationException ex)
+        {
+            // Surface the "in use" error as an editor error for visibility.
+            _editorError = ex.Message;
+            _editorOpen = true;
+        }
+        _deleteOpen = false;
+        _deletingTag = null;
     }
 }
