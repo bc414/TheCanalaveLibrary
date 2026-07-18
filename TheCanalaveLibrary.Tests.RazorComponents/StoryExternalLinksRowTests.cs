@@ -14,17 +14,27 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// </summary>
 public class StoryExternalLinksRowTests : BunitContext
 {
+    private readonly FakeRelatedStoriesStoryReadService _storyReadService = new();
+    private readonly FakeChapterReadService _chapterReadService = new();
+
     public StoryExternalLinksRowTests()
     {
         // ChapterList (WU45) injects the manual read-mark write service.
         Services.AddSingleton<IChapterReadMarkWriteService>(new FakeChapterReadMarkWriteService());
-        // StoryDesktop composition needs the same fakes as StoryDesktopTests.
+        // The placement test renders StoryPage (the former StoryDesktop composite was folded
+        // into it 2026-07-18, WU-ResponsiveMerge) — same fake surface as StoryPageTests.
+        Services.AddScoped<IStoryReadService>(_ => _storyReadService);
+        Services.AddScoped<IChapterReadService>(_ => _chapterReadService);
+        Services.AddScoped<ISeriesReadService>(_ => new FakeSeriesReadService());
+        Services.AddScoped<IStoryLineageReadService>(_ => new FakeStoryLineageReadService());
+        Services.AddScoped<IStoryArcReadService>(_ => new FakeStoryArcReadService());
+        Services.AddScoped<IViewCountWriteService>(_ => new FakeViewCountWriteService());
+        Services.AddScoped<IPublicUrlProvider>(_ => new PublicUrlProvider("https://test.local"));
         Services.AddScoped<IRecommendationWriteService>(_ => new FakeRecommendationWriteService());
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
-        // RelatedStoriesSection (Feature 61, nested in StoryDesktop) injects these four; left at
+        // RelatedStoriesSection (Feature 61, nested in the page) injects these; left at
         // their empty defaults so the section renders nothing (BothEmpty).
         Services.AddScoped<ICoOccurrenceReadService>(_ => new FakeCoOccurrenceReadService());
-        Services.AddScoped<IStoryReadService>(_ => new FakeRelatedStoriesStoryReadService());
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeRelatedStoriesInteractionReadService());
         Services.AddScoped<IDiscoveryDefaultsReadService>(_ => new FakeDiscoveryDefaultsReadService());
         JSInterop.Mode = JSRuntimeMode.Loose;
@@ -68,9 +78,9 @@ public class StoryExternalLinksRowTests : BunitContext
     // ── Settled placement on the story page ──────────────────────────────────────
 
     [Fact]
-    public void OnStoryDesktop_RowSitsAfterChaptersAndBeforeRecommendations()
+    public void OnStoryPage_RowSitsAfterChaptersAndBeforeRecommendations()
     {
-        var story = new StoryDetailsDTO
+        _storyReadService.StoryDetails = new StoryDetailsDTO
         {
             StoryId = 5,
             StoryTitle = "Placed Story",
@@ -83,13 +93,13 @@ public class StoryExternalLinksRowTests : BunitContext
             Rating = Rating.E,
             ExternalLinks = [Ao3()]
         };
+        _chapterReadService.ChapterList =
+        [
+            new ChapterListEntryDto(101, 1, "Chapter One", 100, true, null, false, 0f, [])
+        ];
 
-        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
-            .Add(c => c.Story, story)
-            .Add(c => c.Chapters, (IReadOnlyList<ChapterListEntryDto>)
-            [
-                new ChapterListEntryDto(101, 1, "Chapter One", 100, true, null, false, 0f, [])
-            ]));
+        IRenderedComponent<StoryPage> cut = Render<StoryPage>(p => p
+            .Add(c => c.StoryId, 5));
 
         int chaptersIndex = cut.Markup.IndexOf("Chapters", StringComparison.Ordinal);
         int linksIndex = cut.Markup.IndexOf("Also posted on:", StringComparison.Ordinal);

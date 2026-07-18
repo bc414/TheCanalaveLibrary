@@ -158,39 +158,12 @@
     private string StoryHref => $"/story/{Story.StoryId}";
     private string AuthorHref => $"/user/{Story.AuthorId}";
 
-    // ── Computed display properties ──────────────────────────────────────────────
+    // ── Computed display properties (labels via StoryDisplayFormat — MA-209) ─────
 
-    private string WordCountDisplay => Story.WordCount switch
-    {
-        < 1_000 => $"{Story.WordCount} words",
-        < 1_000_000 => $"{Story.WordCount / 1000.0:F0}K words",
-        _ => $"{Story.WordCount / 1_000_000.0:F1}M words"
-    };
-
-    private string StatusLabel => Story.StoryStatusId switch
-    {
-        StoryStatusEnum.Draft => "Draft",
-        StoryStatusEnum.PendingApproval => "Pending Approval",
-        StoryStatusEnum.InProgress => "In Progress",
-        StoryStatusEnum.Completed => "Complete",
-        StoryStatusEnum.OnHiatus => "On Hiatus",
-        StoryStatusEnum.Cancelled => "Cancelled",
-        StoryStatusEnum.Rewriting => "Rewriting",
-        StoryStatusEnum.OpenBeta => "Open Beta",
-        StoryStatusEnum.Rejected => "Rejected",
-        _ => "Unknown"
-    };
-
+    private string WordCountDisplay => StoryDisplayFormat.WordCount(Story.WordCount);
+    private string StatusLabel => StoryDisplayFormat.StatusLabel(Story.StoryStatusId);
     private string StatusBadgeClass => StatusBadges.ForStatus(Story.StoryStatusId);
-
-    private string RatingLabel => Story.Rating switch
-    {
-        Rating.E => "Everyone",
-        Rating.T => "Teen",
-        Rating.M => "Mature",
-        _ => "Unknown"
-    };
-
+    private string RatingLabel => StoryDisplayFormat.RatingLabel(Story.Rating);
     private string RatingBadgeClass => StatusBadges.ForRating(Story.Rating);
 
     // ── Caret menu helpers ───────────────────────────────────────────────────────

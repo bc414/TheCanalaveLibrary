@@ -11,10 +11,10 @@
    different, use separate components instead"), not a runtime toggle inside this one component. A
    `Compact`-boolean variant was tried and discarded: toggling it at runtime doesn't work cleanly
    anyway (Quill binds toolbar listeners once, at construction — a later RenderFragment change doesn't
-   retroactively rewire it) and it fights the device-dispatch pattern used everywhere else. **MVP ships
-   the desktop toolbar only; a mobile-compact variant is deferred** (not MVP-blocking — see
-   workplan.md WU6 Stage note). When it's built, it'll be a separate composition this component is
-   embedded in, mirroring HomeDesktop/HomeMobile, StoryDesktop/StoryMobile.
+   retroactively rewire it). **MVP ships the desktop toolbar only; a mobile-compact variant is
+   deferred** (not MVP-blocking — see workplan.md WU6 Stage note). When it's built, it'll be a
+   separate composition this component is embedded in (note: the Desktop/Mobile fork pattern it
+   would have mirrored was dissolved 2026-07-18, WU-ResponsiveMerge — single responsive tree).
 
    Produces raw HTML only — never sanitizes its own output. Sanitization happens once, server-side, in
    the write service before persisting (layer2-services.md "User HTML Is Sanitized Once, On Save" and

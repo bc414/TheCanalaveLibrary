@@ -38,7 +38,11 @@ internal sealed class FakeRelatedStoriesStoryReadService : IStoryReadService
 {
     public Dictionary<int, StoryListingDto> StoriesById { get; set; } = new();
 
-    public Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId) => Task.FromResult<StoryDetailsDTO?>(null);
+    /// <summary>Configurable knob for StoryPageTests (the page loads its story through this
+    /// registration). Default null preserves the original not-found behavior.</summary>
+    public StoryDetailsDTO? StoryDetails { get; set; }
+
+    public Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId) => Task.FromResult(StoryDetails);
     public Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId) => Task.FromResult<StoryUpdateDTO?>(null);
 
     public Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds) =>
