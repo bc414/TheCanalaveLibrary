@@ -218,6 +218,7 @@
                     <button type="button"
                             class="@ReadToggleClasses(isRead)"
                             title="Mark read / unread"
+                            aria-label="Mark read or unread"
                             aria-pressed="@(isRead ? "true" : "false")"
                             @onclick="() => ToggleReadAsync(chapter)">
                         <svg viewBox="0 0 24 24" class="size-3" fill="currentColor" aria-hidden="true">

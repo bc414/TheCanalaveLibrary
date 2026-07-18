@@ -112,17 +112,29 @@ public class ClientTagServiceTests
             .WithMessage("""A Genre tag named "Dup" already exists.""");
     }
 
-    [Theory]
-    [InlineData(HttpStatusCode.Unauthorized)]
-    [InlineData(HttpStatusCode.Forbidden)]
-    public async Task CreateTagAsync_AuthFailure_ThrowsUnauthorizedAccessException(HttpStatusCode status)
+    [Fact]
+    public async Task CreateTagAsync_Forbidden_ThrowsUnauthorizedAccessException()
     {
-        var handler = new CannedHandler(status, "");
+        var handler = new CannedHandler(HttpStatusCode.Forbidden, "");
         ClientTagWriteService svc = new(NewClient(handler));
 
         Func<Task> act = () => svc.CreateTagAsync(NewCreateDto("Blocked"));
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    [Fact]
+    public async Task CreateTagAsync_Unauthorized_ThrowsInvalidOperationException()
+    {
+        // The server maps the services' "…requires an authenticated user" InvalidOperationException
+        // to 401 (EndpointHelpers.ExecuteWriteAsync) — the shared client translation (MA-008)
+        // reconstructs it, tolerating the cookie handler's body-less 401.
+        var handler = new CannedHandler(HttpStatusCode.Unauthorized, "");
+        ClientTagWriteService svc = new(NewClient(handler));
+
+        Func<Task> act = () => svc.CreateTagAsync(NewCreateDto("Blocked"));
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]

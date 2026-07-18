@@ -13,7 +13,7 @@ public class FakeActiveUserContext : IActiveUserContext
     public int? UserId { get; set; }
     public bool IsAuthenticated { get; set; }
     public bool ShowMatureContent { get; set; }
-    public string Theme { get; set; } = "Pokémon";
+    public string Theme { get; set; } = "pokemon";
     public bool PrefersAnimatedSprites { get; set; } = true;
     public bool IsModerator { get; set; }
     public bool IsAdmin { get; set; }

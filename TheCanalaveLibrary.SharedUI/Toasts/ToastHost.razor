@@ -25,6 +25,10 @@
 @code {
     private readonly List<ToastMessage> _toasts = [];
 
+    // Ties every pending auto-dismiss delay to the component's lifetime — canceled on Dispose
+    // so a Task.Delay can't complete after teardown and invoke on a disposed component.
+    private readonly CancellationTokenSource _disposalCts = new();
+
     protected override void OnInitialized() => Toasts.OnShow += HandleShow;
 
     private void HandleShow(ToastMessage toast)
@@ -40,14 +44,25 @@
 
     private async Task AutoDismissAsync(ToastMessage toast)
     {
-        await Task.Delay(toast.Duration);
-        await InvokeAsync(() =>
+        try
         {
-            if (_toasts.RemoveAll(t => t.Id == toast.Id) > 0)
+            await Task.Delay(toast.Duration, _disposalCts.Token);
+            await InvokeAsync(() =>
             {
-                StateHasChanged();
-            }
-        });
+                if (_toasts.RemoveAll(t => t.Id == toast.Id) > 0)
+                {
+                    StateHasChanged();
+                }
+            });
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected teardown — the host was disposed while the toast was still pending.
+        }
+        catch (ObjectDisposedException)
+        {
+            // Expected teardown — InvokeAsync raced disposal of the renderer/CTS.
+        }
     }
 
     private void Dismiss(Guid id) => _toasts.RemoveAll(t => t.Id == id);
@@ -60,5 +75,10 @@
         _ => "border-(--color-border) bg-(--color-surface-raised) text-(--color-text)",
     };
 
-    public void Dispose() => Toasts.OnShow -= HandleShow;
+    public void Dispose()
+    {
+        Toasts.OnShow -= HandleShow;
+        _disposalCts.Cancel();
+        _disposalCts.Dispose();
+    }
 }

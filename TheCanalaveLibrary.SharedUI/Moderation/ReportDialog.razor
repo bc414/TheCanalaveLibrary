@@ -1,5 +1,7 @@
 @namespace TheCanalaveLibrary.SharedUI
+@using Microsoft.Extensions.Logging
 @inject IModerationWriteService ModerationService
+@inject ILogger<ReportDialog> Logger
 
 @* Report dialog (WU34 Feature 46). Cross-cutting leaf — consumed by StoryCard, UserCard,
    CommentItem, BlogPostCard, recommendation cards, and the message thread. Shell matches
@@ -125,9 +127,15 @@
                 _entityType, _entityId, _selectedReasonId, _notes));
             _submitted = true;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            _errorMessage = "Something went wrong. Please try again.";
+            // Exception-message discipline: typed user-facing exceptions translate; a genuine
+            // unexpected fault (e.g. server 500) logs at Error so it carries a trace — never
+            // silently swallowed (MA-704).
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Submitting a report for {EntityType} {EntityId} failed unexpectedly",
+                    _entityType, _entityId);
+            _errorMessage = ExceptionPresenter.GetUserMessage(ex);
         }
         finally
         {

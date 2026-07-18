@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
@@ -9,17 +8,17 @@ namespace TheCanalaveLibrary.Server;
 /// so it needs an HTTP body-swap like any other component-injected service). Thin pass-throughs;
 /// <c>ServerSpotlightSlotAllocator.RequireModerator()</c> is the enforcement point
 /// (<c>UnauthorizedAccessException</c> → 403 via the shared helper). The whole group additionally
-/// carries the Moderator/Admin role gate, mirroring <c>ModSpotlightPage</c>'s own
-/// <c>[Authorize(Roles = "Moderator,Admin")]</c> (the SiteDailyStatEndpoints precedent).
+/// carries the Moderator/Admin role gate via the named
+/// <see cref="AuthorizationPolicies.RequireModerator"/> policy (registered in <c>Program.cs</c>;
+/// MA-702 fix, 2026-07-18 — replaces the earlier inline <c>AuthorizeAttribute</c>), mirroring
+/// <c>ModSpotlightPage</c>'s own <c>[Authorize(Roles = "Moderator,Admin")]</c>.
 /// </summary>
 public static class SpotlightSlotAllocatorEndpoints
 {
-    private static readonly AuthorizeAttribute ModeratorOnly = new() { Roles = "Moderator,Admin" };
-
     public static WebApplication MapSpotlightSlotAllocatorEndpoints(this WebApplication app)
     {
         RouteGroupBuilder group = app.MapGroup("/api/spotlight-slots")
-            .RequireAuthorization(ModeratorOnly);
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         // Scalar + enum params bind from the query — no body needed (PollEndpoints' vote precedent).
         group.MapPost("/", (ISpotlightSlotAllocator allocator, int toUserId, SpotlightSlotSource source) =>

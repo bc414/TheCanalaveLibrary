@@ -18,8 +18,17 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
     public async Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId) =>
         await Http.GetNullableFromJsonAsync<StoryDetailsDTO?>($"api/stories/{storyId}");
 
-    public async Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId) =>
-        await Http.GetNullableFromJsonAsync<StoryUpdateDTO?>($"api/stories/{storyId}/edit");
+    public async Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId)
+    {
+        // 401/403 → UnauthorizedAccessException, mirroring the server service's author gate so
+        // StoryEditorPage's forbidden handling works identically under both render modes
+        // (status→contract-exception translation, layer5-wasm.md "The Error-Translation Contract").
+        using HttpResponseMessage response = await Http.GetAsync($"api/stories/{storyId}/edit");
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            throw new UnauthorizedAccessException("You must be the author of this story.");
+        response.EnsureSuccessStatusCode();
+        return await ClientHttpHelpers.ReadNullableFromJsonAsync<StoryUpdateDTO?>(response.Content);
+    }
 
     public async Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds)
     {

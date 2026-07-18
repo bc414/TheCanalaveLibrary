@@ -29,15 +29,15 @@ namespace TheCanalaveLibrary.Server;
 /// <c>ExecuteWriteAsync</c>.
 /// </para>
 /// <para>
-/// <b>Known EndpointHelpers mismatch (flagged, not fixed here — out of scope for this add-only
-/// pass, same category as FollowingEndpoints'):</b> <see cref="IRecommendationWriteService.SetHiddenGemAsync"/>
-/// and <see cref="IRecommendationWriteService.SetHighlightedByAuthorAsync"/> throw
-/// <see cref="InvalidOperationException"/> both for "caller not authenticated" AND for their
-/// reject-at-limit business rules (5 Hidden Gems / 5 spotlighted-per-story) — the shared
-/// <c>ExecuteWriteAsync</c> maps every <see cref="InvalidOperationException"/> to 401 uniformly, so a
-/// limit-reached rejection surfaces as 401 rather than the more accurate 400. The message still
-/// crosses via <c>ProblemDetails.Detail</c>, so <c>ClientRecommendationWriteService</c> reads it
-/// through rather than losing it, but the HTTP status itself is semantically imprecise for that case.
+/// <b>Status-code seam resolved (MA-505, 2026-07-18).</b>
+/// <see cref="IRecommendationWriteService.SetHiddenGemAsync"/> and
+/// <see cref="IRecommendationWriteService.SetHighlightedByAuthorAsync"/>'s reject-at-limit business
+/// rules (5 Hidden Gems / 5 spotlighted-per-story) now throw
+/// <see cref="RecommendationValidationException"/> → <b>400</b> (the accurate status) rather than
+/// falling into the <see cref="InvalidOperationException"/> → 401 auth safety net. Only the genuine
+/// unauthenticated-caller guard still maps to 401. <c>ClientRecommendationWriteService</c> already
+/// reconstructs <see cref="RecommendationValidationException"/> from a 400 body (shared MA-008 shape),
+/// so no client change was needed.
 /// </para>
 /// </summary>
 public static class RecommendationEndpoints

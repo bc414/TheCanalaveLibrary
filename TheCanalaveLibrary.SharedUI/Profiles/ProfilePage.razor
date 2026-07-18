@@ -183,7 +183,7 @@ else
 
         // Parse tab; bad slug → 404.
         ProfileTab? parsed = ProfileTabSlug.Parse(Tab);
-        if (parsed is null) { Nav.NavigateTo("/not-found"); _initialized = true; return; }
+        if (parsed is null) { Nav.NotFound(); _initialized = true; return; }
         _tab = parsed.Value;
 
         await LoadHeaderAsync();
@@ -202,7 +202,7 @@ else
         if (!_initialized) return;
 
         ProfileTab? parsed = ProfileTabSlug.Parse(Tab);
-        if (parsed is null) { Nav.NavigateTo("/not-found"); return; }
+        if (parsed is null) { Nav.NotFound(); return; }
         ProfileTab newTab = parsed.Value;
 
         bool userChanged = UserId != _loadedUserId;

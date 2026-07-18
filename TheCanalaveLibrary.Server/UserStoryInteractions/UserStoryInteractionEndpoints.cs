@@ -55,9 +55,13 @@ public static class UserStoryInteractionEndpoints
             EndpointHelpers.ExecuteWriteAsync(async () =>
                 Results.Ok(await interactions.GetBookshelfStoryIdsAsync(tab))));
 
+        // includePrivate is derived server-side (owner-only hidden favorites) — never accepted from
+        // the client, same pattern as UserProfileEndpoints' includePrivate derivation (MA-602;
+        // endpoint-authz sweep 2026-07-18).
         group.MapGet("/favorites/{userId:int}",
-            async (IUserStoryInteractionReadService interactions, int userId, bool includePrivate) =>
-                Results.Ok(await interactions.GetFavoriteStoryIdsAsync(userId, includePrivate)));
+            async (IUserStoryInteractionReadService interactions, IActiveUserContext activeUser, int userId) =>
+                Results.Ok(await interactions.GetFavoriteStoryIdsAsync(
+                    userId, includePrivate: activeUser.UserId == userId)));
 
         // ── Writes ──
 

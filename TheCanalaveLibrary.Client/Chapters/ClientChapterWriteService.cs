@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -9,13 +8,9 @@ namespace TheCanalaveLibrary.Client;
 /// ServerChapterWriteService : ServerChapterReadService. Auth rides the same-origin Identity
 /// cookie — WASM's fetch-backed HttpClient sends it automatically for same-origin requests.
 /// <para>
-/// Translates ChapterEndpoints' status codes back into the service contract's typed exceptions:
-/// 400 → <see cref="ChapterValidationException"/> (message from ProblemDetails.Detail — the
-/// endpoint's shared error-translation joins the service's error list into one string via
-/// <c>ex.Message</c>, so the client reconstructs a single-element list; exact per-item errors
-/// don't round-trip, matching every other <c>{Feature}ValidationException</c> client translation
-/// in this codebase), 401/403 → <see cref="UnauthorizedAccessException"/>,
-/// 404 → <see cref="KeyNotFoundException"/>.
+/// Translates ChapterEndpoints' status codes back into the service contract's typed exceptions —
+/// the shared MA-008 shape (<see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>); 400
+/// reconstructs <see cref="ChapterValidationException"/>.
 /// </para>
 /// </summary>
 public sealed class ClientChapterWriteService(HttpClient http)
@@ -70,24 +65,8 @@ public sealed class ClientChapterWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of ChapterEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new ChapterValidationException([detail ?? "The chapter failed validation."]);
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException("This operation requires the story's author.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException("Chapter not found.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    /// <summary>Status-code → contract-exception translation (inverse of ChapterEndpoints') — the
+    /// shared MA-008 shape.</summary>
+    private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new ChapterValidationException([msg]));
 }

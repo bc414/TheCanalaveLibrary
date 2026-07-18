@@ -21,7 +21,7 @@ public class ServerSeriesWriteService(
 
     public async Task<int> CreateSeriesAsync(CreateSeriesDto dto)
     {
-        int creatorId = RequireAuthenticatedUser();
+        int creatorId = ActiveUser.RequireUserId();
 
         List<string> errors = dto.CanSave();
 
@@ -49,7 +49,7 @@ public class ServerSeriesWriteService(
 
     public async Task UpdateSeriesAsync(UpdateSeriesDto dto)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         Series? series = await writeDb.Series.FirstOrDefaultAsync(s => s.SeriesId == dto.SeriesId);
         if (series is null) throw new KeyNotFoundException($"Series {dto.SeriesId} not found.");
@@ -74,7 +74,7 @@ public class ServerSeriesWriteService(
 
     public async Task DeleteSeriesAsync(int seriesId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         Series? series = await writeDb.Series.FirstOrDefaultAsync(s => s.SeriesId == seriesId);
         if (series is null) throw new KeyNotFoundException($"Series {seriesId} not found.");
@@ -90,7 +90,7 @@ public class ServerSeriesWriteService(
 
     public async Task AddStoryAsync(int seriesId, int storyId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         Series? series = await writeDb.Series.FirstOrDefaultAsync(s => s.SeriesId == seriesId);
         if (series is null) throw new KeyNotFoundException($"Series {seriesId} not found.");
@@ -125,7 +125,7 @@ public class ServerSeriesWriteService(
 
     public async Task RemoveStoryAsync(int seriesId, int storyId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         Series? series = await writeDb.Series.FirstOrDefaultAsync(s => s.SeriesId == seriesId);
         if (series is null) throw new KeyNotFoundException($"Series {seriesId} not found.");
@@ -141,7 +141,7 @@ public class ServerSeriesWriteService(
 
     public async Task ReorderAsync(int seriesId, IReadOnlyList<int> orderedStoryIds)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         Series? series = await writeDb.Series.FirstOrDefaultAsync(s => s.SeriesId == seriesId);
         if (series is null) throw new KeyNotFoundException($"Series {seriesId} not found.");
@@ -166,13 +166,6 @@ public class ServerSeriesWriteService(
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────────
-
-    private int RequireAuthenticatedUser()
-    {
-        if (ActiveUser.UserId is not int id)
-            throw new InvalidOperationException("This operation requires an authenticated user.");
-        return id;
-    }
 
     private static void RequireOwner(Series series, int userId)
     {

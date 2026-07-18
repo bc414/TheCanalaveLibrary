@@ -560,3 +560,26 @@ L4.5 flipped 5→2 in `status.md` until the new surfaces get a real-circuit pass
   reorder, live mark→fill-bar repaint, arc-manager live preview interactivity, download
   Content-Disposition; plus `DataSeeder` has no arced story yet — manual verification needs an
   arc created via the panel first (or a seeder addition later).
+
+### WU-AuditFixPass note (2026-07-18)
+
+Security fix MA-301 closed: all five previously-ungated `ServerChapterWriteService` write methods
+(Create/AddAlternateVersion/UpdateContent/SetPrimaryVersion/SetPublished) and the
+`GetChapterForEditAsync` draft read now enforce `Story.AuthorId == ActiveUser.UserId` server-side
+(the pre-fix state let any authenticated user edit/publish/read-drafts on anyone's story over live
+HTTP). Client 403s translate to `UnauthorizedAccessException`; `ChapterEditorPage` renders its
+forbidden state for both render modes. Also: `ChapterReadingPage`/`ChapterEditorPage` missing-entity
+branches now use `NavigationManager.NotFound()` (real 404), and the reading page's dispose-path JS
+catch is typed. Covered by Integration tier (`ChapterWriteServiceTests` authorship tests — a second
+seeded user is rejected on every method; author-positive edit-read pinned). Full detail:
+`workplan.md` WU-AuditFixPass.
+
+### WU-AuditFixPass-2 note (2026-07-18)
+
+Endpoint-authz sweep, F6/F7 (cells stay Stage 5 — behavior corrected in place): chapter toc/list/versions
+reads now hide unpublished-chapter *metadata* (titles, word counts) from non-authors —
+`IsPublished || Story.AuthorId == viewer` in all three (previously enumerated to anyone). Covered:
+`ChapterDraftVisibilityTests` (Integration) + browser (non-author sees only published chapters on
+StoryPage); 2 existing chapter tests updated for the new visibility. **F44 L5, MA-302:** the
+reading-progress ping dropped its `RequireAuthorization()` — anonymous scroll now 202-no-ops instead of
+401 (browser-verified 202). Full detail: `workplan.md` WU-AuditFixPass-2.

@@ -286,16 +286,20 @@ service layer (audited 2026-07-12):
 
 | Contract exception | Status | Message channel |
 |---|---|---|
-| `{Feature}ValidationException` (13 types), `ArgumentException`/`ArgumentOutOfRangeException`, `VouchLimitException`, `ImportException` | 400 | `Results.Problem(detail: ex.Message, statusCode: 400)` — `ProblemDetails.Detail` carries the user-facing message verbatim; client rethrows it |
+| `{Feature}ValidationException` (the per-feature family, all sharing the `CanalaveValidationException` base — MA-008), `ArgumentException`/`ArgumentOutOfRangeException`, `VouchLimitException`, `ImportException` | 400 | `Results.Problem(detail: ex.Message, statusCode: 400)` — `ProblemDetails.Detail` carries the user-facing message verbatim; client rethrows it. **Business-rule rejections that are not auth failures belong here, not in the 401 row** (self-follow/self-vouch/not-following → `FollowingValidationException`, Hidden-Gem/spotlight limits → `RecommendationValidationException`, unowned badge key → `BadgeValidationException`, unpinnable story → `UserSettingsValidationException`; MA-505/MA-611, 2026-07-18) |
 | `UnauthorizedAccessException` | 403 (401 if unauthenticated — cookie handler emits it before the service runs) | none |
 | `MessagingPermissionException`, `ContentRatingExceededException` | 403 | `Detail` carries the message |
 | `KeyNotFoundException` | 404 — `Results.Problem(statusCode: 404)` | none |
 | `WriteRateLimitExceededException` | 429 | `Detail` carries the message; `retryAfterSeconds` rides in the `ProblemDetails.Extensions` body (no response header — see `security.md` "Write Throttling") |
-| `InvalidOperationException` | 401 | Auth safety net — every throw site is an "...requires an authenticated user" guard; every endpoint calling such a method also carries `RequireAuthorization()`, so the cookie handler's 401 normally wins the race first. `Detail` carries the message. |
+| `InvalidOperationException` | 401 | Auth safety net — reserve this type for the "...requires an authenticated user" guard only; every endpoint calling such a method also carries `RequireAuthorization()`, so the cookie handler's 401 normally wins the race first. `Detail` carries the message. **Caution (MA-123/MA-701):** never reuse this type for an *authenticated-but-forbidden* denial (signed-in non-mod, non-owner) — that's `UnauthorizedAccessException` → 403. **Caution (MA-505/MA-611, 2026-07-18):** never reuse it for an authenticated-but-rejected *business rule* either (self-follow, limit-reached, unowned key, unpinnable story) — that's a `{Feature}ValidationException` → 400 (the 400 row). Moderation once used this type for the non-mod branch and served the wrong status; the Following/Recommendations/Badges/Profiles clusters once used it for business rules and served 401 for what should have been 400. |
 | anything else (e.g. the one domain-invariant `NotSupportedException`) | 500 (unhandled) | client surfaces `HttpRequestException` via `EnsureSuccessStatusCode()` |
 
 **Every API error status must be a bodied result (`Results.Problem`), never a bare
-`Results.NotFound()`/`Results.StatusCode(...)`.** The app's
+`Results.NotFound()`/`Results.StatusCode(...)`.** Scope (clarified 2026-07-18, MA-122): this rule
+governs **JSON API endpoints** — the `/api/*` surfaces a client service deserializes. Binary/asset
+serving (`ImageEndpoints`' GET-only `/uploads/{**key}`) is exempt: there is no JSON contract to
+protect and no non-GET verb to hit the 405-re-execute trap; its bare `Results.NotFound()` simply
+re-executes into the HTML not-found page, which is acceptable for a missing image URL. The app's
 `UseStatusCodePagesWithReExecute("/not-found")` re-executes **body-less** error responses into
 the HTML not-found route **with the original HTTP method** — a PUT/DELETE re-executed against
 that GET-only page surfaces as 405 to the client (regression net: `TagEndpointsTests`).
@@ -304,10 +308,13 @@ Bodied results are skipped by that middleware; success statuses (`Results.Ok`,
 
 **Server side:** every write handler wraps in the **shared**
 `EndpointHelpers.ExecuteWriteAsync(Func<Task<IResult>>)` (`Server/Http/EndpointHelpers.cs`) — one
-copy of the table above, not a per-class try/catch. Validation-exception matching is by type-name
-suffix (`ex.GetType().Name.EndsWith("ValidationException")`) rather than a shared marker base,
-since the 13 `{Feature}ValidationException` types don't share one and retrofitting them was judged
-out of scope for a WASM-add pass.
+copy of the table above, not a per-class try/catch. Validation-exception matching is by the shared
+`CanalaveValidationException` base (MA-008) — every `{Feature}ValidationException` derives from it, so
+a single `catch (Exception ex) when (IsValidationException(ex))` arm maps the whole family to 400.
+Adding a new feature's validation (or, per MA-505/MA-611, giving an authenticated business-rule
+rejection its own `{Feature}ValidationException`) needs no change to the helper: derive from
+`CanalaveValidationException` and the 400 arm already catches it; `ExceptionPresenter` likewise
+matches the base, so the message is user-facing on the client with no per-type wiring.
 
 **Client side:** detail-extraction is shared (`ClientHttpHelpers.ReadProblemDetailAsync`/
 `ReadRetryAfterSecondsAsync` in `Client/Http/ClientHttpHelpers.cs` — the private `ProblemPayload`
@@ -530,9 +537,9 @@ Prerequisite: every feature's endpoints + client impls built and registered. The
 2. `App.razor`: `PageRenderMode` → `InteractiveAuto` (the `AcceptsInteractiveRouting()` guard
    stays — Identity pages remain static SSR).
 3. Sweep every component reachable by the interactive router for services with no client
-   registration — one miss is a browser crash on any cached-runtime visit. Known instance:
-   `DevLoginBar` injects `IHostEnvironment`, which WASM DI does not register (it registers
-   `IWebAssemblyHostEnvironment`) — needs a client-side registration or an adapter.
+   registration — one miss is a browser crash on any cached-runtime visit. The once-flagged
+   instance (`DevLoginBar` injecting `IHostEnvironment`) was resolved at the flip via the
+   `WasmHostEnvironmentAdapter` registration in `Client/Program.cs` (MA-013).
 4. Adopt `[PersistentState]` page-by-page (without it every page double-fetches on hydration —
    under WASM that's a visible flash plus redundant HTTP).
 5. Run a whole-site browser debug wave (L4.5 band, `run-server/SKILL.md`), verifying **which

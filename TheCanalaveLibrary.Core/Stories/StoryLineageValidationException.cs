@@ -5,7 +5,4 @@ namespace TheCanalaveLibrary.Core;
 /// (missing/self-referential ids, unknown type). Mirrors <see cref="SeriesValidationException"/>.
 /// </summary>
 public class StoryLineageValidationException(IReadOnlyList<string> errors)
-    : Exception(string.Join(" ", errors))
-{
-    public IReadOnlyList<string> Errors { get; } = errors;
-}
+    : CanalaveValidationException(string.Join(" ", errors), errors);

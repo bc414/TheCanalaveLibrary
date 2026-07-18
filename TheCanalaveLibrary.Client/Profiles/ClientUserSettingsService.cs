@@ -77,14 +77,14 @@ public sealed class ClientUserSettingsService(HttpClient http) : IUserSettingsSe
     }
 
     /// <summary>
-    /// Status-code → contract-exception translation. <see cref="IUserSettingsService"/>'s only
-    /// documented exception is <see cref="InvalidOperationException"/> (unauthenticated caller —
-    /// see <c>ServerUserSettingsService.RequireCurrentUserId</c>); every service throw site is that
-    /// guard, except <c>UpdateAuthorSettingsAsync</c>'s pinned-story business-rule guard, which the
-    /// shared server-side <c>EndpointHelpers.ExecuteWriteAsync</c> still maps to 401 uniformly (the
-    /// same flagged, out-of-scope mismatch as <c>ClientFollowingWriteService</c>'s analogous cases) —
-    /// so 401/403 both translate to <see cref="InvalidOperationException"/> here, carrying the
-    /// server's message through rather than losing it.
+    /// Status-code → contract-exception translation. <c>UpdateAuthorSettingsAsync</c>'s pinned-story
+    /// ownership/visibility business rule now throws <see cref="UserSettingsValidationException"/>
+    /// server-side → 400, reconstructed here carrying <c>ProblemDetails.Detail</c> (user-facing,
+    /// surfaces the real cause). The remaining throw site is
+    /// <c>ServerUserSettingsService.RequireCurrentUserId</c>'s unauthenticated-caller guard
+    /// (<see cref="InvalidOperationException"/> → 401); the interface declares no dedicated auth
+    /// exception, so 401/403 both translate to <see cref="InvalidOperationException"/> here, carrying
+    /// the server's message through rather than losing it.
     /// </summary>
     private static async Task ThrowIfFailedAsync(HttpResponseMessage response)
     {
@@ -92,6 +92,9 @@ public sealed class ClientUserSettingsService(HttpClient http) : IUserSettingsSe
 
         switch (response.StatusCode)
         {
+            case HttpStatusCode.BadRequest:
+                string? badRequestDetail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
+                throw new UserSettingsValidationException([badRequestDetail ?? "The request failed validation."]);
             case HttpStatusCode.Unauthorized:
             case HttpStatusCode.Forbidden:
                 string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);

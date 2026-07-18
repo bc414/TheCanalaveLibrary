@@ -26,8 +26,10 @@ namespace TheCanalaveLibrary.Server;
 /// <see cref="UnauthorizedAccessException"/> throws (translated to 403 by
 /// <see cref="EndpointHelpers.ExecuteWriteAsync"/>) — folder CRUD and <c>RemoveStoryAsync</c> are
 /// admin-only, <c>AddStoryAsync</c> is member-only, <c>JoinAsync</c>/<c>LeaveAsync</c>/
-/// <c>CreateGroupAsync</c> require only authentication. No <c>RequireRateLimiting(...)</c> — unlike
-/// Tags, <c>ServerGroupWriteService</c> doesn't call an <c>IWriteRateLimitService</c> token bucket.
+/// <c>CreateGroupAsync</c> require only authentication. No <c>RequireRateLimiting(...)</c> at the
+/// edge — <c>CreateGroupAsync</c> throttles at the service layer via the transport-agnostic
+/// <c>IWriteRateLimitService</c> token bucket (<c>WriteActionKind.ContentCreate</c>; MA-508,
+/// 2026-07-18), which covers circuit traffic this middleware never sees.
 /// </para>
 /// </summary>
 public static class GroupEndpoints

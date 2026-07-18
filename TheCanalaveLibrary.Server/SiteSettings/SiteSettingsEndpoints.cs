@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TheCanalaveLibrary.Core;
 
@@ -24,16 +23,15 @@ namespace TheCanalaveLibrary.Server;
 /// setting values over HTTP. Revisit if a future public page needs a direct client read.
 /// </para>
 /// <para>
-/// <b>Write auth.</b> <c>RequireAuthorization()</c> floor — the service's own
-/// <c>RequireModerator()</c> throws <see cref="UnauthorizedAccessException"/> for a non-mod caller,
-/// which <see cref="EndpointHelpers.ExecuteWriteAsync"/> maps to 403.
+/// <b>Write auth.</b> Edge <see cref="AuthorizationPolicies.RequireModerator"/> policy (MA-702,
+/// 2026-07-18 — the write previously carried only the plain floor while this file's own read was
+/// role-gated) on top of the service's own <c>RequireModerator()</c>, which throws
+/// <see cref="UnauthorizedAccessException"/> for a non-mod caller →
+/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> maps to 403.
 /// </para>
 /// </summary>
 public static class SiteSettingsEndpoints
 {
-    /// <summary>Mirrors <c>ModSpotlightPage</c>'s own gate — see class doc's "Read auth" paragraph.</summary>
-    private static readonly AuthorizeAttribute ModeratorOnly = new() { Roles = "Moderator,Admin" };
-
     public static WebApplication MapSiteSettingsEndpoints(this WebApplication app)
     {
         RouteGroupBuilder group = app.MapGroup("/api/site-settings");
@@ -41,7 +39,7 @@ public static class SiteSettingsEndpoints
         group.MapGet("/{settingKey}",
                 async (ISiteSettingsReadService settings, string settingKey, int fallback) =>
                     Results.Ok(await settings.GetIntAsync(settingKey, fallback)))
-            .RequireAuthorization(ModeratorOnly);
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         // [FromBody] pins the bare int to the JSON body (layer5-wasm.md — minimal APIs don't bind a
         // plain scalar from the body implicitly; mirrors GroupEndpoints'/FollowingEndpoints' pattern).
@@ -52,7 +50,7 @@ public static class SiteSettingsEndpoints
                         await settings.SetIntAsync(settingKey, value);
                         return Results.NoContent();
                     }))
-            .RequireAuthorization();
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         return app;
     }

@@ -16,6 +16,7 @@ public class ServerGroupWriteService(
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
     INotificationWriteService notifications,
+    IWriteRateLimitService rateLimit,
     ILogger<ServerGroupWriteService> logger)
     : ServerGroupReadService(readDbFactory, activeUser), IGroupWriteService
 {
@@ -25,6 +26,10 @@ public class ServerGroupWriteService(
     {
         if (ActiveUser.UserId is not int creatorId)
             throw new InvalidOperationException("Creating a group requires an authenticated user.");
+
+        // Group creation makes content every user sees on /groups — the exact "abuse-prone
+        // create" shape security.md's throttle rule covers (MA-508, 2026-07-18).
+        rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, creatorId);
 
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new GroupValidationException(errors);

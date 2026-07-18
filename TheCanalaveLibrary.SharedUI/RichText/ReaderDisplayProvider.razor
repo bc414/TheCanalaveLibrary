@@ -2,8 +2,10 @@
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Web
+@using Microsoft.Extensions.Logging
 @inject IUserSettingsService Settings
 @inject PersistentComponentState ApplicationState
+@inject ILogger<ReaderDisplayProvider> Logger
 @implements IDisposable
 
 @* Layout-level provider for the viewer's ReaderDisplaySettings cascade (Phase E, 2026-07-10).
@@ -81,11 +83,13 @@
                 ReadingBackground = settings.Reader.ReadingBackground,
             };
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // Preference data is best-effort chrome: a failed load falls back to defaults
-            // rather than blocking the page. (No swallow-silently violation: nothing to
-            // surface to the user — the reading experience simply uses defaults.)
+            // rather than blocking the page. Logged at Warning per logging.md's best-effort-
+            // swallow rule — nothing to surface to the user, but a real settings-load bug must
+            // leave a trace.
+            Logger.LogWarning(ex, "Reader display settings load failed — falling back to defaults");
         }
     }
 

@@ -289,3 +289,12 @@ disclosure + goodbye page, above). F1 L2/L3-Logic/L3.5 stay Stage 5, re-verified
 Stage change. F1 L4-Style is unchanged (Stage 1) — this WU visually confirmed only the new Login
 error copy and the banner, not a full Identity-feature sign-off. Rule:
 `canalave-conventions/security.md` "Account-Status Enforcement".
+
+### WU-AuditFixPass note (2026-07-18)
+
+MA-102 closed: the unreferenced `User.Roles` navigation (which minted a phantom `user_id` shadow-FK
+column + index on `asp_net_roles`) is deleted; migration `MA102_DropPhantomUserRolesShadowFk` drops
+the column/index (verified drop-only). MA-103 closed: `options.User.RequireUniqueEmail = true` in
+Program.cs ratifies the already-UNIQUE `EmailIndex` as site policy — duplicate-email registration
+now fails as a friendly validation error instead of a raw DbUpdateException 500; intent comment
+added at the `HasIndex` site in `IdentityConfigurations`. Full detail: `workplan.md` WU-AuditFixPass.

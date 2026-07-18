@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -7,9 +6,9 @@ namespace TheCanalaveLibrary.Client;
 /// <summary>
 /// WASM-side <see cref="ICustomListWriteService"/>. Inherits the read impl (CQRS-lite), mirroring
 /// <c>ServerCustomListWriteService</c> : <c>ServerCustomListReadService</c>. Translates
-/// <c>CustomListEndpoints</c>' status codes back into the service contract's typed exceptions:
-/// 400 → <see cref="CustomListValidationException"/>, 401/403 →
-/// <see cref="UnauthorizedAccessException"/>, 404 → <see cref="KeyNotFoundException"/>.
+/// <c>CustomListEndpoints</c>' status codes back into the service contract's typed exceptions —
+/// the shared MA-008 shape (<see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>); 400
+/// reconstructs <see cref="CustomListValidationException"/>.
 /// </summary>
 public sealed class ClientCustomListWriteService(HttpClient http)
     : ClientCustomListReadService(http), ICustomListWriteService
@@ -66,27 +65,8 @@ public sealed class ClientCustomListWriteService(HttpClient http)
         return await response.Content.ReadFromJsonAsync<int>();
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of CustomListEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                // ProblemDetails.Detail is the server exception's Message — the per-error list
-                // joined into one string; wrap as a single-element list (same note as
-                // ClientSavedTagSelectionWriteService).
-                throw new CustomListValidationException([detail ?? "The list failed validation."]);
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException("You must be the owner of this list.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException("List or story not found.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    /// <summary>Status-code → contract-exception translation (inverse of CustomListEndpoints') — the
+    /// shared MA-008 shape.</summary>
+    private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new CustomListValidationException([msg]));
 }

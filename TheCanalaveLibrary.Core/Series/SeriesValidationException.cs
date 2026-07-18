@@ -6,7 +6,4 @@ namespace TheCanalaveLibrary.Core;
 /// Mirrors <see cref="GroupValidationException"/> / <see cref="BlogPostValidationException"/>.
 /// </summary>
 public class SeriesValidationException(IReadOnlyList<string> errors)
-    : Exception(string.Join(" ", errors))
-{
-    public IReadOnlyList<string> Errors { get; } = errors;
-}
+    : CanalaveValidationException(string.Join(" ", errors), errors);

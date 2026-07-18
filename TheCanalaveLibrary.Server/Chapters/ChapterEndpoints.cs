@@ -12,22 +12,19 @@ namespace TheCanalaveLibrary.Server;
 /// Reads are public — mirrors <c>ChapterReadingPage</c> (SharedUI/Chapters/ChapterReadingPage.razor),
 /// which carries no <c>[Authorize]</c>. The one exception is
 /// <see cref="IChapterReadService.GetChapterForEditAsync"/>, which feeds the author-only editor
-/// form (<c>ChapterEditorPage.razor</c> — <c>[Authorize]</c>) and is gated with
-/// <c>RequireAuthorization()</c> here even though the service itself performs no authorship check
-/// on that read (a pre-existing service-layer gap — flagged, not silently fixed, by this
-/// mechanical add-only pass).
+/// form (<c>ChapterEditorPage.razor</c> — <c>[Authorize]</c>) and is gated with both
+/// <c>RequireAuthorization()</c> here and a story-authorship check inside the service itself
+/// (MA-301, fixed 2026-07-17).
 /// </para>
 /// <para>
 /// Writes all require an authenticated user (<c>RequireAuthorization()</c>, mirroring
-/// <c>ChapterEditorPage.razor</c>'s <c>[Authorize]</c>). Only
+/// <c>ChapterEditorPage.razor</c>'s <c>[Authorize]</c>). Every write method — not just
 /// <see cref="IChapterWriteService.MoveChapterAsync"/> and
-/// <see cref="IChapterWriteService.DeleteChapterAsync"/> additionally verify story authorship
-/// inside the service itself (throwing <see cref="UnauthorizedAccessException"/>); the other five
-/// write methods (Create/AddAlternateVersion/UpdateContent/SetPrimaryVersion/SetPublished) carry
-/// no service-level ownership check today — same pre-existing gap as above, out of scope for this
-/// pass (it changes nothing about the pre-existing production behavior, which relies on the
-/// editor page's own <c>[Authorize]</c> gate; the HTTP surface added here is no more permissive
-/// than that page already was).
+/// <see cref="IChapterWriteService.DeleteChapterAsync"/> — now also verifies story authorship
+/// inside the service itself (throwing <see cref="UnauthorizedAccessException"/>); Create/
+/// AddAlternateVersion/UpdateContent/SetPrimaryVersion/SetPublished previously carried no
+/// service-level ownership check, letting any authenticated caller mutate any story's chapters
+/// over HTTP (MA-301, fixed 2026-07-17).
 /// </para>
 /// </summary>
 public static class ChapterEndpoints
@@ -59,10 +56,16 @@ public static class ChapterEndpoints
         group.MapGet("/{storyId:int}/export", async (IChapterReadService chapters, int storyId) =>
             Results.Ok(await chapters.GetChaptersForExportAsync(storyId)));
 
-        // Author-only editor read — see class doc's authorization note.
+        // Author-only editor read — see class doc's authorization note. Wrapped in
+        // ExecuteWriteAsync (unlike the other reads) because GetChapterForEditAsync enforces the
+        // author gate and throws UnauthorizedAccessException for a non-author — the shared helper
+        // translates that to 403 so ClientChapterReadService's 403→UnauthorizedAccessException
+        // mapping works over WASM (MA-301). Results.Json's null becomes an empty-body 200, which
+        // ClientHttpHelpers.GetNullableFromJsonAsync tolerates.
         group.MapGet("/edit/{chapterContentId:long}",
-                async (IChapterReadService chapters, long chapterContentId) =>
-                    Results.Json(await chapters.GetChapterForEditAsync(chapterContentId)))
+                (IChapterReadService chapters, long chapterContentId) =>
+                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                        Results.Json(await chapters.GetChapterForEditAsync(chapterContentId))))
             .RequireAuthorization();
 
         // ── Writes (authenticated author — RequireAuthorization(); see class doc) ──

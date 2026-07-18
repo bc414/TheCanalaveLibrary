@@ -16,17 +16,18 @@ namespace TheCanalaveLibrary.Tests.Integration;
 [Collection("Postgres")]
 public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
+    private int _authorId;
     private int _storyId;
 
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
-        _storyId = await SeedStoryAsync();
 
-        // Set the fake user to authenticated so ActiveUser.UserId is non-null.
-        // AuthorId on ChapterContent is nullable, but using a real FK value is more realistic.
-        int testUserId = await SeedUserAsync();
-        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(testUserId, showMatureContent: true));
+        // Story must be owned by the active user — every write method gates on story authorship
+        // (MA-301).
+        _authorId = await SeedUserAsync();
+        _storyId  = await SeedStoryAsync(_authorId);
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorId, showMatureContent: true));
     }
 
     // --- CreateChapterAsync ---
@@ -62,7 +63,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
     public async Task CreateChapterAsync_WhenTitleBlank_DefaultsToChapterN()
     {
         // First chapter so we know the chapter number will be 1 in a fresh story.
-        int freshStoryId = await SeedStoryAsync();
+        int freshStoryId = await SeedStoryAsync(_authorId);
 
         int chapterId = await CallCreateAsync(new CreateChapterDto
         {
@@ -221,12 +222,183 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
         updated.ChapterText.Should().Contain("one two three four five");
     }
 
+    // --- MA-301: author gate (regression — these five methods + GetChapterForEditAsync
+    // previously performed no ownership check at all) ---
+
+    [Fact]
+    public async Task CreateChapterAsync_NonAuthor_ThrowsUnauthorized()
+    {
+        int otherUserId = await SeedUserAsync("other");
+        SetActiveUser(otherUserId);
+
+        Func<Task> act = () => CallCreateAsync(new CreateChapterDto
+        {
+            StoryId     = _storyId,
+            ChapterText = "<p>Should not be allowed.</p>",
+            Rating      = Rating.E
+        });
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>(
+            "only the story's author may add a chapter to it");
+    }
+
+    [Fact]
+    public async Task AddAlternateVersionAsync_NonAuthor_ThrowsUnauthorized()
+    {
+        int chapterId = await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId     = _storyId,
+            ChapterText = "<p>Primary.</p>",
+            Rating      = Rating.E
+        });
+
+        int otherUserId = await SeedUserAsync("other");
+        SetActiveUser(otherUserId);
+
+        Func<Task> act = () => CallAddAlternateAsync(chapterId, new CreateChapterDto
+        {
+            StoryId     = _storyId,
+            ChapterText = "<p>Should not be allowed.</p>",
+            Rating      = Rating.E
+        });
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>(
+            "only the story's author may add an alternate version");
+    }
+
+    [Fact]
+    public async Task UpdateChapterContentAsync_NonAuthor_ThrowsUnauthorized()
+    {
+        int chapterId = await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId     = _storyId,
+            ChapterText = "<p>original</p>",
+            Rating      = Rating.E
+        });
+
+        using IServiceScope scopeRead = Factory.Services.CreateScope();
+        ApplicationDbContext dbRead = scopeRead.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Chapter? chapter = await dbRead.Chapters.FirstOrDefaultAsync(c => c.ChapterId == chapterId);
+        long contentId = chapter!.PrimaryContentId!.Value;
+
+        int otherUserId = await SeedUserAsync("other");
+        SetActiveUser(otherUserId);
+
+        using IServiceScope scopeWrite = Factory.Services.CreateScope();
+        IChapterWriteService writeService = scopeWrite.ServiceProvider.GetRequiredService<IChapterWriteService>();
+        Func<Task> act = () => writeService.UpdateChapterContentAsync(new UpdateChapterContentDto
+        {
+            ChapterContentId = contentId,
+            ChapterText      = "<p>tampered</p>",
+            Rating           = Rating.E
+        });
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>(
+            "only the story's author may edit chapter content");
+    }
+
+    [Fact]
+    public async Task SetPrimaryVersionAsync_NonAuthor_ThrowsUnauthorized()
+    {
+        int chapterId = await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId     = _storyId,
+            ChapterText = "<p>Original.</p>",
+            Rating      = Rating.E
+        });
+        long altId = await CallAddAlternateAsync(chapterId, new CreateChapterDto
+        {
+            StoryId     = _storyId,
+            ChapterText = "<p>Alternate.</p>",
+            Rating      = Rating.E
+        });
+
+        int otherUserId = await SeedUserAsync("other");
+        SetActiveUser(otherUserId);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IChapterWriteService svc = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
+        Func<Task> act = () => svc.SetPrimaryVersionAsync(chapterId, altId);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>(
+            "only the story's author may promote a version to primary");
+    }
+
+    [Fact]
+    public async Task SetPublishedAsync_NonAuthor_ThrowsUnauthorized()
+    {
+        int chapterId = await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId     = _storyId,
+            ChapterText = "<p>Content.</p>",
+            Rating      = Rating.E
+        });
+
+        int otherUserId = await SeedUserAsync("other");
+        SetActiveUser(otherUserId);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IChapterWriteService svc = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
+        Func<Task> act = () => svc.SetPublishedAsync(chapterId, true);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>(
+            "only the story's author may publish/unpublish a chapter");
+    }
+
+    [Fact]
+    public async Task GetChapterForEditAsync_NonAuthor_ThrowsUnauthorized()
+    {
+        int chapterId = await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId     = _storyId,
+            ChapterText = "<p>Draft content only the author should see.</p>",
+            Rating      = Rating.E
+        });
+
+        using IServiceScope scopeRead = Factory.Services.CreateScope();
+        ApplicationDbContext dbRead = scopeRead.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Chapter? chapter = await dbRead.Chapters.FirstOrDefaultAsync(c => c.ChapterId == chapterId);
+        long contentId = chapter!.PrimaryContentId!.Value;
+
+        int otherUserId = await SeedUserAsync("other");
+        SetActiveUser(otherUserId);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IChapterReadService readSvc = scope.ServiceProvider.GetRequiredService<IChapterReadService>();
+        Func<Task> act = () => readSvc.GetChapterForEditAsync(contentId);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>(
+            "the author-only editor read must not leak another author's chapter content");
+    }
+
+    [Fact]
+    public async Task GetChapterForEditAsync_Author_ReturnsContent()
+    {
+        int chapterId = await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId     = _storyId,
+            ChapterText = "<p>Author's own content.</p>",
+            Rating      = Rating.E
+        });
+
+        using IServiceScope scopeRead = Factory.Services.CreateScope();
+        ApplicationDbContext dbRead = scopeRead.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Chapter? chapter = await dbRead.Chapters.FirstOrDefaultAsync(c => c.ChapterId == chapterId);
+        long contentId = chapter!.PrimaryContentId!.Value;
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IChapterReadService readSvc = scope.ServiceProvider.GetRequiredService<IChapterReadService>();
+        ChapterReadingDto? result = await readSvc.GetChapterForEditAsync(contentId);
+
+        result.Should().NotBeNull("the author may always load their own chapter for editing");
+    }
+
     // --- Story.WordCount roll-up ---
 
     [Fact]
     public async Task CreateChapterAsync_UpdatesStoryWordCount()
     {
-        int freshStoryId = await SeedStoryAsync();
+        int freshStoryId = await SeedStoryAsync(_authorId);
 
         // Two chapters — word counts are additive via the primary-version sum.
         await CallCreateAsync(new CreateChapterDto
@@ -289,7 +461,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
     public async Task CreateChapterAsync_ExplicitRatingBelowStoryRating_ThrowsFloorViolation()
     {
         // Story is E-rated; floor check: E >= E ✓. But we need a T/M-rated story to test the floor.
-        int tRatedStoryId = await SeedStoryAsync(rating: Rating.T);
+        int tRatedStoryId = await SeedStoryAsync(_authorId, rating: Rating.T);
 
         Func<Task> act = async () => await CallCreateAsync(new CreateChapterDto
         {
@@ -305,7 +477,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
     public async Task CreateChapterAsync_ExplicitRatingAboveStoryRating_ThrowsPrimaryViolation()
     {
         // First version is always primary. M in T story: floor passes (M >= T), but primary invariant fails (M != T).
-        int tRatedStoryId = await SeedStoryAsync(rating: Rating.T);
+        int tRatedStoryId = await SeedStoryAsync(_authorId, rating: Rating.T);
 
         Func<Task> act = async () => await CallCreateAsync(new CreateChapterDto
         {
@@ -321,7 +493,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
     public async Task SetPrimaryVersionAsync_ExplicitRatingAboveStoryRating_ThrowsPrimaryViolation()
     {
         // Promote an M-rated alternate in a T-rated story → primary invariant rejects it.
-        int tRatedStoryId = await SeedStoryAsync(rating: Rating.T);
+        int tRatedStoryId = await SeedStoryAsync(_authorId, rating: Rating.T);
         int chapterId = await CallCreateAsync(new CreateChapterDto
         {
             StoryId     = tRatedStoryId,

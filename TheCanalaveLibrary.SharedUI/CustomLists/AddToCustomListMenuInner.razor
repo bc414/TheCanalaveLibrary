@@ -1,0 +1,120 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@inject ICustomListWriteService CustomListService
+
+@* Inner half of the AddToCustomListMenu wrapper/inner split (MA-403, 2026-07-18) — holds the
+   @inject + all state, instantiated only when the wrapper's AuthorizeView renders Authorized
+   (layer3-logic.md "Deferring DI Behind AuthorizeView (WU43)"; SavedTagSelectionLoadFlyoutInner is
+   the reference pair). Behavior notes live on the wrapper. *@
+
+<button type="button" class="block w-full px-3 py-1.5 text-left text-sm hover:bg-(--color-surface-hover)"
+        aria-label="Add to list" aria-expanded="@_open" @onclick="ToggleAsync">
+    Add to list @(_open ? "▴" : "▾")
+</button>
+@if (_open)
+{
+    <div class="flex flex-col gap-1 px-3 py-1.5">
+        @if (_memberships is null)
+        {
+            <span class="text-xs text-(--color-text-muted)">Loading…</span>
+        }
+        else
+        {
+            @if (_memberships.Count == 0 && !_creating)
+            {
+                <span class="text-xs text-(--color-text-muted)">No lists yet.</span>
+            }
+            @foreach (var list in _memberships)
+            {
+                <button type="button"
+                        class="flex items-center gap-2 rounded-md px-1 py-0.5 text-left text-sm text-text hover:bg-(--color-surface-hover)"
+                        aria-label="@($"Toggle list {list.ListName}")"
+                        @onclick="() => ToggleMembershipAsync(list)">
+                    <span class="w-4 shrink-0 text-(--color-action-ink)">@(list.ContainsStory ? "✓" : "")</span>
+                    <span class="min-w-0 truncate">@list.ListName</span>
+                </button>
+            }
+            @if (_creating)
+            {
+                <div class="flex items-center gap-1">
+                    <input class="min-w-0 flex-1 rounded-md border border-(--color-border) bg-surface px-2 py-1 text-sm text-text"
+                           placeholder="New list name" maxlength="@CustomListValidations.MaxListNameLength"
+                           aria-label="New list name" @bind="_newListName" @bind:event="oninput" />
+                    <button type="button"
+                            class="shrink-0 rounded-md bg-(--color-action) px-2 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-action-hover)"
+                            aria-label="Create list and add story"
+                            disabled="@(string.IsNullOrWhiteSpace(_newListName))"
+                            @onclick="CreateAndAddAsync">
+                        Add
+                    </button>
+                </div>
+            }
+            else
+            {
+                <button type="button"
+                        class="rounded-md px-1 py-0.5 text-left text-sm text-(--color-action-ink) hover:underline"
+                        aria-label="New list" @onclick="() => _creating = true">
+                    + New list
+                </button>
+            }
+            <InlineAlert Messages="@_errors" />
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public int StoryId { get; set; }
+
+    private bool _open;
+    private bool _creating;
+    private string _newListName = "";
+    private List<CustomListMembershipDto>? _memberships;
+    private IReadOnlyList<string>? _errors;
+
+    private async Task ToggleAsync()
+    {
+        _open = !_open;
+        if (_open && _memberships is null)
+            _memberships = await CustomListService.GetMyListMembershipsAsync(StoryId);
+    }
+
+    private async Task ToggleMembershipAsync(CustomListMembershipDto list)
+    {
+        _errors = null;
+        try
+        {
+            if (list.ContainsStory)
+                await CustomListService.RemoveStoryAsync(list.CustomListId, StoryId);
+            else
+                await CustomListService.AddStoryAsync(list.CustomListId, StoryId);
+
+            // Local state flip — no refetch; the write is idempotent and this row is the truth
+            // for this story×list pair.
+            int i = _memberships!.IndexOf(list);
+            _memberships[i] = list with { ContainsStory = !list.ContainsStory };
+        }
+        catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
+        {
+            _errors = ExceptionPresenter.GetUserMessages(ex);
+        }
+    }
+
+    private async Task CreateAndAddAsync()
+    {
+        _errors = null;
+        try
+        {
+            // New lists default private (settled 2026-07-13); publish later from the list page.
+            int listId = await CustomListService.CreateListAsync(_newListName, isPublic: false);
+            await CustomListService.AddStoryAsync(listId, StoryId);
+            _memberships!.Add(new CustomListMembershipDto(listId, _newListName.Trim(), true));
+            _memberships.Sort((a, b) => string.Compare(a.ListName, b.ListName, StringComparison.OrdinalIgnoreCase));
+            _newListName = "";
+            _creating = false;
+        }
+        catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
+        {
+            _errors = ExceptionPresenter.GetUserMessages(ex);
+        }
+    }
+}

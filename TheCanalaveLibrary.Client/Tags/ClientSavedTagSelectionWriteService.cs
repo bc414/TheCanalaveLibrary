@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -10,8 +9,8 @@ namespace TheCanalaveLibrary.Client;
 /// Auth rides the same-origin Identity cookie — WASM's fetch-backed HttpClient sends it automatically.
 /// <para>
 /// Translates SavedTagSelectionEndpoints' status codes back into the service contract's typed
-/// exceptions: 400 → <see cref="SavedTagSelectionValidationException"/>, 401/403 →
-/// <see cref="UnauthorizedAccessException"/>, 404 → <see cref="KeyNotFoundException"/>.
+/// exceptions — the shared MA-008 shape (<see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>);
+/// 400 reconstructs <see cref="SavedTagSelectionValidationException"/>.
 /// </para>
 /// </summary>
 public sealed class ClientSavedTagSelectionWriteService(HttpClient http)
@@ -44,30 +43,9 @@ public sealed class ClientSavedTagSelectionWriteService(HttpClient http)
         return await response.Content.ReadFromJsonAsync<int>();
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of SavedTagSelectionEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                // SavedTagSelectionValidationException's ctor takes IReadOnlyList<string> errors, not a
-                // single message — but ProblemDetails.Detail (ex.Message server-side) is already the
-                // errors joined into one string (EndpointHelpers.ExecuteWriteAsync), so the original
-                // per-error list can't be reconstructed. Wrap the joined detail as a single-element
-                // list; callers that display "the" validation error see the same text either way.
-                throw new SavedTagSelectionValidationException(
-                    [detail ?? "The saved tag selection failed validation."]);
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException("You must be the owner of this saved tag selection.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException("Saved tag selection not found.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    /// <summary>Status-code → contract-exception translation (inverse of SavedTagSelectionEndpoints')
+    /// — the shared MA-008 shape.</summary>
+    private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response,
+            msg => new SavedTagSelectionValidationException([msg]));
 }

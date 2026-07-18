@@ -109,3 +109,10 @@ pre-existing in-flight finding):
   shapes, empty-body → null, 400/401/403/404/5xx translation) and live-proven under the real
   WASM runtime in the L4.5 pass above (create/toggle/clone/delete all flowed through the client
   impls). Meets the WU-L5Pilot Stage-5 bar (built + WASM-verified end-to-end).
+
+### WU-AuditFixPass-2 note (2026-07-18)
+
+MA-403 closed, F51 (cells stay Stage 5 — structure corrected in place): `AddToCustomListMenu` split into
+an `AddToCustomListMenu` wrapper + `AddToCustomListMenuInner`, deferring DI behind `AuthorizeView`
+(SavedTagSelection pattern — no injected service resolves for anonymous viewers). Full detail:
+`workplan.md` WU-AuditFixPass-2.

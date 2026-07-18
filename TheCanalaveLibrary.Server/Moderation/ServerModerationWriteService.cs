@@ -279,8 +279,11 @@ public class ServerModerationWriteService(
     {
         if (activeUser.UserId is not int id)
             throw new InvalidOperationException("Moderator action requires an authenticated user.");
+        // UnauthorizedAccessException, not InvalidOperationException: a signed-in non-mod is
+        // authenticated-but-forbidden → 403 via EndpointHelpers, matching Spotlight/SiteSettings/
+        // Poll's identical role gates (MA-123/MA-701 — this side was the wrong one).
         if (!activeUser.IsModerator && !activeUser.IsAdmin)
-            throw new InvalidOperationException("Moderator action requires the Moderator or Admin role.");
+            throw new UnauthorizedAccessException("Moderator action requires the Moderator or Admin role.");
         return id;
     }
 

@@ -3,6 +3,8 @@
 @attribute [Authorize]
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.Extensions.Logging
+@inject ILogger<SettingsPage> Logger
 @inject IUserSettingsService SettingsService
 @inject IUserProfileReadService ProfileReadService
 @inject IThemeReadService ThemeReadService
@@ -30,19 +32,9 @@ else
     <div class="flex flex-col gap-8">
         <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Settings</h1>
 
-        @* Success / error banner *@
-        @if (_successMessage is not null)
-        {
-            <div class="rounded-lg bg-(--color-success)/10 px-4 py-3 text-sm text-(--color-success)" role="status">
-                @_successMessage
-            </div>
-        }
-        @if (_errorMessage is not null)
-        {
-            <div class="rounded-lg bg-(--color-danger)/10 px-4 py-3 text-sm text-(--color-danger)" role="alert">
-                @_errorMessage
-            </div>
-        }
+        @* Success / error banner — InlineAlert is the standard channel (error-handling.md) *@
+        <InlineAlert Message="@_successMessage" Variant="InlineAlertVariant.Success" />
+        <InlineAlert Message="@_errorMessage" />
 
         @* Profile sub-form *@
         <ProfileSettingsForm
@@ -248,7 +240,11 @@ else
         }
         catch (Exception ex)
         {
-            _errorMessage = $"Save failed: {ex.Message}";
+            // Typed user-facing exceptions translate; unexpected ones log at Error first — raw
+            // ex.Message never reaches the UI (error-handling.md exception-message discipline).
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Settings save failed unexpectedly");
+            _errorMessage = ExceptionPresenter.GetUserMessage(ex);
         }
         finally
         {

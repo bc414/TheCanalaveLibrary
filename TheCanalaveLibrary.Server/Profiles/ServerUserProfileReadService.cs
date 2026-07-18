@@ -123,9 +123,23 @@ public class ServerUserProfileReadService(
     public async Task<string?> GetProfileTextAsync(int userId)
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
-        return await readDb.UserProfiles
+        var row = await readDb.UserProfiles
             .Where(p => p.UserId == userId)
-            .Select(p => p.Text)
+            .Select(p => new { p.Text, p.User.PrivacySettings.ProfileVisibility })
             .FirstOrDefaultAsync();
+        if (row is null) return null;
+
+        // Same visibility gate as GetProfileHeaderAsync (MA-602 hardening, 2026-07-17): the bio is
+        // profile content, and the /bio endpoint is directly reachable over HTTP — a Private
+        // profile's bio must not leak when the header itself is hidden. The owner always passes.
+        if (activeUser.UserId != userId)
+        {
+            if (row.ProfileVisibility == ProfileVisibility.Private)
+                return null;
+            if (row.ProfileVisibility == ProfileVisibility.UsersOnly && activeUser.UserId is null)
+                return null;
+        }
+
+        return row.Text;
     }
 }

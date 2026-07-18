@@ -52,6 +52,7 @@
     private string? _baselineJson;   // the loaded (already-persisted) content — never worth saving
     private string? _lastSavedJson;
     private bool _saveFailureLogged;
+    private bool _tickFailureLogged;
     private PeriodicTimer? _timer;
     private CancellationTokenSource? _cts;
 
@@ -91,24 +92,46 @@
         {
             while (await _timer!.WaitForNextTickAsync(ct))
             {
-                Dictionary<string, string?>? fields = await TryCaptureAsync();
-                if (fields is null) continue;
-
-                string json = FieldsJson(fields);
-                _baselineJson ??= json; // first successful capture IS the loaded content
-                if (json == _baselineJson || json == _lastSavedJson) continue;
-
-                bool saved = await Store.SaveAsync(DraftKey, new DraftEnvelope(DateTime.UtcNow, fields));
-                if (saved)
+                // Catch-log-continue per tick: the loop is launched fire-and-forget, so an
+                // unexpected exception here (e.g. a JS-interop failure inside Store.SaveAsync
+                // during a transient disconnect) would otherwise silently kill the draft-safety
+                // loop for the rest of the session — the exact failure class this component
+                // exists to prevent (MA-002).
+                try
                 {
-                    _lastSavedJson = json;
+                    Dictionary<string, string?>? fields = await TryCaptureAsync();
+                    if (fields is null) continue;
+
+                    string json = FieldsJson(fields);
+                    _baselineJson ??= json; // first successful capture IS the loaded content
+                    if (json == _baselineJson || json == _lastSavedJson) continue;
+
+                    bool saved = await Store.SaveAsync(DraftKey, new DraftEnvelope(DateTime.UtcNow, fields));
+                    if (saved)
+                    {
+                        _lastSavedJson = json;
+                    }
+                    else if (!_saveFailureLogged)
+                    {
+                        // Once per component instance — the draft-safety net is quietly absent on
+                        // this device (private mode/quota); the user's normal submit path still works.
+                        Logger.LogWarning("Draft autosave to localStorage failed for {DraftKey} — device refused the write", DraftKey);
+                        _saveFailureLogged = true;
+                    }
                 }
-                else if (!_saveFailureLogged)
+                catch (OperationCanceledException)
                 {
-                    // Once per component instance — the draft-safety net is quietly absent on
-                    // this device (private mode/quota); the user's normal submit path still works.
-                    Logger.LogWarning("Draft autosave to localStorage failed for {DraftKey} — device refused the write", DraftKey);
-                    _saveFailureLogged = true;
+                    throw; // disposal — handled by the outer catch
+                }
+                catch (Exception ex) when (!_tickFailureLogged)
+                {
+                    // Once per component instance (a persisting condition would repeat every tick).
+                    Logger.LogWarning(ex, "Draft autosave tick failed for {DraftKey} — loop continues", DraftKey);
+                    _tickFailureLogged = true;
+                }
+                catch (Exception)
+                {
+                    // Already logged once this instance — keep the loop alive.
                 }
             }
         }
@@ -126,8 +149,10 @@
         }
         catch (Exception)
         {
-            // Quill not initialized yet / transient interop failure — skip this tick; the loop
-            // retries on the next one. Not a swallow of user work: nothing was captured to lose.
+            // sanctioned-silent: per-tick capture skip — Quill not initialized yet / transient
+            // interop failure; the loop retries on the next tick and nothing captured was lost.
+            // Logging would fire every 2s while the condition persists (see logging.md §"No
+            // Silent Catches" registry).
             return null;
         }
     }

@@ -47,9 +47,14 @@ public static class StoryEndpoints
         group.MapGet("/{storyId:int}", async (IStoryReadService stories, int storyId) =>
             Results.Json(await stories.GetStoryByIdAsync(storyId)));
 
-        // Gated: feeds only StoryEditorPage (@attribute [Authorize]) — mirrors that page's gate.
-        group.MapGet("/{storyId:int}/edit", async (IStoryReadService stories, int storyId) =>
-                Results.Json(await stories.GetStoryForEditAsync(storyId)))
+        // Author-only editor read — wrapped in ExecuteWriteAsync (unlike the other reads) because
+        // GetStoryForEditAsync enforces the author gate and throws UnauthorizedAccessException for
+        // a non-author; the shared helper translates that to 403 so ClientStoryReadService's
+        // 403→UnauthorizedAccessException mapping works over WASM (same wire shape as the
+        // ChapterEndpoints /edit route, MA-301 precedent).
+        group.MapGet("/{storyId:int}/edit", (IStoryReadService stories, int storyId) =>
+                EndpointHelpers.ExecuteWriteAsync(async () =>
+                    Results.Json(await stories.GetStoryForEditAsync(storyId))))
             .RequireAuthorization();
 
         // Repeated-key query binding (?storyIds=1&storyIds=2), same shape as ITagReadService's

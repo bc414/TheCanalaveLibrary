@@ -129,7 +129,9 @@
     /// <summary>
     /// Optional initial filter state. When provided, pre-populates all axis buffers so the panel
     /// reflects an existing query (e.g. the user navigated back or deep-linked a filtered URL).
-    /// Applied during <see cref="OnInitialized"/>; later changes to this param are ignored.
+    /// Re-synced on every parameter set until the user's first interaction (MA-402) — the
+    /// dispatchers resolve the §8.7 default-exclusion seed in an async OnInitializedAsync, so a
+    /// one-time snapshot would freeze on the pre-seed (empty) filter forever.
     /// </summary>
     [Parameter] public StoryFilterDto? InitialFilter { get; set; }
 
@@ -162,13 +164,22 @@
     private IReadOnlyList<UserStoryInteractionTypeEnum> _excludedInteractions = [];
     private DefaultSortOrder _sort = DefaultSortOrder.DatePublished;
 
-    // Seed collections for child axis components; applied once on OnInitialized (WU28).
+    // Seed collections for child axis components (WU28).
     private IReadOnlyList<TagChipDto> _seedIncludedTags = [];
     private IReadOnlyList<TagChipDto> _seedExcludedTags = [];
     private IReadOnlyList<UserStoryInteractionTypeEnum> _seedExcludedInteractions = [];
 
-    protected override void OnInitialized()
+    // Re-sync from Initial* on every parameter set UNTIL the user's first interaction, then stop —
+    // the TreeSearchControls pattern (MA-402). A one-time OnInitialized snapshot is wrong here:
+    // SearchPage/TreeSearchPage resolve the default-exclusion seed inside an async
+    // OnInitializedAsync, so the synchronous first render hands this panel the pre-seed filter and
+    // the interaction checkboxes would never reflect the defaults actually applied to the query.
+    private bool _userHasInteracted;
+
+    protected override void OnParametersSet()
     {
+        if (_userHasInteracted) return;
+
         // Seed tag chips from the explicit chip params (resolved by the dispatcher via
         // ITagReadService.GetTagChipsByIdsAsync). These supersede InitialFilter's id-only lists
         // for display; the id-sets in _tagSelection are kept in sync via OnTagFilterChanged.
@@ -191,17 +202,27 @@
 
     // ── Handlers ──────────────────────────────────────────────────────────────────────────────────
 
-    private void OnTextInput(ChangeEventArgs e) =>
+    private void OnTextInput(ChangeEventArgs e)
+    {
+        _userHasInteracted = true;
         _textQuery = e.Value?.ToString() ?? "";
+    }
 
-    private void OnTagFilterChanged(TagFilterSelection selection) =>
+    private void OnTagFilterChanged(TagFilterSelection selection)
+    {
+        _userHasInteracted = true;
         _tagSelection = selection;
+    }
 
-    private void OnInteractionFilterChanged(IReadOnlyList<UserStoryInteractionTypeEnum> excluded) =>
+    private void OnInteractionFilterChanged(IReadOnlyList<UserStoryInteractionTypeEnum> excluded)
+    {
+        _userHasInteracted = true;
         _excludedInteractions = excluded;
+    }
 
     private void OnSortChanged(ChangeEventArgs e)
     {
+        _userHasInteracted = true;
         if (short.TryParse(e.Value?.ToString(), out short raw))
             _sort = (DefaultSortOrder)raw;
     }

@@ -157,5 +157,7 @@ public class User : IdentityUser<int>
     public virtual ICollection<UserStoryInteractionFilterSetting> UserStoryInteractionFilterSettings { get; set; } = new List<UserStoryInteractionFilterSetting>();
     public virtual UserStat? UserStat { get; set; }
     public virtual ICollection<UserStoryInteraction> UserStoryInteractions { get; set; } = new List<UserStoryInteraction>();
-    public virtual ICollection<ApplicationRole> Roles { get; set; } = new List<ApplicationRole>();
+    // No Roles navigation: user↔role is Identity's many-to-many via asp_net_user_roles. A direct
+    // ICollection<ApplicationRole> nav made EF model a spurious one-to-many, minting a phantom
+    // user_id shadow-FK column + index on asp_net_roles (removed 2026-07-18, MA-102).
 }

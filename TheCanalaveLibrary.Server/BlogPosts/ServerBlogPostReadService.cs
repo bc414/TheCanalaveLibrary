@@ -82,11 +82,14 @@ public class ServerBlogPostReadService(
 
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
-        // includeUnpublished is true only when the owner is viewing their own profile (the caller
-        // passes includeUnpublished: includePrivate where includePrivate = viewerId == authorId).
+        // The unpublished view is owner-only, enforced HERE, not by trusting the caller's flag
+        // (endpoint-authz sweep 2026-07-18 — the flag rides the public HTTP route, so a forged
+        // includeUnpublished=true must degrade to the public view rather than leak drafts).
         // When false: published-only, rating-filtered (the usual public-feed case).
-        // When true:  also include drafts (IsPublished = false), and bypass the rating ceiling so
-        //             the author can see their own mature unpublished posts.
+        // When true (owner verified): also include drafts (IsPublished = false), and bypass the
+        //             rating ceiling so the author can see their own mature unpublished posts.
+        if (includeUnpublished && ActiveUser.UserId != authorId)
+            includeUnpublished = false;
         IQueryable<ProfileBlogPost> query = includeUnpublished
             ? readDb.ProfileBlogPosts
                 .Where(p => p.AuthorId == authorId)
@@ -120,7 +123,10 @@ public class ServerBlogPostReadService(
 
     public async Task<BlogPostEditDto?> GetForEditAsync(int blogPostId)
     {
-        // Edit page is author-only — no rating check. The page verifies ownership after load.
+        // Edit page is author-only — no rating check. Ownership is enforced HERE (endpoint-authz
+        // sweep 2026-07-18): the page's post-load comparison is affordance, not a control
+        // (identity-and-authorization.md §"Security vs affordance") — without this gate any
+        // authenticated user could read any draft's full content over the /edit route.
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
         var row = await readDb.ProfileBlogPosts
             .Where(p => p.BlogPostId == blogPostId)
@@ -128,6 +134,8 @@ public class ServerBlogPostReadService(
             .FirstOrDefaultAsync();
 
         if (row is null) return null;
+        if (ActiveUser.UserId is not int viewerId || row.AuthorId != viewerId)
+            throw new UnauthorizedAccessException("You can only edit your own blog posts.");
 
         return new BlogPostEditDto(
             blogPostId,

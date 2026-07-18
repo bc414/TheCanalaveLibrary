@@ -188,7 +188,11 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasForeignKey(n => n.SourceUserId)
             .OnDelete(DeleteBehavior.Restrict); // CONFLICT: Nullable FK
 
-        // Identity indexes
+        // Identity indexes. These unnamed HasIndex calls silently MERGE with Identity's built-in
+        // UserNameIndex/EmailIndex (same property set) — flipping EmailIndex from Identity's
+        // default non-unique to UNIQUE. That is deliberate site policy (one account per email),
+        // and Program.cs sets options.User.RequireUniqueEmail = true so UserManager validates it
+        // BEFORE the DB constraint throws (MA-103, ratified 2026-07-18).
         builder.HasIndex(e => e.NormalizedUserName).IsUnique();
         builder.HasIndex(e => e.NormalizedEmail).IsUnique();
 

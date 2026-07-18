@@ -82,6 +82,7 @@
     @* ── Submit ──────────────────────────────────────────────────────────────── *@
     <button type="submit"
             disabled="@ViewModel.IsLoading"
+            aria-label="Save blog post"
             class="self-start rounded-md bg-(--color-action) px-5 py-2 font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
         @(ViewModel.IsLoading ? "Saving…" : SubmitLabel)
     </button>

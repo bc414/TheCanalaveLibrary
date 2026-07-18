@@ -180,6 +180,51 @@ public class ResultsFilterPanelTests : BunitContext
             "InitialFilter.ExcludedInteractions must pre-check the interaction checkbox");
         emitted.Page.Should().Be(1, "Apply always resets to page 1 regardless of InitialFilter.Page");
     }
+
+    // ── MA-402: late (async-resolved) InitialFilter re-syncs until first interaction ─────────
+
+    [Fact]
+    public async Task InitialFilter_ArrivingAfterFirstRender_SeedsBuffersAndCheckboxes()
+    {
+        // Reproduces the dispatcher shape: SearchPage/TreeSearchPage resolve the §8.7
+        // default-exclusion seed in an async OnInitializedAsync, so the panel's FIRST render gets
+        // no InitialFilter and the seeded filter only arrives on a later parameter set.
+        StoryFilterDto? emitted = null;
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
+            .Add(c => c.ShowTagFilter, false)
+            .Add(c => c.OnSearch, (StoryFilterDto dto) => emitted = dto));
+
+        StoryFilterDto seeded = new() { ExcludedInteractions = [UserStoryInteractionTypeEnum.Ignore] };
+        cut.Render(p => p.Add(c => c.InitialFilter, seeded));
+
+        // The Ignore checkbox must now render checked (pre-fix it stayed unchecked forever)...
+        cut.FindAll("input[type='checkbox']").Should().Contain(cb => cb.HasAttribute("checked"),
+            "the late-arriving default-exclusion seed must reflect in the interaction checkboxes (MA-402)");
+
+        // ...and Apply must emit the seeded exclusion. (Apply is the only <button> — the
+        // interaction axis renders checkboxes, not buttons.)
+        await cut.Find("button").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        emitted!.ExcludedInteractions.Should().Contain(UserStoryInteractionTypeEnum.Ignore);
+    }
+
+    [Fact]
+    public async Task InitialFilter_AfterUserInteraction_NoLongerOverwritesUserState()
+    {
+        StoryFilterDto? emitted = null;
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
+            .Add(c => c.ShowTagFilter, false)
+            .Add(c => c.ShowInteractionFilters, false)
+            .Add(c => c.OnSearch, (StoryFilterDto dto) => emitted = dto));
+
+        // User types a query — this is the first interaction; later param churn must not clobber it.
+        await cut.Find("input[type='search']").TriggerEventAsync("oninput",
+            new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "torterra" });
+        cut.Render(p => p.Add(c => c.InitialFilter, new StoryFilterDto { TextQuery = "seeded" }));
+
+        await cut.Find("button").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        emitted!.TextQuery.Should().Be("torterra",
+            "after the user's first interaction the panel stops re-syncing from InitialFilter (MA-402)");
+    }
 }
 
 // ── Test double ─────────────────────────────────────────────────────────────────────────────

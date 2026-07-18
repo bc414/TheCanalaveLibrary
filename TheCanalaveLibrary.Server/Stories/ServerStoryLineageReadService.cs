@@ -95,11 +95,7 @@ public class ServerStoryLineageReadService(
             .ToListAsync();
     }
 
-    /// <summary>Shared by the write service too (protected, avoids double-capturing ActiveUser).</summary>
-    protected int RequireAuthenticatedUser()
-    {
-        if (ActiveUser.UserId is not int id)
-            throw new InvalidOperationException("This operation requires an authenticated user.");
-        return id;
-    }
+    /// <summary>Shared by the write service too (protected, avoids double-capturing ActiveUser).
+    /// Delegates to the shared <see cref="ActiveUserContextExtensions.RequireUserId"/> guard (MA-210).</summary>
+    protected int RequireAuthenticatedUser() => ActiveUser.RequireUserId();
 }

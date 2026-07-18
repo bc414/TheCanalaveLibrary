@@ -158,6 +158,9 @@ else
             _rootNotFound = RootStory is null;
         }
 
+        // Missing root → real 404 (render-and-layout.md §"NavigationManager.NotFound()"; MA-404,
+        // bundled with the MA-202/304 sweep). The inline branch remains as fallback markup.
+        if (_rootNotFound) Nav.NotFound();
         if (_rootNotFound || _requiresLogin) return;
 
         // ── Seed §8.7 AutoTreeSearch defaults (??= restore-or-fetch idiom) ───────────────────

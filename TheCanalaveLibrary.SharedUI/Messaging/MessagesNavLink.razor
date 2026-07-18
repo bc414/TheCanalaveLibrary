@@ -1,7 +1,10 @@
 @namespace TheCanalaveLibrary.SharedUI
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
 @implements IDisposable
 @inject IMessagingReadService ReadService
 @inject NavigationManager Nav
+@inject ILogger<MessagesNavLink> Logger
 
 @* Layout chrome — unread badge beside LoginDisplay. Refreshes on every navigation via
    LocationChanged subscription. Only visible to authenticated users (AuthorizeView). *@
@@ -50,15 +53,31 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
     private async Task RefreshCountAsync()
     {
+        // Anonymous viewers render nothing (AuthorizeView) — skip the query outright instead of
+        // relying on the service throwing, so the catch below only sees genuine failures.
+        if (AuthState is not null)
+        {
+            AuthenticationState auth = await AuthState;
+            if (auth.User.Identity?.IsAuthenticated != true)
+            {
+                UnreadCount = 0;
+                return;
+            }
+        }
+
         try
         {
             UnreadCount = await ReadService.GetUnreadConversationCountAsync();
         }
-        catch
+        catch (Exception ex)
         {
-            // Swallow — unauthenticated or transient error; badge stays at 0.
+            // Degraded but continuing — badge shows 0; a real query bug must leave a trace
+            // (logging.md §"No silent catches").
+            Logger.LogWarning(ex, "Unread-conversation count refresh failed — badge shows 0");
             UnreadCount = 0;
         }
     }

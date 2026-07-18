@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -7,9 +6,9 @@ namespace TheCanalaveLibrary.Client;
 /// <summary>
 /// WASM-side <see cref="ISpotlightSlotAllocator"/>: HttpClient wrapper over
 /// SpotlightSlotAllocatorEndpoints (Global Flip — <c>ModSpotlightPage</c> injects the allocator
-/// directly). Status→exception translation mirrors the endpoint's: 400 →
-/// <see cref="SpotlightValidationException"/> (message from <c>ProblemDetails.Detail</c>),
-/// 401/403 → <see cref="UnauthorizedAccessException"/>, 404 → <see cref="KeyNotFoundException"/>.
+/// directly). Status→exception translation is the shared MA-008 shape
+/// (<see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>); 400 reconstructs
+/// <see cref="SpotlightValidationException"/>.
 /// </summary>
 public sealed class ClientSpotlightSlotAllocator(HttpClient http) : ISpotlightSlotAllocator
 {
@@ -34,23 +33,6 @@ public sealed class ClientSpotlightSlotAllocator(HttpClient http) : ISpotlightSl
         await http.GetFromJsonAsync<IReadOnlyList<SpotlightSlotAdminDto>>(
             $"api/spotlight-slots/recent-grants?take={take}") ?? [];
 
-    private static async Task ThrowIfFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new SpotlightValidationException([detail ?? "The slot operation failed validation."]);
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException("This operation requires a moderator.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException("Slot not found.");
-            default:
-                response.EnsureSuccessStatusCode();
-                return;
-        }
-    }
+    private static Task ThrowIfFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new SpotlightValidationException([msg]));
 }

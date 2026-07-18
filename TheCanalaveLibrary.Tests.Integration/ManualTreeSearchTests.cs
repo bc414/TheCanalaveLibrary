@@ -288,7 +288,8 @@ public sealed class ManualTreeSearchTests(PostgresFixture postgres) : Integratio
         // Someone else's story: rejected by the service gate (UI only offers own stories,
         // but the gate lives server-side).
         Func<Task> pinForeign = () => settings.UpdateAuthorSettingsAsync(new AuthorSettingsDto(Rating.T, foreign));
-        await pinForeign.Should().ThrowAsync<InvalidOperationException>();
+        await pinForeign.Should().ThrowAsync<UserSettingsValidationException>(
+            "the ownership/visibility gate is a business rule → 400, not an auth failure (MA-611)");
 
         // Null unpins.
         await settings.UpdateAuthorSettingsAsync(new AuthorSettingsDto(Rating.T, null));

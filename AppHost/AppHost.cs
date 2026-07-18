@@ -31,7 +31,7 @@ IResourceBuilder<PostgresDatabaseResource> canalaveDb = builder.AddPostgres("pos
     .AddDatabase("canalavedb");
 
 // Resource name "cache" is the connection-string name the L7 client registration will consume
-// (builder.AddRedisDistributedCache("cache") - see Server/Program.cs comment, layer7-redis.md).
+// (builder.AddRedisDistributedCache("cache") - see Server/Program.cs comment, horizontal-scaling.md).
 IResourceBuilder<RedisResource> cache = builder.AddRedis("cache")
     .WithContainerName("canalave-redis")
     .WithDataVolume("canalave-redis-data")

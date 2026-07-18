@@ -46,10 +46,14 @@ public static class BlogPostEndpoints
             return Results.Ok(new PagedResult<BlogPostListingDto>(result.Items, result.TotalCount));
         });
 
-        // Gated: feeds only BlogPostEditorPage (@attribute [Authorize]) — mirrors that page's gate.
-        // The real ownership check still lives in the write service; this read is a UX pre-check.
-        group.MapGet("/{blogPostId:int}/edit", async (IBlogPostReadService blogPosts, int blogPostId) =>
-                Results.Json(await blogPosts.GetForEditAsync(blogPostId)))
+        // Author-only editor read — wrapped in ExecuteWriteAsync (unlike the other reads) because
+        // GetForEditAsync enforces the author gate and throws UnauthorizedAccessException for a
+        // non-author; the shared helper translates that to 403 so the client's
+        // 403→UnauthorizedAccessException mapping works over WASM (same wire shape as the
+        // ChapterEndpoints/StoryEndpoints /edit routes — endpoint-authz sweep 2026-07-18).
+        group.MapGet("/{blogPostId:int}/edit", (IBlogPostReadService blogPosts, int blogPostId) =>
+                EndpointHelpers.ExecuteWriteAsync(async () =>
+                    Results.Json(await blogPosts.GetForEditAsync(blogPostId))))
             .RequireAuthorization();
 
         group.MapGet("/by-group/{groupId:int}", async (

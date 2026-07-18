@@ -63,8 +63,8 @@ public class ServerBadgeWriteService(
         foreach (string key in orderedVisibleKeys)
         {
             if (!earnedSet.Contains(key))
-                throw new InvalidOperationException(
-                    $"Badge '{key}' has not been earned by user {userId} and cannot be shown.");
+                throw new BadgeValidationException(
+                    [$"Badge '{key}' has not been earned by user {userId} and cannot be shown."]);
         }
 
         // Build key → desired DisplayOrder map (1-based for visible keys).

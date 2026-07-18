@@ -154,11 +154,22 @@
         {
             // ??= restore-or-fetch: skip the refetch when [PersistentState] restored the
             // prerender pass's load. The owner pre-check and view-model seeding run either way.
-            EditSource ??= await BlogPostService.GetForEditAsync(BlogPostId.Value);
+            // The service throws UnauthorizedAccessException for a non-author (the real gate,
+            // both render modes — endpoint-authz sweep 2026-07-18); render the forbidden state.
+            try
+            {
+                EditSource ??= await BlogPostService.GetForEditAsync(BlogPostId.Value);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                _forbidden = true;
+                _isLoading = false;
+                return;
+            }
 
             if (EditSource is null)
             {
-                NavigationManager.NavigateTo("/not-found");
+                NavigationManager.NotFound();
                 return;
             }
 

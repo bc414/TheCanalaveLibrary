@@ -67,7 +67,7 @@ else
         <div class="border-t border-(--color-border) px-4 py-3">
             @if (!string.IsNullOrEmpty(ErrorMessage))
             {
-                <p class="mb-2 text-sm text-(--color-danger)" role="alert">@ErrorMessage</p>
+                <div class="mb-2"><InlineAlert Message="@ErrorMessage" /></div>
             }
             <MessageComposer OnSend="OnSendReply"
                              SendLabel="Send Reply"

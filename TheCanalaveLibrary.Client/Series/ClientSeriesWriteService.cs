@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -10,11 +9,9 @@ namespace TheCanalaveLibrary.Client;
 /// WASM's fetch-backed HttpClient sends it automatically for same-origin requests.
 /// <para>
 /// Translates SeriesEndpoints' status codes back into the service contract's typed exceptions so
-/// components behave identically on either side of the interface: 400 →
-/// <see cref="SeriesValidationException"/> (message from ProblemDetails.Detail, wrapped as a
-/// single-element errors list — the server already joins the original error list into one string
-/// before it crosses the HTTP boundary, see EndpointHelpers.ExecuteWriteAsync), 401/403 →
-/// <see cref="UnauthorizedAccessException"/>, 404 → <see cref="KeyNotFoundException"/>.
+/// components behave identically on either side of the interface — the shared MA-008 shape
+/// (<see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>); 400 reconstructs
+/// <see cref="SeriesValidationException"/>.
 /// </para>
 /// </summary>
 public sealed class ClientSeriesWriteService(HttpClient http)
@@ -58,24 +55,8 @@ public sealed class ClientSeriesWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of SeriesEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new SeriesValidationException([detail ?? "The series failed validation."]);
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException("You must be the owner of this series.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException("Series not found.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    /// <summary>Status-code → contract-exception translation (inverse of SeriesEndpoints') — the
+    /// shared MA-008 shape.</summary>
+    private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new SeriesValidationException([msg]));
 }

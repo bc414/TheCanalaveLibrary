@@ -190,3 +190,14 @@ child with rating cap), group stories as cards, the group blog post, and the gro
 invisible to a mature-off viewer in `/groups`, and audience badges (Standard/SFW Only/Mature)
 derive correctly from the rating pairs. Deeper folder management + add-story-to-group writes
 remain Integration-covered (GroupServiceTests) rather than browser-driven.
+
+### WU-AuditFixPass note (2026-07-18)
+
+`GroupCreateEditPage` validation block normalized to `InlineAlert` (MA-504 class) and its
+missing-group branch uses `NavigationManager.NotFound()` (same class as the MA-202 sweep; site
+unnamed by the audit but identical shape). Full detail: `workplan.md` WU-AuditFixPass.
+
+### WU-AuditFixPass-2 note (2026-07-18)
+
+MA-508 closed, F38 (cell stays Stage 5): `CreateGroupAsync` is now throttled under the `ContentCreate`
+limiter (group creation was previously unthrottled). Full detail: `workplan.md` WU-AuditFixPass-2.

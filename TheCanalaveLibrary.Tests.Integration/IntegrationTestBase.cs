@@ -112,11 +112,13 @@ public abstract class IntegrationTestBase(PostgresFixture postgres) : IAsyncLife
     protected void SetActiveUser(FakeActiveUserContext ctx)
     {
         FakeActiveUserContext fake = Factory.Services.GetRequiredService<FakeActiveUserContext>();
-        fake.UserId            = ctx.UserId;
-        fake.IsAuthenticated   = ctx.IsAuthenticated;
-        fake.ShowMatureContent = ctx.ShowMatureContent;
-        fake.IsModerator       = ctx.IsModerator;
-        fake.IsAdmin           = ctx.IsAdmin;
+        fake.UserId                 = ctx.UserId;
+        fake.IsAuthenticated        = ctx.IsAuthenticated;
+        fake.ShowMatureContent      = ctx.ShowMatureContent;
+        fake.Theme                  = ctx.Theme;
+        fake.PrefersAnimatedSprites = ctx.PrefersAnimatedSprites;
+        fake.IsModerator            = ctx.IsModerator;
+        fake.IsAdmin                = ctx.IsAdmin;
     }
 
     /// <summary>

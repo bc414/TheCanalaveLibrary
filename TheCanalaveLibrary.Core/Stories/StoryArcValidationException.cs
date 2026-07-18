@@ -6,7 +6,4 @@ namespace TheCanalaveLibrary.Core;
 /// business rules; deliberately not DB constraints). Mirrors <see cref="SeriesValidationException"/>.
 /// </summary>
 public class StoryArcValidationException(IReadOnlyList<string> errors)
-    : Exception(string.Join(" ", errors))
-{
-    public IReadOnlyList<string> Errors { get; } = errors;
-}
+    : CanalaveValidationException(string.Join(" ", errors), errors);

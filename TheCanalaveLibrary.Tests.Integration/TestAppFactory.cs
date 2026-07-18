@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -80,6 +81,20 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
             services.RemoveAll<IActiveUserContext>();
             services.AddSingleton<FakeActiveUserContext>();
             services.AddScoped<IActiveUserContext>(sp => sp.GetRequiredService<FakeActiveUserContext>());
+
+            // Redirect the default authentication scheme to TestAuthenticationHandler, which
+            // authenticates every request as whatever FakeActiveUserContext currently holds — no
+            // test in this suite performs a real Identity cookie sign-in, so without this,
+            // .RequireAuthorization()-gated endpoints hit via Factory.CreateClient() always 401
+            // regardless of SetActiveUser. IdentityConstants.ApplicationScheme stays registered
+            // (harmless, unused) — this only repoints which scheme is the default.
+            services.AddAuthentication(o =>
+            {
+                o.DefaultScheme = TestAuthenticationHandler.SchemeName;
+                o.DefaultAuthenticateScheme = TestAuthenticationHandler.SchemeName;
+                o.DefaultChallengeScheme = TestAuthenticationHandler.SchemeName;
+            }).AddScheme<AuthenticationSchemeOptions, TestAuthenticationHandler>(
+                TestAuthenticationHandler.SchemeName, _ => { });
 
             // Swap the real per-user write throttle for a pass-through — tests legitimately
             // hammer write services in loops (paging seeds, at-limit fills). WriteThrottleTests

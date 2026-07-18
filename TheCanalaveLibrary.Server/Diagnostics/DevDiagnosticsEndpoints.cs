@@ -20,7 +20,10 @@ public static class DevDiagnosticsEndpoints
         devApi.MapPost("/test-delete-user/{id:int}", async (int id, UserDeletionService deletionService) =>
             await deletionService.DeleteUserAsync(id) ? Results.Ok("deleted") : Results.NotFound());
 
-        // --- WU12 verification — throwaway, removed once confirmed (plan: "removed after") ---
+        // --- WU12-era dev endpoints — deliberately KEPT (testing.md: kept dev endpoints carry a
+        // note). Originally throwaway verification, but /dev/wu12/login-as is now load-bearing for
+        // DevLoginBar's one-click user switching; whoami/create-test-story remain useful for
+        // claims/service-path checks. Development-only mapping still applies. ---
 
         devApi.MapGet("/wu12/whoami", (HttpContext http, IActiveUserContext activeUser) => Results.Ok(new
         {

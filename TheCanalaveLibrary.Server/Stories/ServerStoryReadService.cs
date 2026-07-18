@@ -40,7 +40,6 @@ public class ServerStoryReadService(
                 s.StoryListing != null ? s.StoryListing.CoverArtRelativeUrl : null,
                 s.Rating,
                 s.StoryStatusId,
-                s.Chapters.Select(c => c.Title).ToList(),
                 s.StoryDetail != null ? s.StoryDetail.Slug : null,
                 s.StoryTags
                     .Select(st => new TagListingRow(
@@ -93,7 +92,6 @@ public class ServerStoryReadService(
             CoverArtRelativeUrl  = row.CoverArtRelativeUrl,
             Rating               = row.Rating,
             Status               = row.Status,
-            ChapterNames         = row.ChapterNames,
             Slug                 = row.Slug,
             Tags                 = [..row.Tags.Select(ToTagChip), ..characterChips],
             Characters           = row.Characters
@@ -108,11 +106,18 @@ public class ServerStoryReadService(
 
     public async Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId)
     {
+        // Author gate (endpoint-authz sweep 2026-07-18): this feeds the author-only StoryEditorPage,
+        // so ownership is enforced here — the page's own AuthorId comparison is affordance, not a
+        // control (identity-and-authorization.md §"Security vs affordance"). Mirrors
+        // GetChapterForEditAsync: project the owner alongside the DTO, then compare after load.
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
-        return await readDb.Stories // Using a direct projection for optimal query generation
+        var row = await readDb.Stories // Using a direct projection for optimal query generation
             .Where(s => s.StoryId == storyId)
-            .Select(s => new StoryUpdateDTO
+            .Select(s => new
             {
+                s.AuthorId,
+                Dto = new StoryUpdateDTO
+                {
                 StoryId = s.StoryId,
                 Title = s.StoryListing != null ? s.StoryListing.StoryTitle : string.Empty,
                 ShortDescription = s.StoryListing != null ? s.StoryListing.ShortDescription : null,
@@ -151,8 +156,17 @@ public class ServerStoryReadService(
                     }).ToList(),
                 OriginalPublishedDate   = s.OriginalPublishedDate,
                 OriginalLastUpdatedDate = s.OriginalLastUpdatedDate
+                }
             })
             .FirstOrDefaultAsync();
+
+        if (row is null) return null;
+        // Explicit-auth check rather than nullable comparison: an anonymous viewer (UserId null)
+        // against an authorless story (AuthorId null) must not pass on null == null.
+        if (ActiveUser.UserId is not int viewerId || row.AuthorId != viewerId)
+            throw new UnauthorizedAccessException("You must be the author of this story.");
+
+        return row.Dto;
     }
 
     public async Task<IReadOnlyList<ExternalPlatformDto>> GetExternalPlatformsAsync()
@@ -218,8 +232,13 @@ public class ServerStoryReadService(
     public async Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId)
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
-        return await readDb.Stories
-            .IgnoreQueryFilters(["ContentRating"]) // elevated read: author always sees their own stories regardless of rating setting
+        // Elevated read only for the author's own list (endpoint-authz sweep 2026-07-18): the
+        // ContentRating bypass must never be keyed to a client-supplied id — any other viewer gets
+        // the normally-filtered set, so rating-hidden story ids don't leak cross-user.
+        IQueryable<Story> stories = readDb.Stories;
+        if (ActiveUser.UserId == authorId)
+            stories = stories.IgnoreQueryFilters(["ContentRating"]); // elevated read: author always sees their own stories regardless of rating setting
+        return await stories
             .Where(s => s.AuthorId == authorId)
             .Select(s => s.StoryId)
             .ToListAsync();
@@ -479,7 +498,7 @@ public class ServerStoryReadService(
         int WordCount, DateTime PublishDate, DateTime LastUpdatedDate,
         DateOnly? OriginalPublishDate, DateOnly? OriginalLastUpdatedDate,
         int? AuthorId, string? AuthorName, string? CoverArtRelativeUrl,
-        Rating Rating, StoryStatusEnum Status, List<string> ChapterNames,
+        Rating Rating, StoryStatusEnum Status,
         string? Slug,
         List<TagListingRow> Tags,
         List<CharacterDetailRow> Characters,

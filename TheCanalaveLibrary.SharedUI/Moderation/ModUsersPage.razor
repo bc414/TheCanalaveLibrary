@@ -2,6 +2,8 @@
 @namespace TheCanalaveLibrary.SharedUI
 @attribute [Authorize(Roles = "Moderator,Admin")]
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.Extensions.Logging
+@inject ILogger<ModUsersPage> Logger
 @inject IModerationReadService ModerationService
 @inject IModerationWriteService ModerationWriteService
 
@@ -117,7 +119,7 @@
 
             @if (_actionError is not null)
             {
-                <p class="mb-2 text-sm text-danger">@_actionError</p>
+                <div class="mb-2"><InlineAlert Message="@_actionError" /></div>
             }
 
             <div class="flex gap-2">
@@ -213,8 +215,20 @@
             // Post-action refetch — plain assignment (persistence only reads at hydration).
             UserReports = await FetchUserReportsAsync();
         }
-        catch (Exception ex) { _actionError = ex.Message; }
+        catch (Exception ex) { _actionError = Translate(ex, "Applying an account action failed unexpectedly"); }
         finally { _acting = false; }
+    }
+
+    /// <summary>Catch-site exception-message discipline (mirrors CommentSection.Translate).</summary>
+    private string Translate(Exception ex, string unexpectedTemplate)
+    {
+        if (!ExceptionPresenter.IsUserFacing(ex))
+        {
+#pragma warning disable CA2254 // template is one of a fixed set of literals passed by callers
+            Logger.LogError(ex, unexpectedTemplate);
+#pragma warning restore CA2254
+        }
+        return ExceptionPresenter.GetUserMessage(ex);
     }
 
     private static string StatusBadgeClass(ReportStatusEnum status) => status switch

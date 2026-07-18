@@ -112,12 +112,14 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IntegrationTest
     {
         // Seed a fresh story with chapters in reverse-insert order to verify ordering is by
         // ChapterNumber, not insert order (relative-order assertion per testing.md discipline).
-        int freshStoryId = await SeedStoryAsync();
+        // Chapter writes gate on story authorship (MA-301): seed as the viewer-user, then read
+        // back as anonymous.
+        int freshStoryId = await SeedStoryAsync(_viewerUserId);
 
         // Insert three chapters via the write service so ChapterNumbers are assigned correctly.
         await using AsyncServiceScope s1 = Factory.Services.CreateAsyncScope();
         IChapterWriteService write = s1.ServiceProvider.GetRequiredService<IChapterWriteService>();
-        SetActiveUser(FakeActiveUserContext.Anonymous());
+        SetActiveUser(_viewerUserId);
 
         int ch1 = await write.CreateChapterAsync(new CreateChapterDto
             { StoryId = freshStoryId, Title = "Alpha",   ChapterText = "<p>a</p>", Rating = Rating.E });
@@ -126,6 +128,9 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IntegrationTest
         int ch3 = await write.CreateChapterAsync(new CreateChapterDto
             { StoryId = freshStoryId, Title = "Gamma",   ChapterText = "<p>c</p>", Rating = Rating.E });
 
+        // Read back as the author: freshly-created chapters are unpublished, and draft toc rows
+        // are author-only since the endpoint-authz sweep (2026-07-18; anonymous exclusion is
+        // pinned by ChapterDraftVisibilityTests). Ordering is what's under test here.
         IReadOnlyList<ChapterTocEntryDto> toc = await GetTocAsync(freshStoryId);
 
         // Assert relative ordering — do not assert absolute top-N (shared DB accumulates rows).
@@ -171,8 +176,10 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IntegrationTest
     public async Task GetChapterForReadingAsync_IncludesPrevAndNextChapterNumbers()
     {
         // Seed a fresh story with 3 chapters; verify the middle one returns prev = 1, next = 3.
-        int freshStoryId = await SeedStoryAsync();
-        SetActiveUser(FakeActiveUserContext.Anonymous());
+        // Chapter writes gate on story authorship (MA-301): seed as the viewer-user, then read
+        // back as anonymous (below, after the publish step).
+        int freshStoryId = await SeedStoryAsync(_viewerUserId);
+        SetActiveUser(_viewerUserId);
 
         await using AsyncServiceScope svc = Factory.Services.CreateAsyncScope();
         IChapterWriteService write = svc.ServiceProvider.GetRequiredService<IChapterWriteService>();
@@ -198,7 +205,8 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IntegrationTest
         foreach (Chapter c in freshChapters) c.IsPublished = true;
         await db.SaveChangesAsync();
 
-        // Read the middle chapter (ChapterNumber == 2).
+        // Read the middle chapter (ChapterNumber == 2) as the anonymous viewer.
+        SetActiveUser(FakeActiveUserContext.Anonymous());
         ChapterReadingDto? middle = await GetForReadingAsync(freshStoryId, chapterNumber: 2);
 
         middle.Should().NotBeNull();

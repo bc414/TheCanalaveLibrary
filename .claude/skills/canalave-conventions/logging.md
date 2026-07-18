@@ -147,6 +147,17 @@ Registry of sanctioned sites (keep current — this list is the audit trail):
 - `Server/Identity/ServerActiveUserContext.cs` `ResolvePrincipal` — anonymous fallback for
   scopes with no HttpContext and no circuit state (DataSeeder); static helper inside
   auth-middleware timing, predates any logger; anonymous IS the correct outcome, not a failure.
+- `SharedUI/Drafts/DraftAutosave.razor` `TryCaptureAsync` — per-tick capture skip (Quill not
+  initialized / transient interop); the loop retries next tick and nothing captured was lost.
+  Logging would fire every 2s while the condition persists. (Registered 2026-07-18, MA-001.)
+- `SharedUI/Recommendations/RecommendationEditor.razor` `SampleLengthLoopAsync` — per-tick
+  char-count sample skip (editor not initialised / disposing); 500ms retry cadence, no user work
+  at risk. Same repeat-spam rationale as DraftAutosave's tick. (Registered 2026-07-18, MA-503.)
+
+Typed-and-expected teardown catches (`catch (Exception ex) when (ex is JSDisconnectedException
+or JSException or TaskCanceledException or ObjectDisposedException)` on dispose-path JS calls,
+with an "expected during teardown" comment) are the *register path*, not silent catches — they
+don't need registry entries (StoryPage/ChapterReadingPage dispose, 2026-07-18, MA-206/MA-303).
 
 Sweep verification: `grep -E 'catch\s*(\(\s*Exception\s*\))?\s*\{?\s*$' **/*.cs` across
 Server/Core/SharedUI/Client must return only sanctioned sites.

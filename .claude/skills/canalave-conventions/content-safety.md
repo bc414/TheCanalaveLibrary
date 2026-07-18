@@ -116,10 +116,14 @@ EF Core 10 named filters allow per-filter opt-out, leaving other named filters a
 
 ### TPT blog-post exception
 
-`HasQueryFilter` on a TPT root (`BaseBlogPost`) generates broken EF Core 10 SQL on entity
-materialization, so the `"IsTakenDown"` and blog-post content-rating filters are **not** applied
-model-level to `BaseBlogPost`. Instead, each blog-post read service enforces them via an explicit
-`.Where(p => !p.IsTakenDown)` / `.Where(p => p.Rating <= max)` in the projection. Blog-post delete uses
+The TPT-root hazard is narrower than originally recorded (corrected 2026-07-18 against
+`ReadOnlyApplicationDbContext.cs`, which is the authority): a `HasQueryFilter` that **closes over
+`_activeUser`** (the content-rating filter) generates broken EF Core 10 SQL on derived-entity
+materialization, so the blog-post **content-rating** filter is *not* applied model-level to
+`BaseBlogPost` — each blog-post read service enforces the ceiling via an explicit
+`.Where(p => p.Rating <= max)` in the projection. The simple boolean `"IsTakenDown"` filter **is**
+safe on TPT roots and *is* applied model-level to `BaseBlogPost` (confirmed by the full test suite
+since WU34). Blog-post delete uses
 the change-tracker stub: `writeDb.Remove(new ProfileBlogPost { BlogPostId = id });
 await writeDb.SaveChangesAsync();` — EF issues child-then-base DELETE in one transaction. See
 `audit/BlogPosts.md` §Feature 35 Stage-5 note (WU31.5) for full rationale.

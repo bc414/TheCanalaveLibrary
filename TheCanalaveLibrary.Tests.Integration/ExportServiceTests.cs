@@ -19,14 +19,17 @@ namespace TheCanalaveLibrary.Tests.Integration;
 [Collection("Postgres")]
 public class ExportServiceTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
+    private int _authorId;
     private int _storyId;
 
     public override async Task InitializeAsync()
     {
         await base.InitializeAsync();
-        SetActiveUser(FakeActiveUserContext.Anonymous());
 
-        _storyId = await SeedStoryAsync();
+        // Chapter writes gate on story authorship (MA-301) — the fixture story needs a real
+        // author, and chapter seeding runs as them (SeedPublishedChapterAsync handles the swap).
+        _authorId = await SeedUserAsync("export-author");
+        _storyId = await SeedStoryAsync(_authorId);
         await SeedPublishedChapterAsync(_storyId, "The Harbor",
             "<p>Plain and <strong>bold</strong> text.</p><blockquote>Quoted words.</blockquote>");
         await SeedPublishedChapterAsync(_storyId, "The Lighthouse",
@@ -37,10 +40,14 @@ public class ExportServiceTests(PostgresFixture postgres) : IntegrationTestBase(
     /// Creates a chapter through the real write service (server-assigned number, sanitize-on-save,
     /// word count) and publishes it — export only carries published chapters. Rating is left null
     /// (inherit the story's) — a primary version's rating must match the story's, so an explicit
-    /// value would throw on non-E stories.
+    /// value would throw on non-E stories. Runs as the story's author (chapter writes gate on
+    /// authorship; mature-enabled so M-rated fixture stories resolve through the rating filter) and
+    /// restores the anonymous viewer before returning.
     /// </summary>
     private async Task<int> SeedPublishedChapterAsync(int storyId, string title, string html)
     {
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorId, showMatureContent: true));
+
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
         IChapterWriteService write = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
         int chapterId = await write.CreateChapterAsync(new CreateChapterDto
@@ -51,6 +58,8 @@ public class ExportServiceTests(PostgresFixture postgres) : IntegrationTestBase(
             Rating = null
         });
         await write.SetPublishedAsync(chapterId, true);
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
         return chapterId;
     }
 
@@ -123,7 +132,7 @@ public class ExportServiceTests(PostgresFixture postgres) : IntegrationTestBase(
     public async Task ExportStoryAsync_MatureStory_GatedByViewersContentRatingCeiling()
     {
         int viewerId = await SeedUserAsync();
-        int matureStoryId = await SeedStoryAsync(rating: Rating.M);
+        int matureStoryId = await SeedStoryAsync(_authorId, rating: Rating.M);
         await SeedPublishedChapterAsync(matureStoryId, "Mature Ch", "<p>mature body</p>");
 
         // Non-mature viewer: the content-rating master filter hides the story entirely.
@@ -141,7 +150,9 @@ public class ExportServiceTests(PostgresFixture postgres) : IntegrationTestBase(
     [Fact]
     public async Task ExportStoryAsync_ExcludesUnpublishedChapters()
     {
-        // A third, unpublished chapter (created but never SetPublished).
+        // A third, unpublished chapter (created but never SetPublished) — created as the author
+        // (chapter writes gate on story authorship), then export back to the anonymous viewer.
+        SetActiveUser(_authorId);
         await using (AsyncServiceScope scope = Factory.Services.CreateAsyncScope())
         {
             IChapterWriteService write = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
@@ -153,6 +164,7 @@ public class ExportServiceTests(PostgresFixture postgres) : IntegrationTestBase(
                 Rating = Rating.E
             });
         }
+        SetActiveUser(FakeActiveUserContext.Anonymous());
 
         StoryExportResult? result = await ExportAsync(_storyId, ExportFormat.Txt);
         string txt = Encoding.UTF8.GetString(result!.Content);

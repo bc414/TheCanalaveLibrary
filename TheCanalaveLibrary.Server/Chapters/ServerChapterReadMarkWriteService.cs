@@ -17,7 +17,7 @@ public class ServerChapterReadMarkWriteService(
 {
     public async Task SetChapterReadAsync(int chapterId, bool isRead)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = activeUser.RequireUserId();
 
         var chapter = await writeDb.Chapters
             .Where(c => c.ChapterId == chapterId)
@@ -65,7 +65,7 @@ public class ServerChapterReadMarkWriteService(
 
     public async Task SetAllChaptersReadAsync(int storyId, bool isRead)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = activeUser.RequireUserId();
 
         bool storyExists = await writeDb.Stories.AnyAsync(s => s.StoryId == storyId);
         if (!storyExists) throw new KeyNotFoundException($"Story {storyId} not found.");
@@ -112,12 +112,5 @@ public class ServerChapterReadMarkWriteService(
 
         if (isRead)
             await usiWrite.MarkStartedAsync(storyId);
-    }
-
-    private int RequireAuthenticatedUser()
-    {
-        if (activeUser.UserId is not int id)
-            throw new InvalidOperationException("This operation requires an authenticated user.");
-        return id;
     }
 }

@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -9,9 +8,9 @@ namespace TheCanalaveLibrary.Client;
 /// ServerStoryLineageWriteService : ServerStoryLineageReadService. Auth rides the same-origin
 /// Identity cookie — WASM's fetch-backed HttpClient sends it automatically for same-origin requests.
 /// <para>
-/// Translates StoryLineageEndpoints' status codes back into the service contract's typed exceptions:
-/// 400 → <see cref="StoryLineageValidationException"/> (message from ProblemDetails.Detail), 401/403
-/// → <see cref="UnauthorizedAccessException"/>, 404 → <see cref="KeyNotFoundException"/>.
+/// Translates StoryLineageEndpoints' status codes back into the service contract's typed
+/// exceptions — the shared MA-008 shape (<see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>);
+/// 400 reconstructs <see cref="StoryLineageValidationException"/>.
 /// </para>
 /// </summary>
 public sealed class ClientStoryLineageWriteService(HttpClient http)
@@ -44,24 +43,8 @@ public sealed class ClientStoryLineageWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of StoryLineageEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new StoryLineageValidationException([detail ?? "The lineage request failed validation."]);
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException("You do not own the story required for this action.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException("Lineage link not found.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    /// <summary>Status-code → contract-exception translation (inverse of StoryLineageEndpoints') —
+    /// the shared MA-008 shape.</summary>
+    private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new StoryLineageValidationException([msg]));
 }

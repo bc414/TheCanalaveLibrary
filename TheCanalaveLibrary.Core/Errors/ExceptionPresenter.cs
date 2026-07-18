@@ -5,7 +5,9 @@ namespace TheCanalaveLibrary.Core;
 /// <summary>
 /// The single exception → user-facing-message mapper (cross-cutting.md §"Error Handling
 /// Strategy" — exception-message discipline). Only typed user-facing exceptions surface their
-/// own message; BCL exception messages are developer text and are never shown. Everything
+/// own message; the whole per-feature validation family is matched via its shared
+/// <see cref="CanalaveValidationException"/> base (MA-008) rather than one arm per type;
+/// BCL exception messages are developer text and are never shown. Everything
 /// unexpected maps to <see cref="GenericMessage"/> suffixed with the current trace id, so what
 /// the user sees can be joined to what the server logged (logging.md §"Unhandled exceptions").
 ///
@@ -33,18 +35,7 @@ public static class ExceptionPresenter
     /// "unexpected" — the catch site must log at Error before showing the generic message.
     /// </summary>
     public static bool IsUserFacing(Exception ex) => ex
-        is StoryValidationException
-        or ChapterValidationException
-        or CommentValidationException
-        or RecommendationValidationException
-        or BlogPostValidationException
-        or PollValidationException
-        or GroupValidationException
-        or SeriesValidationException
-        or StoryLineageValidationException
-        or MessagingValidationException
-        or CustomListValidationException
-        or TagValidationException
+        is CanalaveValidationException
         or VouchLimitException
         or ContentRatingExceededException
         or MessagingPermissionException
@@ -55,21 +46,12 @@ public static class ExceptionPresenter
     /// <summary>User-facing message list for inline display (e.g. a form's InlineAlert).</summary>
     public static IReadOnlyList<string> GetUserMessages(Exception ex) => ex switch
     {
-        // Multi-message validation family — each carries its own user-written error list.
-        StoryValidationException e => e.ValidationErrors,
-        ChapterValidationException e => e.Errors,
-        CommentValidationException e => e.Errors,
-        RecommendationValidationException e => e.Errors,
-        BlogPostValidationException e => e.Errors,
-        PollValidationException e => e.Errors,
-        GroupValidationException e => e.Errors,
-        SeriesValidationException e => e.Errors,
-        StoryLineageValidationException e => e.Errors,
-        MessagingValidationException e => e.Errors,
-        CustomListValidationException e => e.Errors,
+        // The validation family — one base (MA-008), each instance carries its own
+        // user-written error list.
+        CanalaveValidationException e => e.Errors,
 
         // Single-message typed exceptions whose Message is deliberately user-ready.
-        TagValidationException or VouchLimitException or ContentRatingExceededException
+        VouchLimitException or ContentRatingExceededException
             or MessagingPermissionException or WriteRateLimitExceededException => [ex.Message],
 
         // BCL types the write services use by documented convention — fixed friendly text;

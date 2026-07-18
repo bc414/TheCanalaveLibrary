@@ -36,7 +36,8 @@ namespace TheCanalaveLibrary.Server;
 /// AdminUser=2):
 /// 7 users (TestUser everyman · AdminUser Admin+Moderator · ModUser Moderator · AuthorAlpha ·
 /// AuthorBeta mature author · ReaderGamma mature-off · LurkerDelta private profile);
-/// 44 tags (20 characters, 8 settings, 12 genres, 4 content warnings);
+/// 45 tags (21 characters incl. the Bulbasaur sprite fixture, 8 settings, 12 genres,
+/// 4 content warnings);
 /// 12 stories across ratings E/T/M and statuses (incl. 2 PendingApproval for the mod queue,
 /// 1 Draft), one 5-chapter story with an alternate chapter version, one 2-chapter + unpublished
 /// draft; follows/vouches; TestUser bookshelf rows covering every tab; chapter comments with a
@@ -745,7 +746,8 @@ public class DataSeeder(
             new UserProfile { UserId = users.Test.Id, Text = "<p>Seed bio for TestUser.</p>" },
             new UserProfile { UserId = users.AuthorAlpha.Id, Text = "<p>Seed bio for AuthorAlpha.</p>" });
 
-        // Counters mirror the seeded content above (maintained by construction — see header).
+        // Counter values are hand-set approximations of the seeded content above (e.g. WordsWritten),
+        // close enough to render plausible stats — not exact derived totals.
         context.UserStats.AddRange(
             new UserStat
             {

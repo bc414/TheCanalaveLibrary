@@ -19,8 +19,8 @@ public static class EndpointHelpers
         }
         catch (Exception ex) when (IsValidationException(ex))
         {
-            // Every `{Feature}ValidationException` (13 distinct types — none share a common base;
-            // matched by name suffix rather than retrofitting a marker base onto all of them) plus
+            // Every `{Feature}ValidationException` (matched via the shared
+            // CanalaveValidationException base — MA-008) plus
             // ArgumentException/ArgumentOutOfRangeException, VouchLimitException, and
             // ImportException: all are "the request was malformed/rejected, message is user-facing."
             return Results.Problem(detail: ex.Message, statusCode: StatusCodes.Status400BadRequest);
@@ -72,6 +72,5 @@ public static class EndpointHelpers
     }
 
     private static bool IsValidationException(Exception ex) =>
-        ex.GetType().Name.EndsWith("ValidationException", StringComparison.Ordinal)
-        || ex is ArgumentException or VouchLimitException or ImportException;
+        ex is CanalaveValidationException or ArgumentException or VouchLimitException or ImportException;
 }

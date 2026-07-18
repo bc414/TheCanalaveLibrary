@@ -164,7 +164,7 @@ public class StoryDetailTests(PostgresFixture postgres) : IntegrationTestBase(po
     public async Task GetChapterListAsync_ReturnsChapters_InChapterNumberOrder()
     {
         SetActiveUser(FakeActiveUserContext.Anonymous());
-        int storyId = await SeedStoryAsync();
+        int storyId = await SeedStoryAsync(_authorId);
 
         // Create 3 chapters and publish them so they're visible to an anonymous viewer.
         await SeedPublishedChaptersAsync(storyId, count: 3);
@@ -181,7 +181,7 @@ public class StoryDetailTests(PostgresFixture postgres) : IntegrationTestBase(po
     public async Task GetChapterListAsync_SingleVersionChapter_HasEmptyAlternateVersions()
     {
         SetActiveUser(FakeActiveUserContext.Anonymous());
-        int storyId = await SeedStoryAsync();
+        int storyId = await SeedStoryAsync(_authorId);
         await SeedPublishedChaptersAsync(storyId, count: 1);
 
         IReadOnlyList<ChapterListEntryDto> list = await GetChapterListAsync(storyId);
@@ -250,13 +250,15 @@ public class StoryDetailTests(PostgresFixture postgres) : IntegrationTestBase(po
     }
 
     [Fact]
-    public async Task GetChapterListAsync_UnpublishedChapter_IncludedWithIsPublishedFalse()
+    public async Task GetChapterListAsync_UnpublishedChapter_AuthorSeesItWithIsPublishedFalse()
     {
-        // The service returns all chapters (published and unpublished); the ChapterList leaf
-        // applies ShowDrafts filtering at render time, not here.
-        SetActiveUser(FakeActiveUserContext.Anonymous());
+        // Draft rows are author-only server-side since the endpoint-authz sweep (2026-07-18) —
+        // the author still gets them with IsPublished=false so the management/story surfaces can
+        // render drafts; the anonymous-exclusion side is pinned by ChapterDraftVisibilityTests.
+        int authorId = await SeedUserAsync();
+        SetActiveUser(authorId);
 
-        int storyId = await SeedStoryAsync(rating: Rating.E);
+        int storyId = await SeedStoryAsync(authorId, rating: Rating.E);
 
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -304,12 +306,13 @@ public class StoryDetailTests(PostgresFixture postgres) : IntegrationTestBase(po
     /// <summary>
     /// Seeds <paramref name="count"/> published chapters (E-rated, single primary version each).
     /// Chapter numbers are auto-assigned by <see cref="IChapterWriteService.CreateChapterAsync"/>.
-    /// Uses an anonymous <see cref="FakeActiveUserContext"/> (null UserId) — ChapterContent.AuthorId
-    /// is nullable so anonymous inserts are valid for test seeding purposes.
+    /// Chapter writes gate on story authorship (MA-301), so seeding runs as the story's author
+    /// (<c>_authorId</c> — callers must seed the story with it) and restores the anonymous viewer
+    /// the callers expect before returning.
     /// </summary>
     private async Task SeedPublishedChaptersAsync(int storyId, int count)
     {
-        SetActiveUser(FakeActiveUserContext.Anonymous());
+        SetActiveUser(_authorId);
 
         await using AsyncServiceScope scope = Factory.Services.CreateAsyncScope();
         IChapterWriteService svc = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
@@ -327,6 +330,8 @@ public class StoryDetailTests(PostgresFixture postgres) : IntegrationTestBase(po
             // SetPublishedAsync takes (chapterId, bool), not (storyId, chapterNumber, bool).
             await svc.SetPublishedAsync(chapterId, isPublished: true);
         }
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
     }
 
     /// <summary>

@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -37,8 +38,17 @@ public class ClientChapterReadService(HttpClient http) : IChapterReadService
     public async Task<DateTime?> GetViewerLastInteractionUtcAsync(int storyId) =>
         await Http.GetNullableFromJsonAsync<DateTime?>($"api/chapters/{storyId}/last-interaction");
 
-    public async Task<ChapterReadingDto?> GetChapterForEditAsync(long chapterContentId) =>
-        await Http.GetNullableFromJsonAsync<ChapterReadingDto?>($"api/chapters/edit/{chapterContentId}");
+    public async Task<ChapterReadingDto?> GetChapterForEditAsync(long chapterContentId)
+    {
+        // 401/403 → UnauthorizedAccessException, mirroring the server service's author gate so
+        // ChapterEditorPage's forbidden handling works identically under both render modes
+        // (status→contract-exception translation, layer5-wasm.md "The Error-Translation Contract").
+        using HttpResponseMessage response = await Http.GetAsync($"api/chapters/edit/{chapterContentId}");
+        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
+            throw new UnauthorizedAccessException("You must be the author of this story.");
+        response.EnsureSuccessStatusCode();
+        return await ClientHttpHelpers.ReadNullableFromJsonAsync<ChapterReadingDto?>(response.Content);
+    }
 
     public async Task<IReadOnlyList<ChapterExportDto>> GetChaptersForExportAsync(int storyId) =>
         await Http.GetFromJsonAsync<List<ChapterExportDto>>($"api/chapters/{storyId}/export") ?? [];

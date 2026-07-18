@@ -104,7 +104,10 @@
             }
             catch
             {
-                // Editor not yet initialised or component disposing — swallow.
+                // sanctioned-silent: per-tick char-count sample skip — editor not yet initialised
+                // or component disposing; the next 500ms tick retries and no user work is at risk.
+                // Logging would fire every tick while the condition persists (see logging.md
+                // §"No Silent Catches" registry).
             }
         }
     }

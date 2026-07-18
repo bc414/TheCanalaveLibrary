@@ -25,8 +25,10 @@ public interface IBadgeWriteService : IBadgeReadService
     /// <c>DisplayOrder = 1, 2, … n</c> in list order; all other earned keys receive
     /// <c>DisplayOrder = 0</c> (hidden from profile and UserCards).
     /// </summary>
-    /// <exception cref="InvalidOperationException">
-    /// Thrown if any key in <paramref name="orderedVisibleKeys"/> has not been earned by this user.
+    /// <exception cref="BadgeValidationException">
+    /// Thrown if any key in <paramref name="orderedVisibleKeys"/> has not been earned by this user
+    /// (a business-rule rejection → 400, distinct from the unauthenticated-caller
+    /// <see cref="InvalidOperationException"/> → 401).
     /// </exception>
     Task SetDisplayOrderAsync(int userId, IReadOnlyList<string> orderedVisibleKeys);
 }

@@ -52,13 +52,20 @@ interchangeable; which one you use is determined by where you are:
 | **`IActiveUserContext`** (Core/Identity) | **Server services** (scoped, claims-only, no DbContext) | Per-circuit/request | Query-shaping (content-rating filter, sprite theme), per-viewer DB projections, **and server-side authorization** (`UserId` equality, `IsModerator/IsAdmin`) | Injecting into any SharedUI component |
 | **Blazor `AuthenticationState` / `<AuthorizeView>`** | **UI** (routable pages + components) | Cascading | Showing/hiding affordances, role-gated markup, resolving `CurrentUserId` at the page level to pass down as a parameter | Any decision you actually rely on for security |
 
-**`IActiveUserContext` is server-only** and will not exist in a future WASM Client.
-SharedUI survives the L5 WASM split only because it never injects it.
+**Rule:** *SharedUI components resolve identity from the `AuthenticationState` cascade, not by
+injecting `IActiveUserContext`.* The dispatcher/routable page resolves identity from
+`[CascadingParameter] Task<AuthenticationState>` and passes ownership down as a parameter (bool
+`IsOwnStory`, `IsOwnComment`, `IsEditable`, or `int? CurrentUserId`). `StoryDeck`, `StoryCard`,
+`CommentItem`, and `VouchList` already do exactly this.
 
-**Rule:** *SharedUI components never inject `IActiveUserContext`.* The dispatcher/routable page
-resolves identity from `[CascadingParameter] Task<AuthenticationState>` and passes ownership down
-as a parameter (bool `IsOwnStory`, `IsOwnComment`, `IsEditable`, or `int? CurrentUserId`).
-`StoryDeck`, `StoryCard`, `CommentItem`, and `VouchList` already do exactly this.
+*Why the rule survives the Global Flip (BB-03, 2026-07-18):* the original justification — "the
+interface won't exist in a WASM Client" — is dead: `WasmActiveUserContext` is registered in
+`Client/Program.cs`, so injecting it no longer breaks the WASM build. The rule is retained as a
+**consistency/testability discipline**, not a compile constraint: one identity source per layer
+keeps components parameter-driven and bUnit-testable without fake user-context registrations.
+**Ratified bounded exceptions (the only two):** `Layout/UserActivityTracker.razor` (fire-and-forget
+activity ping — needs the hot scalar, renders nothing) and `Profiles/SettingsPage.razor`
+(self-scoped settings dispatcher). Don't add a third without recording it here.
 
 ### Six kinds of active-user conditionality
 
@@ -167,6 +174,14 @@ a page-level attribute.
 
 ### Default-Deny for MVP, Default-Allow Post-Launch
 
+**Operative posture (recorded 2026-07-18, MA-104): the app runs default-allow.** The MVP
+fallback-policy block below was never implemented — anonymous browsing has been the verified-normal
+behavior since the audit trail began, and public reads are deliberate (stories, profiles, discovery).
+The doc's companion requirement for the default-allow posture — "re-audit every endpoint's
+`.RequireAuthorization()`" — was satisfied by the 2026-07-18 systematic endpoint-authorization sweep
+(all 38 `*Endpoints.cs` files; see `workplan.md` WU-AuditFixPass-2). The block below is retained as
+the recipe should a default-deny phase ever be wanted, not as a description of current state.
+
 **MVP posture (everything requires login):**
 ```csharp
 builder.Services.AddAuthorization(options =>
@@ -200,7 +215,12 @@ Prefer a named policy over repeating role lists once more than one or two pages 
 options.AddPolicy("RequireModerator", p => p.RequireRole("Moderator", "Admin"));
 ```
 `[Authorize(Policy = "RequireModerator")]` / `.RequireAuthorization("RequireModerator")` then apply
-uniformly to mod pages and their backing endpoints. Distinct from `<AuthorizeView Roles="...">`
+uniformly to mod pages and their backing endpoints. **This policy is registered** (Program.cs,
+MA-702 fix 2026-07-18) with its name exposed as the `AuthorizationPolicies.RequireModerator`
+constant (`Server/Identity/AuthorizationPolicies.cs`) — every mod-only endpoint group
+(Moderation writes + queue reads, SiteDailyStat, SpotlightSlotAllocator, SiteSettings) uses it as
+the edge half of the defense-in-depth pair; the service-side `RequireModerator()` remains the
+enforcement point of record. Distinct from `<AuthorizeView Roles="...">`
 (layer3.5-structure.md) — that's for moderator-only controls embedded in an otherwise-public page,
 not for gating the dedicated `/mod/*` routes.
 

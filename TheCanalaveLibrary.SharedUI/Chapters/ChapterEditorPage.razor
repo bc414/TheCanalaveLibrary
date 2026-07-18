@@ -245,7 +245,7 @@ else
             StoryUpdateDTO? story = await StoryReadService.GetStoryForEditAsync(StoryId);
             if (story is null)
             {
-                NavigationManager.NavigateTo("/not-found");
+                NavigationManager.NotFound();
                 return;
             }
             StoryRating = story.Rating;
@@ -270,7 +270,7 @@ else
 
             if (resolvedContentId == 0)
             {
-                NavigationManager.NavigateTo("/not-found");
+                NavigationManager.NotFound();
                 return;
             }
 
@@ -280,10 +280,23 @@ else
             _isPrimary = _currentVersion?.IsPrimary ?? false;
 
             // Load chapter content for the form (no rating ceiling — authors see their own).
-            EditSource ??= await ChapterService.GetChapterForEditAsync(resolvedContentId);
+            // The service throws UnauthorizedAccessException for a non-author (the real gate,
+            // both render modes) — render the forbidden state, mirroring the affordance branch below.
+            try
+            {
+                EditSource ??= await ChapterService.GetChapterForEditAsync(resolvedContentId);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                _forbidden = true;
+                EditSource = null;
+                Versions = null;
+                _isLoading = false;
+                return;
+            }
             if (EditSource is null)
             {
-                NavigationManager.NavigateTo("/not-found");
+                NavigationManager.NotFound();
                 return;
             }
 

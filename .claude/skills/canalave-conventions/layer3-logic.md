@@ -141,23 +141,31 @@ Dropdown/selection options are separate `@code` fields, not in the ViewModel.
 
 ### Nested Validation with `[ValidatableType]` (.NET 10)
 
-.NET 10 supports nested object validation without custom validators. Mark a complex type with
-`[ValidatableType]` and `DataAnnotationsValidator` validates it recursively:
+.NET 10 supports nested object validation without custom validators. Mark the **root** model type
+with `[ValidatableType]` and `DataAnnotationsValidator` validates it recursively. Three
+prerequisites the feature silently no-ops without (BB-01, verified against the aspnetcore-10
+what's-new 2026-07-17):
+
+1. **`builder.Services.AddValidation()` must be registered** — the attribute alone does nothing.
+2. **The model must live in a `.cs` class file, not a `.razor` file** — both the validation source
+   generator and the Razor compiler are source generators, and one's output can't feed the other.
+3. **`[ValidatableType]` goes on the root type only.** Nested complex types are discovered by the
+   generator's graph walk automatically — annotating the nested *property* is off-pattern.
 
 ```csharp
-[ValidatableType]
+[ValidatableType]                       // root type only — in a .cs file
 public class StoryEditViewModel
 {
     [Required, StringLength(200)]
     public string Title { get; set; } = "";
 
-    [ValidatableType]
-    public StoryMetadataViewModel Metadata { get; set; } = new();
+    public StoryMetadataViewModel Metadata { get; set; } = new();  // walked automatically
 }
 ```
 
-Useful for ViewModels containing grouped settings or multi-section forms. Simplifies the
-three-tiered validation strategy at Tier 1.
+The same release also adds `[SkipValidation]`, `IValidatableObject` support, and collection
+validation. Useful for ViewModels containing grouped settings or multi-section forms. Simplifies
+the three-tiered validation strategy at Tier 1.
 
 ### When to Drop to the Manual PersistentComponentState Service
 

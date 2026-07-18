@@ -1038,3 +1038,19 @@ total_words, page_views, active_users`. Daily aggregation worker.
   only while a text query is present (panel contract).
 - **F34 Tag Directory:** curated post-reseed taxonomy renders grouped by type with counts and
   type jump-nav (see Tags audit for the editor overlay on the same page).
+
+### WU-AuditFixPass note (2026-07-18)
+
+`TreeSearchPage`'s missing-root branch now calls `NavigationManager.NotFound()` (real 404 for
+deleted-root URLs, MA-404; inline message retained as interactive-mode fallback markup). Full
+detail: `workplan.md` WU-AuditFixPass.
+
+### WU-AuditFixPass-2 note (2026-07-18)
+
+Endpoint-authz sweep + MA-402 (cells stay Stage 5 — behavior corrected in place): **F31/F59**
+`ResultsFilterPanel` now resync-until-interaction so the async §8.7 default-exclusion seed reflects in the
+checkboxes (browser-verified the "Ignored" / "Hide stories I've ignored" checkbox renders **checked** on
+`/discover`). **F33 ManualTreeSearch:** the favoriters pivot section is now anchored to the viewer-visible
+story set (`visible`) — was leaking who favorited a rating-hidden/taken-down anchor, now matching the
+sibling author/recommendation sections. Covered: `ResultsFilterPanelTests` (RazorComponents, +2 resync
+tests) + browser. Full detail: `workplan.md` WU-AuditFixPass-2.

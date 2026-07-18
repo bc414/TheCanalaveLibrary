@@ -531,3 +531,16 @@ several other features wait on.
 - **F14:** on `/discover`, genre typeahead → Adventure chip → Apply Filters narrowed the deck to
   exactly the three Adventure-tagged stories; ✕ removal renders. AND/OR toggle + interaction
   filters present (interaction-exclusion semantics exercised under F16/F17's pass).
+
+### WU-AuditFixPass note (2026-07-18)
+
+`TagEditorForm`'s hand-rolled server-error `<p role="alert">` normalized to `InlineAlert`
+(MA-405). Full detail: `workplan.md` WU-AuditFixPass.
+
+### WU-AuditFixPass-2 note (2026-07-18)
+
+Endpoint-authz sweep + MA-407, F11 (cells stay Stage 5 — defense-in-depth added): tag write routes gained
+the `.RequireAuthorization()` floor they lacked (the service-layer `RequireMod` already covered them;
+floor + stale-comment fix). `TagEndpoints`' private `ExecuteWriteAsync` deleted — now uses the shared
+`EndpointHelpers`. Covered: `HttpRateLimitTests.TagWrites_*` updated to authenticate as a moderator (the
+real caller) to reach the limiter past the new floor. Full detail: `workplan.md` WU-AuditFixPass-2.

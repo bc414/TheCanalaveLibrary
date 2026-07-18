@@ -52,6 +52,13 @@ public sealed class HttpRateLimitTests(PostgresFixture postgres) : IntegrationTe
     [Fact]
     public async Task TagWrites_Return429_PastTheirPolicyWindow()
     {
+        // Tag writes carry a RequireAuthorization() floor (endpoint-authz sweep 2026-07-18), so the
+        // request must authenticate to reach the rate limiter at all — a moderator is the real
+        // caller. The garbage body still 400s after the limiter counts the request, exactly as
+        // before; only the auth gate is new.
+        int modId = await SeedUserAsync("mod");
+        SetActiveUser(FakeActiveUserContext.Moderator(modId));
+
         using HttpClient client = Factory.CreateClient();
 
         for (int i = 0; i < 30; i++)

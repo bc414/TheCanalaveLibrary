@@ -4,6 +4,7 @@
 @inject IStoryReadService StoryService
 @inject IUserStoryInteractionReadService InteractionService
 @inject IPublicUrlProvider PublicUrlProvider
+@inject NavigationManager Nav
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Components.Authorization
 
@@ -133,6 +134,13 @@ else
                 : [];
             await LoadViewerStateAsync();
         }
+        else
+        {
+            // Missing series → real 404 (render-and-layout.md §"NavigationManager.NotFound()";
+            // MA-202 sweep). The inline "Series not found" branch remains as the interactive-mode
+            // fallback markup.
+            Nav.NotFound();
+        }
 
         _isLoading = false;
         _initialized = true;
@@ -163,6 +171,7 @@ else
             Stories = [];
             _isOwner = false;
             _interactionStates = null;
+            Nav.NotFound();
         }
 
         _isLoading = false;

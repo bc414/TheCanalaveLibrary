@@ -109,17 +109,26 @@ else
 
         if (StoryId.HasValue)
         {
-            StoryUpdateDTO? editData = await StoryReadService.GetStoryForEditAsync(StoryId.Value);
-
-            if (editData is null)
+            // The service throws UnauthorizedAccessException for a non-author (the real gate,
+            // both render modes — endpoint-authz sweep 2026-07-18) — render the forbidden state,
+            // mirroring ChapterEditorPage's load-path handling.
+            StoryUpdateDTO? editData;
+            try
             {
-                NavigationManager.NavigateTo("/not-found");
+                editData = await StoryReadService.GetStoryForEditAsync(StoryId.Value);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                _forbidden = true;
+                _isLoading = false;
                 return;
             }
 
-            // StoryUpdateDTO doesn't carry AuthorId, so no client-side UX pre-check here — the real
-            // gate lives in ServerStoryWriteService (throws UnauthorizedAccessException on mismatch).
-            // A future enriched GetStoryForEditAsync that includes AuthorId could do the redirect here.
+            if (editData is null)
+            {
+                NavigationManager.NotFound();
+                return;
+            }
 
             PopulateViewModelFromEdit(editData);
 

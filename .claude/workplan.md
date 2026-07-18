@@ -3062,3 +3062,231 @@ WASM-focused whole-site browser wave that found and fixed seven real bugs.
   expected; reverted, suite green again.
 - **Tool:** Claude Code (Opus). **Pointer:** `audit/Profiles.md` Feature 58 Stage-5 note;
   `layer2-services.md` "Recalculation worker (F58)".
+
+## WU-AuditFixPass — Modernization-audit Tier-1 (5 must-fix) + Tier-2 (should-fix) closure — DONE ✓ (2026-07-18)
+
+Source: `modernization-audit/report.md` (2026-07-17 pre-lock-in audit). All 5 Tier-1s, all Tier-2
+fix-patterns, plus 4 hardening items a post-fix adversarial re-audit surfaced. Finding IDs (MA-*)
+resolve in `modernization-audit/slices/*-findings.md`; Tier-1 proofs in its `verification.md`.
+
+**Tier-1 security/UX fixes:**
+- **MA-101** `ReconnectModal.razor` `@Assets` path corrected `Components/Layout/…` →
+  `Components/…` (matches the physical `.razor.js`); repo-grepped — no other stale reference.
+- **MA-602** `UserProfileEndpoints` header route now derives `includePrivate` server-side from
+  `IActiveUserContext.UserId == userId`; the client-supplied query bool is gone
+  (`ClientUserProfileReadService` no longer sends it). **Hardening:** the sibling `/bio` route
+  leaked Private/UsersOnly profiles' bios — `ServerUserProfileReadService.GetProfileTextAsync` now
+  applies the same visibility gate as the header (owner always passes); interface doc updated.
+- **MA-601** `BadgeEndpoints` no longer accepts a client `userId` on any route — curation read and
+  display-order derive it from `IActiveUserContext` (UserSettingsEndpoints pattern). **Hardening:**
+  the `/award` route is REMOVED entirely, not self-scoped — awards are earned, the only production
+  caller is `ServerRecommendationWriteService` (in-process), and a mapped route would let any WASM
+  caller self-mint Patron/Architect (same decision + rationale as NotificationEndpoints' unmapped
+  generation; `ClientBadgeWriteService.AwardAsync` throws `NotSupportedException`). Note this
+  deliberately deviates from verification.md's "enforce caller==target in the service" fix-shape:
+  a service-level check would break the legitimate in-process award-to-other-user path.
+- **MA-301** `ServerChapterWriteService`: all five previously-ungated write methods
+  (Create/AddAlternateVersion/UpdateContent/SetPrimaryVersion/SetPublished) now enforce
+  `Story.AuthorId == ActiveUser.UserId` (the same authority Move/Delete already used);
+  `GetChapterForEditAsync` (draft read) gates too. **Hardening:** the read gate requires an
+  authenticated viewer explicitly (an anonymous viewer vs. an authorless story would otherwise
+  pass on null == null); `ClientChapterReadService.GetChapterForEditAsync` translates 401/403 →
+  `UnauthorizedAccessException` so `ChapterEditorPage`'s new catch renders the forbidden state
+  identically under both render modes. Moderation/import/seeder call paths verified unaffected
+  (moderation never calls this service; import commits as the story's author; DataSeeder writes
+  entities directly). `ChapterEndpoints` class doc updated to describe the closed gate.
+- **MA-201** `ServerStoryWriteService` injects `IHtmlSanitizationService` and sanitizes
+  `LongDescription` on create AND update (the rule `ServerSeriesWriteService` already followed).
+
+**Tier-2 fix-patterns:**
+- **Counters (MA-502/MA-705):** `RecordSuccessAsync`'s tracked `SuccessfulRecCount++` → atomic
+  `ExecuteUpdateAsync` delta *after* the success-row insert commits (a PK-race insert failure can
+  no longer increment); BlogPost `ToggleLikeAsync`'s C#-computed absolute write → atomic ±1 delta
+  (0-clamped) + re-read for the returned count.
+- **MA-401:** `UserStoryInteractionPanel` is now `IAsyncDisposable` with a `_flushPending` flag —
+  a toggle inside the 2s debounce window flushes on dispose instead of being dropped; flush
+  failure during teardown logs Warning (never throws).
+- **Not-found sweep (MA-202/304/404/606/708 + GroupCreateEditPage, unnamed by the audit but same
+  class):** all 12 `NavigateTo("/not-found")` sites → `NavigationManager.NotFound()` (StoryPage ×2,
+  StoryEditorPage, SeriesCreateEditPage, ChapterReadingPage, ChapterEditorPage ×3, BlogPostEditorPage,
+  GroupCreateEditPage, ProfilePage ×2), plus the two inline-render sites (SeriesPage missing-series,
+  TreeSearchPage missing-root) now also call `NotFound()`. Deliberately NOT swept: BlogPostPage /
+  CustomListPage / GroupPage inline branches (documented missing-vs-private ambiguity).
+- **Error-channel sweep (MA-205/405/501/504/603/703/704):** 11 components normalized to
+  `InlineAlert` + `ExceptionPresenter` (raw `ex.Message` eliminated from UI): SeriesCreateEditPage,
+  MyStoryLineagesPage, TagEditorForm, MessageThread, ComposeConversationModal, GroupCreateEditPage,
+  SettingsPage (success banner → `InlineAlertVariant.Success`), ModReportsPage, ModUsersPage,
+  ModSubmissionsPage, BlogPostPage, ReportDialog (now logs unexpected at Error), and
+  RecommendationSection fully adopted CommentSection's `Translate` pattern.
+- **MA-123/MA-701:** Moderation's `RequireModerator()` role branch now throws
+  `UnauthorizedAccessException` (→ 403) matching Spotlight/SiteSettings/Poll; the unauthenticated
+  branch stays `InvalidOperationException` (→ 401). `ModerationServiceTests` updated to pin 403.
+  (MA-702's Tier-3 edge `RequireAuthorization(ModeratorOnly)` NOT done — out of Tier-2 scope.)
+- **Silent catches (MA-001/002/206/303/503):** ReaderDisplayProvider + MessagesNavLink now
+  LogWarning (MessagesNavLink also skips the query for anonymous viewers via the AuthState cascade
+  instead of relying on the service throwing); DraftAutosave's fire-and-forget loop gained
+  catch-log-continue per tick (one unexpected throw no longer kills draft safety for the session);
+  StoryPage/ChapterReadingPage dispose JS calls narrowed from bare `catch` to typed teardown
+  filters; DraftAutosave capture-tick + RecommendationEditor sample-tick annotated
+  `sanctioned-silent` and REGISTERED in `logging.md` (registry updated same work-unit).
+- **MA-102:** `User.Roles` phantom nav deleted; migration `MA102_DropPhantomUserRolesShadowFk`
+  drops `asp_net_roles.user_id` + `ix_asp_net_roles_user_id` (verified drop-only).
+- **MA-103:** `options.User.RequireUniqueEmail = true` in Program.cs — ratifies the already-UNIQUE
+  `EmailIndex` as site policy (one account per email) and converts the duplicate-email raw-500
+  into a friendly validation error; intent comment added at the `HasIndex` site.
+
+**Test infra:** `TestAuthenticationHandler` added (test host's default auth scheme) — authenticates
+requests as whatever `FakeActiveUserContext` holds, so `.RequireAuthorization()`-gated endpoints are
+now testable over `Factory.CreateClient()` (no test previously performed a real cookie sign-in;
+audited: no existing test depended on the old always-401 behavior).
+
+**Verified:** `dotnet build` green. New/updated regression tests: `BadgeEndpointsTests` (award route
+unmapped + curation/display-order caller-scoping), `UserProfileEndpointsTests` (private-profile
+header + hidden-last-seen + bio gate, attacker-shaped query strings), `ChapterWriteServiceTests`
+(+7 authorship tests incl. author-positive GetChapterForEdit), `StoryWriteServiceTests` (+2 XSS
+sanitize tests), `ModerationServiceTests` (403 pin). Fixture updates for the MA-301 gate
+(chapter seeding now runs as the story's author): ChapterWriteServiceTests, StoryDetailTests,
+ExportServiceTests, ChapterReadServiceTests. Full suite green (Unit 712 / RazorComponents 639 /
+Integration — all three tiers; the affected-class subset re-verified 102/102 after fixture fixes).
+Browser E2E pass: see status note / this entry's date.
+
+- **Cells:** no Stage numbers change — every touched cell was Stage 5 and remains Stage 5 with
+  corrected behavior; the audit's per-cell "proposes reopen" flags are resolved by this pass.
+- **Deliberately deferred (out of Tier-1/2 scope):** the systematic ~40-endpoint authz sweep
+  (report.md's #1 recommendation — verification/closure of WU-L5Sweep's deferred pass), Tier-3
+  batch, code-economy items, BB-01/02/03 doc-touches.
+- **Tool:** Claude Code (Fable). **Pointer:** `modernization-audit/report.md`; per-cluster audit
+  files carry dated pointers to this entry.
+
+## WU-AuditFixPass-2 — Endpoint-authz sweep closure + remaining Tier-2/3 + code-economy + Bucket-B docs — DONE ✓ (2026-07-18)
+
+Source: `modernization-audit/fix-status.md` (the done/not-done map handed to this pass). Closes
+everything the first pass (WU-AuditFixPass) deferred except the explicit ⛔ / 🧑 items (Desktop/Mobile
+merges, Identity-scaffold prune, export-writer visitor — all product/human calls). Finding IDs (MA-*)
+resolve in `modernization-audit/slices/*-findings.md`; BB-* in its `bucket-b.md`.
+
+**#1 recommendation — the systematic endpoint-authorization sweep (DONE).** All 38 `*Endpoints.cs`
+files audited at authorization depth (fan-out: 7 parallel readers, one per cluster; each traced every
+route into its backing service). Verdict: the WU-L5Sweep deferral class was **wider than the 3 found**
+— 7 additional holes closed, plus MA-702's edge-gate gap. This is the closure the audit called for.
+- **Story `/edit` (GetStoryForEditAsync):** trusted the auth floor only — any authenticated user could
+  read any story's edit DTO (incl. the moderation-only `PostApprovalStatus`). Now loads the owner and
+  throws `UnauthorizedAccessException` (→403); endpoint wrapped in `ExecuteWriteAsync`;
+  `ClientStoryReadService` maps 401/403→`UnauthorizedAccessException`; `StoryEditorPage` renders the
+  forbidden state (mirrors the MA-301 chapter shape).
+- **Story `/by-author/{authorId}` (GetStoryIdsByAuthorAsync):** the `IgnoreQueryFilters(["ContentRating"])`
+  bypass was keyed to a **client-supplied** authorId — any viewer could enumerate another author's
+  rating-hidden story ids. Bypass now applies only when `authorId == ActiveUser.UserId`. Browser-verified:
+  owner (mature-on) sees 5 of their stories, a mature-off non-owner sees 3.
+- **BlogPost `GetByAuthorAsync` + `GetForEditAsync`:** forged `includeUnpublished=true` leaked drafts to
+  anyone; `/edit` had no ownership check (draft content readable by any authed user). Both gated
+  server-side (owner-derived flag / ownership throw); client + editor page mirror the chapter pattern.
+  Browser-verified cross-author blog `/edit` → 403.
+- **UserStoryInteractions `favorites/{userId}?includePrivate`:** the private-favorites switch was
+  client-supplied — hidden favorites leaked. Now server-derived (`activeUser.UserId == userId`), same as
+  MA-602's header fix; client stops sending it.
+- **Chapter toc/list/versions:** draft (unpublished) chapter *metadata* (titles, word counts) enumerated
+  to anyone. Now `IsPublished || Story.AuthorId == viewer` in all three reads. Browser-verified: StoryPage
+  as a non-author shows only published chapters.
+- **ManualTreeSearch favoriters:** the story-pivot favoriters section didn't constrain the anchor to the
+  viewer-visible set — leaked who favorited a rating-hidden/taken-down story. Now anchored to `visible`,
+  matching the author/recommendation sections.
+- **Tag write routes:** added the `.RequireAuthorization()` floor they lacked (service `RequireMod`
+  already covered it; defense-in-depth + stale-comment fix). `HttpRateLimitTests.TagWrites_*` now
+  authenticates as a moderator (the real caller) to reach the limiter past the new floor.
+- **MA-702:** registered the named `AuthorizationPolicies.RequireModerator` policy (Program.cs;
+  `Server/Identity/AuthorizationPolicies.cs`) and applied it as the edge role gate on all mod-only groups
+  (Moderation queue reads + all 6 writes, SiteDailyStat, SpotlightSlotAllocator, SiteSettings write) —
+  replaced 4 duplicated inline `AuthorizeAttribute` copies. Browser-verified: non-mod → 403 on every
+  mod route; AdminUser → 200/204.
+- **Confirmed already-secure (no change):** every other cluster — the 7 sweep agents' full route×verdict
+  tables are the closure record. The service layer was disciplined; holes clustered in the mechanically-
+  generated read/endpoint layer exactly as the audit predicted.
+
+**Remaining Tier-2 (report's curated list was partial — cross-slice §B):** MA-203 (StoryPage's 6 serial
+loads → `Task.WhenAll` in a shared `LoadSupplementaryAsync`, both lifecycle methods), MA-204 (dead
+`ChapterNames` projection + DTO field removed — a correlated subquery on the hottest read, plus a latent
+draft-title leak), MA-402 (`ResultsFilterPanel` + `UserStoryInteractionFilter` now resync-until-interaction
+like `TreeSearchControls` — the async default-exclusion seed reflects in the checkboxes; browser-verified
+"Ignored" renders checked), MA-403 (`AddToCustomListMenu` split into wrapper/inner, deferring DI behind
+`AuthorizeView`), MA-302 (reading-progress ping dropped its `RequireAuthorization()` — anonymous scroll now
+202-no-ops instead of 401; browser-verified), MA-706 (`IBlogPostReadService` rebound to the read impl, not
+the derived write class), MA-003 (logout `ReturnUrl` computed at render time / on `LocationChanged`, not
+cached once per circuit), MA-005 (`CanalaveTypeahead` guards the caller `SearchMethod` + clears stale
+results so Enter can't select from them), MA-110 (`Error.razor` rewritten from template debris to the
+NotFound.razor role treatment + trace id).
+
+**MA-008 (biggest pure-win compression):** new `CanalaveValidationException` base; 15 `*ValidationException`
+types converted to one `Errors` shape (fixes a latent bug — StoryArc/SavedTagSelection/Spotlight previously
+fell through `ExceptionPresenter` to the generic message). `ExceptionPresenter` (11 arms → 1),
+`EndpointHelpers` (name-suffix hack → `is CanalaveValidationException`), and `TagEndpoints` (MA-407 —
+private `ExecuteWriteAsync` deleted) all collapse onto it. Client: shared
+`ClientHttpHelpers.ThrowIfWriteFailedAsync(response, validationFactory, kind?)` replaces ~14 hand-rolled
+copies (3 deviant ones left: Group/Messaging 403-disambiguation, USI ArgumentOutOfRange). **Behavior note:**
+converted client services now map a bare 401→`InvalidOperationException` (was `UnauthorizedAccessException`);
+no catch site reads it, but an expired-cookie 401 on those services routes to the generic-error path, not a
+`_forbidden` state. Two Unit tests split accordingly.
+
+**Tier-3 batch (mechanical):** dead code (MA-105 Razor Pages host + `Pages/`, MA-106 `AddApiEndpoints`,
+MA-111 `RedirectToLogin`, MA-113 Redis pkg + `layer7-redis.md` pointer, MA-207 `StoryListingPageDto`,
+MA-208 `StoryCharacterRelationship` tombstone); aria-labels on all 4 EditorView-wrapping submit buttons +
+ChapterList toggle (MA-212/307/607/707); `IActiveUserContext.RequireUserId()` Core extension collapsing
+5 duplicated guards (MA-210/308); `(int?)`→anonymous-type FK projections (MA-409/507); MA-305
+(`ImportReviewPanel` `bg-danger`→token), MA-306 (attribution fire-and-forget now logged), MA-011
+(`ToastHost` auto-dismiss tied to a disposal CTS), MA-511 (vestigial `CardShadowClass` inlined); comment/
+test debris (MA-109/115/116/117/119/120/213); new `ConfirmDialogTests` (MA-121).
+
+**Bucket-B + doc-staleness (all doc-touch):** BB-01 (`[ValidatableType]` — added `AddValidation()` +
+.cs-not-.razor + root-only constraints), BB-02/MA-309 (write-throttle rule reframed cost-not-write-vs-read;
+`"ImportParse"` concurrency limiter added to the 3 parse routes), BB-03/MA-004/604 (the "IActiveUserContext
+won't exist in WASM" premise deleted; rule restated as testability discipline + 2 ratified exceptions),
+MA-104 (default-allow recorded as operative posture), MA-108/114/118/122/123-note, content-safety/BaseBlogPost
+TPT-filter contradiction corrected against code, MA-506/605/709 (stale-WU TODOs retargeted). Also MA-508
+(group-create now throttled `ContentCreate`).
+
+**Verified:** full three-tier suite green — **Unit 712 / RazorComponents 646 / Integration 734, 0 failures**
+(the sweep + MA-402 added 22 regression tests: StoryEndpointsTests, BlogPostEndpointsTests,
+UserStoryInteractionEndpointsTests, ChapterDraftVisibilityTests, ModerationEndpointsTests, +2 ResultsFilterPanel
+resync tests; 2 chapter tests + 1 rate-limit test updated for the new draft-visibility/auth-floor behavior).
+Browser E2E (server-only, live DB): all 7 sweep holes + MA-702 (both directions) + MA-302 + MA-402 confirmed
+over the wire; StoryPage/discover render clean, no console errors.
+
+- **Cells:** no Stage numbers change — audit findings targeted Stage-5 cells and corrected behavior in place;
+  the "proposes reopen" flags across the slice files are resolved by this pass.
+- **NOT done (deliberate — ⛔/🧑 in fix-status.md):** Desktop/Mobile pair merges (unvalidated placeholder
+  seam), MA-610 Identity-scaffold prune (product call), export-writer DOM-walk visitor + MA-209/406/510
+  extract-or-not seams (Brian's explicit-over-magic call), the residual client 401-mapping deviants.
+- **Tool:** Claude Code (Fable), fan-out to parallel subagents for the sweep + mechanical batches.
+  **Pointer:** `modernization-audit/fix-status.md` (rewritten to reflect this pass); per-cluster audit files.
+
+---
+
+## WU-StatusCodeSeams — MA-505 / MA-611 (DONE ✓ 2026-07-18)
+
+Closed the deferred status-code seam (`modernization-audit/deferred-work.md` §4): authenticated
+business-rule rejections that threw `InvalidOperationException` — mapped to **401** by the auth-safety-net
+arm of `EndpointHelpers.ExecuteWriteAsync` — now throw typed `{Feature}ValidationException`s → **400**.
+No shared-helper change (every new type derives from `CanalaveValidationException`, which the 400 arm and
+`ExceptionPresenter` already match — MA-008).
+
+- **New Core types:** `FollowingValidationException`, `BadgeValidationException`,
+  `UserSettingsValidationException` (mirror the existing family).
+- **Throw sites retyped:** self-follow / self-vouch / not-following (`ServerFollowingWriteService`);
+  Hidden-Gem-limit / spotlight-limit (`ServerRecommendationWriteService`); unowned display key
+  (`ServerBadgeWriteService`); unpinnable story (`ServerUserSettingsService`).
+- **Client translators:** `ClientFollowingWriteService` 400 → `FollowingValidationException` (was
+  `VouchLimitException`); `ClientBadgeWriteService` + `ClientUserSettingsService` gained a 400 arm;
+  `ClientRecommendationWriteService` unchanged (already reconstructs its validation type).
+- **Docs:** the 4 endpoint doc comments ("known mismatch" → "resolved"); `IFollowingWriteService` /
+  `IBadgeWriteService` / `IUserSettingsService` exception docs; `layer5-wasm.md` "The Error-Translation
+  Contract" (validation-family + `InvalidOperationException` rows, plus the stale name-suffix note
+  corrected to the `CanalaveValidationException` base); per-cluster audit Stage notes.
+- **Cells:** no Stage numbers change — corrected status semantics in place within already-Stage-5 cells.
+- **Tests retyped:** the reject-at-limit / self-guard / unowned-key assertions in
+  `FollowingWriteServiceTests`, `RecommendationWriteServiceTests`, `BadgeServiceTests`, and
+  `ManualTreeSearchTests` (pinned-story gate) moved off `InvalidOperationException` onto the new typed
+  exceptions (pinned-story coverage already existed there — no new test class added).
+- **Verified:** Unit 712 / RazorComponents 646 / Integration 734 green; browser E2E — self-follow /
+  not-following / unowned badge key / unpinnable story all return 400, unauthenticated still 401.
+- **Tool:** Claude Code (Opus). **Pointer:** `modernization-audit/deferred-work.md` §4; audit
+  Following/Recommendations/Badges/Profiles.

@@ -125,6 +125,60 @@ public class StoryWriteServiceTests(PostgresFixture postgres) : IntegrationTestB
             .Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
+    // --- MA-201: stored XSS regression — LongDescription was previously saved unsanitized ---
+
+    [Fact]
+    public async Task CreateStoryAsync_SanitizesScriptTag_InLongDescription()
+    {
+        Factory.Services.GetRequiredService<FakeActiveUserContext>().UserId = _authorId;
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IStoryWriteService writeService = scope.ServiceProvider.GetRequiredService<IStoryWriteService>();
+
+        int storyId = await writeService.CreateStoryAsync(new CreateStoryDTO
+        {
+            Title               = $"XSS Fixture {Guid.NewGuid():N}",
+            ShortDescription    = "Integration test story",
+            Rating              = Rating.T,
+            StoryStatusId       = StoryStatusEnum.InProgress,
+            LongDescription     = "<p>Safe text</p><script>alert('xss')</script>",
+            PostApprovalStatus  = StoryStatusEnum.InProgress,
+            StoryTags =
+            [
+                new StoryTagDTO { TagId = _settingTagId, Priority = TagPriority.Primary, TagTypeEnum = TagTypeEnum.Setting },
+                new StoryTagDTO { TagId = _genreTagId, Priority = TagPriority.Primary, TagTypeEnum = TagTypeEnum.Genre }
+            ]
+        });
+
+        using IServiceScope verifyScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = verifyScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        StoryDetail detail = await db.StoryDetails.SingleAsync(d => d.StoryId == storyId);
+
+        detail.LongDescription.Should().NotContain("<script>");
+        detail.LongDescription.Should().Contain("Safe text");
+    }
+
+    [Fact]
+    public async Task UpdateStoryAsync_SanitizesScriptTag_InLongDescription()
+    {
+        int storyId = await CreateStoryAsync($"XSS Update Fixture {Guid.NewGuid():N}");
+        SetActiveUser(_authorId);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IStoryWriteService writeService = scope.ServiceProvider.GetRequiredService<IStoryWriteService>();
+
+        StoryUpdateDTO dto = ValidUpdateDto(storyId, "Updated Title");
+        dto.LongDescription = "<p>Safe update</p><script>alert('xss')</script>";
+        await writeService.UpdateStoryAsync(dto);
+
+        using IServiceScope verifyScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = verifyScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        StoryDetail detail = await db.StoryDetails.SingleAsync(d => d.StoryId == storyId);
+
+        detail.LongDescription.Should().NotContain("<script>");
+        detail.LongDescription.Should().Contain("Safe update");
+    }
+
     private StoryUpdateDTO ValidUpdateDto(int storyId, string title) => new()
     {
         StoryId = storyId,

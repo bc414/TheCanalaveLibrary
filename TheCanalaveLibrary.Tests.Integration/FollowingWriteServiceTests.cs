@@ -69,7 +69,7 @@ public class FollowingWriteServiceTests(PostgresFixture postgres) : IntegrationT
     public async Task FollowAsync_SelfFollow_Throws()
     {
         Func<Task> act = () => CallFollowAsync(_actorId);
-        await act.Should().ThrowAsync<InvalidOperationException>("self-follow must be rejected");
+        await act.Should().ThrowAsync<FollowingValidationException>("self-follow must be rejected");
     }
 
     // ── UnfollowAsync ────────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ public class FollowingWriteServiceTests(PostgresFixture postgres) : IntegrationT
     public async Task SetReceiveAlertsAsync_ThrowsWhenNotFollowing()
     {
         Func<Task> act = () => CallSetReceiveAlertsAsync(_targetId, true);
-        await act.Should().ThrowAsync<InvalidOperationException>();
+        await act.Should().ThrowAsync<FollowingValidationException>();
     }
 
     // ── VouchAsync ───────────────────────────────────────────────────────────────
@@ -148,7 +148,7 @@ public class FollowingWriteServiceTests(PostgresFixture postgres) : IntegrationT
     public async Task VouchAsync_SelfVouch_Throws()
     {
         Func<Task> act = () => CallVouchAsync(_actorId, null);
-        await act.Should().ThrowAsync<InvalidOperationException>("self-vouch must be rejected");
+        await act.Should().ThrowAsync<FollowingValidationException>("self-vouch must be rejected");
     }
 
     [Fact]

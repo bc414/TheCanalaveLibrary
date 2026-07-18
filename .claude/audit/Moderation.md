@@ -298,3 +298,24 @@ L8=5.
   activity-buffer→flush→`active_users`/"Last seen Jul 11, 2026" loop was confirmed end-to-end on a
   real profile page, for both the owner (AdminUser) and a non-owner viewer (TestUser).
 - `dotnet test`: 1421/1421 (524 Unit + 479 RazorComponents + 418 Integration).
+
+### WU-AuditFixPass note (2026-07-18)
+
+MA-123/MA-701 closed: `RequireModerator()`'s role branch throws `UnauthorizedAccessException`
+(→ 403) for a signed-in non-mod, matching Spotlight/SiteSettings/Poll; the unauthenticated branch
+stays 401. `ModerationServiceTests` pins the 403 contract. Error channels normalized: ModReportsPage/
+ModUsersPage/ModSubmissionsPage route catches through `ExceptionPresenter` + `InlineAlert` (raw
+`ex.Message` gone); `ReportDialog` logs unexpected failures at Error instead of silently swallowing
+(MA-704). MA-702's Tier-3 edge role gate (RequireAuthorization(ModeratorOnly) on the mod-write
+group) remains open. Full detail: `workplan.md` WU-AuditFixPass.
+
+### WU-AuditFixPass-2 note (2026-07-18)
+
+MA-702 closed (the edge role gate the pass-1 note left open), F46/F47/F62 (cells stay Stage 5 —
+defense-in-depth added, no behavior change for legitimate mods): the named
+`AuthorizationPolicies.RequireModerator` policy is now registered (Program.cs /
+`Server/Identity/AuthorizationPolicies.cs`) and applied as the edge role gate on the mod-write group +
+queue reads + SiteDailyStat (plus SpotlightSlotAllocator + SiteSettings write) — sits on top of the
+service-layer `RequireModerator`, replacing 4 duplicated inline `AuthorizeAttribute` copies. Covered:
+`ModerationEndpointsTests` (Integration) + browser both directions (non-mod → 403 on every mod route,
+AdminUser → 200/204). Full detail: `workplan.md` WU-AuditFixPass-2.

@@ -61,7 +61,10 @@ public class ServerBlogPostWriteService(
             .Where(us => us.UserId == authorId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.BlogPostsWritten, us => us.BlogPostsWritten + 1));
 
-        // TODO(WU33): notify followers of a new blog post once the notification type exists.
+        // TODO(post-MVP follower-notifications): notify followers of a new profile blog post once
+        // the notification type exists. (Retargeted 2026-07-18, MA-709 — the WU33 marker referenced
+        // a completed work-unit; the group path already fans out via NotifyNewGroupBlogPostAsync,
+        // profile-post follower notifications remain the tracked gap.)
 
         return post.BlogPostId;
     }
@@ -149,31 +152,37 @@ public class ServerBlogPostWriteService(
         bool alreadyLiked = await writeDb.BlogPostLikes
             .AnyAsync(l => l.BlogPostId == blogPostId && l.UserId == userId);
 
-        int newCount;
         bool nowLiked;
-
         if (alreadyLiked)
         {
             await writeDb.BlogPostLikes
                 .Where(l => l.BlogPostId == blogPostId && l.UserId == userId)
                 .ExecuteDeleteAsync();
-
-            newCount = Math.Max(0, currentLikeCount.Value - 1);
             nowLiked = false;
         }
         else
         {
             writeDb.BlogPostLikes.Add(new BlogPostLike { BlogPostId = blogPostId, UserId = userId });
             await writeDb.SaveChangesAsync();
-
-            newCount = currentLikeCount.Value + 1;
             nowLiked = true;
         }
 
-        // LikeCount stays on the base table — updated via base DbSet.
+        // LikeCount stays on the base table — updated via base DbSet as an atomic ±1 delta
+        // (layer2-services.md counter rule — a C#-computed absolute is a read-then-write with a
+        // lost-update window under concurrent likes by different users; MA-705). The clamp keeps
+        // the old Math.Max(0, …) guard against pre-existing drift.
+        int delta = nowLiked ? 1 : -1;
         await writeDb.BlogPosts
             .Where(b => b.BlogPostId == blogPostId)
-            .ExecuteUpdateAsync(s => s.SetProperty(b => b.LikeCount, newCount));
+            .ExecuteUpdateAsync(s => s.SetProperty(
+                b => b.LikeCount,
+                b => b.LikeCount + delta < 0 ? 0 : b.LikeCount + delta));
+
+        // Re-read the landed value so the returned count is accurate under concurrency.
+        int newCount = await writeDb.BlogPosts
+            .Where(b => b.BlogPostId == blogPostId)
+            .Select(b => b.LikeCount)
+            .SingleAsync();
 
         // No notification generated — anti-addictive design (BlogPostLike entity comment).
         return new BlogPostLikeResultDto(newCount, nowLiked);

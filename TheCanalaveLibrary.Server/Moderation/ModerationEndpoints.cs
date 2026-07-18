@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
@@ -25,18 +24,19 @@ namespace TheCanalaveLibrary.Server;
 /// level is the actual security boundary — it does not inherit from the page," these two reads carry
 /// an inline role requirement here rather than the plain <c>RequireAuthorization()</c> floor: without
 /// it, any authenticated non-mod caller could read the report queue / submission queue directly over
-/// HTTP the moment a WASM page injects this client. No named "RequireModerator" policy is registered
-/// in <c>Program.cs</c> (untouched by this pass), so the role requirement is inlined via the
-/// <see cref="AuthorizeAttribute"/> overload of <c>RequireAuthorization</c>, which needs no prior
-/// policy registration.
+/// HTTP the moment a WASM page injects this client. The role requirement uses the named
+/// <see cref="AuthorizationPolicies.RequireModerator"/> policy registered in <c>Program.cs</c>
+/// (MA-702 fix, 2026-07-18 — replaces the earlier inline <c>AuthorizeAttribute</c> copies).
 /// </para>
 /// <para>
-/// <b>Write auth.</b> <c>RequireAuthorization()</c> floor on every write — the service's own
-/// <c>RequireModerator()</c> throws <see cref="InvalidOperationException"/> for a non-mod caller
-/// (both "not signed in" and "not a mod" share that one throw site), which
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> maps to 401 via its auth-safety-net case. <b>Known
-/// EndpointHelpers mismatch (flagged, not fixed here — out of scope for this add-only pass, same
-/// shape as FollowingEndpoints' documented caveat):</b> <c>SubmitReportAsync</c>'s target-type
+/// <b>Write auth.</b> Every mod-only write carries the same edge
+/// <see cref="AuthorizationPolicies.RequireModerator"/> policy on top of the service's own
+/// <c>RequireModerator()</c> gate — defense in depth matching the SpotlightSlotAllocator/
+/// SiteDailyStat siblings (MA-702). The service gate remains the enforcement point of record: a
+/// signed-in non-mod who somehow reaches the service gets <see cref="UnauthorizedAccessException"/>
+/// → 403 (MA-701 fix); the unauthenticated branch throws <see cref="InvalidOperationException"/> →
+/// 401 via <see cref="EndpointHelpers.ExecuteWriteAsync"/>'s auth-safety-net case. <b>Known
+/// EndpointHelpers mismatch (flagged, deferred):</b> <c>SubmitReportAsync</c>'s target-type
 /// allow-set guard, <c>ApplyAccountActionAsync</c>'s "target must be a User" guard, and
 /// <c>ApproveStoryAsync</c>/<c>RejectStoryAsync</c>'s "not pending approval" guards all also throw
 /// <see cref="InvalidOperationException"/> for genuine business-rule reasons, not because the caller
@@ -46,12 +46,6 @@ namespace TheCanalaveLibrary.Server;
 /// </summary>
 public static class ModerationEndpoints
 {
-    /// <summary>
-    /// Inline role requirement for the two mod-only reads the service itself doesn't gate — see
-    /// class doc's "Read auth" paragraph. Mirrors the Blazor pages' own
-    /// <c>[Authorize(Roles = "Moderator,Admin")]</c> without requiring a named policy in Program.cs.
-    /// </summary>
-    private static readonly AuthorizeAttribute ModeratorOnly = new() { Roles = "Moderator,Admin" };
 
     public static WebApplication MapModerationEndpoints(this WebApplication app)
     {
@@ -70,12 +64,12 @@ public static class ModerationEndpoints
         group.MapGet("/reports",
                 async (IModerationReadService moderation, bool includeResolved) =>
                     Results.Ok(await moderation.GetReportQueueAsync(includeResolved)))
-            .RequireAuthorization(ModeratorOnly);
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         // Mod-only — see class doc: the service performs no role check for this read.
         group.MapGet("/submissions", async (IModerationReadService moderation) =>
                 Results.Ok(await moderation.GetPendingSubmissionsAsync()))
-            .RequireAuthorization(ModeratorOnly);
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         // ── Writes ─────────────────────────────────────────────────────────────────
 
@@ -89,7 +83,7 @@ public static class ModerationEndpoints
                 }))
             .RequireAuthorization();
 
-        // Moderator queue actions (Feature 47) — RequireAuthorization() floor; see class doc.
+        // Moderator queue actions (Feature 47) — edge RequireModerator policy + service gate (MA-702).
 
         group.MapPost("/reports/{reportId:long}/claim",
                 (IModerationWriteService moderation, long reportId) =>
@@ -98,7 +92,7 @@ public static class ModerationEndpoints
                         await moderation.ClaimReportAsync(reportId);
                         return Results.NoContent();
                     }))
-            .RequireAuthorization();
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         // actionNotes is a nullable string — minimal API treats nullable parameters as optional
         // automatically, no lambda default needed (unlike the non-nullable bools above/below).
@@ -109,7 +103,7 @@ public static class ModerationEndpoints
                         await moderation.ResolveNoActionAsync(reportId, actionNotes);
                         return Results.NoContent();
                     }))
-            .RequireAuthorization();
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         // hardDelete has no lambda default — the client impl always sends it explicitly (see
         // includeResolved comment above).
@@ -121,7 +115,7 @@ public static class ModerationEndpoints
                         await moderation.ResolveWithRemovalAsync(reportId, removalReason, hardDelete);
                         return Results.NoContent();
                     }))
-            .RequireAuthorization();
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         // suspendedUntilUtc is a nullable DateTime — automatically optional, no lambda default needed.
         group.MapPost("/reports/{reportId:long}/account-action",
@@ -132,9 +126,9 @@ public static class ModerationEndpoints
                         await moderation.ApplyAccountActionAsync(reportId, action, reason, suspendedUntilUtc);
                         return Results.NoContent();
                     }))
-            .RequireAuthorization();
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
-        // Submission approval (Feature 48) — RequireAuthorization() floor; see class doc.
+        // Submission approval (Feature 48) — edge RequireModerator policy + service gate (MA-702).
 
         group.MapPost("/submissions/{storyId:int}/approve",
                 (IModerationWriteService moderation, int storyId) =>
@@ -143,7 +137,7 @@ public static class ModerationEndpoints
                         await moderation.ApproveStoryAsync(storyId);
                         return Results.NoContent();
                     }))
-            .RequireAuthorization();
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         group.MapPost("/submissions/{storyId:int}/reject",
                 (IModerationWriteService moderation, int storyId, string reason) =>
@@ -152,7 +146,7 @@ public static class ModerationEndpoints
                         await moderation.RejectStoryAsync(storyId, reason);
                         return Results.NoContent();
                     }))
-            .RequireAuthorization();
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         return app;
     }

@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -10,9 +9,9 @@ namespace TheCanalaveLibrary.Client;
 /// WASM's fetch-backed HttpClient sends it automatically for same-origin requests.
 /// <para>
 /// Translates TagEndpoints' status codes back into the service contract's typed exceptions so
-/// components behave identically on either side of the interface: 400 → TagValidationException
-/// (message from ProblemDetails.Detail — TagDirectoryDesktop shows it inline), 401/403 →
-/// UnauthorizedAccessException, 404 → KeyNotFoundException.
+/// components behave identically on either side of the interface — the shared MA-008 shape
+/// (<see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>); 400 reconstructs
+/// TagValidationException (TagDirectoryDesktop shows its message inline).
 /// </para>
 /// </summary>
 public sealed class ClientTagWriteService(HttpClient http) : ClientTagReadService(http), ITagWriteService
@@ -39,27 +38,8 @@ public sealed class ClientTagWriteService(HttpClient http) : ClientTagReadServic
         await ThrowIfWriteFailedAsync(response);
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of TagEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                ProblemPayload? problem = await response.Content.ReadFromJsonAsync<ProblemPayload>();
-                throw new TagValidationException(problem?.Detail ?? "The tag failed validation.");
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException("Tag administration requires moderator or admin role.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException("Tag not found.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
-
-    /// <summary>Just the ProblemDetails field we consume — MVC's type isn't referenced in WASM.</summary>
-    private sealed record ProblemPayload(string? Detail);
+    /// <summary>Status-code → contract-exception translation (inverse of TagEndpoints') — the
+    /// shared MA-008 shape.</summary>
+    private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new TagValidationException(msg));
 }

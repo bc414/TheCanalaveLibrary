@@ -345,3 +345,19 @@ reflected (Ignore active); clicking Favorite applied the optimistic pink-active 
 the 2s debounce, persisted (`is_favorite=t` via psql); `/bookshelves/favorites` immediately lists
 the story (F17). All bookshelf tabs render with the seeded per-tab coverage; listing-context card
 buttons render per the blank-slate rules.
+
+### WU-AuditFixPass note (2026-07-18)
+
+MA-401 closed: `UserStoryInteractionPanel` is `IAsyncDisposable` with a pending-flush flag —
+toggle-then-navigate-away within the 2s debounce window now flushes the write on dispose instead of
+silently dropping durable user intent (axiom 7); a teardown flush failure logs Warning, never
+throws. Full detail: `workplan.md` WU-AuditFixPass.
+
+### WU-AuditFixPass-2 note (2026-07-18)
+
+Endpoint-authz sweep + MA-402, F16/F17 (cells stay Stage 5 — behavior corrected in place):
+`GetFavoriteStoryIdsAsync` now derives `includePrivate` server-side (`activeUser.UserId == userId`,
+MA-602 pattern) — the client-supplied bool that leaked hidden favorites is gone (client stops sending it).
+**MA-402:** `UserStoryInteractionFilter` resync-until-interaction (TreeSearchControls pattern) so the
+async default-exclusion seed reflects in the checkbox. Covered: `UserStoryInteractionEndpointsTests`
+(Integration) + browser. Full detail: `workplan.md` WU-AuditFixPass-2.

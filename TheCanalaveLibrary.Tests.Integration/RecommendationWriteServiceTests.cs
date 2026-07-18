@@ -216,7 +216,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
     }
 
     [Fact]
-    public async Task SetHiddenGem_RejectAtFive_ThrowsInvalidOperation()
+    public async Task SetHiddenGem_RejectAtFive_ThrowsValidation()
     {
         // After Respawn reset, count starts at 0. Use real service calls to fill the limit.
         // Use _recommenderUserId throughout — Respawn guarantees no prior HG rows.
@@ -232,7 +232,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         int newRecId = await CallSubmitAsync(new RecommendationSubmitDto(newStoryId, ValidHtml()));
 
         Func<Task> act = async () => await CallSetHiddenGemAsync(newRecId, true);
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        await act.Should().ThrowAsync<RecommendationValidationException>()
             .WithMessage("*5*", "must cite the limit");
     }
 
@@ -287,7 +287,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
     }
 
     [Fact]
-    public async Task SetHighlightedByAuthor_RejectAtFive_ThrowsInvalidOperation()
+    public async Task SetHighlightedByAuthor_RejectAtFive_ThrowsValidation()
     {
         // Recommender submits 6 recommendations on the same story — can't because of unique constraint.
         // Instead: create 6 different recommender users' recommendations (or use 5 diff stories).
@@ -317,7 +317,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
 
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
         Func<Task> act = async () => await CallSetHighlightedAsync(recId, true);
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        await act.Should().ThrowAsync<RecommendationValidationException>()
             .WithMessage("*5*");
     }
 

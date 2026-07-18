@@ -1,6 +1,8 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
+@using Microsoft.Extensions.Logging
 @inject IRecommendationWriteService Recommendations
+@inject ILogger<RecommendationSection> Logger
 
 @* Coordination composite — owns the story recommendation section: load, submission composer
    (gated on auth + not-already-recommended), optimistic like with rollback, Hidden-Gem toggle,
@@ -94,7 +96,7 @@ else
 @* ── Inline error feedback ────────────────────────────────────────────────────── *@
 @if (_error is not null)
 {
-    <p class="mt-2 text-sm text-(--color-danger)">@_error</p>
+    <div class="mt-2"><InlineAlert Message="@_error" /></div>
 }
 
 @code {
@@ -161,9 +163,9 @@ else
             _composing = false;
             await LoadAsync();
         }
-        catch (Exception ex) when (ex is RecommendationValidationException or InvalidOperationException or KeyNotFoundException)
+        catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = Translate(ex, "Submitting a recommendation for story {StoryId} failed unexpectedly", StoryId);
         }
         finally
         {
@@ -207,7 +209,7 @@ else
         {
             idx = Recs.FindIndex(r => r.RecommendationId == id);
             if (idx >= 0) Recs[idx] = original;
-            _error = ex.Message;
+            _error = Translate(ex, "Toggling like on recommendation {RecommendationId} failed unexpectedly", id);
             StateHasChanged();
         }
     }
@@ -224,18 +226,18 @@ else
 
     private async Task HandleEditSaveAsync(string html)
     {
-        if (_editingId is null) return;
+        if (_editingId is not int editId) return;
         _busy = true;
         _error = null;
         try
         {
-            await Recommendations.EditAsync(new UpdateRecommendationDto(_editingId.Value, html));
+            await Recommendations.EditAsync(new UpdateRecommendationDto(editId, html));
             _editingId = null;
             await LoadAsync();
         }
-        catch (Exception ex) when (ex is RecommendationValidationException or UnauthorizedAccessException or KeyNotFoundException)
+        catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = Translate(ex, "Editing recommendation {RecommendationId} failed unexpectedly", editId);
         }
         finally
         {
@@ -260,9 +262,9 @@ else
             await Recommendations.DeleteAsync(_pendingDeleteId);
             await LoadAsync();
         }
-        catch (Exception ex) when (ex is UnauthorizedAccessException or KeyNotFoundException)
+        catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = Translate(ex, "Deleting recommendation {RecommendationId} failed unexpectedly", _pendingDeleteId);
         }
         finally
         {
@@ -284,9 +286,9 @@ else
             Recs[idx] = Recs[idx] with { IsHiddenGem = target };
             StateHasChanged();
         }
-        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException or KeyNotFoundException)
+        catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = Translate(ex, "Toggling Hidden Gem on recommendation {RecommendationId} failed unexpectedly", id);
             StateHasChanged();
         }
     }
@@ -304,10 +306,26 @@ else
             await Recommendations.SetHighlightedByAuthorAsync(id, target);
             await LoadAsync(); // re-sort: highlighted-first ordering may change
         }
-        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException or KeyNotFoundException)
+        catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = Translate(ex, "Toggling author spotlight on recommendation {RecommendationId} failed unexpectedly", id);
             StateHasChanged();
         }
+    }
+
+    /// <summary>
+    /// Catch-site half of the exception-message discipline (mirrors CommentSection.Translate):
+    /// typed user-facing exceptions translate without logging; anything unexpected logs at Error
+    /// with the entity id before showing the generic message. Raw ex.Message never reaches the UI.
+    /// </summary>
+    private string Translate(Exception ex, string unexpectedTemplate, int id)
+    {
+        if (!ExceptionPresenter.IsUserFacing(ex))
+        {
+#pragma warning disable CA2254 // template is one of a fixed set of literals passed by callers
+            Logger.LogError(ex, unexpectedTemplate, id);
+#pragma warning restore CA2254
+        }
+        return ExceptionPresenter.GetUserMessage(ex);
     }
 }

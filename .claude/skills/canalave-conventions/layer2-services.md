@@ -781,7 +781,8 @@ Task<IReadOnlyList<UserStoryInteractionTypeEnum>> GetDefaultExcludedInteractions
 matrix). If `activeUser.UserId` is non-null, load the user's `UserStoryInteractionFilterSetting`
 rows for the same mode and **overlay** (user value wins per key). Anonymous → system defaults only.
 Keep keys where effective `IsEnabled == true`; map filter-key string → enum via a static
-Server-side map (keys live in `SiteConstants.cs`). **`HasStarted` is not in the enum** (the catalog
+Server-side map (keys live in `Core/Discovery/SiteSearchModes.cs` — moved out of
+`SiteConstants.cs` in WU28). **`HasStarted` is not in the enum** (the catalog
 has 7 keys but `UserStoryInteractionTypeEnum` has 6 values) — drop it from the mapped output,
 documented in the service.
 
@@ -1005,8 +1006,11 @@ The `Story…Pairing` prefix marks the concept as per-story and eliminates grep 
 Feature-10 `StoryLineage`/`StoryLineageType` entities. **WU42 (2026-07-12) additionally renamed
 Feature 10 itself** from `StoryRelationship`/`StoryRelationshipType` to `StoryLineage`/
 `StoryLineageType` — the near-collision this table originally worked around no longer exists at the
-identifier level (neither name contains "Relationship" anymore), but the table is kept as it still
-disambiguates the two *concepts* (character pairing vs. story-to-story link).
+*type-name* level, but the table is kept as it still disambiguates the two *concepts* (character
+pairing vs. story-to-story link). Scope caveat (MA-118): the WU42 rename stopped at type level —
+member identifiers still carry "Relationship" (`StoryLineage.RelationshipTypeId`, nav
+`RelationshipType`, `StoryLineageType`'s PK) because renaming them means a column-rename migration;
+deferred as cosmetic, revisit pre-launch if at all.
 
 ### Story Lineage service (WU42, `Core/Stories/` + `Server/Stories/`)
 
@@ -1247,7 +1251,9 @@ hide or reorder. `UserCard.razor` caps to 3 badges.
 **Post-MVP:** a background worker will replace inline checks without changing callers' interface.
 
 Live `SiteBadges` constants: `Patron`, `Recommender`, `RecommenderSilver`, `BetaReader`, `Architect`,
-`Artist`. Keys are `public const string` fields on `SiteConstants.SiteBadges`.
+`Artist`. Keys are `public const string` fields on the top-level `SiteBadges` static class (it
+lives in `Server/Data/SiteConstants.cs` but is NOT nested inside a `SiteConstants` type — MA-108;
+move it to `Server/Badges/` with the next work-unit that touches it, per the vertical rule).
 
 ## UserStats Updates
 

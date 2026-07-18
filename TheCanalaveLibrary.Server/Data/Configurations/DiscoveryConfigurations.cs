@@ -78,7 +78,6 @@ public sealed class DefaultUserStoryInteractionFilterSettingConfiguration : IEnt
         // DefaultUserStoryInteractionFilterSetting requires SearchMode and UserStoryInteractionFilterType seeded first.
         // Minimal sane defaults: exclude already-Ignored stories on every discovery surface. Profile
         // surfaces intentionally have no default exclusions (they show the user's full lists).
-        // TODO(user): flesh out the full SearchMode × UserStoryInteractionFilterType default matrix when desired.
         builder.HasData(
             new { SearchModeKey = SiteSearchModes.SearchPage, UserStoryInteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },
             new { SearchModeKey = SiteSearchModes.TreeSearch, UserStoryInteractionFilterKey = UserStoryInteractionFilters.Ignored, IsEnabled = true },

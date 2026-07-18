@@ -44,12 +44,8 @@ public enum StoryLineageStatus : short
 //The lookup table has display names and descriptions/other related data
 //The enum is for application logic and is used on the foreign key to the lookup table
 
-// This enum is a C# "mirror" of the 'StoryStatuses' table.
-// The values MUST match the IDs in the SQL script.
-// We use 'short' to match the 'TINYINT' SQL data type.
-// This enum is a C# "mirror" of the 'recommendation_statuses' table.
-// The values MUST match the IDs seeded in RecommendationConfigurations.HasData.
-// Note: 1-indexed (the table uses identity(1,1)).
+// C# mirror of the 'recommendation_statuses' lookup table. The values MUST match the IDs seeded
+// in RecommendationConfigurations.HasData. Note: 1-indexed, unlike most lookups here.
 public enum RecommendationStatusEnum : short
 {
     PendingApproval = 1,
@@ -58,6 +54,8 @@ public enum RecommendationStatusEnum : short
     UnderReview = 4
 }
 
+// C# mirror of the 'story_statuses' lookup table. The values MUST match the IDs seeded in
+// StoryConfigurations.HasData. 0-indexed.
 public enum StoryStatusEnum : short
 {
     Draft = 0,

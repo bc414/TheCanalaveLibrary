@@ -23,7 +23,7 @@ public class ServerStoryArcWriteService(
 
     public async Task<int> CreateArcAsync(CreateStoryArcDto dto)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = _activeUser.RequireUserId();
 
         // Write-context lookups see ground truth (no named query filters on ApplicationDbContext).
         Story? story = await _writeDb.Stories.FirstOrDefaultAsync(s => s.StoryId == dto.StoryId);
@@ -50,7 +50,7 @@ public class ServerStoryArcWriteService(
 
     public async Task UpdateArcAsync(UpdateStoryArcDto dto)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = _activeUser.RequireUserId();
 
         StoryArc? arc = await _writeDb.StoryArcs
             .Include(a => a.Story)
@@ -72,7 +72,7 @@ public class ServerStoryArcWriteService(
 
     public async Task DeleteArcAsync(int storyArcId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = _activeUser.RequireUserId();
 
         StoryArc? arc = await _writeDb.StoryArcs
             .Include(a => a.Story)
@@ -120,10 +120,4 @@ public class ServerStoryArcWriteService(
         return errors;
     }
 
-    private int RequireAuthenticatedUser()
-    {
-        if (_activeUser.UserId is not int id)
-            throw new InvalidOperationException("This operation requires an authenticated user.");
-        return id;
-    }
 }

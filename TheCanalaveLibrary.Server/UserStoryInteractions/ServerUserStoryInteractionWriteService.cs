@@ -84,14 +84,16 @@ public class ServerUserStoryInteractionWriteService(
         bool willBeFavorite = update.IsFavorite;
         if (willBeFavorite != wasFavorite)
         {
-            int? storyAuthorId = await writeDb.Stories
+            // Anonymous-type projection so a null AuthorId (authorless story) is not confused with
+            // "row not found" (layer2-services.md §"Scalar projections on nullable FK columns").
+            var storyRow = await writeDb.Stories
                 .Where(s => s.StoryId == storyId)
-                .Select(s => (int?)s.AuthorId)
+                .Select(s => new { s.AuthorId })
                 .FirstOrDefaultAsync();
-            if (storyAuthorId.HasValue)
+            if (storyRow is { AuthorId: int storyAuthorId })
             {
                 int delta = willBeFavorite ? 1 : -1;
-                await writeDb.UserStats.Where(us => us.UserId == storyAuthorId.Value)
+                await writeDb.UserStats.Where(us => us.UserId == storyAuthorId)
                     .ExecuteUpdateAsync(s => s.SetProperty(us => us.FavoritesOnStories, us => us.FavoritesOnStories + delta));
             }
         }

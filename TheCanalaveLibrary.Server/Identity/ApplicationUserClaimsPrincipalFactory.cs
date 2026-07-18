@@ -22,7 +22,13 @@ namespace TheCanalaveLibrary.Server;
 /// directly as a sprite URL path segment without any further transformation.
 /// Consequence: if a user's ShowMatureContent/Theme/PrefersAnimatedSprites changes (WU30 profile
 /// settings), the auth cookie is stale until next sign-in unless that write path calls
-/// <c>SignInManager.RefreshSignInAsync</c> to reissue claims. Flagged here for WU30, not solved by WU12.
+/// <c>SignInManager.RefreshSignInAsync</c> to reissue claims. Status (MA-605, 2026-07-18): still
+/// unwired — <c>ServerUserSettingsService</c> is transport-agnostic (also reached over HTTP from
+/// WASM, where no <c>SignInManager</c>/<c>HttpContext</c> sign-in refresh is straightforward), so
+/// the settings write does NOT refresh the cookie and the change takes effect at next sign-in.
+/// Whether to accept that permanently (like the AccountStatus/Warned staleness) or wire a
+/// server-render-path refresh is an open product/UX call — surface it before beta if mature-toggle
+/// feedback matters. Do not silently treat this note as "accepted".
 /// </remarks>
 public class ApplicationUserClaimsPrincipalFactory(
     UserManager<User> userManager,

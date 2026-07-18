@@ -1,7 +1,9 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
+@using Microsoft.Extensions.Logging
 @inject IUserStoryInteractionWriteService WriteService
-@implements IDisposable
+@inject ILogger<UserStoryInteractionPanel> Logger
+@implements IAsyncDisposable
 
 @* Coordination composite (layer3-logic.md "Self-contained writes"; layer3.5-structure.md example).
    Owns the 2-second debounce across the six UserStoryInteractionButton leaves. State flows in from
@@ -44,6 +46,7 @@
 
     private UserStoryInteractionStateDto? _localState;
     private CancellationTokenSource? _debounce;
+    private bool _flushPending;
 
     protected override void OnParametersSet()
     {
@@ -97,6 +100,7 @@
         _localState = ApplyToggle(current, type, newValue);
         StateHasChanged();
 
+        _flushPending = true;
         _debounce?.Cancel();
         _debounce?.Dispose();
         _debounce = new CancellationTokenSource();
@@ -106,10 +110,12 @@
         {
             await Task.Delay(UserStoryInteractionConstants.UserStoryInteractionDebounceMs, token);
             await FlushAsync();
+            _flushPending = false;
         }
         catch (OperationCanceledException)
         {
-            // Debounce reset by a subsequent toggle; next HandleToggleAsync fires the flush.
+            // Debounce reset by a subsequent toggle (next HandleToggleAsync fires the flush) or
+            // by disposal (DisposeAsync fires it — _flushPending stays true until a flush lands).
         }
     }
 
@@ -138,9 +144,27 @@
             _ => current
         };
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         _debounce?.Cancel();
         _debounce?.Dispose();
+
+        // Flush-on-dispose: a toggle inside the debounce window is durable user intent (axiom 7 —
+        // "durable-direct for intent"); toggle-then-navigate-away must not silently drop the write
+        // (MA-401). The write is an absolute-state set, so racing an in-flight flush is idempotent.
+        if (_flushPending)
+        {
+            _flushPending = false;
+            try
+            {
+                await FlushAsync();
+            }
+            catch (Exception ex)
+            {
+                // Disposal must never throw (circuit teardown); the loss is logged, not silent.
+                Logger.LogWarning(ex,
+                    "Flush-on-dispose of a pending interaction write failed for story {StoryId}", StoryId);
+            }
+        }
     }
 }

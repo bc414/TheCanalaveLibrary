@@ -3,8 +3,10 @@
 @inject IBlogPostWriteService BlogPostService
 @inject IPollReadService PollReadService
 @inject IPublicUrlProvider PublicUrlProvider
+@inject ILogger<BlogPostPage> Logger
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
 
 @* Read-only blog-post view page. Slug is cosmetic — only BlogPostId (int) is the key.
    Pattern 1: separate view and edit pages (cross-cutting.md "Two content-editing patterns").
@@ -98,10 +100,7 @@ else
             }
         </div>
 
-        @if (_likeError is not null)
-        {
-            <p class="text-sm text-(--color-danger)">@_likeError</p>
-        }
+        <InlineAlert Message="@_likeError" />
 
     </article>
 
@@ -266,7 +265,10 @@ else
             // Rollback optimistic update.
             _isLiked   = !newLiked;
             _likeCount = newLiked ? Math.Max(0, _likeCount - 1) : _likeCount + 1;
-            _likeError = ex.Message;
+            // Exception-message discipline: raw ex.Message never reaches the UI; unexpected → log.
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Toggling like on blog post {BlogPostId} failed unexpectedly", BlogPostId);
+            _likeError = ExceptionPresenter.GetUserMessage(ex);
         }
         finally
         {

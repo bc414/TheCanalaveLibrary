@@ -104,3 +104,26 @@ DisplayOrder for that user) + 1` — visible by default. The curation UI lets us
 | `Artist` | Deferred | `FeatureContributions` counter not populated (producer is Feature 56, Stage 2) |
 
 **Open:** none. All WU36 decisions are settled.
+
+### WU-AuditFixPass note (2026-07-18)
+
+Security fix MA-601 closed: `BadgeEndpoints` no longer accepts a client-supplied `userId` on any
+route — curation read and display-order derive the caller from `IActiveUserContext`, and the
+`/award` route is REMOVED entirely (awards are earned; the only production caller is
+`ServerRecommendationWriteService`, in-process — a mapped route would let any WASM caller self-mint
+Patron/Architect; same unmapped-generation decision as Notifications, and deliberately NOT the
+service-level caller==target check the audit verification sketched, which would break the
+in-process award-to-other-user path). `ClientBadgeWriteService.AwardAsync` throws
+`NotSupportedException`. Covered by Integration tier (`BadgeEndpointsTests` — attacker-shaped
+query strings + unmapped-route pin). Full detail: `workplan.md` WU-AuditFixPass.
+
+### MA-611 status-code seam note (2026-07-18)
+
+Status-code seam closed (F50, cells stay Stage 5 — status semantics only):
+`SetDisplayOrderAsync`'s unowned-key guard (a requested display key the caller hasn't earned) now
+throws the new `BadgeValidationException` (a `CanalaveValidationException`) → **400** instead of
+`InvalidOperationException` → 401 (the auth safety net, now reserved for the `RequireUserId` guard).
+`ClientBadgeWriteService` gained a 400 arm reconstructing `BadgeValidationException` from
+`ProblemDetails.Detail`. Covered by Integration tier (`BadgeServiceTests` —
+`SetDisplayOrderAsync_UnownedBadgeKey_ThrowsValidation`, retyped from `InvalidOperationException`).
+Full detail: `modernization-audit/deferred-work.md` §4.

@@ -19,13 +19,13 @@ namespace TheCanalaveLibrary.Server;
 /// the shared helper.
 /// </para>
 /// <para>
-/// <b>Known EndpointHelpers mismatch (flagged, not fixed here — out of scope for this add-only
-/// pass):</b> <c>UpdateAuthorSettingsAsync</c>'s pinned-story ownership/visibility guard also throws
-/// <see cref="InvalidOperationException"/> for a genuine business-rule reason, not because the caller
-/// is unauthenticated — <see cref="EndpointHelpers.ExecuteWriteAsync"/> still maps it to 401
-/// uniformly. The message survives via <c>ProblemDetails.Detail</c>, but the status itself is
-/// semantically off (400 would be more accurate). Same shape as the flagged mismatch in
-/// <c>FollowingEndpoints</c>.
+/// <b>Status-code seam resolved (MA-611, 2026-07-18).</b> <c>UpdateAuthorSettingsAsync</c>'s
+/// pinned-story ownership/visibility guard is a genuine business-rule rejection, not an auth failure —
+/// it now throws <see cref="UserSettingsValidationException"/> (a <c>CanalaveValidationException</c>)
+/// → <b>400</b> via <see cref="EndpointHelpers.ExecuteWriteAsync"/>, the accurate status. Only the
+/// <c>RequireCurrentUserId</c> auth guard's <see cref="InvalidOperationException"/> still maps to 401.
+/// <c>ClientUserSettingsService</c> reconstructs <see cref="UserSettingsValidationException"/> from
+/// the 400 body. Same resolution shape as <c>FollowingEndpoints</c>.
 /// </para>
 /// <para>
 /// <c>UploadProfilePictureAsync</c> is the multipart case (layer5-wasm.md §"Streams and multipart"),

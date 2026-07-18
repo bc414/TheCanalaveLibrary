@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -10,11 +9,9 @@ namespace TheCanalaveLibrary.Client;
 /// cookie — WASM's fetch-backed HttpClient sends it automatically for same-origin requests.
 /// <para>
 /// Translates BlogPostEndpoints' status codes back into the service contract's typed exceptions so
-/// components behave identically on either side of the interface: 400 →
-/// <see cref="BlogPostValidationException"/> (message from ProblemDetails.Detail — the server joins
-/// validation errors into one message, so the client wraps it back into a single-element list
-/// rather than re-splitting it), 401/403 → <see cref="UnauthorizedAccessException"/>, 404 →
-/// <see cref="KeyNotFoundException"/>.
+/// components behave identically on either side of the interface — the shared MA-008 shape
+/// (<see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>); 400 reconstructs
+/// <see cref="BlogPostValidationException"/>.
 /// </para>
 /// </summary>
 public sealed class ClientBlogPostWriteService(HttpClient http)
@@ -53,24 +50,8 @@ public sealed class ClientBlogPostWriteService(HttpClient http)
         return await response.Content.ReadFromJsonAsync<int>();
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of BlogPostEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new BlogPostValidationException([detail ?? "The blog post failed validation."]);
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException("This action requires an authenticated user.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException("Blog post not found.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    /// <summary>Status-code → contract-exception translation (inverse of BlogPostEndpoints') — the
+    /// shared MA-008 shape.</summary>
+    private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new BlogPostValidationException([msg]));
 }

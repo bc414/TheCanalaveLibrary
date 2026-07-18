@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
@@ -11,9 +10,9 @@ namespace TheCanalaveLibrary.Client;
 /// WASM's fetch-backed HttpClient sends it automatically for same-origin requests.
 /// <para>
 /// Translates StoryEndpoints' status codes back into the service contract's typed exceptions so
-/// components behave identically on either side of the interface: 400 →
-/// <see cref="StoryValidationException"/> (message from ProblemDetails.Detail), 401/403 →
-/// <see cref="UnauthorizedAccessException"/>, 404 → <see cref="KeyNotFoundException"/>.
+/// components behave identically on either side of the interface — the shared MA-008 shape
+/// (<see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>); 400 reconstructs
+/// <see cref="StoryValidationException"/>.
 /// </para>
 /// </summary>
 public sealed class ClientStoryWriteService(HttpClient http) : ClientStoryReadService(http), IStoryWriteService
@@ -48,24 +47,8 @@ public sealed class ClientStoryWriteService(HttpClient http) : ClientStoryReadSe
         return (await response.Content.ReadFromJsonAsync<string>())!;
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of StoryEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new StoryValidationException([detail ?? "The story failed validation."]);
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException("You can only edit your own stories.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException("Story not found.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    /// <summary>Status-code → contract-exception translation (inverse of StoryEndpoints') — the
+    /// shared MA-008 shape.</summary>
+    private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, msg => new StoryValidationException([msg]));
 }

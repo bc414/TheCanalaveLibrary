@@ -45,9 +45,15 @@ public interface IUserSettingsService
     Task UpdatePrivacySettingsAsync(PrivacySettingsDto dto);
 
     /// <summary>
-    /// Replaces the current user's <see cref="AuthorSettings"/> JSON group in full.
+    /// Replaces the current user's <see cref="AuthorSettings"/> JSON group in full. When
+    /// <see cref="AuthorSettingsDto.PinnedStoryId"/> is set, the story must be the caller's own,
+    /// published, visible story.
     /// </summary>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
+    /// <exception cref="UserSettingsValidationException">
+    /// The requested pinned story is not the caller's own, published, visible story
+    /// (a business-rule rejection → 400, distinct from the unauthenticated → 401 case).
+    /// </exception>
     Task UpdateAuthorSettingsAsync(AuthorSettingsDto dto);
 
     /// <summary>

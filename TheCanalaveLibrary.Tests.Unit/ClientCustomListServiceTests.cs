@@ -137,17 +137,29 @@ public class ClientCustomListServiceTests
             .WithMessage("""You already have a list named "Dup".""");
     }
 
-    [Theory]
-    [InlineData(HttpStatusCode.Unauthorized)]
-    [InlineData(HttpStatusCode.Forbidden)]
-    public async Task RenameListAsync_AuthFailure_ThrowsUnauthorizedAccessException(HttpStatusCode status)
+    [Fact]
+    public async Task RenameListAsync_Forbidden_ThrowsUnauthorizedAccessException()
     {
-        var handler = new CannedHandler(status, "");
+        var handler = new CannedHandler(HttpStatusCode.Forbidden, "");
         ClientCustomListWriteService svc = new(NewClient(handler));
 
         Func<Task> act = () => svc.RenameListAsync(4, "Blocked");
 
         await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    [Fact]
+    public async Task RenameListAsync_Unauthorized_ThrowsInvalidOperationException()
+    {
+        // The server maps the services' "…requires an authenticated user" InvalidOperationException
+        // to 401 (EndpointHelpers.ExecuteWriteAsync) — the shared client translation (MA-008)
+        // reconstructs it, tolerating the cookie handler's body-less 401.
+        var handler = new CannedHandler(HttpStatusCode.Unauthorized, "");
+        ClientCustomListWriteService svc = new(NewClient(handler));
+
+        Func<Task> act = () => svc.RenameListAsync(4, "Blocked");
+
+        await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
     [Fact]

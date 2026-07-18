@@ -18,13 +18,12 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 ///   <item>OnPageChanged EventCallback fires when a page button is clicked.</item>
 /// </list>
 ///
-/// <b>Visual/CSS note (WU8):</b> bUnit renders markup only — CSS custom properties
-/// (<c>--color-primary</c>, <c>--color-surface-raised</c>, etc.) are not evaluated, so the visual
-/// "active-page box" appearance cannot be asserted here. The markup-level evidence (correct class
-/// token strings, <c>aria-current="page"</c>) is verified by these tests. Human visual sign-off
-/// against the live app is still required for Stage 6. At the markup level, the active-page
-/// indicator is correct: the button for CurrentPage gets <c>aria-current="page"</c> and the
-/// active-state class string ("text-white"), not the inactive-state class string.
+/// <b>Visual/CSS note:</b> bUnit renders markup only — CSS custom properties are not evaluated,
+/// so the visual "active-page box" appearance cannot be asserted here. The markup-level evidence
+/// (correct class token strings, <c>aria-current="page"</c>) is verified by these tests. Human
+/// visual sign-off against the live app is still required for Stage 6. At the markup level, the
+/// active-page indicator is correct: the button for CurrentPage gets <c>aria-current="page"</c>
+/// and the Phase A active fill (<c>bg-(--color-action)</c>), which inactive buttons never carry.
 /// </summary>
 public class PaginationControlsTests : BunitContext
 {
@@ -62,10 +61,16 @@ public class PaginationControlsTests : BunitContext
             .Add(c => c.PageSize, 10)
             .Add(c => c.TotalCount, 70));  // 7 pages
 
-        // Every page 1–7 should appear; no ellipsis (…) in the page window.
+        // Every page 1–7 should appear as its own button; only page 4 (current) carries aria-current.
+        List<IElement> pageButtons = cut.FindAll("button.size-9:not([aria-label])").ToList();
+        pageButtons.Select(b => b.TextContent.Trim())
+            .Should().Equal(["1", "2", "3", "4", "5", "6", "7"],
+                "with 7 total pages the window shows every page in order");
         for (int page = 1; page <= 7; page++)
         {
-            cut.Find($"button[aria-current], button:not([aria-current])").Should().NotBeNull();
+            IElement button = pageButtons.First(b => b.TextContent.Trim() == page.ToString());
+            button.HasAttribute("aria-current").Should().Be(page == 4,
+                $"page {page} {(page == 4 ? "is" : "is not")} the current page");
         }
         cut.FindAll("span").Where(s => s.TextContent.Contains("…")).Should().BeEmpty(
             "with <=7 total pages the window shows every page and never inserts an ellipsis slot");

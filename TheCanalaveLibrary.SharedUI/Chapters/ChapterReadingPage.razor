@@ -3,8 +3,10 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Logging
 @using Microsoft.JSInterop
 @implements IAsyncDisposable
+@inject ILogger<ChapterReadingPage> Logger
 @inject IChapterReadService ChapterReadService
 @inject IStoryArcReadService StoryArcReadService
 @inject IStoryReadService StoryReadService
@@ -289,7 +291,7 @@ else
             _gatedByRating = VersionOrder.HasValue;
             _isLoading = false;
             if (!_gatedByRating)
-                NavigationManager.NavigateTo("/not-found");
+                NavigationManager.NotFound();
             return;
         }
 
@@ -324,9 +326,23 @@ else
         var uri = new Uri(NavigationManager.Uri);
         var qs = System.Web.HttpUtility.ParseQueryString(uri.Query);
         if (int.TryParse(qs["rec"], out int queryRecId) && _currentUserId.HasValue)
-            _ = RecommendationWriteService.RecordAttributionSourceAsync(StoryId, queryRecId);
+            _ = RecordAttributionObservedAsync(queryRecId);
 
         _isLoading = false;
+    }
+
+    // Fire-and-forget by contract — attribution capture must never block or fail the chapter
+    // load. The loss is tolerated but observed (logging.md §"No silent catches").
+    private async Task RecordAttributionObservedAsync(int recId)
+    {
+        try
+        {
+            await RecommendationWriteService.RecordAttributionSourceAsync(StoryId, recId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Attribution-source capture failed for story {StoryId}, recommendation {RecommendationId}", StoryId, recId);
+        }
     }
 
     // _jsRegistered is the sole gate (no firstRender check) so that re-registration works after
@@ -372,7 +388,13 @@ else
     {
         if (_jsRegistered)
         {
-            try { await JS.InvokeVoidAsync("readingProgress.dispose"); } catch { /* page already gone or no JS */ }
+            // Typed teardown states only (circuit gone / JS gone / teardown cancellation) —
+            // anything else propagates and surfaces (logging.md §"No silent catches").
+            try { await JS.InvokeVoidAsync("readingProgress.dispose"); }
+            catch (Exception ex) when (ex is JSDisconnectedException or JSException or TaskCanceledException or ObjectDisposedException)
+            {
+                // Expected during page teardown — the JS side is already gone.
+            }
             _jsRegistered = false;
         }
         _dotnetRef?.Dispose();

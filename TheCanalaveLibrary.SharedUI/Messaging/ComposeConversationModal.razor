@@ -70,10 +70,7 @@
                                      Busy="@Busy" />
                 </div>
 
-                @if (!string.IsNullOrEmpty(ErrorMessage))
-                {
-                    <p class="text-sm text-(--color-danger)" role="alert">@ErrorMessage</p>
-                }
+                <InlineAlert Message="@ErrorMessage" />
             </div>
         </div>
     </div>

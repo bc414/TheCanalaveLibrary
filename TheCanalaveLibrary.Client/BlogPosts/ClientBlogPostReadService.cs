@@ -26,8 +26,17 @@ public class ClientBlogPostReadService(HttpClient http) : IBlogPostReadService
         return (result.Items, result.TotalCount);
     }
 
-    public async Task<BlogPostEditDto?> GetForEditAsync(int blogPostId) =>
-        await Http.GetNullableFromJsonAsync<BlogPostEditDto?>($"api/blog-posts/{blogPostId}/edit");
+    public async Task<BlogPostEditDto?> GetForEditAsync(int blogPostId)
+    {
+        // 401/403 → UnauthorizedAccessException, mirroring the server service's author gate so
+        // BlogPostEditorPage's forbidden handling works identically under both render modes
+        // (status→contract-exception translation, layer5-wasm.md "The Error-Translation Contract").
+        using HttpResponseMessage response = await Http.GetAsync($"api/blog-posts/{blogPostId}/edit");
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            throw new UnauthorizedAccessException("You can only edit your own blog posts.");
+        response.EnsureSuccessStatusCode();
+        return await ClientHttpHelpers.ReadNullableFromJsonAsync<BlogPostEditDto?>(response.Content);
+    }
 
     public async Task<(BlogPostListingDto[] Items, int TotalCount)> GetByGroupAsync(
         int groupId, int page, int pageSize)

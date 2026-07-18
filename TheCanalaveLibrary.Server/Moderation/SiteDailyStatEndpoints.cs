@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authorization;
 using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Server;
@@ -11,12 +10,11 @@ namespace TheCanalaveLibrary.Server;
 /// <b>Auth.</b> <c>ServerSiteDailyStatReadService</c> performs no role check of its own (plain LINQ
 /// over the read context) — same shape as <see cref="ModerationEndpoints"/>'s mod-only reads. Per
 /// identity-and-authorization.md's "Endpoint-level is the actual security boundary — it does not
-/// inherit from the page," an inline role requirement is applied here
-/// (<c>new AuthorizeAttribute { Roles = "Moderator,Admin" }</c>) mirroring <c>ModStatsPage</c>'s own
+/// inherit from the page," the role requirement is applied here, mirroring <c>ModStatsPage</c>'s own
 /// gate, rather than a plain <c>RequireAuthorization()</c> floor that would let any signed-in
-/// non-mod user read site-wide aggregate stats over HTTP. No named "RequireModerator" policy is
-/// registered in <c>Program.cs</c> (untouched by this pass), so the role requirement is inlined via
-/// the <see cref="AuthorizeAttribute"/> overload of <c>RequireAuthorization</c>.
+/// non-mod user read site-wide aggregate stats over HTTP. Uses the named
+/// <see cref="AuthorizationPolicies.RequireModerator"/> policy registered in <c>Program.cs</c>
+/// (MA-702 fix, 2026-07-18 — replaces the earlier inline <c>AuthorizeAttribute</c> copy).
 /// </para>
 /// <para>
 /// <c>CancellationToken</c> parameters are dropped at the client boundary per layer5-wasm.md's
@@ -26,19 +24,17 @@ namespace TheCanalaveLibrary.Server;
 /// </summary>
 public static class SiteDailyStatEndpoints
 {
-    private static readonly AuthorizeAttribute ModeratorOnly = new() { Roles = "Moderator,Admin" };
-
     public static WebApplication MapSiteDailyStatEndpoints(this WebApplication app)
     {
         RouteGroupBuilder group = app.MapGroup("/api/site-daily-stats");
 
         group.MapGet("/latest", async (ISiteDailyStatReadService stats, HttpContext http) =>
                 Results.Json(await stats.GetLatestAsync(http.RequestAborted)))
-            .RequireAuthorization(ModeratorOnly);
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         group.MapGet("/series", async (ISiteDailyStatReadService stats, int days, HttpContext http) =>
                 Results.Ok(await stats.GetSeriesAsync(days, http.RequestAborted)))
-            .RequireAuthorization(ModeratorOnly);
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         return app;
     }

@@ -11,13 +11,14 @@ namespace TheCanalaveLibrary.Client;
 /// <para>
 /// Translates FollowingEndpoints' status codes back into the service contract's typed exceptions so
 /// components behave identically on either side of the interface: 400 →
-/// <see cref="VouchLimitException"/> — the only 400 this write service ever produces (the 6th-vouch
-/// guard in <c>VouchAsync</c>; <see cref="VouchLimitException"/>'s parameterless constructor bakes in
-/// its own message, so there's nothing to read off the response body for this case), 401/403 →
-/// <see cref="UnauthorizedAccessException"/> (message read through from
-/// <c>ProblemDetails.Detail</c> — see FollowingEndpoints' class summary on the shared
-/// <c>InvalidOperationException</c> → 401 mapping covering the self-follow/self-vouch/no-op-alert
-/// guards alongside genuine "not signed in"), 404 → <see cref="KeyNotFoundException"/> (defensive;
+/// <see cref="FollowingValidationException"/> carrying <c>ProblemDetails.Detail</c> — this covers
+/// every business-rule rejection the service produces (self-follow, self-vouch, and the
+/// no-op-alert "you don't follow this user" guard, all now <see cref="FollowingValidationException"/>
+/// server-side, plus the 6th-vouch <see cref="VouchLimitException"/>; the concrete server type isn't
+/// distinguishable from a bare 400, but both are user-facing and the message is what components
+/// display), 401/403 → <see cref="UnauthorizedAccessException"/> (genuine "not signed in" — the
+/// service's auth guard still throws <see cref="InvalidOperationException"/> → 401, message read
+/// through from <c>ProblemDetails.Detail</c>), 404 → <see cref="KeyNotFoundException"/> (defensive;
 /// this service never actually throws <see cref="KeyNotFoundException"/> today).
 /// </para>
 /// </summary>
@@ -65,7 +66,13 @@ public sealed class ClientFollowingWriteService(HttpClient http)
         switch (response.StatusCode)
         {
             case HttpStatusCode.BadRequest:
-                throw new VouchLimitException();
+                // Every business-rule rejection this service produces now maps to 400 (self-follow,
+                // self-vouch, no-op-alert, and the 6th-vouch VouchLimitException) — reconstruct the
+                // family type carrying the server's ProblemDetails.Detail. The concrete server type
+                // (FollowingValidationException vs VouchLimitException) doesn't round-trip, but both
+                // are user-facing and the message is what the UI displays.
+                string? badRequestDetail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
+                throw new FollowingValidationException([badRequestDetail ?? "The request failed validation."]);
             case HttpStatusCode.Unauthorized:
             case HttpStatusCode.Forbidden:
                 string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);

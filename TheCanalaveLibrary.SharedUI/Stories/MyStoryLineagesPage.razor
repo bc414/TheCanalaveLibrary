@@ -34,10 +34,7 @@
                 <section class="flex flex-col gap-3">
                     <h2 class="text-lg font-semibold text-(--color-text)">Requests to your stories</h2>
 
-                    @if (_incomingError is not null)
-                    {
-                        <p class="text-sm text-(--color-danger)">@_incomingError</p>
-                    }
+                    <InlineAlert Message="@_incomingError" />
 
                     @if (ManageData.IncomingRequests.Count == 0)
                     {
@@ -105,17 +102,7 @@
                 <section class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
                     <h2 class="text-lg font-semibold text-(--color-text)">Add a lineage link</h2>
 
-                    @if (_createErrors.Count > 0)
-                    {
-                        <div class="rounded-lg bg-(--color-danger)/10 p-3 text-sm text-(--color-danger)" role="alert">
-                            <ul class="list-disc pl-4 space-y-1">
-                                @foreach (string error in _createErrors)
-                                {
-                                    <li>@error</li>
-                                }
-                            </ul>
-                        </div>
-                    }
+                    <InlineAlert Messages="@_createErrors" />
 
                     @if (OwnStories.Count == 0)
                     {

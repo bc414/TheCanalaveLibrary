@@ -11,7 +11,8 @@ using TheCanalaveLibrary.SharedUI;
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 // Redis (write-behind cache, Layer 7) is post-MVP — no feature reads/writes IDistributedCache yet.
-// Re-add builder.AddRedisDistributedCache("cache") when the first Redis-backed feature is built.
+// Re-add builder.AddRedisDistributedCache("cache") when the first Redis-backed feature is built
+// (re-add the Aspire.StackExchange.Redis.DistributedCaching package alongside it).
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -26,9 +27,6 @@ builder.Services.AddRazorComponents()
 
 // Add HttpContextAccessor to access the HttpContext from services.
 builder.Services.AddHttpContextAccessor();
-
-// Add services for Razor Pages, which are required for the _Host.cshtml fallback.
-builder.Services.AddRazorPages();
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();
@@ -100,6 +98,13 @@ builder.Services.AddDataProtection()
 builder.Services.AddAuthentication(IdentityConstants.ApplicationScheme)
     .AddIdentityCookies(); // This is the correct way to add the cookie handler
 
+// Named moderator policy (identity-and-authorization.md §"Role-Based (Moderator) Gating") — the
+// edge role gate the mod endpoint groups apply on top of the services' own RequireModerator()
+// checks (defense in depth, MA-702). No FallbackPolicy: the operative posture is default-allow
+// with explicit gates (see identity-and-authorization.md §"Default-Deny for MVP" note).
+builder.Services.AddAuthorization(options =>
+    options.AddPolicy(AuthorizationPolicies.RequireModerator, p => p.RequireRole("Moderator", "Admin")));
+
 // 2. Configure ApplicationCookie to handle 401/403 responses for Blazor
 builder.Services.ConfigureApplicationCookie(options =>
 {
@@ -126,7 +131,12 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddIdentityCore<User>(options =>
     {
         options.SignIn.RequireConfirmedAccount = true;
-        
+
+        // Matches the UNIQUE index on normalized_email (IdentityConfigurations) — without this,
+        // a duplicate-email registration bypassed UserManager validation and surfaced as a raw
+        // DbUpdateException 500 instead of a friendly validation error (MA-103, fixed 2026-07-18).
+        options.User.RequireUniqueEmail = true;
+
         // Add sensible password requirements
         options.Password.RequireDigit = true;
         options.Password.RequireLowercase = true;
@@ -143,12 +153,10 @@ builder.Services.AddIdentityCore<User>(options =>
     })
     .AddRoles<ApplicationRole>() // Add the Role service
     .AddEntityFrameworkStores<ApplicationDbContext>() // Connect to your DbContext
-    .AddApiEndpoints() // Add the new .NET 8 Identity API endpoints
     .AddDefaultTokenProviders() // Add token providers for email, 2FA, etc.
-    // Overrides AddApiEndpoints's SignInManager<User> registration (last registration wins) so
-    // CanSignInAsync enforces AccountStatus (Suspended/Banned) at the one choke point every
-    // sign-in path (password/passkey/2FA/external) shares — WU38a, security.md "Account-Status
-    // Enforcement".
+    // Registers CanalaveSignInManager as the SignInManager<User> so CanSignInAsync enforces
+    // AccountStatus (Suspended/Banned) at the one choke point every sign-in path
+    // (password/passkey/2FA/external) shares — WU38a, security.md "Account-Status Enforcement".
     .AddSignInManager<CanalaveSignInManager>();
 
 // Override the default IUserClaimsPrincipalFactory<User> (registered above via AddRoles, TryAddScoped)
@@ -225,6 +233,19 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
             }));
+
+    // "ImportParse" concurrency limiter (BB-02/MA-309, 2026-07-18): the three import parse routes
+    // run expensive attacker-influenced work (Mammoth DOCX conversion, EPUB decompression +
+    // AngleSharp DOM walks, up to 20 MB/file) with no commit-side token bucket — parse-then-discard
+    // never reaches IWriteRateLimitService. Selection is by COST, not write-vs-read (current MS
+    // rate-limiting guidance; security.md "Write Throttling"). A small server-wide concurrency cap
+    // bounds CPU/memory amplification while leaving normal single-user imports untouched.
+    options.AddConcurrencyLimiter("ImportParse", o =>
+    {
+        o.PermitLimit = 4;
+        o.QueueLimit = 8;
+        o.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
+    });
 });
 
 // Add your custom development data seeder
@@ -363,7 +384,9 @@ builder.Services.AddScoped<IUserStoryInteractionReadService, ServerUserStoryInte
 builder.Services.AddScoped<IUserStoryInteractionWriteService, ServerUserStoryInteractionWriteService>();
 // Blog Posts (WU31/WU32) — L2 read/write services (Features 35/36). Profile blog posts shipped
 // WU31; GroupBlogPost create/view added WU32. Feature 56 (feature contributions) deferred post-MVP.
-builder.Services.AddScoped<IBlogPostReadService, ServerBlogPostWriteService>();
+// Read binds to the read impl (MA-706, 2026-07-18 — previously bound to the derived write class,
+// handing read-only consumers the full write impl and minting two write instances per scope).
+builder.Services.AddScoped<IBlogPostReadService, ServerBlogPostReadService>();
 builder.Services.AddScoped<IBlogPostWriteService, ServerBlogPostWriteService>();
 // Polls (WU-Polls, Feature 37) — L2 read/write services + the edit-notification sweep
 // (30-min quiet-period batch; settled 2026-07-12 — audit/BlogPosts.md F37).

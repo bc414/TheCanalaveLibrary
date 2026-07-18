@@ -1,4 +1,5 @@
 @namespace TheCanalaveLibrary.SharedUI
+@implements IDisposable
 @inject NavigationManager Nav
 
 <AuthorizeView>
@@ -6,7 +7,7 @@
         <span>@context.User.Identity?.Name</span>
         <form action="Account/Logout" method="post">
             <AntiforgeryToken />
-            <input type="hidden" name="ReturnUrl" value="@_currentUrl" />
+            <input type="hidden" name="ReturnUrl" value="@CurrentUrl" />
             <button type="submit">Log out</button>
         </form>
     </Authorized>
@@ -16,10 +17,15 @@
 </AuthorizeView>
 
 @code {
-    private string? _currentUrl;
+    // Computed at render time + LocationChanged re-render (MA-003): persistent layout chrome
+    // initializes once per circuit, and unlike UserMenu this form is always rendered — without the
+    // subscription its ReturnUrl would freeze on whatever page the circuit started on.
+    private string CurrentUrl => Nav.ToBaseRelativePath(Nav.Uri);
 
-    protected override void OnInitialized()
-    {
-        _currentUrl = Nav.ToBaseRelativePath(Nav.Uri);
-    }
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

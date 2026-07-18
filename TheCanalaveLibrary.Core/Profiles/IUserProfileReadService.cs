@@ -31,8 +31,11 @@ public interface IUserProfileReadService
 
     /// <summary>
     /// Returns the owner's bio HTML (from <c>UserProfile.Text</c>), or <c>null</c> when the user
-    /// doesn't exist. The stored HTML is already sanitized (sanitize-once-on-save convention);
-    /// render via <c>RichTextView</c> directly.
+    /// doesn't exist or the profile is hidden from the current viewer (same
+    /// <see cref="ProfileVisibility"/> gate as <see cref="GetProfileHeaderAsync"/>: <c>Private</c>
+    /// → owner only; <c>UsersOnly</c> → authenticated viewers; the owner always passes). The
+    /// stored HTML is already sanitized (sanitize-once-on-save convention); render via
+    /// <c>RichTextView</c> directly.
     /// </summary>
     Task<string?> GetProfileTextAsync(int userId);
 }

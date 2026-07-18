@@ -429,7 +429,7 @@ survive, but every composition site now presents it inside the shared `ContentSu
 owners select a variant and placement only.
 
 **`PaginationControls` (WU8, 2026-06-21):** root is `flex flex-col gap-2` — button row, then a
-"Showing X–Y of Z" summary (`text-sm text-[--color-text-muted]`) stacked *below* the row, not beside
+"Showing X–Y of Z" summary (`text-sm text-(--color-text-muted)`) stacked *below* the row, not beside
 it. **Fixed 7-slot window for page numbers:** the numbered cells live in an inner
 `flex items-center justify-center gap-1 min-w-[17.25rem]` wrapper between Prev/Next
 (`17.25rem` = 7 × `size-9` + 6 × `gap-1`) — at `TotalPages > 7` the window always yields exactly 7
@@ -438,9 +438,9 @@ slots (first/last always shown, ellipsis fills gaps, slides with `CurrentPage`);
 effect: **the control's total width never changes**, whether it backs a 3-page or 300-page listing —
 established as the fix for an early review where the footprint visibly shifted between pages.
 Buttons (Prev/Next + page numbers) are bordered solid blocks, not bare text/hover-only —
-`size-9 rounded-md border grid place-items-center transition-colors`, `bg-[--color-surface-raised]`
-at rest with `hover:bg-[--color-primary]/20`; current page is a flat `bg-[--color-primary]
-text-white border-[--color-primary]` fill (no ring/outline variant — flat fill was correct,
+`size-9 rounded-md border grid place-items-center transition-colors`, `bg-(--color-surface-raised)`
+at rest with `hover:bg-(--color-primary)/20`; current page is a flat `bg-(--color-primary)
+text-white border-(--color-primary)` fill (no ring/outline variant — flat fill was correct,
 an earlier "doesn't look active" review note traced to the demo not being wired to update on click,
 not a styling gap). Disabled Prev/Next: muted bg/text + `cursor-not-allowed`, no hover. No outer
 margin; renders nothing when `TotalPages <= 1`. Page size is supplied by the caller
@@ -489,18 +489,18 @@ dot and chip visually associated as "the same tag type" without making the dot a
 no outer margin; the composing page spaces instances with its own `gap-`/`space-y-` (outer-margin
 rule). **Prev/Next:** same bordered-block shape as `PaginationControls`' Prev/Next —
 `inline-grid size-9 place-items-center rounded-md border transition-colors`, using
-`bg-[--color-surface-raised]`/`hover:bg-[--color-primary]/20` when available and
-`bg-[--color-surface-raised]/50 text-[--color-text-muted] cursor-not-allowed` when disabled (no
+`bg-(--color-surface-raised)`/`hover:bg-(--color-primary)/20` when available and
+`bg-(--color-surface-raised)/50 text-(--color-text-muted) cursor-not-allowed` when disabled (no
 hover). Disabled endpoints render as `<span aria-disabled="true">`, not `<button disabled>` —
 these are navigation, not actions. **Disclosure dropdowns** (chapter-select + version picker):
-`<details class="relative">` + `<summary class="flex ... rounded-md border border-[--color-border] bg-[--color-surface-raised] px-3 py-1.5 text-sm hover:bg-[--color-primary]/20 transition-colors">`.
+`<details class="relative">` + `<summary class="flex ... rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5 text-sm hover:bg-(--color-primary)/20 transition-colors">`.
 The `flex` class on `<summary>` suppresses the default browser triangle marker (sets `display: flex`,
 overriding the UA `display: list-item`). Dropdown panel: `absolute left-0 top-full z-10 mt-1
-max-h-{N} min-w-{N} overflow-y-auto rounded-md border border-[--color-border] bg-[--color-surface]
+max-h-{N} min-w-{N} overflow-y-auto rounded-md border border-(--color-border) bg-(--color-surface)
 py-1 shadow-md`. Rows inside: `block px-3 py-1.5 text-sm`; highlighted row (current chapter/version)
-`bg-[--color-primary]/10 font-semibold text-[--color-primary]`; normal row
-`text-[--color-text] hover:bg-[--color-surface-hover]`; unpublished/unavailable row
-`pointer-events-none text-[--color-text-muted]`. Alt-version indicator in the chapter dropdown:
+`bg-(--color-primary)/10 font-semibold text-(--color-primary)`; normal row
+`text-(--color-text) hover:bg-(--color-surface-hover)`; unpublished/unavailable row
+`pointer-events-none text-(--color-text-muted)`. Alt-version indicator in the chapter dropdown:
 a `<span title="Has alternate versions">` with a small glyph (&#8942;) — visually subtle,
 semantically distinguishable, testable via `title` attribute in bUnit.
 
@@ -522,7 +522,7 @@ to `#2DBBA0` Manaphy Teal so the green color family is freed for curation tabs (
 Recommendations / Hidden Gems) in `BookshelfTabVisuals`. **Only the story-follow `UserStoryInteractionButton`
 is affected — the user-to-user `FollowButton.razor` bell is unrelated and unchanged.**
 
-*Desktop tab bar:* a `<nav class="flex gap-1 flex-wrap border-b border-[--color-border] pb-2">` of
+*Desktop tab bar:* a `<nav class="flex gap-1 flex-wrap border-b border-(--color-border) pb-2">` of
 `<a href="/bookshelves/{slug}">` links styled as tab chips. Each chip: `inline-flex items-center gap-1.5
 rounded-t-md px-3 py-1.5 text-sm transition-colors`. The active chip (determined by matching the current
 URL slug) gets `aria-current="page"` and an accent-colored background + white icon/text; inactive chips
@@ -535,7 +535,7 @@ icon + label. Same `absolute left-0 top-full z-10` positioning as the chapter-se
 
 *Mobile filter overlay:* `ResultsFilterPanel` on mobile surfaces from a "Filter" button. When open:
 backdrop `fixed inset-0 z-50 bg-black/50 p-4` (click-to-close); panel `max-w-sm w-full rounded-xl
-bg-[--color-surface] p-4 shadow-lg overflow-y-auto` with `@onclick:stopPropagation`; renders nothing
+bg-(--color-surface) p-4 shadow-lg overflow-y-auto` with `@onclick:stopPropagation`; renders nothing
 when closed. **This is the "third consumer" the WU9 note flagged for deciding on a shared `Modal`
 primitive — decision: do NOT extract.** A slide-in/drawer filter panel is structurally different from
 the centered ConfirmDialog; the `fixed inset-0` shell is the only shared part, too thin to justify a
@@ -563,27 +563,27 @@ cards via `gap-`.
 | State | Visual treatment |
 |---|---|
 | Plain (default) | Base card surface only; no accent |
-| `IsHighlightedByAuthor` (Author's Pick) | Accent border (`border-2 border-[--color-primary]`) + glow (`shadow-[0_0_0_2px_var(--color-primary)/20]`) + an "Author's Pick" ribbon label in `--color-primary` (Roserade Green `#5BB85A` maps to `--color-primary` in this feature's visual register) |
+| `IsHighlightedByAuthor` (Author's Pick) | Accent border (`border-2 border-(--color-primary)`) + glow (`shadow-[0_0_0_2px_var(--color-primary)/20]`) + an "Author's Pick" ribbon label in `--color-primary` (Roserade Green `#5BB85A` maps to `--color-primary` in this feature's visual register) |
 | `IsHiddenGem` | Gem badge icon (Torterra Emerald `#1FA37A` inline SVG, from `RecommendationVisuals`) pinned `absolute top-2 right-2`, `title="Hidden Gem"` |
 | Both | Accent border/glow from spotlight + gem badge both render |
 
 Like button: same bordered-block shape as `PaginationControls`/`ChapterNavigation` at rest
 (`size-8 rounded-md border grid place-items-center transition-colors`), using Roserade Green
 (`#5BB85A`) as the active-state accent (inline CSS custom property `--accent` pattern from WU7).
-Successful-rec count rendered as a small `text-xs text-[--color-text-muted]` badge beside the like
+Successful-rec count rendered as a small `text-xs text-(--color-text-muted)` badge beside the like
 button.
 
 **`RecommendationEditor` (WU29, 2026-06-23):** root is `flex flex-col gap-3` — no outer margin.
-Character-count meter: `text-xs text-[--color-text-muted]`, turns `text-[--color-success]` once
+Character-count meter: `text-xs text-(--color-text-muted)`, turns `text-(--color-success)` once
 the 500-char minimum is met. Submit button disabled (`opacity-50 cursor-not-allowed`) until met.
-Button row follows `CommentEditor`: primary button `bg-[--color-primary]`, cancel `bg-[--color-surface]
+Button row follows `CommentEditor`: primary button `bg-(--color-primary)`, cancel `bg-(--color-surface)
 border`.
 
 **`RecommendationHelpfulPrompt` (WU29, 2026-06-23):** inline non-blocking banner — root is
-`flex items-center justify-between gap-3 rounded-xl border border-[--color-border] bg-[--color-surface]
+`flex items-center justify-between gap-3 rounded-xl border border-(--color-border) bg-(--color-surface)
 p-3 text-sm` — no outer margin; the chapter reading page controls placement. Yes button:
-`rounded-md bg-[--color-primary] px-3 py-1 text-white text-xs`. Dismiss link:
-`text-[--color-text-muted] text-xs underline cursor-pointer`. Renders nothing when dismissed
+`rounded-md bg-(--color-primary) px-3 py-1 text-white text-xs`. Dismiss link:
+`text-(--color-text-muted) text-xs underline cursor-pointer`. Renders nothing when dismissed
 (local `_dismissed` bool).
 
 **Notification icons (WU33, design-pending visual sign-off):** notification category/type icons are **inline

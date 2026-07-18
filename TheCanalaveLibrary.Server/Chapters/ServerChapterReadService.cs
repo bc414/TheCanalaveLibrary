@@ -83,10 +83,14 @@ public class ServerChapterReadService(
     public async Task<IReadOnlyList<ChapterTocEntryDto>> GetChapterTocAsync(int storyId)
     {
         Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
+        // Draft (unpublished) chapter metadata is author-only (endpoint-authz sweep 2026-07-18):
+        // titles/word counts of work-in-progress must not enumerate to other viewers. -1 is an
+        // impossible sentinel for the anonymous case (no real user id is negative).
+        int viewerId = ActiveUser.UserId ?? -1;
 
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         return await readDb.Chapters
-            .Where(c => c.StoryId == storyId)
+            .Where(c => c.StoryId == storyId && (c.IsPublished || c.Story.AuthorId == viewerId))
             .OrderBy(c => c.ChapterNumber)
             .Select(c => new ChapterTocEntryDto(
                 c.ChapterNumber,
@@ -107,6 +111,8 @@ public class ServerChapterReadService(
         int chapterNumber)
     {
         Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
+        // Unpublished chapters' version metadata is author-only (endpoint-authz sweep 2026-07-18).
+        int viewerId = ActiveUser.UserId ?? -1;
 
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
 
@@ -114,7 +120,8 @@ public class ServerChapterReadService(
         // OrderBy must be inside the SelectMany (on the entity field) — EF Core cannot translate
         // OrderBy on the projected DTO's VersionOrder property outside the SelectMany boundary.
         return await readDb.Chapters
-            .Where(c => c.StoryId == storyId && c.ChapterNumber == chapterNumber)
+            .Where(c => c.StoryId == storyId && c.ChapterNumber == chapterNumber
+                     && (c.IsPublished || c.Story.AuthorId == viewerId))
             .SelectMany(c => c.ChapterContents
                 .Where(cc => (cc.Rating ?? c.Story.Rating) <= ratingCeiling)
                 .OrderBy(cc => cc.SortOrder)
@@ -131,13 +138,17 @@ public class ServerChapterReadService(
     public async Task<IReadOnlyList<ChapterListEntryDto>> GetChapterListAsync(int storyId)
     {
         Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
+        // Draft (unpublished) chapter rows are author-only (endpoint-authz sweep 2026-07-18) —
+        // the author's management/story surfaces still see them (AuthorId == viewer), everyone
+        // else gets published rows only. -1 is an impossible sentinel for anonymous.
+        int chapterViewerId = ActiveUser.UserId ?? -1;
 
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
 
-        // Step 1: All chapters for the story, ordered by ChapterNumber.
+        // Step 1: All viewer-visible chapters for the story, ordered by ChapterNumber.
         // PrimaryContent is nullable during the brief post-create window; default WordCount to 0.
         List<ChapterRow> chapters = await readDb.Chapters
-            .Where(c => c.StoryId == storyId)
+            .Where(c => c.StoryId == storyId && (c.IsPublished || c.Story.AuthorId == chapterViewerId))
             .OrderBy(c => c.ChapterNumber)
             .Select(c => new ChapterRow(
                 c.ChapterId,
@@ -170,7 +181,7 @@ public class ServerChapterReadService(
         // outer scope to exclude the primary — EF Core translates correlated outer-scope refs here
         // the same way GetChapterVersionsAsync references c.PrimaryContentId for the IsPrimary flag.
         List<AltVersionRow> altRows = await readDb.Chapters
-            .Where(c => c.StoryId == storyId)
+            .Where(c => c.StoryId == storyId && (c.IsPublished || c.Story.AuthorId == chapterViewerId))
             .SelectMany(c => c.ChapterContents
                 .Where(cc => cc.ChapterContentId != c.PrimaryContentId
                           && (cc.Rating ?? c.Story.Rating) <= ratingCeiling)
@@ -262,28 +273,48 @@ public class ServerChapterReadService(
         // applying IgnoreQueryFilters(["ContentRating"]) if the parent Story is Mature and the
         // editing author has ShowMatureContent=false; WU17 leaves the Story-level filter active
         // here, which suffices for the common case.)
+        //
+        // Author gate (MA-301): this feeds the author-only editor form, so the story's author is
+        // checked here — not just by the client (ChapterEditorPage's own AuthorId comparison is
+        // affordance only, not a control; cross-cutting.md "Security vs affordance"). Checked
+        // against Story.AuthorId (the story's owner), not ChapterContent.AuthorId (whoever authored
+        // that specific version) — the same authority MoveChapterAsync/DeleteChapterAsync use.
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
-        return await readDb.ChapterContents
+        var row = await readDb.ChapterContents
             .Where(cc => cc.ChapterContentId == chapterContentId)
-            .Select(cc => new ChapterReadingDto(
-                cc.ChapterId,
-                cc.Chapter.StoryId,
-                cc.Chapter.ChapterNumber,
-                cc.Chapter.Title,
-                cc.ChapterText,
-                cc.TopAuthorsNote,
-                cc.BottomAuthorsNote,
-                cc.WordCount,
-                cc.Rating ?? cc.Chapter.Story.Rating,  // effective rating
-                cc.AuthorId,
-                cc.Author != null ? (cc.Author.UserName ?? "Unknown") : "Unknown",
-                cc.SortOrder,
-                cc.VersionName,
-                cc.PublishDate,
-                null,  // prev/next not needed for the editing surface
-                null,
-                cc.Chapter.Story.Rating,
-                cc.Rating))  // RawRating — null means inherit; needed by the edit form
+            .Select(cc => new
+            {
+                cc.Chapter.Story.AuthorId,
+                Dto = new ChapterReadingDto(
+                    cc.ChapterId,
+                    cc.Chapter.StoryId,
+                    cc.Chapter.ChapterNumber,
+                    cc.Chapter.Title,
+                    cc.ChapterText,
+                    cc.TopAuthorsNote,
+                    cc.BottomAuthorsNote,
+                    cc.WordCount,
+                    cc.Rating ?? cc.Chapter.Story.Rating,  // effective rating
+                    cc.AuthorId,
+                    cc.Author != null ? (cc.Author.UserName ?? "Unknown") : "Unknown",
+                    cc.SortOrder,
+                    cc.VersionName,
+                    cc.PublishDate,
+                    null,  // prev/next not needed for the editing surface
+                    null,
+                    cc.Chapter.Story.Rating,
+                    cc.Rating)  // RawRating — null means inherit; needed by the edit form
+            })
             .FirstOrDefaultAsync();
+
+        if (row is null) return null;
+        // Require authentication explicitly rather than comparing nullables: an anonymous viewer
+        // (UserId null) against an authorless story (AuthorId null) would otherwise pass on
+        // null == null. RequireAuthorization() on the route blocks that today, but the service is
+        // the enforcement point and must not depend on it.
+        if (ActiveUser.UserId is not int viewerId || row.AuthorId != viewerId)
+            throw new UnauthorizedAccessException("You must be the author of this story.");
+
+        return row.Dto;
     }
 }

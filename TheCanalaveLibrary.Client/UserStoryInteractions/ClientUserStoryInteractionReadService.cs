@@ -41,9 +41,12 @@ public class ClientUserStoryInteractionReadService(HttpClient http) : IUserStory
         return await response.Content.ReadFromJsonAsync<List<int>>() ?? [];
     }
 
+    // includePrivate is NOT sent over the wire — the server derives it from the auth cookie
+    // (hidden favorites are owner-only; MA-602 pattern, endpoint-authz sweep 2026-07-18). The
+    // parameter survives for interface parity with the server impl.
     public async Task<IReadOnlyList<int>> GetFavoriteStoryIdsAsync(int userId, bool includePrivate) =>
         await Http.GetFromJsonAsync<List<int>>(
-            $"api/user-story-interactions/favorites/{userId}?includePrivate={includePrivate}") ?? [];
+            $"api/user-story-interactions/favorites/{userId}") ?? [];
 
     /// <summary>
     /// Status→exception translation (inverse of UserStoryInteractionEndpoints' use of

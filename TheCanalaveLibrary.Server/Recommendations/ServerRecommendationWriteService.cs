@@ -196,9 +196,9 @@ public class ServerRecommendationWriteService(
             int currentCount = await writeDb.Recommendations
                 .CountAsync(r => r.RecommenderId == userId && r.IsHiddenGem);
             if (currentCount >= RecommendationConstants.MaxHiddenGemsPerUser)
-                throw new InvalidOperationException(
-                    $"You already have {RecommendationConstants.MaxHiddenGemsPerUser} Hidden Gem designations. " +
-                    "Remove one before adding another.");
+                throw new RecommendationValidationException(
+                    [$"You already have {RecommendationConstants.MaxHiddenGemsPerUser} Hidden Gem designations. " +
+                     "Remove one before adding another."]);
         }
 
         rec.IsHiddenGem = isHiddenGem;
@@ -209,12 +209,14 @@ public class ServerRecommendationWriteService(
             // Best-effort post-commit notification to story author.
             try
             {
-                int? storyAuthorId = await writeDb.Stories
+                // Anonymous-type projection so null AuthorId (authorless story) is not confused
+                // with "row not found" — mirrors SubmitAsync's projection above.
+                var storyRow = await writeDb.Stories
                     .Where(s => s.StoryId == rec.StoryId)
-                    .Select(s => (int?)s.AuthorId)
+                    .Select(s => new { s.AuthorId })
                     .FirstOrDefaultAsync();
-                if (storyAuthorId.HasValue)
-                    await notifications.NotifyStoryHiddenGemAsync(storyAuthorId.Value, userId);
+                if (storyRow is { AuthorId: int storyAuthorId })
+                    await notifications.NotifyStoryHiddenGemAsync(storyAuthorId, userId);
             }
             catch (Exception ex)
             {
@@ -247,8 +249,8 @@ public class ServerRecommendationWriteService(
             int currentCount = await writeDb.Recommendations
                 .CountAsync(r => r.StoryId == rec.StoryId && r.IsHighlightedByAuthor);
             if (currentCount >= RecommendationConstants.MaxHighlightedPerStory)
-                throw new InvalidOperationException(
-                    $"A story may have at most {RecommendationConstants.MaxHighlightedPerStory} spotlighted recommendations.");
+                throw new RecommendationValidationException(
+                    [$"A story may have at most {RecommendationConstants.MaxHighlightedPerStory} spotlighted recommendations."]);
         }
 
         rec.IsHighlightedByAuthor = isHighlighted;
@@ -276,9 +278,16 @@ public class ServerRecommendationWriteService(
             UserId           = userId,
             RecommendationId = recommendationId
         });
-        rec.SuccessfulRecCount++;
-
         await writeDb.SaveChangesAsync();
+
+        // Atomic delta after the insert commits (layer2-services.md counter rule — a tracked ++
+        // is a read-modify-write that loses updates when concurrent readers trigger the same
+        // recommendation; MA-502). Ordering matters: if the insert had thrown (composite-PK race),
+        // this increment never runs.
+        await writeDb.Recommendations
+            .Where(r => r.RecommendationId == recommendationId)
+            .ExecuteUpdateAsync(s => s.SetProperty(
+                r => r.SuccessfulRecCount, r => r.SuccessfulRecCount + 1));
 
         // ── Tastemaker badge check (WU36) ────────────────────────────────────────
         // Anti-self-farm: skip if the reader IS the recommender, or if the rec is anonymous.

@@ -8,7 +8,7 @@
    Pure leaf: no service injection. All writes are optional EventCallbacks gated by HasDelegate
    (recommender vs. author vs. anonymous viewer wire only what they own). *@
 
-<div class="relative rounded-xl border @CardBorderClass p-4 @CardShadowClass">
+<div class="relative rounded-xl border @CardBorderClass p-4 bg-(--color-surface)">
 
     @* ── Author's Pick ribbon (spotlighted) ──────────────────────────────────── *@
     @if (Rec.IsHighlightedByAuthor)
@@ -158,8 +158,4 @@
     private string CardBorderClass => Rec.IsHighlightedByAuthor
         ? "border-2 border-(--color-rec) ring-2 ring-(--color-rec)/20"
         : "border-(--color-border)";
-
-    private string CardShadowClass => Rec.IsHighlightedByAuthor
-        ? "bg-(--color-surface)"
-        : "bg-(--color-surface)";
 }

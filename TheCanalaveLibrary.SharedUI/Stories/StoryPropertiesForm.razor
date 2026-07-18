@@ -193,7 +193,7 @@
                         class="shrink-0 text-(--color-text-muted) hover:text-(--color-danger)">✕</button>
             </div>
         }
-        <button type="button" @onclick="AddExternalLink"
+        <button type="button" @onclick="AddExternalLink" aria-label="Add external link"
                 class="self-start text-sm text-(--color-action-ink) hover:underline">+ Add link</button>
 
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -213,6 +213,7 @@
     @* ── Submit ──────────────────────────────────────────────────────────────── *@
     <button type="submit"
             disabled="@ViewModel.IsLoading"
+            aria-label="Save story properties"
             class="self-start rounded-md bg-(--color-action) px-5 py-2 font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
         @(ViewModel.IsLoading ? "Saving…" : SubmitLabel)
     </button>

@@ -173,3 +173,23 @@ behavior is exercised by existing `RecommendationSectionTests`.
 - **F30:** full attribution loop — opened `/story/5/1?rec=3` as TestUser (source row written),
   revisited → "Was the recommendation that brought you here helpful?" inline banner at chapter
   bottom → "Yes, it was!" → `recommendation_successes (1,3)` + `SuccessfulRecCount=1` (psql).
+
+### WU-AuditFixPass note (2026-07-18)
+
+MA-502 closed: `RecordSuccessAsync`'s tracked `SuccessfulRecCount++` (lost-update race under
+concurrent readers) replaced by an atomic `ExecuteUpdateAsync` delta AFTER the success-row insert
+commits. `RecommendationSection` fully adopted CommentSection's `InlineAlert` + `Translate`/
+`ExceptionPresenter` pattern (raw `ex.Message` eliminated, unexpected failures now logged);
+`RecommendationEditor`'s per-tick sample swallow annotated `sanctioned-silent` + registered in
+`logging.md`. Full detail: `workplan.md` WU-AuditFixPass.
+
+### MA-505 status-code seam note (2026-07-18)
+
+Status-code seam closed (F29/F30, cells stay Stage 5 — status semantics only): `SetHiddenGemAsync`'s
+reject-at-5 and `SetHighlightedByAuthorAsync`'s spotlight-at-5 limits now throw
+`RecommendationValidationException` → **400** instead of `InvalidOperationException` → 401 (the auth
+safety net, now reserved for the genuine unauthenticated guard). No client change needed —
+`ClientRecommendationWriteService` already reconstructs `RecommendationValidationException` from a 400
+body (shared MA-008 shape). Covered by Integration tier (`RecommendationWriteServiceTests` — the two
+reject-at-five tests retyped to `RecommendationValidationException`, `_ThrowsInvalidOperation`
+renamed `_ThrowsValidation`). Full detail: `modernization-audit/deferred-work.md` §4.

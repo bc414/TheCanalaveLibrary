@@ -13,6 +13,8 @@ public class ClientBadgeReadService(HttpClient http) : IBadgeReadService
     /// <summary>Exposed to the write subclass — primary-ctor params can't be shared directly.</summary>
     protected HttpClient Http { get; } = http;
 
+    // userId is accepted for interface parity but ignored on the wire — the server derives it from
+    // IActiveUserContext, never a client-supplied parameter (MA-601).
     public async Task<IReadOnlyList<EarnedBadgeDto>> GetMyBadgesForCurationAsync(int userId) =>
-        await Http.GetFromJsonAsync<List<EarnedBadgeDto>>($"api/badges?userId={userId}") ?? [];
+        await Http.GetFromJsonAsync<List<EarnedBadgeDto>>("api/badges") ?? [];
 }

@@ -31,7 +31,7 @@ public class ServerFollowingWriteService(
         int actorId = RequireAuthenticatedUser();
 
         if (actorId == targetUserId)
-            throw new InvalidOperationException("A user cannot follow themselves.");
+            throw new FollowingValidationException(["A user cannot follow themselves."]);
 
         bool alreadyFollowing = await writeDb.FollowedUsers
             .AnyAsync(f => f.UserId == actorId && f.FollowedUserId == targetUserId);
@@ -91,7 +91,7 @@ public class ServerFollowingWriteService(
             .FirstOrDefaultAsync(f => f.UserId == actorId && f.FollowedUserId == targetUserId);
 
         if (row is null)
-            throw new InvalidOperationException("Cannot set alert preference — you are not following this user.");
+            throw new FollowingValidationException(["Cannot set alert preference — you are not following this user."]);
 
         row.ReceiveAlerts = receiveAlerts;
         await writeDb.SaveChangesAsync();
@@ -102,7 +102,7 @@ public class ServerFollowingWriteService(
         int actorId = RequireAuthenticatedUser();
 
         if (actorId == targetUserId)
-            throw new InvalidOperationException("A user cannot vouch for themselves.");
+            throw new FollowingValidationException(["A user cannot vouch for themselves."]);
 
         bool alreadyVouched = await writeDb.Vouches
             .AnyAsync(v => v.VouchingUserId == actorId && v.VouchedUserId == targetUserId);

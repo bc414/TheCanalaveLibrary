@@ -79,17 +79,24 @@ retry-after seconds) when the per-user token bucket for that action kind is exha
 | `Comment` | 10 | 10/min | `ServerCommentWriteService.Post*CommentAsync` (all four contexts) |
 | `Message` | 10 | 10/min | `ServerMessagingWriteService.StartConversationAsync` / `SendMessageAsync` |
 | `Report` | 5 | 1 per 3 min | `ServerModerationWriteService.SubmitReportAsync` (reports only — mod actions never throttled) |
-| `ContentCreate` | 5 | 1 per 2 min | story / chapter / alternate-version / blog-post creates, recommendation submit |
+| `ContentCreate` | 5 | 1 per 2 min | story / chapter / alternate-version / blog-post / group creates, recommendation submit |
 | `ImageUpload` | 10 | 1 per 30 s | `ImageUploadProcessor` (covers covers + avatars through the one seam) |
 
 **Rules:**
 - The `EnsureAllowed` call goes **immediately after the method's auth guard** (userId is
   non-null there) and before any DB work.
-- Every *new* abuse-prone write method (creates content another user sees, or is unbounded)
-  adds a call under an existing kind, or adds a kind + limit row here. Edits/deletes and
-  bounded toggles are **deliberately unthrottled**: interaction/follow/like toggles
-  (UX-hostile to limit; the 2s client debounce absorbs the frequency), vouches / Hidden Gems (hard
-  count limits already exist), tag writes (mod-only; HTTP policy covers).
+- **Select by cost, not by write-vs-read** (reframed 2026-07-18, BB-02/MA-309 — matches current
+  MS rate-limiting guidance, which drives limiter choice from "the resources used: time, data
+  access, CPU, I/O"). Two classes need protection:
+  - *Abuse-prone writes* (creates content another user sees, or is unbounded): add an
+    `EnsureAllowed` call under an existing kind, or add a kind + limit row above.
+  - *Expensive authenticated operations that never commit* (file parsing, heavy decode): the
+    token bucket never sees them — bound them with an edge **Concurrency Limiter** instead. Live
+    instance: the `"ImportParse"` policy (Program.cs) capping the three import parse routes
+    (Mammoth DOCX / EPUB decompression / AngleSharp DOM walks, up to 20 MB/file).
+- Edits/deletes and bounded toggles are **deliberately unthrottled**: interaction/follow/like
+  toggles (UX-hostile to limit; the 2s client debounce absorbs the frequency), vouches / Hidden
+  Gems (hard count limits already exist), tag writes (mod-only; HTTP policy covers).
 - L5 endpoint contract (applies at the WASM flip): endpoints translate
   `WriteRateLimitExceededException` → **429** with `Retry-After`, joining `layer5-wasm.md`'s
   error-translation table.
@@ -138,7 +145,7 @@ that way:
 CSP directives (built by the pure static `CspPolicy` so unit tests cover the string):
 `default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'nonce-{per-request}'
 https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
-img-src 'self' data:; font-src 'self'; connect-src 'self' ws: wss:; object-src 'none';
+img-src 'self' data:; font-src 'self' data:; connect-src 'self' ws: wss:; object-src 'none';
 base-uri 'self'; form-action 'self'; frame-ancestors 'none'`.
 
 Blazor-specific notes: `wasm-unsafe-eval` is required by the Blazor runtime (both render

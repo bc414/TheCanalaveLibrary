@@ -1,12 +1,4 @@
 namespace TheCanalaveLibrary.Core;
 
-public class StoryValidationException : Exception
-{
-    public List<string> ValidationErrors { get; }
-
-    public StoryValidationException(List<string> validationErrors)
-        : base("Story validation failed.")
-    {
-        ValidationErrors = validationErrors;
-    }
-}
+public class StoryValidationException(List<string> validationErrors)
+    : CanalaveValidationException("Story validation failed.", validationErrors);

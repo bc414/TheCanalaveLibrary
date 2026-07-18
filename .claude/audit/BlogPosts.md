@@ -230,3 +230,22 @@ sees own drafts per the includeUnpublished rule) → `/blog/{id}/edit` round-tri
 body, like affordance, and the comment section; seeded published+draft posts behave per the
 author-visibility rules on the profile Blog tab. (Post-save the edit page stays put rather than
 redirecting to the post — mild UX polish candidate, not unsound.)
+
+### WU-AuditFixPass note (2026-07-18)
+
+MA-705 closed: `ToggleLikeAsync` writes `LikeCount` as an atomic ±1 delta (0-clamped) instead of a
+C#-computed absolute, and re-reads the landed value for the returned count. `BlogPostPage`'s like
+error normalized to `InlineAlert` + `ExceptionPresenter` (raw `ex.Message` gone, unexpected logged);
+`BlogPostEditorPage` missing-post branch uses `NotFound()` (BlogPostPage's inline soft message
+deliberately kept — missing-vs-hidden ambiguity). Full detail: `workplan.md` WU-AuditFixPass.
+
+### WU-AuditFixPass-2 note (2026-07-18)
+
+Endpoint-authz sweep + MA-706, F35/F36 (cells stay Stage 5 — behavior corrected in place):
+`GetByAuthorAsync` now owner-derives `includeUnpublished` (a forged `includeUnpublished=true` no longer
+leaks drafts to anyone; degrades to the public view); `GetForEditAsync` enforces ownership server-side
+(was client-check-only — any authed user could read any blog draft's full content), throwing →403 with
+client + editor page mirroring the chapter forbidden pattern. **L2 MA-706:** `IBlogPostReadService` DI
+rebound to the read impl (`ServerBlogPostReadService`), not the derived write class. Covered:
+`BlogPostEndpointsTests` (Integration) + browser (cross-author `/edit`→403). Full detail:
+`workplan.md` WU-AuditFixPass-2.

@@ -111,7 +111,7 @@ public class StoryListingsTests(PostgresFixture postgres) : IntegrationTestBase(
     [Fact]
     public async Task GetListingsAsync_ExcludeFavorited_HidesViewersFavoritedStories()
     {
-        // Use the DataSeeder's TestUser — only user guaranteed to exist in the shared container.
+        // Viewer is the test-owned user seeded in InitializeAsync via SeedUserAsync (_testUserId).
         SetViewer(authenticated: true);
 
         string suffix = Guid.NewGuid().ToString("N")[..8];

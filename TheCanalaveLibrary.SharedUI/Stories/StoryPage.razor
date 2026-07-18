@@ -135,23 +135,47 @@ else
             _notFound = true;
             _isLoading = false;
             _initialized = true;
-            NavigationManager.NavigateTo("/not-found");
+            NavigationManager.NotFound();
             return;
         }
 
-        Chapters ??= (await ChapterReadService.GetChapterListAsync(StoryId)).ToArray();
-
-        if (_currentUserId is not null)
-            _usiState = await UsiReadService.GetStateAsync(StoryId);
-
-        _seriesMemberships = await SeriesReadService.GetMembershipsForStoryAsync(StoryId);
-        _lineageLinks = await StoryLineageReadService.GetLineageForStoryAsync(StoryId);
-        _arcs = await StoryArcReadService.GetArcsForStoryAsync(StoryId);
-        _viewerWatermarkUtc = await ChapterReadService.GetViewerLastInteractionUtcAsync(StoryId);
+        await LoadSupplementaryAsync();
 
         _isAuthor  = _currentUserId.HasValue && Story.AuthorId == _currentUserId;
         _isLoading = false;
         _initialized = true;
+    }
+
+    // The six supplementary loads are mutually independent, so they run under Task.WhenAll
+    // (layer2-services.md §"Read-Context Concurrency" — server reads are factory-per-method, so
+    // concurrent calls are safe; under WASM this collapses six serial HTTP round-trips on the
+    // heaviest page in the app). Shared by both lifecycle methods (MA-203). Chapters only
+    // participates when not already restored by [PersistentState] (init) or nulled for a reload
+    // (OnParametersSetAsync); _usiState only for an authenticated viewer.
+    private async Task LoadSupplementaryAsync()
+    {
+        Task<IReadOnlyList<ChapterListEntryDto>>? chaptersTask =
+            Chapters is null ? ChapterReadService.GetChapterListAsync(StoryId) : null;
+        Task<UserStoryInteractionStateDto>? usiTask =
+            _currentUserId is not null ? UsiReadService.GetStateAsync(StoryId) : null;
+        Task<IReadOnlyList<StorySeriesMembershipDto>> membershipsTask =
+            SeriesReadService.GetMembershipsForStoryAsync(StoryId);
+        Task<IReadOnlyList<StoryLineageDto>> lineageTask =
+            StoryLineageReadService.GetLineageForStoryAsync(StoryId);
+        Task<IReadOnlyList<StoryArcDto>> arcsTask = StoryArcReadService.GetArcsForStoryAsync(StoryId);
+        Task<DateTime?> watermarkTask = ChapterReadService.GetViewerLastInteractionUtcAsync(StoryId);
+
+        List<Task> pending = [membershipsTask, lineageTask, arcsTask, watermarkTask];
+        if (chaptersTask is not null) pending.Add(chaptersTask);
+        if (usiTask is not null) pending.Add(usiTask);
+        await Task.WhenAll(pending);
+
+        if (chaptersTask is not null) Chapters = (await chaptersTask).ToArray();
+        _usiState = usiTask is not null ? await usiTask : null;
+        _seriesMemberships = await membershipsTask;
+        _lineageLinks = await lineageTask;
+        _arcs = await arcsTask;
+        _viewerWatermarkUtc = await watermarkTask;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -171,16 +195,14 @@ else
         {
             _notFound = true;
             _isLoading = false;
-            NavigationManager.NavigateTo("/not-found");
+            NavigationManager.NotFound();
             return;
         }
 
-        Chapters = (await ChapterReadService.GetChapterListAsync(StoryId)).ToArray();
-        _usiState = _currentUserId is not null ? await UsiReadService.GetStateAsync(StoryId) : null;
-        _seriesMemberships = await SeriesReadService.GetMembershipsForStoryAsync(StoryId);
-        _lineageLinks = await StoryLineageReadService.GetLineageForStoryAsync(StoryId);
-        _arcs = await StoryArcReadService.GetArcsForStoryAsync(StoryId);
-        _viewerWatermarkUtc = await ChapterReadService.GetViewerLastInteractionUtcAsync(StoryId);
+        // Plain reload: null the persisted chapter list so LoadSupplementaryAsync refetches it for
+        // the new StoryId (the [PersistentState] value belongs to the previous story).
+        Chapters = null;
+        await LoadSupplementaryAsync();
         _isAuthor = _currentUserId.HasValue && Story.AuthorId == _currentUserId;
         _isLoading = false;
 
@@ -222,7 +244,13 @@ else
     {
         if (_pingRegistered)
         {
-            try { await JS.InvokeVoidAsync("viewPing.dispose"); } catch { /* page already gone or no JS */ }
+            // Typed teardown states only (circuit gone / JS gone / teardown cancellation) —
+            // anything else propagates and surfaces (logging.md §"No silent catches").
+            try { await JS.InvokeVoidAsync("viewPing.dispose"); }
+            catch (Exception ex) when (ex is JSDisconnectedException or JSException or TaskCanceledException or ObjectDisposedException)
+            {
+                // Expected during page teardown — the JS side is already gone.
+            }
             _pingRegistered = false;
         }
     }

@@ -5,9 +5,8 @@ namespace TheCanalaveLibrary.Core;
 /// story eligibility, cooldown, block capacity, grant cap). Mirrors
 /// <see cref="RecommendationValidationException"/>.
 /// </summary>
-public class SpotlightValidationException(List<string> errors) : Exception(string.Join("; ", errors))
+public class SpotlightValidationException(List<string> errors)
+    : CanalaveValidationException(string.Join("; ", errors), errors)
 {
-    public IReadOnlyList<string> Errors { get; } = errors;
-
     public SpotlightValidationException(string error) : this([error]) { }
 }

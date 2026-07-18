@@ -204,8 +204,8 @@ public class ServerUserSettingsService(
                 && s.StoryStatusId <= StoryStatusEnum.OpenBeta);
 
             if (!pinnable)
-                throw new InvalidOperationException(
-                    $"Story {pinnedId} cannot be pinned by user {userId}: it must be their own, published, visible story.");
+                throw new UserSettingsValidationException(
+                    [$"Story {pinnedId} cannot be pinned by user {userId}: it must be their own, published, visible story."]);
         }
 
         user.PinnedStoryId = dto.PinnedStoryId;

@@ -102,10 +102,7 @@
             </div>
         }
 
-        @if (!string.IsNullOrEmpty(_serverError))
-        {
-            <p class="text-sm text-(--color-danger)" role="alert">@_serverError</p>
-        }
+        <InlineAlert Message="@_serverError" />
 
         <div class="flex justify-end gap-2">
             <button type="button"

@@ -726,3 +726,31 @@ could not be driven (browser-automation file-upload API mismatch in this session
 not an app defect); the storage service itself is Integration-covered and was WU12
 endpoint-verified. Re-verify the InputFile wiring when a browser pass with working file upload
 is available.
+
+### WU-AuditFixPass note (2026-07-18)
+
+Security fix MA-201 closed: `ServerStoryWriteService` sanitizes `LongDescription` on create AND
+update via `IHtmlSanitizationService` (stored-XSS on the story page; the sibling Series service
+already did this). Also: `StoryPage`/`StoryEditorPage`/`SeriesCreateEditPage`/`SeriesPage`
+missing-entity paths now use `NavigationManager.NotFound()` (real 404); `StoryPage`'s view-ping
+dispose catch is typed; `MyStoryLineagesPage` + `SeriesCreateEditPage` error blocks normalized to
+`InlineAlert`. Covered by Integration tier (`StoryWriteServiceTests` sanitize-on-create/update).
+Full detail: `workplan.md` WU-AuditFixPass.
+
+### WU-AuditFixPass-2 note (2026-07-18)
+
+Endpoint-authz sweep + Tier-2, F4/F5 (cells stay Stage 5 — behavior corrected in place; resolves the
+slice files' "proposes reopen" flags):
+- **F4/F5 `GetStoryForEditAsync`:** was auth-floor-only — any authenticated user could read any story's
+  edit DTO (incl. the moderation-only `PostApprovalStatus`). Now loads the owner and throws
+  `UnauthorizedAccessException` (→403); endpoint wrapped in `ExecuteWriteAsync`; `ClientStoryReadService`
+  + `StoryEditorPage` map 403→forbidden (MA-301 chapter shape).
+- **F5 `GetStoryIdsByAuthorAsync`:** the `IgnoreQueryFilters(["ContentRating"])` bypass was keyed to the
+  client-supplied authorId (any viewer could enumerate another author's rating-hidden story ids); now
+  owner-only (`authorId == ActiveUser.UserId`).
+- **F5 MA-204:** dead `ChapterNames` projection + DTO field removed (correlated subquery on the hottest
+  read; also closed a latent draft-title leak).
+- **F5 MA-203:** `StoryPage`'s 6 supplementary loads parallelized via `Task.WhenAll` in a shared
+  `LoadSupplementaryAsync` (both lifecycle methods).
+Covered: `StoryEndpointsTests` (Integration) + browser E2E (owner mature-on sees 5, mature-off non-owner
+3; cross-author `/edit`→403). Full detail: `workplan.md` WU-AuditFixPass-2.

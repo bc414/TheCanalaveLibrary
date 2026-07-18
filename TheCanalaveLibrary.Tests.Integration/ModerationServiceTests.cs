@@ -259,7 +259,9 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         SetActiveUser(_reporterId); // plain user, not moderator
         Func<Task> act = () => GetMod().ClaimReportAsync(reportId);
 
-        await act.Should().ThrowAsync<InvalidOperationException>()
+        // Authenticated-but-not-a-mod is forbidden (403), not unauthenticated (401) — matches
+        // Spotlight/SiteSettings/Poll's identical role gates (MA-123/MA-701).
+        await act.Should().ThrowAsync<UnauthorizedAccessException>()
             .WithMessage("*Moderator*");
     }
 

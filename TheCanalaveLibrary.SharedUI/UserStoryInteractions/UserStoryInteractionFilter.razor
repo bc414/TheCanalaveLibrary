@@ -32,7 +32,11 @@
     [Parameter]
     public IReadOnlyList<UserStoryInteractionTypeEnum> AvailableKinds { get; set; } = DefaultKinds;
 
-    /// <summary>Seed excluded kinds. Applied on first render only.</summary>
+    /// <summary>
+    /// Seed excluded kinds. Re-synced on every parameter set until the user's first toggle
+    /// (MA-402) — the assembler's seed resolves asynchronously after the first render, so a
+    /// first-render-only snapshot would freeze on the empty pre-seed.
+    /// </summary>
     [Parameter]
     public IReadOnlyList<UserStoryInteractionTypeEnum> ExcludedKinds { get; set; } = [];
 
@@ -52,8 +56,12 @@
 
     private HashSet<UserStoryInteractionTypeEnum> _excluded = [];
 
-    protected override void OnInitialized()
+    // TreeSearchControls resync-until-interaction pattern (MA-402): see ExcludedKinds doc.
+    private bool _userHasInteracted;
+
+    protected override void OnParametersSet()
     {
+        if (_userHasInteracted) return;
         _excluded = [.. ExcludedKinds];
     }
 
@@ -61,6 +69,7 @@
 
     private async Task ToggleAsync(UserStoryInteractionTypeEnum kind, bool exclude)
     {
+        _userHasInteracted = true;
         if (exclude) _excluded.Add(kind);
         else _excluded.Remove(kind);
 

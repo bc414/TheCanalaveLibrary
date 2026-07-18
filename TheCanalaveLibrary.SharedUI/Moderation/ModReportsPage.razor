@@ -2,6 +2,8 @@
 @namespace TheCanalaveLibrary.SharedUI
 @attribute [Authorize(Roles = "Moderator,Admin")]
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.Extensions.Logging
+@inject ILogger<ModReportsPage> Logger
 @inject IModerationWriteService ModerationService
 
 @* Moderator report queue (WU34 Feature 47). Desktop-only.
@@ -121,7 +123,7 @@
 
             @if (_actionError is not null)
             {
-                <p class="mb-2 text-sm text-danger">@_actionError</p>
+                <div class="mb-2"><InlineAlert Message="@_actionError" /></div>
             }
 
             <div class="flex flex-wrap gap-2">
@@ -191,8 +193,24 @@
         }
         catch (Exception ex)
         {
-            _actionError = ex.Message;
+            _actionError = Translate(ex, "Claiming a report failed unexpectedly");
         }
+    }
+
+    /// <summary>
+    /// Catch-site half of the exception-message discipline (mirrors CommentSection.Translate):
+    /// typed user-facing exceptions translate without logging; unexpected ones log at Error
+    /// before showing the generic message. Raw ex.Message never reaches the UI.
+    /// </summary>
+    private string Translate(Exception ex, string unexpectedTemplate)
+    {
+        if (!ExceptionPresenter.IsUserFacing(ex))
+        {
+#pragma warning disable CA2254 // template is one of a fixed set of literals passed by callers
+            Logger.LogError(ex, unexpectedTemplate);
+#pragma warning restore CA2254
+        }
+        return ExceptionPresenter.GetUserMessage(ex);
     }
 
     private void OpenActionPanel(ReportQueueItemDto report)
@@ -219,7 +237,7 @@
             CloseActionPanel();
             await LoadAsync();
         }
-        catch (Exception ex) { _actionError = ex.Message; }
+        catch (Exception ex) { _actionError = Translate(ex, "Resolving a report (no action) failed unexpectedly"); }
         finally { _acting = false; }
     }
 
@@ -239,7 +257,7 @@
             CloseActionPanel();
             await LoadAsync();
         }
-        catch (Exception ex) { _actionError = ex.Message; }
+        catch (Exception ex) { _actionError = Translate(ex, "Resolving a report (removal) failed unexpectedly"); }
         finally { _acting = false; }
     }
 
@@ -260,7 +278,7 @@
             CloseActionPanel();
             await LoadAsync();
         }
-        catch (Exception ex) { _actionError = ex.Message; }
+        catch (Exception ex) { _actionError = Translate(ex, "Applying an account action failed unexpectedly"); }
         finally { _acting = false; }
     }
 

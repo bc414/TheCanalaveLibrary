@@ -2,6 +2,8 @@
 @namespace TheCanalaveLibrary.SharedUI
 @attribute [Authorize(Roles = "Moderator,Admin")]
 @using Microsoft.AspNetCore.Authorization
+@using Microsoft.Extensions.Logging
+@inject ILogger<ModSubmissionsPage> Logger
 @inject IModerationWriteService ModerationService
 
 @* Story submission queue (WU34 Feature 48). Tabbed shell — Stories tab is the active tab;
@@ -94,7 +96,7 @@
                                           @bind="_rejectReason"></textarea>
                                 @if (_rejectError is not null)
                                 {
-                                    <p class="mt-1 text-sm text-danger">@_rejectError</p>
+                                    <div class="mt-1"><InlineAlert Message="@_rejectError" /></div>
                                 }
                                 <div class="mt-2 flex gap-2">
                                     <button type="button"
@@ -165,7 +167,7 @@
             await ModerationService.ApproveStoryAsync(storyId);
             await LoadAsync();
         }
-        catch (Exception ex) { _rejectError = ex.Message; }
+        catch (Exception ex) { _rejectError = Translate(ex, "Approving a story submission failed unexpectedly"); }
         finally { _actingStoryId = null; }
     }
 
@@ -199,8 +201,20 @@
             CancelReject();
             await LoadAsync();
         }
-        catch (Exception ex) { _rejectError = ex.Message; }
+        catch (Exception ex) { _rejectError = Translate(ex, "Rejecting a story submission failed unexpectedly"); }
         finally { _actingStoryId = null; }
+    }
+
+    /// <summary>Catch-site exception-message discipline (mirrors CommentSection.Translate).</summary>
+    private string Translate(Exception ex, string unexpectedTemplate)
+    {
+        if (!ExceptionPresenter.IsUserFacing(ex))
+        {
+#pragma warning disable CA2254 // template is one of a fixed set of literals passed by callers
+            Logger.LogError(ex, unexpectedTemplate);
+#pragma warning restore CA2254
+        }
+        return ExceptionPresenter.GetUserMessage(ex);
     }
 
     private static string TabClasses(bool isActive) =>

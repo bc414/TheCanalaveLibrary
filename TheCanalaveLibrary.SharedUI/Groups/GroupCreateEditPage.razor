@@ -39,14 +39,7 @@
 
                 @if (_errors.Count > 0)
                 {
-                    <div class="mb-4 rounded-lg bg-(--color-danger)/10 p-4 text-sm text-(--color-danger)" role="alert">
-                        <ul class="list-disc pl-4 space-y-1">
-                            @foreach (string error in _errors)
-                            {
-                                <li>@error</li>
-                            }
-                        </ul>
-                    </div>
+                    <div class="mb-4"><InlineAlert Messages="@_errors" /></div>
                 }
 
                 <div class="flex flex-col gap-6 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
@@ -151,7 +144,7 @@
 
             if (EditSource is null)
             {
-                Nav.NavigateTo("/not-found");
+                Nav.NotFound();
                 return;
             }
 

@@ -9,9 +9,9 @@ public interface IFollowingWriteService : IFollowingReadService
 {
     /// <summary>
     /// Records the current user as following <paramref name="targetUserId"/>. Idempotent — no-op if
-    /// the row already exists. Guards against self-follow (throws <see cref="InvalidOperationException"/>).
+    /// the row already exists. Guards against self-follow (throws <see cref="FollowingValidationException"/>).
     /// <c>ReceiveAlerts</c> defaults to <c>true</c> on the new row.
-    /// <!-- TODO(WU22): generate a "new follower" notification after persisting. -->
+    /// <!-- New-follower notification ships via NotifyNewFollowerAsync (WU22, done). -->
     /// </summary>
     Task FollowAsync(int targetUserId);
 
@@ -23,7 +23,7 @@ public interface IFollowingWriteService : IFollowingReadService
 
     /// <summary>
     /// Toggles the alert-bell preference on an existing follow row. Throws
-    /// <see cref="InvalidOperationException"/> if the current user does not follow
+    /// <see cref="FollowingValidationException"/> if the current user does not follow
     /// <paramref name="targetUserId"/>.
     /// </summary>
     Task SetReceiveAlertsAsync(int targetUserId, bool receiveAlerts);
@@ -33,8 +33,9 @@ public interface IFollowingWriteService : IFollowingReadService
     /// rich-text note. Sanitizes <paramref name="vouchText"/> via <c>IHtmlSanitizationService</c>
     /// before persisting (sanitize-once-on-save — <c>layer2-services.md</c>). Enforces the
     /// <see cref="FollowingConstants.MaxVouchesPerUser"/> limit (throws <see cref="VouchLimitException"/>
-    /// at the 6th vouch). Guards against self-vouch and duplicate vouches.
-    /// <!-- TODO(WU22): generate a "new vouch" notification after persisting. -->
+    /// at the 6th vouch). Guards against self-vouch (throws <see cref="FollowingValidationException"/>)
+    /// and duplicate vouches (idempotent no-op).
+    /// <!-- New-vouch notification ships via NotifyNewVouchAsync (WU22, done). -->
     /// </summary>
     Task VouchAsync(int targetUserId, string? vouchText);
 

@@ -31,17 +31,15 @@ namespace TheCanalaveLibrary.Server;
 /// bucket.
 /// </para>
 /// <para>
-/// <b>Known EndpointHelpers mismatch (flagged, not fixed here — out of scope for this add-only
-/// pass):</b> <c>FollowAsync</c>/<c>VouchAsync</c>'s self-target guards and
-/// <c>SetReceiveAlertsAsync</c>'s "you don't follow this user" guard all throw
-/// <see cref="InvalidOperationException"/> for genuine business-rule reasons, not because the caller
-/// is unauthenticated — but the shared <see cref="EndpointHelpers.ExecuteWriteAsync"/> maps every
-/// <see cref="InvalidOperationException"/> to 401 uniformly (its doc comment's stated assumption,
-/// "every throw site is an ...requires an authenticated user guard," doesn't hold for these three
-/// call sites). The message still crosses via <c>ProblemDetails.Detail</c>, so
-/// <c>ClientFollowingWriteService</c> reads it through rather than losing it, but the HTTP status
-/// itself (401) is semantically wrong for a self-follow/self-vouch/no-op-alert rejection (400 would
-/// be more accurate). Left as-is per this sweep's mechanical, add-only scope.
+/// <b>Status-code seam resolved (MA-505, 2026-07-18).</b> <c>FollowAsync</c>/<c>VouchAsync</c>'s
+/// self-target guards and <c>SetReceiveAlertsAsync</c>'s "you don't follow this user" guard are
+/// genuine business-rule rejections, not auth failures — they now throw
+/// <see cref="FollowingValidationException"/> (a <c>CanalaveValidationException</c>), which the shared
+/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> maps to <b>400</b>, the accurate status. Only the
+/// <c>RequireAuthenticatedUser</c> guard's <see cref="InvalidOperationException"/> still maps to 401.
+/// The <see cref="FollowingConstants.MaxVouchesPerUser"/> limit keeps its own
+/// <see cref="VouchLimitException"/> (also 400). <c>ClientFollowingWriteService</c> reconstructs
+/// <see cref="FollowingValidationException"/> from the 400 body.
 /// </para>
 /// </summary>
 public static class FollowingEndpoints
@@ -67,7 +65,8 @@ public static class FollowingEndpoints
                 Results.Ok(await following.GetIncomingVouchesAsync()))
             .RequireAuthorization();
 
-        // ── Writes (authenticated — see class summary for the EndpointHelpers 401 caveat) ──
+        // ── Writes (authenticated — business-rule rejections are 400 via FollowingValidationException;
+        //    see class summary "Status-code seam resolved") ──
 
         group.MapPost("/{targetUserId:int}", (IFollowingWriteService following, int targetUserId) =>
                 EndpointHelpers.ExecuteWriteAsync(async () =>

@@ -49,13 +49,6 @@ public class StoryDetailsDTO
     /// story page (after chapters, before recommendations). Verified links show a checkmark.
     /// </summary>
     public IReadOnlyList<StoryExternalLinkDto> ExternalLinks { get; set; } = [];
-
-    /// <summary>
-    /// Legacy: chapter title list from the original L5 JSON-endpoint design. The story landing page
-    /// (WU25) uses <see cref="IChapterReadService.GetChapterListAsync"/> instead for richer
-    /// per-chapter metadata. This field will be removed when an L5 endpoint is rebuilt (post-MVP).
-    /// </summary>
-    public List<string> ChapterNames { get; set; } = [];
 }
 
 /// <summary>Per-character display data for the story view page (OC overlay info).</summary>

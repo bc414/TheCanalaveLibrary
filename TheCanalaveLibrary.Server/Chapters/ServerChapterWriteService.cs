@@ -13,16 +13,19 @@ public class ServerChapterWriteService(
 {
     public async Task<int> CreateChapterAsync(CreateChapterDto dto)
     {
-        // Chapter creates stamp a nullable AuthorId rather than hard-requiring auth, so the
-        // throttle mirrors that: authenticated axis only (security.md "Write Throttling").
-        if (ActiveUser.UserId is int throttleUserId)
-            rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, throttleUserId);
+        int userId = ActiveUser.RequireUserId();
+        rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, userId);
 
-        // Load story rating for invariant checks before validation.
-        Rating? storyRating = await writeDb.Stories
+        // Load story rating + author for invariant checks and the author gate (cross-cutting.md
+        // "Security vs affordance" — only the story's author may add chapters to it; MA-301).
+        var story = await writeDb.Stories
             .Where(s => s.StoryId == dto.StoryId)
-            .Select(s => (Rating?)s.Rating)
+            .Select(s => new { s.AuthorId, s.Rating })
             .FirstOrDefaultAsync();
+        if (story is null) throw new KeyNotFoundException($"Story {dto.StoryId} not found.");
+        if (story.AuthorId != userId)
+            throw new UnauthorizedAccessException("You must be the author of this story.");
+        Rating? storyRating = story.Rating;
 
         // First version is always the primary — enforce both floor and primary invariants.
         List<string> errors = dto.CanSave(storyRating, isPrimary: true);
@@ -56,7 +59,7 @@ public class ServerChapterWriteService(
 
         ChapterContent firstVersion = new()
         {
-            AuthorId         = ActiveUser.UserId,
+            AuthorId         = userId,
             SortOrder        = 0,
             ChapterText      = sanitizedText,
             TopAuthorsNote   = sanitizedTop,
@@ -95,15 +98,19 @@ public class ServerChapterWriteService(
 
     public async Task<long> AddAlternateVersionAsync(int chapterId, CreateChapterDto dto)
     {
-        // Same conditional throttle as CreateChapterAsync (nullable AuthorId contract).
-        if (ActiveUser.UserId is int throttleUserId)
-            rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, throttleUserId);
+        int userId = ActiveUser.RequireUserId();
+        rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, userId);
 
-        // Load story rating for floor invariant (alternate versions are not primary — no primary invariant).
-        Rating? storyRating = await writeDb.Chapters
+        // Load story rating + author for the floor invariant (alternate versions are not primary —
+        // no primary invariant) and the author gate (MA-301).
+        var storyInfo = await writeDb.Chapters
             .Where(c => c.ChapterId == chapterId)
-            .Select(c => (Rating?)c.Story.Rating)
+            .Select(c => new { c.Story.AuthorId, c.Story.Rating })
             .FirstOrDefaultAsync();
+        if (storyInfo is null) throw new KeyNotFoundException($"Chapter {chapterId} not found.");
+        if (storyInfo.AuthorId != userId)
+            throw new UnauthorizedAccessException("You must be the author of this story.");
+        Rating? storyRating = storyInfo.Rating;
 
         List<string> errors = dto.CanSave(storyRating, isPrimary: false);
         if (errors.Count > 0) throw new ChapterValidationException(errors);
@@ -127,7 +134,7 @@ public class ServerChapterWriteService(
         ChapterContent altVersion = new()
         {
             ChapterId        = chapterId,
-            AuthorId         = ActiveUser.UserId,
+            AuthorId         = userId,
             SortOrder        = nextSortOrder,
             ChapterText      = sanitizedText,
             TopAuthorsNote   = sanitizedTop,
@@ -153,6 +160,10 @@ public class ServerChapterWriteService(
             .FirstOrDefaultAsync(cc => cc.ChapterContentId == dto.ChapterContentId);
         if (content is null)
             throw new KeyNotFoundException($"ChapterContent {dto.ChapterContentId} not found.");
+
+        int userId = ActiveUser.RequireUserId();
+        if (content.Chapter.Story.AuthorId != userId)
+            throw new UnauthorizedAccessException("You must be the author of this story.");
 
         bool isPrimary = content.ChapterContentId == content.Chapter.PrimaryContentId;
         Rating storyRating = content.Chapter.Story.Rating;
@@ -187,6 +198,10 @@ public class ServerChapterWriteService(
             .FirstOrDefaultAsync(c => c.ChapterId == chapterId);
         if (chapter is null) throw new KeyNotFoundException($"Chapter {chapterId} not found.");
 
+        int userId = ActiveUser.RequireUserId();
+        if (chapter.Story.AuthorId != userId)
+            throw new UnauthorizedAccessException("You must be the author of this story.");
+
         ChapterContent? targetContent = await writeDb.ChapterContents
             .FirstOrDefaultAsync(cc => cc.ChapterContentId == chapterContentId && cc.ChapterId == chapterId);
         if (targetContent is null)
@@ -210,8 +225,13 @@ public class ServerChapterWriteService(
     public async Task SetPublishedAsync(int chapterId, bool isPublished)
     {
         Chapter? chapter = await writeDb.Chapters
+            .Include(c => c.Story)
             .FirstOrDefaultAsync(c => c.ChapterId == chapterId);
         if (chapter is null) throw new KeyNotFoundException($"Chapter {chapterId} not found.");
+
+        int userId = ActiveUser.RequireUserId();
+        if (chapter.Story.AuthorId != userId)
+            throw new UnauthorizedAccessException("You must be the author of this story.");
 
         chapter.IsPublished = isPublished;
         await writeDb.SaveChangesAsync();
@@ -221,7 +241,7 @@ public class ServerChapterWriteService(
 
     public async Task MoveChapterAsync(int storyId, int fromNumber, int toNumber)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
         if (fromNumber == toNumber) return;
 
         Story? story = await writeDb.Stories.FirstOrDefaultAsync(s => s.StoryId == storyId);
@@ -272,7 +292,7 @@ public class ServerChapterWriteService(
 
     public async Task DeleteChapterAsync(int chapterId)
     {
-        int userId = RequireAuthenticatedUser();
+        int userId = ActiveUser.RequireUserId();
 
         Chapter? chapter = await writeDb.Chapters
             .Include(c => c.Story)
@@ -370,13 +390,6 @@ public class ServerChapterWriteService(
             arc.EndChapterNumber   = e;
         }
         await writeDb.SaveChangesAsync();
-    }
-
-    private int RequireAuthenticatedUser()
-    {
-        if (ActiveUser.UserId is not int id)
-            throw new InvalidOperationException("This operation requires an authenticated user.");
-        return id;
     }
 
     // Recomputes Story.WordCount as the sum of each primary ChapterContent's WordCount.

@@ -1,6 +1,8 @@
 @namespace TheCanalaveLibrary.SharedUI
 @typeparam TItem
 @implements IDisposable
+@using Microsoft.Extensions.Logging
+@inject ILogger<CanalaveTypeahead<TItem>> Logger
 
 @* In-house debounced typeahead (Global Flip wave) — replaces the archived Blazored.Typeahead,
    whose programmatic-Value-clear bug crashed the WASM renderer outright (removeChild-of-null on
@@ -106,6 +108,10 @@
 
         _open = true;
         _searching = true;
+        // Clear the previous term's results up front (MA-005): while the new search is in flight,
+        // Enter must not select from the stale previous result set.
+        _results = [];
+        _highlight = 0;
 
         try
         {
@@ -119,6 +125,18 @@
         catch (TaskCanceledException)
         {
             // superseded by a newer keystroke — nothing to render
+        }
+        catch (Exception ex)
+        {
+            // Caller-supplied SearchMethod failed (most plausibly a transient HTTP error under the
+            // WASM runtime, MA-005). Degrade to the empty "no results" row instead of letting the
+            // throw escape the input handler and trip the hosting island's error boundary.
+            Logger.LogWarning(ex, "Typeahead search failed for term of length {TermLength}", _term.Length);
+            if (!token.IsCancellationRequested)
+            {
+                _results = [];
+                _searching = false;
+            }
         }
     }
 

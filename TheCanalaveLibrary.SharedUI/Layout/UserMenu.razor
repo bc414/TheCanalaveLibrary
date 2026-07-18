@@ -77,7 +77,7 @@
                     <div class="my-1 border-t border-(--color-border)"></div>
                     <form action="Account/Logout" method="post">
                         <AntiforgeryToken />
-                        <input type="hidden" name="ReturnUrl" value="@_currentUrl" />
+                        <input type="hidden" name="ReturnUrl" value="@CurrentUrl" />
                         <button type="submit"
                                 class="block w-full px-4 py-2 text-left text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)">
                             Log out
@@ -99,13 +99,16 @@
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
     private bool _open;
-    private string? _currentUrl;
     private string _profileHref = "user";
+
+    // Computed at render time, not cached in OnInitializedAsync (MA-003): this is persistent
+    // layout chrome that initializes once per circuit, so a cached URL would be whatever page the
+    // circuit started on. The logout form only renders after the open-toggle click, which forces a
+    // fresh render — so render-time evaluation always reflects the page being logged out from.
+    private string CurrentUrl => Nav.ToBaseRelativePath(Nav.Uri);
 
     protected override async Task OnInitializedAsync()
     {
-        _currentUrl = Nav.ToBaseRelativePath(Nav.Uri);
-
         if (AuthState is not null)
         {
             AuthenticationState state = await AuthState;

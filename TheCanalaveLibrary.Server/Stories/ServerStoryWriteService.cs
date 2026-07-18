@@ -9,6 +9,7 @@ public class ServerStoryWriteService(
     IActiveUserContext activeUser,
     IImageStorageService imageStorage,
     IWriteRateLimitService rateLimit,
+    IHtmlSanitizationService sanitizer,
     ILogger<ServerStoryWriteService> logger)
     : ServerStoryReadService(readDbFactory, activeUser), IStoryWriteService
 {
@@ -29,6 +30,12 @@ public class ServerStoryWriteService(
 
         Story newStoryDB = newStoryDTO.ToStory();
         newStoryDB.AuthorId = authorId;
+        // Sanitize all user HTML before persisting, once, on save (layer2-services.md §"User HTML
+        // Is Sanitized Once, On Save" — same rule ServerSeriesWriteService already follows for
+        // Series.Description; MA-201 fix).
+        newStoryDB.StoryDetail.LongDescription = newStoryDTO.LongDescription is not null
+            ? sanitizer.Sanitize(newStoryDTO.LongDescription)
+            : null;
         // Server-stamped like AuthorId — the mapper deliberately covers only IEditableStoryProperties,
         // so without these the entity defaults (DateTime.MinValue → Postgres "-infinity") reached the
         // DB and story pages showed "Published Jan 1, 0001" (browser pass 2026-07-01).
@@ -98,6 +105,10 @@ public class ServerStoryWriteService(
         string? oldCoverPath = storyToUpdate.StoryListing?.CoverArtRelativeUrl;
 
         storyToUpdate.UpdateStoryEditableProperties(dto);
+        // Sanitize on save, same as CreateStoryAsync above (MA-201 fix).
+        storyToUpdate.StoryDetail.LongDescription = dto.LongDescription is not null
+            ? sanitizer.Sanitize(dto.LongDescription)
+            : null;
         // Server-stamped on every successful property edit (same rationale as the create stamp above).
         storyToUpdate.LastUpdatedDate = DateTime.UtcNow;
 

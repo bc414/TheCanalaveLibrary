@@ -268,19 +268,12 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("normalized_name");
 
-                    b.Property<int?>("UserId")
-                        .HasColumnType("integer")
-                        .HasColumnName("user_id");
-
                     b.HasKey("Id")
                         .HasName("pk_asp_net_roles");
 
                     b.HasIndex("NormalizedName")
                         .IsUnique()
                         .HasDatabaseName("RoleNameIndex");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_asp_net_roles_user_id");
 
                     b.ToTable("AspNetRoles", (string)null);
 
@@ -4601,14 +4594,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasConstraintName("fk_asp_net_user_tokens_asp_net_users_user_id");
                 });
 
-            modelBuilder.Entity("TheCanalaveLibrary.Core.ApplicationRole", b =>
-                {
-                    b.HasOne("TheCanalaveLibrary.Core.User", null)
-                        .WithMany("Roles")
-                        .HasForeignKey("UserId")
-                        .HasConstraintName("fk_asp_net_roles_asp_net_users_user_id");
-                });
-
             modelBuilder.Entity("TheCanalaveLibrary.Core.BaseBlogPost", b =>
                 {
                     b.HasOne("TheCanalaveLibrary.Core.User", "Author")
@@ -6211,8 +6196,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("ReportModeratorUsers");
 
                     b.Navigation("ReportReporterUsers");
-
-                    b.Navigation("Roles");
 
                     b.Navigation("Series");
 

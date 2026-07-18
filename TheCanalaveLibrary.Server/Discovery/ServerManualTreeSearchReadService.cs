@@ -77,8 +77,13 @@ public class ServerManualTreeSearchReadService(
             // Public favorites only — the both-true (favorite + hidden) state is a favorite
             // hidden from visitors, so !IsHiddenFavorite excludes it here exactly as the
             // profile queries do. Manual never surfaces hidden-favorite reach at all.
+            // Anchored to the viewer-visible story set (endpoint-authz sweep 2026-07-18): an
+            // anchor the viewer cannot see (mature-off / taken-down / unlisted status) must yield
+            // an empty favoriters section, matching the author/recommendation sections above —
+            // otherwise the pivot leaks who favorited a rating-hidden or taken-down story.
             IQueryable<User> q = readDb.UserStoryInteractions
-                .Where(i => i.StoryId == request.StoryId && i.IsFavorite && !i.IsHiddenFavorite)
+                .Where(i => i.StoryId == request.StoryId && i.IsFavorite && !i.IsHiddenFavorite
+                         && visible.Any(s => s.StoryId == i.StoryId))
                 .Join(readDb.Users, i => i.UserId, u => u.Id, (i, u) => u);
 
             int total = await q.CountAsync(ct);

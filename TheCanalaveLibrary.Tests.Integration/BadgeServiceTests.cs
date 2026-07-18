@@ -124,7 +124,7 @@ public class BadgeServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
     }
 
     [Fact]
-    public async Task SetDisplayOrderAsync_UnownedBadgeKey_ThrowsInvalidOperation()
+    public async Task SetDisplayOrderAsync_UnownedBadgeKey_ThrowsValidation()
     {
         // User only has Recommender, not RecommenderSilver.
         await CallAwardAsync(_userId, SiteBadges.Recommender);
@@ -132,7 +132,7 @@ public class BadgeServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
         Func<Task> act = async () =>
             await CallSetDisplayOrderAsync(_userId, [SiteBadges.RecommenderSilver]);
 
-        await act.Should().ThrowAsync<InvalidOperationException>(
+        await act.Should().ThrowAsync<BadgeValidationException>(
             "SetDisplayOrderAsync must reject a key the user has not earned");
     }
 

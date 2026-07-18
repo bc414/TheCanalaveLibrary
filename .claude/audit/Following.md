@@ -125,3 +125,15 @@ rich-text note; Submit persisted the sanitized note (`<p>…</p>` via psql), but
 "✓ Vouched", recipient got a NewVouchOnYou (type 32) notification. **Minor staleness (not
 unsound):** VouchButton's IsFollowing comes from page-load RelationshipState, so it appears only
 after a reload when the user follows and vouches in one visit — polish candidate for a later WU.
+
+### MA-505 status-code seam note (2026-07-18)
+
+Status-code seam closed (F19, cells stay Stage 5 — the change is status semantics, not behavior):
+`FollowAsync`/`VouchAsync` self-target guards and `SetReceiveAlertsAsync`'s not-following guard now
+throw the new `FollowingValidationException` (a `CanalaveValidationException`) → **400** via the shared
+`EndpointHelpers.ExecuteWriteAsync`, instead of `InvalidOperationException` → 401 (the auth safety
+net, now reserved for the genuine unauthenticated guard). The `MaxVouchesPerUser` limit keeps its own
+`VouchLimitException` (also 400). `ClientFollowingWriteService`'s 400 arm reconstructs
+`FollowingValidationException` from `ProblemDetails.Detail` (was `VouchLimitException`). Covered by
+Integration tier (`FollowingWriteServiceTests` — self-follow/self-vouch/not-following retyped to
+`FollowingValidationException`). Full detail: `modernization-audit/deferred-work.md` §4.

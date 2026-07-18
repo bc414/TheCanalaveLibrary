@@ -61,6 +61,7 @@
         <button type="button"
                 class="self-start rounded-md bg-(--color-action) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
                 disabled="@Busy"
+                aria-label="Save profile"
                 @onclick="HandleSaveProfileAsync">
             @(Busy ? "Saving…" : "Save Profile")
         </button>

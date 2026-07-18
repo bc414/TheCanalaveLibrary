@@ -62,7 +62,10 @@ public class ServerCommentWriteService(
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
 
-        // TODO(WU22): notify story author of new comment, and parent-comment author of reply.
+        // TODO(post-MVP comment-notifications): notify story author of new comment, and parent-comment
+        // author of reply. (Retargeted 2026-07-18, MA-506 — the old WU22 marker referenced a completed
+        // work-unit; comment notifications are not yet scoped. All four Post*Comment contexts carry
+        // this same marker so the gap is tracked consistently.)
 
         return comment.CommentId;
     }
@@ -113,7 +116,7 @@ public class ServerCommentWriteService(
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
 
-        // TODO(WU33): notify blog post author of new comment, and parent-comment author of reply.
+        // TODO(post-MVP comment-notifications): notify blog post author of new comment, and parent-comment author of reply.
 
         return comment.CommentId;
     }
@@ -158,6 +161,9 @@ public class ServerCommentWriteService(
 
         writeDb.GroupComments.Add(comment);
         await writeDb.SaveChangesAsync();
+
+        // TODO(post-MVP comment-notifications): notify group members/parent-comment author — same
+        // marker as the other three Post*Comment contexts (this one previously omitted it, MA-506).
 
         // Increment CommentsWritten counter (cross-cutting.md §"UserStats Updates").
         await writeDb.UserStats.Where(us => us.UserId == userId)
@@ -211,7 +217,7 @@ public class ServerCommentWriteService(
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
 
-        // TODO(WU33): notify profile owner of new comment, and parent-comment author of reply.
+        // TODO(post-MVP comment-notifications): notify profile owner of new comment, and parent-comment author of reply.
 
         return comment.CommentId;
     }

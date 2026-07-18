@@ -177,3 +177,10 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
   renders/hides, archived label, IsSelected border class, link href; MessageItem own-message uses
   `flex-row-reverse` + no username label, other-message no reverse + shows username, `RichTextView`
   renders HTML. All pass.
+
+### WU-AuditFixPass note (2026-07-18)
+
+`MessageThread` + `ComposeConversationModal` error markup normalized to `InlineAlert` (MA-504).
+`MessagesNavLink` no longer bare-swallows the unread-count read (MA-503): anonymous viewers skip
+the query via the AuthState cascade; genuine failures log Warning and the badge shows 0. Full
+detail: `workplan.md` WU-AuditFixPass.

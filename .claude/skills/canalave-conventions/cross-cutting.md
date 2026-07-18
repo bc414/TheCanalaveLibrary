@@ -139,7 +139,7 @@ logging in as a throwaway fixture user), add a Development-only minimal-API endp
 the service method directly instead of reaching for a one-off temporary endpoint inline in
 `Program.cs`.
 
-**Home:** `TheCanalaveLibrary.Server/Endpoints/DevDiagnosticsEndpoints.cs`
+**Home:** `TheCanalaveLibrary.Server/Diagnostics/DevDiagnosticsEndpoints.cs`
 (`MapDevDiagnosticsEndpoints`), same `{Feature}Endpoints.Map{Feature}Endpoints` shape as
 `StoryEndpoints`. Mapped exactly once, inside the existing `if (app.Environment.IsDevelopment())`
 block in `Program.cs` — never reachable outside local dev. Add new diagnostic routes to this one

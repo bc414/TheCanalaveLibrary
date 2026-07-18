@@ -59,11 +59,19 @@ public static class ContentImportEndpoints
     {
         RouteGroupBuilder group = app.MapGroup("/api/content-import");
 
+        // "ImportParse" (BB-02/MA-309, 2026-07-18): a server-wide concurrency limiter on the three
+        // file-parse routes — Mammoth/EPUB/AngleSharp work is the app's most expensive
+        // attacker-influenced compute and parse-then-discard never reaches the commit-side
+        // IWriteRateLimitService token bucket. Registered in Program.cs; selection by COST per
+        // security.md "Write & Expensive-Operation Throttling". /resplit stays unthrottled — it
+        // re-splits an already-parsed result (bounded by ImportLimits, no file decode).
+
         group.MapPost("/single", (IContentImportService import, IFormFile file, ImportFormat format) =>
                 EndpointHelpers.ExecuteWriteAsync(async () =>
                     Results.Ok(await import.ParseSingleAsync(
                         file.OpenReadStream(), file.FileName, format))))
             .RequireAuthorization()
+            .RequireRateLimiting("ImportParse")
             .DisableAntiforgery();
 
         group.MapPost("/document", (IContentImportService import, IFormFile file, ImportFormat format) =>
@@ -71,12 +79,14 @@ public static class ContentImportEndpoints
                     Results.Ok(await import.ParseDocumentAsync(
                         file.OpenReadStream(), file.FileName, format))))
             .RequireAuthorization()
+            .RequireRateLimiting("ImportParse")
             .DisableAntiforgery();
 
         group.MapPost("/epub", (IContentImportService import, IFormFile file) =>
                 EndpointHelpers.ExecuteWriteAsync(async () =>
                     Results.Ok(await import.ParseEpubAsync(file.OpenReadStream()))))
             .RequireAuthorization()
+            .RequireRateLimiting("ImportParse")
             .DisableAntiforgery();
 
         // Resplit itself is synchronous (see class doc comment) — the async lambda exists purely to

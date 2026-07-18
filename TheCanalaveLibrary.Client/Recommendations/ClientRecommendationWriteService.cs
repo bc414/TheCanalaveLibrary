@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -11,17 +10,14 @@ namespace TheCanalaveLibrary.Client;
 /// same-origin requests.
 /// <para>
 /// Translates RecommendationEndpoints' status codes back into the service contract's typed
-/// exceptions so components behave identically on either side of the interface: 400 →
-/// <see cref="RecommendationValidationException"/> (the server joins validation errors into one
-/// message via <c>ProblemDetails.Detail</c>, so the client wraps it back into a single-element list
-/// rather than re-splitting it — same pattern as <c>ClientCommentWriteService</c>), 401/403 →
-/// <see cref="UnauthorizedAccessException"/> (message read through from <c>ProblemDetails.Detail</c>
-/// when present — see RecommendationEndpoints' class summary on the shared
-/// <c>InvalidOperationException</c> → 401 mapping also covering the Hidden-Gem/spotlight
-/// reject-at-limit business rules alongside genuine "not signed in"), 404 →
-/// <see cref="KeyNotFoundException"/>, 429 → <see cref="WriteRateLimitExceededException"/>
-/// (<c>SubmitAsync</c>'s only throttled write; kind is always
-/// <see cref="WriteActionKind.ContentCreate"/> here).
+/// exceptions so components behave identically on either side of the interface — the shared
+/// MA-008 shape (<see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>); 400 reconstructs
+/// <see cref="RecommendationValidationException"/> and 429 reconstructs
+/// <see cref="WriteRateLimitExceededException"/> with <see cref="WriteActionKind.ContentCreate"/>
+/// (<c>SubmitAsync</c>'s only throttled write). The shared shape's 401 →
+/// <see cref="InvalidOperationException"/> arm carries <c>ProblemDetails.Detail</c> through — see
+/// RecommendationEndpoints' class summary on that mapping also covering the Hidden-Gem/spotlight
+/// reject-at-limit business rules alongside genuine "not signed in".
 /// </para>
 /// </summary>
 public sealed class ClientRecommendationWriteService(HttpClient http)
@@ -85,31 +81,9 @@ public sealed class ClientRecommendationWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of RecommendationEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new RecommendationValidationException(
-                    [detail ?? "The recommendation failed validation."]);
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                string? authDetail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new UnauthorizedAccessException(
-                    authDetail ?? "This action requires an authenticated user.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException("Recommendation not found.");
-            case HttpStatusCode.TooManyRequests:
-                double? retryAfterSeconds = await ClientHttpHelpers.ReadRetryAfterSecondsAsync(response);
-                throw new WriteRateLimitExceededException(
-                    WriteActionKind.ContentCreate, TimeSpan.FromSeconds(retryAfterSeconds ?? 60));
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    /// <summary>Status-code → contract-exception translation (inverse of RecommendationEndpoints') —
+    /// the shared MA-008 shape, including the 429 write-throttle reconstruction.</summary>
+    private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response,
+            msg => new RecommendationValidationException([msg]), WriteActionKind.ContentCreate);
 }

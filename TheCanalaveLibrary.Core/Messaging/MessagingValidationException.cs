@@ -5,7 +5,4 @@ namespace TheCanalaveLibrary.Core;
 /// Mirrors <c>CommentValidationException</c> — a list of human-readable error strings.
 /// </summary>
 public class MessagingValidationException(List<string> errors)
-    : Exception(string.Join("; ", errors))
-{
-    public IReadOnlyList<string> Errors { get; } = errors;
-}
+    : CanalaveValidationException(string.Join("; ", errors), errors);
