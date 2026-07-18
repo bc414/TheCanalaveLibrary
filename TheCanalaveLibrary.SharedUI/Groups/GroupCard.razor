@@ -13,8 +13,8 @@
         @* ── Header row: name + audience badge ───────────────────────────────── *@
         <div class="flex flex-wrap items-center justify-between gap-2">
             <h3 class="font-semibold text-(--color-text) leading-snug">@Group.GroupName</h3>
-            <span class="@AudienceBadgeClasses(Group.AudienceType) rounded px-1.5 py-0.5 text-xs font-medium ring-1">
-                @AudienceBadgeLabel(Group.AudienceType)
+            <span class="@GroupDisplayFormat.AudienceBadgeClasses(Group.AudienceType) rounded px-1.5 py-0.5 text-xs font-medium ring-1">
+                @GroupDisplayFormat.AudienceBadgeLabel(Group.AudienceType)
             </span>
         </div>
 
@@ -36,18 +36,4 @@
 
 @code {
     [Parameter, EditorRequired] public GroupCardDto Group { get; set; } = null!;
-
-    private static string AudienceBadgeLabel(GroupAudienceType type) => type switch
-    {
-        GroupAudienceType.SfwOnly => "SFW Only",
-        GroupAudienceType.Mature  => "Mature",
-        _                         => "Standard"
-    };
-
-    private static string AudienceBadgeClasses(GroupAudienceType type) => type switch
-    {
-        GroupAudienceType.Mature  => "bg-(--color-danger)/10 text-(--color-danger) ring-(--color-danger)/30",
-        GroupAudienceType.SfwOnly => "bg-(--color-warning)/10 text-(--color-warning) ring-(--color-warning)/30",
-        _                         => "bg-(--color-surface-raised) text-(--color-text-muted) ring-(--color-border)"
-    };
 }
