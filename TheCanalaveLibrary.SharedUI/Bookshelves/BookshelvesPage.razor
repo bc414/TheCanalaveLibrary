@@ -5,7 +5,6 @@
 @inject IStoryReadService StoryReadService
 @inject IUserStoryInteractionReadService InteractionReadService
 @inject IRecommendationReadService RecommendationReadService
-@inject IDeviceDetectionService DeviceService
 @inject NavigationManager Nav
 
 @if (_isLoading)
@@ -16,28 +15,14 @@
 else
 {
     <PageTitle>@BookshelfTabVisuals.For(_tab).Label &mdash; My Bookshelves</PageTitle>
-    @if (DeviceService.IsMobile())
-    {
-        <BookshelvesMobile Tab="_tab"
-                           CurrentUserId="_currentUserId"
-                           Items="@(Items ?? [])"
-                           TotalCount="TotalCount"
-                           InteractionStates="_states"
-                           Filter="_filter"
-                           OnFilterChanged="HandleFilterChanged"
-                           OnPageChanged="HandlePageChanged" />
-    }
-    else
-    {
-        <BookshelvesDesktop Tab="_tab"
-                            CurrentUserId="_currentUserId"
-                            Items="@(Items ?? [])"
-                            TotalCount="TotalCount"
-                            InteractionStates="_states"
-                            Filter="_filter"
-                            OnFilterChanged="HandleFilterChanged"
-                            OnPageChanged="HandlePageChanged" />
-    }
+    <BookshelvesDesktop Tab="_tab"
+                        CurrentUserId="_currentUserId"
+                        Items="@(Items ?? [])"
+                        TotalCount="TotalCount"
+                        InteractionStates="_states"
+                        Filter="_filter"
+                        OnFilterChanged="HandleFilterChanged"
+                        OnPageChanged="HandlePageChanged" />
 }
 
 @code {
