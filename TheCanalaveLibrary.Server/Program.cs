@@ -252,7 +252,6 @@ builder.Services.AddRateLimiter(options =>
 builder.Services.AddScoped<DataSeeder>();
 
 // Services for dependency injection for the server
-builder.Services.AddScoped<IDeviceDetectionService, ServerDeviceDetectionService>();
 builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
 // Story export (Feature 54, WU38c) — composes the read services; "export = what you can read".

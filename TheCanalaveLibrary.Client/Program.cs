@@ -24,7 +24,6 @@ builder.Services.AddScoped<ManualTreeStore>();
 // DraftAutosave resolve identically after the L5 WASM flip.
 builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddScoped<DraftStore>();
-builder.Services.AddScoped<IDeviceDetectionService, WasmDeviceDetectionService>();
 // OptimisticSpriteReadService is stateless; base URL uses same wwwroot default as Server.
 // Both sides share the Core impl — see audit/Sprites.md L5 and layer2-services.md §"Sprite URLs Are Resolved At Render Time."
 builder.Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
@@ -101,8 +100,8 @@ builder.Services.AddScoped<IUserActivityWriteService, ClientUserActivityWriteSer
 // Remaining unregistered interfaces are deliberate structural exclusions — never client-implemented
 // (server-only infra) or already WASM-native via a shared impl. See layer5-wasm.md "Scope
 // Inventory"/"Avoid": IImageStorageService, IHtmlSanitizationService, IWriteRateLimitService,
-// IDeviceDetectionService (WasmDeviceDetectionService above), ISpriteReadService
-// (OptimisticSpriteReadService above), IExportService (anchor-link download, no client impl).
+// ISpriteReadService (OptimisticSpriteReadService above), IExportService (anchor-link download,
+// no client impl).
 
 // Register HttpClient for dependency injection into services
 // The base address is configured to point to the server application.
