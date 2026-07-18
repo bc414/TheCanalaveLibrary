@@ -6,11 +6,11 @@
 @inject IUserStoryInteractionReadService InteractionReadService
 @inject IDiscoveryDefaultsReadService DiscoveryDefaults
 @inject ITagReadService TagReadService
-@inject IDeviceDetectionService DeviceService
 
-@* SearchPage — dispatcher for /discover (WU28, spec §5.3 / §5.28).
-   Loads §8.7 defaults on init, preloads a random batch (area is never blank), and branches
-   to SearchDesktop / SearchMobile. AllowAnonymous: discovery is public.
+@* SearchPage — /discover (WU28, spec §5.3 / §5.28).
+   Loads §8.7 defaults on init and preloads a random batch (area is never blank).
+   AllowAnonymous: discovery is public. Mobile composite deleted 2026-07-18
+   (WU-ResponsiveMerge — single responsive tree).
 
    Two modes keyed on _filter.Sort:
    - Random: Items accumulates across batches; "Give me more" appends a fresh draw.
@@ -22,36 +22,18 @@
    plain assignment to the same properties. Per-viewer interaction states (_states) stay ephemeral
    and are reloaded on hydration. *@
 
-@if (DeviceService.IsMobile())
-{
-    <SearchMobile Items="@(Items ?? [])"
-                  TotalCount="_totalCount"
-                  InteractionStates="_states"
-                  CurrentUserId="_currentUserId"
-                  Filter="_filter"
-                  InitialIncludedTags="_includedTagChips"
-                  InitialExcludedTags="_excludedTagChips"
-                  IsRandomMode="@(_filter.Sort == DefaultSortOrder.Random)"
-                  IsLoadingMore="_isLoadingMore"
-                  OnFilterChanged="HandleFilterChangedAsync"
-                  OnPageChanged="HandlePageChangedAsync"
-                  OnLoadMore="HandleLoadMoreAsync" />
-}
-else
-{
-    <SearchDesktop Items="@(Items ?? [])"
-                   TotalCount="_totalCount"
-                   InteractionStates="_states"
-                   CurrentUserId="_currentUserId"
-                   Filter="_filter"
-                   InitialIncludedTags="_includedTagChips"
-                   InitialExcludedTags="_excludedTagChips"
-                   IsRandomMode="@(_filter.Sort == DefaultSortOrder.Random)"
-                   IsLoadingMore="_isLoadingMore"
-                   OnFilterChanged="HandleFilterChangedAsync"
-                   OnPageChanged="HandlePageChangedAsync"
-                   OnLoadMore="HandleLoadMoreAsync" />
-}
+<SearchDesktop Items="@(Items ?? [])"
+               TotalCount="_totalCount"
+               InteractionStates="_states"
+               CurrentUserId="_currentUserId"
+               Filter="_filter"
+               InitialIncludedTags="_includedTagChips"
+               InitialExcludedTags="_excludedTagChips"
+               IsRandomMode="@(_filter.Sort == DefaultSortOrder.Random)"
+               IsLoadingMore="_isLoadingMore"
+               OnFilterChanged="HandleFilterChangedAsync"
+               OnPageChanged="HandlePageChangedAsync"
+               OnLoadMore="HandleLoadMoreAsync" />
 
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
