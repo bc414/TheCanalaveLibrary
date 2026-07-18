@@ -7,10 +7,12 @@
 @inject IDiscoveryDefaultsReadService DiscoveryDefaults
 @inject ITagReadService TagReadService
 
-@* SearchPage — /discover (WU28, spec §5.3 / §5.28).
+@* SearchPage — /discover (WU28, spec §5.3 / §5.28; former SearchDesktop composite folded in
+   2026-07-18, WU-ResponsiveMerge — single responsive tree, page owns its markup).
    Loads §8.7 defaults on init and preloads a random batch (area is never blank).
-   AllowAnonymous: discovery is public. Mobile composite deleted 2026-07-18
-   (WU-ResponsiveMerge — single responsive tree).
+   AllowAnonymous: discovery is public.
+   Layout: ResultsFilterPanel sidebar + StoryDeck with Give-me-more / pagination; the sidebar
+   stacks above the deck at narrow (desktop composition is the base).
 
    Two modes keyed on _filter.Sort:
    - Random: Items accumulates across batches; "Give me more" appends a fresh draw.
@@ -22,18 +24,63 @@
    plain assignment to the same properties. Per-viewer interaction states (_states) stay ephemeral
    and are reloaded on hydration. *@
 
-<SearchDesktop Items="@(Items ?? [])"
-               TotalCount="_totalCount"
-               InteractionStates="_states"
-               CurrentUserId="_currentUserId"
-               Filter="_filter"
-               InitialIncludedTags="_includedTagChips"
-               InitialExcludedTags="_excludedTagChips"
-               IsRandomMode="@(_filter.Sort == DefaultSortOrder.Random)"
-               IsLoadingMore="_isLoadingMore"
-               OnFilterChanged="HandleFilterChangedAsync"
-               OnPageChanged="HandlePageChangedAsync"
-               OnLoadMore="HandleLoadMoreAsync" />
+<div class="flex flex-col gap-6 items-start px-3 py-4 md:flex-row md:px-4">
+
+    @* ── ResultsFilterPanel sidebar (stacks above the deck at narrow) ──────────────────── *@
+    <aside class="w-full md:w-72 md:shrink-0 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+        <h2 class="mb-3 text-sm font-bold text-(--color-text-muted) uppercase tracking-wide">Filters</h2>
+        <ResultsFilterPanel OnSearch="@HandleFilterChangedAsync"
+                            InitialFilter="@_filter"
+                            InitialIncludedTags="@_includedTagChips"
+                            InitialExcludedTags="@_excludedTagChips"
+                            AvailableSorts="@AvailableSorts"
+                            ShowTextSearch="true"
+                            ShowTagFilter="true"
+                            ShowInteractionFilters="true"
+                            ShowTagIncludeModeToggle="true" />
+    </aside>
+
+    @* ── Main area: StoryDeck + mode-dependent controls ─────────────────────────────────── *@
+    <div class="w-full min-w-0 flex-1 flex flex-col gap-4">
+
+        @if (IsRandomMode)
+        {
+            @* Random mode: no pagination; deck TotalCount == Items.Count forces TotalPages=1
+               so PaginationControls self-hides. "Give me more" button appears below the deck. *@
+            <StoryDeck Stories="@(Items ?? [])"
+                       UserStoryInteractionStates="@_states"
+                       CurrentUserId="@_currentUserId"
+                       EmptyMessage="No stories found for these filters. Try broadening your search."
+                       CurrentPage="1"
+                       PageSize="@(Items?.Length ?? 0)"
+                       TotalCount="@(Items?.Length ?? 0)"
+                       OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+
+            <button type="button"
+                    class="self-center rounded-md bg-(--color-mission) px-5 py-2 text-sm font-medium text-white hover:bg-(--color-mission-hover) active:bg-(--color-mission-hover) transition-colors disabled:opacity-50"
+                    disabled="@_isLoadingMore"
+                    @onclick="HandleLoadMoreAsync">
+                @(_isLoadingMore ? "Loading…" : "Give me more")
+            </button>
+        }
+        else
+        {
+            @* Sorted mode: real pagination; no give-me-more button. *@
+            <StoryDeck Stories="@(Items ?? [])"
+                       UserStoryInteractionStates="@_states"
+                       CurrentUserId="@_currentUserId"
+                       EmptyMessage="No stories found for these filters. Try broadening your search."
+                       CurrentPage="@_filter.Page"
+                       PageSize="@_filter.PageSize"
+                       TotalCount="@_totalCount"
+                       OnPageChanged="@HandlePageChangedAsync"
+                       OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+        }
+
+        <ReportDialog @ref="_reportDialog" />
+    </div>
+
+</div>
 
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
@@ -66,6 +113,14 @@
     private IReadOnlyList<TagChipDto> _excludedTagChips = [];
 
     private bool _isLoadingMore;
+
+    // ── Presentation state (from the former SearchDesktop composite) ──────────────
+    private ReportDialog _reportDialog = default!;
+
+    private bool IsRandomMode => _filter.Sort == DefaultSortOrder.Random;
+
+    private static readonly IReadOnlyList<DefaultSortOrder> AvailableSorts =
+        [DefaultSortOrder.Random, DefaultSortOrder.DatePublished, DefaultSortOrder.Relevance];
 
     protected override async Task OnInitializedAsync()
     {

@@ -37,7 +37,11 @@ internal sealed class FakeStoryReadService : IStoryReadService
     /// (BookshelvesPageTests). Default empty preserves the original no-op behavior.</summary>
     public (StoryListingDto[] Items, int TotalCount) ListingsResult { get; set; } = ([], 0);
     public Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null) => Task.FromResult(ListingsResult);
-    public Task<StoryListingDto[]> GetRandomBatchAsync(StoryFilterDto filter, int batchSize) => Task.FromResult(Array.Empty<StoryListingDto>());
+
+    /// <summary>Configurable knob for random-mode discovery tests (SearchPageTests).
+    /// Default empty preserves the original no-op behavior.</summary>
+    public StoryListingDto[] RandomBatch { get; set; } = [];
+    public Task<StoryListingDto[]> GetRandomBatchAsync(StoryFilterDto filter, int batchSize) => Task.FromResult(RandomBatch);
     public Task<IReadOnlyList<int>> FilterCandidateIdsAsync(IReadOnlyCollection<int> candidateIds, StoryFilterDto filter) => Task.FromResult<IReadOnlyList<int>>([.. candidateIds]);
     public Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId) => Task.FromResult<IReadOnlyList<int>>([]);
     public Task<IReadOnlyList<StoryTitleSearchDto>> SearchStoriesByTitleAsync(string term) => Task.FromResult<IReadOnlyList<StoryTitleSearchDto>>([]);
