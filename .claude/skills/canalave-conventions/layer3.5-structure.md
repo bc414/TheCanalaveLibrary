@@ -8,15 +8,15 @@ Decidable once the component system is known — before visual design.
 
 ### Data Flow: DTOs Through the Tree
 
-DTOs flow from dispatcher to children as `[Parameter]`. The dispatcher loads once; children
-receive and render. Don't decompose DTOs into primitive parameters at the composition boundary:
+DTOs flow from the page to children as `[Parameter]`. The page loads once; children receive and
+render. Don't decompose DTOs into primitive parameters at the composition boundary:
 
 ```razor
-@* Dispatcher passes the DTO *@
-<StoryDesktop Story="Story" Chapters="Chapters" OnFavorite="HandleFavorite" />
+@* Page passes the DTO *@
+<StoryDeck Stories="Stories" OnPageChanged="HandlePageChanged" />
 
-@* StoryDesktop passes through to leaves *@
-<StoryCard Story="Story" />
+@* Composites pass through to leaves *@
+<StoryCard Story="story" />
 ```
 
 **Context-specific augmentation** — when a parent has data that doesn't belong in the child's DTO
@@ -35,41 +35,32 @@ contaminating the DTO or the child:
 
 ### Parent-owns-arrangement
 
-Dispatcher and pass-through composites control spatial arrangement of children. Children are
+Pages and pass-through composites control spatial arrangement of children. Children are
 agnostic about their placement — they work the same in a 3-column grid and a 1-column stack.
 
-### Desktop/Mobile Branching
+### Responsive Structure — One Tree, Every Viewport (settled 2026-07-18)
 
-The dispatcher pattern — the dispatcher loads data, detects device, branches to a presentation
-composite:
+The site is a **single responsive site**: one component tree, one DOM, all viewports. There is no
+device detection, no Desktop/Mobile component fork, and no dispatcher branching — the former
+`IDeviceDetectionService` / `DeviceLayout` / `{X}Desktop`+`{X}Mobile` paradigm was removed
+2026-07-18 (history and rationale: `render-and-layout.md` §"Responsive Layout Architecture").
+Pages load data AND render their own markup; extract a child component for **reuse or
+coordination state**, never as a single-consumer pass-through tier.
 
-```razor
-@* StoryPage.razor — dispatcher *@
-@if (_isMobile)
-{
-    <StoryMobile Story="Story" Chapters="Chapters" OnFavorite="HandleFavorite" />
-}
-else
-{
-    <StoryDesktop Story="Story" Chapters="Chapters" OnFavorite="HandleFavorite" />
-}
-```
+Express every viewport difference at the lowest rung of the adaptivity ladder that can carry it
+(full ladder + the rung-3 trigger rule: `layer4-style.md` §"Responsive Adaptivity Ladder"):
+CSS reflow → CSS capability queries → *(future, trigger-gated)* `ViewportState` cascade →
+separate compositions only behind that trigger, at the smallest divergent subtree.
 
-Desktop and mobile composites reuse the **same leaf components**. They differ in arrangement
-(grid vs stack), component ordering, and which elements appear.
-
-### When to Create Separate Desktop/Mobile vs. Responsive Prefixes
-
-**Responsive prefixes** (one component): the elements are identical, only sizing/layout changes.
-
-**Separate components**: different elements, different hierarchy, different interaction patterns.
-A top bar on desktop and a bottom sheet on mobile are structurally different.
+Merged pages are **desktop-composition-first with graceful narrow degradation** (sidebars stack
+below content, tab bars wrap or scroll). Deliberate narrow UX is a future mobile-phase activity —
+current narrow rendering is provisional, not settled design.
 
 ### Moderator-Only Pages
 
-Pages gated to moderator/admin roles skip the dispatcher/desktop/mobile pattern. Desktop-only,
-single layout. Applies to: Reports (`/mod/reports`), Story Submissions (`/mod/submissions`),
-User Management (`/mod/users`).
+Desktop-focused surfaces: same single responsive tree as everything else, but no narrow-viewport
+investment beyond not-broken. Applies to: Reports (`/mod/reports`), Story Submissions
+(`/mod/submissions`), User Management (`/mod/users`).
 
 ## Component Hierarchy Patterns
 
@@ -362,14 +353,13 @@ inside the package), it is not a live two-way binding. Reading the edited HTML b
 `GetHtmlAsync()` that the consuming form's `@ref` calls at submit time — pull-on-submit, not
 push-on-change.
 
-A boolean `Compact` toolbar parameter was tried (WU6) and discarded for two reasons: Quill binds
-toolbar-button listeners once, at construction, so changing the `ToolbarContent` RenderFragment later
-doesn't retroactively rewire anything — forcing a real rebuild needs `@key`-driven destroy/recreate,
-which is exactly the device-axis problem `layer4-style.md` Responsive Breakpoints already settles
-("when desktop and mobile are structurally different, use separate components instead"). So the
-device axis is a **separate composition**, the same way `HomeDesktop`/`HomeMobile` and
-`StoryDesktop`/`StoryMobile` are — not a runtime toggle inside one `EditorView`. **MVP ships the
-desktop toolbar only; the mobile-compact variant is deferred** (not MVP-blocking).
+A boolean `Compact` toolbar parameter was tried (WU6) and discarded: Quill binds toolbar-button
+listeners once, at construction, so changing the `ToolbarContent` RenderFragment later doesn't
+retroactively rewire anything — a genuinely different toolbar needs `@key`-driven destroy/recreate,
+not a runtime toggle inside one `EditorView`. **MVP ships the desktop toolbar only; a
+compact-toolbar variant is a future mobile-phase decision** (WU-EditorMobile, re-scoped 2026-07-18:
+if ever built, it rides the adaptivity ladder's rung-3 trigger — not a device fork, which no
+longer exists as a pattern).
 
 Preview is an **overlay popup**, not an in-place swap of the editor out of the tree — swapping
 reflows the surrounding page every toggle (confusing) and would destroy/recreate Quill (losing
@@ -1001,8 +991,9 @@ Automatic tab's controls do.
   "Context-specific augmentation" above) — rendered alongside `StoryCard`'s triage row
   (co-important, NOT in the caret menu), and the **primary** action for `UserCard` results (which
   have no triage equivalent).
-- **Mobile:** Tree ⇄ Results toggle (structurally different arrangement, per "Separate Desktop/
-  Mobile" above — not a responsive-prefix case).
+- **Narrow viewports:** tree and results stack via CSS reflow (rung 1) — provisional, like all
+  narrow layouts. The former Tree ⇄ Results toggle died with the device-fork paradigm
+  (2026-07-18); a deliberate narrow interaction model is a mobile-phase decision.
 
 #### Deep Dive tab — coordination composite, full-viewport canvas + floating panel
 

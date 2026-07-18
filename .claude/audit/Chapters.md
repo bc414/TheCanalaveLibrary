@@ -4,6 +4,12 @@
 
 ## Shared Context
 
+> **2026-07-18 — Desktop/Mobile paradigm removed site-wide (WU-ResponsiveMerge).** No Chapters
+> pair existed, but **WU-EditorMobile is re-scoped**: the compact `EditorView` toolbar is a future
+> *mobile-phase* UX decision riding the adaptivity ladder's rung-3 trigger
+> (`layer4-style.md` §"Responsive Adaptivity Ladder") — the device-specific-composition framing is
+> obsolete. See `layer3.5-structure.md` §EditorView for the updated rationale.
+
 **Entities (Core/Models/):** `Chapter` (`StoryId`, `ChapterNumber`, `Title`, `PrimaryContentId` FK to the
 active version), `ChapterContent` (versioned body — "live alternates" not revision history, `Rating`,
 `SortOrder`), `UserChapterInteraction` (`ReadProgress` 0.0–1.0, `IsRead`, PK `(UserId,ChapterId)`).

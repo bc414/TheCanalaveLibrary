@@ -5,6 +5,13 @@
 
 ## Shared Context
 
+> **2026-07-18 — Desktop/Mobile fork removed (WU-ResponsiveMerge).** `GroupDesktop`/`GroupMobile`
+> merged into `GroupPage` (page renders its own markup; mobile variant deleted as an unvalidated
+> placeholder); MA-509 audience-badge statics centralized. Narrow rendering is provisional pending
+> the future mobile phase. Desktop/mobile assertions elsewhere in this file are historical. Rules:
+> `canalave-conventions/render-and-layout.md` §"Responsive Layout Architecture"; spec §3.9/§3.10
+> superseded on this axis.
+
 **Entities (Core/Models/):** `Group` (unique `GroupName`, `AudienceRating`/`MaxContentRating`→short,
 `GroupAudienceType` presets derived at boundary), `GroupMember` (composite `(UserId,GroupId)`,
 `GroupRole` enum, `DateJoined`), `GroupStory` (first-class, `AddedByUserId` SetNull),

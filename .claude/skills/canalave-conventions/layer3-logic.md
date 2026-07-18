@@ -27,7 +27,12 @@ Every component's public API consists of three kinds of declarations:
 **Composite components:** Parameters flowing through, plus coordination state. Service injection
 only for genuinely independent concerns (typeahead queries, self-contained writes).
 
-**Page/dispatcher components:** Service injection, route `[Parameter]`s, `IDeviceDetectionService`.
+**Page components:** Service injection, route `[Parameter]`s, data loading, AND their own markup —
+pages are smart and render directly (the page-level Desktop/Mobile coordination-composite tier was
+folded into pages 2026-07-18 with the single-responsive-site decision; extract a child component
+for reuse or coordination state, never as a single-consumer pass-through). Where older sections
+say "dispatcher," read "route-parameterized page" — the term survives in section titles only to
+keep cross-references stable.
 
 ### Service Injection Principle
 

@@ -4,6 +4,13 @@
 worker).
 
 ## Shared Context
+
+> **2026-07-18 — Desktop/Mobile fork removed (WU-ResponsiveMerge).** `ProfileDesktop`/`ProfileMobile`
+> merged into `ProfilePage` (page renders its own markup; mobile variant + `<details>` tab dropdown +
+> filter drawer deleted as unvalidated placeholders; `ProfileBanner`'s `IsMobile` parameter removed).
+> Narrow rendering is provisional pending the future mobile phase. Desktop/mobile assertions
+> elsewhere in this file are historical. Rules: `canalave-conventions/render-and-layout.md`
+> §"Responsive Layout Architecture"; spec §3.9/§3.10 superseded on this axis.
 **Entities:** `UserProfile` (cold partition — `ProfileText`, 1-to-1 cascade from `User`), `UserStat`
 (PK `UserId`, 22+ denormalized counters, 1-to-1 cascade). Settings (Reader/Privacy/Author) live as owned
 JSON on `User` (see Identity audit). Spec calls for `IUserProfileReadService` (public profile) and

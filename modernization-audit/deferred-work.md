@@ -14,6 +14,13 @@ decision it needs, hardest-to-reverse first.
 
 ## 1. ⛔ DO NOT ACT — the Desktop/Mobile seam
 
+> **SUPERSEDED 2026-07-18 (Brian, WU-ResponsiveMerge — single-responsive-site resolution,
+> `middle_plan_v2.md` §Resolved):** the 07-17 verdict assumed the fork paradigm would continue.
+> The paradigm was removed instead: pairs merged into pages, mobile variants deleted as
+> unvalidated placeholders, MA-406 dissolved (drawer shells deleted), MA-209/MA-509 resolved
+> during the merge. §4's "only after the desktop→mobile human pass" sequencing note is likewise
+> obsolete for these items.
+
 **Status: the audit verdict was explicitly corrected to "do not merge" (report.md lines 104–113, Brian,
 2026-07-17).** These read as duplication but are an intentional seam: mobile is an **unvalidated
 placeholder copy**, and mobile layout will be scrutinized and diverged *separately* after the human

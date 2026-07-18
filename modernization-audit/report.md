@@ -101,6 +101,14 @@ stale doc pointers, comment debris, test-comment drift. All catalogued in `slice
 **Trades (less code, more machinery — your call, per your explicit-over-magic preference):**
 - Export-writer DOM-walk visitor (~100 LOC, S3); triplicated StoryCard display statics (MA-209).
 
+> **SUPERSEDED 2026-07-18 (Brian, WU-ResponsiveMerge):** the paragraph below assumed the
+> Desktop/Mobile fork paradigm would continue and mobile would diverge as separate components.
+> The single-responsive-site resolution (`middle_plan_v2.md` §Resolved;
+> `canalave-conventions/render-and-layout.md` §"Responsive Layout Architecture") removed the
+> paradigm itself: pairs merged into their pages, mobile variants deleted as unvalidated
+> placeholders, MA-406 dissolved with the drawers, MA-209/MA-509 resolved during the merge.
+> Future narrow-UX divergence, if any, rides the adaptivity ladder — not component pairs.
+
 **Desktop/Mobile pairs — OUT OF SCOPE for the fix pass (audit verdict corrected 2026-07-17, Brian).**
 The audit read the byte-identical `@code` in `StoryDesktop`/`StoryMobile` (and the other pairs) as a
 merge candidate. That reading is **wrong for the actual workflow** and must NOT be acted on: desktop has

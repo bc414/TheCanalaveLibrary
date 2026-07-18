@@ -7,6 +7,13 @@
 
 ## Shared Context
 
+> **2026-07-18 — Desktop/Mobile fork removed (WU-ResponsiveMerge).** `MessagesDesktop`/`MessagesMobile`
+> merged into `MessagesPage` (page renders its own markup; mobile variant deleted — conversation
+> list and thread stack at narrow via CSS; a deliberate narrow master/detail model is a future
+> mobile-phase decision). Narrow rendering is provisional. Desktop/mobile assertions elsewhere in
+> this file are historical. Rules: `canalave-conventions/render-and-layout.md` §"Responsive Layout
+> Architecture"; spec §3.9/§3.10 superseded on this axis.
+
 **Entities (now `Core/Messaging/` — to be migrated out of legacy `Core/Models/` during WU35):**
 `Conversation` (`ConversationId`, `Subject` max 2048, `DateCreated` default),
 `ConversationParticipant` (composite `(ConversationId, UserId)`, `LastReadTimestamp`, `IsArchived`,

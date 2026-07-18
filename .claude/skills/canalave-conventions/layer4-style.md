@@ -346,11 +346,31 @@ the state-dependent class strings to a computed property per "Conditional Classe
 </nav>
 ```
 
-### Responsive Breakpoints
+### Responsive Adaptivity Ladder (settled 2026-07-18)
 
-Tailwind's mobile-first approach: write mobile styles first, add `md:` and `lg:` prefixes for
-wider viewports. This only applies when using responsive prefixes within a single component.
-When desktop and mobile are structurally different, use separate components instead.
+The site is a **single responsive site**: one component tree, one DOM, every viewport. Two size
+tiers only — narrow vs `md:` (768px), no tablet tier. Express every viewport difference at the
+lowest rung that can carry it:
+
+1. **CSS reflow** — Tailwind mobile-first: base styles are the narrow layout, `md:` widens
+   (arrangement, stacking, columns, sizing). Covers nearly everything. Container queries are
+   sanctioned for components living in variable-width slots.
+2. **CSS capability queries** — interaction affordances. Tailwind v4's `hover:` variant is already
+   capability-gated (`@media (hover: hover)`); `pointer-coarse:` may enlarge touch targets. Rules:
+   hover is an enhancement, NEVER the only path to an action; no `title`-only essential info.
+3. **Reactive `ViewportState` cascade** — DOES NOT EXIST YET; trigger-gated. Build only if the
+   future mobile phase proves a DOM-existence fork necessary (e.g., a bottom nav bar — CSS-hiding
+   two navs would double chrome service calls). Shape when triggered: one root provider
+   subscribing to `matchMedia` change events via async JS interop, cascading an immutable record;
+   UA sniff at most as a prerender seed corrected on first interactive callback. Never UA-sniff
+   for behavior.
+4. **Separate compositions** — only behind rung 3's trigger, at the smallest divergent subtree.
+   Whole-page `{X}Desktop`/`{X}Mobile` forks are retired permanently (2026-07-18;
+   `render-and-layout.md` §"Responsive Layout Architecture" carries the history and rationale).
+
+**Narrow layouts are provisional:** merged pages are desktop-composition-first with graceful
+narrow degradation. Deliberate narrow UX is a future mobile-phase activity — don't polish narrow
+opportunistically, and don't treat current narrow rendering as settled design.
 
 ## Quill.js Stylesheet Interaction
 

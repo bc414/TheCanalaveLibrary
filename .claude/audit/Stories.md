@@ -5,6 +5,13 @@ view-count). Largest cluster.
 
 ## Shared Context
 
+> **2026-07-18 — Desktop/Mobile fork removed (WU-ResponsiveMerge).** `StoryDesktop`/`StoryMobile`
+> merged into `StoryPage` (page renders its own markup; mobile variant deleted as an unvalidated
+> placeholder); MA-209 display statics centralized in `StoryDisplayFormat`. Narrow rendering is
+> provisional (graceful degradation) pending the future mobile phase. Desktop/mobile structure
+> assertions elsewhere in this file are historical. Rules: `canalave-conventions/render-and-layout.md`
+> §"Responsive Layout Architecture"; spec §3.9/§3.10 superseded on this axis.
+
 **Entities (Core/Stories/):** `Story` (hot partition — status, counts, dates, FKs), `StoryListing`
 (warm — title, short desc, cover art URL; carries the FTS `SearchVector` generated column), `StoryDetail`
 (cold — long desc, slug, `PostApprovalStatus`). Vertical-partition trio with 1-to-1 cascade. `Story`

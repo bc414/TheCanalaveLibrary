@@ -263,8 +263,10 @@ presentation upgrade and chapter reorder/delete. Custom Lists — 51 — designe
 WU-CustomLists. See Resolved.) Two Chapters-cluster (Feature 6) items follow the same
 design-now-or-defer pattern, carried from WU6's original scope notes rather than decision row 3:
 **WU-EditorSprite** (inline Pokémon-sprite Quill blot, spec §5.30.2, deferred at WU6 "its own
-future work-unit") and **WU-EditorMobile** (mobile `EditorView` toolbar / device-specific
-composition, deferred at WU6 alongside the rest of the desktop/mobile axis). See `audit/Chapters.md`.
+future work-unit") and **WU-EditorMobile** (compact `EditorView` toolbar — re-scoped 2026-07-18:
+a future *mobile-phase* UX decision riding the adaptivity ladder's rung-3 trigger; the
+device-specific-composition framing is obsolete, the desktop/mobile axis having been dissolved by
+the single-responsive-site resolution — see "Resolved"). See `audit/Chapters.md`.
 
 ## Phase 5 — L5 WASM enablement (v1 Phase 4 item 6, deliberately after features)
 
@@ -357,6 +359,19 @@ renumbered, since other docs cite them by number.
 ---
 
 ## Resolved
+
+- **Desktop/Mobile axis → single responsive site** — **resolved 2026-07-18** (Brian, deliberated in
+  chat against first principles, the Oct-2025 Gemini origin record, and current external guidance).
+  One component tree, one DOM, every viewport; CSS-first adaptivity (two tiers, 768px, no tablet
+  tier); device detection and the `{X}Desktop`/`{X}Mobile` fork paradigm removed
+  (WU-ResponsiveMerge); page-level coordination composites folded into their pages; mobile
+  variants deleted as unvalidated placeholders — deliberate narrow UX is a future mobile-phase
+  activity gated on desktop evaluation finishing first. Native-app direction is **PWA post-L5**,
+  not MAUI. Supersedes the 2026-07-17 "do not merge" verdict in `modernization-audit/report.md` /
+  `deferred-work.md` §1 (that verdict assumed the fork paradigm would continue). Rules now live in:
+  `canalave-conventions/render-and-layout.md` §"Responsive Layout Architecture" (architecture +
+  rung-3 trigger), `layer4-style.md` §"Responsive Adaptivity Ladder" (the ladder),
+  `layer3.5-structure.md` §"Responsive Structure" (composition consequences).
 
 - **Custom Lists requirements + build scope (row 3's Feature-51 verdict)** — **resolved 2026-07-13**
   (Brian, in chat; ground-truthed against the Gemini design log and reconciled with code reality).

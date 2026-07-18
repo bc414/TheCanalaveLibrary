@@ -5,6 +5,13 @@
 
 ## Shared Context
 
+> **2026-07-18 — Desktop/Mobile fork removed (WU-ResponsiveMerge).** `TagDirectoryDesktop`/
+> `TagDirectoryMobile` merged into `TagDirectoryPage` (page renders its own markup; the 33-line
+> mobile stub deleted). The page remains the L5 WASM-island pilot — island behavior unchanged.
+> Narrow rendering is provisional pending the future mobile phase. Desktop/mobile assertions
+> elsewhere in this file are historical. Rules: `canalave-conventions/render-and-layout.md`
+> §"Responsive Layout Architecture"; spec §3.9/§3.10 superseded on this axis.
+
 **Entities (Core/Tags/ + Core/Models/):** `Tag` (`TagName`, `TagTypeId`, `IsFanon`, `ParentTagId`
 self-ref one-level hierarchy, `SpriteIdentifier`, `AllowOCDetails`, `Description`), `TagType` (+ enum
 mirror `TagTypeEnum`: Character/Setting/Genre/ContentWarning/CrossoverFandom/Relationship), `StoryTag`

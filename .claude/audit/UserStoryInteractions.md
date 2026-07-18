@@ -4,6 +4,13 @@
 
 ## Shared Context
 
+> **2026-07-18 — Desktop/Mobile fork removed (WU-ResponsiveMerge).** `BookshelvesDesktop`/
+> `BookshelvesMobile` merged into `BookshelvesPage` (page renders its own markup; mobile variant +
+> filter drawer deleted as unvalidated placeholders). Narrow rendering is provisional pending the
+> future mobile phase. Desktop/mobile assertions elsewhere in this file are historical. Rules:
+> `canalave-conventions/render-and-layout.md` §"Responsive Layout Architecture"; spec §3.9/§3.10
+> superseded on this axis.
+
 **Entities (Core/Models/):** `UserStoryInteraction` (the bit-packed hot table, PK `(UserId,StoryId)`),
 `UserStoryInteractionDate` (warm 1-to-1 partition), `UserStoryRecommendationSource` (sparse 1-to-1).
 **Fluent config:** composite keys, partition 1-to-1 cascades, and **seven filtered/covering indexes** on

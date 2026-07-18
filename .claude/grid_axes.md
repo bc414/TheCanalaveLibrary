@@ -121,8 +121,9 @@ design dependency.
 - **Leaf** (TagChip, UserStoryInteractionButton, StoryCard): Parameters and EventCallbacks only. No service injection.
 - **Composite** (ChapterNavigation, UserStoryInteractionPanel, ResultsFilterPanel): Pass-through parameters plus coordination
   state (debounce, mode toggles). Service injection only for genuinely independent concerns.
-- **Page/Dispatcher** (StoryPage, ChapterPage, SearchPage): Service injection, route parameters, data loading,
-  device detection, `[PersistentState]` on loaded DTOs, event coordination for child writes.
+- **Page** (StoryPage, ChapterPage, SearchPage): Service injection, route parameters, data loading,
+  `[PersistentState]` on loaded DTOs, event coordination for child writes, and the page's own markup
+  (single responsive tree — the Desktop/Mobile dispatcher tier was dissolved 2026-07-18; see Layer 3.5).
 
 **Service injection principle:** inject when the component has a genuinely independent concern that cannot
 be coordinated from above. The rigid constraint: pure display components showing pre-loaded data must
@@ -150,12 +151,15 @@ design.
 **Component tiers** determine Structure weight:
 - **Leaf** (TagChip, RichTextView): Only raw HTML elements. `@if`/`@foreach` driven by parameters.
   No child Razor components by definition. Full structural weight.
-- **Composite** (StoryDesktop, EditorView): Child Razor components composed with layout wrappers.
+- **Composite** (StoryDeck, EditorView): Child Razor components composed with layout wrappers.
   `@if` for conditional children. `@ChildContent` for container composites. Main structural job.
-- **Page/Dispatcher** (StoryPage): Thin — usually just `@if (isMobile) { <Mobile /> } else { <Desktop /> }`.
+- **Page** (StoryPage): Owns the top-level markup skeleton directly — loading/empty/populated
+  states, section arrangement, composition of reusable children. (The former "thin dispatcher"
+  definition described the dissolved Desktop/Mobile fork tier and was already inaccurate for the
+  logic weight pages carry.)
 
 **Composite subtypes:**
-1. Pass-through layout (StoryDesktop, StoryDeck) — arranges children, thin logic.
+1. Pass-through layout (StoryDeck) — arranges children, thin logic.
 2. Coordination (UserStoryInteractionPanel, ResultsFilterPanel) — owns state spanning children.
 3. Container (Card, Panel) — provides visual vessel via `@ChildContent`.
 4. Third-party wrapper (EditorView) — adapts Quill/Typeahead to Blazor model.
@@ -164,12 +168,13 @@ design.
 appears multiple times, or wraps a third-party component. If something only appears in one place with no
 coordination logic, it belongs inline in its parent.
 
-**Desktop/mobile decision rule:** if the difference is layout (same elements, different sizing), use
-responsive prefixes in one component. If the difference is structure (different elements, hierarchy,
-interactions), use separate components.
+**Viewport adaptivity rule:** single responsive tree — differences are expressed per the
+adaptivity ladder (`layer4-style.md` §"Responsive Adaptivity Ladder"): CSS reflow first, CSS
+capability queries second, the trigger-gated `ViewportState` cascade only if the future mobile
+phase proves a DOM-existence fork necessary. No device detection, no page forks.
 
-**Stage-2 planning covers:** component hierarchy (which components compose which), desktop/mobile branching
-decisions, which DTO fields each component needs (feeds back into DTO shape), `<AuthorizeView>` gate
+**Stage-2 planning covers:** component hierarchy (which components compose which), viewport
+adaptivity decisions (which ladder rung each difference rides), which DTO fields each component needs (feeds back into DTO shape), `<AuthorizeView>` gate
 placement, three-state pattern (loading/empty/populated) per data-driven component, and universal
 component identification (EditorView, RichTextView, TagChip, StoryCard, StoryDeck, PaginationControls).
 
@@ -186,9 +191,10 @@ expressions. **Blocked on design tokens** (`tailwind.config.js`) being locked.
 **Component tiers** determine Style weight:
 - **Leaf** (TagChip, UserStoryInteractionButton): Full visual weight. All colors, typography, borders, shadows,
   hover/focus/transition states, sprite rendering, active/inactive/disabled conditional styling.
-- **Composite** (StoryDesktop, ChapterNavigation): Light — layout Tailwind (`flex`, `grid`, `gap`, column
+- **Composite** (StoryDeck, ChapterNavigation): Light — layout Tailwind (`flex`, `grid`, `gap`, column
   spans, breakpoints). Container visual framing if the composite is a vessel (card surface, border).
-- **Page/Dispatcher** (StoryPage): Near zero. Possibly a loading skeleton.
+- **Page** (StoryPage): Layout Tailwind for its own skeleton (arrangement, gaps, responsive
+  prefixes); visual identity stays in leaves and containers.
 
 **Outer margin rule (non-negotiable):** components own internal padding but never outer margin. Parents
 control spacing via `gap`. Forbidden on component root: `mt-`, `mb-`, `mx-`, `my-`, `m-`.
@@ -590,7 +596,7 @@ SUM, read on demand only (`GetStoryTotalViewsAsync` → StoryCard dropdown "View
 
 **46. Content Reporting** — Submit `Report` with `ReportReasonId`. Polymorphic entity reference.
 
-**47. Moderation Queue & Actions** — Route: `/mod/reports`. Desktop-only, no dispatcher pattern.
+**47. Moderation Queue & Actions** — Route: `/mod/reports`. Desktop-focused (same single responsive tree as everything else; no narrow-viewport investment).
 Moderator reviews, actions, auto-flagging via `ActiveReportCount`.
 
 **48. Story Approval Workflow** — Route: `/mod/submissions`. PendingApproval → approve/reject.

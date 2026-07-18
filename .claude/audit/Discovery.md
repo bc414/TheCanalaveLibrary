@@ -7,6 +7,15 @@ of per-search-mode defaults).
 
 ## Shared Context
 
+> **2026-07-18 — Desktop/Mobile fork removed (WU-ResponsiveMerge).** `SearchDesktop`/`SearchMobile`
+> merged into `SearchPage`, `TreeSearchDesktop`/`TreeSearchMobile` into `TreeSearchPage` (pages
+> render their own markup; mobile variants, filter drawers, and the Tree ⇄ Results toggle deleted
+> as unvalidated placeholders — tree and results stack at narrow via CSS). `HomePage`'s
+> `HomeDesktop`/`HomeMobile` stubs merged likewise. Narrow rendering is provisional pending the
+> future mobile phase. Desktop/mobile assertions elsewhere in this file are historical. Rules:
+> `canalave-conventions/render-and-layout.md` §"Responsive Layout Architecture"; spec §3.9/§3.10
+> superseded on this axis.
+
 **Entities (Core/Models/):** `SearchMode`, `UserInteractionFilter`, `DefaultSearchSetting` (matrix),
 `UserSearchSetting` (overrides), `UserCustomFilter`. Data marts: `AlsoFavoritedScore`,
 `AlsoRecommendedScore`, `UserStoryTreeSearchEntry`. FTS lives on `StoryListing.SearchVector`
