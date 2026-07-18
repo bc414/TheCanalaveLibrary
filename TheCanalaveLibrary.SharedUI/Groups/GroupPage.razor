@@ -5,7 +5,6 @@
 @inject IUserStoryInteractionReadService InteractionService
 @inject IBlogPostReadService BlogPostService
 @inject IToastService Toasts
-@inject IDeviceDetectionService DeviceService
 @inject NavigationManager Nav
 @inject IPublicUrlProvider PublicUrlProvider
 @using TheCanalaveLibrary.Core
@@ -15,7 +14,8 @@
    Slug is cosmetic; only GroupId is the key (audience filter may return null for hidden Mature groups).
    Resolves CurrentUserId from the auth cascade (never injects IActiveUserContext — SharedUI rule).
    Batch-loads: group detail, story listings, interaction states, blog posts in parallel.
-   Passes fully loaded data to GroupDesktop / GroupMobile composites.
+   Passes fully loaded data to the GroupDesktop composite (mobile variant deleted 2026-07-18,
+   WU-ResponsiveMerge — single responsive tree).
    [PersistentState] on Group/Stories/BlogPosts/TotalBlogPosts eliminates the prerender→interactive
    double-fetch; per-viewer state (_currentUserRole, _interactionStates) stays ephemeral — same
    judgment as StoryPage's _usiState (deterministic per viewer, re-fetch is flicker-free).
@@ -36,34 +36,17 @@ else
     <PageTitle>@Group.GroupName</PageTitle>
     <SocialMetaTags Title="@Group.GroupName" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="website"/>
 
-    @if (DeviceService.IsMobile())
-    {
-        <GroupMobile Group="Group"
-                     CurrentUserId="_currentUserId"
-                     CurrentUserRole="_currentUserRole"
-                     Stories="@(Stories ?? [])"
-                     InteractionStates="_interactionStates"
-                     BlogPosts="@(BlogPosts ?? [])"
-                     TotalBlogPosts="TotalBlogPosts"
-                     OnJoin="HandleJoinAsync"
-                     OnLeave="HandleLeaveAsync"
-                     OnStoryAdded="HandleStoryAddedAsync"
-                     OnStoryRemoved="HandleStoryRemovedAsync" />
-    }
-    else
-    {
-        <GroupDesktop Group="Group"
-                      CurrentUserId="_currentUserId"
-                      CurrentUserRole="_currentUserRole"
-                      Stories="@(Stories ?? [])"
-                      InteractionStates="_interactionStates"
-                      BlogPosts="@(BlogPosts ?? [])"
-                      TotalBlogPosts="TotalBlogPosts"
-                      OnJoin="HandleJoinAsync"
-                      OnLeave="HandleLeaveAsync"
-                      OnStoryAdded="HandleStoryAddedAsync"
-                      OnStoryRemoved="HandleStoryRemovedAsync" />
-    }
+    <GroupDesktop Group="Group"
+                  CurrentUserId="_currentUserId"
+                  CurrentUserRole="_currentUserRole"
+                  Stories="@(Stories ?? [])"
+                  InteractionStates="_interactionStates"
+                  BlogPosts="@(BlogPosts ?? [])"
+                  TotalBlogPosts="TotalBlogPosts"
+                  OnJoin="HandleJoinAsync"
+                  OnLeave="HandleLeaveAsync"
+                  OnStoryAdded="HandleStoryAddedAsync"
+                  OnStoryRemoved="HandleStoryRemovedAsync" />
 }
 
 @* Inline error strip (join/leave/story errors surface here) *@
