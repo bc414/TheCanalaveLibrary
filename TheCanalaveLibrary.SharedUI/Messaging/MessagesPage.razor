@@ -20,21 +20,59 @@
 }
 else
 {
-    <MessagesDesktop Conversations="@(Conversations ?? [])"
-                     SelectedConversationId="ConversationId"
-                     Thread="EffectiveThread"
-                     BusySendReply="_replying"
-                     BusyLoadOlder="_loadingOlder"
-                     ReplyError="@_replyError"
-                     ComposeIsOpen="_composeOpen"
-                     ComposePreset="_composePreset"
-                     ComposeBusy="_composeBusy"
-                     ComposeError="@_composeError"
-                     OnSendReply="HandleSendReplyAsync"
-                     OnLoadOlderMessages="HandleLoadOlderAsync"
-                     OnNewConversation="HandleNewConversation"
-                     OnCancelCompose="HandleCancelCompose"
-                     OnSubmitCompose="HandleSubmitComposeAsync" />
+    @* Former MessagesDesktop composite, folded in 2026-07-18 (WU-ResponsiveMerge — single
+       responsive tree, page owns its markup). Master/detail: conversation-list sidebar +
+       thread pane side-by-side; the panes stack at narrow (list above, capped height, thread
+       below — pure CSS, no list/thread swap logic). *@
+    <div class="flex flex-col md:flex-row h-[calc(100vh-4rem)] overflow-hidden">
+
+        @* ── Conversation list sidebar (stacks above the thread at narrow) ── *@
+        <aside class="flex w-full max-h-64 md:w-72 md:max-h-none md:shrink-0 flex-col border-b md:border-b-0 md:border-r border-(--color-border) bg-(--color-surface)">
+            <div class="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
+                <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Messages</h1>
+                <button type="button"
+                        class="rounded-md bg-(--color-mission) px-2.5 py-1 text-xs font-medium text-white hover:bg-(--color-mission-hover)"
+                        @onclick="HandleNewConversation">
+                    New
+                </button>
+            </div>
+
+            <div class="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
+                @if ((Conversations?.Count ?? 0) == 0)
+                {
+                    <p class="mt-4 text-center text-sm text-(--color-text-muted)">
+                        No conversations yet.
+                    </p>
+                }
+                else
+                {
+                    @foreach (var conv in Conversations!)
+                    {
+                        <ConversationListItem Conversation="@conv"
+                                             IsSelected="@(conv.ConversationId == ConversationId)" />
+                    }
+                }
+            </div>
+        </aside>
+
+        @* ── Thread pane ── *@
+        <section class="flex flex-1 flex-col overflow-hidden">
+            <MessageThread Thread="EffectiveThread"
+                           OnSendReply="HandleSendReplyAsync"
+                           OnLoadOlderMessages="HandleLoadOlderAsync"
+                           BusySending="_replying"
+                           BusyLoading="_loadingOlder"
+                           ErrorMessage="@_replyError" />
+        </section>
+    </div>
+
+    @* Compose modal renders as a fixed overlay; position is independent of layout. *@
+    <ComposeConversationModal IsOpen="_composeOpen"
+                              RecipientPreset="_composePreset"
+                              OnSubmit="HandleSubmitComposeAsync"
+                              OnCancel="HandleCancelCompose"
+                              Busy="_composeBusy"
+                              ErrorMessage="@_composeError" />
 }
 
 @code {
