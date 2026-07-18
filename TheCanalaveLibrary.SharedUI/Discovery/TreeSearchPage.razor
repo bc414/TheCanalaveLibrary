@@ -10,13 +10,13 @@
 @inject IUserStoryInteractionReadService InteractionReadService
 @inject IDiscoveryDefaultsReadService DiscoveryDefaults
 @inject ITreeSearchReadService TreeSearchReadService
-@inject IDeviceDetectionService DeviceService
 @inject NavigationManager Nav
 
-@* TreeSearchPage — dispatcher for the Unified Tree Search Page (WU44, spec §5.26).
+@* TreeSearchPage — the Unified Tree Search Page (WU44, spec §5.26).
    Routes: /discover/me (self as root), /discover/user/{userId}, /discover/story/{storyId}.
-   Resolves the root entity, seeds §8.7 AutoTreeSearch defaults, runs an initial traversal with
-   sensible control defaults (or query-param-seeded ones), and branches mobile/desktop. Manual tab
+   Resolves the root entity, seeds §8.7 AutoTreeSearch defaults, and runs an initial traversal
+   with sensible control defaults (or query-param-seeded ones). Mobile composite deleted
+   2026-07-18 (WU-ResponsiveMerge — single responsive tree). Manual tab
    is a placeholder — Feature 33 / WU40 fills it into this same shell.
 
    URL state (spec §5.26): root/anchor lives in the route; degrees/edges/sort live in the query
@@ -41,15 +41,6 @@ else if (_requiresLogin)
     <div class="mx-auto max-w-2xl px-4 py-12 text-center text-(--color-text-muted)">
         <p>Log in to discover from yourself.</p>
     </div>
-}
-else if (DeviceService.IsMobile())
-{
-    <TreeSearchMobile RootStory="RootStory" RootUser="RootUser"
-                      ActiveTab="_activeTab" OnTabChanged="HandleTabChangedAsync"
-                      Result="Result" InteractionStates="_states" CurrentUserId="_currentUserId"
-                      InitialMaxDegrees="_maxDegrees" InitialEdgeTypes="_edgeTypes" InitialSort="_sort"
-                      InitialFilter="_filter"
-                      OnControlsApply="HandleControlsApplyAsync" OnFilterApply="HandleFilterApplyAsync" />
 }
 else
 {
