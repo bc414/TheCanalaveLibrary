@@ -5,7 +5,7 @@ namespace TheCanalaveLibrary.SharedUI;
 /// feedback channels). Deliberately minimal: for system events with no inline home ("draft
 /// restored", "reconnected"). NEVER for validation errors (InlineAlert, next to the field) and
 /// never for anything requiring a decision (ConfirmDialog). Scoped per circuit/user; ToastHost
-/// (rendered once by DeviceLayout) is the single subscriber.
+/// (rendered once by MainLayout) is the single subscriber.
 /// </summary>
 public interface IToastService
 {

@@ -626,14 +626,15 @@ blue, never mission blue. Vote/Update = `action` family; Create Poll / New Site 
 IsDestructive`. Manage row is separated by `border-t border-(--color-border) pt-2`. Voter names
 are standard green links (`text-(--color-action-ink) hover:underline`).
 
-**`DesktopLayout` top bar / `UserMenu` / `CreateMenu` (2026-07-01):** replaced the placeholder
+**Top bar (`MainLayout`, née `DesktopLayout`) / `UserMenu` / `CreateMenu` (2026-07-01):** replaced the placeholder
 `w-64` empty sidebar + hardcoded MS "About" link with a single full-width sticky bar —
 `sticky top-0 z-20 flex items-center gap-6 border-b border-(--color-border)
 bg-(--color-surface-raised) px-6 py-3 shadow-subtle`. Layout: wordmark (`font-display`) → `<nav>`
 of `<NavLink>`s (Home/Discover/Tags/Groups, `ActiveClass="font-semibold text-(--color-primary)"`,
 Home uses `Match="NavLinkMatch.All"`) → `ml-auto` right-side chrome group. No left sidebar; no
-inline search field (Discover link covers it). Mobile is a structurally separate composition
-(`MobileLayout`, unchanged) per the desktop-vs-mobile split rule.
+inline search field (Discover link covers it). (2026-07-18: this bar became `MainLayout` — the
+single layout for all viewports, `flex-wrap` at narrow; `MobileLayout` and its placeholder bottom
+bar were deleted with the device-fork paradigm.)
 
 Two new dropdown components follow the `NotificationBell` caret pattern exactly (`relative` root +
 `@onclick` toggle + `@if(_open)` `absolute right-0 top-full z-30` panel — not a `fixed inset-0`

@@ -43,7 +43,7 @@ builder.Services.AddScoped<IActiveUserContext, ServerActiveUserContext>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, TelemetryCircuitHandler>();
 
 // Error-handling UX seams (WU-ErrorHandling — cross-cutting.md §"Error Handling Strategy"):
-// the transient toast channel (ToastHost in DeviceLayout is the single subscriber) and the
+// the transient toast channel (ToastHost in MainLayout is the single subscriber) and the
 // localStorage draft store behind DraftAutosave. Both scoped per circuit; both also registered
 // in the Client host so the components survive the L5 WASM flip unchanged.
 builder.Services.AddScoped<IToastService, ToastService>();

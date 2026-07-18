@@ -33,11 +33,11 @@
 <ReconnectModal/>
 
 @* Last-resort circuit-teardown bar (cross-cutting.md §"Error Handling Strategy"). Lives HERE,
-   not in a layout: the default layout is DeviceLayout, so a MainLayout-hosted bar (the template
-   default) existed only on Identity Manage pages — interactive pages had NO teardown surface at
-   all. blazor.web.js toggles it via inline style.display, which overrides the `hidden` class;
-   the .reload/.dismiss classes are its required hooks. Faults the error boundaries catch never
-   reach this; only a true circuit teardown shows it. *@
+   not in a layout: a layout-hosted bar (the template default) existed only on Identity Manage
+   pages — interactive pages had NO teardown surface at all. blazor.web.js toggles it via inline
+   style.display, which overrides the `hidden` class; the .reload/.dismiss classes are its
+   required hooks. Faults the error boundaries catch never reach this; only a true circuit
+   teardown shows it. *@
 <div id="blazor-error-ui" data-nosnippet
      class="hidden fixed bottom-0 left-0 right-0 z-(--z-error) border-t border-(--color-danger)/40 bg-(--color-surface-raised) px-4 py-3 text-sm text-(--color-text) shadow-prominent">
     <span class="font-semibold text-(--color-danger)">Something went wrong with your connection.</span>

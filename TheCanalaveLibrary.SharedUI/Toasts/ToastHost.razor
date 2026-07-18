@@ -2,7 +2,7 @@
 @implements IDisposable
 @inject IToastService Toasts
 
-@* The single toast render surface — placed once, in DeviceLayout, so it exists on every
+@* The single toast render surface — placed once, in MainLayout, so it exists on every
    interactive page. Fixed stack, bottom-right; aria-live="polite" so screen readers announce
    arrivals without interrupting. Auto-dismisses per ToastMessage.Duration; every toast is also
    manually dismissible. Producers go through IToastService.Show — never render toasts ad hoc. *@
