@@ -2,7 +2,6 @@
 @namespace TheCanalaveLibrary.SharedUI
 @inject ITagReadService TagReadService
 @inject ITagWriteService TagWriteService
-@inject IDeviceDetectionService DeviceService
 
 @* Tag Directory dispatcher — Pattern 2 dispatcher (layer3.5-structure.md §"Dispatcher Pattern").
    Public route (no [Authorize]). Injects both read + write services; write calls owned here
@@ -34,17 +33,10 @@ else
         </div>
     }
 
-    @if (DeviceService.IsMobile())
-    {
-        <TagDirectoryMobile Directory="Directory" />
-    }
-    else
-    {
-        <TagDirectoryDesktop Directory="Directory"
-                             OnTagCreated="HandleTagCreatedAsync"
-                             OnTagUpdated="HandleTagUpdatedAsync"
-                             OnTagDeleted="HandleTagDeletedAsync" />
-    }
+    <TagDirectoryDesktop Directory="Directory"
+                         OnTagCreated="HandleTagCreatedAsync"
+                         OnTagUpdated="HandleTagUpdatedAsync"
+                         OnTagDeleted="HandleTagDeletedAsync" />
 }
 
 @code {

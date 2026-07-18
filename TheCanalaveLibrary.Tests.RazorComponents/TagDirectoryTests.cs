@@ -8,13 +8,13 @@ using TheCanalaveLibrary.SharedUI;
 namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
-/// Render tests for <see cref="TagDirectoryDesktop"/> and <see cref="TagDirectoryMobile"/> (WU27.5).
+/// Render tests for <see cref="TagDirectoryDesktop"/> (WU27.5; mobile variant deleted
+/// 2026-07-18, WU-ResponsiveMerge — single responsive tree).
 /// Covers:
 /// - Sections render per type with correct heading.
 /// - Parent chip rendered; child chip nested beneath parent.
 /// - Bounded types rendered expanded; unbounded types rendered in &lt;details&gt;.
 /// - Mod edit/delete controls visible to Moderator/Admin, hidden to anonymous.
-/// - OnTagCreated / OnTagDeleted callbacks fire from desktop buttons.
 /// Tier: RazorComponents (bUnit).
 /// </summary>
 public class TagDirectoryTests : BunitContext
@@ -130,44 +130,6 @@ public class TagDirectoryTests : BunitContext
             .Should().BeTrue("Moderator sees the New Tag button");
     }
 
-    // ── Mobile — basic render ─────────────────────────────────────────────────
-
-    [Fact]
-    public void Mobile_RendersBothChips()
-    {
-        IRenderedComponent<TagDirectoryMobile> cut = Render<TagDirectoryMobile>(p => p
-            .Add(c => c.Directory, MakeDirectory()));
-
-        string markup = cut.Markup;
-        markup.Should().Contain("Bulbasaur");
-        markup.Should().Contain("Bulbachild");
-        markup.Should().Contain("Action");
-    }
-
-    [Fact]
-    public void Mobile_UnboundedType_RenderedInDetails()
-    {
-        IRenderedComponent<TagDirectoryMobile> cut = Render<TagDirectoryMobile>(p => p
-            .Add(c => c.Directory, MakeDirectory()));
-
-        bool hasDetails = cut.FindAll("details").Any(d => d.InnerHtml.Contains("Characters"));
-        hasDetails.Should().BeTrue("mobile Character section is collapsible <details>");
-    }
-
-    [Fact]
-    public void Mobile_DoesNotRenderNewTagButton()
-    {
-        // Mobile has no "+ New Tag" button — that's a desktop-only feature.
-        // Per-chip edit/delete ARE present (via TagDirectorySection's AuthorizeView) when authenticated,
-        // but the page-level create action is suppressed.
-        _auth.SetAuthorized("mod-user").SetRoles("Moderator");
-
-        IRenderedComponent<TagDirectoryMobile> cut = Render<TagDirectoryMobile>(p => p
-            .Add(c => c.Directory, MakeDirectory()));
-
-        cut.FindAll("button").Where(b => b.TextContent.Contains("New Tag"))
-            .Should().BeEmpty("mobile view has no New Tag button — create is desktop-only");
-    }
 }
 
 /// <summary>
