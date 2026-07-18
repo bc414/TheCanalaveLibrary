@@ -3290,3 +3290,44 @@ No shared-helper change (every new type derives from `CanalaveValidationExceptio
   not-following / unowned badge key / unpinnable story all return 400, unauthenticated still 401.
 - **Tool:** Claude Code (Opus). **Pointer:** `modernization-audit/deferred-work.md` §4; audit
   Following/Recommendations/Badges/Profiles.
+
+---
+
+## WU-MigrationCollapse — Squash 34 migrations → 1 InitialSchema (DONE ✓ 2026-07-18)
+
+Pre-launch "nuke and rebuild" (`canalave-conventions/layer1-data-model.md` "Migrations"): the dev DB
+is rebuilt from scratch on every consumer (`DataSeeder.MigrateAsync`; Testcontainers per integration
+collection) and the site exists nowhere else, so the 34 accumulated migrations (2026-06-20 → -07-18,
+mostly make-nullable / drop-phantom-FK / rename churn) were collapsed to a single regenerated
+`InitialSchema`.
+
+- **Non-model DDL preserved by hand re-append** to the regenerated `InitialSchema.Up()`/`Down()` (the
+  only DDL `ef migrations add` does not emit from the model; audit of all 34 confirmed exactly these
+  two): the `daily_story_stats` raw table + `COMMENT` (ex-`R2_ViewCountToDailyStoryStats`) and the
+  MVCC storage tuning `fillfactor`/`autovacuum_vacuum_scale_factor` on
+  `user_chapter_interactions`/`daily_story_stats`/`user_story_interactions` (ex-`R4_MvccStorageTuning`).
+  Everything else regenerates from the model (all tables/columns/FKs, the 7 USI partial-covering
+  indexes + GIN + `stored` `search_vector` computed column, 17 `HasData` seed sets) or was a
+  rename/data-transform moot on a from-scratch build.
+- **Runtime bug surfaced during verification + fixed same session** (CLAUDE.md rule):
+  `UserStatRecalculator.InsertMissingRowsSql` omitted `recommendation_successes_earned`, silently
+  leaning on that column's `DEFAULT 0` — a leftover `AddColumn` artifact the EF model never declared
+  (hence `has-pending-model-changes` clean). The collapse correctly shed the default and exposed the
+  gap; fix adds the column to the explicit 0-seed list, honoring the method's own stated invariant
+  ("list every column explicitly … not rely on the database"). No other raw-SQL INSERT path affected
+  (`ViewCountFlusher`/`ReadingProgressFlusher`/`SiteDailyStatAggregator` targets are byte-identical
+  before/after).
+- **Verified:** `pg_dump --schema-only` before vs after diff is clean — identical object counts
+  (97 tables / 138 indexes / 97 PK / 139 FK / 41 identity seq / 1 COMMENT / 3 storage-param settings),
+  empty table+index name symmetric-diff; residual textual diffs are benign squash normalizations only
+  (column ordinal order, named-vs-anonymous NOT NULL, stale-vs-fresh constraint/sequence names from
+  pre-rename tables, and shed non-model backfill defaults). `has-pending-model-changes` clean.
+  `dotnet test` green: Unit 712 / Integration 734 (incl. `ViewCountFlushTests` exercising the
+  re-appended `daily_story_stats`, and all `UserStatRecalculatorTests`) / RazorComponents 646 (one
+  pre-existing flaky `CanalaveTypeaheadTests.Escape_ClosesDropdown_WithoutSelecting` raced once in the
+  full parallel run; passes 7/7 in isolation — unrelated to this change).
+- **Cells:** no Stage numbers change (schema-maintenance op; no feature/layer behavior change).
+- **Docs:** `layer1-data-model.md` "Migrations" — added the re-append rule, the two concrete
+  non-model items, and the pg_dump schema-diff verification step.
+- **Tool:** Claude Code (Opus). **Pointer:** `.claude/plans/please-put-together-a-tidy-hollerith.md`;
+  `canalave-conventions/layer1-data-model.md` "Migrations".

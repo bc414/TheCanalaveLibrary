@@ -64,9 +64,9 @@ public sealed class UserStatRecalculator(ApplicationDbContext context)
             recommendations_written, blog_posts_written, acknowledged_as_beta_reader_count,
             acknowledged_as_inspiration_count, feature_contributions, follower_count,
             authors_followed, favorites_on_stories, views_on_stories, groups_joined,
-            recommendations_received, spotlight_count
+            recommendations_received, recommendation_successes_earned, spotlight_count
         )
-        SELECT u.id, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        SELECT u.id, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         FROM "AspNetUsers" u
         LEFT JOIN user_stats us ON us.user_id = u.id
         WHERE us.user_id IS NULL

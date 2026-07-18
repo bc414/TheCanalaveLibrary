@@ -99,28 +99,51 @@ fragility the lazy-read pattern in `ServerActiveUserContext` exists to avoid.
 
 ## What belongs in RazorComponents (bUnit)
 
-**Scope = Layer 3 (`@code` logic) only.** bUnit tests cover what *cannot be verified by reading
-the Razor file* — C# computation that produces a behavioral outcome. They do not cover Layer 3.5
-(markup structure) or Layer 4 (style), both of which are declarative and human-verified.
+**The deciding criterion — silent-regression + coverage, on semantic output.** A bUnit test earns
+its keep when a *plausible silent regression* in the component's user-observable behavior would
+**not** be caught by any of: the Razor/C# compiler, another automated tier (Unit / Integration), or
+the `check-design-tokens.ps1` CI script — **and** the assertion is on **semantic output** (rendered
+text, presence/absence of an element, one-element-per-item, a computed or interpolated value, an
+EventCallback argument, a service-call id), **not** on style.
 
-**Test these — they involve `@code` computation:**
+> **Why not "can you read it in the `.razor`?"** That older heuristic was a *leaky* proxy and it
+> over-cut. *All* code is readable from source; we test it anyway because reading it doesn't stop it
+> from regressing. A bare-parameter `@if` can silently invert via a refactor, a rename, or a change
+> to a shared child component — and still compile. "Readable now" is not "safe from regression."
+> The criterion is whether *some mechanism* catches the regression, not whether the current source
+> is easy to read.
+
+**Browser-band dependency (read this before cutting anything).** The systemic net for render output
+is meant to be the L4.5-Browser band — but an L4.5 Stage-5 mark achieved *autonomously* (Claude
+driving a browser) is **not** human-verified coverage and must **not** be treated as a reason to
+drop a bUnit assertion. Until a feature's render output is verified by a **human**, its behavior-level
+bUnit tests are frequently the *only* automated guard on that output (the compiler does not see an
+inverted condition or a wrong string). When in doubt, **keep** the behavior assertion.
+
+**Test these — nothing else automatically guards them:**
 - EventCallback invocations with the correct argument values (e.g. `OnRemoveVouch` fires with
   the vouched user's id — the caller must pick the right field from the DTO).
 - Service method calls triggered by interaction (e.g. `FollowAsync(targetUserId)` called on
   click — the component must resolve the right id from its parameters).
-- `disabled` attribute or other state computed in `@code` from a non-trivial condition (e.g.
-  a property derived from multiple parameters, not a direct pass-through).
+- `disabled` or other state computed in `@code` from a non-trivial condition.
+- **Conditional visibility and data-driven output** — an element that appears only when
+  `@if(SomeCondition)`, a `@foreach` rendering one row per item, an interpolated/computed value
+  ("N more", an unread count). These are *user-observable behavior*, and with the browser band not
+  yet human-verified, bUnit is their only automated net. Prefer **one behavior-level test** that
+  renders with realistic params and asserts the meaningful composite, over many one-line asserts.
 
-**Do not test these — they are readable from the Razor file:**
-- `@if (IsEditable)` / `@if (IsFollowing)` blocks where the condition is a bare `[Parameter]`
-  pass-through. The logic is one line; reading it is faster than a test and the test adds no
-  new information.
-- `@foreach` producing one item per input element — that's declarative markup.
-- Presence of static text, placeholder messages, or aria-label values set by string interpolation.
-- Any Tailwind class presence — Layer 4, human sign-off only.
-
-**The deciding question:** does the test require running C# code to know what will happen, or
-can you determine the answer by reading the `.razor` file? If the latter, skip the test.
+**Never test these:**
+- **Any CSS/Tailwind class presence** — e.g. `border-(--color-action-ink)`, `bg-(--color-*)`,
+  `flex-row-reverse`. bUnit does not apply CSS, so a class-string assertion is **not evidence the
+  styling works** — it only checks that a substring appears in the markup. Style is owned by
+  `check-design-tokens.ps1` (token correctness, in CI) and the human visual pass. This is a hard
+  rule: no class-presence assertions, ever.
+- **Redundant restatements** — the inverse half of a `ShowsX` / `NoX` pair on the same bare
+  parameter (keep one); the same computed attribute (`disabled="@Busy"`) asserted three times;
+  a mobile test file that only re-asserts a desktop file's identical computed mappings (Layer-4
+  layout deltas are the human/visual concern, not a second copy of the same `@code` test).
+- **Static-copy change-detectors** — an always-present heading or label with no condition behind
+  it. Its only failure mode is an intentional copy edit, so the test detects *changes*, not *bugs*.
 
 **Note on AngleSharp CSS selector fragility:** bUnit uses AngleSharp, which silently ignores
 compound selectors when the qualifier is a hyphenated class name (`.text-danger`) or an

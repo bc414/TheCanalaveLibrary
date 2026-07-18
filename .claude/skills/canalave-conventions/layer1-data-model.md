@@ -315,10 +315,25 @@ PKs must be non-zero for auto-increment tables.
 **Pre-launch:** "nuke and rebuild" — delete Migrations folder, drop DB, regenerate
 `InitialSchema`. **Post-launch:** incremental migrations only.
 
-Key manual edits EF won't generate:
-- **CHECK constraints:** `migrationBuilder.Sql(...)` in `Up()`, drop in `Down()`.
+**Re-append the non-model DDL after every regeneration.** `ef migrations add InitialSchema`
+emits only what the EF *model* knows; the raw-DDL items below live in no model and are **silently
+dropped** by regeneration. After regenerating, re-append them by hand to the end of `Up()` (and their
+teardown to the start of `Down()`) — copy from the prior `InitialSchema` before deleting it. The
+current set (folded in at the 2026-07-18 migration collapse; originals were migrations
+`R2_ViewCountToDailyStoryStats` and `R4_MvccStorageTuning`):
+- **`daily_story_stats`** — migration-managed ground-truth stat table, deliberately outside the EF
+  model (accumulated, not a rebuildable L8 mart): raw `CREATE TABLE` + `COMMENT ON TABLE`. Ordered
+  before the MVCC block, which tunes it too.
+- **MVCC storage tuning** — `ALTER TABLE … SET (fillfactor / autovacuum_vacuum_scale_factor)` on
+  `user_chapter_interactions`, `daily_story_stats`, `user_story_interactions`.
+
+Verify a collapse preserved everything with a schema diff: `pg_dump --schema-only` before and after
+the regeneration must differ only in `__EFMigrationsHistory` row contents.
+
+Key manual edits EF won't generate (re-append per the rule above if ever introduced):
+- **CHECK constraints:** `migrationBuilder.Sql(...)` in `Up()`, drop in `Down()`. *(none present)*
 - **Triggers:** `CREATE TRIGGER` (PL/pgSQL) in `Up()`, `DROP TRIGGER` in `Down()`.
-  `HasTrigger` Fluent API is SQL Server-specific — do not use.
+  `HasTrigger` Fluent API is SQL Server-specific — do not use. *(none present)*
 - **Migration commands:** always `--context ApplicationDbContext` (the read context owns no migrations).
 
 Cache/data-mart tables (`UserStoryTreeSearchEntries`, `AlsoFavoritedScore`, `AlsoRecommendedScore`)
