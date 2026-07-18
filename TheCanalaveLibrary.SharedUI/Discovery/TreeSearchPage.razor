@@ -44,12 +44,76 @@ else if (_requiresLogin)
 }
 else
 {
-    <TreeSearchDesktop RootStory="RootStory" RootUser="RootUser"
-                       ActiveTab="_activeTab" OnTabChanged="HandleTabChangedAsync"
-                       Result="Result" InteractionStates="_states" CurrentUserId="_currentUserId"
-                       InitialMaxDegrees="_maxDegrees" InitialEdgeTypes="_edgeTypes" InitialSort="_sort"
-                       InitialFilter="_filter"
-                       OnControlsApply="HandleControlsApplyAsync" OnFilterApply="HandleFilterApplyAsync" />
+    @* Former TreeSearchDesktop composite, folded in 2026-07-18 (WU-ResponsiveMerge — single
+       responsive tree, page owns its markup). Layout: root-entity header → tab strip →
+       (Automatic: controls + filter sidebar that stacks above the deck at narrow, results deck)
+       or (Explore / Deep Dive composites). *@
+    <div class="mx-auto flex max-w-6xl flex-col gap-4 px-3 py-4 md:px-4">
+
+        @* ── Root-entity header ────────────────────────────────────────────────────────────── *@
+        <div class="max-w-sm">
+            @if (RootStory is not null)
+            {
+                <StoryCard Story="RootStory" IsOwnStory="@IsOwnRootStory" />
+            }
+            else if (RootUser is not null)
+            {
+                <UserCard User="RootUser" />
+            }
+        </div>
+
+        <TreeSearchTabStrip ActiveTab="_activeTab" OnTabChanged="HandleTabChangedAsync" />
+
+        @if (_activeTab == TreeSearchTab.Explore)
+        {
+            <ExploreTab RootStory="RootStory" RootUser="RootUser" CurrentUserId="_currentUserId" />
+        }
+        else if (_activeTab == TreeSearchTab.DeepDive)
+        {
+            <DeepDiveTab RootStory="RootStory" RootUser="RootUser" CurrentUserId="_currentUserId" />
+        }
+        else
+        {
+            <div class="flex flex-col gap-6 md:flex-row md:items-start">
+                <aside class="flex w-full md:w-72 md:shrink-0 flex-col gap-6">
+                    <div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+                        <h2 class="mb-3 text-sm font-bold text-(--color-text-muted) uppercase tracking-wide">Connections</h2>
+                        <TreeSearchControls InitialMaxDegrees="_maxDegrees" InitialEdgeTypes="_edgeTypes"
+                                            InitialSort="_sort" OnApply="HandleControlsApplyAsync" />
+                    </div>
+                    <div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+                        <h2 class="mb-3 text-sm font-bold text-(--color-text-muted) uppercase tracking-wide">Filters</h2>
+                        <ResultsFilterPanel OnSearch="HandleFilterApplyAsync"
+                                            InitialFilter="_filter"
+                                            AvailableSorts="@(Array.Empty<DefaultSortOrder>())"
+                                            ShowTextSearch="true"
+                                            ShowTagFilter="true"
+                                            ShowInteractionFilters="true" />
+                    </div>
+                </aside>
+
+                <div class="w-full min-w-0 flex-1 flex flex-col gap-4">
+                    @if (Result is not null && Result.ResultCapTruncated)
+                    {
+                        <p class="rounded-md bg-(--color-warning)/15 px-3 py-2 text-sm text-(--color-warning)">
+                            Showing a sample of many connections — try narrowing the filters or lowering degrees.
+                        </p>
+                    }
+                    <StoryDeck Stories="@StoryItems"
+                               UserStoryInteractionStates="_states"
+                               CurrentUserId="_currentUserId"
+                               EmptyMessage="No connected stories found. Try more connection types, more degrees, or fewer filters."
+                               CurrentPage="1" PageSize="@ItemCount" TotalCount="@ItemCount">
+                        <CardOverlay Context="story">
+                            <TreeSearchResultBadge Degree="@DegreeFor(story.StoryId)" Path="@PathFor(story.StoryId)"
+                                                   PathHops="@HopsFor(story.StoryId)" />
+                        </CardOverlay>
+                    </StoryDeck>
+                </div>
+            </div>
+        }
+
+    </div>
 }
 
 @code {
@@ -92,6 +156,16 @@ else
     // pattern as StoryPage / the WU-ComponentSoundness wave.
     private bool _initialized;
     private (int? UserId, int? StoryId) _loadedRoute;
+
+    // ── Presentation helpers (from the former TreeSearchDesktop composite) ────────
+    private bool IsOwnRootStory => _currentUserId is not null && RootStory?.AuthorId == _currentUserId;
+
+    private StoryListingDto[]? StoryItems => Result?.Items.Select(i => i.Story).ToArray();
+    private int ItemCount => Result?.Items.Count ?? 0;
+
+    private int DegreeFor(int storyId) => Result?.Items.FirstOrDefault(i => i.Story.StoryId == storyId)?.Degree ?? 0;
+    private string? PathFor(int storyId) => Result?.Items.FirstOrDefault(i => i.Story.StoryId == storyId)?.Path;
+    private IReadOnlyList<TreeSearchPathHopDto>? HopsFor(int storyId) => Result?.Items.FirstOrDefault(i => i.Story.StoryId == storyId)?.PathHops;
 
     protected override async Task OnInitializedAsync()
     {

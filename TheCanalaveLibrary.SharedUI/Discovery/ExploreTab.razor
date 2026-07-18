@@ -5,7 +5,7 @@
 
 @* Explore — Manual Tree Search's "build your own map" paradigm (Feature 33 / WU40).
    Self-contained coordination composite (CommentSection precedent: owns its reads) — the shell
-   (TreeSearchDesktop/Mobile) passes only the resolved root + viewer id. Two-pane ~50/50: left =
+   (TreeSearchPage) passes only the resolved root + viewer id. Two-pane ~50/50: left =
    the persistent client-curated tree (localStorage, IDs+edges only, rehydrated per load); right =
    a disposable stateless candidate-results pane for the selected node under the active
    (edge, direction) toggles. Full design: layer3.5-structure.md §"Manual Tree Search",
@@ -13,25 +13,12 @@
 
 <div class="flex h-[70vh] min-h-[480px] flex-col rounded-lg border border-(--color-border) bg-(--color-surface-raised)">
 
-    @if (IsMobile)
-    {
-        @* Tree ⇄ Results toggle — the two panes can't sit side-by-side on small viewports. *@
-        <div class="flex gap-1 border-b border-(--color-border) p-2">
-            <button type="button"
-                    class="flex-1 rounded-md px-3 py-1.5 text-sm font-semibold @(_mobileResultsPane ? "text-(--color-text-muted)" : "bg-(--color-mission)/10 text-(--color-text)")"
-                    @onclick="() => _mobileResultsPane = false">Your Map</button>
-            <button type="button"
-                    class="flex-1 rounded-md px-3 py-1.5 text-sm font-semibold @(_mobileResultsPane ? "bg-(--color-mission)/10 text-(--color-text)" : "text-(--color-text-muted)")"
-                    @onclick="() => _mobileResultsPane = true">Connections</button>
-        </div>
-    }
-
-    <div class="flex min-h-0 flex-1">
+    @* Panes sit side-by-side at md+; they stack (map above, connections below) at narrow
+       (WU-ResponsiveMerge — the former mobile Tree/Results toggle was deleted 2026-07-18). *@
+    <div class="flex min-h-0 flex-1 flex-col md:flex-row">
 
         @* ── Left: the curated tree ─────────────────────────────────────────────────────── *@
-        @if (!IsMobile || !_mobileResultsPane)
-        {
-            <div class="flex min-w-0 flex-1 flex-col border-r border-(--color-border) bg-(--color-surface)">
+        <div class="flex min-w-0 min-h-0 flex-1 flex-col border-b md:border-b-0 md:border-r border-(--color-border) bg-(--color-surface)">
                 <div class="flex items-center justify-between px-4 py-2.5">
                     <span class="text-xs font-bold uppercase tracking-wide text-(--color-text-muted)">Your Map</span>
                     <button type="button"
@@ -55,13 +42,10 @@
                 <p class="px-4 py-2 text-[11px] leading-snug text-(--color-text-muted)">
                     Drag to pan · click a node to explore it · dashed nodes haven't been explored yet.
                 </p>
-            </div>
-        }
+        </div>
 
         @* ── Right: stateless candidate results for the selected node ───────────────────── *@
-        @if (!IsMobile || _mobileResultsPane)
-        {
-            <div class="flex min-w-0 flex-1 flex-col">
+        <div class="flex min-w-0 min-h-0 flex-1 flex-col">
 
                 @* Anchor banner — a reminder of which node the results below belong to. *@
                 <div class="flex items-center gap-3 border-b border-(--color-border) px-4 py-3">
@@ -178,8 +162,7 @@
                             () => { _vouchedPage++; return LoadPivotAsync(appendVouched: true); })
                     }
                 </div>
-            </div>
-        }
+        </div>
     </div>
 </div>
 
@@ -187,7 +170,6 @@
     [Parameter] public StoryListingDto? RootStory { get; set; }
     [Parameter] public UserCardDto? RootUser { get; set; }
     [Parameter] public int? CurrentUserId { get; set; }
-    [Parameter] public bool IsMobile { get; set; }
 
     private const int PageSize = 10;
 
@@ -213,7 +195,6 @@
     private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states = new Dictionary<int, UserStoryInteractionStateDto>();
     private bool _loading = true;
     private bool _initialized;
-    private bool _mobileResultsPane;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -271,7 +252,6 @@
     {
         node.Ghost = false; // selecting solidifies the frontier
         _selected = node;
-        _mobileResultsPane = true; // mobile: jump straight to the connections you just asked for
         ResetPages();
         await PersistTreeAsync();
         await LoadPivotAsync();
