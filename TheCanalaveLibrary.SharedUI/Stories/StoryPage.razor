@@ -10,7 +10,6 @@
 @inject IStoryLineageReadService StoryLineageReadService
 @inject IStoryArcReadService StoryArcReadService
 @inject IViewCountWriteService ViewCountWriteService
-@inject IDeviceDetectionService DeviceService
 @inject NavigationManager NavigationManager
 @inject IJSRuntime JS
 @inject IPublicUrlProvider PublicUrlProvider
@@ -39,30 +38,15 @@ else
     <PageTitle>@Story.StoryTitle</PageTitle>
     <SocialMetaTags Title="@OgTitle" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="article"/>
 
-    @if (DeviceService.IsMobile())
-    {
-        <StoryMobile Story="Story"
-                     Chapters="@(Chapters ?? [])"
-                     CurrentUserId="_currentUserId"
-                     IsAuthor="_isAuthor"
-                     UsiState="_usiState"
-                     SeriesMemberships="_seriesMemberships"
-                     LineageLinks="_lineageLinks"
-                     Arcs="_arcs"
-                     ViewerWatermarkUtc="_viewerWatermarkUtc" />
-    }
-    else
-    {
-        <StoryDesktop Story="Story"
-                      Chapters="@(Chapters ?? [])"
-                      CurrentUserId="_currentUserId"
-                      IsAuthor="_isAuthor"
-                      UsiState="_usiState"
-                      SeriesMemberships="_seriesMemberships"
-                      LineageLinks="_lineageLinks"
-                      Arcs="_arcs"
-                      ViewerWatermarkUtc="_viewerWatermarkUtc" />
-    }
+    <StoryDesktop Story="Story"
+                  Chapters="@(Chapters ?? [])"
+                  CurrentUserId="_currentUserId"
+                  IsAuthor="_isAuthor"
+                  UsiState="_usiState"
+                  SeriesMemberships="_seriesMemberships"
+                  LineageLinks="_lineageLinks"
+                  Arcs="_arcs"
+                  ViewerWatermarkUtc="_viewerWatermarkUtc" />
 }
 
 @code {
