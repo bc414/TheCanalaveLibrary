@@ -79,38 +79,7 @@ public class VouchListTests : BunitContext
             "VouchText is rich HTML rendered by RichTextView — the text content must appear");
     }
 
-    [Fact]
-    public void VouchList_WhenVouchTextIsNull_NoRichTextViewDiv()
-    {
-        IReadOnlyList<VouchDisplayDto> vouches =
-        [
-            MakeVouch(1, "Pikachu", null)
-        ];
-
-        IRenderedComponent<VouchList> cut = Render<VouchList>(p => p
-            .Add(c => c.Vouches, vouches));
-
-        // RichTextView wraps its content in a <div style="..."> when HtmlContent is non-empty.
-        cut.FindAll("li div[style]").Should().BeEmpty(
-            "null VouchText must not render the RichTextView container");
-    }
-
     // ── IsEditable controls remove buttons ───────────────────────────────────────
-
-    [Fact]
-    public void VouchList_WhenNotEditable_NoRemoveVouchButtons()
-    {
-        IReadOnlyList<VouchDisplayDto> vouches = [MakeVouch(1, "Nurse Joy", null)];
-
-        IRenderedComponent<VouchList> cut = Render<VouchList>(p => p
-            .Add(c => c.Vouches, vouches)
-            .Add(c => c.IsEditable, false));
-
-        // The remove button's aria-label contains "Remove vouch for". Check the raw markup
-        // to avoid AngleSharp CSS compound-selector bugs with attribute-value filters.
-        cut.Markup.Should().NotContain("Remove vouch for",
-            "remove controls must not appear when IsEditable is false");
-    }
 
     [Fact]
     public void VouchList_WhenEditable_RendersRemoveButtonPerRow()

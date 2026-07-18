@@ -70,15 +70,6 @@ public class RecommendationCardTests : BunitContext
             "spotlighted recommendation must display the ribbon");
     }
 
-    [Fact]
-    public void RecommendationCard_NotHighlighted_NoRibbon()
-    {
-        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
-            .Add(c => c.Rec, PlainRec()));
-
-        cut.Markup.Should().NotContain("Author's Pick");
-    }
-
     // ── Hidden Gem badge ──────────────────────────────────────────────────────────
 
     [Fact]
@@ -91,27 +82,7 @@ public class RecommendationCardTests : BunitContext
             "Hidden Gem badge must appear when IsHiddenGem is true");
     }
 
-    [Fact]
-    public void RecommendationCard_NotHiddenGem_NoBadge()
-    {
-        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
-            .Add(c => c.Rec, PlainRec()));
-
-        cut.Markup.Should().NotContain("Hidden Gem");
-    }
-
     // ── Like button ───────────────────────────────────────────────────────────────
-
-    [Fact]
-    public void RecommendationCard_OnLikeWired_ShowsLikeButton()
-    {
-        int? invokedId = null;
-        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
-            .Add(c => c.Rec, PlainRec())
-            .Add(c => c.OnLike, EventCallback.Factory.Create<int>(this, id => invokedId = id)));
-
-        cut.Find("[aria-label*='Like']").Should().NotBeNull("like button must appear when OnLike is wired");
-    }
 
     [Fact]
     public void RecommendationCard_OnLikeWired_ClickRaisesCallbackWithId()
@@ -149,18 +120,6 @@ public class RecommendationCardTests : BunitContext
 
         cut.Find("[aria-label='Edit recommendation']").Should().NotBeNull();
         cut.Find("[aria-label='Delete recommendation']").Should().NotBeNull();
-    }
-
-    [Fact]
-    public void RecommendationCard_NotOwnRecommendation_NoEditOrDelete()
-    {
-        IRenderedComponent<RecommendationCard> cut = Render<RecommendationCard>(p => p
-            .Add(c => c.Rec, PlainRec(isOwn: false))
-            .Add(c => c.OnEdit, EventCallback.Factory.Create<int>(this, _ => { }))
-            .Add(c => c.OnDelete, EventCallback.Factory.Create<int>(this, _ => { })));
-
-        cut.FindAll("[aria-label='Edit recommendation']").Count.Should().Be(0);
-        cut.FindAll("[aria-label='Delete recommendation']").Count.Should().Be(0);
     }
 
     // ── Like count + date ─────────────────────────────────────────────────────────

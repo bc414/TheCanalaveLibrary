@@ -331,19 +331,6 @@ public class CommentSectionTests : BunitContext
             "the new-comment composer must not render for anonymous viewers");
     }
 
-    [Fact]
-    public void CommentSection_AuthenticatedViewer_ShowsComposeForm()
-    {
-        _fakeService.SetGetResult(new CommentPageDto([], 0));
-
-        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
-            .Add(c => c.ChapterId, 1)
-            .Add(c => c.CurrentUserId, 1));
-
-        cut.Markup.Should().Contain("Post Comment",
-            "the new-comment composer must render for authenticated viewers");
-    }
-
     // ── F3 mutation-sanity — @key forces a fresh CommentItem on page change ──────
     //
     // Root cause: CommentItem holds `private bool _isRevealed` as ephemeral private state.

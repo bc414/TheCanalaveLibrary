@@ -60,19 +60,6 @@ public class TagDirectoryTests : BunitContext
         new() { TagType = TagTypeEnum.CrossoverFandom, Nodes = [] },
     ];
 
-    // ── Desktop — section headings ────────────────────────────────────────────
-
-    [Fact]
-    public void Desktop_RendersCharactersAndGenreHeadings()
-    {
-        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
-            .Add(c => c.Directory, MakeDirectory()));
-
-        string markup = cut.Markup;
-        markup.Should().Contain("Characters", "Character section heading must be present");
-        markup.Should().Contain("Genres", "Genre section heading must be present");
-    }
-
     // ── Desktop — parent chip + nested child ─────────────────────────────────
 
     [Fact]
@@ -141,18 +128,6 @@ public class TagDirectoryTests : BunitContext
         // "+ New Tag" button should be present.
         cut.FindAll("button").Any(b => b.TextContent.Contains("New Tag"))
             .Should().BeTrue("Moderator sees the New Tag button");
-    }
-
-    [Fact]
-    public void Desktop_Admin_RendersModControls()
-    {
-        _auth.SetAuthorized("admin-user").SetRoles("Admin");
-
-        IRenderedComponent<TagDirectoryDesktop> cut = Render<TagDirectoryDesktop>(p => p
-            .Add(c => c.Directory, MakeDirectory()));
-
-        cut.FindAll("button").Any(b => b.TextContent.Contains("New Tag"))
-            .Should().BeTrue("Admin sees the New Tag button");
     }
 
     // ── Mobile — basic render ─────────────────────────────────────────────────

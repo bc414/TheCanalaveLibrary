@@ -152,17 +152,6 @@ public class TreeSearchDesktopTests : BunitContext
         cut.Markup.Should().Contain("Showing a sample of many connections");
     }
 
-    [Fact]
-    public void NotTruncated_HidesFloodingIndicator()
-    {
-        IRenderedComponent<TreeSearchDesktop> cut = Render<TreeSearchDesktop>(p => p
-            .Add(c => c.RootStory, MakeStory(1))
-            .Add(c => c.ActiveTab, TreeSearchTab.Automatic)
-            .Add(c => c.Result, MakeResult((10, 2, null))));
-
-        cut.Markup.Should().NotContain("Showing a sample of many connections");
-    }
-
     // ── Callbacks ────────────────────────────────────────────────────────────────────
 
     [Fact]

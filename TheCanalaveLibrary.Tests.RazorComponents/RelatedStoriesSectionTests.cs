@@ -105,20 +105,6 @@ public class RelatedStoriesSectionTests : BunitContext
             "anonymous viewers get no interaction filter — exclusions would be inert");
     }
 
-    [Fact]
-    public void Authenticated_InteractionFilterRendered()
-    {
-        _coOccurrence.FavoritedResult = [new RelatedStoryScoreDto { RelatedStoryId = 10, Score = 1 }];
-        _stories.StoriesById = new Dictionary<int, StoryListingDto> { [10] = MakeStory(10, "Story") };
-
-        IRenderedComponent<RelatedStoriesSection> cut = Render<RelatedStoriesSection>(p => p
-            .Add(c => c.StoryId, 1)
-            .Add(c => c.CurrentUserId, 42));
-
-        cut.FindAll("input[type='checkbox']").Should().NotBeEmpty(
-            "authenticated viewers get the shared UserStoryInteractionFilter");
-    }
-
     // ── Toggle re-queries ─────────────────────────────────────────────────────────
 
     [Fact]

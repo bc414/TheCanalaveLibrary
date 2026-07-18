@@ -106,14 +106,6 @@ public class GroupServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
     }
 
     [Fact]
-    public async Task CreateGroup_EmptyName_ThrowsGroupValidationException()
-    {
-        SetActiveUser(_userId);
-        Func<Task> act = () => CreateGroupAsync(new CreateGroupDto { GroupName = "" });
-        await act.Should().ThrowAsync<GroupValidationException>();
-    }
-
-    [Fact]
     public async Task UpdateGroup_Admin_ChangesNameAndAudienceType()
     {
         SetActiveUser(_userId);

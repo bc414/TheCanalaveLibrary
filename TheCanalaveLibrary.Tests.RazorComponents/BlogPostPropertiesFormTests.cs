@@ -33,42 +33,6 @@ public class BlogPostPropertiesFormTests : BunitContext
     };
 
     [Fact]
-    public void Form_Renders_TitleInput()
-    {
-        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
-            p => p.Add(f => f.ViewModel, MakeValidViewModel()));
-
-        cut.Find("input[placeholder='Post title']").Should().NotBeNull();
-    }
-
-    [Fact]
-    public void Form_Renders_RatingSelect()
-    {
-        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
-            p => p.Add(f => f.ViewModel, MakeValidViewModel()));
-
-        cut.FindAll("select").Should().NotBeEmpty();
-    }
-
-    [Fact]
-    public void Form_Renders_HasSpoilersCheckbox()
-    {
-        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
-            p => p.Add(f => f.ViewModel, MakeValidViewModel()));
-
-        cut.Find("#has-spoilers").Should().NotBeNull();
-    }
-
-    [Fact]
-    public void Form_Renders_PublishToggle()
-    {
-        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
-            p => p.Add(f => f.ViewModel, MakeValidViewModel()));
-
-        cut.Find("#is-published").Should().NotBeNull();
-    }
-
-    [Fact]
     public void Form_Renders_SubmitButton_WithCustomLabel()
     {
         IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
@@ -88,17 +52,6 @@ public class BlogPostPropertiesFormTests : BunitContext
             p => p.Add(f => f.ViewModel, vm));
 
         cut.Find("button[type='submit']").HasAttribute("disabled").Should().BeTrue();
-    }
-
-    [Fact]
-    public void Form_AuthorStoriesNull_HidesStoryPicker()
-    {
-        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(
-            p => p.Add(f => f.ViewModel, MakeValidViewModel())
-                  .Add(f => f.AuthorStories, null));
-
-        // The story-picker's sentinel option "— none —" should not be present.
-        cut.Markup.Should().NotContain("— none —");
     }
 
     [Fact]

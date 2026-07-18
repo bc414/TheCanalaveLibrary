@@ -27,15 +27,6 @@ public class MessageComposerTests : BunitContext
     // ── SendLabel ─────────────────────────────────────────────────────────────────
 
     [Fact]
-    public void MessageComposer_DefaultSendLabel_IsSend()
-    {
-        IRenderedComponent<MessageComposer> cut = Render<MessageComposer>();
-
-        cut.Markup.Should().Contain("Send",
-            "the primary button must display the default SendLabel");
-    }
-
-    [Fact]
     public void MessageComposer_CustomSendLabel_AppearsOnPrimaryButton()
     {
         IRenderedComponent<MessageComposer> cut = Render<MessageComposer>(p => p
@@ -55,16 +46,6 @@ public class MessageComposerTests : BunitContext
 
         cut.Markup.Should().NotContain("Cancel",
             "the Cancel button must not render when OnCancel is not wired");
-    }
-
-    [Fact]
-    public void MessageComposer_WhenOnCancelWired_CancelButtonPresent()
-    {
-        IRenderedComponent<MessageComposer> cut = Render<MessageComposer>(p => p
-            .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => { })));
-
-        cut.Markup.Should().Contain("Cancel",
-            "the Cancel button must render when OnCancel is wired");
     }
 
     // ── OnSend callback ───────────────────────────────────────────────────────────
@@ -124,15 +105,4 @@ public class MessageComposerTests : BunitContext
             "the Cancel button must also be disabled when Busy is true");
     }
 
-    [Fact]
-    public void MessageComposer_WhenNotBusy_SendButtonEnabled()
-    {
-        IRenderedComponent<MessageComposer> cut = Render<MessageComposer>(p => p
-            .Add(c => c.Busy, false)
-            .Add(c => c.SendLabel, "Send"));
-
-        IElement sendBtn = cut.Find("button[aria-label='Send']");
-        sendBtn.HasAttribute("disabled").Should().BeFalse(
-            "the Send button must be enabled when Busy is false");
-    }
 }

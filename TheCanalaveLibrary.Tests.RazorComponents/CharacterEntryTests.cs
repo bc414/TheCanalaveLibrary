@@ -49,30 +49,6 @@ public class CharacterEntryTests : BunitContext
     }
 
     [Fact]
-    public void CharacterEntry_Renders_PrioritySelect()
-    {
-        IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p =>
-        {
-            p.Add(c => c.Chip, MakeChip());
-            p.Add(c => c.Dto, MakeDto());
-        });
-
-        cut.FindAll("select").Should().NotBeEmpty("priority dropdown must be present");
-    }
-
-    [Fact]
-    public void CharacterEntry_OcToggle_NotShown_WhenAllowOcDetailsFalse()
-    {
-        IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p =>
-        {
-            p.Add(c => c.Chip, MakeChip(allowOc: false));
-            p.Add(c => c.Dto, MakeDto());
-        });
-
-        cut.FindAll("input[type='checkbox']").Should().BeEmpty("OC checkbox must be hidden when AllowOCDetails=false");
-    }
-
-    [Fact]
     public void CharacterEntry_OcToggle_Shown_WhenAllowOcDetailsTrue()
     {
         IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p =>
@@ -82,19 +58,6 @@ public class CharacterEntryTests : BunitContext
         });
 
         cut.FindAll("input[type='checkbox']").Should().NotBeEmpty("OC checkbox must be shown when AllowOCDetails=true");
-    }
-
-    [Fact]
-    public void CharacterEntry_OcFields_NotShown_WhenIsOcFalse()
-    {
-        IRenderedComponent<CharacterEntry> cut = Render<CharacterEntry>(p =>
-        {
-            p.Add(c => c.Chip, MakeChip(allowOc: true));
-            p.Add(c => c.Dto, MakeDto(isOc: false));
-        });
-
-        // OC name placeholder should not appear
-        cut.Markup.Should().NotContain("OC name", "OC text inputs must be hidden when IsOc=false");
     }
 
     [Fact]

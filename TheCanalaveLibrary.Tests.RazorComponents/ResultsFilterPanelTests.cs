@@ -45,15 +45,6 @@ public class ResultsFilterPanelTests : BunitContext
     }
 
     [Fact]
-    public void ShowTextSearch_True_RendersSearchInput()
-    {
-        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
-            .Add(c => c.ShowTextSearch, true));
-
-        cut.FindAll("input[type='search']").Should().HaveCount(1);
-    }
-
-    [Fact]
     public void ShowTagFilter_False_NoTagSelectorPresent()
     {
         IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
@@ -72,16 +63,6 @@ public class ResultsFilterPanelTests : BunitContext
 
         cut.FindAll("input[type='checkbox']").Should().BeEmpty(
             "ShowInteractionFilters=false must suppress the UserStoryInteractionFilter axis");
-    }
-
-    [Fact]
-    public void ShowInteractionFilters_True_RendersCheckboxes()
-    {
-        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
-            .Add(c => c.ShowInteractionFilters, true));
-
-        cut.FindAll("input[type='checkbox']").Count.Should().BeGreaterThan(0,
-            "ShowInteractionFilters=true must render at least one checkbox");
     }
 
     // ── Apply emits correct DTO ──────────────────────────────────────────────────────

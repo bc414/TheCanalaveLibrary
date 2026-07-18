@@ -14,27 +14,6 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// </summary>
 public class RecommendationHelpfulPromptTests : BunitContext
 {
-    // ── Renders when not dismissed ────────────────────────────────────────────────
-
-    [Fact]
-    public void RecommendationHelpfulPrompt_OnRender_ShowsPromptText()
-    {
-        IRenderedComponent<RecommendationHelpfulPrompt> cut = Render<RecommendationHelpfulPrompt>(p => p
-            .Add(c => c.RecommendationId, 1));
-
-        cut.Markup.Should().Contain("helpful", "the prompt must mention the concept");
-    }
-
-    [Fact]
-    public void RecommendationHelpfulPrompt_OnRender_ShowsYesAndNoButtons()
-    {
-        IRenderedComponent<RecommendationHelpfulPrompt> cut = Render<RecommendationHelpfulPrompt>(p => p
-            .Add(c => c.RecommendationId, 1));
-
-        cut.Find("[aria-label*='Yes']").Should().NotBeNull();
-        cut.Find("[aria-label*='No']").Should().NotBeNull();
-    }
-
     // ── "Yes" fires OnRespond(true) and hides prompt ──────────────────────────────
 
     [Fact]
@@ -74,17 +53,6 @@ public class RecommendationHelpfulPromptTests : BunitContext
         await cut.Find("[aria-label*='No']").ClickAsync(new());
 
         responded.Should().Be(false, "clicking No thanks must raise OnRespond with false");
-    }
-
-    [Fact]
-    public async Task RecommendationHelpfulPrompt_NoClick_HidesPrompt()
-    {
-        IRenderedComponent<RecommendationHelpfulPrompt> cut = Render<RecommendationHelpfulPrompt>(p => p
-            .Add(c => c.RecommendationId, 5));
-
-        await cut.Find("[aria-label*='No']").ClickAsync(new());
-
-        cut.Markup.Should().NotContain("helpful");
     }
 
     // ── Dismiss ───────────────────────────────────────────────────────────────────

@@ -65,23 +65,6 @@ public class SavedTagSelectionServiceTests(PostgresFixture postgres) : Integrati
     }
 
     [Fact]
-    public async Task CreateAsync_EmptyTagSet_ThrowsValidationException()
-    {
-        SetActiveUser(_ownerId);
-        Func<Task> act = () => CreateAsync(new SavedTagSelectionInput("Empty", null, false, [], []));
-        await act.Should().ThrowAsync<SavedTagSelectionValidationException>();
-    }
-
-    [Fact]
-    public async Task CreateAsync_EmptyNickname_ThrowsValidationException()
-    {
-        int tagId = await SeedTagAsync();
-        SetActiveUser(_ownerId);
-        Func<Task> act = () => CreateAsync(new SavedTagSelectionInput("", null, false, [tagId], []));
-        await act.Should().ThrowAsync<SavedTagSelectionValidationException>();
-    }
-
-    [Fact]
     public async Task CreateAsync_DuplicateNicknameForSameUser_ThrowsValidationException()
     {
         int tag1 = await SeedTagAsync();

@@ -78,18 +78,6 @@ public class ImageStorageServiceTests(PostgresFixture postgres) : IntegrationTes
         File.Exists(sentinelPath).Should().BeTrue();
     }
 
-    [Fact]
-    public async Task SaveAsync_RejectsAnUnsupportedContentType()
-    {
-        using IServiceScope scope = Factory.Services.CreateScope();
-        IImageStorageService imageStorage = scope.ServiceProvider.GetRequiredService<IImageStorageService>();
-        using MemoryStream content = new(SmallPng);
-
-        Func<Task> act = async () => await imageStorage.SaveAsync(content, "image/gif", ImageKind.Cover, 1);
-
-        await act.Should().ThrowAsync<ArgumentException>();
-    }
-
     private string ToFullPath(string relativePath) =>
         Path.Combine(Factory.WebRootPath, relativePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
 

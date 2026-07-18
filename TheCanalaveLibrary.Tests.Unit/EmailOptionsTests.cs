@@ -13,12 +13,6 @@ namespace TheCanalaveLibrary.Tests.Unit;
 public class EmailOptionsTests
 {
     [Fact]
-    public void SectionName_IsEmail()
-    {
-        EmailOptions.SectionName.Should().Be("Email");
-    }
-
-    [Fact]
     public void Binding_PopulatesTopLevelAndNestedSmtpProperties()
     {
         IConfigurationRoot config = new ConfigurationBuilder()

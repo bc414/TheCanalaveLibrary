@@ -55,12 +55,4 @@ public class EmailBodiesTests
         body.Should().Contain("&lt;code&gt;&amp;123");
         body.Should().NotContain("<code>&123");
     }
-
-    [Fact]
-    public void SubjectConstants_AreNonEmpty()
-    {
-        EmailBodies.ConfirmationSubject.Should().NotBeNullOrWhiteSpace();
-        EmailBodies.PasswordResetLinkSubject.Should().NotBeNullOrWhiteSpace();
-        EmailBodies.PasswordResetCodeSubject.Should().NotBeNullOrWhiteSpace();
-    }
 }

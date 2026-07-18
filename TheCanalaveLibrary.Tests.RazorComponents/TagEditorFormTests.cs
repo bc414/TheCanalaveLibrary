@@ -60,18 +60,6 @@ public class TagEditorFormTests : BunitContext
             .HaveCount(5, "there are 5 TagTypeEnum values");
     }
 
-    [Fact]
-    public void CreateMode_AllowOCDetailsHidden_WhenDefaultTypeIsCharacter()
-    {
-        // Default type is Character, so the checkbox should be visible.
-        IRenderedComponent<TagEditorForm> cut = Render<TagEditorForm>(p => p
-            .Add(c => c.Directory, MakeDirectory())
-            .Add(c => c.EditingTag, null));
-
-        // Default type is Character — the AllowOCDetails checkbox should be shown.
-        cut.FindAll("input#tag-allow-oc").Should().HaveCount(1);
-    }
-
     // ── AllowOCDetails visibility by type ────────────────────────────────────
 
     [Theory]

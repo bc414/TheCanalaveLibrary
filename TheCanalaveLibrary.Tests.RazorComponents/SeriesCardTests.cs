@@ -76,25 +76,6 @@ public class SeriesCardTests : BunitContext
     }
 
     [Fact]
-    public void SeriesCard_NullDescription_DoesNotRenderDescriptionElement()
-    {
-        IRenderedComponent<SeriesCard> cut = Render<SeriesCard>(p => p
-            .Add(c => c.Series, MakeSeries(description: null)));
-
-        cut.FindAll("p").Should().BeEmpty("no description paragraph when Description is null");
-    }
-
-    [Fact]
-    public void SeriesCard_NoEditHref_RendersOnlyOneLink()
-    {
-        IRenderedComponent<SeriesCard> cut = Render<SeriesCard>(p => p
-            .Add(c => c.Series, MakeSeries()));
-
-        // Only the title anchor — no Edit link (public/view-only context, e.g. profile Series tab).
-        cut.FindAll("a").Should().HaveCount(1);
-    }
-
-    [Fact]
     public void SeriesCard_WithEditHref_RendersEditLink()
     {
         IRenderedComponent<SeriesCard> cut = Render<SeriesCard>(p => p

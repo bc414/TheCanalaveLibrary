@@ -26,29 +26,6 @@ public class ContentSurfaceTests : BunitContext
             }
         });
 
-    [Fact]
-    public void ContentSurface_Default_UsesPaperGroundAndSideRailFrame()
-    {
-        var cut = RenderSurface();
-
-        string cls = cut.Find("div").GetAttribute("class") ?? string.Empty;
-        cls.Should().Contain("bg-(--color-paper)", "the material ground is the paper token");
-        cls.Should().Contain("border-x-4", "side rails is the ratified frame (gate, 2026-07-10)");
-        cut.Find("div").GetAttribute("style").Should().BeNullOrEmpty(
-            "no reader override → the tokens own the ground (SiteDefault rides the site theme)");
-    }
-
-    [Theory]
-    [InlineData(ContentSurfaceVariant.Reading, "py-8")]
-    [InlineData(ContentSurfaceVariant.Inline, "py-3")]
-    [InlineData(ContentSurfaceVariant.Input, "focus-within:ring-2")]
-    public void ContentSurface_Variants_CarryTheirDistinctTreatment(ContentSurfaceVariant variant, string expected)
-    {
-        var cut = RenderSurface(variant);
-
-        (cut.Find("div").GetAttribute("class") ?? string.Empty).Should().Contain(expected);
-    }
-
     [Theory]
     [InlineData(ReadingBackgroundEnum.Light, "#FBFAF6")]
     [InlineData(ReadingBackgroundEnum.Sepia, "#F4E9D4")]

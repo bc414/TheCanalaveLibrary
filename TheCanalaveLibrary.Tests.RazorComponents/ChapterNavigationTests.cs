@@ -212,19 +212,6 @@ public class ChapterNavigationTests : BunitContext
             "with only one version there is no version picker to render");
     }
 
-    [Fact]
-    public void ChapterNavigation_NoVersions_VersionPickerNotRendered()
-    {
-        IRenderedComponent<ChapterNavigation> cut = Render<ChapterNavigation>(p => p
-            .Add(c => c.StoryId,              42)
-            .Add(c => c.CurrentChapterNumber, 1)
-            .Add(c => c.Toc,      MakeToc())
-            .Add(c => c.Versions, Array.Empty<ChapterVersionDto>()));
-
-        cut.FindAll("details").Should().HaveCount(1,
-            "with no versions there is no version picker to render");
-    }
-
     // ── Version picker — present and correct when >1 version ─────────────────────
 
     [Fact]

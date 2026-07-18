@@ -99,27 +99,4 @@ public class StoryExternalLinksRowTests : BunitContext
             "settled placement: after the chapter list — a meaningful feature, not a mission-level one");
         recsIndex.Should().BeGreaterThan(linksIndex, "and before the recommendations section");
     }
-
-    [Fact]
-    public void OnStoryDesktop_NoLinks_RowAbsent()
-    {
-        var story = new StoryDetailsDTO
-        {
-            StoryId = 6,
-            StoryTitle = "Linkless",
-            AuthorId = 1,
-            AuthorName = "A",
-            WordCount = 100,
-            PublishDate = DateTime.UtcNow,
-            LastUpdatedDate = DateTime.UtcNow,
-            Status = StoryStatusEnum.InProgress,
-            Rating = Rating.E
-        };
-
-        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
-            .Add(c => c.Story, story)
-            .Add(c => c.Chapters, (IReadOnlyList<ChapterListEntryDto>)[]));
-
-        cut.Markup.Should().NotContain("Also posted on:");
-    }
 }

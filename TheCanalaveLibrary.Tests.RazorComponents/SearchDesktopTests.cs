@@ -90,18 +90,6 @@ public class SearchDesktopTests : BunitContext
     // ── Sorted mode ──────────────────────────────────────────────────────────────
 
     [Fact]
-    public void SortedMode_DoesNotRenderGiveMeMoreButton()
-    {
-        IRenderedComponent<SearchDesktop> cut = RenderDesktop(isRandomMode: false,
-            items: [MakeStory(1)], totalCount: 50,
-            filter: new StoryFilterDto { Sort = DefaultSortOrder.DatePublished, Page = 1, PageSize = 20 });
-
-        cut.FindAll("button")
-            .Select(b => b.TextContent.Trim())
-            .Should().NotContain("Give me more", "sorted mode uses pagination instead");
-    }
-
-    [Fact]
     public void SortedMode_RendersPaginationControls_WhenMultiplePages()
     {
         IRenderedComponent<SearchDesktop> cut = RenderDesktop(isRandomMode: false,
@@ -113,17 +101,6 @@ public class SearchDesktopTests : BunitContext
         // PaginationControls does not use a <nav> element; check for its "Previous page" button.
         cut.FindAll("button[aria-label='Previous page']").Should().HaveCount(1,
             "PaginationControls renders a Prev button when there are multiple pages in sorted mode");
-    }
-
-    // ── ResultsFilterPanel ───────────────────────────────────────────────────────
-
-    [Fact]
-    public void Desktop_RendersResultsFilterPanel()
-    {
-        IRenderedComponent<SearchDesktop> cut = RenderDesktop();
-
-        cut.FindComponents<ResultsFilterPanel>().Should().HaveCount(1,
-            "the desktop layout includes a sidebar filter panel");
     }
 
     // ── StoryDeck ────────────────────────────────────────────────────────────────
@@ -157,22 +134,5 @@ public class SearchDesktopTests : BunitContext
             .Click();
 
         fired.Should().BeTrue("clicking 'Give me more' fires OnLoadMore");
-    }
-
-    // Mutation sanity: switching IsRandomMode changes visible controls.
-    [Fact]
-    public void MutationSanity_SwitchToSortedMode_HidesGiveMeMoreButton()
-    {
-        IRenderedComponent<SearchDesktop> cut = RenderDesktop(isRandomMode: true);
-        cut.FindAll("button").Select(b => b.TextContent.Trim())
-            .Should().Contain("Give me more");
-
-        cut.Render(p => p
-            .Add(c => c.IsRandomMode, false)
-            .Add(c => c.TotalCount, 1)
-            .Add(c => c.Filter, new StoryFilterDto { Sort = DefaultSortOrder.DatePublished, Page = 1, PageSize = 20 }));
-
-        cut.FindAll("button").Select(b => b.TextContent.Trim())
-            .Should().NotContain("Give me more", "sorted mode hides the give-me-more button");
     }
 }

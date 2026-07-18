@@ -39,14 +39,6 @@ public class TagFilterTests : BunitContext
     }
 
     [Fact]
-    public void Anonymous_HidesLoadAndSaveButtons()
-    {
-        IRenderedComponent<TagFilter> cut = Render<TagFilter>();
-        cut.Markup.Should().NotContain("Load saved");
-        cut.Markup.Should().NotContain("Save current");
-    }
-
-    [Fact]
     public void Authorized_ShowsLoadAndSaveButtons()
     {
         _auth.SetAuthorized("user");

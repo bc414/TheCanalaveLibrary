@@ -42,16 +42,6 @@ public class StoryTitlePickerTests : BunitContext
         cut.Find("input").GetAttribute("placeholder").Should().Be("Type to search for a story...");
     }
 
-    [Fact]
-    public void StoryTitlePicker_RendersWithoutThrowing_WhenExcludeStoryIdSet()
-    {
-        Action act = () => Render<StoryTitlePicker>(p => p
-            .Add(c => c.ExcludeStoryId, 5)
-            .Add(c => c.OnStorySelected, (StoryTitleSearchDto _) => { }));
-
-        act.Should().NotThrow();
-    }
-
     // A minimal fake IStoryReadService — the picker only calls SearchStoriesByTitleAsync.
     private sealed class FakeStorySearchService : IStoryReadService
     {

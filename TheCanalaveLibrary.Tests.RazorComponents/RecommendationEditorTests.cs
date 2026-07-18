@@ -65,17 +65,6 @@ public class RecommendationEditorTests : BunitContext
     }
 
     [Fact]
-    public void RecommendationEditor_OnCancelWired_ShowsCancelButton()
-    {
-        IRenderedComponent<RecommendationEditor> cut = Render<RecommendationEditor>(p => p
-            .Add(c => c.SaveLabel, "Save Changes")
-            .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => { })));
-
-        cut.Find("[aria-label='Cancel']").Should().NotBeNull(
-            "Cancel button must appear when OnCancel is wired");
-    }
-
-    [Fact]
     public async Task RecommendationEditor_CancelClick_RaisesOnCancel()
     {
         bool cancelled = false;
@@ -100,16 +89,5 @@ public class RecommendationEditorTests : BunitContext
 
         cut.Find("[aria-label='Cancel']").HasAttribute("disabled").Should().BeTrue(
             "Cancel must be disabled when Busy is true");
-    }
-
-    // ── Char meter ────────────────────────────────────────────────────────────────
-
-    [Fact]
-    public void RecommendationEditor_OnRender_ShowsMinimumCharacterHint()
-    {
-        IRenderedComponent<RecommendationEditor> cut = Render<RecommendationEditor>(p => p
-            .Add(c => c.SaveLabel, "Submit Recommendation"));
-
-        cut.Markup.Should().Contain("500", "the 500-char minimum must be visible in the meter");
     }
 }

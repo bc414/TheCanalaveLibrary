@@ -62,42 +62,6 @@ public class ConversationListItemTests : BunitContext
             "an archived conversation must show the Archived indicator");
     }
 
-    [Fact]
-    public void ConversationListItem_IsArchivedFalse_NoArchivedLabel()
-    {
-        IRenderedComponent<ConversationListItem> cut = Render<ConversationListItem>(p => p
-            .Add(c => c.Conversation, MakeConversation(isArchived: false)));
-
-        cut.Markup.Should().NotContain("Archived",
-            "a non-archived conversation must not show the Archived indicator");
-    }
-
-    // ── IsSelected highlight ──────────────────────────────────────────────────────
-
-    [Fact]
-    public void ConversationListItem_WhenSelected_HasPrimaryBorderClass()
-    {
-        IRenderedComponent<ConversationListItem> cut = Render<ConversationListItem>(p => p
-            .Add(c => c.Conversation, MakeConversation())
-            .Add(c => c.IsSelected, true));
-
-        // Selected items use border-(--color-action-ink) — Tailwind v4 CSS-variable shorthand
-        // (the v3 bracket form compiled to invalid CSS; see layer4-style.md).
-        cut.Markup.Should().Contain("border-(--color-action-ink)",
-            "the selected item must have the primary-coloured border");
-    }
-
-    [Fact]
-    public void ConversationListItem_WhenNotSelected_NoPrimaryBorderClass()
-    {
-        IRenderedComponent<ConversationListItem> cut = Render<ConversationListItem>(p => p
-            .Add(c => c.Conversation, MakeConversation())
-            .Add(c => c.IsSelected, false));
-
-        cut.Markup.Should().NotContain("border-(--color-action-ink)",
-            "an unselected item must not use the primary border class");
-    }
-
     // ── Link target ───────────────────────────────────────────────────────────────
 
     [Fact]

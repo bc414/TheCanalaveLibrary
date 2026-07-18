@@ -117,19 +117,6 @@ public class StoryCardTests : BunitContext
             "read-only context: no OnRemove wired, so no remove button inside TagChip");
     }
 
-    [Fact]
-    public void Tags_WhenEmpty_NoTagNames()
-    {
-        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
-            .Add(c => c.Story, MakeStory(tags: [])));
-
-        // When the tag list is empty the @if block suppresses the tag container entirely.
-        // We verify by seeding known names and confirming none appear when tags is [].
-        // (Can't use span.rounded-full here — status/rating badges use the same class.)
-        cut.Markup.Should().NotContain("Tag A").And.NotContain("Tag B",
-            "no tag names should appear in markup when the tag list is empty");
-    }
-
     // ── Short description ────────────────────────────────────────────────────────
 
     [Fact]
@@ -140,16 +127,6 @@ public class StoryCardTests : BunitContext
 
         var para = cut.Find("p[title='A gripping tale of Sinnoh.']");
         para.TextContent.Trim().Should().Be("A gripping tale of Sinnoh.");
-    }
-
-    [Fact]
-    public void ShortDescription_WhenNull_NotRendered()
-    {
-        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
-            .Add(c => c.Story, MakeStory(shortDescription: null)));
-
-        // No <p> with a title attribute should appear (there's no other <p> in the card).
-        cut.FindAll("p[title]").Should().BeEmpty("no synopsis paragraph when ShortDescription is null");
     }
 
     // ── WordCountDisplay ─────────────────────────────────────────────────────────
@@ -320,18 +297,5 @@ public class StoryCardTests : BunitContext
 
         cut.Markup.Should().Contain("Report",
             "Report item should appear when OnReport has a delegate");
-    }
-
-    [Fact]
-    public void Caret_ViewStory_AlwaysPresent_EvenWithNoCallbacks()
-    {
-        IRenderedComponent<StoryCard> cut = Render<StoryCard>(p => p
-            .Add(c => c.Story, MakeStory(storyId: 8)));
-
-        cut.Find("button[aria-label='Story options']").Click();
-
-        // "View Story" link must always be in the menu.
-        cut.Find("a[href='/story/8']").Should().NotBeNull(
-            "View Story link is always present in the caret dropdown");
     }
 }

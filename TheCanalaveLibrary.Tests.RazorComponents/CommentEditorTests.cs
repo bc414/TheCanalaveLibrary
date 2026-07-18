@@ -38,15 +38,6 @@ public class CommentEditorTests : BunitContext
             "the primary button must display the SaveLabel text");
     }
 
-    [Fact]
-    public void CommentEditor_DefaultSaveLabel_IsSave()
-    {
-        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>();
-
-        // Default SaveLabel is "Save" — primary button must carry it
-        cut.Markup.Should().Contain("Save");
-    }
-
     // ── Cancel button visibility (.HasDelegate idiom) ─────────────────────────────
 
     [Fact]
@@ -59,17 +50,6 @@ public class CommentEditorTests : BunitContext
 
         cut.Markup.Should().NotContain("Cancel",
             "the Cancel button must not render when OnCancel is not wired");
-    }
-
-    [Fact]
-    public void CommentEditor_WhenOnCancelWired_CancelButtonPresent()
-    {
-        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
-            .Add(c => c.SaveLabel, "Save")
-            .Add(c => c.OnCancel, EventCallback.Factory.Create(this, () => { })));
-
-        cut.Markup.Should().Contain("Cancel",
-            "the Cancel button must appear when OnCancel is wired (edit/reply mode)");
     }
 
     [Fact]
@@ -107,16 +87,6 @@ public class CommentEditorTests : BunitContext
     // ── Spoiler toggle visibility ─────────────────────────────────────────────────
 
     [Fact]
-    public void CommentEditor_WhenShowSpoilerToggleFalse_NoCheckbox()
-    {
-        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
-            .Add(c => c.ShowSpoilerToggle, false));
-
-        cut.Markup.Should().NotContain("spoilers",
-            "the spoiler checkbox must not render when ShowSpoilerToggle is false");
-    }
-
-    [Fact]
     public void CommentEditor_WhenShowSpoilerToggleTrue_CheckboxPresent()
     {
         IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
@@ -152,14 +122,4 @@ public class CommentEditorTests : BunitContext
             "the Cancel button must also be disabled when Busy is true");
     }
 
-    [Fact]
-    public void CommentEditor_WhenNotBusy_SaveButtonEnabled()
-    {
-        IRenderedComponent<CommentEditor> cut = Render<CommentEditor>(p => p
-            .Add(c => c.Busy, false));
-
-        IElement saveBtn = cut.Find("button[aria-label='Save']");
-        saveBtn.HasAttribute("disabled").Should().BeFalse(
-            "the primary button must be enabled when Busy is false");
-    }
 }

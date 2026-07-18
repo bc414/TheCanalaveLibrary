@@ -75,18 +75,6 @@ public class TagSelectorTests : BunitContext
         cut.Markup.Should().Contain("Mystery");
     }
 
-    [Fact]
-    public void TagSelector_WithNoInitialSelectedTags_RendersNoChips()
-    {
-        IRenderedComponent<TagSelector> cut = Render<TagSelector>(p => p
-            .Add(c => c.TagType, TagTypeEnum.Genre)
-            .Add(c => c.SelectedTags, []));
-
-        // No TagChip components rendered — the span.rounded-full chips are absent.
-        cut.FindAll("span.rounded-full").Should().BeEmpty(
-            "no initial tags → no chip spans should appear");
-    }
-
     // ── remove flow ──────────────────────────────────────────────────────────────
 
     [Fact]

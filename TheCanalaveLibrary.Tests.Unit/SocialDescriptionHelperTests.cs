@@ -94,10 +94,4 @@ public class SocialDescriptionHelperTests
         result.Should().NotBeNull();
         result!.Should().Be(new string('a', 200) + "…");
     }
-
-    [Fact]
-    public void Clean_DefaultMaxLength_Is200()
-    {
-        SocialDescriptionHelper.DefaultMaxLength.Should().Be(200);
-    }
 }

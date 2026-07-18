@@ -44,14 +44,6 @@ public class SavedTagSelectionLoadFlyoutTests : BunitContext
     }
 
     [Fact]
-    public void Authorized_RendersLoadSavedButton()
-    {
-        _auth.SetAuthorized("user");
-        IRenderedComponent<SavedTagSelectionLoadFlyout> cut = Render<SavedTagSelectionLoadFlyout>();
-        cut.Markup.Should().Contain("Load saved");
-    }
-
-    [Fact]
     public async Task ClickingButton_OpensFlyoutAndListsSelections()
     {
         _auth.SetAuthorized("user");

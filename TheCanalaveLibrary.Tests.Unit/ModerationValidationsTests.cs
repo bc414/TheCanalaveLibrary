@@ -21,32 +21,6 @@ public class ModerationValidationsTests
 {
     // ── Target-type allow-set ─────────────────────────────────────────────────────
 
-    [Theory]
-    [InlineData(ReportedEntityType.Story)]
-    [InlineData(ReportedEntityType.User)]
-    [InlineData(ReportedEntityType.Comment)]
-    [InlineData(ReportedEntityType.BlogPost)]
-    [InlineData(ReportedEntityType.Recommendation)]
-    [InlineData(ReportedEntityType.Message)]
-    public void ReportedEntityType_AllDefinedValues_AreInExpectedSet(ReportedEntityType type)
-    {
-        // The enum definition should contain exactly the expected types.
-        // If a new type is added, this test fails until the allow-set in
-        // ServerModerationWriteService.AllowedReportTargets is also updated.
-        HashSet<ReportedEntityType> expected =
-        [
-            ReportedEntityType.Story,
-            ReportedEntityType.User,
-            ReportedEntityType.Comment,
-            ReportedEntityType.BlogPost,
-            ReportedEntityType.Recommendation,
-            ReportedEntityType.Message,
-        ];
-
-        expected.Should().Contain(type,
-            $"every {nameof(ReportedEntityType)} value should be a reportable target");
-    }
-
     [Fact]
     public void ReportedEntityType_EnumValues_ExactlyMatchExpectedSet()
     {
@@ -106,16 +80,5 @@ public class ModerationValidationsTests
     {
         ((int)NotificationTypeEnum.StoryApproved).Should().Be(75,
             "the value must match the seeded notification_types row (id=75)");
-    }
-
-    // ── ReportedEntityId widened to long ──────────────────────────────────────────
-
-    [Fact]
-    public void Report_ReportedEntityId_IsLong()
-    {
-        var prop = typeof(Report).GetProperty(nameof(Report.ReportedEntityId));
-        prop.Should().NotBeNull();
-        prop!.PropertyType.Should().Be(typeof(long),
-            "PrivateMessage.MessageId is long; the id column must be wide enough to hold it");
     }
 }

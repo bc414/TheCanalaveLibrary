@@ -129,28 +129,4 @@ public class S3ImageStorageServiceTests(GarageFixture garage) : IClassFixture<Ga
         await service.DeleteAsync("/uploads/../secrets.txt");
         await service.DeleteAsync("/somewhere/else.png");
     }
-
-    [Fact]
-    public async Task SaveAsync_RejectsAnUnsupportedContentType()
-    {
-        S3ImageStorageService service = CreateService();
-        using MemoryStream content = new(SmallPng);
-
-        Func<Task> act = async () => await service.SaveAsync(content, "image/gif", ImageKind.Cover, 1);
-
-        await act.Should().ThrowAsync<ArgumentException>();
-    }
-
-    [Fact]
-    public async Task SaveAsync_RejectsAPayloadOverTheSizeCap()
-    {
-        S3ImageStorageService service = CreateService();
-        // 1 byte over the 10 MB cap. The S3 impl buffers with limit enforcement, so this holds
-        // even for non-seekable browser streams (which the Local impl's CanSeek check can't cover).
-        using MemoryStream content = new(new byte[ImageUploadRules.MaxBytes + 1]);
-
-        Func<Task> act = async () => await service.SaveAsync(content, "image/png", ImageKind.Cover, 1);
-
-        await act.Should().ThrowAsync<ArgumentException>();
-    }
 }

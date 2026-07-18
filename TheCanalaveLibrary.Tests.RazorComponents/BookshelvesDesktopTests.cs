@@ -84,16 +84,6 @@ public class BookshelvesDesktopTests : BunitContext
     }
 
     [Fact]
-    public void TabBar_InactiveTabs_DoNotHaveAriaCurrent()
-    {
-        IRenderedComponent<BookshelvesDesktop> cut = RenderDesktop(BookshelfTab.Favorites);
-
-        var inactiveLinks = cut.FindAll("nav a:not([aria-current])")
-            .Where(a => a.GetAttribute("href") != "/my-lists"); // cross-link is not a tab
-        inactiveLinks.Should().HaveCount(10, "10 tabs are inactive");
-    }
-
-    [Fact]
     public void TabBar_AllTabLinks_HaveCorrectHref()
     {
         IRenderedComponent<BookshelvesDesktop> cut = RenderDesktop();
@@ -116,17 +106,6 @@ public class BookshelvesDesktopTests : BunitContext
 
         cut.FindComponents<StoryDeck>().Should().HaveCount(1);
         cut.FindComponents<StoryCard>().Should().HaveCount(2, "two stories → two cards");
-    }
-
-    // ── ResultsFilterPanel present ───────────────────────────────────────────────
-
-    [Fact]
-    public void Sidebar_RendersResultsFilterPanel()
-    {
-        IRenderedComponent<BookshelvesDesktop> cut = RenderDesktop();
-
-        cut.FindComponents<ResultsFilterPanel>().Should().HaveCount(1,
-            "the desktop layout includes a sidebar filter panel");
     }
 
     // Mutation sanity: verify the tab bar renders a different active link when activeTab changes.

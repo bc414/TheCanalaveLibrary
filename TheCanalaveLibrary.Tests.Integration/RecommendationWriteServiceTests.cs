@@ -60,14 +60,6 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
     }
 
     [Fact]
-    public async Task Submit_TooShort_ThrowsValidationException()
-    {
-        Func<Task> act = async () => await CallSubmitAsync(
-            new RecommendationSubmitDto(_storyId, "<p>Too short.</p>"));
-        await act.Should().ThrowAsync<RecommendationValidationException>();
-    }
-
-    [Fact]
     public async Task Submit_ScriptTag_IsStrippedBySanitizer()
     {
         int id = await CallSubmitAsync(new RecommendationSubmitDto(

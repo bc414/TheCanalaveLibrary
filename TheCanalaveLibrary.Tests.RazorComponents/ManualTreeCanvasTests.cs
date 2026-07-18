@@ -95,17 +95,6 @@ public class ManualTreeCanvasTests : BunitContext
         clicked.Should().NotBeNull();
         clicked!.EntityId.Should().Be(1);
     }
-
-    [Fact]
-    public void UserChips_AreCircular_StoryChips_AreNot()
-    {
-        var (root, displays) = MakeTree();
-
-        IRenderedComponent<ManualTreeCanvas> cut = RenderCanvas(root, displays);
-
-        cut.FindAll("[data-tree-node]").Count(c => c.ClassList.Contains("rounded-full"))
-            .Should().Be(1, "exactly one node in this tree is a user");
-    }
 }
 
 /// <summary>Toggle-pill row tests — every pill is one direction-specific pair.</summary>

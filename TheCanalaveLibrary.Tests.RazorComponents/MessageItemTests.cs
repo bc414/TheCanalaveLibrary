@@ -24,28 +24,7 @@ public class MessageItemTests : BunitContext
             DateSent: DateTime.UtcNow,
             IsOwnMessage: true);
 
-    private static MessageDto OtherMessage(string html = "<p>Their text</p>") =>
-        new(MessageId: 2,
-            ConversationId: 10,
-            SenderUserId: 99,
-            SenderUsername: "Misty",
-            SenderAvatarUrl: "/img/default-avatar.svg",
-            MessageText: html,
-            DateSent: DateTime.UtcNow,
-            IsOwnMessage: false);
-
     // ── Own message alignment ─────────────────────────────────────────────────────
-
-    [Fact]
-    public void MessageItem_OwnMessage_UsesFlexRowReverse()
-    {
-        IRenderedComponent<MessageItem> cut = Render<MessageItem>(p => p
-            .Add(c => c.Message, OwnMessage()));
-
-        // Outer flex container should use flex-row-reverse for right-side bubble alignment.
-        cut.Markup.Should().Contain("flex-row-reverse",
-            "own messages must use flex-row-reverse for right-side alignment");
-    }
 
     [Fact]
     public void MessageItem_OwnMessage_ShowsSenderUsername()
@@ -59,28 +38,6 @@ public class MessageItemTests : BunitContext
             "own messages display the sender username alongside the avatar");
     }
 
-    // ── Other-participant message alignment ───────────────────────────────────────
-
-    [Fact]
-    public void MessageItem_OtherMessage_DoesNotUseFlexRowReverse()
-    {
-        IRenderedComponent<MessageItem> cut = Render<MessageItem>(p => p
-            .Add(c => c.Message, OtherMessage()));
-
-        cut.Markup.Should().NotContain("flex-row-reverse",
-            "other-participant messages must not use flex-row-reverse");
-    }
-
-    [Fact]
-    public void MessageItem_OtherMessage_ShowsSenderUsername()
-    {
-        IRenderedComponent<MessageItem> cut = Render<MessageItem>(p => p
-            .Add(c => c.Message, OtherMessage()));
-
-        cut.Markup.Should().Contain("Misty",
-            "other-participant messages must display the sender's username");
-    }
-
     // ── Content (RichTextView) ────────────────────────────────────────────────────
 
     [Fact]
@@ -92,15 +49,5 @@ public class MessageItemTests : BunitContext
         // RichTextView renders the MarkupString inside a div; the text should appear in DOM.
         cut.Markup.Should().Contain("Great chapter!",
             "MessageItem must render the stored message HTML via RichTextView");
-    }
-
-    [Fact]
-    public void MessageItem_OtherMessage_RendersStoredHtml()
-    {
-        IRenderedComponent<MessageItem> cut = Render<MessageItem>(p => p
-            .Add(c => c.Message, OtherMessage("<p>Looking forward to it!</p>")));
-
-        cut.Markup.Should().Contain("Looking forward to it!",
-            "other-participant messages must also render HTML via RichTextView");
     }
 }

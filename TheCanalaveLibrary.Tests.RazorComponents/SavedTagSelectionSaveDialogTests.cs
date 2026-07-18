@@ -35,14 +35,6 @@ public class SavedTagSelectionSaveDialogTests : BunitContext
     }
 
     [Fact]
-    public void Authorized_RendersSaveCurrentButton()
-    {
-        _auth.SetAuthorized("user");
-        IRenderedComponent<SavedTagSelectionSaveDialog> cut = Render<SavedTagSelectionSaveDialog>();
-        cut.Markup.Should().Contain("Save current…");
-    }
-
-    [Fact]
     public async Task EmptyTagSet_SaveButtonIsDisabled()
     {
         _auth.SetAuthorized("user");

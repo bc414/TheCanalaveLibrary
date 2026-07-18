@@ -40,17 +40,6 @@ public class PaginationControlsTests : BunitContext
         cut.Markup.Should().BeEmpty("TotalPages == 1, so the @if guard hides the whole control");
     }
 
-    [Fact]
-    public void PaginationControls_WhenTotalCountIsZero_RendersNothing()
-    {
-        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
-            .Add(c => c.CurrentPage, 1)
-            .Add(c => c.PageSize, 10)
-            .Add(c => c.TotalCount, 0));
-
-        cut.Markup.Should().BeEmpty();
-    }
-
     // ── page-window: <=7 pages — all shown, no ellipsis ─────────────────────────
 
     [Fact]
@@ -144,40 +133,6 @@ public class PaginationControlsTests : BunitContext
         activeButton.Should().NotBeNull("the current-page button must have aria-current='page'");
         activeButton!.TextContent.Trim().Should().Be(currentPage.ToString(),
             "the button marked aria-current='page' must show the current page number");
-    }
-
-    [Fact]
-    public void PaginationControls_InactivePageButtons_DoNotHaveAriaCurrent()
-    {
-        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
-            .Add(c => c.CurrentPage, 2)
-            .Add(c => c.PageSize, 10)
-            .Add(c => c.TotalCount, 50));  // 5 pages, page 2 is current
-
-        // Buttons 1, 3, 4, 5 must NOT have aria-current="page".
-        var inactiveButtons = cut.FindAll("button.size-9:not([aria-current])");
-        inactiveButtons.Select(b => b.TextContent.Trim())
-            .Should().Contain(["1", "3", "4", "5"],
-                "all non-current page buttons must not carry aria-current");
-    }
-
-    [Fact]
-    public void PaginationControls_ActivePage_HasDistinctCssTokenFromInactivePage()
-    {
-        IRenderedComponent<PaginationControls> cut = Render<PaginationControls>(p => p
-            .Add(c => c.CurrentPage, 2)
-            .Add(c => c.PageSize, 10)
-            .Add(c => c.TotalCount, 50));
-
-        string activeClass = cut.Find("button[aria-current='page']").GetAttribute("class") ?? string.Empty;
-        string inactiveClass = cut.Find("button.size-9:not([aria-current])").GetAttribute("class") ?? string.Empty;
-
-        // Active fill is the light action green with dark ink since the Phase A lock
-        // (bg-action + text-(--color-text)); the distinct token is the fill, not white text.
-        activeClass.Should().Contain("bg-(--color-action)",
-            "active page button carries the action fill");
-        inactiveClass.Should().NotContain("bg-(--color-action)",
-            "inactive page buttons must not carry the action fill");
     }
 
     // ── Prev / Next buttons ──────────────────────────────────────────────────────

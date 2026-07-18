@@ -100,16 +100,6 @@ public class StoryDeckTests : BunitContext
         cut.FindComponents<StoryCard>().Should().HaveCount(3);
     }
 
-    [Fact]
-    public void PopulatedStories_GridContainerPresent()
-    {
-        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
-            .Add(c => c.Stories, new[] { MakeStory() }));
-
-        // Grid class is on the immediate card wrapper — assert both grid and deck wrapper exist
-        cut.Find("[class*='grid']").Should().NotBeNull("grid container must be present");
-    }
-
     // ── IsOwnStory forwarding ────────────────────────────────────────────────────
 
     [Fact]
@@ -130,17 +120,6 @@ public class StoryDeckTests : BunitContext
         IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
             .Add(c => c.Stories, new[] { MakeStory(storyId: 1, authorId: 42) })
             .Add(c => c.CurrentUserId, 99));
-
-        cut.Markup.Should().NotContain("Edit Story");
-    }
-
-    [Fact]
-    public void NullCurrentUserId_DoesNotRenderEditStoryLink()
-    {
-        // Anonymous viewer → IsOwnStory always false
-        IRenderedComponent<StoryDeck> cut = Render<StoryDeck>(p => p
-            .Add(c => c.Stories, new[] { MakeStory(storyId: 1, authorId: 42) })
-            .Add(c => c.CurrentUserId, (int?)null));
 
         cut.Markup.Should().NotContain("Edit Story");
     }

@@ -154,10 +154,15 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
     {
         int actorB = await SeedUserAsync("NS-C");
 
-        // Two notifications for the recipient in quick succession.
+        // Two notifications for the recipient. Pin their timestamps explicitly — back-to-back
+        // writes can land on the same instant (Windows' ~15 ms clock tick), so asserting on
+        // creation order requires setting DateCreated, not sleeping and hoping the clock advanced.
         await CallNotifyNewFollowerAsync(_recipientId, _actorId);
-        await Task.Delay(10); // ensure distinct DateCreated
         await CallNotifyNewVouchAsync(_recipientId, actorB);
+        await SetNotificationDateCreatedAsync(
+            _recipientId, NotificationTypeEnum.NewFollowerOnYou, _actorId, DateTime.UtcNow.AddMinutes(-10));
+        await SetNotificationDateCreatedAsync(
+            _recipientId, NotificationTypeEnum.NewVouchOnYou, actorB, DateTime.UtcNow.AddMinutes(-5));
 
         SetActiveUser(_recipientId);
         NotificationDto[] dtos = await CallGetNotificationsAsync(page: 1, pageSize: 10);
@@ -173,8 +178,9 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
             n.NotificationTypeId == NotificationTypeEnum.NewFollowerOnYou &&
             n.SourceUserId == _actorId);
 
-        if (vouchIndex >= 0 && followIndex >= 0)
-            vouchIndex.Should().BeLessThan(followIndex, "newest notification must appear first");
+        vouchIndex.Should().BeGreaterThanOrEqualTo(0, "the vouch notification must be present");
+        followIndex.Should().BeGreaterThanOrEqualTo(0, "the follow notification must be present");
+        vouchIndex.Should().BeLessThan(followIndex, "newest notification must appear first");
     }
 
     [Fact]
@@ -401,11 +407,15 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
     {
         int actorB = await SeedUserAsync("NS-E");
 
-        // First (older) notification: follow.
+        // First (older) notification: follow; second (newer): vouch. Pin both timestamps
+        // explicitly so the ordering reflects the sort, not the wall clock (Windows' ~15 ms tick
+        // can leave back-to-back writes on the same instant).
         await CallNotifyNewFollowerAsync(_recipientId, _actorId);
-        await Task.Delay(15); // ensure distinct DateCreated
-        // Second (newer) notification: vouch.
         await CallNotifyNewVouchAsync(_recipientId, actorB);
+        await SetNotificationDateCreatedAsync(
+            _recipientId, NotificationTypeEnum.NewFollowerOnYou, _actorId, DateTime.UtcNow.AddMinutes(-10));
+        await SetNotificationDateCreatedAsync(
+            _recipientId, NotificationTypeEnum.NewVouchOnYou, actorB, DateTime.UtcNow.AddMinutes(-5));
 
         // Mark the older follow notification as read.
         SetActiveUser(_recipientId);
@@ -509,6 +519,25 @@ public class NotificationServiceTests(PostgresFixture postgres) : IntegrationTes
             IsRead             = false,
             DateCreated        = DateTime.UtcNow
         });
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Pins a notification's <c>DateCreated</c> to a fixed instant so ordering tests assert the
+    /// sort, not the wall clock. Back-to-back writes can land on the same timestamp (Windows'
+    /// ~15 ms clock tick); setting the value explicitly is deterministic and replaces the old
+    /// <c>Task.Delay</c>-and-hope hack.
+    /// </summary>
+    private async Task SetNotificationDateCreatedAsync(
+        int recipientId, NotificationTypeEnum type, int sourceUserId, DateTime dateCreated)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Notification row = await db.Notifications.SingleAsync(n =>
+            n.RecipientUserId == recipientId &&
+            n.NotificationTypeId == type &&
+            n.SourceUserId == sourceUserId);
+        row.DateCreated = dateCreated;
         await db.SaveChangesAsync();
     }
 

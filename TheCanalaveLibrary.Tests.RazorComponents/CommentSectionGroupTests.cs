@@ -41,17 +41,6 @@ public class CommentSectionGroupTests : BunitContext
         _fakeService.GetGroupCommentsCalls[0].Page.Should().Be(1, "first page on init");
     }
 
-    [Fact]
-    public void CommentSection_GroupContext_EmptyResult_ShowsNoCommentsMessage()
-    {
-        _fakeService.SetGetResult(new CommentPageDto([], 0));
-
-        IRenderedComponent<CommentSection> cut = Render<CommentSection>(p => p
-            .Add(c => c.GroupId, 1));
-
-        cut.Markup.Should().Contain("No comments yet");
-    }
-
     // ── Post dispatch ─────────────────────────────────────────────────────────────
 
     [Fact]

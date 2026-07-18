@@ -39,25 +39,6 @@ public class TagChipTests : BunitContext
         cut.Markup.Should().Contain("My Genre Tag");
     }
 
-    // ── type-specific colour classes ─────────────────────────────────────────────
-
-    // Solid Pokémon-type-color tokens per the Phase A gate ratification (2026-07-10).
-    [Theory]
-    [InlineData(TagTypeEnum.Character, "bg-(--color-tagtype-character)")]
-    [InlineData(TagTypeEnum.Setting, "bg-(--color-tagtype-setting)")]
-    [InlineData(TagTypeEnum.Genre, "bg-(--color-tagtype-genre)")]
-    [InlineData(TagTypeEnum.ContentWarning, "bg-(--color-tagtype-warning)")]
-    [InlineData(TagTypeEnum.CrossoverFandom, "bg-(--color-tagtype-crossover)")]
-    public void TagChip_AppliesCorrectBackgroundClassForTagType(TagTypeEnum type, string expectedClass)
-    {
-        IRenderedComponent<TagChip> cut = Render<TagChip>(p =>
-            p.Add(c => c.Tag, MakeDto(type, $"{type} Tag")));
-
-        string spanClass = cut.Find("span").GetAttribute("class") ?? string.Empty;
-        spanClass.Should().Contain(expectedClass,
-            $"TagTypeEnum.{type} maps to {expectedClass} in TypeClasses");
-    }
-
     // ── sprite image (requires ThemeContext cascading value) ──────────────────────
 
     [Fact]
@@ -107,18 +88,6 @@ public class TagChipTests : BunitContext
     }
 
     [Fact]
-    public void TagChip_WhenSpriteIdentifierIsNull_DoesNotRenderImg()
-    {
-        TagChipDto dto = MakeDto(TagTypeEnum.Character, "Generic Character", spriteIdentifier: null);
-
-        IRenderedComponent<TagChip> cut = Render<TagChip>(p => p
-            .Add(c => c.Tag, dto)
-            .AddCascadingValue(DefaultTheme));
-
-        cut.FindAll("img").Should().BeEmpty("null SpriteIdentifier → no img element");
-    }
-
-    [Fact]
     public void TagChip_WhenNoThemeContextCascaded_DoesNotRenderImg()
     {
         // ThemeContext is nullable — if not cascaded, no img should render even with an identifier.
@@ -156,17 +125,6 @@ public class TagChipTests : BunitContext
             .Add(c => c.OnRemove, EventCallback.Empty));
 
         cut.FindAll("button").Should().HaveCount(1, "the remove button is present when OnRemove has a delegate");
-    }
-
-    [Fact]
-    public void TagChip_WhenOnRemoveHasNoDelegate_DoesNotRenderRemoveButton()
-    {
-        TagChipDto dto = MakeDto(TagTypeEnum.Genre, "Non-removable");
-
-        IRenderedComponent<TagChip> cut = Render<TagChip>(p => p.Add(c => c.Tag, dto));
-        // OnRemove not supplied → HasDelegate == false
-
-        cut.FindAll("button").Should().BeEmpty("no OnRemove delegate → no remove button");
     }
 
     [Fact]

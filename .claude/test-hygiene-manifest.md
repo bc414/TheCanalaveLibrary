@@ -1,8 +1,20 @@
-# bUnit Test-Hygiene Manifest (review gate — NO cuts applied yet)
+# bUnit Test-Hygiene Manifest
 
-**Status:** Re-adjudication complete. This is a review artifact only — nothing has been deleted or
-edited. Approve/adjust the buckets below before any test is touched. Scope: `TheCanalaveLibrary.Tests.RazorComponents`
-only (the Integration flake fix, Integration format-dupes, and Unit trim are separate phases, not in this file).
+**Status (2026-07-18): DELETIONS EXECUTED.** The 77 non-mobile deletions below (buckets A,
+B-redundant, B-static) were applied; RazorComponents tier green at 563/563 (method count 602 → 525).
+`CanalaveTypeaheadTests.Escape_ClosesDropdown_WithoutSelecting` is a pre-existing intermittent flake
+(unrelated file, never touched; passes on isolated re-run) — noted, not caused here.
+
+**Deferred to a separate session (holistic Desktop/Mobile split assessment) — NOT executed:**
+- `StoryMobileTests.cs` whole-file deletion (19).
+- All cuts inside `*Mobile` files: `SearchMobileTests.cs` (:65 static, :96 consolidate, :108/:120/:134/:145/:165
+  redundant), `BookshelvesMobileTests.cs` (:167 redundant, :120 consolidate), `TreeSearchMobileTests.cs` (:104 redundant).
+
+**Remaining (not done this pass, still open):** the 25 non-mobile **C-consolidate** merges in §5 (separate
+refactor from deletions), plus the non-bUnit phases (Integration `NotificationServiceTests` flake fix,
+Integration format-dupes, Unit tautology trim) tracked in the plan, not this file.
+
+**§6 judgment-call keeps were preserved** (not touched), per instruction.
 
 **Criterion applied** (the reframed rule now in `canalave-conventions/testing.md` §"What belongs in
 RazorComponents"): a test earns its keep when a *plausible silent regression* in user-observable

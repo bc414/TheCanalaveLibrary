@@ -63,18 +63,6 @@ public class FollowButtonTests : BunitContext
     }
 
     [Fact]
-    public void FollowButton_WhenFollowing_ShowsBellButton()
-    {
-        IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p
-            .Add(c => c.TargetUserId, 42)
-            .Add(c => c.IsFollowing, true)
-            .Add(c => c.ReceiveAlerts, true));
-
-        IElement? bell = cut.FindAll("button[aria-label]").FirstOrDefault();
-        bell.Should().NotBeNull("the bell button must appear when following");
-    }
-
-    [Fact]
     public void FollowButton_WhenFollowingWithAlertsOn_BellHasDisableLabel()
     {
         IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p

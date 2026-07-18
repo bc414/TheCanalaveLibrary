@@ -129,18 +129,6 @@ public class StoryDesktopTests : BunitContext
             "author must see the Edit Story link");
     }
 
-    [Fact]
-    public void StoryDesktop_IsAuthorFalse_NoEditStoryLink()
-    {
-        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
-            .Add(c => c.Story, MakeStory(storyId: 5))
-            .Add(c => c.Chapters, [])
-            .Add(c => c.IsAuthor, false));
-
-        cut.FindAll("a[href='/story/5/edit']").Should().BeEmpty(
-            "non-author must not see the Edit Story link");
-    }
-
     // ── Status + rating badges ────────────────────────────────────────────────────
 
     [Theory]
@@ -205,18 +193,6 @@ public class StoryDesktopTests : BunitContext
             "read-only tag chips have no remove button");
     }
 
-    [Fact]
-    public void StoryDesktop_WithNoTags_TagSectionAbsent()
-    {
-        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
-            .Add(c => c.Story, MakeStory(tags: []))
-            .Add(c => c.Chapters, []));
-
-        cut.FindAll("button[aria-label='Remove tag']").Should().BeEmpty();
-        // No tag name known from test data — verify "Adventure" from other tests is absent.
-        cut.Markup.Should().NotContain("Adventure");
-    }
-
     // ── Cover art ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -227,17 +203,6 @@ public class StoryDesktopTests : BunitContext
             .Add(c => c.Chapters, []));
 
         cut.Find("img[src='/images/covers/great-fanfic.webp']").Should().NotBeNull();
-    }
-
-    [Fact]
-    public void StoryDesktop_CoverUrlNull_NoImgRendered()
-    {
-        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
-            .Add(c => c.Story, MakeStory(coverArtRelativeUrl: null))
-            .Add(c => c.Chapters, []));
-
-        cut.FindAll("img[src]").Should().BeEmpty(
-            "null cover URL must not render an img element");
     }
 
     // ── Long description via RichTextView ────────────────────────────────────────
@@ -251,19 +216,6 @@ public class StoryDesktopTests : BunitContext
 
         cut.Markup.Should().Contain("A gripping adventure across Sinnoh.",
             "long description HTML must be rendered inside RichTextView");
-    }
-
-    [Fact]
-    public void StoryDesktop_LongDescriptionNull_NoRichTextViewDiv()
-    {
-        IRenderedComponent<StoryDesktop> cut = Render<StoryDesktop>(p => p
-            .Add(c => c.Story, MakeStory(longDescription: null))
-            .Add(c => c.Chapters, []));
-
-        // RichTextView renders a <div> with a style attribute when content is non-empty.
-        // When null/empty, the @if block suppresses it.
-        cut.Markup.Should().NotContain("A gripping adventure",
-            "null long description must not render prose");
     }
 
     // ── Chapter list ──────────────────────────────────────────────────────────────

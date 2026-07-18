@@ -45,16 +45,4 @@ public class InlineAlertTests : BunitContext
 
         cut.FindAll("li").Should().HaveCount(2);
     }
-
-    [Fact]
-    public void DangerIsDefault_SuccessSwapsPalette()
-    {
-        IRenderedComponent<InlineAlert> danger = Render<InlineAlert>(p => p.Add(a => a.Message, "x"));
-        IRenderedComponent<InlineAlert> success = Render<InlineAlert>(p => p
-            .Add(a => a.Message, "x")
-            .Add(a => a.Variant, InlineAlertVariant.Success));
-
-        danger.Find("[role='alert']").GetAttribute("class").Should().Contain("--color-danger");
-        success.Find("[role='alert']").GetAttribute("class").Should().Contain("--color-success");
-    }
 }
