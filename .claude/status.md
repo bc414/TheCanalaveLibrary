@@ -17,6 +17,13 @@ pure seed data). L4-Style may still be Stage 1 while L4.5 is 5 — visual polish
 sign-off; L4.5 only demands the feature be *usable*.
 
 Global conditions affecting many cells — kept terse; detail lives at the pointer, not here:
+- **Desktop/Mobile fork paradigm removed — single responsive site (WU-ResponsiveMerge, 2026-07-18).**
+  Device detection deleted; nine `{X}Desktop`/`{X}Mobile` pairs merged into their pages;
+  coordination-composite tier folded into pages; `MainLayout` is the only layout. No cell Stage
+  changed (touched cells were Stage 5 and remain 5). Narrow-viewport rendering is provisional
+  (graceful degradation only) pending the future mobile phase — L4.5 claims cover desktop width.
+  Detail: `middle_plan_v2.md` §Resolved; `render-and-layout.md` §"Responsive Layout Architecture";
+  `workplan.md` WU-ResponsiveMerge.
 - **Design solidification COMPLETE (WU-DesignSystem, 2026-07-10).** Phases B–F landed same-day
   after the gate: all 17 RichTextView/EditorView sites on `ContentSurface` (side-rails paper;
   MessageItem de-bubbled); `ReaderDisplayProvider` wired — the reader-settings cascade has a

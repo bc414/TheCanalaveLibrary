@@ -13,6 +13,9 @@
 > mobile-phase decision). Narrow rendering is provisional. Desktop/mobile assertions elsewhere in
 > this file are historical. Rules: `canalave-conventions/render-and-layout.md` §"Responsive Layout
 > Architecture"; spec §3.9/§3.10 superseded on this axis.
+> Verified 2026-07-18: full suite green post-merge (Unit 702 / Integration 727 / RazorComponents
+> 510); browser smoke at desktop width clean (loads, no error banner, zero console errors);
+> narrow rendering deliberately unpolished, no visual pass yet.
 
 **Entities (now `Core/Messaging/` — to be migrated out of legacy `Core/Models/` during WU35):**
 `Conversation` (`ConversationId`, `Subject` max 2048, `DateCreated` default),
