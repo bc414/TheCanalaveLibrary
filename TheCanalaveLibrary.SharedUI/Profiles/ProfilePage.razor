@@ -14,7 +14,6 @@
 @inject ISavedTagSelectionReadService TagSelectionReadService
 @inject ISavedTagSelectionWriteService TagSelectionWriteService
 @inject ICustomListReadService CustomListReadService
-@inject IDeviceDetectionService DeviceService
 @inject IToastService Toasts
 @inject NavigationManager Nav
 @inject IPublicUrlProvider PublicUrlProvider
@@ -28,7 +27,8 @@
    2. Load GetProfileHeaderAsync once (banner is tab-independent); overlay RelationshipState
       via IFollowingReadService when authenticated and not the owner.
    3. Load the tab payload on init, then reload only the payload on tab switch.
-   4. Device-branch to ProfileDesktop / ProfileMobile.
+   4. Render the ProfileDesktop composite (mobile variant deleted 2026-07-18,
+      WU-ResponsiveMerge — single responsive tree).
 
    [PersistentState] on the header + initially-loaded tab payload eliminates the
    prerender→interactive double fetch on full document loads; tab clicks and UserId changes are
@@ -52,56 +52,28 @@ else
     <PageTitle>@Header.Username &mdash; Profile</PageTitle>
     <SocialMetaTags Title="@OgTitle" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="profile"/>
 
-    @if (DeviceService.IsMobile())
-    {
-        <ProfileMobile Header="@Header"
-                       Tab="@_tab"
-                       IsOwner="@_isOwner"
-                       CurrentUserId="@_currentUserId"
-                       RelationshipState="@_relationship"
-                       OnRemoveVouch="HandleRemoveVouchAsync"
-                       BioHtml="@BioHtml"
-                       StoryItems="@(StoryItems ?? [])"
-                       StoryTotalCount="@StoryTotalCount"
-                       InteractionStates="@_interactionStates"
-                       StoryFilter="@_storyFilter"
-                       OnStoryFilterChanged="HandleStoryFilterChanged"
-                       OnStoryPageChanged="HandleStoryPageChanged"
-                       BlogPosts="@(BlogPosts ?? [])"
-                       BlogTotalCount="@BlogTotalCount"
-                       BlogPage="@_blogPage"
-                       BlogPageSize="@BlogPageSize"
-                       OnBlogPageChanged="HandleBlogPageChanged"
-                       SeriesItems="@(SeriesItems ?? [])"
-                       TagSelectionItems="@(TagSelectionItems ?? [])"
-                       OnCopyTagSelection="HandleCopyTagSelectionAsync"
-                       PublicListItems="@(PublicListItems ?? [])" />
-    }
-    else
-    {
-        <ProfileDesktop Header="@Header"
-                        Tab="@_tab"
-                        IsOwner="@_isOwner"
-                        CurrentUserId="@_currentUserId"
-                        RelationshipState="@_relationship"
-                        OnRemoveVouch="HandleRemoveVouchAsync"
-                        BioHtml="@BioHtml"
-                        StoryItems="@(StoryItems ?? [])"
-                        StoryTotalCount="@StoryTotalCount"
-                        InteractionStates="@_interactionStates"
-                        StoryFilter="@_storyFilter"
-                        OnStoryFilterChanged="HandleStoryFilterChanged"
-                        OnStoryPageChanged="HandleStoryPageChanged"
-                        BlogPosts="@(BlogPosts ?? [])"
-                        BlogTotalCount="@BlogTotalCount"
-                        BlogPage="@_blogPage"
-                        BlogPageSize="@BlogPageSize"
-                        OnBlogPageChanged="HandleBlogPageChanged"
-                        SeriesItems="@(SeriesItems ?? [])"
-                        TagSelectionItems="@(TagSelectionItems ?? [])"
-                        OnCopyTagSelection="HandleCopyTagSelectionAsync"
-                        PublicListItems="@(PublicListItems ?? [])" />
-    }
+    <ProfileDesktop Header="@Header"
+                    Tab="@_tab"
+                    IsOwner="@_isOwner"
+                    CurrentUserId="@_currentUserId"
+                    RelationshipState="@_relationship"
+                    OnRemoveVouch="HandleRemoveVouchAsync"
+                    BioHtml="@BioHtml"
+                    StoryItems="@(StoryItems ?? [])"
+                    StoryTotalCount="@StoryTotalCount"
+                    InteractionStates="@_interactionStates"
+                    StoryFilter="@_storyFilter"
+                    OnStoryFilterChanged="HandleStoryFilterChanged"
+                    OnStoryPageChanged="HandleStoryPageChanged"
+                    BlogPosts="@(BlogPosts ?? [])"
+                    BlogTotalCount="@BlogTotalCount"
+                    BlogPage="@_blogPage"
+                    BlogPageSize="@BlogPageSize"
+                    OnBlogPageChanged="HandleBlogPageChanged"
+                    SeriesItems="@(SeriesItems ?? [])"
+                    TagSelectionItems="@(TagSelectionItems ?? [])"
+                    OnCopyTagSelection="HandleCopyTagSelectionAsync"
+                    PublicListItems="@(PublicListItems ?? [])" />
 }
 
 @code {
