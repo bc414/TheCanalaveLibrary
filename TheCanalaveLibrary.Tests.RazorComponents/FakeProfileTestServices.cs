@@ -109,10 +109,3 @@ internal sealed class FakeSeriesReadService : ISeriesReadService
 // FakeSavedTagSelectionTestServices.cs (richer, configurable versions shared with
 // SavedTagSelectionLoadFlyoutTests/SaveDialogTests/TagFilterTests). ProfilePageTests registers
 // those same classes.
-
-// ── Device detection ──────────────────────────────────────────────────────────────────────────
-
-internal sealed class AlwaysDesktopDeviceService : IDeviceDetectionService
-{
-    public bool IsMobile() => false;
-}

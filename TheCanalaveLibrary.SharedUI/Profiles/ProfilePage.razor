@@ -52,28 +52,236 @@ else
     <PageTitle>@Header.Username &mdash; Profile</PageTitle>
     <SocialMetaTags Title="@OgTitle" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="profile"/>
 
-    <ProfileDesktop Header="@Header"
-                    Tab="@_tab"
-                    IsOwner="@_isOwner"
-                    CurrentUserId="@_currentUserId"
-                    RelationshipState="@_relationship"
-                    OnRemoveVouch="HandleRemoveVouchAsync"
-                    BioHtml="@BioHtml"
-                    StoryItems="@(StoryItems ?? [])"
-                    StoryTotalCount="@StoryTotalCount"
-                    InteractionStates="@_interactionStates"
-                    StoryFilter="@_storyFilter"
-                    OnStoryFilterChanged="HandleStoryFilterChanged"
-                    OnStoryPageChanged="HandleStoryPageChanged"
-                    BlogPosts="@(BlogPosts ?? [])"
-                    BlogTotalCount="@BlogTotalCount"
-                    BlogPage="@_blogPage"
-                    BlogPageSize="@BlogPageSize"
-                    OnBlogPageChanged="HandleBlogPageChanged"
-                    SeriesItems="@(SeriesItems ?? [])"
-                    TagSelectionItems="@(TagSelectionItems ?? [])"
-                    OnCopyTagSelection="HandleCopyTagSelectionAsync"
-                    PublicListItems="@(PublicListItems ?? [])" />
+    @* Former ProfileDesktop composite, folded in 2026-07-18 (WU-ResponsiveMerge — single
+       responsive tree, page owns its markup). Persistent banner above the tab bar; horizontal
+       tab bar (wraps at narrow); tab body below.
+       Tab bodies:
+       - Profile (default)  → bio RichTextView + CommentSection (UserProfile context)
+       - Favorites / Recommendations / Authored → StoryDeck + ResultsFilterPanel sidebar
+         (stacks below the deck at narrow)
+       - Blog → paginated BlogPostCard list (full-width, no filter sidebar) *@
+    <div class="flex flex-col">
+
+        @* ── Persistent banner ───────────────────────────────────────────────────── *@
+        <div class="border-b border-(--color-border) bg-(--color-surface)">
+            <div class="mx-auto max-w-6xl">
+                <ProfileBanner Header="@Header"
+                               IsOwner="@_isOwner"
+                               RelationshipState="@_relationship"
+                               OnRemoveVouch="@HandleRemoveVouchAsync" />
+            </div>
+        </div>
+
+        @* ── Tab bar ──────────────────────────────────────────────────────────────── *@
+        <nav class="border-b border-(--color-border) bg-(--color-surface-raised)"
+             aria-label="Profile tabs">
+            <div class="mx-auto flex flex-wrap max-w-6xl gap-1 px-4 md:px-6">
+                @foreach (ProfileTab tab in Enum.GetValues<ProfileTab>())
+                {
+                    bool isActive = tab == _tab;
+                    <a href="/user/@Header.UserId/@ProfileTabSlug.For(tab)"
+                       class="@TabClasses(isActive)"
+                       aria-current="@(isActive ? "page" : null)">
+                        @TabLabel(tab)
+                    </a>
+                }
+            </div>
+        </nav>
+
+        @* ── Tab body ─────────────────────────────────────────────────────────────── *@
+        <div class="mx-auto w-full max-w-6xl px-4 py-6 md:px-6">
+
+            @if (_tab == ProfileTab.Profile)
+            {
+                @* Bio text + comment wall — no filter sidebar *@
+                <div class="flex flex-col gap-8">
+                    @if (!string.IsNullOrEmpty(BioHtml))
+                    {
+                        <section>
+                            <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">About</h2>
+                            <ContentSurface Variant="ContentSurfaceVariant.Inline">
+                                <RichTextView HtmlContent="@BioHtml" />
+                            </ContentSurface>
+                        </section>
+                    }
+
+                    @if (Header.AllowProfileComments != SocialInteractionPermission.Nobody ||
+                         _isOwner)
+                    {
+                        <section>
+                            <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Comments</h2>
+                            <CanalaveErrorBoundary Label="comments" Compact="true">
+                                <CommentSection ProfileUserId="@Header.UserId"
+                                                CurrentUserId="@_currentUserId" />
+                            </CanalaveErrorBoundary>
+                        </section>
+                    }
+                </div>
+            }
+            else if (_tab == ProfileTab.Blog)
+            {
+                @* Blog tab — full-width paginated blog post list *@
+                <div class="flex flex-col gap-4">
+                    @if (_isOwner)
+                    {
+                        <div class="flex justify-end">
+                            <a href="/blog/new"
+                               class="rounded-md bg-(--color-mission) px-4 py-2 text-sm font-medium text-white hover:bg-(--color-mission-hover)">
+                                + New Post
+                            </a>
+                        </div>
+                    }
+                    @if (BlogPosts is null || BlogPosts.Length == 0)
+                    {
+                        <p class="text-sm text-(--color-text-muted)">@(_isOwner ? "You haven't written any blog posts yet." : "No blog posts yet.")</p>
+                    }
+                    else
+                    {
+                        <div class="flex flex-col gap-3">
+                            @foreach (var post in BlogPosts)
+                            {
+                                <BlogPostCard Post="@post"
+                                             IsOwner="@_isOwner"
+                                             EditHref="@(_isOwner ? $"/blog/{post.BlogPostId}/edit" : null)" />
+                            }
+                        </div>
+                        <PaginationControls CurrentPage="@_blogPage"
+                                            PageSize="@BlogPageSize"
+                                            TotalCount="@BlogTotalCount"
+                                            OnPageChanged="@HandleBlogPageChanged" />
+                    }
+                </div>
+            }
+            else if (_tab == ProfileTab.Series)
+            {
+                @* Series tab (WU41) — full-width grid, no filter sidebar (small, unpaginated set) *@
+                @if (SeriesItems is null || SeriesItems.Count == 0)
+                {
+                    <p class="text-sm text-(--color-text-muted)">@(_isOwner ? "You haven't created any series yet." : "No series yet.")</p>
+                }
+                else
+                {
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        @foreach (var series in SeriesItems)
+                        {
+                            <SeriesCard Series="series" EditHref="@(_isOwner ? $"/series/{series.SeriesId}/edit" : null)" />
+                        }
+                    </div>
+                }
+            }
+            else if (_tab == ProfileTab.TagSelections)
+            {
+                @* Tag Selections tab (WU43) — public (IsPublic) selections only, full-width grid, no
+                   filter sidebar (small, unpaginated set — same shape as Series). No public browse/
+                   gallery surface exists; this tab is the sole discovery path for a shared selection. *@
+                @if (TagSelectionItems is null || TagSelectionItems.Count == 0)
+                {
+                    <p class="text-sm text-(--color-text-muted)">@(_isOwner ? "You haven't made any saved tag selections public yet." : "No public saved tag selections yet.")</p>
+                }
+                else
+                {
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        @foreach (SavedTagSelectionDetailDto selection in TagSelectionItems)
+                        {
+                            <div class="flex flex-col gap-2 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+                                <div class="flex items-start justify-between gap-2">
+                                    <h3 class="font-semibold text-text">@selection.Nickname</h3>
+                                    @if (_currentUserId.HasValue && !_isOwner)
+                                    {
+                                        <button type="button"
+                                                class="shrink-0 rounded-md bg-(--color-mission) px-2 py-1 text-xs font-medium text-white transition-colors hover:bg-(--color-mission-hover)"
+                                                @onclick="() => HandleCopyTagSelectionAsync(selection.Id)">
+                                            Add to my filters
+                                        </button>
+                                    }
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(selection.Description))
+                                {
+                                    <p class="text-sm text-(--color-text-muted)">@selection.Description</p>
+                                }
+                                @if (selection.IncludedTags.Count > 0)
+                                {
+                                    <div class="flex flex-wrap gap-2">
+                                        @foreach (TagChipDto tag in selection.IncludedTags)
+                                        {
+                                            <TagChip Tag="tag" />
+                                        }
+                                    </div>
+                                }
+                                @if (selection.ExcludedTags.Count > 0)
+                                {
+                                    <div class="flex flex-col gap-1">
+                                        <span class="text-xs font-medium text-(--color-text-muted)">Excludes:</span>
+                                        <div class="flex flex-wrap gap-2">
+                                            @foreach (TagChipDto tag in selection.ExcludedTags)
+                                            {
+                                                <TagChip Tag="tag" />
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            else if (_tab == ProfileTab.Lists)
+            {
+                @* Lists tab (WU-CustomLists, Feature 51) — public (IsPublic) custom lists only,
+                   full-width, no filter sidebar (small, unpaginated set — same shape as Series).
+                   Each card links to the list's own /lists/{id} page, where viewing/cloning lives. *@
+                @if (PublicListItems is null || PublicListItems.Count == 0)
+                {
+                    <p class="text-sm text-(--color-text-muted)">@(_isOwner ? "You haven't made any lists public yet." : "No public lists yet.")</p>
+                }
+                else
+                {
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        @foreach (CustomListSummaryDto list in PublicListItems)
+                        {
+                            <a href="/lists/@list.CustomListId"
+                               class="flex flex-col gap-1 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4 transition-colors hover:bg-(--color-surface-hover)">
+                                <h3 class="font-semibold text-(--color-action-ink)">@list.ListName</h3>
+                                <p class="text-xs text-(--color-text-muted)">
+                                    @(list.StoryCount == 1 ? "1 story" : $"{list.StoryCount} stories") ·
+                                    created @list.DateCreated.ToString("MMM d, yyyy")
+                                </p>
+                            </a>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                @* Story tabs: Favorites, Recommendations, Authored — deck + filter sidebar
+                   (sidebar stacks below the deck at narrow) *@
+                <div class="flex flex-col gap-6 md:flex-row md:items-start">
+                    <div class="min-w-0 flex-1">
+                        <StoryDeck Stories="@(StoryItems ?? [])"
+                                   UserStoryInteractionStates="@_interactionStates"
+                                   CurrentUserId="@_currentUserId"
+                                   EmptyMessage="@StoryEmptyMessage"
+                                   CurrentPage="@_storyFilter.Page"
+                                   PageSize="@_storyFilter.PageSize"
+                                   TotalCount="@StoryTotalCount"
+                                   OnPageChanged="@HandleStoryPageChanged"
+                                   OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+                        <ReportDialog @ref="_reportDialog" />
+                    </div>
+                    <aside class="w-full md:w-72 md:shrink-0 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+                        <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Filters</h2>
+                        <ResultsFilterPanel OnSearch="@HandleStoryFilterChanged"
+                                            InitialFilter="@_storyFilter"
+                                            AvailableSorts="@_availableSorts"
+                                            ShowTextSearch="true"
+                                            ShowTagFilter="true"
+                                            ShowInteractionFilters="false" />
+                    </aside>
+                </div>
+            }
+        </div>
+
+    </div>
 }
 
 @code {
@@ -138,6 +346,39 @@ else
     private bool _initialized;
     private int _loadedUserId = int.MinValue;      // sentinel; no real UserId equals this
     private ProfileTab _loadedTab = (ProfileTab)(-1); // sentinel; outside valid enum range
+
+    // ── Presentation helpers (from the former ProfileDesktop composite) ───────────
+    private ReportDialog _reportDialog = default!;
+
+    private static readonly IReadOnlyList<DefaultSortOrder> _availableSorts =
+        [DefaultSortOrder.DatePublished, DefaultSortOrder.Random, DefaultSortOrder.Relevance];
+
+    private string StoryEmptyMessage => _tab switch
+    {
+        ProfileTab.Favorites       => "No favorites yet.",
+        ProfileTab.Recommendations => "No recommendations given yet.",
+        ProfileTab.Authored        => "No stories written yet.",
+        _                          => "No stories."
+    };
+
+    private static string TabLabel(ProfileTab tab) => tab switch
+    {
+        ProfileTab.Profile         => "Profile",
+        ProfileTab.Favorites       => "Favorites",
+        ProfileTab.Recommendations => "Recommendations",
+        ProfileTab.Authored        => "Stories",
+        ProfileTab.Blog            => "Blog",
+        ProfileTab.Series          => "Series",
+        ProfileTab.TagSelections   => "Tag Selections",
+        ProfileTab.Lists           => "Lists",
+        _                          => tab.ToString()
+    };
+
+    private static string TabClasses(bool isActive) =>
+        "px-3 py-2.5 text-sm transition-colors border-b-2 " +
+        (isActive
+            ? "border-(--color-action-ink) font-semibold text-(--color-action-ink)"
+            : "border-transparent text-(--color-text-muted) hover:border-(--color-border) hover:text-(--color-text)");
 
     // Open Graph/Twitter meta (WU-Seo).
     private string OgTitle => Header is null ? "Profile" : $"{Header.Username} — Profile";
