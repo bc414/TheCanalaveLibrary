@@ -12,6 +12,13 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// Applies the actual <c>InitialSchema</c> migration once the container is up, then builds a
 /// <see cref="Respawner"/> that tests call via <see cref="ResetAsync"/> before each test to restore
 /// the DB to the migrated+lookup baseline. See testing.md "Integration tests reset between every test."
+///
+/// Also owns the single collection-wide <see cref="TestAppFactory"/> (<see cref="Factory"/>): the
+/// real host is built <b>once per run</b>, not once per test. DB isolation is Respawn's job (per
+/// test, above); the shared host's only per-test in-memory state is reset by
+/// <c>IntegrationTestBase.ResetSharedHostState</c>. Because the whole suite is one serial collection
+/// (<c>[assembly: CollectionBehavior(DisableTestParallelization = true)]</c>), a single shared host
+/// is safe. See testing.md "Integration test host is shared collection-wide."
 /// </summary>
 public sealed class PostgresFixture : IAsyncLifetime
 {
@@ -24,6 +31,12 @@ public sealed class PostgresFixture : IAsyncLifetime
     private Respawner _respawner = null!;
 
     public string ConnectionString => _container.GetConnectionString() + ";Include Error Detail=true";
+
+    /// <summary>
+    /// The collection-wide host, built once in <see cref="InitializeAsync"/>. Every test resolves
+    /// services from this instance via <c>IntegrationTestBase.Factory</c> — no per-test host build.
+    /// </summary>
+    public TestAppFactory Factory { get; private set; } = null!;
 
     public async Task InitializeAsync()
     {
@@ -75,6 +88,12 @@ public sealed class PostgresFixture : IAsyncLifetime
                 "external_platforms"
             ]
         });
+
+        // Build the collection-wide host once, after the schema exists. Forcing .Services here
+        // triggers the (single) host build + one-time DevSeed=None seeder pass up front rather than
+        // lazily on the first test.
+        Factory = new TestAppFactory(ConnectionString);
+        _ = Factory.Services;
     }
 
     /// <summary>
@@ -90,6 +109,8 @@ public sealed class PostgresFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        // Dispose the host before the container it connects to.
+        Factory.Dispose();
         await _container.DisposeAsync();
     }
 }

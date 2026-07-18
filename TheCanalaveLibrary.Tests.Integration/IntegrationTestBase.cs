@@ -8,40 +8,58 @@ namespace TheCanalaveLibrary.Tests.Integration;
 
 /// <summary>
 /// Base class for all integration test classes in the "Postgres" collection.
-/// Owns the factory lifecycle and reset/seeding infrastructure — see testing.md
+/// Owns the per-test reset/seeding infrastructure — see testing.md
 /// "Integration tests reset between every test (Respawn)."
 ///
 /// <b>Lifecycle per test:</b>
 /// <list type="number">
-///   <item><description><see cref="InitializeAsync"/> (this base): resets DB via Respawn, creates
-///   a fresh <see cref="TestAppFactory"/>.</description></item>
-///   <item><description><see cref="InitializeAsync"/> (override in child): seeds per-class fixture
-///   rows (users, stories) via the helper methods below.</description></item>
+///   <item><description><see cref="InitializeAsync"/> (this base): resets DB rows via Respawn, then
+///   resets the shared host's in-memory state (<see cref="ResetSharedHostState"/>). The host itself
+///   (<see cref="Factory"/>) is built once collection-wide by <see cref="PostgresFixture"/> — never
+///   per test.</description></item>
+///   <item><description><see cref="InitializeAsync"/> (override in child): seeds the rows this test
+///   needs (users, stories) via the helper methods below.</description></item>
 ///   <item><description>Test body runs.</description></item>
-///   <item><description><see cref="DisposeAsync"/>: disposes the factory (Respawn reset before
-///   the <i>next</i> test handles the application rows).</description></item>
+///   <item><description><see cref="DisposeAsync"/>: nothing to tear down — the shared host outlives
+///   the test, and Respawn wipes application rows before the next test.</description></item>
 /// </list>
 ///
 /// <b>Override contract:</b> if a child class overrides <see cref="InitializeAsync"/>, it MUST
-/// call <c>await base.InitializeAsync()</c> first so the reset and factory are ready before
-/// any seeding helper is used.
+/// call <c>await base.InitializeAsync()</c> first so the reset is done before any seeding helper
+/// is used.
 /// </summary>
 public abstract class IntegrationTestBase(PostgresFixture postgres) : IAsyncLifetime
 {
-    /// <summary>The live host for the current test. Created after reset; disposed after test.</summary>
-    protected TestAppFactory Factory { get; private set; } = null!;
+    /// <summary>
+    /// The collection-wide host, shared across every test (built once by <see cref="PostgresFixture"/>).
+    /// Its DB is reset per test by Respawn; its in-memory state by <see cref="ResetSharedHostState"/>.
+    /// </summary>
+    protected TestAppFactory Factory => postgres.Factory;
 
     public virtual async Task InitializeAsync()
     {
         await postgres.ResetAsync();
-        Factory = new TestAppFactory(postgres.ConnectionString);
-        _ = Factory.Services; // trigger host build
+        ResetSharedHostState();
     }
 
-    public virtual Task DisposeAsync()
+    public virtual Task DisposeAsync() => Task.CompletedTask;
+
+    /// <summary>
+    /// Restores the shared host's in-memory singleton state to its clean baseline before each test.
+    /// Respawn (above) resets DB <i>rows</i>; this resets the process-memory state that would
+    /// otherwise leak across tests on the shared host. <b>This is the COMPLETE set of stateful
+    /// singletons in the host</b> (the real rate-limiter is swapped for a stateless fake; the import
+    /// service and sprite probe are stateless) — if a new stateful singleton is ever registered in
+    /// <c>Program.cs</c>, it MUST be reset here. See testing.md "Integration test host is shared
+    /// collection-wide."
+    /// </summary>
+    private void ResetSharedHostState()
     {
-        Factory.Dispose();
-        return Task.CompletedTask;
+        // Anonymous() == new() == the default a freshly-built host's FakeActiveUserContext would have.
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        Factory.Services.GetRequiredService<ViewCountBuffer>().Clear();
+        Factory.Services.GetRequiredService<ReadingProgressBuffer>().Clear();
+        Factory.Services.GetRequiredService<UserActivityBuffer>().Clear();
     }
 
     // ── Seeding helpers ───────────────────────────────────────────────────────────

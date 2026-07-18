@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -24,10 +25,13 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// Testcontainers connection string directly. Everything else (Identity, real service registrations)
 /// is wired exactly as production.
 ///
-/// Each test method gets its own instance (xUnit constructs a fresh test-class instance per <c>[Fact]</c>),
-/// so each test gets its own DI container and therefore its own <see cref="FakeActiveUserContext"/> —
-/// no cross-test contamination from the mutable fake, even though it's registered as a singleton
-/// within any one factory.
+/// <b>One instance, shared collection-wide.</b> This host is built once per run and owned by
+/// <see cref="PostgresFixture"/> (<see cref="PostgresFixture.Factory"/>); every test resolves from
+/// it. Per-test isolation is <em>not</em> this factory's job: Respawn resets the DB before each
+/// test, and <c>IntegrationTestBase.ResetSharedHostState</c> resets the shared host's in-memory
+/// state (the mutable <see cref="FakeActiveUserContext"/> singleton back to
+/// <see cref="FakeActiveUserContext.Anonymous"/>, plus the signal buffers). See testing.md
+/// "Integration test host is shared collection-wide."
 /// </summary>
 public sealed class TestAppFactory(string connectionString) : WebApplicationFactory<Program>
 {
@@ -37,25 +41,35 @@ public sealed class TestAppFactory(string connectionString) : WebApplicationFact
     {
         Directory.CreateDirectory(WebRootPath);
 
-        // "Development" environment so the DataSeeder runs (harmless — tests seed their own
-        // identities via IntegrationTestBase.SeedUserAsync; Respawn wipes everything before
-        // the next test).
+        // "Development" environment so Program.cs's IsDevelopment() branches (dev-diagnostics
+        // endpoints, DetailedErrors) behave as in a real local run. The DataSeeder also runs under
+        // this environment but is pinned to DevSeed=None below, so it seeds nothing — tests seed
+        // their own identities via IntegrationTestBase.SeedUserAsync.
         builder.UseEnvironment(Environments.Development);
 
         // Redirect uploads to a per-factory temp folder — LocalImageStorageService writes under
         // IWebHostEnvironment.WebRootPath, and tests must never touch the real wwwroot/uploads/.
         builder.UseWebRoot(WebRootPath);
 
-        // Pin the seeder to Minimal (users + roles only): under the Development environment the
-        // seeder runs on every factory boot — i.e. before EVERY test (Respawn wipes TestUser, so
-        // its guard never trips). The Full showcase inventory would add seconds per test. Unlike
-        // the connection string (read eagerly by Program.cs — see the DbContext note below), the
-        // seeder reads IConfiguration lazily at run time, so this override works.
+        // Pin the seeder to None: under the Development environment the seeder runs on every factory
+        // boot, and (with the factory now shared collection-wide — see PostgresFixture) once per run.
+        // Tests seed their own identities via IntegrationTestBase.SeedUserAsync and never depend on
+        // TestUser/AdminUser (testing.md forbids it); the ASP.NET role rows tests need as FK targets
+        // come from ApplicationRoleConfiguration.HasData (Respawn-ignored), not the seeder, so None
+        // is safe. Unlike the connection string (read eagerly by Program.cs — see the DbContext note
+        // below), the seeder reads IConfiguration lazily at run time, so this override works.
         builder.ConfigureAppConfiguration((_, cfg) =>
-            cfg.AddInMemoryCollection(new Dictionary<string, string?> { ["DevSeed"] = "Minimal" }));
+            cfg.AddInMemoryCollection(new Dictionary<string, string?> { ["DevSeed"] = "None" }));
 
         builder.ConfigureServices(services =>
         {
+            // Collapse Identity's deliberately-slow PBKDF2 to a single iteration. No test in this
+            // suite verifies a password — auth is faked via TestAuthenticationHandler +
+            // FakeActiveUserContext — so the hash cost is pure waste, paid by every
+            // SeedUserAsync (userManager.CreateAsync). The stored hash records its own iteration
+            // count, so this only affects cost, never correctness of the create path.
+            services.Configure<PasswordHasherOptions>(o => o.IterationCount = 1);
+
             // Re-register both DbContexts against the Testcontainers database.
             // ConfigureAppConfiguration cannot reliably override the connection string because
             // Program.cs reads it via builder.Configuration.GetConnectionString() before the

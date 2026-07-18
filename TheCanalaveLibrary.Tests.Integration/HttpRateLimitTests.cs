@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using TheCanalaveLibrary.Core;
 
 namespace TheCanalaveLibrary.Tests.Integration;
 
@@ -12,14 +14,45 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// tests never need a real form post, and 400s on the way to the 429 are expected. In the
 /// TestServer every request shares one partition (no RemoteIpAddress → "unknown"), which is
 /// exactly what a single-attacker window looks like.
+///
+/// <b>Own per-test host.</b> The rate limiter is stateful middleware whose per-partition windows
+/// do not replenish within a run, so these tests cannot share the collection-wide host (a window
+/// consumed by an earlier test would fail the next). Each test runs against its own fresh
+/// <see cref="TestAppFactory"/> — the same isolation principle <see cref="WriteThrottleTests"/>
+/// uses for the service-layer throttle. Identities are still seeded through the shared DB.
 /// </summary>
 [Collection("Postgres")]
 public sealed class HttpRateLimitTests(PostgresFixture postgres) : IntegrationTestBase(postgres)
 {
+    private readonly PostgresFixture _postgres = postgres;
+    private TestAppFactory _factory = null!;
+
+    public override async Task InitializeAsync()
+    {
+        await base.InitializeAsync();
+        _factory = new TestAppFactory(_postgres.ConnectionString);
+    }
+
+    public override Task DisposeAsync()
+    {
+        _factory.Dispose();
+        return base.DisposeAsync();
+    }
+
+    /// <summary>Sets the isolated factory's own fake (its DI container is separate from the shared one).</summary>
+    private void SetIsolatedActiveUser(FakeActiveUserContext ctx)
+    {
+        FakeActiveUserContext fake = _factory.Services.GetRequiredService<FakeActiveUserContext>();
+        fake.UserId          = ctx.UserId;
+        fake.IsAuthenticated = ctx.IsAuthenticated;
+        fake.IsModerator     = ctx.IsModerator;
+        fake.IsAdmin         = ctx.IsAdmin;
+    }
+
     [Fact]
     public async Task AuthFormPosts_Return429WithRetryAfterAndABody_PastTheWindowLimit()
     {
-        using HttpClient client = Factory.CreateClient();
+        using HttpClient client = _factory.CreateClient();
 
         for (int i = 0; i < 10; i++)
         {
@@ -40,7 +73,7 @@ public sealed class HttpRateLimitTests(PostgresFixture postgres) : IntegrationTe
     [Fact]
     public async Task AuthWindow_OnlyCoversAccountPosts_GetsAndOtherRoutesStayUnlimited()
     {
-        using HttpClient client = Factory.CreateClient();
+        using HttpClient client = _factory.CreateClient();
 
         for (int i = 0; i < 15; i++)
         {
@@ -57,9 +90,9 @@ public sealed class HttpRateLimitTests(PostgresFixture postgres) : IntegrationTe
         // caller. The garbage body still 400s after the limiter counts the request, exactly as
         // before; only the auth gate is new.
         int modId = await SeedUserAsync("mod");
-        SetActiveUser(FakeActiveUserContext.Moderator(modId));
+        SetIsolatedActiveUser(FakeActiveUserContext.Moderator(modId));
 
-        using HttpClient client = Factory.CreateClient();
+        using HttpClient client = _factory.CreateClient();
 
         for (int i = 0; i < 30; i++)
         {
@@ -76,7 +109,7 @@ public sealed class HttpRateLimitTests(PostgresFixture postgres) : IntegrationTe
     [Fact]
     public async Task TagReads_AreNeverRateLimited()
     {
-        using HttpClient client = Factory.CreateClient();
+        using HttpClient client = _factory.CreateClient();
 
         for (int i = 0; i < 35; i++)
         {

@@ -39,14 +39,21 @@ public sealed class DataProtectionPersistenceTests(PostgresFixture postgres) : I
     [Fact]
     public void ProtectedPayload_SurvivesProcessReplacement_AcrossFactories()
     {
+        // This test genuinely needs to dispose a host mid-test, so it uses two of its OWN throwaway
+        // factories — NOT the collection-shared Factory (disposing that would poison every
+        // subsequent test in the run). Both share only the database, which is the whole point.
+
         // Host A protects…
-        IDataProtector protectorA = Factory.Services
-            .GetRequiredService<IDataProtectionProvider>()
-            .CreateProtector("Tests.DataProtectionPersistence.CrossHost");
-        string protectedPayload = protectorA.Protect("survives-redeploy");
+        string protectedPayload;
+        using (TestAppFactory firstFactory = new(_postgres.ConnectionString))
+        {
+            IDataProtector protectorA = firstFactory.Services
+                .GetRequiredService<IDataProtectionProvider>()
+                .CreateProtector("Tests.DataProtectionPersistence.CrossHost");
+            protectedPayload = protectorA.Protect("survives-redeploy");
+        }
 
         // …host A dies (deploy), host B boots against the same database…
-        Factory.Dispose();
         using TestAppFactory secondFactory = new(_postgres.ConnectionString);
         IDataProtector protectorB = secondFactory.Services
             .GetRequiredService<IDataProtectionProvider>()

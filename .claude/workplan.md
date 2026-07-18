@@ -3331,3 +3331,32 @@ mostly make-nullable / drop-phantom-FK / rename churn) were collapsed to a singl
   non-model items, and the pg_dump schema-diff verification step.
 - **Tool:** Claude Code (Opus). **Pointer:** `.claude/plans/please-put-together-a-tidy-hollerith.md`;
   `canalave-conventions/layer1-data-model.md` "Migrations".
+
+## WU-IntTestPerf — Integration tier speedup: shared host + cheap seeding (DONE ✓ 2026-07-18)
+
+Integration tier was **12m30s / 727 tests** — cost was repeated construction + wasted crypto paid
+per `[Fact]`, serially, not the Postgres/Respawn realism. Two changes (plan:
+`.claude/plans/put-together-a-plan-linked-hoare.md`; rigor archaeology in that plan's Context):
+
+- **Tier A — no wasted password crypto** (`TestAppFactory`): `PasswordHasherOptions.IterationCount = 1`
+  (auth is faked; no test verifies a password) speeds every `SeedUserAsync`; `DevSeed=None` (was
+  `Minimal`) skips the seeder entirely — safe because role rows come from `HasData` (Respawn-ignored)
+  and no test may depend on seeded users. Measured alone: 12m30s → **10m27s**, 727 green.
+- **Tier B — one shared host, not one per test** (`PostgresFixture` now owns a collection-wide
+  `TestAppFactory`, built once; `IntegrationTestBase.Factory` returns it). Respawn still resets the
+  DB per test; a new `ResetSharedHostState()` resets the *only* stateful singletons — the mutable
+  `FakeActiveUserContext` → `Anonymous()` and the three signal buffers' `Clear()`. Net: **10m27s →
+  ~1m25s**, 727 green (two consecutive clean runs).
+- **Shared-host conflicts surfaced by Tier B, both fixed** (exactly the "test that mutates shared
+  host state" class the plan flagged): `DataProtectionPersistenceTests` called `Factory.Dispose()`
+  to simulate process replacement — now uses two of its own throwaway factories; `HttpRateLimitTests`
+  relied on a fresh rate-limiter window per test (stateful middleware) — now owns a per-test factory,
+  same pattern as `WriteThrottleTests`. Both leave the shared host untouched.
+- **Cells:** none — test infrastructure; no feature/layer behavior change. **Not in scope:** Tier C
+  (parallelism via DB-per-worker); the pre-existing flaky `CanalaveTypeaheadTests` (RazorComponents).
+- **Docs:** `testing.md` — new "Integration test host is shared collection-wide" section (Respawn owns
+  DB isolation; the reset-hook rule for new stateful singletons; the own-your-own-factory rule),
+  rewrote the `DevSeed` note, refreshed the stale ~2m20s figure. Stale doc-comments corrected on
+  `TestAppFactory` / `IntegrationTestBase` / `PostgresFixture`.
+- **Tool:** Claude Code (Opus). **Pointer:** `.claude/plans/put-together-a-plan-linked-hoare.md`;
+  `canalave-conventions/testing.md` "Integration test host is shared collection-wide".

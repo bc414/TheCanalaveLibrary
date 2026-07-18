@@ -77,16 +77,52 @@ or `SecurityStampValidator`. Use a `TestAppFactory : WebApplicationFactory<Progr
 
 Everything else (real service registrations, Identity) stays wired as production.
 
-**`DevSeed=Minimal` pin:** `TestAppFactory` also overrides config key `DevSeed` to `Minimal`
-(ONLY `TestUser` + `AdminUser` + roles — matching the pre-rewrite seeder's per-test cost; each
-additional user is a slow PBKDF2 hash multiplied by every test). Under the `Development`
-environment the `DataSeeder` runs on every factory boot — i.e. before *every* test, because
-Respawn wipes `TestUser` so the seeder's guard never trips — and the Full showcase inventory
-would add seconds per test (measured: Full-in-tests pushed the tier from ~2m20s to ~3m45s even
-with just 5 extra users). Unlike the connection string (read eagerly, hence the
-descriptor-replacement dance above), the seeder reads `IConfiguration` lazily at run time, so a
-plain `ConfigureAppConfiguration` in-memory override works. Tests still must not depend on seeded
-rows (the rule above) — including the Minimal-mode `TestUser`/`AdminUser`.
+**`DevSeed=None` pin + cheap password hashing:** `TestAppFactory` overrides config key `DevSeed`
+to `None` (the seeder seeds nothing) and lowers `PasswordHasherOptions.IterationCount` to `1`.
+Tests seed their own identities via `SeedUserAsync` and must not depend on seeded rows (the rule
+above); the ASP.NET role rows tests use as FK targets come from
+`ApplicationRoleConfiguration.HasData` (Respawn-ignored — see `PostgresFixture.TablesToIgnore`),
+not the seeder, so `None` is safe. No test verifies a password (auth is faked via
+`TestAuthenticationHandler` + `FakeActiveUserContext`), so Identity's deliberately-slow PBKDF2 is
+pure cost — collapsing it to one iteration speeds every `SeedUserAsync`. Unlike the connection
+string (read eagerly, hence the descriptor-replacement dance above), the seeder reads
+`IConfiguration` lazily at run time, so a plain `ConfigureAppConfiguration` in-memory override
+works. (History: the seeder used to run a `Minimal` two-user seed on every per-test factory boot;
+that cost — and the whole per-test factory — is gone now that the host is shared, below.)
+
+## Integration test host is shared collection-wide
+
+The whole integration suite is one serial collection (`[assembly: CollectionBehavior(
+DisableTestParallelization = true)]`), so it uses **one** `TestAppFactory`, built **once per run**
+and owned by `PostgresFixture` (`PostgresFixture.Factory`). `IntegrationTestBase.Factory` returns
+it; no test builds its own host by default. This is what makes the tier fast — booting the real
+`Program.cs` host ~730 times (once per `[Fact]`) was the dominant cost.
+
+**Per-test isolation is Respawn's job, not the factory's.** Do not conflate "new host per test"
+with "clean state per test":
+- **DB rows** — reset by `PostgresFixture.ResetAsync()` (Respawn) before every test. Unchanged;
+  this is the load-bearing isolation that licenses absolute assertions.
+- **In-memory host state** — reset by `IntegrationTestBase.ResetSharedHostState()` before every
+  test: the mutable `FakeActiveUserContext` singleton back to `Anonymous()`, plus the signal
+  buffers (`ViewCountBuffer` / `ReadingProgressBuffer` / `UserActivityBuffer`, each has a test-only
+  `Clear()`). **This is the complete set of stateful singletons in the host** (the real write-rate
+  limiter is swapped for a stateless fake; import service and sprite probe are stateless). **Rule:
+  any new stateful singleton registered in `Program.cs` MUST be reset here** — otherwise it leaks
+  across the shared host and tests fail order-dependently with `ObjectDisposedException` or stale
+  data.
+
+**A test that needs its own host builds its own `TestAppFactory`** (never disposes or mutates the
+shared one — that poisons the rest of the run). Three do, and each documents why:
+- `WriteThrottleTests` — re-registers the *real* `ServerWriteRateLimitService` (the shared host
+  uses the pass-through fake).
+- `HttpRateLimitTests` — the HTTP edge rate limiter is stateful middleware whose per-partition
+  windows don't replenish within a run, so each test needs a fresh window.
+- `DataProtectionPersistenceTests` — deliberately disposes a host mid-test to prove keys survive
+  process replacement, so it uses two of its own throwaway factories.
+
+Result: the tier dropped from ~12m30s (727 per-test host boots) to ~1m25s (one shared boot), same
+727 tests, same Postgres/Respawn rigor. (Wall-clock scales with test count × per-test cost; the
+old figure grew with the suite, this one grows far slower.)
 
 ## What stays manual (out of scope for automated tests)
 
@@ -298,9 +334,10 @@ fixtures without checking the relevant audit file for a note that they were deli
   the behavioral placement rule (see `ClientTagServiceTests`).
 - **`TheCanalaveLibrary.Tests.Integration`**: same xUnit/FluentAssertions packages, plus
   `Testcontainers.PostgreSql`, `Microsoft.AspNetCore.Mvc.Testing`, and `Respawn`. Project
-  reference: Server. All test classes inherit `IntegrationTestBase` (provides factory
-  lifecycle, `ResetAsync` via `PostgresFixture`, `SeedUserAsync`, `SeedStoryAsync`,
-  `SetActiveUser`). Serial execution enforced by `[assembly: CollectionBehavior(
+  reference: Server. All test classes inherit `IntegrationTestBase` (exposes the collection-shared
+  `Factory` from `PostgresFixture`, and per-test `ResetAsync` via `PostgresFixture` +
+  `ResetSharedHostState`, `SeedUserAsync`, `SeedStoryAsync`, `SetActiveUser` — see "Integration
+  test host is shared collection-wide"). Serial execution enforced by `[assembly: CollectionBehavior(
   DisableTestParallelization = true)]` in `AssemblyInfo.cs`.
 - **`TheCanalaveLibrary.Tests.RazorComponents`**: `bunit`, `xunit`,
   `xunit.runner.visualstudio`, `Microsoft.NET.Test.Sdk`, `FluentAssertions`, `coverlet.collector`.
