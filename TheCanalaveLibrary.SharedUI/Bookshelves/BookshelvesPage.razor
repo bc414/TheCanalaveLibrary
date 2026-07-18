@@ -15,14 +15,71 @@
 else
 {
     <PageTitle>@BookshelfTabVisuals.For(_tab).Label &mdash; My Bookshelves</PageTitle>
-    <BookshelvesDesktop Tab="_tab"
-                        CurrentUserId="_currentUserId"
-                        Items="@(Items ?? [])"
-                        TotalCount="TotalCount"
-                        InteractionStates="_states"
-                        Filter="_filter"
-                        OnFilterChanged="HandleFilterChanged"
-                        OnPageChanged="HandlePageChanged" />
+
+    @* Former BookshelvesDesktop composite, folded in 2026-07-18 (WU-ResponsiveMerge — single
+       responsive tree, page owns its markup; spec §5.15). Desktop: horizontal tab bar across
+       the top (icon + text, 11 tabs); main area = StoryDeck; sidebar = ResultsFilterPanel
+       (stacks below the deck at narrow). Outer Margin Rule: root has no m-*. *@
+    <div class="flex flex-col gap-4 px-3 py-4 md:px-4">
+
+        @* ── Tab bar ─────────────────────────────────────────────────────────────────────────
+           Grounded Wayfinding bar. AccentColor is a var(--color-tab-*) token reference since
+           the Phase A lock, so the active tint uses color-mix() — the old {hex}22 alpha-suffix
+           concatenation is impossible with var() and was off-token anyway. *@
+        <nav class="flex flex-wrap gap-1 rounded-t-md border-b border-(--color-border) bg-(--color-surface-raised) px-2 pt-2 pb-0" aria-label="Bookshelf tabs">
+            @foreach (BookshelfTab tab in BookshelfTabVisuals.AllTabs)
+            {
+                var info = BookshelfTabVisuals.For(tab);
+                bool isActive = tab == _tab;
+                <a href="/bookshelves/@info.Slug"
+                   class="@TabClasses(isActive)"
+                   style="@(isActive ? $"background-color:color-mix(in oklab, {info.AccentColor} 15%, transparent);color:{info.AccentColor};border-bottom:2px solid {info.AccentColor};" : "")"
+                   aria-current="@(isActive ? "page" : null)">
+                    <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24"
+                         style="fill:@(isActive ? info.AccentColor : "currentColor")" aria-hidden="true">
+                        <path d="@info.IconPath" />
+                    </svg>
+                    <span>@info.Label</span>
+                </a>
+            }
+            @* Cross-link to the separate My Lists section (WU-CustomLists — custom lists are
+               deliberately NOT dynamic tabs here; the closed BookshelfTab enum stays closed). *@
+            <a href="/my-lists"
+               class="ml-auto flex items-center gap-1 px-3 py-2 text-sm text-(--color-action-ink) hover:underline">
+                My Lists →
+            </a>
+        </nav>
+
+        @* ── Main content + filter sidebar (stacks at narrow) ─────────────────────────────── *@
+        <div class="flex flex-col gap-6 md:flex-row md:items-start">
+
+            @* StoryDeck — takes remaining width *@
+            <div class="min-w-0 flex-1">
+                <StoryDeck Stories="@(Items ?? [])"
+                           UserStoryInteractionStates="@_states"
+                           CurrentUserId="@_currentUserId"
+                           EmptyMessage="@EmptyMessage"
+                           CurrentPage="@_filter.Page"
+                           PageSize="@_filter.PageSize"
+                           TotalCount="@TotalCount"
+                           OnPageChanged="@HandlePageChanged"
+                           OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+                <ReportDialog @ref="_reportDialog" />
+            </div>
+
+            @* ResultsFilterPanel sidebar *@
+            <aside class="w-full md:w-72 md:shrink-0 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+                <h2 class="mb-3 text-sm font-bold text-(--color-text-muted) uppercase tracking-wide">Filters</h2>
+                <ResultsFilterPanel OnSearch="@HandleFilterChanged"
+                                    InitialFilter="@_filter"
+                                    AvailableSorts="@_availableSorts"
+                                    ShowTextSearch="true"
+                                    ShowTagFilter="true"
+                                    ShowInteractionFilters="false" />
+            </aside>
+
+        </div>
+    </div>
 }
 
 @code {
@@ -52,6 +109,22 @@ else
 
     private bool _initialized;
     private string? _loadedTab = ""; // sentinel; no valid bookshelf slug is empty
+
+    // ── Presentation state (from the former BookshelvesDesktop composite) ─────────
+    private ReportDialog _reportDialog = default!;
+
+    // Actively Reading additionally offers the viewer-relative "Recently read" sort (its default).
+    private IReadOnlyList<DefaultSortOrder> _availableSorts => _tab == BookshelfTab.ActivelyReading
+        ? [DefaultSortOrder.RecentlyRead, DefaultSortOrder.DatePublished, DefaultSortOrder.Random, DefaultSortOrder.Relevance]
+        : [DefaultSortOrder.DatePublished, DefaultSortOrder.Random, DefaultSortOrder.Relevance];
+
+    private string EmptyMessage => $"No stories in {BookshelfTabVisuals.For(_tab).Label}.";
+
+    private static string TabClasses(bool isActive) =>
+        "flex items-center gap-1.5 rounded-t-md px-3 py-1.5 text-sm transition-colors " +
+        (isActive
+            ? "font-semibold"
+            : "text-(--color-text-muted) hover:bg-(--color-surface-hover) hover:text-(--color-text)");
 
     protected override async Task OnInitializedAsync()
     {

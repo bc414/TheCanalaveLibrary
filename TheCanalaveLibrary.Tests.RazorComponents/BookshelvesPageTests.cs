@@ -7,33 +7,39 @@ using TheCanalaveLibrary.SharedUI;
 namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
-/// Render tests for <see cref="BookshelvesDesktop"/> (WU27). Covers:
+/// Render tests for <see cref="BookshelvesPage"/> (WU27; retargeted from the former
+/// BookshelvesDesktop composite 2026-07-18, WU-ResponsiveMerge — the page now owns its markup
+/// and loads listings via <see cref="IStoryReadService"/>). Covers:
 /// - Tab bar renders all 11 tab links.
 /// - Active tab has aria-current="page"; inactive tabs do not.
 /// - StoryDeck is rendered with supplied stories.
 /// - ResultsFilterPanel is present in the sidebar.
-/// - OnPageChanged callback is wired through StoryDeck → PaginationControls.
 ///
 /// Not tested: Tailwind visual layout, dynamic accent colors (human sign-off for Stage 6).
 /// </summary>
-public class BookshelvesDesktopTests : BunitContext
+public class BookshelvesPageTests : BunitContext
 {
     private readonly FakeUserStoryInteractionWriteService _fakeUsiFakeService = new();
+    private readonly FakeStoryReadService _storyReadService = new();
 
-    public BookshelvesDesktopTests()
+    public BookshelvesPageTests()
     {
+        // Page injections: listings + candidate IDs (IStoryReadService), bookshelf IDs + states
+        // (IUserStoryInteractionReadService), recommendation ID feeds (IRecommendationReadService).
+        Services.AddScoped<IStoryReadService>(_ => _storyReadService);
+        Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
+        Services.AddScoped<IRecommendationReadService>(_ => new FakeRecommendationReadService());
         Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeUsiFakeService);
         // TagSelector inside ResultsFilterPanel injects ITagReadService.
         Services.AddScoped<ITagReadService>(_ => new FakeTagReadService());
         // TagChip and TagSelector inject ISpriteReadService for sprite URL resolution.
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
-        // ReportDialog (inside BookshelvesDesktop) injects IModerationWriteService.
+        // ReportDialog (inside the page) injects IModerationWriteService.
         Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
         JSInterop.Mode = JSRuntimeMode.Loose;
 
-        // TagFilter (inside ResultsFilterPanel) mounts SavedTagSelectionLoadFlyout/SaveDialog
-        // (WU43), both wrapped in a bare <AuthorizeView> — anonymous/not-authorized by default
-        // keeps them off the DOM here (this suite isn't testing that feature).
+        // Supplies the Task<AuthenticationState> cascade the page awaits (anonymous is fine —
+        // _currentUserId stays null). TagFilter's WU43 flyouts stay off the DOM the same way.
         this.AddAuthorization();
     }
 
@@ -43,15 +49,14 @@ public class BookshelvesDesktopTests : BunitContext
         new(id, $"Story {id}", null, null, null, "Author", 5_000,
             StoryStatusEnum.InProgress, Rating.T, DateTime.UtcNow, []);
 
-    private IRenderedComponent<BookshelvesDesktop> RenderDesktop(
+    private IRenderedComponent<BookshelvesPage> RenderPage(
         BookshelfTab activeTab = BookshelfTab.Favorites,
         StoryListingDto[]? items = null)
     {
-        return Render<BookshelvesDesktop>(p => p
-            .Add(c => c.Tab, activeTab)
-            .Add(c => c.Items, items ?? [MakeStory(1), MakeStory(2)])
-            .Add(c => c.TotalCount, 2)
-            .Add(c => c.Filter, new StoryFilterDto()));
+        StoryListingDto[] listings = items ?? [MakeStory(1), MakeStory(2)];
+        _storyReadService.ListingsResult = (listings, listings.Length);
+        return Render<BookshelvesPage>(p => p
+            .Add(c => c.Tab, BookshelfTabSlug.For(activeTab)));
     }
 
     // ── Tab bar ──────────────────────────────────────────────────────────────────
@@ -59,7 +64,7 @@ public class BookshelvesDesktopTests : BunitContext
     [Fact]
     public void TabBar_RendersAllElevenTabs()
     {
-        IRenderedComponent<BookshelvesDesktop> cut = RenderDesktop();
+        IRenderedComponent<BookshelvesPage> cut = RenderPage();
 
         // Each tab is an <a> inside the nav, plus the My Lists cross-link (WU-CustomLists —
         // custom lists are a separate section, not tabs). LINQ filter, not an attribute-value
@@ -74,7 +79,7 @@ public class BookshelvesDesktopTests : BunitContext
     [Fact]
     public void TabBar_ActiveTab_HasAriaCurrent()
     {
-        IRenderedComponent<BookshelvesDesktop> cut = RenderDesktop(BookshelfTab.Favorites);
+        IRenderedComponent<BookshelvesPage> cut = RenderPage(BookshelfTab.Favorites);
 
         var activeLinks = cut.FindAll("nav a[aria-current='page']");
         activeLinks.Should().HaveCount(1, "exactly one tab is active");
@@ -86,7 +91,7 @@ public class BookshelvesDesktopTests : BunitContext
     [Fact]
     public void TabBar_AllTabLinks_HaveCorrectHref()
     {
-        IRenderedComponent<BookshelvesDesktop> cut = RenderDesktop();
+        IRenderedComponent<BookshelvesPage> cut = RenderPage();
 
         foreach (BookshelfTab tab in Enum.GetValues<BookshelfTab>())
         {
@@ -101,18 +106,29 @@ public class BookshelvesDesktopTests : BunitContext
     [Fact]
     public void StoryDeck_IsRendered_WithSuppliedStories()
     {
-        IRenderedComponent<BookshelvesDesktop> cut = RenderDesktop(
+        IRenderedComponent<BookshelvesPage> cut = RenderPage(
             items: [MakeStory(10), MakeStory(11)]);
 
         cut.FindComponents<StoryDeck>().Should().HaveCount(1);
         cut.FindComponents<StoryCard>().Should().HaveCount(2, "two stories → two cards");
     }
 
+    // ── Filter sidebar present at every viewport (drawer deleted, WU-ResponsiveMerge) ────────
+
+    [Fact]
+    public void FilterSidebar_IsAlwaysRendered()
+    {
+        IRenderedComponent<BookshelvesPage> cut = RenderPage();
+
+        cut.FindComponents<ResultsFilterPanel>().Should().HaveCount(1,
+            "the filter panel is a sidebar in the single responsive tree, not a drawer");
+    }
+
     // Mutation sanity: verify the tab bar renders a different active link when activeTab changes.
     [Fact]
     public void TabBar_DifferentActiveTab_ShowsCorrectAriaCurrent()
     {
-        IRenderedComponent<BookshelvesDesktop> cut = RenderDesktop(BookshelfTab.Completed);
+        IRenderedComponent<BookshelvesPage> cut = RenderPage(BookshelfTab.Completed);
 
         string href = cut.Find("nav a[aria-current='page']").GetAttribute("href") ?? "";
         href.Should().Contain(BookshelfTabSlug.For(BookshelfTab.Completed));

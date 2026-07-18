@@ -32,7 +32,11 @@ internal sealed class FakeStoryReadService : IStoryReadService
     public Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId) => Task.FromResult<StoryUpdateDTO?>(null);
     public Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds) => Task.FromResult(Array.Empty<StoryListingDto>());
     public Task<(StoryListingDto[] Items, int TotalCount)> GetRecentListingsAsync(int page, int pageSize) => Task.FromResult((Array.Empty<StoryListingDto>(), 0));
-    public Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null) => Task.FromResult((Array.Empty<StoryListingDto>(), 0));
+
+    /// <summary>Configurable knob for page tests whose listings load through the filter path
+    /// (BookshelvesPageTests). Default empty preserves the original no-op behavior.</summary>
+    public (StoryListingDto[] Items, int TotalCount) ListingsResult { get; set; } = ([], 0);
+    public Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null) => Task.FromResult(ListingsResult);
     public Task<StoryListingDto[]> GetRandomBatchAsync(StoryFilterDto filter, int batchSize) => Task.FromResult(Array.Empty<StoryListingDto>());
     public Task<IReadOnlyList<int>> FilterCandidateIdsAsync(IReadOnlyCollection<int> candidateIds, StoryFilterDto filter) => Task.FromResult<IReadOnlyList<int>>([.. candidateIds]);
     public Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId) => Task.FromResult<IReadOnlyList<int>>([]);
