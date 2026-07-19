@@ -252,6 +252,26 @@ and pre-beta-harmless.
 them. Promotion to a hard gate is a Phase 7 launch-readiness checklist item (a known-vuln
 dependency becomes launch-blocking once real users exist).
 
+**Accepted-risk register — AngleSharp 0.17.1 (CVE-2026-54570 / GHSA-pgww-w46g-26qg).** Moderate
+(CVSS 6.9) mXSS via MathML `<annotation-xml>` (HTML integration-point mishandling + unescaped
+`<`/`>` in serialized attributes), fixed in AngleSharp 1.5.0. **Cannot upgrade:** `HtmlSanitizer`
+9.x hard-pins `AngleSharp (= 0.17.1)` and no release targets 1.x (upstream mganss/HtmlSanitizer
+#491 open since 2023, #614 tracks 1.5.2); a direct override risks a runtime `MissingMethodException`
+in the sanitizer trust boundary. **Mitigation (why this is accepted, not fixed):** the HTML
+sanitizer allow-list (`layer2-services.md` §"User HTML Is Sanitized Once, On Save" — 13 tags +
+`href` only, no `style`/`class`/arbitrary attributes) strips the `<annotation-xml>` element and the
+`encoding` attribute at *every* untrusted-HTML boundary (editor output + all five import formats),
+so the vector cannot survive sanitization; the direct AngleSharp use (export/import DOM walks) only
+parses our own already-sanitized stored content. The report-only scan will keep listing it — that
+is expected, not a regression. **Handling:** Dependabot's AngleSharp bump PRs are **closed, not
+ignored** — `dependabot.yml` deliberately carries *no* AngleSharp entry, so a *different* future
+AngleSharp advisory still surfaces; the specific advisory is dismissed as risk-accepted in the
+GitHub Security tab. **Root-cause fix** (a custom AngleSharp-1.5.2 sanitizer behind the existing
+`IHtmlSanitizationService` seam — drop `Ganss.Xss`, float the direct ref off 0.17.1, backed by an
+XSS-payload test corpus + security review) is a Phase 7 launch-readiness item in `middle_plan_v2.md`
+(the vuln-scan hard gate above blocks on it once real users exist). If an HtmlSanitizer release on
+AngleSharp 1.x lands first, that is the zero-code path instead.
+
 ## Phase-7 Deferred Register (launch-readiness picks these up)
 
 Security items that only make sense at deployment — deliberately **not** built in WU-Security:

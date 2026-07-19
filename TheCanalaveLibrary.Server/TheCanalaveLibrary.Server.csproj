@@ -19,7 +19,18 @@
              HtmlSanitizer. PINNED to 0.17.1: HtmlSanitizer 9.x has a hard AngleSharp (= 0.17.1)
              constraint; floating to 1.x resolves but risks runtime MissingMethodException inside
              the sanitizer (the trust boundary). Bump only together with an HtmlSanitizer release
-             that targets AngleSharp 1.x. -->
+             that targets AngleSharp 1.x (upstream mganss/HtmlSanitizer#491, open since 2023;
+             #614 tracks 1.5.2 — no release yet).
+             KNOWN VULN — ACCEPTED RISK: 0.17.1 carries CVE-2026-54570 / GHSA-pgww-w46g-26qg, a
+             moderate (CVSS 6.9) mXSS via MathML <annotation-xml>, fixed in AngleSharp 1.5.0. Our
+             sanitizer allowlist (ServerHtmlSanitizationService — 13 tags + href only) strips the
+             <annotation-xml> element and the encoding attribute at every untrusted-HTML boundary,
+             so the vector cannot survive sanitization. Root-cause fix (custom AngleSharp-1.5.2
+             sanitizer, drop Ganss.Xss, float this ref off 0.17.1) is a Phase 7 launch-readiness
+             item in middle_plan_v2.md; rationale + mitigation in canalave-conventions/security.md
+             "Dependency Vulnerability Scan Cadence". Dependabot's AngleSharp bump PRs are CLOSED,
+             not ignored (dependabot.yml carries no AngleSharp ignore), and the advisory is
+             dismissed as risk-accepted in the GitHub Security tab. -->
         <PackageReference Include="AngleSharp" Version="0.17.1" />
         <!-- S3-compatible image storage (WU-S3Garage): one client for Garage (dev) and
              Cloudflare R2 (prod). See S3ImageStorageService for the wire-format constraints

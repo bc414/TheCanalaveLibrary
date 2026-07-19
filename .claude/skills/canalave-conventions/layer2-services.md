@@ -481,6 +481,15 @@ blockquote, ul, ol, li, a` (+ `a[href]` with safe schemes, normalized `rel`/`tar
 that persists `EditorView` output injects `IHtmlSanitizationService` and calls it before persisting;
 if the toolbar ever gains a button, extend the allow-list in the same change.
 
+**Security consequence — the allow-list is also a live vuln mitigation.** The sanitizer's parser
+(AngleSharp) is pinned to 0.17.1, which carries CVE-2026-54570 (mXSS via MathML `<annotation-xml>`;
+see `security.md` "Dependency Vulnerability Scan Cadence" and the `AngleSharp` pin comment in
+`TheCanalaveLibrary.Server.csproj`). This restrictive allow-list is what neutralizes it: stripping
+every element/attribute outside the 13-tag + `href` set removes the `<annotation-xml>` element and
+its `encoding` attribute before they can round-trip. So loosening the allow-list is not purely a
+UX/toolbar decision — adding `svg`, `math`, `style`, or broad attributes re-opens the mXSS surface
+until AngleSharp is off 0.17.1 (tracked as a Phase 7 root-cause fix in `middle_plan_v2.md`).
+
 ### Word Count Is Computed Server-Side, On Save — From Stripped Text
 
 Any write path that persists a content body with a `WordCount` column (chapters, and any future

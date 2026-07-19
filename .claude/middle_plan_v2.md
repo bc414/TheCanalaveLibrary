@@ -333,6 +333,16 @@ checklist — each bullet becomes a checkable item, most are small:
     of a shrug (live site, or a collaborator appears).
   - Promote the vuln scan (`dotnet list package --vulnerable`) from report-only to a hard gate —
     shipping a known-vulnerable dependency to real users carries real risk that it didn't pre-launch.
+- **Clear the AngleSharp 0.17.1 mXSS at the root (CVE-2026-54570)** — the vuln-scan hard gate above
+  will block on this known-vulnerable AngleSharp unless it's cleared first. Can't just bump:
+  HtmlSanitizer 9.x hard-pins `AngleSharp (= 0.17.1)` and there's no 1.x release (upstream
+  mganss/HtmlSanitizer #491/#614). Fix: replace `Ganss.Xss` with a small custom sanitizer built on
+  AngleSharp 1.5.2 behind the existing `IHtmlSanitizationService` seam (allow-list walk + XSS-payload
+  test corpus + security review), and float the direct AngleSharp ref (export/import DOM walks) off
+  0.17.1. Currently **risk-accepted** — the 13-tag/`href`-only allow-list strips the `<annotation-xml>`
+  vector at every trust boundary (`security.md` "Dependency Vulnerability Scan Cadence" +
+  `layer2-services.md` allow-list section; `TheCanalaveLibrary.Server.csproj` pin comment). If an
+  HtmlSanitizer release targeting AngleSharp 1.x lands first, that's the zero-code path instead.
 - **TLS/domain** (Cloudflare Registrar per spec §1).
 - **Legal/policy track** (decision row 10 — ToS, privacy policy, DMCA agent, moderation
   obligations): non-engineering, runs parallel, gates launch.
