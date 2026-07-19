@@ -29,8 +29,6 @@ public partial class BaseComment : IModeratableContent
 
     public virtual ICollection<CommentLike> Likes { get; set; } = new List<CommentLike>();
 
-    public virtual ICollection<FeatureContribution> FeatureContributions { get; set; } = new List<FeatureContribution>();
-
     public virtual ICollection<BaseComment> InverseParentComment { get; set; } = new List<BaseComment>();
 
     public virtual BaseComment? ParentComment { get; set; }

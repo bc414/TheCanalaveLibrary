@@ -133,8 +133,8 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
 
         const string copy = """
             COPY user_stats (user_id, acknowledged_as_beta_reader_count, acknowledged_as_inspiration_count,
-                active_report_count, authors_followed, blog_posts_written, chapters_read, comments_written,
-                favorites_on_stories, feature_contributions, follower_count, groups_joined,
+                authors_followed, blog_posts_written, chapters_read, comments_written,
+                favorites_on_stories, follower_count, groups_joined,
                 recommendation_successes_earned, recommendations_found_useful, recommendations_received,
                 recommendations_written, spotlight_count, stories_ignored, stories_in_progress,
                 stories_read, stories_written, views_on_stories, words_read, words_written)
@@ -149,13 +149,11 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             await writer.WriteAsync(user.Id, NpgsqlDbType.Integer);
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // acknowledged_as_beta_reader_count
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // acknowledged_as_inspiration_count
-            await writer.WriteAsync(0, NpgsqlDbType.Integer); // active_report_count
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // authors_followed
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // blog_posts_written
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // chapters_read
             await writer.WriteAsync(commentsWritten.GetValueOrDefault(user.Id), NpgsqlDbType.Integer);
             await writer.WriteAsync(favsReceived.GetValueOrDefault(user.Id), NpgsqlDbType.Integer);
-            await writer.WriteAsync(0, NpgsqlDbType.Integer); // feature_contributions
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // follower_count
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // groups_joined
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // recommendation_successes_earned

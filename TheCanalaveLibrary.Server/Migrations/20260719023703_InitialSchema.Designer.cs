@@ -14,7 +14,7 @@ using TheCanalaveLibrary.Server;
 namespace TheCanalaveLibrary.Server.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20260718165824_InitialSchema")]
+    [Migration("20260719023703_InitialSchema")]
     partial class InitialSchema
     {
         /// <inheritdoc />
@@ -1086,52 +1086,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                             ExternalPlatformId = (short)7,
                             Name = "Other"
                         });
-                });
-
-            modelBuilder.Entity("TheCanalaveLibrary.Core.FeatureContribution", b =>
-                {
-                    b.Property<int>("FeatureContributionId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("feature_contribution_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("FeatureContributionId"));
-
-                    b.Property<int?>("BlogPostId")
-                        .HasColumnType("integer")
-                        .HasColumnName("blog_post_id");
-
-                    b.Property<long?>("CommentId")
-                        .HasColumnType("bigint")
-                        .HasColumnName("comment_id");
-
-                    b.Property<DateTime>("DateAwarded")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("date_awarded");
-
-                    b.Property<string>("FeatureName")
-                        .IsRequired()
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)")
-                        .HasColumnName("feature_name");
-
-                    b.Property<int?>("UserId")
-                        .HasColumnType("integer")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("FeatureContributionId")
-                        .HasName("pk_feature_contributions");
-
-                    b.HasIndex("BlogPostId")
-                        .HasDatabaseName("ix_feature_contributions_blog_post_id");
-
-                    b.HasIndex("CommentId")
-                        .HasDatabaseName("ix_feature_contributions_comment_id");
-
-                    b.HasIndex("UserId")
-                        .HasDatabaseName("ix_feature_contributions_user_id");
-
-                    b.ToTable("feature_contributions", (string)null);
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.FollowedUser", b =>
@@ -3967,10 +3921,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("favorites_on_stories");
 
-                    b.Property<int>("FeatureContributions")
-                        .HasColumnType("integer")
-                        .HasColumnName("feature_contributions");
-
                     b.Property<int>("FollowerCount")
                         .HasColumnType("integer")
                         .HasColumnName("follower_count");
@@ -4873,33 +4823,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("SearchModeKeyNavigation");
 
                     b.Navigation("UserStoryInteractionFilterType");
-                });
-
-            modelBuilder.Entity("TheCanalaveLibrary.Core.FeatureContribution", b =>
-                {
-                    b.HasOne("TheCanalaveLibrary.Core.BaseBlogPost", "BlogPost")
-                        .WithMany("FeatureContributions")
-                        .HasForeignKey("BlogPostId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_feature_contributions_blog_posts_blog_post_id");
-
-                    b.HasOne("TheCanalaveLibrary.Core.BaseComment", "Comment")
-                        .WithMany("FeatureContributions")
-                        .HasForeignKey("CommentId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_feature_contributions_base_comments_comment_id");
-
-                    b.HasOne("TheCanalaveLibrary.Core.User", "User")
-                        .WithMany("FeatureContributions")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_feature_contributions_users_user_id");
-
-                    b.Navigation("BlogPost");
-
-                    b.Navigation("Comment");
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.FollowedUser", b =>
@@ -5939,8 +5862,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                 {
                     b.Navigation("BlogPostComments");
 
-                    b.Navigation("FeatureContributions");
-
                     b.Navigation("Likes");
 
                     b.Navigation("Polls");
@@ -5948,8 +5869,6 @@ namespace TheCanalaveLibrary.Server.Migrations
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.BaseComment", b =>
                 {
-                    b.Navigation("FeatureContributions");
-
                     b.Navigation("InverseParentComment");
 
                     b.Navigation("Likes");
@@ -6171,8 +6090,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("ConversationParticipants");
 
                     b.Navigation("CustomLists");
-
-                    b.Navigation("FeatureContributions");
 
                     b.Navigation("FollowedUserFollowedUserNavigations");
 

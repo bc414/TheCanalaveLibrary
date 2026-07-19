@@ -1013,7 +1013,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                     blog_posts_written = table.Column<int>(type: "integer", nullable: false),
                     acknowledged_as_beta_reader_count = table.Column<int>(type: "integer", nullable: false),
                     acknowledged_as_inspiration_count = table.Column<int>(type: "integer", nullable: false),
-                    feature_contributions = table.Column<int>(type: "integer", nullable: false),
                     follower_count = table.Column<int>(type: "integer", nullable: false),
                     authors_followed = table.Column<int>(type: "integer", nullable: false),
                     favorites_on_stories = table.Column<int>(type: "integer", nullable: false),
@@ -1165,41 +1164,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                         principalTable: "AspNetUsers",
                         principalColumn: "id",
                         onDelete: ReferentialAction.Cascade);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "feature_contributions",
-                columns: table => new
-                {
-                    feature_contribution_id = table.Column<int>(type: "integer", nullable: false)
-                        .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    user_id = table.Column<int>(type: "integer", nullable: true),
-                    comment_id = table.Column<long>(type: "bigint", nullable: true),
-                    blog_post_id = table.Column<int>(type: "integer", nullable: true),
-                    feature_name = table.Column<string>(type: "character varying(256)", maxLength: 256, nullable: false),
-                    date_awarded = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("pk_feature_contributions", x => x.feature_contribution_id);
-                    table.ForeignKey(
-                        name: "fk_feature_contributions_base_comments_comment_id",
-                        column: x => x.comment_id,
-                        principalTable: "base_comments",
-                        principalColumn: "comment_id",
-                        onDelete: ReferentialAction.SetNull);
-                    table.ForeignKey(
-                        name: "fk_feature_contributions_blog_posts_blog_post_id",
-                        column: x => x.blog_post_id,
-                        principalTable: "base_blog_posts",
-                        principalColumn: "blog_post_id",
-                        onDelete: ReferentialAction.SetNull);
-                    table.ForeignKey(
-                        name: "fk_feature_contributions_users_user_id",
-                        column: x => x.user_id,
-                        principalTable: "AspNetUsers",
-                        principalColumn: "id",
-                        onDelete: ReferentialAction.SetNull);
                 });
 
             migrationBuilder.CreateTable(
@@ -2706,21 +2670,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "ix_feature_contributions_blog_post_id",
-                table: "feature_contributions",
-                column: "blog_post_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_feature_contributions_comment_id",
-                table: "feature_contributions",
-                column: "comment_id");
-
-            migrationBuilder.CreateIndex(
-                name: "ix_feature_contributions_user_id",
-                table: "feature_contributions",
-                column: "user_id");
-
-            migrationBuilder.CreateIndex(
                 name: "ix_followed_users_followed_user_id",
                 table: "followed_users",
                 column: "followed_user_id");
@@ -3403,9 +3352,6 @@ namespace TheCanalaveLibrary.Server.Migrations
 
             migrationBuilder.DropTable(
                 name: "default_user_story_interaction_filter_settings");
-
-            migrationBuilder.DropTable(
-                name: "feature_contributions");
 
             migrationBuilder.DropTable(
                 name: "followed_users");

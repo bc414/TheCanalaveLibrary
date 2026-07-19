@@ -138,11 +138,6 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasForeignKey(cc => cc.AuthorId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        builder.HasMany(u => u.FeatureContributions)
-            .WithOne(fc => fc.User)
-            .HasForeignKey(fc => fc.UserId)
-            .OnDelete(DeleteBehavior.SetNull);
-
         builder.HasMany(u => u.ReportReporterUsers)
             .WithOne(r => r.ReporterUser)
             .HasForeignKey(r => r.ReporterUserId)

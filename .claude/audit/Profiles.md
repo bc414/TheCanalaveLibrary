@@ -135,7 +135,9 @@ Covering tier: **RazorComponents** —
   Counters deferred (producer not yet built): `ViewsOnStories` (WU38), `SpotlightCount` (post-MVP,
   definition unsettled), acknowledgment counters (no assigned WU — the acknowledgment/beta-reader
   producer is unbuilt; NOT WU37, which is Story Tagging — stale cross-reference corrected
-  2026-07-15), `FeatureContributions` (producer is Feature 56, Stage 2). `ActiveReportCount` was
+  2026-07-15). (`FeatureContributions` was a deferred counter here too, but the column was
+  **removed entirely 2026-07-18** when Feature 56 was cut — see `audit/BlogPosts.md` Feature 56 CUT
+  note.) `ActiveReportCount` was
   found to be an orphaned duplicate (never written; live data is `User.ActiveReportCount` on
   `AspNetUsers`) and dropped via migration in WU-UserStatRecalc — see Feature 58 below.
   Verified: `dotnet build` green; 373 RazorComponents pass; integration counter-specific tests deferred
@@ -176,9 +178,10 @@ Covering tier: **RazorComponents** —
     - **Recompute — 1 raw-SQL counter:** `ViewsOnStories` (`daily_story_stats` mart, joined to the
       author's stories).
     - **Deferred, no recompute query:** `SpotlightCount`, `AcknowledgedAsBetaReaderCount`,
-      `AcknowledgedAsInspirationCount`, `FeatureContributions` — producers unbuilt/unsettled, see
+      `AcknowledgedAsInspirationCount` — producers unbuilt/unsettled, see
       Feature 22's deferred-counters note above. Recomputing these to 0 would mask missing
-      producers, not correct drift.
+      producers, not correct drift. (`FeatureContributions` was in this list until 2026-07-18, when
+      the column was removed with the Feature 56 cut.)
     - **Dropped:** `ActiveReportCount` — orphaned duplicate column, removed via migration (not
       recomputed).
   - Insert-then-recompute: the worker also inserts any missing `UserStat` row before recomputing

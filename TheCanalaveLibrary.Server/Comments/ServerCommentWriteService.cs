@@ -260,7 +260,6 @@ public class ServerCommentWriteService(
         // Hard delete. DB FKs handle the rest:
         //  • ParentCommentId SET NULL  → replies become flat top-level comments.
         //  • CommentLike CASCADE       → likes removed.
-        //  • FeatureContribution SET NULL → attribution nulled.
         int? authorId = comment.UserId;
         writeDb.BaseComments.Remove(comment);
         await writeDb.SaveChangesAsync();

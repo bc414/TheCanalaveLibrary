@@ -42,8 +42,6 @@ public abstract class BaseBlogPost : IModeratableContent
 
     public virtual ICollection<BlogPostLike> Likes { get; set; } = new List<BlogPostLike>();
 
-    public virtual ICollection<FeatureContribution> FeatureContributions { get; set; } = new List<FeatureContribution>();
-
     // Typed to the TPT child (NOT BasePoll) so EF pairs this with BlogPostPoll.BlogPost — the
     // ICollection<BasePoll> typing minted a spurious second relationship (shadow FK
     // base_blog_post_blog_post_id on base_polls, letting a SitePoll point at a blog post).

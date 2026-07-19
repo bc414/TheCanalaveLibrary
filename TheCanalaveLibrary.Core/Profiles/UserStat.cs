@@ -30,8 +30,6 @@ public partial class UserStat
 
     public int AcknowledgedAsInspirationCount { get; set; }
 
-    public int FeatureContributions { get; set; }
-
     public int FollowerCount { get; set; }
 
     public int AuthorsFollowed { get; set; }

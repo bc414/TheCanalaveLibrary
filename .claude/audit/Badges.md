@@ -98,12 +98,14 @@ DisplayOrder for that user) + 1` — visible by default. The curation UI lets us
 **Deferred award triggers:**
 | Badge | Status | Blocking reason |
 |---|---|---|
-| `Patron` | Deferred | `FeatureContributions` counter not populated (producer is Feature 56, Stage 2 — not WU37, which is Story Tagging; stale cross-reference corrected 2026-07-15) |
+| `Patron` | Manual/future | No automated producer. (Formerly cited the `FeatureContributions` counter — **removed 2026-07-18** with the Feature 56 cut; that citation was a stale copy-paste anyway.) Grant via direct `user_badges` insert. |
 | `BetaReader` | Deferred | `AcknowledgedAsBetaReaderCount` counter not populated (acknowledgment/beta-reader producer has no assigned WU) |
-| `Architect` | Deferred | `FeatureContributions` counter not populated (producer is Feature 56, Stage 2) |
-| `Artist` | Deferred | `FeatureContributions` counter not populated (producer is Feature 56, Stage 2) |
+| `Architect` | Manual grant | **Feature 56 (its intended automated producer) was CUT 2026-07-18** — the `FeatureContributions` counter no longer exists. The badge is deliberately **retained** in the catalogue as the site-stewardship recognition lever; grant it by direct `user_badges` insert (psql). `IBadgeWriteService.AwardAsync` stays unmapped (no admin HTTP route). See `audit/BlogPosts.md` Feature 56 CUT note. |
+| `Artist` | Manual/future | No automated producer. (Formerly cited the `FeatureContributions` counter — **removed 2026-07-18** with the Feature 56 cut; that citation was a stale copy-paste anyway.) Grant via direct `user_badges` insert. |
 
-**Open:** none. All WU36 decisions are settled.
+**Open:** none. All WU36 decisions are settled. (Feature 56 cut 2026-07-18 removed the never-built
+`FeatureContributions` counter that three of the above rows had cited as their producer — the
+Architect badge is retained as a manual grant; see the CUT note in `audit/BlogPosts.md`.)
 
 ### WU-AuditFixPass note (2026-07-18)
 

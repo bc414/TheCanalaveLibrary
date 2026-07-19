@@ -642,8 +642,11 @@ Pure application-layer, no schema impact. Anyone who can read a story can export
 beta) redeemed into block-booked homepage story features (story + optional recommendation).
 Mechanics settled 2026-07-11; built as WU-Spotlight. See `audit/Spotlight.md`.
 
-**56. Feature Contributions** — Admin attribution of accepted suggestions. Tied to "Site Development"
-Group.
+**56. Feature Contributions** — ~~Admin attribution of accepted suggestions. Tied to "Site
+Development" Group.~~ **CUT 2026-07-18** (decision row 3's final verdict). Machinery removed; the
+Architect badge is retained as a manual grant. Number kept (not renumbered — other docs cite by
+number). Rationale + removal record: `audit/BlogPosts.md` Feature 56 CUT note;
+`middle_plan_v2.md` §Resolved "Feature Contributions (56) cut".
 
 **57. Notification Cleanup Worker** — `IHostedService` deleting read notifications older than 60 days.
 

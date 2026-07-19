@@ -158,7 +158,6 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     //Badges and badge metrics
     public DbSet<Badge> Badges { get; set; }
     public DbSet<UserBadge> UserBadges { get; set; }
-    public DbSet<FeatureContribution> FeatureContributions { get; set; }
 
     //Advanced story customization
     public DbSet<Series> Series { get; set; } //Series are for splitting a concept across multiple stories

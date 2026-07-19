@@ -379,7 +379,6 @@ public class UserStatRecalculatorTests(PostgresFixture postgres) : IntegrationTe
                 SpotlightCount = 7,
                 AcknowledgedAsBetaReaderCount = 3,
                 AcknowledgedAsInspirationCount = 2,
-                FeatureContributions = 4,
             });
             await db.SaveChangesAsync();
         }
@@ -392,7 +391,6 @@ public class UserStatRecalculatorTests(PostgresFixture postgres) : IntegrationTe
         stat.SpotlightCount.Should().Be(7, "producer unbuilt/unsettled — recomputing to 0 would mask that, not correct drift");
         stat.AcknowledgedAsBetaReaderCount.Should().Be(3);
         stat.AcknowledgedAsInspirationCount.Should().Be(2);
-        stat.FeatureContributions.Should().Be(4);
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────

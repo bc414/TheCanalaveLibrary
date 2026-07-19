@@ -254,8 +254,10 @@ gated on decision row 12; see `audit/Accessibility.md`.
 
 ## Phase 4 — Beta-scope decisions (v1 Phase 3, unchanged)
 
-Feature Contributions (56): design now or explicitly defer past beta — a
-deliberate verdict per feature (decision row 3). Interleaves with Phases 2–3. (Spotlight donation
+Decision row 3 is now fully resolved (all per-feature verdicts rendered — see Resolved).
+Feature Contributions (56) got its verdict 2026-07-18: **cut from the roadmap entirely** (machinery
+removed; the Architect badge is retained as a manual grant — see Resolved "Feature Contributions
+(56) cut"). (Spotlight donation
 infra — 55 remainder — got its verdict 2026-07-11: explicitly deferred past beta; the spotlight
 feature itself was built in Phase 2 as WU-Spotlight. Polls — 37 — designed + built 2026-07-12.
 Story Arcs — 8 — designed + built 2026-07-12 as WU45, scope widened to include the chapter-list
@@ -341,14 +343,14 @@ checklist — each bullet becomes a checkable item, most are small:
 
 Rows 1–6 carried from v1 (numbering preserved — existing docs cite these numbers). Row 4 is
 expanded in scope by Phase 7 above. **Row 5 resolved 2026-07-05; rows 7 and 9 resolved
-2026-07-06 — moved to Resolved below** — row numbers are otherwise left as gaps rather than
+2026-07-06; row 3 fully resolved 2026-07-18 (last item — Feature 56 — cut) — moved to Resolved
+below** — row numbers are otherwise left as gaps rather than
 renumbered, since other docs cite them by number.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
 | 1 | **Non-story report-target rating routing** — unchanged from v1 (see `middle_plan.md` row 1 for the full technical framing). | Deferred from pre-integration cleanup (2026-06-26). | Own work-unit; surface during the Phase 3 moderation-queue review. |
 | 2 | **Homepage design — remaining sections.** The spotlight-curation half was resolved 2026-07-11 (see Resolved "Community Spotlight model"); the spotlight section of `/` is built by WU-Spotlight and no longer gated. What remains open: what else the front door shows (recently updated, featured tags, active SitePolls — open intent recorded 2026-07-12, see `audit/BlogPosts.md` F37 — etc.) and its layout. | Spec §5.28: `/` = Community Spotlight stories; other sections undecided. | Front-door product design. Gates the rest of Phase 2 item 1 (WU-Home). |
-| 3 | **Beta scope for features 51 / 56** — design or defer, per feature. (55-remainder's verdict rendered 2026-07-11: spotlight built, donation infra deferred. **37 Polls' verdict rendered 2026-07-12: designed + built — see Resolved "Polls requirements". 8 Story Arcs' verdict rendered 2026-07-12: designed + built — see Resolved "Story Arcs + chapter presentation".**) | None — genuine Stage-1 intent gaps. | Product-scope judgment. Phase 4. |
 | 4 | **Launch-readiness mechanics** — now the full Phase 7 checklist: deploy mechanism, config contract, migration-in-prod, backup+restore drill, uptime/alerting, TLS/domain, R2 values. | Topology settled (droplet + managed PG + R2); `aspire publish` compose output is the default deploy candidate. | Operational cost/effort trade-offs. Phase 7. |
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Phase 6 gate. |
 | 8 | **Email provider + sending domain** (residual — mechanism resolved 2026-07-06, see Resolved) — which SMTP provider to point the seam at, and the sending domain. | Postmark or Amazon SES (cheap at this scale) or Resend; needs a sending domain, which ties into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Config-only swap once decided (no code change) — gates Phase 7, not Phase 1 anymore. |
@@ -359,6 +361,19 @@ renumbered, since other docs cite them by number.
 ---
 
 ## Resolved
+
+- **Feature Contributions (56) cut (row 3's last Feature-56 verdict)** — **resolved 2026-07-18**
+  (Brian, in chat; ground-truthed against the Gemini origin record and code reality). **Cut from the
+  roadmap entirely**, not deferred. Rationale: the prosocial-recognition space is already covered by
+  shipped features (Beta Reader acknowledgments, Muse/Inspiration, Recommendations, Community
+  Spotlight, Custom Lists); a formal on-site attribution loop has near-zero value at trusted-beta
+  scale (suggestions arrive via Discord); and the feature's `FeatureContribution` table was the
+  single most complex delete-path in the schema (the three-way `SetNull` "diamond" User→FC /
+  User→BlogPost→FC / User→Comment→FC). The prosocial-badge *intent* that motivated it is preserved
+  by **keeping the Architect badge**, granted manually (direct `user_badges` insert — `AwardAsync`
+  stays deliberately unmapped, no admin UI). Clean pre-launch removal (sole squashed `InitialSchema`
+  migration, no shipped data, no `.razor` UI). Full record: `audit/BlogPosts.md` Feature 56 CUT note;
+  feature marked CUT (number kept) in `grid_axes.md` / `status.md`.
 
 - **Desktop/Mobile axis → single responsive site** — **resolved 2026-07-18** (Brian, deliberated in
   chat against first principles, the Oct-2025 Gemini origin record, and current external guidance).

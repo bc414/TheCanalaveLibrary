@@ -1315,8 +1315,9 @@ serializes correctly under any isolation level.
   story-acknowledgment/beta-reader-crediting producer has **no assigned WU** and is unbuilt (not
   WU37 — WU37 is Story Tagging, done; this was a stale cross-reference, corrected 2026-07-15).
   Source ambiguity also unsettled: `BetaReader` entity vs. `StoryAcknowledgment` role 1.
-- `FeatureContributions` — producer is **Feature 56** (status.md: L1 Stage 5, L2/L3 Stage 2,
-  unbuilt), not WU37.
+- ~~`FeatureContributions` — producer is Feature 56.~~ **Removed 2026-07-18:** Feature 56 was cut
+  and the `UserStat.FeatureContributions` column dropped — no longer a deferred counter. See
+  `audit/BlogPosts.md` Feature 56 CUT note.
 
 **`ActiveReportCount` — dropped (WU-UserStatRecalc, 2026-07-15).** `UserStat.ActiveReportCount` was
 an orphaned duplicate column that no write path ever populated — the live moderation path writes

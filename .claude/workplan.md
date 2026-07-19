@@ -3447,3 +3447,35 @@ Two loose ends from WU-IntTestPerf, closed same day:
   default, 300ms, never `<=0`).
 - **Tool:** Claude Code (Opus). **Pointer:** `TheCanalaveLibrary.Tests.Integration/PostgresFixture.cs`;
   `TheCanalaveLibrary.SharedUI/Controls/CanalaveTypeahead.razor` `HandleInputAsync`.
+
+## WU-CutFeature56 — Feature Contributions cut from the roadmap (DONE ✓ 2026-07-18)
+
+- **Decision:** Feature 56 (Feature Contributions — admin attribution of accepted site-feature
+  suggestions) rendered decision row 3's final verdict: **cut entirely**, not deferred. Rationale +
+  full record: `middle_plan_v2.md` §Resolved "Feature Contributions (56) cut"; `audit/BlogPosts.md`
+  Feature 56 CUT note. The prosocial-badge intent that motivated it is preserved by **keeping the
+  Architect badge** as a manual grant (direct `user_badges` insert; `AwardAsync` stays unmapped).
+- **Removed (code + schema):** `FeatureContribution` entity (`Core/Models/`), its `DbSet`, the three
+  `SetNull` FK configs (`BaseBlogPostConfiguration`, `BaseCommentConfiguration`, User config) + the
+  `FeatureContributions` navigations on `User`/`BaseBlogPost`/`BaseComment`, the
+  `UserStat.FeatureContributions` counter (Core entity + `UserStatRecalculator` doc-list +
+  insert-column list), the delete-path notes in `ServerCommentWriteService`/`ServerBlogPostWriteService`,
+  the `UserStatRecalculatorTests` seed/assertion, the `SeedBulkWriter` `user_stats` COPY column+value
+  (would have failed at runtime against the dropped column), and the `ReferenceSQL` table/column/FKs.
+- **Migration:** sole pre-launch `InitialSchema` regenerated (nuke-and-rebuild per
+  `layer1-data-model.md`); non-model DDL (`daily_story_stats` + MVCC tuning) re-appended by hand.
+  New id `20260719023703_InitialSchema`. Architect badge seed retained (grep-confirmed present).
+- **Cells:** Feature 56 row **removed** from `status.md` (number kept, not renumbered — marked CUT in
+  `grid_axes.md`). No other cell Stage changed.
+- **Also fixed (pre-existing, surfaced here):** `SeedBulkWriter`'s `user_stats` COPY listed
+  `active_report_count`, a column `WU-UserStatRecalc` dropped — a latent runtime break in the
+  (test-uncovered) SeedTool that predates this cut. Removed the column + its value write alongside
+  the `feature_contributions` removal; `user_stats` COPY is now 22 aligned columns matching the
+  live schema.
+- **Verified:** `dotnet build` clean; `dotnet test` green all three tiers (Unit 702, RazorComponents
+  510, Integration 727 — the Integration tier applied the regenerated migration + re-appended DDL to
+  fresh Testcontainers-Postgres). Dev DB reset (`reset-dev-db.ps1`) + real server boot confirmed
+  migrate + seed succeed end-to-end: psql ground truth — `feature_contributions` table absent,
+  `user_stats` = 22 columns (no `feature_contributions`, no `active_report_count`),
+  `daily_story_stats` present (re-appended DDL), Architect badge seeded, 7 users.
+- **Tool:** Claude Code (Opus). **Pointer:** `audit/BlogPosts.md` Feature 56 CUT note.

@@ -656,7 +656,6 @@ CREATE TABLE UserStats (
 
                            AcknowledgedAsBetaReaderCount INT NOT NULL DEFAULT 0,
                            AcknowledgedAsInspirationCount INT NOT NULL DEFAULT 0,
-                           FeatureContributions INT NOT NULL DEFAULT 0,
 
     -- Community Interaction Stats
                            FollowerCount INT NOT NULL DEFAULT 0,
@@ -1299,24 +1298,7 @@ CREATE TABLE BlogPostLikes (
 );
 GO
 
--- Table to track official admin attributions for feature suggestions
-DROP TABLE IF EXISTS FeatureContributions;
-GO
-
-CREATE TABLE FeatureContributions (
-                                      ContributionID INT IDENTITY(1,1) PRIMARY KEY,
-                                      UserID INT NULL, -- <-- CHANGED: Made NULLABLE for ON DELETE SET NULL
-                                      CommentID BIGINT NULL, -- CHANGED: Must be BIGINT to match BaseComments
-                                      BlogPostID INT NULL,
-                                      FeatureName NVARCHAR(255) NOT NULL,
-                                      DateAwarded DATETIME2(7) NOT NULL DEFAULT GETUTCDATE(),
-                                      CONSTRAINT CK_FeatureContribution_Source CHECK (
-                                          (CASE WHEN CommentID IS NOT NULL THEN 1 ELSE 0 END +
-                                           CASE WHEN BlogPostID IS NOT NULL THEN 1 ELSE 0
-                                               END) = 1
-                                          )
-);
-GO
+-- (FeatureContributions table removed 2026-07-18 — Feature 56 was cut; see audit/BlogPosts.md.)
 
 -- Table for story import verification
 DROP TABLE IF EXISTS StoryImports;
@@ -1540,10 +1522,7 @@ ALTER TABLE BetaReaders ADD CONSTRAINT FK_StoryBetaReaders_User FOREIGN KEY (Bet
 -- StoryAcknowledgments
 ALTER TABLE StoryAcknowledgments ADD CONSTRAINT FK_StoryAcknowledgments_Story FOREIGN KEY (StoryID) REFERENCES Stories(StoryID) ON DELETE CASCADE;
 ALTER TABLE StoryAcknowledgments ADD CONSTRAINT FK_StoryAcknowledgments_User FOREIGN KEY (AcknowledgedUserID) REFERENCES AspNetUsers(Id) ON DELETE CASCADE;
--- FeatureContributions
-ALTER TABLE FeatureContributions ADD CONSTRAINT FK_FeatureContributions_User FOREIGN KEY (UserID) REFERENCES AspNetUsers(Id) ON DELETE SET NULL;
-ALTER TABLE FeatureContributions ADD CONSTRAINT FK_FeatureContributions_Comment FOREIGN KEY (CommentID) REFERENCES BaseComments(CommentID) ON DELETE SET NULL;
-ALTER TABLE FeatureContributions ADD CONSTRAINT FK_FeatureContributions_BlogPost FOREIGN KEY (BlogPostID) REFERENCES BlogPosts(BlogPostID) ON DELETE SET NULL;
+-- (FeatureContributions FKs removed 2026-07-18 — Feature 56 was cut.)
 -- StoryImports
 ALTER TABLE StoryImports ADD CONSTRAINT FK_StoryImports_Story FOREIGN KEY (StoryID) REFERENCES Stories(StoryID) ON DELETE CASCADE;
 -- Private Messaging

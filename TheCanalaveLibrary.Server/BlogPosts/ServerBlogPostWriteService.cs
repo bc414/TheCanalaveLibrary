@@ -125,8 +125,7 @@ public class ServerBlogPostWriteService(
             throw new UnauthorizedAccessException("You can only delete your own blog posts.");
 
         // Change-tracker stub delete: EF issues child-then-base DELETE in one transaction.
-        // BlogPostLike / BlogPostComment rows cascade; FeatureContribution.BlogPostId is SET NULL
-        // (configured in BaseBlogPostConfiguration). ExecuteDeleteAsync is unsupported on TPT
+        // BlogPostLike / BlogPostComment rows cascade. ExecuteDeleteAsync is unsupported on TPT
         // base-type DbSets — change-tracker stub is the clean alternative.
         writeDb.Remove(new ProfileBlogPost { BlogPostId = blogPostId });
         await writeDb.SaveChangesAsync();

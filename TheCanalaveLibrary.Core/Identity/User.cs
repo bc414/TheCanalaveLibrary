@@ -131,7 +131,6 @@ public class User : IdentityUser<int>
     public virtual ICollection<CommunitySpotlight> CommunitySpotlights { get; set; } = new List<CommunitySpotlight>();
     public virtual ICollection<ConversationParticipant> ConversationParticipants { get; set; } = new List<ConversationParticipant>();
     public virtual ICollection<CustomList> CustomLists { get; set; } = new List<CustomList>();
-    public virtual ICollection<FeatureContribution> FeatureContributions { get; set; } = new List<FeatureContribution>();
     public virtual ICollection<FollowedUser> FollowedUserFollowedUserNavigations { get; set; } = new List<FollowedUser>();
     public virtual ICollection<FollowedUser> FollowedUserUsers { get; set; } = new List<FollowedUser>();
     public virtual ICollection<Vouch> VouchesGiven { get; set; } = new List<Vouch>();

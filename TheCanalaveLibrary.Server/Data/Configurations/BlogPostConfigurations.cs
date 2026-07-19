@@ -8,13 +8,6 @@ public sealed class BaseBlogPostConfiguration : IEntityTypeConfiguration<BaseBlo
 {
     public void Configure(EntityTypeBuilder<BaseBlogPost> builder)
     {
-        // --- Diamond-Breaking SetNulls (Already covered by User SetNull) ---
-        // Example: FeatureContribution.BlogPostId -> BaseBlogPost
-        builder.HasMany(b => b.FeatureContributions)
-            .WithOne(fc => fc.BlogPost)
-            .HasForeignKey(fc => fc.BlogPostId)
-            .OnDelete(DeleteBehavior.SetNull); // Breaks diamond
-
         builder.ToTable("base_blog_posts");
     }
 }
@@ -125,8 +118,3 @@ public sealed class PollVoteConfiguration : IEntityTypeConfiguration<PollVote>
             .HasForeignKey(pv => pv.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }
-
-// NOTE: FeatureContribution has no FeatureContributionConfiguration class. Its delete-breaking
-// relationships are configured from the principal side: BaseBlogPostConfiguration (above) and
-// BaseCommentConfiguration (CommentConfigurations.cs) declare the SetNull FKs to it. It carries no
-// configuration of its own (no composite key, no indexes beyond convention) — only a DbSet mapping.

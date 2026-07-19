@@ -27,7 +27,7 @@ public sealed record UserStatRecalcResult(int RowsInserted, long CountersCorrect
 /// <item>1 raw-SQL counter (<c>ViewsOnStories</c>) reading the <c>daily_story_stats</c> L8 mart
 /// (no EF model exists for it).</item>
 /// <item>Deferred, not recomputed: <c>SpotlightCount</c>, <c>AcknowledgedAsBetaReaderCount</c>,
-/// <c>AcknowledgedAsInspirationCount</c>, <c>FeatureContributions</c> — producers are
+/// <c>AcknowledgedAsInspirationCount</c> — producers are
 /// unbuilt/unsettled; recomputing them to 0 would mask the missing producer, not correct drift.</item>
 /// <item><c>ActiveReportCount</c> was dropped from <c>UserStat</c> entirely (orphaned duplicate,
 /// never written) — nothing to recompute.</item>
@@ -62,11 +62,11 @@ public sealed class UserStatRecalculator(ApplicationDbContext context)
             user_id, stories_read, stories_in_progress, stories_ignored, chapters_read, words_read,
             recommendations_found_useful, stories_written, words_written, comments_written,
             recommendations_written, blog_posts_written, acknowledged_as_beta_reader_count,
-            acknowledged_as_inspiration_count, feature_contributions, follower_count,
+            acknowledged_as_inspiration_count, follower_count,
             authors_followed, favorites_on_stories, views_on_stories, groups_joined,
             recommendations_received, recommendation_successes_earned, spotlight_count
         )
-        SELECT u.id, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        SELECT u.id, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         FROM "AspNetUsers" u
         LEFT JOIN user_stats us ON us.user_id = u.id
         WHERE us.user_id IS NULL

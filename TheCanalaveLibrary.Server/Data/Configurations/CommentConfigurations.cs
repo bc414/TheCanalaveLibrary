@@ -17,13 +17,6 @@ public sealed class BaseCommentConfiguration : IEntityTypeConfiguration<BaseComm
             .HasForeignKey(c => c.ParentCommentId)
             .OnDelete(DeleteBehavior.SetNull); // Keep replies as top-level comments
 
-        // --- Diamond-Breaking SetNulls (Already covered by User SetNull) ---
-        // Example: FeatureContribution.CommentId -> BaseComment
-        builder.HasMany(c => c.FeatureContributions)
-            .WithOne(fc => fc.Comment)
-            .HasForeignKey(fc => fc.CommentId)
-            .OnDelete(DeleteBehavior.SetNull); // Breaks diamond
-
         // Future indexes for querying (e.g., by AuthorId, DatePosted)...
     }
 }

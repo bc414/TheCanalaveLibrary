@@ -1,15 +1,17 @@
 # Audit — BlogPosts/
 
-**Features:** 35 (writing), 36 (display), 37 (polls), 56 (feature contributions). Universal `EditorView`
+**Features:** 35 (writing), 36 (display), 37 (polls). (56 — feature contributions — **CUT
+2026-07-18**; see the Feature 56 CUT note below.) Universal `EditorView`
 for composition (§5.30.2; stale §5.19 reference corrected 2026-06-24).
 
 ## Shared Context
 **Entities (moving Core/Models/ → Core/BlogPosts/ as part of WU31):** `BaseBlogPost` (TPT root,
 `ToTable("base_blog_posts")`, `Rating`→short, M:N `LikedByUsers`) → `ProfileBlogPost` (optional
 `StoryId`, `SetNull`), `GroupBlogPost` (`GroupId`). `BasePoll` (TPT) → `SitePoll` / `BlogPostPoll`;
-`PollOption` (unique `(PollId,Text)` and `(PollId,SortOrder)`). `FeatureContribution` (`SetNull`
-diamond-breaking to blog/comment). All blog posts support comments (see Comments cluster).
-WU31 delivers L2/L3/L3.5/L4 for features 35/36 (profile blog posts only); Feature 56 deferred.
+`PollOption` (unique `(PollId,Text)` and `(PollId,SortOrder)`). All blog posts support comments
+(see Comments cluster). WU31 delivers L2/L3/L3.5/L4 for features 35/36 (profile blog posts only).
+(The `FeatureContribution` entity and its `SetNull` diamond-breaking FKs were removed 2026-07-18
+when Feature 56 was cut — see the Feature 56 CUT note below.)
 
 ## Feature 35 — Blog Post Writing
 - **L1 — Stage 5.** TPT split sound. **L2 — Stage 5.** **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
@@ -212,14 +214,34 @@ bullet below, 2026-07-13.)
   `middle_plan_v2.md` row 2). (The formerly-deferred L5 WASM enablement landed with WU-GlobalFlip —
   see the L5 bullet above.)
 
-## Feature 56 — Feature Contributions
-- **L1 — Stage 5** (`FeatureContribution`; SetNull diamond-breaking FKs to `BaseBlogPost`/`BaseComment`).
-  **L2 — Stage 2** (admin attribution of accepted suggestions; tied to "Site Development" group).
-  **L3/L3.5 — Stage 2. L4 — Stage 1. L5 — N/A** (admin-only server surface).
-- **Settled (2026-06-24, WU31):** Deferred post-MVP. Not part of WU31 scope. Will ship in a dedicated
-  post-MVP work-unit (no sequence number yet). `FeatureContribution` entity, SetNull FKs, `DbSet`,
-  and `BaseBlogPost.FeatureContributions` navigation property remain as-is (L1 Stage 5, unchanged).
-  Only L2+ implementation is deferred. See `forward_plan.md` "WU31 Blog Post settled decisions."
+## Feature 56 — Feature Contributions — **CUT 2026-07-18**
+
+**Verdict (Brian, in chat; decision row 3's last item).** Cut from the roadmap entirely, not
+deferred. The feature was admin attribution of accepted site-feature suggestions — a user posts a
+suggestion (as a blog post / comment in a "Site Development" group), an admin records a
+`FeatureContribution` crediting them, incrementing `UserStats.FeatureContributions` and earning the
+Architect badge (origin: GeminiDiscussions Sept–Nov 2025, lines 17036 / 17386 / 20861).
+
+**Why cut.** The prosocial-recognition space is already covered by shipped features (Beta Reader
+acknowledgments, Muse/Inspiration, Recommendations, Community Spotlight, Custom Lists); a formal
+on-site attribution loop has near-zero value at trusted-beta scale (suggestions arrive via Discord);
+and `FeatureContribution` was the single most complex delete-path in the schema (the three-way
+`SetNull` "diamond": User→FC, User→BlogPost→FC, User→Comment→FC). The prosocial-badge intent that
+motivated it is preserved by **keeping the Architect badge** as a manual grant.
+
+**What was removed (2026-07-18).** `FeatureContribution` entity (`Core/Models/`), its `DbSet`, the
+three `SetNull` FK configs + the `FeatureContributions` navigations on `User`/`BaseBlogPost`/
+`BaseComment`, the `UserStat.FeatureContributions` counter column (+ its `UserStatRecalculator`
+deferred-list mention and insert-column entry), the delete-path notes in
+`ServerCommentWriteService`/`ServerBlogPostWriteService`, and the `UserStatRecalculatorTests` seed/
+assertion. The sole pre-launch `InitialSchema` migration was regenerated (no shipped data; no
+`.razor` UI ever referenced the feature). L1's former Stage 5 is void — the cell no longer exists.
+
+**What was kept.** The **Architect badge** seed (`BadgeConfigurations` / `SiteBadges.Architect`,
+"Helped develop a site feature.") stays in the catalogue. Grant path is a direct `user_badges` insert
+(psql) — `IBadgeWriteService.AwardAsync` stays deliberately unmapped (no admin HTTP route; see
+`BadgeEndpoints` class doc). No admin-grant UI was built; that would be a separate future decision.
+See `audit/Badges.md` for the retained-badge note.
 
 ## L4.5-Browser verification (2026-07-02) — F35 + F36 → Stage 5
 
