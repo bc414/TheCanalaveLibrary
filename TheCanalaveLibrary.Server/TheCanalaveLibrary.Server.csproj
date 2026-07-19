@@ -20,7 +20,7 @@
              constraint; floating to 1.x resolves but risks runtime MissingMethodException inside
              the sanitizer (the trust boundary). Bump only together with an HtmlSanitizer release
              that targets AngleSharp 1.x. -->
-        <PackageReference Include="AngleSharp" Version="0.17.1" />
+        <PackageReference Include="AngleSharp" Version="1.5.2" />
         <!-- S3-compatible image storage (WU-S3Garage): one client for Garage (dev) and
              Cloudflare R2 (prod). See S3ImageStorageService for the wire-format constraints
              (unchunked uploads, WHEN_REQUIRED checksums) that keep both endpoints working. -->
