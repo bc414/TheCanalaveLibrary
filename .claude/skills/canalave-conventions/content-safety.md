@@ -171,12 +171,23 @@ and `"GroupAudience"` — all display/visibility filters live on the read contex
 Filtering" above). The write context sees ground truth; `IgnoreQueryFilters` is only needed on elevated
 *read* paths (mod queue, author viewing own taken-down content).
 
-**Moderator filter behavior (settled 2026-06-26).** A moderator's content-rating reach equals their
-personal `ShowMatureContent` setting, **both** when browsing the site and when reviewing the report queue.
-The report queue is a shared global pool scoped by the `ContentRating` filter — a T-only mod sees only E/T
-Story reports, not M ones. Review/entity-load paths bypass **only** `"IsTakenDown"` (so already-taken-down
-content stays reviewable); `ContentRating` and `GroupAudience` stay live. Reports on entities filtered out
-by ContentRating are *dropped* from the queue (not shown as placeholders).
+**Moderator review surfaces are work surfaces, exempt from the personal rating filter (settled
+2026-07-18, supersedes 2026-06-26).** The report queue (`GetReportQueueAsync`) and pending-submission
+queue (`GetPendingSubmissionsAsync`) bypass `"IsTakenDown"`, `"ContentRating"`, and `"GroupAudience"`
+alike — a moderator sees every open report and every pending submission regardless of their personal
+`ShowMatureContent` setting. `ShowMatureContent` still gates ordinary *browsing* reads; it does not gate
+*moderation* reads. Three reasons converged: (1) the setting is a personal comfort filter, not an access
+boundary — reviewing a report is not the same act as browsing for pleasure; (2) the write/action path was
+already unfiltered ground truth (`ServerModerationWriteService` acts on `writeDb`, no rating filter, ever)
+— a mod could already resolve or remove a report the queue chose to hide, so scoping the read side created
+an incoherent middle state, not a real access boundary; (3) rating-scoping a shared work queue creates a
+coverage hole — a report on content above every active moderator's personal cap would be invisible to all
+of them. The original 2026-06-26 framing only ever scoped `Story` targets in practice (every other
+reportable type — Recommendation, BlogPost, Comment, User, Message — was already shown regardless of
+rating, for lack of a query filter reaching them); "show all" resolves that inconsistency by deletion
+rather than by building derived-rating joins (child-table BlogPost rating, 2-hop Comment rating) to extend
+scoping outward. Full reasoning: `middle_plan_v2.md` Resolved "Non-story report-target rating routing" and
+`audit/Moderation.md` Feature 46/47.
 
 ### Auto-Hide Policy — None
 

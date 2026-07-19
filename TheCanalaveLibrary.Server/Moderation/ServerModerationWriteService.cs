@@ -20,10 +20,13 @@ namespace TheCanalaveLibrary.Server;
 /// special-cased: User uses ApplyAccountActionAsync; Message goes straight to hard-delete with no
 /// takedown columns.</para>
 ///
-/// <para><b>Content-rating filter.</b> Review/entity loads bypass <em>only</em>
-/// <c>IsTakenDown</c> (so already-taken-down content stays reviewable); ContentRating and
-/// GroupAudience stay live so a T-only moderator's review queue is scoped by their own
-/// ShowMatureContent setting — exactly as when browsing (settled 2026-06-26).</para>
+/// <para><b>Content-rating filter.</b> The write context (<c>writeDb</c>) is never filtered — every
+/// action here already acts on ground truth regardless of rating, and always has. The read side
+/// (<see cref="ServerModerationReadService"/>) now matches: review/entity-load reads bypass
+/// <c>IsTakenDown</c> and ContentRating/GroupAudience alike, since moderation review is a work
+/// surface exempt from the reviewer's personal ShowMatureContent setting (settled 2026-07-18,
+/// supersedes the 2026-06-26 "mirrors browsing" framing — see <c>content-safety.md</c>
+/// §"Moderator review surfaces are work surfaces").</para>
 ///
 /// <para><b>Notifications are best-effort.</b> All <c>NotifyXxx</c> calls happen <em>after</em>
 /// the primary <c>SaveChangesAsync</c> inside a <c>try/catch</c> that logs and swallows — a

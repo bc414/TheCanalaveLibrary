@@ -9,12 +9,14 @@ namespace TheCanalaveLibrary.Server;
 /// to enforce moderator/admin role gating at the page or endpoint level — this service does not
 /// re-check roles.
 ///
-/// <para><b>Filter contract.</b> Review/entity loads bypass <em>only</em> <c>IsTakenDown</c>
-/// (so already-taken-down content remains viewable in the queue). ContentRating and GroupAudience
-/// stay live — a moderator's content-rating reach equals their personal ShowMatureContent setting,
-/// same as when browsing (settled 2026-06-26). Reports on entities filtered out by ContentRating
-/// are <em>dropped</em> from the queue rather than shown as a placeholder; an M-rated story simply
-/// does not appear for a T-only moderator.</para>
+/// <para><b>Filter contract (settled 2026-07-18, supersedes 2026-06-26).</b> Review/entity loads
+/// bypass <c>IsTakenDown</c> <em>and</em> ContentRating/GroupAudience — moderation review surfaces
+/// are work surfaces, exempt from the personal comfort filter that gates ordinary browsing. A
+/// moderator sees every open report and every pending submission regardless of their own
+/// ShowMatureContent setting; the action path (<see cref="ServerModerationWriteService"/>) was
+/// already unfiltered ground truth, so scoping only the read side produced an incoherent middle
+/// state rather than a real access boundary. See <c>content-safety.md</c> §"Moderator review
+/// surfaces are work surfaces".</para>
 ///
 /// <para><b>Polymorphic target resolution</b> in <see cref="GetReportQueueAsync"/> follows the
 /// same two-pass batch-enrichment pattern as <c>GetNotificationsAsync</c> (WU33): one query per
@@ -77,16 +79,15 @@ public class ServerModerationReadService(
         if (rows.Count == 0) return [];
 
         // Step 2: batch-load target labels, URLs, and ActiveReportCount per entity type present.
-        // ContentRating stays live here — entities filtered by the moderator's rating preference
-        // simply won't appear in the dictionary, and their report rows are dropped in Step 3.
+        // ContentRating/GroupAudience are bypassed here (see BatchLoadTargetsAsync) — the report
+        // queue is a work surface, not scoped by the moderator's personal rating preference.
         var typesPresent = rows.Select(r => r.ReportedEntityType).Distinct().ToList();
         var labelMap = await BatchLoadTargetsAsync(readDb, typesPresent, rows
             .GroupBy(r => r.ReportedEntityType)
             .ToDictionary(g => g.Key, g => g.Select(r => r.ReportedEntityId).Distinct().ToList()));
 
-        // Step 3: stitch — drop report rows whose target was filtered by ContentRating/GroupAudience.
-        // This is the mechanism that makes the queue per-moderator-rating-scoped: an M story simply
-        // doesn't appear for a T-only mod, rather than showing as a labelless placeholder.
+        // Step 3: stitch — drop report rows whose target no longer materializes (e.g. hard-deleted
+        // between report submission and queue load). Not a rating-based drop — see Step 2.
         return [..rows
             .Where(r =>
                 labelMap.TryGetValue(r.ReportedEntityType, out var dict) &&
@@ -124,7 +125,9 @@ public class ServerModerationReadService(
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
         return await (
             from s in readDb.Stories
-                .IgnoreQueryFilters(["IsTakenDown"]) // elevated read: pending submissions may be taken-down
+                // elevated read: pending submissions are a work surface, not scoped by the
+                // moderator's personal ContentRating/ShowMatureContent preference.
+                .IgnoreQueryFilters(["IsTakenDown", "ContentRating"])
                 .Where(s => s.StoryStatusId == StoryStatusEnum.PendingApproval)
             join sl in readDb.StoryListings on s.StoryId equals sl.StoryId
             join sd in readDb.StoryDetails on s.StoryId equals sd.StoryId
@@ -148,9 +151,11 @@ public class ServerModerationReadService(
     /// <summary>
     /// Returns one dictionary per <see cref="ReportedEntityType"/> present in
     /// <paramref name="idsPerType"/>, each mapping <c>entityId → (label, url, activeReportCount)</c>.
-    /// ContentRating and GroupAudience filters stay live — entities filtered out simply won't
-    /// appear in the returned dictionary, causing their report rows to be dropped by the caller.
-    /// Only <c>IsTakenDown</c> is bypassed so taken-down content is still reviewable.
+    /// <c>IsTakenDown</c> and, for <see cref="ReportedEntityType.Story"/>, <c>ContentRating</c> are
+    /// bypassed — the report queue is a moderator work surface, not scoped by the reviewer's personal
+    /// rating preference (settled 2026-07-18; see <c>content-safety.md</c> §"Moderator review
+    /// surfaces are work surfaces"). Every other target type here already carries no rating filter
+    /// (Recommendation/BlogPost/Comment/User/Message), so this keeps all six arms consistent.
     /// </summary>
     private static async Task<Dictionary<ReportedEntityType, Dictionary<long, (string Label, string? Url, int Count)>>>
         BatchLoadTargetsAsync(
@@ -170,7 +175,10 @@ public class ServerModerationReadService(
                 {
                     var intIds = ids.Select(id => (int)id).ToList();
                     var data = await (
-                        from s in readDb.Stories.IgnoreQueryFilters(["IsTakenDown"]) // elevated read: mod queue sees taken-down content
+                        from s in readDb.Stories
+                            // elevated read: mod queue is a work surface — sees taken-down content
+                            // and is not scoped by the moderator's personal ContentRating preference.
+                            .IgnoreQueryFilters(["IsTakenDown", "ContentRating"])
                             .Where(s => intIds.Contains(s.StoryId))
                         join sl in readDb.StoryListings on s.StoryId equals sl.StoryId
                         join sd in readDb.StoryDetails on s.StoryId equals sd.StoryId

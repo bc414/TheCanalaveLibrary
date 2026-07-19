@@ -43,10 +43,13 @@ public class ReadOnlyApplicationDbContext : ApplicationDbContext
             g => _activeUser.ShowMatureContent || g.AudienceRating != Rating.M);
 
         // Hides moderator-removed content from public reads (settled WU34).
-        // Elevated read paths (mod queue) use .IgnoreQueryFilters(["IsTakenDown"]) — annotated
+        // Elevated read paths (mod queue) use .IgnoreQueryFilters([...]) — annotated
         // with // elevated read: so survivors are self-evidently deliberate.
-        // A moderator's ContentRating reach equals their own ShowMatureContent; they bypass only
-        // IsTakenDown, never ContentRating/GroupAudience.
+        // Moderation review surfaces (report queue, pending submissions) are work surfaces and
+        // bypass IsTakenDown *and* ContentRating/GroupAudience — a moderator's personal
+        // ShowMatureContent setting gates ordinary browsing only, not moderation review (settled
+        // 2026-07-18, supersedes the WU34-era "reach = ShowMatureContent" framing; see
+        // content-safety.md §"Moderator review surfaces are work surfaces").
         // Note: ContentRating is intentionally NOT added to BaseBlogPost — TPT + a filter that
         // closes over _activeUser's ShowMatureContent generates broken EF Core 10 SQL on derived-entity
         // materialization (WU31.5). The simple boolean IsTakenDown filter is safe on TPT roots

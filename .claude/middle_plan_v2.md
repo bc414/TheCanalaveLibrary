@@ -353,13 +353,12 @@ checklist — each bullet becomes a checkable item, most are small:
 
 Rows 1–6 carried from v1 (numbering preserved — existing docs cite these numbers). Row 4 is
 expanded in scope by Phase 7 above. **Row 5 resolved 2026-07-05; rows 7 and 9 resolved
-2026-07-06; row 3 fully resolved 2026-07-18 (last item — Feature 56 — cut) — moved to Resolved
-below** — row numbers are otherwise left as gaps rather than
+2026-07-06; row 3 fully resolved 2026-07-18 (last item — Feature 56 — cut); row 1 resolved
+2026-07-18 — moved to Resolved below** — row numbers are otherwise left as gaps rather than
 renumbered, since other docs cite them by number.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
-| 1 | **Non-story report-target rating routing** — unchanged from v1 (see `middle_plan.md` row 1 for the full technical framing). | Deferred from pre-integration cleanup (2026-06-26). | Own work-unit; surface during the Phase 3 moderation-queue review. |
 | 2 | **Homepage design — remaining sections.** The spotlight-curation half was resolved 2026-07-11 (see Resolved "Community Spotlight model"); the spotlight section of `/` is built by WU-Spotlight and no longer gated. What remains open: what else the front door shows (recently updated, featured tags, active SitePolls — open intent recorded 2026-07-12, see `audit/BlogPosts.md` F37 — etc.) and its layout. | Spec §5.28: `/` = Community Spotlight stories; other sections undecided. | Front-door product design. Gates the rest of Phase 2 item 1 (WU-Home). |
 | 4 | **Launch-readiness mechanics** — now the full Phase 7 checklist: deploy mechanism, config contract, migration-in-prod, backup+restore drill, uptime/alerting, TLS/domain, R2 values. | Topology settled (droplet + managed PG + R2); `aspire publish` compose output is the default deploy candidate. | Operational cost/effort trade-offs. Phase 7. |
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Phase 6 gate. |
@@ -371,6 +370,26 @@ renumbered, since other docs cite them by number.
 ---
 
 ## Resolved
+
+- **Non-story report-target rating routing (row 1) — resolved as "work surface, show all"** —
+  **resolved 2026-07-18** (Brian, in chat; weighed against overengineering the edge case). The
+  question (see `middle_plan.md` row 1 for the full original technical framing) was how to extend
+  per-moderator rating scoping from Story targets (the only one actually implemented — a live
+  `ContentRating` query filter on the Story arm) to Recommendation (1-hop), BlogPost (child-table
+  rating, blocked by the WU31.5 EF-10 TPT bug), and Comment (2-hop) report targets. **Verdict:
+  don't extend scoping — remove it instead.** Moderation review surfaces (report queue + pending
+  submissions) are now work surfaces exempt from the moderator's personal `ShowMatureContent`
+  comfort filter entirely; a moderator sees every open report and every pending submission
+  regardless of rating. Three reasons: the setting is a personal comfort filter, not an access
+  boundary; the write/action path (`ServerModerationWriteService`) was already unfiltered ground
+  truth, so scoping only the read side was an incoherent middle state, not a real boundary; and
+  rating-scoping a shared work queue creates a coverage hole (a report above every active
+  moderator's cap would be invisible to all of them). This resolves the inconsistency by deletion
+  (drop the Story arm's `ContentRating` bypass-exclusion) rather than by adding derived-rating
+  joins for the other four target types. Rule: `canalave-conventions/content-safety.md`
+  §"Moderator review surfaces are work surfaces"; code:
+  `ServerModerationReadService.GetReportQueueAsync`/`BatchLoadTargetsAsync`/
+  `GetPendingSubmissionsAsync`; detail: `audit/Moderation.md` Feature 46/47.
 
 - **Feature Contributions (56) cut (row 3's last Feature-56 verdict)** — **resolved 2026-07-18**
   (Brian, in chat; ground-truthed against the Gemini origin record and code reality). **Cut from the

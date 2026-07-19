@@ -248,6 +248,38 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         notified.Should().BeTrue();
     }
 
+    // ── Report queue / pending submissions are work surfaces (decision row 1, 2026-07-18) ────
+
+    [Fact]
+    public async Task GetReportQueueAsync_ShowsMRatedStoryReport_ToModWithMatureOff()
+    {
+        int authorId = await SeedUserAsync("MRatedAuthor");
+        int storyId = await SeedStoryAsync(authorId, Rating.M);
+        long reportId = await SeedReportAsync(ReportedEntityType.Story, storyId, _reporterId);
+
+        // FakeActiveUserContext.Moderator defaults ShowMatureContent = false.
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        ReportQueueItemDto[] queue = await GetMod().GetReportQueueAsync();
+
+        queue.Should().Contain(r => r.ReportId == reportId,
+            "the report queue is a work surface exempt from the moderator's personal " +
+            "ShowMatureContent setting — an M-rated story's report must still surface");
+    }
+
+    [Fact]
+    public async Task GetPendingSubmissionsAsync_ShowsMRatedSubmission_ToModWithMatureOff()
+    {
+        int authorId = await SeedUserAsync("MRatedSubAuthor");
+        int storyId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress, Rating.M);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        StorySubmissionQueueItemDto[] pending = await GetMod().GetPendingSubmissionsAsync();
+
+        pending.Should().Contain(s => s.StoryId == storyId,
+            "pending submissions are a work surface exempt from the moderator's personal " +
+            "ShowMatureContent setting — an M-rated submission must still surface for approval");
+    }
+
     // ── Non-moderator ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -328,7 +360,8 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
     /// Seeds a story in <see cref="StoryStatusEnum.PendingApproval"/> with the given
     /// <paramref name="postApprovalStatus"/> and returns the <c>StoryId</c>.
     /// </summary>
-    private async Task<int> SeedPendingStoryAsync(int authorId, StoryStatusEnum postApprovalStatus)
+    private async Task<int> SeedPendingStoryAsync(int authorId, StoryStatusEnum postApprovalStatus,
+        Rating rating = Rating.E)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -337,7 +370,7 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         Story story = new()
         {
             AuthorId = authorId,
-            Rating = Rating.E,
+            Rating = rating,
             StoryStatusId = StoryStatusEnum.PendingApproval,
             PublishedDate = DateTime.UtcNow,
             LastUpdatedDate = DateTime.UtcNow,

@@ -1015,6 +1015,19 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
 - **Tool:** opusplan. **Pointer:** `audit/Moderation.md` Features 46/47/48; `content-safety.md` "Moderation
   Model." **Deps:** WU9, WU12, WU20, WU22, WU24, WU29, WU31, WU35.
 
+> **Report-target rating routing (decision row 1) — resolved 2026-07-18, supersedes the WU34-era
+> "reach = ShowMatureContent" framing.** Was: open decision on extending per-moderator `ContentRating`
+> scoping from Story reports (the only arm that had it) out to Recommendation/BlogPost/Comment. Now:
+> scoping removed entirely — the report queue and pending-submissions queue are moderator work
+> surfaces, shown regardless of rating. `ServerModerationReadService.GetReportQueueAsync`/
+> `BatchLoadTargetsAsync`/`GetPendingSubmissionsAsync` bypass `ContentRating` alongside `IsTakenDown`;
+> `dotnet test` 1941/1941 green (2 new Integration tests:
+> `GetReportQueueAsync_ShowsMRatedStoryReport_ToModWithMatureOff`,
+> `GetPendingSubmissionsAsync_ShowsMRatedSubmission_ToModWithMatureOff`). No Stage-number change
+> (Features 46/47/48 L3-Logic stay Stage 5). See `middle_plan_v2.md` Resolved and
+> `content-safety.md` §"Moderator review surfaces are work surfaces" for the settled mechanism and
+> `audit/Moderation.md` Feature 47/48 Stage notes for the full record.
+
 ### WU35 — Messaging — DONE ✓ (2026-06-24)
 - **Cells:** 49 L2/L3/L3.5/L4 → Stage 5.
 - **Do:** `/messages/{ConversationId?}`, three-table model, stateless request/response (no SignalR —

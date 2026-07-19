@@ -89,6 +89,19 @@ sign-in-side half, `CanalaveSignInManager`, lives in Identity, not here). **Veri
 `_BanUser_BumpsSecurityStamp`/`_WarnUser_DoesNotBumpSecurityStamp`) — stamp changes on Suspend/Ban,
 unchanged on Warn. `dotnet test` 1483/1483 green.
 
+**Settled 2026-07-18 — report-target rating routing (decision row 1), "work surface, show all."**
+Superseded the WU34 "moderator's ContentRating reach = personal ShowMatureContent, mirrors
+browsing" framing. Row 1 asked how to extend per-target rating scoping — which in practice only
+ever covered Story reports (the sole arm with a live `ContentRating` filter) — out to
+Recommendation/BlogPost/Comment. Resolved by removing scoping instead of extending it: the report
+queue and pending-submissions queue are now moderator work surfaces, exempt from
+`ShowMatureContent` entirely. Reasoning + full record: `middle_plan_v2.md` Resolved "Non-story
+report-target rating routing"; rule: `canalave-conventions/content-safety.md` §"Moderator review
+surfaces are work surfaces". L3=5 stays (behavior change, not a stage change) — **verified:**
+Integration (`ModerationServiceTests.GetReportQueueAsync_ShowsMRatedStoryReport_ToModWithMatureOff`,
+`GetPendingSubmissionsAsync_ShowsMRatedSubmission_ToModWithMatureOff`); `dotnet test` full suite
+green (see Feature 48 note below for the pending-submissions half of this same change).
+
 ## Feature 48 — Story Approval Workflow
 
 **WU34 settled constraints:**
@@ -149,6 +162,15 @@ report→claim→resolve and approve/reject cycles driven in a real browser agai
   Unit-covered; approve semantics Integration-covered by `ApproveStoryAsync_SetsPostApprovalStatus_
   NotifiesAuthor`).
 - L4 stays 3 (functional styling, not design-reviewed) — nothing unusable found.
+
+**Stage note (2026-07-18) — supersedes the F48 bullet above.** The 2026-07-02 browser verification
+("ModUser saw only the E-rated pending story; AdminUser saw both") documented the *old* per-mod
+`ContentRating` scoping on `GetPendingSubmissionsAsync`. That scoping is now removed — see Feature
+47's 2026-07-18 Stage note above for the full decision-row-1 reasoning ("work surface, show all"),
+which covers both queues. `GetPendingSubmissionsAsync` now bypasses `IsTakenDown` and `ContentRating`
+alike; a T-only or mature-off moderator sees every pending submission regardless of rating.
+**Verified:** Integration (`ModerationServiceTests.GetPendingSubmissionsAsync_ShowsMRatedSubmission_
+ToModWithMatureOff`); `dotnet test` full suite green.
 
 ## Feature 53 — External Story Links & Verification (reframed 2026-07-11)
 
