@@ -115,7 +115,13 @@
 
         try
         {
-            await Task.Delay(DebounceMilliseconds, token);
+            // Skip the timer entirely when there's no debounce to apply — Task.Delay(0/negative)
+            // still schedules a real timer-thread hop even though the elapsed time is nil, which is
+            // an unnecessary async gap (and, under heavy concurrent-test-host load, was observed to
+            // widen into a genuine race between the delayed render and a same-tick follow-up key
+            // event in bUnit tests using DebounceMilliseconds=0 for "no debounce").
+            if (DebounceMilliseconds > 0)
+                await Task.Delay(DebounceMilliseconds, token);
             IEnumerable<TItem> found = await SearchMethod(_term);
             if (token.IsCancellationRequested) return; // a newer keystroke owns the dropdown now
             _results = found.ToList();

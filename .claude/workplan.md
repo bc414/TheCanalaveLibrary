@@ -3410,3 +3410,40 @@ per `[Fact]`, serially, not the Postgres/Respawn realism. Two changes (plan:
   `TestAppFactory` / `IntegrationTestBase` / `PostgresFixture`.
 - **Tool:** Claude Code (Opus). **Pointer:** `.claude/plans/put-together-a-plan-linked-hoare.md`;
   `canalave-conventions/testing.md` "Integration test host is shared collection-wide".
+
+## WU-IntTestPerf follow-ups: durability tuning (no gain) + CanalaveTypeaheadTests flake fixed (2026-07-18)
+
+Two loose ends from WU-IntTestPerf, closed same day:
+
+- **Integration container durability tuning (Tier D) — landed but measured NO gain.**
+  `PostgresFixture`'s ephemeral container now runs with `fsync=off` /
+  `synchronous_commit=off` / `full_page_writes=off` (safe: throwaway container, nothing needs
+  crash-durability). Real bug hit and fixed on the way: `.WithCommand("postgres", "-c", ...)`
+  duplicated the program name — `PostgreSqlBuilder`'s own default command already supplies
+  `postgres`, so the container exited 1 with `postgres: invalid argument: "postgres"` (repro'd
+  directly via `docker run` before landing the fix: pass flags only, no leading `"postgres"`).
+  Measured before/after (2 runs each): ~1m25s/1m35s pre-tuning → ~1m26s/1m27s post-tuning — no
+  measurable change; kept anyway since it's zero-maintenance and doesn't regress anything.
+  Tier C (DB-per-worker parallelism) remains the only lever left for further Integration
+  speedup and is still out of scope.
+- **`CanalaveTypeaheadTests.Escape_ClosesDropdown_WithoutSelecting` flake — root-caused and
+  fixed**, closing the "pre-existing flaky" note carried since WU-MigrationCollapse. Forced a
+  repro via a 40-iteration full-suite stress loop (RazorComponents runs test classes in
+  parallel, unlike Integration): **6/40 failures (15%)** — 5× `Escape_ClosesDropdown_WithoutSelecting`,
+  1× `EnterKey_SelectsHighlighted_ArrowsMoveHighlight` (different test, same mechanism — ruled
+  out an Escape-specific logic bug). Root cause: the test helper's `DebounceMilliseconds = 1`
+  ("effectively no debounce") still routes through a real `Task.Delay(1, token)` — a genuine
+  timer-thread hop that, under the CPU contention of 40 parallel `dotnet test` processes, opened
+  a real race between the debounced-search render and the test's immediately-following key
+  event. `CanalaveTypeahead.razor`'s `HandleInputAsync` now skips `Task.Delay` entirely when
+  `DebounceMilliseconds <= 0` (a legitimate improvement independent of tests — no reason to
+  schedule a nil-duration timer); test helper changed to `DebounceMilliseconds = 0`, so
+  `SearchMethod`'s already-completed `Task.FromResult(...)` awaits synchronously with no gap.
+  Re-ran the identical 40-iteration stress loop post-fix: **0/40 failures** (p < 0.002 under the
+  null hypothesis that the true rate is still 15%). Full `dotnet test` green (Unit 702,
+  RazorComponents 510 ×2 clean, Integration 727 ×2 clean) confirms no regression.
+- **Cells:** none — test-infra tuning + a test-only-triggered timing bug in shared UI plumbing;
+  no feature behavior changed (production callers all use the real `DebounceMilliseconds`
+  default, 300ms, never `<=0`).
+- **Tool:** Claude Code (Opus). **Pointer:** `TheCanalaveLibrary.Tests.Integration/PostgresFixture.cs`;
+  `TheCanalaveLibrary.SharedUI/Controls/CanalaveTypeahead.razor` `HandleInputAsync`.

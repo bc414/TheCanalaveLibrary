@@ -26,6 +26,19 @@ public sealed class PostgresFixture : IAsyncLifetime
         .WithDatabase("canalavedb_test")
         .WithUsername("postgres")
         .WithPassword("postgres")
+        // Relaxed crash-durability on this THROWAWAY, ephemeral container only — never do this to a
+        // real database. Respawn resets + every test's writes hit disk-flush overhead for no
+        // benefit: nothing here needs to survive a crash, so trade fsync/WAL guarantees for speed.
+        // PostgreSqlBuilder's own base configuration already supplies the "postgres" program name
+        // (via its entrypoint/default command) — WithCommand here supplies ONLY extra args appended
+        // after it. Passing "postgres" again duplicates the program name into postgres's own argv
+        // ("postgres: invalid argument: \"postgres\"", container exits 1 — confirmed by direct repro
+        // before landing this). The log-based "ready to accept connections" wait strategy is
+        // otherwise unaffected — same append pattern as GarageFixture.WithCommand.
+        .WithCommand(
+            "-c", "fsync=off",
+            "-c", "synchronous_commit=off",
+            "-c", "full_page_writes=off")
         .Build();
 
     private Respawner _respawner = null!;

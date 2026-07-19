@@ -22,7 +22,13 @@ public class CanalaveTypeaheadTests : BunitContext
         ctx.Render<CanalaveTypeahead<string>>(p => p
             .Add(c => c.SearchMethod, search)
             .Add(c => c.OnSelected, onSelected)
-            .Add(c => c.DebounceMilliseconds, 1) // effectively no debounce inside tests
+            .Add(c => c.DebounceMilliseconds, 0) // no debounce inside tests — see CanalaveTypeahead's
+                                                  // HandleInputAsync: DebounceMilliseconds<=0 skips
+                                                  // Task.Delay entirely, so SearchMethod's already-
+                                                  // completed Task.FromResult(...) awaits synchronously,
+                                                  // eliminating a real timer-hop that raced under heavy
+                                                  // parallel-test-host load (was 1ms; a genuine, if
+                                                  // tiny, async gap)
             .Add(c => c.MinimumLength, 2)
             .Add(c => c.ResultTemplate, item => b => b.AddContent(0, item)));
 
