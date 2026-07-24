@@ -98,6 +98,24 @@ conventions. **Do not revisit these.** Pointers:
   nullable `GroupRole?` read — one of the 18 empty-body-fix sites) verified in a real WASM runtime
   during the flip's browser wave. Full wave narrative + the 7 bugs found/fixed: `workplan.md`
   WU-GlobalFlip.
+- **L5 grid-mark reconciliation (WU-GroupsL5, 2026-07-24).** `status.md` rows 38–40 had stayed at
+  Stage 2 despite this Stage-5 note above — WU-GlobalFlip's blanket "L5 flipped to 5 for all 40
+  built-surface rows" claim missed the Groups cluster (it did update the sibling Recommendations
+  rows 27–30 corrected in the same 2026-07-12 pass). Grid corrected to 5; no code change was
+  needed here — F38's endpoints/client impl/browser verification were already sound. Also fixed a
+  DI slip found during the reconciliation's build check: `Server/Program.cs` mapped
+  `IGroupReadService` → `ServerGroupWriteService` (the heavier write impl) instead of
+  `ServerGroupReadService`, unlike every other feature's read/write DI split (`Series` at the
+  next registration block shares the same quirk — left as-is, out of scope for this WU). New
+  Integration tier: `GroupEndpointsTests` (11 tests — `PagedResult<T>` envelope on both paged
+  reads, the `RequireAuthorization()` 401 floor, the admin-only 403 gate, and full folder CRUD
+  over HTTP incl. 404 on an unknown folder) — real Testcontainers-Postgres, all green. New Unit
+  tier: `ClientGroupServiceTests` (16 tests — request URL/verb shapes incl. the folder routes,
+  `PagedResult<T>` deconstruction, and the status-code → contract-exception mapping, pinning the
+  project's one non-standard case: Groups' 403 disambiguation between the plain admin gate and
+  the content-rating waterfall via `ProblemDetails.Detail` presence). `dotnet test` full suite
+  1998/1998 (718 Unit + 521 RazorComponents + 759 Integration). Detail: `workplan.md` WU-GroupsL5;
+  F39's Stage note below for the one genuine gap this WU also closed (the folder-management page).
 - L6 — Stage 2.
 
 ## Feature 39 — Group Content & Folders
@@ -114,11 +132,28 @@ conventions. **Do not revisit these.** Pointers:
 - **L3-Logic — Stage 5 (2026-06-24, WU32).** `CreateFolderDto` with `MaxRating ≤ group cap` constraint.
   `AddGroupStoryDto` carries optional `GroupFolderId`. `ContentRatingExceededException` is a Core domain
   exception. Test tier: Unit — no pure-logic unit test (validation is simple enough; Integration covers).
-- **L3.5-Structure — Stage 5 (2026-06-24, WU32).** Folder tree rendered inline in `GroupDesktop` /
-  `GroupMobile` via `RenderFolders` recursive `RenderFragment` helper. Inline add-story form (StoryId
-  text field) with `ContentRatingExceededException` surfaced as error toast. Admin manage-folders link
-  to `/group/{GroupId}/folders` (folder management page deferred post-MVP; link is present as
-  affordance). Test tier: none applicable (inline rendering in composite; Integration covers the data).
+- **L3.5-Structure — Stage 5 (2026-06-24, WU32; folder-management page built WU-GroupsL5,
+  2026-07-24).** Folder tree rendered inline in `GroupPage` via `RenderFolders` recursive
+  `RenderFragment` helper (read-only display, deliberate M-badge zero-trace suppression for
+  non-consenting viewers — WU-AccessGate). Inline add-story form (StoryId text field) with
+  `ContentRatingExceededException` surfaced as error toast. The admin "Manage" link to
+  `/group/{GroupId}/folders` — a dangling affordance since WU32, folder management deferred
+  post-MVP — now resolves: `GroupFolderManagementPage.razor` (admin-gated, mirrors
+  `GroupCreateEditPage`'s pattern) owns its own interactive recursive tree (separate from
+  `GroupPage.RenderFolders` — every row here is stateful/admin-only, no public suppression logic
+  applies) with create (supports nesting via a depth-indented parent select), inline rename,
+  two-step confirm-gated delete (`ConfirmDialog`), and sibling reorder (up/down buttons driving a
+  `ReorderFolderAsync` SortOrder value-swap — robust to non-contiguous SortOrder, no unique
+  constraint on the column). Every write does a full `GetByIdAsync` reload — no local tree
+  mutation — so the server stays the single source of truth for uniqueness/cap/ordering.
+  Story→folder assignment (`AssignStoryToFolderAsync`/`UnassignStoryFromFolderAsync`) still has
+  no UI — deliberately out of scope for this page; `GroupFolderDto.StoryIds` already carries what
+  a future assignment surface would need.
+  Test tier: RazorComponents (`GroupFolderManagementPageTests`, 11 tests — admin gate (member and
+  non-member both denied), create dispatch incl. nested `ParentFolderId`, rename dispatch, the
+  two-step delete guard, the reorder value-swap + boundary-disabled buttons, validation-error
+  surfacing via `InlineAlert`); Integration/Unit tiers for the transport layer are noted on F38's
+  new Stage note above.
 - **L4-Style — Stage 5 (2026-06-24, WU32).** Tailwind classes. Visual sign-off is human (Stage 6).
 - **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5; see F38's L5 note for the general
   correction).** Prior text, retained as the L2/L3 test record: waterfall rejection (both
@@ -127,7 +162,17 @@ conventions. **Do not revisit these.** Pointers:
   `IgnoreQueryFilters` fix is the direct fix for this feature's test assertions.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; supersedes the correction above).** Endpoints +
   client impl live (WU-L5Sweep); stories/folders rendered on the group page under WASM in the
-  flip's browser wave (folder-op writes not driven). Detail: `workplan.md` WU-GlobalFlip.
+  flip's browser wave (folder-op writes not driven).
+- **Folder-op writes now driven (WU-GroupsL5, 2026-07-24) — closes the "not driven" caveat
+  above.** Grid corrected 2→5 (see F38's L5 grid-mark note for why it had drifted back to Stage
+  2). `GroupFolderManagementPage` browser-verified end-to-end on a live dev-DB group as admin: a
+  fresh page load confirmed genuine WASM execution (`_framework/*.wasm` bundle downloaded, zero
+  `_blazor` WebSocket — the same signature WU-GlobalFlip's own verification used), then create
+  (root + nested), rename, both-direction reorder, and confirm-gated delete were each driven and
+  `psql`-confirmed against `group_folders` (parent id, swapped `sort_order`, row removal). The
+  `GroupPage` display (`RenderFolders`) was confirmed to reflect the live tree afterward.
+  Verification data cleaned up post-check (no fixture value, unlike WU-ChapterArcBrowserPass's
+  deliberately-kept arcs). Detail: `workplan.md` WU-GroupsL5.
 
 ## Feature 40 — Group Display
 
@@ -168,6 +213,10 @@ conventions. **Do not revisit these.** Pointers:
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; supersedes the correction above).** Endpoints +
   client impl live (WU-L5Sweep); the group page's display composition (detail + stories + blog
   posts) rendered under WASM in the flip's browser wave. Detail: `workplan.md` WU-GlobalFlip.
+- **Grid-mark reconciliation (WU-GroupsL5, 2026-07-24).** `status.md` row 40 had stayed at Stage 2
+  despite this note — no code gap, purely the same missed-edit WU-GlobalFlip left on F38/F39 (see
+  F38's L5 grid-mark note). Corrected 2→5; no browser re-verification needed beyond F38/F39's
+  pass (this feature's display composition was already exercised in that same session).
 
 ### WU-ComponentSoundness Stage note (2026-06-27)
 

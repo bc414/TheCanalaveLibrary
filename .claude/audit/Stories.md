@@ -378,13 +378,44 @@ requirements record: WU45 in `workplan.md`. Settled — do not revisit without f
   `StoryEditorPage` edit mode.
 - **L4 — Stage 1.** All design tokens (`check-design-tokens.ps1` clean for these files); visual
   sign-off pending human review (WU13/WU14/WU24 precedent).
-- **L4.5 — Stage 2.** Browser verification explicitly deferred at WU45 close (2026-07-12, Brian's
-  direction) — automated tiers green; the live create-arc → story-page-headers → reading-label
-  loop still needs a real-circuit pass.
+- **L4.5 — Stage 5 (WU-ChapterArcBrowserPass, 2026-07-24).** Real-circuit pass closes the WU45
+  deferral — see Stage note below.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; arcs data loading verified in a real WASM runtime during the
   flip's browser wave (arcs fetched via API on story-page load). Full wave narrative + the 7 bugs
   found/fixed: `workplan.md` WU-GlobalFlip.
+
+### WU-ChapterArcBrowserPass Stage note (2026-07-24) — closes the WU45 L4.5 deferral, no bugs found
+
+Real-circuit Chrome pass on the flagship seed story (story 1) drove the full create-arc →
+story-page-headers → reading-label loop the WU45 deferral named. **L4.5: `2 → 5`.** Full checklist
+and mutation-by-mutation detail (chapter reorder/delete, mark-read repaint, New badge, download
+headers — same session, same story) lives in `audit/Chapters.md`'s WU-ChapterArcBrowserPass Stage
+note; this note covers the Story-Arcs-specific findings.
+
+- **Author flow (`StoryArcManagerPanel` on `StoryEditorPage`):** added "Arc 1: Beginnings"
+  (ch 1–2) and "Arc 2: The Long Middle" (ch 3–5). The read-only preview list updated live as the
+  draft row's title/range fields changed — before Add/Save — confirming "arc-manager live preview
+  interactivity." Deliberately triggered an overlapping range (Ch. 2–5 vs. the just-added
+  Ch. 1–2): the panel surfaced an inline validation message naming both arcs and the rule
+  ("Arcs cannot overlap"), not a raw exception string; corrected and saved cleanly. `psql
+  story_arcs` confirmed both rows.
+- **Reader surfaces:** the story page's `ChapterList` rendered "Arc 1 — Arc 1: Beginnings" /
+  "Arc 2 — Arc 2: The Long Middle" sticky headers with per-arc "N/M read" counts; clicking a
+  header's caret collapsed/expanded that arc independently of the other. Opening a mid-arc
+  chapter (Chapter 3) showed "Arc 2 — Arc 2: The Long Middle" under the chapter title on
+  `ChapterReadingPage`, exactly the settled `Arc X — [name]` format.
+- **Fixture decision — the two arcs are left in place, not wiped.** The flagship story's stated
+  role is "seed story exercising multi-chapter reading and chapter versioning" (`DataSeeder.cs`);
+  before this pass it had zero arcs, so nothing exercised the Story Arcs UI end-to-end for future
+  manual verification or screenshots. Leaving the two demonstration arcs makes the fixture
+  actually exercise the feature it's meant to, per `run-server/SKILL.md` "Dev DB lifecycle" (new,
+  non-conflicting state is kept by default — only wipe when prior state would confound what's
+  being observed, which arcs on chapters 1–5 do not).
+- **L4-Style unaffected — stays Stage 1.** Human visual sign-off (WU13/WU14/WU24 precedent) is
+  out of scope for an agent-driven pass; tokens were already clean per `check-design-tokens.ps1`.
+
+No runtime bugs found; no code changes made.
 
 ## Feature 9 — Series & Ordering
 

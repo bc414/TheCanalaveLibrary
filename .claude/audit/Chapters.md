@@ -94,6 +94,8 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   (three `EditorView` instances — top note, chapter text, bottom note), version switcher composite (progressive),
   per-version controls. `ChapterEditorPage` orchestrates all.
 - **L4-Style — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5).**
+- **L4.5-Browser — Stage 5 (WU-ChapterArcBrowserPass, 2026-07-24).** Real-circuit pass closes the
+  WU45 deferral. See the WU-ChapterArcBrowserPass Stage note below.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; chapter CREATE verified in a real WASM runtime during the
   flip's browser wave (incl. the create→edit `forceLoad` redirect fix for Quill-hosting pages).
@@ -204,6 +206,8 @@ Phase 4 (beta-scope-decision pattern) and `workplan.md` "Planned / not-yet-built
 - **L3.5-Structure — Stage 5 (WU26 page slice, DONE ✓ 2026-06-24; WU18 nav slice and WU5 leaf also Stage 5).**
   `ChapterReadingPage` + `ChapterNavigation` top+bottom + `CommentSection` wired. See WU26 Phase 1–3 Stage note.
 - **L4-Style — Stage 5 (WU26/WU18/WU5, DONE ✓ 2026-06-24; see Stage notes).**
+- **L4.5-Browser — Stage 5 (WU-ChapterArcBrowserPass, 2026-07-24).** Real-circuit pass closes the
+  WU45 deferral. See the WU-ChapterArcBrowserPass Stage note in this file's Feature 6 section.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; chapter reading page verified in a real WASM runtime during
   the flip's browser wave (content, TOC, and versions loaded via API). Full wave narrative + the
@@ -566,6 +570,49 @@ L4.5 flipped 5→2 in `status.md` until the new surfaces get a real-circuit pass
   reorder, live mark→fill-bar repaint, arc-manager live preview interactivity, download
   Content-Disposition; plus `DataSeeder` has no arced story yet — manual verification needs an
   arc created via the panel first (or a seeder addition later).
+
+### WU-ChapterArcBrowserPass Stage note (2026-07-24) — closes the WU45 L4.5 deferral, no bugs found
+
+Real-circuit Chrome pass against the checklist above, driven on the flagship seed story
+("Seed Story: Five Chapters + Alt Version (T)", story 1) using `AuthorAlpha` (author surfaces)
+and `TestUser` (reader surfaces). Every item behaved exactly as the WU45 design intended; ground
+truth confirmed via `psql` after each mutation. **F6 L4.5 and F7 L4.5: `2 → 5`.**
+
+- **Reorder:** dragged Chapter 5's handle above Chapter 4 on `StoryEditorPage`; UI reordered
+  instantly, `psql` confirmed the `ChapterNumber` swap (chapter_id 5→4, chapter_id 4→5); dragged
+  back to restore original order (also DB-confirmed).
+- **Delete:** created a throwaway Chapter 6 (`/story/{id}/chapter/new`) rather than deleting a
+  real seeded chapter — deleting a seeded chapter would have cascaded to its comments and
+  corrupted the hand-built fixture other verification depends on. `ConfirmDialog` rendered the
+  chapter's own title and consequences (no native `confirm()`); confirming deleted it and
+  renumbered later chapters down, `psql`-verified back to the original 5-chapter state.
+- **Arc-manager author flow:** added "Arc 1: Beginnings" (ch 1–2) and "Arc 2: The Long Middle"
+  (ch 3–5) via `StoryArcManagerPanel`. The read-only preview list updated live as the draft
+  row's title/range fields were edited, before Add/Save — confirms "arc-manager live preview
+  interactivity". An intentionally overlapping range (Ch. 2–5, colliding with Arc 1) surfaced an
+  inline `StoryArcValidationException` message naming both arcs and the rule, not a raw
+  `ex.Message` — corrected the range and saved cleanly. Both arcs persisted (`psql`
+  `story_arcs`). These two arcs are left as permanent fixture enrichment on the flagship story
+  (see Feature 8's Stage note in `audit/Stories.md` for the "why keep, not wipe" reasoning).
+- **`ChapterList` reader mark-read → fill-bar repaint:** as `TestUser` (previously zero
+  interaction rows on this story), clicking the per-row read toggle on chapters 1–3 repainted
+  the fill-bar/checkmark and the arc header's "N/M read" count live, with no page reload; Arc 1
+  auto-collapsed on reaching 2/2. `psql user_chapter_interactions` confirmed `is_read`/
+  `last_interaction_date` written on each click.
+- **"New" badge — strict chain rule:** with chapters 1–3 read (frontier = chapter 4, watermark
+  ≈ the last mark-read timestamp), temporarily bumped chapter 4's `ChapterContents.publish_date`
+  to a future date via `psql` and reloaded — chapter 4 showed the "New" badge, chapter 5 (whose
+  real `publish_date` predates the watermark) correctly did **not**, confirming "one non-fresh
+  chapter ends the chain." `publish_date` restored to its original seeded value afterward.
+- **Per-chapter download `Content-Disposition`:** the chapter row's download menu hits
+  `GET /api/stories/{id}/chapters/{n}/export/{format}`; fetched it directly (`javascript_tool`)
+  and confirmed the response header starts with `attachment`, includes a `filename` naming the
+  chapter, and the requested extension — a real forced download, not an inline/generic response.
+- **Story Arcs reader surfaces** (headers, collapse/expand, reading-page label): see
+  `audit/Stories.md` Feature 8 Stage note — same session, same story.
+
+No runtime bugs found; no code changes made. `dotnet build` clean (pre-existing `AngleSharp`
+NU1902 advisories only, unrelated). Server started/stopped per `run-server/SKILL.md`.
 
 ### WU-AuditFixPass note (2026-07-18)
 

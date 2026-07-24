@@ -85,6 +85,7 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 - **Modernization-audit closure pass done (WU-AuditFixPass-2, 2026-07-18).** The audit's #1 recommendation — the systematic endpoint-authorization sweep — is CLOSED: all 38 `*Endpoints.cs` files audited at authz depth (7 additional holes beyond the original 3 found + fixed: Story `/edit` + `/by-author` bypass, BlogPost `GetByAuthor`/`GetForEdit`, USI hidden-favorites, chapter draft-metadata, ManualTree favoriters), MA-702's named `RequireModerator` edge policy applied to every mod-only group, plus the remaining Tier-2 (MA-203/204/302/402/403/706/003/005/110), the MA-008 validation-exception unification (15 types + shared client translator), the Tier-3 mechanical batch (dead code, aria-labels, RequireUserId extension, projection idioms, comment debris, ConfirmDialogTests), and all Bucket-B/doc-staleness items (BB-01/02/03, MA-104/108/114/118/122/123-note, content-safety TPT correction, TODO retargets, ImportParse concurrency limiter + group-create throttle). No cell Stage changes. Full suite green (712 / 646 / 734, 0 failures; +22 regression tests). Browser E2E confirmed all 7 holes + MA-702 (both directions) + MA-302 + MA-402 over the wire. Deliberately NOT done (⛔/🧑): Desktop/Mobile merges, Identity-scaffold prune, extract-or-not seams. Detail: `workplan.md` WU-AuditFixPass-2; `modernization-audit/fix-status.md`.
 - **Integration tier sped up ~9× (WU-IntTestPerf, 2026-07-18).** One collection-shared host (was one per `[Fact]`) + `DevSeed=None` + 1-iteration PBKDF2: ~12m30s → ~1m25s, 727/727 green, same Postgres/Respawn rigor. No cell Stage changed. Detail: `testing.md` §"Integration test host is shared collection-wide", `workplan.md` WU-IntTestPerf.
 - **Feature 56 (Feature Contributions) CUT (2026-07-18).** Decision row 3's final verdict; machinery removed (`FeatureContribution` entity/FKs, `UserStat.FeatureContributions` counter), sole `InitialSchema` migration regenerated. Its grid row is gone (number kept, not renumbered). The Architect badge is retained as a manual grant. Detail: `audit/BlogPosts.md` Feature 56 CUT note; `middle_plan_v2.md` §Resolved.
+- **Groups L5 grid-mark reconciliation (WU-GroupsL5, 2026-07-24).** Rows 38–40 L5 were left at Stage 2 when WU-GlobalFlip's "L5 flipped to 5 for all 40 built-surface rows" claim missed this cluster — the endpoints/client impl were already built and browser-verified same-day as the sibling Recommendations correction (27–30), which the flip did update; Groups' rows were simply skipped. Corrected to 5; the one genuine gap (F39's folder-write methods had no UI at all) closed by building the previously-dangling folder-management page, now covered by all three test tiers and browser-verified end-to-end under WASM. Detail: `audit/Groups.md` Stage notes, `workplan.md` WU-GroupsL5.
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L4.5-Browser | L5 | L6 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|--------------|----|----|----|
@@ -93,9 +94,9 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 3 | Sprite & Theme System | Sprites | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 4 | Story Creation & Editing | Stories | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A |
 | 5 | Story Browsing & Display | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
-| 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 2 | 5 | 2 | N/A |
-| 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 2 | 5 | 2 | N/A |
-| 8 | Story Arcs | Stories | 5 | 5 | 5 | 5 | 1 | 2 | 5 | N/A | N/A |
+| 6 | Chapter Writing & Versioning | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
+| 7 | Chapter Reading | Chapters | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
+| 8 | Story Arcs | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 9 | Series & Ordering | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 10 | Story Lineage | Stories | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 11 | Tag Administration | Tags | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
@@ -125,9 +126,9 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 35 | Blog Post Writing | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A |
 | 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 37 | Polls | BlogPosts | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 38 | Group Management | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 2 | 2 | N/A |
-| 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
-| 40 | Group Display | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A | N/A |
+| 38 | Group Management | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
+| 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
+| 40 | Group Display | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 41 | Notification Generation | Notifications | 5 | 5 | N/A | N/A | N/A | 5 | N/A | 5 | N/A |
 | 42 | Notification Display | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 5 | N/A |
 | 43 | Notification Settings | Notifications | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |

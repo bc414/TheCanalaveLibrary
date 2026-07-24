@@ -3529,3 +3529,90 @@ Two loose ends from WU-IntTestPerf, closed same day:
   `user_stats` = 22 columns (no `feature_contributions`, no `active_report_count`),
   `daily_story_stats` present (re-appended DDL), Architect badge seeded, 7 users.
 - **Tool:** Claude Code (Opus). **Pointer:** `audit/BlogPosts.md` Feature 56 CUT note.
+
+## WU-ChapterArcBrowserPass — Real-circuit L4.5 pass: Story Arcs + chapter reorder/delete/reading state (Features 6, 7, 8) — DONE ✓ (2026-07-24)
+
+- **Scope:** closes the WU45 L4.5-Browser deferral (Brian's direction, 2026-07-12) for Features 6,
+  7, 8 only — the not-covered checklist from that Stage note. Rows 6/7's L6 (chapter read-query
+  indexes) and row 8's L4-Style (human visual sign-off) are explicitly out of scope and unchanged.
+- **Vehicle:** the seeded flagship story ("Seed Story: Five Chapters + Alt Version (T)", story 1,
+  `DataSeeder.cs`) — no seeder change needed. `AuthorAlpha` drove author surfaces, `TestUser` drove
+  reader surfaces.
+- **Verified live in Chrome, `psql`-confirmed after every mutation:** arc creation + live preview
+  interactivity + overlap validation (`StoryArcManagerPanel`); arc headers/collapse-expand +
+  reading-page `Arc X — [name]` label (`ChapterList`/`ChapterReadingPage`); chapter drag-drop
+  reorder (swapped ch 4/5, restored); chapter delete via `ConfirmDialog` (created + deleted a
+  throwaway Chapter 6 rather than a seeded one, to avoid cascading away seeded comments); mark-read
+  → live fill-bar/count repaint with no reload; the "New" badge strict-chain rule (temporarily
+  future-dated a chapter's `PublishDate` via `psql` to trigger it, confirmed the chain-break
+  behavior on the next chapter, then restored the date); per-chapter download endpoint's
+  `Content-Disposition: attachment; filename=...` header.
+- **No runtime bugs found; no code changes.** `dotnet build` clean (pre-existing `AngleSharp`
+  NU1902 advisories only). Full `dotnet test` not re-run — no code changed that could regress it.
+- **Fixture note:** the two demonstration arcs created during this pass were left on the flagship
+  story rather than wiped — it had zero arcs before, so nothing exercised the Story Arcs UI for
+  future manual verification. Reasoning: `audit/Stories.md` Feature 8 Stage note.
+- **Cells:** `status.md` F6/F7/F8 `L4.5-Browser`: `2 → 5`.
+- **Tool:** Claude Code (Opus). **Pointer:** `audit/Chapters.md` WU-ChapterArcBrowserPass Stage
+  note; `audit/Stories.md` Feature 8 WU-ChapterArcBrowserPass Stage note.
+
+## WU-GroupsL5 — Groups L5 grid-mark reconciliation + folder-management page (Features 38/39/40) — DONE ✓ (2026-07-24)
+
+- **Trigger:** the user couldn't recall why Groups L5 (rows 38–40) was still Stage 2 while
+  nearly every other feature's L5 had flipped to 5. Investigation found the premise false: the
+  endpoints/client impl were already built, registered, and browser-verified in WU-GlobalFlip
+  (2026-07-13) — `audit/Groups.md` already carried Stage-5 L5 notes for all three features.
+  WU-GlobalFlip's "L5 flipped to 5 for all 40 built-surface rows" claim simply missed the Groups
+  cluster when it updated the sibling Recommendations rows (27–30, corrected in the same
+  2026-07-12 pass) — a stale grid mark, not a deferred decision.
+- **Scope (settled with the user, given the finding):** (1) reconcile the stale `status.md`
+  marks; (2) a DI cleanup at `Server/Program.cs` (`IGroupReadService` was mapped to the write
+  impl); (3) build the one truly-missing consumer — the deferred group **folder-management page**
+  (`/group/{GroupId:int}/folders`), since `IGroupWriteService`'s four folder-write methods had NO
+  UI at all, and the page requires "browser-verify folder writes" to be answerable; (4) add the
+  deferred L5 test tiers (`GroupEndpointsTests`, `ClientGroupServiceTests`); (5) browser-verify
+  end-to-end. L6 row-38's two missing composite indexes are a separate, real, explicitly
+  out-of-scope gap (`audit/L6-reconciliation-matrix.md`).
+- **Built:** `TheCanalaveLibrary.SharedUI/Groups/GroupFolderManagementPage.razor` — admin-gated
+  (mirrors `GroupCreateEditPage`'s pattern: `[Authorize]` + UX admin pre-check +
+  `[PersistentState]` + `InlineAlert` + exception-to-message mapping), own recursive interactive
+  tree (deliberately not sharing `GroupPage.RenderFolders`, a read-only display fragment with
+  public M-badge suppression that doesn't apply here), create with optional nesting (a
+  depth-indented parent `<select>`), inline rename, two-step `ConfirmDialog`-gated delete, and
+  sibling reorder via a `ReorderFolderAsync` SortOrder value-swap (robust to non-contiguous
+  SortOrder — no unique constraint on the column). Every write reloads the whole tree from
+  `GetByIdAsync` — no local mutation. One-line addition: `GroupConstants.MaxFolderNameLength`.
+  Story→folder assignment (`AssignStoryToFolderAsync`/`UnassignStoryFromFolderAsync`) still has
+  no UI — deliberately out of scope, flagged as a follow-up.
+- **Fixed:** `Server/Program.cs` — `IGroupReadService` now maps to `ServerGroupReadService`
+  (was `ServerGroupWriteService`, the heavier write impl with sanitizer/notifications/rate-limit
+  deps), matching every other feature's read/write DI split. `Series`' registration block has the
+  same quirk — left as-is, out of scope for this WU.
+- **New tests:** `GroupFolderManagementPageTests` (RazorComponents, 11) — admin gate, create
+  dispatch incl. nested `ParentFolderId`, rename dispatch, the two-step delete guard (trash click
+  must not call the service), reorder value-swap + boundary-disabled buttons, validation-error
+  surfacing. `GroupEndpointsTests` (Integration, 10) — `PagedResult<T>` envelope on both paged
+  reads, the `RequireAuthorization()` 401 floor, the admin-only 403 gate, full folder CRUD over
+  HTTP incl. 404 on an unknown folder. `ClientGroupServiceTests` (Unit, 16) — request URL/verb
+  shapes incl. every folder route, `PagedResult<T>` deconstruction, and the status-code →
+  contract-exception mapping, pinning Groups' one non-standard case (403 disambiguated via
+  `ProblemDetails.Detail` presence into `UnauthorizedAccessException` vs.
+  `ContentRatingExceededException`).
+- **Verified:** `dotnet build` clean. `dotnet test` full suite green: 718 Unit + 521
+  RazorComponents + 759 Integration = 1998/1998 (Integration ran for real against
+  Testcontainers-Postgres). `scripts/check-design-tokens.ps1` clean for the new page (two
+  pre-existing unrelated findings elsewhere — `ImportReviewPanel.razor` UGC-outside-ContentSurface,
+  `ProfilePage.razor` undeclared `--color-link` — untouched by this WU). Browser-verified live
+  against the dev DB as `TestUser` (admin of a throwaway test group): confirmed genuine WASM
+  execution on a fresh load (`_framework/*.wasm` bundle, zero `_blazor` WebSocket — the same
+  signature WU-GlobalFlip's own verification used), then drove create (root + nested folder),
+  rename, both-direction reorder, and confirm-gated delete, `psql`-confirming `group_folders`
+  ground truth after each (parent id, swapped `sort_order`, row removal); confirmed `GroupPage`'s
+  read-only tree reflects the live state afterward. Verification group/folders deleted afterward
+  (no fixture value) — unlike WU-ChapterArcBrowserPass's deliberately-kept arcs above, this data
+  had no standing purpose.
+- **Cells:** `status.md` F38/F39/F40 `L5`: `2 → 5` (grid-mark correction, not new capability for
+  F38/F40; F39 additionally gained the folder-management page itself). No other cells changed —
+  F38's L6 stays 2 (the separate index gap).
+- **Tool:** Claude Code (Opus). **Pointer:** `audit/Groups.md` F38/F39/F40 Stage notes;
+  `layer5-wasm.md` §"L5 Stage Semantics".

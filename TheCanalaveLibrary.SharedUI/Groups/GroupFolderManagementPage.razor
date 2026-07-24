@@ -1,0 +1,455 @@
+@page "/group/{GroupId:int}/folders"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@inject IGroupWriteService GroupService
+@inject NavigationManager Nav
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Group folder-management page (F39 L3.5) — admin-only CRUD + reorder for a group's folder tree.
+   The "Manage" link at GroupPage.razor has pointed here since WU32 with no page behind it (folder
+   management was deferred post-MVP); this closes that gap and is the only UI consumer of
+   IGroupWriteService's four folder-write methods (WU-GroupsL5, 2026-07-24).
+
+   Mirrors GroupCreateEditPage's admin-gated pattern: [Authorize] page-level guard, a UX admin
+   pre-check (_forbidden — the real gate is ServerGroupWriteService.RequireAdminAsync),
+   [PersistentState] on the loaded GroupDetailDto to kill the prerender->interactive double-fetch,
+   InlineAlert for validation errors, try/catch mapping GroupValidationException/Unauthorized/
+   KeyNotFound.
+
+   Every write reloads the whole tree via GetByIdAsync (no local tree mutation) — the server is
+   the source of truth for name-uniqueness, the group's rating cap, and folder ordering. Reorder
+   is a two-call SortOrder value-swap between adjacent siblings (see HandleMoveAsync) — robust to
+   non-contiguous SortOrder values and safe because ReorderFolderAsync has no unique constraint on
+   SortOrder. Story-to-folder assignment (AssignStoryToFolderAsync/UnassignStoryFromFolderAsync)
+   is deliberately out of scope — a separate follow-up alongside GroupPage's story listing. *@
+
+<PageTitle>Manage Folders</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        @if (_isLoading)
+        {
+            <p class="p-4 text-(--color-text-muted)"><em>Loading…</em></p>
+        }
+        else if (_forbidden)
+        {
+            <p class="p-4 text-(--color-danger)">You must be an admin of this group to manage its folders.</p>
+        }
+        else if (Group is not null)
+        {
+            <div class="mx-auto max-w-2xl px-4 py-8 flex flex-col gap-6">
+                <div class="flex items-center justify-between gap-4">
+                    <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+                        Manage Folders &mdash; @Group.GroupName
+                    </h1>
+                    <a href="/group/@GroupId" class="shrink-0 text-sm text-(--color-action-ink) hover:underline">Back to group</a>
+                </div>
+
+                @if (_errors.Count > 0)
+                {
+                    <InlineAlert Messages="@_errors" />
+                }
+
+                @* ── Create folder ────────────────────────────────────────── *@
+                <div class="flex flex-col gap-4 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+                    <h2 class="text-base font-semibold text-(--color-text)">New Folder</h2>
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:flex-wrap">
+                        <div class="flex flex-1 min-w-40 flex-col gap-1">
+                            <label for="new-folder-name" class="text-sm font-medium text-(--color-text)">Name</label>
+                            <input id="new-folder-name" type="text" @bind="_newName" @bind:event="oninput"
+                                   maxlength="@GroupConstants.MaxFolderNameLength"
+                                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                                   placeholder="Folder name" />
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <label for="new-folder-rating" class="text-sm font-medium text-(--color-text)">Max Rating</label>
+                            <select id="new-folder-rating" @bind="_newMaxRating"
+                                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
+                                @foreach (Rating rating in AllowedRatings)
+                                {
+                                    <option value="@rating">@rating</option>
+                                }
+                            </select>
+                        </div>
+                        @if (_parentOptions.Count > 0)
+                        {
+                            <div class="flex flex-col gap-1">
+                                <label for="new-folder-parent" class="text-sm font-medium text-(--color-text)">Parent Folder</label>
+                                <select id="new-folder-parent" @bind="_newParentFolderId"
+                                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
+                                    <option value="">(root)</option>
+                                    @foreach ((int id, string label) in _parentOptions)
+                                    {
+                                        <option value="@id">@label</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        <button type="button" @onclick="HandleCreateAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_newName))"
+                                class="rounded-md bg-(--color-action) px-5 py-2 font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
+                            @(_busy ? "Saving…" : "Create Folder")
+                        </button>
+                    </div>
+                </div>
+
+                @* ── Folder tree ──────────────────────────────────────────── *@
+                <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+                    <h2 class="text-base font-semibold text-(--color-text)">Folders</h2>
+                    @if (Group.FolderTree.Count == 0)
+                    {
+                        <p class="text-sm text-(--color-text-muted)">No folders yet.</p>
+                    }
+                    else
+                    {
+                        @RenderFolderTree(Group.FolderTree)
+                    }
+                </div>
+            </div>
+
+            <ConfirmDialog @bind-IsOpen="_confirmOpen" Title="Delete folder?" IsDestructive="true"
+                           ConfirmText="Delete folder" CancelText="Cancel" OnConfirm="HandleDeleteConfirmedAsync">
+                <p class="text-(--color-text)">
+                    Deleting "@_pendingDeleteName" removes the folder and unfiles any stories in it.
+                    The stories stay in the group &mdash; only their placement in this folder is removed.
+                    This can't be undone.
+                </p>
+            </ConfirmDialog>
+        }
+    </Authorized>
+    @* No <NotAuthorized> branch: page-level [Authorize] means the router renders the denial
+       (SignInRequired via Routes.razor) — an inline branch here is unreachable dead code
+       (WU-AccessGate Phase 1 cleanup; same judgment as GroupCreateEditPage). *@
+</AuthorizeView>
+
+@code {
+    [Parameter] public int GroupId { get; set; }
+
+    // No AuthState cascade needed: unlike GroupPage/GroupCreateEditPage this page never needs the
+    // viewer's own user id, only their role in this specific group (ApplyAdminGateAsync below) —
+    // the real gate is server-side (ServerGroupWriteService.RequireAdminAsync); this is UX-only.
+
+    // Persisted across the prerender→interactive handoff — kills the double-fetch. Every write
+    // handler reloads this via plain assignment (not ??=) so a stale tree never survives a write.
+    [PersistentState] public GroupDetailDto? Group { get; set; }
+
+    private bool _isLoading = true;
+    private bool _forbidden;
+    private bool _busy;
+    private List<string> _errors = [];
+
+    // Create-form state — transient, never persisted.
+    private string _newName = string.Empty;
+    private Rating _newMaxRating;
+    private int? _newParentFolderId;
+    private List<(int Id, string Label)> _parentOptions = [];
+
+    // Inline-rename state — transient.
+    private int? _editingFolderId;
+    private string _editName = string.Empty;
+
+    // Delete-confirm state — transient.
+    private bool _confirmOpen;
+    private int? _pendingDeleteId;
+    private string _pendingDeleteName = string.Empty;
+
+    // Route-dispatcher guard (layer3-logic.md §"Route-Parameter Dispatchers Reload in
+    // OnParametersSetAsync") — this page's route param is itself the dispatch key.
+    private bool _initialized;
+    private int _loadedGroupId = int.MinValue;
+
+    private IEnumerable<Rating> AllowedRatings =>
+        Enum.GetValues<Rating>().Where(r => Group is null || r <= Group.MaxContentRating);
+
+    protected override async Task OnInitializedAsync()
+    {
+        // ??= is safe only here: OnInitializedAsync runs once per instance, so this either
+        // restores the [PersistentState] value or performs the first fetch — never both.
+        Group ??= await GroupService.GetByIdAsync(GroupId);
+
+        if (Group is null)
+        {
+            Nav.NotFound();
+            return;
+        }
+
+        await ApplyAdminGateAsync();
+        _newMaxRating = Group.MaxContentRating;
+        RefreshParentOptions();
+        _loadedGroupId = GroupId;
+        _isLoading = false;
+        _initialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Fires when the same page instance is reused for a different GroupId (SPA nav between
+        // two groups' folder pages) — reloads are plain assignments, never ??=, so a previous
+        // group's persisted tree can't short-circuit the new group's fetch.
+        if (!_initialized) return;
+        if (GroupId == _loadedGroupId) return;
+
+        ResetTransientState();
+        await ReloadAsync();
+        if (Group is null)
+        {
+            Nav.NotFound();
+            return;
+        }
+        await ApplyAdminGateAsync();
+    }
+
+    private async Task ApplyAdminGateAsync()
+    {
+        GroupRole? role = await GroupService.GetCurrentUserRoleAsync(GroupId);
+        _forbidden = role != GroupRole.Admin;
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loadedGroupId = GroupId;
+        Group = await GroupService.GetByIdAsync(GroupId);
+        if (Group is not null)
+        {
+            _newMaxRating = Group.MaxContentRating;
+            RefreshParentOptions();
+        }
+    }
+
+    private void ResetTransientState()
+    {
+        _errors.Clear();
+        _newName = string.Empty;
+        _newParentFolderId = null;
+        _editingFolderId = null;
+        _editName = string.Empty;
+        _confirmOpen = false;
+        _pendingDeleteId = null;
+        _pendingDeleteName = string.Empty;
+    }
+
+    // ── Parent-folder select (nested creation) ──────────────────────────────────
+
+    private void RefreshParentOptions()
+    {
+        _parentOptions = [];
+        if (Group is not null)
+            FlattenForParentSelect(Group.FolderTree, depth: 0);
+    }
+
+    private void FlattenForParentSelect(IReadOnlyList<GroupFolderDto> folders, int depth)
+    {
+        foreach (GroupFolderDto folder in folders)
+        {
+            _parentOptions.Add((folder.GroupFolderId, new string('—', depth) + " " + folder.Name));
+            FlattenForParentSelect(folder.Children, depth + 1);
+        }
+    }
+
+    private static GroupFolderDto? FindFolder(IReadOnlyList<GroupFolderDto> folders, int id)
+    {
+        foreach (GroupFolderDto folder in folders)
+        {
+            if (folder.GroupFolderId == id) return folder;
+            GroupFolderDto? found = FindFolder(folder.Children, id);
+            if (found is not null) return found;
+        }
+        return null;
+    }
+
+    private IReadOnlyList<GroupFolderDto> FindSiblings(GroupFolderDto folder)
+    {
+        if (Group is null) return [];
+        if (folder.ParentFolderId is null) return Group.FolderTree;
+        return FindFolder(Group.FolderTree, folder.ParentFolderId.Value)?.Children ?? [];
+    }
+
+    // ── Write handlers ───────────────────────────────────────────────────────────
+
+    private async Task HandleCreateAsync()
+    {
+        if (Group is null || string.IsNullOrWhiteSpace(_newName)) return;
+
+        _errors.Clear();
+        _busy = true;
+        try
+        {
+            IReadOnlyList<GroupFolderDto> siblings = _newParentFolderId is int parentId
+                ? FindFolder(Group.FolderTree, parentId)?.Children ?? []
+                : Group.FolderTree;
+
+            await GroupService.CreateFolderAsync(new CreateFolderDto
+            {
+                GroupId        = GroupId,
+                ParentFolderId = _newParentFolderId,
+                Name           = _newName,
+                MaxRating      = _newMaxRating,
+                SortOrder      = siblings.Count
+            });
+
+            _newName = string.Empty;
+            _newParentFolderId = null;
+            await ReloadAsync();
+        }
+        catch (GroupValidationException ex) { _errors.AddRange(ex.Errors); }
+        catch (UnauthorizedAccessException) { _forbidden = true; }
+        catch (Exception) { _errors.Add("An unexpected error occurred. Please try again."); }
+        finally { _busy = false; }
+    }
+
+    private void BeginRename(GroupFolderDto folder)
+    {
+        _editingFolderId = folder.GroupFolderId;
+        _editName = folder.Name;
+    }
+
+    private void CancelRename()
+    {
+        _editingFolderId = null;
+        _editName = string.Empty;
+    }
+
+    private async Task HandleRenameAsync(int folderId)
+    {
+        if (string.IsNullOrWhiteSpace(_editName)) return;
+
+        _errors.Clear();
+        _busy = true;
+        try
+        {
+            await GroupService.RenameFolderAsync(folderId, _editName);
+            _editingFolderId = null;
+            await ReloadAsync();
+        }
+        catch (GroupValidationException ex) { _errors.AddRange(ex.Errors); }
+        catch (UnauthorizedAccessException) { _forbidden = true; }
+        catch (KeyNotFoundException) { _errors.Add("That folder no longer exists."); }
+        catch (Exception) { _errors.Add("An unexpected error occurred. Please try again."); }
+        finally { _busy = false; }
+    }
+
+    private void BeginDelete(GroupFolderDto folder)
+    {
+        _pendingDeleteId = folder.GroupFolderId;
+        _pendingDeleteName = folder.Name;
+        _confirmOpen = true;
+    }
+
+    private async Task HandleDeleteConfirmedAsync()
+    {
+        if (_pendingDeleteId is not int folderId) return;
+
+        _errors.Clear();
+        _busy = true;
+        try
+        {
+            await GroupService.DeleteFolderAsync(folderId);
+            await ReloadAsync();
+        }
+        catch (UnauthorizedAccessException) { _forbidden = true; }
+        catch (KeyNotFoundException) { _errors.Add("That folder no longer exists."); }
+        catch (Exception) { _errors.Add("An unexpected error occurred. Please try again."); }
+        finally
+        {
+            _busy = false;
+            _pendingDeleteId = null;
+            _pendingDeleteName = string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Moves a folder one slot among its siblings via a two-call SortOrder value-swap —
+    /// <paramref name="direction"/> is -1 (up) or +1 (down). Robust to non-contiguous SortOrder:
+    /// works off the sibling's actual current value rather than assuming i±1, and the transient
+    /// equal-SortOrder state between the two calls is harmless (no unique constraint).
+    /// </summary>
+    private async Task HandleMoveAsync(GroupFolderDto folder, int direction)
+    {
+        List<GroupFolderDto> siblings = FindSiblings(folder).ToList();
+        int index = siblings.FindIndex(f => f.GroupFolderId == folder.GroupFolderId);
+        int swapIndex = index + direction;
+        if (index < 0 || swapIndex < 0 || swapIndex >= siblings.Count) return;
+
+        GroupFolderDto other = siblings[swapIndex];
+
+        _errors.Clear();
+        _busy = true;
+        try
+        {
+            await GroupService.ReorderFolderAsync(folder.GroupFolderId, other.SortOrder);
+            await GroupService.ReorderFolderAsync(other.GroupFolderId, folder.SortOrder);
+            await ReloadAsync();
+        }
+        catch (UnauthorizedAccessException) { _forbidden = true; }
+        catch (KeyNotFoundException) { _errors.Add("That folder no longer exists."); }
+        catch (Exception) { _errors.Add("An unexpected error occurred. Please try again."); }
+        finally { _busy = false; }
+    }
+
+    // ── Tree rendering ───────────────────────────────────────────────────────────
+    // Own recursive render (deliberately not shared with GroupPage.RenderFolders — that's a
+    // read-only display fragment with public M-badge suppression; this page is admin-only and
+    // every row here is interactive). @key per row so reload/reorder never misattaches the
+    // inline-rename <input> to the wrong folder (layer3-logic.md §"Forcing a Child to Re-Seed via @key").
+
+    private RenderFragment RenderFolderTree(IReadOnlyList<GroupFolderDto> folders) =>
+        @<ul class="flex flex-col gap-2">
+            @foreach (GroupFolderDto folder in folders)
+            {
+                bool isFirst = folder.GroupFolderId == folders[0].GroupFolderId;
+                bool isLast = folder.GroupFolderId == folders[^1].GroupFolderId;
+                <li @key="folder.GroupFolderId" class="flex flex-col gap-1">
+                    <div class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2">
+                        @if (_editingFolderId == folder.GroupFolderId)
+                        {
+                            <input type="text" @bind="_editName" @bind:event="oninput"
+                                   maxlength="@GroupConstants.MaxFolderNameLength"
+                                   aria-label="@($"Rename {folder.Name}")"
+                                   class="flex-1 rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" />
+                            <button type="button" @onclick="() => HandleRenameAsync(folder.GroupFolderId)" disabled="@(_busy || string.IsNullOrWhiteSpace(_editName))"
+                                    class="rounded-md bg-(--color-action) px-3 py-1 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
+                                Save
+                            </button>
+                            <button type="button" @onclick="CancelRename" disabled="@_busy"
+                                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50">
+                                Cancel
+                            </button>
+                        }
+                        else
+                        {
+                            <span class="flex-1 truncate text-sm text-(--color-text)">📁 @folder.Name</span>
+                            @if (folder.MaxRating != Rating.M)
+                            {
+                                <span class="text-xs text-(--color-text-muted)">(@folder.MaxRating)</span>
+                            }
+                            <button type="button" @onclick="() => HandleMoveAsync(folder, -1)" disabled="@(_busy || isFirst)"
+                                    aria-label="@($"Move {folder.Name} up")"
+                                    class="inline-grid size-8 shrink-0 place-items-center rounded-md border border-(--color-border) bg-(--color-surface) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50 disabled:cursor-not-allowed">
+                                &uarr;
+                            </button>
+                            <button type="button" @onclick="() => HandleMoveAsync(folder, 1)" disabled="@(_busy || isLast)"
+                                    aria-label="@($"Move {folder.Name} down")"
+                                    class="inline-grid size-8 shrink-0 place-items-center rounded-md border border-(--color-border) bg-(--color-surface) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50 disabled:cursor-not-allowed">
+                                &darr;
+                            </button>
+                            <button type="button" @onclick="() => BeginRename(folder)" disabled="@_busy"
+                                    class="shrink-0 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50">
+                                Rename
+                            </button>
+                            <button type="button" @onclick="() => BeginDelete(folder)" disabled="@_busy"
+                                    class="shrink-0 rounded-md px-3 py-1 text-sm text-(--color-danger) transition-colors hover:bg-(--color-danger)/10 disabled:opacity-50">
+                                Delete
+                            </button>
+                        }
+                    </div>
+                    @if (folder.Children.Count > 0)
+                    {
+                        <div class="ml-6 border-l border-(--color-border) pl-3">
+                            @RenderFolderTree(folder.Children)
+                        </div>
+                    }
+                </li>
+            }
+        </ul>;
+}

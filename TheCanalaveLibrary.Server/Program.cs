@@ -395,7 +395,7 @@ builder.Services.AddScoped<IPollWriteService, ServerPollWriteService>();
 builder.Services.AddScoped<PollEditNotificationSweeper>();
 builder.Services.AddHostedService<PollEditNotificationWorker>();
 // Groups (WU32) — L2 read/write services (Features 38/39/40).
-builder.Services.AddScoped<IGroupReadService, ServerGroupWriteService>();
+builder.Services.AddScoped<IGroupReadService, ServerGroupReadService>();
 builder.Services.AddScoped<IGroupWriteService, ServerGroupWriteService>();
 // Series (WU41) — L2 read/write services (Feature 9).
 builder.Services.AddScoped<ISeriesReadService, ServerSeriesWriteService>();
