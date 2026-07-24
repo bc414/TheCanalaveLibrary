@@ -22,6 +22,9 @@ internal sealed class FakeUserProfileReadService : IUserProfileReadService
 
     public Task<string?> GetProfileTextAsync(int userId) =>
         Task.FromResult(BioHtml);
+
+    public Task<ProfileAccessState> GetProfileAccessStateAsync(int userId) =>
+        Task.FromResult(ProfileAccessState.Visible);
 }
 
 // ── Story ─────────────────────────────────────────────────────────────────────────────────────
@@ -29,6 +32,7 @@ internal sealed class FakeUserProfileReadService : IUserProfileReadService
 internal sealed class FakeStoryReadService : IStoryReadService
 {
     public Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId) => Task.FromResult<StoryDetailsDTO?>(null);
+    public Task<GatedMetadataDto?> GetStoryGateAsync(int storyId) => Task.FromResult<GatedMetadataDto?>(null);
     public Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId) => Task.FromResult<StoryUpdateDTO?>(null);
     public Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds) => Task.FromResult(Array.Empty<StoryListingDto>());
     public Task<(StoryListingDto[] Items, int TotalCount)> GetRecentListingsAsync(int page, int pageSize) => Task.FromResult((Array.Empty<StoryListingDto>(), 0));
@@ -36,7 +40,9 @@ internal sealed class FakeStoryReadService : IStoryReadService
     /// <summary>Configurable knob for page tests whose listings load through the filter path
     /// (BookshelvesPageTests). Default empty preserves the original no-op behavior.</summary>
     public (StoryListingDto[] Items, int TotalCount) ListingsResult { get; set; } = ([], 0);
-    public Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null) => Task.FromResult(ListingsResult);
+    public Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null, bool personalScope = false) => Task.FromResult(ListingsResult);
+    public Task<IReadOnlyList<GatedMetadataDto>> GetGatedCardsAsync(IReadOnlyCollection<int> storyIds) => Task.FromResult<IReadOnlyList<GatedMetadataDto>>([]);
+    public Task<IReadOnlyList<GatedMetadataDto>> GetGatedStoriesByAuthorAsync(int authorId) => Task.FromResult<IReadOnlyList<GatedMetadataDto>>([]);
 
     /// <summary>Configurable knob for random-mode discovery tests (SearchPageTests).
     /// Default empty preserves the original no-op behavior.</summary>
@@ -89,6 +95,7 @@ internal sealed class FakeBlogPostReadService : IBlogPostReadService
     public (BlogPostListingDto[] Items, int TotalCount) AuthorResult { get; set; } = ([], 0);
 
     public Task<BlogPostDto?> GetByIdAsync(int blogPostId) => Task.FromResult<BlogPostDto?>(null);
+    public Task<GatedMetadataDto?> GetBlogPostGateAsync(int blogPostId) => Task.FromResult<GatedMetadataDto?>(null);
     public Task<(BlogPostListingDto[] Items, int TotalCount)> GetByAuthorAsync(int authorId, int page, int pageSize, bool includeUnpublished = false) =>
         Task.FromResult(AuthorResult);
     public Task<BlogPostEditDto?> GetForEditAsync(int blogPostId) => Task.FromResult<BlogPostEditDto?>(null);

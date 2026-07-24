@@ -442,6 +442,8 @@ builder.Services.AddScoped<IModerationReadService>(sp => sp.GetRequiredService<I
 // IUserProfileReadService: public display (includePrivate bool, not a source switch).
 // IThemeReadService: Sprites cluster (Feature 3 owns Theme entity).
 builder.Services.AddScoped<IUserSettingsService, ServerUserSettingsService>();
+// ContentGate cluster (Feature 66, WU-AccessGate) — reveal management for /settings.
+builder.Services.AddScoped<IContentRevealService, ServerContentRevealService>();
 builder.Services.AddScoped<IUserProfileReadService, ServerUserProfileReadService>();
 builder.Services.AddScoped<IThemeReadService, ServerThemeReadService>();
 // Badges (WU36) — L2 services (Feature 50). Synchronous inline award-checks; curation UI.
@@ -501,15 +503,55 @@ else
 
 app.MapDefaultEndpoints();
 
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+// Status-code re-execute by CODE (WU-AccessGate Phase 1): 404 → styled not-found; 401/403 →
+// the SignInRequired experience (Server/ContentGate/StatusCodePage.razor). Formerly a fixed
+// "/not-found" target — and formerly ineffective for auth: see the explicit auth placement below.
+app.UseStatusCodePagesWithReExecute("/status-code/{0}", createScopeForStatusCodePages: true);
+
+// GET/HEAD ONLY: re-execution preserves the original HTTP method, and a POST re-executed into a
+// Razor-component endpoint trips component antiforgery validation — turning e.g. a 403 policy
+// rejection into a 400 (caught by ModerationEndpointsTests). Opt non-document requests out via
+// the feature flag rather than branching the pipeline with UseWhen — a UseWhen branch breaks the
+// re-execute's endpoint re-routing (re-executed paths dead-ended in 404).
+app.Use((ctx, next) =>
+{
+    if (!HttpMethods.IsGet(ctx.Request.Method) && !HttpMethods.IsHead(ctx.Request.Method)
+        && ctx.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodePagesFeature>() is { } statusPages)
+    {
+        statusPages.Enabled = false;
+    }
+    return next(ctx);
+});
 app.UseHttpsRedirection();
 
 // Security headers + per-request CSP nonce on every response (WU-Security). CSP is enforced
 // outside Development, Report-Only in Development — see security.md "Response Headers & CSP".
 app.UseMiddleware<SecurityHeadersMiddleware>();
 
+// Verified-crawler detection (Pattern B serving, WU-AccessGate). Inert until
+// Seo:TrustVerifiedBots is enabled — a Phase-7 launch-readiness line gated on the Cloudflare
+// trust boundary (see the middleware's doc comment).
+app.UseMiddleware<VerifiedBotMiddleware>();
+
+// Canonical-slug 301 (Feature 64): /story/{id}/{stale-slug} → the canonical slug, before any
+// rendering. Full-document GET/HEAD only; see SeoEndpoints.UseCanonicalStorySlugRedirect.
+app.UseCanonicalStorySlugRedirect();
+
 // This must come before MapRazorComponents
 app.UseStaticFiles();
+
+// EXPLICIT placement (WU-AccessGate Phase 1): when these aren't called explicitly,
+// WebApplication auto-inserts UseAuthentication/UseAuthorization immediately after routing —
+// BEFORE every user-registered middleware, including UseStatusCodePagesWithReExecute above. The
+// cookie handler's body-less 401/403 (OnRedirectToLogin/OnRedirectToAccessDenied overrides) then
+// reached the browser as a blank page (~30 [Authorize] routes; observed live, audit/Identity.md
+// 2026-07-01). Registering them HERE puts the status-code re-execute around authorization, so
+// those responses render the styled sign-in-required page instead. Order constraints honored:
+// after routing (auto, front of pipeline), before UseAntiforgery (consumes auth state) and
+// before endpoint mapping.
+app.UseAuthentication();
+app.UseAuthorization();
+
 // After UseStaticFiles (assets exempt), before UseAntiforgery — see security.md.
 app.UseRateLimiter();
 app.UseAntiforgery();
@@ -527,6 +569,12 @@ app.MapRazorComponents<App>()
 
 // Add additional endpoints required by the Identity /Account Razor components.
 app.MapAdditionalIdentityEndpoints();
+
+// Mature-content consent endpoints (Feature 66, WU-AccessGate).
+app.MapContentGateEndpoints();
+
+// Site-level crawlability (Feature 64): robots.txt + sitemap.xml.
+app.MapSeoEndpoints();
 
 app.MapStoryEndpoints();
 app.MapTagEndpoints();

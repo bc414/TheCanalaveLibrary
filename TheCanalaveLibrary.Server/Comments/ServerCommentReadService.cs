@@ -150,6 +150,11 @@ public class ServerCommentReadService(
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
 
+        // Class-A: the comment wall is profile content; respect the owner's ProfileVisibility
+        // (WU-AccessGate Phase 1 — /api/comments/profile/{userId} is directly reachable).
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, profileUserId))
+            return new CommentPageDto([], 0);
+
         // Mirrors GetGroupCommentsAsync exactly — same two-step load and in-memory ordering,
         // over UserProfileComments instead of GroupComments. No spoiler flag on profile comments.
         int totalRootCount = await readDb.UserProfileComments

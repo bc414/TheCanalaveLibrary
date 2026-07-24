@@ -1,0 +1,54 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Settings section — "Mature content you've revealed" (Feature 66, WU-AccessGate). Durable
+   consent is revocable: removing a reveal makes that story/group/post gate again on the next
+   visit. Parameter-driven (no @inject) like the other settings sub-forms, so it stays
+   bUnit-testable in isolation; SettingsPage owns the service calls. Renders nothing when the
+   member has no reveals — the section only exists once there is something to manage. *@
+
+@if (Items.Count > 0)
+{
+    <section class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-4 md:p-6">
+        <h2 class="font-display text-lg font-semibold text-(--color-text)">Mature content you've revealed</h2>
+        <p class="text-sm text-(--color-text-muted)">
+            Stories, groups, and posts you chose to view while your mature-content setting was
+            off. Remove one and it will ask again next time.
+        </p>
+        <ul class="flex flex-col gap-2">
+            @foreach (RevealDisplayDto item in Items)
+            {
+                <li class="flex flex-wrap items-center gap-2 text-sm">
+                    <span class="rounded bg-(--color-surface-raised) px-1.5 py-0.5 text-xs font-semibold text-(--color-text-muted) ring-1 ring-(--color-border)">M</span>
+                    <a href="@LinkFor(item)" class="text-(--color-action-ink) hover:underline">@item.Title</a>
+                    <span class="text-xs text-(--color-text-muted)">@NounFor(item) · revealed @item.DateRevealed.ToString("yyyy-MM-dd")</span>
+                    <button type="button"
+                            class="ml-auto rounded-md px-2 py-0.5 text-xs text-(--color-danger) transition-colors hover:bg-(--color-surface-hover)"
+                            disabled="@Busy"
+                            @onclick="() => OnRemove.InvokeAsync(item)">
+                        Remove
+                    </button>
+                </li>
+            }
+        </ul>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<RevealDisplayDto> Items { get; set; } = [];
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<RevealDisplayDto> OnRemove { get; set; }
+
+    private static string LinkFor(RevealDisplayDto item) => item.EntityType switch
+    {
+        RevealedEntityType.Group => $"/group/{item.EntityId}",
+        RevealedEntityType.BlogPost => $"/blog/{item.EntityId}",
+        _ => $"/story/{item.EntityId}",
+    };
+
+    private static string NounFor(RevealDisplayDto item) => item.EntityType switch
+    {
+        RevealedEntityType.Group => "group",
+        RevealedEntityType.BlogPost => "post",
+        _ => "story",
+    };
+}

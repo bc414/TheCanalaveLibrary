@@ -84,7 +84,7 @@ public class ServerCoOccurrenceReadService(
         command.CommandText = sql;
         command.Parameters.Add(new NpgsqlParameter("storyId", storyId));
         command.Parameters.Add(new NpgsqlParameter("take", take));
-        command.Parameters.Add(new NpgsqlParameter("maxRating", (short)(activeUser.ShowMatureContent ? Rating.M : Rating.T)));
+        command.Parameters.Add(new NpgsqlParameter("maxRating", (short)activeUser.MaxRating));
         command.Parameters.Add(new NpgsqlParameter("viewerId", activeUser.UserId ?? -1));
         AddExclusionParameters(command, exclusions);
 

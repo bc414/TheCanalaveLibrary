@@ -20,7 +20,15 @@
             <ThemeContextProvider>
                 <ReaderDisplayProvider>
                     <UserActivityTracker />
-                    <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)" />
+                    <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(MainLayout)">
+                        @* SPA-navigation denial (WU-AccessGate Phase 1): without this template the
+                           framework rendered bare "Not authorized" text. Full-document loads take
+                           the status-code re-execute path to the same component instead
+                           (Program.cs UseStatusCodePagesWithReExecute + explicit auth placement). *@
+                        <NotAuthorized>
+                            <SignInRequired />
+                        </NotAuthorized>
+                    </AuthorizeRouteView>
                 </ReaderDisplayProvider>
             </ThemeContextProvider>
         </CascadingAuthenticationState>

@@ -120,6 +120,8 @@ else
             </select>
         </div>
 
+        <MatureDisclosureLine Items="@_gatedItems" />
+
         <StoryDeck Stories="@Items"
                    UserStoryInteractionStates="@_states"
                    CurrentUserId="@_currentUserId"
@@ -153,6 +155,9 @@ else
     [PersistentState] public StoryListingDto[]? Items { get; set; }
 
     private IReadOnlyList<int> _storyIds = [];
+
+    // Mature count-line disclosure items (WU-AccessGate) — per-viewer deterministic, not persisted.
+    private IReadOnlyList<GatedMetadataDto> _gatedItems = [];
     private IReadOnlyDictionary<int, UserStoryInteractionStateDto> _states =
         new Dictionary<int, UserStoryInteractionStateDto>();
     private CustomListSortEnum _sort = CustomListSortEnum.DateAddedDesc;
@@ -202,10 +207,16 @@ else
         if (restore) Detail ??= await CustomListService.GetListDetailAsync(ListId);
         else Detail = await CustomListService.GetListDetailAsync(ListId);
 
-        if (Detail is null) { _isLoading = false; return; }
+        // Real 404 instead of an inline soft-404 (WU-AccessGate Phase 1). Missing and
+        // private-to-this-viewer stay deliberately indistinguishable (a list's existence is not
+        // otherwise observable) — but as a genuine 404 status, not an indexable 200.
+        if (Detail is null) { Nav.NotFound(); _isLoading = false; return; }
 
         // Candidate ids always fetch (not persisted) so sort/page changes keep working.
         _storyIds = await CustomListService.GetListStoryIdsAsync(ListId, _sort);
+        // Mature count-line disclosure (WU-AccessGate): server returns [] for the owner
+        // (Personal-plane reads already include their M entries) and for mature-on viewers.
+        _gatedItems = await CustomListService.GetListHiddenMatureAsync(ListId);
         if (Items is null)
             await ReloadPageAsync();
         else

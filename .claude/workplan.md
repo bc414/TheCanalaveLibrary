@@ -2108,11 +2108,29 @@ the DONE ✓ units above and from the "Post-MVP — Layers 5–8" section below 
 design). Each entry names its cell(s)/feature, phase, audit pointer, and deps; flip to a DONE ✓
 entry above (with cells/verification) when built.
 
-- **WU-SeoSite** — **Cells:** Feature 64 (new), all layers currently Stage 1–2 per `status.md`.
-  **Phase:** 2, item 8. **Scope:** `robots.txt`, `sitemap.xml` endpoint, canonical-slug 301
-  redirect (unblocked now); mature-content `noindex` (blocked on decision row 11). **Pointer:**
-  `audit/Seo.md`. **Deps:** none — the existing `Seo/` cluster (`IPublicUrlProvider`) and
-  `StoryPage` routing are both Stage 5.
+- **WU-AccessGate — DONE ✓ (2026-07-23)** *(re-minted 2026-07-19 from WU-SeoSite, which it
+  absorbed — decision row 11 resolved "index all; gate access")* — **Cells:** Features 64 + 66,
+  all applicable layers → **Stage 5**. **Phase:** 2, item 8. **Shipped:** the three-plane access
+  model end-to-end — Class-A fixes (ProfileVisibility enforced on all seven profile-scoped read
+  paths + honest profile states; styled sign-in-required experience replacing the blank-401 class
+  via explicit auth-middleware placement + `/status-code/{0}` re-execute; soft-404s → real 404s;
+  author self-access on own-M read/edit; group-blog permalinks; five dead `<NotAuthorized>`
+  blocks deleted; `/welcome` flow), consent infrastructure (`user_content_reveals` polymorphic
+  table, `canalave.prefs` anon cookie, consent endpoints with `RefreshSignInAsync` — MA-605
+  closed, ceiling derivation centralized as `MaxRating`), the gates (gated-existence reads →
+  `ContentGateInterstitial` on story/chapter/group/blog-post pages, adult labels rating=adult +
+  RTA on both branches, `/gate` endpoints for the WASM pass, reveal-aware
+  chapter/TOC/versions/export subtree, tree-search root reveals), Personal plane + disclosure
+  (`personalScope` bookshelf/owner-list hydration, `MatureDisclosureLine` gated mini-cards on
+  profile tabs/public lists/group sections/series, spotlight dedicated M/non-M slot pools with
+  redemption validation, `/settings` reveal revoke section), and the Feature-64 slice
+  (robots.txt with AI-trainer blocks, sitemap.xml incl. M, canonical-slug 301 middleware +
+  `<link rel="canonical">`, `VerifiedBotMiddleware` config-gated OFF until Phase 7's trust
+  boundary). **Verified:** `dotnet test` green — 1955 total (14 new Integration
+  `ContentGateTests`); curl matrix + Chrome browser band (anonymous consent loop, logged-in
+  always-show with immediate claim refresh, DB reveal + revoke, disclosure line) — full
+  narrative in `audit/AccessGate.md` Stage-5 note. **Pointers:** `audit/AccessGate.md`,
+  `.claude/design/access-gating-first-principles.md` (model), `audit/Seo.md` (Feature 64 slice).
 - **WU-A11y** — **Cells:** Feature 65 (new), L4/L4.5 currently Stage 1. **Phase:** 3, paired with
   the L4 freeze sweep. **Scope:** blocked on decision row 12 (scope/depth). **Pointer:**
   `audit/Accessibility.md`. **Deps:** Phase 3's L4 freeze sweep (same pass).

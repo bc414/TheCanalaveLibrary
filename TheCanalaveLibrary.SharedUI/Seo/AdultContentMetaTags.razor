@@ -1,0 +1,14 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Adult-content head labels (Feature 64/66, WU-AccessGate; audit/Seo.md). Emitted on EVERY
+   M-work URL — interstitial AND revealed/loaded branches alike: the URL is adult regardless of
+   the viewer's consent state, and these tags are what keep SafeSearch/parental-control
+   classification per-page instead of Google guessing (and potentially misclassifying the whole
+   domain). Two conventions, both emitted: Google's rating=adult and the ASACP RTA label (read by
+   parental-control software and browsers). Sibling of <SocialMetaTags> — same append-only
+   <HeadContent> constraint (never duplicate these in App.razor's static head). *@
+
+<HeadContent>
+    <meta name="rating" content="adult" />
+    <meta name="rating" content="RTA-5042-1996-1400-1577-RTA" />
+</HeadContent>

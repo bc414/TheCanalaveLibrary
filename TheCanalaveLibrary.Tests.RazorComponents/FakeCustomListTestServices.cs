@@ -42,6 +42,9 @@ internal sealed class FakeCustomListWriteService : ICustomListWriteService
         return Task.FromResult(StoryIds);
     }
 
+    public Task<IReadOnlyList<GatedMetadataDto>> GetListHiddenMatureAsync(int listId) =>
+        Task.FromResult<IReadOnlyList<GatedMetadataDto>>([]);
+
     public Task<List<CustomListSummaryDto>> GetPublicListsByUserAsync(int userId) =>
         Task.FromResult(PublicLists);
 

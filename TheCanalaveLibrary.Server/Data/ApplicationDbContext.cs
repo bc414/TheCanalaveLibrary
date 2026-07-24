@@ -136,6 +136,9 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     public DbSet<BasePoll> Polls { get; set; }
     public DbSet<PollOption> PollOptions { get; set; }
 
+    //ContentGate (Feature 66, WU-AccessGate) — durable per-item mature-content consent
+    public DbSet<UserContentReveal> UserContentReveals { get; set; }
+
     //Notifications
     public DbSet<Notification> Notifications { get; set; }
     public DbSet<NotificationCategory> NotificationCategories { get; set; }

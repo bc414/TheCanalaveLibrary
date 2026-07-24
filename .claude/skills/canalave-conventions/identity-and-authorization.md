@@ -40,6 +40,49 @@ Two consumers justify the abstraction independently: the content-rating query fi
 `ThemeContextProvider` (see `render-and-layout.md` §"ThemeContext Cascading Provider") — both
 previously had no defined source for "the current user."
 
+## Viewer Consent State (WU-AccessGate, 2026-07-19)
+
+Three additions extend the viewer context for the three-plane access model
+(`content-safety.md` §"The Three-Plane Access Model"):
+
+**Anonymous prefs cookie.** One first-party JSON cookie —
+`{ mature: bool, revealedStories: [ids], revealedGroups: [ids], revealedBlogPosts: [ids] }` —
+**SameSite=Lax** (it must ride inbound external links; Strict would re-gate every Discord/search
+arrival), **not HttpOnly** (WASM parity), 180-day sliding expiry, ~50-reveal LRU cap. For
+anonymous viewers `ServerActiveUserContext` resolves `ShowMatureContent` from `cookie.mature`
+(lazily, same guarded pattern as its principal cache — never in the constructor; the
+`SecurityStampValidator` early-capture hazard applies to any constructor-time HttpContext read).
+The cookie also feeds the `GroupAudience` filter — an anon mature toggle widens group visibility
+too, by design. **WASM parity is deliberately not implemented** (refined at build time,
+2026-07-19): `WasmActiveUserContext` has no anon-cookie read because nothing consumes it there —
+SharedUI components never inject `IActiveUserContext` (the two-identity-source rule below), and
+every data read crosses HTTP to the server, where the cookie rides the request and the server
+context enforces. If a WASM-side consumer ever appears, `PersistentComponentState` is the
+channel (the framework's auth-state serialization cannot carry anonymous data) — do not reach
+for `document.cookie` interop, which clashes with the context's synchronous resolution.
+
+**Reveals.** Logged-in consent is durable in `user_content_reveals`
+(user id, entity type Story/Group/BlogPost, entity id) — *not* a cookie (cross-device, no size
+cap, server-readable on every path including export anchor GETs, revocable from `/settings`).
+Anonymous consent lives in the cookie lists above; on login, anon reveals are discarded
+(re-consent is one click). Reveal checks compose in read-service queries (the context itself
+stays claims/cookie-only and DbContext-free — no circular dependency). Reveals affect the
+Direct-navigation plane and the revealed item's own subtree only; they never widen Discovery.
+
+**Responsive `ShowMatureContent` (MA-605 closed).** The claim is reissued the moment the setting
+changes: the set-mature action (settings form and interstitial "Always show mature content"
+alike) runs through a full-document server endpoint that writes the DB, calls
+`SignInManager.RefreshSignInAsync`, and 303-redirects — the redirect also rebuilds the circuit,
+which is required anyway (a circuit's viewer context is frozen; see `ServerActiveUserContext`'s
+principal cache). Anonymous: same endpoint shape, Set-Cookie instead of Identity. Consent
+endpoints (reveal story/group/blog-post) follow the identical POST→303 pattern.
+
+**Verified crawlers.** `VerifiedBotMiddleware` stamps `HttpContext.Items` (pattern:
+`SecurityHeadersMiddleware`), surfaced as `IsVerifiedBot` on the context. Config-gated by
+`Seo:TrustVerifiedBots` (default **false**) — do not enable before Phase 7's Cloudflare
+ForwardedHeaders/origin-lockdown lands, or the elevation is spoofable by direct-to-origin
+requests. Crawlers only ever hit the SSR/prerender pass, which always has an HttpContext.
+
 ## Active-User-Conditional Handling
 
 ### The two identity sources — which to use where

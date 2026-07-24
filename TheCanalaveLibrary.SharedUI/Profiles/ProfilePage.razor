@@ -44,8 +44,21 @@
 }
 else if (Header is null)
 {
-    <PageTitle>Not Found</PageTitle>
-    <p class="text-(--color-text-muted)">This profile doesn't exist or isn't visible to you.</p>
+    @* Honest hidden states (WU-AccessGate Phase 1). A missing user never reaches here —
+       LoadHeaderAsync routes NotFound to the styled 404 page via Nav.NotFound(). *@
+    @if (_accessState == ProfileAccessState.SignInRequired)
+    {
+        <PageTitle>Sign in to view this profile</PageTitle>
+        <div class="flex flex-col gap-2 p-4">
+            <p class="text-(--color-text-muted)">This profile is visible to signed-in members only.</p>
+            <p><a class="underline text-(--color-link)" href="@($"/Account/Login?ReturnUrl={Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri))}")">Sign in to view this profile</a></p>
+        </div>
+    }
+    else
+    {
+        <PageTitle>Private profile</PageTitle>
+        <p class="p-4 text-(--color-text-muted)">This profile is private.</p>
+    }
 }
 else
 {
@@ -256,7 +269,8 @@ else
                 @* Story tabs: Favorites, Recommendations, Authored — deck + filter sidebar
                    (sidebar stacks below the deck at narrow) *@
                 <div class="flex flex-col gap-6 md:flex-row md:items-start">
-                    <div class="min-w-0 flex-1">
+                    <div class="min-w-0 flex-1 flex flex-col gap-3">
+                        <MatureDisclosureLine Items="@_gatedItems" />
                         <StoryDeck Stories="@(StoryItems ?? [])"
                                    UserStoryInteractionStates="@_interactionStates"
                                    CurrentUserId="@_currentUserId"
@@ -334,11 +348,19 @@ else
     // Per-viewer supplementary state — deterministic per viewer, so the prerender→interactive
     // re-fetch is flicker-free; not persisted (same treatment as StoryPage's _usiState).
     private UserRelationshipStateDto? _relationship; // null = anonymous or owner
+
+    // Why the header is null (honest hidden states, WU-AccessGate Phase 1) — loaded only on the
+    // null path; deterministic per viewer, so not persisted.
+    private ProfileAccessState _accessState = ProfileAccessState.Visible;
     private IReadOnlyDictionary<int, UserStoryInteractionStateDto>? _interactionStates;
 
     // Candidate IDs — not rendered, so never persisted (browser-exposure rule: don't persist a
     // superset the UI pages down); the restore path refetches them so pagination keeps working.
     private IReadOnlyList<int> _candidateIds = [];
+
+    // Mature count-line disclosure items for the current story tab (WU-AccessGate) — per-viewer
+    // deterministic, not persisted.
+    private IReadOnlyList<GatedMetadataDto> _gatedItems = [];
     private StoryFilterDto _storyFilter = new StoryFilterDto { PageSize = StoryPageSize };
 
     private int _blogPage = 1;
@@ -464,6 +486,16 @@ else
         _relationship = null;
         if (Header is not null && _currentUserId.HasValue && !_isOwner)
             _relationship = await FollowingReadService.GetRelationshipStateAsync(UserId);
+
+        // Honest empty states (WU-AccessGate Phase 1): the header read conflates missing,
+        // Private, and UsersOnly-as-anonymous into null — a second, null-path-only read
+        // distinguishes them so a missing user is a real 404 while a hidden profile says why.
+        if (Header is null)
+        {
+            _accessState = await ProfileReadService.GetProfileAccessStateAsync(UserId);
+            if (_accessState is ProfileAccessState.NotFound or ProfileAccessState.Visible)
+                Nav.NotFound(); // Visible-but-null-header is unreachable; treat as not-found.
+        }
     }
 
     // Clears every persisted tab payload — called before any non-initial reload so the loaders'
@@ -502,17 +534,45 @@ else
         // Candidate IDs always fetch (not persisted) so filter/page changes keep working.
         _candidateIds = await GetCandidateIdsForTabAsync(_tab);
         if (StoryItems is null)
+        {
             await ReloadStoryListingsAsync();
+        }
         else
-            await LoadInteractionStatesAsync(); // restored listings — only the per-viewer states need fetching
+        {
+            // Restored listings — the per-viewer states + disclosure still need fetching.
+            await LoadInteractionStatesAsync();
+            await LoadGatedDisclosureAsync(_isOwner && _tab == ProfileTab.Favorites);
+        }
     }
 
     // Plain fetch — also the filter/page-change path, which must never be short-circuited by
     // persisted state.
     private async Task ReloadStoryListingsAsync()
     {
-        (StoryItems, StoryTotalCount) = await StoryReadService.GetListingsAsync(_storyFilter, _candidateIds);
+        // Owner viewing their own Favorites tab hydrates Personal-plane (their own interaction
+        // graph is never rating-filtered — WU-AccessGate); every other viewer/tab is
+        // Discovery-filtered with the count-line disclosure supplying the hidden half.
+        bool personalScope = _isOwner && _tab == ProfileTab.Favorites;
+        (StoryItems, StoryTotalCount) = await StoryReadService.GetListingsAsync(_storyFilter, _candidateIds, personalScope);
         await LoadInteractionStatesAsync();
+        await LoadGatedDisclosureAsync(personalScope);
+    }
+
+    // Mature count-line disclosure (WU-AccessGate, person-scoped listing surfaces): the M items
+    // this tab's ceiling hid, as minimal gated cards. Authored uses the dedicated author read
+    // (visible-id reads never leak rating-hidden ids cross-user); Favorites/Recommendations pass
+    // their raw candidate sets.
+    private async Task LoadGatedDisclosureAsync(bool personalScope)
+    {
+        _gatedItems = personalScope
+            ? []
+            : _tab switch
+            {
+                ProfileTab.Authored => await StoryReadService.GetGatedStoriesByAuthorAsync(UserId),
+                ProfileTab.Favorites or ProfileTab.Recommendations =>
+                    await StoryReadService.GetGatedCardsAsync([.. _candidateIds]),
+                _ => [],
+            };
     }
 
     private async Task LoadInteractionStatesAsync()

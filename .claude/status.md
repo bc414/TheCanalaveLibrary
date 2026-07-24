@@ -150,5 +150,6 @@ Global conditions affecting many cells — kept terse; detail lives at the point
 | 61 | Also Favorited / Also Recommended | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | N/A | 5 |
 | 62 | SiteDailyStat Worker | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | N/A | 5 |
 | 63 | Chapter Import (file ingestion) | Import | N/A | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
-| 64 | Site SEO | Seo | N/A | 2 | 2 | 2 | N/A | 1 | N/A | N/A | N/A |
+| 64 | Site SEO | Seo | N/A | 5 | 5 | 5 | N/A | 5 | N/A | N/A | N/A |
 | 65 | Accessibility | — | N/A | N/A | N/A | N/A | 1 | 1 | N/A | N/A | N/A |
+| 66 | Viewer Access Gating | AccessGate | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 |

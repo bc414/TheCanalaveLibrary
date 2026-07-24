@@ -40,15 +40,22 @@ public class ServerCustomListReadService(
                 l.IsPublic,
                 l.DateCreated,
                 l.UserId,
-                OwnerUserName = l.User.UserName,
-                // Viewer-visible count — the filtered Stories subquery applies the rating/takedown
-                // named filters, matching what GetListStoryIdsAsync will return this viewer.
-                StoryCount = l.CustomListEntries.Count(e => readDb.Stories.Any(s => s.StoryId == e.StoryId))
+                OwnerUserName = l.User.UserName
             })
             .FirstOrDefaultAsync();
 
         if (header is null) return null;
-        if (!header.IsPublic && header.UserId != ActiveUser.UserId) return null;
+        bool isOwner = header.UserId == ActiveUser.UserId;
+        if (!header.IsPublic && !isOwner) return null;
+
+        // Viewer-visible count — matches what GetListStoryIdsAsync returns this viewer. The
+        // OWNER counts unfiltered (Personal plane, WU-AccessGate): their own list must show and
+        // count their own M entries so they can see and manage them. Takedown stays filtered.
+        IQueryable<Story> countStories = readDb.Stories;
+        if (isOwner)
+            countStories = countStories.IgnoreQueryFilters(["ContentRating"]); // elevated read: Personal plane (own list)
+        int storyCount = await readDb.CustomListEntries
+            .CountAsync(e => e.ListId == listId && countStories.Any(s => s.StoryId == e.StoryId));
 
         return new CustomListDetailDto(
             header.CustomListId,
@@ -57,7 +64,7 @@ public class ServerCustomListReadService(
             header.DateCreated,
             header.UserId,
             header.OwnerUserName ?? "(deleted user)",
-            header.StoryCount);
+            storyCount);
     }
 
     public async Task<IReadOnlyList<int>> GetListStoryIdsAsync(int listId, CustomListSortEnum sort)
@@ -70,13 +77,19 @@ public class ServerCustomListReadService(
             .Select(l => new { l.IsPublic, l.UserId })
             .FirstOrDefaultAsync();
         if (gate is null) return [];
-        if (!gate.IsPublic && gate.UserId != ActiveUser.UserId) return [];
+        bool isOwner = gate.UserId == ActiveUser.UserId;
+        if (!gate.IsPublic && !isOwner) return [];
 
         // Join through the filtered Stories set so rating/takedown-hidden entries drop out here,
         // keeping pagination gap-free (GetListingsByIdsAsync would drop them post-page otherwise).
+        // The OWNER joins rating-unfiltered (Personal plane, WU-AccessGate) — see GetListDetailAsync.
+        IQueryable<Story> joinStories = readDb.Stories;
+        if (isOwner)
+            joinStories = joinStories.IgnoreQueryFilters(["ContentRating"]); // elevated read: Personal plane (own list)
+
         var rows =
             from e in readDb.CustomListEntries
-            join s in readDb.Stories on e.StoryId equals s.StoryId
+            join s in joinStories on e.StoryId equals s.StoryId
             where e.ListId == listId
             // Title lives on the StoryListing vertical partition; empty-string fallback keeps the
             // ORDER BY total when a listing row is missing.
@@ -97,9 +110,46 @@ public class ServerCustomListReadService(
         return await ordered.ToArrayAsync();
     }
 
+    public async Task<IReadOnlyList<GatedMetadataDto>> GetListHiddenMatureAsync(int listId)
+    {
+        // Mature count-line disclosure for a public list viewed below the M ceiling
+        // (WU-AccessGate): interstitial-grade metadata for the entries the rating filter hid.
+        // The owner never needs this (their reads are Personal-plane unfiltered above).
+        if (ActiveUser.MaxRating >= Rating.M) return [];
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        var gate = await readDb.CustomLists
+            .Where(l => l.CustomListId == listId)
+            .Select(l => new { l.IsPublic, l.UserId })
+            .FirstOrDefaultAsync();
+        if (gate is null) return [];
+        if (!gate.IsPublic && gate.UserId != ActiveUser.UserId) return [];
+
+        Rating ceiling = ActiveUser.MaxRating;
+        // elevated read: disclosure metadata only (title/author/rating); IsTakenDown stays active.
+        return await readDb.CustomListEntries
+            .Where(e => e.ListId == listId)
+            .Join(readDb.Stories.IgnoreQueryFilters(["ContentRating"]).Where(s => s.Rating > ceiling),
+                e => e.StoryId, s => s.StoryId,
+                (e, s) => new GatedMetadataDto(
+                    RevealedEntityType.Story,
+                    s.StoryId,
+                    s.StoryListing != null ? s.StoryListing.StoryTitle : string.Empty,
+                    s.AuthorId,
+                    s.Author != null ? s.Author.UserName : null,
+                    s.Rating))
+            .ToListAsync();
+    }
+
     public async Task<List<CustomListSummaryDto>> GetPublicListsByUserAsync(int userId)
     {
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        // Class-A: a user's public lists are profile-tab data; respect their ProfileVisibility
+        // (WU-AccessGate Phase 1 — /api/custom-lists/public/{userId} is directly reachable).
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, userId))
+            return [];
 
         return await ProjectSummaries(
             readDb, readDb.CustomLists.Where(l => l.UserId == userId && l.IsPublic));

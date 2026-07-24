@@ -190,7 +190,10 @@ else
     // filter changes (paths that must never be short-circuited by persisted state).
     private async Task ReloadListingsAsync()
     {
-        (Items, TotalCount) = await StoryReadService.GetListingsAsync(_filter, _candidateIds);
+        // personalScope (WU-AccessGate): bookshelves are the viewer's OWN interaction graph —
+        // Personal plane, never rating-filtered. A mature-off reader's M favorites/history stay
+        // visible and manageable here (no more invisible un-deletable ghost rows).
+        (Items, TotalCount) = await StoryReadService.GetListingsAsync(_filter, _candidateIds, personalScope: true);
         await LoadStatesAsync();
     }
 

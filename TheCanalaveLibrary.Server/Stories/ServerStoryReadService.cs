@@ -21,9 +21,19 @@ public class ServerStoryReadService(
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
 
+        // Reveal-aware (WU-AccessGate, Direct-navigation plane): a per-story consent or a
+        // verified crawler lifts the rating filter for THIS read only. IsTakenDown stays active.
+        IQueryable<Story> stories = readDb.Stories;
+        if (ActiveUser.IsVerifiedBot
+            || await RevealCheck.IsRevealedAsync(readDb, ActiveUser, RevealedEntityType.Story, storyId))
+        {
+            // elevated read: per-story consent (or Pattern-B verified crawler) on the detail path
+            stories = stories.IgnoreQueryFilters(["ContentRating"]);
+        }
+
         // Two-step: project a lean intermediate row (EF-translatable) then build DTOs in memory.
         // SpriteIdentifier is passed through raw — no URL construction here.
-        StoryDetailRow? row = await readDb.Stories
+        StoryDetailRow? row = await stories
             .Where(s => s.StoryId == storyId)
             .Select(s => new StoryDetailRow(
                 s.StoryId,
@@ -112,6 +122,10 @@ public class ServerStoryReadService(
         // GetChapterForEditAsync: project the owner alongside the DTO, then compare after load.
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         var row = await readDb.Stories // Using a direct projection for optimal query generation
+            // elevated read: an author edits their own story regardless of their personal rating
+            // setting — the mature-off-author lockout was bug B5 (WU-AccessGate Phase 1). Safe:
+            // the ownership comparison below is the gate; non-authors get null either way.
+            .IgnoreQueryFilters(["ContentRating"])
             .Where(s => s.StoryId == storyId)
             .Select(s => new
             {
@@ -181,10 +195,21 @@ public class ServerStoryReadService(
     public async Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds)
     {
         if (storyIds.Count == 0) return [];
+        return await GetListingsByIdsCoreAsync(storyIds, personalScope: false);
+    }
 
+    // Shared hydration for GetListingsByIdsAsync (Discovery-plane, filtered) and
+    // GetListingsAsync's Personal-plane path (WU-AccessGate: owner interaction-backed candidate
+    // sets hydrate unfiltered so a viewer's own M favorites/history stay visible and manageable).
+    private async Task<StoryListingDto[]> GetListingsByIdsCoreAsync(IReadOnlyList<int> storyIds, bool personalScope)
+    {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
-        List<StoryListingRow> rows = await ProjectListingRows(readDb.Stories.Where(s => storyIds.Contains(s.StoryId)))
-            .ToListAsync();
+
+        IQueryable<Story> root = readDb.Stories.Where(s => storyIds.Contains(s.StoryId));
+        if (personalScope)
+            root = root.IgnoreQueryFilters(["ContentRating"]); // elevated read: Personal plane (own interaction graph)
+
+        List<StoryListingRow> rows = await ProjectListingRows(root).ToListAsync();
 
         // Reorder to match the caller's id order (spec §6.6 — the domain service owns "which ids and in
         // what order"; this is purely the presentation lookup). IDs the content-rating filter dropped,
@@ -194,6 +219,59 @@ public class ServerStoryReadService(
             .Where(byId.ContainsKey)
             .Select(id => ToDto(byId[id]))
             .ToArray();
+    }
+
+    public async Task<IReadOnlyList<GatedMetadataDto>> GetGatedCardsAsync(IReadOnlyCollection<int> storyIds)
+    {
+        if (storyIds.Count == 0 || ActiveUser.MaxRating >= Rating.M) return [];
+
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // elevated read: mature count-line disclosure — acknowledges the M items a
+        // person/collection-scoped listing hid (title/author/rating only; IsTakenDown stays
+        // active). See content-safety.md §"Person/collection-scoped listings".
+        Rating ceiling = ActiveUser.MaxRating;
+        return await readDb.Stories
+            .IgnoreQueryFilters(["ContentRating"])
+            .Where(s => storyIds.Contains(s.StoryId) && s.Rating > ceiling)
+            .OrderByDescending(s => s.LastUpdatedDate)
+            .Select(s => new GatedMetadataDto(
+                RevealedEntityType.Story,
+                s.StoryId,
+                s.StoryListing != null ? s.StoryListing.StoryTitle : string.Empty,
+                s.AuthorId,
+                s.Author != null ? s.Author.UserName : null,
+                s.Rating))
+            .ToListAsync();
+    }
+
+    public async Task<IReadOnlyList<GatedMetadataDto>> GetGatedStoriesByAuthorAsync(int authorId)
+    {
+        if (ActiveUser.MaxRating >= Rating.M || ActiveUser.UserId == authorId) return [];
+
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // Class-A: profile-tab data — respect the author's ProfileVisibility like the visible-id
+        // read does.
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, authorId))
+            return [];
+
+        // elevated read: the authored tab's disclosure half (the visible-id read deliberately
+        // never leaks rating-hidden ids cross-user; this supplies them as gated metadata instead
+        // — the discovery bridge: acknowledge existence, withhold content).
+        Rating ceiling = ActiveUser.MaxRating;
+        return await readDb.Stories
+            .IgnoreQueryFilters(["ContentRating"])
+            .Where(s => s.AuthorId == authorId && s.Rating > ceiling)
+            .OrderByDescending(s => s.LastUpdatedDate)
+            .Select(s => new GatedMetadataDto(
+                RevealedEntityType.Story,
+                s.StoryId,
+                s.StoryListing != null ? s.StoryListing.StoryTitle : string.Empty,
+                s.AuthorId,
+                s.Author != null ? s.Author.UserName : null,
+                s.Rating))
+            .ToListAsync();
     }
 
     public async Task<(StoryListingDto[] Items, int TotalCount)> GetRecentListingsAsync(int page, int pageSize)
@@ -229,9 +307,37 @@ public class ServerStoryReadService(
             .SingleAsync();
     }
 
+    public async Task<GatedMetadataDto?> GetStoryGateAsync(int storyId)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // elevated read: gated-existence metadata — ContentRating bypassed so the interstitial
+        // can acknowledge the story exists; "IsTakenDown" stays ACTIVE so taken-down stories
+        // remain a true 404 (takedown is Class-A enforcement, not consent). Only M stories gate;
+        // a null here means genuinely absent → the page 404s. Metadata is title/author/rating
+        // ONLY — no cover, no description (settled 2026-07-19; both can themselves be explicit).
+        return await readDb.Stories
+            .IgnoreQueryFilters(["ContentRating"])
+            .Where(s => s.StoryId == storyId && s.Rating == Rating.M)
+            .Select(s => new GatedMetadataDto(
+                RevealedEntityType.Story,
+                s.StoryId,
+                s.StoryListing != null ? s.StoryListing.StoryTitle : string.Empty,
+                s.AuthorId,
+                s.Author != null ? s.Author.UserName : null,
+                s.Rating))
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId)
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // Class-A: an author's story list is profile-tab data; respect their ProfileVisibility
+        // (WU-AccessGate Phase 1 — the endpoint is now anonymous-callable for the public tab).
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, authorId))
+            return [];
+
         // Elevated read only for the author's own list (endpoint-authz sweep 2026-07-18): the
         // ContentRating bypass must never be keyed to a client-supplied id — any other viewer gets
         // the normally-filtered set, so rating-hidden story ids don't leak cross-user.
@@ -263,10 +369,16 @@ public class ServerStoryReadService(
     }
 
     public async Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(
-        StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null)
+        StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null, bool personalScope = false)
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         IQueryable<Story> query = readDb.Stories;
+
+        // Personal plane (WU-AccessGate): a viewer's own interaction-backed candidate set is
+        // never rating-filtered — see the interface doc. Only meaningful with a restrict set.
+        bool personal = personalScope && restrictToStoryIds is { Count: > 0 };
+        if (personal)
+            query = query.IgnoreQueryFilters(["ContentRating"]); // elevated read: Personal plane (own interaction graph)
 
         // ── Bookshelf candidate narrowing (applied first so count + all filters are scoped to it) ──
         if (restrictToStoryIds is { Count: > 0 })
@@ -330,7 +442,7 @@ public class ServerStoryReadService(
                 .ToArrayAsync()
         };
 
-        StoryListingDto[] items = await GetListingsByIdsAsync(pageIds);
+        StoryListingDto[] items = await GetListingsByIdsCoreAsync(pageIds, personal);
         return (items, totalCount);
     }
 

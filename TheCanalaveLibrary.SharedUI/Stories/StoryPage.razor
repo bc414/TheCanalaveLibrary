@@ -28,6 +28,12 @@
     <PageTitle>Loading…</PageTitle>
     <p class="text-(--color-text-muted)"><em>Loading…</em></p>
 }
+else if (_gate is not null && Story is null)
+{
+    @* Mature interstitial (WU-AccessGate): exists but not consented — acknowledged existence,
+       body withheld server-side. The interstitial emits its own PageTitle + adult labels. *@
+    <ContentGateInterstitial Metadata="@_gate" />
+}
 else if (_notFound || Story is null)
 {
     <PageTitle>Story not found</PageTitle>
@@ -37,6 +43,16 @@ else
 {
     <PageTitle>@Story.StoryTitle</PageTitle>
     <SocialMetaTags Title="@OgTitle" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="article"/>
+    @* Canonical link (Feature 64) — pairs with the server-side 301 for stale slugs; OgUrl is
+       already the canonical absolute URL via IPublicUrlProvider. *@
+    <HeadContent>
+        <link rel="canonical" href="@OgUrl" />
+    </HeadContent>
+    @if (Story.Rating == Rating.M)
+    {
+        @* Adult labels on the revealed branch too — the URL is adult regardless of consent. *@
+        <AdultContentMetaTags />
+    }
 
     @* Former StoryDesktop composite, folded in 2026-07-18 (WU-ResponsiveMerge — single
        responsive tree, page owns its markup; spec §5.28, WU25). Composes: TagChip (tags),
@@ -218,6 +234,12 @@ else
 
     private bool _isLoading = true;
     private bool _notFound;
+
+    // Interstitial metadata when the story exists but the viewer hasn't consented
+    // (WU-AccessGate). Deterministic per viewer — not persisted; consent actions force a
+    // full-document navigation, so the post-consent render refetches everything server-side.
+    private GatedMetadataDto? _gate;
+
     private int? _currentUserId;
     private bool _isAuthor;
     // Per-viewer interaction state for the Detail-context panel (N+1 rule: the panel receives
@@ -282,10 +304,18 @@ else
         Story  ??= await StoryReadService.GetStoryByIdAsync(StoryId);
         if (Story is null)
         {
-            _notFound = true;
+            // Gated-existence read (WU-AccessGate): distinguishes "M story, not consented"
+            // (→ interstitial; supplementary loads are deliberately SKIPPED — the body is never
+            // fetched into [PersistentState] for an un-consented viewer) from truly absent /
+            // taken down (→ real 404).
+            _gate = await StoryReadService.GetStoryGateAsync(StoryId);
+            if (_gate is null)
+            {
+                _notFound = true;
+                NavigationManager.NotFound();
+            }
             _isLoading = false;
             _initialized = true;
-            NavigationManager.NotFound();
             return;
         }
 
@@ -340,12 +370,17 @@ else
 
         // Plain assignment (not ??=) — the [PersistentState] fields from the previous story must
         // not short-circuit the reload for a new StoryId (layer3-logic.md §"Route-Parameter Dispatchers").
+        _gate = null;
         Story = await StoryReadService.GetStoryByIdAsync(StoryId);
         if (Story is null)
         {
-            _notFound = true;
+            _gate = await StoryReadService.GetStoryGateAsync(StoryId);
+            if (_gate is null)
+            {
+                _notFound = true;
+                NavigationManager.NotFound();
+            }
             _isLoading = false;
-            NavigationManager.NotFound();
             return;
         }
 

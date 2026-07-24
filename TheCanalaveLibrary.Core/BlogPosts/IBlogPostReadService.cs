@@ -15,7 +15,20 @@ public interface IBlogPostReadService
     /// The content-rating global filter applies; authors viewing their own mature/draft posts
     /// bypass it via <c>IgnoreQueryFilters(["ContentRating"])</c>.
     /// </summary>
+    /// <summary>
+    /// Reveal-aware since WU-AccessGate: an M profile post loads under a per-post reveal; a
+    /// group post loads under its GROUP's reveal (which covers all group-owned content).
+    /// Serves both TPT subtypes (the group-post branch closed permalink bug B7).
+    /// </summary>
     Task<BlogPostDto?> GetByIdAsync(int blogPostId);
+
+    /// <summary>
+    /// The gated-existence read (WU-AccessGate): when <see cref="GetByIdAsync"/> returned null,
+    /// distinguishes "exists but mature/audience-gated" (interstitial metadata — the reveal
+    /// target is the POST for profile posts, the GROUP for group posts) from truly absent,
+    /// unpublished, or taken down (null → real 404).
+    /// </summary>
+    Task<GatedMetadataDto?> GetBlogPostGateAsync(int blogPostId);
 
     /// <summary>
     /// Returns a page of <see cref="BlogPostListingDto"/> for a given author, ordered newest-first.

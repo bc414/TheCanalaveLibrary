@@ -4,6 +4,115 @@ The content-rating/audience visibility filters (the "zero visible trace" rule) a
 tooling's deliberately-inverted-from-industry-standard model. Split out of `cross-cutting.md`
 (2026-07-07) as its own coherent theme.
 
+## Mature-Content Design Philosophy
+
+The axioms below are *why* the filters and moderation model are shaped the way they are. They are
+settled design intent — treat them as load-bearing when any decision touches mature-content
+visibility, discovery, gating, or defaults. The concrete access model built on these axioms —
+the three planes, the consent interstitial, reveals, and the Intentionality Doctrine — was
+resolved 2026-07-19 (`middle_plan_v2.md` Resolved "Mature-content `noindex` (row 11)") and is
+stated in §"The Three-Plane Access Model" below; the full derivation lives in
+`.claude/design/access-gating-first-principles.md` (authoritative) and
+`access-gating-audit.md` (surface inventory). Only the age-gate *wording* remains open (row 10,
+counsel — interim: AO3-style willingness assertion).
+
+**Rating model.** `Rating { E=0, T=1, M=2 }` (`Core/Lookups/ModelEnums.cs`). Three tiers only.
+E (Everyone) and T (Teen) are functionally identical (both non-mature). **M (Mature) is the single
+gated tier, and M *includes explicit content*** — there is no separate "Explicit" rating above M
+because M already encompasses it. "Mature" here means **adult/explicit** — up to and including
+explicit sexual content — not merely "mature themes." For all age-gating, SafeSearch/adult
+labeling, and legal analysis, treat M as the explicit tier. Mature vs non-mature is therefore a clean binary, with M carrying the full
+adult-content weight.
+
+**No ads.** The site carries no advertising. Ad-safety/brand-pressure is *not* a driver of any
+content or moderation decision here (this is why the moderation model can invert the industry
+defaults — see "Mission-Driven Defaults" below). SEO/discoverability is therefore never monetized,
+but still matters as the path by which readers find content.
+
+**Filters are first-class, and serve three reader tiers — not a binary.** The whole product thesis
+is that the mature/non-mature *binary* of existing platforms underserves people. The filter system
+must serve all three tiers equally well:
+1. **No-M readers** — want mature content gone entirely.
+2. **M-native readers/writers** — here *for* it; want it first-class and discoverable.
+3. **The quiet middle** — mixed, not full-embrace; quiet consumers who keep mature *off* as their
+   comfortable default but occasionally read a specific M work. Existing platforms flatten this
+   tier by forcing a self-declaration; this project deliberately designs for it.
+
+A design that optimizes tier-1 comfort or tier-2 access *at the other's expense* is the flattening
+this project exists to avoid. **Prefer granular, consent-based, per-work mechanisms over global
+binary switches** — e.g. a middle-tier reader must be able to view one M work without being forced
+to reclassify their whole account to tier-2. (This is the design constraint behind the still-open
+direct-link interstitial in row 11: a temporary per-work reveal must never mutate the saved
+`ShowMatureContent` setting.)
+
+**The middle tier's mechanism is cross-tier author discovery.** Readers are often first drawn in by
+one kind of content but retained by an author's *broader* body of work spanning rating tiers — the
+bridge is an author being discoverable across ratings, not any single work in isolation. Design
+implication: **preserve the discovery bridge while gating the M content itself, not the discovery.**
+The gate sits on the M content a viewer reaches, not on their ability to find an author. The two
+are not in tension. (M pages are indexed — never `noindex`d — with the interstitial as the
+crawler-visible artifact; the count-line disclosure keeps the bridge on profile listings.)
+
+## The Three-Plane Access Model (settled 2026-07-19)
+
+Every surface belongs to exactly one plane; assign new surfaces deliberately:
+
+| Plane | Definition | M-content rule |
+|---|---|---|
+| **Discovery** | The site offers content the viewer didn't ask for: browse, search, tag listings, recommendations, random batch, tree-search results, homepage sections, group listings, marts | **Zero-trace.** Mature-off (or anonymous, no cookie) viewers see no M content, no M counts, no M ids rendered. Enforced by the named query filters + manual ceilings below. Reveals never widen this plane. |
+| **Direct navigation** | The viewer asks for a specific thing by URL: story page, chapter page, group page, blog-post page | **Consent gate.** Existence acknowledged, content withheld: a server-side interstitial shows title/author/rating only (no cover, no description — they can themselves be explicit) with actions "View this story"/"View this group" (grants a durable per-item **reveal**) and "Always show mature content". The body is absent from the HTML until consent — gate the *fetch*, never CSS-hide (`[PersistentState]` embeds fetched DTOs in prerendered HTML). Taken-down content stays a true 404 — takedown is enforcement (Class A), not consent. |
+| **Personal** | The viewer's own interaction graph: bookshelves, reading history, notifications, own custom lists, hidden-gem slots, own-authored stories (read *and* edit) | **Never rating-filtered.** Protected by auth/ownership (Class A), not by rating. A user's own favorites/history/notifications show their M items regardless of their Discovery setting — their interactions were deliberate acts. This is what prevents ghost rows (invisible, un-deletable M favorites) and vanishing reading history. |
+
+`ShowMatureContent` is the **Discovery-plane setting only**. Reveals (durable, per-item:
+`user_content_reveals` rows for accounts; the anon prefs cookie for guests) are the
+**Direct-navigation consent record** — they also unlock the item's own subtree on deliberate use
+(chapters/TOC/versions/export of a revealed story; folders/comments/blog posts of a revealed
+group; a revealed story may seed its own tree-search page, results still ceiling-filtered).
+There is no separate "strict no-M" setting — the interstitial *is* the strict experience (two
+deliberate acts before anything mature renders).
+
+**Class A vs Class B — know which one you're enforcing.**
+- **Class A (access control, real security):** auth, ownership, `ProfileVisibility`, drafts,
+  DMs, mod surfaces, `IsTakenDown`. Enforced server-side at **every** reachable endpoint; the
+  adversary picks the path.
+- **Class B (consent UX):** the mature-rating ceiling and interstitial. M content is public
+  content behind a consent checkpoint — there is no adversary, only accidental exposure to
+  prevent. The load-bearing enforcement is the *page-serving* path.
+
+**The Intentionality Doctrine (Class-B APIs).** *If someone calls a JSON API directly, they are
+doing it on purpose — the hand-built request is itself the consent the interstitial exists to
+capture.* JSON APIs serving Class-B child data (comments, arcs, TOC lists, group members/children,
+view counts, id lists) are **deliberately ungated by rating** — do not "fix" them, and do not
+re-report them as leaks (they were reclassified 2026-07-19; see
+`access-gating-first-principles.md` §5). This matches the whole content class (AO3's gate is a
+query param; Fimfiction's is a cookie). Two boundaries hold regardless:
+1. **Class-A checks are never relaxed** — auth, privacy, takedown, ownership apply to every API.
+2. **The four page-backing detail endpoints** (story, chapter, group, blog post) return the gated
+   envelope (`Visible | GatedMature(metadata) | NotFound`) — they are the page's data source
+   across render modes, and full JSON would put the body in the response the UI then hides.
+   Consent rides the prefs cookie / DB reveal, so consented callers (including deliberate API
+   users who set the cookie) get full data.
+
+**The invariant this doctrine costs:** M-safety of child data is enforced at *page* level. Any
+NEW UI surface that composes Class-B child data (comments, arcs, TOCs, group children) **outside
+its gated parent page** must itself apply the viewer's effective ceiling. Check this at review
+time whenever a widget/preview/dashboard renders child content.
+
+**UI copy convention:** it is always "story" / "group" / "blog post" — never "work". Interstitial
+buttons: "View this story" / "View this group".
+
+**Write paths stay rating-blind.** Favoriting/following/listing/recommending an M story needs no
+ceiling check (the actor consented via the gate, has M on, or called the API deliberately). The
+one legitimate write-path rating check is spotlight redemption validating story rating against
+the slot's rating class — that is inventory integrity, not consent. Spotlight runs **dedicated
+M and non-M slot pools**; mature-off/anon viewers see the non-M pool at full width.
+
+**Person/collection-scoped listings get the count-line disclosure.** Profile tabs (authored,
+favorites, recommendations), public custom lists, group story/folder sections, and series pages
+show "K mature stories aren't shown · show them" (line absent at K=0); expanding renders minimal
+gated cards (title/author/rating, no cover/description) that link to the story page, where the
+interstitial handles consent. Global Discovery surfaces never get the line.
+
 ## Group Audience-Visibility Filter
 
 Groups carry an **`AudienceRating`** property (renamed from `Rating` in the WU32 migration — column

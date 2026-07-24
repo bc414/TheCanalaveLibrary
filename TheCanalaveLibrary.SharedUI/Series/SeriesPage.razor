@@ -73,6 +73,7 @@ else
         }
 
         @* ── Member stories, in reading order ────────────────────────────────── *@
+        <MatureDisclosureLine Items="@_gatedItems" />
         <StoryDeck Stories="stories"
                    UserStoryInteractionStates="_interactionStates"
                    CurrentUserId="_currentUserId"
@@ -101,6 +102,9 @@ else
     private bool _isLoading = true;
     private int? _currentUserId;
     private bool _isOwner;
+
+    // Mature count-line disclosure items (WU-AccessGate) — per-viewer deterministic, not persisted.
+    private IReadOnlyList<GatedMetadataDto> _gatedItems = [];
 
     private bool _initialized;
     private int _loadedSeriesId = int.MinValue; // sentinel; no real SeriesId equals this
@@ -131,6 +135,11 @@ else
         {
             Stories ??= Series.OrderedStoryIds.Count > 0
                 ? await StoryService.GetListingsByIdsAsync(Series.OrderedStoryIds)
+                : [];
+            // Mature count-line disclosure (WU-AccessGate): the M members the ceiling hid — the
+            // raw OrderedStoryIds set is the candidate list.
+            _gatedItems = Series.OrderedStoryIds.Count > 0
+                ? await StoryService.GetGatedCardsAsync(Series.OrderedStoryIds)
                 : [];
             await LoadViewerStateAsync();
         }
@@ -163,6 +172,9 @@ else
         {
             Stories = Series.OrderedStoryIds.Count > 0
                 ? await StoryService.GetListingsByIdsAsync(Series.OrderedStoryIds)
+                : [];
+            _gatedItems = Series.OrderedStoryIds.Count > 0
+                ? await StoryService.GetGatedCardsAsync(Series.OrderedStoryIds)
                 : [];
             await LoadViewerStateAsync();
         }

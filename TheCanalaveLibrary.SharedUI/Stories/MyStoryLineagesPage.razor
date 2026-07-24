@@ -166,9 +166,9 @@
             }
         </div>
     </Authorized>
-    <NotAuthorized>
-        <p class="p-4 text-(--color-danger)">You must be signed in to manage story lineage.</p>
-    </NotAuthorized>
+    @* No <NotAuthorized> branch: page-level [Authorize] means the router renders the denial
+       (SignInRequired via Routes.razor) — an inline branch here is unreachable dead code
+       (WU-AccessGate Phase 1 cleanup). *@
 </AuthorizeView>
 
 @code {

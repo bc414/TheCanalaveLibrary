@@ -8,4 +8,5 @@ public record SpotlightSlotAdminDto(
     string? GrantedToUserName,
     SpotlightSlotSource Source,
     SpotlightSlotStatus Status,
-    DateTime GrantedUtc);
+    DateTime GrantedUtc,
+    Rating MaxStoryRating = Rating.E);

@@ -44,6 +44,10 @@ public static class CustomListEndpoints
         group.MapGet("/public/{userId:int}", async (ICustomListReadService lists, int userId) =>
             Results.Ok(await lists.GetPublicListsByUserAsync(userId)));
 
+        // Mature count-line disclosure (WU-AccessGate) — interstitial-grade metadata only.
+        group.MapGet("/{listId:int}/hidden-mature", async (ICustomListReadService lists, int listId) =>
+            Results.Ok(await lists.GetListHiddenMatureAsync(listId)));
+
         group.MapGet("/memberships", async (ICustomListReadService lists, int storyId) =>
                 Results.Ok(await lists.GetMyListMembershipsAsync(storyId)))
             .RequireAuthorization();

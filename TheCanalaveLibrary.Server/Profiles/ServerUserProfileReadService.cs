@@ -120,6 +120,26 @@ public class ServerUserProfileReadService(
             lastSeenUtc);
     }
 
+    public async Task<ProfileAccessState> GetProfileAccessStateAsync(int userId)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        ProfileVisibility? visibility = await readDb.Users
+            .Where(u => u.Id == userId)
+            .Select(u => (ProfileVisibility?)u.PrivacySettings.ProfileVisibility)
+            .FirstOrDefaultAsync();
+
+        if (visibility is null) return ProfileAccessState.NotFound;
+        if (activeUser.UserId == userId) return ProfileAccessState.Visible;
+
+        return visibility switch
+        {
+            ProfileVisibility.Private => ProfileAccessState.Private,
+            ProfileVisibility.UsersOnly when activeUser.UserId is null => ProfileAccessState.SignInRequired,
+            _ => ProfileAccessState.Visible,
+        };
+    }
+
     public async Task<string?> GetProfileTextAsync(int userId)
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();

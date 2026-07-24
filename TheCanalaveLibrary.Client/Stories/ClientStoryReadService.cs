@@ -18,6 +18,9 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
     public async Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId) =>
         await Http.GetNullableFromJsonAsync<StoryDetailsDTO?>($"api/stories/{storyId}");
 
+    public async Task<GatedMetadataDto?> GetStoryGateAsync(int storyId) =>
+        await Http.GetNullableFromJsonAsync<GatedMetadataDto?>($"api/stories/{storyId}/gate");
+
     public async Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId)
     {
         // 401/403 → UnauthorizedAccessException, mirroring the server service's author gate so
@@ -46,11 +49,16 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
     }
 
     public async Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(
-        StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null)
+        StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null, bool personalScope = false)
     {
         string url = "api/stories/query";
+        List<string> queryParts = [];
         if (restrictToStoryIds is { Count: > 0 })
-            url += "?" + string.Join('&', restrictToStoryIds.Select(id => $"restrictToStoryIds={id}"));
+            queryParts.AddRange(restrictToStoryIds.Select(id => $"restrictToStoryIds={id}"));
+        if (personalScope)
+            queryParts.Add("personalScope=true");
+        if (queryParts.Count > 0)
+            url += "?" + string.Join('&', queryParts);
 
         HttpResponseMessage response = await Http.PostAsJsonAsync(url, filter);
         response.EnsureSuccessStatusCode();
@@ -58,6 +66,17 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
             (await response.Content.ReadFromJsonAsync<PagedResult<StoryListingDto>>())!;
         return (result.Items, result.TotalCount);
     }
+
+    public async Task<IReadOnlyList<GatedMetadataDto>> GetGatedCardsAsync(IReadOnlyCollection<int> storyIds)
+    {
+        if (storyIds.Count == 0) return []; // mirrors the server impl's short-circuit
+
+        string query = string.Join('&', storyIds.Select(id => $"storyIds={id}"));
+        return await Http.GetFromJsonAsync<List<GatedMetadataDto>>($"api/stories/gated-cards?{query}") ?? [];
+    }
+
+    public async Task<IReadOnlyList<GatedMetadataDto>> GetGatedStoriesByAuthorAsync(int authorId) =>
+        await Http.GetFromJsonAsync<List<GatedMetadataDto>>($"api/stories/gated-by-author/{authorId}") ?? [];
 
     public async Task<StoryListingDto[]> GetRandomBatchAsync(StoryFilterDto filter, int batchSize)
     {

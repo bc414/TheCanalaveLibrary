@@ -61,6 +61,12 @@ public class ServerSeriesReadService(
     {
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
+        // Class-A: an author's series list is profile-tab data; respect their ProfileVisibility
+        // (WU-AccessGate Phase 1 — /api/series/by-author/{id} is directly reachable).
+        // The owner passes the guard by definition, so MySeriesPage is unaffected.
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, authorId))
+            return [];
+
         List<SeriesListingDto> items = await readDb.Series
             .Where(s => s.AuthorId == authorId)
             .OrderByDescending(s => s.DateCreated)

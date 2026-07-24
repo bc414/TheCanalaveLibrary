@@ -11,6 +11,8 @@
 @inject IActiveUserContext ActiveUser
 @inject IBadgeWriteService BadgeService
 @inject IStoryReadService StoryReadService
+@inject IContentRevealService RevealService
+@inject NavigationManager Nav
 
 @* Feature 20 (profile editing) + Feature 3 (theme-selection UI), WU30.
    Self-referential settings page — the active user edits only their own data.
@@ -57,6 +59,12 @@ else
             Initial="@Settings.Privacy"
             Busy="@_privacyBusy"
             OnSave="HandleSavePrivacyAsync" />
+
+        @* Reveal management (Feature 66, WU-AccessGate) — renders only when reveals exist. *@
+        <RevealManagementList
+            Items="@_reveals"
+            Busy="@_revealBusy"
+            OnRemove="HandleRemoveRevealAsync" />
 
         @* Author sub-form (Pinned Story options = the caller's own published stories, WU40) *@
         <AuthorSettingsForm
@@ -107,6 +115,11 @@ else
     private bool _authorBusy;
     private bool _appearanceBusy;
     private bool _badgesBusy;
+    private bool _revealBusy;
+
+    // Reveal management (Feature 66, WU-AccessGate) — the member's durable mature-content
+    // consents, revocable here.
+    private IReadOnlyList<RevealDisplayDto> _reveals = [];
 
     private string? _successMessage;
     private string? _errorMessage;
@@ -144,7 +157,24 @@ else
             Themes ??= await ThemeReadService.GetThemesAsync();
         }
 
+        // Reveal management (WU-AccessGate) — per-viewer ephemeral, always fetched plain.
+        _reveals = await RevealService.GetMyRevealsAsync();
+
         _isLoading = false;
+    }
+
+    private async Task HandleRemoveRevealAsync(RevealDisplayDto item)
+    {
+        _revealBusy = true;
+        try
+        {
+            await RevealService.RemoveAsync(item.EntityType, item.EntityId);
+            _reveals = await RevealService.GetMyRevealsAsync();
+        }
+        finally
+        {
+            _revealBusy = false;
+        }
     }
 
     /// <summary>
@@ -193,11 +223,22 @@ else
             v => _readerBusy = v,
             "Reader preferences saved.");
 
-    private async Task HandleSavePrivacyAsync(PrivacySettingsDto dto) =>
+    private async Task HandleSavePrivacyAsync(PrivacySettingsDto dto)
+    {
+        bool matureChanged = Settings is not null && Settings.Privacy.ShowMatureContent != dto.ShowMatureContent;
+
         await RunWithFeedbackAsync(
             () => SettingsService.UpdatePrivacySettingsAsync(dto),
             v => _privacyBusy = v,
             "Privacy settings saved.");
+
+        // ShowMatureContent is a claim baked into the auth cookie; the DB write alone would take
+        // effect at next sign-in (MA-605). A full-document trip through the claim-refresh
+        // endpoint reissues the cookie now — the redirect also rebuilds the circuit, which is
+        // required anyway (the viewer context is frozen per scope). WU-AccessGate Phase 2.
+        if (matureChanged)
+            Nav.NavigateTo("/content-gate/refresh-claims?returnUrl=%2Fsettings", forceLoad: true);
+    }
 
     private async Task HandleSaveAuthorAsync(AuthorSettingsDto dto) =>
         await RunWithFeedbackAsync(

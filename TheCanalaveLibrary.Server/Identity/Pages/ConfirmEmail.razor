@@ -11,10 +11,22 @@
 <div class="mx-auto flex w-full max-w-md flex-col gap-4 py-8">
     <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Confirm email</h1>
     <StatusMessage Message="@statusMessage"/>
+    @if (_confirmed)
+    {
+        @* New accounts flow confirm → sign-in → welcome/onboarding, never back to a stale
+           bounce point — settled 2026-07-19 (WU-AccessGate Phase 1). *@
+        <p class="text-sm text-(--color-text)">
+            <a href="/Account/Login?ReturnUrl=%2Fwelcome"
+               class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">
+                Sign in to get started
+            </a>
+        </p>
+    }
 </div>
 
 @code {
     private string? statusMessage;
+    private bool _confirmed;
 
     [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
 
@@ -40,6 +52,7 @@
         {
             var code = Encoding.UTF8.GetString(WebEncoders.Base64UrlDecode(Code));
             var result = await UserManager.ConfirmEmailAsync(user, code);
+            _confirmed = result.Succeeded;
             statusMessage = result.Succeeded ? "Thank you for confirming your email." : "Error confirming your email.";
         }
     }

@@ -237,11 +237,16 @@ Ordered as v1, all deps Stage 5, settled directions in the audit files named in 
    `StoryExternalLink`/`ExternalPlatform` remodel). 1600 tests green; export/import round-trips +
    browser-verified. WU39 (item 6) now owns only the mod link-verification tab. See
    `audit/Export.md`, `audit/Import.md`, `audit/Moderation.md` F53, `workplan.md` WU38c/WU38d.
-8. **WU-SeoSite** *(added 2026-07-15, Feature 64, minted from `middle-addendum.md` §3 #15/#16/#18).*
-   `robots.txt`, a `sitemap.xml` endpoint over published stories, and the spec'd-but-never-built
-   canonical-slug 301 redirect. The mature-content `noindex` half of this feature is gated on
-   decision row 11 (ramifications not yet assessed) — build the redirect/robots/sitemap slice
-   first, add `noindex` once row 11 resolves. See `audit/Seo.md`.
+8. **WU-AccessGate** *(re-minted 2026-07-19 from WU-SeoSite, which it absorbs; Features 64 + 66).*
+   Implements the resolved row-11 model end-to-end: Class-A fixes (ProfileVisibility API
+   enforcement, sign-in-required pages, soft-404s, author self-access, group-blog permalinks),
+   consent infrastructure (per-story/group/blog-post reveals, anon prefs cookie, responsive
+   `ShowMatureContent` via `RefreshSignInAsync`), the interstitials + adult labels, Personal-plane
+   unfiltered reads + count-line disclosures, spotlight M/non-M slot pools, and the former
+   WU-SeoSite slice (`robots.txt` with AI-trainer blocking, `sitemap.xml` incl. M URLs,
+   canonical-slug 301 + `<link rel="canonical">`, config-gated verified-bot serving). Plan:
+   `.claude/design/access-gating-first-principles.md` + `access-gating-audit.md`; audit ledger:
+   `audit/AccessGate.md`. No `noindex` is ever added (row 11 Resolved).
 
 ## Phase 3 — Full L4 sweep + Stage-6 freezes (v1 Phase 2, unchanged)
 
@@ -354,8 +359,8 @@ checklist — each bullet becomes a checkable item, most are small:
 Rows 1–6 carried from v1 (numbering preserved — existing docs cite these numbers). Row 4 is
 expanded in scope by Phase 7 above. **Row 5 resolved 2026-07-05; rows 7 and 9 resolved
 2026-07-06; row 3 fully resolved 2026-07-18 (last item — Feature 56 — cut); row 1 resolved
-2026-07-18 — moved to Resolved below** — row numbers are otherwise left as gaps rather than
-renumbered, since other docs cite them by number.
+2026-07-18; row 11 resolved 2026-07-19 — moved to Resolved below** — row numbers are otherwise
+left as gaps rather than renumbered, since other docs cite them by number.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -364,12 +369,31 @@ renumbered, since other docs cite them by number.
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Phase 6 gate. |
 | 8 | **Email provider + sending domain** (residual — mechanism resolved 2026-07-06, see Resolved) — which SMTP provider to point the seam at, and the sending domain. | Postmark or Amazon SES (cheap at this scale) or Resend; needs a sending domain, which ties into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Config-only swap once decided (no code change) — gates Phase 7, not Phase 1 anymore. |
 | 10 | **Legal/policy track ownership + timing** — ToS, privacy policy, DMCA agent/process, moderation obligations for a fanfiction UGC site. | None. | Legal exposure and community policy are yours; engineering only hosts the documents. Gates Phase 7 (lighter obligation defensible for the trusted-audience beta — your call). |
-| 11 | **Mature-content `noindex` ramifications** — whether `noindex, follow` on Mature/Explicit story pages risks de-listing legitimate content, how it interacts with the still-open age-verification legal question (decision row 10 / `middle-addendum.md` §3 #2), and any crawl-budget effect. Raised, not answered, 2026-07-15 (Brian: "need to understand the ramifications of this suggestion" — `middle-addendum.md` §3 #18). | None — genuine open question. | Product/legal judgment call. Gates WU-SeoSite's `noindex` half (Phase 2 item 8); the robots/sitemap/redirect half of that WU is unaffected and can proceed. |
 | 12 | **Accessibility scope/depth** — a full WCAG AA audit vs. a targeted axe-DevTools pass over the highest-traffic pages (search, story, chapter reading, signup/login); which pages if targeted; whether to add an automated a11y test tier (axe-core/Lighthouse-CI) to the three-tier test suite. | None — genuine Stage-1 intent gap (`middle-addendum.md` §3 #22 names the gap but not a scope). | Product/effort trade-off; solo-dev realistic scope is yours to set. Gates WU-A11y (Phase 3). |
 
 ---
 
 ## Resolved
+
+- **Mature-content `noindex` (row 11) — resolved as "index all; gate access, never de-list" —
+  resolved 2026-07-19** (Brian, in chat, after a five-sweep code audit + first-principles review).
+  The question ("should M pages carry `noindex, follow`?") dissolved into a larger settled model:
+  **no rating-based `noindex` anywhere** — the entire content class (AO3, Fimfiction, FFN in
+  practice) indexes mature content and gates *access*; de-indexing would sever discovery for the
+  audiences the site exists to serve. M story/chapter/group/blog URLs return a server-side
+  **interstitial** to un-consented viewers (title/author/rating + adult labels
+  `meta rating=adult` + RTA; body absent from HTML) — that page *is* the indexable artifact.
+  Verified crawlers can later be served full content via a config-gated middleware
+  (`Seo:TrustVerifiedBots`, default off) once Phase 7's Cloudflare trust boundary lands.
+  Consent is durable per-story/per-group ("reveals": DB rows for accounts, a 180-day prefs cookie
+  for anonymous). The full model — three planes (Discovery zero-trace / Direct-navigation gate /
+  Personal never-filtered), the Intentionality Doctrine for JSON APIs, spotlight M/non-M slot
+  pools, count-line disclosures on person-scoped listings — is specified in
+  `.claude/design/access-gating-first-principles.md` (authoritative) +
+  `.claude/design/access-gating-audit.md` (surface inventory), conventions in
+  `canalave-conventions/content-safety.md`. Age-gate *wording* stays a row-10 counsel item
+  (interim: AO3-style willingness assertion). Built as **WU-AccessGate** (Phase 2 item 8, which
+  absorbs WU-SeoSite).
 
 - **Non-story report-target rating routing (row 1) — resolved as "work surface, show all"** —
   **resolved 2026-07-18** (Brian, in chat; weighed against overengineering the edge case). The

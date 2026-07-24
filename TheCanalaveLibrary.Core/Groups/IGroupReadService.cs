@@ -18,7 +18,18 @@ public interface IGroupReadService
     /// exist or is not visible to the current user (audience filter). The <c>GroupAudience</c>
     /// filter is applied via <c>IgnoreQueryFilters</c> opt-out only on admin/creator paths.
     /// </summary>
+    /// <summary>
+    /// Reveal-aware since WU-AccessGate: an M-audience group loads for viewers whose mature
+    /// setting permits it, whose per-group reveal covers it, or for verified crawlers.
+    /// </summary>
     Task<GroupDetailDto?> GetByIdAsync(int groupId);
+
+    /// <summary>
+    /// The gated-existence read (WU-AccessGate): when <see cref="GetByIdAsync"/> returned null,
+    /// distinguishes "exists but audience-gated" (interstitial metadata; one group reveal covers
+    /// all group-owned content) from truly absent (null → real 404).
+    /// </summary>
+    Task<GatedMetadataDto?> GetGroupGateAsync(int groupId);
 
     /// <summary>
     /// Returns the <see cref="GroupRole"/> of the current user within the specified group, or

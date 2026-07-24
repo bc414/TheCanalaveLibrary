@@ -12,7 +12,9 @@
         </form>
     </Authorized>
     <NotAuthorized>
-        <a href="Account/Login">Log in</a>
+        @* ReturnUrl round-trip (WU-AccessGate Phase 1): header sign-ins come back to the page
+           the reader was on, same as the SignInRequired experience. *@
+        <a href="@($"Account/Login?ReturnUrl={Uri.EscapeDataString("/" + CurrentUrl)}")">Log in</a>
     </NotAuthorized>
 </AuthorizeView>
 

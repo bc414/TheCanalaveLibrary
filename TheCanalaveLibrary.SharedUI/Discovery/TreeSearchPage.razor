@@ -39,7 +39,11 @@
 else if (_requiresLogin)
 {
     <div class="mx-auto max-w-2xl px-4 py-12 text-center text-(--color-text-muted)">
-        <p>Log in to discover from yourself.</p>
+        <p>
+            <a href="@($"/Account/Login?ReturnUrl={Uri.EscapeDataString("/discover/me")}")"
+               class="text-(--color-action-ink) hover:underline">Log in</a>
+            to discover from yourself.
+        </p>
     </div>
 }
 else
@@ -220,6 +224,32 @@ else
                 StoryListingDto[] stories = await StoryReadService.GetListingsByIdsAsync([StoryId.Value]);
                 RootStory = stories.Length > 0 ? stories[0] : null;
             }
+
+            // Reveal-aware root (WU-AccessGate, settled 2026-07-19): a story you can read, you
+            // can tree-search from. The listing hydration is Discovery-plane (silently skips M),
+            // so a REVEALED M root falls through to the reveal-aware detail read; traversal
+            // RESULTS stay ceiling-filtered regardless (other M stories never appear).
+            // Un-revealed M roots keep the "couldn't find" behavior below.
+            if (RootStory is null)
+            {
+                StoryDetailsDTO? revealed = await StoryReadService.GetStoryByIdAsync(StoryId.Value);
+                if (revealed is not null)
+                {
+                    RootStory = new StoryListingDto(
+                        revealed.StoryId,
+                        revealed.StoryTitle ?? string.Empty,
+                        revealed.ShortDescription,
+                        revealed.CoverArtRelativeUrl,
+                        revealed.AuthorId,
+                        revealed.AuthorName ?? "Unknown",
+                        revealed.WordCount,
+                        revealed.Status,
+                        revealed.Rating,
+                        revealed.LastUpdatedDate,
+                        revealed.Tags);
+                }
+            }
+
             _rootNotFound = RootStory is null;
         }
 

@@ -33,6 +33,14 @@ public interface ICustomListReadService
     Task<IReadOnlyList<int>> GetListStoryIdsAsync(int listId, CustomListSortEnum sort);
 
     /// <summary>
+    /// Mature count-line disclosure for a public list viewed below the M ceiling (WU-AccessGate):
+    /// interstitial-grade metadata (title/author/rating) for entries the viewer's rating filter
+    /// hid. Empty for mature-on viewers and for the owner (whose reads are Personal-plane
+    /// unfiltered). Same list-visibility gate as the other reads.
+    /// </summary>
+    Task<IReadOnlyList<GatedMetadataDto>> GetListHiddenMatureAsync(int listId);
+
+    /// <summary>
     /// Every <c>IsPublic</c> list owned by <paramref name="userId"/>, newest-created first. Backs
     /// the profile Lists tab (<c>ProfileTab.Lists</c>) — public to any viewer, mirroring
     /// <c>ISavedTagSelectionReadService.GetPublicSelectionsByUserAsync</c>.

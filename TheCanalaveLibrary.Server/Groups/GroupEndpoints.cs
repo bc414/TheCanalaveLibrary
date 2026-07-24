@@ -49,6 +49,11 @@ public static class GroupEndpoints
         group.MapGet("/{groupId:int}", async (IGroupReadService groups, int groupId) =>
             Results.Json(await groups.GetByIdAsync(groupId)));
 
+        // Gated-existence read (WU-AccessGate): interstitial metadata for an M-audience group
+        // the viewer hasn't consented to; JSON null for absent. Backs the WASM interstitial pass.
+        group.MapGet("/{groupId:int}/gate", async (IGroupReadService groups, int groupId) =>
+            Results.Json(await groups.GetGroupGateAsync(groupId)));
+
         group.MapGet("/{groupId:int}/role", async (IGroupReadService groups, int groupId) =>
             Results.Json(await groups.GetCurrentUserRoleAsync(groupId)));
 

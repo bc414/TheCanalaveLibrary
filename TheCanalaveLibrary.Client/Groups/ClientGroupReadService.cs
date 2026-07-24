@@ -25,6 +25,9 @@ public class ClientGroupReadService(HttpClient http) : IGroupReadService
     public async Task<GroupDetailDto?> GetByIdAsync(int groupId) =>
         await Http.GetNullableFromJsonAsync<GroupDetailDto?>($"api/groups/{groupId}");
 
+    public async Task<GatedMetadataDto?> GetGroupGateAsync(int groupId) =>
+        await Http.GetNullableFromJsonAsync<GatedMetadataDto?>($"api/groups/{groupId}/gate");
+
     public async Task<GroupRole?> GetCurrentUserRoleAsync(int groupId) =>
         await Http.GetNullableFromJsonAsync<GroupRole?>($"api/groups/{groupId}/role");
 

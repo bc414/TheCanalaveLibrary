@@ -1,0 +1,88 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject NavigationManager Nav
+
+@* The mature-content consent interstitial (Feature 66, WU-AccessGate; content-safety.md §"The
+   Three-Plane Access Model"). Rendered by the story/chapter/group/blog-post pages when their
+   gated-existence read says "exists but not consented". Shows title/author/rating ONLY — no
+   cover, no description (settled 2026-07-19). Both actions are plain form POSTs to the consent
+   endpoints: consent must ride a full-document round-trip (frozen circuit + cookie/claim
+   reissue), and the 303 back to this URL re-renders with content server-side — the body is
+   never shipped-then-unhidden.
+
+   Copy note: the willingness assertion below is INTERIM wording (AO3-style, willingness-to-view)
+   — final wording and any age-assertion element are a decision-row-10 counsel item; revisit at
+   Phase 7. Copy convention: "story"/"group"/"post", never "work". *@
+
+<PageTitle>@Metadata.Title</PageTitle>
+<AdultContentMetaTags />
+
+<div class="mx-auto flex max-w-md flex-col gap-4 py-12">
+    <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+        Mature content
+    </h1>
+    <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+        <div class="flex flex-col gap-1">
+            <p class="font-display text-lg font-semibold text-(--color-text)">@Metadata.Title</p>
+            @if (!string.IsNullOrEmpty(Metadata.AuthorName))
+            {
+                <p class="text-sm text-(--color-text-muted)">
+                    by <a href="@($"/user/{Metadata.AuthorId}")" class="text-(--color-action-ink) hover:underline">@Metadata.AuthorName</a>
+                </p>
+            }
+            <p class="text-sm text-(--color-text-muted)">Rated M — Mature</p>
+        </div>
+
+        <p class="text-sm text-(--color-text)">
+            This @EntityNoun is rated Mature and may contain explicit content.
+            By continuing, you confirm that you are willing to view mature content.
+        </p>
+
+        <div class="flex flex-wrap items-center gap-3 pt-1">
+            <form method="post" action="/content-gate/reveal">
+                <AntiforgeryToken />
+                <input type="hidden" name="entityType" value="@Metadata.RevealTarget" />
+                <input type="hidden" name="entityId" value="@Metadata.RevealTargetId" />
+                <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                <button type="submit"
+                        class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">
+                    @RevealButtonLabel
+                </button>
+            </form>
+            <form method="post" action="/content-gate/mature">
+                <AntiforgeryToken />
+                <input type="hidden" name="enable" value="true" />
+                <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+                <button type="submit" class="text-sm text-(--color-action-ink) hover:underline">
+                    Always show mature content
+                </button>
+            </form>
+        </div>
+
+        <div class="flex gap-3 border-t border-(--color-border) pt-3 text-sm">
+            <a href="/" class="text-(--color-action-ink) hover:underline">Go home</a>
+            <a href="/discover" class="text-(--color-action-ink) hover:underline">Discover stories</a>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public GatedMetadataDto Metadata { get; set; } = default!;
+
+    private string ReturnUrl => "/" + Nav.ToBaseRelativePath(Nav.Uri);
+
+    // "story"/"group"/"post" — never "work" (settled copy convention, 2026-07-19). A group
+    // reveal target on a blog-post URL still reads "group": the consent covers the community.
+    private string EntityNoun => Metadata.RevealTarget switch
+    {
+        RevealedEntityType.Group => "group",
+        RevealedEntityType.BlogPost => "post",
+        _ => "story",
+    };
+
+    private string RevealButtonLabel => Metadata.RevealTarget switch
+    {
+        RevealedEntityType.Group => "View this group",
+        RevealedEntityType.BlogPost => "View this post",
+        _ => "View this story",
+    };
+}

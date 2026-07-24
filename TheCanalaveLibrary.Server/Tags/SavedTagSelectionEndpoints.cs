@@ -9,12 +9,16 @@ namespace TheCanalaveLibrary.Server;
 /// endpoint's only added job is exception→status translation, via the shared
 /// <see cref="EndpointHelpers.ExecuteWriteAsync"/> (layer5-wasm.md §"The Error-Translation Contract").
 /// <para>
-/// Saved tag selections are a per-user feature (saved filter presets) — every read and write
-/// requires an authenticated user, so <c>RequireAuthorization()</c> gates the whole surface (unlike
-/// Tags/Comments, which have public read paths). <see cref="ISavedTagSelectionReadService.GetMySelectionsAsync"/>
-/// and <see cref="ISavedTagSelectionWriteService"/>'s methods already throw/no-op for unauthenticated
+/// Saved tag selections are a per-user feature (saved filter presets) — every write and every
+/// self-scoped read requires an authenticated user (<c>RequireAuthorization()</c>).
+/// <see cref="ISavedTagSelectionReadService.GetMySelectionsAsync"/> and
+/// <see cref="ISavedTagSelectionWriteService"/>'s methods already throw/no-op for unauthenticated
 /// callers at the service layer, but the endpoint-level gate keeps the failure mode a clean 401 from
 /// the cookie handler (Program.cs <c>OnRedirectToLogin</c>) instead of relying on that fallback.
+/// Exception: <see cref="ISavedTagSelectionReadService.GetPublicSelectionsByUserAsync"/> feeds the
+/// PUBLIC profile Tag Selections tab (an <c>[AllowAnonymous]</c> page), so it is anonymous-callable
+/// (WU-AccessGate Phase 1 — the gate made the tab 401-crash on the anonymous WASM pass); the
+/// owner's <c>ProfileVisibility</c> gates the read in the service.
 /// </para>
 /// </summary>
 public static class SavedTagSelectionEndpoints
@@ -35,9 +39,10 @@ public static class SavedTagSelectionEndpoints
                 Results.Json(await selections.GetSelectionDetailAsync(id)))
             .RequireAuthorization();
 
+        // Anonymous-callable: feeds the public profile Tag Selections tab (see type doc comment);
+        // ProfileVisibility is enforced in the service.
         group.MapGet("/public/{userId:int}", async (ISavedTagSelectionReadService selections, int userId) =>
-                Results.Ok(await selections.GetPublicSelectionsByUserAsync(userId)))
-            .RequireAuthorization();
+            Results.Ok(await selections.GetPublicSelectionsByUserAsync(userId)));
 
         // ── Writes (owner-only enforced in the service; endpoint translates the resulting exceptions) ──
 

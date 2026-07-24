@@ -146,9 +146,15 @@ public class ServerRecommendationReadService(
         // Returns the story ids for which the given user has written a recommendation,
         // for use as the candidate-id set on the Profile page's Recommendations tab.
         // RecommenderId is nullable (anonymous recs are allowed), so we compare int? == int.
-        // No visibility gating needed — the set only determines which stories appear in the
+        // No rating gating needed — the set only determines which stories appear in the
         // StoryDeck; the deck applies the global content-rating query filter at listing time.
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        // Class-A: a user's recommendations are profile-tab data; respect their ProfileVisibility
+        // (WU-AccessGate Phase 1 — /api/recommendations/by-user/{id}/story-ids is directly reachable).
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, userId))
+            return [];
+
         return await readDb.Recommendations
             .Where(r => r.RecommenderId == userId)
             .Select(r => r.StoryId)

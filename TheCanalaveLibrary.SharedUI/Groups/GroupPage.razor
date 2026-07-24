@@ -25,6 +25,11 @@
     <PageTitle>Group</PageTitle>
     <p class="p-4 text-(--color-text-muted)"><em>Loading…</em></p>
 }
+else if (_gate is not null && Group is null)
+{
+    @* Mature interstitial (WU-AccessGate): M-audience group, not consented. *@
+    <ContentGateInterstitial Metadata="@_gate" />
+}
 else if (Group is null)
 {
     <PageTitle>Group not found</PageTitle>
@@ -34,6 +39,11 @@ else
 {
     <PageTitle>@Group.GroupName</PageTitle>
     <SocialMetaTags Title="@Group.GroupName" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="website"/>
+    @if (Group.AudienceType == GroupAudienceType.Mature)
+    {
+        @* Adult labels on the revealed branch too — the URL is adult regardless of consent. *@
+        <AdultContentMetaTags />
+    }
 
     <div class="mx-auto max-w-6xl px-3 py-4 md:px-4 md:py-8 flex flex-col gap-6 md:gap-8">
 
@@ -136,6 +146,7 @@ else
                         </div>
                     }
 
+                    <MatureDisclosureLine Items="@_gatedItems" />
                     <StoryDeck Stories="@(Stories ?? [])"
                                UserStoryInteractionStates="_interactionStates"
                                CurrentUserId="_currentUserId"
@@ -242,6 +253,15 @@ else
 
     private bool _isLoading = true;
 
+    // Interstitial metadata when the group exists but the viewer hasn't consented
+    // (WU-AccessGate). Deterministic per viewer — not persisted; consent forces a
+    // full-document navigation.
+    private GatedMetadataDto? _gate;
+
+    // Mature count-line disclosure items for the member-story section (WU-AccessGate) —
+    // per-viewer deterministic, not persisted.
+    private IReadOnlyList<GatedMetadataDto> _gatedItems = [];
+
     private bool _initialized;
     private int _loadedGroupId = int.MinValue; // sentinel; no real GroupId equals this
 
@@ -310,8 +330,19 @@ else
     {
         _isLoading = true;
         _loadedGroupId = GroupId;
+        _gate = null;
 
         Group = await GroupService.GetByIdAsync(GroupId);
+
+        // Gated-existence read (WU-AccessGate): an M-audience group the viewer hasn't consented
+        // to → interstitial (one group consent covers all group-owned content); truly absent →
+        // real 404. Child loads below are skipped either way (Group is null).
+        if (Group is null)
+        {
+            _gate = await GroupService.GetGroupGateAsync(GroupId);
+            if (_gate is null)
+                Nav.NotFound();
+        }
 
         if (Group is not null)
         {
@@ -321,13 +352,21 @@ else
                 Group.StoryIds.Count > 0
                     ? StoryService.GetListingsByIdsAsync(Group.StoryIds)
                     : Task.FromResult(Array.Empty<StoryListingDto>());
+            // Mature count-line disclosure (WU-AccessGate): the M member stories the viewer's
+            // ceiling hid — a group reveal covers group-OWNED content, member stories still gate
+            // individually, so the disclosure keeps the bridge visible inside the group too.
+            Task<IReadOnlyList<GatedMetadataDto>> gatedTask =
+                Group.StoryIds.Count > 0
+                    ? StoryService.GetGatedCardsAsync(Group.StoryIds)
+                    : Task.FromResult<IReadOnlyList<GatedMetadataDto>>([]);
             Task<(BlogPostListingDto[], int)> blogTask =
                 BlogPostService.GetByGroupAsync(GroupId, page: 1, pageSize: 10);
 
-            await Task.WhenAll(roleTask, storyTask, blogTask);
+            await Task.WhenAll(roleTask, storyTask, gatedTask, blogTask);
 
             _currentUserRole = await roleTask;
             Stories          = await storyTask;
+            _gatedItems      = await gatedTask;
 
             (BlogPostListingDto[] blogItems, int blogTotal) = await blogTask;
             BlogPosts      = blogItems;
@@ -400,6 +439,9 @@ else
             builder.OpenElement(5, "span");
             builder.AddContent(6, "📁 " + folder.Name);
             builder.CloseElement(); // span
+            // Deliberate zero-trace: an M-capped folder inside an E-audience (Standard) group
+            // renders as an unlabeled folder to mature-off viewers — suppressing the "(M)" badge
+            // rather than advertising a mature shelf. Documented 2026-07-19 (was uncommented).
             if (folder.MaxRating != Rating.M)
             {
                 builder.OpenElement(7, "span");

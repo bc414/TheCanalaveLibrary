@@ -79,6 +79,12 @@ public class ServerUserStoryInteractionReadService(
         // includePrivate = true when the owner views their own profile; false for visitors.
         // Hidden favorites (IsHiddenFavorite) are visible only to the owner.
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // Class-A: public favorites are profile-tab data; respect the owner's ProfileVisibility
+        // (WU-AccessGate Phase 1 — the endpoint is now anonymous-callable).
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, activeUser, userId))
+            return [];
+
         return await readDb.UserStoryInteractions
             .Where(i => i.UserId == userId
                         && i.IsFavorite

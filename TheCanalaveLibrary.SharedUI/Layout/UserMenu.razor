@@ -88,7 +88,9 @@
         </div>
     </Authorized>
     <NotAuthorized>
-        <a href="Account/Login"
+        @* ReturnUrl round-trip (WU-AccessGate Phase 1): header sign-ins come back to the page
+           the reader was on, same as the SignInRequired experience. *@
+        <a href="@($"Account/Login?ReturnUrl={Uri.EscapeDataString("/" + CurrentUrl)}")"
            class="rounded-md px-2 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) hover:text-(--color-action-ink)">
             Log in
         </a>

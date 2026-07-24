@@ -55,6 +55,11 @@ public class ServerSavedTagSelectionReadService(
     {
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
+        // Class-A: public tag selections are profile-tab data; respect the owner's
+        // ProfileVisibility (WU-AccessGate Phase 1 — the endpoint is now anonymous-callable).
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, userId))
+            return [];
+
         List<int> ids = await readDb.SavedTagSelections
             .Where(s => s.UserId == userId && s.IsPublic)
             .OrderByDescending(s => s.DateCreated)

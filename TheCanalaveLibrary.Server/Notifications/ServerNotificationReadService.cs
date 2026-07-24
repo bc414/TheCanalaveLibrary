@@ -324,7 +324,14 @@ public class ServerNotificationReadService(
 
         if (idsByKind.TryGetValue(RelatedEntityKind.Group, out var groupIds))
         {
+            // elevated read: notifications are Personal-plane — they reference things the
+            // recipient interacted with, so enrichment resolves ground truth and is never
+            // rating/audience-filtered (content-safety.md §"The Three-Plane Access Model").
+            // Without the bypass, an M-audience group's name dropped out of its own member's
+            // notifications while the sibling post-title lookup (unfiltered GroupBlogPosts)
+            // kept working — normalized toward ground truth, WU-AccessGate Phase 1.
             result[RelatedEntityKind.Group] = (await readDb.Groups
+                    .IgnoreQueryFilters(["GroupAudience"])
                     .Where(g => groupIds.Contains(g.GroupId))
                     .Select(g => new { g.GroupId, g.GroupName })
                     .ToListAsync())

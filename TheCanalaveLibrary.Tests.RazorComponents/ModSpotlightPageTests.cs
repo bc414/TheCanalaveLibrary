@@ -90,7 +90,7 @@ public class ModSpotlightPageTests : BunitContext
         public IReadOnlyList<SpotlightSlotAdminDto> Recent { get; set; } = [];
         public int? LastGrantedTo { get; private set; }
 
-        public Task<int> GrantSlotAsync(int toUserId, SpotlightSlotSource source)
+        public Task<int> GrantSlotAsync(int toUserId, SpotlightSlotSource source, Rating maxStoryRating = Rating.E)
         {
             LastGrantedTo = toUserId;
             return Task.FromResult(1);

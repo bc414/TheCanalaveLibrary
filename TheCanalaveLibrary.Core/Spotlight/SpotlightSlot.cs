@@ -27,6 +27,15 @@ public class SpotlightSlot
 
     public SpotlightSlotStatus Status { get; set; }
 
+    /// <summary>
+    /// The slot's rating class (WU-AccessGate, settled 2026-07-19): dedicated M and non-M pools.
+    /// <see cref="Rating.E"/> (default) = non-M pool (E/T stories only); <see cref="Rating.M"/> =
+    /// Mature pool (M stories only). Enforced at redemption — slot-inventory integrity, so an
+    /// awardee always knows which audience their slot reaches (mature-off/anon homepage viewers
+    /// see only non-M placements; the display-time filtered join already does that).
+    /// </summary>
+    public Rating MaxStoryRating { get; set; }
+
     /// <summary>Reserved for the deferred donation pipeline — the payment-provider transaction
     /// reference that earned this slot. Always null for <see cref="SpotlightSlotSource.ModAward"/>.</summary>
     [MaxLength(2048)]

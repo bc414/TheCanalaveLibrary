@@ -41,8 +41,17 @@ public class ServerActiveUserContext(
     AuthenticationStateProvider authenticationStateProvider) : IActiveUserContext
 {
     private ClaimsPrincipal? _principal;
+    private AnonPrefs? _anonPrefs;
 
     private ClaimsPrincipal Principal => _principal ??= ResolvePrincipal(httpContextAccessor, authenticationStateProvider);
+
+    // Anonymous prefs cookie (WU-AccessGate) — same lazy-once discipline as Principal: never read
+    // in the constructor (the SecurityStampValidator early-capture hazard in the type doc comment
+    // applies to any constructor-time HttpContext read), captured on first access for the life of
+    // the scope. Circuit dispatches with no HttpContext keep the value captured at circuit start;
+    // consent actions force a full-document navigation anyway (frozen-circuit rule).
+    private AnonPrefs AnonPrefsValue => _anonPrefs ??=
+        httpContextAccessor.HttpContext is { } ctx ? AnonPrefs.Read(ctx.Request) : AnonPrefs.Empty;
 
     public bool IsAuthenticated => Principal.Identity?.IsAuthenticated ?? false;
 
@@ -51,11 +60,25 @@ public class ServerActiveUserContext(
             ? id
             : null;
 
-    // Anonymous defaults: the safe Teen-ceiling content rating, default animation preference.
+    // Authenticated: the claim baked at sign-in (reissued on change via RefreshSignInAsync —
+    // MA-605 closed by WU-AccessGate). Anonymous: the prefs-cookie mature toggle (Fimfiction/AO3
+    // model) — which also feeds the GroupAudience filter, by design.
     public bool ShowMatureContent =>
         IsAuthenticated
-        && bool.TryParse(Principal.FindFirstValue(ActiveUserClaimTypes.ShowMatureContent), out bool mature)
-        && mature;
+            ? bool.TryParse(Principal.FindFirstValue(ActiveUserClaimTypes.ShowMatureContent), out bool mature) && mature
+            : AnonPrefsValue.Mature;
+
+    // ANONYMOUS per-item consent only — authenticated reveals are DB rows checked by RevealCheck
+    // in read services (this context stays DbContext-free; see IActiveUserContext doc).
+    public bool HasAnonRevealed(RevealedEntityType entityType, int entityId) =>
+        !IsAuthenticated && AnonPrefsValue.HasRevealed(entityType, entityId);
+
+    // Set by VerifiedBotMiddleware (Phase 5) when Seo:TrustVerifiedBots is enabled and the edge
+    // signal verifies; absent middleware or config → false. Crawlers only ever hit the
+    // SSR/prerender pass, which always has an HttpContext.
+    public bool IsVerifiedBot =>
+        httpContextAccessor.HttpContext?.Items.TryGetValue(VerifiedBotMiddleware.ItemKey, out object? v) == true
+        && v is true;
 
     // Returns the URL-safe slug (e.g. "pokemon") — not the display name. Default matches the
     // seeded Theme.Slug so anonymous users resolve optimistic sprite URLs to the correct path.

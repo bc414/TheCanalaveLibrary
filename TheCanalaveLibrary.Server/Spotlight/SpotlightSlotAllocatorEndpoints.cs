@@ -21,9 +21,11 @@ public static class SpotlightSlotAllocatorEndpoints
             .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
         // Scalar + enum params bind from the query — no body needed (PollEndpoints' vote precedent).
-        group.MapPost("/", (ISpotlightSlotAllocator allocator, int toUserId, SpotlightSlotSource source) =>
+        // maxStoryRating: E (default) = non-M slot, M = Mature-pool slot (WU-AccessGate).
+        group.MapPost("/", (ISpotlightSlotAllocator allocator, int toUserId, SpotlightSlotSource source,
+                Rating maxStoryRating = Rating.E) =>
             EndpointHelpers.ExecuteWriteAsync(async () =>
-                Results.Ok(await allocator.GrantSlotAsync(toUserId, source))));
+                Results.Ok(await allocator.GrantSlotAsync(toUserId, source, maxStoryRating))));
 
         group.MapDelete("/{slotId:int}", (ISpotlightSlotAllocator allocator, int slotId) =>
             EndpointHelpers.ExecuteWriteAsync(async () =>

@@ -12,10 +12,11 @@ namespace TheCanalaveLibrary.Client;
 /// </summary>
 public sealed class ClientSpotlightSlotAllocator(HttpClient http) : ISpotlightSlotAllocator
 {
-    public async Task<int> GrantSlotAsync(int toUserId, SpotlightSlotSource source)
+    public async Task<int> GrantSlotAsync(int toUserId, SpotlightSlotSource source, Rating maxStoryRating = Rating.E)
     {
         HttpResponseMessage response = await http.PostAsync(
-            $"api/spotlight-slots?toUserId={toUserId}&source={(int)source}", content: null);
+            $"api/spotlight-slots?toUserId={toUserId}&source={(int)source}&maxStoryRating={(int)maxStoryRating}",
+            content: null);
         await ThrowIfFailedAsync(response);
         return await response.Content.ReadFromJsonAsync<int>();
     }

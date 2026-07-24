@@ -45,6 +45,12 @@
             <div class="flex flex-wrap items-center gap-2">
                 <input type="text" placeholder="Exact username" @bind="_grantUsername" disabled="@_busy"
                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text)" />
+                @* Dedicated M / non-M slot pools (WU-AccessGate, settled 2026-07-19): a Mature
+                   slot books M stories only and reaches mature-enabled viewers only. *@
+                <label class="flex items-center gap-1.5 text-sm text-(--color-text)">
+                    <input type="checkbox" @bind="_grantMature" disabled="@_busy" />
+                    Mature slot
+                </label>
                 <button type="button" disabled="@(_busy || string.IsNullOrWhiteSpace(_grantUsername))"
                         class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
                         @onclick="GrantAsync">
@@ -135,6 +141,7 @@
     private string? _settingsError;
 
     private string? _grantUsername;
+    private bool _grantMature; // grant into the Mature slot pool (WU-AccessGate)
 
     // Persisted across the prerender→interactive handoff (restore-or-fetch ??= in
     // OnInitializedAsync). int? rather than int so "not yet loaded" is distinguishable from 0.
@@ -207,9 +214,11 @@
                 return;
             }
 
-            await Allocator.GrantSlotAsync(user.UserId, SpotlightSlotSource.ModAward);
-            Toasts.Show($"Slot granted to {user.Username}.", ToastLevel.Success);
+            await Allocator.GrantSlotAsync(user.UserId, SpotlightSlotSource.ModAward,
+                _grantMature ? Rating.M : Rating.E);
+            Toasts.Show($"{(_grantMature ? "Mature slot" : "Slot")} granted to {user.Username}.", ToastLevel.Success);
             _grantUsername = null;
+            _grantMature = false;
             await LoadAsync();
         }
         catch (Exception ex) when (ex is SpotlightValidationException or UnauthorizedAccessException)

@@ -68,6 +68,8 @@ builder.Services.AddScoped<IFollowingReadService, ClientFollowingReadService>();
 builder.Services.AddScoped<IFollowingWriteService, ClientFollowingWriteService>();
 builder.Services.AddScoped<IUserProfileReadService, ClientUserProfileReadService>();
 builder.Services.AddScoped<IUserSettingsService, ClientUserSettingsService>();
+// ContentGate cluster (Feature 66, WU-AccessGate) — reveal management for /settings.
+builder.Services.AddScoped<IContentRevealService, ClientContentRevealService>();
 builder.Services.AddScoped<IThemeReadService, ClientThemeReadService>();
 builder.Services.AddScoped<IRecommendationReadService, ClientRecommendationReadService>();
 builder.Services.AddScoped<IRecommendationWriteService, ClientRecommendationWriteService>();

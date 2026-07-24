@@ -12,14 +12,30 @@ public class ServerChapterReadService(
     /// constructor parameter a second time (eliminates CS9107 on the write service).
     /// </summary>
     protected IActiveUserContext ActiveUser { get; } = activeUser;
+
+    /// <summary>
+    /// Reveal-aware effective ceiling (WU-AccessGate, Direct-navigation plane): a per-story
+    /// consent or a verified crawler raises this story's reads to the M ceiling. When elevated,
+    /// the caller must ALSO apply <c>IgnoreQueryFilters(["ContentRating"])</c> to its query —
+    /// the <c>Story</c> navigation otherwise drops M-story rows at the join regardless of the
+    /// per-version rating predicate. One story reveal covers the whole subtree: reading page,
+    /// TOC, versions, list, export.
+    /// </summary>
+    private async Task<(Rating Ceiling, bool Elevated)> EffectiveCeilingAsync(
+        ReadOnlyApplicationDbContext readDb, int storyId)
+    {
+        bool elevated = ActiveUser.IsVerifiedBot
+            || await RevealCheck.IsRevealedAsync(readDb, ActiveUser, RevealedEntityType.Story, storyId);
+        return (elevated ? Rating.M : ActiveUser.MaxRating, elevated);
+    }
+
     public async Task<ChapterReadingDto?> GetChapterForReadingAsync(
         int storyId,
         int chapterNumber,
         int? versionOrder = null)
     {
-        Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
-
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        (Rating ratingCeiling, bool elevated) = await EffectiveCeilingAsync(readDb, storyId);
 
         // Build a query that resolves to the target ChapterContent. Both branches produce
         // IQueryable<ChapterContent> so the final projection stays unified.
@@ -45,6 +61,9 @@ public class ServerChapterReadService(
                     c.PrimaryContentId != null)
                 .Select(c => c.PrimaryContent!)
                 .Where(cc => (cc.Rating ?? cc.Chapter.Story.Rating) <= ratingCeiling);
+
+        if (elevated)
+            contentQuery = contentQuery.IgnoreQueryFilters(["ContentRating"]); // elevated read: per-story consent / verified crawler
 
         // Single projection including correlated subqueries for prev/next and story rating.
         // Rating = effective (COALESCE); RawRating = null (reading page doesn't need raw form value).
@@ -82,14 +101,19 @@ public class ServerChapterReadService(
 
     public async Task<IReadOnlyList<ChapterTocEntryDto>> GetChapterTocAsync(int storyId)
     {
-        Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
         // Draft (unpublished) chapter metadata is author-only (endpoint-authz sweep 2026-07-18):
         // titles/word counts of work-in-progress must not enumerate to other viewers. -1 is an
         // impossible sentinel for the anonymous case (no real user id is negative).
         int viewerId = ActiveUser.UserId ?? -1;
 
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
-        return await readDb.Chapters
+        (Rating ratingCeiling, bool elevated) = await EffectiveCeilingAsync(readDb, storyId);
+
+        IQueryable<Chapter> chapters = readDb.Chapters;
+        if (elevated)
+            chapters = chapters.IgnoreQueryFilters(["ContentRating"]); // elevated read: per-story consent / verified crawler
+
+        return await chapters
             .Where(c => c.StoryId == storyId && (c.IsPublished || c.Story.AuthorId == viewerId))
             .OrderBy(c => c.ChapterNumber)
             .Select(c => new ChapterTocEntryDto(
@@ -110,16 +134,20 @@ public class ServerChapterReadService(
         int storyId,
         int chapterNumber)
     {
-        Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
         // Unpublished chapters' version metadata is author-only (endpoint-authz sweep 2026-07-18).
         int viewerId = ActiveUser.UserId ?? -1;
 
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        (Rating ratingCeiling, bool elevated) = await EffectiveCeilingAsync(readDb, storyId);
+
+        IQueryable<Chapter> chapterQuery = readDb.Chapters;
+        if (elevated)
+            chapterQuery = chapterQuery.IgnoreQueryFilters(["ContentRating"]); // elevated read: per-story consent / verified crawler
 
         // SelectMany from the matching chapter into its accessible ChapterContent rows.
         // OrderBy must be inside the SelectMany (on the entity field) — EF Core cannot translate
         // OrderBy on the projected DTO's VersionOrder property outside the SelectMany boundary.
-        return await readDb.Chapters
+        return await chapterQuery
             .Where(c => c.StoryId == storyId && c.ChapterNumber == chapterNumber
                      && (c.IsPublished || c.Story.AuthorId == viewerId))
             .SelectMany(c => c.ChapterContents
@@ -137,17 +165,21 @@ public class ServerChapterReadService(
 
     public async Task<IReadOnlyList<ChapterListEntryDto>> GetChapterListAsync(int storyId)
     {
-        Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
         // Draft (unpublished) chapter rows are author-only (endpoint-authz sweep 2026-07-18) —
         // the author's management/story surfaces still see them (AuthorId == viewer), everyone
         // else gets published rows only. -1 is an impossible sentinel for anonymous.
         int chapterViewerId = ActiveUser.UserId ?? -1;
 
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        (Rating ratingCeiling, bool elevated) = await EffectiveCeilingAsync(readDb, storyId);
+
+        IQueryable<Chapter> chapterQuery = readDb.Chapters;
+        if (elevated)
+            chapterQuery = chapterQuery.IgnoreQueryFilters(["ContentRating"]); // elevated read: per-story consent / verified crawler
 
         // Step 1: All viewer-visible chapters for the story, ordered by ChapterNumber.
         // PrimaryContent is nullable during the brief post-create window; default WordCount to 0.
-        List<ChapterRow> chapters = await readDb.Chapters
+        List<ChapterRow> chapters = await chapterQuery
             .Where(c => c.StoryId == storyId && (c.IsPublished || c.Story.AuthorId == chapterViewerId))
             .OrderBy(c => c.ChapterNumber)
             .Select(c => new ChapterRow(
@@ -180,7 +212,7 @@ public class ServerChapterReadService(
         // same rule noted in GetChapterVersionsAsync). References c.PrimaryContentId from the
         // outer scope to exclude the primary — EF Core translates correlated outer-scope refs here
         // the same way GetChapterVersionsAsync references c.PrimaryContentId for the IsPrimary flag.
-        List<AltVersionRow> altRows = await readDb.Chapters
+        List<AltVersionRow> altRows = await chapterQuery
             .Where(c => c.StoryId == storyId && (c.IsPublished || c.Story.AuthorId == chapterViewerId))
             .SelectMany(c => c.ChapterContents
                 .Where(cc => cc.ChapterContentId != c.PrimaryContentId
@@ -236,15 +268,21 @@ public class ServerChapterReadService(
 
     public async Task<IReadOnlyList<ChapterExportDto>> GetChaptersForExportAsync(int storyId)
     {
-        Rating ratingCeiling = ActiveUser.ShowMatureContent ? Rating.M : Rating.T;
-
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        // Reveal-aware like the reading paths: export = what you can read, and the reveal rides
+        // the prefs cookie on the plain-anchor export GET (bypasses the circuit), so a consented
+        // viewer's export works without any special transport (WU-AccessGate).
+        (Rating ratingCeiling, bool elevated) = await EffectiveCeilingAsync(readDb, storyId);
+
+        IQueryable<Chapter> chapterQuery = readDb.Chapters;
+        if (elevated)
+            chapterQuery = chapterQuery.IgnoreQueryFilters(["ContentRating"]); // elevated read: per-story consent / verified crawler
 
         // Published chapters' primary versions only, viewer's rating ceiling applied
         // (COALESCE(cc.rating, story.rating) — same effective-rating rule as the reading paths).
         // The primary invariant (effective(primary) == story.Rating) means the ceiling rarely
         // bites here, but it stays for defense-in-depth: export must never exceed what reading shows.
-        return await readDb.Chapters
+        return await chapterQuery
             .Where(c => c.StoryId == storyId && c.IsPublished && c.PrimaryContentId != null)
             .Select(c => c.PrimaryContent!)
             .Where(cc => (cc.Rating ?? cc.Chapter.Story.Rating) <= ratingCeiling)
@@ -269,18 +307,20 @@ public class ServerChapterReadService(
     public async Task<ChapterReadingDto?> GetChapterForEditAsync(long chapterContentId)
     {
         // No ShowMatureContent ceiling — authors must be able to open their own chapters for
-        // editing regardless of version rating. (The writing page (WU26) is responsible for
-        // applying IgnoreQueryFilters(["ContentRating"]) if the parent Story is Mature and the
-        // editing author has ShowMatureContent=false; WU17 leaves the Story-level filter active
-        // here, which suffices for the common case.)
+        // editing regardless of version rating, INCLUDING when the parent Story is M-rated and
+        // the author browses mature-off: the ContentRating filter is bypassed below (closes the
+        // known WU17 gap — mature-off-author lockout, bug B5, WU-AccessGate Phase 1).
         //
         // Author gate (MA-301): this feeds the author-only editor form, so the story's author is
         // checked here — not just by the client (ChapterEditorPage's own AuthorId comparison is
         // affordance only, not a control; cross-cutting.md "Security vs affordance"). Checked
         // against Story.AuthorId (the story's owner), not ChapterContent.AuthorId (whoever authored
         // that specific version) — the same authority MoveChapterAsync/DeleteChapterAsync use.
+        // That ownership gate is what makes the elevated read safe: non-authors get null either way.
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         var row = await readDb.ChapterContents
+            // elevated read: author always edits their own chapters regardless of rating setting
+            .IgnoreQueryFilters(["ContentRating"])
             .Where(cc => cc.ChapterContentId == chapterContentId)
             .Select(cc => new
             {

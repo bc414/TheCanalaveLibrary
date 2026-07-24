@@ -1,0 +1,76 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager Nav
+
+@* The sign-in-required / not-authorized experience (WU-AccessGate Phase 1). Rendered from two
+   places: the router's <NotAuthorized> template in Routes.razor (SPA navigation to an
+   [Authorize] page) and the status-code re-execute page (full-document 401/403, which used to
+   reach the browser as a blank page). Copy comes from the SignInRequiredCopy route map — the
+   denial explains what the page is for instead of dead-ending.
+
+   Three states:
+   - anonymous + member page  → feature description + Sign in (returnUrl round-trip) + Create account
+   - anonymous + mod area     → moderator notice + Sign in (no Create account — an account won't help)
+   - signed-in (role denial)  → "you don't have access" + way back; no sign-in buttons.
+
+   Create account deliberately carries NO returnUrl: registration flows through email
+   confirmation to the welcome page, not back to a stale bounce point (settled 2026-07-19).
+
+   Visual treatment mirrors NotFound.razor: Wayfinding plaque + Container vessel on canvas. *@
+
+<PageTitle>@Copy.Title</PageTitle>
+
+<div class="mx-auto flex max-w-md flex-col gap-4 py-12">
+    <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+        @Copy.Title
+    </h1>
+    <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+        <AuthorizeView>
+            <Authorized>
+                <p class="text-sm text-(--color-text)">
+                    @(Copy.IsModeratorArea
+                        ? "This area is for site moderators."
+                        : "Your account doesn't have access to this page.")
+                </p>
+                <div class="flex gap-3 text-sm">
+                    <a href="/" class="text-(--color-action-ink) hover:underline">Go home</a>
+                    <a href="/discover" class="text-(--color-action-ink) hover:underline">Discover stories</a>
+                </div>
+            </Authorized>
+            <NotAuthorized>
+                <p class="text-sm text-(--color-text)">@Copy.Description</p>
+                <p class="text-sm text-(--color-text-muted)">
+                    @(Copy.IsModeratorArea ? "Sign in with a moderator account to continue." : "Sign in to see yours.")
+                </p>
+                <div class="flex flex-wrap items-center gap-3 pt-1">
+                    <a href="@SignInHref"
+                       class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">
+                        Sign in
+                    </a>
+                    @if (!Copy.IsModeratorArea)
+                    {
+                        <a href="/Account/Register" class="text-sm text-(--color-action-ink) hover:underline">
+                            Create an account
+                        </a>
+                    }
+                </div>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// The path the viewer was denied on. Defaults to the current URI (router template case);
+    /// the status-code re-execute page passes the original request path explicitly, because
+    /// during a re-execute the NavigationManager already points at the re-execute route.
+    /// </summary>
+    [Parameter] public string? OriginalPath { get; set; }
+
+    private string EffectivePath => OriginalPath ?? "/" + Nav.ToBaseRelativePath(Nav.Uri);
+
+    private SignInRequiredCopy.Entry Copy => SignInRequiredCopy.For(EffectivePath);
+
+    private string SignInHref =>
+        $"/Account/Login?ReturnUrl={Uri.EscapeDataString(EffectivePath)}";
+}

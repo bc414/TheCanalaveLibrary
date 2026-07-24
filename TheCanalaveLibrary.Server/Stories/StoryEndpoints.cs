@@ -15,9 +15,11 @@ namespace TheCanalaveLibrary.Server;
 /// <c>StoryPage</c> (<c>/story/{StoryId:int}/{*StorySlug}</c>, no <c>[Authorize]</c> — "stories are
 /// publicly visible") and the public discovery surfaces that consume
 /// <see cref="IStoryReadService.GetListingsAsync"/>/<see cref="IStoryReadService.GetRandomBatchAsync"/>/
-/// <see cref="IStoryReadService.FilterCandidateIdsAsync"/>. Two exceptions:
-/// <see cref="IStoryReadService.GetStoryIdsByAuthorAsync"/> explicitly bypasses the content-rating
-/// filter per its doc comment, so it is gated; <see cref="IStoryReadService.GetStoryForEditAsync"/>
+/// <see cref="IStoryReadService.FilterCandidateIdsAsync"/>. This includes
+/// <see cref="IStoryReadService.GetStoryIdsByAuthorAsync"/> (anonymous-callable since
+/// WU-AccessGate Phase 1 — it feeds the public profile Stories tab; the service keeps the
+/// ContentRating bypass owner-only and enforces the author's ProfileVisibility). Two exceptions:
+/// <see cref="IStoryReadService.GetStoryForEditAsync"/>
 /// feeds only <c>StoryEditorPage</c> (<c>@attribute [Authorize]</c>), so it is gated to mirror that
 /// page. <see cref="IStoryReadService.SearchStoriesByTitleAsync"/> is gated too — genuinely unsure:
 /// its only consumers today (the Story Lineage target picker, the Groups add-story retrofit) are
@@ -79,12 +81,23 @@ public static class StoryEndpoints
         // down every Integration test — caught via `dotnet test`, not `dotnet build`, since MSBuild
         // has no static check for minimal-API parameter-source inference).
         group.MapPost("/query", async (
-            IStoryReadService stories, StoryFilterDto filter, [FromQuery] int[]? restrictToStoryIds) =>
+            IStoryReadService stories, StoryFilterDto filter, [FromQuery] int[]? restrictToStoryIds,
+            [FromQuery] bool personalScope = false) =>
         {
+            // personalScope: Personal-plane hydration for the WASM bookshelf/owner-list pass —
+            // see IStoryReadService doc (only effective with a restrict set; a forged flag is a
+            // deliberate API call per the Intentionality Doctrine, not a browse leak).
             (StoryListingDto[] Items, int TotalCount) result =
-                await stories.GetListingsAsync(filter, restrictToStoryIds);
+                await stories.GetListingsAsync(filter, restrictToStoryIds, personalScope);
             return Results.Ok(new PagedResult<StoryListingDto>(result.Items, result.TotalCount));
         });
+
+        // Mature count-line disclosure reads (WU-AccessGate) — interstitial-grade metadata only.
+        group.MapGet("/gated-cards", async (IStoryReadService stories, [FromQuery] int[] storyIds) =>
+            Results.Ok(await stories.GetGatedCardsAsync(storyIds)));
+
+        group.MapGet("/gated-by-author/{authorId:int}", async (IStoryReadService stories, int authorId) =>
+            Results.Ok(await stories.GetGatedStoriesByAuthorAsync(authorId)));
 
         group.MapPost("/random-batch", async (
                 IStoryReadService stories, StoryFilterDto filter, int batchSize) =>
@@ -97,10 +110,20 @@ public static class StoryEndpoints
             Results.Ok(await stories.FilterCandidateIdsAsync(candidateIds, filter)));
 
         // Gated: bypasses the content-rating filter so authors always see their own mature stories
-        // (doc comment on IStoryReadService.GetStoryIdsByAuthorAsync) — not a public-safe read.
+        // Anonymous-callable (WU-AccessGate Phase 1): feeds the PUBLIC profile Stories tab, which
+        // 401-crashed on the anonymous WASM pass under the old RequireAuthorization gate (the
+        // recurring MA-302 split-brain class). Safe: the service gives non-owners the
+        // rating-filtered set only (the ContentRating bypass stays keyed to viewer == author,
+        // never the client-supplied id) and enforces the author's ProfileVisibility.
         group.MapGet("/by-author/{authorId:int}", async (IStoryReadService stories, int authorId) =>
-                Results.Ok(await stories.GetStoryIdsByAuthorAsync(authorId)))
-            .RequireAuthorization();
+            Results.Ok(await stories.GetStoryIdsByAuthorAsync(authorId)));
+
+        // Gated-existence read (WU-AccessGate): interstitial metadata (title/author/rating only)
+        // for an M story the viewer hasn't consented to; JSON null for absent/taken-down. Backs
+        // the WASM pass of the story/chapter interstitial pages. Public by design — it reveals
+        // exactly what the interstitial page itself acknowledges.
+        group.MapGet("/{storyId:int}/gate", async (IStoryReadService stories, int storyId) =>
+            Results.Json(await stories.GetStoryGateAsync(storyId)));
 
         // Seeded lookup table (platform name + URL auto-detect pattern) — same public-lookup
         // treatment as ITagReadService.GetTagDirectoryAsync; not sensitive on its own.

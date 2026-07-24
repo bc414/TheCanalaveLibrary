@@ -50,6 +50,12 @@ public class ServerFollowingReadService(
     public async Task<IReadOnlyList<UserCardDto>> GetFollowedUsersAsync(int userId)
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // Class-A: who a user follows is profile-tab data; respect their ProfileVisibility
+        // (WU-AccessGate Phase 1 — this endpoint is directly reachable over HTTP).
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, activeUser, userId))
+            return [];
+
         return await readDb.FollowedUsers
             .Where(f => f.UserId == userId)
             .OrderBy(f => f.DateFollowed)
@@ -70,6 +76,11 @@ public class ServerFollowingReadService(
     public async Task<IReadOnlyList<VouchDisplayDto>> GetOutgoingVouchesAsync(int userId)
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // Class-A: same ProfileVisibility gate as GetFollowedUsersAsync (WU-AccessGate Phase 1).
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, activeUser, userId))
+            return [];
+
         return await readDb.Vouches
             .Where(v => v.VouchingUserId == userId)
             .OrderBy(v => v.DateVouched)

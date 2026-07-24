@@ -4,6 +4,7 @@
 @inject IPollReadService PollReadService
 @inject IPublicUrlProvider PublicUrlProvider
 @inject ILogger<BlogPostPage> Logger
+@inject NavigationManager Nav
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.Extensions.Logging
@@ -21,6 +22,11 @@
 {
     <p class="text-(--color-text-muted)"><em>Loading…</em></p>
 }
+else if (_gate is not null && Post is null)
+{
+    @* Mature interstitial (WU-AccessGate): the post exists but the viewer hasn't consented. *@
+    <ContentGateInterstitial Metadata="@_gate" />
+}
 else if (_notFound || Post is null)
 {
     <p class="text-(--color-danger)">Post not found.</p>
@@ -28,6 +34,11 @@ else if (_notFound || Post is null)
 else
 {
     bool isAuthor = _currentUserId.HasValue && _currentUserId == Post.AuthorId;
+    @if (Post.Rating == Rating.M)
+    {
+        @* Adult labels on the revealed branch too — the URL is adult regardless of consent. *@
+        <AdultContentMetaTags />
+    }
 
     <PageTitle>@Post.Title</PageTitle>
     <SocialMetaTags Title="@Post.Title" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="article"/>
@@ -152,6 +163,11 @@ else
     private bool _isLoading = true;
     private bool _notFound;
 
+    // Interstitial metadata when the post exists but the viewer hasn't consented
+    // (WU-AccessGate). Deterministic per viewer — not persisted; consent forces a
+    // full-document navigation.
+    private GatedMetadataDto? _gate;
+
     // Current viewer (null = anonymous).
     private int? _currentUserId;
 
@@ -214,6 +230,8 @@ else
     {
         _isLoading = true;
         _loadedBlogPostId = BlogPostId;
+        _gate = null;
+        _notFound = false;
 
         // Parallel load is sanctioned (layer2-services.md — factory-per-method read contexts).
         Task<BlogPostDto?> postTask = BlogPostService.GetByIdAsync(BlogPostId);
@@ -226,6 +244,12 @@ else
         {
             _notFound = true;
             Polls = [];
+            // Gated-existence read (WU-AccessGate): a mature-gated post → interstitial (reveal
+            // target = the post for profile posts, the GROUP for group posts); truly absent /
+            // unpublished / taken down → real 404.
+            _gate = await BlogPostService.GetBlogPostGateAsync(BlogPostId);
+            if (_gate is null)
+                Nav.NotFound();
         }
         else
         {

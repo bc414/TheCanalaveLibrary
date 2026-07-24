@@ -1,0 +1,26 @@
+@page "/welcome"
+@namespace TheCanalaveLibrary.SharedUI
+
+@* First-sign-in landing for new accounts (WU-AccessGate Phase 1): register → email confirmation
+   → sign in → here. Deliberately NOT a returnUrl round-trip — a brand-new member gets oriented
+   instead of being bounced back to whatever page they hit three days ago (settled 2026-07-19).
+   Public route: harmless if visited directly or anonymously. *@
+
+<PageTitle>Welcome to The Canalave Library</PageTitle>
+
+<div class="mx-auto flex max-w-md flex-col gap-4 py-12">
+    <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+        Welcome to The Canalave Library
+    </h1>
+    <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+        <p class="text-sm text-(--color-text)">
+            Your account is ready. The library is yours to explore — a few good places to start:
+        </p>
+        <ul class="flex flex-col gap-2 text-sm text-(--color-text)">
+            <li><a href="/discover" class="text-(--color-action-ink) hover:underline">Discover stories</a> — browse and search the whole library.</li>
+            <li><a href="/bookshelves" class="text-(--color-action-ink) hover:underline">Your bookshelves</a> — favorites, follows, and reading progress live here.</li>
+            <li><a href="/settings" class="text-(--color-action-ink) hover:underline">Settings</a> — reading preferences, privacy, and content filters.</li>
+            <li><a href="/story/new" class="text-(--color-action-ink) hover:underline">Write a story</a> — when you're ready to share your own.</li>
+        </ul>
+    </div>
+</div>

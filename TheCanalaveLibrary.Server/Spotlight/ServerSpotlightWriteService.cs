@@ -83,7 +83,7 @@ public class ServerSpotlightWriteService(
             // ── Story eligibility (ground truth — the write context is unfiltered by design) ──
             var story = await writeDb.Stories
                 .Where(s => s.StoryId == dto.StoryId)
-                .Select(s => new { s.AuthorId, s.StoryStatusId, s.IsTakenDown })
+                .Select(s => new { s.AuthorId, s.StoryStatusId, s.IsTakenDown, s.Rating })
                 .FirstOrDefaultAsync();
             if (story is null)
                 throw new SpotlightValidationException("Story not found.");
@@ -93,6 +93,20 @@ public class ServerSpotlightWriteService(
             if (story.IsTakenDown
                 || story.StoryStatusId is StoryStatusEnum.Draft or StoryStatusEnum.PendingApproval or StoryStatusEnum.Rejected)
                 throw new SpotlightValidationException("That story isn't publicly visible, so it can't be spotlighted.");
+
+            // ── Slot rating class (WU-AccessGate, settled 2026-07-19): dedicated M and non-M
+            //    pools — an M story books only into an M slot and vice versa. This is slot
+            //    INVENTORY integrity (the buyer/awardee knows which audience they're booking),
+            //    not a consent check — the one rating check that belongs on a write path
+            //    (content-safety.md §"Write paths stay rating-blind"). ─────────────────────────
+            bool storyIsMature = story.Rating == Rating.M;
+            bool slotIsMature = slot.MaxStoryRating == Rating.M;
+            if (storyIsMature && !slotIsMature)
+                throw new SpotlightValidationException(
+                    "That story is rated Mature — it needs a Mature spotlight slot.");
+            if (!storyIsMature && slotIsMature)
+                throw new SpotlightValidationException(
+                    "That spotlight slot is reserved for Mature stories.");
 
             // ── Optional recommendation: belongs to the story, Approved, not taken down.
             //    Anyone's — self-recommendation is fine; only self-STORY is banned. ─────────────

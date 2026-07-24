@@ -26,22 +26,29 @@
    every reading-progress/read-mark signal stays ephemeral (layer5-wasm.md §"Avoiding the double
    fetch"). *@
 
-<PageTitle>@(Chapter is not null ? $"{Chapter.Title} – Chapter {ChapterNumber}" : "Chapter")</PageTitle>
+@if (_gate is null)
+{
+    <PageTitle>@(Chapter is not null ? $"{Chapter.Title} – Chapter {ChapterNumber}" : "Chapter")</PageTitle>
+}
 @if (Chapter is not null)
 {
     <SocialMetaTags Title="@OgTitle" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="article"/>
+    @if (Chapter.StoryRating == Rating.M || Chapter.Rating == Rating.M)
+    {
+        @* Adult labels on the revealed branch too — the URL is adult regardless of consent. *@
+        <AdultContentMetaTags />
+    }
 }
 
 @if (_isLoading)
 {
     <p class="text-(--color-text-muted)"><em>Loading…</em></p>
 }
-else if (_gatedByRating)
+else if (_gate is not null && Chapter is null)
 {
-    <div class="mx-auto max-w-2xl px-4 py-8">
-        <p class="text-(--color-text-muted)">This version of the chapter requires mature content to be enabled in your account settings.</p>
-        <a href="/story/@StoryId/@ChapterNumber" class="mt-4 inline-block text-(--color-action-ink) hover:underline">Read the default version instead</a>
-    </div>
+    @* Mature interstitial (WU-AccessGate): the parent story exists but the viewer hasn't
+       consented. Replaces the old versioned-URL heuristic (misfired on nonexistent versions). *@
+    <ContentGateInterstitial Metadata="@_gate" />
 }
 else if (Chapter is null)
 {
@@ -202,7 +209,11 @@ else
     private int? _recId;
     private bool _progressReached90;
     private bool _isLoading = true;
-    private bool _gatedByRating;
+
+    // Interstitial metadata when the parent story exists but the viewer hasn't consented
+    // (WU-AccessGate; replaced the old _gatedByRating VersionOrder heuristic). Deterministic per
+    // viewer — not persisted; consent forces a full-document navigation.
+    private GatedMetadataDto? _gate;
 
     private DotNetObjectReference<ChapterReadingPage>? _dotnetRef;
     private bool _jsRegistered;
@@ -268,7 +279,7 @@ else
         _isAuthor = false;
         _recId = null;
         _progressReached90 = false;
-        _gatedByRating = false;
+        _gate = null;
 
         _loadedStoryId       = StoryId;
         _loadedChapterNumber = ChapterNumber;
@@ -287,10 +298,15 @@ else
 
         if (Chapter is null)
         {
-            // Distinguish: versioned URL (non-mature reader blocked) vs truly absent chapter.
-            _gatedByRating = VersionOrder.HasValue;
+            // Gated-existence read (WU-AccessGate): the chapter page gates on its PARENT STORY —
+            // a real answer replacing the old VersionOrder.HasValue guess, which showed a false
+            // "requires mature content" for any nonexistent versioned URL of any story. An M
+            // story the viewer hasn't consented to → interstitial (one story consent covers the
+            // whole subtree); anything else null here → real 404. Supplementary loads are
+            // deliberately skipped — no body data is fetched for an un-consented viewer.
+            _gate = await StoryReadService.GetStoryGateAsync(StoryId);
             _isLoading = false;
-            if (!_gatedByRating)
+            if (_gate is null)
                 NavigationManager.NotFound();
             return;
         }

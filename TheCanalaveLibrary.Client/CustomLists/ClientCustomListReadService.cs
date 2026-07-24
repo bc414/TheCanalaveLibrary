@@ -25,6 +25,10 @@ public class ClientCustomListReadService(HttpClient http) : ICustomListReadServi
         await Http.GetFromJsonAsync<int[]>(
             $"api/custom-lists/{listId}/story-ids?sort={(int)sort}") ?? [];
 
+    public async Task<IReadOnlyList<GatedMetadataDto>> GetListHiddenMatureAsync(int listId) =>
+        await Http.GetFromJsonAsync<List<GatedMetadataDto>>(
+            $"api/custom-lists/{listId}/hidden-mature") ?? [];
+
     public async Task<List<CustomListSummaryDto>> GetPublicListsByUserAsync(int userId) =>
         await Http.GetFromJsonAsync<List<CustomListSummaryDto>>(
             $"api/custom-lists/public/{userId}") ?? [];

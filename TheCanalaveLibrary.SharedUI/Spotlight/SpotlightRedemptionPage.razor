@@ -66,6 +66,14 @@
                     You have <span class="font-semibold text-(--color-text)">@Slots.Count</span>
                     spotlight slot@(Slots.Count == 1 ? "" : "s") — feature someone else's story
                     on the home page.
+                    @if (Slots[0].MaxStoryRating == Rating.M)
+                    {
+                        @* Dedicated pools (WU-AccessGate): a Mature slot books M stories only and
+                           is shown to mature-enabled viewers only. *@
+                        <span class="font-medium text-(--color-text)">
+                            This is a Mature slot — it features an M-rated story to mature-enabled readers.
+                        </span>
+                    }
                 </p>
 
                 @* Step 1 — pick the story *@

@@ -2796,6 +2796,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnName("granted_utc")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<short>("MaxStoryRating")
+                        .HasColumnType("smallint")
+                        .HasColumnName("max_story_rating");
+
                     b.Property<string>("PaymentId")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)")
@@ -3796,6 +3800,30 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasDatabaseName("ix_user_chapter_interactions_chapter_id");
 
                     b.ToTable("user_chapter_interactions", (string)null);
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.UserContentReveal", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.Property<short>("EntityType")
+                        .HasColumnType("smallint")
+                        .HasColumnName("entity_type");
+
+                    b.Property<int>("EntityId")
+                        .HasColumnType("integer")
+                        .HasColumnName("entity_id");
+
+                    b.Property<DateTime>("DateRevealed")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_revealed");
+
+                    b.HasKey("UserId", "EntityType", "EntityId")
+                        .HasName("pk_user_content_reveals");
+
+                    b.ToTable("user_content_reveals", (string)null);
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.UserCustomFilter", b =>
@@ -5523,6 +5551,18 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasConstraintName("fk_user_chapter_interactions_users_user_id");
 
                     b.Navigation("Chapter");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.UserContentReveal", b =>
+                {
+                    b.HasOne("TheCanalaveLibrary.Core.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_content_reveals_users_user_id");
 
                     b.Navigation("User");
                 });

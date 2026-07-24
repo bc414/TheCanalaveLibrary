@@ -29,6 +29,12 @@ public static class UserProfileEndpoints
         group.MapGet("/{userId:int}/bio", async (IUserProfileReadService profiles, int userId) =>
             Results.Json(await profiles.GetProfileTextAsync(userId)));
 
+        // Why-is-it-hidden read for the page's honest empty states (WU-AccessGate Phase 1).
+        // Deliberately public: it reveals only the visibility MODE, which the rendered page states
+        // in prose anyway ("This profile is private." / sign-in prompt).
+        group.MapGet("/{userId:int}/access-state", async (IUserProfileReadService profiles, int userId) =>
+            Results.Ok(await profiles.GetProfileAccessStateAsync(userId)));
+
         return app;
     }
 }

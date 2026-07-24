@@ -38,4 +38,13 @@ public interface IUserProfileReadService
     /// <c>RichTextView</c> directly.
     /// </summary>
     Task<string?> GetProfileTextAsync(int userId);
+
+    /// <summary>
+    /// Distinguishes WHY a profile is hidden from the current viewer, so the page can render an
+    /// honest state (WU-AccessGate Phase 1): real 404 for a missing user, "This profile is
+    /// private." for <see cref="ProfileVisibility.Private"/>, a sign-in prompt for
+    /// <see cref="ProfileVisibility.UsersOnly"/> viewed anonymously. Called only on the
+    /// header-null path — the common visible case never pays for it.
+    /// </summary>
+    Task<ProfileAccessState> GetProfileAccessStateAsync(int userId);
 }

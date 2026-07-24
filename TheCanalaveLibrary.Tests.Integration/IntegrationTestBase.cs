@@ -137,6 +137,9 @@ public abstract class IntegrationTestBase(PostgresFixture postgres) : IAsyncLife
         fake.PrefersAnimatedSprites = ctx.PrefersAnimatedSprites;
         fake.IsModerator            = ctx.IsModerator;
         fake.IsAdmin                = ctx.IsAdmin;
+        fake.IsVerifiedBot          = ctx.IsVerifiedBot;
+        fake.AnonReveals.Clear();
+        fake.AnonReveals.UnionWith(ctx.AnonReveals);
     }
 
     /// <summary>

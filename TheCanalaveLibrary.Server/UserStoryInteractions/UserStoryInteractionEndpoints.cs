@@ -5,12 +5,14 @@ namespace TheCanalaveLibrary.Server;
 /// <summary>
 /// Layer-5 API surface for <see cref="IUserStoryInteractionReadService"/> /
 /// <see cref="IUserStoryInteractionWriteService"/>. Every method on both interfaces resolves the
-/// current viewer via <see cref="IActiveUserContext"/> (or, for
-/// <see cref="IUserStoryInteractionReadService.GetFavoriteStoryIdsAsync"/>, an explicit
-/// <c>userId</c> whose result is still only meaningful in a per-viewer context) — the whole
-/// cluster is inherently per-user data (favorites, bookshelves, follows), so the entire group
-/// carries <c>RequireAuthorization()</c> rather than the per-endpoint public/private judgment call
-/// layer5-wasm.md normally calls for.
+/// current viewer via <see cref="IActiveUserContext"/>, so the group carries
+/// <c>RequireAuthorization()</c> — with one deliberate exception:
+/// <see cref="IUserStoryInteractionReadService.GetFavoriteStoryIdsAsync"/> takes an explicit
+/// <c>userId</c> and feeds the PUBLIC profile Favorites tab (an <c>[AllowAnonymous]</c> page), so
+/// its endpoint is <c>AllowAnonymous</c> (WU-AccessGate Phase 1 — the group-level gate made the
+/// tab 401-crash on the anonymous WASM pass, the recurring MA-302 split-brain class). Privacy is
+/// enforced in the service: hidden favorites are owner-only (MA-602 server-derived
+/// <c>includePrivate</c>), and the owner's <c>ProfileVisibility</c> gates the whole read.
 /// <para>
 /// Thin pass-throughs: no business logic here. <see cref="EndpointHelpers.ExecuteWriteAsync"/>
 /// handles the exception→status translation (layer5-wasm.md §"The Error-Translation Contract").
@@ -57,11 +59,13 @@ public static class UserStoryInteractionEndpoints
 
         // includePrivate is derived server-side (owner-only hidden favorites) — never accepted from
         // the client, same pattern as UserProfileEndpoints' includePrivate derivation (MA-602;
-        // endpoint-authz sweep 2026-07-18).
+        // endpoint-authz sweep 2026-07-18). AllowAnonymous overrides the group gate: this read
+        // feeds the public profile Favorites tab (see type doc comment).
         group.MapGet("/favorites/{userId:int}",
-            async (IUserStoryInteractionReadService interactions, IActiveUserContext activeUser, int userId) =>
-                Results.Ok(await interactions.GetFavoriteStoryIdsAsync(
-                    userId, includePrivate: activeUser.UserId == userId)));
+                async (IUserStoryInteractionReadService interactions, IActiveUserContext activeUser, int userId) =>
+                    Results.Ok(await interactions.GetFavoriteStoryIdsAsync(
+                        userId, includePrivate: activeUser.UserId == userId)))
+            .AllowAnonymous();
 
         // ── Writes ──
 

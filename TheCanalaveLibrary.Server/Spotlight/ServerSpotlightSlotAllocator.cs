@@ -18,8 +18,12 @@ public class ServerSpotlightSlotAllocator(
     ISiteSettingsReadService siteSettings,
     ILogger<ServerSpotlightSlotAllocator> logger) : ISpotlightSlotAllocator
 {
-    public async Task<int> GrantSlotAsync(int toUserId, SpotlightSlotSource source)
+    public async Task<int> GrantSlotAsync(int toUserId, SpotlightSlotSource source, Rating maxStoryRating = Rating.E)
     {
+        // Slot rating class is binary (dedicated M / non-M pools, WU-AccessGate): normalize any
+        // non-M value to E so T never becomes a third pool by accident.
+        if (maxStoryRating != Rating.M) maxStoryRating = Rating.E;
+
         if (source == SpotlightSlotSource.Donation)
             throw new NotSupportedException(
                 "Donation-sourced slots are the deferred payment-pipeline seam — no grant path produces them yet.");
@@ -45,6 +49,7 @@ public class ServerSpotlightSlotAllocator(
             GrantedByUserId = modId,
             Source = source,
             Status = SpotlightSlotStatus.Available,
+            MaxStoryRating = maxStoryRating,
             GrantedUtc = DateTime.UtcNow
         };
         writeDb.SpotlightSlots.Add(slot);
@@ -102,7 +107,8 @@ public class ServerSpotlightSlotAllocator(
                 s.GrantedToUser != null ? s.GrantedToUser.UserName : null,
                 s.Source,
                 s.Status,
-                s.GrantedUtc))
+                s.GrantedUtc,
+                s.MaxStoryRating))
             .ToListAsync();
     }
 

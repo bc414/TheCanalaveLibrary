@@ -125,7 +125,7 @@ public class ServerTreeSearchReadService(
         command.Parameters.Add(new NpgsqlParameter("maxDegrees", request.MaxDegrees));
         command.Parameters.Add(new NpgsqlParameter("fanOutCap", FanOutCap));
         command.Parameters.Add(new NpgsqlParameter("edges", request.EdgeTypes.Select(e => (short)e).Distinct().ToArray()));
-        command.Parameters.Add(new NpgsqlParameter("maxRating", (short)(activeUser.ShowMatureContent ? Rating.M : Rating.T)));
+        command.Parameters.Add(new NpgsqlParameter("maxRating", (short)activeUser.MaxRating));
         command.Parameters.Add(new NpgsqlParameter("viewerId", activeUser.UserId ?? -1));
         command.Parameters.Add(new NpgsqlParameter("includePaths", request.IncludePaths));
         command.Parameters.Add(new NpgsqlParameter("sortByDegree", request.Sort == TreeSearchSortOrder.ByDegree));

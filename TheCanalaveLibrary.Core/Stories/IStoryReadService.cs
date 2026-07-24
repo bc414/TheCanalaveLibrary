@@ -2,7 +2,22 @@ namespace TheCanalaveLibrary.Core;
 
 public interface IStoryReadService
 {
+    /// <summary>
+    /// Reveal-aware since WU-AccessGate: an M story loads for viewers whose ceiling permits it,
+    /// whose per-story reveal covers it, or for verified crawlers. Null still conflates
+    /// absent/taken-down/gated — the null path calls <see cref="GetStoryGateAsync"/> to
+    /// distinguish.
+    /// </summary>
     Task<StoryDetailsDTO?> GetStoryByIdAsync(int storyId);
+
+    /// <summary>
+    /// The gated-existence read (WU-AccessGate): when a detail read returned null, distinguishes
+    /// "exists but mature-gated" (returns interstitial metadata — title/author/rating only, no
+    /// cover/description) from truly absent or taken down (returns null → real 404; the
+    /// IsTakenDown filter stays ACTIVE here). Also serves chapter URLs — the chapter page gates
+    /// on its parent story.
+    /// </summary>
+    Task<GatedMetadataDto?> GetStoryGateAsync(int storyId);
 
     /// <summary>
     /// Gets the data required to edit a story.
@@ -42,10 +57,37 @@ public interface IStoryReadService
     ///
     /// <b>Bookshelf narrowing:</b> when <paramref name="restrictToStoryIds"/> is provided, results
     /// are pre-filtered to that candidate set before all other filters are applied. The content-rating
-    /// global filter still applies; callers never see stories outside their rating cap.
+    /// global filter still applies; callers never see stories outside their rating cap — unless
+    /// <paramref name="personalScope"/> is set (below).
+    ///
+    /// <b>Personal plane (<paramref name="personalScope"/>, WU-AccessGate):</b> set ONLY by
+    /// Personal-plane surfaces (bookshelves, reading history, the owner's view of their own
+    /// lists) whose candidate set is the viewer's own interaction graph — those reads are never
+    /// rating-filtered (content-safety.md §"The Three-Plane Access Model": your own favorites/
+    /// history show your M items regardless of your Discovery setting; this is what prevents
+    /// invisible un-deletable ghost rows). Ignored unless <paramref name="restrictToStoryIds"/>
+    /// is a non-empty set. Rides the HTTP query route for the WASM pass — a forged flag is a
+    /// deliberate API call reading Class-B listing metadata of a self-supplied id set, which the
+    /// Intentionality Doctrine deliberately does not defend against.
     /// </summary>
     Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(
-        StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null);
+        StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null, bool personalScope = false);
+
+    /// <summary>
+    /// Mature count-line disclosure data (WU-AccessGate; person/collection-scoped listings only):
+    /// interstitial-grade metadata (title/author/rating — no cover, no description) for the ids in
+    /// <paramref name="storyIds"/> that the viewer's rating ceiling hid. Empty for mature-on
+    /// viewers. Callers pass the surface's RAW candidate set (favorites ids, series entry ids,
+    /// group story ids); global Discovery surfaces never call this.
+    /// </summary>
+    Task<IReadOnlyList<GatedMetadataDto>> GetGatedCardsAsync(IReadOnlyCollection<int> storyIds);
+
+    /// <summary>
+    /// Same disclosure data for an author's profile tab, where the visible-id read deliberately
+    /// does NOT leak rating-hidden ids cross-user — this read supplies the hidden half as gated
+    /// metadata instead (the discovery-bridge rule: acknowledge existence, withhold content).
+    /// </summary>
+    Task<IReadOnlyList<GatedMetadataDto>> GetGatedStoriesByAuthorAsync(int authorId);
 
     /// <summary>
     /// Returns a random selection of listing DTOs from the post-filter valid set (WU28, spec §5.3).

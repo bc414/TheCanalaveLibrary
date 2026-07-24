@@ -141,20 +141,40 @@ additive `<head>` output, not a change to any of those features' existing Stage-
 - Production values for `Site:PublicBaseUrl` (and `ImageStorage:PublicBaseUrl` if/when it diverges)
   are a Phase-7 config/secrets-promotion concern (`middle_plan_v2.md`), not a code gap.
 
-## Feature 64 — Site SEO: settled vs. open (WU-SeoSite, 2026-07-15)
+## Feature 64 — Site SEO: settled vs. open (revised 2026-07-19; built by WU-AccessGate)
 
 **Settled (do not revisit at build time):**
-- Scope is exactly `robots.txt` (static) + `sitemap.xml` (minimal-API endpoint over published-story
-  listings) + canonical-slug 301 redirect (`StoryPage`'s routing check) — three independent,
-  unblocked pieces.
-- `noindex` extends `<SocialMetaTags>` or adds a sibling head tag — do not duplicate the
+- **`noindex` is resolved: never added.** Decision row 11 resolved 2026-07-19 as "index all; gate
+  access" — M pages serve a consent interstitial (title/author/rating + `meta rating=adult` + RTA
+  labels) which is itself the indexable artifact. The interstitial/labels/reveals work is
+  **Feature 66 (Viewer Access Gating)**, ledger `audit/AccessGate.md`; Feature 64 keeps only the
+  site-crawlability slice below. Full model: `.claude/design/access-gating-first-principles.md`.
+- Scope is exactly `robots.txt` (static; allows search crawlers, disallows named AI-training bots
+  per the AO3/Fimfiction/FFN class norm — settled 2026-07-19) + `sitemap.xml` (minimal-API
+  endpoint over published-story listings, **including M stories** — index-all) + canonical-slug
+  301 redirect (`StoryPage`'s routing check) + `<link rel="canonical">`.
+- Adult labels extend `<SocialMetaTags>` or add a sibling head component — do not duplicate the
   head-content mechanism (same append-only `<HeadContent>` constraint documented above for OG).
 - `IPublicUrlProvider`/`Site:PublicBaseUrl` is the existing seam for any absolute-URL need
   (sitemap `<loc>` entries) — do not mint a second base-URL resolver.
 
-**Open (blocks part of the build):**
-- **Mature-content `noindex` ramifications — `middle_plan_v2.md` decision row 11.** Whether
-  `noindex, follow` on Mature/Explicit pages risks de-listing legitimate content, its interaction
-  with the still-open age-verification legal question (decision row 10), and crawl-budget effects.
-  Raised 2026-07-15, not yet answered. **The robots.txt/sitemap.xml/canonical-redirect slice does
-  not depend on this and can be built first.**
+**Open:** none — WU-AccessGate (`middle_plan_v2.md` Phase 2 item 8) is unblocked end-to-end.
+
+### Feature 64 Stage 5 — built + verified (2026-07-23, WU-AccessGate)
+
+`Server/Seo/SeoEndpoints.cs`: `/robots.txt` endpoint (absolute `Sitemap:` line via
+`IPublicUrlProvider` — the reason it's an endpoint, not a wwwroot file; AI-training crawlers
+disallowed per class norm; `/api`, `/Account`, `/content-gate`, `/status-code` excluded for all),
+`/sitemap.xml` (published stories INCLUDING M — index-all per resolved row 11; elevated read with
+IsTakenDown kept; single file, 50k cap noted), and `UseCanonicalStorySlugRedirect` middleware
+(true 301 for stale `/story/{id}/{slug}` before rendering; numeric third segments excluded —
+chapter routes). `<link rel="canonical">` added to StoryPage's loaded branch. Adult labels
+(`SharedUI/Seo/AdultContentMetaTags.razor`, rating=adult + RTA) emitted on M URLs in both
+interstitial and revealed branches. `VerifiedBotMiddleware` registered, config-gated OFF
+(`Seo:TrustVerifiedBots`) — activation is a Phase-7 launch-readiness line behind the Cloudflare
+ForwardedHeaders/origin-lockdown work.
+
+**How verified:** Integration (`ContentGateTests`: robots content incl. AI-bot blocks + sitemap
+pointer; sitemap contains an M story; stale slug → 301 with exact canonical Location; gate
+endpoint JSON). Manual band: curl of all three surfaces against the seeded server (robots body,
+sitemap `<loc>` entries, 301 redirect_url). Feature 64 grid row → 5.

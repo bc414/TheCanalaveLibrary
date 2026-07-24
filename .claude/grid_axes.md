@@ -684,16 +684,32 @@ splitting), and EPUB (spine-defined). Story shell is created via the normal flow
 chapters land as unpublished drafts. Sits above the MVP line's spirit but scheduled with WU38
 (2026-07-11) because migration UX is a launch-adoption concern. Detail: `audit/Import.md`.
 
-**64. Site SEO** — *(added 2026-07-15, minted from `middle-addendum.md` §3 #15/#16/#18.)*
-Site-level crawlability surface not owned by any content feature: `robots.txt`, a `sitemap.xml`
-endpoint over published stories, the spec'd-but-never-built canonical-slug 301 redirect (a story
+**64. Site SEO** — *(added 2026-07-15, minted from `middle-addendum.md` §3 #15/#16/#18; re-scoped
+2026-07-19 when decision row 11 resolved as "index all — no `noindex`".)*
+Site-level crawlability surface not owned by any content feature: `robots.txt` (search crawlers
+allowed, named AI-training bots disallowed), a `sitemap.xml` endpoint over published stories
+(including M-rated — index-all), the spec'd-but-never-built canonical-slug 301 redirect (a story
 reached via a stale/wrong slug segment should redirect to its current canonical URL — currently
-cosmetic-only, see Feature 5/10), and mature-content `noindex, follow` head output keyed off
-`Rating`. Distinct from the already-shipped per-page OG/`<meta description>` slice (attributed to
-the consuming content features — Stories, Chapters, Profiles, Series, BlogPosts, Groups — per
-`audit/Seo.md`); this row is the remaining site-wide work. The `noindex` half is gated on
-`middle_plan_v2.md` decision row 11 (ramifications not yet assessed). Scheduled as WU-SeoSite.
-Detail: `audit/Seo.md`.
+cosmetic-only, see Feature 5/10) plus `<link rel="canonical">`, and config-gated verified-crawler
+serving (`Seo:TrustVerifiedBots`, activated at Phase 7's Cloudflare trust boundary). The former
+`noindex` clause is **gone** — mature pages are gated, never de-listed; that gating is
+**Feature 66**. Distinct from the already-shipped per-page OG/`<meta description>` slice
+(attributed to the consuming content features — Stories, Chapters, Profiles, Series, BlogPosts,
+Groups — per `audit/Seo.md`). Built by WU-AccessGate. Detail: `audit/Seo.md`.
+
+**66. Viewer Access Gating** — *(added 2026-07-19, minted from decision row 11's resolution; see
+`.claude/design/access-gating-first-principles.md` (authoritative model) and
+`access-gating-audit.md` (surface inventory).)* The viewer-permission model as a first-class
+feature: the three planes (Discovery = zero-trace, unchanged; Direct navigation = consent
+interstitial on M story/chapter/group/blog-post pages, existence acknowledged, body withheld
+server-side; Personal = own interaction graph never rating-filtered, auth-protected); durable
+per-item reveals (DB rows for accounts via `user_content_reveals`, 180-day prefs cookie for
+anonymous, revocable in `/settings`); responsive `ShowMatureContent` (claim reissued via
+`RefreshSignInAsync` — closes MA-605); adult labels (`meta rating=adult` + RTA) on M URLs; the
+Intentionality Doctrine (Class-B JSON child APIs deliberately ungated; the four page-backing
+detail endpoints return a gated envelope); count-line mature disclosures on person/collection-
+scoped listings; spotlight M/non-M slot pools; the sign-in-required experience for `[Authorize]`
+pages; honest profile-privacy states. Built by WU-AccessGate. Detail: `audit/AccessGate.md`.
 
 **65. Accessibility** — *(added 2026-07-15, minted from `middle-addendum.md` §3 #22.)*
 Cross-cutting quality attribute, not a vertical feature — no owning folder, no L1–L3 surface of its

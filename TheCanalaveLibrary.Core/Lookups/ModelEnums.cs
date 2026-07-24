@@ -8,6 +8,20 @@ public enum Rating : short
     M = 2
 }
 
+/// <summary>
+/// What kind of content a <see cref="UserContentReveal"/> row (or an anon prefs-cookie reveal
+/// entry) consents to — WU-AccessGate. Story reveals cover the story's whole subtree (chapters,
+/// TOC, versions, export); Group reveals cover all group-owned content (folders, comments, group
+/// blog posts) but NOT member stories; BlogPost reveals cover a single M-rated profile blog post
+/// (group posts ride their group's reveal). See content-safety.md §"The Three-Plane Access Model".
+/// </summary>
+public enum RevealedEntityType : short
+{
+    Story = 0,
+    Group = 1,
+    BlogPost = 2,
+}
+
 public enum ReportedEntityType : short
 {
     User = 0,

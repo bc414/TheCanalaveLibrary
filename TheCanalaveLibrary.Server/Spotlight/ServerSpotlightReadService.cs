@@ -82,7 +82,7 @@ public class ServerSpotlightReadService(
         return await readDb.SpotlightSlots
             .Where(s => s.GrantedToUserId == userId && s.Status == SpotlightSlotStatus.Available)
             .OrderBy(s => s.GrantedUtc)
-            .Select(s => new SpotlightSlotDto(s.SlotId, s.Source, s.GrantedUtc))
+            .Select(s => new SpotlightSlotDto(s.SlotId, s.Source, s.GrantedUtc, s.MaxStoryRating))
             .ToListAsync();
     }
 

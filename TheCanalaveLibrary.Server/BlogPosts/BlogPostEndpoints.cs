@@ -38,6 +38,12 @@ public static class BlogPostEndpoints
         group.MapGet("/{blogPostId:int}", async (IBlogPostReadService blogPosts, int blogPostId) =>
             Results.Json(await blogPosts.GetByIdAsync(blogPostId)));
 
+        // Gated-existence read (WU-AccessGate): interstitial metadata for a mature-gated post
+        // (reveal target = post for profile posts, GROUP for group posts); JSON null for
+        // absent/unpublished/taken-down. Backs the WASM interstitial pass.
+        group.MapGet("/{blogPostId:int}/gate", async (IBlogPostReadService blogPosts, int blogPostId) =>
+            Results.Json(await blogPosts.GetBlogPostGateAsync(blogPostId)));
+
         group.MapGet("/by-author/{authorId:int}", async (
             IBlogPostReadService blogPosts, int authorId, int page, int pageSize, bool includeUnpublished = false) =>
         {

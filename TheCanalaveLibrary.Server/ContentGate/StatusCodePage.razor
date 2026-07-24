@@ -1,0 +1,62 @@
+@page "/status-code/{Code:int}"
+@namespace TheCanalaveLibrary.Server
+@layout TheCanalaveLibrary.SharedUI.MainLayout
+
+@* Target of UseStatusCodePagesWithReExecute("/status-code/{0}") — WU-AccessGate Phase 1.
+   Body-less 4xx/5xx responses (the cookie handler's 401/403, endpoint 404s) re-execute here so
+   the browser gets a styled page instead of a blank one. 401/403 render the shared
+   SignInRequired experience with the ORIGINAL request path (from IStatusCodeReExecuteFeature —
+   the re-execute rewrites the request path, so NavigationManager points at /status-code/{Code}
+   and cannot supply it); everything else renders the NotFound treatment.
+
+   Lives in the SERVER project (like the Identity pages and /Error): it needs HttpContext /
+   IStatusCodeReExecuteFeature, which SharedUI deliberately cannot reference, and re-execute is a
+   server-side concern — static SSR only ([ExcludeFromInteractiveRouting] via folder _Imports). *@
+
+@if (Code is 401 or 403)
+{
+    <SignInRequired OriginalPath="@OriginalPath" />
+}
+else
+{
+    <PageTitle>Not Found</PageTitle>
+    <div class="mx-auto flex max-w-md flex-col gap-4 py-12">
+        <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+            Page not found
+        </h1>
+        <div class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+            <p class="text-sm text-(--color-text)">The page you're looking for doesn't exist — it may have been moved, unpublished, or the link is mistyped.</p>
+            <div class="flex gap-3 text-sm">
+                <a href="/" class="text-(--color-action-ink) hover:underline">Go home</a>
+                <a href="/discover" class="text-(--color-action-ink) hover:underline">Discover stories</a>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Code { get; set; }
+
+    [CascadingParameter] public HttpContext? HttpContext { get; set; }
+
+    protected override void OnInitialized()
+    {
+        // Razor-component endpoint rendering resets the response to 200 — re-assert the
+        // original status so a styled 401/403/404 page still IS a 401/403/404 on the wire
+        // (integration tests and API callers read the status, not the body).
+        if (HttpContext is not null && !HttpContext.Response.HasStarted && Code is >= 400 and <= 599)
+            HttpContext.Response.StatusCode = Code;
+    }
+
+    private string? OriginalPath
+    {
+        get
+        {
+            var feature = HttpContext?.Features.Get<Microsoft.AspNetCore.Diagnostics.IStatusCodeReExecuteFeature>();
+            if (feature is null) return null;
+            return string.IsNullOrEmpty(feature.OriginalQueryString)
+                ? feature.OriginalPath
+                : feature.OriginalPath + feature.OriginalQueryString;
+        }
+    }
+}

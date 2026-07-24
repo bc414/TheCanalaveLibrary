@@ -19,4 +19,7 @@ public class ClientUserProfileReadService(HttpClient http) : IUserProfileReadSer
 
     public async Task<string?> GetProfileTextAsync(int userId) =>
         await Http.GetNullableFromJsonAsync<string?>($"api/user-profiles/{userId}/bio");
+
+    public async Task<ProfileAccessState> GetProfileAccessStateAsync(int userId) =>
+        await Http.GetFromJsonAsync<ProfileAccessState>($"api/user-profiles/{userId}/access-state");
 }

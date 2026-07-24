@@ -18,6 +18,9 @@ public class ClientBlogPostReadService(HttpClient http) : IBlogPostReadService
     public async Task<BlogPostDto?> GetByIdAsync(int blogPostId) =>
         await Http.GetNullableFromJsonAsync<BlogPostDto?>($"api/blog-posts/{blogPostId}");
 
+    public async Task<GatedMetadataDto?> GetBlogPostGateAsync(int blogPostId) =>
+        await Http.GetNullableFromJsonAsync<GatedMetadataDto?>($"api/blog-posts/{blogPostId}/gate");
+
     public async Task<(BlogPostListingDto[] Items, int TotalCount)> GetByAuthorAsync(
         int authorId, int page, int pageSize, bool includeUnpublished = false)
     {

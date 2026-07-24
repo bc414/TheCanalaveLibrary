@@ -17,7 +17,11 @@ public interface ISpotlightSlotAllocator
     /// site costs"); <see cref="SpotlightSlotSource.Donation"/> throws until the payment pipeline
     /// lands. Sends <c>SpotlightSlotGranted</c> best-effort post-commit. Returns the new slot id.
     /// </summary>
-    Task<int> GrantSlotAsync(int toUserId, SpotlightSlotSource source);
+    /// <param name="toUserId">The awardee.</param>
+    /// <param name="source">Grant source (ModAward today).</param>
+    /// <param name="maxStoryRating"><see cref="Rating.E"/> (default) = non-M slot;
+    /// <see cref="Rating.M"/> = Mature-pool slot (WU-AccessGate dedicated pools).</param>
+    Task<int> GrantSlotAsync(int toUserId, SpotlightSlotSource source, Rating maxStoryRating = Rating.E);
 
     /// <summary>Moderator withdraws an <c>Available</c> (unredeemed) slot — the escape hatch for
     /// expiry-less grants. Throws <see cref="SpotlightValidationException"/> if already redeemed.</summary>

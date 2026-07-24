@@ -58,8 +58,20 @@ public class ServerGroupReadService(
 
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
-        // Audience filter applied automatically. Returns null if not visible or not found.
-        var row = await readDb.Groups
+        // Reveal-aware (WU-AccessGate, Direct-navigation plane): a per-group consent or a
+        // verified crawler lifts the audience filter for THIS read — one group reveal covers all
+        // group-owned content (this detail read is the page's sole data root; folders/comments/
+        // blog sections hydrate only after it returns).
+        IQueryable<Group> groups = readDb.Groups;
+        if (ActiveUser.IsVerifiedBot
+            || await RevealCheck.IsRevealedAsync(readDb, ActiveUser, RevealedEntityType.Group, groupId))
+        {
+            // elevated read: per-group consent (or Pattern-B verified crawler) on the detail path
+            groups = groups.IgnoreQueryFilters(["GroupAudience"]);
+        }
+
+        // Audience filter applied automatically otherwise. Returns null if not visible or not found.
+        var row = await groups
             .Where(g => g.GroupId == groupId)
             .Select(g => new
             {
@@ -102,6 +114,26 @@ public class ServerGroupReadService(
             row.CurrentUserRole,
             folderTree,
             row.StoryIds);
+    }
+
+    public async Task<GatedMetadataDto?> GetGroupGateAsync(int groupId)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        // elevated read: gated-existence metadata — GroupAudience bypassed so the interstitial
+        // can acknowledge the group exists. Only M-audience groups gate; null = genuinely absent
+        // → real 404. Name/creator/rating only (interstitial metadata rule, settled 2026-07-19).
+        return await readDb.Groups
+            .IgnoreQueryFilters(["GroupAudience"])
+            .Where(g => g.GroupId == groupId && g.AudienceRating == Rating.M)
+            .Select(g => new GatedMetadataDto(
+                RevealedEntityType.Group,
+                g.GroupId,
+                g.GroupName,
+                g.CreatorId,
+                g.Creator != null ? g.Creator.UserName : null,
+                g.AudienceRating))
+            .FirstOrDefaultAsync();
     }
 
     public async Task<GroupRole?> GetCurrentUserRoleAsync(int groupId)

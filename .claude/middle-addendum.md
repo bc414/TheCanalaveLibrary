@@ -188,7 +188,11 @@ compliance theater).
     path as items 15/17, driven off a field the `Story` entity already has. Need to understand the
     ramifications of this suggestion. **→ formalized 2026-07-15: Feature 64 (Site SEO), WU-SeoSite;
     the ramifications question itself is now `middle_plan_v2.md` decision row 11 — see `audit/Seo.md`
-    "Feature 64 — settled vs. open."**
+    "Feature 64 — settled vs. open."** **→ ANSWERED 2026-07-19: row 11 resolved as "index all — no
+    rating-based `noindex`, ever"; M pages instead serve a consent interstitial (the indexable
+    artifact) with adult labels. See `middle_plan_v2.md` Resolved "Mature-content `noindex` (row 11)"
+    and `.claude/design/access-gating-first-principles.md`. Built as WU-AccessGate (absorbs
+    WU-SeoSite).**
 19. **RSS/Atom feeds.** Absent. Real precedent in this exact space (AO3, FFN both offer it) but
     both implementations are widely considered mediocre, and the real retention mechanism for
     "new chapter from a followed author" is the *already-deferred* email-digest feature
