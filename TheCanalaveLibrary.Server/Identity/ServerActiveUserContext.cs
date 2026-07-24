@@ -68,6 +68,10 @@ public class ServerActiveUserContext(
             ? bool.TryParse(Principal.FindFirstValue(ActiveUserClaimTypes.ShowMatureContent), out bool mature) && mature
             : AnonPrefsValue.Mature;
 
+    // The Discovery-plane ceiling — the single ShowMatureContent-derived value (never
+    // reveal-raised; see IActiveUserContext doc).
+    public Rating MaxRating => ShowMatureContent ? Rating.M : Rating.T;
+
     // ANONYMOUS per-item consent only — authenticated reveals are DB rows checked by RevealCheck
     // in read services (this context stays DbContext-free; see IActiveUserContext doc).
     public bool HasAnonRevealed(RevealedEntityType entityType, int entityId) =>

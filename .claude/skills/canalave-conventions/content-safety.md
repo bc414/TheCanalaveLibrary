@@ -194,6 +194,18 @@ modelBuilder.Entity<Story>().HasQueryFilter("IsTakenDown", s => !s.IsTakenDown);
 modelBuilder.Entity<BaseComment>().HasQueryFilter("IsTakenDown", c => !c.IsTakenDown);
 modelBuilder.Entity<BaseBlogPost>().HasQueryFilter("IsTakenDown", b => !b.IsTakenDown);
 modelBuilder.Entity<Recommendation>().HasQueryFilter("IsTakenDown", r => !r.IsTakenDown);
+
+// Class-A confidentiality (WU-AccessGate2, 2026-07-23): never-published/refused work is
+// invisible to everyone EXCEPT its own author — the author clause makes drafts self-visible
+// everywhere (story page, chapter navigations, MyStories) with no per-path elevation. Only
+// the moderation work surfaces bypass by name (pending-submissions queue). Unlike the rating
+// filter this is confidentiality, not consent: reveals and personalScope never bypass it,
+// and hidden-status stories 404 rather than gate (no interstitial acknowledgment).
+modelBuilder.Entity<Story>().HasQueryFilter("StoryStatus",
+    s => (s.StoryStatusId != StoryStatusEnum.Draft
+          && s.StoryStatusId != StoryStatusEnum.PendingApproval
+          && s.StoryStatusId != StoryStatusEnum.Rejected)
+         || (s.AuthorId != null && s.AuthorId == _activeUser.UserId));
 ```
 
 EF Core caches models per context *type*, so the read context gets a filtered model; the base type

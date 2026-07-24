@@ -42,6 +42,20 @@ public class ReadOnlyApplicationDbContext : ApplicationDbContext
         modelBuilder.Entity<Group>().HasQueryFilter("GroupAudience",
             g => _activeUser.ShowMatureContent || g.AudienceRating != Rating.M);
 
+        // Never-published / refused work is Class-A confidential (WU-AccessGate2, settled
+        // 2026-07-23): Draft, PendingApproval, and Rejected stories are invisible to everyone
+        // EXCEPT their own author (the author clause makes drafts self-visible everywhere —
+        // story page, chapter navigations, MyStories hydration — with no per-path elevation).
+        // Public lifecycle statuses (InProgress/Completed/OnHiatus/Cancelled/Rewriting/OpenBeta)
+        // all mean "the author published this". Moderation work surfaces bypass by name (the
+        // pending-submissions queue must see PendingApproval). Unlike the rating filter, this is
+        // confidentiality, not consent — reveals and personalScope never bypass it.
+        modelBuilder.Entity<Story>().HasQueryFilter("StoryStatus",
+            s => (s.StoryStatusId != StoryStatusEnum.Draft
+                  && s.StoryStatusId != StoryStatusEnum.PendingApproval
+                  && s.StoryStatusId != StoryStatusEnum.Rejected)
+                 || (s.AuthorId != null && s.AuthorId == _activeUser.UserId));
+
         // Hides moderator-removed content from public reads (settled WU34).
         // Elevated read paths (mod queue) use .IgnoreQueryFilters([...]) — annotated
         // with // elevated read: so survivors are self-evidently deliberate.

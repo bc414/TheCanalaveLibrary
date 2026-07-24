@@ -1,5 +1,6 @@
 @namespace TheCanalaveLibrary.SharedUI
 @inject NavigationManager Nav
+@inject IPublicUrlProvider PublicUrlProvider
 
 @* The mature-content consent interstitial (Feature 66, WU-AccessGate; content-safety.md §"The
    Three-Plane Access Model"). Rendered by the story/chapter/group/blog-post pages when their
@@ -15,6 +16,13 @@
 
 <PageTitle>@Metadata.Title</PageTitle>
 <AdultContentMetaTags />
+@* Minimal OG set (WU-AccessGate2): a shared M link unfurls with its title + site branding
+   instead of a bare URL. Deliberately NO description and the site-default image, never the
+   cover — the un-consented viewer rule extends to unfurl surfaces. *@
+<SocialMetaTags Title="@Metadata.Title"
+                ImageUrl="@PublicUrlProvider.AbsoluteImageUrl(null, "/img/default-cover.svg")"
+                Url="@PublicUrlProvider.AbsolutePageUrl(ReturnUrl)"
+                OgType="article" />
 
 <div class="mx-auto flex max-w-md flex-col gap-4 py-12">
     <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
@@ -33,8 +41,19 @@
         </div>
 
         <p class="text-sm text-(--color-text)">
-            This @EntityNoun is rated Mature and may contain explicit content.
-            By continuing, you confirm that you are willing to view mature content.
+            @if (SubjectNoun is not null && SubjectNoun != EntityNoun)
+            {
+                @* e.g. an M-rated post inside an E-audience group: the SUBJECT is the post, the
+                   consent target is the group (one consent covers its mature posts). *@
+                <text>This @SubjectNoun contains mature content — viewing it also shows this
+                @EntityNoun's other mature content. By continuing, you confirm that you are
+                willing to view mature content.</text>
+            }
+            else
+            {
+                <text>This @EntityNoun is rated Mature and may contain explicit content.
+                By continuing, you confirm that you are willing to view mature content.</text>
+            }
         </p>
 
         <div class="flex flex-wrap items-center gap-3 pt-1">
@@ -67,6 +86,13 @@
 
 @code {
     [Parameter, EditorRequired] public GatedMetadataDto Metadata { get; set; } = default!;
+
+    /// <summary>
+    /// The noun of the REQUESTED content when it differs from the reveal target's noun — e.g.
+    /// BlogPostPage passes "post" when the reveal target is the parent Group, so the copy says
+    /// what the viewer actually asked for while the button still names the consent scope.
+    /// </summary>
+    [Parameter] public string? SubjectNoun { get; set; }
 
     private string ReturnUrl => "/" + Nav.ToBaseRelativePath(Nav.Uri);
 

@@ -99,6 +99,34 @@ public class ServerChapterReadService(
             .FirstOrDefaultAsync();
     }
 
+    public async Task<GatedMetadataDto?> GetChapterGateAsync(
+        int storyId, int chapterNumber, int? versionOrder = null)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // elevated read: gated-existence for the chapter page — did the requested chapter/version
+        // exist and get blocked by the RATING ceiling specifically? Covers the M-story case
+        // (primary's effective rating is M) and the M-alternate-version-of-a-T-story case in one
+        // query, so the page needs a single fallback call. Only "ContentRating" is bypassed:
+        // "StoryStatus" (with its own-author clause) and "IsTakenDown" stay active — hidden or
+        // taken-down stories remain a true 404, never an acknowledgment.
+        return await readDb.ChapterContents
+            .IgnoreQueryFilters(["ContentRating"])
+            .Where(cc => cc.Chapter.StoryId == storyId
+                         && cc.Chapter.ChapterNumber == chapterNumber
+                         && cc.Chapter.IsPublished
+                         && (versionOrder == null || cc.SortOrder == versionOrder)
+                         && (cc.Rating ?? cc.Chapter.Story.Rating) == Rating.M)
+            .Select(cc => new GatedMetadataDto(
+                RevealedEntityType.Story,
+                cc.Chapter.StoryId,
+                cc.Chapter.Story.StoryListing != null ? cc.Chapter.Story.StoryListing.StoryTitle : string.Empty,
+                cc.Chapter.Story.AuthorId,
+                cc.Chapter.Story.Author != null ? cc.Chapter.Story.Author.UserName : null,
+                Rating.M))
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<IReadOnlyList<ChapterTocEntryDto>> GetChapterTocAsync(int storyId)
     {
         // Draft (unpublished) chapter metadata is author-only (endpoint-authz sweep 2026-07-18):

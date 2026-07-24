@@ -39,6 +39,13 @@ public static class ChapterEndpoints
             async (IChapterReadService chapters, int storyId, int chapterNumber, int? versionOrder) =>
                 Results.Json(await chapters.GetChapterForReadingAsync(storyId, chapterNumber, versionOrder)));
 
+        // Gated-existence read (WU-AccessGate2): interstitial metadata when the requested
+        // chapter/version exists but is rating-blocked; JSON null for absent. Backs the WASM
+        // interstitial pass on the chapter page.
+        group.MapGet("/{storyId:int}/{chapterNumber:int}/gate",
+            async (IChapterReadService chapters, int storyId, int chapterNumber, int? versionOrder) =>
+                Results.Json(await chapters.GetChapterGateAsync(storyId, chapterNumber, versionOrder)));
+
         group.MapGet("/{storyId:int}/toc", async (IChapterReadService chapters, int storyId) =>
             Results.Ok(await chapters.GetChapterTocAsync(storyId)));
 

@@ -2131,9 +2131,28 @@ entry above (with cells/verification) when built.
   always-show with immediate claim refresh, DB reveal + revoke, disclosure line) — full
   narrative in `audit/AccessGate.md` Stage-5 note. **Pointers:** `audit/AccessGate.md`,
   `.claude/design/access-gating-first-principles.md` (model), `audit/Seo.md` (Feature 64 slice).
+
+- **WU-AccessGate2 — DONE ✓ (2026-07-24)** — the post-completion-review follow-ups. **Shipped:**
+  the `"StoryStatus"` named filter (Class-A: Draft/PendingApproval/Rejected confidential to all
+  but their own author — closes the pre-existing gap where such stories were served by direct
+  link and listed in search/browse; author-aware clause, mod work surfaces bypass by name);
+  `GetChapterGateAsync` (consent path for an M alternate version of a non-M story — fixes the
+  WU-AccessGate silent-404 regression; one story reveal unlocks its versions); the
+  `IActiveUserContext` consent members made abstract with explicit implementations in all five
+  implementors (default-interface-member shortcut removed); sitemap expanded to Public profiles
+  + groups + published blog posts per the "original content homes" paradigm; interstitial
+  minimal OG + group-post `SubjectNoun` copy; Phase-7 checklist lines. **Verified:** `dotnet
+  test` green — 1961 total (6 new Integration `StoryVisibilityTests`); seeded curl matrix +
+  browser band (author sees own draft, mod queue lists pending, sitemap in/out counts) — full
+  narrative in `audit/AccessGate.md` "WU-AccessGate2" Stage note.
+
 - **WU-A11y** — **Cells:** Feature 65 (new), L4/L4.5 currently Stage 1. **Phase:** 3, paired with
   the L4 freeze sweep. **Scope:** blocked on decision row 12 (scope/depth). **Pointer:**
   `audit/Accessibility.md`. **Deps:** Phase 3's L4 freeze sweep (same pass).
+  *(Note for WU-AccountEnforcement, listed in `middle_plan_v2.md` Phase 2 item 5: the
+  `RefreshSignInAsync` claim-refresh pattern from `/content-gate` (WU-AccessGate, 2026-07-23) is
+  the ready-made tool for making `AccountStatus` responsive — a freshly-Warned/Suspended user's
+  claim currently waits for next sign-in.)*
 - **WU-EditorSprite** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
   inline Pokémon-sprite Quill blot (spec §5.30.2), deferred at WU6. **Pointer:**
   `audit/Chapters.md` Feature 6. **Deps:** WU6 (`EditorView`, Stage 5).

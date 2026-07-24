@@ -24,8 +24,11 @@
 }
 else if (_gate is not null && Post is null)
 {
-    @* Mature interstitial (WU-AccessGate): the post exists but the viewer hasn't consented. *@
-    <ContentGateInterstitial Metadata="@_gate" />
+    @* Mature interstitial (WU-AccessGate): the post exists but the viewer hasn't consented.
+       SubjectNoun: when the reveal target is the parent GROUP (group posts), the copy still
+       names what the viewer asked for — a post. *@
+    <ContentGateInterstitial Metadata="@_gate"
+                             SubjectNoun="@(_gate.RevealTarget == RevealedEntityType.Group ? "post" : null)" />
 }
 else if (_notFound || Post is null)
 {

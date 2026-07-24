@@ -21,6 +21,7 @@ public class FakeActiveUserContext : IActiveUserContext
     // ── Viewer consent state (WU-AccessGate) ──
     // Stand-ins for the prefs-cookie reveals (anonymous) and the VerifiedBotMiddleware signal.
     // Authenticated reveals are DB rows — seed user_content_reveals directly instead.
+    public Rating MaxRating => ShowMatureContent ? Rating.M : Rating.T;
     public bool IsVerifiedBot { get; set; }
     public HashSet<(RevealedEntityType EntityType, int EntityId)> AnonReveals { get; } = [];
 

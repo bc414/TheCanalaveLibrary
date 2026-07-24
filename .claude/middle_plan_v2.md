@@ -349,8 +349,17 @@ checklist — each bullet becomes a checkable item, most are small:
   `layer2-services.md` allow-list section; `TheCanalaveLibrary.Server.csproj` pin comment). If an
   HtmlSanitizer release targeting AngleSharp 1.x lands first, that's the zero-code path instead.
 - **TLS/domain** (Cloudflare Registrar per spec §1).
+- **Activate verified-crawler serving** (WU-AccessGate, 2026-07-23): flip `Seo:TrustVerifiedBots`
+  once the ForwardedHeaders/origin-lockdown item above lands, **and verify the actual Cloudflare
+  verified-bot header contract for the account's plan at that time** — `VerifiedBotMiddleware`'s
+  `cf-verified-bot` header name is a stub pending the real product tier. Until flipped, crawlers
+  get the interstitial (Pattern A) — deliberate, not a gap.
 - **Legal/policy track** (decision row 10 — ToS, privacy policy, DMCA agent, moderation
-  obligations): non-engineering, runs parallel, gates launch.
+  obligations): non-engineering, runs parallel, gates launch. Two WU-AccessGate additions to the
+  privacy-policy/counsel list: document the two first-party cookies (auth session +
+  `canalave.prefs` consent cookie — no banner, functional-cookie rationale in
+  `access-gating-first-principles.md` §10), and finalize the consent interstitial's willingness
+  wording (interim AO3-style copy shipped; `ContentGateInterstitial.razor` carries the note).
 
 ---
 

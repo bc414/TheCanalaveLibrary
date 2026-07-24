@@ -79,13 +79,11 @@ public static class SeoEndpoints
             await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
 
             // elevated read: index-all — M stories belong in the sitemap (their gated
-            // interstitial is the indexable page). IsTakenDown stays active; drafts and
-            // unapproved stories are excluded by status.
+            // interstitial is the indexable page). IsTakenDown stays active, and the
+            // "StoryStatus" filter (anonymous scope → public statuses only) excludes
+            // Draft/PendingApproval/Rejected without an explicit predicate (WU-AccessGate2).
             var rows = await readDb.Stories
                 .IgnoreQueryFilters(["ContentRating"])
-                .Where(s => s.StoryStatusId != StoryStatusEnum.Draft
-                            && s.StoryStatusId != StoryStatusEnum.PendingApproval
-                            && s.StoryStatusId != StoryStatusEnum.Rejected)
                 .OrderBy(s => s.StoryId)
                 .Select(s => new
                 {
@@ -95,20 +93,66 @@ public static class SeoEndpoints
                 })
                 .ToListAsync();
 
+            // The other three "original content home" types (settled 2026-07-23: stories +
+            // Public-visibility profiles + groups + published blog posts are IN; chapters ride
+            // story-page links, series/custom lists are rearrangements, tag/search pages are
+            // navigation — all OUT).
+
+            // Profiles: Public visibility only, and deliberately NO <lastmod> — deriving one
+            // from activity would leak activity for users who hid their status.
+            List<int> profileIds = await readDb.Users
+                .Where(u => u.PrivacySettings.ProfileVisibility == ProfileVisibility.Public)
+                .OrderBy(u => u.Id)
+                .Select(u => u.Id)
+                .ToListAsync();
+
+            // Groups: all, including M-audience (index-all — the gated page is indexable).
+            var groupRows = await readDb.Groups
+                .IgnoreQueryFilters(["GroupAudience"])
+                .OrderBy(g => g.GroupId)
+                .Select(g => new { g.GroupId, g.DateCreated })
+                .ToListAsync();
+
+            // Blog posts: both TPT subtypes, published only; takedown filter active; the
+            // group-audience gate bypassed for group posts (their gated page is indexable).
+            var profilePostRows = await readDb.ProfileBlogPosts
+                .Where(p => p.IsPublished)
+                .OrderBy(p => p.BlogPostId)
+                .Select(p => new { p.BlogPostId, p.LastUpdatedDate })
+                .ToListAsync();
+            var groupPostRows = await readDb.GroupBlogPosts
+                .IgnoreQueryFilters(["GroupAudience"])
+                .Where(p => p.IsPublished)
+                .OrderBy(p => p.BlogPostId)
+                .Select(p => new { p.BlogPostId, p.LastUpdatedDate })
+                .ToListAsync();
+
             var xml = new StringBuilder();
             xml.Append("""<?xml version="1.0" encoding="UTF-8"?>""").Append('\n');
             xml.Append("""<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">""").Append('\n');
+
+            void AppendUrl(string path, DateTime? lastmod)
+            {
+                xml.Append("  <url><loc>")
+                   .Append(System.Security.SecurityElement.Escape(urls.AbsolutePageUrl(path)));
+                xml.Append("</loc>");
+                if (lastmod is DateTime lm)
+                    xml.Append("<lastmod>").Append(lm.ToString("yyyy-MM-dd")).Append("</lastmod>");
+                xml.Append("</url>\n");
+            }
+
             foreach (var row in rows)
             {
                 string path = string.IsNullOrEmpty(row.Slug)
                     ? $"/story/{row.StoryId}"
                     : $"/story/{row.StoryId}/{row.Slug}";
-                xml.Append("  <url><loc>")
-                   .Append(System.Security.SecurityElement.Escape(urls.AbsolutePageUrl(path)))
-                   .Append("</loc><lastmod>")
-                   .Append(row.LastUpdatedDate.ToString("yyyy-MM-dd"))
-                   .Append("</lastmod></url>\n");
+                AppendUrl(path, row.LastUpdatedDate);
             }
+            foreach (int id in profileIds) AppendUrl($"/user/{id}", lastmod: null);
+            foreach (var g in groupRows) AppendUrl($"/group/{g.GroupId}", g.DateCreated);
+            foreach (var p in profilePostRows) AppendUrl($"/blog/{p.BlogPostId}", p.LastUpdatedDate);
+            foreach (var p in groupPostRows) AppendUrl($"/blog/{p.BlogPostId}", p.LastUpdatedDate);
+
             xml.Append("</urlset>\n");
 
             return Results.Text(xml.ToString(), "application/xml", Encoding.UTF8);

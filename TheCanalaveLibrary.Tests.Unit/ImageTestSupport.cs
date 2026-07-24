@@ -69,4 +69,7 @@ public sealed class StubActiveUserContext : IActiveUserContext
     public bool PrefersAnimatedSprites { get; set; }
     public bool IsModerator { get; set; }
     public bool IsAdmin { get; set; }
+    public Rating MaxRating => ShowMatureContent ? Rating.M : Rating.T;
+    public bool IsVerifiedBot { get; set; }
+    public bool HasAnonRevealed(RevealedEntityType entityType, int entityId) => false;
 }

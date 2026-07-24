@@ -18,6 +18,8 @@ internal sealed class FakeChapterReadService : IChapterReadService
 
     public Task<ChapterReadingDto?> GetChapterForReadingAsync(int storyId, int chapterNumber, int? versionOrder = null) =>
         Task.FromResult<ChapterReadingDto?>(null);
+    public Task<GatedMetadataDto?> GetChapterGateAsync(int storyId, int chapterNumber, int? versionOrder = null) =>
+        Task.FromResult<GatedMetadataDto?>(null);
     public Task<IReadOnlyList<ChapterTocEntryDto>> GetChapterTocAsync(int storyId) =>
         Task.FromResult<IReadOnlyList<ChapterTocEntryDto>>([]);
     public Task<IReadOnlyList<ChapterVersionDto>> GetChapterVersionsAsync(int storyId, int chapterNumber) =>

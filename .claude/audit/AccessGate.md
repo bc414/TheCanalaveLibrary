@@ -117,6 +117,51 @@ the disclosure-line fetch — the count-line rendered during prerender then vani
 Re-fetch added to the restore branch (per-viewer ephemeral state rule); ProfilePage's equivalent
 path was already correct. Group component tests green.
 
+### Stage 5 — WU-AccessGate2 follow-ups (2026-07-24)
+
+Post-completion-review items, all landed; `dotnet test` green: **1961 tests (749 Integration —
+6 new in `StoryVisibilityTests`), 0 failures.** Rulings 2026-07-23: hidden statuses =
+Draft/PendingApproval/Rejected; sitemap = stories + Public profiles + groups + published blog
+posts (chapters/series/lists/tag pages out); series names stay ungated public metadata;
+interface default members replaced with explicit implementations.
+
+- **`"StoryStatus"` named filter** (Class-A confidentiality — the pre-existing gap where
+  draft/pending/rejected stories were served by direct link and listed in search/browse):
+  author-aware clause makes own drafts self-visible everywhere with no per-path elevation; only
+  `ServerModerationReadService` (pending-submissions/queue) and the lineage manage surface add
+  `"StoryStatus"` to their bypass lists. Hidden-status stories 404 — they never gate (the gated
+  reads bypass `ContentRating` only). Sitemap's explicit status predicate removed (filter-driven).
+  This also resolved the recorded quirk: pending M stories no longer appear in the authored-tab
+  disclosure count.
+- **`GetChapterGateAsync`** (fixes the WU-AccessGate regression): one chapter-level
+  gated-existence read covering both the M-story case and the M-alternate-version-of-a-T-story
+  case (which briefly had NO consent path — silent 404); `ChapterReadingPage` now makes a single
+  fallback call; a story reveal unlocks its M versions (pinned in `StoryVisibilityTests`).
+- **Interface rigor:** the three `IActiveUserContext` consent members are abstract with explicit
+  implementations in all five implementors (Server real sources; WASM documented deliberate
+  constants; Fake/Stub test knobs; design-time anonymous) — the default-interface-member
+  shortcut was removed per the "best foundation" ruling.
+- **Sitemap expansion:** + Public-visibility profiles (deliberately no lastmod — activity leak),
+  all groups incl. M-audience, published blog posts (both TPT subtypes). Detail: `audit/Seo.md`.
+- **Polish:** interstitial emits minimal OG (title + site-default image, no description — the
+  un-consented rule extends to unfurls); `SubjectNoun` copy variant for an M post whose consent
+  target is its group; external-login signups verified to already reach `/welcome` via the
+  confirm-email flow (no change needed); Phase-7 checklist lines added (`middle_plan_v2.md`);
+  WU-AccountEnforcement pointer added (`workplan.md`).
+- **Deliberately deferred, recorded:** rate limiting on consent endpoints (cheap, self-scoped;
+  revisit on abuse); spotlight non-M pool floor (operational; a site-settings knob if it bites);
+  series derived rating (ruled: public metadata).
+
+**How verified:** Integration (`StoryVisibilityTests`: hidden-status invisibility + author
+self-visibility + mod-queue bypass + listings exclusion + disclosure exclusion + personalScope
+draft hydration + version-gate consent path incl. reveal unlock + expanded sitemap in/out).
+Manual band (seeded server): draft/pending 404 as anon; pending-M gate returns null (no
+acknowledgment); published-M gate unchanged; sitemap counts (6 public profiles — private
+excluded, 3 groups, 2 blog posts, zero hidden-status stories); interstitial og:title present;
+default search listing = exactly the 8 public-status non-M stories. Browser band: AuthorAlpha
+sees own Draft story page with Edit affordances; AdminUser's `/mod/submissions` lists both
+pending stories (E and M).
+
 **Tests retired/amended:** none removed — `ContentRatingFilterTests.MatureRatedStory_IsInvisible…`
 still passes (it pins raw filter mechanics; service-level policy elevates per-path) and
 `BookshelfStoryIdsTests` pins id-collection (hydration, not ids, is where personalScope acts).

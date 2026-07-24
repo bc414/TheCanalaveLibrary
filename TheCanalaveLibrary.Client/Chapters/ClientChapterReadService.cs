@@ -14,6 +14,16 @@ public class ClientChapterReadService(HttpClient http) : IChapterReadService
     /// <summary>Exposed to the write subclass — primary-ctor params can't be shared directly.</summary>
     protected HttpClient Http { get; } = http;
 
+    public async Task<GatedMetadataDto?> GetChapterGateAsync(
+        int storyId,
+        int chapterNumber,
+        int? versionOrder = null)
+    {
+        string query = versionOrder.HasValue ? $"?versionOrder={versionOrder.Value}" : string.Empty;
+        return await Http.GetNullableFromJsonAsync<GatedMetadataDto?>(
+            $"api/chapters/{storyId}/{chapterNumber}/gate{query}");
+    }
+
     public async Task<ChapterReadingDto?> GetChapterForReadingAsync(
         int storyId,
         int chapterNumber,

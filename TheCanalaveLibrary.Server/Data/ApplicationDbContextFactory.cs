@@ -39,5 +39,8 @@ public sealed class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Ap
         public bool PrefersAnimatedSprites => true;
         public bool IsModerator => false;
         public bool IsAdmin => false;
+        public Rating MaxRating => Rating.T;   // anonymous ceiling — design-time never reads data
+        public bool IsVerifiedBot => false;
+        public bool HasAnonRevealed(RevealedEntityType entityType, int entityId) => false;
     }
 }

@@ -127,7 +127,7 @@ public class ServerModerationReadService(
             from s in readDb.Stories
                 // elevated read: pending submissions are a work surface, not scoped by the
                 // moderator's personal ContentRating/ShowMatureContent preference.
-                .IgnoreQueryFilters(["IsTakenDown", "ContentRating"])
+                .IgnoreQueryFilters(["IsTakenDown", "ContentRating", "StoryStatus"])
                 .Where(s => s.StoryStatusId == StoryStatusEnum.PendingApproval)
             join sl in readDb.StoryListings on s.StoryId equals sl.StoryId
             join sd in readDb.StoryDetails on s.StoryId equals sd.StoryId
@@ -178,7 +178,7 @@ public class ServerModerationReadService(
                         from s in readDb.Stories
                             // elevated read: mod queue is a work surface — sees taken-down content
                             // and is not scoped by the moderator's personal ContentRating preference.
-                            .IgnoreQueryFilters(["IsTakenDown", "ContentRating"])
+                            .IgnoreQueryFilters(["IsTakenDown", "ContentRating", "StoryStatus"])
                             .Where(s => intIds.Contains(s.StoryId))
                         join sl in readDb.StoryListings on s.StoryId equals sl.StoryId
                         join sd in readDb.StoryDetails on s.StoryId equals sd.StoryId

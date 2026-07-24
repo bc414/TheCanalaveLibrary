@@ -47,10 +47,10 @@ public class ServerStoryLineageReadService(
         // can always see and manage their own links even if the other side's story has since gone
         // mature/taken-down for them (this is a management page, not a discovery surface).
         List<StoryLineageOutgoingDto> outgoing = await (
-            from sl in readDb.StoryLineages.IgnoreQueryFilters(["ContentRating", "IsTakenDown"])
-            join source in readDb.Stories.IgnoreQueryFilters(["ContentRating", "IsTakenDown"])
+            from sl in readDb.StoryLineages.IgnoreQueryFilters(["ContentRating", "IsTakenDown", "StoryStatus"])
+            join source in readDb.Stories.IgnoreQueryFilters(["ContentRating", "IsTakenDown", "StoryStatus"])
                 on sl.SourceStoryId equals source.StoryId
-            join target in readDb.Stories.IgnoreQueryFilters(["ContentRating", "IsTakenDown"])
+            join target in readDb.Stories.IgnoreQueryFilters(["ContentRating", "IsTakenDown", "StoryStatus"])
                 on sl.TargetStoryId equals target.StoryId
             where source.AuthorId == userId
             orderby sl.DateCreated descending
@@ -65,10 +65,10 @@ public class ServerStoryLineageReadService(
             .ToListAsync();
 
         List<StoryLineageIncomingRequestDto> incoming = await (
-            from sl in readDb.StoryLineages.IgnoreQueryFilters(["ContentRating", "IsTakenDown"])
-            join source in readDb.Stories.IgnoreQueryFilters(["ContentRating", "IsTakenDown"])
+            from sl in readDb.StoryLineages.IgnoreQueryFilters(["ContentRating", "IsTakenDown", "StoryStatus"])
+            join source in readDb.Stories.IgnoreQueryFilters(["ContentRating", "IsTakenDown", "StoryStatus"])
                 on sl.SourceStoryId equals source.StoryId
-            join target in readDb.Stories.IgnoreQueryFilters(["ContentRating", "IsTakenDown"])
+            join target in readDb.Stories.IgnoreQueryFilters(["ContentRating", "IsTakenDown", "StoryStatus"])
                 on sl.TargetStoryId equals target.StoryId
             where target.AuthorId == userId && sl.StatusId == StoryLineageStatus.Pending
             orderby sl.DateCreated descending

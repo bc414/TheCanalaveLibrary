@@ -178,3 +178,15 @@ ForwardedHeaders/origin-lockdown work.
 pointer; sitemap contains an M story; stale slug → 301 with exact canonical Location; gate
 endpoint JSON). Manual band: curl of all three surfaces against the seeded server (robots body,
 sitemap `<loc>` entries, 301 redirect_url). Feature 64 grid row → 5.
+
+**Sitemap expanded (WU-AccessGate2, 2026-07-24; settled paradigm: "orthogonal original-content
+homes in, rearrangements/navigation out"):** + Public-visibility profiles (`/user/{id}` — no
+`<lastmod>`, deliberately: deriving one from activity would leak activity for users who hid
+their status), all groups incl. M-audience (`/group/{id}`, lastmod = DateCreated), and published
+blog posts of both TPT subtypes (`/blog/{id}`, GroupAudience bypassed for group posts — their
+gated page is the indexable artifact). OUT by ruling: chapters (story URL is the canonical
+entry; crawlers follow story-page links), series and custom lists (rearrangements of existing
+stories), tag/search/discover pages (navigation). Story rows now rely on the `"StoryStatus"`
+filter instead of an explicit status predicate. Verified in
+`StoryVisibilityTests.Sitemap_IncludesProfilesGroupsBlogs_ExcludesPrivateAndHidden` + seeded
+curl counts.

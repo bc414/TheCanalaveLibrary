@@ -26,6 +26,20 @@ public interface IChapterReadService
         int? versionOrder = null);
 
     /// <summary>
+    /// The chapter page's gated-existence read (WU-AccessGate2): when
+    /// <see cref="GetChapterForReadingAsync"/> returned null, distinguishes "the requested
+    /// chapter/version exists but its effective rating exceeds the viewer's ceiling" (returns
+    /// story-target interstitial metadata — covers both an M story's chapters AND an M alternate
+    /// version of a non-M story; one story reveal unlocks either) from truly absent/unpublished
+    /// (null → real 404). Status and takedown filters stay active — hidden-status stories never
+    /// gate, they 404.
+    /// </summary>
+    Task<GatedMetadataDto?> GetChapterGateAsync(
+        int storyId,
+        int chapterNumber,
+        int? versionOrder = null);
+
+    /// <summary>
     /// Returns the ordered table-of-contents for a story — all chapters, ordered by
     /// <c>ChapterNumber</c>. Includes a flag indicating whether each chapter has alternate
     /// versions accessible to the current viewer.

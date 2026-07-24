@@ -35,15 +35,17 @@ public interface IActiveUserContext
     bool IsAdmin { get; }
 
     // ── Viewer consent state (WU-AccessGate; identity-and-authorization.md §"Viewer Consent
-    //    State"). Default interface implementations keep the many existing implementations
-    //    compiling — only ServerActiveUserContext overrides them with real sources. ──
+    //    State"). Abstract by design — every implementation states its sources explicitly
+    //    (default interface members were tried and replaced 2026-07-23: silent `false` defaults
+    //    hid which implementations actually participate in consent; explicit one-liners keep
+    //    the behavior visible where it lives). ──
 
     /// <summary>
-    /// The Discovery-plane rating ceiling — the single source for the previously five-fold
-    /// duplicated <c>ShowMatureContent ? M : T</c> derivation. Reveals do NOT raise this
-    /// (they are per-item, Direct-navigation-plane consent — see <c>RevealCheck</c>).
+    /// The Discovery-plane rating ceiling — the single derivation
+    /// <c>ShowMatureContent ? M : T</c>, stated once per implementation. Reveals do NOT raise
+    /// this (they are per-item, Direct-navigation-plane consent — see <c>RevealCheck</c>).
     /// </summary>
-    Rating MaxRating => ShowMatureContent ? Rating.M : Rating.T;
+    Rating MaxRating { get; }
 
     /// <summary>
     /// True when the request comes from a cryptographically/infrastructure-verified search
@@ -51,7 +53,7 @@ public interface IActiveUserContext
     /// Cloudflare trust boundary lands — spoofable before origin lockdown). Verified bots are
     /// served full content on gated pages (Pattern B).
     /// </summary>
-    bool IsVerifiedBot => false;
+    bool IsVerifiedBot { get; }
 
     /// <summary>
     /// ANONYMOUS viewers' per-item consent, read from the prefs cookie. Always false for
@@ -59,7 +61,7 @@ public interface IActiveUserContext
     /// checked by read services via <c>RevealCheck</c>, because this context is deliberately
     /// DbContext-free (the circular-dependency rule in this type's doc comment).
     /// </summary>
-    bool HasAnonRevealed(RevealedEntityType entityType, int entityId) => false;
+    bool HasAnonRevealed(RevealedEntityType entityType, int entityId);
 }
 
 /// <summary>

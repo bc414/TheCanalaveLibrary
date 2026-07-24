@@ -50,4 +50,14 @@ public class WasmActiveUserContext(AuthenticationStateProvider authenticationSta
 
     public bool IsModerator => Principal.IsInRole("Moderator");
     public bool IsAdmin => Principal.IsInRole("Admin");
+
+    public Rating MaxRating => ShowMatureContent ? Rating.M : Rating.T;
+
+    // Deliberately constant on WASM (WU-AccessGate; identity-and-authorization.md §"Viewer
+    // Consent State"): crawlers never reach the Client host, and anonymous reveals live in the
+    // prefs cookie which every HTTP call carries to the SERVER context — nothing in WASM
+    // consumes either value (SharedUI never injects this interface). Explicit rather than a
+    // hidden interface default so the non-participation is visible here.
+    public bool IsVerifiedBot => false;
+    public bool HasAnonRevealed(RevealedEntityType entityType, int entityId) => false;
 }

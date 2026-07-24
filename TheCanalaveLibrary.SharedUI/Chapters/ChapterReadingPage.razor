@@ -298,13 +298,14 @@ else
 
         if (Chapter is null)
         {
-            // Gated-existence read (WU-AccessGate): the chapter page gates on its PARENT STORY —
-            // a real answer replacing the old VersionOrder.HasValue guess, which showed a false
-            // "requires mature content" for any nonexistent versioned URL of any story. An M
-            // story the viewer hasn't consented to → interstitial (one story consent covers the
-            // whole subtree); anything else null here → real 404. Supplementary loads are
-            // deliberately skipped — no body data is fetched for an un-consented viewer.
-            _gate = await StoryReadService.GetStoryGateAsync(StoryId);
+            // Gated-existence read (WU-AccessGate; widened WU-AccessGate2): one chapter-level
+            // call answers "did the requested chapter/version exist and get RATING-blocked?" —
+            // covering both an M story's chapters and an M alternate version of a non-M story
+            // (the case the old VersionOrder.HasValue guess mishandled, and which briefly had NO
+            // consent path). Reveal target is always the story — one consent covers the subtree.
+            // Anything else null here → real 404. Supplementary loads are deliberately skipped —
+            // no body data is fetched for an un-consented viewer.
+            _gate = await ChapterReadService.GetChapterGateAsync(StoryId, ChapterNumber, VersionOrder);
             _isLoading = false;
             if (_gate is null)
                 NavigationManager.NotFound();
