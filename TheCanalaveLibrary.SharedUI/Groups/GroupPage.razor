@@ -308,6 +308,12 @@ else
                 _interactionStates = await InteractionService.GetStatesByStoryIdsAsync(storyIds);
             }
 
+            // Mature count-line disclosure is per-viewer ephemeral (not persisted) — without this
+            // re-fetch it rendered during prerender then vanished at hydration (WU-AccessGate
+            // restore-path fix, found in post-completion review).
+            if (Group is not null && Group.StoryIds.Count > 0)
+                _gatedItems = await StoryService.GetGatedCardsAsync(Group.StoryIds);
+
             _isLoading = false;
         }
 

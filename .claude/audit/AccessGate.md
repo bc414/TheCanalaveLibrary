@@ -112,6 +112,11 @@ pending-approval M story appears in the authored-tab disclosure count exactly as
 pending-approval T story appears in the visible deck. Revisit both together if status-filtering
 of authored tabs is ever tightened.
 
+**Post-completion review fix (2026-07-23):** GroupPage's [PersistentState] restore path skipped
+the disclosure-line fetch — the count-line rendered during prerender then vanished at hydration.
+Re-fetch added to the restore branch (per-viewer ephemeral state rule); ProfilePage's equivalent
+path was already correct. Group component tests green.
+
 **Tests retired/amended:** none removed — `ContentRatingFilterTests.MatureRatedStory_IsInvisible…`
 still passes (it pins raw filter mechanics; service-level policy elevates per-path) and
 `BookshelfStoryIdsTests` pins id-collection (hydration, not ids, is where personalScope acts).
