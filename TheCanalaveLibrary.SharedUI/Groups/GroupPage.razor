@@ -18,7 +18,16 @@
    [PersistentState] on Group/Stories/BlogPosts/TotalBlogPosts eliminates the prerender→interactive
    double-fetch; per-viewer state (_currentUserRole, _interactionStates) stays ephemeral — same
    judgment as StoryPage's _usiState (deterministic per viewer, re-fetch is flicker-free).
-   WU32. *@
+   WU32.
+
+   Story↔folder membership (WU-GroupsL5b, 2026-07-24 — closes hidden-deferrals B6): the folder
+   tree now renders each folder's actual stories (title + link) for EVERY viewer — visibility was
+   never gated, only the group/folder write actions are (settled WU32: RequireAdminAsync). Admins
+   additionally get a per-story "move to folder" control (StoryDeck's CardOverlay slot — see
+   CustomListPage.OwnerRemoveOverlay for the same pattern) and a per-folder unassign (×) control,
+   plus the group-removal action HandleStoryRemovedAsync already implemented but previously
+   unwired to any button. Group.Stories/GroupFolderDto.Stories carry GroupStoryDto (GroupStoryId +
+   StoryId) — every write method here is keyed by GroupStoryId, not StoryId. *@
 
 @if (_isLoading)
 {
@@ -151,8 +160,16 @@ else
                                UserStoryInteractionStates="_interactionStates"
                                CurrentUserId="_currentUserId"
                                EmptyMessage="No stories in this group yet."
-                               OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
+                               OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))"
+                               CardOverlay="@AdminStoryOverlay" />
                     <ReportDialog @ref="_reportDialog" />
+                    <ConfirmDialog @bind-IsOpen="_confirmRemoveOpen" Title="Remove story?" IsDestructive="true"
+                                   ConfirmText="Remove" CancelText="Cancel" OnConfirm="HandleRemoveConfirmedAsync">
+                        <p class="text-(--color-text)">
+                            Remove "@_pendingRemoveStoryTitle" from this group? This can't be undone &mdash;
+                            the story itself is not deleted.
+                        </p>
+                    </ConfirmDialog>
                 </section>
 
                 @* Blog posts ─────────────────────────────────────────────────────── *@
@@ -269,6 +286,20 @@ else
     private ReportDialog _reportDialog = default!;
     private bool _showAddStory;
 
+    // ── Story↔folder lookups (WU-GroupsL5b) — rebuilt from Group/Stories whenever either
+    // changes (RebuildStoryLookups). Ephemeral, not persisted — pure derived view of the
+    // persisted Group/Stories fields, same as _interactionStates.
+    private Dictionary<int, int> _groupStoryIdByStoryId = new();
+    private Dictionary<int, List<int>> _folderIdsByStoryId = new();
+    private List<(int Id, string Label)> _folderOptions = [];
+    private Dictionary<int, StoryListingDto> _storiesById = new();
+
+    // Remove-from-group confirm state (admin-only trigger; two-step, mirrors
+    // GroupFolderManagementPage's delete-folder pattern).
+    private int? _pendingRemoveGroupStoryId;
+    private string _pendingRemoveStoryTitle = string.Empty;
+    private bool _confirmRemoveOpen;
+
     // Open Graph/Twitter meta (WU-Seo). No cover field on GroupDetailDto — falls back to the
     // site-default image (see audit/Seo.md "Open" re: SVG re-use).
     private string? OgDescription => Group is null ? null : SocialDescriptionHelper.Clean(Group.Description);
@@ -311,9 +342,10 @@ else
             // Mature count-line disclosure is per-viewer ephemeral (not persisted) — without this
             // re-fetch it rendered during prerender then vanished at hydration (WU-AccessGate
             // restore-path fix, found in post-completion review).
-            if (Group is not null && Group.StoryIds.Count > 0)
-                _gatedItems = await StoryService.GetGatedCardsAsync(Group.StoryIds);
+            if (Group is not null && Group.Stories.Count > 0)
+                _gatedItems = await StoryService.GetGatedCardsAsync(Group.Stories.Select(s => s.StoryId).ToList());
 
+            RebuildStoryLookups();
             _isLoading = false;
         }
 
@@ -353,17 +385,18 @@ else
         if (Group is not null)
         {
             // Role and stories batch-loaded in parallel.
+            List<int> groupStoryIds = Group.Stories.Select(s => s.StoryId).ToList();
             Task<GroupRole?> roleTask      = GroupService.GetCurrentUserRoleAsync(GroupId);
             Task<StoryListingDto[]> storyTask =
-                Group.StoryIds.Count > 0
-                    ? StoryService.GetListingsByIdsAsync(Group.StoryIds)
+                groupStoryIds.Count > 0
+                    ? StoryService.GetListingsByIdsAsync(groupStoryIds)
                     : Task.FromResult(Array.Empty<StoryListingDto>());
             // Mature count-line disclosure (WU-AccessGate): the M member stories the viewer's
             // ceiling hid — a group reveal covers group-OWNED content, member stories still gate
             // individually, so the disclosure keeps the bridge visible inside the group too.
             Task<IReadOnlyList<GatedMetadataDto>> gatedTask =
-                Group.StoryIds.Count > 0
-                    ? StoryService.GetGatedCardsAsync(Group.StoryIds)
+                groupStoryIds.Count > 0
+                    ? StoryService.GetGatedCardsAsync(groupStoryIds)
                     : Task.FromResult<IReadOnlyList<GatedMetadataDto>>([]);
             Task<(BlogPostListingDto[], int)> blogTask =
                 BlogPostService.GetByGroupAsync(GroupId, page: 1, pageSize: 10);
@@ -384,6 +417,8 @@ else
                 IReadOnlyList<int> storyIds = Stories.Select(s => s.StoryId).ToArray();
                 _interactionStates = await InteractionService.GetStatesByStoryIdsAsync(storyIds);
             }
+
+            RebuildStoryLookups();
         }
 
         _isLoading = false;
@@ -431,42 +466,208 @@ else
         _showAddStory = false;
     }
 
-    // ── Folder tree (inline recursive render fragment) ────────────────────────────
+    // ── Folder tree (recursive render — Razor template, not RenderTreeBuilder: this method
+    // gained real interactive children (the per-story unassign button) — the declarative
+    // template form is far less error-prone for that than hand-sequencing OpenElement/
+    // AddAttribute calls. Same idiom as GroupFolderManagementPage.RenderFolderTree. ──────────
 
-    private RenderFragment RenderFolders(IReadOnlyList<GroupFolderDto> folders) => builder =>
+    private RenderFragment RenderFolders(IReadOnlyList<GroupFolderDto> folders) =>
+        @<ul class="flex flex-col gap-1 text-sm">
+            @foreach (GroupFolderDto folder in folders)
+            {
+                <li class="flex flex-col gap-1">
+                    <div class="flex items-center gap-1 text-(--color-text)">
+                        <span>📁 @folder.Name</span>
+                        @* Deliberate zero-trace: an M-capped folder inside an E-audience
+                           (Standard) group renders as an unlabeled folder to mature-off viewers —
+                           suppressing the "(M)" badge rather than advertising a mature shelf
+                           (2026-07-19). *@
+                        @if (folder.MaxRating != Rating.M)
+                        {
+                            <span class="text-xs text-(--color-text-muted)">(@folder.MaxRating)</span>
+                        }
+                    </div>
+                    @* Folder contents — visible to EVERY viewer (never gated; only the
+                       write actions below are admin-only, WU32 RequireAdminAsync). *@
+                    @if (folder.Stories.Count > 0)
+                    {
+                        <ul class="ml-5 flex flex-col gap-0.5">
+                            @foreach (GroupStoryDto groupStory in folder.Stories)
+                            {
+                                if (_storiesById.TryGetValue(groupStory.StoryId, out StoryListingDto? story))
+                                {
+                                    <li class="flex items-center justify-between gap-1 text-xs">
+                                        <a href="/story/@story.StoryId"
+                                           class="truncate text-(--color-action-ink) hover:underline">@story.Title</a>
+                                        @if (_currentUserRole == GroupRole.Admin)
+                                        {
+                                            <button type="button"
+                                                    aria-label="@($"Remove {story.Title} from {folder.Name}")"
+                                                    class="shrink-0 text-(--color-danger) hover:underline"
+                                                    @onclick="() => HandleUnassignAsync(groupStory.GroupStoryId, folder.GroupFolderId)">
+                                                &times;
+                                            </button>
+                                        }
+                                    </li>
+                                }
+                            }
+                        </ul>
+                    }
+                    @if (folder.Children.Count > 0)
+                    {
+                        <div class="ml-4">
+                            @RenderFolders(folder.Children)
+                        </div>
+                    }
+                </li>
+            }
+        </ul>;
+
+    // ── Story↔folder lookups + admin write actions (WU-GroupsL5b) ────────────────────
+
+    /// <summary>
+    /// Rebuilds every derived story↔folder lookup from Group/Stories — call after either changes
+    /// (both OnInitializedAsync's restore branch and the end of LoadGroupAsync). Pure view, not
+    /// persisted; cheap (group-scale collections).
+    /// </summary>
+    private void RebuildStoryLookups()
     {
-        builder.OpenElement(0, "ul");
-        builder.AddAttribute(1, "class", "flex flex-col gap-1 text-sm");
+        _groupStoryIdByStoryId = Group?.Stories.ToDictionary(s => s.StoryId, s => s.GroupStoryId)
+            ?? new Dictionary<int, int>();
+        _storiesById = (Stories ?? []).ToDictionary(s => s.StoryId);
+
+        _folderIdsByStoryId = new Dictionary<int, List<int>>();
+        _folderOptions = [];
+        if (Group is not null)
+        {
+            CollectFolderMembership(Group.FolderTree);
+            FlattenFoldersForSelect(Group.FolderTree, depth: 0);
+        }
+    }
+
+    private void CollectFolderMembership(IReadOnlyList<GroupFolderDto> folders)
+    {
         foreach (GroupFolderDto folder in folders)
         {
-            builder.OpenElement(2, "li");
-            builder.OpenElement(3, "div");
-            builder.AddAttribute(4, "class", "flex items-center gap-1 text-(--color-text)");
-            builder.OpenElement(5, "span");
-            builder.AddContent(6, "📁 " + folder.Name);
-            builder.CloseElement(); // span
-            // Deliberate zero-trace: an M-capped folder inside an E-audience (Standard) group
-            // renders as an unlabeled folder to mature-off viewers — suppressing the "(M)" badge
-            // rather than advertising a mature shelf. Documented 2026-07-19 (was uncommented).
-            if (folder.MaxRating != Rating.M)
+            foreach (GroupStoryDto groupStory in folder.Stories)
             {
-                builder.OpenElement(7, "span");
-                builder.AddAttribute(8, "class", "text-xs text-(--color-text-muted)");
-                builder.AddContent(9, $"({folder.MaxRating})");
-                builder.CloseElement(); // span
+                if (!_folderIdsByStoryId.TryGetValue(groupStory.StoryId, out List<int>? list))
+                    _folderIdsByStoryId[groupStory.StoryId] = list = [];
+                list.Add(folder.GroupFolderId);
             }
-            builder.CloseElement(); // div
-            if (folder.Children.Count > 0)
-            {
-                builder.OpenElement(10, "div");
-                builder.AddAttribute(11, "class", "ml-4");
-                builder.AddContent(12, RenderFolders(folder.Children));
-                builder.CloseElement(); // div
-            }
-            builder.CloseElement(); // li
+            CollectFolderMembership(folder.Children);
         }
-        builder.CloseElement(); // ul
-    };
+    }
+
+    private void FlattenFoldersForSelect(IReadOnlyList<GroupFolderDto> folders, int depth)
+    {
+        foreach (GroupFolderDto folder in folders)
+        {
+            _folderOptions.Add((folder.GroupFolderId, new string('—', depth) + " " + folder.Name));
+            FlattenFoldersForSelect(folder.Children, depth + 1);
+        }
+    }
+
+    /// <summary>
+    /// Per-story admin overlay (StoryDeck's CardOverlay slot — a folder-move select + a
+    /// remove-from-group trigger). Null for non-admins, preserving every other viewer's rendering
+    /// exactly (StoryDeck's own "additive only" contract on that slot).
+    /// </summary>
+    private RenderFragment<StoryListingDto>? AdminStoryOverlay =>
+        _currentUserRole != GroupRole.Admin ? null : story =>
+            @<div class="pointer-events-auto flex flex-col gap-1 rounded-md border border-(--color-border) bg-(--color-surface-raised) p-1.5 text-xs shadow-medium">
+                @{
+                    int groupStoryId = _groupStoryIdByStoryId.GetValueOrDefault(story.StoryId);
+                    List<int> currentFolders = _folderIdsByStoryId.GetValueOrDefault(story.StoryId) ?? [];
+                }
+                @if (currentFolders.Count <= 1)
+                {
+                    <select aria-label="@($"Move {story.Title} to folder")"
+                            class="rounded border border-(--color-border) bg-(--color-surface) px-1 py-0.5 text-xs text-(--color-text)"
+                            @onchange="@(e => HandleFolderAssignmentChangedAsync(groupStoryId, currentFolders, ParseFolderSelectValue(e.Value)))">
+                        <option value="" selected="@(currentFolders.Count == 0)">(unfiled)</option>
+                        @foreach ((int id, string label) in _folderOptions)
+                        {
+                            <option value="@id" selected="@(currentFolders.Contains(id))">@label</option>
+                        }
+                    </select>
+                }
+                else
+                {
+                    @* Genuinely-possible edge case (GroupStory.GroupFolders is a many-to-many at
+                       the data layer) — don't have the dropdown silently guess which one "wins";
+                       point at the per-folder × controls in the tree to resolve it explicitly. *@
+                    <span class="text-(--color-text-muted)">In @currentFolders.Count folders &mdash; use the folder list to remove one</span>
+                }
+                <button type="button" class="text-left text-(--color-danger) hover:underline"
+                        @onclick="() => BeginRemoveStory(groupStoryId, story.Title)">
+                    Remove from group
+                </button>
+            </div>;
+
+    private static int? ParseFolderSelectValue(object? value) =>
+        value is string s && int.TryParse(s, out int id) ? id : null;
+
+    /// <summary>
+    /// Reconciles a story's folder membership toward <paramref name="newFolderId"/> (null =
+    /// unfiled) from its <paramref name="currentFolderIds"/> — only ever called with 0 or 1
+    /// current folders (see the &gt;1 branch in <see cref="AdminStoryOverlay"/>, which never
+    /// offers this control).
+    /// </summary>
+    private async Task HandleFolderAssignmentChangedAsync(
+        int groupStoryId, IReadOnlyList<int> currentFolderIds, int? newFolderId)
+    {
+        try
+        {
+            foreach (int oldFolderId in currentFolderIds)
+            {
+                if (oldFolderId != newFolderId)
+                    await GroupService.UnassignStoryFromFolderAsync(groupStoryId, oldFolderId);
+            }
+            if (newFolderId is int folderId && !currentFolderIds.Contains(folderId))
+                await GroupService.AssignStoryToFolderAsync(groupStoryId, folderId);
+            await LoadGroupAsync();
+        }
+        catch (ContentRatingExceededException ex)
+        {
+            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+        }
+    }
+
+    /// <summary>Per-folder × control in the tree — unassigns from exactly that one folder.</summary>
+    private async Task HandleUnassignAsync(int groupStoryId, int groupFolderId)
+    {
+        try
+        {
+            await GroupService.UnassignStoryFromFolderAsync(groupStoryId, groupFolderId);
+            await LoadGroupAsync();
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+        }
+    }
+
+    private void BeginRemoveStory(int groupStoryId, string storyTitle)
+    {
+        _pendingRemoveGroupStoryId = groupStoryId;
+        _pendingRemoveStoryTitle = storyTitle;
+        _confirmRemoveOpen = true;
+    }
+
+    /// <summary>ConfirmDialog's OnConfirm — delegates to the already-implemented, previously
+    /// unwired HandleStoryRemovedAsync (no change needed to that handler itself).</summary>
+    private async Task HandleRemoveConfirmedAsync()
+    {
+        if (_pendingRemoveGroupStoryId is int groupStoryId)
+            await HandleStoryRemovedAsync(groupStoryId);
+        _pendingRemoveGroupStoryId = null;
+        _pendingRemoveStoryTitle = string.Empty;
+    }
 
     // ── Story management callbacks ────────────────────────────────────────────────
 

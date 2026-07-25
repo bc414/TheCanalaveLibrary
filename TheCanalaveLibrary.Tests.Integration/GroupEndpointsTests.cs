@@ -48,6 +48,20 @@ public class GroupEndpointsTests(PostgresFixture postgres) : IntegrationTestBase
         await db.SaveChangesAsync();
     }
 
+    /// <summary>Adds a fresh story to the group (as whichever user is currently active) and
+    /// returns the new row's <c>GroupStoryId</c> — every folder-write route is keyed by it.</summary>
+    private async Task<int> AddStoryAndGetGroupStoryIdAsync(int groupId)
+    {
+        int storyId = await SeedStoryAsync();
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IGroupWriteService svc = scope.ServiceProvider.GetRequiredService<IGroupWriteService>();
+        await svc.AddStoryAsync(new AddGroupStoryDto { GroupId = groupId, StoryId = storyId });
+
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return (await db.GroupStories.SingleAsync(gs => gs.GroupId == groupId && gs.StoryId == storyId))
+            .GroupStoryId;
+    }
+
     // ── Reads: PagedResult<T> boundary ──────────────────────────────────────────
 
     [Fact]
@@ -229,6 +243,60 @@ public class GroupEndpointsTests(PostgresFixture postgres) : IntegrationTestBase
         using IServiceScope verifyScope = Factory.Services.CreateScope();
         ApplicationDbContext db = verifyScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         (await db.GroupFolders.FindAsync(folderId)).Should().BeNull();
+    }
+
+    // ── Story↔folder assignment — the D3.1 fix, over the wire ────────────────────
+
+    [Fact]
+    public async Task PutStoryFolder_CrossGroupFolder_Returns404()
+    {
+        int adminId = await SeedUserAsync("Admin");
+        SetActiveUser(adminId);
+        int groupAId = await SeedGroupWithAdminAsync(adminId);
+        int groupBId = await SeedGroupWithAdminAsync(adminId);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IGroupWriteService svc = scope.ServiceProvider.GetRequiredService<IGroupWriteService>();
+        int folderBId = await svc.CreateFolderAsync(new CreateFolderDto { GroupId = groupBId, Name = "B's Folder" });
+
+        SetActiveUser(adminId);
+        int groupStoryId = await AddStoryAndGetGroupStoryIdAsync(groupAId);
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response =
+            await client.PutAsync($"/api/groups/stories/{groupStoryId}/folder/{folderBId}", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound,
+            "D3.1: a folder belonging to a different group must be rejected exactly like a " +
+            "nonexistent one, over HTTP as well as at the service layer");
+    }
+
+    [Fact]
+    public async Task PutStoryFolder_Admin_Returns204AndAssignsFolder()
+    {
+        int adminId = await SeedUserAsync("Admin");
+        SetActiveUser(adminId);
+        int groupId = await SeedGroupWithAdminAsync(adminId);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IGroupWriteService svc = scope.ServiceProvider.GetRequiredService<IGroupWriteService>();
+        int folderId = await svc.CreateFolderAsync(new CreateFolderDto { GroupId = groupId, Name = "Folder" });
+
+        SetActiveUser(adminId);
+        int groupStoryId = await AddStoryAndGetGroupStoryIdAsync(groupId);
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response =
+            await client.PutAsync($"/api/groups/stories/{groupStoryId}/folder/{folderId}", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+
+        using IServiceScope verifyScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = verifyScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        GroupStory story = await db.GroupStories
+            .Include(gs => gs.GroupFolders)
+            .SingleAsync(gs => gs.GroupStoryId == groupStoryId);
+        story.GroupFolders.Should().ContainSingle(f => f.GroupFolderId == folderId);
     }
 
     [Fact]

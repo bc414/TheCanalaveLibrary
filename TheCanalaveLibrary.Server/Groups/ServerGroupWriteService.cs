@@ -174,7 +174,8 @@ public class ServerGroupWriteService(
             // Tier 3: optional folder assignment.
             if (dto.GroupFolderId.HasValue)
             {
-                await AssignStoryToFolderInternalAsync(groupStory.GroupStoryId, dto.GroupFolderId.Value, story.Rating);
+                await AssignStoryToFolderInternalAsync(
+                    groupStory.GroupStoryId, dto.GroupFolderId.Value, story.Rating, dto.GroupId);
             }
         }
 
@@ -224,7 +225,7 @@ public class ServerGroupWriteService(
         await RequireAdminAsync(gs.GroupId, userId);
 
         Rating storyRating = gs.Story?.Rating ?? Rating.E;
-        await AssignStoryToFolderInternalAsync(groupStoryId, groupFolderId, storyRating);
+        await AssignStoryToFolderInternalAsync(groupStoryId, groupFolderId, storyRating, gs.GroupId);
     }
 
     public async Task UnassignStoryFromFolderAsync(int groupStoryId, int groupFolderId)
@@ -349,11 +350,20 @@ public class ServerGroupWriteService(
             throw new UnauthorizedAccessException("You must be an Admin of this group.");
     }
 
-    private async Task AssignStoryToFolderInternalAsync(int groupStoryId, int groupFolderId, Rating storyRating)
+    private async Task AssignStoryToFolderInternalAsync(
+        int groupStoryId, int groupFolderId, Rating storyRating, int expectedGroupId)
     {
         GroupFolder? folder = await writeDb.GroupFolders
             .FirstOrDefaultAsync(f => f.GroupFolderId == groupFolderId);
         if (folder is null) throw new KeyNotFoundException($"Folder {groupFolderId} not found.");
+
+        // D3.1 (modernization-audit/deferred-work.md §7 "Missing cross-entity ownership
+        // validation"): a folder id from a DIFFERENT group must be rejected exactly like a
+        // nonexistent one — same exception, same message shape — so the response never discloses
+        // whether the id exists in another group. Without this, an admin of Group A could file
+        // Group A's story into Group B's folder just by knowing/guessing its id (2026-07-24).
+        if (folder.GroupId != expectedGroupId)
+            throw new KeyNotFoundException($"Folder {groupFolderId} not found.");
 
         // Tier 3: folder MaxRating ceiling.
         if (storyRating > folder.MaxRating)

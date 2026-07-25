@@ -129,6 +129,15 @@ conventions. **Do not revisit these.** Pointers:
   `RemoveStoryAsync` (admin, cascades folder assignments). All guarded via `RequireAdminAsync` helper.
   Test tier: Integration (`GroupServiceTests`) — waterfall rejection both tiers, admin-only folder ops
   reject non-admins, story add for members.
+- **D3.1 fix (WU-GroupsL5b, 2026-07-25).** `AssignStoryToFolderInternalAsync` never checked
+  `folder.GroupId == groupStory.GroupId` — an admin of group A could file A's story into a
+  group-B folder id via direct API use (`modernization-audit/deferred-work.md` §7, split into
+  D3.1/D3.2 in `hidden-deferrals-tracker.md`, 2026-07-25). Now threads `expectedGroupId` through
+  and rejects a mismatch with `KeyNotFoundException` — identical to a genuinely nonexistent
+  folder, so the response never discloses that the id exists in another group. New Integration
+  coverage at both the service (`GroupServiceTests`) and HTTP (`GroupEndpointsTests`) layers —
+  previously zero tests existed for `AssignStoryToFolderAsync`/`UnassignStoryFromFolderAsync` at
+  all.
 - **L3-Logic — Stage 5 (2026-06-24, WU32).** `CreateFolderDto` with `MaxRating ≤ group cap` constraint.
   `AddGroupStoryDto` carries optional `GroupFolderId`. `ContentRatingExceededException` is a Core domain
   exception. Test tier: Unit — no pure-logic unit test (validation is simple enough; Integration covers).
@@ -146,14 +155,81 @@ conventions. **Do not revisit these.** Pointers:
   `ReorderFolderAsync` SortOrder value-swap — robust to non-contiguous SortOrder, no unique
   constraint on the column). Every write does a full `GetByIdAsync` reload — no local tree
   mutation — so the server stays the single source of truth for uniqueness/cap/ordering.
-  Story→folder assignment (`AssignStoryToFolderAsync`/`UnassignStoryFromFolderAsync`) still has
-  no UI — deliberately out of scope for this page; `GroupFolderDto.StoryIds` already carries what
-  a future assignment surface would need.
+  Story→folder assignment (`AssignStoryToFolderAsync`/`UnassignStoryFromFolderAsync`) is
+  deliberately **not** on this page — it landed on `GroupPage` instead (WU-GroupsL5b, 2026-07-25;
+  see Stage note below) since that's where stories actually render with titles/cards and the
+  viewer's role already loads; this page owns folder CRUD/reorder only.
   Test tier: RazorComponents (`GroupFolderManagementPageTests`, 11 tests — admin gate (member and
   non-member both denied), create dispatch incl. nested `ParentFolderId`, rename dispatch, the
   two-step delete guard, the reorder value-swap + boundary-disabled buttons, validation-error
   surfacing via `InlineAlert`); Integration/Unit tiers for the transport layer are noted on F38's
   new Stage note above.
+
+### WU-GroupsL5b Stage note (2026-07-25) — closes hidden-deferrals B6 + D3.1
+
+**Trigger:** a hidden-deferrals audit (2026-07-24) flagged B6 — `AssignStoryToFolderAsync`/
+`UnassignStoryFromFolderAsync` built and tested but no UI anywhere calls them. Investigating
+surfaced the real blocker: no DTO exposed `GroupStoryId` (every write method needs it; only bare
+`StoryId` existed on `GroupDetailDto.StoryIds`/`GroupFolderDto.StoryIds`). A first-draft fix
+(a new admin-only `GetGroupStoriesAsync` endpoint) was rejected on review — it would have shipped
+admin-only *read* access to data that was never actually gated (write-gating to admins is the
+settled WU32 decision; read-gating was an unexamined default), and it would have left the real gap
+open: `GroupPage.RenderFolders` had never rendered folder **contents** for *any* viewer, admin or
+not, since WU32.
+
+**Fix — retype at the source, not a parallel endpoint.** `GroupDetailDto.StoryIds`/
+`GroupFolderDto.StoryIds` (`IReadOnlyList<int>`) retyped to `IReadOnlyList<GroupStoryDto>`
+(new record, `GroupStoryId` + `StoryId`) in `Core/Groups/`. `ServerGroupReadService.GetByIdAsync`/
+`BuildFolderTreeAsync` updated to project the richer shape. This means `GetByIdAsync` — already
+fetched by `GroupPage` for every viewer, not just admins — carries everything needed in the one
+round trip that already happens; no new endpoint. Blast radius was fully mapped before coding
+(Explore agent + `dotnet build`): 6 consumption-site spots in `GroupPage.razor`, 2 test-fixture
+named-arg renames in `GroupFolderManagementPageTests.cs` — nothing else in the solution touched
+`.StoryIds` on either DTO.
+
+**`GroupPage.razor` — the actual feature:**
+- `RenderFolders` now shows each folder's story titles (linked to `/story/{id}`) for **every
+  viewer**, unconditionally — the display gap this investigation found. Rewritten from imperative
+  `RenderTreeBuilder` calls to a Razor-template recursive fragment (same idiom as
+  `GroupFolderManagementPage.RenderFolderTree`) since it gained real interactive children.
+- Per-folder unassign (×), admin-only, next to each listed story.
+- Per-story assign/reassign + remove-from-group, admin-only, via `StoryDeck`'s existing
+  `CardOverlay` slot (`RenderFragment<StoryListingDto>?`, `StoryDeck.razor:99`) — **no changes to
+  `StoryDeck` itself**. Precedent: `CustomListPage.OwnerRemoveOverlay` (`pointer-events-auto`
+  punched through the slot's `pointer-events-none` wrapper). The folder `<select>` treats
+  story→folder as effectively single-primary (matching `AddGroupStoryDto.GroupFolderId`'s
+  singular add-time intent) but doesn't guess if a story is ever in more than one folder
+  (`GroupStory.GroupFolders` is a genuine many-to-many at the data layer) — it shows that plainly
+  and points at the per-folder × controls instead.
+- **`HandleStoryRemovedAsync` finally has a UI trigger.** It was fully implemented (error
+  handling, reload, the works) but had never been wired to any button — found as a second dead
+  handler during the same investigation, on the identical admin-action surface this WU was
+  already building. Two-step confirmed via `ConfirmDialog`, same pattern as
+  `GroupFolderManagementPage`'s delete-folder flow.
+
+**D3.1 folded in** (see F39 L2 note above) — same method (`AssignStoryToFolderInternalAsync`)
+this WU had to touch anyway.
+
+**Tests:** `GroupServiceTests` +5 (assign/unassign happy paths, the D3.1 cross-group-rejection
+pin, non-admin rejection, `GetByIdAsync`'s `Stories` carrying correct `GroupStoryId`).
+`GroupEndpointsTests` +2 (cross-group → 404 over HTTP, admin assign → 204). New
+`GroupPageTests.cs` (12 tests, RazorComponents — no file existed for this page before): folder
+contents visible to every role incl. anonymous; non-admin sees zero admin controls; assign/
+reassign/unfile dispatch correct id pairs; per-folder unassign dispatches correctly; remove is
+two-step (trigger alone must not call the service). `ClientGroupServiceTests` +1 (deserializing a
+populated `GetByIdAsync` body with the new nested shape — no prior test in that file exercised a
+non-empty response at all).
+
+**Verified:** `dotnet build` clean (confirms the retype's blast radius was fully caught — any
+missed consumer fails to compile, by design). `dotnet test` full suite green: 753 Unit + 556
+RazorComponents + 807 Integration = 2116/2116. `check-design-tokens.ps1` clean for the touched
+file (two pre-existing, unrelated findings elsewhere untouched). Browser-verified live against
+the dev DB: as admin, created a folder, added a story, assigned/reassigned/unassigned it via both
+the per-story overlay and the per-folder ×, removed a story from the group via the confirm
+dialog — `psql`-confirmed `group_stories`↔`group_folder_group_story` ground truth after each
+step. Switched to a non-member seed user (`ReaderGamma`) on the same group: folder contents
+(the story title) rendered correctly, zero admin controls anywhere on the page. Verification data
+cleaned up afterward. Detail: `workplan.md` WU-GroupsL5b; `hidden-deferrals-tracker.md` B6/D3.1.
 - **L4-Style — Stage 5 (2026-06-24, WU32).** Tailwind classes. Visual sign-off is human (Stage 6).
 - **L5 — Stage 2 (corrected 2026-07-12 — was mismarked Stage 5; see F38's L5 note for the general
   correction).** Prior text, retained as the L2/L3 test record: waterfall rejection (both
@@ -200,8 +276,13 @@ conventions. **Do not revisit these.** Pointers:
   `GroupDesktop.razor` / `GroupMobile.razor` (composites: header, join/leave, story deck, folders,
   blog posts, comment section). `GroupBlogPostEditorPage.razor` (`/group/{GroupId}/blog/new`, member gate,
   reuses `BlogPostPropertiesForm`, `CreateGroupBlogPostAsync`).
+  `GroupPage.razor` additionally gained admin story→folder management (assign/reassign/unassign/
+  remove) and folder-contents display for every viewer — WU-GroupsL5b, 2026-07-25, Stage note
+  under F39 above (the story→folder feature itself is F39's territory; this is a structure-layer
+  pointer to where it lives).
   Test tier: RazorComponents (`GroupCardTests`) — name, link, audience badge, member count (singular/plural),
-  description present/absent.
+  description present/absent. `GroupPageTests` (new, WU-GroupsL5b) covers the story-management
+  additions specifically — see F39's Stage note.
 - **L4-Style — Stage 5 (2026-06-24, WU32).** All group components use design-token CSS variables
   (`--color-primary`, `--color-surface`, etc.) and Tailwind v4 utilities throughout. Visual sign-off
   is human (Stage 6).

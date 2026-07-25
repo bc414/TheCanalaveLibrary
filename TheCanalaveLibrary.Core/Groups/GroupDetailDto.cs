@@ -5,6 +5,8 @@ namespace TheCanalaveLibrary.Core;
 /// <see cref="CreatorDisplayName"/> is nullable (creator may be deleted — SET NULL on User delete).
 /// <see cref="CurrentUserRole"/> is null when the viewer is not a member (anonymous or non-member).
 /// <see cref="FolderTree"/> is the root-level folders; each folder carries its own nested children.
+/// <see cref="Stories"/> carries every story in the group with its <see cref="GroupStoryDto.GroupStoryId"/>
+/// (visible to every viewer — visibility was never gated; only the group/folder write actions are).
 /// </summary>
 public record GroupDetailDto(
     int GroupId,
@@ -18,4 +20,4 @@ public record GroupDetailDto(
     DateTime DateCreated,
     GroupRole? CurrentUserRole,
     IReadOnlyList<GroupFolderDto> FolderTree,
-    IReadOnlyList<int> StoryIds);
+    IReadOnlyList<GroupStoryDto> Stories);

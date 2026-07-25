@@ -348,6 +348,113 @@ public class GroupServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // Story↔folder assignment (WU-GroupsL5b, 2026-07-24) — previously zero coverage; folds in
+    // the D3.1 cross-group-ownership fix.
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task AssignStoryToFolder_Admin_AddsStoryToFolder()
+    {
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Group" });
+        int storyId = await SeedStoryAsync();
+        await AddStoryAsync(new AddGroupStoryDto { GroupId = groupId, StoryId = storyId });
+        int folderId = await CreateFolderAsync(new CreateFolderDto { GroupId = groupId, Name = "Folder" });
+
+        GroupDetailDto? before = await GetGroupAsync(groupId);
+        int groupStoryId = before!.Stories.Single().GroupStoryId;
+
+        await AssignStoryToFolderAsync(groupStoryId, folderId);
+
+        GroupDetailDto? after = await GetGroupAsync(groupId);
+        after!.FolderTree.Single(f => f.GroupFolderId == folderId).Stories
+            .Should().ContainSingle(s => s.GroupStoryId == groupStoryId && s.StoryId == storyId);
+    }
+
+    [Fact]
+    public async Task UnassignStoryFromFolder_Admin_RemovesStoryFromFolder()
+    {
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Group" });
+        int storyId = await SeedStoryAsync();
+        int folderId = await CreateFolderAsync(new CreateFolderDto { GroupId = groupId, Name = "Folder" });
+        await AddStoryAsync(new AddGroupStoryDto
+            { GroupId = groupId, StoryId = storyId, GroupFolderId = folderId });
+
+        GroupDetailDto? before = await GetGroupAsync(groupId);
+        int groupStoryId = before!.Stories.Single().GroupStoryId;
+        before.FolderTree.Single().Stories.Should().ContainSingle("sanity check on the add-time assignment");
+
+        await UnassignStoryFromFolderAsync(groupStoryId, folderId);
+
+        GroupDetailDto? after = await GetGroupAsync(groupId);
+        after!.FolderTree.Single(f => f.GroupFolderId == folderId).Stories.Should().BeEmpty();
+        after.Stories.Should().ContainSingle(
+            "unassigning from a folder must not remove the story from the group itself");
+    }
+
+    [Fact]
+    public async Task AssignStoryToFolder_CrossGroupFolder_ThrowsKeyNotFound()
+    {
+        // D3.1 (modernization-audit/deferred-work.md §7): AssignStoryToFolderInternalAsync must
+        // reject a folder id that belongs to a DIFFERENT group — same exception as a genuinely
+        // nonexistent folder, so the response never discloses that the id exists elsewhere.
+        SetActiveUser(_userId);
+        int groupAId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Group A" });
+        int groupBId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Group B" });
+        int folderBId = await CreateFolderAsync(new CreateFolderDto { GroupId = groupBId, Name = "B's Folder" });
+
+        int storyId = await SeedStoryAsync();
+        await AddStoryAsync(new AddGroupStoryDto { GroupId = groupAId, StoryId = storyId });
+        GroupDetailDto? detail = await GetGroupAsync(groupAId);
+        int groupStoryId = detail!.Stories.Single().GroupStoryId;
+
+        Func<Task> act = () => AssignStoryToFolderAsync(groupStoryId, folderBId);
+
+        (await act.Should().ThrowAsync<KeyNotFoundException>(
+            "Group A's story must not be filable into Group B's folder even by an admin of both"))
+            .WithMessage($"*{folderBId}*not found*");
+
+        GroupDetailDto? unchanged = await GetGroupAsync(groupAId);
+        unchanged!.FolderTree.Should().BeEmpty("Group A has no folders — the story must not have landed anywhere");
+    }
+
+    [Fact]
+    public async Task AssignStoryToFolder_NonAdminMember_ThrowsUnauthorizedAccess()
+    {
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Group" });
+        int folderId = await CreateFolderAsync(new CreateFolderDto { GroupId = groupId, Name = "Folder" });
+        int storyId = await SeedStoryAsync();
+        await AddStoryAsync(new AddGroupStoryDto { GroupId = groupId, StoryId = storyId });
+        GroupDetailDto? detail = await GetGroupAsync(groupId);
+        int groupStoryId = detail!.Stories.Single().GroupStoryId;
+
+        SetActiveUser(_otherUserId);
+        await JoinGroupAsync(groupId); // member, not admin
+
+        Func<Task> act = () => AssignStoryToFolderAsync(groupStoryId, folderId);
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    [Fact]
+    public async Task GetById_Stories_CarryCorrectGroupStoryId()
+    {
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Group" });
+        int storyId = await SeedStoryAsync();
+        await AddStoryAsync(new AddGroupStoryDto { GroupId = groupId, StoryId = storyId });
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        GroupStory entity = await db.GroupStories.SingleAsync(gs => gs.GroupId == groupId);
+
+        GroupDetailDto? detail = await GetGroupAsync(groupId);
+        detail!.Stories.Should().ContainSingle(s =>
+            s.GroupStoryId == entity.GroupStoryId && s.StoryId == storyId);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // Group comments
     // ─────────────────────────────────────────────────────────────────────────────
 
@@ -583,6 +690,20 @@ public class GroupServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
         using IServiceScope scope = Factory.Services.CreateScope();
         IGroupWriteService svc = scope.ServiceProvider.GetRequiredService<IGroupWriteService>();
         await svc.DeleteFolderAsync(folderId);
+    }
+
+    private async Task AssignStoryToFolderAsync(int groupStoryId, int groupFolderId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IGroupWriteService svc = scope.ServiceProvider.GetRequiredService<IGroupWriteService>();
+        await svc.AssignStoryToFolderAsync(groupStoryId, groupFolderId);
+    }
+
+    private async Task UnassignStoryFromFolderAsync(int groupStoryId, int groupFolderId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IGroupWriteService svc = scope.ServiceProvider.GetRequiredService<IGroupWriteService>();
+        await svc.UnassignStoryFromFolderAsync(groupStoryId, groupFolderId);
     }
 
     private async Task<long> PostGroupCommentAsync(PostGroupCommentDto dto)

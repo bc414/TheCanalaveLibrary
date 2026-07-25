@@ -51,6 +51,44 @@ public class ClientGroupServiceTests
     }
 
     [Fact]
+    public async Task GetByIdAsync_PopulatedBody_DeserializesGroupStoryDtoInStoriesAndFolderTree()
+    {
+        // WU-GroupsL5b: GroupDetailDto.StoryIds/GroupFolderDto.StoryIds retyped from bare int to
+        // GroupStoryDto (GroupStoryId + StoryId) — no earlier test in this file exercised a
+        // populated GetByIdAsync body at all (the only prior case sent an empty one), so this pins
+        // the client's deserialization of the new nested shape specifically.
+        var handler = new CannedHandler(HttpStatusCode.OK,
+            """
+            {
+                "groupId": 7, "groupName": "Group", "description": null, "audienceType": 0,
+                "maxContentRating": 2, "creatorId": 1, "creatorDisplayName": "Creator",
+                "memberCount": 1, "dateCreated": "2026-01-01T00:00:00Z", "currentUserRole": 1,
+                "folderTree": [
+                    {
+                        "groupFolderId": 100, "groupId": 7, "parentFolderId": null, "name": "Folder",
+                        "maxRating": 2, "sortOrder": 0,
+                        "stories": [{"groupStoryId": 50, "storyId": 2}],
+                        "children": []
+                    }
+                ],
+                "stories": [{"groupStoryId": 51, "storyId": 1}, {"groupStoryId": 50, "storyId": 2}]
+            }
+            """);
+        ClientGroupReadService svc = new(NewClient(handler));
+
+        GroupDetailDto? detail = await svc.GetByIdAsync(7);
+
+        detail.Should().NotBeNull();
+        detail!.Stories.Should().BeEquivalentTo(
+        [
+            new GroupStoryDto(51, 1),
+            new GroupStoryDto(50, 2)
+        ]);
+        detail.FolderTree.Should().ContainSingle().Which.Stories.Should().ContainSingle()
+            .Which.Should().Be(new GroupStoryDto(50, 2));
+    }
+
+    [Fact]
     public async Task GetGroupGateAsync_GetsGateRoute()
     {
         var handler = new CannedHandler(HttpStatusCode.OK, "");

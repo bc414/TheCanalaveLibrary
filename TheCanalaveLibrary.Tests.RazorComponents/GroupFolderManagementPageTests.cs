@@ -37,11 +37,11 @@ public class GroupFolderManagementPageTests : BunitContext
         TestGroupId, "Test Group", "A description.", GroupAudienceType.Standard, Rating.M,
         CreatorId: 1, CreatorDisplayName: "Creator", MemberCount: 3,
         DateCreated: new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-        CurrentUserRole: GroupRole.Admin, FolderTree: folderTree, StoryIds: []);
+        CurrentUserRole: GroupRole.Admin, FolderTree: folderTree, Stories: []);
 
     private static GroupFolderDto NewFolder(int id, string name, int sortOrder, Rating rating = Rating.M,
         int? parentId = null, IReadOnlyList<GroupFolderDto>? children = null) =>
-        new(id, TestGroupId, parentId, name, rating, sortOrder, StoryIds: [], children ?? []);
+        new(id, TestGroupId, parentId, name, rating, sortOrder, Stories: [], children ?? []);
 
     // AngleSharp compound-selector fragility (testing.md) — button text isn't a CSS selector, so
     // locate by exact TextContent like ConfirmDialogTests does, rather than a brittle :contains().
@@ -263,6 +263,9 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
     public List<(int FolderId, string NewName)> RenameFolderCalls { get; } = [];
     public List<int> DeleteFolderCalls { get; } = [];
     public List<(int FolderId, int NewSortOrder)> ReorderFolderCalls { get; } = [];
+    public List<int> RemoveStoryCalls { get; } = [];
+    public List<(int GroupStoryId, int GroupFolderId)> AssignStoryToFolderCalls { get; } = [];
+    public List<(int GroupStoryId, int GroupFolderId)> UnassignStoryFromFolderCalls { get; } = [];
 
     // ── Reads (stubbed — not exercised by this page beyond GetByIdAsync/GetCurrentUserRoleAsync) ──
 
@@ -285,9 +288,24 @@ internal sealed class FakeGroupWriteService : IGroupWriteService
     public Task JoinAsync(int groupId) => Task.CompletedTask;
     public Task LeaveAsync(int groupId) => Task.CompletedTask;
     public Task AddStoryAsync(AddGroupStoryDto dto) => Task.CompletedTask;
-    public Task RemoveStoryAsync(int groupStoryId) => Task.CompletedTask;
-    public Task AssignStoryToFolderAsync(int groupStoryId, int groupFolderId) => Task.CompletedTask;
-    public Task UnassignStoryFromFolderAsync(int groupStoryId, int groupFolderId) => Task.CompletedTask;
+
+    public Task RemoveStoryAsync(int groupStoryId)
+    {
+        RemoveStoryCalls.Add(groupStoryId);
+        return Task.CompletedTask;
+    }
+
+    public Task AssignStoryToFolderAsync(int groupStoryId, int groupFolderId)
+    {
+        AssignStoryToFolderCalls.Add((groupStoryId, groupFolderId));
+        return Task.CompletedTask;
+    }
+
+    public Task UnassignStoryFromFolderAsync(int groupStoryId, int groupFolderId)
+    {
+        UnassignStoryFromFolderCalls.Add((groupStoryId, groupFolderId));
+        return Task.CompletedTask;
+    }
 
     // ── Folder writes (what this page actually exercises) ────────────────────────
 

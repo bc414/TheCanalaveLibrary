@@ -100,10 +100,11 @@ decision work that has no row at all.
   - Source: `audit/Messaging.md` L4.5 "Observation (not a defect)."
   - Context: `SetArchivedAsync` + the "Archived" label exist and are tested, but no UI control surfaces them. Capability dead-ends at the service layer; every messaging cell reads Stage 5.
 
-- [ ] **B6 — Story→folder assignment has methods but no UI** `[inert · low · anytime]`
-  - Grid: F39 L3.5=5.
-  - Source: `audit/Groups.md` Feature 39 L3.5 note.
-  - Context: `AssignStoryToFolderAsync`/`UnassignStoryFromFolderAsync` exist and are tested. WU-GroupsL5 (2026-07-24) built the folder-management page but **pointedly excluded** story-assignment — there is no UI anywhere to file a story into a group folder.
+- [x] **B6 — Story→folder assignment has methods but no UI — RESOLVED (WU-GroupsL5b, 2026-07-25)** `[inert · low · anytime]`
+  - Grid: F39 L3.5=5 (unchanged — already Stage 5; this closed the inert plumbing under it).
+  - Source: `audit/Groups.md` Feature 39/40 L3.5 notes.
+  - Context: `AssignStoryToFolderAsync`/`UnassignStoryFromFolderAsync` exist and are tested. WU-GroupsL5 (2026-07-24) built the folder-management page but **pointedly excluded** story-assignment — there was no UI anywhere to file a story into a group folder.
+  - Residual: **done 2026-07-25.** Investigating the fix surfaced that admin-gating the read side too (the first-draft design) would have shipped a display gap affecting *every* viewer, not just admins — the folder tree had never rendered folder contents at all, for anyone, since WU32. Root-fixed by retyping `GroupDetailDto.StoryIds`/`GroupFolderDto.StoryIds` (bare `int`) to `IReadOnlyList<GroupStoryDto>` (`GroupStoryId` + `StoryId`) at the source rather than bolting on a parallel admin-only endpoint. `GroupPage` now renders folder contents (story titles, linked) for every viewer unconditionally, and admin-only controls (assign/reassign via a per-story `StoryDeck` overlay, per-folder unassign, and — closing a second dead handler found in the same investigation — the previously-unwired `RemoveStoryAsync`) on top. Folds in **D3.1** (see below). Browser-verified both directions (admin: assign/reassign/unassign/remove, all `psql`-confirmed; non-member viewer: sees folder contents, zero admin controls). `dotnet test` full suite green. Detail: `workplan.md` WU-GroupsL5b; `audit/Groups.md` F39/F40 Stage notes.
 
 - [ ] **B7 — Discovery per-user filter-override editing UI (§8.7)** `[inert · low · anytime]`
   - Grid: F31 L2=5 (no dedicated cell for the override UI).
@@ -181,10 +182,16 @@ unless noted. All sit under Stage-5 cells.
   - Source: `modernization-audit/deferred-work.md` §7.
   - Context: `GET /api/polls/by-blog-post/{id}` returns poll name/description for polls attached to an *unpublished draft* blog post (tallies/voters are blanked, metadata isn't).
 
-- [ ] **D3 — Missing cross-entity ownership validation** `[latent-risk · low · anytime]`
-  - Grid: F30/F39 all=5.
+- [x] **D3.1 — Groups: missing cross-group folder-ownership validation — RESOLVED (WU-GroupsL5b, 2026-07-25)** `[latent-risk · low · anytime]`
+  - Grid: F39 all=5 (unchanged).
+  - Source: `modernization-audit/deferred-work.md` §7 (split from the original **D3**, 2026-07-25 — see D3.2 below for the other half).
+  - Context: `AssignStoryToFolderAsync` didn't verify `folder.GroupId == groupStory.GroupId` — an admin of group A could file A's story into a group-B folder id via direct API use, no UI needed.
+  - Residual: **done 2026-07-25**, folded into the B6 fix since both landed in the exact same method (`AssignStoryToFolderInternalAsync`). Now rejects a cross-group folder id with `KeyNotFoundException` — identical to a genuinely nonexistent folder, so the response never discloses that the id exists in another group. New Integration coverage at both the service and HTTP layers (previously zero tests existed for assign/unassign at all). Detail: `workplan.md` WU-GroupsL5b; `audit/Groups.md` F39 Stage note.
+
+- [ ] **D3.2 — Recommendations: missing recommendation↔story ownership validation** `[latent-risk · low · anytime]` — *Deliberately deferred to a future Recommendations-refinement session (split from D3, 2026-07-25).*
+  - Grid: F30 all=5.
   - Source: `modernization-audit/deferred-work.md` §7.
-  - Context: `RecordAttributionSourceAsync` never checks `recommendationId` exists/belongs to `storyId` (bogus self-attribution can later feed credit via `RecordSuccessAsync`). `AssignStoryToFolderAsync` doesn't verify `folder.GroupId == groupStory.GroupId` (admin of group A can file A's story into a group-B folder id).
+  - Context: `RecordAttributionSourceAsync` never checks `recommendationId` exists/belongs to `storyId` (bogus self-attribution can later feed credit via `RecordSuccessAsync`). Unrelated code path to D3.1 (Recommendations, not Groups) — the user split the original combined D3 item rather than fold this half into the Groups fix, since it belongs with dedicated Recommendations work instead.
 
 - [ ] **D4 — Code-economy items (not the disclosed "extract-or-not" seams)** `[polish · low · anytime]`
   - Grid: affected cells all Stage 5.

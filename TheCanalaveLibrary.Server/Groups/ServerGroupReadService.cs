@@ -90,8 +90,8 @@ public class ServerGroupReadService(
                         .Select(m => (GroupRole?)m.Role)
                         .FirstOrDefault()
                     : (GroupRole?)null,
-                StoryIds = g.GroupStories
-                    .Select(gs => gs.StoryId)
+                Stories = g.GroupStories
+                    .Select(gs => new GroupStoryDto(gs.GroupStoryId, gs.StoryId))
                     .ToList()
             })
             .FirstOrDefaultAsync();
@@ -113,7 +113,7 @@ public class ServerGroupReadService(
             row.DateCreated,
             row.CurrentUserRole,
             folderTree,
-            row.StoryIds);
+            row.Stories);
     }
 
     public async Task<GatedMetadataDto?> GetGroupGateAsync(int groupId)
@@ -202,7 +202,7 @@ public class ServerGroupReadService(
                 f.Name,
                 f.MaxRating,
                 f.SortOrder,
-                StoryIds = f.GroupStories.Select(gs => gs.StoryId).ToList()
+                Stories = f.GroupStories.Select(gs => new GroupStoryDto(gs.GroupStoryId, gs.StoryId)).ToList()
             })
             .ToListAsync();
 
@@ -219,7 +219,7 @@ public class ServerGroupReadService(
                     f.Name,
                     f.MaxRating,
                     f.SortOrder,
-                    f.StoryIds,
+                    f.Stories,
                     BuildChildren(f.GroupFolderId)))
                 .ToList();
 

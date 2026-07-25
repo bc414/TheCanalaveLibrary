@@ -3658,3 +3658,73 @@ Two loose ends from WU-IntTestPerf, closed same day:
 - **Tool:** Claude Code (Opus). **Pointer:** `audit/Chapters.md` A3 Stage note;
   `audit/UserStoryInteractions.md` A3 settled note; `audit/Comments.md` Feature 26 A3 update;
   `layer2-services.md` §"`IsCompleted` auto-producer"; `.claude/hidden-deferrals-tracker.md` A3.
+
+## WU-GroupsL5b — Story↔folder membership: closes B6 + D3.1 + dead RemoveStoryAsync (Features 39/40) — DONE ✓ (2026-07-25)
+
+- **Trigger:** the hidden-deferrals audit (2026-07-24) flagged **B6** —
+  `AssignStoryToFolderAsync`/`UnassignStoryFromFolderAsync` built and tested, but no UI anywhere
+  called them (WU-GroupsL5 had pointedly excluded story-assignment from the folder-management
+  page it built the day before).
+- **First-draft design mistake, caught in review, then corrected:** the initial fix patched the
+  missing `GroupStoryId` read path with a brand-new admin-only `GetGroupStoriesAsync` endpoint.
+  The user rejected this on two grounds: (1) no decision anywhere ever gated *read* access to
+  story→folder membership to admins — only the write actions are settled-admin-only (WU32) — and
+  shipping an admin-only fetch would have left a real display gap open for every other viewer
+  (`GroupPage.RenderFolders` had never rendered folder *contents*, for anyone, since WU32); (2) a
+  parallel endpoint next to `GroupDetailDto.StoryIds`/`GroupFolderDto.StoryIds` — which already
+  carried almost what was needed, missing only `GroupStoryId` — would be a workaround, not a fix:
+  "don't make shortcuts or tech debt due to existing code... if a refactor is warranted, do it."
+- **Actual fix — retype at the source.** `GroupDetailDto.StoryIds`/`GroupFolderDto.StoryIds`
+  (`IReadOnlyList<int>`) retyped to `IReadOnlyList<GroupStoryDto>` (new record: `GroupStoryId` +
+  `StoryId`) in `Core/Groups/`; `ServerGroupReadService.GetByIdAsync`/`BuildFolderTreeAsync`
+  updated to project the richer shape. `GetByIdAsync` — already fetched by `GroupPage` for every
+  viewer — now carries everything needed in the one round trip that already happens. No new
+  endpoint. Blast radius mapped exhaustively before coding (Explore agent, confirmed by
+  `dotnet build`): 6 consumption-site spots in `GroupPage.razor`, 2 test-fixture named-arg
+  renames — nothing else in the solution touched `.StoryIds` on either DTO.
+- **`GroupPage.razor` built:** `RenderFolders` now shows each folder's story titles (linked) for
+  **every viewer**, unconditionally — closing the display gap the first-draft mistake would have
+  left open; rewritten from imperative `RenderTreeBuilder` to a Razor-template recursive fragment
+  (matching `GroupFolderManagementPage.RenderFolderTree`'s idiom) since it gained real interactive
+  children. Per-folder unassign (×), admin-only. Per-story assign/reassign + remove-from-group,
+  admin-only, via `StoryDeck`'s existing `CardOverlay` slot (no changes to `StoryDeck` itself —
+  same `pointer-events-auto`-through-the-wrapper pattern as `CustomListPage.OwnerRemoveOverlay`).
+  The folder `<select>` treats story→folder as single-primary (matching `AddGroupStoryDto`'s
+  add-time intent) but doesn't guess when a story is genuinely in more than one folder
+  (`GroupStory.GroupFolders` is a real many-to-many) — shows that plainly, points at the
+  per-folder × controls instead.
+- **Second dead handler found and wired in the same pass:** `HandleStoryRemovedAsync` was fully
+  implemented (error handling, reload) but had no UI trigger anywhere — found while building the
+  admin story-action surface this WU needed regardless. Two-step confirmed via `ConfirmDialog`.
+- **D3.1 folded in** (same method, `AssignStoryToFolderInternalAsync`, this WU had to touch
+  anyway): it never checked `folder.GroupId == groupStory.GroupId` — an admin of group A could
+  file A's story into group B's folder id via direct API use. Now threads `expectedGroupId`
+  through and rejects a mismatch with `KeyNotFoundException` (identical to a genuinely nonexistent
+  folder — no disclosure that the id exists elsewhere). **D3.2** (the Recommendations half of the
+  original combined D3 item — `RecordAttributionSourceAsync`'s missing ownership check) was split
+  off at the user's direction and deliberately deferred to a future Recommendations-refinement
+  session; this WU only touched the tracker doc to record the split, no Recommendations code.
+- **New tests:** `GroupServiceTests` +5 (assign/unassign happy paths, the D3.1
+  cross-group-rejection pin, non-admin rejection, `GetByIdAsync.Stories` carrying correct
+  `GroupStoryId`). `GroupEndpointsTests` +2 (cross-group → 404 over HTTP, admin assign → 204).
+  New `GroupPageTests.cs` (12 tests, RazorComponents — no file existed for this page before):
+  folder contents visible to every role incl. anonymous; non-admin sees zero admin controls;
+  assign/reassign/unfile dispatch correct id pairs; per-folder unassign dispatches correctly;
+  remove is two-step (trigger alone must not call the service). `ClientGroupServiceTests` +1
+  (deserializing a populated `GetByIdAsync` body with the new nested shape — no prior test in
+  that file exercised a non-empty response at all).
+- **Verified:** `dotnet build` clean (confirms the retype's blast radius was fully caught — a
+  missed consumer fails to compile, by design). `dotnet test` full suite green: 753 Unit + 556
+  RazorComponents + 807 Integration = 2116/2116. `scripts/check-design-tokens.ps1` clean for the
+  touched file (two pre-existing, unrelated findings elsewhere — `ImportReviewPanel.razor`,
+  `ProfilePage.razor` — untouched). Browser-verified live against the dev DB: as admin, created a
+  folder, added a story, assigned/reassigned/unassigned it via both the per-story overlay and the
+  per-folder ×, removed a story from the group via the confirm dialog — `psql`-confirmed
+  `group_stories`↔`group_folder_group_story` ground truth after each step. Switched to a
+  non-member seed user (`ReaderGamma`) on the same group: folder contents rendered correctly,
+  zero admin controls anywhere on the page. Verification data cleaned up afterward.
+- **Cells:** `status.md` — no Stage-number change; F39/F40 were already Stage 5 across the board.
+  This fills in inert plumbing + a display gap under already-Stage-5 cells, exactly what the
+  hidden-deferrals tracker exists to catch.
+- **Tool:** Claude Code (Opus). **Pointer:** `audit/Groups.md` F39/F40 Stage notes;
+  `.claude/hidden-deferrals-tracker.md` B6, D3.1, D3.2.
