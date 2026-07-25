@@ -81,6 +81,7 @@ retry-after seconds) when the per-user token bucket for that action kind is exha
 | `Report` | 5 | 1 per 3 min | `ServerModerationWriteService.SubmitReportAsync` (reports only — mod actions never throttled) |
 | `ContentCreate` | 5 | 1 per 2 min | story / chapter / alternate-version / blog-post / group creates, recommendation submit |
 | `ImageUpload` | 10 | 1 per 30 s | `ImageUploadProcessor` (covers covers + avatars through the one seam) |
+| `VerificationRequest` | 5 | 1 per 2 min | `ServerExternalVerificationWriteService.SubmitAccountForVerificationAsync` / `RequestLinkVerificationAsync` (Feature 53, WU39 — mod approve/reject never throttled) |
 
 **Rules:**
 - The `EnsureAllowed` call goes **immediately after the method's auth guard** (userId is

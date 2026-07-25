@@ -36,6 +36,7 @@ public class ServerUserProfileReadService(
                 AvatarUrl        = u.ProfilePictureRelativeUrl,
                 Privacy          = u.PrivacySettings,
                 u.LastActiveUtc,
+                u.VerificationCode,
                 Stats            = u.UserStat,
                 Badges           = u.UserBadges
                     .Where(ub => ub.DisplayOrder > 0)
@@ -117,7 +118,8 @@ public class ServerUserProfileReadService(
             row.Privacy.ProfileVisibility,
             row.Privacy.AllowProfileComments,
             row.Privacy.ShowUserStats,
-            lastSeenUtc);
+            lastSeenUtc,
+            row.VerificationCode);
     }
 
     public async Task<ProfileAccessState> GetProfileAccessStateAsync(int userId)

@@ -19,6 +19,11 @@ namespace TheCanalaveLibrary.Core;
 /// gating shape as <see cref="Stats"/>), or when the user has no <c>User.LastActiveUtc</c> stamp
 /// yet (go-forward signal — see layer8-data-marts.md §"site_daily_stats"). The banner hides the
 /// "last seen" line in either case.
+///
+/// <see cref="VerificationCode"/> (Feature 53, WU39) is the owner's site-wide public verification
+/// code — null until they first visit Settings (lazily generated). Not privacy-gated: it's a
+/// public nonce shown at the bottom of everyone's profile, including anonymous visitors, by
+/// design (an author places the same text on an external profile to prove control of it).
 /// </summary>
 public record ProfileHeaderDto(
     int UserId,
@@ -32,4 +37,5 @@ public record ProfileHeaderDto(
     ProfileVisibility ProfileVisibility,
     SocialInteractionPermission AllowProfileComments,
     bool ShowUserStats,
-    DateTime? LastSeenUtc);
+    DateTime? LastSeenUtc,
+    string? VerificationCode);

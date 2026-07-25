@@ -4,6 +4,8 @@
 @attribute [Authorize]
 @inject IStoryReadService StoryReadService
 @inject IStoryWriteService StoryWriteService
+@inject IExternalVerificationReadService ExternalVerificationReadService
+@inject IExternalVerificationWriteService ExternalVerificationWriteService
 @inject ITagReadService TagReadService
 @inject NavigationManager NavigationManager
 @inject ILogger<StoryEditorPage> Logger
@@ -49,6 +51,8 @@ else
                              InitialPairings="_initialPairings"
                              InitialGenrePriorities="_initialGenrePriorities"
                              ExternalPlatforms="@(ExternalPlatforms ?? [])"
+                             VerifiedPlatformIds="@((IReadOnlySet<short>)(VerifiedPlatformIds ?? []))"
+                             OnRequestLinkVerification="HandleRequestLinkVerification"
                              SubmitLabel="@(StoryId.HasValue ? "Save Changes" : "Create Story")"
                              OnValidSubmit="HandleValidSubmit" />
 
@@ -102,6 +106,13 @@ else
     [PersistentState] public IReadOnlyList<ExternalPlatformDto>? ExternalPlatforms { get; set; }
     [PersistentState] public List<TagChipDto>? TagChips { get; set; }
 
+    /// <summary>
+    /// Platform ids the author already holds a Verified account-tier identity for (WU39) — gates
+    /// each saved link row's "Request verification" button. Edit mode only (create mode has no
+    /// saved links yet to request review for).
+    /// </summary>
+    [PersistentState] public HashSet<short>? VerifiedPlatformIds { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         // Seeded platform lookup for the "Also posted on" section (WU38d) — needed in both modes.
@@ -151,6 +162,11 @@ else
             _initialGenrePriorities = editData.StoryTags
                 .Where(t => t.TagTypeEnum == TagTypeEnum.Genre)
                 .ToDictionary(t => t.TagId, t => t.Priority);
+
+            VerifiedPlatformIds ??= (await ExternalVerificationReadService.GetMyExternalAccountsAsync())
+                .Where(a => a.Status == VerificationStatusEnum.Verified)
+                .Select(a => a.ExternalPlatformId)
+                .ToHashSet();
         }
 
         _isLoading = false;
@@ -301,6 +317,28 @@ else
         finally
         {
             _viewModel.IsLoading = false;
+        }
+    }
+
+    /// <summary>Author requests per-link review (WU39) — refreshes only the link statuses, not the whole edit DTO, so in-progress unsaved edits elsewhere on the form survive.</summary>
+    private async Task HandleRequestLinkVerification(int storyExternalLinkId)
+    {
+        if (!StoryId.HasValue) return;
+
+        _viewModel.ServerValidationErrors.Clear();
+        try
+        {
+            await ExternalVerificationWriteService.RequestLinkVerificationAsync(storyExternalLinkId);
+
+            StoryUpdateDTO? refreshed = await StoryReadService.GetStoryForEditAsync(StoryId.Value);
+            if (refreshed is not null)
+                _viewModel.ExternalLinks = refreshed.ExternalLinks;
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Requesting link verification failed unexpectedly for link {LinkId}", storyExternalLinkId);
+            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
         }
     }
 

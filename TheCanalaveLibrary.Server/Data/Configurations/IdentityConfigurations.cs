@@ -191,6 +191,10 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasIndex(e => e.NormalizedUserName).IsUnique();
         builder.HasIndex(e => e.NormalizedEmail).IsUnique();
 
+        // Feature 53 / WU39: filtered — most users never generate a code (lazy, on first use).
+        builder.HasIndex(e => e.VerificationCode).IsUnique()
+            .HasFilter("\"verification_code\" IS NOT NULL");
+
         // Future indexes for querying (e.g., on show_mature_content)...
 
         // --- JSON complex types (EF Core 10 ComplexProperty + ToJson) ---

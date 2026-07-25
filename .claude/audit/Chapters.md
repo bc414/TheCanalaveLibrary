@@ -202,7 +202,12 @@ Phase 4 (beta-scope-decision pattern) and `workplan.md` "Planned / not-yet-built
   Verified: see WU25 stage note in `audit/Stories.md` Feature 5 L3-Logic.
 - **L3-Logic — Stage 5 (WU26, DONE ✓ 2026-06-24).** `ChapterReadingPage` dispatcher built with content-rating
   handling, scroll-progress JS interop, attribution capture, helpful-prompt gate. Reader settings cascade
-  provider deferred to WU30 (`RichTextView` falls back to defaults). `AutoLoadNextChapter` is post-MVP.
+  provider deferred to WU30 (`RichTextView` falls back to defaults). `AutoLoadNextChapter` officially
+  cut 2026-07-24 (was never "post-MVP" scope, just unexamined scope — traced to a Gemini brainstorm
+  suggestion drawing on a commercial binge-read UX baseline, no site-specific rationale ever given;
+  conflicts with the mission's manual per-chapter pause for reflection/commenting). Field removed
+  from `ReaderSettings`/`ReaderSettingsDto`/`ReaderSettingsForm` same day — spec §~991's `ReaderSettings`
+  jsonb shape is now stale on this one field (spec is a read-only snapshot; code is authoritative).
 - **L3.5-Structure — Stage 5 (WU26 page slice, DONE ✓ 2026-06-24; WU18 nav slice and WU5 leaf also Stage 5).**
   `ChapterReadingPage` + `ChapterNavigation` top+bottom + `CommentSection` wired. See WU26 Phase 1–3 Stage note.
 - **L4-Style — Stage 5 (WU26/WU18/WU5, DONE ✓ 2026-06-24; see Stage notes).**

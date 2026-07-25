@@ -71,7 +71,21 @@ public class ServerStoryReadService(
                     .Select(el => new StoryExternalLinkDto(
                         el.ExternalPlatform.Name,
                         el.Url,
-                        el.VerificationStatus == VerificationStatusEnum.Verified))
+                        el.VerificationStatus == VerificationStatusEnum.Verified,
+                        // WU39: the companion sub-line only appears once the per-link tier is
+                        // reviewed AND the story's author still holds a Verified account-tier
+                        // identity for that platform — a correlated lookup, not a stored copy, so
+                        // an account later un-verified stops showing the handle automatically.
+                        el.VerificationStatus == VerificationStatusEnum.Verified && s.Author != null
+                            ? s.Author.UserExternalIdentities
+                                .Where(i => i.ExternalPlatformId == el.ExternalPlatformId && i.VerificationStatus == VerificationStatusEnum.Verified)
+                                .Select(i => i.Handle).FirstOrDefault()
+                            : null,
+                        el.VerificationStatus == VerificationStatusEnum.Verified && s.Author != null
+                            ? s.Author.UserExternalIdentities
+                                .Where(i => i.ExternalPlatformId == el.ExternalPlatformId && i.VerificationStatus == VerificationStatusEnum.Verified)
+                                .Select(i => i.ProfileUrl).FirstOrDefault()
+                            : null))
                     .ToList()))
             .FirstOrDefaultAsync();
 
@@ -165,8 +179,12 @@ public class ServerStoryReadService(
                     .OrderBy(el => el.ExternalPlatformId)
                     .Select(el => new StoryExternalLinkEditDto
                     {
-                        ExternalPlatformId = el.ExternalPlatformId,
-                        Url                = el.Url
+                        StoryExternalLinkId   = el.StoryExternalLinkId,
+                        ExternalPlatformId    = el.ExternalPlatformId,
+                        Url                   = el.Url,
+                        VerificationStatus    = el.VerificationStatus,
+                        VerificationRequested = el.DateVerificationRequested != null,
+                        RejectionReason       = el.RejectionReason
                     }).ToList(),
                 OriginalPublishedDate   = s.OriginalPublishedDate,
                 OriginalLastUpdatedDate = s.OriginalLastUpdatedDate

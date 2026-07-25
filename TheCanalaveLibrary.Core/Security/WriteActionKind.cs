@@ -21,5 +21,13 @@ public enum WriteActionKind
     ContentCreate,
 
     /// <summary>Image uploads (covers + profile pictures) via <c>ImageUploadProcessor</c>.</summary>
-    ImageUpload
+    ImageUpload,
+
+    /// <summary>
+    /// External-account and per-link verification requests (Feature 53, WU39) —
+    /// <c>SubmitAccountForVerificationAsync</c> and <c>RequestLinkVerificationAsync</c>. Moderator
+    /// approve/reject actions are NOT throttled (mod actions are deliberately unthrottled per
+    /// security.md).
+    /// </summary>
+    VerificationRequest
 }

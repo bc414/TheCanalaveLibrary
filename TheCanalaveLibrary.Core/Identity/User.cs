@@ -23,7 +23,6 @@ public class ReaderSettings
     public ReadingBackgroundEnum ReadingBackground { get; set; } = ReadingBackgroundEnum.SiteDefault;
 
     // Browsing Behavior
-    public bool AutoLoadNextChapter { get; set; } = false;
     public bool CollapseCommentThreads { get; set; } = true;
     public int DefaultPaginationSize { get; set; } = 20;
     public DefaultSortOrder DefaultSearchSort { get; set; } = DefaultSortOrder.DatePublished;
@@ -114,6 +113,14 @@ public class User : IdentityUser<int>
     
     public int ThemeId { get; set; }
     public Theme Theme { get; set; } = null!;
+
+    // --- External-link verification (Feature 53 / WU39) ---
+    // Site-wide public code, lazily generated on first use (see PublicVerificationCode +
+    // ServerExternalVerificationWriteService.EnsureMyVerificationCodeAsync). Displayed at the
+    // bottom of the user's own public profile; the same code is reused across every external
+    // platform account they verify — not a secret, publishing it has no security downside.
+    [StringLength(32)]
+    public string? VerificationCode { get; set; }
     
     // --- "COLD" PARTITION ---
     // 1-to-1 Navigation to the "cold" blob
@@ -156,6 +163,8 @@ public class User : IdentityUser<int>
     public virtual ICollection<UserStoryInteractionFilterSetting> UserStoryInteractionFilterSettings { get; set; } = new List<UserStoryInteractionFilterSetting>();
     public virtual UserStat? UserStat { get; set; }
     public virtual ICollection<UserStoryInteraction> UserStoryInteractions { get; set; } = new List<UserStoryInteraction>();
+    public virtual ICollection<UserExternalIdentity> UserExternalIdentities { get; set; } = new List<UserExternalIdentity>();
+    public virtual ICollection<UserExternalIdentity> UserExternalIdentityModeratorUsers { get; set; } = new List<UserExternalIdentity>();
     // No Roles navigation: user↔role is Identity's many-to-many via asp_net_user_roles. A direct
     // ICollection<ApplicationRole> nav made EF model a spurious one-to-many, minting a phantom
     // user_id shadow-FK column + index on asp_net_roles (removed 2026-07-18, MA-102).

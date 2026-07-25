@@ -1032,6 +1032,15 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("name");
 
+                    b.Property<string>("PlacementInstructions")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("placement_instructions");
+
+                    b.Property<bool>("SupportsVerification")
+                        .HasColumnType("boolean")
+                        .HasColumnName("supports_verification");
+
                     b.HasKey("ExternalPlatformId")
                         .HasName("pk_external_platforms");
 
@@ -1046,42 +1055,55 @@ namespace TheCanalaveLibrary.Server.Migrations
                         {
                             ExternalPlatformId = (short)1,
                             DomainPattern = "archiveofourown.org",
-                            Name = "Archive of Our Own"
+                            Name = "Archive of Our Own",
+                            PlacementInstructions = "Add the code anywhere in your AO3 profile's \"About Me\" section (My Profile → Edit → About Me).",
+                            SupportsVerification = true
                         },
                         new
                         {
                             ExternalPlatformId = (short)2,
                             DomainPattern = "fanfiction.net",
-                            Name = "FanFiction.Net"
+                            Name = "FanFiction.Net",
+                            PlacementInstructions = "Add the code anywhere in your FFN profile bio, as plain text — FFN doesn't allow hyperlinks in profiles.",
+                            SupportsVerification = true
                         },
                         new
                         {
                             ExternalPlatformId = (short)3,
                             DomainPattern = "wattpad.com",
-                            Name = "Wattpad"
+                            Name = "Wattpad",
+                            PlacementInstructions = "Add the code anywhere in your Wattpad profile bio.",
+                            SupportsVerification = true
                         },
                         new
                         {
                             ExternalPlatformId = (short)4,
                             DomainPattern = "spacebattles.com",
-                            Name = "SpaceBattles"
+                            Name = "SpaceBattles",
+                            PlacementInstructions = "Add the code to your SpaceBattles profile's \"About\" field or forum signature.",
+                            SupportsVerification = true
                         },
                         new
                         {
                             ExternalPlatformId = (short)5,
                             DomainPattern = "sufficientvelocity.com",
-                            Name = "Sufficient Velocity"
+                            Name = "Sufficient Velocity",
+                            PlacementInstructions = "Add the code to your Sufficient Velocity profile's \"About\" field or forum signature.",
+                            SupportsVerification = true
                         },
                         new
                         {
                             ExternalPlatformId = (short)6,
                             DomainPattern = "royalroad.com",
-                            Name = "Royal Road"
+                            Name = "Royal Road",
+                            PlacementInstructions = "Add the code anywhere in your Royal Road profile bio.",
+                            SupportsVerification = true
                         },
                         new
                         {
                             ExternalPlatformId = (short)7,
-                            Name = "Other"
+                            Name = "Other",
+                            SupportsVerification = false
                         });
                 });
 
@@ -1770,6 +1792,46 @@ namespace TheCanalaveLibrary.Server.Migrations
                             DisplayName = "Story Approved",
                             NotificationCategory = (short)2,
                             NotificationKey = "StoryApproved"
+                        },
+                        new
+                        {
+                            NotificationTypeId = (short)76,
+                            DefaultCollapsed = false,
+                            DefaultEmailEnabled = false,
+                            Description = "A moderator confirmed your external platform account.",
+                            DisplayName = "External Account Verified",
+                            NotificationCategory = (short)3,
+                            NotificationKey = "ExternalAccountVerified"
+                        },
+                        new
+                        {
+                            NotificationTypeId = (short)77,
+                            DefaultCollapsed = false,
+                            DefaultEmailEnabled = true,
+                            Description = "A moderator could not confirm your external platform account.",
+                            DisplayName = "External Account Not Verified",
+                            NotificationCategory = (short)3,
+                            NotificationKey = "ExternalAccountRejected"
+                        },
+                        new
+                        {
+                            NotificationTypeId = (short)78,
+                            DefaultCollapsed = false,
+                            DefaultEmailEnabled = false,
+                            Description = "A moderator confirmed one of your \"also posted on\" links.",
+                            DisplayName = "External Link Verified",
+                            NotificationCategory = (short)2,
+                            NotificationKey = "ExternalLinkVerified"
+                        },
+                        new
+                        {
+                            NotificationTypeId = (short)79,
+                            DefaultCollapsed = false,
+                            DefaultEmailEnabled = true,
+                            Description = "A moderator could not confirm one of your \"also posted on\" links.",
+                            DisplayName = "External Link Not Verified",
+                            NotificationCategory = (short)2,
+                            NotificationKey = "ExternalLinkRejected"
                         },
                         new
                         {
@@ -3115,9 +3177,18 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnName("date_added")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<DateTime?>("DateVerificationRequested")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_verification_requested");
+
                     b.Property<short>("ExternalPlatformId")
                         .HasColumnType("smallint")
                         .HasColumnName("external_platform_id");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("rejection_reason");
 
                     b.Property<int>("StoryId")
                         .HasColumnType("integer")
@@ -3653,6 +3724,11 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("user_name");
 
+                    b.Property<string>("VerificationCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("verification_code");
+
                     b.ComplexProperty(typeof(Dictionary<string, object>), "AuthorSettings", "TheCanalaveLibrary.Core.User.AuthorSettings#AuthorSettings", b1 =>
                         {
                             b1.IsRequired();
@@ -3688,8 +3764,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.ComplexProperty(typeof(Dictionary<string, object>), "ReaderSettings", "TheCanalaveLibrary.Core.User.ReaderSettings#ReaderSettings", b1 =>
                         {
                             b1.IsRequired();
-
-                            b1.Property<bool>("AutoLoadNextChapter");
 
                             b1.Property<bool>("CollapseCommentThreads");
 
@@ -3737,6 +3811,11 @@ namespace TheCanalaveLibrary.Server.Migrations
 
                     b.HasIndex("ThemeId")
                         .HasDatabaseName("ix_asp_net_users_theme_id");
+
+                    b.HasIndex("VerificationCode")
+                        .IsUnique()
+                        .HasDatabaseName("ix_asp_net_users_verification_code")
+                        .HasFilter("\"verification_code\" IS NOT NULL");
 
                     b.ToTable("AspNetUsers", (string)null);
                 });
@@ -3867,6 +3946,74 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasDatabaseName("ix_user_custom_filters_user_id");
 
                     b.ToTable("user_custom_filters", (string)null);
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.UserExternalIdentity", b =>
+                {
+                    b.Property<int>("UserExternalIdentityId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("user_external_identity_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("UserExternalIdentityId"));
+
+                    b.Property<DateTime>("DateRequested")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_requested")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("DateReviewed")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_reviewed");
+
+                    b.Property<short>("ExternalPlatformId")
+                        .HasColumnType("smallint")
+                        .HasColumnName("external_platform_id");
+
+                    b.Property<string>("Handle")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("handle");
+
+                    b.Property<string>("ProfileUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("profile_url");
+
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("rejection_reason");
+
+                    b.Property<int?>("ReviewedByModeratorUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("reviewed_by_moderator_user_id");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.Property<short>("VerificationStatus")
+                        .HasColumnType("smallint")
+                        .HasColumnName("verification_status");
+
+                    b.HasKey("UserExternalIdentityId")
+                        .HasName("pk_user_external_identities");
+
+                    b.HasIndex("ExternalPlatformId")
+                        .HasDatabaseName("ix_user_external_identities_external_platform_id");
+
+                    b.HasIndex("ReviewedByModeratorUserId")
+                        .HasDatabaseName("ix_user_external_identities_reviewed_by_moderator_user_id");
+
+                    b.HasIndex("UserId", "ExternalPlatformId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_user_external_identities_user_id_external_platform_id");
+
+                    b.ToTable("user_external_identities", (string)null);
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.UserNotificationSetting", b =>
@@ -5588,6 +5735,35 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("TheCanalaveLibrary.Core.UserExternalIdentity", b =>
+                {
+                    b.HasOne("TheCanalaveLibrary.Core.ExternalPlatform", "ExternalPlatform")
+                        .WithMany("UserExternalIdentities")
+                        .HasForeignKey("ExternalPlatformId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_external_identities_external_platforms_external_platfo");
+
+                    b.HasOne("TheCanalaveLibrary.Core.User", "ReviewedByModeratorUser")
+                        .WithMany("UserExternalIdentityModeratorUsers")
+                        .HasForeignKey("ReviewedByModeratorUserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_user_external_identities_asp_net_users_reviewed_by_moderator_");
+
+                    b.HasOne("TheCanalaveLibrary.Core.User", "User")
+                        .WithMany("UserExternalIdentities")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_user_external_identities_asp_net_users_user_id");
+
+                    b.Navigation("ExternalPlatform");
+
+                    b.Navigation("ReviewedByModeratorUser");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("TheCanalaveLibrary.Core.UserNotificationSetting", b =>
                 {
                     b.HasOne("TheCanalaveLibrary.Core.NotificationType", "NotificationType")
@@ -5940,6 +6116,8 @@ namespace TheCanalaveLibrary.Server.Migrations
             modelBuilder.Entity("TheCanalaveLibrary.Core.ExternalPlatform", b =>
                 {
                     b.Navigation("StoryExternalLinks");
+
+                    b.Navigation("UserExternalIdentities");
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.Group", b =>
@@ -6165,6 +6343,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("UserChapterInteractions");
 
                     b.Navigation("UserCustomFilters");
+
+                    b.Navigation("UserExternalIdentities");
+
+                    b.Navigation("UserExternalIdentityModeratorUsers");
 
                     b.Navigation("UserNotificationSettings");
 

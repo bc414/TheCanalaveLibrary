@@ -156,15 +156,86 @@ public sealed class ExternalPlatformConfiguration : IEntityTypeConfiguration<Ext
     {
         builder.HasIndex(e => e.Name).IsUnique();
 
+        // PlacementInstructions (WU39): where the author puts their public VerificationCode on
+        // that platform's profile — data-driven, not a code branch. FFN's text calls out plain
+        // text specifically because FFN disallows hyperlinks in profiles (settled,
+        // audit/Moderation.md F53 — "two-way" means both sides show the same code, not a mutual
+        // hyperlink). "Other" offers no verification: no known placement surface.
         builder.HasData(
-            new ExternalPlatform { ExternalPlatformId = 1, Name = "Archive of Our Own", DomainPattern = "archiveofourown.org" },
-            new ExternalPlatform { ExternalPlatformId = 2, Name = "FanFiction.Net", DomainPattern = "fanfiction.net" },
-            new ExternalPlatform { ExternalPlatformId = 3, Name = "Wattpad", DomainPattern = "wattpad.com" },
-            new ExternalPlatform { ExternalPlatformId = 4, Name = "SpaceBattles", DomainPattern = "spacebattles.com" },
-            new ExternalPlatform { ExternalPlatformId = 5, Name = "Sufficient Velocity", DomainPattern = "sufficientvelocity.com" },
-            new ExternalPlatform { ExternalPlatformId = 6, Name = "Royal Road", DomainPattern = "royalroad.com" },
-            new ExternalPlatform { ExternalPlatformId = 7, Name = "Other", DomainPattern = null }
+            new ExternalPlatform
+            {
+                ExternalPlatformId = 1, Name = "Archive of Our Own", DomainPattern = "archiveofourown.org",
+                SupportsVerification = true,
+                PlacementInstructions = "Add the code anywhere in your AO3 profile's \"About Me\" section (My Profile → Edit → About Me)."
+            },
+            new ExternalPlatform
+            {
+                ExternalPlatformId = 2, Name = "FanFiction.Net", DomainPattern = "fanfiction.net",
+                SupportsVerification = true,
+                PlacementInstructions = "Add the code anywhere in your FFN profile bio, as plain text — FFN doesn't allow hyperlinks in profiles."
+            },
+            new ExternalPlatform
+            {
+                ExternalPlatformId = 3, Name = "Wattpad", DomainPattern = "wattpad.com",
+                SupportsVerification = true,
+                PlacementInstructions = "Add the code anywhere in your Wattpad profile bio."
+            },
+            new ExternalPlatform
+            {
+                ExternalPlatformId = 4, Name = "SpaceBattles", DomainPattern = "spacebattles.com",
+                SupportsVerification = true,
+                PlacementInstructions = "Add the code to your SpaceBattles profile's \"About\" field or forum signature."
+            },
+            new ExternalPlatform
+            {
+                ExternalPlatformId = 5, Name = "Sufficient Velocity", DomainPattern = "sufficientvelocity.com",
+                SupportsVerification = true,
+                PlacementInstructions = "Add the code to your Sufficient Velocity profile's \"About\" field or forum signature."
+            },
+            new ExternalPlatform
+            {
+                ExternalPlatformId = 6, Name = "Royal Road", DomainPattern = "royalroad.com",
+                SupportsVerification = true,
+                PlacementInstructions = "Add the code anywhere in your Royal Road profile bio."
+            },
+            new ExternalPlatform
+            {
+                ExternalPlatformId = 7, Name = "Other", DomainPattern = null,
+                SupportsVerification = false,
+                PlacementInstructions = null
+            }
         );
+    }
+}
+
+/// <summary>
+/// Account tier of Feature 53's two-tier verification model (WU39, settled 2026-07-24,
+/// audit/Moderation.md F53). Unique per (UserId, ExternalPlatformId) — a user verifies each
+/// platform account once, ever.
+/// </summary>
+public sealed class UserExternalIdentityConfiguration : IEntityTypeConfiguration<UserExternalIdentity>
+{
+    public void Configure(EntityTypeBuilder<UserExternalIdentity> builder)
+    {
+        builder.Property(e => e.VerificationStatus).HasConversion<short>();
+        builder.Property(e => e.DateRequested).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        builder.HasIndex(e => new { e.UserId, e.ExternalPlatformId }).IsUnique();
+
+        builder.HasOne(e => e.User)
+            .WithMany(u => u.UserExternalIdentities)
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(e => e.ReviewedByModeratorUser)
+            .WithMany(u => u.UserExternalIdentityModeratorUsers)
+            .HasForeignKey(e => e.ReviewedByModeratorUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasOne(e => e.ExternalPlatform)
+            .WithMany(p => p.UserExternalIdentities)
+            .HasForeignKey(e => e.ExternalPlatformId)
+            .OnDelete(DeleteBehavior.Restrict); // seeded lookup rows are never deleted from under identities
     }
 }
 

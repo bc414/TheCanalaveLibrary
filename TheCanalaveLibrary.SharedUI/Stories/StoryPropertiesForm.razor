@@ -168,29 +168,53 @@
         <p class="text-sm font-semibold text-(--color-text)">Also posted on</p>
         <p class="text-xs text-(--color-text-muted)">
             If this story is also live on other sites, list the links — they'll show on your story
-            page, and a moderator can verify you as the author (✓). Paste the URL; the site is
-            detected automatically.
+            page. Paste the URL; the site is detected automatically. Verify your account for a
+            platform in Settings, then request verification on each link — a moderator confirms
+            it's you.
         </p>
         @for (int i = 0; i < ViewModel.ExternalLinks.Count; i++)
         {
             int idx = i;
             StoryExternalLinkEditDto link = ViewModel.ExternalLinks[idx];
-            <div class="flex items-center gap-2">
-                <input value="@link.Url"
-                       @onchange="@(e => HandleLinkUrlChanged(idx, e.Value as string))"
-                       placeholder="https://…"
-                       class="min-w-0 flex-1 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" />
-                <select value="@link.ExternalPlatformId"
-                        @onchange="@(e => link.ExternalPlatformId = short.Parse((string)e.Value!))"
-                        aria-label="Platform"
-                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1.5 text-sm text-(--color-text)">
-                    @foreach (ExternalPlatformDto platform in ExternalPlatforms)
-                    {
-                        <option value="@platform.ExternalPlatformId">@platform.Name</option>
-                    }
-                </select>
-                <button type="button" @onclick="() => RemoveExternalLink(idx)" aria-label="Remove link"
-                        class="shrink-0 text-(--color-text-muted) hover:text-(--color-danger)">✕</button>
+            <div class="flex flex-col gap-1">
+                <div class="flex items-center gap-2">
+                    <input value="@link.Url"
+                           @onchange="@(e => HandleLinkUrlChanged(idx, e.Value as string))"
+                           placeholder="https://…"
+                           class="min-w-0 flex-1 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" />
+                    <select value="@link.ExternalPlatformId"
+                            @onchange="@(e => link.ExternalPlatformId = short.Parse((string)e.Value!))"
+                            aria-label="Platform"
+                            class="rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1.5 text-sm text-(--color-text)">
+                        @foreach (ExternalPlatformDto platform in ExternalPlatforms)
+                        {
+                            <option value="@platform.ExternalPlatformId">@platform.Name</option>
+                        }
+                    </select>
+                    <button type="button" @onclick="() => RemoveExternalLink(idx)" aria-label="Remove link"
+                            class="shrink-0 text-(--color-text-muted) hover:text-(--color-danger)">✕</button>
+                </div>
+                @* Verification status is only meaningful once the link is saved (has a real id). *@
+                @if (link.StoryExternalLinkId != 0)
+                {
+                    <div class="flex flex-wrap items-center gap-2 pl-1 text-xs text-(--color-text-muted)">
+                        <span>@StatusLabel(link)</span>
+                        @if (link.VerificationStatus != VerificationStatusEnum.Verified)
+                        {
+                            bool canRequest = VerifiedPlatformIds.Contains(link.ExternalPlatformId);
+                            <button type="button" disabled="@(!canRequest)"
+                                    aria-label="Request verification"
+                                    @onclick="() => OnRequestLinkVerification.InvokeAsync(link.StoryExternalLinkId)"
+                                    class="text-(--color-action-ink) hover:underline disabled:cursor-not-allowed disabled:text-(--color-text-muted) disabled:no-underline">
+                                Request verification
+                            </button>
+                            @if (!canRequest)
+                            {
+                                <span>— verify your @PlatformName(link.ExternalPlatformId) account in Settings first</span>
+                            }
+                        }
+                    </div>
+                }
             </div>
         }
         <button type="button" @onclick="AddExternalLink" aria-label="Add external link"
@@ -243,6 +267,15 @@
     /// first option.
     /// </summary>
     [Parameter] public IReadOnlyList<ExternalPlatformDto> ExternalPlatforms { get; set; } = [];
+
+    /// <summary>
+    /// Platform ids the caller already holds a Verified account-tier identity for (WU39) — gates
+    /// each saved link row's "Request verification" button. Loaded by the page.
+    /// </summary>
+    [Parameter] public IReadOnlySet<short> VerifiedPlatformIds { get; set; } = new HashSet<short>();
+
+    /// <summary>Fires with the saved link's <c>StoryExternalLinkId</c> when the author requests per-link review (WU39).</summary>
+    [Parameter] public EventCallback<int> OnRequestLinkVerification { get; set; }
 
     private EditorView? _editor;
 
@@ -461,6 +494,21 @@
         ExternalPlatforms.FirstOrDefault(p => p.DomainPattern is null)?.ExternalPlatformId
         ?? ExternalPlatforms.FirstOrDefault()?.ExternalPlatformId
         ?? (short)0;
+
+    /// <summary>Author-facing per-link verification status label (WU39). No dates, no checkmark — see StoryExternalLinksRow for the reader-facing model.</summary>
+    private static string StatusLabel(StoryExternalLinkEditDto link) =>
+        LinkVerificationStatusHelper.GetDisplayStatus(link.VerificationStatus, link.VerificationRequested) switch
+        {
+            LinkVerificationDisplayStatus.Confirmed => "Confirmed",
+            LinkVerificationDisplayStatus.PendingReview => "Pending moderator review",
+            LinkVerificationDisplayStatus.Rejected => link.RejectionReason is { Length: > 0 } reason
+                ? $"Not confirmed — {reason}"
+                : "Not confirmed",
+            _ => "Not yet requested",
+        };
+
+    private string PlatformName(short platformId) =>
+        ExternalPlatforms.FirstOrDefault(p => p.ExternalPlatformId == platformId)?.Name ?? "this platform";
 
     private async Task HandleValidSubmit() => await OnValidSubmit.InvokeAsync();
 }

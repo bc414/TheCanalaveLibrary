@@ -170,6 +170,12 @@ public enum NotificationTypeEnum : short
     AccountBanned = 74,    // Your account has been permanently banned
     StoryApproved = 75,    // Your story submission was approved
 
+    //External-link verification (Feature 53, WU39, settled 2026-07-24)
+    ExternalAccountVerified = 76, // A moderator confirmed your external platform account
+    ExternalAccountRejected = 77, // A moderator could not confirm your external platform account
+    ExternalLinkVerified = 78,    // A moderator confirmed one of your "also posted on" links
+    ExternalLinkRejected = 79,    // A moderator could not confirm one of your "also posted on" links
+
     //Notifications for the user who *sent* a report
     ReportReceived = 80, // "Thank you, we have received your report."
     ReportResolved = 81,  // "Your report about '...' has been resolved."

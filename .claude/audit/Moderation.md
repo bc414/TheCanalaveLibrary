@@ -178,7 +178,9 @@ ToModWithMatureOff`); `dotnet test` full suite green.
 below):** the feature is **"Also posted on" external story links**, plain language, display-first.
 A story lists the other sites it's also live on (X, Y, Z — *multiple* links), shown low-key on the
 story page (after the chapter list, before recommendations — awareness, not an invitation to click
-away). Each link has a `VerificationStatus`; `Verified` links render an author-verified checkmark.
+away). Each link has a `VerificationStatus`, flipped through WU39's two-tier verification workflow
+(settled 2026-07-24, see below); the reader-facing display is a muted "reviewed" indicator, not a
+checkmark.
 **Purpose (anti-theft):** anyone can pull a story off AO3/FFN via FicHub and re-upload it under
 their own account — community members who recognize a story and see unverified links report it
 (Feature 46, existing flow) for takedown. The site is anti-predatory even toward non-users: it
@@ -196,22 +198,66 @@ ingestion (the other thing "import" used to mean here) is now **Feature 63** (`a
   per-platform verification properties off this table, not code branches. Entities live in
   `Core/Stories/` (story-page display is the primary use).
 - **WU38d ships:** the remodel migration, story-page "Also posted on" row (checkmark only when
-  `Verified`), `StoryPropertiesForm` repeatable link rows + original-dates edit surface,
+  `Verified` — **display superseded 2026-07-24 by WU39's "reviewed" sub-line, see below; the
+  underlying `VerificationStatus == Verified` gating is unchanged**), `StoryPropertiesForm`
+  repeatable link rows + original-dates edit surface,
   write-service sync (new links start `Unverified`; editing a verified link's URL resets it to
   `Unverified`). `Story.OriginalPublishedDate`/`OriginalLastUpdatedDate` already exist — no
   migration for those.
 - **Dropped by the reframe:** "route the story into `PendingApproval`" — links don't gate story
   approval (Feature 48 untouched); verification is per-link, display-only.
 
-**WU39 (re-minted as "External Link Verification (mod workflow)", deps WU34):** the
-`/mod/submissions` link-verification tab (shell stubbed in WU34), moderator review of `Unverified`
-links, the two-way-link authorship mechanism (site publishes a verifiable token the author puts on
-the source page, vs. purely manual review — still open, WU39's question), flipping
-`VerificationStatus` (checkmarks appear on the story page automatically).
+**WU39 settled design (2026-07-24 — resolves the "still open" question below; supersedes the
+WU38d checkmark display noted above):** the two-way-link mechanism is settled as a **two-tier
+verification model**, both tiers confirmed by a moderator opening the URL in their own browser —
+**no server-side outbound HTTP / scraping, ever** (SSRF surface + Cloudflare/FFN blocking risk;
+permanently deferred, not a future phase of this feature).
 
-**Stages:** L1 — Stage 5 (WU38d remodel migrated). L2 — Stage 2. L3/L3.5 — Stage 2.
-L4 — Stage 1. L5 — N/A. (L2/L3/L3.5 stay 2 because the feature's mod-verification half is WU39;
-the author-facing half below is done.)
+- **Account tier (new `UserExternalIdentity` entity):** a user proves control of an external
+  platform *account* once per (user, platform), ever. The system gives each user a single
+  site-wide public code (`TCL-Verify-XXXXXX`, lazily generated, shown at the bottom of their own
+  TCL profile — a public nonce, no security downside to publishing it; doubles as a "find me on
+  TCL" discovery nudge). The author places it on the external profile (placement surface is
+  platform-specific — a column on `ExternalPlatform`, not a code branch; e.g. FFN's profile bio,
+  as plain text since FFN disallows profile hyperlinks — "two-way" means both sides show the same
+  code, not a mutual hyperlink). A moderator opens the profile URL, confirms the code text is
+  present, flips the identity's `VerificationStatus`.
+- **Per-link tier (existing `StoryExternalLink.VerificationStatus`, reused, not retired):** even
+  with a verified account, each linked story still needs its own authorship confirmation, because
+  platform work URLs (`/works/12345`, `/s/1234567/…`) don't name the author — "account verified"
+  ≠ "this specific story is theirs." Once the account tier is Verified for that platform, the
+  author may request per-link review; a moderator opens the linked story, confirms its listed
+  author matches the confirmed handle, flips that link. No per-link mod-queue item exists before
+  the account tier is Verified.
+- **Reader display — no checkmark, ever (settled, supersedes all "checkmark" language above):** a
+  reviewed link shows the plain external link (new tab) plus an indented, muted sub-line —
+  "reviewed · author's account: `<handle>` ↗" (linking to the confirmed profile) — only when the
+  per-link tier is `Verified`. A checkmark asserts one-time-judgment-as-permanent-trust and invites
+  complacency; the muted sub-line instead invites the reader to click through and compare, every
+  time. Never-requested / pending / rejected links are **visually identical** (a plain link) —
+  deliberate: reporting is driven by a reader's own outside knowledge that a story belongs to
+  someone else, never by reading TCL's internal verification microstate, so an "unverified" flag
+  would catch ~nobody and only cast suspicion on slow-but-legitimate authors. No dates anywhere in
+  this UI (a "content changed since review" staleness signal was considered and explicitly
+  rejected as overengineering against a weak-incentive edge case).
+- **Verification stays display-only — unchanged from the reframe above:** it adds no new gate.
+  Rejected links are **not** hidden (hiding reads as an accusation and invites misdirected
+  reports) — the author gets private feedback (status + reason + notification) to fix and
+  re-request; a moderator who suspects actual theft uses the *existing* Feature 46 report / 48
+  takedown path by hand. No new automation for that case either.
+- **Cluster decision:** the verification *entity + service* (`UserExternalIdentity`,
+  `IExternalVerificationReadService`/`WriteService`) colocate in `Core/Stories`/`Server/Stories`
+  alongside `StoryExternalLink`/`ExternalPlatform` (precedent: `ISpotlightSlotAllocator`, a
+  mod-gated feature service living in its own cluster, not folded into `IModerationWriteService`).
+  Only the mod **review tab** (`/mod/submissions` → Imports) is Moderation-cluster UI, injecting
+  the Stories-cluster service — mirrors `ModStatsPage`→`ISiteDailyStatReadService`,
+  `ModSpotlightPage`→`ISpotlightSlotAllocator`. See `folder_clusters.md`.
+
+**Stages (updated 2026-07-25, WU39):** L1 — Stage 5. L2/L3-Logic/L3.5-Structure — Stage 5
+(WU39 shipped the mod-verification half; both tiers built, tested, browser-verified end to end).
+L4-Style — Stage 1 (pending visual/token sign-off, per the WU8/WU13/WU23/WU28/WU37/WU41
+precedent — functional browser verification is not the same as visual polish). L4.5-Browser —
+Stage 5 (see WU39 Stage note below). L5/L6/L8 — N/A.
 
 **WU38d Stage note (2026-07-11) — author-facing half shipped:**
 - **L1:** migration `WU38d_StoryExternalLinks` (drop `story_imports`, create
@@ -236,6 +282,61 @@ the author-facing half below is done.)
   placement asserted on `StoryDesktop`); browser (2026-07-11) — add-link with live AO3
   auto-detect, save, psql-confirmed Unverified row + original date, story-page row rendered in
   place, psql flip to Verified → checkmark + tooltip appeared.
+
+**WU39 Stage note (2026-07-25) — mod-verification half shipped:**
+- **L1:** migration `WU39ExternalLinkVerification` (new `user_external_identities` table — unique
+  `(user_id, external_platform_id)`, FKs to `AspNetUsers` (owner Cascade, reviewing moderator
+  SetNull) and `external_platforms` (Restrict); `story_external_links.date_verification_requested`
+  + `.rejection_reason` columns; `external_platforms.placement_instructions` +
+  `.supports_verification` columns + seed update (6 platforms `true` with per-platform placement
+  text, "Other" `false`); `asp_net_users.verification_code` + filtered unique index; four
+  `NotificationType` seed rows). Applied cleanly to the dev workbench and Testcontainers.
+- **Built:** `Core/Stories/{UserExternalIdentity, PublicVerificationCode}`;
+  `IExternalVerification{Read,Write}Service` + `Server{...}` impls (account-tier
+  submit/approve/reject, per-link request/approve/reject, the account-gates-link-request rule,
+  the pending-account/pending-link mod queues); `ServerStoryReadService` projection changes
+  (`StoryExternalLinkDto` gains `IsReviewed`/`AuthorAccountHandle`/`AuthorAccountProfileUrl`,
+  correlated on the story author's Verified identity for that platform;
+  `StoryExternalLinkEditDto` gains `StoryExternalLinkId`/`VerificationStatus`/
+  `VerificationRequested`/`RejectionReason`); `ExternalVerificationEndpoints` + Client read/write
+  services; four `INotificationWriteService` methods (`NotifyExternalAccount{Verified,Rejected}`,
+  `NotifyExternalLink{Verified,Rejected}`) + `KindFor` branches; `WriteActionKind.VerificationRequest`
+  (5 burst / 1 per 2 min, mirrored in `security.md`). UI: `StoryExternalLinksRow` reworked to the
+  two-line "reviewed · author's account: `<handle>`" model (no checkmark); `StoryPropertiesForm`
+  per-link status label + gated "Request verification" button; new
+  `ExternalAccountsSettingsForm` (code + per-platform submit) composed into `SettingsPage`;
+  public verification-code line on `ProfilePage`'s Profile tab (`ProfileHeaderDto.VerificationCode`);
+  `ModSubmissionsPage` Imports tab replaced with the two live queues (account + link), reusing the
+  Stories-tab Approve/Reject/reject-reason idiom exactly.
+- **Verified:** Integration (`ExternalVerificationTests`, 22 tests — account create/resubmit/
+  approve/reject + notification rows, per-link request gating (throws without a Verified account,
+  throws for non-owner) + approve/reject + notification, both mod queues' filter semantics
+  (account queue = Unverified only; link queue = Unverified + requested + account Verified for
+  that platform, with an explicit case proving a requested link on an unverified account is
+  excluded), story-page projection both ways; `ExternalVerificationEndpointsTests`, 5 tests — mod
+  routes 403 for a signed-in non-mod / 401 anonymous, author routes 401 anonymous; extended
+  `StoryExternalLinkTests` with a test proving a URL edit clears `DateVerificationRequested`
+  alongside the existing status-reset assertion). RazorComponents (`StoryExternalLinksRowTests`
+  rewritten — reviewed sub-line + handle link vs. plain non-reviewed line, no checkmark/date
+  anywhere, settled placement preserved; new `ExternalAccountsSettingsFormTests`, 7 tests; new
+  `ModSubmissionsPageImportsTests`, 9 tests — both queues render, Approve/Reject fire with the
+  right id, reject requires a reason; `StoryPropertiesFormTests` extended — request button
+  enabled only when the platform is in `VerifiedPlatformIds`, fires the callback with the link id,
+  status label per state). Unit (`PublicVerificationCodeTests`,
+  `LinkVerificationStatusHelperTests`, `ClientExternalVerificationServiceTests` — route/verb
+  shapes + status-code translation). Full suite green: 752 Unit + 544 RazorComponents + 783
+  Integration. Browser (2026-07-25, server-only path) — full live walk as AuthorAlpha/AdminUser:
+  Settings generated `TCL-Verify-MNQEPU`, submitted an AO3 account (→ "Pending moderator
+  review"), added an AO3 link to a story (paste-URL auto-detect confirmed), per-link "Request
+  verification" correctly disabled with the "verify your account first" hint pre-approval; mod
+  Imports tab showed the account request with its code and the profile link, approved it; the
+  per-link button then enabled, requested, appeared in the mod's link queue showing the confirmed
+  handle `gengarlover` for comparison, approved; the public story page rendered the settled
+  two-line "reviewed · author's account: gengarlover ↗" sub-line with no checkmark, both links
+  `target="_blank"`/`rel=nofollow`. psql confirmed `user_external_identities` Verified +
+  moderator-stamped, `story_external_links.verification_status` Verified, `AspNetUsers
+  .verification_code` matching the UI, and both `ExternalAccountVerified`(76)/
+  `ExternalLinkVerified`(78) notification rows with the correct `related_entity_id` (0 / storyId).
 
 ## Feature 62 — SiteDailyStat Worker
 

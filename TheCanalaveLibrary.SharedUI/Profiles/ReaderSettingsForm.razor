@@ -111,14 +111,6 @@
             <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
                 <input type="checkbox"
                        class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
-                       checked="@_autoLoadNext"
-                       @onchange="e => _autoLoadNext = (bool)(e.Value ?? false)" />
-                Auto-load next chapter when reaching the end
-            </label>
-
-            <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
-                <input type="checkbox"
-                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
                        checked="@_collapseThreads"
                        @onchange="e => _collapseThreads = (bool)(e.Value ?? false)" />
                 Collapse comment threads by default
@@ -145,7 +137,6 @@
     private float _lineHeight = 1.5f;
     private int _textWidth = 800;
     private bool _justifyText;
-    private bool _autoLoadNext;
     private bool _collapseThreads = true;
     private int _defaultPageSize = 20;
     private DefaultSortOrder _defaultSort = DefaultSortOrder.DatePublished;
@@ -162,7 +153,6 @@
             _lineHeight      = Initial.LineHeight;
             _textWidth       = Initial.TextWidth;
             _justifyText     = Initial.JustifyText;
-            _autoLoadNext    = Initial.AutoLoadNextChapter;
             _collapseThreads = Initial.CollapseCommentThreads;
             _defaultPageSize = Initial.DefaultPaginationSize;
             _defaultSort     = Initial.DefaultSearchSort;
@@ -175,6 +165,6 @@
     private async Task HandleSave() =>
         await OnSave.InvokeAsync(new ReaderSettingsDto(
             _fontName, _fontSize, _lineHeight, _textWidth,
-            _justifyText, _autoLoadNext, _collapseThreads,
+            _justifyText, _collapseThreads,
             _defaultPageSize, _defaultSort, _readingBackground, _savedTagSelectionSort));
 }

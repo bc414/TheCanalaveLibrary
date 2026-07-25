@@ -5,13 +5,22 @@
 @using Microsoft.Extensions.Logging
 @inject ILogger<ModSubmissionsPage> Logger
 @inject IModerationWriteService ModerationService
+@inject IExternalVerificationWriteService ExternalVerificationService
 
-@* Story submission queue (WU34 Feature 48). Tabbed shell — Stories tab is the active tab;
-   Imports tab is a placeholder for WU39. Desktop-only.
+@* Story submission queue (WU34 Feature 48) + external-link verification (Feature 53, WU39).
+   Tabbed shell — Stories tab is the active tab. Desktop-only.
 
-   Approve: sets StoryStatusId = PostApprovalStatus + fires StoryApproved notification.
-   Reject: sets StoryStatusId = Rejected + records reason + fires StoryRejected notification.
-   [PersistentState] on Submissions avoids the prerender→interactive double fetch; persisted
+   Stories tab — Approve: sets StoryStatusId = PostApprovalStatus + fires StoryApproved
+   notification. Reject: sets StoryStatusId = Rejected + records reason + fires StoryRejected
+   notification.
+
+   Imports tab — two independent queues, both manual review (no server-side fetch, ever):
+   account tier (open the profile URL, confirm the code text is present) and per-link tier (open
+   the linked story, confirm its listed author matches the confirmed account handle). Approve/
+   reject on either fires the matching notification; a rejected link is NOT hidden publicly
+   (settled 2026-07-24, audit/Moderation.md F53 — hiding reads as an accusation).
+
+   [PersistentState] on all three queues avoids the prerender→interactive double fetch; persisted
    payload = rendered content, mod-gated page (layer5-wasm.md §"Avoiding the double fetch"). *@
 
 <PageTitle>Mod — Submissions</PageTitle>
@@ -120,10 +129,178 @@
     }
     else
     {
-        @* ── Imports tab — placeholder for WU39 ──────────────────────────────── *@
-        <p class="text-sm text-(--color-text-muted) italic">
-            Import verification is coming in a future update (WU39).
-        </p>
+        @* ── Imports tab — external-link verification (Feature 53, WU39) ─────────── *@
+        <div class="flex flex-col gap-6">
+            <section class="flex flex-col gap-3">
+                <h2 class="text-lg font-semibold text-text">Pending account verifications</h2>
+                <p class="text-xs text-(--color-text-muted)">
+                    Open the profile URL and confirm the code text is present, then approve or reject.
+                </p>
+                @if (_accountsLoading || PendingAccounts is null)
+                {
+                    <p class="text-sm text-(--color-text-muted)">Loading…</p>
+                }
+                else if (PendingAccounts.Length == 0)
+                {
+                    <p class="text-sm text-(--color-text-muted)">No pending account verifications.</p>
+                }
+                else
+                {
+                    <div class="flex flex-col gap-3">
+                        @foreach (var a in PendingAccounts)
+                        {
+                            var acc = a;
+                            <div class="rounded-lg border border-(--color-border) bg-surface p-4">
+                                <div class="flex items-start justify-between gap-4">
+                                    <div>
+                                        <p class="font-semibold text-text">@acc.UserName &mdash; @acc.PlatformName</p>
+                                        <p class="mt-0.5 text-sm text-(--color-text-muted)">
+                                            Handle: @acc.Handle &mdash;
+                                            requested @acc.DateRequested.ToString("yyyy-MM-dd")
+                                        </p>
+                                        <p class="mt-1 text-xs text-(--color-text-muted)">
+                                            Look for code
+                                            <code class="rounded border border-(--color-border) bg-(--color-surface-raised) px-1 py-0.5">@acc.VerificationCode</code>
+                                            on <a href="@acc.ProfileUrl" target="_blank" rel="noopener noreferrer nofollow"
+                                                  class="text-(--color-action-ink) hover:underline">their profile ↗</a>
+                                        </p>
+                                    </div>
+                                    <div class="flex shrink-0 flex-col items-end gap-2">
+                                        <button type="button"
+                                                class="rounded-md bg-(--color-success)/15 px-3 py-1 text-sm text-(--color-success) ring-1 ring-(--color-success)/30 transition-colors hover:bg-(--color-success)/25 disabled:opacity-50"
+                                                disabled="@(_actingAccountId is not null)"
+                                                @onclick="() => ApproveAccountAsync(acc.UserExternalIdentityId)">
+                                            Approve
+                                        </button>
+                                        <button type="button"
+                                                class="rounded-md bg-danger px-3 py-1 text-sm text-white transition-colors hover:bg-(--color-danger-strong) disabled:opacity-50"
+                                                disabled="@(_actingAccountId is not null)"
+                                                @onclick="() => OpenRejectAccountPanel(acc.UserExternalIdentityId)">
+                                            Reject
+                                        </button>
+                                    </div>
+                                </div>
+
+                                @if (_rejectingAccountId == acc.UserExternalIdentityId)
+                                {
+                                    <div class="mt-3 border-t border-(--color-border) pt-3">
+                                        <label class="mb-1 block text-sm font-medium text-text" for="reject-account-reason-@acc.UserExternalIdentityId">
+                                            Rejection reason
+                                        </label>
+                                        <textarea id="reject-account-reason-@acc.UserExternalIdentityId" rows="2"
+                                                  class="w-full rounded-md border border-(--color-border) bg-surface px-3 py-2 text-sm text-text"
+                                                  @bind="_rejectAccountReason"></textarea>
+                                        @if (_rejectAccountError is not null)
+                                        {
+                                            <div class="mt-1"><InlineAlert Message="@_rejectAccountError" /></div>
+                                        }
+                                        <div class="mt-2 flex gap-2">
+                                            <button type="button"
+                                                    class="rounded-md bg-danger px-3 py-1 text-sm text-white transition-colors hover:bg-(--color-danger-strong) disabled:opacity-50"
+                                                    disabled="@(_actingAccountId is not null)"
+                                                    @onclick="() => ConfirmRejectAccountAsync(acc.UserExternalIdentityId)">
+                                                Confirm reject
+                                            </button>
+                                            <button type="button"
+                                                    class="rounded border border-(--color-border) bg-surface px-3 py-1 text-sm text-text"
+                                                    @onclick="CancelRejectAccount">
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+
+            <section class="flex flex-col gap-3">
+                <h2 class="text-lg font-semibold text-text">Pending link verifications</h2>
+                <p class="text-xs text-(--color-text-muted)">
+                    Open the linked story and confirm its listed author matches the confirmed account handle, then approve or reject.
+                </p>
+                @if (_linksLoading || PendingLinks is null)
+                {
+                    <p class="text-sm text-(--color-text-muted)">Loading…</p>
+                }
+                else if (PendingLinks.Length == 0)
+                {
+                    <p class="text-sm text-(--color-text-muted)">No pending link verifications.</p>
+                }
+                else
+                {
+                    <div class="flex flex-col gap-3">
+                        @foreach (var l in PendingLinks)
+                        {
+                            var link = l;
+                            <div class="rounded-lg border border-(--color-border) bg-surface p-4">
+                                <div class="flex items-start justify-between gap-4">
+                                    <div>
+                                        <a href="@link.StoryUrl" target="_blank"
+                                           class="font-semibold text-(--color-action-ink) hover:underline">
+                                            @link.StoryTitle
+                                        </a>
+                                        <p class="mt-0.5 text-sm text-(--color-text-muted)">
+                                            by @link.AuthorUserName &mdash; @link.PlatformName &mdash;
+                                            requested @link.DateRequested.ToString("yyyy-MM-dd")
+                                        </p>
+                                        <p class="mt-1 text-xs text-(--color-text-muted)">
+                                            Confirmed account: @link.AccountHandle &mdash;
+                                            <a href="@link.LinkUrl" target="_blank" rel="noopener noreferrer nofollow"
+                                               class="text-(--color-action-ink) hover:underline">open link ↗</a>
+                                        </p>
+                                    </div>
+                                    <div class="flex shrink-0 flex-col items-end gap-2">
+                                        <button type="button"
+                                                class="rounded-md bg-(--color-success)/15 px-3 py-1 text-sm text-(--color-success) ring-1 ring-(--color-success)/30 transition-colors hover:bg-(--color-success)/25 disabled:opacity-50"
+                                                disabled="@(_actingLinkId is not null)"
+                                                @onclick="() => ApproveLinkAsync(link.StoryExternalLinkId)">
+                                            Approve
+                                        </button>
+                                        <button type="button"
+                                                class="rounded-md bg-danger px-3 py-1 text-sm text-white transition-colors hover:bg-(--color-danger-strong) disabled:opacity-50"
+                                                disabled="@(_actingLinkId is not null)"
+                                                @onclick="() => OpenRejectLinkPanel(link.StoryExternalLinkId)">
+                                            Reject
+                                        </button>
+                                    </div>
+                                </div>
+
+                                @if (_rejectingLinkId == link.StoryExternalLinkId)
+                                {
+                                    <div class="mt-3 border-t border-(--color-border) pt-3">
+                                        <label class="mb-1 block text-sm font-medium text-text" for="reject-link-reason-@link.StoryExternalLinkId">
+                                            Rejection reason
+                                        </label>
+                                        <textarea id="reject-link-reason-@link.StoryExternalLinkId" rows="2"
+                                                  class="w-full rounded-md border border-(--color-border) bg-surface px-3 py-2 text-sm text-text"
+                                                  @bind="_rejectLinkReason"></textarea>
+                                        @if (_rejectLinkError is not null)
+                                        {
+                                            <div class="mt-1"><InlineAlert Message="@_rejectLinkError" /></div>
+                                        }
+                                        <div class="mt-2 flex gap-2">
+                                            <button type="button"
+                                                    class="rounded-md bg-danger px-3 py-1 text-sm text-white transition-colors hover:bg-(--color-danger-strong) disabled:opacity-50"
+                                                    disabled="@(_actingLinkId is not null)"
+                                                    @onclick="() => ConfirmRejectLinkAsync(link.StoryExternalLinkId)">
+                                                Confirm reject
+                                            </button>
+                                            <button type="button"
+                                                    class="rounded border border-(--color-border) bg-surface px-3 py-1 text-sm text-text"
+                                                    @onclick="CancelRejectLink">
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+        </div>
     }
 </div>
 
@@ -144,11 +321,35 @@
     private string? _rejectReason;
     private string? _rejectError;
 
+    // ── Imports tab state (Feature 53, WU39) — two independent queues ────────────
+    [PersistentState]
+    public PendingAccountVerificationDto[]? PendingAccounts { get; set; }
+    [PersistentState]
+    public PendingLinkVerificationDto[]? PendingLinks { get; set; }
+
+    private bool _accountsLoading = true;
+    private bool _linksLoading = true;
+
+    private int? _actingAccountId;
+    private int? _rejectingAccountId;
+    private string? _rejectAccountReason;
+    private string? _rejectAccountError;
+
+    private int? _actingLinkId;
+    private int? _rejectingLinkId;
+    private string? _rejectLinkReason;
+    private string? _rejectLinkError;
+
     protected override async Task OnInitializedAsync()
     {
         // ??= — skip the fetch when [PersistentState] restored the prerendered queue.
         Submissions ??= await ModerationService.GetPendingSubmissionsAsync();
         _loading = false;
+
+        PendingAccounts ??= (await ExternalVerificationService.GetPendingAccountVerificationsAsync()).ToArray();
+        _accountsLoading = false;
+        PendingLinks ??= (await ExternalVerificationService.GetPendingLinkVerificationsAsync()).ToArray();
+        _linksLoading = false;
     }
 
     private async Task LoadAsync()
@@ -203,6 +404,118 @@
         }
         catch (Exception ex) { _rejectError = Translate(ex, "Rejecting a story submission failed unexpectedly"); }
         finally { _actingStoryId = null; }
+    }
+
+    // ── Imports tab — account tier (WU39) ─────────────────────────────────────────
+
+    private async Task LoadAccountsAsync()
+    {
+        _accountsLoading = true;
+        PendingAccounts = (await ExternalVerificationService.GetPendingAccountVerificationsAsync()).ToArray();
+        _accountsLoading = false;
+    }
+
+    private async Task ApproveAccountAsync(int userExternalIdentityId)
+    {
+        _actingAccountId = userExternalIdentityId;
+        _rejectAccountError = null;
+        try
+        {
+            await ExternalVerificationService.ApproveAccountVerificationAsync(userExternalIdentityId);
+            await LoadAccountsAsync();
+        }
+        catch (Exception ex) { _rejectAccountError = Translate(ex, "Approving an account verification failed unexpectedly"); }
+        finally { _actingAccountId = null; }
+    }
+
+    private void OpenRejectAccountPanel(int userExternalIdentityId)
+    {
+        _rejectingAccountId = userExternalIdentityId;
+        _rejectAccountReason = null;
+        _rejectAccountError = null;
+    }
+
+    private void CancelRejectAccount()
+    {
+        _rejectingAccountId = null;
+        _rejectAccountReason = null;
+        _rejectAccountError = null;
+    }
+
+    private async Task ConfirmRejectAccountAsync(int userExternalIdentityId)
+    {
+        if (string.IsNullOrWhiteSpace(_rejectAccountReason))
+        {
+            _rejectAccountError = "A rejection reason is required.";
+            return;
+        }
+
+        _actingAccountId = userExternalIdentityId;
+        _rejectAccountError = null;
+        try
+        {
+            await ExternalVerificationService.RejectAccountVerificationAsync(userExternalIdentityId, _rejectAccountReason!);
+            CancelRejectAccount();
+            await LoadAccountsAsync();
+        }
+        catch (Exception ex) { _rejectAccountError = Translate(ex, "Rejecting an account verification failed unexpectedly"); }
+        finally { _actingAccountId = null; }
+    }
+
+    // ── Imports tab — per-link tier (WU39) ────────────────────────────────────────
+
+    private async Task LoadLinksAsync()
+    {
+        _linksLoading = true;
+        PendingLinks = (await ExternalVerificationService.GetPendingLinkVerificationsAsync()).ToArray();
+        _linksLoading = false;
+    }
+
+    private async Task ApproveLinkAsync(int storyExternalLinkId)
+    {
+        _actingLinkId = storyExternalLinkId;
+        _rejectLinkError = null;
+        try
+        {
+            await ExternalVerificationService.ApproveLinkVerificationAsync(storyExternalLinkId);
+            await LoadLinksAsync();
+        }
+        catch (Exception ex) { _rejectLinkError = Translate(ex, "Approving a link verification failed unexpectedly"); }
+        finally { _actingLinkId = null; }
+    }
+
+    private void OpenRejectLinkPanel(int storyExternalLinkId)
+    {
+        _rejectingLinkId = storyExternalLinkId;
+        _rejectLinkReason = null;
+        _rejectLinkError = null;
+    }
+
+    private void CancelRejectLink()
+    {
+        _rejectingLinkId = null;
+        _rejectLinkReason = null;
+        _rejectLinkError = null;
+    }
+
+    private async Task ConfirmRejectLinkAsync(int storyExternalLinkId)
+    {
+        if (string.IsNullOrWhiteSpace(_rejectLinkReason))
+        {
+            _rejectLinkError = "A rejection reason is required.";
+            return;
+        }
+
+        _actingLinkId = storyExternalLinkId;
+        _rejectLinkError = null;
+        try
+        {
+            await ExternalVerificationService.RejectLinkVerificationAsync(storyExternalLinkId, _rejectLinkReason!);
+            CancelRejectLink();
+            await LoadLinksAsync();
+        }
+        catch (Exception ex) { _rejectLinkError = Translate(ex, "Rejecting a link verification failed unexpectedly"); }
+        finally { _actingLinkId = null; }
     }
 
     /// <summary>Catch-site exception-message discipline (mirrors CommentSection.Translate).</summary>

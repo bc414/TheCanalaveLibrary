@@ -217,6 +217,26 @@ public class ServerNotificationWriteService(
             [(storyAuthorUserId, storyId)]);
 
     /// <inheritdoc/>
+    public Task NotifyExternalAccountVerifiedAsync(int userId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.ExternalAccountVerified, moderatorSourceId,
+            [(userId, 0)]);
+
+    /// <inheritdoc/>
+    public Task NotifyExternalAccountRejectedAsync(int userId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.ExternalAccountRejected, moderatorSourceId,
+            [(userId, 0)]);
+
+    /// <inheritdoc/>
+    public Task NotifyExternalLinkVerifiedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.ExternalLinkVerified, moderatorSourceId,
+            [(storyAuthorUserId, storyId)]);
+
+    /// <inheritdoc/>
+    public Task NotifyExternalLinkRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.ExternalLinkRejected, moderatorSourceId,
+            [(storyAuthorUserId, storyId)]);
+
+    /// <inheritdoc/>
     public Task NotifyAccountWarningAsync(int targetUserId, int moderatorSourceId) =>
         CreateCoreAsync(NotificationTypeEnum.AccountWarning, moderatorSourceId,
             [(targetUserId, 0)]);

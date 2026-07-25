@@ -72,7 +72,7 @@ internal sealed class FakeUserSettingsService : IUserSettingsService
         PrefersAnimatedSprites: true,
         PrefersDataSaverMode: false,
         Reader: new ReaderSettingsDto(
-            "Georgia", 16, 1.5f, 800, false, false, true, 20,
+            "Georgia", 16, 1.5f, 800, false, true, 20,
             DefaultSortOrder.DatePublished, ReadingBackgroundEnum.SiteDefault, SavedTagSelectionSort),
         Privacy: new PrivacySettingsDto(
             ProfileVisibility.Public, true, SocialInteractionPermission.Public,

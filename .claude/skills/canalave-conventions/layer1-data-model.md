@@ -214,7 +214,6 @@ public class ReaderSettings
     public float LineHeight { get; set; } = 1.6f;
     public int TextWidth { get; set; } = 700;
     public bool JustifyText { get; set; } = false;
-    public bool AutoLoadNextChapter { get; set; } = true;
     public bool CollapseCommentThreads { get; set; } = false;
     public int DefaultPaginationSize { get; set; } = 20;
 }

@@ -1,0 +1,129 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* External-account verification sub-form (Feature 53, WU39, settled 2026-07-24). No @inject —
+   parameter-driven, bUnit-testable, matches the SettingsPage sub-form convention
+   (AuthorSettingsForm et al.). Shows the caller's site-wide public verification code, and per
+   platform that supports verification: current account-tier status + a profile-URL/handle submit
+   form. Account-tier confirmation is what lets a story-page link show its "reviewed · author's
+   account" sub-line (StoryExternalLinksRow) once the per-link tier is also confirmed. *@
+
+<section class="flex flex-col gap-4">
+    <div>
+        <h2 class="text-base font-semibold text-(--color-text)">External Account Verification</h2>
+        <p class="text-sm text-(--color-text-muted)">
+            Prove you control your accounts on other fanfiction sites. Once a moderator confirms
+            an account, readers can compare your "also posted on" links against it directly —
+            place your code, then request review below.
+        </p>
+    </div>
+
+    <div class="flex flex-col gap-4 rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-4">
+        @if (!string.IsNullOrEmpty(VerificationCode))
+        {
+            <div class="flex flex-col gap-1">
+                <span class="text-sm font-medium text-(--color-text)">Your verification code</span>
+                <code class="w-fit rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text)">@VerificationCode</code>
+                <p class="text-xs text-(--color-text-muted)">
+                    Place this exact code on each external profile below, then request review.
+                    It also shows publicly at the bottom of your own profile.
+                </p>
+            </div>
+        }
+
+        @foreach (VerificationPlatformDto platform in Platforms)
+        {
+            ExternalAccountDto? account = Accounts.FirstOrDefault(a => a.ExternalPlatformId == platform.ExternalPlatformId);
+            <div class="flex flex-col gap-2 border-t border-(--color-border) pt-3 first:border-t-0 first:pt-0">
+                <span class="text-sm font-medium text-(--color-text)">@platform.Name</span>
+
+                @if (account is { Status: VerificationStatusEnum.Verified })
+                {
+                    <p class="text-xs text-(--color-text-muted)">
+                        Confirmed — @account.Handle
+                        (<a href="@account.ProfileUrl" target="_blank" rel="noopener noreferrer nofollow"
+                            class="text-(--color-action-ink) hover:underline">profile ↗</a>)
+                    </p>
+                }
+                else
+                {
+                    @if (platform.PlacementInstructions is { Length: > 0 })
+                    {
+                        <p class="text-xs text-(--color-text-muted)">@platform.PlacementInstructions</p>
+                    }
+                    @if (account is { Status: VerificationStatusEnum.Unverified })
+                    {
+                        <p class="text-xs text-(--color-text-muted)">Pending moderator review.</p>
+                    }
+                    else if (account is { Status: VerificationStatusEnum.Rejected })
+                    {
+                        <p class="text-xs text-(--color-danger)">
+                            Not confirmed@(account.RejectionReason is { Length: > 0 } reason ? $" — {reason}" : "")
+                        </p>
+                    }
+
+                    <div class="flex flex-wrap items-center gap-2">
+                        <input value="@GetEdit(platform.ExternalPlatformId).Url"
+                               @onchange="e => SetUrl(platform.ExternalPlatformId, e.Value as string)"
+                               placeholder="Profile URL"
+                               aria-label="@($"{platform.Name} profile URL")"
+                               class="min-w-0 flex-1 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" />
+                        <input value="@GetEdit(platform.ExternalPlatformId).Handle"
+                               @onchange="e => SetHandle(platform.ExternalPlatformId, e.Value as string)"
+                               placeholder="Your handle"
+                               aria-label="@($"{platform.Name} handle")"
+                               class="w-40 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" />
+                        <button type="button" disabled="@Busy"
+                                aria-label="@($"Request review for {platform.Name}")"
+                                @onclick="() => Submit(platform.ExternalPlatformId)"
+                                class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
+                            Request review
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter] public string? VerificationCode { get; set; }
+    [Parameter] public IReadOnlyList<VerificationPlatformDto> Platforms { get; set; } = [];
+    [Parameter] public IReadOnlyList<ExternalAccountDto> Accounts { get; set; } = [];
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Fires with the (platform, url, handle) the author entered when they click "Request review".</summary>
+    [Parameter] public EventCallback<AddExternalAccountRequest> OnSubmitAccount { get; set; }
+
+    private readonly Dictionary<short, (string Url, string Handle)> _edits = new();
+    private bool _seeded;
+
+    protected override void OnParametersSet()
+    {
+        if (_seeded) return;
+        foreach (ExternalAccountDto account in Accounts)
+            _edits[account.ExternalPlatformId] = (account.ProfileUrl, account.Handle);
+        _seeded = true;
+    }
+
+    private (string Url, string Handle) GetEdit(short platformId) =>
+        _edits.TryGetValue(platformId, out (string Url, string Handle) edit) ? edit : (string.Empty, string.Empty);
+
+    private void SetUrl(short platformId, string? url)
+    {
+        (string _, string handle) = GetEdit(platformId);
+        _edits[platformId] = (url?.Trim() ?? string.Empty, handle);
+    }
+
+    private void SetHandle(short platformId, string? handle)
+    {
+        (string url, string _) = GetEdit(platformId);
+        _edits[platformId] = (url, handle?.Trim() ?? string.Empty);
+    }
+
+    private async Task Submit(short platformId)
+    {
+        (string url, string handle) = GetEdit(platformId);
+        await OnSubmitAccount.InvokeAsync(new AddExternalAccountRequest(platformId, url, handle));
+    }
+}

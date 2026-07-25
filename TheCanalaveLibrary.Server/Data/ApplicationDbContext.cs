@@ -170,6 +170,7 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     //"Also posted on" external links (Feature 53 reframe, WU38d) + seeded platform lookup
     public DbSet<StoryExternalLink> StoryExternalLinks { get; set; }
     public DbSet<ExternalPlatform> ExternalPlatforms { get; set; }
+    public DbSet<UserExternalIdentity> UserExternalIdentities { get; set; }
 
     //Collaboration
     public DbSet<StoryAcknowledgment> StoryAcknowledgments { get; set; }

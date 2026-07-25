@@ -27,6 +27,19 @@ public partial class StoryExternalLink
 
     public DateTime DateAdded { get; set; }
 
+    /// <summary>
+    /// Per-link tier (WU39). Null = not requested. Set when the author requests review — but only
+    /// once their <see cref="UserExternalIdentity"/> account tier is Verified for this platform;
+    /// see <c>ServerExternalVerificationWriteService.RequestLinkVerificationAsync</c>. The
+    /// existing delete+add resync on URL edit (<c>ServerStoryWriteService</c>) already clears this
+    /// on re-add, same as it resets <see cref="VerificationStatus"/>.
+    /// </summary>
+    public DateTime? DateVerificationRequested { get; set; }
+
+    /// <summary>Author-facing only — shown in the editor so they can fix and re-request. Never projected to the reader page.</summary>
+    [MaxLength(512)]
+    public string? RejectionReason { get; set; }
+
     public virtual Story Story { get; set; } = null!;
 
     public virtual ExternalPlatform ExternalPlatform { get; set; } = null!;

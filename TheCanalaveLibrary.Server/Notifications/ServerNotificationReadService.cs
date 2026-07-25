@@ -89,6 +89,12 @@ public class ServerNotificationReadService(
         NotificationTypeEnum.StoryRejected                   => RelatedEntityKind.Story,
         NotificationTypeEnum.StoryApproved                   => RelatedEntityKind.Story,
 
+        // ── Implemented WU39 (Feature 53): RelatedEntityId = storyId for the per-link tier;
+        // the account tier carries 0 (Settings is a fixed route, not an entity) — falls to
+        // None below. ─────────────────────────────────────────────────────────────────────
+        NotificationTypeEnum.ExternalLinkVerified => RelatedEntityKind.Story,
+        NotificationTypeEnum.ExternalLinkRejected => RelatedEntityKind.Story,
+
         // ── No navigable target (site announcements, account warnings, reports) ──
         _ => RelatedEntityKind.None
     };

@@ -63,7 +63,8 @@ public class TreeSearchPageTests : BunitContext
         ProfileVisibility: ProfileVisibility.Public,
         AllowProfileComments: SocialInteractionPermission.Nobody,
         ShowUserStats: false,
-        LastSeenUtc: null);
+        LastSeenUtc: null,
+        VerificationCode: null);
 
     private static TreeSearchListingResultDto MakeResult(
         params (int StoryId, int Degree, string? Path)[] hits) => new()

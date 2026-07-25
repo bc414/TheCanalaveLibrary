@@ -8,7 +8,7 @@ namespace TheCanalaveLibrary.SharedUI;
 /// unified type loaded for the viewer; a layout-level ancestor converts it to this bag once
 /// (<see cref="ToReaderDisplaySettings"/>) and provides it via CascadingValue, so leaves like
 /// RichTextView see only the fields they render — not the behavior settings
-/// (AutoLoadNextChapter, CollapseCommentThreads, etc.) they have no business consuming.
+/// (CollapseCommentThreads, etc.) they have no business consuming.
 /// See canalave-conventions/layer3.5-structure.md "Ambient Viewer Settings via Cascading Slim Bags".
 /// </summary>
 public class ReaderDisplaySettings

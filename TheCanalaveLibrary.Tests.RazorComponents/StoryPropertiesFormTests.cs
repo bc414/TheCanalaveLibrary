@@ -158,6 +158,120 @@ public class StoryPropertiesFormTests : BunitContext
 
         cut.Find("button[type='submit']").HasAttribute("disabled").Should().BeTrue();
     }
+
+    // ── "Also posted on" per-link verification (Feature 53, WU39) ────────────────
+
+    private static readonly ExternalPlatformDto Ao3Platform = new(1, "Archive of Our Own", "archiveofourown.org");
+
+    private IRenderedComponent<StoryPropertiesForm> RenderWithSavedLink(
+        VerificationStatusEnum status, bool requested, IReadOnlySet<short>? verifiedPlatformIds = null)
+    {
+        StoryPropertiesViewModel vm = MakeValidViewModel();
+        vm.ExternalLinks =
+        [
+            new StoryExternalLinkEditDto
+            {
+                StoryExternalLinkId = 42,
+                ExternalPlatformId = 1,
+                Url = "https://archiveofourown.org/works/123",
+                VerificationStatus = status,
+                VerificationRequested = requested
+            }
+        ];
+
+        return Render<StoryPropertiesForm>(p =>
+        {
+            p.Add(f => f.ViewModel, vm);
+            p.Add(f => f.ExternalPlatforms, (IReadOnlyList<ExternalPlatformDto>)[Ao3Platform]);
+            p.Add(f => f.VerifiedPlatformIds, verifiedPlatformIds ?? new HashSet<short>());
+        });
+    }
+
+    [Fact]
+    public void SavedLink_UnverifiedPlatform_RequestButtonDisabled_WithHint()
+    {
+        IRenderedComponent<StoryPropertiesForm> cut = RenderWithSavedLink(
+            VerificationStatusEnum.Unverified, requested: false, verifiedPlatformIds: new HashSet<short>());
+
+        cut.Find("button[aria-label='Request verification']").HasAttribute("disabled").Should().BeTrue();
+        cut.Markup.Should().Contain("verify your Archive of Our Own account");
+        cut.Markup.Should().Contain("Not yet requested");
+    }
+
+    [Fact]
+    public void SavedLink_VerifiedPlatform_RequestButtonEnabled()
+    {
+        IRenderedComponent<StoryPropertiesForm> cut = RenderWithSavedLink(
+            VerificationStatusEnum.Unverified, requested: false, verifiedPlatformIds: new HashSet<short> { 1 });
+
+        cut.Find("button[aria-label='Request verification']").HasAttribute("disabled").Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SavedLink_ClickRequestVerification_RaisesCallback_WithLinkId()
+    {
+        int? raisedId = null;
+        StoryPropertiesViewModel vm = MakeValidViewModel();
+        vm.ExternalLinks =
+        [
+            new StoryExternalLinkEditDto
+            {
+                StoryExternalLinkId = 42,
+                ExternalPlatformId = 1,
+                Url = "https://archiveofourown.org/works/123",
+                VerificationStatus = VerificationStatusEnum.Unverified,
+                VerificationRequested = false
+            }
+        ];
+
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(p =>
+        {
+            p.Add(f => f.ViewModel, vm);
+            p.Add(f => f.ExternalPlatforms, (IReadOnlyList<ExternalPlatformDto>)[Ao3Platform]);
+            p.Add(f => f.VerifiedPlatformIds, (IReadOnlySet<short>)new HashSet<short> { 1 });
+            p.Add(f => f.OnRequestLinkVerification, EventCallback.Factory.Create<int>(this, id => raisedId = id));
+        });
+
+        await cut.Find("button[aria-label='Request verification']").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        raisedId.Should().Be(42);
+    }
+
+    [Fact]
+    public void SavedLink_PendingReview_ShowsPendingLabel_NoRequestButtonDisabledState()
+    {
+        IRenderedComponent<StoryPropertiesForm> cut = RenderWithSavedLink(
+            VerificationStatusEnum.Unverified, requested: true, verifiedPlatformIds: new HashSet<short> { 1 });
+
+        cut.Markup.Should().Contain("Pending moderator review");
+    }
+
+    [Fact]
+    public void SavedLink_Confirmed_ShowsConfirmedLabel_NoRequestButton()
+    {
+        IRenderedComponent<StoryPropertiesForm> cut = RenderWithSavedLink(
+            VerificationStatusEnum.Verified, requested: true, verifiedPlatformIds: new HashSet<short> { 1 });
+
+        cut.Markup.Should().Contain("Confirmed");
+        cut.FindAll("button[aria-label='Request verification']").Should().BeEmpty(
+            "a confirmed link has nothing left to request");
+    }
+
+    [Fact]
+    public void UnsavedLink_NoStatusLabelOrRequestButton()
+    {
+        // StoryExternalLinkId == 0 (unsaved) — verification status is meaningless until saved.
+        StoryPropertiesViewModel vm = MakeValidViewModel();
+        vm.ExternalLinks = [new StoryExternalLinkEditDto { ExternalPlatformId = 1, Url = "https://archiveofourown.org/works/123" }];
+
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(p =>
+        {
+            p.Add(f => f.ViewModel, vm);
+            p.Add(f => f.ExternalPlatforms, (IReadOnlyList<ExternalPlatformDto>)[Ao3Platform]);
+        });
+
+        cut.FindAll("button[aria-label='Request verification']").Should().BeEmpty();
+    }
 }
 
 file sealed class FakeTagReadServiceForForm : ITagReadService

@@ -223,11 +223,11 @@ Ordered as v1, all deps Stage 5, settled directions in the audit files named in 
    shell + Automatic tab; Manual tab is a placeholder for WU40 to fill in).
 4. **WU38a Account Deletion UI** (surface the existing service from `/settings`).
 5. **WU-AccountEnforcement** (Suspended/Banned at login; Warned banner).
-6. **WU39 External Link Verification (mod workflow)** — re-minted 2026-07-11 (was "Story Import &
-   Verification"): fills the `/mod/submissions` tab with review of `Unverified` `StoryExternalLink`
-   rows + the two-way-link authorship mechanism. Its author-facing half (links + story-page
-   display) moved into WU38d; file ingestion became Feature 63/WU38d. See `audit/Moderation.md`
-   Feature 53.
+6. **WU39 External Link Verification (mod workflow) — DONE ✓ (2026-07-25).** Re-minted 2026-07-11
+   (was "Story Import & Verification"); its author-facing half (links + story-page display) moved
+   into WU38d, file ingestion became Feature 63/WU38d. Shipped the two-tier verification model
+   (account tier + the existing per-link tier) and the `/mod/submissions` Imports tab's two live
+   queues — see `audit/Moderation.md` Feature 53 (WU39 Stage note), `workplan.md` WU39.
 7. **WU38c Export (six formats) + WU38d Chapter Import & external links — DONE ✓ (2026-07-11).**
    Scope expanded same day from "epub/pdf export, lowest value": planning surfaced that
    file-format import (Word/Google-Docs/EPUB → chapters) existed nowhere, and it's

@@ -27,6 +27,7 @@ public sealed class ServerWriteRateLimitService : IWriteRateLimitService, IDispo
         [WriteActionKind.Report] = BucketOf(tokenLimit: 5, replenishmentSeconds: 180),         // 5 burst, 1 per 3 min
         [WriteActionKind.ContentCreate] = BucketOf(tokenLimit: 5, replenishmentSeconds: 120),  // 5 burst, 1 per 2 min
         [WriteActionKind.ImageUpload] = BucketOf(tokenLimit: 10, replenishmentSeconds: 30),    // 10 burst, 1 per 30 s
+        [WriteActionKind.VerificationRequest] = BucketOf(tokenLimit: 5, replenishmentSeconds: 120), // 5 burst, 1 per 2 min
     };
 
     private readonly IReadOnlyDictionary<WriteActionKind, TokenBucketRateLimiterOptions> _limits;

@@ -105,8 +105,8 @@ public class StoryExternalLinkTests(PostgresFixture postgres) : IntegrationTestB
         StoryDetailsDTO? details = await read.GetStoryByIdAsync(storyId);
 
         details!.ExternalLinks.Should().HaveCount(2);
-        details.ExternalLinks.Should().OnlyContain(l => !l.IsVerified,
-            "new links always start Unverified — the checkmark is moderator-granted (WU39)");
+        details.ExternalLinks.Should().OnlyContain(l => !l.IsReviewed,
+            "new links always start Unverified — per-link review is moderator-granted (WU39)");
         details.ExternalLinks.Select(l => l.PlatformName)
             .Should().Contain(["Archive of Our Own", "FanFiction.Net"]);
     }
@@ -168,6 +168,37 @@ public class StoryExternalLinkTests(PostgresFixture postgres) : IntegrationTestB
             .Should().Be(VerificationStatusEnum.Unverified,
                 "changing a verified link's URL resets verification — it's a different claim");
         rows.Single(l => l.ExternalPlatformId == 2).Url.Should().Be("https://www.fanfiction.net/s/789");
+    }
+
+    [Fact]
+    public async Task UpdateStory_ChangedUrl_AlsoClearsDateVerificationRequested()
+    {
+        // WU39: editing a verified link's URL resets VerificationStatus (asserted above) via the
+        // existing delete+add resync — this asserts the resync also clears the per-link
+        // verification-REQUESTED marker, not just the status, since the re-added row is a fresh
+        // entity with no DateVerificationRequested set.
+        int storyId = await CreateStoryWithLinksAsync(
+            new StoryExternalLinkEditDto { ExternalPlatformId = 1, Url = "https://archiveofourown.org/works/123" });
+
+        using (IServiceScope dbScope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = dbScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            StoryExternalLink link = db.StoryExternalLinks.Single(l => l.StoryId == storyId);
+            link.VerificationStatus = VerificationStatusEnum.Verified;
+            link.DateVerificationRequested = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        StoryUpdateDTO edit = await GetForEditAsync(storyId);
+        edit.ExternalLinks.Single().Url = "https://archiveofourown.org/works/999";
+        await UpdateAsync(edit);
+
+        using IServiceScope verifyScope = Factory.Services.CreateScope();
+        ApplicationDbContext verifyDb = verifyScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        StoryExternalLink after = verifyDb.StoryExternalLinks.Single(l => l.StoryId == storyId);
+
+        after.VerificationStatus.Should().Be(VerificationStatusEnum.Unverified);
+        after.DateVerificationRequested.Should().BeNull("the re-added row is a fresh entity — the old request is gone with the old URL claim");
     }
 
     [Fact]

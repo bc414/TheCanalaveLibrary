@@ -45,6 +45,8 @@ builder.Services.AddScoped<ITagWriteService, ClientTagWriteService>();
 // verification is future work.
 builder.Services.AddScoped<IStoryReadService, ClientStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ClientStoryWriteService>();
+builder.Services.AddScoped<IExternalVerificationReadService, ClientExternalVerificationReadService>();
+builder.Services.AddScoped<IExternalVerificationWriteService, ClientExternalVerificationWriteService>();
 builder.Services.AddScoped<IStoryArcReadService, ClientStoryArcReadService>();
 builder.Services.AddScoped<IStoryArcWriteService, ClientStoryArcWriteService>();
 builder.Services.AddScoped<IStoryLineageReadService, ClientStoryLineageReadService>();

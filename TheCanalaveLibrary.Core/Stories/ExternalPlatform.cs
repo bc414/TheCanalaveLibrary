@@ -24,5 +24,18 @@ public partial class ExternalPlatform
     [MaxLength(256)]
     public string? DomainPattern { get; set; }
 
+    /// <summary>
+    /// Where/how to place the verification code on this platform (WU39) — e.g. "Add the code
+    /// anywhere in your profile bio." Data-driven per platform, never a code branch. Null when
+    /// <see cref="SupportsVerification"/> is false.
+    /// </summary>
+    [MaxLength(512)]
+    public string? PlacementInstructions { get; set; }
+
+    /// <summary>False for "Other" — no known placement surface, so verification isn't offered.</summary>
+    public bool SupportsVerification { get; set; }
+
     public virtual ICollection<StoryExternalLink> StoryExternalLinks { get; set; } = new List<StoryExternalLink>();
+
+    public virtual ICollection<UserExternalIdentity> UserExternalIdentities { get; set; } = new List<UserExternalIdentity>();
 }

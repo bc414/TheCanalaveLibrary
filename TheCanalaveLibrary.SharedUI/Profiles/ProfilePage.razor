@@ -129,6 +129,17 @@ else
                             </CanalaveErrorBoundary>
                         </section>
                     }
+
+                    @* External-account verification code (Feature 53, WU39) — a public nonce, not
+                       gated by profile privacy; shown to everyone including anonymous visitors, so
+                       anyone can cross-check it against an external profile carrying the same
+                       text. Doubles as a "find me on TCL" discovery nudge. *@
+                    @if (Header.VerificationCode is { Length: > 0 } verificationCode)
+                    {
+                        <p class="text-xs text-(--color-text-muted)">
+                            Verify me elsewhere: <code class="rounded border border-(--color-border) bg-(--color-surface) px-1.5 py-0.5">@verificationCode</code>
+                        </p>
+                    }
                 </div>
             }
             else if (_tab == ProfileTab.Blog)

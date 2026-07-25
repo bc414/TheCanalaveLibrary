@@ -117,6 +117,18 @@ public sealed class ClientNotificationWriteService(HttpClient http)
     public Task NotifyStoryRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
         throw NotExposedOverHttp();
 
+    public Task NotifyExternalAccountVerifiedAsync(int userId, int moderatorSourceId) =>
+        throw NotExposedOverHttp();
+
+    public Task NotifyExternalAccountRejectedAsync(int userId, int moderatorSourceId) =>
+        throw NotExposedOverHttp();
+
+    public Task NotifyExternalLinkVerifiedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
+        throw NotExposedOverHttp();
+
+    public Task NotifyExternalLinkRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId) =>
+        throw NotExposedOverHttp();
+
     public Task NotifyAccountWarningAsync(int targetUserId, int moderatorSourceId) =>
         throw NotExposedOverHttp();
 

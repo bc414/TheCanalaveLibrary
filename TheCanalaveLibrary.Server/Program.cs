@@ -254,6 +254,9 @@ builder.Services.AddScoped<DataSeeder>();
 // Services for dependency injection for the server
 builder.Services.AddScoped<IStoryReadService, ServerStoryReadService>();
 builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
+// External-link verification (Feature 53, WU39) — colocated in the Stories cluster.
+builder.Services.AddScoped<IExternalVerificationReadService, ServerExternalVerificationReadService>();
+builder.Services.AddScoped<IExternalVerificationWriteService, ServerExternalVerificationWriteService>();
 // Story export (Feature 54, WU38c) — composes the read services; "export = what you can read".
 // QuestPDF's Community license is set in PdfWriter's static ctor (covers app + test paths).
 builder.Services.AddScoped<IExportService, ServerExportService>();
@@ -577,6 +580,7 @@ app.MapContentGateEndpoints();
 app.MapSeoEndpoints();
 
 app.MapStoryEndpoints();
+app.MapExternalVerificationEndpoints();
 app.MapTagEndpoints();
 app.MapExportEndpoints();
 

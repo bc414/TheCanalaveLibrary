@@ -11,7 +11,6 @@ public record ReaderSettingsDto(
     float LineHeight,
     int TextWidth,
     bool JustifyText,
-    bool AutoLoadNextChapter,
     bool CollapseCommentThreads,
     int DefaultPaginationSize,
     DefaultSortOrder DefaultSearchSort,

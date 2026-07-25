@@ -149,6 +149,30 @@ public interface INotificationWriteService : INotificationReadService
     Task NotifyStoryRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId);
 
     /// <summary>
+    /// Sends <c>ExternalAccountVerified = 76</c> to the user (Feature 53, WU39). <c>RelatedEntityId
+    /// = 0</c> (no navigable entity — the account tier lives in Settings, a fixed route).
+    /// </summary>
+    Task NotifyExternalAccountVerifiedAsync(int userId, int moderatorSourceId);
+
+    /// <summary>
+    /// Sends <c>ExternalAccountRejected = 77</c> to the user (Feature 53, WU39) so they can fix
+    /// and re-request. <c>RelatedEntityId = 0</c>.
+    /// </summary>
+    Task NotifyExternalAccountRejectedAsync(int userId, int moderatorSourceId);
+
+    /// <summary>
+    /// Sends <c>ExternalLinkVerified = 78</c> to the story's author (Feature 53, WU39).
+    /// <c>RelatedEntityId = storyId</c> (navigates to the story page).
+    /// </summary>
+    Task NotifyExternalLinkVerifiedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId);
+
+    /// <summary>
+    /// Sends <c>ExternalLinkRejected = 79</c> to the story's author (Feature 53, WU39) so they can
+    /// fix and re-request. <c>RelatedEntityId = storyId</c>.
+    /// </summary>
+    Task NotifyExternalLinkRejectedAsync(int storyAuthorUserId, int storyId, int moderatorSourceId);
+
+    /// <summary>
     /// Sends <c>AccountWarning = 72</c> to <paramref name="targetUserId"/>.
     /// <c>RelatedEntityId = 0</c>.
     /// </summary>

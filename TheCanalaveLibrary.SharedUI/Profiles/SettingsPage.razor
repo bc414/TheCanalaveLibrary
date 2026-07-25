@@ -12,6 +12,8 @@
 @inject IBadgeWriteService BadgeService
 @inject IStoryReadService StoryReadService
 @inject IContentRevealService RevealService
+@inject IExternalVerificationReadService ExternalVerificationReadService
+@inject IExternalVerificationWriteService ExternalVerificationWriteService
 @inject NavigationManager Nav
 
 @* Feature 20 (profile editing) + Feature 3 (theme-selection UI), WU30.
@@ -87,6 +89,14 @@ else
             EarnedBadges="@(EarnedBadges ?? [])"
             Busy="@_badgesBusy"
             OnSave="HandleSaveBadgesAsync" />
+
+        @* External-account verification sub-form (Feature 53, WU39) *@
+        <ExternalAccountsSettingsForm
+            VerificationCode="@VerificationCode"
+            Platforms="@(VerificationPlatforms ?? [])"
+            Accounts="@(ExternalAccounts ?? [])"
+            Busy="@_externalAccountBusy"
+            OnSubmitAccount="HandleSubmitExternalAccountAsync" />
     </div>
 }
 
@@ -102,6 +112,11 @@ else
     [PersistentState] public IReadOnlyList<EarnedBadgeDto>? EarnedBadges { get; set; }
     [PersistentState] public IReadOnlyList<StoryTitleSearchDto>? PinnableStories { get; set; }
 
+    // External-account verification (Feature 53, WU39).
+    [PersistentState] public string? VerificationCode { get; set; }
+    [PersistentState] public IReadOnlyList<VerificationPlatformDto>? VerificationPlatforms { get; set; }
+    [PersistentState] public IReadOnlyList<ExternalAccountDto>? ExternalAccounts { get; set; }
+
     // Live upload state — starts from Settings.ProfilePictureRelativeUrl (recomputed each init,
     // so it needs no persistence) and mutates on upload; never persisted (transient UI state).
     private string? _pictureUrl;
@@ -116,6 +131,7 @@ else
     private bool _appearanceBusy;
     private bool _badgesBusy;
     private bool _revealBusy;
+    private bool _externalAccountBusy;
 
     // Reveal management (Feature 66, WU-AccessGate) — the member's durable mature-content
     // consents, revocable here.
@@ -159,6 +175,15 @@ else
 
         // Reveal management (WU-AccessGate) — per-viewer ephemeral, always fetched plain.
         _reveals = await RevealService.GetMyRevealsAsync();
+
+        // External-account verification (Feature 53, WU39). EnsureMyVerificationCodeAsync
+        // lazily creates the caller's code on first visit — idempotent, safe to call every load.
+        VerificationPlatforms ??= await ExternalVerificationReadService.GetVerificationPlatformsAsync();
+        if (ActiveUser.UserId is int)
+        {
+            VerificationCode ??= await ExternalVerificationWriteService.EnsureMyVerificationCodeAsync();
+            ExternalAccounts ??= await ExternalVerificationReadService.GetMyExternalAccountsAsync();
+        }
 
         _isLoading = false;
     }
@@ -259,6 +284,18 @@ else
             () => BadgeService.SetDisplayOrderAsync(userId, orderedVisibleKeys),
             v => _badgesBusy = v,
             "Badge display saved.");
+    }
+
+    private async Task HandleSubmitExternalAccountAsync(AddExternalAccountRequest request)
+    {
+        await RunWithFeedbackAsync(
+            async () =>
+            {
+                await ExternalVerificationWriteService.SubmitAccountForVerificationAsync(request);
+                ExternalAccounts = await ExternalVerificationReadService.GetMyExternalAccountsAsync();
+            },
+            v => _externalAccountBusy = v,
+            "Verification requested — a moderator will review it soon.");
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────
