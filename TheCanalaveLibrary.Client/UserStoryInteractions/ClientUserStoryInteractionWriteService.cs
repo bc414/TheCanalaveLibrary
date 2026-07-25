@@ -25,4 +25,11 @@ public sealed class ClientUserStoryInteractionWriteService(HttpClient http)
             await Http.PostAsync($"api/user-story-interactions/{storyId}/started", null);
         await ThrowIfFailedAsync(response);
     }
+
+    public async Task MarkCompletedAsync(int storyId)
+    {
+        HttpResponseMessage response =
+            await Http.PostAsync($"api/user-story-interactions/{storyId}/completed", null);
+        await ThrowIfFailedAsync(response);
+    }
 }

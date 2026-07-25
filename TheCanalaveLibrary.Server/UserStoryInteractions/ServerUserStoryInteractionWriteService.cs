@@ -145,6 +145,15 @@ public class ServerUserStoryInteractionWriteService(
         UserStoryInteraction? row = await writeDb.UserStoryInteractions
             .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
 
+        // Capture BEFORE applying the write (transition-delta rule) — StoriesInProgress mirrors
+        // the recompute formula (HasStarted && !IsCompleted, layer2-services.md "Recalculation
+        // worker" note) and must move here too: this reading-path call, not the panel, is the only
+        // producer of a HasStarted false→true flip. Without it, MarkCompletedAsync's symmetric
+        // decrement would underflow the counter below zero for the common case of a user who never
+        // touched the panel (A3, 2026-07-24 — found via CompletionProducerTests).
+        bool alreadyStarted = row?.HasStarted ?? false;
+        bool wasCompleted = row?.IsCompleted ?? false;
+
         if (row is null)
         {
             row = new UserStoryInteraction { UserId = userId, StoryId = storyId };
@@ -153,6 +162,54 @@ public class ServerUserStoryInteractionWriteService(
 
         row.HasStarted = true;
         await writeDb.SaveChangesAsync();
+
+        if (!alreadyStarted && !wasCompleted)
+        {
+            await writeDb.UserStats.Where(us => us.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(us => us.StoriesInProgress, us => us.StoriesInProgress + 1));
+        }
+    }
+
+    public async Task MarkCompletedAsync(int storyId)
+    {
+        if (CurrentUserId is not int userId) return;  // anonymous: no-op
+
+        UserStoryInteraction? row = await writeDb.UserStoryInteractions
+            .Include(i => i.InteractionDatePartition)
+            .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
+
+        // Idempotent: already complete → no-op (guards against a double StoriesRead increment on a
+        // re-visit/re-scroll of the final chapter — A3 "re-visit behavior" is fire-once per completion).
+        if (row is { IsCompleted: true }) return;
+
+        // Capture derived state BEFORE applying the write (transition-delta rule — layer2-services.md
+        // §"Transition-delta rule for UserStoryInteraction-derived counters"). wasCompleted is always
+        // false here (guarded above); StoriesInProgress only moves if the user had already started.
+        bool wasInProgress = row?.HasStarted ?? false;
+
+        if (row is null)
+        {
+            row = new UserStoryInteraction { UserId = userId, StoryId = storyId };
+            writeDb.UserStoryInteractions.Add(row);
+        }
+
+        DateTime now = DateTime.UtcNow;
+        row.IsCompleted = true;
+        row.InteractionDatePartition ??= new UserStoryInteractionDate { UserId = row.UserId, StoryId = row.StoryId };
+        row.InteractionDatePartition.CompletedDate = now;
+
+        await writeDb.SaveChangesAsync();
+
+        // StoriesRead +1 (wasCompleted was false); StoriesInProgress −1 only when the user had
+        // started (mirrors SetUserStoryInteractionStateAsync's transition-delta handling).
+        await writeDb.UserStats.Where(us => us.UserId == userId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.StoriesRead, us => us.StoriesRead + 1));
+
+        if (wasInProgress)
+        {
+            await writeDb.UserStats.Where(us => us.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(us => us.StoriesInProgress, us => us.StoriesInProgress - 1));
+        }
     }
 
     private static void ValidateCombination(UserStoryInteractionStateUpdate update)

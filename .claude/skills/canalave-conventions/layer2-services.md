@@ -1313,7 +1313,8 @@ serializes correctly under any isolation level.
 | `BlogPostsWritten` | author | `ServerBlogPostWriteService` create/delete | ±1 |
 | `GroupsJoined` | member | `ServerGroupWriteService` join/leave | ±1 |
 | `FavoritesOnStories` | story author | `ServerUserStoryInteractionWriteService` | **transition-delta** |
-| `StoriesRead`, `StoriesInProgress`, `StoriesIgnored` | acting user | `ServerUserStoryInteractionWriteService` | **transition-delta** |
+| `StoriesRead`, `StoriesIgnored` | acting user | `ServerUserStoryInteractionWriteService.SetUserStoryInteractionStateAsync` / `MarkCompletedAsync` | **transition-delta** |
+| `StoriesInProgress` | acting user | `ServerUserStoryInteractionWriteService.MarkStartedAsync` (+1 on a genuine `HasStarted` flip, not already completed) **and** `SetUserStoryInteractionStateAsync`/`MarkCompletedAsync` (−1 on completing) | **transition-delta** |
 
 **Counters deferred — producer not yet built:**
 - `ViewsOnStories` — WU38 (story view events); recomputable today only via raw SQL over the
@@ -1373,6 +1374,51 @@ The same flip-check governs `StoriesRead`/`StoriesInProgress`/`StoriesIgnored` �
 boolean column (`IsCompleted`, `HasStarted`+`!IsCompleted`, `IsIgnored`); the counter moves only
 when the effective derived state actually changes. Never increment/decrement if the boolean is being
 written to its current value (idempotent call from an optimistic-UI retry).
+
+### `IsCompleted` auto-producer — durable direct write, never the reading buffer
+
+`IsCompleted` has two producers: the interaction panel (`SetUserStoryInteractionStateAsync`, "mark as
+read elsewhere") and `IUserStoryInteractionWriteService.MarkCompletedAsync(int storyId)` — the
+application-side producer for spec §5.12's *"set `IsCompleted` when the user reads the last chapter of
+a story the author has marked Complete."*
+
+**Mirrors `MarkStartedAsync` exactly, for the same reason.** `HasStarted` is set by a durable direct
+write triggered from the reading page at Ch.1 ≥90% scroll — deliberately bypassing the
+`ReadingProgressBuffer`/`ReadingProgressFlusher`, because that buffer's contract is *loss-tolerant,
+high-frequency, coalescable* signals only ("deliberate actions… take the durable direct-write path,
+never this buffer" — see Feature 44 L2 body-swap note). Story completion is just as durable and
+load-bearing (it drives the Completed bookshelf tab, `StoriesRead`/`StoriesInProgress`, and the F26
+spoiler-reveal gate), so `MarkCompletedAsync` is built the same way: a direct write from
+`ChapterReadingPage.OnScrollProgress` (Completed-story final chapter, ≥90%, guarded so it fires once
+per page visit) and from the manual mark-read path (`ServerChapterReadMarkWriteService`, when the
+marked chapter is the story's last published chapter). **The reading-progress buffer/flusher are never
+touched by this producer.**
+
+**Gate — Completed stories only.** `MarkCompletedAsync` only ever fires when
+`Story.StoryStatusId == StoryStatusEnum.Completed`. For an ongoing story, "caught up with everything
+published" stays the existing query-time computation (`user_chapters_read < PublishedChapterCount`) —
+never a stored-flag auto-set. This is deliberate: the V3 reading-status design already considered and
+rejected a stored `CaughtUp` state specifically because it required a publish-time background worker to
+un-set it when a new chapter posts. Gating the producer to Completed stories keeps that worker
+unnecessary — an ongoing story publishing a new chapter never needs any completion state touched.
+
+**No auto-clear.** `MarkCompletedAsync` only ever sets `IsCompleted = true`; nothing clears it
+automatically. The rare case of a Completed story reopening and gaining a new chapter accepts brief
+staleness (a previously-auto-completed reader stays marked complete) rather than reintroduce the
+rejected publish-time worker. The flag remains user-mutable via the panel.
+
+**Idempotent.** No-op if the row is already `IsCompleted = true` (no double counter increment) and
+no-op for anonymous callers.
+
+**Bug found via CompletionProducerTests, fixed same session (A3, 2026-07-24):** `MarkCompletedAsync`'s
+`StoriesInProgress` decrement (mirroring the panel's own transition-delta) assumes the counter was
+previously incremented when `HasStarted` went true. That increment was missing — `MarkStartedAsync`
+never touched `StoriesInProgress` before this fix — so for the common case (a user who reads via
+scroll/`MarkStartedAsync` and is later auto-completed, never having touched the panel), the decrement
+drove the counter negative. Fixed by giving `MarkStartedAsync` the matching +1 transition-delta on a
+genuine `HasStarted` false→true flip (guarded: only when not already completed). This also closes the
+same latent underflow risk in the pre-existing panel-only completion path (`SetUserStoryInteractionStateAsync`
+completing a row whose `HasStarted` came from the reading path, not the panel).
 
 ## Site Settings (`ISiteSettingsService`) — DB-Backed Mod-Editable Runtime Knobs (WU-Spotlight)
 

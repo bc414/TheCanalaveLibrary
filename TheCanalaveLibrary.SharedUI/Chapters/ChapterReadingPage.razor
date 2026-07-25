@@ -146,7 +146,7 @@ else
             <CanalaveErrorBoundary Label="comments" Compact="true">
                 <CommentSection ChapterId="@Chapter.ChapterId"
                                 CurrentUserId="@_currentUserId"
-                                UserHasCompletedStory="false" />
+                                UserHasCompletedStory="@Chapter.ViewerHasCompletedStory" />
             </CanalaveErrorBoundary>
         </section>
 
@@ -208,6 +208,9 @@ else
     private bool _isAuthor;
     private int? _recId;
     private bool _progressReached90;
+    // A3 (2026-07-24): guards the final-chapter completion trigger so MarkCompletedAsync fires once
+    // per page visit, mirroring _progressReached90's guard shape for MarkStartedAsync.
+    private bool _completedMarked;
     private bool _isLoading = true;
 
     // Interstitial metadata when the parent story exists but the viewer hasn't consented
@@ -279,6 +282,7 @@ else
         _isAuthor = false;
         _recId = null;
         _progressReached90 = false;
+        _completedMarked = false;
         _gate = null;
 
         _loadedStoryId       = StoryId;
@@ -388,6 +392,17 @@ else
         {
             _progressReached90 = true;
             await UserStoryInteractionWriteService.MarkStartedAsync(StoryId);
+            await InvokeAsync(StateHasChanged);
+        }
+
+        // A3 (2026-07-24): story-completion auto-producer, mirroring the MarkStarted trigger above —
+        // a durable direct write, never through the reading-progress buffer (layer2-services.md
+        // §"IsCompleted auto-producer"). Fires once per page visit on reaching the final published
+        // chapter of an author-Completed story; gated to Completed stories only (never ongoing ones).
+        if (Chapter.NextChapterNumber is null && Chapter.StoryIsComplete && progress >= 0.9f && !_completedMarked)
+        {
+            _completedMarked = true;
+            await UserStoryInteractionWriteService.MarkCompletedAsync(StoryId);
             await InvokeAsync(StateHasChanged);
         }
     }

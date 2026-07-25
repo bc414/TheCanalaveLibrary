@@ -38,4 +38,11 @@ public class FakeUserStoryInteractionWriteService : IUserStoryInteractionWriteSe
         MarkStartedCalls.Add(storyId);
         return Task.CompletedTask;
     }
+
+    public List<int> MarkCompletedCalls { get; } = [];
+    public Task MarkCompletedAsync(int storyId)
+    {
+        MarkCompletedCalls.Add(storyId);
+        return Task.CompletedTask;
+    }
 }

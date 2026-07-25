@@ -87,6 +87,16 @@ public static class UserStoryInteractionEndpoints
                     return Results.NoContent();
                 }));
 
+        // Mirrors /started (A3, 2026-07-24) — MarkCompletedAsync is likewise a direct DbContext
+        // write, not a buffered signal, so 204 No Content like an ordinary write.
+        group.MapPost("/{storyId:int}/completed",
+            (IUserStoryInteractionWriteService interactions, int storyId) =>
+                EndpointHelpers.ExecuteWriteAsync(async () =>
+                {
+                    await interactions.MarkCompletedAsync(storyId);
+                    return Results.NoContent();
+                }));
+
         return app;
     }
 }

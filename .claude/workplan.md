@@ -3621,3 +3621,40 @@ Two loose ends from WU-IntTestPerf, closed same day:
   F38's L6 stays 2 (the separate index gap).
 - **Tool:** Claude Code (Opus). **Pointer:** `audit/Groups.md` F38/F39/F40 Stage notes;
   `layer5-wasm.md` §"L5 Stage Semantics".
+
+## A3 — Story-completion auto-producer, wired to the spoiler gate (Features 7, 26, 44) — DONE ✓ (2026-07-24)
+
+- **Scope:** closes `hidden-deferrals-tracker.md` item A3 — the F26 spoiler completion-gate was fed
+  a hardcoded `UserHasCompletedStory=false` from `ChapterReadingPage` since WU26 ("full completion
+  tracking is post-MVP"), making its single-click-reveal branch unreachable in production. Owner
+  decided (2026-07-24, mid-session) to build the deferred spec §5.12 producer now rather than leave
+  it deferred, given a live plan-mode reassessment of "post-MVP" scope.
+- **Design:** `IUserStoryInteractionWriteService.MarkCompletedAsync(int storyId)` — a durable direct
+  write mirroring the existing `MarkStartedAsync`, deliberately never routed through the
+  `ReadingProgressBuffer`/`ReadingProgressFlusher` signal buffer (that buffer's contract is
+  loss-tolerant scroll pings only; completion is a durable, aggregate-driving transition). Fires only
+  for author-Completed stories, on reaching the final published chapter (not a chapter-count
+  comparison), with no auto-clear (holds the V3 reading-status design's rejection of a stored
+  `CaughtUp` state + publish-time worker). Two trigger sites: `ChapterReadingPage.OnScrollProgress`
+  (mirrors the `MarkStartedAsync` guard shape) and `ServerChapterReadMarkWriteService`'s manual
+  mark-read path. Wiring: `ChapterReadingDto` gained `ViewerHasCompletedStory`/`StoryIsComplete`,
+  populated by `GetChapterForReadingAsync` via a correlated subquery — no extra round-trip.
+- **Bug found and fixed same session:** `CompletionProducerTests` caught a latent `StoriesInProgress`
+  counter underflow — `MarkCompletedAsync`'s decrement assumed `MarkStartedAsync` had already
+  incremented it, but `MarkStartedAsync` never touched that counter (only the panel did). Fixed by
+  giving `MarkStartedAsync` the missing transition-delta.
+- **Verified:** `dotnet build` clean. `dotnet test` full suite green: 752 Unit + 544 RazorComponents +
+  800 Integration = 2096/2096 (new `CompletionProducerTests.cs`; `ChapterReadServiceTests.cs`
+  extended for the projection fields). Browser-verified live against the server-only dev DB: as
+  AuthorBeta, posted a spoiler comment on the seeded Completed one-published-chapter story (story 12);
+  as TestUser (seeded `IsCompleted=false` for that story), confirmed the "haven't finished" dialog
+  still gated the reveal; scrolled the chapter to the bottom, `psql`-confirmed
+  `user_story_interactions` flipped to `is_completed=t` with the pre-existing `is_ignored=t` bit
+  untouched (zero-coupling), `CompletedDate` stamped, `UserStat` counters moved; reloaded and
+  confirmed the same spoiler comment now revealed on a single click, no dialog.
+- **Cells:** `status.md` F7 `L3-Logic` and F26 (all built cells) stay Stage 5 — no grid number
+  change, the cells were already Stage 5; this closes the gap the grid couldn't show. F44 `L2`
+  likewise stays 5.
+- **Tool:** Claude Code (Opus). **Pointer:** `audit/Chapters.md` A3 Stage note;
+  `audit/UserStoryInteractions.md` A3 settled note; `audit/Comments.md` Feature 26 A3 update;
+  `layer2-services.md` §"`IsCompleted` auto-producer"; `.claude/hidden-deferrals-tracker.md` A3.

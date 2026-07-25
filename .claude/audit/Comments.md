@@ -159,6 +159,13 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   `UserHasCompletedStory`, else sets `_showSpoilerConfirm` (in-item `ConfirmDialog` — no service
   needed); `_isRevealed` is ephemeral (re-hides on page load, §5.9.1). Blur cover uses Tailwind
   `blur-md` + `pointer-events-none` overlay; "Reveal spoiler" button carries `aria-label="Reveal spoiler"`.
+  **A3 update (2026-07-24):** the gate's `UserHasCompletedStory` parameter was fed a hardcoded `false`
+  from `ChapterReadingPage` since WU26 — the "immediate reveal" branch was unreachable in production.
+  Now fed the viewer's real `UserStoryInteraction.IsCompleted` (`Chapter.ViewerHasCompletedStory`),
+  populated by a new application producer (`MarkCompletedAsync`, fires on reaching the final chapter of
+  an author-Completed story). `CommentSection`/`CommentItem` themselves are unchanged — this closes
+  `hidden-deferrals-tracker.md` A3. Full producer design: `audit/Chapters.md` A3 Stage note;
+  `layer2-services.md` §"`IsCompleted` auto-producer"; settled constraints: `audit/UserStoryInteractions.md`.
   **L3.5 — Stage 5** (WU9, 2026-06-21 — see note below). **L5 — Stage 5 (WU-GlobalFlip,
   2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the site now runs global
   InteractiveAuto (spoiler reveal not browser-driven in the flip's wave; the comment read/post flows

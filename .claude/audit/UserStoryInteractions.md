@@ -211,6 +211,34 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
   Browser-verified 2026-07-06: favorite toggle durably persisted (psql: `is_favorite=t` +
   `favorite_date` stamped), state survives a hard reload from a fresh DB read.
 
+- **A3 settled note (2026-07-24): `IsCompleted` gains a second producer — `MarkCompletedAsync`.**
+  Previously `IsCompleted` was only panel-writable ("mark as read elsewhere"). Feature 7/26's hidden
+  deferral (`.claude/hidden-deferrals-tracker.md` A3 — the spoiler-comment completion-gate was fed a
+  hardcoded `false`) is closed by implementing spec §5.12's application producer:
+  `IUserStoryInteractionWriteService.MarkCompletedAsync(int storyId)`, called from
+  `ChapterReadingPage.OnScrollProgress` (final-chapter ≥90% scroll, guarded to fire once per visit) and
+  `ServerChapterReadMarkWriteService` (marking the story's last published chapter read) — see
+  `audit/Chapters.md` Feature 7/44 and `layer2-services.md` §"`IsCompleted` auto-producer" for the full
+  design. Settled, do not revisit:
+  - **Completed-only gate:** fires only when `Story.StoryStatusId == StoryStatusEnum.Completed`. Never
+    for ongoing stories — "caught up" there stays the existing query-time computation.
+  - **Signal = reached the final chapter**, not "all chapters read" — matches spec §5.12's literal
+    wording and mirrors `HasStarted`'s "reached chapter 1" trigger. No published-chapter-count predicate.
+  - **No auto-clear.** Only ever sets `IsCompleted = true`; a reopened Completed story that gains a new
+    chapter is accepted stale rather than reviving the V3-rejected `CaughtUp` background worker (spec:1067).
+  - **Never routes through `ReadingProgressBuffer`/`ReadingProgressFlusher`** — same durable direct-write
+    category as `MarkStartedAsync`, not the lossy scroll-progress signal.
+  - **Zero-coupling unaffected:** this is an external producer writing one bit from a reading event, not
+    a bit-to-bit cascade inside `UserStoryInteraction`; `ValidateCombination` stays an empty extension point.
+  - Idempotent (no-op if already `IsCompleted`; no-op for anonymous) — routes through the same
+    `StoriesRead`/`StoriesInProgress` transition-delta counters as the panel path.
+  - **Bug fixed in the same session:** `MarkStartedAsync` never applied the `StoriesInProgress`
+    transition-delta on a `HasStarted` flip — only the panel did. Since `MarkCompletedAsync`'s
+    decrement assumes that increment already happened, the counter went negative for any user who
+    started reading without ever touching the panel (the common case). `MarkStartedAsync` now
+    applies the matching +1 (see `layer2-services.md` §"`IsCompleted` auto-producer" for detail);
+    this also closes the same latent risk in the pre-existing panel-only completion path.
+
 - **R3 divergence note (2026-07-06): no DB CHECK constraints for flag pairs — deliberately.**
   The requirements draft assumed mutually-exclusive pairs (e.g. `IsFavorite` vs
   `IsHiddenFavorite`) enforceable by CHECK. Ground truth: spec §4's zero-coupling model declares

@@ -16,6 +16,12 @@ namespace TheCanalaveLibrary.Core;
 /// <para>Mark-read additionally flips the story's <c>HasStarted</c> via the existing idempotent
 /// <c>MarkStartedAsync</c> ("read it elsewhere" case); mark-unread never un-sets it (permanent
 /// past event). Anonymous callers throw — the UI gates these controls behind AuthorizeView.</para>
+///
+/// <para><b>A3 (2026-07-24):</b> mark-read additionally calls the idempotent
+/// <c>MarkCompletedAsync</c> when the marked chapter is the story's last published chapter and
+/// <c>Story.StoryStatusId == StoryStatusEnum.Completed</c> — the manual-path half of the
+/// story-completion auto-producer (layer2-services.md §"<c>IsCompleted</c> auto-producer"). Never
+/// fires for ongoing stories; mark-unread never un-sets <c>IsCompleted</c>.</para>
 /// </summary>
 public interface IChapterReadMarkWriteService
 {

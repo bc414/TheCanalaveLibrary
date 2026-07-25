@@ -24,6 +24,23 @@ public interface IUserStoryInteractionWriteService : IUserStoryInteractionReadSe
     /// Idempotent upsert that flips <c>HasStarted = true</c> for the current viewer on
     /// <paramref name="storyId"/>. Called by the reading page when Ch.1 reaches ≥90% scroll
     /// (WU26). Never clears other interaction flags. Anonymous viewers are silently ignored.
+    /// On a genuine false→true flip (and only when not already completed), also applies the
+    /// <c>StoriesInProgress</c> transition-delta (A3, 2026-07-24) — this is the sole real-time
+    /// producer of that counter's increment; <see cref="MarkCompletedAsync"/>'s decrement depends
+    /// on it having run first.
     /// </summary>
     Task MarkStartedAsync(int storyId);
+
+    /// <summary>
+    /// Idempotent upsert that flips <c>IsCompleted = true</c> for the current viewer on
+    /// <paramref name="storyId"/> — the application-side producer for spec §5.12 (A3, 2026-07-24).
+    /// Mirrors <see cref="MarkStartedAsync"/>: a durable direct write, never routed through the
+    /// reading-progress signal buffer. Callers gate invocation to Completed stories only (an ongoing
+    /// story's "caught up" state stays the existing query-time computation — never auto-set here);
+    /// see <c>layer2-services.md</c> §"<c>IsCompleted</c> auto-producer" for the full design.
+    /// No-op if the row is already <c>IsCompleted</c> (no double counter increment) or if the
+    /// viewer is anonymous. Never clears other interaction flags, and never auto-clears
+    /// <c>IsCompleted</c> once set.
+    /// </summary>
+    Task MarkCompletedAsync(int storyId);
 }

@@ -304,6 +304,66 @@ shape and dropdown row classes.
 - ~~**L7 — Stage 2.** Redis batching of progress writes (write-behind pattern 1; MVP direct DB; L7 swaps body).~~
   Superseded — see "Feature 44 L2 body swap — signal buffer" below (Layer 7 dissolved 2026-07-06).
 
+### A3 Stage note (2026-07-24) — story-completion auto-producer, DONE ✓
+
+Closes hidden-deferrals-tracker A3. Feature 7 L3-Logic's `UserHasCompletedStory=false` hardcode (WU26
+note above) and F44's `MarkStartedAsync`-only reading-page trigger are superseded together:
+
+- **`IUserStoryInteractionWriteService.MarkCompletedAsync(int storyId)`** added, mirroring
+  `MarkStartedAsync` — durable direct write, never through `ReadingProgressBuffer`/
+  `ReadingProgressFlusher`. Full design/rationale: `layer2-services.md` §"`IsCompleted` auto-producer";
+  settled constraints: `audit/UserStoryInteractions.md` A3 settled note.
+- **Trigger A (reading page):** `ChapterReadingPage.OnScrollProgress` calls `MarkCompletedAsync(StoryId)`
+  once (guarded, mirrors the existing `_progressReached90`/`MarkStartedAsync` guard shape) when
+  `Chapter.NextChapterNumber is null && Chapter.StoryIsComplete && progress >= 0.9f`. New DTO fields
+  `ChapterReadingDto.ViewerHasCompletedStory` (feeds the F26 gate) and `StoryIsComplete` (feeds this
+  trigger) populated by `GetChapterForReadingAsync` — viewer's `UserStoryInteraction.IsCompleted` via
+  correlated subquery (anonymous → false), `Story.StoryStatusId == Completed` respectively. No extra
+  round-trip.
+- **Trigger B (manual mark-read path):** `ServerChapterReadMarkWriteService.SetChapterReadAsync` /
+  `SetAllChaptersReadAsync` call `MarkCompletedAsync(storyId)` after marking the story's last published
+  chapter read on a Completed story.
+- **Gate:** Completed stories only; **signal is "reached the final chapter"**, not a chapter-count
+  comparison; **no auto-clear** — see the three settled bullets in `audit/UserStoryInteractions.md`.
+- `ChapterReadingPage.razor` line ~149: `UserHasCompletedStory="false"` → `UserHasCompletedStory="@Chapter.ViewerHasCompletedStory"`.
+
+**Bug found and fixed during verification (same session):** the first test run caught a latent
+`StoriesInProgress` underflow — `MarkCompletedAsync`'s decrement assumed `MarkStartedAsync` had
+already applied a matching +1, but `MarkStartedAsync` never touched that counter (only the panel
+did), so completing a story for a user who only ever read via the scroll/reading path drove
+`StoriesInProgress` negative. Fixed by giving `MarkStartedAsync` the missing transition-delta
+(+1 on a genuine `HasStarted` false→true flip, guarded on not-already-completed). Detail:
+`layer2-services.md` §"`IsCompleted` auto-producer" and `audit/UserStoryInteractions.md` A3 note.
+
+**How verified:** `dotnet build` green (0 errors). `dotnet test` green: 752 Unit / 544
+RazorComponents / 800 Integration = 2096 total (0 failed). Integration tier
+(`CompletionProducerTests.cs`, new) covers: `MarkCompletedAsync` directly (sets `IsCompleted` +
+stamps `CompletedDate`; idempotent re-fire does not double-increment `StoriesRead`; anonymous
+no-op; `StoriesRead`/`StoriesInProgress` transition-deltas both with and without a prior
+`HasStarted`); `MarkStartedAsync`'s corrected `StoriesInProgress` increment (including its own
+idempotency); both trigger paths (`SetChapterReadAsync`/`SetAllChaptersReadAsync`) firing only on
+the story's final published chapter of a Completed story, never on an ongoing story or a non-final
+chapter. `ChapterReadServiceTests.cs` (extended) covers the `GetChapterForReadingAsync` projection:
+`ViewerHasCompletedStory` true/false/anonymous, `StoryIsComplete` true/false. RazorComponents tier:
+no new tests — the existing `CommentItemTests.cs` gate-behavior tests
+(`CommentItem_RevealClick_WhenUserHasCompleted_RevealsImmediately` /
+`..._WhenUserHasNotCompleted_OpensSpoilerDialog`) are unchanged and still pass, since A3 does not
+touch `CommentItem`/`CommentSection` — only what feeds their existing `UserHasCompletedStory`
+parameter changed. `ChapterReadingPage` has no bUnit harness (none existed before A3 either; its
+JS-interop/`[PersistentState]` surface has always relied on Integration + browser verification, matching precedent for the pre-existing `MarkStartedAsync` trigger).
+
+**Browser-verified** (server-only dev path, seed data, 2026-07-24): as **AuthorBeta**, posted a
+spoiler-flagged comment on **Seed Story: Filler (T)** (story 12, Completed status, one published
+chapter — TestUser's seeded `UserStoryInteraction` for it: `IsIgnored=true, IsCompleted=false`).
+Switched to **TestUser**: clicking Reveal on the still-uncompleted story correctly opened the
+"You haven't finished the story yet" `ConfirmDialog` (proving the gate reads the real per-user flag,
+not `Story.Status`). Scrolled the chapter to the bottom → `psql` confirmed
+`user_story_interactions` flipped to `has_started=t, is_completed=t` for TestUser, `is_ignored`
+**unchanged at `t`** (zero-coupling holds in production), `CompletedDate` stamped, and
+`UserStat.StoriesRead`/`StoriesInProgress` moved. Reloaded the page: the same spoiler comment now
+revealed on a single click, no confirm dialog. Confirms the full producer→wiring→gate chain
+end-to-end. See `workplan.md` A3 entry.
+
 ---
 
 ### WU26 Phase 1–3 Stage note (2026-06-24) — Reading/writing pages + F44 L2/L3/L3.5, DONE ✓
@@ -342,8 +402,10 @@ directives (primary + versioned URL). Key design:
   `Task.WhenAll`).
 - Top/bottom author's notes in `<aside>` blocks (only if non-null).
 - `<article id="chapter-body">` — anchor for the reading-progress scroll tracker.
-- `CommentSection` wired with `ChapterId`, `CurrentUserId`, `UserHasCompletedStory=false` (full
-  completion tracking is post-MVP).
+- `CommentSection` wired with `ChapterId`, `CurrentUserId`, `UserHasCompletedStory` — originally
+  hardcoded `false` ("full completion tracking is post-MVP"); **superseded 2026-07-24 (A3)** — now fed
+  `Chapter.ViewerHasCompletedStory` from `GetChapterForReadingAsync`'s projection (viewer's
+  `UserStoryInteraction.IsCompleted`). See the A3 Stage note below and `audit/Comments.md` Feature 26.
 - `RecommendationHelpfulPrompt` gated on `_recId.HasValue && _progressReached90` — prompt appears
   only after scroll reaches 90% of chapter body AND a source recommendation exists with no prior
   success. `OnRespond(true)` → `RecordSuccessAsync(recId)`.

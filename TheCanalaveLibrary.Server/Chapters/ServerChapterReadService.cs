@@ -65,6 +65,10 @@ public class ServerChapterReadService(
         if (elevated)
             contentQuery = contentQuery.IgnoreQueryFilters(["ContentRating"]); // elevated read: per-story consent / verified crawler
 
+        // Viewer id for the ViewerHasCompletedStory correlated subquery below — anonymous (-1) never
+        // matches a row (mirrors GetChapterTocAsync's viewerId sentinel pattern).
+        int viewerId = ActiveUser.UserId ?? -1;
+
         // Single projection including correlated subqueries for prev/next and story rating.
         // Rating = effective (COALESCE); RawRating = null (reading page doesn't need raw form value).
         return await contentQuery
@@ -95,7 +99,16 @@ public class ServerChapterReadService(
                     .OrderBy(next => next.ChapterNumber)
                     .Select(next => (int?)next.ChapterNumber)
                     .FirstOrDefault(),
-                cc.Chapter.Story.Rating))
+                cc.Chapter.Story.Rating,
+                null,
+                // ViewerHasCompletedStory (A3): viewer's UserStoryInteraction.IsCompleted for this
+                // story. Sparse table — no row means false; anonymous viewerId (-1) never matches.
+                cc.Chapter.Story.UserStoryInteractions
+                    .Where(i => i.UserId == viewerId)
+                    .Select(i => (bool?)i.IsCompleted)
+                    .FirstOrDefault() ?? false,
+                // StoryIsComplete (A3): gates the reading-page MarkCompletedAsync trigger.
+                cc.Chapter.Story.StoryStatusId == StoryStatusEnum.Completed))
             .FirstOrDefaultAsync();
     }
 

@@ -1,4 +1,5 @@
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.Server;
@@ -214,6 +215,73 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IntegrationTest
         middle.NextChapterNumber.Should().Be(3);
     }
 
+    // --- A3 (2026-07-24): ViewerHasCompletedStory / StoryIsComplete projection fields ---
+    // (the completion-gate wiring — see CompletionProducerTests for the auto-producer itself)
+
+    [Fact]
+    public async Task GetChapterForReadingAsync_StoryIsComplete_TrueForCompletedStory()
+    {
+        int freshStoryId = await SeedStoryAsync(_viewerUserId, status: StoryStatusEnum.Completed);
+        await PublishSingleChapterAsync(freshStoryId);
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        ChapterReadingDto? dto = await GetForReadingAsync(freshStoryId, chapterNumber: 1);
+
+        dto.Should().NotBeNull();
+        dto!.StoryIsComplete.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetChapterForReadingAsync_StoryIsComplete_FalseForOngoingStory()
+    {
+        int freshStoryId = await SeedStoryAsync(_viewerUserId, status: StoryStatusEnum.InProgress);
+        await PublishSingleChapterAsync(freshStoryId);
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        ChapterReadingDto? dto = await GetForReadingAsync(freshStoryId, chapterNumber: 1);
+
+        dto!.StoryIsComplete.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetChapterForReadingAsync_ViewerHasCompletedStory_TrueWhenIsCompletedSet()
+    {
+        int freshStoryId = await SeedStoryAsync(_viewerUserId);
+        await PublishSingleChapterAsync(freshStoryId);
+        await SeedCompletedInteractionAsync(_viewerUserId, freshStoryId);
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_viewerUserId, showMatureContent: false));
+        ChapterReadingDto? dto = await GetForReadingAsync(freshStoryId, chapterNumber: 1);
+
+        dto!.ViewerHasCompletedStory.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetChapterForReadingAsync_ViewerHasCompletedStory_FalseWhenNoInteractionRow()
+    {
+        int freshStoryId = await SeedStoryAsync(_viewerUserId);
+        await PublishSingleChapterAsync(freshStoryId);
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_viewerUserId, showMatureContent: false));
+        ChapterReadingDto? dto = await GetForReadingAsync(freshStoryId, chapterNumber: 1);
+
+        dto!.ViewerHasCompletedStory.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task GetChapterForReadingAsync_ViewerHasCompletedStory_FalseForAnonymous()
+    {
+        int freshStoryId = await SeedStoryAsync(_viewerUserId);
+        await PublishSingleChapterAsync(freshStoryId);
+        await SeedCompletedInteractionAsync(_viewerUserId, freshStoryId);
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        ChapterReadingDto? dto = await GetForReadingAsync(freshStoryId, chapterNumber: 1);
+
+        dto!.ViewerHasCompletedStory.Should().BeFalse(
+            "anonymous viewers have no user id — never matches a UserStoryInteraction row");
+    }
+
     // --- Helpers ---
 
     private async Task<ChapterReadingDto?> GetForReadingAsync(int storyId, int chapterNumber, int? versionOrder = null)
@@ -235,6 +303,37 @@ public class ChapterReadServiceTests(PostgresFixture postgres) : IntegrationTest
         using IServiceScope scope = Factory.Services.CreateScope();
         IChapterReadService svc = scope.ServiceProvider.GetRequiredService<IChapterReadService>();
         return await svc.GetChapterTocAsync(storyId);
+    }
+
+    /// <summary>
+    /// Creates and publishes a single Chapter-1 with an E-rated primary version, authored by
+    /// <c>_viewerUserId</c> (write-service gate, MA-301). Used by the A3 wiring tests, which only
+    /// need one readable chapter. Leaves the active user as <c>_viewerUserId</c> — callers switch
+    /// the active user afterward for the actual read.
+    /// </summary>
+    private async Task PublishSingleChapterAsync(int storyId)
+    {
+        SetActiveUser(_viewerUserId);
+        await using AsyncServiceScope svc = Factory.Services.CreateAsyncScope();
+        IChapterWriteService write = svc.ServiceProvider.GetRequiredService<IChapterWriteService>();
+        await write.CreateChapterAsync(new CreateChapterDto
+            { StoryId = storyId, Title = "Ch 1", ChapterText = "<p>content</p>", Rating = Rating.E });
+
+        using IServiceScope dbScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = dbScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Chapter chapter = await db.Chapters.FirstAsync(c => c.StoryId == storyId);
+        chapter.IsPublished = true;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Direct EF seed of an IsCompleted=true UserStoryInteraction row (A3 wiring tests).</summary>
+    private async Task SeedCompletedInteractionAsync(int userId, int storyId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.UserStoryInteractions.Add(new UserStoryInteraction
+            { UserId = userId, StoryId = storyId, IsCompleted = true });
+        await db.SaveChangesAsync();
     }
 
     /// <summary>

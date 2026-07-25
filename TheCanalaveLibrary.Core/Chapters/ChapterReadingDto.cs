@@ -38,5 +38,18 @@ public record ChapterReadingDto(
     /// Populated only by <see cref="IChapterReadService.GetChapterForEditAsync"/> for the
     /// edit-form's "Same as story" vs explicit-override display. Null on reading-page loads.
     /// </summary>
-    Rating? RawRating = null
+    Rating? RawRating = null,
+    /// <summary>
+    /// The viewer's <c>UserStoryInteraction.IsCompleted</c> for this story (false for anonymous
+    /// viewers or no row). Feeds <c>CommentSection.UserHasCompletedStory</c> — the F26
+    /// spoiler-reveal completion gate (A3, 2026-07-24; layer2-services.md
+    /// §"<c>IsCompleted</c> auto-producer").
+    /// </summary>
+    bool ViewerHasCompletedStory = false,
+    /// <summary>
+    /// <c>Story.StoryStatusId == StoryStatusEnum.Completed</c>. Gates the reading page's
+    /// <c>MarkCompletedAsync</c> trigger — the auto-producer only fires on Completed stories,
+    /// never ongoing ones (A3, 2026-07-24).
+    /// </summary>
+    bool StoryIsComplete = false
 );
