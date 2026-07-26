@@ -17,9 +17,9 @@ public class ClientMessagingReadService(HttpClient http) : IMessagingReadService
     protected HttpClient Http { get; } = http;
 
     public async Task<IReadOnlyList<ConversationSummaryDto>> GetConversationsAsync(
-        bool includeArchived = false) =>
+        ConversationScope scope = ConversationScope.Active) =>
         await Http.GetFromJsonAsync<List<ConversationSummaryDto>>(
-            $"api/messaging/conversations?includeArchived={includeArchived}") ?? [];
+            $"api/messaging/conversations?scope={scope}") ?? [];
 
     public async Task<ConversationThreadDto> GetConversationThreadAsync(
         int conversationId, int page, int pageSize) =>

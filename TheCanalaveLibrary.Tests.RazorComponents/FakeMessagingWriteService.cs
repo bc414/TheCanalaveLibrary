@@ -8,26 +8,35 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// call so tests can assert which methods were invoked without needing a host or database.
 /// <para>
 /// Unlike most fakes here, this one keeps a real conversation <em>store</em> rather than a single
-/// canned result: <see cref="GetConversationsAsync"/> honours the <c>includeArchived</c> flag by
-/// filtering that store, and <see cref="SetArchivedAsync"/> mutates it. That is deliberate —
-/// MessagesPage's Inbox|Archived split is exactly a test of whether the flag is threaded through
-/// correctly, so a fake that ignored it would render the tab tests meaningless.
+/// canned result: <see cref="GetConversationsAsync"/> honours <see cref="ConversationScope"/> by
+/// filtering that store, <see cref="SetArchivedAsync"/> moves rows between scopes, and
+/// <see cref="MarkConversationReadAsync"/> zeroes the unread count. That is deliberate —
+/// MessagesPage's Inbox|Archived split and its refresh-after-read flows are exactly tests of
+/// whether those signals thread through correctly, so a fake that ignored them would render the
+/// page tests meaningless. The archived flag lives beside the DTO (not on it) because
+/// <see cref="ConversationSummaryDto"/> deliberately carries none — scope implies it.
 /// </para>
 /// </summary>
 public class FakeMessagingWriteService : IMessagingWriteService
 {
     // ── Store ─────────────────────────────────────────────────────────────────────
 
-    private readonly List<ConversationSummaryDto> _conversations = [];
+    private sealed class StoredConversation(ConversationSummaryDto dto, bool archived)
+    {
+        public ConversationSummaryDto Dto { get; set; } = dto;
+        public bool Archived { get; set; } = archived;
+    }
+
+    private readonly List<StoredConversation> _conversations = [];
     private ConversationThreadDto? _thread;
     private MessagingParticipantDto? _lookupResult;
     private int _unreadCount;
 
     /// <summary>Seeds the conversation store the read methods project from.</summary>
-    public void SetConversations(params ConversationSummaryDto[] conversations)
+    public void SetConversations(params (ConversationSummaryDto Dto, bool Archived)[] conversations)
     {
         _conversations.Clear();
-        _conversations.AddRange(conversations);
+        _conversations.AddRange(conversations.Select(c => new StoredConversation(c.Dto, c.Archived)));
     }
 
     /// <summary>Seeds the thread returned by <see cref="GetConversationThreadAsync"/>.</summary>
@@ -39,18 +48,19 @@ public class FakeMessagingWriteService : IMessagingWriteService
 
     // ── Read tracking ─────────────────────────────────────────────────────────────
 
-    public List<bool> GetConversationsCalls { get; } = [];
+    public List<ConversationScope> GetConversationsCalls { get; } = [];
     public List<(int ConversationId, int Page, int PageSize)> GetThreadCalls { get; } = [];
 
     public Task<IReadOnlyList<ConversationSummaryDto>> GetConversationsAsync(
-        bool includeArchived = false)
+        ConversationScope scope = ConversationScope.Active)
     {
-        GetConversationsCalls.Add(includeArchived);
+        GetConversationsCalls.Add(scope);
 
-        // Mirrors ServerMessagingReadService: includeArchived widens the set, it does not
-        // switch to archived-only.
+        // Mirrors ServerMessagingReadService: scopes are disjoint slices of the store.
+        bool archived = scope == ConversationScope.Archived;
         IReadOnlyList<ConversationSummaryDto> result = _conversations
-            .Where(c => includeArchived || !c.IsArchived)
+            .Where(c => c.Archived == archived)
+            .Select(c => c.Dto)
             .ToList();
 
         return Task.FromResult(result);
@@ -106,10 +116,10 @@ public class FakeMessagingWriteService : IMessagingWriteService
         // Mirror the real service: advancing LastReadTimestamp zeroes the unread count, so a
         // follow-up GetConversationsAsync reflects the read. Without this, tests of the
         // sidebar-refresh-after-read flow would assert against a fake that can't change.
-        for (int i = 0; i < _conversations.Count; i++)
+        foreach (StoredConversation stored in _conversations)
         {
-            if (_conversations[i].ConversationId == conversationId)
-                _conversations[i] = _conversations[i] with { UnreadCount = 0 };
+            if (stored.Dto.ConversationId == conversationId)
+                stored.Dto = stored.Dto with { UnreadCount = 0 };
         }
 
         return Task.CompletedTask;
@@ -121,10 +131,10 @@ public class FakeMessagingWriteService : IMessagingWriteService
 
         // Mutate the store so a follow-up GetConversationsAsync reflects the change, the same
         // way the real service would.
-        for (int i = 0; i < _conversations.Count; i++)
+        foreach (StoredConversation stored in _conversations)
         {
-            if (_conversations[i].ConversationId == conversationId)
-                _conversations[i] = _conversations[i] with { IsArchived = archived };
+            if (stored.Dto.ConversationId == conversationId)
+                stored.Archived = archived;
         }
 
         if (_thread is not null && _thread.ConversationId == conversationId)

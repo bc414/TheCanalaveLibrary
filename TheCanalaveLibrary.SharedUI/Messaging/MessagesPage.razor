@@ -355,18 +355,9 @@ else
         }
     }
 
-    /// <summary>
-    /// Loads the archived-only list. The service exposes <c>includeArchived</c> (both) rather than
-    /// an archived-only mode, so the archived subset is filtered here. That still meets the goal:
-    /// the default Inbox load stays lean, and the wider read happens only when the user explicitly
-    /// opens the Archived tab.
-    /// </summary>
-    private async Task<IReadOnlyList<ConversationSummaryDto>> LoadArchivedAsync()
-    {
-        IReadOnlyList<ConversationSummaryDto> all =
-            await WriteService.GetConversationsAsync(includeArchived: true);
-        return all.Where(c => c.IsArchived).ToList();
-    }
+    /// <summary>Loads the archived list via its own read scope — nothing is over-fetched.</summary>
+    private Task<IReadOnlyList<ConversationSummaryDto>> LoadArchivedAsync() =>
+        WriteService.GetConversationsAsync(ConversationScope.Archived);
 
     /// <summary>
     /// Archives or unarchives the open conversation, then returns to /messages with the pane

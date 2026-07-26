@@ -279,6 +279,48 @@ things (fix-same-session discipline):
 Post-addendum suite: full `dotnet test` green — 764 Unit / 591 RazorComponents / 859 Integration
 (**2214/2214**; +1 = the staleness pin).
 
+### WU-MsgReadPath — ID-first conversation listing + scoped reads (2026-07-26)
+
+Builds the read-path rework that WU-MsgArchive's review had deferred (owner chose to take it now
+as foundation). **L2 stays Stage 5** — behavior-preserving restructure plus a contract tightening.
+
+- **`ConversationScope` (Core enum, `Active`/`Archived`) replaces `includeArchived`.** Scopes are
+  disjoint; there is deliberately no "all" member (no UI merges the lists; a merged mode would
+  reinvite fetch-and-filter-client-side — the enum's doc comment carries the rationale).
+  `MessagesPage.LoadArchivedAsync` collapsed to a direct `GetConversationsAsync(Archived)` call;
+  its client-side `.Where(IsArchived)` filter is gone.
+- **`ConversationSummaryDto.IsArchived` removed** — under scoped listings every row's archived
+  state is implied by the scope it was requested under; keeping the field would have been exactly
+  the inert-plumbing shape the deferrals tracker exists to catch. The per-thread flag stays on
+  `ConversationThreadDto.IsArchived` (direct-URL navigation needs it). The fake's store now
+  carries the flag beside the DTO; `ConversationListItemTests`' two WU-MsgArchive chip tests were
+  retired because the pin is now structural — a per-row archived marker is *uncompilable*.
+- **`GetConversationsAsync` is two-step ID-first** (mirrors the thread query's own idiom):
+  metadata step (ids + `MAX(date_sent)`, ordered NULLS-last via the two-key idiom, ~4 bytes/row —
+  the future `Skip/Take` site) → hydration step (participant, unread count, and
+  `SUBSTRING(message_text, 1, 2048)` instead of the whole body — the preview is ≤100 plain-text
+  chars, so unbounded `MessageText` transfer was the dominant waste). Rows reassembled in step-1
+  order in C#. `MakePreview` now drops a SQL-bisected trailing tag fragment.
+- **SQL shape verified** (`ToQueryString`, scratch harness deleted): step 1 emits two correlated
+  `MAX()` ordering subqueries (single min/max seeks on
+  `ix_private_messages_conversation_id_date_sent`); step 2 emits ROW_NUMBER window joins with the
+  substring inside the join and **no ORDER BY**. Convention text updated:
+  `layer2-services.md` §"Conversation listing is scoped, ID-first, and unpaged".
+- **Endpoint/client:** `GET /api/messaging/conversations?scope=Archived` (enum TryParse binding,
+  absent → Active); `ClientMessagingReadService` updated. One additional
+  `IMessagingReadService` implementer updated (`ModSpotlightPageTests.FakeUserLookup`).
+- **Verified:** full suite green (753 Unit / 591 RazorComponents / 916 Integration — counts also
+  absorb the concurrent WU-TagFanon session's tests). Integration: scope-disjointness test
+  (Archived returns archived rows *only*) and a new **bounded-preview pin** — a ~9 KB body yields
+  a ≤101-char preview, which also proves the `Substring` SQL translation against real Postgres
+  (an untranslatable expression would throw there). Browser smoke (server-only path, TestUser):
+  Inbox renders; Archived tab empty-state; archive → Archived tab lists it (via the new
+  scope=Archived read) with preview rendered from the bounded prefix; unarchive → back in Inbox;
+  `psql`-confirmed both flags false afterwards (workbench restored); zero console errors.
+  Note: the L6 story is unchanged — `(user_id, is_archived)` remains served by the plain
+  `ix_conversation_participants_user_id` (C4's messaging half stays open; all index work deferred
+  to a later pass per the owner's standing instruction).
+
 ### Tests (WU35, 2026-06-24)
 
 - **Unit** (`Tests.Unit/MessagingValidationsTests.cs`, 11 tests): `MessagingValidations.Validate`

@@ -37,9 +37,11 @@ public static class MessagingEndpoints
 
         // ── Reads (all authenticated — see class summary) ──
 
+        // Enum query binding: minimal APIs bind ConversationScope via case-insensitive TryParse
+        // ("?scope=Archived"); absent → Active (the default everywhere).
         group.MapGet("/conversations",
-                async (IMessagingReadService messaging, bool includeArchived = false) =>
-                    Results.Ok(await messaging.GetConversationsAsync(includeArchived)))
+                async (IMessagingReadService messaging, ConversationScope scope = ConversationScope.Active) =>
+                    Results.Ok(await messaging.GetConversationsAsync(scope)))
             .RequireAuthorization();
 
         group.MapGet("/conversations/{conversationId:int}",

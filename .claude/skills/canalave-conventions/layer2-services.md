@@ -1271,14 +1271,32 @@ Three rules follow, all already true in code — do not "fix" any of them:
 Net semantic: **archiving mutes, it does not delete or defer.** Unarchiving is always an explicit
 user act.
 
-**Inbox listing is unpaged, and ordered in SQL.** `GetConversationsAsync` returns every matching
-conversation — conversation counts are bounded by human effort (a conversation must be started by a
-person), unlike notifications, which are machine-generated and therefore paged. Ordering is
-`ORDER BY (last_message_date IS NOT NULL) DESC, last_message_date DESC`, expressed as the two-key
-LINQ idiom `.OrderByDescending(x => x.LastMessageDate != null).ThenByDescending(x => x.LastMessageDate)`.
-**The first key is load-bearing:** PostgreSQL defaults to `NULLS FIRST` for `ORDER BY … DESC`, so a
-single-key sort would promote message-less conversations to the top of every inbox. The contract is
-message-less conversations sort **last**.
+**Conversation listing is scoped, ID-first, and unpaged (WU-MsgReadPath, 2026-07-26).**
+`GetConversationsAsync(ConversationScope scope = Active)` — scopes are **disjoint** (`Active` =
+inbox, `Archived` = archived only; deliberately no "all" member — no UI merges the lists, and a
+merged mode would reinvite fetch-everything-and-filter-client-side). `ConversationSummaryDto`
+carries **no `IsArchived`**: scope implies it; the per-thread flag lives on
+`ConversationThreadDto.IsArchived` for direct-URL navigation.
+
+The read is **two-step** (the same page-the-ids-then-hydrate idiom as the thread query):
+
+1. **Metadata step** — filter `(user_id, is_archived)`, project `conversation_id` +
+   `MAX(date_sent)`, `ORDER BY (max IS NOT NULL) DESC, max DESC`, return ids only (~4 bytes/row).
+   **The first ordering key is load-bearing:** PostgreSQL defaults to `NULLS FIRST` for
+   `ORDER BY … DESC`, so a single-key sort would promote message-less conversations to the top;
+   the contract is they sort **last**. Any future page window is a `Skip/Take` on this step —
+   nothing else changes.
+2. **Hydration step** — for exactly those ids: other participant, unread count, and the last
+   message's `SUBSTRING(message_text, 1, 2048)` (`PreviewFetchPrefixChars`) — never the whole
+   body; the preview is ≤100 plain-text chars, so unbounded `MessageText` transfer was the read
+   path's dominant waste. `MakePreview` guards against a SQL-bisected trailing tag fragment.
+   No SQL ORDER BY here; rows are reassembled in step-1 order in C#.
+
+Unpaged stays correct because conversation counts are bounded by human effort (someone must start
+each one), unlike machine-generated notifications, which are paged. SQL shape verified via
+`ToQueryString` 2026-07-26: step 1's two ordering keys emit as correlated `MAX()` subqueries
+(single min/max seeks on `ix_private_messages_conversation_id_date_sent`); step 2 emits
+ROW_NUMBER window joins with the substring inside the join.
 
 ## Self-Referential Editing Exception — `IUserSettingsService` (spec §3.5)
 

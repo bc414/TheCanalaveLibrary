@@ -122,7 +122,8 @@ public class ModSpotlightPageTests : BunitContext
         public Task<MessagingParticipantDto?> FindUserByUsernameAsync(string username) => Task.FromResult(User);
 
         // The mod page uses only the username lookup — everything else is unreachable here.
-        public Task<IReadOnlyList<ConversationSummaryDto>> GetConversationsAsync(bool includeArchived = false) =>
+        public Task<IReadOnlyList<ConversationSummaryDto>> GetConversationsAsync(
+            ConversationScope scope = ConversationScope.Active) =>
             throw new NotSupportedException();
         public Task<ConversationThreadDto> GetConversationThreadAsync(int conversationId, int page, int pageSize) =>
             throw new NotSupportedException();

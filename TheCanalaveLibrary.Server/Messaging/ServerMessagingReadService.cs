@@ -32,21 +32,44 @@ public partial class ServerMessagingReadService(
     // -----------------------------------------------------------------------
 
     public async Task<IReadOnlyList<ConversationSummaryDto>> GetConversationsAsync(
-        bool includeArchived = false)
+        ConversationScope scope = ConversationScope.Active)
     {
         int viewerId = RequireAuthenticatedUser();
+        bool archived = scope == ConversationScope.Archived;
 
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
-        // Two-step: EF handles the DB work (including ordering), C# handles HTML stripping only.
+        // ── Step 1: order on METADATA only (id + last-message date) ──────────────────
+        // ID-first shape, mirroring GetConversationThreadAsync's page-the-ids-then-fetch idiom.
+        // This step transfers ~12 bytes/row and is where any future page window goes
+        // (Skip/Take here — the hydration below already handles an arbitrary id list).
+        //
+        // The two ordering keys are load-bearing: Postgres defaults to NULLS FIRST for
+        // ORDER BY ... DESC, so a single-key sort would promote message-less conversations to
+        // the TOP; the contract is that they sort LAST.
+        // See layer2-services.md §"Conversation Archiving Is Sticky".
+        List<int> orderedIds = await readDb.ConversationParticipants
+            .Where(cp => cp.UserId == viewerId && cp.IsArchived == archived)
+            .Select(cp => new
+            {
+                cp.ConversationId,
+                // MAX over an empty set is NULL in SQL — the nullable cast keeps the C# type honest.
+                LastMessageDate = cp.Conversation.PrivateMessages.Max(m => (DateTime?)m.DateSent)
+            })
+            .OrderByDescending(x => x.LastMessageDate != null)
+            .ThenByDescending(x => x.LastMessageDate)
+            .Select(x => x.ConversationId)
+            .ToListAsync();
+
+        if (orderedIds.Count == 0) return [];
+
+        // ── Step 2: hydrate details for exactly those ids ────────────────────────────
         var raw = await readDb.ConversationParticipants
-            .Where(cp => cp.UserId == viewerId && (includeArchived || !cp.IsArchived))
+            .Where(cp => cp.UserId == viewerId && orderedIds.Contains(cp.ConversationId))
             .Select(cp => new
             {
                 cp.ConversationId,
                 cp.Conversation.Subject,
-                cp.IsArchived,
-                cp.LastReadTimestamp,
                 OtherParticipant = cp.Conversation.ConversationParticipants
                     .Where(other => other.UserId != viewerId)
                     .Select(other => new
@@ -56,13 +79,17 @@ public partial class ServerMessagingReadService(
                         AvatarUrl = other.User.ProfilePictureRelativeUrl
                     })
                     .FirstOrDefault(),
-                // DateSent is widened to DateTime? here on purpose: this is a FirstOrDefault()
-                // subquery, so the whole shape is absent for a conversation with no messages.
-                // The nullable projection is what lets the ORDER BY below express NULLS-LAST
-                // without a CS8073 "always true" warning on a non-nullable DateTime.
+                // Bounded prefix, not the whole body: the preview is ≤100 plain-text chars, so
+                // shipping a multi-KB message across the wire to truncate it in C# was the read
+                // path's dominant waste. Substring translates to SQL substring(), which is
+                // length-tolerant on shorter strings.
                 LastMessage = cp.Conversation.PrivateMessages
                     .OrderByDescending(m => m.DateSent)
-                    .Select(m => new { m.MessageText, DateSent = (DateTime?)m.DateSent })
+                    .Select(m => new
+                    {
+                        HtmlPrefix = m.MessageText.Substring(0, PreviewFetchPrefixChars),
+                        DateSent = (DateTime?)m.DateSent
+                    })
                     .FirstOrDefault(),
                 // Messages sent by the other participant after my LastReadTimestamp.
                 UnreadCount = cp.Conversation.PrivateMessages
@@ -70,23 +97,14 @@ public partial class ServerMessagingReadService(
                                 && (cp.LastReadTimestamp == null
                                     || m.DateSent > cp.LastReadTimestamp))
             })
-            // Ordered in SQL, not in C#. The first key is load-bearing: Postgres defaults to
-            // NULLS FIRST for ORDER BY ... DESC, so a single-key sort would promote message-less
-            // conversations to the TOP. The contract (and the pre-2026-07-26 C# behavior) is that
-            // they sort LAST. See layer2-services.md §"Conversation Archiving Is Sticky".
-            //
-            // SQL shape (inspected via ToQueryString, 2026-07-26): EF does NOT reuse the
-            // LastMessage ROW_NUMBER join for the ordering keys — it emits `EXISTS(...)` for the
-            // first key and a correlated `(SELECT date_sent ... LIMIT 1)` for the second. Both are
-            // single seeks on ix_private_messages_conversation_id_date_sent (equality-bound
-            // leading column, backward scan), negligible at human-bounded conversation counts.
-            // `x.LastMessage != null` (not `.DateSent != null`) is deliberate: it translates to
-            // the cheaper EXISTS probe instead of a third top-1 value fetch.
-            .OrderByDescending(x => x.LastMessage != null)
-            .ThenByDescending(x => x.LastMessage!.DateSent)
             .ToListAsync();
 
+        // Reassemble in step-1 order (Contains gives no ordering guarantee).
+        Dictionary<int, int> rank = new(orderedIds.Count);
+        for (int i = 0; i < orderedIds.Count; i++) rank[orderedIds[i]] = i;
+
         return raw
+            .OrderBy(r => rank[r.ConversationId])
             .Select(r => new ConversationSummaryDto(
                 r.ConversationId,
                 r.Subject,
@@ -96,10 +114,9 @@ public partial class ServerMessagingReadService(
                         r.OtherParticipant.UserId,
                         r.OtherParticipant.Username ?? "[deleted]",
                         r.OtherParticipant.AvatarUrl ?? DefaultAvatarUrl),
-                r.LastMessage is null ? null : MakePreview(r.LastMessage.MessageText),
+                r.LastMessage is null ? null : MakePreview(r.LastMessage.HtmlPrefix),
                 r.LastMessage?.DateSent,
-                r.UnreadCount,
-                r.IsArchived))
+                r.UnreadCount))
             .ToList();
     }
 
@@ -250,8 +267,23 @@ public partial class ServerMessagingReadService(
     /// The message text is already sanitized (stored after allow-list sanitization); no
     /// security implication here — this is purely a display convenience.
     /// </summary>
+    /// <summary>
+    /// Raw-HTML prefix fetched per conversation for the list preview. The preview is ≤100
+    /// plain-text chars; 2048 raw chars is a ~20× allowance for tag/entity inflation, so the
+    /// stripped prefix virtually always yields the full 100. Pathological bodies (e.g. one
+    /// enormous link URL) may yield a shorter preview — acceptable for a listing excerpt.
+    /// </summary>
+    private const int PreviewFetchPrefixChars = 2048;
+
     private static string MakePreview(string html)
     {
+        // The input may be a SQL-truncated prefix (PreviewFetchPrefixChars), so it can end
+        // mid-tag ("...<a hre"); an unclosed trailing "<" fragment would survive tag-stripping
+        // as literal text. Drop it. (A bisected entity like "&am" decodes to itself — harmless,
+        // and it can only surface when the stripped text is shorter than the preview cap.)
+        int lastOpen = html.LastIndexOf('<');
+        if (lastOpen >= 0 && html.IndexOf('>', lastOpen) < 0) html = html[..lastOpen];
+
         // Strip tags then decode entities.
         string plain = HtmlTagPattern().Replace(html, " ");
         plain = System.Net.WebUtility.HtmlDecode(plain);

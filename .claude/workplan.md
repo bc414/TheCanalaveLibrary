@@ -4178,3 +4178,35 @@ same session, which is why it is called out here rather than quietly amended.
 
 **Verified:** `dotnet test` green; three new regression tests (case-variant adoption skip, ship
 arity 400, repeated-member 400); migration script green.
+
+---
+
+## WU-MsgReadPath — ID-first conversation listing + scoped reads (Feature 49 L2/L5) — DONE ✓ (2026-07-26)
+
+- **Trigger:** WU-MsgArchive's review had deferred the messaging read-path rework as coupled work
+  ("don't do the small half alone"); owner chose to take it now as foundation rather than leave it.
+- **Did:** `ConversationScope` enum (`Active`/`Archived`, disjoint, deliberately no "all") replaces
+  `includeArchived` across `IMessagingReadService`/server/client/endpoint
+  (`?scope=Archived`); `ConversationSummaryDto.IsArchived` **removed** (scope implies it — keeping
+  it would be the tracker's own inert-plumbing shape; the per-thread flag stays on
+  `ConversationThreadDto`); `GetConversationsAsync` restructured to the two-step ID-first shape
+  (metadata: ids + `MAX(date_sent)`, NULLS-last two-key order, the future Skip/Take site →
+  hydration: participant/unread/`SUBSTRING(message_text,1,2048)` — never the whole body), rows
+  reassembled in step-1 order; `MakePreview` drops SQL-bisected trailing tag fragments;
+  `MessagesPage.LoadArchivedAsync` collapsed to a direct scoped call (client-side filter gone).
+- **SQL shape inspected** (`ToQueryString`, scratch deleted): step 1 = two correlated `MAX()`
+  ordering seeks on `ix_private_messages_conversation_id_date_sent`, id-only projection; step 2 =
+  ROW_NUMBER window joins, substring inside the join, no ORDER BY. Convention:
+  `layer2-services.md` §"Conversation listing is scoped, ID-first, and unpaged" (supersedes the
+  WU-MsgArchive paragraph).
+- **Verified:** full suite green — 753 Unit / 591 RazorComponents / 916 Integration (counts absorb
+  the concurrent WU-TagFanon session's tests). New Integration pins: scope disjointness (Archived
+  returns archived rows only) + bounded preview on a ~9 KB body (≤101 chars; also proves the
+  `Substring` translation against real Postgres). bUnit: fake store reworked (archived flag beside
+  the DTO); the two chip tests retired — the pin is now structural (uncompilable). Browser smoke on
+  the server-only path: Inbox / empty Archived / archive → scoped Archived list (preview from the
+  bounded prefix) / unarchive round trip, `psql`-confirmed clean workbench, zero console errors.
+- **Cells:** no Stage changes — F49 L2/L5 already Stage 5; this replaces the shape underneath.
+  L6 untouched: C4's messaging half stays open, all index work deferred per standing instruction.
+- **Tool:** Claude Code (Fable). **Pointer:** `audit/Messaging.md` §"WU-MsgReadPath";
+  `layer2-services.md` §"Conversation listing is scoped, ID-first, and unpaged".

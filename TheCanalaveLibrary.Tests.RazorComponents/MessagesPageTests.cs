@@ -31,16 +31,17 @@ public class MessagesPageTests : BunitContext
         this.AddAuthorization().SetAuthorized("TestUser");
     }
 
-    private static ConversationSummaryDto NewConversation(
-        int id, string username, bool isArchived = false, int unreadCount = 0) => new(
+    // The archived flag rides beside the DTO (fake-store shape) — ConversationSummaryDto itself
+    // deliberately carries no IsArchived; scope implies it (see the DTO's doc comment).
+    private static (ConversationSummaryDto Dto, bool Archived) NewConversation(
+        int id, string username, bool isArchived = false, int unreadCount = 0) => (new ConversationSummaryDto(
             ConversationId: id,
             Subject: $"Subject {id}",
             OtherParticipant: new MessagingParticipantDto(
                 UserId: id + 100, Username: username, AvatarUrl: "/img/default-avatar.svg"),
             LastMessagePreview: "preview text",
             LastMessageDate: new DateTime(2026, 7, 20, 12, 0, 0, DateTimeKind.Utc),
-            UnreadCount: unreadCount,
-            IsArchived: isArchived);
+            UnreadCount: unreadCount), isArchived);
 
     private static ConversationThreadDto NewThread(int id, bool isArchived) => new(
         ConversationId: id,
@@ -80,7 +81,7 @@ public class MessagesPageTests : BunitContext
 
         Render<MessagesPage>();
 
-        _fakeService.GetConversationsCalls.Should().NotContain(true,
+        _fakeService.GetConversationsCalls.Should().NotContain(ConversationScope.Archived,
             "the archived set grows without bound — it must not ride along on every page load");
     }
 
@@ -94,8 +95,8 @@ public class MessagesPageTests : BunitContext
         IRenderedComponent<MessagesPage> cut = Render<MessagesPage>();
         FindButton(cut, "Archived").Click();
 
-        _fakeService.GetConversationsCalls.Should().Contain(true,
-            "opening the Archived tab is what triggers the wider read");
+        _fakeService.GetConversationsCalls.Should().Contain(ConversationScope.Archived,
+            "opening the Archived tab is what triggers the archived-scope read");
         cut.Markup.Should().Contain("Brock");
         cut.Markup.Should().NotContain("Ash",
             "the Archived tab must show archived conversations only, not the merged set");

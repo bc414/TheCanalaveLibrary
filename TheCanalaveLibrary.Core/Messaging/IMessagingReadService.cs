@@ -8,11 +8,16 @@ namespace TheCanalaveLibrary.Core;
 public interface IMessagingReadService
 {
     /// <summary>
-    /// Returns all conversations the current user participates in, ordered by the most recent
-    /// message date (newest first). Archived conversations are excluded unless
-    /// <paramref name="includeArchived"/> is <c>true</c>.
+    /// Returns the current user's conversations in the given <paramref name="scope"/>
+    /// (<see cref="ConversationScope.Active"/> = inbox, the default;
+    /// <see cref="ConversationScope.Archived"/> = archived only — the scopes are disjoint),
+    /// ordered by most-recent message date, newest first; conversations with no messages sort
+    /// last. Unpaged — conversation counts are bounded by human effort — but the implementation
+    /// is ID-first (order/limit on metadata, then hydrate), so adding a page window later is a
+    /// Skip/Take on the metadata step, not a rework.
     /// </summary>
-    Task<IReadOnlyList<ConversationSummaryDto>> GetConversationsAsync(bool includeArchived = false);
+    Task<IReadOnlyList<ConversationSummaryDto>> GetConversationsAsync(
+        ConversationScope scope = ConversationScope.Active);
 
     /// <summary>
     /// Returns a paged thread view for a specific conversation.

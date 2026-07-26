@@ -308,7 +308,7 @@ public class MessagingWriteServiceTests(PostgresFixture postgres) : IntegrationT
     }
 
     [Fact]
-    public async Task GetConversations_ExcludesArchivedByDefault_AndIncludesThemOnRequest()
+    public async Task GetConversations_ScopesAreDisjoint_ActiveAndArchivedSplitTheSet()
     {
         int convActive = await CallStartAsync("Active", "<p>a</p>");
         int convArchived = await CallStartAsync("Archived", "<p>b</p>");
@@ -316,13 +316,35 @@ public class MessagingWriteServiceTests(PostgresFixture postgres) : IntegrationT
 
         IReadOnlyList<ConversationSummaryDto> inbox = await CallGetConversationsAsync();
         inbox.Select(c => c.ConversationId).Should().Equal([convActive],
-            "the default inbox read hides archived conversations");
+            "the default (Active) scope hides archived conversations");
 
-        IReadOnlyList<ConversationSummaryDto> all =
-            await CallGetConversationsAsync(includeArchived: true);
-        all.Select(c => c.ConversationId).Should().Contain(convArchived,
-            "includeArchived widens the set — this is what backs the Archived tab");
-        all.Single(c => c.ConversationId == convArchived).IsArchived.Should().BeTrue();
+        IReadOnlyList<ConversationSummaryDto> archived =
+            await CallGetConversationsAsync(ConversationScope.Archived);
+        archived.Select(c => c.ConversationId).Should().Equal([convArchived],
+            "the Archived scope returns archived rows ONLY — never the merged set (this is what "
+            + "backs the Archived tab without over-fetching the inbox)");
+    }
+
+    /// <summary>
+    /// Pins the ID-first read path's bounded preview prefix (WU-MsgReadPath): the hydration step
+    /// fetches SUBSTRING(message_text, 1, 2048), not the whole body — this test both exercises
+    /// the Substring SQL translation against real Postgres (an untranslatable expression would
+    /// throw here) and asserts the preview contract survives a body far larger than the prefix.
+    /// </summary>
+    [Fact]
+    public async Task GetConversations_PreviewIsBounded_ForVeryLongMessages()
+    {
+        // ~9 KB body: 1500 six-char words. Well past the 2048-char fetch prefix.
+        string longBody = "<p>" + string.Concat(Enumerable.Repeat("wordy ", 1500)) + "</p>";
+        await CallStartAsync("Long", longBody);
+
+        IReadOnlyList<ConversationSummaryDto> list = await CallGetConversationsAsync();
+
+        string? preview = list.Single().LastMessagePreview;
+        preview.Should().NotBeNull();
+        preview!.Length.Should().BeLessThanOrEqualTo(101,
+            "the preview contract is ≤100 plain-text chars plus the ellipsis");
+        preview.Should().StartWith("wordy wordy").And.EndWith("…");
     }
 
     /// <summary>
@@ -348,7 +370,7 @@ public class MessagingWriteServiceTests(PostgresFixture postgres) : IntegrationT
         badge.Should().Be(0, "archived conversations are muted from the global unread badge");
 
         IReadOnlyList<ConversationSummaryDto> archived =
-            await CallGetConversationsAsync(includeArchived: true);
+            await CallGetConversationsAsync(ConversationScope.Archived);
         archived.Single(c => c.ConversationId == convId).UnreadCount
             .Should().BeGreaterThan(0,
                 "the per-conversation count survives archiving — a new message must not vanish "
@@ -358,11 +380,11 @@ public class MessagingWriteServiceTests(PostgresFixture postgres) : IntegrationT
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
     private async Task<IReadOnlyList<ConversationSummaryDto>> CallGetConversationsAsync(
-        bool includeArchived = false)
+        ConversationScope conversationScope = ConversationScope.Active)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         IMessagingWriteService svc = scope.ServiceProvider.GetRequiredService<IMessagingWriteService>();
-        return await svc.GetConversationsAsync(includeArchived);
+        return await svc.GetConversationsAsync(conversationScope);
     }
 
     private async Task<int> CallStartAsync(
