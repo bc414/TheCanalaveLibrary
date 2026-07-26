@@ -38,7 +38,7 @@ public partial class ServerMessagingReadService(
 
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
-        // Two-step: EF handles the DB work, C# handles HTML stripping and final ordering.
+        // Two-step: EF handles the DB work (including ordering), C# handles HTML stripping only.
         var raw = await readDb.ConversationParticipants
             .Where(cp => cp.UserId == viewerId && (includeArchived || !cp.IsArchived))
             .Select(cp => new
@@ -56,9 +56,13 @@ public partial class ServerMessagingReadService(
                         AvatarUrl = other.User.ProfilePictureRelativeUrl
                     })
                     .FirstOrDefault(),
+                // DateSent is widened to DateTime? here on purpose: this is a FirstOrDefault()
+                // subquery, so the whole shape is absent for a conversation with no messages.
+                // The nullable projection is what lets the ORDER BY below express NULLS-LAST
+                // without a CS8073 "always true" warning on a non-nullable DateTime.
                 LastMessage = cp.Conversation.PrivateMessages
                     .OrderByDescending(m => m.DateSent)
-                    .Select(m => new { m.MessageText, m.DateSent })
+                    .Select(m => new { m.MessageText, DateSent = (DateTime?)m.DateSent })
                     .FirstOrDefault(),
                 // Messages sent by the other participant after my LastReadTimestamp.
                 UnreadCount = cp.Conversation.PrivateMessages
@@ -66,11 +70,23 @@ public partial class ServerMessagingReadService(
                                 && (cp.LastReadTimestamp == null
                                     || m.DateSent > cp.LastReadTimestamp))
             })
+            // Ordered in SQL, not in C#. The first key is load-bearing: Postgres defaults to
+            // NULLS FIRST for ORDER BY ... DESC, so a single-key sort would promote message-less
+            // conversations to the TOP. The contract (and the pre-2026-07-26 C# behavior) is that
+            // they sort LAST. See layer2-services.md §"Conversation Archiving Is Sticky".
+            //
+            // SQL shape (inspected via ToQueryString, 2026-07-26): EF does NOT reuse the
+            // LastMessage ROW_NUMBER join for the ordering keys — it emits `EXISTS(...)` for the
+            // first key and a correlated `(SELECT date_sent ... LIMIT 1)` for the second. Both are
+            // single seeks on ix_private_messages_conversation_id_date_sent (equality-bound
+            // leading column, backward scan), negligible at human-bounded conversation counts.
+            // `x.LastMessage != null` (not `.DateSent != null`) is deliberate: it translates to
+            // the cheaper EXISTS probe instead of a third top-1 value fetch.
+            .OrderByDescending(x => x.LastMessage != null)
+            .ThenByDescending(x => x.LastMessage!.DateSent)
             .ToListAsync();
 
-        // Order by most-recent message first; conversations with no messages sort last.
         return raw
-            .OrderByDescending(r => r.LastMessage?.DateSent)
             .Select(r => new ConversationSummaryDto(
                 r.ConversationId,
                 r.Subject,
@@ -101,6 +117,9 @@ public partial class ServerMessagingReadService(
             .Select(cp => new
             {
                 cp.Conversation.Subject,
+                // Viewer's own archived flag — free here (this query is already on their
+                // participant row) and required by the thread-header archive control.
+                cp.IsArchived,
                 OtherParticipant = cp.Conversation.ConversationParticipants
                     .Where(other => other.UserId != viewerId)
                     .Select(other => new
@@ -140,7 +159,8 @@ public partial class ServerMessagingReadService(
                         header.OtherParticipant.Username ?? "[deleted]",
                         header.OtherParticipant.AvatarUrl ?? DefaultAvatarUrl),
                 [],
-                totalMessageCount);
+                totalMessageCount,
+                header.IsArchived);
         }
 
         // Step 2: fetch the selected messages, ordered ascending (oldest first) for display.
@@ -172,7 +192,8 @@ public partial class ServerMessagingReadService(
             header.Subject,
             otherParticipantDto,
             messages,
-            totalMessageCount);
+            totalMessageCount,
+            header.IsArchived);
     }
 
     public async Task<int> GetUnreadConversationCountAsync()

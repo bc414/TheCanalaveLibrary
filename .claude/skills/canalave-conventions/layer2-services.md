@@ -1206,6 +1206,33 @@ for MVP, load the recipient's `PrivacySettings` navigation and evaluate in C# (s
 not a filter over many rows). The gate check comes **after** the self-message guard and **before**
 validation/sanitization of the message body.
 
+## Conversation Archiving Is Sticky, Never Auto-Cleared (WU-MsgArchive)
+
+`ConversationParticipant.IsArchived` is a **per-participant, unilateral, non-destructive** flag —
+archiving affects only the caller's own row (`SetArchivedAsync` scopes by `viewerId`); the other
+party's view of the thread is untouched and they can still read and reply. Since no delete exists
+for a conversation and no block exists for an *established* thread (the `AllowPrivateMessages` gate
+above applies only at `StartConversationAsync`), **archive is the only disposal gesture a user has.**
+Three rules follow, all already true in code — do not "fix" any of them:
+
+| Rule | Where | Why |
+|---|---|---|
+| A new inbound message **never** clears `IsArchived`. | Nothing in `SendMessageAsync` touches it. | Gmail-style raise-on-reply was considered and **rejected**: with no block available, it lets a persistent unwanted correspondent drag a thread back into the inbox indefinitely, so archiving would grant no actual relief. |
+| `GetUnreadConversationCountAsync` excludes archived rows. | `ServerMessagingReadService` — `.Where(cp => … && !cp.IsArchived)`. | This is the *muting* half. The global nav badge stays quiet for archived threads by design. |
+| Per-conversation `UnreadCount` **stays populated** for archived rows. | The `GetConversationsAsync` projection computes it for every returned row, archived or not. | This is what keeps sticky archiving honest — the Archived view surfaces the unread count, so a legitimate reply is discoverable rather than silently lost. Do not suppress it in the archived projection. |
+
+Net semantic: **archiving mutes, it does not delete or defer.** Unarchiving is always an explicit
+user act.
+
+**Inbox listing is unpaged, and ordered in SQL.** `GetConversationsAsync` returns every matching
+conversation — conversation counts are bounded by human effort (a conversation must be started by a
+person), unlike notifications, which are machine-generated and therefore paged. Ordering is
+`ORDER BY (last_message_date IS NOT NULL) DESC, last_message_date DESC`, expressed as the two-key
+LINQ idiom `.OrderByDescending(x => x.LastMessageDate != null).ThenByDescending(x => x.LastMessageDate)`.
+**The first key is load-bearing:** PostgreSQL defaults to `NULLS FIRST` for `ORDER BY … DESC`, so a
+single-key sort would promote message-less conversations to the top of every inbox. The contract is
+message-less conversations sort **last**.
+
 ## Self-Referential Editing Exception — `IUserSettingsService` (spec §3.5)
 
 When the reader and writer populations are **identical by definition** — a user editing only

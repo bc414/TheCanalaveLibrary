@@ -32,6 +32,18 @@ else
                     @Thread.Subject
                 </p>
             </div>
+
+            @* Archive / unarchive — the sole affordance for the IsArchived flag (WU-MsgArchive).
+               Optional: stays dark unless the owner supplies a delegate (HasDelegate idiom). *@
+            @if (OnToggleArchive.HasDelegate)
+            {
+                <button type="button"
+                        class="ml-auto flex-none rounded-md border border-(--color-border) bg-(--color-surface-raised) px-2.5 py-1 text-xs transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50"
+                        disabled="@BusyArchiving"
+                        @onclick="() => OnToggleArchive.InvokeAsync()">
+                    @(IsArchived ? "Unarchive" : "Archive")
+                </button>
+            }
         </div>
 
         @* "Load older" sits above the scroll container so it isn't caught by flex-col-reverse *@
@@ -97,4 +109,20 @@ else
 
     /// <summary>Shown above the composer when a send or load fails.</summary>
     [Parameter] public string? ErrorMessage { get; set; }
+
+    /// <summary>
+    /// Current archived state of this conversation for the viewer. Drives the header button's
+    /// label only — archiving is sticky and never affects thread contents
+    /// (see <c>layer2-services.md</c> §"Conversation Archiving Is Sticky").
+    /// </summary>
+    [Parameter] public bool IsArchived { get; set; }
+
+    /// <summary>
+    /// Raised when the user clicks Archive/Unarchive. The owning page performs the write and
+    /// decides where to navigate. When no delegate is supplied the button is not rendered.
+    /// </summary>
+    [Parameter] public EventCallback OnToggleArchive { get; set; }
+
+    /// <summary>Disables the archive button while the toggle write is in flight.</summary>
+    [Parameter] public bool BusyArchiving { get; set; }
 }

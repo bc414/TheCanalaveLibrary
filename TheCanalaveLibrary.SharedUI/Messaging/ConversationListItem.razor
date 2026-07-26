@@ -3,8 +3,14 @@
 @* Leaf — one row in the conversation list sidebar.
    Shows the other participant's avatar + username, the conversation subject, a last-message
    excerpt (HTML-stripped, truncated by the read service), the time since the last message,
-   an unread-count badge when UnreadCount > 0, and an archived indicator. The entire card is
-   a link to /messages/{ConversationId}. No service injection. *@
+   and an unread-count badge when UnreadCount > 0. The entire card is a link to
+   /messages/{ConversationId}. No service injection.
+
+   No per-row archived marker: MessagesPage splits Inbox and Archived into separate tabs, so
+   every row in the archived list is archived and a chip would carry no information
+   (WU-MsgArchive, 2026-07-26 — the retired chip's design-registry row is struck in
+   design/surface-registry.md). The unread badge deliberately still renders for archived rows;
+   that is what keeps sticky archiving honest. *@
 
 <a href="/messages/@Conversation.ConversationId"
    class="block rounded-xl border @(IsSelected ? "border-(--color-action-ink) bg-(--color-action-ink)/10" : "border-(--color-border) bg-(--color-surface)") p-3 transition-colors hover:bg-(--color-surface-hover)">
@@ -47,12 +53,6 @@
                 </p>
             }
 
-            @if (Conversation.IsArchived)
-            {
-                <span class="mt-1 inline-block rounded bg-(--color-text-muted)/20 px-1.5 py-0.5 text-xs text-(--color-text-muted)">
-                    Archived
-                </span>
-            }
         </div>
     </div>
 </a>

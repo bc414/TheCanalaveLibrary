@@ -114,10 +114,28 @@ decision work that has no row at all.
   - Source: `audit/Badges.md` "Deferred award triggers" table + WU36 settled decisions.
   - Context: Only Recommender/RecommenderSilver auto-award. **BetaReader has no producer and no assigned WU** (`AcknowledgedAsBetaReaderCount` never populated — ties to B3). Architect/Patron/Artist are *deliberate manual grants* (settled after the Feature 56 cut) — not pending.
 
-- [ ] **B5 — Private-message archive/unarchive has no UI** `[inert · low · anytime]`
-  - Grid: F49 L3-Logic/L3.5/L4/L4.5=5.
-  - Source: `audit/Messaging.md` L4.5 "Observation (not a defect)."
+- [x] **B5 — Private-message archive/unarchive UI — DONE (WU-MsgArchive, 2026-07-26)** `[inert · low · anytime]`
+  - Grid: F49 L3-Logic/L3.5/L4/L4.5=5 (unchanged — this filled in inert plumbing under already-Stage-5 cells).
+  - Source: `audit/Messaging.md` L4.5 "Observation (not a defect)" (now struck; superseded by that file's WU-MsgArchive slice).
   - Context: `SetArchivedAsync` + the "Archived" label exist and are tested, but no UI control surfaces them. Capability dead-ends at the service layer; every messaging cell reads Stage 5.
+  - **Residual: done 2026-07-26.** Provenance traced first: `IsArchived` has **no design deliberation
+    anywhere in the record** — it appears in the Gemini log (Entry #1539, 2025-10-25) already present
+    in a pasted SQL script, and the one first-principles PM design turn (#1409) never mentions
+    archiving; spec §5.19 describes the column, not a user story. So the capability was **ratified
+    deliberately** rather than inherited — built, not cut, because with no delete and no block for an
+    established thread, archive is the only disposal gesture a user has. Settled semantic: **archive
+    is sticky (mutes), not filing** — a reply never auto-unarchives (raise-on-reply explicitly
+    rejected: it would let a persistent unwanted correspondent drag the thread back forever), the
+    global badge excludes archived threads, but the per-conversation unread count stays visible in
+    the Archived tab so nothing is silently lost. Needed zero service change. Shipped: thread-header
+    Archive/Unarchive button, Inbox|Archived segmented toggle with per-tab on-demand fetch, the
+    now-redundant per-row "Archived" chip removed (its ratified `surface-registry.md` row struck),
+    `ConversationThreadDto.IsArchived` added, and the inbox sort moved from C# into SQL preserving
+    the message-less-sorts-LAST contract against Postgres's `NULLS FIRST` default. `dotnet test`
+    green (2213/2213); browser-verified end-to-end including a real reply into an archived thread.
+    Full narrative: `workplan.md` WU-MsgArchive; `audit/Messaging.md` §WU-MsgArchive;
+    `layer2-services.md` §"Conversation Archiving Is Sticky".
+  - **Not touched:** no index work — **C4** stays exactly as written (all index work is a later pass).
 
 - [x] **B6 — Story→folder assignment has methods but no UI — RESOLVED (WU-GroupsL5b, 2026-07-25)** `[inert · low · anytime]`
   - Grid: F39 L3.5=5 (unchanged — already Stage 5; this closed the inert plumbing under it).

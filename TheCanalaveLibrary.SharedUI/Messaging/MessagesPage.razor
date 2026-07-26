@@ -28,25 +28,54 @@ else
 
         @* ── Conversation list sidebar (stacks above the thread at narrow) ── *@
         <aside class="flex w-full max-h-64 md:w-72 md:max-h-none md:shrink-0 flex-col border-b md:border-b-0 md:border-r border-(--color-border) bg-(--color-surface)">
-            <div class="flex items-center justify-between border-b border-(--color-border) px-4 py-3">
-                <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Messages</h1>
-                <button type="button"
-                        class="rounded-md bg-(--color-mission) px-2.5 py-1 text-xs font-medium text-white hover:bg-(--color-mission-hover)"
-                        @onclick="HandleNewConversation">
-                    New
-                </button>
+            <div class="border-b border-(--color-border) px-4 py-3">
+                <div class="flex items-center justify-between">
+                    <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Messages</h1>
+                    <button type="button"
+                            class="rounded-md bg-(--color-mission) px-2.5 py-1 text-xs font-medium text-white hover:bg-(--color-mission-hover)"
+                            @onclick="HandleNewConversation">
+                        New
+                    </button>
+                </div>
+
+                @* Inbox / Archived toggle — sits on its own row because the sidebar is md:w-72,
+                   too narrow to carry the segments beside the heading and New button.
+                   Recipe mirrors NotificationsPage's view toggle. *@
+                <div class="mt-2 flex overflow-hidden rounded-md border border-(--color-border) text-sm">
+                    <button type="button"
+                            class="flex-1 px-3 py-1.5 transition-colors @(_tab == MessageTab.Inbox ? "bg-(--color-action) text-(--color-text)" : "bg-(--color-surface-raised) hover:bg-(--color-surface-hover)")"
+                            @onclick="() => SetTabAsync(MessageTab.Inbox)">
+                        Inbox
+                    </button>
+                    <button type="button"
+                            class="flex-1 px-3 py-1.5 transition-colors @(_tab == MessageTab.Archived ? "bg-(--color-action) text-(--color-text)" : "bg-(--color-surface-raised) hover:bg-(--color-surface-hover)")"
+                            @onclick="() => SetTabAsync(MessageTab.Archived)">
+                        Archived
+                    </button>
+                </div>
             </div>
 
             <div class="flex flex-1 flex-col gap-2 overflow-y-auto p-2">
-                @if ((Conversations?.Count ?? 0) == 0)
+                @if (_listError is not null)
                 {
+                    <InlineAlert Message="@_listError" />
+                }
+                @if (_loadingArchived)
+                {
+                    <p class="mt-4 text-center text-sm text-(--color-text-muted)">Loading&hellip;</p>
+                }
+                else if ((VisibleConversations?.Count ?? 0) == 0 && _listError is null)
+                {
+                    @* Per-tab copy. Inbox copy stays tab-scoped ("inbox is empty", not "no
+                       conversations yet") because archived conversations may exist that this
+                       view deliberately hasn't fetched — don't claim the user has none. *@
                     <p class="mt-4 text-center text-sm text-(--color-text-muted)">
-                        No conversations yet.
+                        @(_tab == MessageTab.Archived ? "No archived conversations." : "Your inbox is empty.")
                     </p>
                 }
                 else
                 {
-                    @foreach (var conv in Conversations!)
+                    @foreach (var conv in VisibleConversations!)
                     {
                         <ConversationListItem Conversation="@conv"
                                              IsSelected="@(conv.ConversationId == ConversationId)" />
@@ -60,6 +89,9 @@ else
             <MessageThread Thread="EffectiveThread"
                            OnSendReply="HandleSendReplyAsync"
                            OnLoadOlderMessages="HandleLoadOlderAsync"
+                           OnToggleArchive="HandleToggleArchiveAsync"
+                           IsArchived="@(_threadHeader?.IsArchived ?? false)"
+                           BusyArchiving="_archiving"
                            BusySending="_replying"
                            BusyLoading="_loadingOlder"
                            ErrorMessage="@_replyError" />
@@ -88,11 +120,27 @@ else
 
     // ── Conversation list ─────────────────────────────────────────────────────
 
-    // Persisted across the prerender→interactive handoff ([PersistentState] requires a public
-    // property) — the sidebar listing hydrates from the prerender payload. Thread state below
-    // stays ephemeral: loading it bundles a MarkConversationReadAsync write plus a post-mark-read
-    // listing refresh, both of which must run (plain assignments) on every load.
+    private enum MessageTab { Inbox, Archived }
+
+    /// <summary>
+    /// The INBOX list only (non-archived). Persisted across the prerender→interactive handoff
+    /// ([PersistentState] requires a public property) — the sidebar listing hydrates from the
+    /// prerender payload. Thread state below stays ephemeral: loading it bundles a
+    /// MarkConversationReadAsync write plus a post-mark-read listing refresh, both of which must
+    /// run (plain assignments) on every load.
+    /// </summary>
     [PersistentState] public IReadOnlyList<ConversationSummaryDto>? Conversations { get; set; }
+
+    // The archived list is deliberately NOT persisted and NOT fetched on first load. Archiving is
+    // the gesture that keeps the active set small, so the archived set is the one that grows
+    // without bound — pulling it on every /messages visit would make a diligent user's inbox
+    // monotonically heavier. Fetched on demand when the Archived tab is opened, dropped otherwise.
+    private IReadOnlyList<ConversationSummaryDto>? _archivedConversations;
+
+    // Ephemeral, like NotificationsPage's view/sort state — no querystring, resets on reload.
+    private MessageTab _tab = MessageTab.Inbox;
+    private bool _loadingArchived;
+    private string? _listError;
 
     // ── Thread state ──────────────────────────────────────────────────────────
 
@@ -120,8 +168,13 @@ else
     private bool _replying;
     private string? _replyError;
     private bool _loadingOlder;
+    private bool _archiving;
 
     // ── Computed ──────────────────────────────────────────────────────────────
+
+    /// <summary>The list the sidebar renders — whichever tab is active.</summary>
+    private IReadOnlyList<ConversationSummaryDto>? VisibleConversations =>
+        _tab == MessageTab.Archived ? _archivedConversations : Conversations;
 
     /// <summary>
     /// Projects _threadHeader + _allMessages into a ConversationThreadDto for the children.
@@ -200,6 +253,12 @@ else
             // Mark read + refresh list (updates unread counts in sidebar).
             await WriteService.MarkConversationReadAsync(ConversationId.Value);
             Conversations = await WriteService.GetConversationsAsync();
+
+            // The sidebar renders _archivedConversations while the Archived tab is active, so
+            // the mark-read above must be reflected there too — otherwise the just-read thread's
+            // unread badge sits stale in the archived list until the tab is toggled.
+            if (_tab == MessageTab.Archived)
+                _archivedConversations = await LoadArchivedAsync();
         }
         catch (KeyNotFoundException)
         {
@@ -222,8 +281,11 @@ else
             // Prepend newest message at index 0 — appears at bottom in flex-col-reverse.
             _allMessages.Insert(0, sent);
             _totalMessageCount++;
-            // Refresh sidebar preview.
+            // Refresh sidebar preview — both lists, since a reply to an archived thread must
+            // update the archived list's preview/timestamp too (same reasoning as LoadThreadAsync).
             Conversations = await WriteService.GetConversationsAsync();
+            if (_tab == MessageTab.Archived)
+                _archivedConversations = await LoadArchivedAsync();
         }
         catch (MessagingValidationException ex)
         {
@@ -258,6 +320,83 @@ else
         finally
         {
             _loadingOlder = false;
+        }
+    }
+
+    private async Task SetTabAsync(MessageTab tab)
+    {
+        if (_tab == tab) return;
+        _tab = tab;
+        _listError = null;
+
+        if (tab == MessageTab.Archived)
+        {
+            _loadingArchived = true;
+            try
+            {
+                _archivedConversations = await LoadArchivedAsync();
+            }
+            catch (Exception)
+            {
+                // Same inline-error posture as the page's other user-clicked handlers —
+                // a failed fetch shouldn't take out the whole page via the error boundary.
+                _listError = "Failed to load archived conversations. Please try again.";
+            }
+            finally
+            {
+                _loadingArchived = false;
+            }
+        }
+        else
+        {
+            // Drop it rather than cache — the next visit to the tab re-reads, so an archive
+            // performed in between is never shown stale.
+            _archivedConversations = null;
+        }
+    }
+
+    /// <summary>
+    /// Loads the archived-only list. The service exposes <c>includeArchived</c> (both) rather than
+    /// an archived-only mode, so the archived subset is filtered here. That still meets the goal:
+    /// the default Inbox load stays lean, and the wider read happens only when the user explicitly
+    /// opens the Archived tab.
+    /// </summary>
+    private async Task<IReadOnlyList<ConversationSummaryDto>> LoadArchivedAsync()
+    {
+        IReadOnlyList<ConversationSummaryDto> all =
+            await WriteService.GetConversationsAsync(includeArchived: true);
+        return all.Where(c => c.IsArchived).ToList();
+    }
+
+    /// <summary>
+    /// Archives or unarchives the open conversation, then returns to /messages with the pane
+    /// cleared. Archiving is sticky — nothing else clears the flag — so the navigation is what
+    /// makes the outcome unambiguous rather than leaving a now-filtered-out thread on screen.
+    /// </summary>
+    private async Task HandleToggleArchiveAsync()
+    {
+        if (!ConversationId.HasValue || _threadHeader is null) return;
+
+        _archiving = true;
+        _replyError = null;
+
+        try
+        {
+            await WriteService.SetArchivedAsync(ConversationId.Value, !_threadHeader.IsArchived);
+
+            // Back to a known state: Inbox tab, fresh listing, no thread selected.
+            _tab = MessageTab.Inbox;
+            _archivedConversations = null;
+            Conversations = await WriteService.GetConversationsAsync();
+            Nav.NavigateTo("/messages");
+        }
+        catch (Exception)
+        {
+            _replyError = "Failed to update this conversation. Please try again.";
+        }
+        finally
+        {
+            _archiving = false;
         }
     }
 

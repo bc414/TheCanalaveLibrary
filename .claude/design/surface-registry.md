@@ -381,7 +381,7 @@ especially ⚖️-marked rows.)
 | Row card (link) | `rounded-xl border border-(--color-border) bg-(--color-surface) hover:bg-(--color-primary)/10`; selected: `border-(--color-primary) bg-(--color-primary)/10` | Container | — |
 | Username / subject / timestamp / preview | token inks | Container text | — |
 | Unread count badge | `bg-(--color-primary) text-white rounded-full` | Indicator | Primary doubling as indicator |
-| Archived chip | `bg-(--color-text-muted)/20 text-(--color-text-muted)` | Indicator | Chip ground derived from a text token opacity, not a status token |
+| ~~Archived chip~~ | ~~`bg-(--color-text-muted)/20 text-(--color-text-muted)`~~ | ~~Indicator~~ | ~~Chip ground derived from a text token opacity, not a status token~~ — **element retired (WU-MsgArchive, 2026-07-26)**: the Inbox\|Archived tab split in `MessagesPage` makes a per-row archived marker redundant (every row in the Archived tab is archived), so the chip was deleted rather than re-grounded. The token mismatch is therefore **closed by deletion, not by fix** — if a per-row archived marker is ever reintroduced, it must be re-ratified against a status token, not revived from this recipe. |
 
 #### ComposeConversationModal.razor
 | Element | Current classes | Role | Mismatch |

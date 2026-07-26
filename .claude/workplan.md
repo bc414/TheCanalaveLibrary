@@ -3879,3 +3879,82 @@ Two loose ends from WU-IntTestPerf, closed same day:
   settled design" + Stage note; `audit/Comments.md` F23 WU-RecLifecycle note; `audit/Moderation.md`
   F48 supersession; `layer2-services.md` §"Publish-immediately + the Recommendation Lifecycle";
   `content-safety.md` §"Author-Controlled Content Actions"; `hidden-deferrals-tracker.md` A4/D1/D3.2.
+
+---
+
+## WU-MsgArchive — Private-message archive/unarchive UI (closes B5) (Feature 49) — DONE ✓ (2026-07-26)
+
+- **Trigger:** hidden-deferrals tracker item **B5** — `SetArchivedAsync`, the `includeArchived` read
+  filter, the unread-badge exclusion, the HTTP endpoint, the client impl and Integration tests all
+  existed, but no UI control surfaced any of it. A complete vertical slice with no button.
+- **Provenance traced first (2026-07-26).** `IsArchived` has **no design deliberation anywhere in
+  the record**: it first appears in the Gemini log at Entry #1539 (2025-10-25) already present in a
+  SQL script the owner pasted in for Identity conversion, and the sole first-principles PM design
+  turn (Entry #1409) never mentions archiving. Spec §5.19 describes the column, not a user story.
+  The capability was therefore **ratified deliberately in this WU** rather than inherited by default
+  — the same treatment A2 (AutoLoadNextChapter) got when its unprompted origin was traced, but with
+  the opposite outcome: build it, because with no delete and no block for an established thread,
+  archive is the only disposal gesture a user has.
+- **Settled semantic — sticky, not filing.** A new inbound message never clears `IsArchived`;
+  Gmail-style raise-on-reply was considered and **rejected** (it would let a persistent unwanted
+  correspondent drag a thread back indefinitely, leaving archive with no relief value). The global
+  nav badge excludes archived conversations; the per-conversation `UnreadCount` deliberately stays
+  populated so the Archived tab surfaces a reply rather than swallowing it. **Zero service change** —
+  this is what `GetConversationsAsync` already did. Recorded in `layer2-services.md`
+  §"Conversation Archiving Is Sticky" as a Doc-Touch moment-1 item, before any code.
+- **Built:** Archive/Unarchive button in the `MessageThread` header (the sole affordance —
+  `ConversationListItem` stays a single `<a>`, which cannot legally contain a `<button>`);
+  Inbox|Archived segmented toggle in `MessagesPage` (recipe from `NotificationsPage`); per-tab fetch
+  with `[PersistentState]` on the Inbox list only and the archived list ephemeral/on-demand (the
+  archived set is the one that grows without bound, so it must not ride along on every page load);
+  archiving navigates to `/messages` and resets to Inbox; `ConversationThreadDto.IsArchived` added
+  (free — the header query already read the viewer's participant row; sourced there rather than off
+  the sidebar list so direct-URL navigation resolves correctly); `ConversationListItem`'s "Archived"
+  chip **removed** as redundant under the tab split, its ratified `surface-registry.md` row struck.
+- **L2 — inbox sort pushed from C# into SQL.** **The two-key idiom is load-bearing:** Postgres
+  defaults to `NULLS FIRST` for `ORDER BY … DESC`, so a naive single-key translation would silently
+  promote message-less conversations to the top of every inbox. `.OrderByDescending(x =>
+  x.LastMessage!.DateSent != null).ThenByDescending(…)` preserves the message-less-sorts-LAST
+  contract. No paging added — conversation counts are bounded by human effort, unlike notifications.
+- **Verified:** `dotnet build` clean; `dotnet test` full suite green — **2213/2213** (764 Unit +
+  590 RazorComponents + 859 Integration). New: 3 Integration (ordering-with-message-less-last — the
+  guard on the sort move; `includeArchived` both directions; the sticky invariant driven through the
+  real service), 13 RazorComponents (`MessagesPageTests` ×8 — first page-level messaging coverage,
+  via the new `FakeMessagingWriteService`; `MessageThreadTests` ×5), and `ConversationListItemTests`'
+  archived-chip test replaced by its inverse plus an unread-survives-archiving pin.
+  **L4.5 browser pass (2026-07-26)** on the server-only path, every step `psql`-confirmed: archive →
+  navigates away, pane clears, row leaves Inbox, nav badge goes quiet, `is_archived` flips for the
+  viewer's row only; Archived tab shows it with no chip and the header reads "Unarchive". Sticky
+  proven end-to-end by signing in as the other participant and sending a **real reply** while
+  archived — no return to Inbox, no nav badge, but the Archived tab showed the unread count and new
+  preview. Unarchive returned it. Ordering verified live with seeded fixtures: newest → older →
+  **message-less last**. Zero console messages, zero server-log errors; fixtures removed and the dev
+  workbench restored to seeded state.
+  `scripts/check-design-tokens.ps1`: no findings in any Messaging file (the two pre-existing
+  unrelated findings — `ImportReviewPanel.razor`, `ProfilePage.razor` — untouched, same as
+  WU-RecLifecycle recorded).
+- **Cells:** `status.md` — **no Stage-number changes.** F49 L2/L3-Logic/L3.5/L4/L4.5 were all already
+  Stage 5 and remain so; this fills in inert plumbing underneath them. Exactly the hidden-deferral
+  shape the tracker exists to catch.
+- **Deliberately out of scope:** no index work, and no doc note claiming index work was cut — tracker
+  item **C4** is left exactly as written, per the owner's instruction that all index work happens
+  later as its own pass.
+- **Tool:** Claude Code (Opus). **Pointer:** `audit/Messaging.md` §"WU-MsgArchive"; `layer2-services.md`
+  §"Conversation Archiving Is Sticky"; `design/surface-registry.md` (struck Archived-chip row);
+  `hidden-deferrals-tracker.md` B5.
+
+- **Same-session review addendum (2026-07-26).** A post-completion review found: (1) an
+  **Archived-tab sidebar staleness defect** — `LoadThreadAsync`/`HandleSendReplyAsync` refreshed only
+  the Inbox list while the sidebar renders `_archivedConversations` on the Archived tab, so a
+  just-read archived thread kept its badge until a tab toggle; fixed (both handlers refresh the
+  archived list when that tab is active) + regression-pinned
+  (`OpeningArchivedThread_FromArchivedTab_ClearsItsSidebarUnreadBadge`; the fake's mark-read now
+  zeroes the store's unread count so the flow is observable). (2) The plan's **generated-SQL
+  inspection step had been skipped** — discharged via `ToQueryString()`: projection uses ROW_NUMBER
+  window joins (good); ORDER BY keys re-emit correlated subqueries rather than reusing the join;
+  first key switched to `x.LastMessage != null` (translates to a cheaper `EXISTS` probe); both keys
+  are single seeks on `ix_private_messages_conversation_id_date_sent`, negligible at human-bounded
+  counts — full key/join reuse belongs to the deferred ID-first read-path rework. (3) Polish:
+  tab-scoped Inbox empty copy ("Your inbox is empty."), inline-error catch on the archived tab
+  fetch. Post-addendum: full suite green **2214/2214** (764/591/859). Detail: `audit/Messaging.md`
+  WU-MsgArchive addendum.
