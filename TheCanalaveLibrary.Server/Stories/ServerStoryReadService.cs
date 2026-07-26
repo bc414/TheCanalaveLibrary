@@ -394,12 +394,17 @@ public class ServerStoryReadService(
 
         // Personal plane (WU-AccessGate): a viewer's own interaction-backed candidate set is
         // never rating-filtered — see the interface doc. Only meaningful with a restrict set.
-        bool personal = personalScope && restrictToStoryIds is { Count: > 0 };
+        bool personal = personalScope && restrictToStoryIds is not null;
         if (personal)
             query = query.IgnoreQueryFilters(["ContentRating"]); // elevated read: Personal plane (own interaction graph)
 
         // ── Bookshelf candidate narrowing (applied first so count + all filters are scoped to it) ──
-        if (restrictToStoryIds is { Count: > 0 })
+        // null = no narrowing (the /discover path); EMPTY = narrow to nothing. The empty case must
+        // NOT fall through to an unnarrowed query — an empty shelf/profile tab renders empty, never
+        // the whole library (browser-caught 2026-07-25; every bookshelf tab with zero candidates
+        // was listing every story, and it silently undid WU-RecLifecycle's D1 filter on the profile
+        // Recommendations tab).
+        if (restrictToStoryIds is not null)
             query = query.Where(s => restrictToStoryIds.Contains(s.StoryId));
 
         bool hasFts = !string.IsNullOrWhiteSpace(filter.TextQuery);

@@ -310,6 +310,27 @@ rather than by building derived-rating joins (child-table BlogPost rating, 2-hop
 scoping outward. Full reasoning: `middle_plan_v2.md` Resolved "Non-story report-target rating routing" and
 `audit/Moderation.md` Feature 46/47.
 
+### Author-Controlled Content Actions (WU-RecLifecycle, 2026-07-25)
+
+A third actor class exists alongside *self* (edit/delete your own content) and *moderator*
+(report→takedown): the **story author acting on content attached to their story**. Orthogonal to the
+`IModeratableContent` mod-takedown axis — none of these set `IsTakenDown`; they are ownership-gated
+service methods (`Story.AuthorId == userId`; co-authors deliberately excluded until the dormant
+`CoAuthor` feature is built). Motivated by the anti-FFN grievance: authors must be able to exorcise
+trolls from their own story pages.
+
+- **Recommendations:** Request-Revision (note + hide-until-edited, not sticky) / Remove (silent,
+  sticky via the `(RecommenderId, StoryId)` unique index) / Unblock. Full lifecycle:
+  `layer2-services.md` §"Publish-immediately + the Recommendation Lifecycle". There is **no
+  moderator approval gate for recs and no `/mod/submissions` rec tab** — spec §5.6's "moderator
+  review" was a mis-rewording; mods touch recs only via the ordinary report→takedown path.
+- **Chapter comments:** the story's author may hard-delete any comment on their story's chapters
+  (`DeleteCommentAsync` authorizes comment-author OR story-author via
+  `ChapterComment.Chapter.Story.AuthorId`). Same hard-delete semantics as self-delete (replies
+  reparent, likes cascade); no uniqueness constraint, so a removed commenter *can* re-post —
+  deliberately weaker stickiness than rec-Remove. Blog/group/profile comments are NOT covered
+  (no story linkage); profile-owner deletion is a tracked follow-up, not built.
+
 ### Auto-Hide Policy — None
 
 `ActiveReportCount` drives mod-only triage ordering (most-reported items first in the queue) and an inline

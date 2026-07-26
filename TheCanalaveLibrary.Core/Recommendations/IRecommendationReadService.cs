@@ -8,11 +8,23 @@ namespace TheCanalaveLibrary.Core;
 public interface IRecommendationReadService
 {
     /// <summary>
-    /// Returns all Approved recommendations for a story, ordered: spotlighted
+    /// Returns the recommendations for a story the current viewer may see, ordered: spotlighted
     /// (<c>IsHighlightedByAuthor</c>) first, then by <c>DatePosted</c> descending.
     /// Per-viewer <c>IsLikedByCurrentUser</c> and <c>IsOwnRecommendation</c> are included.
+    /// <para><b>Per-viewer visibility (WU-RecLifecycle):</b> everyone sees <c>Approved</c>; the
+    /// story's author additionally sees <c>NeedsRevision</c>/<c>Rejected</c> (to act on them); a
+    /// recommender additionally sees their own hidden recommendation (with the author's
+    /// <c>RevisionRequestNote</c>). <c>Status</c>/<c>RevisionRequestNote</c> are populated only on
+    /// those elevated rows — public viewers only ever receive Approved rows.</para>
     /// </summary>
     Task<List<RecommendationDto>> GetForStoryAsync(int storyId);
+
+    /// <summary>
+    /// Returns the active user's own non-Approved recommendations (<c>NeedsRevision</c> with the
+    /// author's note, and <c>Rejected</c>), newest first — the Bookshelves Recommendations tab's
+    /// "Needs attention" section (WU-RecLifecycle). Anonymous → empty.
+    /// </summary>
+    Task<List<RecommendationDto>> GetMyRecommendationsNeedingAttentionAsync();
 
     /// <summary>Returns a single recommendation by id, or null if not found or not Approved.</summary>
     Task<RecommendationDto?> GetByIdAsync(int recommendationId);

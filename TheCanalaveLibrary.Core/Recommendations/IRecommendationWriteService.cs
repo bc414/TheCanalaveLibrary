@@ -8,33 +8,78 @@ public interface IRecommendationWriteService : IRecommendationReadService
 {
     /// <summary>
     /// Submits a new recommendation. Sanitizes and validates the body (min
-    /// <see cref="RecommendationConstants.MinLength"/> plain-text characters). Auto-approves on
-    /// submit for MVP (moderation lifecycle deferred to WU34). One-per-user-per-story enforced by
-    /// the DB unique index — duplicate submissions translate to a friendly validation error.
+    /// <see cref="RecommendationConstants.MinLength"/> plain-text characters). Publishes
+    /// immediately (<c>Approved</c> — WU-RecLifecycle: no pre-publication gate, by design) and
+    /// best-effort notifies the story author. Self-recommendation (caller is the story's author)
+    /// is rejected. One-per-user-per-story enforced by the DB unique index — duplicate submissions
+    /// translate to a friendly validation error.
     /// </summary>
     /// <returns>The new <c>RecommendationId</c>.</returns>
-    /// <exception cref="RecommendationValidationException">Body too short.</exception>
+    /// <exception cref="RecommendationValidationException">Body too short, or self-recommendation.</exception>
     /// <exception cref="KeyNotFoundException">Story not found.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated, or a recommendation already exists for this user+story.</exception>
     Task<int> SubmitAsync(RecommendationSubmitDto dto);
 
     /// <summary>
     /// Edits the body of an existing recommendation. Author-only. Re-sanitizes and re-validates.
+    /// Editing a <c>NeedsRevision</c> recommendation automatically returns it to <c>Approved</c>
+    /// (revision note cleared; story author best-effort notified). Refused on <c>Rejected</c>
+    /// recommendations — a removal is sticky until the story author unblocks it.
     /// </summary>
     /// <exception cref="RecommendationValidationException">Body too short.</exception>
     /// <exception cref="KeyNotFoundException">Recommendation not found.</exception>
-    /// <exception cref="UnauthorizedAccessException">Caller is not the recommendation's author.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the recommendation's author, or the recommendation is Rejected.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task EditAsync(UpdateRecommendationDto dto);
 
     /// <summary>
     /// Hard-deletes a recommendation. Author-only. Cascade deletes all
-    /// <c>RecommendationLike</c> and <c>RecommendationDetail</c> rows.
+    /// <c>RecommendationLike</c> and <c>RecommendationDetail</c> rows. Refused on <c>Rejected</c>
+    /// recommendations — the persisted Rejected row is the block record that keeps the
+    /// one-per-user-per-story slot occupied (WU-RecLifecycle stickiness).
     /// </summary>
     /// <exception cref="KeyNotFoundException">Recommendation not found.</exception>
-    /// <exception cref="UnauthorizedAccessException">Caller is not the recommendation's author.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the recommendation's author, or the recommendation is Rejected.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task DeleteAsync(int recommendationId);
+
+    /// <summary>
+    /// Story-author action (WU-RecLifecycle "Correct" path): sends a recommendation back for
+    /// revision with a required note. From <c>Approved</c> or <c>NeedsRevision</c> (repeat request
+    /// overwrites the note). Sets <c>NeedsRevision</c> (publicly hidden), clears
+    /// <c>IsHiddenGem</c>/<c>IsHighlightedByAuthor</c> (flag invariant — slots freed, not
+    /// auto-restored), and best-effort notifies the recommender
+    /// (<c>RecommendationRevisionRequested</c>). Not sticky — the recommender's edit auto-returns
+    /// the recommendation to <c>Approved</c>.
+    /// </summary>
+    /// <exception cref="RecommendationValidationException">Note empty or too long.</exception>
+    /// <exception cref="KeyNotFoundException">Recommendation not found.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the story's author, or the recommendation is Rejected.</exception>
+    /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
+    Task RequestRevisionAsync(int recommendationId, string note);
+
+    /// <summary>
+    /// Story-author action (WU-RecLifecycle "Remove" path): removes a recommendation from the
+    /// story. From <c>Approved</c> or <c>NeedsRevision</c> → <c>Rejected</c>. Silent (no
+    /// notification), publicly hidden, and sticky: the recommender cannot edit, delete, or
+    /// resubmit — only <see cref="UnblockAsync"/> reverses it. Clears the revision note and both
+    /// curation flags.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">Recommendation not found.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the story's author.</exception>
+    /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
+    Task RemoveAsync(int recommendationId);
+
+    /// <summary>
+    /// Story-author action: reverses a mistaken/reconsidered <see cref="RemoveAsync"/>. From
+    /// <c>Rejected</c> only → straight to <c>Approved</c> (live). Best-effort notifies the
+    /// recommender (<c>RecommendationApproved</c> — its only trigger). Curation flags are NOT
+    /// restored (re-designate manually).
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">Recommendation not found.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the story's author.</exception>
+    /// <exception cref="InvalidOperationException">Recommendation is not Rejected, or caller is not authenticated.</exception>
+    Task UnblockAsync(int recommendationId);
 
     /// <summary>
     /// Toggles a like on a recommendation. Returns the updated denormalized count and the

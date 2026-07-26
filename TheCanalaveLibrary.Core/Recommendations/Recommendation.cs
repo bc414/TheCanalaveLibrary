@@ -24,6 +24,13 @@ public class Recommendation : IModeratableContent
     [MaxLength(1024)]
     public string? TakedownReason { get; set; }
 
+    // WU-RecLifecycle: the story author's Request-Revision note (plain text, Blazor-escaped at
+    // render). Same shape/placement rationale as TakedownReason — sparse, nullable, lifecycle-
+    // paired free text; non-null only while StatusId == NeedsRevision. Cleared on return to
+    // Approved (recommender edit) and on Remove.
+    [MaxLength(500)]
+    public string? RevisionRequestNote { get; set; }
+
     public RecommendationDetail RecommendationDetail { get; set; } = null!;
     public ICollection<RecommendationLike> Likes { get; set; } = [];
     public ICollection<RecommendationSuccess> RecommendationSuccesses { get; set; } = [];

@@ -87,6 +87,18 @@ public sealed class ClientNotificationWriteService(HttpClient http)
     public Task NotifyStoryHiddenGemAsync(int recipientStoryAuthorId, int sourceRecommenderId) =>
         throw NotExposedOverHttp();
 
+    public Task NotifyNewRecommendationOnYourStoryAsync(int recipientStoryAuthorId, int sourceRecommenderId, int storyId) =>
+        throw NotExposedOverHttp();
+
+    public Task NotifyRecommendationRevisionRequestedAsync(int recipientRecommenderId, int sourceStoryAuthorId, int storyId) =>
+        throw NotExposedOverHttp();
+
+    public Task NotifyRecommendationRevisedAsync(int recipientStoryAuthorId, int sourceRecommenderId, int storyId) =>
+        throw NotExposedOverHttp();
+
+    public Task NotifyRecommendationApprovedAsync(int recipientRecommenderId, int sourceStoryAuthorId, int storyId) =>
+        throw NotExposedOverHttp();
+
     public Task NotifyNewGroupStoryAsync(int groupId, int storyAuthorId, int sourceUserId) =>
         throw NotExposedOverHttp();
 

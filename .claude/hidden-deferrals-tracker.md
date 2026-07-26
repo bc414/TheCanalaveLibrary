@@ -44,11 +44,20 @@ decision work that has no row at all.
   - Context: "Full completion tracking is post-MVP." `CommentSection` was wired with `UserHasCompletedStory=false` **hardcoded**, so the spoiler completion-gate could never treat a viewer as having finished the story.
   - **Residual: done 2026-07-24** — built spec §5.12's application producer (`IUserStoryInteractionWriteService.MarkCompletedAsync`, a durable direct write mirroring `MarkStartedAsync`, deliberately outside the reading-progress signal buffer; fires on reaching the final chapter of an author-Completed story only, no auto-clear) and wired the real `ViewerHasCompletedStory` into the gate via `ChapterReadingDto`. A latent `StoriesInProgress` counter underflow was found and fixed in the same session. `dotnet test` green (2096/2096); browser-verified end-to-end against seed data. Full narrative: `workplan.md` "A3" entry; `audit/Chapters.md` A3 Stage note; `audit/UserStoryInteractions.md` A3 settled note; `layer2-services.md` §"`IsCompleted` auto-producer".
 
-- [ ] **A4 — Recommendation approval lifecycle (auto-approve shortcut)** `[scope-cut · med · beta]`
+- [x] **A4 — Recommendation lifecycle — REDESIGNED + BUILT (WU-RecLifecycle, 2026-07-25)** `[scope-cut · med · beta]`
   - Grid: F27 all=5; F48 (Story Approval Workflow) built cells=5.
-  - Source: `audit/Recommendations.md` Feature 27 L2; `audit/Moderation.md` Feature 48 ("Rec-approval wiring deferred"); code `ServerRecommendationWriteService.cs` (`StatusId = ApprovedStatusId, // auto-approve MVP (moderation deferred to WU34)`).
-  - Context: Spec §5.6 defines a Pending → author-approval → moderator-review lifecycle plus a `/mod/submissions` rec-approval tab. Recs currently write `StatusId=Approved` directly. WU34 built moderation but explicitly left rec-approval out.
-  - **Coupling:** see **D1** — the moment this lifecycle goes live, `GetRecommendedStoryIdsByUserAsync`'s missing status filter becomes a real leak. Do them together.
+  - Source: `audit/Recommendations.md` §"WU-RecLifecycle settled design" (authoritative); code `ServerRecommendationWriteService.cs`.
+  - Context: The original entry's framing was wrong twice over. Spec §5.6's "moderator review" was a
+    mis-rewording (source deliberation: *author*-approval + time auto-approve; no mod gate), and on
+    first-principles review the owner rejected any pre-publication gate outright (discovery-first;
+    a gate merges "fix an earnest flaw" and "remove a troll" into one harsh mechanism). The settled
+    design — **publish-immediately + author Request-Revision (note, hide-until-edited, auto-relive) +
+    author Remove (silent, sticky, unblockable)** — has **no `/mod/submissions` rec tab, ever**.
+  - **Coupling:** **D1** folded into the same WU (the status filter becomes load-bearing the moment
+    `NeedsRevision`/`Rejected` rows exist). Also folded: **D3.2** (rec-attribution validation); self-rec block.
+  - Follow-ups spawned (not built): extend author checks to co-authors when the dormant `CoAuthor`
+    feature is actually built; profile owners deleting `UserProfileComment`s on their own profile
+    (same grievance shape as author-deletes-story-comments, deliberately excluded from WU-RecLifecycle).
 
 - [ ] **A5 — Fanonize notify/migrate flow (spec §14)** `[scope-cut · low · anytime]`
   - Grid: F11/F12 L2/L3/L3.5=5.
@@ -182,10 +191,14 @@ was measured. The owner's standing rule is "always measure."
 All from `modernization-audit/deferred-work.md` (repo root, **not** under `.claude/`) §7 ("Informational — none was acted on")
 unless noted. All sit under Stage-5 cells.
 
-- [ ] **D1 — `GetRecommendedStoryIdsByUserAsync` omits `StatusId==Approved` filter** `[latent-risk · med · with A4]`
+- [x] **D1 — `GetRecommendedStoryIdsByUserAsync` omits `StatusId==Approved` filter — RESOLVED (WU-RecLifecycle, 2026-07-25)** `[latent-risk · med · with A4]`
   - Grid: F28/F30 L2/L3=5.
   - Source: `modernization-audit/deferred-work.md` §7 (`ServerRecommendationReadService:152-153`).
-  - Context: Its sibling reads apply the status filter; this one doesn't. Latent because recs currently auto-approve (**A4**) — but the instant rec-moderation lands, pending/rejected rec story-ids leak onto the public profile tab. Audit flagged ⚠️ "worth checking whether WU34 makes this live" — never checked.
+  - Context: Its sibling reads apply the status filter; this one doesn't. The "worth checking whether
+    WU34 makes this live" question was settled 2026-07-24: **latent, not live** — WU34 added recs as
+    report targets but never wired status rejection; nothing writes non-Approved rows yet. Fixed
+    inside **A4**'s WU-RecLifecycle (where `NeedsRevision`/`Rejected` rows start existing), with the
+    regression test the method never had.
 
 - [ ] **D2 — Poll `by-blog-post` leaks draft metadata** `[latent-risk · low · anytime]`
   - Grid: F37 all built cells=5.
@@ -198,7 +211,7 @@ unless noted. All sit under Stage-5 cells.
   - Context: `AssignStoryToFolderAsync` didn't verify `folder.GroupId == groupStory.GroupId` — an admin of group A could file A's story into a group-B folder id via direct API use, no UI needed.
   - Residual: **done 2026-07-25**, folded into the B6 fix since both landed in the exact same method (`AssignStoryToFolderInternalAsync`). Now rejects a cross-group folder id with `KeyNotFoundException` — identical to a genuinely nonexistent folder, so the response never discloses that the id exists in another group. New Integration coverage at both the service and HTTP layers (previously zero tests existed for assign/unassign at all). Detail: `workplan.md` WU-GroupsL5b; `audit/Groups.md` F39 Stage note.
 
-- [ ] **D3.2 — Recommendations: missing recommendation↔story ownership validation** `[latent-risk · low · anytime]` — *Deliberately deferred to a future Recommendations-refinement session (split from D3, 2026-07-25).*
+- [x] **D3.2 — Recommendations: missing recommendation↔story ownership validation — RESOLVED (WU-RecLifecycle, 2026-07-25)** `[latent-risk · low · anytime]` — *The "future Recommendations-refinement session" this was deferred to was WU-RecLifecycle (split from D3, 2026-07-25). `RecordAttributionSourceAsync` now verifies the rec exists and belongs to the claimed story; Integration-tested.*
   - Grid: F30 all=5.
   - Source: `modernization-audit/deferred-work.md` §7.
   - Context: `RecordAttributionSourceAsync` never checks `recommendationId` exists/belongs to `storyId` (bogus self-attribution can later feed credit via `RecordSuccessAsync`). Unrelated code path to D3.1 (Recommendations, not Groups) — the user split the original combined D3 item rather than fold this half into the Groups fix, since it belongs with dedicated Recommendations work instead.

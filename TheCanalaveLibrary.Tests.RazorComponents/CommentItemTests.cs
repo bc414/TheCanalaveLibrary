@@ -229,6 +229,40 @@ public class CommentItemTests : BunitContext
             "the Delete button must not render when IsOwnComment is false");
     }
 
+    // ── Story-author delete (WU-RecLifecycle author content control) ──────────────
+
+    [Fact]
+    public async Task CommentItem_DeleteClick_ViewerIsStoryAuthor_InvokesOnDeleteOnOthersComment()
+    {
+        long? received = null;
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
+            .Add(c => c.Comment, MakeComment(42))
+            .Add(c => c.IsOwnComment, false)
+            .Add(c => c.ViewerIsStoryAuthor, true)
+            .Add(c => c.OnDelete,
+                EventCallback.Factory.Create<long>(this, id => { received = id; })));
+
+        IElement deleteBtn = cut.Find("button[aria-label='Delete comment']");
+        await deleteBtn.ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        received.Should().Be(42,
+            "the story's author can delete another user's comment on their story");
+    }
+
+    [Fact]
+    public void CommentItem_EditButton_AbsentForStoryAuthorOnOthersComment()
+    {
+        IRenderedComponent<CommentItem> cut = Render<CommentItem>(p => p
+            .Add(c => c.Comment, MakeComment(1))
+            .Add(c => c.IsOwnComment, false)
+            .Add(c => c.ViewerIsStoryAuthor, true)
+            .Add(c => c.OnEdit,
+                EventCallback.Factory.Create<long>(this, _ => { })));
+
+        cut.FindAll("button[aria-label='Edit comment']").Should().BeEmpty(
+            "story-author powers cover Delete only — Edit stays comment-author-only");
+    }
+
     // ── Spoiler blur + completion-gated reveal (§5.9.1) ───────────────────────────
 
     [Fact]

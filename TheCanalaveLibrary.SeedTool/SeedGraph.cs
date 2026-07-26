@@ -260,6 +260,9 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
 
         void AddRecommendation(int userIdx, int storyIdx)
         {
+            // Self-rec block (WU-RecLifecycle): seed data mirrors the production invariant —
+            // a story's author never recommends their own story.
+            if (stories[storyIdx].AuthorId == bases.UserId + userIdx) return;
             HashSet<int> set = recStoriesByUser.TryGetValue(userIdx, out HashSet<int>? s)
                 ? s
                 : recStoriesByUser[userIdx] = [];
@@ -330,9 +333,10 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
         void MarkGem(int userIdx, int storyIdx)
         {
             AddRecommendation(userIdx, storyIdx);
-            SeedRecommendationRow rec = recommendations.Last(r =>
+            // AddRecommendation skips self-recs (WU-RecLifecycle invariant) — no row may exist.
+            SeedRecommendationRow? rec = recommendations.LastOrDefault(r =>
                 r.RecommenderId == bases.UserId + userIdx && r.StoryId == stories[storyIdx].Id);
-            if (rec.IsHiddenGem) return;
+            if (rec is null || rec.IsHiddenGem) return;
             int count = gemCountByUser.GetValueOrDefault(userIdx);
             if (count >= 5) return; // the ≤5 cap the write services enforce in production
             rec.IsHiddenGem = true;

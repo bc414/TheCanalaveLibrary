@@ -273,6 +273,8 @@ public class NotificationPresenterTests
         NotificationTypeEnum.ReportReceived                 => NotificationCategoryEnum.YourReports,
         NotificationTypeEnum.ReportResolved                 => NotificationCategoryEnum.YourReports,
         NotificationTypeEnum.ReportResolvedNoAction         => NotificationCategoryEnum.YourReports,
+        NotificationTypeEnum.RecommendationRevised          => NotificationCategoryEnum.YourStories,
+        NotificationTypeEnum.RecommendationRevisionRequested => NotificationCategoryEnum.YourRecommendations,
         _                                                   => NotificationCategoryEnum.SiteNews
     };
 

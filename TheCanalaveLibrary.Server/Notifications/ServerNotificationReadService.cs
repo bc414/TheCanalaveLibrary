@@ -92,8 +92,12 @@ public class ServerNotificationReadService(
         NotificationTypeEnum.NewRecommendationByFollowedUser => RelatedEntityKind.Story,
         NotificationTypeEnum.NewStoryFavorite                => RelatedEntityKind.Story,
         NotificationTypeEnum.NewStoryFollower                => RelatedEntityKind.Story,
+        // NewRecommendationOnYourStory + RecommendationApproved gained production senders in
+        // WU-RecLifecycle (submit / unblock); the two types below were minted by the same WU.
         NotificationTypeEnum.NewRecommendationOnYourStory    => RelatedEntityKind.Story,
         NotificationTypeEnum.RecommendationApproved          => RelatedEntityKind.Story,
+        NotificationTypeEnum.RecommendationRevisionRequested => RelatedEntityKind.Story,
+        NotificationTypeEnum.RecommendationRevised           => RelatedEntityKind.Story,
         NotificationTypeEnum.RecommendationHighlighted       => RelatedEntityKind.Story,
         NotificationTypeEnum.SuccessfulRec                   => RelatedEntityKind.Story,
         NotificationTypeEnum.StoryLineageRequested            => RelatedEntityKind.Story,

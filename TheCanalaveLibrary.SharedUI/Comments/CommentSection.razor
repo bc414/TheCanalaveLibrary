@@ -34,6 +34,7 @@ else
             <CommentItem @key="root.CommentId"
                          Comment="root"
                          IsOwnComment="@(root.AuthorId is not null && root.AuthorId == CurrentUserId)"
+                         ViewerIsStoryAuthor="@ViewerIsStoryAuthor"
                          IsEditing="@(_editingId == root.CommentId)"
                          UserHasCompletedStory="@UserHasCompletedStory"
                          OnToggleLike="HandleLike"
@@ -52,6 +53,7 @@ else
                     <CommentItem @key="reply.CommentId"
                                  Comment="reply"
                                  IsOwnComment="@(reply.AuthorId is not null && reply.AuthorId == CurrentUserId)"
+                                 ViewerIsStoryAuthor="@ViewerIsStoryAuthor"
                                  IsEditing="@(_editingId == reply.CommentId)"
                                  UserHasCompletedStory="@UserHasCompletedStory"
                                  OnToggleLike="HandleLike"
@@ -147,6 +149,14 @@ else
 
     /// <summary>Null = anonymous viewer — hides post/like/edit/delete affordances.</summary>
     [Parameter] public int? CurrentUserId { get; set; }
+
+    /// <summary>
+    /// True when the viewer authored the story these chapter comments sit on (chapter context
+    /// only — the hosting page computes it; WU-RecLifecycle author content control). Forwarded to
+    /// CommentItem to unlock Delete on other users' comments. Always false for the blog-post,
+    /// group, and profile contexts. The server enforces the same rule authoritatively.
+    /// </summary>
+    [Parameter] public bool ViewerIsStoryAuthor { get; set; }
 
     [Parameter] public int PageSize { get; set; } = 20;
 

@@ -69,6 +69,11 @@ public static class RecommendationEndpoints
             async (IRecommendationReadService recs, int userId) =>
                 Results.Ok(await recs.GetRecommendedStoryIdsByUserAsync(userId)));
 
+        // Own non-Approved recs (WU-RecLifecycle "Needs attention"). Service degrades to empty for
+        // anonymous callers (the /mine/* zero-state pattern above), so no RequireAuthorization.
+        group.MapGet("/mine/needing-attention", async (IRecommendationReadService recs) =>
+            Results.Ok(await recs.GetMyRecommendationsNeedingAttentionAsync()));
+
         // ── Writes (authenticated — author-only ownership enforced in the service) ──
 
         group.MapPost("/", (IRecommendationWriteService recs, RecommendationSubmitDto dto) =>
@@ -130,6 +135,37 @@ public static class RecommendationEndpoints
                     EndpointHelpers.ExecuteWriteAsync(async () =>
                     {
                         await recs.RecordSuccessAsync(recommendationId);
+                        return Results.NoContent();
+                    }))
+            .RequireAuthorization();
+
+        // ── Author lifecycle actions (WU-RecLifecycle — story-ownership enforced in the service) ──
+
+        group.MapPost("/{recommendationId:int}/request-revision", (
+                IRecommendationWriteService recs,
+                int recommendationId,
+                [Microsoft.AspNetCore.Mvc.FromBody] string note) =>
+                EndpointHelpers.ExecuteWriteAsync(async () =>
+                {
+                    await recs.RequestRevisionAsync(recommendationId, note);
+                    return Results.NoContent();
+                }))
+            .RequireAuthorization();
+
+        group.MapPost("/{recommendationId:int}/remove",
+                (IRecommendationWriteService recs, int recommendationId) =>
+                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    {
+                        await recs.RemoveAsync(recommendationId);
+                        return Results.NoContent();
+                    }))
+            .RequireAuthorization();
+
+        group.MapPost("/{recommendationId:int}/unblock",
+                (IRecommendationWriteService recs, int recommendationId) =>
+                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    {
+                        await recs.UnblockAsync(recommendationId);
                         return Results.NoContent();
                     }))
             .RequireAuthorization();

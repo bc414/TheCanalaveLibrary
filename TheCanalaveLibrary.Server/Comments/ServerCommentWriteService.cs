@@ -6,8 +6,10 @@ namespace TheCanalaveLibrary.Server;
 /// <summary>
 /// Server-side write implementation for Comments. Inherits the read path via primary-constructor
 /// chaining. Sanitizes all user HTML before persisting (layer2-services.md
-/// §"User HTML Is Sanitized Once, On Save"). Edit and delete are author-only; moderation delete
-/// (WU34) will bypass the ownership check via a separate admin service or method.
+/// §"User HTML Is Sanitized Once, On Save"). Edit is comment-author-only. Delete is
+/// comment-author OR — chapter comments only — the story's author (WU-RecLifecycle author content
+/// control; content-safety.md §"Author-Controlled Content Actions"). Moderator removal is the
+/// separate ServerModerationWriteService soft-takedown/hard-delete path (WU34).
 /// </summary>
 public class ServerCommentWriteService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
@@ -347,9 +349,20 @@ public class ServerCommentWriteService(
         if (comment is null)
             throw new KeyNotFoundException($"Comment {commentId} not found.");
 
+        // Authorization: comment-author OR (WU-RecLifecycle author-content-control) the author of
+        // the story the comment's chapter belongs to. Only ChapterComment links to a story — the
+        // other three comment types stay comment-author-only. Co-authors deliberately excluded
+        // until the dormant CoAuthor feature is built. See content-safety.md
+        // §"Author-Controlled Content Actions".
         if (comment.UserId != userId)
-            throw new UnauthorizedAccessException(
-                "You can only delete your own comments.");
+        {
+            bool isStoryAuthorOfChapterComment = await writeDb.ChapterComments
+                .AnyAsync(cc => cc.CommentId == commentId
+                    && cc.Chapter.Story.AuthorId == userId);
+            if (!isStoryAuthorOfChapterComment)
+                throw new UnauthorizedAccessException(
+                    "You can only delete your own comments, or comments on your own stories.");
+        }
 
         // Hard delete. DB FKs handle the rest:
         //  • ParentCommentId SET NULL  → replies become flat top-level comments.

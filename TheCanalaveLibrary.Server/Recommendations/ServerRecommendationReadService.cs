@@ -15,7 +15,7 @@ public class ServerRecommendationReadService(
     IActiveUserContext activeUser) : IRecommendationReadService
 {
     private const string DefaultAvatarUrl = "/img/default-avatar.svg";
-    private const short ApprovedStatusId = 2;
+    private const short ApprovedStatusId = (short)RecommendationStatusEnum.Approved;
 
     /// <summary>
     /// Protected so the derived write service can access the user context without double-capturing
@@ -34,8 +34,19 @@ public class ServerRecommendationReadService(
         int? currentUserId = ActiveUser.UserId;
 
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        // Per-viewer visibility (WU-RecLifecycle): everyone sees Approved; the story's author also
+        // sees NeedsRevision/Rejected (to act on them); a recommender also sees their own hidden
+        // rec (with the author's note). Status/RevisionRequestNote are projected only on those
+        // elevated rows — public viewers only ever receive Approved rows, so nothing leaks.
+        bool isStoryAuthor = currentUserId != null && await readDb.Stories
+            .AnyAsync(s => s.StoryId == storyId && s.AuthorId == currentUserId);
+
         return await readDb.Recommendations
-            .Where(r => r.StoryId == storyId && r.StatusId == ApprovedStatusId)
+            .Where(r => r.StoryId == storyId &&
+                (r.StatusId == ApprovedStatusId
+                 || isStoryAuthor
+                 || (currentUserId != null && r.RecommenderId == currentUserId)))
             .OrderByDescending(r => r.IsHighlightedByAuthor)
             .ThenByDescending(r => r.DatePosted)
             .Select(r => new RecommendationDto(
@@ -58,7 +69,41 @@ public class ServerRecommendationReadService(
                 r.SuccessfulRecCount,
                 r.DatePosted,
                 currentUserId != null && r.Likes.Any(l => l.UserId == currentUserId),
-                currentUserId != null && r.RecommenderId == currentUserId))
+                currentUserId != null && r.RecommenderId == currentUserId,
+                (RecommendationStatusEnum)r.StatusId,
+                isStoryAuthor || (currentUserId != null && r.RecommenderId == currentUserId)
+                    ? r.RevisionRequestNote
+                    : null))
+            .ToListAsync();
+    }
+
+    public async Task<List<RecommendationDto>> GetMyRecommendationsNeedingAttentionAsync()
+    {
+        int? userId = ActiveUser.UserId;
+        if (userId is null) return [];
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        // Own non-Approved recs (NeedsRevision with the author's note + Rejected), newest first —
+        // the Bookshelves "Needs attention" section (WU-RecLifecycle). Recommender card omitted
+        // (it's the viewer's own rec); like/own flags trivially self-referential.
+        return await readDb.Recommendations
+            .Where(r => r.RecommenderId == userId && r.StatusId != ApprovedStatusId)
+            .OrderByDescending(r => r.DatePosted)
+            .Select(r => new RecommendationDto(
+                r.RecommendationId,
+                r.StoryId,
+                null,
+                r.RecommendationDetail.Text,
+                r.LikeCount,
+                r.IsHiddenGem,
+                r.IsHighlightedByAuthor,
+                r.SuccessfulRecCount,
+                r.DatePosted,
+                false,
+                true,
+                (RecommendationStatusEnum)r.StatusId,
+                r.RevisionRequestNote))
             .ToListAsync();
     }
 
@@ -155,8 +200,12 @@ public class ServerRecommendationReadService(
         if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, userId))
             return [];
 
+        // Approved-only (D1 fix, WU-RecLifecycle): the siblings above all filter by status and the
+        // interface doc promises it; without this, NeedsRevision/Rejected story-ids would leak onto
+        // the public profile tab. Applies to the owner viewing their own profile too — owner
+        // visibility into hidden recs lives in GetMyRecommendationsNeedingAttentionAsync.
         return await readDb.Recommendations
-            .Where(r => r.RecommenderId == userId)
+            .Where(r => r.RecommenderId == userId && r.StatusId == ApprovedStatusId)
             .Select(r => r.StoryId)
             .Distinct()
             .ToListAsync();

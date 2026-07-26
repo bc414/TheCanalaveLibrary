@@ -126,8 +126,9 @@
                 </button>
             }
 
-            @* Delete — author only; raises OnDelete; section owns the ConfirmDialog *@
-            @if (IsOwnComment && OnDelete.HasDelegate)
+            @* Delete — comment author, or the story's author on their own story's chapter comments
+               (WU-RecLifecycle author content control); raises OnDelete; section owns the ConfirmDialog *@
+            @if ((IsOwnComment || ViewerIsStoryAuthor) && OnDelete.HasDelegate)
             {
                 <button type="button"
                         class="text-(--color-text-muted) hover:text-(--color-danger) transition-colors"
@@ -158,6 +159,13 @@
 
     /// <summary>True when Comment.AuthorId == the viewing user's ID. Gated on author for edit/delete.</summary>
     [Parameter] public bool IsOwnComment { get; set; }
+
+    /// <summary>
+    /// True when the viewer authored the STORY these comments sit on (chapter-comment context only —
+    /// WU-RecLifecycle author content control). Unlocks Delete on other users' comments; the server
+    /// enforces the same rule authoritatively. Edit stays comment-author-only.
+    /// </summary>
+    [Parameter] public bool ViewerIsStoryAuthor { get; set; }
 
     /// <summary>
     /// From the future ChapterPage dispatcher (§5.9.1). When false, revealing a spoiler opens a

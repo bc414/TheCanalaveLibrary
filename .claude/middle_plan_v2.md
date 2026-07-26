@@ -915,9 +915,12 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   `RecommendationConstants.MinLength`. See [audit/Recommendations.md](audit/Recommendations.md)
   Feature 27 and [layer2-services.md](skills/canalave-conventions/layer2-services.md)
   §"Recommendation Write Conventions".
-- **Recommendation approval lifecycle for MVP** — resolved WU29 (2026-06-23): new
-  recommendations are written directly as **Approved**. Spec §5.6's Pending lifecycle deferred
-  to WU34. See [audit/Recommendations.md](audit/Recommendations.md) Feature 27.
+- **Recommendation lifecycle** — resolved twice: WU29 (2026-06-23) shipped the auto-approve MVP
+  shortcut ("Spec §5.6's Pending lifecycle deferred to WU34"); WU-RecLifecycle (2026-07-25)
+  **rejected the pre-publication gate outright** and ratified publish-immediately + author
+  Request-Revision/Remove/Unblock (no moderator gate, no timer, no `/mod/submissions` rec tab —
+  spec §5.6's "moderator review" was a mis-rewording of the source deliberation). Authoritative:
+  [audit/Recommendations.md](audit/Recommendations.md) §"WU-RecLifecycle settled design".
 - **Tailwind version + build tooling** (Phase C) — resolved Phase C (2026-06-20): **Tailwind
   v4**, CSS-first config (`@theme` block), npm + MSBuild target. Color palette: green, rooted in
   Pokémon Gen 4/5 — explicitly not blue. Font-scope rule: Tailwind fonts cover site chrome only;

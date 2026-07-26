@@ -55,6 +55,59 @@ else
 
             @* StoryDeck — takes remaining width *@
             <div class="min-w-0 flex-1">
+
+                @* ── "Needs attention" (Recommendations tab only — WU-RecLifecycle) ─────────
+                   Rec-level rows for the viewer's own hidden recs (NeedsRevision with the
+                   author's note, Rejected). A separate section, not deck cards: the deck below
+                   shows Approved recs' *stories*; these need status + note + an edit path. *@
+                @if (_tab == BookshelfTab.Recommendations && _needingAttention.Count > 0)
+                {
+                    <section class="mb-6 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4"
+                             aria-label="Recommendations needing attention">
+                        <h2 class="mb-3 text-sm font-bold text-(--color-text-muted) uppercase tracking-wide">
+                            Needs attention
+                        </h2>
+                        <ul class="flex flex-col gap-3">
+                            @foreach (var rec in _needingAttention)
+                            {
+                                <li class="rounded-md border border-dashed border-(--color-border) bg-(--color-surface) p-3 text-sm">
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <span class="font-semibold text-(--color-text)">
+                                            @(rec.Status == RecommendationStatusEnum.NeedsRevision
+                                                ? "Revision requested"
+                                                : "Removed by the story author")
+                                        </span>
+                                        <a href="/story/@rec.StoryId" class="text-(--color-action-ink) hover:underline">
+                                            @(_needingAttentionTitles.TryGetValue(rec.StoryId, out string? title)
+                                                ? title
+                                                : "View story")
+                                            →
+                                        </a>
+                                    </div>
+                                    @if (rec.Status == RecommendationStatusEnum.NeedsRevision)
+                                    {
+                                        @if (!string.IsNullOrEmpty(rec.RevisionRequestNote))
+                                        {
+                                            <p class="mt-1 text-(--color-text-muted)">
+                                                The author asked: <span class="italic">@rec.RevisionRequestNote</span>
+                                            </p>
+                                        }
+                                        <p class="mt-1 text-xs text-(--color-text-muted)">
+                                            Hidden from readers until you edit it on the story page — editing brings it right back.
+                                        </p>
+                                    }
+                                    else
+                                    {
+                                        <p class="mt-1 text-xs text-(--color-text-muted)">
+                                            Hidden; it can't be edited or resubmitted unless the author unblocks it.
+                                        </p>
+                                    }
+                                </li>
+                            }
+                        </ul>
+                    </section>
+                }
+
                 <StoryDeck Stories="@(Items ?? [])"
                            UserStoryInteractionStates="@_states"
                            CurrentUserId="@_currentUserId"
@@ -112,6 +165,11 @@ else
 
     // ── Presentation state (from the former BookshelvesDesktop composite) ─────────
     private ReportDialog _reportDialog = default!;
+
+    // WU-RecLifecycle "Needs attention" (Recommendations tab only): the viewer's own hidden recs
+    // + story titles for their links (silently-dropped titles fall back to a generic link).
+    private List<RecommendationDto> _needingAttention = [];
+    private Dictionary<int, string> _needingAttentionTitles = [];
 
     // Actively Reading additionally offers the viewer-relative "Recently read" sort (its default).
     private IReadOnlyList<DefaultSortOrder> _availableSorts => _tab == BookshelfTab.ActivelyReading
@@ -179,11 +237,30 @@ else
     {
         _isLoading = true;
         _candidateIds = await GetCandidateIdsAsync();
+        await LoadNeedingAttentionAsync();
         if (Items is null)
             await ReloadListingsAsync();
         else
             await LoadStatesAsync(); // restored listings — only the ephemeral per-viewer states need fetching
         _isLoading = false;
+    }
+
+    // WU-RecLifecycle: the Recommendations tab's "Needs attention" section — the viewer's own
+    // hidden recs, hydrated with story titles (dropped titles fall back to a generic link).
+    // Ephemeral per-viewer state, refetched on restore (same treatment as _states).
+    private async Task LoadNeedingAttentionAsync()
+    {
+        if (_tab != BookshelfTab.Recommendations)
+        {
+            _needingAttention = [];
+            _needingAttentionTitles = [];
+            return;
+        }
+        _needingAttention = await RecommendationReadService.GetMyRecommendationsNeedingAttentionAsync();
+        _needingAttentionTitles = _needingAttention.Count == 0
+            ? []
+            : (await StoryReadService.GetListingsByIdsAsync([.. _needingAttention.Select(r => r.StoryId).Distinct()]))
+                .ToDictionary(c => c.StoryId, c => c.Title);
     }
 
     // Re-paginates within the existing candidate set. Plain fetch — called when page, sort, or

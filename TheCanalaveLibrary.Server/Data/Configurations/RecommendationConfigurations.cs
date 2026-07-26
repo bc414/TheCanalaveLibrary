@@ -38,11 +38,12 @@ public sealed class RecommendationStatusConfiguration : IEntityTypeConfiguration
             .HasForeignKey(r => r.StatusId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // WU-RecLifecycle: "Pending Approval"(1) and "Under Review"(4) removed — recs publish
+        // immediately and mods act only via report→takedown. NeedsRevision reuses the freed 1.
         builder.HasData(
-            new { RecommendationStatusId = (short)1, StatusName = "Pending Approval", Description = "Submitted by user, awaiting author review." },
+            new { RecommendationStatusId = (short)1, StatusName = "Needs Revision", Description = "The story author requested a revision; hidden until the recommender edits it." },
             new { RecommendationStatusId = (short)2, StatusName = "Approved", Description = "Publicly visible." },
-            new { RecommendationStatusId = (short)3, StatusName = "Rejected", Description = "Rejected by author, not visible." },
-            new { RecommendationStatusId = (short)4, StatusName = "Under Review", Description = "An approved recommendation that was reported and is under review." }
+            new { RecommendationStatusId = (short)3, StatusName = "Rejected", Description = "Removed by the story author, not visible; blocked until the author unblocks it." }
         );
 
         builder.HasIndex(e => e.StatusName).IsUnique();

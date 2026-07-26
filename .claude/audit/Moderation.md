@@ -109,8 +109,12 @@ green (see Feature 48 note below for the pending-submissions half of this same c
   submission mechanism — **not** `RequestedStatusId` (that was a deliberations-doc artifact, never built).
 - Approve: `StoryStatusId = PostApprovalStatus` + `NotifyStoryApprovedAsync`.
 - Reject: `StoryStatusId = Rejected` + `ActionTaken` reason + `NotifyStoryRejectedAsync`.
-- `/mod/submissions` is a tabbed shell in WU34; import-verification tab drops in with WU39. Rec-approval
-  wiring deferred (recs write as `Approved` directly; tab added later without restructuring).
+- `/mod/submissions` is a tabbed shell in WU34; import-verification tab drops in with WU39.
+  **Superseded (WU-RecLifecycle, 2026-07-25):** the WU34-era "rec-approval wiring deferred; tab added
+  later" expectation is void — there is **no rec-approval tab, ever**. Recommendations are
+  author-controlled (publish-immediately + author Request-Revision/Remove/Unblock; see
+  `audit/Recommendations.md` §"WU-RecLifecycle settled design"); moderators act on recs only
+  reactively via the existing report→takedown path. `/mod/submissions` stays Stories + Imports.
 
 **Stage note (WU34 — 2026-06-25):** L1=5, L2=5, L3=5, L3.5=5. `ModSubmissionsPage.razor` built at
 `/mod/submissions` with tabbed shell (Stories tab active, Imports tab placeholder for WU39). Approve/reject

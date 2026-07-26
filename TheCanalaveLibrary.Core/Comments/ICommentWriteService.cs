@@ -54,11 +54,14 @@ public interface ICommentWriteService : ICommentReadService
     Task EditCommentAsync(UpdateCommentDto dto);
 
     /// <summary>
-    /// Hard-deletes a comment. Author-only. DB FKs handle the rest: <c>ParentCommentId</c> SET NULL
-    /// reparents any replies as flat top-level comments; <c>CommentLike</c> rows CASCADE delete.
+    /// Hard-deletes a comment. Authorized for the comment's author, OR — for chapter comments only
+    /// (the one story-linked comment type) — the author of the story the comment sits on
+    /// (WU-RecLifecycle author content control; see <c>content-safety.md</c> §"Author-Controlled
+    /// Content Actions"). DB FKs handle the rest: <c>ParentCommentId</c> SET NULL reparents any
+    /// replies as flat top-level comments; <c>CommentLike</c> rows CASCADE delete.
     /// </summary>
     /// <exception cref="KeyNotFoundException">Comment not found.</exception>
-    /// <exception cref="UnauthorizedAccessException">Caller is not the comment's author.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is neither the comment's author nor the story's author.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task DeleteCommentAsync(long commentId);
 

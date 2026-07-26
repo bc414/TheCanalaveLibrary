@@ -9,10 +9,16 @@ namespace TheCanalaveLibrary.Server;
 /// chaining. All user HTML is sanitized on save (IHtmlSanitizationService); min-length is validated on
 /// the stripped plain text (RecommendationText.CountPlainTextLength — layer2-services.md WU29 conventions).
 ///
-/// <para><b>Auto-approve MVP:</b> StatusId is set to Approved (2) on submit. The moderation lifecycle
-/// (Pending → author approval → moderator review) is deferred to WU34 — tracked in audit/Recommendations.md.</para>
+/// <para><b>Lifecycle (WU-RecLifecycle):</b> recommendations publish immediately (Approved on submit —
+/// the pre-publication gate was rejected by design, not deferred). The story author holds two distinct
+/// actions: <see cref="RequestRevisionAsync"/> (note + hide-until-edited, not sticky — the recommender's
+/// edit auto-returns it to Approved) and <see cref="RemoveAsync"/> (silent, sticky Rejected; only
+/// <see cref="UnblockAsync"/> reverses it). Self-recommendation is blocked. Flag invariant:
+/// IsHiddenGem/IsHighlightedByAuthor only ever true on Approved recs. See layer2-services.md
+/// §"Publish-immediately + the Recommendation Lifecycle".</para>
 /// <para><b>One-per-user-per-story:</b> enforced by the DB unique index. Duplicate submissions are caught
-/// as <see cref="InvalidOperationException"/> with a friendly message.</para>
+/// as <see cref="InvalidOperationException"/> with a friendly message. A Rejected row keeps the slot
+/// occupied — that persistence is what makes a removal sticky.</para>
 /// <para><b>Hidden Gem limit:</b> reject-at-5 (count against writeDb before setting). No auto-evict.
 /// On set, best-effort post-commit notification fires to the story author via INotificationWriteService.</para>
 /// <para><b>Like toggle:</b> no notification — anti-addictive design (§6.11).</para>
@@ -28,12 +34,52 @@ public class ServerRecommendationWriteService(
     ILogger<ServerRecommendationWriteService> logger)
     : ServerRecommendationReadService(readDbFactory, activeUser), IRecommendationWriteService
 {
-    private const short ApprovedStatusId = 2;
+    private const short ApprovedStatusId = (short)RecommendationStatusEnum.Approved;
+    private const short NeedsRevisionStatusId = (short)RecommendationStatusEnum.NeedsRevision;
+    private const short RejectedStatusId = (short)RecommendationStatusEnum.Rejected;
 
-    // ── Helper ────────────────────────────────────────────────────────────────────
+    /// <summary>Length cap for the author's Request-Revision note (mirrors the entity's MaxLength).</summary>
+    public const int MaxRevisionNoteLength = 500;
+
+    // ── Helpers ───────────────────────────────────────────────────────────────────
 
     private int RequireAuthenticatedUser(string action) =>
         ActiveUser.UserId ?? throw new InvalidOperationException($"{action} requires an authenticated user.");
+
+    /// <summary>
+    /// Loads a recommendation and authorizes the caller as the author of its story (the
+    /// SetHighlightedByAuthorAsync ownership pattern). Co-authors deliberately excluded until the
+    /// dormant CoAuthor feature is built.
+    /// </summary>
+    private async Task<(Recommendation rec, int userId)> RequireStoryAuthorAsync(int recommendationId, string action)
+    {
+        int userId = RequireAuthenticatedUser(action);
+
+        Recommendation? rec = await writeDb.Recommendations
+            .FirstOrDefaultAsync(r => r.RecommendationId == recommendationId);
+        if (rec is null)
+            throw new KeyNotFoundException($"Recommendation {recommendationId} not found.");
+
+        bool isStoryAuthor = await writeDb.Stories
+            .AnyAsync(s => s.StoryId == rec.StoryId && s.AuthorId == userId);
+        if (!isStoryAuthor)
+            throw new UnauthorizedAccessException("Only the story author can manage recommendations on their story.");
+
+        return (rec, userId);
+    }
+
+    /// <summary>Fires a best-effort post-commit notification; failures are logged and swallowed.</summary>
+    private async Task NotifyBestEffortAsync(Func<Task> notify, string what, int recommendationId)
+    {
+        try
+        {
+            await notify();
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "{What} notification failed for recommendation {Id} — swallowed.", what, recommendationId);
+        }
+    }
 
     // ── Submit ───────────────────────────────────────────────────────────────────
 
@@ -54,6 +100,11 @@ public class ServerRecommendationWriteService(
             throw new KeyNotFoundException($"Story {dto.StoryId} not found.");
         int? storyAuthorId = storyRow.AuthorId;
 
+        // Self-recommendation blocked (WU-RecLifecycle): a recommendation is a peer endorsement
+        // by definition — the story's author cannot recommend their own story.
+        if (storyAuthorId == userId)
+            throw new RecommendationValidationException(["You cannot recommend your own story."]);
+
         string sanitizedText = sanitizer.Sanitize(dto.Text);
 
         List<string> errors = dto.CanSave(sanitizedText);
@@ -63,7 +114,7 @@ public class ServerRecommendationWriteService(
         {
             StoryId     = dto.StoryId,
             RecommenderId = userId,
-            StatusId    = ApprovedStatusId, // auto-approve MVP (moderation deferred to WU34)
+            StatusId    = ApprovedStatusId, // publish-immediately (WU-RecLifecycle — permanent design, no gate)
             DatePosted  = DateTime.UtcNow
         };
         rec.RecommendationDetail = new RecommendationDetail { Text = sanitizedText };
@@ -87,6 +138,12 @@ public class ServerRecommendationWriteService(
             await writeDb.UserStats.Where(us => us.UserId == storyAuthorId.Value)
                 .ExecuteUpdateAsync(s => s.SetProperty(us => us.RecommendationsReceived, us => us.RecommendationsReceived + 1));
 
+        // Best-effort post-commit: tell the story author a new recommendation is live on their story.
+        if (storyAuthorId is int authorId)
+            await NotifyBestEffortAsync(
+                () => notifications.NotifyNewRecommendationOnYourStoryAsync(authorId, userId, dto.StoryId),
+                "NewRecommendationOnYourStory", rec.RecommendationId);
+
         return rec.RecommendationId;
     }
 
@@ -104,13 +161,41 @@ public class ServerRecommendationWriteService(
         if (rec.RecommenderId != userId)
             throw new UnauthorizedAccessException("You can only edit your own recommendations.");
 
+        // Sticky removal (WU-RecLifecycle): a Rejected rec is out of the recommender's hands —
+        // only the story author's Unblock can revive it.
+        if (rec.StatusId == RejectedStatusId)
+            throw new UnauthorizedAccessException(
+                "This recommendation was removed by the story author and can no longer be edited.");
+
         string sanitizedText = sanitizer.Sanitize(dto.Text);
 
         List<string> errors = dto.CanSave(sanitizedText);
         if (errors.Count > 0) throw new RecommendationValidationException(errors);
 
+        bool wasNeedsRevision = rec.StatusId == NeedsRevisionStatusId;
+
         rec.RecommendationDetail.Text = sanitizedText;
+        if (wasNeedsRevision)
+        {
+            // The edit IS the revision — auto-return to live, no author re-blessing step.
+            rec.StatusId = ApprovedStatusId;
+            rec.RevisionRequestNote = null;
+        }
         await writeDb.SaveChangesAsync();
+
+        if (wasNeedsRevision)
+        {
+            // Best-effort post-commit: tell the story AUTHOR the flagged rec is live again (their
+            // recourse is Remove). The recommender is not self-notified — their own edit caused it.
+            int? storyAuthorId = await writeDb.Stories
+                .Where(s => s.StoryId == rec.StoryId)
+                .Select(s => s.AuthorId)
+                .FirstOrDefaultAsync();
+            if (storyAuthorId is int authorId)
+                await NotifyBestEffortAsync(
+                    () => notifications.NotifyRecommendationRevisedAsync(authorId, userId, rec.StoryId),
+                    "RecommendationRevised", rec.RecommendationId);
+        }
     }
 
     // ── Delete ───────────────────────────────────────────────────────────────────
@@ -125,6 +210,13 @@ public class ServerRecommendationWriteService(
             throw new KeyNotFoundException($"Recommendation {recommendationId} not found.");
         if (rec.RecommenderId != userId)
             throw new UnauthorizedAccessException("You can only delete your own recommendations.");
+
+        // Sticky removal (WU-RecLifecycle): deleting a Rejected rec would free the
+        // one-per-user-per-story slot and let the recommender resubmit — the persisted Rejected
+        // row IS the block record.
+        if (rec.StatusId == RejectedStatusId)
+            throw new UnauthorizedAccessException(
+                "This recommendation was removed by the story author and can no longer be deleted.");
 
         writeDb.Recommendations.Remove(rec);
         await writeDb.SaveChangesAsync();
@@ -188,6 +280,11 @@ public class ServerRecommendationWriteService(
         if (rec.RecommenderId != userId)
             throw new UnauthorizedAccessException("You can only manage your own Hidden Gem designations.");
 
+        // Flag invariant (WU-RecLifecycle): curation flags only ever true on live (Approved) recs.
+        if (isHiddenGem && rec.StatusId != ApprovedStatusId)
+            throw new RecommendationValidationException(
+                ["Only a live recommendation can be designated a Hidden Gem."]);
+
         if (rec.IsHiddenGem == isHiddenGem) return; // already in desired state
 
         if (isHiddenGem)
@@ -242,6 +339,11 @@ public class ServerRecommendationWriteService(
         if (!isStoryAuthor)
             throw new UnauthorizedAccessException("Only the story author can spotlight recommendations.");
 
+        // Flag invariant (WU-RecLifecycle): curation flags only ever true on live (Approved) recs.
+        if (isHighlighted && rec.StatusId != ApprovedStatusId)
+            throw new RecommendationValidationException(
+                ["Only a live recommendation can be spotlighted."]);
+
         if (rec.IsHighlightedByAuthor == isHighlighted) return;
 
         if (isHighlighted)
@@ -255,6 +357,69 @@ public class ServerRecommendationWriteService(
 
         rec.IsHighlightedByAuthor = isHighlighted;
         await writeDb.SaveChangesAsync();
+    }
+
+    // ── Author lifecycle actions (WU-RecLifecycle) ───────────────────────────────
+
+    public async Task RequestRevisionAsync(int recommendationId, string note)
+    {
+        (Recommendation rec, int userId) = await RequireStoryAuthorAsync(recommendationId, "Requesting a revision");
+
+        // "Correct" path — inapplicable to a removed rec (use Unblock first if reconsidering).
+        if (rec.StatusId == RejectedStatusId)
+            throw new UnauthorizedAccessException(
+                "This recommendation is removed. Unblock it before requesting a revision.");
+
+        string trimmedNote = note?.Trim() ?? string.Empty;
+        if (trimmedNote.Length == 0)
+            throw new RecommendationValidationException(
+                ["A revision request needs a note telling the recommender what to fix."]);
+        if (trimmedNote.Length > MaxRevisionNoteLength)
+            throw new RecommendationValidationException(
+                [$"The revision note must be {MaxRevisionNoteLength} characters or fewer."]);
+
+        rec.StatusId = NeedsRevisionStatusId;
+        rec.RevisionRequestNote = trimmedNote; // repeat requests overwrite the note
+        // Flag invariant: leaving Live clears both curation flags (slots freed, not auto-restored).
+        rec.IsHiddenGem = false;
+        rec.IsHighlightedByAuthor = false;
+        await writeDb.SaveChangesAsync();
+
+        if (rec.RecommenderId is int recommenderId)
+            await NotifyBestEffortAsync(
+                () => notifications.NotifyRecommendationRevisionRequestedAsync(recommenderId, userId, rec.StoryId),
+                "RecommendationRevisionRequested", recommendationId);
+    }
+
+    public async Task RemoveAsync(int recommendationId)
+    {
+        (Recommendation rec, _) = await RequireStoryAuthorAsync(recommendationId, "Removing a recommendation");
+
+        if (rec.StatusId == RejectedStatusId) return; // already removed — idempotent
+
+        rec.StatusId = RejectedStatusId;
+        rec.RevisionRequestNote = null;
+        // Flag invariant: leaving Live clears both curation flags (slots freed, not auto-restored).
+        rec.IsHiddenGem = false;
+        rec.IsHighlightedByAuthor = false;
+        await writeDb.SaveChangesAsync();
+        // Silent — no notification (matches the moderation model's silent-rejection stance).
+    }
+
+    public async Task UnblockAsync(int recommendationId)
+    {
+        (Recommendation rec, int userId) = await RequireStoryAuthorAsync(recommendationId, "Unblocking a recommendation");
+
+        if (rec.StatusId != RejectedStatusId)
+            throw new InvalidOperationException("Only a removed recommendation can be unblocked.");
+
+        rec.StatusId = ApprovedStatusId; // straight to live — the author already read it when removing
+        await writeDb.SaveChangesAsync();
+
+        if (rec.RecommenderId is int recommenderId)
+            await NotifyBestEffortAsync(
+                () => notifications.NotifyRecommendationApprovedAsync(recommenderId, userId, rec.StoryId),
+                "RecommendationApproved", recommendationId);
     }
 
     // ── Attribution (Feature 30 — minted here, triggered by WU26) ───────────────
@@ -330,6 +495,15 @@ public class ServerRecommendationWriteService(
     public async Task RecordAttributionSourceAsync(int storyId, int recommendationId)
     {
         int userId = RequireAuthenticatedUser("Recording attribution source");
+
+        // D3.2 (WU-RecLifecycle): the claimed source recommendation must exist AND belong to the
+        // claimed story — otherwise a bogus self-attribution could later feed credit via
+        // RecordSuccessAsync (modernization-audit/deferred-work.md §7).
+        bool recBelongsToStory = await writeDb.Recommendations
+            .AnyAsync(r => r.RecommendationId == recommendationId && r.StoryId == storyId);
+        if (!recBelongsToStory)
+            throw new KeyNotFoundException(
+                $"Recommendation {recommendationId} does not exist for story {storyId}.");
 
         // Upsert — if the source row already exists, keep the original attribution.
         bool alreadyExists = await writeDb.UserStoryRecommendationSources

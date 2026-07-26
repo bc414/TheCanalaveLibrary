@@ -64,6 +64,28 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   Postgres, covering post root, IsSpoiler round-trip, script tag stripped on save, reply, cross-chapter
   reply guard, empty text validation, anonymous guard). Server booted clean; DI resolved
   `ICommentReadService`/`ICommentWriteService` without exception.
+  **WU-RecLifecycle Stage note (2026-07-25) — author content control on delete.**
+  `DeleteCommentAsync` authorization widened from comment-author-only to comment-author OR the
+  author of the story the comment's chapter belongs to (resolved via
+  `ChapterComment.Chapter.Story.AuthorId`; only chapter comments — the other three TPT types stay
+  comment-author-only; co-authors excluded until the dormant `CoAuthor` feature is built). Hard-delete
+  semantics unchanged (replies reparent, likes cascade — deliberately weaker stickiness than
+  rec-Remove: no uniqueness constraint means a removed commenter can re-post). UI:
+  `CommentItem.ViewerIsStoryAuthor` parameter (Delete shows for `IsOwnComment || ViewerIsStoryAuthor`;
+  Edit stays comment-author-only), threaded `ChapterReadingPage`(`_isAuthor`) → `CommentSection` →
+  `CommentItem`. Rationale + actor-class framing: `content-safety.md` §"Author-Controlled Content
+  Actions". **Verified:** Integration (`CommentWriteServiceTests` —
+  `DeleteComment_StoryAuthor_RemovesOtherUsersChapterComment`,
+  `DeleteComment_AuthorOfDifferentStory_ThrowsUnauthorized`; existing self-delete/non-owner/anonymous
+  tests unchanged and green) + RazorComponents (`CommentItemTests` — story-author sees Delete on
+  others' comments, Edit stays absent). Follow-up (tracked in `hidden-deferrals-tracker.md` A4 entry):
+  profile owners deleting `UserProfileComment`s on their own profile — same grievance shape,
+  deliberately out of scope here.
+  **L4.5-Browser verification (2026-07-25):** on chapter 1 of AuthorAlpha's story, the story author
+  saw **3 Delete buttons but only 1 Edit button** (their own comment) — the exact
+  delete-widened/edit-unchanged split; a non-author non-commenter (LurkerDelta) saw **0** Delete
+  buttons. Drove the real flow: LurkerDelta posted a comment, AuthorAlpha deleted it via the card's
+  Delete → `ConfirmDialog` → row gone (`psql`: 0 rows for that id, the three seed comments intact).
 
 ## Feature 24 — Comment Display & Pagination
 - **L1 — Stage 5.** **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live

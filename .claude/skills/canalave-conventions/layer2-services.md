@@ -1015,10 +1015,35 @@ service strips HTML and decodes entities before counting characters — same Cor
 `RecommendationValidationException` if the count is below the threshold. The minimum is enforced on
 the **sanitized** text (after `sanitizer.Sanitize(rawHtml)`) so markup inflation never passes through.
 
-**Auto-approve on submit (MVP):** `SubmitAsync` writes `StatusId = Approved` directly. Spec §5.6's
-Pending→author-approval/moderation lifecycle is deferred to WU34. See `forward_plan.md` Resolved.
-The status enum seed (1=Pending, 2=Approved, 3=Rejected, 4=Under Review) is unchanged; this is a
-write-service choice, not a schema change.
+**Publish-immediately + the Recommendation Lifecycle (WU-RecLifecycle, 2026-07-25 — supersedes the
+WU29 "auto-approve MVP / deferred to WU34" note):** `SubmitAsync` writes `StatusId = Approved`
+directly — permanently, not as a shortcut. The pre-publication gate (and any moderator approval) was
+**rejected** on first-principles review: recommendations are discovery, not feedback; a gate delays
+discovery, dead-weights inactive authors, and merges two distinct author intents into one harsh
+mechanism. Statuses: `NeedsRevision=1` / `Approved=2` / `Rejected=3` (`PendingApproval` and
+`UnderReview` removed — nothing ever produced them). The lifecycle:
+
+- **Submit:** self-rec guard (`storyAuthorId == userId` → validation error); live immediately;
+  best-effort `NotifyNewRecommendationOnYourStoryAsync` to the story author.
+- **`RequestRevisionAsync(recId, note)`** (story-author-gated, the "fix an earnest flaw" path):
+  from Approved/NeedsRevision; non-empty note required, stored on hot
+  `Recommendation.RevisionRequestNote` (same shape/placement as `TakedownReason`); publicly hidden;
+  recommender notified (`RecommendationRevisionRequested`). **Not sticky** — the recommender's
+  `EditAsync` auto-returns it to Approved (note cleared, author notified via `RecommendationRevised`;
+  the recommender is NOT self-notified).
+- **`RemoveAsync(recId)`** (story-author-gated, the "remove a troll" path): from either state →
+  `Rejected`. Silent, hidden, **sticky**: `EditAsync`/`DeleteAsync` refuse on Rejected, and the
+  `(RecommenderId, StoryId)` unique index blocks resubmission — the persisted Rejected row IS the
+  block record. Only **`UnblockAsync`** (author, from Rejected only) reverses it → straight to
+  Approved + `RecommendationApproved` notification (its only trigger).
+- **Flag invariant:** `IsHiddenGem`/`IsHighlightedByAuthor` are only ever true on Approved recs.
+  Both lifecycle exits clear both flags (slots freed); return to Approved does NOT restore them;
+  both setters refuse on non-Approved.
+- Story-author authorization uses the `SetHighlightedByAuthorAsync` ownership pattern
+  (`Stories.AnyAsync(s => s.StoryId == rec.StoryId && s.AuthorId == userId)`); co-authors
+  deliberately excluded until the dormant `CoAuthor` feature is built.
+- Deliberate asymmetry with comment removal (hard-delete, re-postable): a Rejected rec's slot stays
+  occupied. Actor-class framing: `content-safety.md` §"Moderation Model".
 
 **Count-limit enforcement (Hidden Gem and author-highlight):** Both limits are checked against
 `writeDb` (write-side read, Case 1 — constraint check, for consistency), then rejected via

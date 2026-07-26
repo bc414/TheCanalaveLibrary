@@ -288,6 +288,48 @@ public class CommentWriteServiceTests(PostgresFixture postgres) : IntegrationTes
         await act.Should().ThrowAsync<UnauthorizedAccessException>();
     }
 
+    // --- Author content control (WU-RecLifecycle): story author deletes chapter comments ---
+
+    [Fact]
+    public async Task DeleteComment_StoryAuthor_RemovesOtherUsersChapterComment()
+    {
+        int storyAuthorId = await SeedUserAsync();
+        int authoredChapterId = await SeedChapterAsync(storyAuthorId);
+
+        // _userId (a reader) leaves the comment.
+        long id = await CallPostAsync(new PostChapterCommentDto
+        {
+            ChapterId   = authoredChapterId,
+            CommentText = "<p>Troll comment.</p>"
+        });
+
+        // The story's author deletes it.
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(storyAuthorId, showMatureContent: false));
+        await CallDeleteAsync(id);
+
+        BaseComment? c = await LoadBaseCommentAsync(id);
+        c.Should().BeNull("the story author can hard-delete any comment on their story's chapters");
+    }
+
+    [Fact]
+    public async Task DeleteComment_AuthorOfDifferentStory_ThrowsUnauthorized()
+    {
+        // The caller authors SOME story — just not the one the comment sits on.
+        int otherStoryAuthorId = await SeedUserAsync();
+        await SeedChapterAsync(otherStoryAuthorId); // their story, uncommented
+
+        long id = await CallPostAsync(new PostChapterCommentDto
+        {
+            ChapterId   = _chapterId, // authorless story — not theirs
+            CommentText = "<p>Comment on an unrelated story.</p>"
+        });
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(otherStoryAuthorId, showMatureContent: false));
+        Func<Task> act = async () => await CallDeleteAsync(id);
+        await act.Should().ThrowAsync<UnauthorizedAccessException>(
+            "authoring a different story grants no delete rights on this one's comments");
+    }
+
     [Fact]
     public async Task DeleteComment_Anonymous_ThrowsInvalidOperation()
     {
@@ -407,9 +449,9 @@ public class CommentWriteServiceTests(PostgresFixture postgres) : IntegrationTes
         return await db.ChapterComments.FirstOrDefaultAsync(c => c.CommentId == id);
     }
 
-    private async Task<int> SeedChapterAsync()
+    private async Task<int> SeedChapterAsync(int? storyAuthorId = null)
     {
-        int storyId = await SeedStoryAsync();
+        int storyId = await SeedStoryAsync(storyAuthorId);
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         Chapter chapter = new()

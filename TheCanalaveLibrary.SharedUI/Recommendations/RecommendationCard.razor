@@ -5,10 +5,42 @@
      · Plain            — unadorned baseline
      · Spotlighted      — IsHighlightedByAuthor: accent border/glow + "Author's Pick" ribbon
      · Hidden Gem       — IsHiddenGem: Torterra Emerald gem badge (can coexist with spotlight)
+   plus two WU-RecLifecycle hidden states (visible only to the story author / the recommender —
+   public reads never carry them):
+     · NeedsRevision    — dashed border + "revision requested" strip with the author's note
+     · Rejected/Removed — dashed border + "removed by the story author" strip
    Pure leaf: no service injection. All writes are optional EventCallbacks gated by HasDelegate
    (recommender vs. author vs. anonymous viewer wire only what they own). *@
 
 <div class="relative rounded-xl border @CardBorderClass p-4 bg-(--color-surface)">
+
+    @* ── Lifecycle status strip (WU-RecLifecycle — elevated viewers only) ──────── *@
+    @if (Rec.Status == RecommendationStatusEnum.NeedsRevision)
+    {
+        <div class="mb-3 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm">
+            <p class="font-semibold text-(--color-text)">
+                Revision requested — hidden from readers until it's edited
+            </p>
+            @if (!string.IsNullOrEmpty(Rec.RevisionRequestNote))
+            {
+                <p class="mt-1 text-(--color-text-muted)">
+                    The author asked: <span class="italic">@Rec.RevisionRequestNote</span>
+                </p>
+            }
+        </div>
+    }
+    else if (Rec.Status == RecommendationStatusEnum.Rejected)
+    {
+        <div class="mb-3 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm">
+            <p class="font-semibold text-(--color-text)">Removed by the story author</p>
+            @if (Rec.IsOwnRecommendation)
+            {
+                <p class="mt-1 text-(--color-text-muted)">
+                    This recommendation is hidden and can no longer be edited or resubmitted.
+                </p>
+            }
+        </div>
+    }
 
     @* ── Author's Pick ribbon (spotlighted) ──────────────────────────────────── *@
     @if (Rec.IsHighlightedByAuthor)
@@ -141,6 +173,35 @@
                 @(Rec.IsHighlightedByAuthor ? "✓ Author's Pick" : "Spotlight")
             </button>
         }
+
+        @* Story-author-only: lifecycle actions (WU-RecLifecycle) *@
+        @if (OnRequestRevision.HasDelegate)
+        {
+            <button type="button"
+                    class="hover:text-(--color-text) transition-colors"
+                    aria-label="Request a revision of this recommendation"
+                    @onclick="() => OnRequestRevision.InvokeAsync(Rec.RecommendationId)">
+                Request revision
+            </button>
+        }
+        @if (OnRemove.HasDelegate)
+        {
+            <button type="button"
+                    class="hover:text-(--color-danger) transition-colors"
+                    aria-label="Remove this recommendation from your story"
+                    @onclick="() => OnRemove.InvokeAsync(Rec.RecommendationId)">
+                Remove
+            </button>
+        }
+        @if (OnUnblock.HasDelegate)
+        {
+            <button type="button"
+                    class="hover:text-(--color-text) transition-colors"
+                    aria-label="Unblock this recommendation and restore it"
+                    @onclick="() => OnUnblock.InvokeAsync(Rec.RecommendationId)">
+                Unblock
+            </button>
+        }
     </div>
 </div>
 
@@ -154,8 +215,15 @@
     [Parameter] public EventCallback<int> OnToggleHiddenGem { get; set; }
     [Parameter] public EventCallback<int> OnToggleHighlight { get; set; }
     [Parameter] public EventCallback OnDiscoverFromRecommendation { get; set; }
+    // WU-RecLifecycle author actions — the section wires them per-rec by status + ownership.
+    [Parameter] public EventCallback<int> OnRequestRevision { get; set; }
+    [Parameter] public EventCallback<int> OnRemove { get; set; }
+    [Parameter] public EventCallback<int> OnUnblock { get; set; }
 
-    private string CardBorderClass => Rec.IsHighlightedByAuthor
-        ? "border-2 border-(--color-rec) ring-2 ring-(--color-rec)/20"
-        : "border-(--color-border)";
+    private string CardBorderClass =>
+        Rec.Status != RecommendationStatusEnum.Approved
+            ? "border-dashed border-(--color-border)" // hidden state (NeedsRevision/Rejected)
+            : Rec.IsHighlightedByAuthor
+                ? "border-2 border-(--color-rec) ring-2 ring-(--color-rec)/20"
+                : "border-(--color-border)";
 }

@@ -973,7 +973,9 @@ RazorComponents) — or why none applies — in the audit Stage note. Convention
      widen key to include `RelatedEntityId`. Regression-test follow/vouch/group notification suites.
   7. **`StoryApproved` notification type added** (`NotificationTypeEnum.StoryApproved = 75`,
      category `YourStories=2`, `KindFor → Story`). Seeded `NotificationType` row + migration.
-  8. **`/mod/submissions` tabbed shell; rec-approval wiring deferred.** Recs currently write as
+  8. **`/mod/submissions` tabbed shell; rec-approval wiring deferred.** *(Superseded by
+     WU-RecLifecycle, 2026-07-25: no rec tab, ever — recs are author-controlled; see that entry.)*
+     Recs currently write as
      `Approved` directly. Build the tab shell; import-verification tab drops in with WU39. Do not change
      the rec write-path in WU34.
 - **Superseded (from `Moderation_And_Reporting_Deliberations.md` — do not resurrect):**
@@ -3789,3 +3791,91 @@ Two loose ends from WU-IntTestPerf, closed same day:
   `audit/BlogPosts.md` WU-B2 notes; `audit/Groups.md` amendments; `audit/Comments.md` F23 note;
   `layer2-services.md` §"Comment & blog-post semantic methods"; `hidden-deferrals-tracker.md` B2;
   `L6-reconciliation-matrix.md` story-centric USI addendum.
+
+## WU-RecLifecycle — Recommendation lifecycle (A4) + D1 leak fix + author content control (Features 23/27/28/30) — DONE ✓ (2026-07-25)
+
+- **Trigger:** hidden-deferrals tracker **A4** + **D1** (coupled by design: the missing status
+  filter becomes a live leak the moment non-Approved rows exist). Scope grew during planning at the
+  owner's direction: author-deletes-comments-on-their-story (the FFN "can't remove reviews"
+  grievance), **D3.2** (rec↔story attribution validation), self-rec block.
+- **Two spec corrections settled before any code (Doc-Touch moment 1):** spec §5.6's "moderator
+  review" was a mis-rewording of the source deliberation (author-approval + time auto-approve — no
+  mod gate ever existed in the design); and on first-principles review the owner **rejected the
+  pre-publication gate outright** (recs are discovery, not feedback; a gate delays discovery,
+  dead-weights inactive authors, and merges the two distinct author intents — "fix an earnest
+  flaw" vs "remove a troll" — into one harsh mechanism). The full deliberation (rejected
+  alternatives: pre-pub gate + 7-day timer; pure post-mod binary reject) is recorded in
+  `audit/Recommendations.md` §"WU-RecLifecycle settled design". There is **no `/mod/submissions`
+  rec tab, ever** — `audit/Moderation.md` F48 carries the supersession.
+- **Model shipped — Publish + Request-Revision + Remove:** live on submit (self-rec blocked; story
+  author notified — type 22's first production sender); author `RequestRevisionAsync(note)` →
+  `NeedsRevision` (hidden, note on hot `revision_request_note`, recommender notified; the
+  recommender's edit auto-relives it, note cleared, author notified via new `RecommendationRevised`
+  27); author `RemoveAsync` → `Rejected` (silent, sticky — edit/delete/resubmit all refused; the
+  Rejected row + unique index ARE the block record); author `UnblockAsync` → straight to Approved
+  (`RecommendationApproved` 40's only trigger). Flag invariant: leaving Live clears
+  IsHiddenGem/IsHighlightedByAuthor (slots freed, not auto-restored); both setters refuse on
+  non-Approved. Statuses now NeedsRevision(1)/Approved(2)/Rejected(3) — PendingApproval/UnderReview
+  deleted (nothing ever wrote them). Migration `RecLifecycle`.
+- **D1 closed:** `GetRecommendedStoryIdsByUserAsync` gains the Approved filter its siblings and its
+  own interface doc always promised — regression-tested for the first time. Applies to the owner
+  viewing their own profile too (owner visibility lives in the new surfaces below). **D3.2 closed:**
+  `RecordAttributionSourceAsync` verifies the rec exists AND belongs to the claimed story.
+- **Per-viewer reads:** `GetForStoryAsync` — public sees Approved only; the story author also sees
+  NeedsRevision/Rejected (to act); a recommender also sees their own hidden rec (with note).
+  Status/note projected only on elevated rows — public DTOs never carry them. New
+  `GetMyRecommendationsNeedingAttentionAsync` feeds the Bookshelves Recommendations tab's
+  "Needs attention" section (rec-level rows: status, author's note, story link via
+  `GetListingsByIdsAsync`). `RecommendationSection`: author actions (inline revision-note panel on
+  the ModSubmissionsPage reject-panel pattern; Remove behind `ConfirmDialog`; Unblock direct),
+  recommender status strip + note on own hidden card.
+- **Author-deletes-comments:** `DeleteCommentAsync` widened to comment-author OR the chapter
+  comment's `Chapter.Story.AuthorId` (other three comment types unchanged; hard-delete semantics
+  kept — deliberately weaker stickiness than rec-Remove since comments have no uniqueness).
+  `CommentItem.ViewerIsStoryAuthor` threaded from `ChapterReadingPage._isAuthor` via
+  `CommentSection`. Actor-class framing minted: `content-safety.md` §"Author-Controlled Content
+  Actions".
+- **Also:** the three `ApprovedStatusId = 2` magic-number consts now derive from the enum
+  (Spotlight's idiom); SeedTool `AddRecommendation` skips self-recs (+ `MarkGem` null-guard);
+  Spotlight needed **no changes** (`GetByIdAsync` null = its documented blank-rec display state).
+  Co-authors deliberately excluded (dormant scaffolding — zero service/razor references); tracked
+  follow-ups: co-author extension, profile-owner comment deletion.
+- **New tests:** `RecommendationWriteServiceTests` +15 (self-rec block; submit notification;
+  request-revision hide/note/notify/flag-clear + empty-note + non-author; edit auto-relive +
+  author notification; remove silent/sticky ×3 (edit/delete/resubmit refused); unblock restore +
+  notify + wrong-state guard; gem-on-hidden refused; D3.2). `RecommendationReadServiceTests` +6
+  (author/recommender/public visibility split; note never leaks publicly; **D1 regression**;
+  needing-attention incl. anonymous-empty). `CommentWriteServiceTests` +2 (story-author deletes
+  other's comment; author-of-different-story 403). `CommentItemTests` +2, 
+  `RecommendationSectionTests` +5 (author actions dispatch; public sees none; note renders).
+  Fakes extended (`FakeRecommendationWriteService`, three read fakes, presenter category map).
+- **Browser-verified end-to-end (L4.5, 2026-07-25)** against the dev DB, every step `psql`-confirmed:
+  request-revision (hide + note + flag-clear + notify 43) → recommender's note display on both the
+  story card and the Bookshelves "Needs attention" section → edit auto-relive (notify 27, flags NOT
+  restored) → remove (silent, `status→3`) → **server-side stickiness proven by direct API calls: edit
+  403 / delete 403 / resubmit 401** → unblock (notify 40) → self-rec **400** → fresh rec publishes
+  immediately + notify 22 (that type's first production send) → **D1 confirmed**: a third party's view
+  of the recommender's profile Recommendations tab showed "No recommendations given yet." while the
+  rec was hidden. Comments: story author saw 3 Delete / 1 Edit, a non-author saw 0 Delete; drove a
+  real post→delete→confirm round trip. Workbench restored to seed state afterward.
+- **Two runtime defects found in that pass and fixed in-session** (CLAUDE.md fix-same-session rule):
+  1. **`GetListingsAsync` empty-restrict bug (pre-existing since WU23, high impact).**
+     `restrictToStoryIds is { Count: > 0 }` treated an EMPTY candidate set as "no narrowing," so
+     **every bookshelf/profile story tab with zero candidates listed the entire library** (seen live
+     on an always-empty Hidden Gems tab). It also silently undid this WU's own D1 fix. Now
+     `is not null` — null = no narrowing, empty = narrow to nothing. +1 Integration regression test.
+     Detail: `audit/Stories.md` Feature 5 WU-RecLifecycle note.
+  2. **Self-rec CTA affordance.** "Recommend this story" was offered to the story's own author — an
+     action the server can only reject. Now gated on `CurrentUserId != StoryAuthorId`; +1 bUnit test.
+- **Verified:** `dotnet build` clean; `dotnet test` full suite green: **2193/2193** before the two
+  browser-caught fixes, **2195/2195** after — 764 Unit (unchanged) + 575 RazorComponents (+1, the
+  self-rec CTA pin) + 856 Integration (+1, the empty-restrict pin).
+  `scripts/check-design-tokens.ps1`: touched files clean (the two pre-existing unrelated findings —
+  `ImportReviewPanel.razor`, `ProfilePage.razor` — untouched).
+- **Cells:** `status.md` — no Stage-number changes; F27/F28/F30 and F23 were already Stage 5; this
+  replaces the auto-approve shortcut and inert seams under them. Exactly the hidden-deferral shape
+  the tracker exists to catch.
+- **Tool:** Claude Code (Opus/Fable). **Pointer:** `audit/Recommendations.md` §"WU-RecLifecycle
+  settled design" + Stage note; `audit/Comments.md` F23 WU-RecLifecycle note; `audit/Moderation.md`
+  F48 supersession; `layer2-services.md` §"Publish-immediately + the Recommendation Lifecycle";
+  `content-safety.md` §"Author-Controlled Content Actions"; `hidden-deferrals-tracker.md` A4/D1/D3.2.

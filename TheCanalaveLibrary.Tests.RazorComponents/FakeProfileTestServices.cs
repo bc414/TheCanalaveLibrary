@@ -86,6 +86,7 @@ internal sealed class FakeRecommendationReadService : IRecommendationReadService
     public Task<IReadOnlyList<int>> GetHiddenGemStoryIdsAsync() => Task.FromResult<IReadOnlyList<int>>([]);
     public Task<int?> GetHelpfulPromptRecommendationIdAsync(int storyId) => Task.FromResult<int?>(null);
     public Task<IReadOnlyList<int>> GetRecommendedStoryIdsByUserAsync(int userId) => Task.FromResult<IReadOnlyList<int>>([]);
+    public Task<List<RecommendationDto>> GetMyRecommendationsNeedingAttentionAsync() => Task.FromResult(new List<RecommendationDto>());
 }
 
 // ── Blog post (read) ──────────────────────────────────────────────────────────────────────────

@@ -30,4 +30,7 @@ public class ClientRecommendationReadService(HttpClient http) : IRecommendationR
 
     public async Task<IReadOnlyList<int>> GetRecommendedStoryIdsByUserAsync(int userId) =>
         await Http.GetFromJsonAsync<List<int>>($"api/recommendations/by-user/{userId}/story-ids") ?? [];
+
+    public async Task<List<RecommendationDto>> GetMyRecommendationsNeedingAttentionAsync() =>
+        await Http.GetFromJsonAsync<List<RecommendationDto>>("api/recommendations/mine/needing-attention") ?? [];
 }

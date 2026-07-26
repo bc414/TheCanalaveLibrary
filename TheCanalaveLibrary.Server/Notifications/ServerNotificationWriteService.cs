@@ -127,6 +127,28 @@ public class ServerNotificationWriteService(
             sourceUserId: sourceRecommenderId,
             targets: [(recipientStoryAuthorId, sourceRecommenderId)]);
 
+    // ── Semantic generation methods (WU-RecLifecycle slice) ──────────────────────
+
+    /// <inheritdoc/>
+    public Task NotifyNewRecommendationOnYourStoryAsync(int recipientStoryAuthorId, int sourceRecommenderId, int storyId) =>
+        CreateCoreAsync(NotificationTypeEnum.NewRecommendationOnYourStory, sourceRecommenderId,
+            [(recipientStoryAuthorId, storyId)]);
+
+    /// <inheritdoc/>
+    public Task NotifyRecommendationRevisionRequestedAsync(int recipientRecommenderId, int sourceStoryAuthorId, int storyId) =>
+        CreateCoreAsync(NotificationTypeEnum.RecommendationRevisionRequested, sourceStoryAuthorId,
+            [(recipientRecommenderId, storyId)]);
+
+    /// <inheritdoc/>
+    public Task NotifyRecommendationRevisedAsync(int recipientStoryAuthorId, int sourceRecommenderId, int storyId) =>
+        CreateCoreAsync(NotificationTypeEnum.RecommendationRevised, sourceRecommenderId,
+            [(recipientStoryAuthorId, storyId)]);
+
+    /// <inheritdoc/>
+    public Task NotifyRecommendationApprovedAsync(int recipientRecommenderId, int sourceStoryAuthorId, int storyId) =>
+        CreateCoreAsync(NotificationTypeEnum.RecommendationApproved, sourceStoryAuthorId,
+            [(recipientRecommenderId, storyId)]);
+
     // ── Semantic generation methods (WU32 slice — group fan-out) ─────────────────
 
     /// <inheritdoc/>

@@ -58,7 +58,10 @@ public interface IStoryReadService
     /// <b>Bookshelf narrowing:</b> when <paramref name="restrictToStoryIds"/> is provided, results
     /// are pre-filtered to that candidate set before all other filters are applied. The content-rating
     /// global filter still applies; callers never see stories outside their rating cap — unless
-    /// <paramref name="personalScope"/> is set (below).
+    /// <paramref name="personalScope"/> is set (below). <b>null and empty are different:</b> null
+    /// means "no narrowing" (the /discover path); an <b>empty</b> collection means "narrow to
+    /// nothing" and yields zero results — an empty shelf or profile tab must render empty, never
+    /// fall through to the whole library.
     ///
     /// <b>Personal plane (<paramref name="personalScope"/>, WU-AccessGate):</b> set ONLY by
     /// Personal-plane surfaces (bookshelves, reading history, the owner's view of their own

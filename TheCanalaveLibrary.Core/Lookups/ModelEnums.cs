@@ -60,12 +60,16 @@ public enum StoryLineageStatus : short
 
 // C# mirror of the 'recommendation_statuses' lookup table. The values MUST match the IDs seeded
 // in RecommendationConfigurations.HasData. Note: 1-indexed, unlike most lookups here.
+// WU-RecLifecycle: PendingApproval(1)/UnderReview(4) removed (nothing ever wrote them — recs
+// publish immediately); NeedsRevision reuses the freed 1. Lifecycle: Approved ⇄ NeedsRevision
+// (author Request-Revision, recommender edit auto-relives) / Approved|NeedsRevision → Rejected
+// (author Remove, sticky) → Approved (author Unblock only). See layer2-services.md
+// §"Publish-immediately + the Recommendation Lifecycle".
 public enum RecommendationStatusEnum : short
 {
-    PendingApproval = 1,
+    NeedsRevision = 1,
     Approved = 2,
-    Rejected = 3,
-    UnderReview = 4
+    Rejected = 3
 }
 
 // C# mirror of the 'story_statuses' lookup table. The values MUST match the IDs seeded in
@@ -139,6 +143,7 @@ public enum NotificationTypeEnum : short
     NewStoryComment = 24,
     YourStoryAddedToGroup = 25,
     TagUpdateSuggestion = 26, //One of your OC tag names matches a newly fanonized tag. Do you want to update it?
+    RecommendationRevised = 27, //A recommendation you sent back for revision was edited and is live again (WU-RecLifecycle)
     
     //Notifications for interactions on you
     NewFollowerOnYou = 30,
@@ -148,9 +153,10 @@ public enum NotificationTypeEnum : short
     CommentReply = 34,
     
     //Notifications about your recommendations
-    RecommendationApproved = 40,
+    RecommendationApproved = 40, //An author restored (unblocked) your removed recommendation — its only trigger (WU-RecLifecycle)
     RecommendationHighlighted = 41,
     SuccessfulRec = 42,
+    RecommendationRevisionRequested = 43, //An author asked you to revise your recommendation (note on the rec; deep-links to the story)
     
     //Collaborations
     StoryLineageRequested = 50, //someone else is asking to cite your story

@@ -146,6 +146,7 @@ else
             <CanalaveErrorBoundary Label="comments" Compact="true">
                 <CommentSection ChapterId="@Chapter.ChapterId"
                                 CurrentUserId="@_currentUserId"
+                                ViewerIsStoryAuthor="@_isAuthor"
                                 UserHasCompletedStory="@Chapter.ViewerHasCompletedStory" />
             </CanalaveErrorBoundary>
         </section>

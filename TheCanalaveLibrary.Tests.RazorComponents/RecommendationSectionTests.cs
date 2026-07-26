@@ -29,7 +29,8 @@ public class RecommendationSectionTests : BunitContext
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
     private static RecommendationDto MakeRec(int id, int? storyId = null,
-        bool isOwn = false, bool isLiked = false, bool isHighlighted = false)
+        bool isOwn = false, bool isLiked = false, bool isHighlighted = false,
+        RecommendationStatusEnum status = RecommendationStatusEnum.Approved, string? note = null)
         => new(
             RecommendationId:       id,
             StoryId:                storyId ?? 99,
@@ -41,7 +42,9 @@ public class RecommendationSectionTests : BunitContext
             SuccessfulRecCount:     0,
             DatePosted:             DateTime.UtcNow,
             IsLikedByCurrentUser:   isLiked,
-            IsOwnRecommendation:    isOwn);
+            IsOwnRecommendation:    isOwn,
+            Status:                 status,
+            RevisionRequestNote:    note);
 
     // ── Initial load ──────────────────────────────────────────────────────────────
 
@@ -181,5 +184,103 @@ public class RecommendationSectionTests : BunitContext
         _fakeService.SetHiddenGemCalls.Should().ContainSingle(
             "SetHiddenGemAsync must be called when the toggle is clicked");
         _fakeService.SetHiddenGemCalls[0].Id.Should().Be(7);
+    }
+
+    // ── Author lifecycle actions (WU-RecLifecycle) ────────────────────────────────
+
+    /// <summary>Renders the section as the STORY AUTHOR (user 42) viewing someone else's rec.</summary>
+    private IRenderedComponent<RecommendationSection> RenderAsStoryAuthor(RecommendationDto rec)
+    {
+        _fakeService.SetGetForStoryResult([rec]);
+        return Render<RecommendationSection>(p => p
+            .Add(c => c.StoryId, 1)
+            .Add(c => c.StoryAuthorId, 42)
+            .Add(c => c.CurrentUserId, 42));
+    }
+
+    [Fact]
+    public async Task RecommendationSection_RequestRevisionConfirm_CallsServiceWithNote()
+    {
+        IRenderedComponent<RecommendationSection> cut = RenderAsStoryAuthor(MakeRec(11));
+
+        await cut.Find("[aria-label='Request a revision of this recommendation']").ClickAsync(new());
+        // The inline note panel opens (ModSubmissionsPage reject-panel pattern).
+        cut.Find("textarea").Input("Please fix the spoiler.");
+        await cut.FindAll("button").First(b => b.TextContent.Contains("Send revision request"))
+            .ClickAsync(new());
+
+        _fakeService.RequestRevisionCalls.Should().ContainSingle();
+        _fakeService.RequestRevisionCalls[0].Id.Should().Be(11);
+        _fakeService.RequestRevisionCalls[0].Note.Should().Be("Please fix the spoiler.");
+    }
+
+    [Fact]
+    public async Task RecommendationSection_RemoveConfirm_CallsRemoveAsync()
+    {
+        IRenderedComponent<RecommendationSection> cut = RenderAsStoryAuthor(MakeRec(12));
+
+        await cut.Find("[aria-label='Remove this recommendation from your story']").ClickAsync(new());
+        // Second ConfirmDialog instance is the Remove dialog ([0] = delete-own). [0]=Cancel, [1]=Remove.
+        IRenderedComponent<ConfirmDialog> dialog = cut.FindComponents<ConfirmDialog>()[1];
+        await dialog.FindAll("button")[1].ClickAsync(new());
+
+        _fakeService.RemoveCalls.Should().ContainSingle()
+            .Which.Should().Be(12, "RemoveAsync must be called after the author confirms");
+    }
+
+    [Fact]
+    public async Task RecommendationSection_UnblockClick_CallsUnblockAsync()
+    {
+        IRenderedComponent<RecommendationSection> cut =
+            RenderAsStoryAuthor(MakeRec(13, status: RecommendationStatusEnum.Rejected));
+
+        await cut.Find("[aria-label='Unblock this recommendation and restore it']").ClickAsync(new());
+
+        _fakeService.UnblockCalls.Should().ContainSingle()
+            .Which.Should().Be(13, "UnblockAsync fires directly — no confirm needed for a reversible restore");
+    }
+
+    [Fact]
+    public void RecommendationSection_PublicViewer_SeesNoAuthorLifecycleActions()
+    {
+        _fakeService.SetGetForStoryResult([MakeRec(14)]);
+
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
+            .Add(c => c.StoryId, 1)
+            .Add(c => c.StoryAuthorId, 42)
+            .Add(c => c.CurrentUserId, 77)); // signed in, but not the story author
+
+        cut.FindAll("[aria-label='Request a revision of this recommendation']").Should().BeEmpty();
+        cut.FindAll("[aria-label='Remove this recommendation from your story']").Should().BeEmpty();
+    }
+
+    [Fact]
+    public void RecommendationSection_StoryAuthor_SeesNoRecommendCTAOnOwnStory()
+    {
+        _fakeService.SetGetForStoryResult([]);
+
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
+            .Add(c => c.StoryId, 1)
+            .Add(c => c.StoryAuthorId, 42)
+            .Add(c => c.CurrentUserId, 42));
+
+        cut.Markup.Should().NotContain("Recommend this story",
+            "self-recommendation is blocked server-side — don't offer an affordance that can only fail");
+    }
+
+    [Fact]
+    public void RecommendationSection_RecommenderView_ShowsRevisionNote()
+    {
+        _fakeService.SetGetForStoryResult([
+            MakeRec(15, isOwn: true, status: RecommendationStatusEnum.NeedsRevision, note: "trim the ending detail")]);
+
+        IRenderedComponent<RecommendationSection> cut = Render<RecommendationSection>(p => p
+            .Add(c => c.StoryId, 1)
+            .Add(c => c.CurrentUserId, 42));
+
+        cut.Markup.Should().Contain("Revision requested",
+            "the recommender sees their hidden rec's status");
+        cut.Markup.Should().Contain("trim the ending detail",
+            "the author's note is displayed inline on the card");
     }
 }

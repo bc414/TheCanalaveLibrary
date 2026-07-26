@@ -190,6 +190,25 @@ change).
 
 ## Feature 5 — Story Browsing & Display
 
+### WU-RecLifecycle Stage note (2026-07-25) — empty candidate set no longer means "no narrowing"
+
+**Browser-caught during WU-RecLifecycle's L4.5 pass; cells stay Stage 5 (correctness fix under an
+already-Stage-5 cell).** `ServerStoryReadService.GetListingsAsync` guarded its candidate narrowing
+with `restrictToStoryIds is { Count: > 0 }`, so an **empty** restrict set fell through to an
+unnarrowed query: **every bookshelf tab and profile story tab with zero candidates listed the entire
+library** (observed live on TestUser's always-empty Hidden Gems tab — 9 stories shown). Pre-existing
+since WU23, invisible to the automated tiers because no test ever passed an empty restrict set.
+
+It also silently undid this WU's own **D1** fix: with all of a user's recommendations hidden, the
+profile Recommendations tab's candidate set is empty → the whole library rendered where the point of
+D1 was to render nothing. Fix: `restrictToStoryIds is not null` — **null = no narrowing** (the
+`/discover` path), **empty = narrow to nothing**; `personalScope` follows the same predicate.
+Contract now stated on `IStoryReadService.GetListingsAsync`. Covering tier: **Integration**
+(`BookshelfStoryIdsTests.GetListingsAsync_EmptyRestrict_ReturnsNothing` — pins items empty *and*
+`TotalCount == 0`; the existing null-restrict test pins the other half). Re-verified in-browser:
+empty Hidden Gems → "No stories in Hidden Gems."; the profile Recommendations tab of a user whose
+only rec is hidden → "No recommendations given yet."
+
 - **WU38c/WU38d additive touches (2026-07-11), cells stay Stage 5:**
   - **Download links (Feature 54's trigger):** new `StoryDownloadLinks` leaf (six per-format
     anchors with the `download` attribute — a file download must bypass the circuit,

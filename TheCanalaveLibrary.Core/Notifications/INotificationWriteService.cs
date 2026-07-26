@@ -69,6 +69,37 @@ public interface INotificationWriteService : INotificationReadService
     /// </summary>
     Task NotifyStoryHiddenGemAsync(int recipientStoryAuthorId, int sourceRecommenderId);
 
+    // ── Semantic generation methods (WU-RecLifecycle slice) ──────────────────────
+
+    /// <summary>
+    /// Creates a <c>NewRecommendationOnYourStory</c> notification for the story author when a
+    /// recommendation is submitted (recs publish immediately — WU-RecLifecycle). Called by
+    /// <c>ServerRecommendationWriteService.SubmitAsync</c> after its primary commit, best-effort.
+    /// </summary>
+    Task NotifyNewRecommendationOnYourStoryAsync(int recipientStoryAuthorId, int sourceRecommenderId, int storyId);
+
+    /// <summary>
+    /// Creates a <c>RecommendationRevisionRequested</c> notification for the recommender when the
+    /// story author sends their recommendation back for revision. The author's note travels on
+    /// <c>Recommendation.RevisionRequestNote</c> (notifications carry no free text); this alerts
+    /// and deep-links to the story. Called by <c>RequestRevisionAsync</c>, best-effort.
+    /// </summary>
+    Task NotifyRecommendationRevisionRequestedAsync(int recipientRecommenderId, int sourceStoryAuthorId, int storyId);
+
+    /// <summary>
+    /// Creates a <c>RecommendationRevised</c> notification for the story author when the
+    /// recommender's edit returns a <c>NeedsRevision</c> recommendation to live (the recommender
+    /// is not self-notified — their own edit caused it). Called by <c>EditAsync</c>, best-effort.
+    /// </summary>
+    Task NotifyRecommendationRevisedAsync(int recipientStoryAuthorId, int sourceRecommenderId, int storyId);
+
+    /// <summary>
+    /// Creates a <c>RecommendationApproved</c> notification for the recommender when the story
+    /// author unblocks their removed recommendation (WU-RecLifecycle: Unblock is this type's only
+    /// trigger). Called by <c>UnblockAsync</c>, best-effort.
+    /// </summary>
+    Task NotifyRecommendationApprovedAsync(int recipientRecommenderId, int sourceStoryAuthorId, int storyId);
+
     // ── Semantic generation methods (WU32 slice — group fan-out) ─────────────────
 
     /// <summary>

@@ -67,6 +67,29 @@ public sealed class ClientRecommendationWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
+    // ── Author lifecycle actions (WU-RecLifecycle) ───────────────────────────────
+
+    public async Task RequestRevisionAsync(int recommendationId, string note)
+    {
+        HttpResponseMessage response = await Http.PostAsJsonAsync(
+            $"api/recommendations/{recommendationId}/request-revision", note);
+        await ThrowIfWriteFailedAsync(response);
+    }
+
+    public async Task RemoveAsync(int recommendationId)
+    {
+        HttpResponseMessage response =
+            await Http.PostAsync($"api/recommendations/{recommendationId}/remove", content: null);
+        await ThrowIfWriteFailedAsync(response);
+    }
+
+    public async Task UnblockAsync(int recommendationId)
+    {
+        HttpResponseMessage response =
+            await Http.PostAsync($"api/recommendations/{recommendationId}/unblock", content: null);
+        await ThrowIfWriteFailedAsync(response);
+    }
+
     public async Task RecordSuccessAsync(int recommendationId)
     {
         HttpResponseMessage response =

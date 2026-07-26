@@ -41,7 +41,7 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
 
         Recommendation? rec = await LoadRecAsync(id);
         rec.Should().NotBeNull();
-        rec!.StatusId.Should().Be((short)RecommendationStatusEnum.Approved, "auto-approved on submit (MVP)");
+        rec!.StatusId.Should().Be((short)RecommendationStatusEnum.Approved, "recs publish immediately (WU-RecLifecycle)");
         rec.RecommenderId.Should().Be(_recommenderUserId);
         rec.StoryId.Should().Be(_storyId);
     }
@@ -488,6 +488,240 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         exists.Should().BeTrue();
     }
 
+    // ── WU-RecLifecycle: self-rec block + submit notification ─────────────────────
+
+    [Fact]
+    public async Task Submit_OwnStory_ThrowsValidation()
+    {
+        int ownStoryId = await SeedStoryAsync(_recommenderUserId);
+
+        Func<Task> act = async () => await CallSubmitAsync(
+            new RecommendationSubmitDto(ownStoryId, ValidHtml()));
+        await act.Should().ThrowAsync<RecommendationValidationException>()
+            .WithMessage("*own story*", "self-recommendation is blocked outright");
+    }
+
+    [Fact]
+    public async Task Submit_WritesNewRecommendationNotificationToStoryAuthor()
+    {
+        await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        bool notifExists = await db.Notifications.AnyAsync(
+            n => n.RecipientUserId == _authorUserId
+                 && n.NotificationTypeId == NotificationTypeEnum.NewRecommendationOnYourStory
+                 && n.SourceUserId == _recommenderUserId);
+        notifExists.Should().BeTrue("submitting must notify the story author their story got a recommendation");
+    }
+
+    // ── WU-RecLifecycle: RequestRevisionAsync ─────────────────────────────────────
+
+    [Fact]
+    public async Task RequestRevision_StoryAuthor_HidesStoresNoteAndNotifies()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRequestRevisionAsync(recId, "Please remove the chapter 12 spoiler.");
+
+        Recommendation? rec = await LoadRecAsync(recId);
+        rec!.StatusId.Should().Be((short)RecommendationStatusEnum.NeedsRevision);
+        rec.RevisionRequestNote.Should().Be("Please remove the chapter 12 spoiler.");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        bool notifExists = await db.Notifications.AnyAsync(
+            n => n.RecipientUserId == _recommenderUserId
+                 && n.NotificationTypeId == NotificationTypeEnum.RecommendationRevisionRequested);
+        notifExists.Should().BeTrue("the recommender must be told a revision was requested");
+    }
+
+    [Fact]
+    public async Task RequestRevision_EmptyNote_ThrowsValidation()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        Func<Task> act = async () => await CallRequestRevisionAsync(recId, "   ");
+        await act.Should().ThrowAsync<RecommendationValidationException>(
+            "a revision request without a note gives the recommender nothing to act on");
+    }
+
+    [Fact]
+    public async Task RequestRevision_NonStoryAuthor_ThrowsUnauthorized()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+
+        // Still the recommender — not the story author.
+        Func<Task> act = async () => await CallRequestRevisionAsync(recId, "note");
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+    }
+
+    [Fact]
+    public async Task RequestRevision_ClearsCurationFlags()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+        await CallSetHiddenGemAsync(recId, true); // as recommender
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallSetHighlightedAsync(recId, true);
+        await CallRequestRevisionAsync(recId, "Fix the pairing tags mentioned.");
+
+        Recommendation? rec = await LoadRecAsync(recId);
+        rec!.IsHiddenGem.Should().BeFalse("leaving Live frees the recommender's gem slot");
+        rec.IsHighlightedByAuthor.Should().BeFalse("leaving Live frees the story's highlight slot");
+    }
+
+    // ── WU-RecLifecycle: EditAsync auto-relive + stickiness ───────────────────────
+
+    [Fact]
+    public async Task Edit_NeedsRevision_ReturnsToApprovedClearsNoteAndNotifiesAuthor()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRequestRevisionAsync(recId, "Reword the ending mention.");
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_recommenderUserId, showMatureContent: false));
+        await CallEditAsync(new UpdateRecommendationDto(recId, ValidHtml("revised body")));
+
+        Recommendation? rec = await LoadRecAsync(recId);
+        rec!.StatusId.Should().Be((short)RecommendationStatusEnum.Approved,
+            "the recommender's edit IS the revision — auto-return to live, no author re-blessing");
+        rec.RevisionRequestNote.Should().BeNull("the note is consumed by the fix");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        bool notifExists = await db.Notifications.AnyAsync(
+            n => n.RecipientUserId == _authorUserId
+                 && n.NotificationTypeId == NotificationTypeEnum.RecommendationRevised);
+        notifExists.Should().BeTrue("the story author must learn the flagged rec is live again");
+    }
+
+    // ── WU-RecLifecycle: RemoveAsync / UnblockAsync ───────────────────────────────
+
+    [Fact]
+    public async Task Remove_StoryAuthor_SetsRejectedSilentlyAndClearsFlags()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+        await CallSetHiddenGemAsync(recId, true); // as recommender
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRemoveAsync(recId);
+
+        Recommendation? rec = await LoadRecAsync(recId);
+        rec!.StatusId.Should().Be((short)RecommendationStatusEnum.Rejected);
+        rec.IsHiddenGem.Should().BeFalse("removal frees the gem slot");
+        rec.RevisionRequestNote.Should().BeNull();
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        bool anyRecipientNotif = await db.Notifications.AnyAsync(
+            n => n.RecipientUserId == _recommenderUserId
+                 && (n.NotificationTypeId == NotificationTypeEnum.RecommendationRevisionRequested
+                     || n.NotificationTypeId == NotificationTypeEnum.RecommendationApproved));
+        anyRecipientNotif.Should().BeFalse("removal is silent — no notification to the recommender");
+    }
+
+    [Fact]
+    public async Task Remove_ThenRecommenderEdit_ThrowsUnauthorized()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRemoveAsync(recId);
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_recommenderUserId, showMatureContent: false));
+        Func<Task> act = async () => await CallEditAsync(new UpdateRecommendationDto(recId, ValidHtml("sneaky edit")));
+        await act.Should().ThrowAsync<UnauthorizedAccessException>("a removed rec is out of the recommender's hands");
+    }
+
+    [Fact]
+    public async Task Remove_ThenRecommenderDelete_ThrowsUnauthorized()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRemoveAsync(recId);
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_recommenderUserId, showMatureContent: false));
+        Func<Task> act = async () => await CallDeleteAsync(recId);
+        await act.Should().ThrowAsync<UnauthorizedAccessException>(
+            "deleting would free the one-per-user-per-story slot — the Rejected row IS the block record");
+    }
+
+    [Fact]
+    public async Task Remove_ThenResubmit_ThrowsInvalidOperation()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRemoveAsync(recId);
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_recommenderUserId, showMatureContent: false));
+        Func<Task> act = async () => await CallSubmitAsync(
+            new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*already submitted*", "the unique index keeps the slot occupied — removal is sticky");
+    }
+
+    [Fact]
+    public async Task Unblock_Rejected_RestoresApprovedAndNotifies()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRemoveAsync(recId);
+
+        await CallUnblockAsync(recId);
+
+        Recommendation? rec = await LoadRecAsync(recId);
+        rec!.StatusId.Should().Be((short)RecommendationStatusEnum.Approved,
+            "unblock goes straight to live — the author already read it when removing");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        bool notifExists = await db.Notifications.AnyAsync(
+            n => n.RecipientUserId == _recommenderUserId
+                 && n.NotificationTypeId == NotificationTypeEnum.RecommendationApproved);
+        notifExists.Should().BeTrue("the recommender must learn their rec is live again");
+    }
+
+    [Fact]
+    public async Task Unblock_NotRejected_ThrowsInvalidOperation()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        Func<Task> act = async () => await CallUnblockAsync(recId);
+        await act.Should().ThrowAsync<InvalidOperationException>("only a removed recommendation can be unblocked");
+    }
+
+    // ── WU-RecLifecycle: flag invariant on setters ────────────────────────────────
+
+    [Fact]
+    public async Task SetHiddenGem_OnNeedsRevisionRec_ThrowsValidation()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyWithAuthorId, ValidHtml()));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRequestRevisionAsync(recId, "note");
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_recommenderUserId, showMatureContent: false));
+        Func<Task> act = async () => await CallSetHiddenGemAsync(recId, true);
+        await act.Should().ThrowAsync<RecommendationValidationException>(
+            "curation flags may only ever be true on live recommendations");
+    }
+
+    // ── WU-RecLifecycle: D3.2 attribution ownership validation ────────────────────
+
+    [Fact]
+    public async Task RecordAttributionSource_RecommendationOnDifferentStory_ThrowsKeyNotFound()
+    {
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+        int unrelatedStoryId = await SeedStoryAsync();
+
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        Func<Task> act = async () => await CallRecordAttributionSourceAsync(unrelatedStoryId, recId);
+        await act.Should().ThrowAsync<KeyNotFoundException>(
+            "the claimed source recommendation must belong to the claimed story (D3.2)");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
     private static string ValidHtml(string? suffix = null)
@@ -535,6 +769,25 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         using IServiceScope scope = Factory.Services.CreateScope();
         await scope.ServiceProvider.GetRequiredService<IRecommendationWriteService>()
             .SetHighlightedByAuthorAsync(id, isHighlighted);
+    }
+
+    private async Task CallRequestRevisionAsync(int id, string note)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IRecommendationWriteService>()
+            .RequestRevisionAsync(id, note);
+    }
+
+    private async Task CallRemoveAsync(int id)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IRecommendationWriteService>().RemoveAsync(id);
+    }
+
+    private async Task CallUnblockAsync(int id)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IRecommendationWriteService>().UnblockAsync(id);
     }
 
     private async Task CallRecordSuccessAsync(int id)

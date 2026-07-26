@@ -34,13 +34,19 @@ else
         @foreach (var r in Recs ?? [])
         {
             var rec = r;
+            bool viewerIsStoryAuthor = CurrentUserId is not null && CurrentUserId == StoryAuthorId;
+            bool isLive = rec.Status == RecommendationStatusEnum.Approved;
+            bool isRejected = rec.Status == RecommendationStatusEnum.Rejected;
             <RecommendationCard @key="rec.RecommendationId"
                                 Rec="rec"
-                                OnLike="@(CurrentUserId is not null ? EventCallback.Factory.Create<int>(this, HandleLike) : default)"
-                                OnEdit="@(rec.IsOwnRecommendation ? EventCallback.Factory.Create<int>(this, HandleEditClick) : default)"
-                                OnDelete="@(rec.IsOwnRecommendation ? EventCallback.Factory.Create<int>(this, HandleDeleteClick) : default)"
-                                OnToggleHiddenGem="@(rec.IsOwnRecommendation ? EventCallback.Factory.Create<int>(this, HandleToggleHiddenGem) : default)"
-                                OnToggleHighlight="@(CurrentUserId == StoryAuthorId ? EventCallback.Factory.Create<int>(this, HandleToggleHighlight) : default)" />
+                                OnLike="@(CurrentUserId is not null && isLive ? EventCallback.Factory.Create<int>(this, HandleLike) : default)"
+                                OnEdit="@(rec.IsOwnRecommendation && !isRejected ? EventCallback.Factory.Create<int>(this, HandleEditClick) : default)"
+                                OnDelete="@(rec.IsOwnRecommendation && !isRejected ? EventCallback.Factory.Create<int>(this, HandleDeleteClick) : default)"
+                                OnToggleHiddenGem="@(rec.IsOwnRecommendation && isLive ? EventCallback.Factory.Create<int>(this, HandleToggleHiddenGem) : default)"
+                                OnToggleHighlight="@(viewerIsStoryAuthor && isLive ? EventCallback.Factory.Create<int>(this, HandleToggleHighlight) : default)"
+                                OnRequestRevision="@(viewerIsStoryAuthor && !isRejected && !rec.IsOwnRecommendation ? EventCallback.Factory.Create<int>(this, HandleRequestRevisionClick) : default)"
+                                OnRemove="@(viewerIsStoryAuthor && !isRejected && !rec.IsOwnRecommendation ? EventCallback.Factory.Create<int>(this, HandleRemoveClick) : default)"
+                                OnUnblock="@(viewerIsStoryAuthor && isRejected ? EventCallback.Factory.Create<int>(this, HandleUnblockAsync) : default)" />
 
             @* Inline editor for this card (edit-in-place) *@
             @if (_editingId == rec.RecommendationId)
@@ -53,12 +59,45 @@ else
                                           OnCancel="HandleEditCancel" />
                 </div>
             }
+
+            @* Inline revision-note panel (WU-RecLifecycle — the ModSubmissionsPage reject-panel pattern) *@
+            @if (_revisionRequestId == rec.RecommendationId)
+            {
+                <div class="ml-4 mt-1 rounded-md border border-(--color-border) bg-(--color-surface-raised) p-3">
+                    <label class="mb-1 block text-sm font-semibold text-(--color-text)" for="revision-note-@rec.RecommendationId">
+                        What should the recommender fix?
+                    </label>
+                    <textarea id="revision-note-@rec.RecommendationId"
+                              class="w-full rounded-md border border-(--color-border) bg-(--color-surface) p-2 text-sm text-(--color-text)"
+                              rows="3" maxlength="500"
+                              placeholder="e.g. This mentions the chapter 12 twist — could you reword to avoid the spoiler?"
+                              @bind="_revisionNote" @bind:event="oninput"></textarea>
+                    <p class="mt-1 text-xs text-(--color-text-muted)">
+                        The recommendation is hidden from readers until they edit it — editing brings it right back.
+                    </p>
+                    <div class="mt-2 flex gap-2">
+                        <button type="button"
+                                class="rounded-md border border-(--color-mission) px-3 py-1.5 text-sm text-(--color-mission) transition-colors hover:bg-(--color-mission)/10 disabled:opacity-50"
+                                disabled="@(_busy || string.IsNullOrWhiteSpace(_revisionNote))"
+                                @onclick="HandleRequestRevisionConfirmAsync">
+                            Send revision request
+                        </button>
+                        <button type="button"
+                                class="rounded-md border border-(--color-border) px-3 py-1.5 text-sm text-(--color-text-muted) transition-colors hover:text-(--color-text)"
+                                @onclick="HandleRequestRevisionCancel">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            }
         }
     </div>
 }
 
-@* ── New-recommendation composer (auth + not-yet-recommended) ─────────────────── *@
-@if (CurrentUserId is not null && !_alreadyRecommended)
+@* ── New-recommendation composer (auth + not-yet-recommended + not own story) ──── *@
+@* Self-rec is blocked server-side (WU-RecLifecycle — a recommendation is a peer endorsement);
+   don't offer the author an affordance that can only fail. *@
+@if (CurrentUserId is not null && !_alreadyRecommended && CurrentUserId != StoryAuthorId)
 {
     <div class="mt-6">
         @if (!_composing)
@@ -93,6 +132,15 @@ else
                IsDestructive="true"
                OnConfirm="HandleDeleteConfirmAsync" />
 
+@* ── Remove (author) confirmation dialog — WU-RecLifecycle ────────────────────── *@
+<ConfirmDialog @bind-IsOpen="_showRemoveConfirm"
+               Title="Remove recommendation"
+               Message="Remove this recommendation from your story? It will be hidden, and the recommender won't be able to edit or resubmit it. You can unblock it later if you change your mind."
+               ConfirmText="Remove"
+               CancelText="Cancel"
+               IsDestructive="true"
+               OnConfirm="HandleRemoveConfirmAsync" />
+
 @* ── Inline error feedback ────────────────────────────────────────────────────── *@
 @if (_error is not null)
 {
@@ -125,6 +173,12 @@ else
     private int _pendingDeleteId;
     private bool _busy;
     private string? _error;
+
+    // WU-RecLifecycle author-action state
+    private int? _revisionRequestId;
+    private string _revisionNote = string.Empty;
+    private bool _showRemoveConfirm;
+    private int _pendingRemoveId;
 
     protected override async Task OnInitializedAsync()
     {
@@ -309,6 +363,84 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Toggling author spotlight on recommendation {RecommendationId} failed unexpectedly", id);
+            StateHasChanged();
+        }
+    }
+
+    // ── Author lifecycle actions (WU-RecLifecycle) ────────────────────────────────
+    private void HandleRequestRevisionClick(int id)
+    {
+        _revisionRequestId = id;
+        _revisionNote = string.Empty;
+        _editingId = null;
+        _error = null;
+    }
+
+    private void HandleRequestRevisionCancel()
+    {
+        _revisionRequestId = null;
+        _revisionNote = string.Empty;
+    }
+
+    private async Task HandleRequestRevisionConfirmAsync()
+    {
+        if (_revisionRequestId is not int recId || string.IsNullOrWhiteSpace(_revisionNote)) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Recommendations.RequestRevisionAsync(recId, _revisionNote);
+            _revisionRequestId = null;
+            _revisionNote = string.Empty;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = Translate(ex, "Requesting a revision on recommendation {RecommendationId} failed unexpectedly", recId);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void HandleRemoveClick(int id)
+    {
+        _pendingRemoveId = id;
+        _showRemoveConfirm = true;
+        _error = null;
+    }
+
+    private async Task HandleRemoveConfirmAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await Recommendations.RemoveAsync(_pendingRemoveId);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = Translate(ex, "Removing recommendation {RecommendationId} failed unexpectedly", _pendingRemoveId);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task HandleUnblockAsync(int id)
+    {
+        _error = null;
+        try
+        {
+            await Recommendations.UnblockAsync(id);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = Translate(ex, "Unblocking recommendation {RecommendationId} failed unexpectedly", id);
             StateHasChanged();
         }
     }

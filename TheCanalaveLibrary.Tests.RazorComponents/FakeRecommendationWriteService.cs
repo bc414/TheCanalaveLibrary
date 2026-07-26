@@ -40,6 +40,11 @@ public class FakeRecommendationWriteService : IRecommendationWriteService
     public Task<IReadOnlyList<int>> GetRecommendedStoryIdsByUserAsync(int userId) =>
         Task.FromResult<IReadOnlyList<int>>([]);
 
+    private List<RecommendationDto> _needingAttentionResult = [];
+    public void SetNeedingAttentionResult(List<RecommendationDto> result) => _needingAttentionResult = result;
+    public Task<List<RecommendationDto>> GetMyRecommendationsNeedingAttentionAsync() =>
+        Task.FromResult(_needingAttentionResult);
+
     // ── Write tracking ────────────────────────────────────────────────────────────
 
     public List<RecommendationSubmitDto> SubmitCalls { get; } = [];
@@ -50,6 +55,9 @@ public class FakeRecommendationWriteService : IRecommendationWriteService
     public List<(int Id, bool IsHighlighted)> SetHighlightedCalls { get; } = [];
     public List<int> RecordSuccessCalls { get; } = [];
     public List<(int StoryId, int RecId)> RecordAttributionCalls { get; } = [];
+    public List<(int Id, string Note)> RequestRevisionCalls { get; } = [];
+    public List<int> RemoveCalls { get; } = [];
+    public List<int> UnblockCalls { get; } = [];
 
     private RecommendationLikeResultDto _likeResult = new(0, false);
 
@@ -100,6 +108,24 @@ public class FakeRecommendationWriteService : IRecommendationWriteService
     public Task RecordAttributionSourceAsync(int storyId, int recommendationId)
     {
         RecordAttributionCalls.Add((storyId, recommendationId));
+        return Task.CompletedTask;
+    }
+
+    public Task RequestRevisionAsync(int recommendationId, string note)
+    {
+        RequestRevisionCalls.Add((recommendationId, note));
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveAsync(int recommendationId)
+    {
+        RemoveCalls.Add(recommendationId);
+        return Task.CompletedTask;
+    }
+
+    public Task UnblockAsync(int recommendationId)
+    {
+        UnblockCalls.Add(recommendationId);
         return Task.CompletedTask;
     }
 }

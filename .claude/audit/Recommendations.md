@@ -5,12 +5,106 @@ never "review." Recommendations **cannot** have spoilers — deliberate absence 
 
 ## Shared Context
 **Entities (Core/Recommendations/ after WU29):** `Recommendation` (hot — `StoryId`, `RecommenderId`,
-`StatusId`, `LikeCount`), `RecommendationDetail` (cold — text body, 1-to-1 cascade, PK=FK),
-`RecommendationStatus` (seeded: Pending/Approved/Rejected/Under Review), `RecommendationLike`
-(junction, minted WU29), `RecommendationSuccess` (PK `(UserId,RecommendationId)`),
-`UserStoryRecommendationSource` (sparse partition off `UserStoryInteraction`). Migrated out of
-`Core/Models/` just-in-time (WU29) per the vertical-cluster rule. Services, DTOs, and components
-fully built in WU29 (L2/L3/L3.5/L4 across all four features).
+`StatusId`, `LikeCount`, `RevisionRequestNote` after WU-RecLifecycle), `RecommendationDetail` (cold —
+text body, 1-to-1 cascade, PK=FK), `RecommendationStatus` (seeded — WU-RecLifecycle 2026-07-25:
+NeedsRevision/Approved/Rejected; the WU29-era Pending Approval and Under Review rows were removed,
+never written by production code), `RecommendationLike` (junction, minted WU29),
+`RecommendationSuccess` (PK `(UserId,RecommendationId)`), `UserStoryRecommendationSource` (sparse
+partition off `UserStoryInteraction`). Migrated out of `Core/Models/` just-in-time (WU29) per the
+vertical-cluster rule. Services, DTOs, and components fully built in WU29 (L2/L3/L3.5/L4 across all
+four features).
+
+### WU-RecLifecycle settled design (2026-07-25) — the recommendation lifecycle
+
+**Spec §5.6 divergence, recorded per the spec-relationship rule.** The spec says recs are
+"auto-approved after author approval OR moderator review." Two corrections, both settled with the
+owner (2026-07-24/25): (1) "moderator review" was a spec mis-rewording — the source deliberation
+(`GeminiDiscussions/MyActivity September to November 2025_filtered.md` ~17260) specified an
+*author*-approval workflow with time-based auto-approval; there is **no moderator approval gate**
+(mods act only reactively via the WU34 report→takedown path). (2) The pre-publication gate itself
+(and its 7-day auto-approve timer) was **rejected outright** on first-principles review:
+recommendations are a *discovery* feature, not feedback; a gate delays discovery, dead-weights
+inactive authors, and merges two distinct author intents (fix an earnest flaw vs. remove a troll)
+into one harsh mechanism. What shipped instead:
+
+**Model: Publish + Request-Revision + Remove.** Statuses: `Approved` (live, the submit default) /
+`NeedsRevision` / `Rejected`.
+- **Live on submit** — no pending state, no timer, no worker.
+- **Request Revision** (author, story-ownership-gated): requires a note (plain text, stored on hot
+  `Recommendation.RevisionRequestNote` beside the same-shaped `TakedownReason`); rec hidden publicly;
+  recommender notified (`RecommendationRevisionRequested`, deep-links to the story). The
+  recommender's **edit auto-returns it to Live** (note cleared, author notified via
+  `RecommendationRevised`). Not sticky.
+- **Remove** (author): from Live or NeedsRevision → `Rejected`. Silent, hidden, **sticky** — the
+  recommender cannot edit/delete/resubmit (the `(RecommenderId, StoryId)` unique index + the
+  persisted Rejected row are the block record). Only the author's **Unblock** reverses it (straight
+  to Live; `RecommendationApproved` fires — its only trigger).
+- **Flag invariant:** `IsHiddenGem`/`IsHighlightedByAuthor` are only ever true on Live recs — both
+  Request Revision and Remove clear both flags (slots freed); return to Live does NOT restore them;
+  both setters refuse on non-Approved.
+- **Self-recommendation blocked** at submit (peer endorsement by definition); SeedTool mirrors the
+  invariant. Authorless-story recs simply go Live (nothing to gate).
+- **Submit now notifies the story author** (`NewRecommendationOnYourStory` — type existed since
+  WU22-era seeding but production never sent it).
+- **Recommender status surfaces:** Bookshelves Recommendations tab "Needs attention" section
+  (rec-level rows with note) + own-rec status display in `RecommendationSection`. The *public*
+  profile tab stays Approved-only for everyone including the owner.
+- **Deliberate asymmetry with comments:** comment removal is hard-delete with no uniqueness
+  constraint (a removed commenter can re-post); a Rejected rec's slot stays occupied. Intentional.
+- Conventions detail: `layer2-services.md` §"Publish-immediately + the Recommendation Lifecycle";
+  actor-class framing: `content-safety.md` §"Author-Controlled Content Actions".
+
+**WU-RecLifecycle Stage note (2026-07-25) — built.** Migration `RecLifecycle`: status seed rows
+(1→"Needs Revision", 3 reworded, 4 deleted), `recommendations.revision_request_note`
+(varchar 500, hot table beside `TakedownReason`), notification-type seeds 27
+(`RecommendationRevised` → author, YourStories) + 43 (`RecommendationRevisionRequested` →
+recommender, YourRecommendations). Server: `RequestRevisionAsync`/`RemoveAsync`/`UnblockAsync` on
+`IRecommendationWriteService` (story-ownership via the `SetHighlightedByAuthorAsync` pattern);
+`SubmitAsync` gains the self-rec guard + wires `NewRecommendationOnYourStory` (type 22's first
+production sender); `EditAsync` auto-relives NeedsRevision (note cleared, author notified via
+`RecommendationRevised`) and refuses on Rejected; `DeleteAsync` refuses on Rejected; both curation
+setters refuse on non-Approved; `RecordAttributionSourceAsync` validates rec↔story ownership
+(**D3.2 closed**); `GetRecommendedStoryIdsByUserAsync` gains the Approved filter (**D1 closed** —
+regression-tested for the first time); `GetForStoryAsync` is per-viewer (public=Approved;
+story author +NeedsRevision/Rejected; recommender +own hidden rec with note); new
+`GetMyRecommendationsNeedingAttentionAsync`. The three `ApprovedStatusId = 2` magic-number consts
+now derive from `RecommendationStatusEnum`; SeedTool's `AddRecommendation` skips self-recs
+(`MarkGem` null-guarded accordingly). L5: endpoints (3 authorized POSTs + needing-attention GET) +
+client impls + `ClientNotificationWriteService` stubs. UI: `RecommendationCard` status
+strip/note/dashed border + three author-action callbacks; `RecommendationSection` wires actions by
+status+ownership, inline revision-note panel (ModSubmissionsPage reject-panel pattern), Remove
+`ConfirmDialog`, direct Unblock; Bookshelves Recommendations tab "Needs attention" section
+(rec-level rows, titles via `GetListingsByIdsAsync`). **Verified:** `dotnet build` green;
+`dotnet test` green — covering tiers: Integration (`RecommendationWriteServiceTests` +15
+lifecycle/self-rec/flag-invariant/stickiness/notification tests; `RecommendationReadServiceTests`
++6 per-viewer visibility + D1 regression + needing-attention) and RazorComponents
+(`RecommendationSectionTests` +5 author actions/note display; fakes extended). Spotlight needed no
+changes (`GetByIdAsync` null = blank-rec display state, already documented there).
+
+**L4.5-Browser verification (2026-07-25) — F27/F28/F30 stay Stage 5.** Full lifecycle driven against
+the dev DB (server-only path), every step `psql`-confirmed. As AuthorAlpha on story 1 with TestUser's
+seeded Author's-Pick rec: **Request Revision** → card shows "Revision requested — hidden from readers
+until it's edited" + the note, `status_id 2→1`, note stored, **`is_highlighted_by_author t→f`** (the
+flag invariant, observed live — the AUTHOR'S PICK ribbon and the Spotlight toggle both vanished),
+notification 43 → TestUser. As TestUser: the note renders on the story card *and* in the Bookshelves
+Recommendations "NEEDS ATTENTION" section; **edit → auto-relive** (`status 1→2`, note cleared,
+notification 27 → AuthorAlpha, "Mark as Hidden Gem" reappears; flags correctly NOT auto-restored).
+**Remove** → "Removed by the story author", `status→3`, **silent** (no notification row), author left
+with Unblock only; stickiness enforced *server-side*, not just by affordance — direct API calls as
+TestUser returned **edit 403, delete 403, resubmit 401** ("You have already submitted a
+recommendation for this story"). **Unblock** → `status→2`, notification 40 → TestUser. **Self-rec
+blocked**: `POST /api/recommendations` for own story → **400 "You cannot recommend your own story."**
+A fresh rec from ReaderGamma published **immediately** (visible to a third party, rec count 1→2) and
+fired notification 22 to AuthorAlpha — type 22's first production send. **D1 confirmed end-to-end**:
+while TestUser's only rec was Rejected, ReaderGamma's view of `/user/1/recommendations` showed "No
+recommendations given yet."
+**Two runtime defects found and fixed in-session** (per CLAUDE.md's fix-same-session rule): (1) the
+`GetListingsAsync` empty-restrict bug — see `audit/Stories.md` Feature 5 WU-RecLifecycle note; (2)
+the "Recommend this story" composer CTA was offered to the story's own author, an affordance that
+could only fail — now gated on `CurrentUserId != StoryAuthorId`
+(`RecommendationSectionTests.RecommendationSection_StoryAuthor_SeesNoRecommendCTAOnOwnStory`).
+Verification data cleaned up afterward (throwaway rec + comment removed, rec 1's seed body/flag and
+the four generated notifications restored/deleted — workbench left at seed state).
 
 ## Feature 27 — Recommendation Submission
 - **L1 — Stage 5.** Hot/cold vertical partition + status lifecycle; no `IsSpoiler` (correct).
@@ -20,10 +114,13 @@ fully built in WU29 (L2/L3/L3.5/L4 across all four features).
   (b) **minimum 500 characters** on stripped text (strip helper mirrors `ChapterText.CountWords`,
   `RecommendationConstants.MinLength`; value settled WU29 — no prior spec value, see
   `forward_plan.md` Resolved); (c) sanitize-once-on-save; (d) writes hot+cold partition via `Add`
-  (not `Attach`, heed WU12 lesson); (e) **auto-approve (MVP):** `StatusId = Approved` on create —
-  spec §5.6's Pending→author-approval/moderation lifecycle deferred to WU34, recorded in
-  `forward_plan.md` Resolved, code is authoritative. `EditAsync`/`DeleteAsync` author-only.
-  One-per-user enforced by the DB unique index (duplicate → friendly `RecommendationValidationException`).
+  (not `Attach`, heed WU12 lesson); (e) **publish-immediately:** `StatusId = Approved` on create —
+  originally the WU29 auto-approve MVP shortcut ("deferred to WU34"), ratified as the permanent
+  design by WU-RecLifecycle (2026-07-25; see the settled-design section above — the gate was
+  rejected, not merely deferred). WU-RecLifecycle also added the self-rec guard and the
+  submit-time author notification. `EditAsync`/`DeleteAsync` author-only (and refused on Rejected
+  recs — sticky). One-per-user enforced by the DB unique index (duplicate → friendly
+  `RecommendationValidationException`).
 - **L3/L3.5/L4 — Stage 5 (WU29, 2026-06-23).** `RecommendationEditor` leaf: wraps `EditorView`
   (pull-on-submit `@ref`/`GetHtmlAsync()`), Save/Cancel/`Busy` shell, live 500-char meter, no spoiler
   checkbox (deliberate absence). Own leaf, not a shared `EditorForm` abstraction (only two

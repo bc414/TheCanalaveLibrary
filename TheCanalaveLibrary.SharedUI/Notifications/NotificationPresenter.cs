@@ -73,6 +73,11 @@ public static class NotificationPresenter
             NotificationTypeEnum.TagUpdateSuggestion =>
                 target is not null ? $"{actor} suggested tag updates for {target}" : $"{actor} suggested tag updates for your story",
 
+            NotificationTypeEnum.RecommendationRevised =>
+                target is not null
+                    ? $"{actor} revised their recommendation for {target} — it's live again"
+                    : $"{actor} revised their recommendation — it's live again",
+
             NotificationTypeEnum.StoryRejected =>
                 target is not null ? $"{target} was not approved for the library" : "Your story was not approved for the library",
 
@@ -98,6 +103,11 @@ public static class NotificationPresenter
 
             NotificationTypeEnum.SuccessfulRec =>
                 target is not null ? $"Your recommendation for {target} helped a reader discover it" : "Your recommendation helped a reader discover a story",
+
+            NotificationTypeEnum.RecommendationRevisionRequested =>
+                target is not null
+                    ? $"The author of {target} asked you to revise your recommendation"
+                    : "An author asked you to revise your recommendation",
 
             NotificationTypeEnum.NewRecommendationByFollowedUser =>
                 target is not null ? $"{actor} recommended {target}" : $"{actor} wrote a recommendation",

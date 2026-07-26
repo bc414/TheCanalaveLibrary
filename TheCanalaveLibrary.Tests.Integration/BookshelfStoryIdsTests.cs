@@ -197,6 +197,24 @@ public class BookshelfStoryIdsTests(PostgresFixture postgres) : IntegrationTestB
         total.Should().BeGreaterThanOrEqualTo(1);
     }
 
+    /// <summary>
+    /// Regression pin (browser-caught 2026-07-25): an EMPTY restrict set is "narrow to nothing,"
+    /// NOT "no narrowing." Before the fix, every empty bookshelf tab / profile story tab listed
+    /// the entire library — and it silently undid WU-RecLifecycle's D1 Approved-only filter on the
+    /// profile Recommendations tab (all recs hidden → empty candidate set → whole library shown).
+    /// </summary>
+    [Fact]
+    public async Task GetListingsAsync_EmptyRestrict_ReturnsNothing()
+    {
+        string suffix = Guid.NewGuid().ToString("N")[..8];
+        await SeedStoryAsync($"EmptyRestrict-{suffix}");
+
+        (StoryListingDto[] items, int total) = await CallGetListingsAsync(new StoryFilterDto(), restrictTo: []);
+
+        items.Should().BeEmpty("an empty candidate set is an empty shelf, never the whole library");
+        total.Should().Be(0, "the count must reflect the narrowed (empty) set too");
+    }
+
     // ════════════════════════════════════════════════════════════════════════════
     // GetRecommendedStoryIdsAsync + GetHiddenGemStoryIdsAsync
     // ════════════════════════════════════════════════════════════════════════════
@@ -213,14 +231,14 @@ public class BookshelfStoryIdsTests(PostgresFixture postgres) : IntegrationTestB
     }
 
     [Fact]
-    public async Task GetRecommendedStoryIds_ExcludesPendingRecommendations()
+    public async Task GetRecommendedStoryIds_ExcludesNonApprovedRecommendations()
     {
         int story = await SeedStoryAsync();
-        await SeedRecAsync(recommenderId: _userId, storyId: story, statusId: RecommendationStatusEnum.PendingApproval);
+        await SeedRecAsync(recommenderId: _userId, storyId: story, statusId: RecommendationStatusEnum.NeedsRevision);
 
         IReadOnlyList<int> ids = await CallGetRecommendedStoryIdsAsync();
 
-        ids.Should().NotContain(story, "pending recommendations are not shown in bookshelf");
+        ids.Should().NotContain(story, "non-approved recommendations are not shown in bookshelf");
     }
 
     [Fact]

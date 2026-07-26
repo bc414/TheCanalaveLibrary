@@ -29,7 +29,7 @@ public class ServerManualTreeSearchReadService(
     IActiveUserContext activeUser) : IManualTreeSearchReadService
 {
     private const string DefaultAvatarUrl = "/img/default-avatar.svg";
-    private const short ApprovedStatusId = 2;
+    private const short ApprovedStatusId = (short)RecommendationStatusEnum.Approved;
 
     public async Task<ManualTreeNeighborsDto> GetStoryNeighborsAsync(
         StoryNeighborsRequest request, CancellationToken ct = default)
