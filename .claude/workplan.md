@@ -3958,3 +3958,28 @@ Two loose ends from WU-IntTestPerf, closed same day:
   tab-scoped Inbox empty copy ("Your inbox is empty."), inline-error catch on the archived tab
   fetch. Post-addendum: full suite green **2214/2214** (764/591/859). Detail: `audit/Messaging.md`
   WU-MsgArchive addendum.
+
+---
+
+## WU-TokenGreen — restore the design-token gate to green (Features 63 L4 / 21 L4) — DONE ✓ (2026-07-26)
+
+- **Trigger:** `scripts/check-design-tokens.ps1` — nominally a CI gate — had been exiting 1 on the
+  same two findings across multiple work-units (recorded as "pre-existing, untouched" in at least
+  WU38d-era entries, WU-RecLifecycle, and WU-MsgArchive). A permanently-red enforcement gate trains
+  everyone to ignore it; owner directed the fix.
+- **Fixed:**
+  1. **`Import/ImportReviewPanel.razor` — UGC outside ContentSurface.** The expanded draft preview
+     rendered `RichTextView` in a bare bordered div. Drafts are user prose; the UGC-on-ContentSurface
+     rule applies to previews. Now `<ContentSurface Variant="Inline">` inside a scroll-only wrapper
+     (`max-h-64 overflow-y-auto` — ground/frame/padding moved to the surface, per the role system).
+  2. **`Profiles/ProfilePage.razor` — undeclared `--color-link`.** The sign-in-required state's link
+     referenced a token that never existed in `@theme` (class compiled to nothing; the link rendered
+     in inherited ink). Swapped to the ratified link token `--color-action-ink`.
+- **Verified:** `scripts/check-design-tokens.ps1` **green** (first clean run since the findings were
+  introduced); `ImportReviewPanelTests` + `ProfilePage` RazorComponents tests pass unchanged (9/9 in
+  the filtered run — no test pinned the old markup); full suite green 2214/2214 immediately prior
+  (WU-MsgArchive addendum) with only these two markup-local diffs since.
+- **Cells:** no Stage changes — F63 and F21 L4 already Stage 5; both were latent visual defects under
+  Stage-5 cells (the `--color-link` one user-visible: an unstyled link).
+- **Tool:** Claude Code (Fable). **Pointer:** `audit/Import.md` token-fix note; `audit/Profiles.md`
+  §"Token fix (WU-TokenGreen)".

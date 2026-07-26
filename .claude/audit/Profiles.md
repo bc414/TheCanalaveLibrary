@@ -86,6 +86,15 @@ JSON on `User` (see Identity audit). Spec calls for `IUserProfileReadService` (p
   flip's browser wave (header, stats, vouches, tabs). Full wave narrative + the 7 bugs found/fixed:
   `workplan.md` WU-GlobalFlip.
 
+### Token fix (WU-TokenGreen, 2026-07-26) — L4 stays Stage 5
+
+The sign-in-required state's link (`ProfilePage.razor`, WU-AccessGate Phase 1 markup) referenced
+`--color-link`, a token that **never existed** in `@theme` — the class compiled to nothing, so the
+link rendered in inherited body ink with only the underline distinguishing it. Swapped to
+`--color-action-ink` (the ratified links/active-text token). This was one of the two findings that
+had kept `scripts/check-design-tokens.ps1` red repo-wide since the AccessGate work; the checker is
+green again as of this fix (see `workplan.md` WU-TokenGreen).
+
 ---
 
 ### WU-ComponentSoundness Stage note (2026-06-27)

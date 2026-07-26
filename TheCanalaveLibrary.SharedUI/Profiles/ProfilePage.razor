@@ -51,7 +51,9 @@ else if (Header is null)
         <PageTitle>Sign in to view this profile</PageTitle>
         <div class="flex flex-col gap-2 p-4">
             <p class="text-(--color-text-muted)">This profile is visible to signed-in members only.</p>
-            <p><a class="underline text-(--color-link)" href="@($"/Account/Login?ReturnUrl={Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri))}")">Sign in to view this profile</a></p>
+            @* Link ink is --color-action-ink (the ratified links/active-text token) — the
+               once-referenced --color-link never existed in @theme. *@
+            <p><a class="underline text-(--color-action-ink)" href="@($"/Account/Login?ReturnUrl={Uri.EscapeDataString(Nav.ToBaseRelativePath(Nav.Uri))}")">Sign in to view this profile</a></p>
         </div>
     }
     else

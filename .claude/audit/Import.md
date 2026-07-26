@@ -62,6 +62,13 @@ dropped) — the sanitizer still runs on every draft as the trust boundary.
   Word clipboard on a human machine; Quill normalization + sanitize-on-save is expected adequate
   (audit/Import.md "Settled"). Record findings here when Brian tries it; a Quill paste matcher
   becomes a follow-up only if inadequate.
+- **Token fix (WU-TokenGreen, 2026-07-26):** `ImportReviewPanel`'s expanded draft preview rendered
+  `RichTextView` in a bare bordered div — the role system's UGC-on-ContentSurface rule
+  (`layer4-style.md` §"Element Roles") applies to previews too; drafts are user prose. Now wrapped
+  in `<ContentSurface Variant="Inline">`, with the outer div reduced to the scroll constraint only
+  (`max-h-64 overflow-y-auto`) — ground/frame/padding belong to the surface. This was one of the
+  two findings that had kept `scripts/check-design-tokens.ps1` red repo-wide since WU38d shipped;
+  green again as of this fix. `ImportReviewPanelTests` (incl. preview toggle) still pass unchanged.
 
 ### Settled (WU38d, 2026-07-11 — do not revisit without Stage-4 diagnosis)
 - **Reframe:** fundamentally *chapter* import / bulk chapter import, NOT "story import." Story
