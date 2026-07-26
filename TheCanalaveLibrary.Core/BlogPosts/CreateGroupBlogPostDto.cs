@@ -4,7 +4,8 @@ namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// Data required to create a new <see cref="GroupBlogPost"/>. Mirrors
-/// <see cref="CreateProfileBlogPostDto"/> with the addition of <see cref="GroupId"/>.
+/// <see cref="CreateProfileBlogPostDto"/> with the addition of <see cref="GroupId"/> and the
+/// removal of <c>StoryId</c> — group posts are not story-linkable (WU-B2, 2026-07-25).
 /// <c>AuthorId</c> is server-stamped from <see cref="IActiveUserContext.UserId"/>; absent here.
 /// <see cref="Content"/> is raw HTML sanitized server-side before persisting.
 /// </summary>
@@ -23,9 +24,6 @@ public class CreateGroupBlogPostDto
     public Rating Rating { get; set; }
 
     public bool HasSpoilers { get; set; }
-
-    /// <summary>Optional FK to a story the post is about. SET NULL on story deletion.</summary>
-    public int? StoryId { get; set; }
 }
 
 public static class CreateGroupBlogPostDtoValidations

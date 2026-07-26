@@ -61,6 +61,22 @@ when Feature 56 was cut — see the Feature 56 CUT note below.)
     Covering tier: **Integration** — existing `GetById_MaturePost_HiddenFromNonMatureViewer`,
     `GetById_MaturePost_VisibleToMatureViewer`, `GetById_MaturePost_VisibleToAuthorRegardlessOfMatureSetting`
     confirm content-rating projection path. L1/L2 return to Stage 5.
+- **WU-B2 settled decisions (2026-07-25):**
+  - **Follower notifications fire on the publish transition** (`IsPublished` false→true in
+    `UpdateBlogPostAsync`), never on draft create (the MA-709 seam). Fan-out: author-followers
+    (`ReceiveAlerts`, type 13) plus — when story-linked — story followers/favoriters/read-it-later
+    (14/15/16), disjoint by precedence 13 > 14 > 15 > 16. Republish re-notifies (intentional; unread-dedup
+    absorbs bursts). Detail: `layer2-services.md` §"Comment & blog-post semantic methods" +
+    `audit/Notifications.md` WU-B2 slice.
+  - **`StoryId` is ownership-validated at write time** (create + update): a `StoryId` whose
+    `Story.AuthorId` isn't the blog author throws `UnauthorizedAccessException`. The editor's
+    own-stories dropdown was affordance only; the service gate closes the fan-out spam vector
+    (forge `StoryId` → spam a popular story's audience).
+  - **`GroupBlogPost.StoryId` removed** (entity + column via migration + `CreateGroupBlogPostDto` +
+    editor picker + read-service group-branch projection). Group posts are for group topics; only
+    profile posts speak about a specific story. Restores the original TPT design (Gemini Entry #930:
+    `GroupBlogPosts (BlogPostId, GroupId)` only — the shipped `StoryId` was a deviation). Group
+    spoiler posts therefore always take the interstitial's immediate-reveal path.
 
 ## Feature 36 — Blog Post Display
 - **L1 — Stage 5.** **L2 — Stage 5** (profile context for WU31; story/group contexts → WU30/WU32).
@@ -75,6 +91,43 @@ when Feature 56 was cut — see the Feature 56 CUT note below.)
   (chapter XOR blog post; see `layer3.5-structure.md` "CommentSection — Multi-Context Dispatch").
   Draft posts (`IsPublished = false`) return null/NotFound to non-authors; author reads own
   mature/unpublished content via `IgnoreQueryFilters()` on derived scalar projections.
+- **WU-B2 settled decisions (2026-07-25) — `HasSpoilers` now gates content, not just a badge:**
+  - **Completion-gated spoiler interstitial on `BlogPostPage`** — full parity with the chapter-comment
+    flow (`CommentItem.razor` §5.9.1 pattern, *not* the mature content-gate: a spoiler is a soft
+    curtain, not a server-consent access boundary). `HasSpoilers` post renders blur-covered for
+    non-authors; "⚠ Reveal spoiler" click reveals immediately when the post isn't story-linked or the
+    viewer completed the linked story (`BlogPostDto.ViewerHasCompletedStory`, projected in
+    `GetByIdAsync` from `UserStoryInteraction.IsCompleted`); otherwise `ConfirmDialog` first.
+    Author auto-reveals; reveal state is ephemeral (re-hides on reload); inline markup, no shared
+    `SpoilerCover` extraction at two consumers.
+  - **`BlogPostCard` snippet suppressed under `HasSpoilers`** — the body-derived `ContentSnippet`
+    leaked spoiler content in listings; replaced with a muted "Content hidden — contains spoilers"
+    line (title/date/rating/badge stay).
+  - Notifications always show the blog title — `HasSpoilers` is never threaded into the notification
+    layer (a title is a broad descriptor; the spoiler is the content).
+  - **Verified (2026-07-25):** `dotnet test` full suite green (2157/2157). Covering tiers:
+    **RazorComponents** — `BlogPostPageTests.cs` (9: curtain shown to non-author/anonymous, absent
+    for author and non-spoiler posts; immediate reveal for non-story-linked and completed viewers;
+    ConfirmDialog open/confirm/cancel flow) + `BlogPostCardTests.cs` (2: snippet suppressed /
+    shown); **Integration** — `CommentAndBlogNotificationTests.cs` `GetById_*` ×4
+    (`ViewerHasCompletedStory` true/false/anonymous/non-story-linked) and the ownership-gate ×2
+    (create/update with a foreign `StoryId` → `UnauthorizedAccessException`).
+    `scripts/check-design-tokens.ps1`: no new findings (curtain uses `shadow-medium` + unflagged
+    `blur-md`/`pointer-events-none`; `RichTextView` stays inside `ContentSurface` in both branches).
+    **L4.5 browser pass — DONE (2026-07-25, real circuit vs. dev DB, `psql`-confirmed).** Created a
+    story-linked `HasSpoilers` profile post as AuthorAlpha (draft → publish via edit); the
+    publish transition fired the fan-out (`psql`: recipients TestUser + ReaderGamma each got
+    **exactly one** type-13 row — they also favorite the linked story, so this confirmed the
+    13>15 precedence-dedup live, not two rows). Bell rendered "AuthorAlpha posted a blog entry:
+    {title}" and clicking navigated to `/blog/{id}` (BlogPostDirect enrichment). Curtain flow
+    verified for every branch: blurred for the non-author; not-completed viewer → "Reveal spoiler"
+    opens the "you haven't finished the linked story" `ConfirmDialog` → Reveal shows content;
+    marking the viewer's `is_completed=true` → single click reveals with **no** dialog; reload
+    re-hides (ephemeral); author sees content with no curtain. Also confirmed: chapter-comment →
+    NewStoryComment bell "TestUser commented on {chapter title}" deep-linking to
+    `/story/{id}/{ch}` (Chapter enrichment); the group blog editor renders **no** Linked Story
+    picker; a group blog post renders **no** "About:" row. All verification rows cleaned up
+    afterward.
 - **Stage-5 note (2026-06-24, WU31):** `dotnet build` green; `dotnet test` 691 tests all green.
   - **L2** (`ServerBlogPostReadService.GetByIdAsync` / `GetByAuthorAsync` / `GetForEditAsync`): Integration
     tier — `BlogPostWriteServiceTests` (covers per-viewer `IsLikedByCurrentUser`, content-rating filter,

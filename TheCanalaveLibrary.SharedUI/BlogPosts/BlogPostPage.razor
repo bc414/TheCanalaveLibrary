@@ -85,11 +85,47 @@ else
         }
 
         @* ── Content ───────────────────────────────────────────────────────── *@
-        <ContentSurface Variant="ContentSurfaceVariant.Reading">
-            <div class="prose prose-sm max-w-none text-(--color-text)">
-                <RichTextView HtmlContent="@Post.Content" />
+        @if (Post.HasSpoilers && !isAuthor && !_spoilerRevealed)
+        {
+            @* Spoiler curtain (WU-B2): blur cover + overlay reveal button, completion-gated like
+               chapter comments (CommentItem §5.9.1 pattern — soft curtain, NOT the mature
+               content-gate; the interstitial above is the real access boundary). The author
+               auto-reveals; _spoilerRevealed is ephemeral and re-hides on every load. *@
+            <div class="relative select-none">
+                <div class="pointer-events-none blur-md">
+                    <ContentSurface Variant="ContentSurfaceVariant.Reading">
+                        <div class="prose prose-sm max-w-none text-(--color-text)">
+                            <RichTextView HtmlContent="@Post.Content" />
+                        </div>
+                    </ContentSurface>
+                </div>
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <button type="button"
+                            class="rounded-md bg-(--color-surface) px-4 py-2 text-sm font-medium text-(--color-text) shadow-medium"
+                            @onclick="HandleSpoilerRevealClick"
+                            aria-label="Reveal spoiler">
+                        ⚠ Reveal spoiler
+                    </button>
+                </div>
             </div>
-        </ContentSurface>
+
+            @* Completion-gated confirm — shown only when the post is story-linked and the viewer
+               hasn't finished that story (immediate reveal otherwise; see HandleSpoilerRevealClick). *@
+            <ConfirmDialog @bind-IsOpen="_showSpoilerConfirm"
+                           Title="Spoiler warning"
+                           Message="You haven't finished the linked story yet. Are you sure you want to see this spoiler?"
+                           ConfirmText="Reveal"
+                           CancelText="Back"
+                           OnConfirm="() => _spoilerRevealed = true" />
+        }
+        else
+        {
+            <ContentSurface Variant="ContentSurfaceVariant.Reading">
+                <div class="prose prose-sm max-w-none text-(--color-text)">
+                    <RichTextView HtmlContent="@Post.Content" />
+                </div>
+            </ContentSurface>
+        }
 
         @* ── Like button + author Edit link ─────────────────────────────────── *@
         <div class="flex items-center gap-4">
@@ -180,6 +216,12 @@ else
     private bool _likeBusy;
     private string? _likeError;
 
+    // Spoiler curtain state (WU-B2) — ephemeral component state, re-hides on every page load
+    // (mirrors CommentItem's _isRevealed, spec §5.9.1). Reset in LoadPostAsync so navigating
+    // between posts on a reused page instance never leaks a reveal.
+    private bool _spoilerRevealed;
+    private bool _showSpoilerConfirm;
+
     private bool _initialized;
     private int _loadedBlogPostId = int.MinValue; // sentinel; no real BlogPostId equals this
 
@@ -235,6 +277,8 @@ else
         _loadedBlogPostId = BlogPostId;
         _gate = null;
         _notFound = false;
+        _spoilerRevealed = false;
+        _showSpoilerConfirm = false;
 
         // Parallel load is sanctioned (layer2-services.md — factory-per-method read contexts).
         Task<BlogPostDto?> postTask = BlogPostService.GetByIdAsync(BlogPostId);
@@ -260,6 +304,18 @@ else
             _isLiked   = Post.IsLikedByCurrentUser;
         }
         _isLoading = false;
+    }
+
+    private void HandleSpoilerRevealClick()
+    {
+        // Completion gate (mirrors CommentItem.HandleRevealClick): reveal immediately when
+        // there's nothing to gate on (no linked story) or the viewer finished the linked story;
+        // otherwise confirm first. Anonymous viewers count as not-completed.
+        if (Post is null) return;
+        if (Post.StoryId is null || Post.ViewerHasCompletedStory)
+            _spoilerRevealed = true;
+        else
+            _showSpoilerConfirm = true;
     }
 
     private void HandlePollChanged(int pollId, PollDto? updated)

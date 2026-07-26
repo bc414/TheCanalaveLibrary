@@ -653,7 +653,8 @@ especially ⚖️-marked rows.)
 | Title link | `text-(--color-text) hover:underline hover:text-(--color-primary)` | Container text | — |
 | Draft badge | `rounded-full bg-(--color-warning)/15 text-(--color-warning)` | Indicator | — |
 | Meta chips / spoilers | muted; spoilers `text-(--color-warning)` | Indicator | — |
-| Content snippet | muted `line-clamp-3` | Container text | — (plain snippet) |
+| Content snippet | muted `line-clamp-3` | Container text | — (plain snippet; suppressed under `HasSpoilers` since WU-B2) |
+| Spoiler-hidden snippet line (WU-B2, 2026-07-25) | muted italic one-liner replacing the snippet when `HasSpoilers` | Indicator | — |
 | Report button | muted `hover:text-danger hover:underline` | Control | Bare spelling (valid), inconsistent form |
 
 #### BlogPostPage.razor
@@ -661,7 +662,8 @@ especially ⚖️-marked rows.)
 |---|---|---|---|
 | Title h1 / meta | token inks | Wayfinding / Indicator | — |
 | Draft badge | `rounded bg-(--color-surface) ring-1 ring-(--color-border) text-(--color-text-muted)` | Indicator | DIFFERENT draft-badge recipe from BlogPostCard (warning tint vs neutral ring) — inconsistent pair |
-| Post body | `prose prose-sm text-(--color-text)` wrapping RichTextView, no ground | Content Surface | UGC prose bare on canvas — no vessel |
+| Post body | `prose prose-sm text-(--color-text)` wrapping RichTextView, no ground | Content Surface | ~~UGC prose bare on canvas~~ resolved by later sweep — body now inside `ContentSurface` (Reading variant) |
+| Spoiler curtain — blurred body + reveal button (WU-B2, 2026-07-25) | `relative select-none` wrapper; `pointer-events-none blur-md` over the `ContentSurface`; button `bg-(--color-surface) shadow-medium` | Control over Content Surface | — (mirrors the CommentItem spoiler recipe; token shadow) |
 | Like button / edit link | token recipes | Control | — |
 
 #### BlogPostPropertiesForm.razor

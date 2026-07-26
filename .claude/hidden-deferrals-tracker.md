@@ -80,10 +80,20 @@ decision work that has no row at all.
   - Context: The per-type `EmailEnabled` checkbox stores, renders, and persists — so the settings page is a legit Stage 5 — but it drives **no mail**. WU-Email shipped *transactional* mail only (confirmation/reset). Fan-out over notification settings is WU-NotifEmail, Phase 6, unbuilt.
   - Next: WU-NotifEmail also folds in the missing `FakeNotificationWriteService` + anonymous-`NotificationBell` regression test (see H5).
 
-- [ ] **B2 — Comment & blog-follower notifications (TODO seams)** `[inert · med · beta]`
-  - Grid: F23/F24/F35 L2=5.
+- [x] **B2 — Comment & blog-follower notifications — DONE (WU-B2, 2026-07-25)** `[inert · med · beta]`
+  - Grid: F23/F24/F35 L2=5 (now genuinely live, not inert).
   - Source: code `ServerCommentWriteService.cs` (four `// TODO(post-MVP comment-notifications)` at ~lines 65, 119, 165, 220); `ServerBlogPostWriteService.cs` (`// TODO(post-MVP follower-notifications)` ~line 64).
   - Context: New comments do not notify story/blog/group/profile owners or parent-comment authors; new profile blog posts do not notify followers. Seams are stubbed but unwired. (Comment-*like* notifications are deliberately omitted by design — not part of this.)
+  - **Closed 2026-07-25 (WU-B2), with scope growth beyond the original item:** all five seams wired
+    (group comments = replies-only by owner decision; blog fan-out fires on the publish transition
+    and extends to the linked story's followers/favoriters/read-it-later users, types 13–16 with
+    precedence-dedup). Pulled in during planning: the blog spoiler **content interstitial**
+    (completion-gated, CommentItem pattern) + `BlogPostCard` snippet suppression; **story-link
+    integrity** (write-time `StoryId` ownership validation; `GroupBlogPost.StoryId` removed
+    entirely — group posts are not story-linkable, restoring the original TPT design); `PollUpdated`
+    enrichment fix (profile-post polls were title-less). Narrative: `audit/Notifications.md` WU-B2
+    slice, `audit/BlogPosts.md`, `audit/Groups.md`, `layer2-services.md` §"Comment & blog-post
+    semantic methods".
 
 - [ ] **B3 — UserStat counters with no producer (always read 0)** `[inert · med · beta]`
   - Grid: F22 all=5; F58 (recalc worker) L2=5.

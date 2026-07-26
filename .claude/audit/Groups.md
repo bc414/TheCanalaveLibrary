@@ -52,10 +52,17 @@ conventions. **Do not revisit these.** Pointers:
    WU31 `BaseBlogPost` / `IBlogPostWriteService` / `BlogPostCard` / `BlogPostPropertiesForm`
    infrastructure; `IBlogPostWriteService` gains `CreateGroupBlogPostAsync` +
    `IBlogPostReadService` gains `GetByGroupAsync`.
+   **Amended 2026-07-25 (WU-B2): group blog posts are not story-linkable.** `GroupBlogPost.StoryId`
+   removed (entity + column + DTO + editor story picker). Group posts are for topics about what the
+   group is about; only *profile* posts speak about a specific story. Restores the original TPT
+   design (the shipped `StoryId` was a deviation). Detail: `audit/BlogPosts.md` WU-B2 note.
 
 5. **Group comments follow per-context method pattern (WU31 precedent).** `GetGroupCommentsAsync` /
    `PostGroupCommentAsync` mirror the blog-post methods. No `IsSpoiler` on `PostGroupCommentDto`.
    See `layer2-services.md` "Group Comments — Per-Context Method Pattern."
+   **Amended 2026-07-25 (WU-B2): group-comment notifications are replies-only.** A group wall has no
+   single comment-owner and no `NotifyForNewComment` membership flag; top-level group comments
+   generate no notification — only `CommentReply` (34) to the parent-comment author fires.
 
 ## Feature 38 — Group Management
 

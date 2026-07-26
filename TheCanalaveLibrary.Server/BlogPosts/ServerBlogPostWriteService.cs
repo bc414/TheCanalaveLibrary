@@ -37,6 +37,12 @@ public class ServerBlogPostWriteService(
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new BlogPostValidationException(errors);
 
+        // Ownership gate on the optional story link (WU-B2): the editor's own-stories dropdown is
+        // affordance; this check is the control (identity-and-authorization.md §"Security vs
+        // affordance"). A forged StoryId would link another author's story and, since WU-B2's
+        // publish fan-out, spam that story's followers/favoriters/read-it-later audience.
+        await EnsureLinkedStoryOwnedAsync(dto.StoryId, authorId);
+
         string sanitizedContent = sanitizer.Sanitize(dto.Content);
 
         ProfileBlogPost post = new()
@@ -61,12 +67,25 @@ public class ServerBlogPostWriteService(
             .Where(us => us.UserId == authorId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.BlogPostsWritten, us => us.BlogPostsWritten + 1));
 
-        // TODO(post-MVP follower-notifications): notify followers of a new profile blog post once
-        // the notification type exists. (Retargeted 2026-07-18, MA-709 — the WU33 marker referenced
-        // a completed work-unit; the group path already fans out via NotifyNewGroupBlogPostAsync,
-        // profile-post follower notifications remain the tracked gap.)
+        // No notification on create (WU-B2): profile posts are drafts here (IsPublished = false).
+        // The follower/story fan-out fires on the publish transition in UpdateBlogPostAsync.
 
         return post.BlogPostId;
+    }
+
+    /// <summary>
+    /// Throws <see cref="UnauthorizedAccessException"/> when <paramref name="storyId"/> names a
+    /// story the caller doesn't own (or that no longer has an owner — deleted authors SET NULL).
+    /// No-op when <paramref name="storyId"/> is null. WU-B2 story-link integrity gate.
+    /// </summary>
+    private async Task EnsureLinkedStoryOwnedAsync(int? storyId, int authorId)
+    {
+        if (storyId is not int linkedStoryId) return;
+
+        bool ownsStory = await writeDb.Stories
+            .AnyAsync(s => s.StoryId == linkedStoryId && s.AuthorId == authorId);
+        if (!ownsStory)
+            throw new UnauthorizedAccessException("You can only link your own stories.");
     }
 
     public async Task UpdateBlogPostAsync(UpdateBlogPostDto dto)
@@ -88,6 +107,17 @@ public class ServerBlogPostWriteService(
         if (existingAuthorId != userId)
             throw new UnauthorizedAccessException("You can only edit your own blog posts.");
 
+        // Ownership gate on the optional story link (WU-B2) — same control as the create path.
+        await EnsureLinkedStoryOwnedAsync(dto.StoryId, userId);
+
+        // Prior published state, read from the child table only (WU-B2): detects the false→true
+        // publish transition below. Null when the id isn't a profile post — the base-table update
+        // still runs (preserving pre-B2 behavior for raw non-profile ids) but no fan-out fires.
+        bool? wasPublished = await writeDb.ProfileBlogPosts
+            .Where(p => p.BlogPostId == dto.BlogPostId)
+            .Select(p => (bool?)p.IsPublished)
+            .FirstOrDefaultAsync();
+
         string sanitizedContent = sanitizer.Sanitize(dto.Content);
 
         // Base-table columns: Title and Content only (author_id never changes after creation).
@@ -106,6 +136,25 @@ public class ServerBlogPostWriteService(
                 .SetProperty(p => p.LastUpdatedDate, DateTime.UtcNow)
                 .SetProperty(p => p.HasSpoilers,     dto.HasSpoilers)
                 .SetProperty(p => p.StoryId,         dto.StoryId));
+
+        // Publish-transition fan-out (WU-B2, best-effort post-commit): fires only on the
+        // false→true edge — drafts stay silent, and a republish after unpublish re-notifies
+        // (intentional; the create-core's unread-dedup absorbs back-to-back bursts). Recipient
+        // resolution + 13>14>15>16 precedence live in NotifyNewProfileBlogPostAsync.
+        if (wasPublished == false && dto.IsPublished)
+        {
+            try
+            {
+                await notifications.NotifyNewProfileBlogPostAsync(dto.BlogPostId, userId, dto.StoryId);
+            }
+            catch (Exception ex)
+            {
+                // Notification failure must never roll back the primary action.
+                logger.LogWarning(ex,
+                    "Profile blog post publish fan-out failed for blog post {BlogPostId}",
+                    dto.BlogPostId);
+            }
+        }
     }
 
     public async Task DeleteBlogPostAsync(int blogPostId)
@@ -218,7 +267,6 @@ public class ServerBlogPostWriteService(
             Content         = sanitizedContent,
             Rating          = dto.Rating,
             HasSpoilers     = dto.HasSpoilers,
-            StoryId         = dto.StoryId,
             IsPublished     = true,              // group blog posts publish immediately
             DateCreated     = DateTime.UtcNow,
             LastUpdatedDate = DateTime.UtcNow

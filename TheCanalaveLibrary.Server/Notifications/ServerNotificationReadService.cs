@@ -29,8 +29,12 @@ public class ServerNotificationReadService(
     /// <summary>
     /// Internal enum classifying what entity table a notification's <c>RelatedEntityId</c>
     /// references. Used by <see cref="KindFor"/> and <see cref="BatchLoadEntitiesAsync"/>.
+    /// Two blog-post kinds exist deliberately: <c>BlogPost</c> resolves via <c>GroupBlogPosts</c>
+    /// and links to the *group* (<c>/group/{GroupId}</c> — NewGroupBlogPost's chosen target);
+    /// <c>BlogPostDirect</c> resolves via the TPT-root <c>BlogPosts</c> DbSet and links to the
+    /// *post* (<c>/blog/{id}</c>, the unified BlogPostPage route serving both post kinds).
     /// </summary>
-    private enum RelatedEntityKind { None, User, Story, Chapter, Group, BlogPost }
+    private enum RelatedEntityKind { None, User, Story, Chapter, Group, BlogPost, BlogPostDirect }
 
     /// <summary>
     /// Maps each <see cref="NotificationTypeEnum"/> to the kind of entity its
@@ -64,22 +68,31 @@ public class ServerNotificationReadService(
 
         // ── Implemented WU-Polls: RelatedEntityId = owning blog post id for blog-post
         // polls (navigates to the post); site polls carry 0 → no dictionary match → null
-        // title/url, which the display renders as a non-navigating notification. ─────
-        NotificationTypeEnum.PollUpdated => RelatedEntityKind.BlogPost,
+        // title/url, which the display renders as a non-navigating notification.
+        // Remapped BlogPost → BlogPostDirect in WU-B2: polls attach to *profile* blog posts,
+        // which the group-only BlogPost lookup could never resolve (title-less notifications). ──
+        NotificationTypeEnum.PollUpdated => RelatedEntityKind.BlogPostDirect,
+
+        // ── Implemented WU-B2 (2026-07-25): comment + profile-blog generation lives ──
+        // RelatedEntityId: chapterId for NewStoryComment (deep-link to the commented chapter);
+        // blogPostId for NewCommentOnBlog + the four followed-content blog types (13–16);
+        // profileOwnerId for NewCommentOnYourProfile. CommentReply stays None below — one
+        // cross-context type cannot map to one table (relatedId is the context entity's id).
+        NotificationTypeEnum.NewStoryComment                 => RelatedEntityKind.Chapter,
+        NotificationTypeEnum.NewCommentOnBlog                => RelatedEntityKind.BlogPostDirect,
+        NotificationTypeEnum.NewCommentOnYourProfile         => RelatedEntityKind.User,
+        NotificationTypeEnum.NewBlogPostByFollowedUser       => RelatedEntityKind.BlogPostDirect,
+        NotificationTypeEnum.NewBlogPostOnFollowedStory      => RelatedEntityKind.BlogPostDirect,
+        NotificationTypeEnum.NewBlogPostOnFavoritedStory     => RelatedEntityKind.BlogPostDirect,
+        NotificationTypeEnum.NewBlogPostOnReadItLaterStory   => RelatedEntityKind.BlogPostDirect,
 
         // ── Forward-compat stubs (no rows until triggering work-units land) ──────
         NotificationTypeEnum.NewChapterOnFollowedStory       => RelatedEntityKind.Chapter,
         NotificationTypeEnum.NewStoryByFollowedUser          => RelatedEntityKind.Story,
         NotificationTypeEnum.NewRecommendationByFollowedUser => RelatedEntityKind.Story,
-        NotificationTypeEnum.NewBlogPostByFollowedUser       => RelatedEntityKind.BlogPost,
-        NotificationTypeEnum.NewBlogPostOnFollowedStory      => RelatedEntityKind.BlogPost,
-        NotificationTypeEnum.NewBlogPostOnFavoritedStory     => RelatedEntityKind.BlogPost,
-        NotificationTypeEnum.NewBlogPostOnReadItLaterStory   => RelatedEntityKind.BlogPost,
         NotificationTypeEnum.NewStoryFavorite                => RelatedEntityKind.Story,
         NotificationTypeEnum.NewStoryFollower                => RelatedEntityKind.Story,
         NotificationTypeEnum.NewRecommendationOnYourStory    => RelatedEntityKind.Story,
-        NotificationTypeEnum.NewStoryComment                 => RelatedEntityKind.Story,
-        NotificationTypeEnum.NewCommentOnBlog                => RelatedEntityKind.BlogPost,
         NotificationTypeEnum.RecommendationApproved          => RelatedEntityKind.Story,
         NotificationTypeEnum.RecommendationHighlighted       => RelatedEntityKind.Story,
         NotificationTypeEnum.SuccessfulRec                   => RelatedEntityKind.Story,
@@ -348,9 +361,8 @@ public class ServerNotificationReadService(
 
         if (idsByKind.TryGetValue(RelatedEntityKind.BlogPost, out var blogPostIds))
         {
-            // Only GroupBlogPost generates notifications today (NewGroupBlogPost via WU32).
-            // GroupBlogPost inherits Title from BaseBlogPost (TPT); GroupId needed for the URL.
-            // ProfileBlogPost notification types are not yet implemented (no generating path).
+            // Group-scoped kind (NewGroupBlogPost only): links to the GROUP, not the post —
+            // that type's chosen navigation target. Post-scoped types use BlogPostDirect below.
             result[RelatedEntityKind.BlogPost] = (await readDb.GroupBlogPosts
                     .Where(b => blogPostIds.Contains(b.BlogPostId))
                     .Select(b => new { b.BlogPostId, b.Title, b.GroupId })
@@ -358,6 +370,22 @@ public class ServerNotificationReadService(
                 .ToDictionary(
                     b => b.BlogPostId,
                     b => ((string?)b.Title, (string?)$"/group/{b.GroupId}"));
+        }
+
+        if (idsByKind.TryGetValue(RelatedEntityKind.BlogPostDirect, out var directPostIds))
+        {
+            // TPT-root lookup (WU-B2): resolves BOTH post kinds; /blog/{id} is the unified
+            // BlogPostPage route. No IgnoreQueryFilters — blog posts carry no audience/rating
+            // global filter (rating is an explicit .Where in the blog read service), and the
+            // IsTakenDown named filter stays active deliberately: a taken-down post drops out
+            // → null target → the presenter's graceful no-title fallback.
+            result[RelatedEntityKind.BlogPostDirect] = (await readDb.BlogPosts
+                    .Where(b => directPostIds.Contains(b.BlogPostId))
+                    .Select(b => new { b.BlogPostId, b.Title })
+                    .ToListAsync())
+                .ToDictionary(
+                    b => b.BlogPostId,
+                    b => ((string?)b.Title, (string?)$"/blog/{b.BlogPostId}"));
         }
 
         return result;

@@ -226,4 +226,59 @@ public interface INotificationWriteService : INotificationReadService
     /// voted on their own poll.
     /// </summary>
     Task NotifyPollUpdatedAsync(int pollOwnerUserId, IReadOnlyList<int> voterUserIds, int relatedEntityId);
+
+    // ── Semantic generation methods (WU-B2 slice — comments & profile blog posts) ─
+
+    /// <summary>
+    /// Sends <c>NewStoryComment = 24</c> to the story author when a chapter comment is posted.
+    /// <c>RelatedEntityId = chapterId</c> (deep-links to the chapter the comment sits on).
+    /// Called by <c>ServerCommentWriteService.PostChapterCommentAsync</c> after its primary commit.
+    /// </summary>
+    Task NotifyNewStoryCommentAsync(int storyAuthorId, int commenterId, int chapterId);
+
+    /// <summary>
+    /// Sends <c>NewCommentOnBlog = 33</c> to the blog post's author when a blog-post comment is
+    /// posted (profile or group post — owner resolves via the TPT root).
+    /// <c>RelatedEntityId = blogPostId</c> (navigates to <c>/blog/{id}</c>).
+    /// Called by <c>ServerCommentWriteService.PostBlogPostCommentAsync</c> after its primary commit.
+    /// </summary>
+    Task NotifyNewBlogCommentAsync(int blogAuthorId, int commenterId, int blogPostId);
+
+    /// <summary>
+    /// Sends <c>NewCommentOnYourProfile = 31</c> to the profile owner when a profile-wall comment
+    /// is posted. <c>RelatedEntityId = profileOwnerId</c> (the owner and the related entity are the
+    /// same user — navigates to <c>/user/{id}</c>).
+    /// Called by <c>ServerCommentWriteService.PostUserProfileCommentAsync</c> after its primary commit.
+    /// </summary>
+    Task NotifyNewProfileCommentAsync(int profileOwnerId, int commenterId);
+
+    /// <summary>
+    /// Sends <c>CommentReply = 34</c> to the parent comment's author when a reply is posted, in
+    /// any comment context. <paramref name="contextEntityId"/> is the containing entity's id
+    /// (chapterId / blogPostId / groupId / profileOwnerId) — <b>never the comment id</b>:
+    /// <c>Notification.RelatedEntityId</c> is <c>int</c> while <c>CommentId</c> is <c>long</c>.
+    /// Accepted dedup consequence: two unread replies from one user to the recipient's different
+    /// comments in the same context collapse to one notification (matches the generic
+    /// "replied to your comment" presenter text). The type is non-navigating
+    /// (<c>KindFor → None</c> — one cross-context type cannot map to one table).
+    /// </summary>
+    Task NotifyCommentReplyAsync(int parentAuthorId, int commenterId, int contextEntityId);
+
+    /// <summary>
+    /// Fan-out fired when a profile blog post transitions to published
+    /// (<c>IsPublished</c> false→true in <c>UpdateBlogPostAsync</c> — never on draft create).
+    /// Resolves four recipient sets, made disjoint by precedence 13 &gt; 14 &gt; 15 &gt; 16
+    /// (most-direct relationship wins; each user gets exactly one notification per publish):
+    /// <list type="bullet">
+    ///   <item><c>NewBlogPostByFollowedUser = 13</c> — author-followers with
+    ///   <c>FollowedUser.ReceiveAlerts = true</c>.</item>
+    ///   <item><c>NewBlogPostOnFollowedStory = 14</c> / <c>OnFavoritedStory = 15</c> /
+    ///   <c>OnReadItLaterStory = 16</c> — when <paramref name="storyId"/> is non-null, users whose
+    ///   <c>UserStoryInteraction</c> has the matching flag (no per-row opt-in exists — presence of
+    ///   the flag is the signal; hidden favorites included, notifications are personal-plane).</item>
+    /// </list>
+    /// <c>RelatedEntityId = blogPostId</c> for all four types. Republish re-notifies (unread-dedup
+    /// absorbs back-to-back duplicates) — intentional.
+    /// </summary>
+    Task NotifyNewProfileBlogPostAsync(int blogPostId, int authorId, int? storyId);
 }

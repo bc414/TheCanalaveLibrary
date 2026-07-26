@@ -91,6 +91,15 @@ built new code whose data need contradicts a "rejected" note recorded against a 
 audit file, and nothing flagged it at build time. **This should be resolved explicitly** (build the
 story-centric partial index after all, or find another shape) before F33 reaches Stage 5.
 
+**WU-B2 (2026-07-25) adds three more story-centric USI queries** — the profile-blog publish
+fan-out (`ServerNotificationWriteService.NotifyNewProfileBlogPostAsync`) resolves recipients via
+`WHERE story_id = @id AND is_followed` / `AND is_favorite` / `AND is_read_it_later`. Same rejected
+access pattern, three more call sites. Mitigating factor: blog-publish is a low-frequency event
+(one author action, not a read path), so per the "always measure" rule this is measure-first, not
+a blocker — but it further invalidates the R4 rejection premise. When the story-centric partial
+indexes are (re)considered for the F33 favoriters branch above, include `is_followed` /
+`is_favorite` / `is_read_it_later` `story_id`-leading partials in the same decision.
+
 ---
 
 ## Recommendations (Feature 27 — cross-cutting composite gap)

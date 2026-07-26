@@ -88,9 +88,10 @@ than get its own WU.
   defaults); end-to-end `FollowAsync` → notification row exists. Mutation sanity: drop-self line
   commented out → `NotifyNewFollowerAsync_DropsSelf_WhenRecipientEqualsSource` fails; reverted.
   **Deferred semantic methods (co-delivered with triggering work-units):** `NotifyNewChapterAsync`
-  (fan-out to `ReceiveAlerts` followers, with WU17/chapter-publish flow); `NotifyNewCommentAsync` /
-  `NotifyNewRecommendationAsync` / etc. (with WU19/20/29). The create-core and DAG pattern are built
-  now; each deferred method is a thin wrapper addition.
+  (fan-out to `ReceiveAlerts` followers, with WU17/chapter-publish flow); `NotifyNewRecommendationAsync` /
+  etc. (with WU19/20/29). The create-core and DAG pattern are built now; each deferred method is a
+  thin wrapper addition. The comment + profile-blog wrappers landed 2026-07-25 — see the WU-B2 slice
+  below.
   **WU-Spotlight slice (2026-07-12):** three new types 90–92 (`SpotlightSlotGranted` /
   `StorySpotlighted` / `RecommendationSpotlighted` — categories SiteNews / YourStories /
   YourRecommendations, email-default on) + thin semantic wrappers + `KindFor` Story branches for
@@ -98,6 +99,31 @@ than get its own WU.
   a worker (`SpotlightGoLiveWorker`) at window-open, not by a write path — first worker-sourced
   notifications; the create-core's drop-self correctly suppresses 92 when the sponsor attached
   their own recommendation (browser-verified against the dev DB). Detail: `audit/Spotlight.md`.
+  **WU-B2 slice (2026-07-25) — comment & profile-blog wrappers (settled decisions):** five new semantic
+  methods wire the MA-506/MA-709 seams: `NotifyNewStoryCommentAsync` (24, relatedId = chapterId),
+  `NotifyNewBlogCommentAsync` (33, relatedId = blogPostId — TPT-root owner resolution, covers comments
+  on both profile and group posts), `NotifyNewProfileCommentAsync` (31, relatedId = profileOwnerId),
+  `NotifyCommentReplyAsync` (34, relatedId = *context* id — `CommentId` is `long`, `RelatedEntityId`
+  is `int`, so replies cannot reference the comment itself; accepted dedup consequence recorded in
+  `layer2-services.md`), `NotifyNewProfileBlogPostAsync` (fan-out 13/14/15/16, disjoint by precedence
+  13 > 14 > 15 > 16). Settled: group comments notify **replies only** (no single comment-owner, no
+  membership flag); profile-blog fan-out fires on the **publish transition** only (drafts silent;
+  republish re-notifies — unread-dedup absorbs bursts); reply/container-suppress rule (owner who is
+  also parent author gets only `CommentReply`); null-skip for SET-NULL'd authors; enrichment adds the
+  `BlogPostDirect` kind (`/blog/{id}`, TPT-root, `IsTakenDown` filter deliberately active) and remaps
+  `PollUpdated` onto it (its group-only lookup left profile-post poll notifications title-less);
+  `NewStoryComment` → Chapter kind; `NewCommentOnYourProfile` → User kind; `CommentReply` → None
+  (non-navigating, known minor UX gap). Convention detail: `layer2-services.md` §"Comment & blog-post
+  semantic methods".
+  **Verified (2026-07-25):** `dotnet test` full suite green (758 Unit + 567 RazorComponents + 832
+  Integration = 2157/2157). Covering tier: **Integration** —
+  `CommentAndBlogNotificationTests.cs` (22 tests: all four seams incl. drop-self, container-suppress,
+  null-skip pins; fan-out precedence-dedup incl. the multi-qualifier-gets-exactly-one pin;
+  draft-silent / no-transition / republish-after-read behaviors; enrichment URL pins `/blog/{id}` +
+  chapter deep-link) + **Unit** — `NotificationPresenterTests` +5 (new `NewCommentOnBlog` arm,
+  reworded 14/15/16). L6 note: the fan-out's three story-centric USI queries feed the existing
+  "Rejected-vs-live conflict" — see `L6-reconciliation-matrix.md` WU-B2 addendum (measure-first,
+  low-frequency write path).
 
 ## Feature 42 — Notification Display
 

@@ -38,8 +38,13 @@
         <span>@Post.DateCreated.ToString("MMM d, yyyy")</span>
     </div>
 
-    @* ── Content snippet ─────────────────────────────────────────────────────── *@
-    @if (!string.IsNullOrEmpty(Post.ContentSnippet))
+    @* ── Content snippet — suppressed for spoiler posts (WU-B2): the snippet is body-derived,
+         so rendering it would leak exactly what HasSpoilers hides on the post page. ─────────── *@
+    @if (Post.HasSpoilers)
+    {
+        <p class="text-sm italic text-(--color-text-muted)">Content hidden — contains spoilers</p>
+    }
+    else if (!string.IsNullOrEmpty(Post.ContentSnippet))
     {
         <p class="text-sm text-(--color-text-muted) leading-relaxed line-clamp-3">@Post.ContentSnippet</p>
     }

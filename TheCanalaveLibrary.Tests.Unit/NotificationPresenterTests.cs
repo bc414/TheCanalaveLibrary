@@ -117,6 +117,56 @@ public class NotificationPresenterTests
             "Group name (TargetTitle) must appear in the NewGroupStory message");
     }
 
+    // ── WU-B2 arms: blog-comment + story-linked blog fan-out wording ──────────────
+
+    [Fact]
+    public void Compose_NewCommentOnBlog_IncludesActorAndBlogTitle()
+    {
+        var n = Make(NotificationTypeEnum.NewCommentOnBlog, NotificationCategoryEnum.YourProfile,
+            sourceUserName: "Dana", targetTitle: "My Writing Journey");
+        var (text, _, _) = NotificationPresenter.Compose(n);
+        text.Should().Contain("Dana").And.Contain("My Writing Journey");
+    }
+
+    [Fact]
+    public void Compose_NewCommentOnBlog_NullTarget_FallsBackWithoutNullLiteral()
+    {
+        var n = Make(NotificationTypeEnum.NewCommentOnBlog, NotificationCategoryEnum.YourProfile,
+            sourceUserName: null, targetTitle: null);
+        var (text, _, _) = NotificationPresenter.Compose(n);
+        text.Should().NotContain("null").And.NotBeNullOrWhiteSpace();
+        text.Should().Contain("Someone");
+    }
+
+    [Fact]
+    public void Compose_NewBlogPostOnFollowedStory_NamesBlogTitleWithStoryCue()
+    {
+        // {target} is the BLOG title (BlogPostDirect enrichment, WU-B2) — the copy must keep
+        // the story-relationship cue while naming the post.
+        var n = Make(NotificationTypeEnum.NewBlogPostOnFollowedStory, NotificationCategoryEnum.YourFollows,
+            targetTitle: "Behind the Scenes");
+        var (text, _, _) = NotificationPresenter.Compose(n);
+        text.Should().Contain("Behind the Scenes").And.Contain("story you follow");
+    }
+
+    [Fact]
+    public void Compose_NewBlogPostOnFavoritedStory_NamesBlogTitleWithStoryCue()
+    {
+        var n = Make(NotificationTypeEnum.NewBlogPostOnFavoritedStory, NotificationCategoryEnum.YourFollows,
+            targetTitle: "Behind the Scenes");
+        var (text, _, _) = NotificationPresenter.Compose(n);
+        text.Should().Contain("Behind the Scenes").And.Contain("story you favorited");
+    }
+
+    [Fact]
+    public void Compose_NewBlogPostOnReadItLaterStory_NamesBlogTitleWithStoryCue()
+    {
+        var n = Make(NotificationTypeEnum.NewBlogPostOnReadItLaterStory, NotificationCategoryEnum.YourFollows,
+            targetTitle: "Behind the Scenes");
+        var (text, _, _) = NotificationPresenter.Compose(n);
+        text.Should().Contain("Behind the Scenes").And.Contain("saved for later");
+    }
+
     // ── Per-type icon overrides ───────────────────────────────────────────────────
 
     [Fact]
@@ -207,6 +257,7 @@ public class NotificationPresenterTests
         NotificationTypeEnum.StoryRejected                  => NotificationCategoryEnum.YourStories,
         NotificationTypeEnum.NewStoryAcknowledgement        => NotificationCategoryEnum.YourStories,
         NotificationTypeEnum.NewCommentOnYourProfile        => NotificationCategoryEnum.YourProfile,
+        NotificationTypeEnum.NewCommentOnBlog               => NotificationCategoryEnum.YourProfile,
         NotificationTypeEnum.CommentReply                   => NotificationCategoryEnum.YourProfile,
         NotificationTypeEnum.RecommendationApproved         => NotificationCategoryEnum.YourRecommendations,
         NotificationTypeEnum.RecommendationHighlighted      => NotificationCategoryEnum.YourRecommendations,

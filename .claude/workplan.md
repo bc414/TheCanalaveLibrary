@@ -3728,3 +3728,64 @@ Two loose ends from WU-IntTestPerf, closed same day:
   hidden-deferrals tracker exists to catch.
 - **Tool:** Claude Code (Opus). **Pointer:** `audit/Groups.md` F39/F40 Stage notes;
   `.claude/hidden-deferrals-tracker.md` B6, D3.1, D3.2.
+
+## WU-B2 — Comment & blog-follower notifications + blog spoiler interstitial + story-link integrity (Features 23/24/35/36/41) — DONE ✓ (2026-07-25)
+
+- **Trigger:** hidden-deferrals tracker **B2** — five built-but-inert notification seams (four
+  `// TODO(post-MVP comment-notifications)` in `ServerCommentWriteService`, one
+  `// TODO(post-MVP follower-notifications)` in `ServerBlogPostWriteService`). Scope grew during
+  plan review (owner decisions recorded in the audit files): blog spoiler content interstitial,
+  card-snippet suppression, StoryId ownership validation, group StoryId removal, PollUpdated
+  enrichment fix.
+- **Notifications wired:** five new semantic methods on `INotificationWriteService`
+  (`NotifyNewStoryCommentAsync` 24 / `NotifyNewBlogCommentAsync` 33 / `NotifyNewProfileCommentAsync`
+  31 / `NotifyCommentReplyAsync` 34 / `NotifyNewProfileBlogPostAsync` 13–16), all funneling through
+  the existing `CreateCoreAsync`. Comment seams: best-effort post-commit, reply/container-suppress,
+  null-skip for SET-NULL''d authors, replies carry the *context* id (`CommentId` is `long`,
+  `RelatedEntityId` is `int`); group comments = replies-only (owner decision — no single
+  comment-owner). Blog fan-out fires on the `IsPublished` false→true transition in
+  `UpdateBlogPostAsync` (drafts silent; republish re-notifies deliberately), recipient sets made
+  disjoint by precedence 13>14>15>16; `ReceiveAlerts` gates the author-follow set only.
+- **Read side:** new `RelatedEntityKind.BlogPostDirect` (TPT-root `BlogPosts` → `/blog/{id}`,
+  `IsTakenDown` filter deliberately active, no rating bypass — none exists on blog posts); types
+  13–16, 33, and `PollUpdated` mapped to it (PollUpdated''s group-only lookup had left profile-post
+  poll notifications title-less); `NewStoryComment`→Chapter deep-link; `NewCommentOnYourProfile`→User;
+  `CommentReply` stays None (non-navigating, known minor gap). Presenter: new `NewCommentOnBlog` arm;
+  14/15/16 reworded for a blog-title `{target}` with the story-relationship cue kept.
+- **Blog spoiler interstitial (owner pulled into scope):** `HasSpoilers` now gates post *content*,
+  not just a badge. `BlogPostPage` blur curtain + "⚠ Reveal spoiler" Control (CommentItem §5.9.1
+  pattern, NOT the mature content-gate), completion-gated: immediate reveal when non-story-linked or
+  `BlogPostDto.ViewerHasCompletedStory` (new per-viewer projection in `GetByIdAsync` off
+  `UserStoryInteraction.IsCompleted`); `ConfirmDialog` otherwise; author auto-reveals; ephemeral
+  state (reset in `LoadPostAsync`). `BlogPostCard` suppresses the body-derived `ContentSnippet`
+  under `HasSpoilers` ("Content hidden — contains spoilers").
+- **Story-link integrity:** write-time ownership gate (`EnsureLinkedStoryOwnedAsync`) on profile
+  create + update — closes the fan-out spam vector (forged `StoryId` → spam a story''s audience;
+  the editor dropdown was affordance only). `GroupBlogPost.StoryId` **removed** (entity + DTO +
+  editor picker + read-service projection; migration `DropGroupBlogPostStoryId` — the column had no
+  FK constraint) — group posts are group topics; restores the original TPT design (Gemini #930).
+- **New tests:** `CommentAndBlogNotificationTests.cs` (Integration, 22 tests — all four seams incl.
+  drop-self / suppress / null-skip pins, fan-out precedence-dedup, draft-silent / no-transition /
+  republish behaviors, ownership gate ×2, enrichment URL pins for `/blog/{id}` + chapter deep-link,
+  `ViewerHasCompletedStory` ×4). `NotificationPresenterTests` +5 (new 33 arm + reworded 14/15/16).
+  New `BlogPostPageTests.cs` (bUnit, 9 — curtain visibility ×4, reveal flow ×5 incl. dialog
+  confirm/cancel) + `BlogPostCardTests.cs` (bUnit, 2 — snippet suppression).
+- **Verified:** `dotnet build` clean; `dotnet test` full suite green — 758 Unit + 567
+  RazorComponents + 832 Integration = **2157/2157**. `scripts/check-design-tokens.ps1`: no new
+  findings (the two pre-existing, unrelated findings — `ImportReviewPanel.razor`,
+  `ProfilePage.razor` — confirmed present on clean HEAD via stash round-trip). **Browser pass
+  (L4.5) done 2026-07-25** vs. the real circuit + dev DB (`psql`-confirmed, verification rows
+  cleaned up): publish-transition fan-out with live 13>15 precedence-dedup (each follower-favoriter
+  got exactly one type-13 row); bell text + `/blog/{id}` navigation; the full completion-gated
+  curtain flow (blur → confirm-dialog when not-completed → reveal; immediate reveal when completed;
+  re-hide on reload; author no curtain); chapter-comment bell + `/story/{id}/{ch}` deep-link; group
+  editor has no story picker; group post has no "About:" row. Detail: `audit/BlogPosts.md` WU-B2
+  L4.5 note.
+- **Cells:** `status.md` — no Stage-number changes; F23/F24/F35 L2 were "5-but-inert," now live;
+  the interstitial is additive under F35/F36''s existing Stage 5s; the group `story_id` column drop
+  is L1-neutral (no feature contract changed). Exactly the hidden-deferral shape the tracker exists
+  to catch.
+- **Tool:** Claude Code (Opus/Fable). **Pointer:** `audit/Notifications.md` WU-B2 slice;
+  `audit/BlogPosts.md` WU-B2 notes; `audit/Groups.md` amendments; `audit/Comments.md` F23 note;
+  `layer2-services.md` §"Comment & blog-post semantic methods"; `hidden-deferrals-tracker.md` B2;
+  `L6-reconciliation-matrix.md` story-centric USI addendum.

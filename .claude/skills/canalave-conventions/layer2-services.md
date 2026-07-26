@@ -687,6 +687,40 @@ No in-app mute column exists; that toggle was deliberately dropped from spec §5
 9 categories, ~35 types with gap-based numbering. `DefaultEmailEnabled` and `DefaultCollapsed` are
 required non-nullable on all types.
 
+### Comment & blog-post semantic methods (WU-B2, 2026-07-25)
+
+The comment and profile-blog seams are wired through five semantic methods. Rules that bind them:
+
+- **Replies carry the *context* id, never the comment id.** `Notification.RelatedEntityId` is `int`;
+  `CommentId` is `long` — a `CommentReply` notification physically cannot reference the comment. It
+  stores the context entity id per seam (chapterId / blogPostId / groupId / profileOwnerId). Accepted
+  dedup consequence: two replies from one user to your different comments in the same context, while
+  the first is unread, collapse to one notification — consistent with the generic "replied to your
+  comment" presenter text.
+- **Reply/container-suppress rule:** on a reply, the container owner (story author / blog author /
+  profile owner) is *not* sent the container-level type when they are also the parent-comment author —
+  they get exactly one notification (`CommentReply`). Never two notifications to one person for one event.
+- **Null-skip:** `Story.AuthorId`, `BaseBlogPost.AuthorId`, `BaseComment.UserId` are `int?` (SET NULL
+  on user deletion) — seams skip any notify whose resolved recipient is null.
+- **Group comments notify replies only.** A group wall has no single comment-owner and no
+  `NotifyForNewComment` membership flag; top-level group comments generate nothing.
+- **Profile blog fan-out fires on the publish transition** (`IsPublished` false→true in
+  `UpdateBlogPostAsync`), never on draft create. Republish re-notifies (unread-dedup absorbs
+  back-to-back duplicates) — intentional.
+- **Fan-out precedence-dedup:** `NotifyNewProfileBlogPostAsync` resolves four recipient sets —
+  author-followers (`FollowedUser.ReceiveAlerts`, type 13) and, when story-linked, story
+  followers/favoriters/read-it-later (`UserStoryInteraction.IsFollowed/IsFavorite/IsReadItLater`,
+  types 14/15/16) — made disjoint by precedence 13 > 14 > 15 > 16 (most-direct relationship wins), so
+  each user receives exactly one notification per publish event. Story-interaction sets have no
+  per-row opt-in; presence of the flag is the signal. Hidden-favorite users are included in 15
+  (notifications are personal-plane — visible only to the favoriter).
+- **Blog `StoryId` is ownership-validated at write time:** `CreateProfileBlogPostAsync` /
+  `UpdateBlogPostAsync` reject a `StoryId` whose `Story.AuthorId` isn't the blog author
+  (`UnauthorizedAccessException`) — the editor's own-stories dropdown is affordance, the service gate
+  is the control. This is what keeps the story fan-out unspoofable. Group blog posts have no
+  `StoryId` at all (removed 2026-07-25, restoring the original TPT design — group posts are group
+  topics; only profile posts speak about a specific story).
+
 ## Polymorphic RelatedEntityId — Two-Pass Batch Enrichment (WU33)
 
 `NotificationDto.RelatedEntityId` is a single `int` column that points at different entity tables
@@ -706,20 +740,32 @@ normalize the polymorphic target into one `(TargetTitle?, TargetUrl?)` pair — 
    Collapsed; `Users` on `SourceUserId` for `SourceUserName`). Apply ordering before `Skip/Take`.
 2. **Classify** each materialized row's `RelatedEntityId` by a private
    `static RelatedEntityKind KindFor(NotificationTypeEnum)` switch.
-   `RelatedEntityKind` is an internal enum: `User | Story | Chapter | Group | BlogPost | Comment | None`.
+   `RelatedEntityKind` is an internal enum: `None | User | Story | Chapter | Group | BlogPost | BlogPostDirect`.
 3. **Batch-load** each kind present on the page in one query per kind:
    - Group the materialized row ids by kind; skip empty sets.
    - `Stories.Where(s => ids.Contains(s.StoryId)).Select(s => new {s.StoryId, s.Title})` → url = `$"/story/{id}"`.
    - `Chapters.Where(...)` → url = `$"/story/{storyId}/{chapterNumber}"` (Chapter carries both fields).
    - `Users.Where(...)` → url = `$"/user/{id}"`.
-   - Group/BlogPost/Comment → respective routes. `None` → no query; null title/url.
+   - Group/BlogPost → respective routes. `None` → no query; null title/url.
    - Produce `Dictionary<int,(string Title,string Url)>` per kind.
 4. **Stitch** each DTO row with its `(TargetTitle, TargetUrl)` from the relevant dictionary; return enriched array.
 
-**Extra queries:** at most as many as distinct kinds appearing on the page (max 6, typically 1–3). Never N+1.
+**Extra queries:** at most as many as distinct kinds appearing on the page (max 7, typically 1–3). Never N+1.
 
 **Forward-compat:** kinds whose triggering feature isn't built yet produce no rows, but their `KindFor` branch
 is coded now — dormant branches compile and need no future edit.
+
+**Two blog-post kinds (WU-B2, 2026-07-25):** `BlogPost` resolves via `GroupBlogPosts` and deliberately
+links to the *group* (`/group/{GroupId}`) — used by `NewGroupBlogPost` only. `BlogPostDirect` resolves
+via the TPT-root `BlogPosts` DbSet and links to the *post* (`/blog/{BlogPostId}` — the unified
+`BlogPostPage` route serves both post kinds) — used by the followed-content blog types (13–16),
+`NewCommentOnBlog`, and `PollUpdated` (remapped: its group-only lookup left profile-post poll
+notifications title-less). The `BlogPostDirect` lookup applies **no `IgnoreQueryFilters`**: blog posts
+carry no audience/rating global filter (rating is an explicit `.Where` in the blog read service), and
+the `IsTakenDown` named filter stays active deliberately — a taken-down post drops out → null target →
+graceful fallback text. `NewStoryComment` maps to `Chapter` (deep-links the comment to its chapter);
+`NewCommentOnYourProfile` maps to `User`; `CommentReply` stays `None` (one cross-context type cannot
+map to one table — non-navigating, known minor UX gap).
 
 ## Service Composition
 

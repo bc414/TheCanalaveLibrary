@@ -275,6 +275,80 @@ public class ServerNotificationWriteService(
         CreateCoreAsync(NotificationTypeEnum.PollUpdated, pollOwnerUserId,
             voterUserIds.Select(id => (id, relatedEntityId)).ToArray());
 
+    // ── Semantic generation methods (WU-B2 slice — comments & profile blog posts) ─
+
+    /// <inheritdoc/>
+    public Task NotifyNewStoryCommentAsync(int storyAuthorId, int commenterId, int chapterId) =>
+        CreateCoreAsync(NotificationTypeEnum.NewStoryComment, commenterId,
+            [(storyAuthorId, chapterId)]);
+
+    /// <inheritdoc/>
+    public Task NotifyNewBlogCommentAsync(int blogAuthorId, int commenterId, int blogPostId) =>
+        CreateCoreAsync(NotificationTypeEnum.NewCommentOnBlog, commenterId,
+            [(blogAuthorId, blogPostId)]);
+
+    /// <inheritdoc/>
+    public Task NotifyNewProfileCommentAsync(int profileOwnerId, int commenterId) =>
+        CreateCoreAsync(NotificationTypeEnum.NewCommentOnYourProfile, commenterId,
+            [(profileOwnerId, profileOwnerId)]);
+
+    /// <inheritdoc/>
+    public Task NotifyCommentReplyAsync(int parentAuthorId, int commenterId, int contextEntityId) =>
+        CreateCoreAsync(NotificationTypeEnum.CommentReply, commenterId,
+            [(parentAuthorId, contextEntityId)]);
+
+    /// <inheritdoc/>
+    public async Task NotifyNewProfileBlogPostAsync(int blogPostId, int authorId, int? storyId)
+    {
+        // Recipient resolution on the write context — ground truth, Personal plane (same pattern
+        // as the group fan-outs above; no audience/visibility filtering applies to recipients).
+        // Author-followers gate on the per-follow ReceiveAlerts flag; story-interaction sets have
+        // no per-row opt-in — presence of the flag is the signal.
+        List<int> authorFollowers = await writeDb.FollowedUsers
+            .Where(f => f.FollowedUserId == authorId && f.ReceiveAlerts)
+            .Select(f => f.UserId)
+            .ToListAsync();
+
+        List<int> storyFollowers = [];
+        List<int> storyFavoriters = [];
+        List<int> storyReadLaters = [];
+        if (storyId is int sid)
+        {
+            storyFollowers = await writeDb.UserStoryInteractions
+                .Where(i => i.StoryId == sid && i.IsFollowed)
+                .Select(i => i.UserId)
+                .ToListAsync();
+            storyFavoriters = await writeDb.UserStoryInteractions
+                .Where(i => i.StoryId == sid && i.IsFavorite)
+                .Select(i => i.UserId)
+                .ToListAsync();
+            storyReadLaters = await writeDb.UserStoryInteractions
+                .Where(i => i.StoryId == sid && i.IsReadItLater)
+                .Select(i => i.UserId)
+                .ToListAsync();
+        }
+
+        // Precedence-dedup: 13 > 14 > 15 > 16 (most-direct relationship wins). Each user receives
+        // exactly one notification per publish event; per-type email settings stay meaningful.
+        HashSet<int> claimed = [.. authorFollowers];
+        List<int> followedStorySet = storyFollowers.Where(id => claimed.Add(id)).ToList();
+        List<int> favoritedStorySet = storyFavoriters.Where(id => claimed.Add(id)).ToList();
+        List<int> readLaterStorySet = storyReadLaters.Where(id => claimed.Add(id)).ToList();
+
+        if (authorFollowers.Count > 0)
+            await CreateCoreAsync(NotificationTypeEnum.NewBlogPostByFollowedUser, authorId,
+                authorFollowers.Select(id => (id, blogPostId)).ToArray());
+        if (followedStorySet.Count > 0)
+            await CreateCoreAsync(NotificationTypeEnum.NewBlogPostOnFollowedStory, authorId,
+                followedStorySet.Select(id => (id, blogPostId)).ToArray());
+        if (favoritedStorySet.Count > 0)
+            await CreateCoreAsync(NotificationTypeEnum.NewBlogPostOnFavoritedStory, authorId,
+                favoritedStorySet.Select(id => (id, blogPostId)).ToArray());
+        if (readLaterStorySet.Count > 0)
+            await CreateCoreAsync(NotificationTypeEnum.NewBlogPostOnReadItLaterStory, authorId,
+                readLaterStorySet.Select(id => (id, blogPostId)).ToArray());
+    }
+
     // ── Private create-core ───────────────────────────────────────────────────────
 
     /// <summary>

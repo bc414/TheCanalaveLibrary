@@ -7,6 +7,10 @@ namespace TheCanalaveLibrary.Core;
 /// <c>RichTextView</c>.
 /// <see cref="IsLikedByCurrentUser"/> is per-viewer state, projected from <c>BlogPostLikes</c>
 /// using the active user's id; false for anonymous viewers.
+/// <see cref="ViewerHasCompletedStory"/> is per-viewer state (WU-B2; mirrors
+/// <c>ChapterReadingDto.ViewerHasCompletedStory</c>): true only when the post is story-linked and
+/// the signed-in viewer's <c>UserStoryInteraction.IsCompleted</c> is set for that story. Gates the
+/// spoiler interstitial's reveal path — false for anonymous viewers and non-story-linked posts.
 /// </summary>
 public record BlogPostDto(
     int BlogPostId,
@@ -22,4 +26,5 @@ public record BlogPostDto(
     DateTime LastUpdatedDate,
     int LikeCount,
     bool IsLikedByCurrentUser,
-    bool IsPublished);
+    bool IsPublished,
+    bool ViewerHasCompletedStory = false);

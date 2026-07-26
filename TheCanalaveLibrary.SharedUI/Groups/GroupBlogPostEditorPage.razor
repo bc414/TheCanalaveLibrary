@@ -2,7 +2,6 @@
 @namespace TheCanalaveLibrary.SharedUI
 @attribute [Authorize]
 @inject IBlogPostWriteService BlogPostService
-@inject IStoryReadService StoryService
 @inject IGroupWriteService GroupService
 @inject NavigationManager Nav
 @inject ILogger<GroupBlogPostEditorPage> Logger
@@ -12,11 +11,13 @@
 @using Microsoft.Extensions.Logging
 
 @* Group blog post create page — member-only.
-   Reuses BlogPostPropertiesForm (no publish toggle, group posts publish immediately).
+   Reuses BlogPostPropertiesForm (no publish toggle, group posts publish immediately; no story
+   picker — group posts are not story-linkable, WU-B2, so AuthorStories stays null and the form
+   suppresses the picker).
    Pattern 1 edit side (cross-cutting.md "Two content-editing patterns"); view is BlogPostPage.
    [PersistentState] on GroupName (the page's only non-per-viewer fetched content) skips the group
-   re-fetch on hydration; the member-role gate and the viewer's story-picker options are per-viewer
-   state and always load fresh. Live form/draft state is never persisted.
+   re-fetch on hydration; the member-role gate is per-viewer state and always loads fresh. Live
+   form/draft state is never persisted.
    WU32. *@
 
 <PageTitle>New Group Post</PageTitle>
@@ -58,7 +59,6 @@
                 <div class="rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
                     <BlogPostPropertiesForm @ref="_form"
                                             ViewModel="_viewModel"
-                                            AuthorStories="_authorStories"
                                             SubmitLabel="Publish Post"
                                             OnValidSubmit="HandleValidSubmit" />
                 </div>
@@ -78,11 +78,6 @@
     private BlogPostPropertiesForm? _form;
     private DraftAutosave? _autosave;
     private BlogPostPropertiesViewModel _viewModel = new();
-
-    // Per-viewer picker options — NOT persisted: per-viewer supplementary state (the viewer's own
-    // stories) that reloads flicker-free, and a list of ValueTuples besides (tuples don't survive
-    // the [PersistentState] System.Text.Json round trip).
-    private IReadOnlyList<(int Id, string Title)>? _authorStories;
 
     // Persisted across the prerender→interactive handoff — the only fetched content this page
     // renders that isn't per-viewer. Just the rendered name, not the whole GroupDetailDto
@@ -126,18 +121,7 @@
             return;
         }
 
-        // Populate the story picker — per-viewer, always fresh (see _authorStories comment).
-        _authorStories = await LoadAuthorStoriesAsync(currentUserId.Value);
-
         _isLoading = false;
-    }
-
-    private async Task<IReadOnlyList<(int Id, string Title)>> LoadAuthorStoriesAsync(int authorId)
-    {
-        IReadOnlyList<int> ids = await StoryService.GetStoryIdsByAuthorAsync(authorId);
-        if (ids.Count == 0) return [];
-        StoryListingDto[] listings = await StoryService.GetListingsByIdsAsync(ids);
-        return listings.Select(l => (l.StoryId, l.Title)).ToArray();
     }
 
     private async Task HandleValidSubmit()
@@ -156,8 +140,7 @@
                 Title       = _viewModel.Title,
                 Content     = _viewModel.Content,
                 Rating      = _viewModel.Rating,
-                HasSpoilers = _viewModel.HasSpoilers,
-                StoryId     = _viewModel.StoryId
+                HasSpoilers = _viewModel.HasSpoilers
             });
 
             if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup

@@ -60,9 +60,8 @@ public class ServerBlogPostReadService(
         // (/blog/{id}) 404'd for everyone because this read only knew ProfileBlogPosts. Loaded
         // with the GroupAudience filter bypassed so the visibility decision can honor a per-group
         // reveal below (the filtered-navigation join would drop the row before we could ask).
-        // GroupBlogPost has no Story navigation — the linked title resolves through the filtered
-        // Stories DbSet below (an M story a viewer can't see silently drops its link, matching
-        // the ProfileBlogPost navigation behavior).
+        // Group posts carry no StoryId (WU-B2 — group posts are not story-linkable), so
+        // StoryId/LinkedStoryTitle project as null markers to unify with the profile branch.
         if (row is null)
         {
             row = await readDb.GroupBlogPosts
@@ -81,7 +80,7 @@ public class ServerBlogPostReadService(
                     p.LikeCount,
                     p.IsPublished,
                     p.HasSpoilers,
-                    p.StoryId,
+                    StoryId = (int?)null,
                     LinkedStoryTitle = (string?)null,
                     GroupId = (int?)p.GroupId,
                     GroupAudience = (Rating?)(p.Group != null ? p.Group.AudienceRating : Rating.E),
@@ -91,15 +90,6 @@ public class ServerBlogPostReadService(
                 .FirstOrDefaultAsync();
 
             isGroupPost = row is not null;
-
-            if (row is not null && row.StoryId is int linkedStoryId)
-            {
-                string? linkedTitle = await readDb.Stories
-                    .Where(s => s.StoryId == linkedStoryId)
-                    .Select(s => s.StoryListing.StoryTitle)
-                    .FirstOrDefaultAsync();
-                row = row with { LinkedStoryTitle = linkedTitle };
-            }
         }
 
         if (row is null) return null;
@@ -128,6 +118,16 @@ public class ServerBlogPostReadService(
             }
         }
 
+        // Per-viewer completion signal (WU-B2): gates the spoiler interstitial's reveal path.
+        // One extra query only for signed-in viewers of a story-linked (profile) post — a pure
+        // projection, never a visibility gate. False for anonymous / non-story-linked.
+        bool viewerHasCompletedStory = false;
+        if (currentUserId is int uid && row.StoryId is int sid)
+        {
+            viewerHasCompletedStory = await readDb.UserStoryInteractions
+                .AnyAsync(i => i.UserId == uid && i.StoryId == sid && i.IsCompleted);
+        }
+
         return new BlogPostDto(
             row.BlogPostId,
             row.AuthorId,
@@ -142,7 +142,8 @@ public class ServerBlogPostReadService(
             row.LastUpdatedDate,
             row.LikeCount,
             row.IsLikedByCurrentUser,
-            row.IsPublished);
+            row.IsPublished,
+            viewerHasCompletedStory);
     }
 
     public async Task<GatedMetadataDto?> GetBlogPostGateAsync(int blogPostId)

@@ -14,9 +14,24 @@ public class ServerCommentWriteService(
     ApplicationDbContext writeDb,
     IActiveUserContext activeUser,
     IHtmlSanitizationService sanitizer,
-    IWriteRateLimitService rateLimit)
+    IWriteRateLimitService rateLimit,
+    INotificationWriteService notifications,
+    ILogger<ServerCommentWriteService> logger)
     : ServerCommentReadService(readDbFactory, activeUser), ICommentWriteService
 {
+    /// <summary>
+    /// Resolves the parent comment's author for a reply, or null for a top-level comment or a
+    /// SET-NULL'd (deleted) parent author. Used only by the best-effort notification blocks.
+    /// </summary>
+    private async Task<int?> GetParentAuthorIdAsync(long? parentCommentId)
+    {
+        if (parentCommentId is not long pid) return null;
+        return await writeDb.BaseComments
+            .Where(c => c.CommentId == pid)
+            .Select(c => c.UserId)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<long> PostChapterCommentAsync(PostChapterCommentDto dto)
     {
         if (ActiveUser.UserId is not int userId)
@@ -62,10 +77,31 @@ public class ServerCommentWriteService(
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
 
-        // TODO(post-MVP comment-notifications): notify story author of new comment, and parent-comment
-        // author of reply. (Retargeted 2026-07-18, MA-506 — the old WU22 marker referenced a completed
-        // work-unit; comment notifications are not yet scoped. All four Post*Comment contexts carry
-        // this same marker so the gap is tracked consistently.)
+        // Best-effort post-commit notifications (WU-B2): story author (NewStoryComment) + parent
+        // author on replies (CommentReply, relatedId = context chapterId — CommentId is long,
+        // RelatedEntityId is int). Reply/container-suppress + null-skip rules:
+        // layer2-services.md §"Comment & blog-post semantic methods".
+        try
+        {
+            int? storyAuthorId = await writeDb.Chapters
+                .Where(c => c.ChapterId == dto.ChapterId)
+                .Select(c => c.Story.AuthorId)
+                .FirstOrDefaultAsync();
+            int? parentAuthorId = await GetParentAuthorIdAsync(dto.ParentCommentId);
+
+            bool ownerIsParentAuthor = parentAuthorId is int pa && storyAuthorId == pa;
+            if (storyAuthorId is int ownerId && !ownerIsParentAuthor)
+                await notifications.NotifyNewStoryCommentAsync(ownerId, userId, dto.ChapterId);
+            if (parentAuthorId is int parentId)
+                await notifications.NotifyCommentReplyAsync(parentId, userId, dto.ChapterId);
+        }
+        catch (Exception ex)
+        {
+            // Notification failure must never roll back the primary action.
+            logger.LogWarning(ex,
+                "Chapter-comment notification failed for comment {CommentId} on chapter {ChapterId}",
+                comment.CommentId, dto.ChapterId);
+        }
 
         return comment.CommentId;
     }
@@ -116,7 +152,31 @@ public class ServerCommentWriteService(
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
 
-        // TODO(post-MVP comment-notifications): notify blog post author of new comment, and parent-comment author of reply.
+        // Best-effort post-commit notifications (WU-B2): blog post author (NewCommentOnBlog — TPT
+        // root, covers profile and group posts) + parent author on replies (CommentReply,
+        // relatedId = context blogPostId). Rules: layer2-services.md §"Comment & blog-post
+        // semantic methods".
+        try
+        {
+            int? blogAuthorId = await writeDb.BlogPosts
+                .Where(b => b.BlogPostId == dto.BlogPostId)
+                .Select(b => b.AuthorId)
+                .FirstOrDefaultAsync();
+            int? parentAuthorId = await GetParentAuthorIdAsync(dto.ParentCommentId);
+
+            bool ownerIsParentAuthor = parentAuthorId is int pa && blogAuthorId == pa;
+            if (blogAuthorId is int ownerId && !ownerIsParentAuthor)
+                await notifications.NotifyNewBlogCommentAsync(ownerId, userId, dto.BlogPostId);
+            if (parentAuthorId is int parentId)
+                await notifications.NotifyCommentReplyAsync(parentId, userId, dto.BlogPostId);
+        }
+        catch (Exception ex)
+        {
+            // Notification failure must never roll back the primary action.
+            logger.LogWarning(ex,
+                "Blog-comment notification failed for comment {CommentId} on blog post {BlogPostId}",
+                comment.CommentId, dto.BlogPostId);
+        }
 
         return comment.CommentId;
     }
@@ -162,12 +222,26 @@ public class ServerCommentWriteService(
         writeDb.GroupComments.Add(comment);
         await writeDb.SaveChangesAsync();
 
-        // TODO(post-MVP comment-notifications): notify group members/parent-comment author — same
-        // marker as the other three Post*Comment contexts (this one previously omitted it, MA-506).
-
         // Increment CommentsWritten counter (cross-cutting.md §"UserStats Updates").
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
+
+        // Best-effort post-commit notification (WU-B2): replies only — a group wall has no single
+        // comment-owner and no NotifyForNewComment membership flag, so top-level group comments
+        // generate nothing (settled 2026-07-25, audit/Groups.md). Reply relatedId = context groupId.
+        try
+        {
+            int? parentAuthorId = await GetParentAuthorIdAsync(dto.ParentCommentId);
+            if (parentAuthorId is int parentId)
+                await notifications.NotifyCommentReplyAsync(parentId, userId, dto.GroupId);
+        }
+        catch (Exception ex)
+        {
+            // Notification failure must never roll back the primary action.
+            logger.LogWarning(ex,
+                "Group-comment reply notification failed for comment {CommentId} in group {GroupId}",
+                comment.CommentId, dto.GroupId);
+        }
 
         return comment.CommentId;
     }
@@ -217,7 +291,27 @@ public class ServerCommentWriteService(
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
 
-        // TODO(post-MVP comment-notifications): notify profile owner of new comment, and parent-comment author of reply.
+        // Best-effort post-commit notifications (WU-B2): profile owner (NewCommentOnYourProfile —
+        // dto.ProfileUserId IS the owner, no lookup) + parent author on replies (CommentReply,
+        // relatedId = context profileUserId). Rules: layer2-services.md §"Comment & blog-post
+        // semantic methods".
+        try
+        {
+            int? parentAuthorId = await GetParentAuthorIdAsync(dto.ParentCommentId);
+
+            bool ownerIsParentAuthor = parentAuthorId is int pa && dto.ProfileUserId == pa;
+            if (!ownerIsParentAuthor)
+                await notifications.NotifyNewProfileCommentAsync(dto.ProfileUserId, userId);
+            if (parentAuthorId is int parentId)
+                await notifications.NotifyCommentReplyAsync(parentId, userId, dto.ProfileUserId);
+        }
+        catch (Exception ex)
+        {
+            // Notification failure must never roll back the primary action.
+            logger.LogWarning(ex,
+                "Profile-comment notification failed for comment {CommentId} on profile {ProfileUserId}",
+                comment.CommentId, dto.ProfileUserId);
+        }
 
         return comment.CommentId;
     }

@@ -51,7 +51,13 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   in `Server/Comments/ServerCommentWriteService.cs`. Requires authenticated user; validates via
   `CommentValidations.CanSave()` (throws `CommentValidationException`); verifies chapter exists; if replying,
   verifies parent is on same chapter; sanitizes HTML via `IHtmlSanitizationService`; inserts `ChapterComment`
-  row; returns new `CommentId`. Notification seam left as `// TODO(WU22)`. Chapter context only for MVP.
+  row; returns new `CommentId`. Notification seam left as `// TODO(WU22)` (retargeted MA-506) — **wired
+  2026-07-25 (WU-B2)**: all four `Post*CommentAsync` seams now fire best-effort post-commit semantic
+  notifications (chapter → `NewStoryComment` 24 to the story author; blog → `NewCommentOnBlog` 33 to the
+  post author; profile → `NewCommentOnYourProfile` 31 to the owner; replies → `CommentReply` 34 to the
+  parent author, carrying the *context* id; group = replies-only by design). Reply/container-suppress +
+  null-skip rules per `layer2-services.md` §"Comment & blog-post semantic methods". Chapter context only
+  for MVP.
   **Verified:** `dotnet build` green; `dotnet test` green — 367 tests total (112 Unit, 122 RazorComponents,
   133 Integration). Covering tier: **Unit** (`CommentValidationsTests` — 7 tests for `CanSave` empty/
   whitespace/valid/spoiler-flag) + **Integration** (`CommentWriteServiceTests` — 18 tests via Testcontainers

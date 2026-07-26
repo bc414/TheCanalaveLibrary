@@ -83,6 +83,9 @@ public static class NotificationPresenter
             NotificationTypeEnum.NewCommentOnYourProfile =>
                 $"{actor} commented on your profile",
 
+            NotificationTypeEnum.NewCommentOnBlog =>
+                target is not null ? $"{actor} commented on {target}" : $"{actor} commented on your blog post",
+
             NotificationTypeEnum.CommentReply =>
                 $"{actor} replied to your comment",
 
@@ -123,14 +126,17 @@ public static class NotificationPresenter
             NotificationTypeEnum.NewBlogPostByFollowedUser =>
                 target is not null ? $"{actor} posted a blog entry: {target}" : $"{actor} posted a new blog entry",
 
+            // {target} for the three story-linked blog types is the BLOG post's title (enrichment
+            // resolves RelatedEntityId = blogPostId via BlogPostDirect, WU-B2) — the phrasing keeps
+            // the story-relationship cue while naming the post.
             NotificationTypeEnum.NewBlogPostOnFollowedStory =>
-                target is not null ? $"New blog post on {target}" : "A story you follow has a new blog post",
+                target is not null ? $"New blog post on a story you follow: {target}" : "A story you follow has a new blog post",
 
             NotificationTypeEnum.NewBlogPostOnFavoritedStory =>
-                target is not null ? $"New blog post on {target}" : "A story you favorited has a new blog post",
+                target is not null ? $"New blog post on a story you favorited: {target}" : "A story you favorited has a new blog post",
 
             NotificationTypeEnum.NewBlogPostOnReadItLaterStory =>
-                target is not null ? $"New blog post on {target}" : "A story in your Read It Later list has a new blog post",
+                target is not null ? $"New blog post on a story you saved for later: {target}" : "A story in your Read It Later list has a new blog post",
 
             // ── Warnings category ─────────────────────────────────────────────────
             NotificationTypeEnum.ContentRemoved =>

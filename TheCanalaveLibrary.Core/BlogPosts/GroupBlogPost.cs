@@ -15,8 +15,8 @@ public class GroupBlogPost : BaseBlogPost
     /// <summary>True when the post contains spoilers. Mirrors <see cref="ProfileBlogPost.HasSpoilers"/>.</summary>
     public bool HasSpoilers { get; set; }
 
-    /// <summary>Optional FK to a story this post is about. SET NULL on story deletion.</summary>
-    public int? StoryId { get; set; }
+    // No StoryId: group posts are for topics about what the group is about; only ProfileBlogPost
+    // carries the optional story link (WU-B2, 2026-07-25 — restores the original TPT design).
 
     public int GroupId { get; set; }
     public virtual Group? Group { get; set; }
