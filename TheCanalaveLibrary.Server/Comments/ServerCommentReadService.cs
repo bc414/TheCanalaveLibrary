@@ -26,6 +26,13 @@ public class ServerCommentReadService(
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
 
+        // Kind (g): comments are exactly as visible as the chapter hosting them. Every query below
+        // filters on the bare ChapterId FK and never reaches Chapter → Story, so neither
+        // ContentRating nor StoryStatus nor IsTakenDown applied. Empty page = a chapter with no
+        // comments, which is what a non-existent chapter also returns (non-disclosure).
+        if (!await StoryVisibilityGuard.IsChapterVisibleAsync(readDb, ActiveUser, chapterId))
+            return new CommentPageDto([], 0);
+
         // Root count for PaginationControls — does not include replies.
         int totalRootCount = await readDb.ChapterComments
             .Where(c => c.ChapterId == chapterId && c.ParentCommentId == null)
@@ -91,6 +98,13 @@ public class ServerCommentReadService(
     public async Task<CommentPageDto> GetGroupCommentsAsync(int groupId, int page, int pageSize)
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // Kind (g): the GroupAudience filter is declared on Group alone, and reasons that "child
+        // entities are unreachable once their parent group is filtered" — true only for queries that
+        // traverse the Group navigation. These filter on the bare GroupId FK, so EF emitted no join
+        // and an M-audience group's whole comment wall was readable with mature off.
+        if (!await GroupVisibilityGuard.IsGroupVisibleAsync(readDb, ActiveUser, groupId))
+            return new CommentPageDto([], 0);
 
         // Mirrors GetBlogPostCommentsAsync exactly — same two-step load and in-memory ordering,
         // over GroupComments instead of BlogPostComments. No spoiler flag on group comments.
@@ -212,6 +226,12 @@ public class ServerCommentReadService(
     public async Task<CommentPageDto> GetBlogPostCommentsAsync(int blogPostId, int page, int pageSize)
     {
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // Kind (g): comments are exactly as visible as the post hosting them. Bare BlogPostId FK
+        // throughout, so BaseBlogPost's IsTakenDown filter never applied and nothing consulted
+        // IsPublished or the rating gate. Sibling of the D2 poll leak.
+        if (!await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, blogPostId))
+            return new CommentPageDto([], 0);
 
         // Mirrors GetChapterCommentsAsync exactly — same two-step load and in-memory ordering,
         // over BlogPostComments instead of ChapterComments. No spoiler flag on blog-post comments.

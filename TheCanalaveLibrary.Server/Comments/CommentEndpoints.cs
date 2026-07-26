@@ -18,8 +18,12 @@ namespace TheCanalaveLibrary.Server;
 /// </para>
 /// <para>
 /// Reads are public — mirrors the public chapter/blog-post/group/profile pages that host comment
-/// sections; visibility of the parent content is enforced wherever that content is fetched, not
-/// here. Writes (post/edit/delete/like) require an authenticated user: the service throws
+/// sections. Parent visibility is enforced <b>in this service</b>, per context, by the kind-(g)
+/// guards (<c>identity-and-authorization.md</c> §"Parent-visibility guards"). This doc previously
+/// said parent visibility "is enforced wherever that content is fetched, not here" — that reasoning
+/// was the defect: fetching the parent elsewhere does nothing for a comment query keyed on a bare FK,
+/// and comments on drafts, M-audience groups and Private profiles were all independently reachable
+/// (WU-ParentVisibility). Writes (post/edit/delete/like) require an authenticated user: the service throws
 /// <see cref="InvalidOperationException"/> for unauthenticated callers (translated to 401 by
 /// <see cref="EndpointHelpers.ExecuteWriteAsync"/>); <c>RequireAuthorization()</c> is added as
 /// defense-in-depth so the cookie handler's own 401 (Program.cs <c>OnRedirectToLogin</c>) wins the

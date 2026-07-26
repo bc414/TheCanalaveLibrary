@@ -12,9 +12,14 @@ namespace TheCanalaveLibrary.Server;
 /// (layer5-wasm.md §"The Error-Translation Contract").
 /// <para>
 /// Read auth: public — mirrors the public <c>/polls</c> page and the blog-post pages that render
-/// attached polls; the read projection itself already blanks tallies/voter names server-side for
-/// viewers who shouldn't see them (<c>ServerPollReadService.ProjectAsync</c>), so no endpoint-level
-/// gate is needed.
+/// attached polls. Two independent gates live in the service, and both are load-bearing:
+/// <c>ProjectAsync</c> blanks tallies/voter names per the poll's own results-visibility rules, and
+/// <c>BlogPostVisibilityGuard</c> drops blog-post polls whose parent post the viewer cannot see.
+/// <b>The first does not imply the second</b> — this doc used to claim server-side blanking made an
+/// endpoint gate unnecessary, which was the reasoning that let poll name/description/options leak
+/// for unpublished drafts (D2, fixed in WU-ParentVisibility). Results visibility is a poll concept;
+/// parent visibility is conditionality kind (g), <c>identity-and-authorization.md</c>
+/// §"Parent-visibility guards".
 /// </para>
 /// <para>
 /// Write auth: <c>RequireAuthorization()</c> on every write — site-poll create/archive additionally

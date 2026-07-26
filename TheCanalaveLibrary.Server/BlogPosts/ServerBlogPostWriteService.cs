@@ -197,6 +197,15 @@ public class ServerBlogPostWriteService(
         if (currentLikeCount is null)
             throw new KeyNotFoundException($"Blog post {blogPostId} not found.");
 
+        // Kind (g): writeDb is unfiltered, so the existence probe above proves nothing about
+        // visibility — a non-author could inflate LikeCount on someone's unpublished draft. Same
+        // message as a missing post (non-disclosure).
+        await using (ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync())
+        {
+            if (!await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, blogPostId))
+                throw new KeyNotFoundException($"Blog post {blogPostId} not found.");
+        }
+
         bool alreadyLiked = await writeDb.BlogPostLikes
             .AnyAsync(l => l.BlogPostId == blogPostId && l.UserId == userId);
 

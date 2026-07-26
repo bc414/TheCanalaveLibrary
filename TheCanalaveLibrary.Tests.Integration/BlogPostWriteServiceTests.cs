@@ -154,7 +154,10 @@ public class BlogPostWriteServiceTests(PostgresFixture postgres) : IntegrationTe
     [Fact]
     public async Task ToggleLike_FirstLike_AddsRowAndIncrementsCount()
     {
-        int id = await CreatePostAsync();
+        // published: true is load-bearing (WU-ParentVisibility). CreatePostAsync defaults to a draft,
+        // so this test used to have a non-author liking an unpublished post — the very leak the
+        // kind-(g) guard now closes. Liking is only meaningful on a post the liker can see.
+        int id = await CreatePostAsync(published: true);
         // Switch to the other user to like the author's post.
         SetActiveUser(_otherUserId);
 
@@ -170,7 +173,7 @@ public class BlogPostWriteServiceTests(PostgresFixture postgres) : IntegrationTe
     [Fact]
     public async Task ToggleLike_SecondLike_RemovesRowAndDecrementsCount()
     {
-        int id = await CreatePostAsync();
+        int id = await CreatePostAsync(published: true); // see the first-like test for why
         SetActiveUser(_otherUserId);
 
         await CallToggleLikeAsync(id); // like

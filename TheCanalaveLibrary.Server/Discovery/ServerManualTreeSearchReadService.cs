@@ -122,6 +122,16 @@ public class ServerManualTreeSearchReadService(
         activity?.SetTag("canalave.manual_tree.anchor_id", request.UserId);
 
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync(ct);
+
+        // Kind (g): the anchor here is a USER, so the parent is their profile. Story-level rating and
+        // takedown were already handled by VisibleStories, but nothing consulted ProfileVisibility —
+        // so a Private profile's favorites, authored stories, pinned story and recommendation family
+        // were all returned to anonymous callers. This is the exact surface set ProfileVisibilityGuard's
+        // own doc enumerates as protected; every sibling service calls it and this one was missed by
+        // the WU-AccessGate sweep. Empty sections match a user with nothing to show.
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, activeUser, request.UserId))
+            return new ManualTreeNeighborsDto();
+
         IQueryable<Story> visible = VisibleStories(readDb);
 
         ManualTreeSectionDto<ManualTreeRecItemDto>? family = null;
@@ -205,8 +215,17 @@ public class ServerManualTreeSearchReadService(
         List<ManualTreeNodeDisplayDto> users = [];
         if (userIds.Count > 0)
         {
+            // Kind (g), user arm: same rehydration contract as the story arm above — a node the
+            // viewer may no longer see simply doesn't come back and the caller prunes it. Inlined
+            // rather than looping ProfileVisibilityGuard so the whole batch stays one query;
+            // semantics are identical (owner always passes, Private hides, UsersOnly needs a login).
+            int? viewerId = activeUser.UserId;
             users = await readDb.Users
                 .Where(u => userIds.Contains(u.Id))
+                .Where(u => u.Id == viewerId
+                            || u.PrivacySettings.ProfileVisibility == ProfileVisibility.Public
+                            || (u.PrivacySettings.ProfileVisibility == ProfileVisibility.UsersOnly
+                                && viewerId != null))
                 .Select(u => new ManualTreeNodeDisplayDto(
                     u.Id, u.UserName!, u.ProfilePictureRelativeUrl))
                 .ToListAsync(ct);

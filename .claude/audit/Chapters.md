@@ -703,3 +703,20 @@ reads now hide unpublished-chapter *metadata* (titles, word counts) from non-aut
 StoryPage); 2 existing chapter tests updated for the new visibility. **F44 L5, MA-302:** the
 reading-progress ping dropped its `RequireAuthorization()` — anonymous scroll now 202-no-ops instead of
 401 (browser-verified 202). Full detail: `workplan.md` WU-AuditFixPass-2.
+
+---
+
+**WU-ParentVisibility slice (2026-07-26) — F6/F7/F44.**
+`StoryVisibilityGuard.IsChapterVisibleAsync` now backs every chapter-scoped child surface: chapter
+comments (read and write) and the manual read-marks. `SetChapterReadAsync` was the sharp one — marking
+a guessed draft chapter wrote a `UserChapterInteraction` row and cascaded into
+`MarkStartedAsync`/`MarkCompletedAsync` against the hidden story, corrupting the caller's own
+`StoriesRead`/`StoriesInProgress` counters. `SetAllChaptersReadAsync` was only partly shielded by its
+existing `IsPublished` chapter filter: an all-draft story was already a no-op, but a story with
+published chapters that was itself Draft/PendingApproval/Rejected or taken down stayed fully markable.
+Reading progress (F44) validates at **drain time** rather than on entry — a per-request guard would
+add a database round-trip to a deliberately buffer-only path; the flusher's existing `EXISTS` guard now
+joins through to the owning story using `DiscoveryMartSchema.VisibleStory`, reused rather than restated
+so the two cannot drift.
+
+Invariant, guards, and the two root causes: `identity-and-authorization.md` §"Parent-visibility guards" (conditionality kind (g)). Enforcement: `Tests.Integration/ParentVisibilityContractTests.cs`. Full narrative: `workplan.md` WU-ParentVisibility. **No Stage number changed — every affected cell was already Stage 5 and remains 5.**

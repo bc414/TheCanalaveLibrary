@@ -446,3 +446,18 @@ queue reads + SiteDailyStat (plus SpotlightSlotAllocator + SiteSettings write) �
 service-layer `RequireModerator`, replacing 4 duplicated inline `AuthorizeAttribute` copies. Covered:
 `ModerationEndpointsTests` (Integration) + browser both directions (non-mod → 403 on every mod route,
 AdminUser → 200/204). Full detail: `workplan.md` WU-AuditFixPass-2.
+
+---
+
+**WU-ParentVisibility slice (2026-07-26) — F46.** `SubmitReportAsync` had **no existence check at
+all**, so the queue could accumulate reports against ids that never existed while
+`AdjustActiveReportCountAsync` bumped `ActiveReportCount` on drafts. Settled rule (2026-07-26): the
+target must **exist always** — checked on the unfiltered write context, so a taken-down row still
+counts as existing — and must be **visible to the reporter, except when the parent is hidden solely
+by takedown**. That exemption is deliberate and tested: a good-faith report filed in the moments after
+a moderator removes content must still land, rather than failing with a confusing not-found for an
+action that was valid when the user began it. Everything else (unpublished, non-public story status,
+rating without consent, Private profile, M-audience group) is refused. Moderator work surfaces remain
+exempt from the invariant entirely, per `content-safety.md`.
+
+Invariant, guards, and the two root causes: `identity-and-authorization.md` §"Parent-visibility guards" (conditionality kind (g)). Enforcement: `Tests.Integration/ParentVisibilityContractTests.cs`. Full narrative: `workplan.md` WU-ParentVisibility. **No Stage number changed — every affected cell was already Stage 5 and remains 5.**

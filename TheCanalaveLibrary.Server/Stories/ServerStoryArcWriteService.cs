@@ -15,11 +15,12 @@ public class ServerStoryArcWriteService(
     ApplicationDbContext writeDb,
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser)
-    : ServerStoryArcReadService(readDbFactory), IStoryArcWriteService
+    : ServerStoryArcReadService(readDbFactory, activeUser), IStoryArcWriteService
 {
     private readonly ApplicationDbContext _writeDb = writeDb;
-    // No CS9107 concern: the read base takes no IActiveUserContext, so this class is the sole owner.
-    private readonly IActiveUserContext _activeUser = activeUser;
+    // The read base now takes IActiveUserContext too (kind-(g) gate). Aliased to the inherited
+    // ActiveUser property rather than re-capturing the ctor parameter — avoids CS9107/CS9124.
+    private IActiveUserContext _activeUser => ActiveUser;
 
     public async Task<int> CreateArcAsync(CreateStoryArcDto dto)
     {

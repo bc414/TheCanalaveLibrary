@@ -22,6 +22,73 @@ public class ServerCommentWriteService(
     : ServerCommentReadService(readDbFactory, activeUser), ICommentWriteService
 {
     /// <summary>
+    /// Kind (g) for comment likes, which are context-agnostic at the call site: resolves which of
+    /// the four TPT contexts owns this comment and applies that context's guard.
+    /// <para>
+    /// Resolution runs on the <b>read</b> context, which also applies <c>BaseComment</c>'s
+    /// <c>IsTakenDown</c> filter — so a moderator-removed comment resolves to no context and is
+    /// refused here. <c>writeDb</c> sees it and would have let the like through.
+    /// </para>
+    /// </summary>
+    private async Task RequireCommentContextVisibleAsync(long commentId)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        if (await readDb.ChapterComments.Where(c => c.CommentId == commentId)
+                .Select(c => (int?)c.ChapterId).FirstOrDefaultAsync() is int chapterId)
+        {
+            if (!await StoryVisibilityGuard.IsChapterVisibleAsync(readDb, ActiveUser, chapterId))
+                throw new KeyNotFoundException($"Comment {commentId} not found.");
+            return;
+        }
+
+        if (await readDb.BlogPostComments.Where(c => c.CommentId == commentId)
+                .Select(c => (int?)c.BlogPostId).FirstOrDefaultAsync() is int blogPostId)
+        {
+            if (!await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, blogPostId))
+                throw new KeyNotFoundException($"Comment {commentId} not found.");
+            return;
+        }
+
+        if (await readDb.GroupComments.Where(c => c.CommentId == commentId)
+                .Select(c => (int?)c.GroupId).FirstOrDefaultAsync() is int groupId)
+        {
+            if (!await GroupVisibilityGuard.IsGroupVisibleAsync(readDb, ActiveUser, groupId))
+                throw new KeyNotFoundException($"Comment {commentId} not found.");
+            return;
+        }
+
+        if (await readDb.UserProfileComments.Where(c => c.CommentId == commentId)
+                .Select(c => (int?)c.ProfileUserId).FirstOrDefaultAsync() is int profileUserId)
+        {
+            if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, profileUserId))
+                throw new KeyNotFoundException($"Comment {commentId} not found.");
+            return;
+        }
+
+        // No context resolved: the comment is absent or taken down. Both are "not found".
+        throw new KeyNotFoundException($"Comment {commentId} not found.");
+    }
+
+    /// <summary>
+    /// Kind (g) enforcement for every comment write: you cannot comment on content you cannot see.
+    /// <paramref name="isVisibleAsync"/> receives a read context, since <c>writeDb</c> carries none
+    /// of the visibility filters and every existence check in this file therefore proves only that a
+    /// row exists, never that the caller may see it.
+    /// <para>
+    /// Throws <see cref="KeyNotFoundException"/> with the caller's own not-found message so a hidden
+    /// parent is indistinguishable from an absent one (non-disclosure rule).
+    /// </para>
+    /// </summary>
+    private async Task RequireParentVisibleAsync(
+        Func<ReadOnlyApplicationDbContext, Task<bool>> isVisibleAsync, string notFoundMessage)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        if (!await isVisibleAsync(readDb))
+            throw new KeyNotFoundException(notFoundMessage);
+    }
+
+    /// <summary>
     /// Resolves the parent comment's author for a reply, or null for a top-level comment or a
     /// SET-NULL'd (deleted) parent author. Used only by the best-effort notification blocks.
     /// </summary>
@@ -43,10 +110,16 @@ public class ServerCommentWriteService(
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new CommentValidationException(errors);
 
-        // Verify the chapter exists.
+        // Verify the chapter exists AND that this user may see it — an existence check on the
+        // unfiltered writeDb would happily accept a draft chapter of a Draft/Rejected/taken-down
+        // story, persisting a comment and notifying its author that someone guessed the id.
         bool chapterExists = await writeDb.Chapters.AnyAsync(c => c.ChapterId == dto.ChapterId);
         if (!chapterExists)
             throw new KeyNotFoundException($"Chapter {dto.ChapterId} not found.");
+
+        await RequireParentVisibleAsync(
+            readDb => StoryVisibilityGuard.IsChapterVisibleAsync(readDb, ActiveUser, dto.ChapterId),
+            $"Chapter {dto.ChapterId} not found.");
 
         // If replying, verify the parent belongs to the same chapter.
         if (dto.ParentCommentId.HasValue)
@@ -117,10 +190,15 @@ public class ServerCommentWriteService(
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new CommentValidationException(errors);
 
-        // Verify the blog post exists.
+        // Verify the blog post exists AND is visible to this user (kind (g)) — otherwise anyone
+        // holding a guessed id could comment on an unpublished draft.
         bool postExists = await writeDb.BlogPosts.AnyAsync(p => p.BlogPostId == dto.BlogPostId);
         if (!postExists)
             throw new KeyNotFoundException($"Blog post {dto.BlogPostId} not found.");
+
+        await RequireParentVisibleAsync(
+            readDb => BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, dto.BlogPostId),
+            $"Blog post {dto.BlogPostId} not found.");
 
         // If replying, verify the parent belongs to the same blog post.
         if (dto.ParentCommentId.HasValue)
@@ -192,10 +270,16 @@ public class ServerCommentWriteService(
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new CommentValidationException(errors);
 
-        // Verify the group exists.
+        // Verify the group exists AND is visible to this user (kind (g)). Without the guard the
+        // read/write asymmetry was stark: GetGroupCommentsAsync now hides an M-audience group's wall
+        // from a mature-off viewer, but that same viewer could still seed the wall they can't read.
         bool groupExists = await writeDb.Groups.AnyAsync(g => g.GroupId == dto.GroupId);
         if (!groupExists)
             throw new KeyNotFoundException($"Group {dto.GroupId} not found.");
+
+        await RequireParentVisibleAsync(
+            readDb => GroupVisibilityGuard.IsGroupVisibleAsync(readDb, ActiveUser, dto.GroupId),
+            $"Group {dto.GroupId} not found.");
 
         // If replying, verify the parent belongs to the same group.
         if (dto.ParentCommentId.HasValue)
@@ -257,10 +341,16 @@ public class ServerCommentWriteService(
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new CommentValidationException(errors);
 
-        // Verify the profile user exists.
+        // Verify the profile user exists AND that their wall is visible to this user (kind (g)).
+        // GetUserProfileCommentsAsync has called ProfileVisibilityGuard since WU-AccessGate; this
+        // write never did, so a Private profile still received wall comments plus a notification.
         bool profileUserExists = await writeDb.Users.AnyAsync(u => u.Id == dto.ProfileUserId);
         if (!profileUserExists)
             throw new KeyNotFoundException($"Profile user {dto.ProfileUserId} not found.");
+
+        await RequireParentVisibleAsync(
+            readDb => ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, dto.ProfileUserId),
+            $"Profile user {dto.ProfileUserId} not found.");
 
         // If replying, verify the parent belongs to the same profile wall.
         if (dto.ParentCommentId.HasValue)
@@ -390,6 +480,11 @@ public class ServerCommentWriteService(
             .FirstOrDefaultAsync(c => c.CommentId == commentId);
         if (comment is null)
             throw new KeyNotFoundException($"Comment {commentId} not found.");
+
+        // Kind (g): the like must be refused when the content hosting the comment is invisible —
+        // and, because writeDb bypasses BaseComment's IsTakenDown filter, when the comment itself
+        // has been removed by a moderator.
+        await RequireCommentContextVisibleAsync(commentId);
 
         bool nowLiked;
         int delta;

@@ -316,6 +316,13 @@ public class ServerStoryReadService(
         // daily_story_stats is migration-managed raw DDL with no EF model (accumulated stat
         // table, not a mart) — read via SqlQuery; SUM(int) is bigint in Postgres, hence long.
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // Kind (g): raw SQL has no EF model and therefore no query filter of any kind, so this
+        // confirmed the existence and popularity of hidden, draft and taken-down stories. Zero is
+        // what a story with no recorded views returns, so the hidden case is indistinguishable.
+        if (!await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, storyId))
+            return 0;
+
         return await readDb.Database
             .SqlQuery<long>($"""
                 SELECT COALESCE(SUM(view_count), 0) AS "Value"

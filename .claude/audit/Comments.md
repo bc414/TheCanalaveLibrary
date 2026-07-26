@@ -293,3 +293,22 @@ group ×2 / profile ×2) is wrapped in a compact `comments` `CanalaveErrorBounda
 Strategy + placement map: `error-handling.md` §"Error Handling Strategy". Covered by existing
 CommentSection bUnit suites (message text unchanged for typed validation) + the new
 `CanalaveErrorBoundaryTests`/`InlineAlertTests` (RazorComponents tier).
+
+---
+
+**WU-ParentVisibility slice (2026-07-26) — F23/F24/F25.** All four comment contexts now inherit
+their parent's visibility, on both sides. Reads: `GetBlogPostCommentsAsync` (BlogPost guard),
+`GetChapterCommentsAsync` (Chapter guard), `GetGroupCommentsAsync` (Group guard) — the last confirmed
+as a real leak, since the `GroupAudience` filter is declared on `Group` alone and these queries used
+the bare `GroupId` FK, so EF emitted no join and an M-audience group's whole comment wall was
+anonymously readable. Writes: all four `Post*CommentAsync` methods plus `ToggleLikeAsync`. The
+read/write asymmetry was systematic rather than incidental — `GetUserProfileCommentsAsync` had called
+`ProfileVisibilityGuard` since WU-AccessGate while `PostUserProfileCommentAsync` never did, so a
+Private profile still received wall comments and a notification. `ToggleLikeAsync` needed a
+context-resolving guard (its call site is context-agnostic); resolving on the read context also closes
+a second hole, since `writeDb` bypasses `BaseComment`'s `IsTakenDown` filter and a moderator-removed
+comment stayed likeable. `CommentEndpoints`' class doc said parent visibility "is enforced wherever
+that content is fetched, not here" — that reasoning is exactly what failed, and it has been
+rewritten.
+
+Invariant, guards, and the two root causes: `identity-and-authorization.md` §"Parent-visibility guards" (conditionality kind (g)). Enforcement: `Tests.Integration/ParentVisibilityContractTests.cs`. Full narrative: `workplan.md` WU-ParentVisibility. **No Stage number changed — every affected cell was already Stage 5 and remains 5.**

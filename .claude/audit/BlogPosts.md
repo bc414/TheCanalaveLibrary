@@ -324,3 +324,23 @@ client + editor page mirroring the chapter forbidden pattern. **L2 MA-706:** `IB
 rebound to the read impl (`ServerBlogPostReadService`), not the derived write class. Covered:
 `BlogPostEndpointsTests` (Integration) + browser (cross-author `/edit`→403). Full detail:
 `workplan.md` WU-AuditFixPass-2.
+
+---
+
+**WU-ParentVisibility slice (2026-07-26) — F35/F36/F37.** Closed `hidden-deferrals-tracker.md`
+**D2**, and found it was the tip of a 38-surface class. Polls: `GetPollsForBlogPostAsync` and
+`GetPollAsync` now gate on `BlogPostVisibilityGuard`, and `VoteAsync` does too — the write half was
+the more damaging one, since a vote on a draft's poll sets `ConfigLocked` and freezes
+`AllowMultiple`/`ResultsVisibility`/`AnonymityMode` before the author ever publishes. The leak was
+wider than D2 stated: the full option-text list, the owner's username, and `ConfigLocked` as a
+has-anyone-voted side-channel, leaking past the draft gate *and* the rating/reveal gate *and*
+`IsTakenDown`. Blog posts: `GetByGroupAsync` gates on `GroupVisibilityGuard` (an M-audience group's
+E/T posts were anonymously readable), and `ToggleLikeAsync` on `BlogPostVisibilityGuard` (a non-author
+could inflate `LikeCount` on someone's unpublished draft). `GetByIdAsync` now **delegates** its
+draft+consent gate to the guard and owns none of the rule — facts come from its existing projection,
+so it pays no extra query. `PollEndpoints`' class doc previously argued that server-side tally blanking
+made an endpoint gate unnecessary; that was the reasoning that produced D2, and it has been rewritten.
+F37's settled note is extended: a blog-post poll is exactly as visible, and exactly as votable, as its
+post.
+
+Invariant, guards, and the two root causes: `identity-and-authorization.md` §"Parent-visibility guards" (conditionality kind (g)). Enforcement: `Tests.Integration/ParentVisibilityContractTests.cs`. Full narrative: `workplan.md` WU-ParentVisibility. **No Stage number changed — every affected cell was already Stage 5 and remains 5.**

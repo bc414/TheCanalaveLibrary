@@ -17,6 +17,16 @@ pure seed data). L4-Style may still be Stage 1 while L4.5 is 5 — visual polish
 sign-off; L4.5 only demands the feature be *usable*.
 
 Global conditions affecting many cells — kept terse; detail lives at the pointer, not here:
+- **Parent-visibility invariant established and swept (WU-ParentVisibility, 2026-07-26).** Child
+  content is never more visible, nor more writable, than the parent that hosts it — now conditionality
+  kind (g). 38 surfaces across 12 clusters were violating it (13 reads, 25 writes), all fixed; three
+  guards join `ProfileVisibilityGuard`. Two root causes: bare-FK queries never expand the parent so no
+  named query filter can apply, and `writeDb` carries no visibility filters at all, making every
+  existence check on the write path prove nothing. **No cell Stage changed** — every affected cell was
+  Stage 5 and remains 5, which is exactly the hidden-deferral shape. Enforcement is
+  `ParentVisibilityContractTests` (27 tests), not prose: the rule already existed in `layer2-services.md`
+  and a sweep still missed it. Detail: `identity-and-authorization.md` §"Parent-visibility guards";
+  `workplan.md` WU-ParentVisibility.
 - **Desktop/Mobile fork paradigm removed — single responsive site (WU-ResponsiveMerge, 2026-07-18).**
   Device detection deleted; nine `{X}Desktop`/`{X}Mobile` pairs merged into their pages;
   coordination-composite tier folded into pages; `MainLayout` is the only layout. No cell Stage

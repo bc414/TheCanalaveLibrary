@@ -47,6 +47,46 @@ public class ServerRecommendationWriteService(
         ActiveUser.UserId ?? throw new InvalidOperationException($"{action} requires an authenticated user.");
 
     /// <summary>
+    /// Kind (g): refuses a write whose parent story the caller cannot see. <c>writeDb</c> carries no
+    /// visibility filters, so every "story loads" check in this file proves existence only — the guard
+    /// needs a read context. Throws the same message a missing story produces (non-disclosure rule).
+    /// <para>
+    /// <paramref name="confidentialityOnly"/> keeps the viewer's rating ceiling out of the decision,
+    /// for the one path where that permissiveness is a recorded WU29 decision rather than an
+    /// oversight (see <see cref="SubmitAsync"/>).
+    /// </para>
+    /// </summary>
+    private async Task RequireStoryVisibleAsync(int storyId, bool confidentialityOnly = false)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        bool visible = confidentialityOnly
+            ? await StoryVisibilityGuard.IsStoryPublishedAsync(readDb, ActiveUser, storyId)
+            : await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, storyId);
+
+        if (!visible) throw new KeyNotFoundException($"Story {storyId} not found.");
+    }
+
+    /// <summary>
+    /// Kind (g) keyed by recommendation id: resolves the rec's parent story and applies
+    /// <see cref="RequireStoryVisibleAsync"/>. Used by the paths a non-owner can reach.
+    /// </summary>
+    private async Task RequireRecommendationVisibleAsync(int recommendationId)
+    {
+        int? storyId = await writeDb.Recommendations
+            .Where(r => r.RecommendationId == recommendationId)
+            .Select(r => (int?)r.StoryId)
+            .FirstOrDefaultAsync();
+
+        if (storyId is not int parentStoryId)
+            throw new KeyNotFoundException($"Recommendation {recommendationId} not found.");
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        if (!await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, parentStoryId))
+            throw new KeyNotFoundException($"Recommendation {recommendationId} not found.");
+    }
+
+    /// <summary>
     /// Loads a recommendation and authorizes the caller as the author of its story (the
     /// SetHighlightedByAuthorAsync ownership pattern). Co-authors deliberately excluded until the
     /// dormant CoAuthor feature is built.
@@ -98,6 +138,14 @@ public class ServerRecommendationWriteService(
             .FirstOrDefaultAsync();
         if (storyRow is null)
             throw new KeyNotFoundException($"Story {dto.StoryId} not found.");
+
+        // Kind (g), confidentiality axis only: "mature off can still recommend an M-rated story" is
+        // the deliberate WU29 behavior documented immediately above and is preserved. What was never
+        // intended is a rec on a Draft/PendingApproval/Rejected or taken-down story — it takes the
+        // one-per-user slot permanently, bumps the author's RecommendationsReceived, and notifies
+        // them that someone guessed an unpublished id.
+        await RequireStoryVisibleAsync(dto.StoryId, confidentialityOnly: true);
+
         int? storyAuthorId = storyRow.AuthorId;
 
         // Self-recommendation blocked (WU-RecLifecycle): a recommendation is a peer endorsement
@@ -233,6 +281,10 @@ public class ServerRecommendationWriteService(
             .FirstOrDefaultAsync(r => r.RecommendationId == recommendationId);
         if (rec is null)
             throw new KeyNotFoundException($"Recommendation {recommendationId} not found.");
+
+        // Kind (g): liking requires seeing. writeDb also bypasses the Recommendation IsTakenDown
+        // filter, so without this a moderator-removed rec on a hidden story stayed likeable.
+        await RequireRecommendationVisibleAsync(recommendationId);
 
         RecommendationLike? existing = rec.Likes.FirstOrDefault();
         bool nowLiked;
@@ -433,6 +485,12 @@ public class ServerRecommendationWriteService(
         if (rec is null)
             throw new KeyNotFoundException($"Recommendation {recommendationId} not found.");
 
+        // Kind (g), and the sharpest case in the sweep: this method awards real site badges
+        // (Recommender / RecommenderSilver) off an unverified parent, so a loop over guessed
+        // recommendation ids could farm another user's SuccessfulRecCount and badges without ever
+        // being able to see the stories involved. The anti-self-farm check below is not a substitute.
+        await RequireRecommendationVisibleAsync(recommendationId);
+
         // Idempotent — composite PK prevents duplicates.
         bool alreadyRecorded = await writeDb.RecommendationSuccesses
             .AnyAsync(s => s.UserId == userId && s.RecommendationId == recommendationId);
@@ -504,6 +562,10 @@ public class ServerRecommendationWriteService(
         if (!recBelongsToStory)
             throw new KeyNotFoundException(
                 $"Recommendation {recommendationId} does not exist for story {storyId}.");
+
+        // Kind (g): D3.2 established that the rec must belong to the claimed story, but neither was
+        // checked for visibility — the attribution feeds RecordSuccessAsync credit downstream.
+        await RequireStoryVisibleAsync(storyId);
 
         // Upsert — if the source row already exists, keep the original attribution.
         bool alreadyExists = await writeDb.UserStoryRecommendationSources

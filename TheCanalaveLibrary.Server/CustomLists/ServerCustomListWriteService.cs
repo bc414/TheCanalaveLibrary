@@ -79,11 +79,24 @@ public class ServerCustomListWriteService(
         int userId = RequireAuthenticatedUser();
         await RequireOwnedListAsync(listId, userId);
 
-        // Write context is unfiltered — the story loads regardless of the caller's rating settings
-        // (same posture as ServerGroupWriteService.AddStoryAsync; a user adds from a story page
-        // they could open, so no rating ceiling re-check belongs here).
+        // CORRECTION (WU-ParentVisibility): this used to justify skipping any check with "a user adds
+        // from a story page they could open" — an assumption the code never verified, on a route that
+        // is reachable directly. The not-found-vs-success distinction was an oracle over the whole
+        // Stories keyspace including drafts, and a public list could then enumerate hidden story ids
+        // to every other viewer.
+        //
+        // Kind (g), CONFIDENTIALITY axis only. The rating half of that old comment is genuinely
+        // settled and stays: AddStoryAsync_MRatedStory_MatureOffOwner_StillAdds asserts an owner with
+        // mature content off may still list an M-rated story. Draft/PendingApproval/Rejected and
+        // taken-down stories were never part of that decision.
         bool storyExists = await writeDb.Stories.AnyAsync(s => s.StoryId == storyId);
         if (!storyExists) throw new KeyNotFoundException($"Story {storyId} not found.");
+
+        await using (ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync())
+        {
+            if (!await StoryVisibilityGuard.IsStoryPublishedAsync(readDb, ActiveUser, storyId))
+                throw new KeyNotFoundException($"Story {storyId} not found.");
+        }
 
         // Idempotent — composite PK (ListId, StoryId).
         bool alreadyInList = await writeDb.CustomListEntries

@@ -14,6 +14,20 @@ public class ServerUserStoryInteractionWriteService(
     IActiveUserContext activeUser)
     : ServerUserStoryInteractionReadService(readDbFactory, activeUser), IUserStoryInteractionWriteService
 {
+    /// <summary>
+    /// Kind (g): these three writes had no parent check of any kind — not even existence, since the
+    /// FK was the only guard. Marking a guessed draft/M-unrevealed/taken-down story as a favorite
+    /// increments the <b>story author's</b> <c>UserStats.FavoritesOnStories</c> (a non-owner write to
+    /// another user's public counter) and silently enrolls the actor in that story's notification
+    /// fan-out sets, self-subscribing them to content they were never allowed to see.
+    /// </summary>
+    private async Task RequireStoryVisibleAsync(int storyId)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        if (!await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, storyId))
+            throw new KeyNotFoundException($"Story {storyId} not found.");
+    }
+
     public async Task SetUserStoryInteractionStateAsync(int storyId, UserStoryInteractionStateUpdate update)
     {
         if (CurrentUserId is not int userId)
@@ -21,6 +35,8 @@ public class ServerUserStoryInteractionWriteService(
 
         // Reject impossible combinations per spec §4 before touching the database.
         ValidateCombination(update);
+
+        await RequireStoryVisibleAsync(storyId);
 
         // Load the tracked row + its date partition, or prepare a new row.
         UserStoryInteraction? row = await writeDb.UserStoryInteractions
@@ -142,6 +158,8 @@ public class ServerUserStoryInteractionWriteService(
     {
         if (CurrentUserId is not int userId) return;  // anonymous: no-op
 
+        await RequireStoryVisibleAsync(storyId);
+
         UserStoryInteraction? row = await writeDb.UserStoryInteractions
             .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
 
@@ -173,6 +191,8 @@ public class ServerUserStoryInteractionWriteService(
     public async Task MarkCompletedAsync(int storyId)
     {
         if (CurrentUserId is not int userId) return;  // anonymous: no-op
+
+        await RequireStoryVisibleAsync(storyId);
 
         UserStoryInteraction? row = await writeDb.UserStoryInteractions
             .Include(i => i.InteractionDatePartition)

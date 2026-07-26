@@ -1066,3 +1066,20 @@ checkboxes (browser-verified the "Ignored" / "Hide stories I've ignored" checkbo
 story set (`visible`) — was leaking who favorited a rating-hidden/taken-down anchor, now matching the
 sibling author/recommendation sections. Covered: `ResultsFilterPanelTests` (RazorComponents, +2 resync
 tests) + browser. Full detail: `workplan.md` WU-AuditFixPass-2.
+
+---
+
+**WU-ParentVisibility slice (2026-07-26) — F33.** `GetUserNeighborsAsync` now calls
+`ProfileVisibilityGuard` first. This is the most significant find of the sweep: story-level rating and
+takedown were already handled via `VisibleStories`, but nothing consulted `ProfileVisibility`, so a
+**Private profile's** favorites, authored stories, pinned story and recommendation family were all
+returned to **anonymous** callers over a public POST route. That is precisely the surface set
+`ProfileVisibilityGuard`'s own doc comment enumerates as needing the guard — every sibling service
+calls it, and this path was missed by the WU-AccessGate Phase-1 sweep. It is the strongest available
+evidence that a documented convention is not by itself sufficient enforcement, and it is why
+WU-ParentVisibility shipped a contract-test suite rather than another doc update. `GetNodeDisplaysAsync`'
+user arm was unfiltered too; it now applies the same predicate inline (so the batch stays one query)
+under the existing rehydration contract — a node the viewer may no longer see simply doesn't come back
+and the caller prunes it. The story arm was already correct and is unchanged.
+
+Invariant, guards, and the two root causes: `identity-and-authorization.md` §"Parent-visibility guards" (conditionality kind (g)). Enforcement: `Tests.Integration/ParentVisibilityContractTests.cs`. Full narrative: `workplan.md` WU-ParentVisibility. **No Stage number changed — every affected cell was already Stage 5 and remains 5.**

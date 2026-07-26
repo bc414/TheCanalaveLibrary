@@ -22,6 +22,15 @@ public class ServerFollowingReadService(
     /// </summary>
     protected int? CurrentUserId => activeUser.UserId;
 
+    /// <summary>
+    /// Exposed for the derived write service's kind-(g) profile guard, which needs the whole context
+    /// and a read connection — same no-re-capture reason as <see cref="CurrentUserId"/>.
+    /// </summary>
+    protected IActiveUserContext ActiveUser => activeUser;
+
+    /// <inheritdoc cref="ActiveUser"/>
+    protected IDbContextFactory<ReadOnlyApplicationDbContext> ReadDbFactory => readDbFactory;
+
     public async Task<UserRelationshipStateDto> GetRelationshipStateAsync(int targetUserId)
     {
         int? viewerId = activeUser.UserId;

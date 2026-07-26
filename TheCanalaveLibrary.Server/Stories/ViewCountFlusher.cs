@@ -24,12 +24,26 @@ public sealed class ViewCountFlusher(
 {
     // EXISTS guard drops views of stories deleted mid-window (mirrors the daily_story_stats FK,
     // which exists for CASCADE cleanup — the guard keeps one stale ping from failing the batch).
-    private const string UpsertSql =
-        """
+    //
+    // It also carries the kind-(g) parent check (WU-ParentVisibility, settled 2026-07-26:
+    // "validate at drain time"). RecordViewAsync is anonymous-reachable and buffer-only by design —
+    // a per-request guard would add a database round-trip to the hottest endpoint on the site and
+    // negate the buffer's whole reason for existing. Validating here costs nothing extra: the EXISTS
+    // was already in the statement, so this is one more predicate on a query that had to run anyway.
+    //
+    // Only the CONFIDENTIALITY axis is meaningful at drain time. Flushes run in a background scope
+    // with no viewer, so per-viewer consent (rating ceiling, reveals) has nobody to be evaluated
+    // against — whereas "published and not taken down" is viewer-independent. DiscoveryMartSchema
+    // .VisibleStory is the codebase's existing SQL spelling of exactly that predicate; reused rather
+    // than restated so the two cannot drift.
+    private static readonly string UpsertSql =
+        $"""
         INSERT INTO daily_story_stats (story_id, stat_date, view_count)
         SELECT x.story_id, @stat_date, x.view_count
         FROM unnest(@story_ids, @view_counts) AS x(story_id, view_count)
-        WHERE EXISTS (SELECT 1 FROM stories s WHERE s.story_id = x.story_id)
+        WHERE EXISTS (
+            SELECT 1 FROM stories s
+            WHERE s.story_id = x.story_id AND {DiscoveryMartSchema.VisibleStory})
         ON CONFLICT (story_id, stat_date) DO UPDATE SET
             view_count = daily_story_stats.view_count + EXCLUDED.view_count
         """;

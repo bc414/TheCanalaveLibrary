@@ -348,3 +348,21 @@ unnamed by the audit but identical shape). Full detail: `workplan.md` WU-AuditFi
 
 MA-508 closed, F38 (cell stays Stage 5): `CreateGroupAsync` is now throttled under the `ContentCreate`
 limiter (group creation was previously unthrottled). Full detail: `workplan.md` WU-AuditFixPass-2.
+
+---
+
+**WU-ParentVisibility slice (2026-07-26) — F38/F39/F40.** New `GroupVisibilityGuard`. The
+`GroupAudience` filter's own note reasons that "child entities are unreachable once their parent group
+is filtered" — true only for queries that traverse the `Group` navigation, which the bare-`GroupId`
+child queries never did. `GetMembersAsync` therefore handed an M-audience group's full roster
+(usernames, avatars, roles, join dates) to anonymous callers, even though the sibling `GetByIdAsync` is
+fully reveal-gated. Writes: `JoinAsync` and `AddStoryAsync`. **`JoinAsync` carried a false comment**
+claiming "the audience filter is active on writeDb too" — it is not, and this same file says so
+correctly twice elsewhere. That comment described a control that did not exist, and it was
+load-bearing: joining unlocked the membership-gated writes (`CreateGroupBlogPostAsync`,
+`AddStoryAsync`) and enrolled the user in `NewGroupStory`/`NewGroupBlogPost` fan-out for mature content
+they had explicitly opted out of. `AddStoryAsync` gates on the **confidentiality axis only** — the
+rating axis belongs to the tier-2 `MaxContentRating` waterfall, which reports its own
+`ContentRatingExceededException` that a viewer-ceiling guard would pre-empt and lose.
+
+Invariant, guards, and the two root causes: `identity-and-authorization.md` §"Parent-visibility guards" (conditionality kind (g)). Enforcement: `Tests.Integration/ParentVisibilityContractTests.cs`. Full narrative: `workplan.md` WU-ParentVisibility. **No Stage number changed — every affected cell was already Stage 5 and remains 5.**

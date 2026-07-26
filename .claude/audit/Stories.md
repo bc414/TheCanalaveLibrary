@@ -814,3 +814,21 @@ slice files' "proposes reopen" flags):
   `LoadSupplementaryAsync` (both lifecycle methods).
 Covered: `StoryEndpointsTests` (Integration) + browser E2E (owner mature-on sees 5, mature-off non-owner
 3; cross-author `/edit`→403). Full detail: `workplan.md` WU-AuditFixPass-2.
+
+---
+
+**WU-ParentVisibility slice (2026-07-26) — F4/F8/F9/F15.** New `StoryVisibilityGuard`, which leans
+on the filtered `readDb.Stories` set rather than restating its rules and layers only per-story reveal
+consent on top; it also exposes `IsStoryPublishedAsync` for the confidentiality axis alone, used by the
+deliberately rating-permissive writes. Surfaces: `GetArcsForStoryAsync` — `ServerStoryArcReadService`
+was the **only service in the codebase injecting no `IActiveUserContext`**, so it was structurally
+incapable of gating, and leaked arc titles and chapter ranges (a story's narrative skeleton) for
+M-unrevealed, Draft/PendingApproval/Rejected and taken-down stories; its constructor changed.
+`GetStoryTotalViewsAsync` is raw SQL with no EF model and therefore no query filter of any kind, and
+confirmed the existence and popularity of hidden stories; it now returns 0, which is what a story with
+no recorded views returns anyway. `RequestLineageAsync` gates its **target** story (the source was
+already ownership-gated) — the found-vs-not-found distinction was an id oracle across the whole
+`Stories` keyspace. View counts validate at **drain time** via `DiscoveryMartSchema.VisibleStory`,
+keeping the anonymous, highest-volume write path buffer-only.
+
+Invariant, guards, and the two root causes: `identity-and-authorization.md` §"Parent-visibility guards" (conditionality kind (g)). Enforcement: `Tests.Integration/ParentVisibilityContractTests.cs`. Full narrative: `workplan.md` WU-ParentVisibility. **No Stage number changed — every affected cell was already Stage 5 and remains 5.**

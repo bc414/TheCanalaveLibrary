@@ -67,6 +67,14 @@ public class ServerModerationWriteService(
         if (reporterId is int throttleUserId)
             rateLimit.EnsureAllowed(WriteActionKind.Report, throttleUserId);
 
+        // Kind (g), settled 2026-07-26: the target must EXIST always, and must be VISIBLE to the
+        // reporter EXCEPT when the only thing hiding it is a takedown. Rationale: this method had no
+        // existence check at all, so the queue could be flooded with reports against ids that never
+        // existed while AdjustActiveReportCountAsync bumped ActiveReportCount on drafts. The takedown
+        // exemption keeps a good-faith report legitimate when content is removed between the moment a
+        // user opens the report form and the moment they submit it.
+        await RequireReportableTargetAsync(request.EntityType, request.EntityId);
+
         var report = new Report
         {
             ReportedEntityType = request.EntityType,
@@ -330,6 +338,76 @@ public class ServerModerationWriteService(
     /// Uses ExecuteUpdateAsync (set-based, no load) — does not go through IModeratableContent.
     /// Write context is unfiltered — taken-down content gets its counter adjusted correctly.
     /// </summary>
+    /// <summary>
+    /// Kind (g) for report submission (settled 2026-07-26). Two rules, deliberately different:
+    /// <list type="bullet">
+    /// <item><b>Existence is always required</b> — checked on the unfiltered write context, so a
+    /// taken-down target still counts as existing.</item>
+    /// <item><b>Visibility is required except for takedown</b> — a reporter who legitimately opened
+    /// content that a moderator removed a moment later must still be able to file. Everything else
+    /// (draft/unpublished, non-public story status, rating without consent, Private profile,
+    /// M-audience group) must be refused.</item>
+    /// </list>
+    /// Throws <see cref="KeyNotFoundException"/> either way so a hidden target and an absent one are
+    /// indistinguishable. <c>Message</c> is participant-scoped and validated by its own path.
+    /// </summary>
+    private async Task RequireReportableTargetAsync(ReportedEntityType type, long id)
+    {
+        KeyNotFoundException NotFound() =>
+            new($"The reported {type} could not be found.");
+
+        // Existence on the unfiltered write context — a taken-down row is still a real row.
+        bool exists = type switch
+        {
+            ReportedEntityType.Story => await writeDb.Stories.AnyAsync(s => s.StoryId == (int)id),
+            ReportedEntityType.User => await writeDb.Users.AnyAsync(u => u.Id == (int)id),
+            ReportedEntityType.Comment => await writeDb.BaseComments.AnyAsync(c => c.CommentId == id),
+            ReportedEntityType.BlogPost => await writeDb.BlogPosts.AnyAsync(b => b.BlogPostId == (int)id),
+            ReportedEntityType.Recommendation =>
+                await writeDb.Recommendations.AnyAsync(r => r.RecommendationId == (int)id),
+            ReportedEntityType.Message => await writeDb.PrivateMessages.AnyAsync(m => m.MessageId == id),
+            _ => false,
+        };
+        if (!exists) throw NotFound();
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        // Takedown exemption: if the row is gone from the read context purely because IsTakenDown is
+        // set, the report is still legitimate. Probing with that one filter lifted separates
+        // "removed by a moderator" from every other reason the target might be hidden.
+        bool takenDownOnly = type switch
+        {
+            ReportedEntityType.Story => await readDb.Stories
+                .IgnoreQueryFilters(["IsTakenDown"]).AnyAsync(s => s.StoryId == (int)id && s.IsTakenDown),
+            ReportedEntityType.Comment => await readDb.BaseComments
+                .IgnoreQueryFilters(["IsTakenDown"]).AnyAsync(c => c.CommentId == id && c.IsTakenDown),
+            ReportedEntityType.BlogPost => await readDb.BlogPosts
+                .IgnoreQueryFilters(["IsTakenDown"]).AnyAsync(b => b.BlogPostId == (int)id && b.IsTakenDown),
+            ReportedEntityType.Recommendation => await readDb.Recommendations
+                .IgnoreQueryFilters(["IsTakenDown"]).AnyAsync(r => r.RecommendationId == (int)id && r.IsTakenDown),
+            _ => false,
+        };
+        if (takenDownOnly) return;
+
+        bool visible = type switch
+        {
+            ReportedEntityType.Story =>
+                await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, activeUser, (int)id),
+            ReportedEntityType.BlogPost =>
+                await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, activeUser, (int)id),
+            ReportedEntityType.User =>
+                await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, activeUser, (int)id),
+            ReportedEntityType.Comment => await readDb.BaseComments.AnyAsync(c => c.CommentId == id),
+            ReportedEntityType.Recommendation =>
+                await readDb.Recommendations.AnyAsync(r => r.RecommendationId == (int)id),
+            // Messages are participant-scoped, not content-visibility-scoped; existence above is the
+            // check, and a non-participant cannot learn a message id through any read path.
+            ReportedEntityType.Message => true,
+            _ => false,
+        };
+        if (!visible) throw NotFound();
+    }
+
     private async Task AdjustActiveReportCountAsync(ReportedEntityType type, long id, int delta)
     {
         switch (type)

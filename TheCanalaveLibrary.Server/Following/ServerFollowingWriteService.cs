@@ -26,12 +26,28 @@ public class ServerFollowingWriteService(
     ILogger<ServerFollowingWriteService> logger)
     : ServerFollowingReadService(readDbFactory, activeUser), IFollowingWriteService
 {
+    /// <summary>
+    /// Kind (g): the parent here is the target's profile. Both reads in
+    /// <see cref="ServerFollowingReadService"/> have called <c>ProfileVisibilityGuard</c> since
+    /// WU-AccessGate; neither write did, so a Private profile still accrued followers and vouches —
+    /// each bumping the target's public <c>UserStats.FollowerCount</c> and firing a notification, and
+    /// in the vouch case persisting attacker-authored HTML onto a profile the actor cannot open.
+    /// </summary>
+    private async Task RequireProfileVisibleAsync(int targetUserId)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, targetUserId))
+            throw new KeyNotFoundException($"User {targetUserId} not found.");
+    }
+
     public async Task FollowAsync(int targetUserId)
     {
         int actorId = RequireAuthenticatedUser();
 
         if (actorId == targetUserId)
             throw new FollowingValidationException(["A user cannot follow themselves."]);
+
+        await RequireProfileVisibleAsync(targetUserId);
 
         bool alreadyFollowing = await writeDb.FollowedUsers
             .AnyAsync(f => f.UserId == actorId && f.FollowedUserId == targetUserId);
@@ -103,6 +119,8 @@ public class ServerFollowingWriteService(
 
         if (actorId == targetUserId)
             throw new FollowingValidationException(["A user cannot vouch for themselves."]);
+
+        await RequireProfileVisibleAsync(targetUserId);
 
         bool alreadyVouched = await writeDb.Vouches
             .AnyAsync(v => v.VouchingUserId == actorId && v.VouchedUserId == targetUserId);

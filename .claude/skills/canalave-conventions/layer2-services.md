@@ -1102,7 +1102,8 @@ page before it displays; a link where the requester owns both stories is created
 (`GetLineageForStoryAsync`) return only `Approved` rows where the queried story is the source, joined
 through `Story` so a link never survives display when its target fails the viewer's
 `ContentRating`/`IsTakenDown` filters (mirrors `ServerSeriesReadService.GetMembershipsForStoryAsync`'s
-join-not-bare-projection rule). Target-story selection goes through a new reusable
+join-not-bare-projection rule — generalized as conditionality kind (g),
+`identity-and-authorization.md` §"Parent-visibility guards"). Target-story selection goes through a new reusable
 `IStoryReadService.SearchStoriesByTitleAsync` (`ILike` substring typeahead) — deliberately not the
 discovery FTS (`StoryListing.SearchVector`, a whole-word-ranked GIN index tuned for browse relevance,
 not incremental substring matching); the same search method also retrofits Groups' add-story picker.
@@ -1592,7 +1593,8 @@ mod-gated.
 (`GetActiveSpotlightsAsync`: `StartDate <= now < EndDate`) projects through the required `Story`
 nav and optional `Recommendation` nav on the read context — `ContentRating`/`IsTakenDown` named
 filters apply to the joined entities, so a placement whose story the viewer can't see simply drops
-out (same join-not-bare-projection rule as `ServerStoryLineageReadService`), and a taken-down
+out (same join-not-bare-projection rule as `ServerStoryLineageReadService`; the general form is
+conditionality kind (g), `identity-and-authorization.md` §"Parent-visibility guards"), and a taken-down
 recommendation nulls back to the blank-rec display state. Composition for presentation:
 `IStoryReadService.GetListingsByIdsAsync` for the story cards, `IRecommendationReadService` for
 rec DTOs — the spotlight service never re-implements those projections.

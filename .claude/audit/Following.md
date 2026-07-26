@@ -137,3 +137,16 @@ net, now reserved for the genuine unauthenticated guard). The `MaxVouchesPerUser
 `FollowingValidationException` from `ProblemDetails.Detail` (was `VouchLimitException`). Covered by
 Integration tier (`FollowingWriteServiceTests` — self-follow/self-vouch/not-following retyped to
 `FollowingValidationException`). Full detail: `modernization-audit/deferred-work.md` §4.
+
+---
+
+**WU-ParentVisibility slice (2026-07-26) — F18/F19.** `FollowAsync` and `VouchAsync` now call
+`ProfileVisibilityGuard`. Both reads in `ServerFollowingReadService` have called it since
+WU-AccessGate; neither write did, and neither even checked existence — the FK was the only guard. A
+Private profile therefore still accrued followers and vouches, each bumping the target's public
+`UserStats.FollowerCount` and firing a notification, and in the vouch case persisting
+attacker-authored HTML onto a profile the actor cannot open. The base read service gained protected
+`ActiveUser`/`ReadDbFactory` accessors so the derived write service can reach the guard without
+re-capturing primary-constructor parameters (the established CS9107 pattern).
+
+Invariant, guards, and the two root causes: `identity-and-authorization.md` §"Parent-visibility guards" (conditionality kind (g)). Enforcement: `Tests.Integration/ParentVisibilityContractTests.cs`. Full narrative: `workplan.md` WU-ParentVisibility. **No Stage number changed — every affected cell was already Stage 5 and remains 5.**

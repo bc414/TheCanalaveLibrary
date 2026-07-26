@@ -22,7 +22,6 @@ public class ServerBlogPostReadService(
     public async Task<BlogPostDto?> GetByIdAsync(int blogPostId)
     {
         int? currentUserId = ActiveUser.UserId;
-        Rating maxRating = ActiveUser.MaxRating; // centralized Discovery-plane ceiling (WU-AccessGate)
 
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
@@ -94,29 +93,20 @@ public class ServerBlogPostReadService(
 
         if (row is null) return null;
 
+        // Draft gate + consent resolution (WU-AccessGate, Direct-navigation plane) both live in
+        // BlogPostVisibilityGuard as of WU-ParentVisibility — this read is the reference caller and
+        // owns none of the rule any more. Facts come from the projection above, so delegating costs
+        // no extra query; the guard resolves the reveal itself only when consent is what the
+        // decision turns on (a GROUP reveal covers all group-owned content — audience gate AND
+        // M-rated group posts, one consent per community; a profile post gates on its own per-post
+        // reveal). Every child read of this post now asks the same predicate.
         bool isAuthor = currentUserId.HasValue && currentUserId == row.AuthorId;
 
-        if (!row.IsPublished && !isAuthor) return null;
+        BlogPostVisibilityFacts facts = new(
+            row.BlogPostId, row.AuthorId, row.IsPublished, row.Rating,
+            isGroupPost, row.GroupId, row.GroupAudience);
 
-        // Consent resolution (WU-AccessGate, Direct-navigation plane): a GROUP reveal covers all
-        // group-owned content (audience gate AND M-rated group posts — one consent per
-        // community); a profile post's M rating gates on its own per-post reveal.
-        if (!isAuthor && !ActiveUser.IsVerifiedBot)
-        {
-            if (isGroupPost)
-            {
-                bool groupRevealed = row.GroupId is int gid
-                    && await RevealCheck.IsRevealedAsync(readDb, ActiveUser, RevealedEntityType.Group, gid);
-                bool audienceHidden = row.GroupAudience == Rating.M && !ActiveUser.ShowMatureContent;
-                if ((audienceHidden || row.Rating > maxRating) && !groupRevealed)
-                    return null;
-            }
-            else if (row.Rating > maxRating
-                     && !await RevealCheck.IsRevealedAsync(readDb, ActiveUser, RevealedEntityType.BlogPost, blogPostId))
-            {
-                return null;
-            }
-        }
+        if (!await BlogPostVisibilityGuard.IsVisibleAsync(readDb, ActiveUser, facts)) return null;
 
         // Per-viewer completion signal (WU-B2): gates the spoiler interstitial's reveal path.
         // One extra query only for signed-in viewers of a story-linked (profile) post — a pure
@@ -266,6 +256,13 @@ public class ServerBlogPostReadService(
         Rating maxRating = ActiveUser.MaxRating; // centralized Discovery-plane ceiling (WU-AccessGate)
 
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        // Kind (g): the group's own audience gate. This filters on the bare GroupId FK and never
+        // expands the Group navigation, so the GroupAudience filter cannot reach it — an M-audience
+        // group's E/T posts (title, date, and a snippet of the body) were readable with mature off.
+        // The post-rating ceiling below is a separate axis and does not substitute for it.
+        if (!await GroupVisibilityGuard.IsGroupVisibleAsync(readDb, ActiveUser, groupId))
+            return ([], 0);
 
         // Filter by group and apply content-rating ceiling (explicit .Where — same pattern as profile
         // blog posts; named filter not available on TPT derived DbSets, see cross-cutting.md).

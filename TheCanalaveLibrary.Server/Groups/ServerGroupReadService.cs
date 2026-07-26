@@ -152,6 +152,14 @@ public class ServerGroupReadService(
         int groupId, int page, int pageSize)
     {
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        // Kind (g): the roster is as visible as the group. Bare GroupId FK — the Group navigation is
+        // never expanded, so GroupAudience could not apply, and an M-audience group's full membership
+        // (usernames, avatars, roles, join dates) was anonymously enumerable even though the sibling
+        // GetByIdAsync is fully reveal-gated.
+        if (!await GroupVisibilityGuard.IsGroupVisibleAsync(readDb, ActiveUser, groupId))
+            return ([], 0);
+
         IQueryable<GroupMember> query = readDb.GroupMembers
             .Where(m => m.GroupId == groupId)
             .OrderBy(m => m.DateJoined);

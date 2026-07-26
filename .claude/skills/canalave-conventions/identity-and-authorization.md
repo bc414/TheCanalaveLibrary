@@ -110,7 +110,7 @@ keeps components parameter-driven and bUnit-testable without fake user-context r
 activity ping — needs the hot scalar, renders nothing) and `Profiles/SettingsPage.razor`
 (self-scoped settings dispatcher). Don't add a third without recording it here.
 
-### Six kinds of active-user conditionality
+### Seven kinds of active-user conditionality
 
 | # | Kind | Mechanism | Established |
 |---|---|---|---|
@@ -120,6 +120,75 @@ activity ping — needs the hot scalar, renders nothing) and `Profiles/SettingsP
 | **(d)** | Ownership gate ("is the viewer the owner of *this specific entity*?") | UI: page computes bool, passes down; component uses plain `@if`. Server: service loads entity, compares `entity.OwnerId != activeUser.UserId`, throws | UI: WU13/WU14. Server: WU24+ |
 | **(e)** | Per-viewer state ("has the viewer favorited / liked / started this?") | Server read service projects per-viewer flags via `IActiveUserContext.UserId` into the DTO | WU15/WU19 |
 | **(f)** | Owner-or-staff gate — **does not exist in this codebase.** | Editing is **author-only** (strict identity-equality). Moderation is a **separate code path** (WU34 admin service). Never an `OR` fold. | WU24 |
+| **(g)** | **Parent-visibility inheritance** ("is the content that *hosts* this child visible to the viewer?") | Child read service calls the parent's guard and returns empty; child write service calls it and throws `KeyNotFoundException`. See §"Parent-visibility guards" below | WU-ParentVisibility |
+
+### Parent-visibility guards
+
+**The invariant: child content is never more visible, nor more writable, than the parent content that
+hosts it.** A poll is exactly as visible as its blog post; a comment as its chapter; a group's member
+roster as the group.
+
+This rule was violated on **38 surfaces** before WU-ParentVisibility (13 reads, 25 writes) for two
+structural reasons, both worth internalizing:
+
+1. **The bare-FK shape defeats query filters.** `readDb.Children.Where(c => c.ParentId == id)` filters
+   on the *scalar FK column*, so the parent entity type never enters the query — EF emits no join, and
+   therefore **no named query filter** (`ContentRating`, `GroupAudience`, `StoryStatus`, `IsTakenDown`)
+   and no reveal check can possibly apply. A filter on `Group` protects nothing in a query that only
+   mentions `GroupComment.GroupId`. This is the same insight as the *join-not-bare-projection rule*
+   (`layer2-services.md` §StoryLineage / §Spotlight) — stated here because this is the file developers
+   consult when writing a service.
+2. **`writeDb` has no filters at all.** The visibility filters are declared only on
+   `ReadOnlyApplicationDbContext`. `ApplicationDbContext` is unfiltered by design, so every
+   `writeDb.X.AnyAsync(x => x.Id == id)` existence check sees drafts, M-rated, and taken-down rows.
+   **An existence check is not a visibility check.** Never write a comment claiming a filter protects a
+   write path — two such comments were shipped and both were false.
+
+**Satisfy the invariant one of three ways** (in preference order): call the parent's guard explicitly;
+join the *filtered* parent DbSet (`join s in readDb.Stories`); or constrain against a captured filtered
+subquery (`visible.Any(s => s.StoryId == …)`).
+
+**The guard set.** One guard per parent kind — deliberately *not* one universal guard, since the parents
+differ in columns and in reveal target:
+
+| Guard | Parent hidden when |
+|---|---|
+| `BlogPostVisibilityGuard` | unpublished (to non-authors) · rating above viewer ceiling without a reveal (`RevealedEntityType.BlogPost` for profile posts, `.Group` for group posts) · group audience M with mature off · taken down |
+| `StoryVisibilityGuard` | rating above ceiling without a `RevealedEntityType.Story` reveal · status `Draft`/`PendingApproval`/`Rejected` · taken down. `IsChapterVisibleAsync` adds: chapter unpublished (to non-authors) |
+| `GroupVisibilityGuard` | audience rating M and the viewer has mature off |
+| `ProfileVisibilityGuard` | Private to non-owners · UsersOnly to anonymous viewers (predates this WU) |
+
+Every guard follows one contract shape:
+
+```csharp
+static Task<bool> Is{Parent}VisibleAsync(ReadOnlyApplicationDbContext, IActiveUserContext, int id);
+static bool IsVisible(<Facts> facts, IActiveUserContext, bool isRevealed);   // pure overload
+```
+
+The **pure overload owns the rule**; the id overload loads the facts and delegates. Callers that
+already project the parent's columns (e.g. `ServerBlogPostReadService.GetByIdAsync`) pass facts and pay
+no extra query; callers holding only an id use the loader. One copy of the rule, no forced round-trip.
+
+**Four rules that are easy to get wrong:**
+
+- **Non-disclosure.** A hidden parent and an absent parent must be indistinguishable — same status,
+  same body, same error text. Reads return empty/null; writes throw `KeyNotFoundException` (never
+  `UnauthorizedAccessException`, which would confirm the id exists). Precedent: D3.1's cross-group
+  folder id.
+- **Authors keep their drafts.** The author of an unpublished parent always passes. An over-broad guard
+  that breaks the blog editor's poll panel or a chapter draft flow is a worse bug than the leak.
+- **Takedown outranks authorship.** A taken-down parent hides from its author too — `IsTakenDown` is
+  not author-conditional.
+- **Exemptions are narrow.** Moderator work surfaces bypass this entirely (`content-safety.md`
+  §"Moderator review surfaces are work surfaces"); verified bots follow the existing `IsVerifiedBot`
+  elevation. Buffered lossy writes (view counts, reading progress) validate at **drain time** in the
+  flush worker, never at entry — a per-request query would negate the buffer's reason for existing.
+
+**Enrolment is the enforcement.** `Tests.Integration/ParentVisibilityContractTests.cs` holds a table of
+every governed surface and asserts, per hidden-parent kind, that reads come back empty and writes are
+refused. A new parent-scoped read or write is registered by adding a row. Docs alone already failed
+once: the rule existed in `layer2-services.md` and the WU-AccessGate sweep still missed
+`GetUserNeighborsAsync`, leaving a Private profile's contents anonymously readable.
 
 ### Security vs affordance — the load-bearing principle
 

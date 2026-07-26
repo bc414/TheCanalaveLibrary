@@ -36,6 +36,17 @@ public class ServerStoryLineageWriteService(
         if (target is null)
             throw new StoryLineageValidationException(["The target story could not be found."]);
 
+        // Kind (g) on the TARGET (the source is already ownership-gated above). Without it a request
+        // could point at someone's unpublished, rejected or taken-down story and notify its author —
+        // and the found-vs-not-found distinction was an oracle across the whole Stories keyspace.
+        // Same message as a genuinely missing target (non-disclosure).
+        if (target.AuthorId != userId)
+        {
+            await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+            if (!await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, dto.TargetStoryId))
+                throw new StoryLineageValidationException(["The target story could not be found."]);
+        }
+
         bool typeExists = await writeDb.StoryLineageTypes.AnyAsync(t => t.RelationshipTypeId == dto.TypeId);
         if (!typeExists)
             throw new StoryLineageValidationException(["The selected lineage type is not valid."]);

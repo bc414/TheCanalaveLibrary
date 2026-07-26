@@ -27,13 +27,24 @@ public sealed class ReadingProgressFlusher(
     // EXISTS guards drop pings whose chapter/user was deleted mid-read — without them one stale
     // ping would FK-fail the whole batch. is_read is computed in C# (same float comparison as the
     // old direct write), never re-derived in SQL where real→double promotion shifts the 0.9 edge.
-    private const string UpsertSql =
-        """
+    //
+    // The chapter guard also carries the kind-(g) parent check (WU-ParentVisibility, settled
+    // 2026-07-26: "validate at drain time"), joining through to the owning story so progress is only
+    // ever persisted for a published chapter of a published, non-taken-down story. Buffer entry stays
+    // a pure in-memory write with no added latency, which is the point of the signal-buffer axiom.
+    // Only the confidentiality axis applies here: the flush runs in a background scope with no viewer,
+    // so per-viewer consent has nothing to evaluate against. DiscoveryMartSchema.VisibleStory is the
+    // existing SQL spelling of that predicate — reused rather than restated so the two cannot drift.
+    private static readonly string UpsertSql =
+        $"""
         INSERT INTO user_chapter_interactions (user_id, chapter_id, read_progress, last_interaction_date, is_read)
         SELECT x.user_id, x.chapter_id, x.read_progress, x.last_interaction_date, x.is_read
         FROM unnest(@user_ids, @chapter_ids, @progresses, @stamps, @is_reads)
              AS x(user_id, chapter_id, read_progress, last_interaction_date, is_read)
-        WHERE EXISTS (SELECT 1 FROM chapters c WHERE c.chapter_id = x.chapter_id)
+        WHERE EXISTS (
+            SELECT 1 FROM chapters c
+            JOIN stories s ON s.story_id = c.story_id
+            WHERE c.chapter_id = x.chapter_id AND c.is_published AND {DiscoveryMartSchema.VisibleStory})
           AND EXISTS (SELECT 1 FROM "AspNetUsers" u WHERE u.id = x.user_id)
         ON CONFLICT (user_id, chapter_id) DO UPDATE SET
             read_progress         = GREATEST(user_chapter_interactions.read_progress, EXCLUDED.read_progress),

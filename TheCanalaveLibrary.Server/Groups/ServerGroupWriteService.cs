@@ -92,10 +92,22 @@ public class ServerGroupWriteService(
     {
         int userId = RequireAuthenticatedUser();
 
-        // Audience filter is active on writeDb too — if the group is invisible to this user, the
-        // AnyAsync returns false and we throw KeyNotFoundException (correct: can't join what you can't see).
+        // CORRECTION (WU-ParentVisibility): this check used to carry a comment claiming "the audience
+        // filter is active on writeDb too." It is not — GroupAudience is declared on
+        // ReadOnlyApplicationDbContext only, as this same file states correctly twice below. The false
+        // comment described a control that did not exist, and it was load-bearing: a user with mature
+        // content off could join an M-audience group, which then unlocked the membership-gated writes
+        // (CreateGroupBlogPostAsync, AddStoryAsync) and enrolled them in NewGroupStory/NewGroupBlogPost
+        // fan-out for mature content they had explicitly opted out of.
         bool groupExists = await writeDb.Groups.AnyAsync(g => g.GroupId == groupId);
         if (!groupExists) throw new KeyNotFoundException($"Group {groupId} not found.");
+
+        // Kind (g): you cannot join what you cannot see — now actually enforced.
+        await using (ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync())
+        {
+            if (!await GroupVisibilityGuard.IsGroupVisibleAsync(readDb, ActiveUser, groupId))
+                throw new KeyNotFoundException($"Group {groupId} not found.");
+        }
 
         // Idempotent — no-op if already a member.
         bool alreadyMember = await writeDb.GroupMembers
@@ -150,6 +162,19 @@ public class ServerGroupWriteService(
         Story? story = await writeDb.Stories
             .FirstOrDefaultAsync(s => s.StoryId == dto.StoryId);
         if (story is null) throw new KeyNotFoundException($"Story {dto.StoryId} not found.");
+
+        // Kind (g), CONFIDENTIALITY axis only. The rating axis here belongs to the tier-2
+        // MaxContentRating waterfall below, which is group policy rather than a viewer check and
+        // reports its own ContentRatingExceededException (AddStory_Tier2_StoryRatingExceedsGroupMax_
+        // Throws asserts that specific type — a viewer-ceiling guard would pre-empt it with a
+        // not-found and lose the diagnostic). What the waterfall never asked is whether the story is
+        // published at all: a Draft, PendingApproval, Rejected or taken-down story could be filed
+        // into a group and its author notified via NotifyNewGroupStoryAsync.
+        await using (ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync())
+        {
+            if (!await StoryVisibilityGuard.IsStoryPublishedAsync(readDb, ActiveUser, dto.StoryId))
+                throw new KeyNotFoundException($"Story {dto.StoryId} not found.");
+        }
 
         // Tier 2: group MaxContentRating ceiling.
         if (story.Rating > group.MaxContentRating)

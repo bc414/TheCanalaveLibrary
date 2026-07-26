@@ -218,10 +218,13 @@ unless noted. All sit under Stage-5 cells.
     inside **A4**'s WU-RecLifecycle (where `NeedsRevision`/`Rejected` rows start existing), with the
     regression test the method never had.
 
-- [ ] **D2 — Poll `by-blog-post` leaks draft metadata** `[latent-risk · low · anytime]`
-  - Grid: F37 all built cells=5.
+- [x] **D2 — Poll `by-blog-post` leaks draft metadata — RESOLVED, and it was the tip of a 38-surface class (WU-ParentVisibility, 2026-07-26)** `[latent-risk · low → the class was med/high · anytime]`
+  - Grid: F37 all built cells=5 (unchanged — no cell moved anywhere in the sweep).
   - Source: `modernization-audit/deferred-work.md` §7.
   - Context: `GET /api/polls/by-blog-post/{id}` returns poll name/description for polls attached to an *unpublished draft* blog post (tallies/voters are blanked, metadata isn't).
+  - **Resolution: the item was real but understated on three axes.** (1) More data than name/description — the full option-text list, the owner's username, and `ConfigLocked`, a boolean side-channel disclosing *whether anyone had voted* even with tallies zeroed. (2) More gates than "draft" — the same missing join bypassed the mature-rating/reveal gate and the `IsTakenDown` filter too. (3) More surfaces — `GET /api/polls/{pollId}` had the identical defect and is enumerable by integer id, and `VoteAsync` let any authenticated user vote on a draft's poll, setting `ConfigLocked` and freezing the author's config *before publication*.
+  - **Scoping it revealed a class, not a bug.** A sweep of all 29 read services and 26 write services found **38 violating surfaces** across 12 clusters. Notable siblings: an M-audience group's member roster and blog posts readable anonymously; a mature-off account able to **join** an M group (unlocking membership-gated writes and M-content notification fan-out); `RecordSuccessAsync` farming real site badges off guessed ids; `SubmitReportAsync` with no existence check at all; and a Private profile's contents reachable anonymously through manual tree search — the last being a surface `ProfileVisibilityGuard`'s own doc lists as protected, missed by the earlier WU-AccessGate sweep.
+  - **Now conditionality kind (g)** in `identity-and-authorization.md`, with three new guards and a 27-test `ParentVisibilityContractTests` suite as the enforcement mechanism (docs alone had already failed once here). Full narrative: `workplan.md` WU-ParentVisibility; `status.md` Global Conditions.
 
 - [x] **D3.1 — Groups: missing cross-group folder-ownership validation — RESOLVED (WU-GroupsL5b, 2026-07-25)** `[latent-risk · low · anytime]`
   - Grid: F39 all=5 (unchanged).
@@ -390,6 +393,7 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
 ## Already-closed — do NOT re-report (checked during the 2026-07-24 audit)
 
 These earlier deferrals were resolved by later work; the grid is correct. Listed so a future pass doesn't resurface them:
+- Parent-visibility across polls, comments, groups, recommendations, arcs, interactions, following, reports and the buffered writes → **WU-ParentVisibility (2026-07-26)**. With D2 closed, `modernization-audit/deferred-work.md` §7 has **no live code items left** — its only remaining entries are the dev-diagnostics exposure (environmental, not a code path) and the avatar-URL CDN model (explicitly accepted).
 - Groups L5 rows 38–40 → **WU-GroupsL5 (2026-07-24)**.
 - Chapter/arc/version L4.5 (F6/F7/F8, set 5→2 on 2026-07-12) → **WU-ChapterArcBrowserPass (2026-07-24)**.
 - Desktop/Mobile page merges → **WU-ResponsiveMerge (2026-07-18)**.

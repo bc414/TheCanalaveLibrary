@@ -11,13 +11,31 @@ namespace TheCanalaveLibrary.Server;
 /// </summary>
 public class ServerChapterReadMarkWriteService(
     ApplicationDbContext writeDb,
+    IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser,
     ReadingProgressBuffer progressBuffer,
     IUserStoryInteractionWriteService usiWrite) : IChapterReadMarkWriteService
 {
+    /// <summary>
+    /// Kind (g): a read-mark is durable intent about content the user actually read, so it must be
+    /// refused for a chapter they cannot see. Marking a guessed draft chapter wrote a
+    /// <c>UserChapterInteraction</c> row and cascaded into <c>MarkStartedAsync</c>/
+    /// <c>MarkCompletedAsync</c> against the hidden story, corrupting the caller's own
+    /// <c>StoriesRead</c>/<c>StoriesInProgress</c> counters. <c>writeDb</c> is unfiltered, so the
+    /// guard needs a read context.
+    /// </summary>
+    private async Task RequireChapterVisibleAsync(int chapterId)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+        if (!await StoryVisibilityGuard.IsChapterVisibleAsync(readDb, activeUser, chapterId))
+            throw new KeyNotFoundException($"Chapter {chapterId} not found.");
+    }
+
     public async Task SetChapterReadAsync(int chapterId, bool isRead)
     {
         int userId = activeUser.RequireUserId();
+
+        await RequireChapterVisibleAsync(chapterId);
 
         var chapter = await writeDb.Chapters
             .Where(c => c.ChapterId == chapterId)
@@ -91,6 +109,15 @@ public class ServerChapterReadMarkWriteService(
             .Select(s => new { s.StoryStatusId })
             .FirstOrDefaultAsync();
         if (story is null) throw new KeyNotFoundException($"Story {storyId} not found.");
+
+        // Kind (g). The IsPublished filter below already made an all-draft story a no-op, but a
+        // published-chapter story that is itself Draft/PendingApproval/Rejected, taken down, or
+        // M-rated-unrevealed was still fully markable.
+        await using (ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync())
+        {
+            if (!await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, activeUser, storyId))
+                throw new KeyNotFoundException($"Story {storyId} not found.");
+        }
 
         // Published chapters only — drafts are invisible to readers and stay untouched.
         List<int> chapterIds = await writeDb.Chapters

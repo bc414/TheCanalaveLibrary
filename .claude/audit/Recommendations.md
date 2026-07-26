@@ -290,3 +290,22 @@ safety net, now reserved for the genuine unauthenticated guard). No client chang
 body (shared MA-008 shape). Covered by Integration tier (`RecommendationWriteServiceTests` — the two
 reject-at-five tests retyped to `RecommendationValidationException`, `_ThrowsInvalidOperation`
 renamed `_ThrowsValidation`). Full detail: `modernization-audit/deferred-work.md` §4.
+
+---
+
+**WU-ParentVisibility slice (2026-07-26) — F27/F28/F30.** Recommendations are now exactly as
+visible as the story they endorse. Reads: `GetForStoryAsync` and `GetByIdAsync` (the latter enumerable
+by rec id, and its DTO discloses the parent `StoryId`). Note the pre-existing `isStoryAuthor` probe did
+use the filtered `Stories` set, but it only ever returned false — it never gated the main query.
+Writes: `SubmitAsync`, `ToggleLikeAsync`, `RecordSuccessAsync`, `RecordAttributionSourceAsync`.
+**`RecordSuccessAsync` was the sharpest surface in the whole sweep** — it awards real site badges
+(`Recommender`/`RecommenderSilver`) off an unverified parent, so a loop over guessed recommendation ids
+could farm another user's `SuccessfulRecCount` and badges without ever being able to see the stories
+involved; the existing anti-self-farm check is not a substitute. `SubmitAsync` gates on the
+**confidentiality axis only**, preserving the settled WU29 decision (and its test) that a reader with
+mature content off may still recommend an M-rated story — what was never intended is a rec on an
+unpublished story, which takes the one-per-user slot permanently and notifies the author. D3.2
+established that the attributed rec must belong to the claimed story; neither was checked for
+visibility until now.
+
+Invariant, guards, and the two root causes: `identity-and-authorization.md` §"Parent-visibility guards" (conditionality kind (g)). Enforcement: `Tests.Integration/ParentVisibilityContractTests.cs`. Full narrative: `workplan.md` WU-ParentVisibility. **No Stage number changed — every affected cell was already Stage 5 and remains 5.**

@@ -233,11 +233,24 @@ public class ServerPollWriteService(
             .Select(p => new
             {
                 p.AllowMultiple, p.AnonymityMode, p.DateOpened, p.DateClosed,
+                BlogPostId = p is BlogPostPoll ? (int?)((BlogPostPoll)p).BlogPostId : null,
                 OptionIds = p.PollOptions.Select(o => o.PollOptionId).ToArray(),
             })
             .FirstOrDefaultAsync();
         if (poll is null)
             throw new KeyNotFoundException($"Poll {pollId} not found.");
+
+        // Kind (g): you cannot vote on a poll hanging off a post you cannot see. This is the write
+        // half of D2 and the more damaging one — a vote on someone's draft sets ConfigLocked, which
+        // freezes AllowMultiple/ResultsVisibility/AnonymityMode before the author ever publishes.
+        // writeDb is unfiltered, so the existence check above proves nothing about visibility; the
+        // guard needs the read context. Same message as a missing poll (non-disclosure).
+        if (poll.BlogPostId is int parentId)
+        {
+            await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+            if (!await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, parentId))
+                throw new KeyNotFoundException($"Poll {pollId} not found.");
+        }
 
         if (PollRules.StatusFor(poll.DateOpened, poll.DateClosed, DateTime.UtcNow) != PollStatus.Open)
             throw new PollValidationException("This poll is not open for voting.");
@@ -268,7 +281,11 @@ public class ServerPollWriteService(
 
         await writeDb.SaveChangesAsync();
 
-        return (await GetPollAsync(pollId))!;
+        // The re-read applies the same kind-(g) guard. It can only come back null if the parent post
+        // was hidden between the check above and here (author unpublished it, or a mod took it down
+        // mid-vote) — report that as the poll being gone rather than dereferencing null.
+        return await GetPollAsync(pollId)
+               ?? throw new KeyNotFoundException($"Poll {pollId} not found.");
     }
 
     // ── Private helpers ──────────────────────────────────────────────────────────

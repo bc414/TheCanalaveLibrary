@@ -3983,3 +3983,88 @@ Two loose ends from WU-IntTestPerf, closed same day:
   Stage-5 cells (the `--color-link` one user-visible: an unstyled link).
 - **Tool:** Claude Code (Fable). **Pointer:** `audit/Import.md` token-fix note; `audit/Profiles.md`
   §"Token fix (WU-TokenGreen)".
+
+---
+
+## WU-ParentVisibility — the parent-visibility invariant: 38 surfaces across 12 clusters (D2 and its whole class) — DONE ✓ (2026-07-26)
+
+- **Trigger:** `hidden-deferrals-tracker.md` **D2** ("Poll `by-blog-post` leaks draft metadata").
+  Investigation showed D2 was not a defect but a symptom: a sweep of all 29 server read services and
+  all 26 server write services found **38 surfaces** where child content was more visible, or more
+  writable, than its parent. Owner chose one sweep over staged WUs, and required the plan be written
+  as intent/requirements rather than implementation.
+- **Root causes (two, neither a coding mistake):** (1) the bare-FK shape
+  `readDb.Children.Where(c => c.ParentId == id)` never expands the parent entity, so **no** named query
+  filter (`ContentRating`, `GroupAudience`, `StoryStatus`, `IsTakenDown`) and no reveal check can reach
+  it; (2) those filters live only on `ReadOnlyApplicationDbContext` — `writeDb` is unfiltered, so every
+  `writeDb.X.AnyAsync(id == …)` existence check proved existence and nothing else. The rule *did* exist
+  (the "join-not-bare-projection rule") but only inside the StoryLineage and Spotlight narratives in
+  `layer2-services.md`, so nobody writing a poll or comment service would meet it.
+- **Convention first (Doc-Touch moment 1):** `identity-and-authorization.md`'s "Six kinds of
+  active-user conditionality" is now **seven** — new kind **(g) parent-visibility inheritance** — plus a
+  §"Parent-visibility guards" section carrying the guard set, the contract shape, and four
+  easy-to-get-wrong rules (non-disclosure; authors keep their drafts; takedown outranks authorship;
+  narrow exemptions). `layer2-services.md`'s two incidental mentions now point at it.
+- **Guards shipped:** `BlogPostVisibilityGuard`, `StoryVisibilityGuard` (story + chapter), and
+  `GroupVisibilityGuard`, joining the existing `ProfileVisibilityGuard` — one per parent kind, not one
+  universal guard (parents differ in columns and reveal target). Each exposes a pure decision over
+  already-projected facts plus an id-loading overload, so `ServerBlogPostReadService.GetByIdAsync`
+  delegates its gate with **zero** extra queries while child services pay one lookup. `GetByIdAsync`
+  now owns none of the rule.
+- **Two axes, made explicit:** confidentiality (story status, takedown) is absolute; consent (rating)
+  is reveal-bypassable and deliberately not applied to a few writes. `IsStoryPublishedAsync` serves
+  those — recommendation submit, custom-list add, group story-add — preserving three *existing* tests
+  that assert the permissive behavior. The suite caught every one of these; none was guessed.
+- **Reads fixed (13):** polls ×2 (D2 itself, incl. the wider by-id hole), comments ×3 (blog/chapter/
+  group), group members, blog-posts-by-group, recommendations ×2, story arcs, story total views,
+  manual-tree-search ×2.
+- **Writes fixed (25):** poll vote, comments ×5, recommendations ×4, blog-post like, chapter
+  read-marks ×2, user-story interactions ×3, group join + story-add, custom-list add, report submit,
+  follow + vouch, lineage request, and the two buffered writes.
+- **Notable specifics:** `RecordSuccessAsync` awards real site badges off an unverified parent — a loop
+  over guessed ids could farm another user's `SuccessfulRecCount` and badges. `JoinAsync` let a
+  mature-off account join an M-audience group, unlocking the membership-gated writes and M-content
+  notification fan-out. `SubmitReportAsync` had **no existence check at all**. `ServerStoryArcReadService`
+  was the only service injecting no `IActiveUserContext` and so could not gate at all — constructor changed.
+- **Settled decisions (2026-07-26, recorded before implementation):** buffered writes validate at
+  **drain time** (the flushers' existing `EXISTS` guard now carries `DiscoveryMartSchema.VisibleStory`,
+  reused rather than restated — buffer entry keeps zero added latency, and only the confidentiality axis
+  is meaningful in a viewerless background scope); reports require existence **always** and visibility
+  **except when the parent is hidden solely by takedown** (a good-faith report filed just after a removal
+  must still land); custom-list add verifies its previously-unverified premise.
+- **Two false comments corrected.** `ServerGroupWriteService` claimed "the audience filter is active on
+  writeDb too" — it is not, and the same file says so correctly twice elsewhere; that false comment was
+  load-bearing for the join hole. `ServerCustomListWriteService` asserted a premise the code never checked.
+- **New tests:** `Tests.Integration/ParentVisibilityContractTests.cs` — **27** tests; the enrolment list
+  *is* the enforcement mechanism (adding a parent-scoped read/write means adding a row). Covers each
+  hidden-parent kind × read-empty/write-refused, plus the positive directions: author still sees and
+  manages their own draft's poll, and the two deliberately rating-permissive writes still succeed.
+  Docs alone had already failed once — the rule was written down and the WU-AccessGate sweep still
+  shipped `GetUserNeighborsAsync` handing a Private profile's contents to anonymous callers.
+- **Four pre-existing tests corrected, not weakened:** two `BlogPostWriteServiceTests.ToggleLike_*`
+  were liking an *unpublished draft* as a non-author (asserting the leak — `CreatePostAsync` defaults to
+  a draft); `CustomListServiceTests.AddStoryAsync_MRatedStory_MatureOffOwner_StillAdds` and
+  `GroupServiceTests.AddStory_Tier2_StoryRatingExceedsGroupMax_Throws` documented real settled decisions
+  and drove the confidentiality-only split above.
+- **Verified:** `dotnet build` clean. `dotnet test` full suite **2241/2241** green
+  (764 Unit + 591 RazorComponents + 886 Integration). `scripts/check-design-tokens.ps1` passed.
+  **HTTP pass (anonymous + per-user cookies):** every fixed read probed against seeded fixtures — draft
+  post's poll `[]` vs published control returning the poll; group-3 (M audience) members/comments/
+  blog-posts empty for anonymous and for a mature-**off** user, real data for a mature-**on** user;
+  standard group unaffected; draft story's arcs/views/recs empty with published controls intact.
+  **Non-disclosure confirmed byte-identical:** hidden poll and nonexistent poll both return empty body,
+  status 200. **Write refusals confirmed at the DB:** a stranger voting on the draft's poll got 404 with
+  `psql` showing 0 vote rows and `ConfigLocked` still false, while the published control took the vote;
+  mature-off join → 404, mature-on join → 204. **Browser pass (L4.5):** as the draft's author, `/blog/3`
+  renders with its poll fully manageable; as a stranger the same URL is a real 404; the published post
+  still renders its poll including the stranger's own vote state. All verification rows cleaned up
+  (`psql`-confirmed zero remaining).
+- **Cells:** `status.md` — **no Stage-number changes.** Every affected cell was already Stage 5 and
+  remains 5; the invariant is cross-cutting and attaches to no single cell, so it is recorded as a
+  Global Conditions note pointing at the convention section. Exactly the hidden-deferral shape the
+  tracker exists to catch.
+- **Tool:** Claude Code (Fable). **Pointer:** `identity-and-authorization.md` §"Parent-visibility
+  guards" + kind (g); `layer2-services.md` (two cross-references); `audit/BlogPosts.md`,
+  `audit/Comments.md`, `audit/Chapters.md`, `audit/Groups.md`, `audit/Recommendations.md`,
+  `audit/Discovery.md`, `audit/Following.md`, `audit/Moderation.md`, `audit/Stories.md`;
+  `hidden-deferrals-tracker.md` D2.

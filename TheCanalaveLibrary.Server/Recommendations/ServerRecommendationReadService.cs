@@ -35,6 +35,14 @@ public class ServerRecommendationReadService(
 
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
+        // Kind (g): recommendations are exactly as visible as the story they endorse. The query
+        // below filters on the bare StoryId FK, so none of Story's three filters reached it — full
+        // rec text and recommender cards were readable for M-unrevealed, Draft/PendingApproval/
+        // Rejected and taken-down stories. (The isStoryAuthor probe below uses the filtered set, but
+        // it only ever returns false — it never gated the main query.)
+        if (!await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, storyId))
+            return [];
+
         // Per-viewer visibility (WU-RecLifecycle): everyone sees Approved; the story's author also
         // sees NeedsRevision/Rejected (to act on them); a recommender also sees their own hidden
         // rec (with the author's note). Status/RevisionRequestNote are projected only on those
@@ -112,6 +120,19 @@ public class ServerRecommendationReadService(
         int? currentUserId = ActiveUser.UserId;
 
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        // Kind (g), keyed by rec id — the same leak as GetForStoryAsync but enumerable, and the DTO
+        // discloses the parent StoryId. Null matches a nonexistent/non-Approved rec (non-disclosure).
+        // Also the composition entry point for ServerSpotlightReadService.
+        int? parentStoryId = await readDb.Recommendations
+            .Where(r => r.RecommendationId == recommendationId)
+            .Select(r => (int?)r.StoryId)
+            .FirstOrDefaultAsync();
+
+        if (parentStoryId is not int storyId
+            || !await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, storyId))
+            return null;
+
         return await readDb.Recommendations
             .Where(r => r.RecommendationId == recommendationId && r.StatusId == ApprovedStatusId)
             .Select(r => new RecommendationDto(

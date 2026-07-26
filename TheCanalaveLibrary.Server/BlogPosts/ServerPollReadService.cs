@@ -34,6 +34,14 @@ public class ServerPollReadService(
     public async Task<PollDto[]> GetPollsForBlogPostAsync(int blogPostId)
     {
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        // Kind (g): a poll is exactly as visible as the post that hosts it. BasePoll carries no
+        // query filter and this query never joins BaseBlogPost, so nothing else can enforce it —
+        // without this the poll's name, description and full option list leaked for unpublished,
+        // M-rated-unrevealed and taken-down posts (hidden-deferrals-tracker.md D2).
+        if (!await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, blogPostId))
+            return [];
+
         return await ProjectAsync(readDb.Polls
             .Where(p => p is BlogPostPoll && ((BlogPostPoll)p).BlogPostId == blogPostId)
             .OrderBy(p => p.PollId));
@@ -43,7 +51,16 @@ public class ServerPollReadService(
     {
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
         PollDto[] result = await ProjectAsync(readDb.Polls.Where(p => p.PollId == pollId));
-        return result.FirstOrDefault();
+        PollDto? poll = result.FirstOrDefault();
+
+        // Kind (g), keyed by poll id rather than post id — the wider hole of the two, since poll ids
+        // are enumerable and the DTO discloses its parent BlogPostId. Site polls have no parent and
+        // are always public. Returning null matches a nonexistent poll exactly (non-disclosure).
+        if (poll is { BlogPostId: int parentId }
+            && !await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, parentId))
+            return null;
+
+        return poll;
     }
 
     /// <summary>
