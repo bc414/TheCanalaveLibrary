@@ -306,6 +306,45 @@ public class FanonPipelineTests(PostgresFixture postgres) : IntegrationTestBase(
             .CustomName.Should().Be(name, "the skipped row is untouched");
     }
 
+    [Fact]
+    public async Task Adopt_StoryWithCaseVariantDuplicates_SkipsInsteadOfCrashing()
+    {
+        // Regression: the group key is case-INSENSITIVE but the DB unique index is
+        // case-SENSITIVE, so one story can hold "Saura" AND "saura" on one base tag and both
+        // match the same link. Adopting both would write two identical (story, target, NULL)
+        // rows — a raw DbUpdateException (500), not the friendly collision skip.
+        string name = $"Case{Guid.NewGuid():N}"[..12];
+        int storyId = await SeedClusterStoryAsync(_authorA, name);
+        using (IServiceScope scope = NewScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.StoryCharacters.Add(new StoryCharacter
+            {
+                StoryId = storyId, CharacterTagId = _baseTagId, IsOc = true,
+                CustomName = name.ToLowerInvariant()   // legal: index is case-sensitive
+            });
+            await db.SaveChangesAsync();
+        }
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        using (IServiceScope scope = NewScope())
+            await scope.ServiceProvider.GetRequiredService<IFanonWriteService>()
+                .LinkGroupAsync(new FanonLinkCreateDto(name, _baseTagId, _targetTagId));
+
+        SetActiveUser(_authorA);
+        AdoptResultDto result;
+        using (IServiceScope scope = NewScope())
+            result = await scope.ServiceProvider.GetRequiredService<IFanonWriteService>().AdoptAllAsync(_targetTagId);
+
+        result.Adopted.Should().Be(0, "a story holding case-variant duplicates is skipped whole");
+        result.SkippedCollisions.Should().Be(2, "both rows report as skipped, not adopted");
+
+        using IServiceScope verify = NewScope();
+        ApplicationDbContext verifyDb = verify.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await verifyDb.StoryCharacters.CountAsync(sc => sc.StoryId == storyId && sc.CharacterTagId == _baseTagId))
+            .Should().Be(2, "both original rows are untouched");
+    }
+
     // ── Adoption pages + dismissal ─────────────────────────────────────────────
 
     [Fact]

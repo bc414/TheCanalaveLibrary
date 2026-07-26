@@ -218,6 +218,16 @@ public class ServerFanonWriteService(
                         .ToListAsync())
                     .ToHashSet();
 
+                // Intra-story case-variant duplicates ("Saura" AND "saura" on one base tag) are
+                // legal under the case-SENSITIVE DB index but both match this case-INSENSITIVE
+                // group — adopting both would produce two identical (story, target, NULL) rows and
+                // violate the unique index as a raw DbUpdateException. Treat the whole story as a
+                // collision: skip it, explain it, let the author de-duplicate and re-adopt. Writes
+                // can no longer create these (ValidateStructuredTagGatesAsync compares case-
+                // insensitively); this handles rows predating that rule.
+                foreach (int dupStoryId in mine.GroupBy(m => m.StoryId).Where(g => g.Count() > 1).Select(g => g.Key))
+                    colliding.Add(dupStoryId);
+
                 foreach (StoryCharacter row in mine)
                 {
                     if (colliding.Contains(row.StoryId)) { skipped++; continue; }
@@ -247,6 +257,11 @@ public class ServerFanonWriteService(
                         .Select(st => st.StoryId)
                         .ToListAsync())
                     .ToHashSet();
+
+                // Flat rows can't case-collide within a story (StoryTag's PK is (StoryId, TagId),
+                // so one row per tag), but keep the guard symmetric and defensive.
+                foreach (int dupStoryId in mine.GroupBy(m => m.StoryId).Where(g => g.Count() > 1).Select(g => g.Key))
+                    colliding.Add(dupStoryId);
 
                 foreach (StoryTag row in mine)
                 {

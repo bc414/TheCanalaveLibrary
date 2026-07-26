@@ -4124,3 +4124,57 @@ drift. Adds newly-found seams: `PrefersDataSaverMode` inert, and the six defects
 - **Tool:** Claude Code (Fable). **Pointer:** `audit/Tags.md` §"WU-TagFanon Stage note";
   `audit/Discovery.md`, `audit/Notifications.md`; `layer1-data-model.md`, `layer2-services.md`;
   `status.md` Global conditions; `hidden-deferrals-tracker.md`.
+
+### WU-TagFanon post-review pass (2026-07-26, same session)
+
+A deliberate re-read of the WU-TagFanon diff after the suite was green and the browser pass was
+clean. It found four defects and two architectural gaps. **None was caught by the 2258 tests or the
+browser verification** — recording that because it argues for diff-review as a distinct step, not a
+formality after green tests.
+
+**Fixed:**
+1. **Malformed ship input returned 500, not 400.** `ApplyShipTerm` threw `ArgumentException` from
+   inside predicate assembly when a ship named more than `ShipFilterDto.MaxMembers` characters.
+   Replaced with a `ValidateShipShape` guard at the service entry throwing `StoryValidationException`
+   (a `CanalaveValidationException`, which the endpoint layer maps to 400); it also now rejects a
+   ship naming the same character twice.
+2. **Adoption crashed on case-variant duplicates.** The fanon group key is case-INSENSITIVE but the
+   `story_characters` unique index is case-SENSITIVE, so one story could legally hold "Saura" and
+   "saura" on one base tag — and adopting mapped both to `(story, target, NULL)`, violating the
+   index as a raw `DbUpdateException`. Root fix: `ValidateStructuredTagGatesAsync` now compares
+   custom names case-insensitively, so writes can no longer create the pair. Existing rows are
+   handled by treating such a story as a collision — skipped with the same explanation, never merged.
+3. **Two N+1 loops.** `GetGroupsAsync` ran two queries per linked group inside a `foreach`;
+   `GetMyAdoptionIndexAsync` ran one count per fanon link SITE-WIDE, unbounded by paging. Both
+   rewritten to batch (`GroupAuthorsBatchedAsync` + a single notified-pairs query; two batched
+   queries for the adoption index). This was a violation of `layer2-services.md`'s own
+   "Two-Pass Batch Enrichment" rule, in the same file family as tracked defect MA-408.
+4. **The "data-preserving" migration had never run against data.** Both prior applications were to a
+   freshly-dropped dev database, so the flag OR-merge, the SettingDetail fold and the description
+   truncation all executed against zero rows. Now proven by
+   **`scripts/verify-tagfanon-migration.ps1`** — stands up a scratch DB at the pre-overlay schema,
+   seeds representative old-shape rows (both gate flags independently, an over-length description,
+   an OC overlay, a SettingDetail side-row), applies the migration and asserts 12 preservation
+   claims. All pass. Re-run it whenever those migrations are edited.
+   *(Two Windows-PowerShell traps encoded in that script: native-command stderr under
+   `$ErrorActionPreference='Stop'` turns psql NOTICEs into terminating errors, and PS 5.1's
+   native-argument quoting strips the double quotes around `"AspNetUsers"` — hence `psql -f file`
+   rather than `-c`.)*
+
+Also removed a dead `_linkingGroup` field (and the now-unused `OpenLinkPanel` parameter) — refactor
+residue that created a second source of truth for the open panel.
+
+**Recorded, not built:** `hidden-deferrals-tracker.md` **B11** (ship filter has no restore path —
+carries the URL-round-trip decision that must be settled first) and **B12** (roll-up made
+`ApplyFilters` impure; expansion is uncached and unshared with Layer 8, and the 0.02 ms figure
+measured localhost DB execution rather than a production round-trip). Both entries are written to be
+planned from, with options and trade-offs.
+
+**Doc correction:** `audit/Discovery.md` had let the settled F15 decision ("ships are never persisted
+in `SavedTagSelection`") read as though it also settled ship URL/seed round-tripping, which was never
+discussed. The note now separates settled from open explicitly. This is the same failure mode
+WU-TagFanon existed to clean up — a non-decision wearing a decision's clothes — reproduced in the
+same session, which is why it is called out here rather than quietly amended.
+
+**Verified:** `dotnet test` green; three new regression tests (case-variant adoption skip, ship
+arity 400, repeated-member 400); migration script green.

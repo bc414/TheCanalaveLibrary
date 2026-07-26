@@ -93,12 +93,21 @@ from its own species' search results — the feature would have inverted its own
 the browser: an adopted story carrying *only* the fanon child still returns under its parent filter.
 
 **Ship filter axis.** `StoryFilterDto` gains `IncludedShips`/`ExcludedShips` (`ShipFilterDto`:
-1–3 member character tag ids + optional pairing type). A ship matches when ONE pairing's member set
-covers every named character — co-presence in a story is not a ship. Include and exclude mirror the
-tag axis, AND across ships, and member ids inherit roll-up. Ships are transient viewer intent and
-are deliberately **never** persisted in `SavedTagSelection` (tag-axis-only, settled F15 scope).
+1–3 member character tag ids + optional pairing type; arity and repeated-member violations throw
+`StoryValidationException` at the service entry, so malformed input is a 400 not a 500). A ship
+matches when ONE pairing's member set covers every named character — co-presence in a story is not
+a ship. Include and exclude mirror the tag axis, AND across ships, and member ids inherit roll-up.
 Curated pairing tags did NOT return — ships are combinatorial and would reproduce the tag soup the
 curated model exists to prevent.
+
+**Settled vs. open — do not conflate these two (correction, 2026-07-26).**
+- **Settled:** ships are **not** persisted in `SavedTagSelection`. A saved selection is a curated
+  artifact the user names and shares as an object, and its scope is tag-axis-only (F15, WU43).
+- **NOT settled, and never discussed:** whether ship state participates in **filter round-tripping**
+  (URL query params, `InitialFilter` seeding, `[PersistentState]`). An earlier revision of this note
+  let the first decision read as though it covered the second. It does not — a saved artifact and
+  the address of a view are different concerns. Ships currently have **no restore path of any kind**,
+  which is an open gap rather than a decision. See `hidden-deferrals-tracker.md` **B11**.
 
 Covered by `DiscoveryRollUpAndShipTests` (Integration). Full narrative: `audit/Tags.md`
 §"WU-TagFanon Stage note"; rules: `layer2-services.md` §"Tag Hierarchy Roll-Up".

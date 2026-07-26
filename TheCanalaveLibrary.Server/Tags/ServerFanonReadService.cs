@@ -53,16 +53,37 @@ public class ServerFanonReadService(
         Dictionary<(string, int), int> linkTargets = links.ToDictionary(l => (l.NormalizedName, l.BaseTagId), l => l.TargetTagId);
         Dictionary<int, TagChipDto> targetChips = await ChipsByIdAsync(readDb, links.Select(l => l.TargetTagId).Distinct().ToList());
 
-        // Per linked target: how many authors were already notified.
+        // ── Two batched queries for the whole page's linked groups (never per-group: the
+        //    "Two-Pass Batch Enrichment" rule in layer2-services.md, and the defect shape
+        //    tracker MA-408 exists for). ──
         List<int> targetIds = links.Select(l => l.TargetTagId).Distinct().ToList();
-        var notifiedCounts = targetIds.Count == 0
+
+        // (1) notified (target, user) pairs — serves BOTH the notified count and the
+        //     unnotified-author computation.
+        List<(int TargetTagId, int UserId)> notifiedPairs = targetIds.Count == 0
             ? []
-            : await readDb.TagAdoptionStates
-                .Where(s => targetIds.Contains(s.TargetTagId) && s.DateNotified != null)
-                .GroupBy(s => s.TargetTagId)
-                .Select(g => new { TargetTagId = g.Key, Count = g.Count() })
-                .ToListAsync();
-        Dictionary<int, int> notifiedByTarget = notifiedCounts.ToDictionary(x => x.TargetTagId, x => x.Count);
+            : (await readDb.TagAdoptionStates
+                    .Where(s => targetIds.Contains(s.TargetTagId) && s.DateNotified != null)
+                    .Select(s => new { s.TargetTagId, s.UserId })
+                    .ToListAsync())
+                .Select(x => (x.TargetTagId, x.UserId))
+                .ToList();
+        Dictionary<int, int> notifiedByTarget = notifiedPairs
+            .GroupBy(p => p.TargetTagId)
+            .ToDictionary(g => g.Key, g => g.Count());
+        Dictionary<int, HashSet<int>> notifiedUsersByTarget = notifiedPairs
+            .GroupBy(p => p.TargetTagId)
+            .ToDictionary(g => g.Key, g => g.Select(p => p.UserId).ToHashSet());
+
+        // (2) (group key → author ids) for every linked group on this page, in ONE query.
+        //     The IN×IN predicate over-matches (name × base cross product); the exact
+        //     (name, base) pairing is restored in memory below.
+        List<(string Name, int BaseTagId)> linkedKeys = rows
+            .Where(r => linkTargets.ContainsKey((r.Name, r.BaseTagId)))
+            .Select(r => (r.Name, r.BaseTagId))
+            .ToList();
+        Dictionary<(string, int), HashSet<int>> authorsByGroup =
+            await GroupAuthorsBatchedAsync(readDb, axis, linkedKeys);
 
         List<FanonGroupDto> result = new(rows.Count);
         foreach (var r in rows)
@@ -71,13 +92,9 @@ public class ServerFanonReadService(
             int unnotified = 0;
             if (targetId is int tid)
             {
-                // Authors in the group with no notified state for the target — the mod
-                // "Notify new" count. Per-linked-group query (rare rows, page-bounded).
-                List<int> groupAuthorIds = await GroupAuthorIdsAsync(readDb, axis, r.BaseTagId, r.Name, includeDrafts: false);
-                HashSet<int> notified = (await readDb.TagAdoptionStates
-                        .Where(s => s.TargetTagId == tid && s.DateNotified != null)
-                        .Select(s => s.UserId).ToListAsync()).ToHashSet();
-                unnotified = groupAuthorIds.Count(a => !notified.Contains(a));
+                HashSet<int> groupAuthors = authorsByGroup.GetValueOrDefault((r.Name, r.BaseTagId)) ?? [];
+                HashSet<int> notified = notifiedUsersByTarget.GetValueOrDefault(tid) ?? [];
+                unnotified = groupAuthors.Count(a => !notified.Contains(a));
             }
 
             result.Add(new FanonGroupDto(
@@ -233,22 +250,48 @@ public class ServerFanonReadService(
                 .ToListAsync())
             .ToDictionary(s => s.TargetTagId, s => s.IsDismissed);
 
+        // TWO batched queries for the viewer's whole matching set — never one per link. The old
+        // per-link loop was unbounded by paging: it cost one query per fanon link SITE-WIDE on
+        // every load of /tag-adoptions.
+        List<string> allNames = links.Select(l => l.NormalizedName).Distinct().ToList();
+        List<int> charBaseIds = links.Where(l => l.BaseTypeId == TagTypeEnum.Character)
+            .Select(l => l.BaseTagId).Distinct().ToList();
+        List<int> flatBaseIds = links.Where(l => l.BaseTypeId != TagTypeEnum.Character)
+            .Select(l => l.BaseTagId).Distinct().ToList();
+
+        List<(string Name, int BaseTagId)> charRows = charBaseIds.Count == 0
+            ? []
+            : (await readDb.StoryCharacters
+                    .IgnoreQueryFilters(["ContentRating"])
+                    .Where(sc => sc.Story.AuthorId == viewerId
+                        && sc.CustomName != null
+                        && charBaseIds.Contains(sc.CharacterTagId)
+                        && allNames.Contains(sc.CustomName!.ToLower().Trim()))
+                    .Select(sc => new { Name = sc.CustomName!.ToLower().Trim(), BaseTagId = sc.CharacterTagId })
+                    .ToListAsync())
+                .Select(x => (x.Name, x.BaseTagId)).ToList();
+
+        List<(string Name, int BaseTagId)> flatRows = flatBaseIds.Count == 0
+            ? []
+            : (await readDb.StoryTags
+                    .IgnoreQueryFilters(["ContentRating"])
+                    .Where(st => st.Story.AuthorId == viewerId
+                        && st.CustomName != null
+                        && flatBaseIds.Contains(st.TagId)
+                        && allNames.Contains(st.CustomName!.ToLower().Trim()))
+                    .Select(st => new { Name = st.CustomName!.ToLower().Trim(), BaseTagId = st.TagId })
+                    .ToListAsync())
+                .Select(x => (x.Name, x.BaseTagId)).ToList();
+
+        // Tally the over-matched rows back onto exact (name, base) link keys.
+        Dictionary<(string, int), int> countByKey = charRows.Concat(flatRows)
+            .GroupBy(r => (r.Name, r.BaseTagId))
+            .ToDictionary(g => g.Key, g => g.Count());
+
         Dictionary<int, int> pendingByTarget = [];
         foreach (var link in links)
         {
-            int pending = link.BaseTypeId == TagTypeEnum.Character
-                ? await readDb.StoryCharacters
-                    .IgnoreQueryFilters(["ContentRating"])
-                    .CountAsync(sc => sc.Story.AuthorId == viewerId
-                        && sc.CharacterTagId == link.BaseTagId
-                        && sc.CustomName != null
-                        && sc.CustomName!.ToLower().Trim() == link.NormalizedName)
-                : await readDb.StoryTags
-                    .IgnoreQueryFilters(["ContentRating"])
-                    .CountAsync(st => st.Story.AuthorId == viewerId
-                        && st.TagId == link.BaseTagId
-                        && st.CustomName != null
-                        && st.CustomName!.ToLower().Trim() == link.NormalizedName);
+            int pending = countByKey.GetValueOrDefault((link.NormalizedName, link.BaseTagId));
             if (pending > 0)
                 pendingByTarget[link.TargetTagId] = pendingByTarget.GetValueOrDefault(link.TargetTagId) + pending;
         }
@@ -385,36 +428,69 @@ public class ServerFanonReadService(
             .Distinct();
     }
 
-    /// <summary>Distinct author ids of a group's published stories (for the notify-new count).</summary>
-    protected static async Task<List<int>> GroupAuthorIdsAsync(
-        ReadOnlyApplicationDbContext readDb, TagTypeEnum axis, int baseTagId, string normalizedName, bool includeDrafts)
+    /// <summary>
+    /// Distinct author ids per group key, for MANY groups in ONE query (the batch counterpart of
+    /// the old per-group lookup). The SQL predicate is an over-matching IN×IN cross product; the
+    /// exact (normalized name, base tag) pairing is restored in memory, which is cheap and keeps
+    /// the round-trip count at one regardless of page size.
+    /// </summary>
+    protected static async Task<Dictionary<(string, int), HashSet<int>>> GroupAuthorsBatchedAsync(
+        ReadOnlyApplicationDbContext readDb, TagTypeEnum axis, List<(string Name, int BaseTagId)> keys)
     {
+        if (keys.Count == 0) return [];
+
+        List<string> names = keys.Select(k => k.Name).Distinct().ToList();
+        List<int> baseIds = keys.Select(k => k.BaseTagId).Distinct().ToList();
+        HashSet<(string, int)> wanted = keys.ToHashSet();
+
+        List<(string Name, int BaseTagId, int AuthorId)> pairs;
         if (axis == TagTypeEnum.Character)
         {
-            return await readDb.StoryCharacters
-                .IgnoreQueryFilters(["ContentRating"])
-                .Where(sc => sc.CharacterTagId == baseTagId
-                    && sc.CustomName != null
-                    && sc.CustomName!.ToLower().Trim() == normalizedName
-                    && sc.Story.AuthorId != null
-                    && (includeDrafts || (sc.Story.StoryStatusId >= StoryStatusEnum.InProgress
-                                          && sc.Story.StoryStatusId <= StoryStatusEnum.OpenBeta)))
-                .Select(sc => sc.Story.AuthorId!.Value)
-                .Distinct()
-                .ToListAsync();
+            pairs = (await readDb.StoryCharacters
+                    .IgnoreQueryFilters(["ContentRating"])
+                    .Where(sc => sc.CustomName != null
+                        && baseIds.Contains(sc.CharacterTagId)
+                        && names.Contains(sc.CustomName!.ToLower().Trim())
+                        && sc.Story.AuthorId != null
+                        && sc.Story.StoryStatusId >= StoryStatusEnum.InProgress
+                        && sc.Story.StoryStatusId <= StoryStatusEnum.OpenBeta)
+                    .Select(sc => new
+                    {
+                        Name = sc.CustomName!.ToLower().Trim(),
+                        BaseTagId = sc.CharacterTagId,
+                        AuthorId = sc.Story.AuthorId!.Value
+                    })
+                    .Distinct()
+                    .ToListAsync())
+                .Select(x => (x.Name, x.BaseTagId, x.AuthorId))
+                .ToList();
+        }
+        else
+        {
+            pairs = (await readDb.StoryTags
+                    .IgnoreQueryFilters(["ContentRating"])
+                    .Where(st => st.CustomName != null
+                        && baseIds.Contains(st.TagId)
+                        && names.Contains(st.CustomName!.ToLower().Trim())
+                        && st.Story.AuthorId != null
+                        && st.Story.StoryStatusId >= StoryStatusEnum.InProgress
+                        && st.Story.StoryStatusId <= StoryStatusEnum.OpenBeta)
+                    .Select(st => new
+                    {
+                        Name = st.CustomName!.ToLower().Trim(),
+                        BaseTagId = st.TagId,
+                        AuthorId = st.Story.AuthorId!.Value
+                    })
+                    .Distinct()
+                    .ToListAsync())
+                .Select(x => (x.Name, x.BaseTagId, x.AuthorId))
+                .ToList();
         }
 
-        return await readDb.StoryTags
-            .IgnoreQueryFilters(["ContentRating"])
-            .Where(st => st.TagId == baseTagId
-                && st.CustomName != null
-                && st.CustomName!.ToLower().Trim() == normalizedName
-                && st.Story.AuthorId != null
-                && (includeDrafts || (st.Story.StoryStatusId >= StoryStatusEnum.InProgress
-                                      && st.Story.StoryStatusId <= StoryStatusEnum.OpenBeta)))
-            .Select(st => st.Story.AuthorId!.Value)
-            .Distinct()
-            .ToListAsync();
+        return pairs
+            .Where(p => wanted.Contains((p.Name, p.BaseTagId)))
+            .GroupBy(p => (p.Name, p.BaseTagId))
+            .ToDictionary(g => g.Key, g => g.Select(p => p.AuthorId).ToHashSet());
     }
 
     /// <summary>Full-field chip lookup by id (parent-inherited sprite, parent name, fanon flag).</summary>

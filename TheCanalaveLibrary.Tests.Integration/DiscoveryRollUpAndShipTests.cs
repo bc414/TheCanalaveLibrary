@@ -207,6 +207,41 @@ public class DiscoveryRollUpAndShipTests(PostgresFixture postgres) : Integration
     }
 
     [Fact]
+    public async Task ShipFilter_TooManyMembers_ThrowsUserFacingValidation_NotArgumentException()
+    {
+        // Regression: arity was enforced deep inside predicate assembly with an
+        // ArgumentException, so ordinary bad input surfaced as a 500 instead of a 400.
+        SetActiveUser(_authorId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IStoryReadService read = scope.ServiceProvider.GetRequiredService<IStoryReadService>();
+
+        Func<Task> act = () => read.GetListingsAsync(new StoryFilterDto
+        {
+            IncludedShips = [new ShipFilterDto { MemberTagIds = [_parentTagId, _childTagId, _otherTagId, _genreParentId] }]
+        });
+
+        (await act.Should().ThrowAsync<StoryValidationException>())
+            .Which.Should().BeAssignableTo<CanalaveValidationException>(
+                "the endpoint layer maps CanalaveValidationException to 400 — an ArgumentException would be a 500");
+    }
+
+    [Fact]
+    public async Task ShipFilter_RepeatedMember_ThrowsUserFacingValidation()
+    {
+        SetActiveUser(_authorId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IStoryReadService read = scope.ServiceProvider.GetRequiredService<IStoryReadService>();
+
+        Func<Task> act = () => read.GetListingsAsync(new StoryFilterDto
+        {
+            IncludedShips = [new ShipFilterDto { MemberTagIds = [_parentTagId, _parentTagId] }]
+        });
+
+        await act.Should().ThrowAsync<StoryValidationException>(
+            "naming the same character twice is a malformed ship, not a self-pairing");
+    }
+
+    [Fact]
     public async Task ShipExclude_RemovesMatchingStories()
     {
         SetActiveUser(_authorId);

@@ -125,7 +125,7 @@
                                 }
                                 else
                                 {
-                                    <button type="button" @onclick="() => OpenLinkPanel(groupKey, group)"
+                                    <button type="button" @onclick="() => OpenLinkPanel(groupKey)"
                                             class="self-start text-xs text-(--color-action-ink) hover:underline">
                                         Link to tag…
                                     </button>
@@ -186,7 +186,6 @@
     private TagChipDto? _pickedTarget;
     private string _newTagName = "";
     private string? _linkError;
-    private FanonGroupDto? _linkingGroup;
 
     private string Title => _axis == TagTypeEnum.Character ? "Original characters" : "Original settings";
 
@@ -238,10 +237,9 @@
 
     // ── Moderator link-and-notify ─────────────────────────────────────────────
 
-    private void OpenLinkPanel(string key, FanonGroupDto group)
+    private void OpenLinkPanel(string key)
     {
         _linkingGroupKey = key;
-        _linkingGroup = group;
         _pickedTarget = null;
         // Deliberately NOT pre-filled — see the create-path comment in the markup.
         _newTagName = "";

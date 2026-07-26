@@ -257,8 +257,16 @@ public class ServerStoryWriteService(
         // Duplicate-character rule: (CharacterTagId, CustomName) must be unique within the story
         // (nulls collide too — at most one unnamed row per tag), mirroring the DB unique index so
         // the violation surfaces as a friendly message, not a DbUpdateException.
+        //
+        // Compared CASE-INSENSITIVELY, deliberately stricter than the DB index (Postgres btree on
+        // text is case-sensitive). "Saura" and "saura" on one tag are the same character to every
+        // other part of the system — the fanon group key normalizes case, so two case-variant rows
+        // in one story would both match one link and adoption would map both to
+        // (story, target, NULL), violating the unique index as a raw DbUpdateException. Rejecting
+        // them at write time is the root fix; AdoptCoreAsync additionally skips any story that
+        // already carries such a pair from before this rule existed.
         bool duplicateCharacters = dto.StoryCharacters
-            .GroupBy(sc => (sc.CharacterTagId, Name: sc.CustomName?.Trim()))
+            .GroupBy(sc => (sc.CharacterTagId, Name: sc.CustomName?.Trim().ToLowerInvariant()))
             .Any(g => g.Count() > 1);
         if (duplicateCharacters)
             errors.Add("Two characters on the same tag need distinct custom names.");

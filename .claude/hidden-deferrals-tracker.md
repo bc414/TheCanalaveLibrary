@@ -10,6 +10,14 @@ items where the grid cell reads Stage 5 (or N/A), yet real work remains. Produce
 > drift, and added **B0**. The pattern worth carrying forward: a one-line tracker entry is a
 > *pointer to an investigation*, not a scoped work item — three of A5's assumptions were wrong
 > before any code was written.
+>
+> A **post-implementation review of that same WU** then added **B11** and **B12**, and caught four
+> defects in the newly-written code: malformed ship input threw from inside predicate assembly
+> (a 500 for what should be a 400); adoption crashed with a raw `DbUpdateException` on case-variant
+> duplicates in one story; two N+1 query loops (one unbounded by paging) in a codebase that
+> documents a batch-enrichment rule; and a "data-preserving" migration whose transformation SQL had
+> only ever run against an empty database. Worth carrying forward: **every one of those was found by
+> re-reading the diff** — the 2258-test suite was green and the browser pass was clean throughout.
 
 **Status: snapshot, not authoritative.** This file is a hand-maintained convenience list, deliberately kept
 *outside* the governed process docs (`status.md` / audit files / skills) at the owner's request. It can go stale.
@@ -197,6 +205,128 @@ decision work that has no row at all.
   - Context: Only `LocalSpriteAssetProbe` (dev) exists. Write-time sprite-existence validation (a non-blocking warning) has no cloud/prod backend.
 
 ---
+
+- [ ] **B11 — Ship filter has no restore path (no URL round-trip, no seed, no persistence)** `[inert · med · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26.*
+  - Grid: F31 L2/L3-Logic/L3.5=5 — invisible there; the axis works, it just cannot be reconstructed.
+  - Source: `audit/Discovery.md` §"WU-TagFanon note" → "Settled vs. open"; `ShipFilter.razor`;
+    `ResultsFilterPanel.razor` `OnParametersSet`; `SearchPage.razor`.
+
+  **What exists.** `StoryFilterDto.IncludedShips`/`ExcludedShips` are real filter axes, applied
+  server-side with roll-up, and `ShipFilter.razor` builds them. Within one page session ships
+  behave correctly: `ShipFilter` owns `_included`/`_excluded`, `OnShipFilterChanged` sets
+  `_userHasInteracted` so the panel's re-seed loop stops overwriting them, and pagination preserves
+  them. **There is no user-visible bug today.**
+
+  **What is missing.** Ships are the ONLY axis with no reconstruction path:
+
+  | Mechanism | Tags | Interactions | Text/Sort | Ships |
+  |---|---|---|---|---|
+  | Carried on `StoryFilterDto` | yes | yes | yes | yes |
+  | `Initial*` seed param on `ResultsFilterPanel` | `InitialIncludedTags`/`InitialExcludedTags` | via `InitialFilter` | via `InitialFilter` | **none** |
+  | Re-hydration of display data from bare ids | `ResolveTagChipsAsync` | n/a | n/a | **none** |
+  | `[PersistentState]` across prerender→interactive | chip lists persisted | n/a | n/a | **none** |
+  | Seeded in `OnParametersSet` | yes | yes | yes | **no** |
+
+  So ship state can only ever be *created by live interaction* and can never be rebuilt from a
+  `StoryFilterDto`. It is lost on navigation, on any parent re-render that recreates `ShipFilter`,
+  and would be lost across a prerender handoff if it could exist there.
+
+  **Why this is worth doing, not just noting.** `/discover` currently round-trips NO filter state
+  through the URL — only `TreeSearchPage` uses `SupplyParameterFromQuery` + `NavigateTo(replace:
+  true)`, and that page is the in-repo pattern to copy. So today ships are consistent with
+  everything else on that page. But the moment `/discover` gains URL state — and for a fanfiction
+  site a shareable filtered view is close to a defining feature; "everything for this pairing" is
+  the canonical community link in the medium — **every axis will come along except ships**, because
+  ships are the one axis with no id→state path. Fixing it later means touching the DTO, the panel,
+  the component and the page; fixing it alongside the URL work means one parameter and one seed block.
+
+  **The decision to make first — a genuine open question, not an implementation detail.**
+  Should `/discover` round-trip filter state through the URL at all?
+  1. **Yes, all axes** — follow `TreeSearchPage`'s pattern. Gains shareable/bookmarkable searches
+     and working back/forward. Costs: URL length with many tag ids; a serialization format for
+     ships (nested member lists); and an explicit note that tag ids in a URL are not a privacy
+     surface (tags are public) so nobody re-litigates it later.
+  2. **No URL state, but add ship seeding anyway** — closes the asymmetry cheaply (an
+     `InitialShips` parameter, a seed block, `[PersistentState]`) so ships stop being second-class
+     without committing to URL design. Leaves `/discover` unshareable, which is the status quo.
+  3. **Leave as-is** — accept that ships die on navigation. Only defensible if URL round-tripping
+     is decided against permanently; otherwise this is deferral wearing a decision's clothes.
+
+  **Explicitly NOT the same question as F15.** Ships are settled as *never persisted in
+  `SavedTagSelection`* — a saved selection is a curated artifact the user names and shares as an
+  object, and its scope is tag-axis-only (WU43). That says nothing about URL/seed round-tripping:
+  a saved artifact and the address of a view are different concerns. An earlier
+  `audit/Discovery.md` revision blurred the two; that note has been corrected. **Do not let the F15
+  decision be cited as covering this.**
+
+  **Implementation sketch (if option 1 or 2 wins).** Add `InitialIncludedShips`/`InitialExcludedShips`
+  to `ResultsFilterPanel` and seed them in `OnParametersSet` beside the tag block; add a matching
+  seed parameter to `ShipFilter` (it currently initializes its lists empty with no `OnInitialized`
+  seeding). Note a real snag: `ShipFilter` keeps parallel `_includedNames`/`_excludedNames` display
+  strings built at pick time from the chips the user selected — those **cannot currently be rebuilt
+  from member tag ids**, so seeding needs either a name-resolution step (the `ResolveTagChipsAsync`
+  equivalent, via `ITagReadService.GetTagChipsByIdsAsync`) or a DTO that carries display names.
+  For option 1, settle a compact URL encoding before building — ships are a list of (member id
+  list, optional pairing type), so something like `ship=21.47~R&ship=25.30`; `ShipFilterDto.MaxMembers`
+  (3) bounds each entry.
+
+  **Blast radius.** All four `ResultsFilterPanel` consumers (`/discover`, Tree Search, Bookshelves,
+  Profile story tabs) inherit `ShowShipFilter` defaulting true, so seeding work benefits all four
+  at once — and any URL decision should be checked against all four, not just `/discover`.
+
+- [ ] **B12 — Hierarchy roll-up made `ApplyFilters` impure; expansion is uncached and unshared** `[latent-risk · low · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26.*
+  - Grid: F31 L2=5; F59/F60 (marts) L8=5 — invisible on all of them.
+  - Source: `ServerStoryReadService.ApplyFiltersAsync` + `ExpandWithChildrenAsync`;
+    `layer2-services.md` §"Tag Hierarchy Roll-Up"; `layer6-indexes.md` §"Measured, no DDL needed".
+
+  **What changed, and why it matters beyond performance.** Roll-up turned a **pure, synchronous**
+  predicate builder (`StoryFilterDto` → predicate, no I/O) into an **impure, async** one that takes
+  a `ReadOnlyApplicationDbContext` and whose output depends on live database state. Three call
+  sites changed signature (`GetListingsAsync`, `FilterCandidateIdsAsync`, `GetRandomBatchAsync`)
+  and every future caller must now have a read context in hand. Three consequences a benchmark
+  will not show:
+
+  1. **A filter is no longer reproducible from its DTO.** Two identical `StoryFilterDto`s can
+     return different result sets if a moderator re-parents a tag between them. That is *intended*
+     — hierarchy is meant to be live — but it means filter results cannot be cached by DTO, logged
+     and replayed, or reasoned about from the DTO alone.
+  2. **Layer 8 cannot share the semantics.** The discovery marts are raw SQL with no EF model
+     (`DiscoveryMartSchema`, documented as frozen). If a mart ever needs the same filter behaviour
+     it must reimplement expansion — a second copy of a correctness rule, which is precisely how
+     the two halves of the tag model drifted apart in the first place.
+  3. **The measurement that justified it captured the cheap half.** The recorded 0.02 ms is
+     *database execution* for a seq scan over a 136-row `tags` table sitting in `shared_buffers`
+     **on localhost**. Production is a droplet plus managed Postgres — network-separated — where an
+     extra round-trip costs roughly 0.5–2 ms of latency regardless of query speed. The honest
+     statement: **filtered** searches pay one extra round-trip; **unfiltered** browse pays nothing
+     (`ExpandWithChildrenAsync` early-returns on an empty id set, and `ApplyFiltersAsync` only
+     populates that set from the tag/ship axes).
+
+  **The obvious cheaper design, not taken.** The parent→children map is tiny (one row per child
+  tag), identical for every viewer, and changes only when a moderator writes a tag — close to an
+  ideal in-memory cache with write-invalidation from `ServerTagWriteService`. It was not considered
+  during the build; the query was simply added. Precedent runs both ways in this codebase:
+  `ISiteSettingsReadService` is *deliberately* uncached and documents why (a mod edit must take
+  effect on the next read), while sprite/theme resolution happens at render time. A tag hierarchy
+  leans cacheable: edits are rare, one cycle of staleness is harmless, and the invalidation point
+  is a single write service.
+
+  **Questions to settle before building anything:**
+  - Cache the expansion map, or keep the per-request lookup? If cached: process-local
+    `IMemoryCache` (fine at N=1) versus something that survives N≥2 (see `horizontal-scaling.md`).
+    A stale map on one node for one cycle is probably acceptable — but decide it deliberately
+    rather than by omission.
+  - Invalidation trigger: any `Tag` write, or specifically `ParentTagId` changes? The narrow
+    trigger is easy to get subtly wrong; the broad one is trivially correct and nearly free.
+  - Should expansion be *exposed* (e.g. `ITagReadService.GetChildIdsAsync`) so Layer 8 and any
+    future consumer share one implementation instead of copying the rule?
+  - **Re-measure on a network-separated database before concluding it does not matter.** The
+    existing number cannot answer the question it is currently being used to answer.
+
+  **Not urgent, and not a defect.** Roll-up is correct and load-bearing — without it, fanonize
+  adoption removes stories from their own species' search results. This entry is about the
+  architectural debt the fix introduced, so a future session can weigh it deliberately instead of
+  rediscovering it.
 
 ## C. L6 cells marked verified but never measured / known-missing indexes
 

@@ -560,6 +560,11 @@ public class ServerStoryReadService(
     private async Task<IQueryable<Story>> ApplyFiltersAsync(
         ReadOnlyApplicationDbContext readDb, IQueryable<Story> query, StoryFilterDto filter, bool hasFts)
     {
+        // Shape validation up front, as a user-facing domain exception — NOT an ArgumentException
+        // from deep inside predicate assembly, which would surface as a 500 for what is ordinary
+        // bad input.
+        ValidateShipShape(filter);
+
         // ── One child-expansion lookup covering every axis that names tag ids ─────────────
         Dictionary<int, int[]> expansion = await ExpandWithChildrenAsync(readDb,
         [
@@ -654,6 +659,26 @@ public class ServerStoryReadService(
     }
 
     /// <summary>
+    /// Rejects malformed ship criteria before any query work. A ship names at most
+    /// <see cref="ShipFilterDto.MaxMembers"/> characters (the predicate builders below are
+    /// explicit per arity so the expression stays EF-translatable). Throws the user-facing
+    /// <see cref="StoryValidationException"/> so callers translate it to a 400 rather than
+    /// logging an unexpected error.
+    /// </summary>
+    private static void ValidateShipShape(StoryFilterDto filter)
+    {
+        List<string> errors = [];
+        foreach (ShipFilterDto ship in filter.IncludedShips.Concat(filter.ExcludedShips))
+        {
+            if (ship.MemberTagIds.Count > ShipFilterDto.MaxMembers)
+                errors.Add($"A ship filter supports at most {ShipFilterDto.MaxMembers} characters.");
+            if (ship.MemberTagIds.Distinct().Count() != ship.MemberTagIds.Count)
+                errors.Add("A ship filter cannot name the same character twice.");
+        }
+        if (errors.Count > 0) throw new StoryValidationException(errors.Distinct().ToList());
+    }
+
+    /// <summary>
     /// Expands each distinct input tag id to <c>{self} ∪ children</c> (hierarchy is one level
     /// deep — a single lookup, no CTE; the query the rejected Cache_TagHierarchy presumed).
     /// </summary>
@@ -682,10 +707,9 @@ public class ServerStoryReadService(
     private static IQueryable<Story> ApplyShipTerm(
         IQueryable<Story> query, ShipFilterDto ship, Dictionary<int, int[]> expansion, bool negate)
     {
+        // Arity is already validated by ValidateShipShape at the entry point.
         List<int[]> sets = ship.MemberTagIds.Select(id => expansion[id]).ToList();
         if (sets.Count == 0) return query;
-        if (sets.Count > ShipFilterDto.MaxMembers)
-            throw new ArgumentException($"A ship filter supports at most {ShipFilterDto.MaxMembers} members.");
 
         CharacterPairingType? type = ship.PairingType;
         System.Linq.Expressions.Expression<Func<Story, bool>> predicate = sets.Count switch
