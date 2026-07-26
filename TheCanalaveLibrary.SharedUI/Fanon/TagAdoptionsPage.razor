@@ -1,0 +1,88 @@
+@page "/tag-adoptions"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@inject IFanonReadService FanonService
+@inject IFanonWriteService FanonWriteService
+@using Microsoft.AspNetCore.Authorization
+
+@* The standing personal adoption index (WU-TagFanon 8.4) — top-level route, /story-lineages
+   precedent, user-menu entry. REQUIRED as a permanent home: read notifications are deleted
+   after 60 days, so the notification cannot be the only way to a pending adoption. The empty
+   state is a real state, not an error. Dismissed tags collapse below, reversibly (8.8). *@
+
+<PageTitle>Tag Adoptions — The Canalave Library</PageTitle>
+
+<div class="mx-auto max-w-2xl px-4 py-8 flex flex-col gap-5">
+    <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+        Tag Adoptions
+    </h1>
+
+    <p class="text-sm text-(--color-text-muted)">
+        When a name you used in a story becomes an official tag, it appears here — adopting it is
+        always your choice. See <a href="/fanon" class="text-(--color-action-ink) hover:underline">the fanon pages</a>
+        for how names become tags.
+    </p>
+
+    @if (Summaries is null)
+    {
+        <p class="text-sm text-(--color-text-muted)"><em>Loading…</em></p>
+    }
+    else
+    {
+        @if (Pending.Count == 0)
+        {
+            <p class="text-sm text-(--color-text-muted)">No pending tag adoptions — you're all caught up.</p>
+        }
+        else
+        {
+            <div class="flex flex-col gap-2">
+                @foreach (MyTagAdoptionSummaryDto s in Pending)
+                {
+                    <a href="/tag-adoptions/@s.TargetTag.TagId"
+                       class="flex items-center gap-3 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 hover:border-(--color-action-ink) transition-colors">
+                        <TagChip Tag="s.TargetTag" />
+                        <span class="text-sm text-(--color-text)">
+                            @s.PendingRowCount @(s.PendingRowCount == 1 ? "story uses" : "stories use") this name →
+                        </span>
+                    </a>
+                }
+            </div>
+        }
+
+        @if (Dismissed.Count > 0)
+        {
+            <div class="flex flex-col gap-2 border-t border-(--color-border) pt-3">
+                <p class="text-xs font-medium text-(--color-text-muted)">Dismissed (not my character/setting)</p>
+                @foreach (MyTagAdoptionSummaryDto s in Dismissed)
+                {
+                    <div class="flex items-center gap-3 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 opacity-70">
+                        <TagChip Tag="s.TargetTag" />
+                        <span class="text-xs text-(--color-text-muted)">@s.PendingRowCount pending</span>
+                        <button type="button" @onclick="() => UndismissAsync(s.TargetTag.TagId)"
+                                class="ml-auto text-xs text-(--color-action-ink) hover:underline">
+                            Restore
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+@code {
+    [PersistentState] public List<MyTagAdoptionSummaryDto>? Summaries { get; set; }
+
+    private List<MyTagAdoptionSummaryDto> Pending => Summaries?.Where(s => !s.IsDismissed).ToList() ?? [];
+    private List<MyTagAdoptionSummaryDto> Dismissed => Summaries?.Where(s => s.IsDismissed).ToList() ?? [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        Summaries ??= (await FanonService.GetMyAdoptionIndexAsync()).ToList();
+    }
+
+    private async Task UndismissAsync(int tagId)
+    {
+        await FanonWriteService.SetDismissedAsync(tagId, dismissed: false);
+        Summaries = (await FanonService.GetMyAdoptionIndexAsync()).ToList();
+    }
+}

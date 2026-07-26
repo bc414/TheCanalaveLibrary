@@ -371,6 +371,11 @@ public class ServerNotificationWriteService(
                 readLaterStorySet.Select(id => (id, blogPostId)).ToArray());
     }
 
+    /// <inheritdoc/>
+    public Task NotifyTagAdoptionSuggestedAsync(IReadOnlyList<int> recipientAuthorIds, int targetTagId, int moderatorSourceId) =>
+        CreateCoreAsync(NotificationTypeEnum.TagUpdateSuggestion, moderatorSourceId,
+            recipientAuthorIds.Select(id => (id, targetTagId)).ToArray());
+
     // ── Private create-core ───────────────────────────────────────────────────────
 
     /// <summary>

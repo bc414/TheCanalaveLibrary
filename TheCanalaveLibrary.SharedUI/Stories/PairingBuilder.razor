@@ -1,8 +1,10 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
 
-@* Presentational pairing builder. No @inject. Receives current character set; manages add/remove
-   of pairings via OnPairingsChanged. *@
+@* Presentational pairing builder. No @inject. Receives the story's character ROWS (positional —
+   one entry per StoryCharacterDto, duplicates of a species legal since WU-TagFanon) and manages
+   add/remove of pairings via OnPairingsChanged. Members are row INDEXES, matching
+   StoryCharacterPairingDto.MemberIndexes. Display names favor the row's CustomName. *@
 
 <div class="flex flex-col gap-3">
     @* Existing pairings *@
@@ -12,7 +14,7 @@
         StoryCharacterPairingDto pairing = Pairings[idx];
         string memberNames = string.Join(
             pairing.PairingType == CharacterPairingType.Romantic ? " ♥ " : " & ",
-            pairing.MemberCharacterTagIds.Select(id => CharacterChips.FirstOrDefault(c => c.TagId == id)?.TagName ?? $"#{id}"));
+            pairing.MemberIndexes.Select(m => NameForRow(m)));
         <div class="flex items-center justify-between gap-2 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm">
             <span class="text-(--color-text)">
                 @memberNames
@@ -29,12 +31,13 @@
         <div class="rounded-md border border-(--color-border) bg-(--color-surface) p-3 flex flex-col gap-3">
             <p class="text-sm font-medium text-(--color-text)">Add Pairing</p>
             <div class="flex flex-wrap gap-2">
-                @foreach (TagChipDto chip in CharacterChips)
+                @for (int i = 0; i < CharacterChips.Count; i++)
                 {
-                    bool selected = _selectedMemberIds.Contains(chip.TagId);
-                    <button type="button" @onclick="@(() => ToggleMember(chip.TagId))"
+                    int rowIndex = i;
+                    bool selected = _selectedMemberIndexes.Contains(rowIndex);
+                    <button type="button" @onclick="@(() => ToggleMember(rowIndex))"
                             class="@($"rounded-full border px-3 py-1 text-xs transition-colors {(selected ? "border-(--color-action-ink) bg-(--color-action) text-(--color-text)" : "border-(--color-border) text-(--color-text) hover:border-(--color-action-ink)")}")">
-                        @chip.TagName
+                        @NameForRow(rowIndex)
                     </button>
                 }
             </div>
@@ -60,7 +63,7 @@
                     </select>
                 </div>
             </div>
-            <button type="button" @onclick="AddPairing" disabled="@(_selectedMemberIds.Count < 2)"
+            <button type="button" @onclick="AddPairing" disabled="@(_selectedMemberIndexes.Count < 2)"
                     class="self-start rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
                 Add Pairing
             </button>
@@ -73,34 +76,44 @@
 </div>
 
 @code {
+    /// <summary>One chip per character ROW, positionally aligned with the form's DTO list.</summary>
     [Parameter] public IReadOnlyList<TagChipDto> CharacterChips { get; set; } = [];
+
+    /// <summary>Per-row display names (CustomName-aware), positionally aligned with <see cref="CharacterChips"/>.</summary>
+    [Parameter] public IReadOnlyList<string> CharacterNames { get; set; } = [];
+
     [Parameter] public IReadOnlyList<StoryCharacterPairingDto> Pairings { get; set; } = [];
     [Parameter] public EventCallback<List<StoryCharacterPairingDto>> OnPairingsChanged { get; set; }
 
-    private HashSet<int> _selectedMemberIds = new();
+    private HashSet<int> _selectedMemberIndexes = new();
     private CharacterPairingType _newPairingType = CharacterPairingType.Romantic;
     private TagPriority _newPairingPriority = TagPriority.Primary;
     // Unique per-instance suffix to namespace radio button groups (prevents cross-instance interference).
     private readonly string _instanceId = Guid.NewGuid().ToString("N")[..8];
 
-    private void ToggleMember(int tagId)
+    private string NameForRow(int index) =>
+        index >= 0 && index < CharacterNames.Count ? CharacterNames[index]
+        : index >= 0 && index < CharacterChips.Count ? CharacterChips[index].TagName
+        : $"#{index}";
+
+    private void ToggleMember(int rowIndex)
     {
-        if (!_selectedMemberIds.Remove(tagId))
-            _selectedMemberIds.Add(tagId);
+        if (!_selectedMemberIndexes.Remove(rowIndex))
+            _selectedMemberIndexes.Add(rowIndex);
     }
 
     private async Task AddPairing()
     {
-        if (_selectedMemberIds.Count < 2) return;
+        if (_selectedMemberIndexes.Count < 2) return;
 
         var newPairing = new StoryCharacterPairingDto
         {
             PairingType = _newPairingType,
             Priority = _newPairingPriority,
-            MemberCharacterTagIds = _selectedMemberIds.ToList()
+            MemberIndexes = _selectedMemberIndexes.OrderBy(i => i).ToList()
         };
 
-        _selectedMemberIds = new HashSet<int>();
+        _selectedMemberIndexes = new HashSet<int>();
         _newPairingType = CharacterPairingType.Romantic;
         _newPairingPriority = TagPriority.Primary;
 

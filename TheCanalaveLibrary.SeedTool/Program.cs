@@ -74,7 +74,13 @@ SeedIdBases bases = new(
     ChapterContentId: 1 + Convert.ToInt64(await Scalar("SELECT COALESCE(MAX(chapter_content_id), 0) FROM chapter_contents")),
     RecommendationId: 1 + Convert.ToInt32(await Scalar("SELECT COALESCE(MAX(recommendation_id), 0) FROM recommendations")),
     CommentId: 1 + Convert.ToInt64(await Scalar("SELECT COALESCE(MAX(comment_id), 0) FROM base_comments")),
-    NotificationId: 1 + Convert.ToInt64(await Scalar("SELECT COALESCE(MAX(notification_id), 0) FROM notifications")));
+    NotificationId: 1 + Convert.ToInt64(await Scalar("SELECT COALESCE(MAX(notification_id), 0) FROM notifications")),
+    TagId: 1 + Convert.ToInt32(await Scalar("SELECT COALESCE(MAX(tag_id), 0) FROM tags")),
+    StoryCharacterId: 1 + Convert.ToInt32(await Scalar("SELECT COALESCE(MAX(story_character_id), 0) FROM story_characters")),
+    PairingId: 1 + Convert.ToInt32(await Scalar("SELECT COALESCE(MAX(story_character_pairing_id), 0) FROM story_character_pairings")),
+    SavedSelectionId: 1 + Convert.ToInt32(await Scalar("SELECT COALESCE(MAX(saved_tag_selection_id), 0) FROM saved_tag_selections")),
+    SavedSelectionEntryId: 1 + Convert.ToInt32(await Scalar("SELECT COALESCE(MAX(saved_tag_selection_entry_id), 0) FROM saved_tag_selection_entries")),
+    FanonLinkId: 1 + Convert.ToInt32(await Scalar("SELECT COALESCE(MAX(fanon_link_id), 0) FROM fanon_links")));
 
 // ── Generate + load ────────────────────────────────────────────────────────────────────────────
 var stopwatch = System.Diagnostics.Stopwatch.StartNew();

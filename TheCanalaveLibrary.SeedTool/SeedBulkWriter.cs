@@ -43,7 +43,212 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
         await CopyVouchesAsync(graph.Vouches);
         await CopyChapterCommentsAsync(graph.ChapterComments);
         await CopyNotificationsAsync(graph.Notifications);
+        // ── Tag world (WU-TagFanon) — FK order: tags → per-story rows → pairings → the rest ──
+        await CopyTagsAsync(graph.Tags);
+        await CopyStoryTagsAsync(graph.StoryTags);
+        await CopyStoryCharactersAsync(graph.StoryCharacters);
+        await CopyPairingsAsync(graph.Pairings);
+        await CopyPairingMembersAsync(graph.PairingMembers);
+        await CopySavedSelectionsAsync(graph.SavedSelections);
+        await CopySavedSelectionEntriesAsync(graph.SavedSelectionEntries);
+        await CopyNotificationSettingsAsync(graph.NotificationSettings);
+        await CopyFanonLinksAsync(graph.FanonLinks);
+        await CopyAdoptionStatesAsync(graph.AdoptionStates);
         await ResyncSequencesAsync();
+    }
+
+    // ── Tag world writers (WU-TagFanon) ────────────────────────────────────────────
+
+    private async Task CopyTagsAsync(List<SeedTagRow> tags)
+    {
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync("""
+            COPY tags (tag_id, tag_name, tag_type_id, is_fanon, description, parent_tag_id,
+                sprite_identifier, allow_custom_name)
+            FROM STDIN (FORMAT BINARY)
+            """);
+        foreach (SeedTagRow tag in tags)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(tag.Id, NpgsqlDbType.Integer);
+            await writer.WriteAsync(tag.Name, NpgsqlDbType.Varchar);
+            await writer.WriteAsync((short)tag.TypeId, NpgsqlDbType.Smallint);
+            await writer.WriteAsync(tag.IsFanon, NpgsqlDbType.Boolean);
+            if (tag.Description is null) await writer.WriteNullAsync();
+            else await writer.WriteAsync(tag.Description, NpgsqlDbType.Varchar);
+            if (tag.ParentTagId is int parent) await writer.WriteAsync(parent, NpgsqlDbType.Integer);
+            else await writer.WriteNullAsync();
+            if (tag.SpriteIdentifier is null) await writer.WriteNullAsync();
+            else await writer.WriteAsync(tag.SpriteIdentifier, NpgsqlDbType.Varchar);
+            await writer.WriteAsync(tag.AllowCustomName, NpgsqlDbType.Boolean);
+        }
+        await writer.CompleteAsync();
+    }
+
+    private async Task CopyStoryTagsAsync(List<SeedStoryTagRow> rows)
+    {
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync(
+            "COPY story_tags (story_id, tag_id, priority, custom_name, nuance) FROM STDIN (FORMAT BINARY)");
+        foreach (SeedStoryTagRow row in rows)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(row.StoryId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.TagId, NpgsqlDbType.Integer);
+            await writer.WriteAsync((short)row.Priority, NpgsqlDbType.Smallint);
+            if (row.CustomName is null) await writer.WriteNullAsync();
+            else await writer.WriteAsync(row.CustomName, NpgsqlDbType.Varchar);
+            if (row.Nuance is null) await writer.WriteNullAsync();
+            else await writer.WriteAsync(row.Nuance, NpgsqlDbType.Varchar);
+        }
+        await writer.CompleteAsync();
+    }
+
+    private async Task CopyStoryCharactersAsync(List<SeedStoryCharacterRow> rows)
+    {
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync("""
+            COPY story_characters (story_character_id, story_id, character_tag_id, priority,
+                is_oc, custom_name, nuance)
+            FROM STDIN (FORMAT BINARY)
+            """);
+        foreach (SeedStoryCharacterRow row in rows)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(row.Id, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.StoryId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.CharacterTagId, NpgsqlDbType.Integer);
+            await writer.WriteAsync((short)row.Priority, NpgsqlDbType.Smallint);
+            await writer.WriteAsync(row.IsOc, NpgsqlDbType.Boolean);
+            if (row.CustomName is null) await writer.WriteNullAsync();
+            else await writer.WriteAsync(row.CustomName, NpgsqlDbType.Varchar);
+            if (row.Nuance is null) await writer.WriteNullAsync();
+            else await writer.WriteAsync(row.Nuance, NpgsqlDbType.Varchar);
+        }
+        await writer.CompleteAsync();
+    }
+
+    private async Task CopyPairingsAsync(List<SeedPairingRow> rows)
+    {
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync("""
+            COPY story_character_pairings (story_character_pairing_id, story_id, pairing_type, priority)
+            FROM STDIN (FORMAT BINARY)
+            """);
+        foreach (SeedPairingRow row in rows)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(row.Id, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.StoryId, NpgsqlDbType.Integer);
+            await writer.WriteAsync((short)row.PairingType, NpgsqlDbType.Smallint);
+            await writer.WriteAsync((short)row.Priority, NpgsqlDbType.Smallint);
+        }
+        await writer.CompleteAsync();
+    }
+
+    private async Task CopyPairingMembersAsync(List<SeedPairingMemberRow> rows)
+    {
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync("""
+            COPY story_character_pairing_members (story_character_pairing_id, story_character_id)
+            FROM STDIN (FORMAT BINARY)
+            """);
+        foreach (SeedPairingMemberRow row in rows)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(row.PairingId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.StoryCharacterId, NpgsqlDbType.Integer);
+        }
+        await writer.CompleteAsync();
+    }
+
+    private async Task CopySavedSelectionsAsync(List<SeedSavedSelectionRow> rows)
+    {
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync("""
+            COPY saved_tag_selections (saved_tag_selection_id, user_id, nickname, description,
+                is_public, date_created)
+            FROM STDIN (FORMAT BINARY)
+            """);
+        foreach (SeedSavedSelectionRow row in rows)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(row.Id, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.UserId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.Nickname, NpgsqlDbType.Varchar);
+            if (row.Description is null) await writer.WriteNullAsync();
+            else await writer.WriteAsync(row.Description, NpgsqlDbType.Varchar);
+            await writer.WriteAsync(row.IsPublic, NpgsqlDbType.Boolean);
+            await writer.WriteAsync(row.DateCreatedUtc, NpgsqlDbType.TimestampTz);
+        }
+        await writer.CompleteAsync();
+    }
+
+    private async Task CopySavedSelectionEntriesAsync(List<SeedSavedSelectionEntryRow> rows)
+    {
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync("""
+            COPY saved_tag_selection_entries (saved_tag_selection_entry_id, saved_tag_selection_id,
+                tag_id, is_excluded)
+            FROM STDIN (FORMAT BINARY)
+            """);
+        foreach (SeedSavedSelectionEntryRow row in rows)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(row.Id, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.SelectionId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.TagId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.IsExcluded, NpgsqlDbType.Boolean);
+        }
+        await writer.CompleteAsync();
+    }
+
+    private async Task CopyNotificationSettingsAsync(List<SeedNotificationSettingRow> rows)
+    {
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync("""
+            COPY user_notification_settings (user_id, notification_type_id, email_enabled, collapsed)
+            FROM STDIN (FORMAT BINARY)
+            """);
+        foreach (SeedNotificationSettingRow row in rows)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(row.UserId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.NotificationTypeId, NpgsqlDbType.Smallint);
+            await writer.WriteAsync(row.EmailEnabled, NpgsqlDbType.Boolean);
+            await writer.WriteAsync(row.Collapsed, NpgsqlDbType.Boolean);
+        }
+        await writer.CompleteAsync();
+    }
+
+    private async Task CopyFanonLinksAsync(List<SeedFanonLinkRow> rows)
+    {
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync("""
+            COPY fanon_links (fanon_link_id, normalized_name, base_tag_id, target_tag_id,
+                linked_by_user_id, date_linked)
+            FROM STDIN (FORMAT BINARY)
+            """);
+        foreach (SeedFanonLinkRow row in rows)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(row.Id, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.NormalizedName, NpgsqlDbType.Varchar);
+            await writer.WriteAsync(row.BaseTagId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.TargetTagId, NpgsqlDbType.Integer);
+            if (row.LinkedByUserId is int userId) await writer.WriteAsync(userId, NpgsqlDbType.Integer);
+            else await writer.WriteNullAsync();
+            await writer.WriteAsync(row.DateLinkedUtc, NpgsqlDbType.TimestampTz);
+        }
+        await writer.CompleteAsync();
+    }
+
+    private async Task CopyAdoptionStatesAsync(List<SeedAdoptionStateRow> rows)
+    {
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync("""
+            COPY tag_adoption_states (user_id, target_tag_id, date_notified, is_dismissed)
+            FROM STDIN (FORMAT BINARY)
+            """);
+        foreach (SeedAdoptionStateRow row in rows)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(row.UserId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(row.TargetTagId, NpgsqlDbType.Integer);
+            await WriteNullableAsync(writer, row.DateNotifiedUtc);
+            await writer.WriteAsync(row.IsDismissed, NpgsqlDbType.Boolean);
+        }
+        await writer.CompleteAsync();
     }
 
     private async Task CopyUsersAsync(
@@ -464,6 +669,12 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             SELECT setval(pg_get_serial_sequence('recommendations', 'recommendation_id'), (SELECT MAX(recommendation_id) FROM recommendations));
             SELECT setval(pg_get_serial_sequence('base_comments', 'comment_id'), (SELECT MAX(comment_id) FROM base_comments));
             SELECT setval(pg_get_serial_sequence('notifications', 'notification_id'), (SELECT MAX(notification_id) FROM notifications));
+            SELECT setval(pg_get_serial_sequence('tags', 'tag_id'), (SELECT MAX(tag_id) FROM tags));
+            SELECT setval(pg_get_serial_sequence('story_characters', 'story_character_id'), (SELECT MAX(story_character_id) FROM story_characters));
+            SELECT setval(pg_get_serial_sequence('story_character_pairings', 'story_character_pairing_id'), (SELECT COALESCE(MAX(story_character_pairing_id), 1) FROM story_character_pairings));
+            SELECT setval(pg_get_serial_sequence('saved_tag_selections', 'saved_tag_selection_id'), (SELECT COALESCE(MAX(saved_tag_selection_id), 1) FROM saved_tag_selections));
+            SELECT setval(pg_get_serial_sequence('saved_tag_selection_entries', 'saved_tag_selection_entry_id'), (SELECT COALESCE(MAX(saved_tag_selection_entry_id), 1) FROM saved_tag_selection_entries));
+            SELECT setval(pg_get_serial_sequence('fanon_links', 'fanon_link_id'), (SELECT COALESCE(MAX(fanon_link_id), 1) FROM fanon_links));
             """);
     }
 

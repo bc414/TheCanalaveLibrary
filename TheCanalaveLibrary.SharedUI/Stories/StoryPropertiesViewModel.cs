@@ -41,7 +41,6 @@ public class StoryPropertiesViewModel
     public List<StoryTagDTO> SelectedFlatTags { get; set; } = new();
 
     public List<StoryCharacterDto> SelectedCharacters { get; set; } = new();
-    public List<SettingDetailDto> SelectedSettingDetails { get; set; } = new();
     public List<StoryCharacterPairingDto> SelectedPairings { get; set; } = new();
 
     // ── "Also posted on" external links + original dates (Feature 53 reframe, WU38d) ──

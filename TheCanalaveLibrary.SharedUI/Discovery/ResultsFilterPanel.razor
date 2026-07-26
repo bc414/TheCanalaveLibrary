@@ -44,6 +44,12 @@
                    OnChanged="OnTagFilterChanged" />
     }
 
+    @* ── Ship filters (WU-TagFanon) ────────────────────────────────────────────────────── *@
+    @if (ShowShipFilter)
+    {
+        <ShipFilter OnChanged="OnShipFilterChanged" />
+    }
+
     @* ── Interaction filters ───────────────────────────────────────────────────────────── *@
     @if (ShowInteractionFilters)
     {
@@ -70,7 +76,7 @@
     }
 
     @* ── Apply button ──────────────────────────────────────────────────────────────────── *@
-    <button type="button"
+    <button type="button" id="rfp-apply"
             class="rounded-md bg-(--color-mission) px-4 py-1.5 text-sm font-medium text-white hover:bg-(--color-mission-hover) active:bg-(--color-mission-hover) transition-colors"
             @onclick="ApplyAsync">
         Apply Filters
@@ -89,6 +95,13 @@
 
     /// <summary>Show the interaction-kind exclusion checkboxes. Default true.</summary>
     [Parameter] public bool ShowInteractionFilters { get; set; } = true;
+
+    /// <summary>
+    /// Show the ship filter axis (WU-TagFanon). Default follows <see cref="ShowTagFilter"/> — a
+    /// surface narrowing by tags almost certainly wants ships too. Ships are transient viewer
+    /// intent (never part of SavedTagSelection), so no seed parameter exists.
+    /// </summary>
+    [Parameter] public bool ShowShipFilter { get; set; } = true;
 
     /// <summary>
     /// Sorts to offer in the sort dropdown. Supply only the sorts relevant to this surface;
@@ -162,6 +175,8 @@
     private string _textQuery = "";
     private TagFilterSelection _tagSelection = TagFilterSelection.Empty;
     private IReadOnlyList<UserStoryInteractionTypeEnum> _excludedInteractions = [];
+    private IReadOnlyList<ShipFilterDto> _includedShips = [];
+    private IReadOnlyList<ShipFilterDto> _excludedShips = [];
     private DefaultSortOrder _sort = DefaultSortOrder.DatePublished;
 
     // Seed collections for child axis components (WU28).
@@ -220,6 +235,12 @@
         _excludedInteractions = excluded;
     }
 
+    private void OnShipFilterChanged((IReadOnlyList<ShipFilterDto> Included, IReadOnlyList<ShipFilterDto> Excluded) ships)
+    {
+        _userHasInteracted = true;
+        (_includedShips, _excludedShips) = ships;
+    }
+
     private void OnSortChanged(ChangeEventArgs e)
     {
         _userHasInteracted = true;
@@ -240,6 +261,8 @@
             ExcludedTagIds = _tagSelection.ExcludedTagIds,
             IncludeMode = _tagSelection.IncludeMode,
             ExcludedInteractions = _excludedInteractions,
+            IncludedShips = _includedShips,
+            ExcludedShips = _excludedShips,
             Sort = effectiveSort,
             Page = 1,
             PageSize = 20

@@ -171,31 +171,18 @@ public class TagValidationsTests
         act.Should().Throw<TagValidationException>().WithMessage("*own parent*");
     }
 
-    // ── AllowOCDetails coercion ───────────────────────────────────────────────
+    // ── Overlay bounds (WU-TagFanon) ──────────────────────────────────────────
+    // The old CoerceAllowOCDetails/CoerceAllowSettingDetails type-coercions are gone —
+    // AllowCustomName is mod judgment on any tag type. These constants are the shared
+    // per-story overlay bounds both StoryCharacter and StoryTag enforce.
 
-    [Theory]
-    [InlineData(TagTypeEnum.Character, true, true)]
-    [InlineData(TagTypeEnum.Character, false, false)]
-    [InlineData(TagTypeEnum.Setting, true, false)]
-    [InlineData(TagTypeEnum.Genre, true, false)]
-    [InlineData(TagTypeEnum.ContentWarning, true, false)]
-    [InlineData(TagTypeEnum.CrossoverFandom, true, false)]
-    public void CoerceAllowOCDetails_ReturnsTrueOnlyForCharacter(TagTypeEnum type, bool input, bool expected)
+    [Fact]
+    public void OverlayBounds_MatchTheModel()
     {
-        TagValidations.CoerceAllowOCDetails(input, type).Should().Be(expected);
-    }
-
-    // ── AllowSettingDetails coercion ──────────────────────────────────────────────
-
-    [Theory]
-    [InlineData(TagTypeEnum.Setting, true, true)]
-    [InlineData(TagTypeEnum.Setting, false, false)]
-    [InlineData(TagTypeEnum.Character, true, false)]
-    [InlineData(TagTypeEnum.Genre, true, false)]
-    [InlineData(TagTypeEnum.ContentWarning, true, false)]
-    [InlineData(TagTypeEnum.CrossoverFandom, true, false)]
-    public void CoerceAllowSettingDetails_ReturnsTrueOnlyForSetting(TagTypeEnum type, bool input, bool expected)
-    {
-        TagValidations.CoerceAllowSettingDetails(input, type).Should().Be(expected);
+        TagValidations.MaxCustomNameLength.Should().Be(128);
+        TagValidations.MaxNuanceLength.Should().Be(2048);
+        // Spec-drift corrections (H6): SpriteIdentifier 100, Description 500.
+        TagValidations.MaxSpriteIdentifierLength.Should().Be(100);
+        TagValidations.MaxDescriptionLength.Should().Be(500);
     }
 }

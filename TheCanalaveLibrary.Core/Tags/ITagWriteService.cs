@@ -11,7 +11,7 @@ public interface ITagWriteService : ITagReadService
 {
     /// <summary>
     /// Creates a new tag. Validates name uniqueness within type, parent constraints, and
-    /// coerces <c>AllowOCDetails</c> to <c>false</c> for non-Character types.
+    /// persists <c>AllowCustomName</c> as given (mod judgment, any type — WU-TagFanon).
     /// </summary>
     /// <returns>
     /// A <see cref="TagSaveResult"/> with the new <c>TagId</c> and an optional
@@ -24,7 +24,7 @@ public interface ITagWriteService : ITagReadService
 
     /// <summary>
     /// Updates an existing tag's fields. Validates name uniqueness within type (excluding self),
-    /// parent constraints, and coerces <c>AllowOCDetails</c> to <c>false</c> for non-Character types.
+    /// parent constraints, and persists <c>AllowCustomName</c> as given (mod judgment, any type — WU-TagFanon).
     /// </summary>
     /// <returns>
     /// An optional <see cref="TagSaveResult.SpriteWarning"/> advisory message, or <c>null</c> if

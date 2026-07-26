@@ -1,0 +1,74 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Presentational sub-component (WU-TagFanon; generalizes the old Setting-only SettingEntry to
+   every flat tag type). Quiet by default: a compact "+ add details" link expands the overlay
+   editor — a CustomName input when the tag permits one, and the ungated Nuance note for any tag.
+   An existing overlay ALWAYS renders open (never collapse authored content). No @inject. *@
+
+<div class="flex flex-col gap-1 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2">
+    <div class="flex items-center gap-3">
+        <span class="flex-1 text-sm text-(--color-text)">@Chip.TagName</span>
+        @if (ShowPriority)
+        {
+            <label class="text-xs text-(--color-text-muted)">Priority</label>
+            <select value="@Priority"
+                    @onchange="@(e => OnPriorityChanged.InvokeAsync(Enum.Parse<TagPriority>((string)e.Value!)))"
+                    class="rounded border border-(--color-border) bg-(--color-surface) px-2 py-1 text-xs text-(--color-text)">
+                <option value="@TagPriority.Primary">Primary</option>
+                <option value="@TagPriority.Supporting">Supporting</option>
+            </select>
+        }
+        @if (!HasOverlay && !_open)
+        {
+            <button type="button" @onclick="() => _open = true"
+                    class="text-xs text-(--color-text-muted) hover:text-(--color-action-ink) hover:underline">
+                + add details
+            </button>
+        }
+    </div>
+
+    @if (HasOverlay || _open)
+    {
+        <div class="flex flex-col gap-2 pt-1">
+            @if (Chip.AllowCustomName)
+            {
+                <input type="text" value="@CustomName" maxlength="128"
+                       @onchange="@(e => OnOverlayChanged.InvokeAsync((NullIfBlank((string?)e.Value), Nuance)))"
+                       placeholder="@CustomNamePlaceholder"
+                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" />
+            }
+            <textarea value="@Nuance" rows="2" maxlength="2048"
+                      @onchange="@(e => OnOverlayChanged.InvokeAsync((CustomName, NullIfBlank((string?)e.Value))))"
+                      placeholder="@NuancePlaceholder"
+                      class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"></textarea>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TagChipDto Chip { get; set; } = null!;
+    [Parameter] public string? CustomName { get; set; }
+    [Parameter] public string? Nuance { get; set; }
+
+    /// <summary>Fires with the updated (CustomName, Nuance) pair on any overlay edit.</summary>
+    [Parameter] public EventCallback<(string? CustomName, string? Nuance)> OnOverlayChanged { get; set; }
+
+    /// <summary>Genre rows also host the per-tag priority select (single row per chip).</summary>
+    [Parameter] public bool ShowPriority { get; set; }
+    [Parameter] public TagPriority Priority { get; set; } = TagPriority.Primary;
+    [Parameter] public EventCallback<TagPriority> OnPriorityChanged { get; set; }
+
+    private bool _open;
+
+    private bool HasOverlay => CustomName is not null || Nuance is not null;
+
+    private string CustomNamePlaceholder => Chip.TagTypeId == TagTypeEnum.Setting
+        ? "Custom setting name (optional)"
+        : "Custom name (optional)";
+
+    private string NuancePlaceholder => $"What does this story do with {Chip.TagName}? (optional)";
+
+    private static string? NullIfBlank(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
+}

@@ -178,6 +178,9 @@ public sealed class ClientNotificationWriteService(HttpClient http)
     public Task NotifyNewProfileBlogPostAsync(int blogPostId, int authorId, int? storyId) =>
         throw NotExposedOverHttp();
 
+    public Task NotifyTagAdoptionSuggestedAsync(IReadOnlyList<int> recipientAuthorIds, int targetTagId, int moderatorSourceId) =>
+        throw NotExposedOverHttp();
+
     private static NotSupportedException NotExposedOverHttp([CallerMemberName] string? method = null) =>
         new($"{method} is a server-internal notification-generation method (called only from other " +
             "server-side write services, in-process, after their own commit — see " +

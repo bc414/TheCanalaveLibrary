@@ -34,7 +34,7 @@ public class ServerNotificationReadService(
     /// <c>BlogPostDirect</c> resolves via the TPT-root <c>BlogPosts</c> DbSet and links to the
     /// *post* (<c>/blog/{id}</c>, the unified BlogPostPage route serving both post kinds).
     /// </summary>
-    private enum RelatedEntityKind { None, User, Story, Chapter, Group, BlogPost, BlogPostDirect }
+    private enum RelatedEntityKind { None, User, Story, Chapter, Group, BlogPost, BlogPostDirect, Tag }
 
     /// <summary>
     /// Maps each <see cref="NotificationTypeEnum"/> to the kind of entity its
@@ -105,6 +105,10 @@ public class ServerNotificationReadService(
         NotificationTypeEnum.NewStoryAcknowledgement         => RelatedEntityKind.Story,
         NotificationTypeEnum.StoryRejected                   => RelatedEntityKind.Story,
         NotificationTypeEnum.StoryApproved                   => RelatedEntityKind.Story,
+
+        // ── Implemented WU-TagFanon: RelatedEntityId = the official tag the author is invited
+        // to adopt; deep-links to the per-tag adoption page. ─────────────────────────────
+        NotificationTypeEnum.TagUpdateSuggestion => RelatedEntityKind.Tag,
 
         // ── Implemented WU39 (Feature 53): RelatedEntityId = storyId for the per-link tier;
         // the account tier carries 0 (Settings is a fixed route, not an entity) — falls to
@@ -390,6 +394,18 @@ public class ServerNotificationReadService(
                 .ToDictionary(
                     b => b.BlogPostId,
                     b => ((string?)b.Title, (string?)$"/blog/{b.BlogPostId}"));
+        }
+
+        if (idsByKind.TryGetValue(RelatedEntityKind.Tag, out var tagIds))
+        {
+            // WU-TagFanon: the adoption invitation deep-links to the author's per-tag page.
+            result[RelatedEntityKind.Tag] = (await readDb.Tags
+                    .Where(t => tagIds.Contains(t.TagId))
+                    .Select(t => new { t.TagId, t.TagName })
+                    .ToListAsync())
+                .ToDictionary(
+                    t => t.TagId,
+                    t => ((string?)t.TagName, (string?)$"/tag-adoptions/{t.TagId}"));
         }
 
         return result;

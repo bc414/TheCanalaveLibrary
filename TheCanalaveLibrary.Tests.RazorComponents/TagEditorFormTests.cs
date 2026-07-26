@@ -12,7 +12,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// Render tests for <see cref="TagEditorForm"/> (WU27.5). Covers:
 /// - Create mode: empty form, all type options present.
 /// - Edit mode: form pre-populated from the chip's fields.
-/// - AllowOCDetails checkbox only visible when TagType == Character.
+/// - AllowCustomName checkbox visible for every type (WU-TagFanon; mod judgment).
 /// - Parent dropdown filtered to same-type top-level tags, excludes self.
 /// - Empty name blocks submit (browser validation).
 /// - OnSave emits a TagEditorFormResult with correct values.
@@ -44,7 +44,7 @@ public class TagEditorFormTests : BunitContext
         bool isFanon = false, bool allowOC = false, int? parentId = null) => new()
     {
         TagId = id, TagName = name, TagTypeId = type,
-        IsFanon = isFanon, AllowOCDetails = allowOC, ParentTagId = parentId
+        IsFanon = isFanon, AllowCustomName = allowOC, ParentTagId = parentId
     };
 
     // ── Create mode ───────────────────────────────────────────────────────────
@@ -60,28 +60,25 @@ public class TagEditorFormTests : BunitContext
             .HaveCount(5, "there are 5 TagTypeEnum values");
     }
 
-    // ── AllowOCDetails visibility by type ────────────────────────────────────
+    // ── AllowCustomName visibility (WU-TagFanon: every type — mod judgment) ──
 
     [Theory]
-    [InlineData(TagTypeEnum.Character, true)]
-    [InlineData(TagTypeEnum.Setting, false)]
-    [InlineData(TagTypeEnum.Genre, false)]
-    [InlineData(TagTypeEnum.ContentWarning, false)]
-    [InlineData(TagTypeEnum.CrossoverFandom, false)]
-    public void AllowOCDetails_VisibleOnlyForCharacterType(TagTypeEnum type, bool shouldBeVisible)
+    [InlineData(TagTypeEnum.Character)]
+    [InlineData(TagTypeEnum.Setting)]
+    [InlineData(TagTypeEnum.Genre)]
+    [InlineData(TagTypeEnum.ContentWarning)]
+    [InlineData(TagTypeEnum.CrossoverFandom)]
+    public void AllowCustomName_VisibleForEveryType(TagTypeEnum type)
     {
-        // Edit a tag of the given type to trigger the correct branch.
+        // Edit a tag of the given type — the checkbox is not type-gated (no coercion).
         TagChipDto chip = MakeChip(99, "TestTag", type);
 
         IRenderedComponent<TagEditorForm> cut = Render<TagEditorForm>(p => p
             .Add(c => c.Directory, MakeDirectory())
             .Add(c => c.EditingTag, chip));
 
-        int count = cut.FindAll("input#tag-allow-oc").Count;
-        if (shouldBeVisible)
-            count.Should().Be(1, "Character type shows AllowOCDetails");
-        else
-            count.Should().Be(0, "Non-Character type hides AllowOCDetails");
+        cut.FindAll("input#tag-allow-custom-name").Count
+            .Should().Be(1, "AllowCustomName is mod judgment on any tag type");
     }
 
     // ── Edit mode pre-population ──────────────────────────────────────────────

@@ -183,6 +183,14 @@ independently. The service layer rejects logically impossible write combinations
   ground-truth time-series, not a rebuildable mart; schema/reads go through EF, writes are raw SQL
   by the daily worker. See `layer8-data-marts.md` §`site_daily_stats` for why this table alone
   breaks L8's "no EF model" rule.
+- **Per-story tag overlay pair (WU-TagFanon, 2026-07-26):** `CustomName` (`[MaxLength(128)]`,
+  nullable, gated by `Tag.AllowCustomName`) + `Nuance` (`[MaxLength(2048)]`, nullable, ungated,
+  plain text — not sanitized HTML, not FTS-indexed). Lives on `StoryTag` (0-or-1 per junction row)
+  and on `StoryCharacter` (1-to-many per base tag: `UNIQUE (StoryId, CharacterTagId, CustomName)`
+  NULLS NOT DISTINCT; non-null `CustomName` requires `IsOc`). Never name this concept "identity" —
+  that word is ASP.NET Core Identity's. `SettingDetail` was deleted by the same WU (cardinality
+  rule: a 0-or-1 overlay belongs on the junction row; a separate table needs 1-to-many or
+  referencing rows — `StoryCharacter` has both, via pairings).
 
 ## Relationships & Queries
 

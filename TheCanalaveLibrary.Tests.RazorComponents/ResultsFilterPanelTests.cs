@@ -76,7 +76,7 @@ public class ResultsFilterPanelTests : BunitContext
             .Add(c => c.ShowInteractionFilters, false)
             .Add(c => c.OnSearch, (StoryFilterDto dto) => emitted = dto));
 
-        await cut.Find("button").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        await cut.Find("#rfp-apply").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
 
         emitted.Should().NotBeNull();
         emitted!.TextQuery.Should().BeNull("default text query is empty → null in DTO");
@@ -98,7 +98,7 @@ public class ResultsFilterPanelTests : BunitContext
         await cut.Find("input[type='search']").TriggerEventAsync("oninput",
             new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "  Arceus  " });
 
-        await cut.Find("button").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        await cut.Find("#rfp-apply").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
 
         emitted!.TextQuery.Should().Be("Arceus", "TextQuery must be trimmed");
     }
@@ -154,7 +154,7 @@ public class ResultsFilterPanelTests : BunitContext
             .Add(c => c.AvailableSorts, [DefaultSortOrder.DatePublished, DefaultSortOrder.Random])
             .Add(c => c.OnSearch, (StoryFilterDto dto) => emitted = dto));
 
-        await cut.Find("button").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        await cut.Find("#rfp-apply").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
 
         emitted!.Sort.Should().Be(DefaultSortOrder.Random, "InitialFilter.Sort must seed the sort dropdown");
         emitted.ExcludedInteractions.Should().Contain(UserStoryInteractionTypeEnum.Ignore,
@@ -182,9 +182,9 @@ public class ResultsFilterPanelTests : BunitContext
         cut.FindAll("input[type='checkbox']").Should().Contain(cb => cb.HasAttribute("checked"),
             "the late-arriving default-exclusion seed must reflect in the interaction checkboxes (MA-402)");
 
-        // ...and Apply must emit the seeded exclusion. (Apply is the only <button> — the
+        // ...and Apply must emit the seeded exclusion. (#rfp-apply is the stable Apply id — the
         // interaction axis renders checkboxes, not buttons.)
-        await cut.Find("button").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        await cut.Find("#rfp-apply").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
         emitted!.ExcludedInteractions.Should().Contain(UserStoryInteractionTypeEnum.Ignore);
     }
 
@@ -202,7 +202,7 @@ public class ResultsFilterPanelTests : BunitContext
             new Microsoft.AspNetCore.Components.ChangeEventArgs { Value = "torterra" });
         cut.Render(p => p.Add(c => c.InitialFilter, new StoryFilterDto { TextQuery = "seeded" }));
 
-        await cut.Find("button").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        await cut.Find("#rfp-apply").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
         emitted!.TextQuery.Should().Be("torterra",
             "after the user's first interaction the panel stops re-syncing from InitialFilter (MA-402)");
     }

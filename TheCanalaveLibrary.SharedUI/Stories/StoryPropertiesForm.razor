@@ -84,23 +84,23 @@
     <div class="flex flex-col gap-6">
         <p class="text-sm font-semibold text-(--color-text)">Tags</p>
 
-        @* Characters + per-entry detail + pairings *@
+        @* Characters + per-entry detail + pairings. Rows are POSITIONAL with the chip list —
+           a species may repeat with distinct custom names (WU-TagFanon). *@
         <div class="flex flex-col gap-2">
-            <TagSelector @key="@string.Join(",", _characterChips.Select(c => c.TagId))"
+            <TagSelector @key="@($"{_characterChips.Count}:{string.Join(",", _characterChips.Select(c => c.TagId))}")"
                          TagType="TagTypeEnum.Character"
                          Label="Characters"
                          SelectedTags="@_characterChips"
+                         AllowRepeatSelection="true"
                          OnSelectionChanged="HandleCharacterChange" />
-            @for (int i = 0; i < _characterDtos.Count; i++)
+            @for (int i = 0; i < _characterDtos.Count && i < _characterChips.Count; i++)
             {
                 int idx = i;
-                TagChipDto? chip = _characterChips.FirstOrDefault(c => c.TagId == _characterDtos[idx].CharacterTagId);
-                if (chip is not null)
-                {
-                    <CharacterEntry Chip="@chip" Dto="@_characterDtos[idx]"
-                                    OnChanged="@(dto => OnCharacterDtoChanged(idx, dto))"
-                                    OnRemoved="@(() => RemoveCharacter(_characterDtos[idx].CharacterTagId))" />
-                }
+                <CharacterEntry Chip="@_characterChips[idx]" Dto="@_characterDtos[idx]"
+                                OfficialNameLookup="@OfficialNameLookup"
+                                OnConvertToOfficial="@(chip => ConvertRowToOfficial(idx, chip))"
+                                OnChanged="@(dto => OnCharacterDtoChanged(idx, dto))"
+                                OnRemoved="@(() => RemoveCharacterRow(idx))" />
             }
         </div>
 
@@ -109,28 +109,28 @@
             <div class="flex flex-col gap-1">
                 <p class="text-sm font-medium text-(--color-text)">Character Pairings</p>
                 <PairingBuilder CharacterChips="@_characterChips"
+                                CharacterNames="@CharacterRowNames"
                                 Pairings="@_pairings"
                                 OnPairingsChanged="HandlePairingsChanged" />
             </div>
         }
 
-        @* Settings + optional detail overlays *@
+        @* Settings — every chip gets the quiet overlay affordance (WU-TagFanon) *@
         <div class="flex flex-col gap-2">
             <TagSelector @key="@string.Join(",", _settingChips.Select(c => c.TagId))"
                          TagType="TagTypeEnum.Setting"
                          Label="Settings"
                          SelectedTags="@_settingChips"
                          OnSelectionChanged="HandleSettingChange" />
-            @foreach (TagChipDto chip in _settingChips.Where(c => c.AllowSettingDetails))
+            @foreach (TagChipDto chip in _settingChips)
             {
-                SettingDetailDto detail = _settingDetailMap.GetValueOrDefault(chip.TagId,
-                    new SettingDetailDto { BaseTagId = chip.TagId });
-                <SettingEntry Chip="@chip" Detail="@detail"
-                              OnChanged="@(d => OnSettingDetailChanged(chip.TagId, d))" />
+                (string? name, string? nuance) = _flatOverlayMap.GetValueOrDefault(chip.TagId);
+                <FlatTagOverlayEntry Chip="@chip" CustomName="@name" Nuance="@nuance"
+                                     OnOverlayChanged="@(o => OnFlatOverlayChanged(chip.TagId, o))" />
             }
         </div>
 
-        @* Genres with per-tag priority *@
+        @* Genres — per-tag priority + the quiet overlay affordance *@
         <div class="flex flex-col gap-2">
             <TagSelector TagType="TagTypeEnum.Genre"
                          Label="Genres"
@@ -138,29 +138,40 @@
                          OnSelectionChanged="HandleGenreChange" />
             @foreach (TagChipDto chip in _genreChips)
             {
-                TagPriority priority = _genrePriorityMap.GetValueOrDefault(chip.TagId, TagPriority.Primary);
-                <div class="flex items-center gap-3 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2">
-                    <span class="flex-1 text-sm text-(--color-text)">@chip.TagName</span>
-                    <label class="text-xs text-(--color-text-muted)">Priority</label>
-                    <select value="@priority"
-                            @onchange="@(e => HandleGenrePriorityChange(chip.TagId, Enum.Parse<TagPriority>((string)e.Value!)))"
-                            class="rounded border border-(--color-border) bg-(--color-surface) px-2 py-1 text-xs text-(--color-text)">
-                        <option value="@TagPriority.Primary">Primary</option>
-                        <option value="@TagPriority.Supporting">Supporting</option>
-                    </select>
-                </div>
+                (string? name, string? nuance) = _flatOverlayMap.GetValueOrDefault(chip.TagId);
+                <FlatTagOverlayEntry Chip="@chip" CustomName="@name" Nuance="@nuance"
+                                     ShowPriority="true"
+                                     Priority="@_genrePriorityMap.GetValueOrDefault(chip.TagId, TagPriority.Primary)"
+                                     OnPriorityChanged="@(p => HandleGenrePriorityChange(chip.TagId, p))"
+                                     OnOverlayChanged="@(o => OnFlatOverlayChanged(chip.TagId, o))" />
             }
         </div>
 
-        @* Content Warnings + Crossover Fandoms — flat, no priority UI *@
-        <TagSelector TagType="TagTypeEnum.ContentWarning"
-                     Label="Content Warnings"
-                     SelectedTags="@_cwChips"
-                     OnSelectionChanged="HandleCwChange" />
-        <TagSelector TagType="TagTypeEnum.CrossoverFandom"
-                     Label="Crossover Fandoms"
-                     SelectedTags="@_crossoverChips"
-                     OnSelectionChanged="HandleCrossoverChange" />
+        @* Content Warnings + Crossover Fandoms — flat, quiet overlay, no priority UI *@
+        <div class="flex flex-col gap-2">
+            <TagSelector TagType="TagTypeEnum.ContentWarning"
+                         Label="Content Warnings"
+                         SelectedTags="@_cwChips"
+                         OnSelectionChanged="HandleCwChange" />
+            @foreach (TagChipDto chip in _cwChips)
+            {
+                (string? name, string? nuance) = _flatOverlayMap.GetValueOrDefault(chip.TagId);
+                <FlatTagOverlayEntry Chip="@chip" CustomName="@name" Nuance="@nuance"
+                                     OnOverlayChanged="@(o => OnFlatOverlayChanged(chip.TagId, o))" />
+            }
+        </div>
+        <div class="flex flex-col gap-2">
+            <TagSelector TagType="TagTypeEnum.CrossoverFandom"
+                         Label="Crossover Fandoms"
+                         SelectedTags="@_crossoverChips"
+                         OnSelectionChanged="HandleCrossoverChange" />
+            @foreach (TagChipDto chip in _crossoverChips)
+            {
+                (string? name, string? nuance) = _flatOverlayMap.GetValueOrDefault(chip.TagId);
+                <FlatTagOverlayEntry Chip="@chip" CustomName="@name" Nuance="@nuance"
+                                     OnOverlayChanged="@(o => OnFlatOverlayChanged(chip.TagId, o))" />
+            }
+        </div>
     </div>
 
     @* ── "Also posted on" external links + original dates (Feature 53 reframe, WU38d) ── *@
@@ -255,9 +266,21 @@
 
     /// <summary>Structured edit-mode seeds; all null in create mode.</summary>
     [Parameter] public IReadOnlyList<StoryCharacterDto>? InitialCharacters { get; set; }
-    [Parameter] public IReadOnlyList<SettingDetailDto>? InitialSettingDetails { get; set; }
+
+    /// <summary>
+    /// One chip per character ROW, positionally aligned with <see cref="InitialCharacters"/> —
+    /// the type-grouped <see cref="InitialTagsByType"/> can't carry duplicates of one species
+    /// (WU-TagFanon).
+    /// </summary>
+    [Parameter] public IReadOnlyList<TagChipDto>? InitialCharacterChips { get; set; }
+
+    /// <summary>Flat-tag edit seeds (priority + CustomName/Nuance overlay per tag id).</summary>
+    [Parameter] public IReadOnlyList<StoryTagDTO>? InitialFlatTags { get; set; }
     [Parameter] public IReadOnlyList<StoryCharacterPairingDto>? InitialPairings { get; set; }
-    [Parameter] public IReadOnlyDictionary<int, TagPriority>? InitialGenrePriorities { get; set; }
+
+    /// <summary>Editor-nudge lookup, threaded down to CharacterEntry (page-supplied I/O —
+    /// this form stays injection-free). Null disables the nudge.</summary>
+    [Parameter] public Func<string, Task<TagChipDto?>>? OfficialNameLookup { get; set; }
 
     [Parameter] public string SubmitLabel { get; set; } = "Save";
 
@@ -288,9 +311,17 @@
 
     // Structured state
     private List<StoryCharacterDto> _characterDtos = new();
-    private Dictionary<int, SettingDetailDto> _settingDetailMap = new();
+    private Dictionary<int, (string? CustomName, string? Nuance)> _flatOverlayMap = new();
     private Dictionary<int, TagPriority> _genrePriorityMap = new();
     private List<StoryCharacterPairingDto> _pairings = new();
+
+    // Per-row display names for the pairing builder (CustomName-aware).
+    private IReadOnlyList<string> CharacterRowNames =>
+        _characterDtos
+            .Select((d, i) => d.CustomName is { Length: > 0 } name
+                ? name
+                : i < _characterChips.Count ? _characterChips[i].TagName : $"#{i}")
+            .ToList();
 
     /// <summary>The most recently selected cover file, or null if none was picked this session.</summary>
     public IBrowserFile? SelectedCoverFile { get; private set; }
@@ -314,7 +345,7 @@
             {
                 switch (type)
                 {
-                    case TagTypeEnum.Character: _characterChips = chips.ToList(); break;
+                    // Character chips arrive via InitialCharacterChips (positional) — not here.
                     case TagTypeEnum.Setting:   _settingChips   = chips.ToList(); break;
                     case TagTypeEnum.Genre:     _genreChips     = chips.ToList(); break;
                     case TagTypeEnum.ContentWarning:  _cwChips       = chips.ToList(); break;
@@ -325,43 +356,61 @@
 
         if (InitialCharacters is not null)
             _characterDtos = InitialCharacters.ToList();
+        if (InitialCharacterChips is not null)
+            _characterChips = InitialCharacterChips.ToList();
 
-        if (InitialSettingDetails is not null)
-            foreach (SettingDetailDto d in InitialSettingDetails)
-                _settingDetailMap[d.BaseTagId] = d;
-
-        // Seed detail map stubs for setting chips that allow details but have no existing detail
-        foreach (TagChipDto chip in _settingChips.Where(c => c.AllowSettingDetails))
-            _settingDetailMap.TryAdd(chip.TagId, new SettingDetailDto { BaseTagId = chip.TagId });
+        if (InitialFlatTags is not null)
+        {
+            foreach (StoryTagDTO t in InitialFlatTags)
+            {
+                if (t.CustomName is not null || t.Nuance is not null)
+                    _flatOverlayMap[t.TagId] = (t.CustomName, t.Nuance);
+                if (t.TagTypeEnum == TagTypeEnum.Genre)
+                    _genrePriorityMap[t.TagId] = t.Priority;
+            }
+        }
 
         if (InitialPairings is not null)
             _pairings = InitialPairings.ToList();
 
-        if (InitialGenrePriorities is not null)
-            foreach ((int tagId, TagPriority priority) in InitialGenrePriorities)
-                _genrePriorityMap[tagId] = priority;
-
         RebuildViewModel();
     }
 
-    // ── Character handlers ────────────────────────────────────────────────────
+    // ── Character handlers (row-based — WU-TagFanon) ──────────────────────────
 
     private void HandleCharacterChange(IReadOnlyList<TagChipDto> chips)
     {
-        HashSet<int> newIds = chips.Select(c => c.TagId).ToHashSet();
-        _characterChips = chips.ToList();
-        _characterDtos.RemoveAll(d => !newIds.Contains(d.CharacterTagId));
-        foreach (TagChipDto chip in chips.Where(c => _characterDtos.All(d => d.CharacterTagId != c.TagId)))
-            _characterDtos.Add(new StoryCharacterDto { CharacterTagId = chip.TagId });
-        // Drop pairings whose member set shrinks below 2 after removal
-        _pairings = _pairings
-            .Select(p => new StoryCharacterPairingDto
+        // Positional reconciliation: consume old (chip,dto) rows greedily by TagId so surviving
+        // rows keep their overlay data, then remap pairing member indexes old→new.
+        List<TagChipDto> oldChips = _characterChips;
+        List<StoryCharacterDto> oldDtos = _characterDtos;
+        bool[] used = new bool[oldChips.Count];
+        int?[] mapping = new int?[oldChips.Count];
+
+        List<TagChipDto> newChips = chips.ToList();
+        List<StoryCharacterDto> newDtos = new(newChips.Count);
+        for (int j = 0; j < newChips.Count; j++)
+        {
+            int match = -1;
+            for (int i = 0; i < oldChips.Count; i++)
             {
-                PairingType = p.PairingType, Priority = p.Priority,
-                MemberCharacterTagIds = p.MemberCharacterTagIds.Where(id => newIds.Contains(id)).ToList()
-            })
-            .Where(p => p.MemberCharacterTagIds.Count >= 2)
-            .ToList();
+                if (!used[i] && oldChips[i].TagId == newChips[j].TagId) { match = i; break; }
+            }
+            if (match >= 0 && match < oldDtos.Count)
+            {
+                used[match] = true;
+                mapping[match] = j;
+                newDtos.Add(oldDtos[match]);
+            }
+            else
+            {
+                newDtos.Add(new StoryCharacterDto { CharacterTagId = newChips[j].TagId });
+            }
+        }
+
+        _characterChips = newChips;
+        _characterDtos = newDtos;
+        RemapPairings(mapping);
         RebuildViewModel();
     }
 
@@ -371,39 +420,82 @@
         RebuildViewModel();
     }
 
-    private void RemoveCharacter(int charTagId)
+    /// <summary>The author accepted the editor nudge: switch the row to the official tag —
+    /// naming moves to the tag, the note survives (same shape as server-side adoption).</summary>
+    private void ConvertRowToOfficial(int index, TagChipDto officialChip)
     {
-        _characterDtos.RemoveAll(d => d.CharacterTagId == charTagId);
-        _characterChips.RemoveAll(c => c.TagId == charTagId);
-        HashSet<int> remaining = _characterChips.Select(c => c.TagId).ToHashSet();
+        StoryCharacterDto old = _characterDtos[index];
+        _characterChips[index] = officialChip;
+        _characterDtos[index] = new StoryCharacterDto
+        {
+            CharacterTagId = officialChip.TagId,
+            Priority = old.Priority,
+            IsOc = false,
+            CustomName = null,
+            Nuance = old.Nuance
+        };
+        RebuildViewModel();
+    }
+
+    private void RemoveCharacterRow(int index)
+    {
+        int?[] mapping = new int?[_characterDtos.Count];
+        for (int i = 0; i < mapping.Length; i++)
+            mapping[i] = i < index ? i : i == index ? null : i - 1;
+
+        _characterDtos.RemoveAt(index);
+        if (index < _characterChips.Count) _characterChips.RemoveAt(index);
+        RemapPairings(mapping);
+        RebuildViewModel();
+    }
+
+    /// <summary>Remaps pairing member indexes through an old→new row mapping (null = row removed);
+    /// pairings falling below 2 distinct members are dropped.</summary>
+    private void RemapPairings(int?[] mapping)
+    {
         _pairings = _pairings
             .Select(p => new StoryCharacterPairingDto
             {
                 PairingType = p.PairingType, Priority = p.Priority,
-                MemberCharacterTagIds = p.MemberCharacterTagIds.Where(id => remaining.Contains(id)).ToList()
+                MemberIndexes = p.MemberIndexes
+                    .Where(m => m >= 0 && m < mapping.Length && mapping[m] is not null)
+                    .Select(m => mapping[m]!.Value)
+                    .ToList()
             })
-            .Where(p => p.MemberCharacterTagIds.Count >= 2)
+            .Where(p => p.MemberIndexes.Distinct().Count() >= 2)
             .ToList();
-        RebuildViewModel();
     }
 
     // ── Setting handlers ──────────────────────────────────────────────────────
 
     private void HandleSettingChange(IReadOnlyList<TagChipDto> chips)
     {
-        HashSet<int> newIds = chips.Select(c => c.TagId).ToHashSet();
         _settingChips = chips.ToList();
-        foreach (int id in _settingDetailMap.Keys.Where(k => !newIds.Contains(k)).ToList())
-            _settingDetailMap.Remove(id);
-        foreach (TagChipDto chip in chips.Where(c => c.AllowSettingDetails))
-            _settingDetailMap.TryAdd(chip.TagId, new SettingDetailDto { BaseTagId = chip.TagId });
+        PruneFlatOverlays();
         RebuildViewModel();
     }
 
-    private void OnSettingDetailChanged(int tagId, SettingDetailDto detail)
+    private void OnFlatOverlayChanged(int tagId, (string? CustomName, string? Nuance) overlay)
     {
-        _settingDetailMap[tagId] = detail;
+        if (overlay.CustomName is null && overlay.Nuance is null)
+            _flatOverlayMap.Remove(tagId);
+        else
+            _flatOverlayMap[tagId] = overlay;
         RebuildViewModel();
+    }
+
+    /// <summary>Drops overlay entries whose tag is no longer selected on any flat axis.</summary>
+    private void PruneFlatOverlays()
+    {
+        HashSet<int> selected =
+        [
+            .._settingChips.Select(c => c.TagId),
+            .._genreChips.Select(c => c.TagId),
+            .._cwChips.Select(c => c.TagId),
+            .._crossoverChips.Select(c => c.TagId),
+        ];
+        foreach (int id in _flatOverlayMap.Keys.Where(k => !selected.Contains(k)).ToList())
+            _flatOverlayMap.Remove(id);
     }
 
     // ── Genre handlers ────────────────────────────────────────────────────────
@@ -414,6 +506,7 @@
         foreach (int id in _genrePriorityMap.Keys.Where(k => !newIds.Contains(k)).ToList())
             _genrePriorityMap.Remove(id);
         _genreChips = chips.ToList();
+        PruneFlatOverlays();
         RebuildViewModel();
     }
 
@@ -425,8 +518,19 @@
 
     // ── CW / Crossover handlers ───────────────────────────────────────────────
 
-    private void HandleCwChange(IReadOnlyList<TagChipDto> chips)       { _cwChips = chips.ToList(); RebuildViewModel(); }
-    private void HandleCrossoverChange(IReadOnlyList<TagChipDto> chips) { _crossoverChips = chips.ToList(); RebuildViewModel(); }
+    private void HandleCwChange(IReadOnlyList<TagChipDto> chips)
+    {
+        _cwChips = chips.ToList();
+        PruneFlatOverlays();
+        RebuildViewModel();
+    }
+
+    private void HandleCrossoverChange(IReadOnlyList<TagChipDto> chips)
+    {
+        _crossoverChips = chips.ToList();
+        PruneFlatOverlays();
+        RebuildViewModel();
+    }
 
     // ── Pairing handler ───────────────────────────────────────────────────────
 
@@ -442,17 +546,23 @@
     {
         ViewModel.SelectedCharacters = new List<StoryCharacterDto>(_characterDtos);
         ViewModel.SelectedPairings   = new List<StoryCharacterPairingDto>(_pairings);
-        // Only include SettingDetail entries that carry at least one non-null field
-        ViewModel.SelectedSettingDetails = _settingDetailMap.Values
-            .Where(d => d.Name != null || d.Description != null)
-            .ToList();
         ViewModel.SelectedFlatTags =
         [
-            .._settingChips.Select(c  => new StoryTagDTO { TagId = c.TagId, TagTypeEnum = TagTypeEnum.Setting, Priority = TagPriority.Primary }),
-            .._genreChips.Select(c    => new StoryTagDTO { TagId = c.TagId, TagTypeEnum = TagTypeEnum.Genre, Priority = _genrePriorityMap.GetValueOrDefault(c.TagId, TagPriority.Primary) }),
-            .._cwChips.Select(c       => new StoryTagDTO { TagId = c.TagId, TagTypeEnum = TagTypeEnum.ContentWarning, Priority = TagPriority.Primary }),
-            .._crossoverChips.Select(c => new StoryTagDTO { TagId = c.TagId, TagTypeEnum = TagTypeEnum.CrossoverFandom, Priority = TagPriority.Primary }),
+            .._settingChips.Select(c  => FlatTag(c, TagTypeEnum.Setting, TagPriority.Primary)),
+            .._genreChips.Select(c    => FlatTag(c, TagTypeEnum.Genre, _genrePriorityMap.GetValueOrDefault(c.TagId, TagPriority.Primary))),
+            .._cwChips.Select(c       => FlatTag(c, TagTypeEnum.ContentWarning, TagPriority.Primary)),
+            .._crossoverChips.Select(c => FlatTag(c, TagTypeEnum.CrossoverFandom, TagPriority.Primary)),
         ];
+    }
+
+    private StoryTagDTO FlatTag(TagChipDto chip, TagTypeEnum type, TagPriority priority)
+    {
+        (string? name, string? nuance) = _flatOverlayMap.GetValueOrDefault(chip.TagId);
+        return new StoryTagDTO
+        {
+            TagId = chip.TagId, TagTypeEnum = type, Priority = priority,
+            CustomName = name, Nuance = nuance
+        };
     }
 
     private void HandleCoverSelected(InputFileChangeEventArgs e) =>

@@ -15,6 +15,28 @@
 > 510); browser smoke at desktop width clean (loads, no error banner, zero console errors);
 > narrow rendering deliberately unpolished, no visual pass yet.
 
+> **2026-07-26 — WU-TagFanon: deliberate Stage-4 reopening of the WU37 settled routing table.**
+> WU-TagFanon (plan: `~/.claude/plans/i-want-to-plan-resilient-sonnet.md`) is the first rigorous
+> consumer of the three-tier character-tag model (generic → specific-canon child → fanon child,
+> Gemini-era Entry #1316) and found the settled shape half-built: hierarchy invisible to discovery,
+> the Setting/AU overlay unreachable (gate flag dropped in `TagDirectoryPage` DTO mapping) *and*
+> invisible (no reader projection), `OcBio` write-only, and the OC gate conflating custom naming
+> with per-story portrayal. Changes to the "settled, do not revisit" items below, recorded as a
+> deliberate reopening, not drift:
+> - **`SettingDetail` deleted; overlay folded onto `StoryTag`** as nullable `CustomName`+`Nuance`.
+>   The real rule is *cardinality*, not "instances are referenced": a 0-or-1 overlay fits the
+>   junction row; `StoryCharacter` keeps its table because a story may hold several custom-named
+>   characters of one species (original `UQ_StoryCharacters_StoryTag (StoryID, BaseTagID,
+>   CharacterName)` intent restored).
+> - **`OcName`/`OcBio` → `CustomName`/`Nuance`** on `StoryCharacter`; `AllowOCDetails` +
+>   `AllowSettingDetails` → single `Tag.AllowCustomName`. "Bio" was never deliberated (the `Oc`
+>   prefix was a mechanical side effect of adding `IsOC`, Entry #1316); "Identity" is banned as a
+>   term (collides with ASP.NET Core Identity). `Nuance` is ungated and universal — every tag type.
+> - **Roll-up:** filtering a parent tag matches its children (symmetric include/exclude) — the
+>   query the rejected `Cache_TagHierarchy` presumed would exist.
+> Full rules: `layer2-services.md` §"Structured Tag Authoring" (rewritten same date) +
+> §"Tag Hierarchy Roll-Up". The WU37 notes below are historical.
+
 **Entities (Core/Tags/ + Core/Models/):** `Tag` (`TagName`, `TagTypeId`, `IsFanon`, `ParentTagId`
 self-ref one-level hierarchy, `SpriteIdentifier`, `AllowOCDetails`, `Description`), `TagType` (+ enum
 mirror `TagTypeEnum`: Character/Setting/Genre/ContentWarning/CrossoverFandom/Relationship), `StoryTag`
@@ -67,6 +89,97 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
 `Tag.Description` is 512 vs spec 500. Address in a future L1 pass.
 
 ---
+
+## WU-TagFanon Stage note (2026-07-26) — F11 + F12 + F31 + F41, all cells stay Stage 5
+
+**What changed.** The tag model's per-story overlay was rebuilt around the custom-name/nuance
+split, hierarchy roll-up was implemented, and the fanonization pipeline was built on top. Cells
+were Stage 5 before and remain Stage 5 — this is the hidden-deferral shape: the grid could not
+show that tiers 2–3 of the character model had storage and nothing else.
+
+**Six defects the audit found in already-Stage-5 code** (each fixed here):
+1. **Hierarchy had zero effect on discovery.** `ApplyFilters` matched tag ids exactly, so
+   filtering `Bulbasaur` never returned `Ash's Bulbasaur` or a fanon child. The Gemini-era record
+   rejected the `Cache_TagHierarchy` closure table *because* "finding all children is a simple
+   direct query" — that query was never written. Left unfixed, fanonize adoption would have
+   silently removed a story from its own species' search results.
+2. **The Setting/AU half was unreachable AND invisible.** `TagDirectoryPage` dropped
+   `AllowSettingDetails` from both DTOs (so no Setting tag could ever be flagged), and
+   `SettingDetail` was projected only into edit hydration — never into `StoryDetailsDTO`.
+3. **`OcBio` was write-only** — authored, stored, projected to the display DTO, rendered nowhere.
+4. **The OC gate conflated two concepts** — one flag gated `IsOc`, `OcName` *and* the bio, making
+   a per-story portrayal note ("competent Ash") impossible on any specific character.
+5. **The character overlay disagreed with itself three ways** — the original schema wanted several
+   OCs per species (`UQ_StoryCharacters_StoryTag`), the model permitted it, `TagSelector` forbade it.
+6. **Ship filtering did not exist.** WU37 removed the `Relationship` tag type; nothing replaced its
+   searchability, so a fanfiction site had no pairing filter at all.
+
+**Also fixed (latent, found while building):** `DeleteTagAsync` omitted `StoryCharacters` from its
+reference pre-check (a character tag used only as an OC base hit the Restrict FK as a raw
+`DbUpdateException`); `TagEditorForm` never hydrated `SpriteIdentifier`, so editing any
+sprite-bearing tag silently cleared its sprite key; H6's tag L1 length drift corrected
+(SpriteIdentifier 50→100, Description 512→500).
+
+**Settled here (do not revisit):**
+- **Cardinality, not "instance-referencing", is why the two halves differ.** Gemini's "absolute
+  requirement" framing for `StoryCharacter`'s surrogate PK is false as stated (composite FKs work);
+  it becomes true only *conditioned on* multiple OCs per species, which the original schema
+  explicitly allowed. A 0-or-1 overlay belongs on the junction row; a 1-to-many overlay needs its
+  own table. Hence `SettingDetail` deleted, `StoryCharacter` kept.
+- **"Identity" is a banned term** for this concept — it collides with ASP.NET Core Identity
+  sitewide. The concept is **custom naming**; the columns are `CustomName`/`Nuance`.
+- **"Bio" was never deliberated.** The original name was the neutral `CharacterBio`; the `Oc`
+  prefix arrived as a mechanical side effect of introducing `IsOC` in the same 2025-10-27 session.
+- **Fanonized tags get `AllowCustomName = false`** — a specific entity, same rule that protects
+  "Ash Ketchum" from being re-declared as someone else's character.
+- **Fanonization is mod-driven set selection, never string matching.** The affected rows are the
+  dashboard group the moderator was looking at, so the tag may be named anything — the
+  `"Saura (Silver Resistance)"` case the naive `OcName == TagName` reading could never handle.
+- **Never notify an author twice per tag** — enforced by `TagAdoptionState.DateNotified`, NOT by
+  notification unread-dedup (which would re-fire on anyone who read and moved on).
+- **No moderator dismiss, no per-row exclusion, no undo.** A living ranking over a growing corpus
+  has nothing to dismiss; moderators cannot have read every story so cannot judge rows; nothing is
+  ever applied without the author acting. Author-side dismiss DOES exist and is reversible — only
+  the author knows whether their "Saura" is *that* Saura.
+
+**How verified (2026-07-26).** `dotnet build` green; `dotnet test` green — **2258 total**
+(753 Unit / 593 RazorComponents / 912 Integration). Design-token check green.
+- **Unit** — `TagValidationsTests` overlay bounds + the removed type-coercions.
+- **Integration** — `StoryTaggingTests` rewritten for the split (gate rules both directions, nuance
+  ungated on canon characters and genres, two same-species OCs with distinct names, duplicate and
+  double-unnamed rejection, flat overlay persistence, index-based pairings incl. a pairing between
+  two same-species OCs, edit round-trip); `FanonPipelineTests` (case-insensitive grouping across
+  authors, single-author below threshold, drafts excluded from public reach, gated story list with
+  complete count, non-mod rejection, link-and-notify, never-twice across a read+sweep, duplicate
+  link rejection, adoption preserving nuance/priority/pairings, collision skip, dismiss round-trip,
+  nudge resolving a disambiguated target); `DiscoveryRollUpAndShipTests` (parent→child include on
+  both tables, independent AND terms, symmetric exclude, ship single-pairing coverage vs
+  co-presence, pairing-type constraint, ship roll-up, ship exclude).
+- **RazorComponents** — H5 closed in full: `FakeNotificationWriteService` added to the fakes
+  catalog and the previously-unwritten anonymous-`NotificationBell` regression test written.
+- **Browser (L4.5 band, extended seed + psql ground truth).** `/fanon` hub with ✦ indicators and
+  sr-only parent cues; `/fanon/characters` ranked with the threshold hiding single-author groups;
+  **two separate "saura" groups on different base tags** — proving grouping is `(name, base tag)`,
+  not name alone; moderator link-to-existing-tag against `"Saura (Silver Resistance)"`, psql-confirmed
+  (link row, 2 adoption states, 2 type-26 notifications, zero stray tags); `/tag-adoptions` index and
+  per-tag page; adoption psql-confirmed to keep the stable row id, priority and nuance while clearing
+  `IsOc`/`CustomName`, with the *other* author's row untouched; **roll-up proven on the adopted
+  story** — it now carries only the fanon child yet still returns under a `Bulbasaur` filter; ship
+  filter returning exactly the paired story; the three-tier tree rendering in `/tags` for the first
+  time (`Bulbasaur` → `Ash's Bulbasaur` → `Saura (Silver Resistance)` ✦); the setting overlay
+  rendering its `*` + tooltip. Zero console errors; anonymous SSR carries no mod controls.
+- **Bug found and fixed during the browser pass:** the link panel pre-filled the create-new tag
+  name with the group name, so a moderator who typed in the typeahead without *selecting* a result
+  silently minted a duplicate tag. The create path is now disarmed until deliberately typed, is
+  disabled while a pick exists, and the button states which action it will take.
+
+**L6 — measured, not assumed (live `pg_indexes` sweep + EXPLAIN ANALYZE on the extended seed).**
+`ix_tags_parent_tag_id` already exists (EF FK convention) and is what roll-up expansion needs;
+at 136 tags the planner correctly prefers a seq scan (0.02 ms, 2 buffers). Dashboard grouping:
+2.4 ms over 5,940 character rows × 3,012 stories. Ship probe: 0.1 ms. **No new indexes were
+warranted.** **Tracker C1 resolves to REJECT** — the tag-chip `ILIKE` runs in 0.079 ms over 136
+tags; F11's L6 note deferred a trigram index "until tag counts grow" and they have not grown
+enough. Recorded as a measured decision, not an assumption.
 
 ## Feature 11 — Tag Administration
 - **L1 — Stage 5.** `Tag` shape matches §5.16 (curated, staff-only, hierarchy, sprite key, OC flag,

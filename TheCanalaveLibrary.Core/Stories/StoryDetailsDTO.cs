@@ -51,13 +51,13 @@ public class StoryDetailsDTO
     public IReadOnlyList<StoryExternalLinkDto> ExternalLinks { get; set; } = [];
 }
 
-/// <summary>Per-character display data for the story view page (OC overlay info).</summary>
+/// <summary>Per-character display data for the story view page (custom-name/nuance overlay).</summary>
 public sealed record CharacterDisplayEntry(
     TagChipDto Chip,
     TagPriority Priority,
     bool IsOc,
-    string? OcName,
-    string? OcBio);
+    string? CustomName,
+    string? Nuance);
 
 /// <summary>Character pairing display row — member names already resolved from tag names.</summary>
 public sealed record PairingDisplayEntry(

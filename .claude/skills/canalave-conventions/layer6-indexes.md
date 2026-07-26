@@ -162,6 +162,31 @@ sort is a first-class concern" reasoning, same posture as the private_messages e
 - **EF convention FK indexes** exist on every FK not superseded above — check `pg_indexes`
   before assuming a gap.
 
+## Measured, no DDL needed (WU-TagFanon, 2026-07-26)
+
+The tag-model reshape + fanonization pipeline added three new query shapes. All were measured on
+the extended seed (136 tags / 5,940 story-character rows / 3,012 stories) with a live `pg_indexes`
+sweep first — **none warranted a new index**:
+
+| Query shape | Plan | Measured | Verdict |
+|---|---|---|---|
+| Roll-up expansion (`tags WHERE parent_tag_id IN (…)`) | Seq Scan, 2 buffers | 0.020 ms | `ix_tags_parent_tag_id` already exists (EF FK convention); planner correctly prefers a seq scan on a 2-page table. Nothing to add. |
+| `/fanon` dashboard grouping (`GROUP BY lower(trim(custom_name)), tag` + author/story distinct counts) | Hash agg over hash join | 2.429 ms | Paginated community/mod surface, not a hot path. Accept. |
+| Ship-filter probe (nested `EXISTS` over pairings + members) | Nested `EXISTS` on the member PK | 0.098 ms | The composite PK on `story_character_pairing_members` already serves it. |
+
+**Tag-chip `ILIKE` trigram — REJECTED again, now with a number.** F11's original L6 note deferred a
+`pg_trgm` GIN index "under R4 until tag counts grow". The WU-TagFanon seed generator grew the
+vocabulary and made the question measurable for the first time: **0.079 ms, 2 buffers, over 136
+tags**. A GIN index would be pure maintenance overhead. Re-measure if the vocabulary grows an order
+of magnitude. (Tracker **C1** resolved on this basis — the honest outcome of "always measure" is
+sometimes "still no".)
+
+**New indexes that DID ship** — all from correctness/uniqueness needs, not performance:
+`ix_story_characters_story_id_character_tag_id_custom_name` (UNIQUE, `NULLS NOT DISTINCT` — several
+custom-named characters of one species per story, at most one unnamed),
+`ix_fanon_links_normalized_name_base_tag_id` (UNIQUE — one link per group),
+`ix_fanon_links_target_tag_id` (adoption pages resolve links by target).
+
 ## Rejected — no matching query (R4), reconfirmed against the 2026-07-07 codebase survey
 
 | Candidate | Why rejected |

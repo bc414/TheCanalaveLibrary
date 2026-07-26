@@ -26,6 +26,5 @@ public interface IEditableStoryProperties
     public List<IStoryTag> StoryTags { get; set; }
 
     public List<StoryCharacterDto> StoryCharacters { get; set; }
-    public List<SettingDetailDto> SettingDetails { get; set; }
     public List<StoryCharacterPairingDto> StoryCharacterPairings { get; set; }
 }

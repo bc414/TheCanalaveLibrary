@@ -297,6 +297,9 @@ var spriteBaseUrl = builder.Configuration["Sprites:BaseUrl"] ?? "/sprites/themes
 builder.Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService(spriteBaseUrl));
 builder.Services.AddScoped<ITagReadService, ServerTagReadService>();
 builder.Services.AddScoped<ITagWriteService, ServerTagWriteService>();
+// WU-TagFanon: forwarding-delegate shape (MA-107's safer default) — one instance per scope.
+builder.Services.AddScoped<IFanonWriteService, ServerFanonWriteService>();
+builder.Services.AddScoped<IFanonReadService>(sp => sp.GetRequiredService<IFanonWriteService>());
 // WU43 — write class serves both interfaces (mirrors ISeriesReadService/Write registration below).
 builder.Services.AddScoped<ISavedTagSelectionReadService, ServerSavedTagSelectionWriteService>();
 builder.Services.AddScoped<ISavedTagSelectionWriteService, ServerSavedTagSelectionWriteService>();
@@ -582,6 +585,7 @@ app.MapSeoEndpoints();
 app.MapStoryEndpoints();
 app.MapExternalVerificationEndpoints();
 app.MapTagEndpoints();
+app.MapFanonEndpoints();
 app.MapExportEndpoints();
 
 // WU-L5Sweep (2026-07-13): mechanical add-only Layer-5 batch — every remaining ServerXXXService's

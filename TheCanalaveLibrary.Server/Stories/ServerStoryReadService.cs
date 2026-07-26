@@ -54,17 +54,28 @@ public class ServerStoryReadService(
                 s.StoryTags
                     .Select(st => new TagListingRow(
                         st.TagId, st.Tag.TagName, st.Tag.TagTypeId,
-                        st.Tag.Description, st.Tag.SpriteIdentifier))
+                        st.Tag.Description,
+                        st.Tag.SpriteIdentifier ?? (st.Tag.ParentTag != null ? st.Tag.ParentTag.SpriteIdentifier : null),
+                        st.Tag.IsFanon, st.Tag.AllowCustomName,
+                        st.Tag.ParentTagId,
+                        st.Tag.ParentTag != null ? st.Tag.ParentTag.TagName : null,
+                        st.CustomName, st.Nuance))
                     .ToList(),
                 s.StoryCharacters
                     .Select(sc => new CharacterDetailRow(
-                        sc.CharacterTagId, sc.CharacterTag.TagName, sc.CharacterTag.SpriteIdentifier,
-                        sc.Priority, sc.IsOc, sc.OcName, sc.OcBio))
+                        sc.CharacterTagId, sc.CharacterTag.TagName,
+                        sc.CharacterTag.SpriteIdentifier ?? (sc.CharacterTag.ParentTag != null ? sc.CharacterTag.ParentTag.SpriteIdentifier : null),
+                        sc.CharacterTag.IsFanon,
+                        sc.CharacterTag.ParentTagId,
+                        sc.CharacterTag.ParentTag != null ? sc.CharacterTag.ParentTag.TagName : null,
+                        sc.Priority, sc.IsOc, sc.CustomName, sc.Nuance))
                     .ToList(),
                 s.StoryCharacterPairings
                     .Select(scp => new PairingDetailRow(
                         scp.PairingType, scp.Priority,
-                        scp.Members.Select(m => m.StoryCharacter.CharacterTag.TagName).ToList()))
+                        // Custom-named characters display under their per-story name; after a
+                        // fanonize adoption the canonical tag name takes over (WU-TagFanon 8.6).
+                        scp.Members.Select(m => m.StoryCharacter.CustomName ?? m.StoryCharacter.CharacterTag.TagName).ToList()))
                     .ToList(),
                 s.ExternalLinks
                     .OrderBy(el => el.ExternalPlatformId)
@@ -96,7 +107,13 @@ public class ServerStoryReadService(
             {
                 TagId = c.CharacterTagId, TagName = c.TagName,
                 TagTypeId = TagTypeEnum.Character,
-                SpriteIdentifier = c.SpriteIdentifier   // raw key; component resolves via ThemeContext
+                SpriteIdentifier = c.SpriteIdentifier,  // raw key; component resolves via ThemeContext
+                IsFanon = c.IsFanon,
+                ParentTagId = c.ParentTagId,
+                ParentTagName = c.ParentTagName,
+                // Per-story overlay rides the chip so cards/story chips carry the indicator (WU-TagFanon 4.1).
+                CustomName = c.CustomName,
+                Nuance = c.Nuance
             })
             .ToList();
 
@@ -119,7 +136,7 @@ public class ServerStoryReadService(
             Slug                 = row.Slug,
             Tags                 = [..row.Tags.Select(ToTagChip), ..characterChips],
             Characters           = row.Characters
-                .Select((c, i) => new CharacterDisplayEntry(characterChips[i], c.Priority, c.IsOc, c.OcName, c.OcBio))
+                .Select((c, i) => new CharacterDisplayEntry(characterChips[i], c.Priority, c.IsOc, c.CustomName, c.Nuance))
                 .ToList(),
             Pairings             = row.Pairings
                 .Select(p => new PairingDisplayEntry(p.PairingType, p.Priority, p.MemberNames))
@@ -144,6 +161,9 @@ public class ServerStoryReadService(
             .Select(s => new
             {
                 s.AuthorId,
+                // Same ordering as the Dto.StoryCharacters subquery — positional index source.
+                CharacterRowIds = s.StoryCharacters.OrderBy(sc => sc.StoryCharacterId)
+                    .Select(sc => sc.StoryCharacterId).ToList(),
                 Dto = new StoryUpdateDTO
                 {
                 StoryId = s.StoryId,
@@ -154,26 +174,28 @@ public class ServerStoryReadService(
                 CoverArtRelativeUrl = s.StoryListing != null ? s.StoryListing.CoverArtRelativeUrl : null,
                 LongDescription = s.StoryDetail != null ? s.StoryDetail.LongDescription : null,
                 PostApprovalStatus = s.StoryDetail != null ? s.StoryDetail.PostApprovalStatus : default,
-                StoryTags = s.StoryTags.Select(st => new StoryTagDTO { TagId = st.TagId, Priority = st.Priority, TagTypeEnum = st.Tag.TagTypeId }).ToList<IStoryTag>(),
-                StoryCharacters = s.StoryCharacters.Select(sc => new StoryCharacterDto
+                StoryTags = s.StoryTags.Select(st => new StoryTagDTO
+                {
+                    TagId = st.TagId, Priority = st.Priority, TagTypeEnum = st.Tag.TagTypeId,
+                    CustomName = st.CustomName, Nuance = st.Nuance
+                }).ToList<IStoryTag>(),
+                // OrderBy keeps this list and CharacterRowIds below positionally aligned — the
+                // index-based pairing translation depends on identical subquery ordering.
+                StoryCharacters = s.StoryCharacters.OrderBy(sc => sc.StoryCharacterId).Select(sc => new StoryCharacterDto
                 {
                     CharacterTagId = sc.CharacterTagId,
                     Priority       = sc.Priority,
                     IsOc           = sc.IsOc,
-                    OcName         = sc.OcName,
-                    OcBio          = sc.OcBio
-                }).ToList(),
-                SettingDetails = s.SettingDetails.Select(sd => new SettingDetailDto
-                {
-                    BaseTagId   = sd.BaseTagId,
-                    Name        = sd.Name,
-                    Description = sd.Description
+                    CustomName     = sc.CustomName,
+                    Nuance         = sc.Nuance
                 }).ToList(),
                 StoryCharacterPairings = s.StoryCharacterPairings.Select(scp => new StoryCharacterPairingDto
                 {
-                    PairingType           = scp.PairingType,
-                    Priority              = scp.Priority,
-                    MemberCharacterTagIds = scp.Members.Select(m => m.StoryCharacter.CharacterTagId).ToList()
+                    PairingType   = scp.PairingType,
+                    Priority      = scp.Priority,
+                    // Temporarily carries StoryCharacterIds; translated to list indexes below
+                    // (the DTO contract is index-based — WU-TagFanon).
+                    MemberIndexes = scp.Members.Select(m => m.StoryCharacterId).ToList()
                 }).ToList(),
                 ExternalLinks = s.ExternalLinks
                     .OrderBy(el => el.ExternalPlatformId)
@@ -197,6 +219,23 @@ public class ServerStoryReadService(
         // against an authorless story (AuthorId null) must not pass on null == null.
         if (ActiveUser.UserId is not int viewerId || row.AuthorId != viewerId)
             throw new UnauthorizedAccessException("You must be the author of this story.");
+
+        // Translate pairing member StoryCharacterIds (projected above) into indexes into the
+        // DTO's StoryCharacters list — the wire contract is index-based (WU-TagFanon).
+        Dictionary<int, int> indexByRowId = row.CharacterRowIds
+            .Select((id, i) => (id, i))
+            .ToDictionary(x => x.id, x => x.i);
+        row.Dto.StoryCharacterPairings = row.Dto.StoryCharacterPairings
+            .Select(p => new StoryCharacterPairingDto
+            {
+                PairingType   = p.PairingType,
+                Priority      = p.Priority,
+                MemberIndexes = p.MemberIndexes
+                    .Where(indexByRowId.ContainsKey)
+                    .Select(id => indexByRowId[id])
+                    .ToList()
+            })
+            .ToList();
 
         return row.Dto;
     }
@@ -415,7 +454,7 @@ public class ServerStoryReadService(
             query = query.Where(s => restrictToStoryIds.Contains(s.StoryId));
 
         bool hasFts = !string.IsNullOrWhiteSpace(filter.TextQuery);
-        query = ApplyFilters(query, filter, hasFts);
+        query = await ApplyFiltersAsync(readDb, query, filter, hasFts);
 
         // ── Count (before Skip/Take so it reflects the full filtered set) ─────────────────
         int totalCount = await query.CountAsync();
@@ -483,7 +522,7 @@ public class ServerStoryReadService(
 
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         IQueryable<Story> query = readDb.Stories.Where(s => candidateIds.Contains(s.StoryId));
-        query = ApplyFilters(query, filter, !string.IsNullOrWhiteSpace(filter.TextQuery));
+        query = await ApplyFiltersAsync(readDb, query, filter, !string.IsNullOrWhiteSpace(filter.TextQuery));
 
         return await query.Select(s => s.StoryId).ToListAsync();
     }
@@ -494,7 +533,7 @@ public class ServerStoryReadService(
         // consulted — batchSize is the only take-cap and EF.Functions.Random() is the only order.
         // No shown-id tracking; "give me more" is a second call that appends a fresh independent draw.
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
-        IQueryable<Story> query = ApplyFilters(readDb.Stories, filter, !string.IsNullOrWhiteSpace(filter.TextQuery));
+        IQueryable<Story> query = await ApplyFiltersAsync(readDb, readDb.Stories, filter, !string.IsNullOrWhiteSpace(filter.TextQuery));
 
         int[] ids = await query
             .OrderBy(_ => EF.Functions.Random())
@@ -506,13 +545,30 @@ public class ServerStoryReadService(
     }
 
     /// <summary>
-    /// Shared filter-building helper used by both <see cref="GetListingsAsync"/> and
-    /// <see cref="GetRandomBatchAsync"/>. Applies tag include (AND or OR per <c>filter.IncludeMode</c>),
-    /// tag exclude (ANY/none), FTS, and viewer-relative interaction exclusions. Does NOT add OrderBy
-    /// or pagination — those are the caller's responsibility.
+    /// Shared filter-building helper used by <see cref="GetListingsAsync"/>,
+    /// <see cref="FilterCandidateIdsAsync"/> and <see cref="GetRandomBatchAsync"/>. Applies tag
+    /// include (AND or OR per <c>filter.IncludeMode</c>), tag exclude (ANY/none), ship filters,
+    /// FTS, and viewer-relative interaction exclusions. Does NOT add OrderBy or pagination —
+    /// those are the caller's responsibility.
+    ///
+    /// <para><b>Hierarchy roll-up (WU-TagFanon):</b> every tag id — include, exclude, and ship
+    /// member — expands to {self} ∪ children before the predicate builds (one lookup; hierarchy
+    /// is one level deep). Symmetric: excluding a parent excludes its children. AND terms are
+    /// independent: a story tagged only with a child satisfies a filter naming parent AND child.
+    /// See layer2-services.md §"Tag Hierarchy Roll-Up".</para>
     /// </summary>
-    private IQueryable<Story> ApplyFilters(IQueryable<Story> query, StoryFilterDto filter, bool hasFts)
+    private async Task<IQueryable<Story>> ApplyFiltersAsync(
+        ReadOnlyApplicationDbContext readDb, IQueryable<Story> query, StoryFilterDto filter, bool hasFts)
     {
+        // ── One child-expansion lookup covering every axis that names tag ids ─────────────
+        Dictionary<int, int[]> expansion = await ExpandWithChildrenAsync(readDb,
+        [
+            ..filter.IncludedTagIds,
+            ..filter.ExcludedTagIds,
+            ..filter.IncludedShips.SelectMany(sh => sh.MemberTagIds),
+            ..filter.ExcludedShips.SelectMany(sh => sh.MemberTagIds),
+        ]);
+
         // ── Tag include ────────────────────────────────────────────────────────────────────
         // Character tags live in StoryCharacters; all others live in StoryTags. Since every
         // TagId belongs to exactly one entity type, the || always resolves to one side only —
@@ -521,31 +577,41 @@ public class ServerStoryReadService(
         {
             if (filter.IncludeMode == TagIncludeMode.Or)
             {
-                // OR — story must match at least one included tag in either collection.
+                // OR — story must match at least one included tag (or child) in either collection.
+                int[] anyOf = [.. filter.IncludedTagIds.SelectMany(id => expansion[id]).Distinct()];
                 query = query.Where(s =>
-                    s.StoryCharacters.Any(sc => filter.IncludedTagIds.Contains(sc.CharacterTagId)) ||
-                    s.StoryTags.Any(st => filter.IncludedTagIds.Contains(st.TagId)));
+                    s.StoryCharacters.Any(sc => anyOf.Contains(sc.CharacterTagId)) ||
+                    s.StoryTags.Any(st => anyOf.Contains(st.TagId)));
             }
             else
             {
-                // AND (default) — story must match every included tag; each gets one subquery.
+                // AND (default) — story must match every included term; each term is its own
+                // {self ∪ children} set with its own subquery, evaluated independently.
                 foreach (int tagId in filter.IncludedTagIds)
                 {
-                    int tid = tagId; // local capture so the closure binds the right value
+                    int[] set = expansion[tagId];
                     query = query.Where(s =>
-                        s.StoryCharacters.Any(sc => sc.CharacterTagId == tid) ||
-                        s.StoryTags.Any(st => st.TagId == tid));
+                        s.StoryCharacters.Any(sc => set.Contains(sc.CharacterTagId)) ||
+                        s.StoryTags.Any(st => set.Contains(st.TagId)));
                 }
             }
         }
 
-        // ── Tag exclude (story must have none of the excluded tags in either collection) ──
+        // ── Tag exclude (story must have none of the excluded tags OR their children) ──
         if (filter.ExcludedTagIds.Count > 0)
         {
+            int[] noneOf = [.. filter.ExcludedTagIds.SelectMany(id => expansion[id]).Distinct()];
             query = query.Where(s =>
-                !s.StoryCharacters.Any(sc => filter.ExcludedTagIds.Contains(sc.CharacterTagId)) &&
-                !s.StoryTags.Any(st => filter.ExcludedTagIds.Contains(st.TagId)));
+                !s.StoryCharacters.Any(sc => noneOf.Contains(sc.CharacterTagId)) &&
+                !s.StoryTags.Any(st => noneOf.Contains(st.TagId)));
         }
+
+        // ── Ship filters (WU-TagFanon) — AND across ships; each ship needs ONE pairing whose
+        //    member set covers every named character (roll-up applied per member). ──
+        foreach (ShipFilterDto ship in filter.IncludedShips)
+            query = ApplyShipTerm(query, ship, expansion, negate: false);
+        foreach (ShipFilterDto ship in filter.ExcludedShips)
+            query = ApplyShipTerm(query, ship, expansion, negate: true);
 
         // ── FTS ───────────────────────────────────────────────────────────────────────────
         if (hasFts)
@@ -587,6 +653,77 @@ public class ServerStoryReadService(
         return query;
     }
 
+    /// <summary>
+    /// Expands each distinct input tag id to <c>{self} ∪ children</c> (hierarchy is one level
+    /// deep — a single lookup, no CTE; the query the rejected Cache_TagHierarchy presumed).
+    /// </summary>
+    private static async Task<Dictionary<int, int[]>> ExpandWithChildrenAsync(
+        ReadOnlyApplicationDbContext readDb, IEnumerable<int> tagIds)
+    {
+        List<int> ids = tagIds.Distinct().ToList();
+        if (ids.Count == 0) return [];
+
+        var childRows = await readDb.Tags
+            .Where(t => t.ParentTagId != null && ids.Contains(t.ParentTagId.Value))
+            .Select(t => new { Parent = t.ParentTagId!.Value, t.TagId })
+            .ToListAsync();
+
+        ILookup<int, int> childrenByParent = childRows.ToLookup(r => r.Parent, r => r.TagId);
+        return ids.ToDictionary(id => id, id => (int[])[id, .. childrenByParent[id]]);
+    }
+
+    /// <summary>
+    /// One ship term: the story must (or, negated, must not) contain a single pairing whose
+    /// member set covers every named character — each member id already roll-up-expanded.
+    /// Members beyond <see cref="ShipFilterDto.MaxMembers"/> are rejected, not silently capped.
+    /// Explicit 1/2/3-member branches keep the predicate EF-translatable without expression-tree
+    /// assembly.
+    /// </summary>
+    private static IQueryable<Story> ApplyShipTerm(
+        IQueryable<Story> query, ShipFilterDto ship, Dictionary<int, int[]> expansion, bool negate)
+    {
+        List<int[]> sets = ship.MemberTagIds.Select(id => expansion[id]).ToList();
+        if (sets.Count == 0) return query;
+        if (sets.Count > ShipFilterDto.MaxMembers)
+            throw new ArgumentException($"A ship filter supports at most {ShipFilterDto.MaxMembers} members.");
+
+        CharacterPairingType? type = ship.PairingType;
+        System.Linq.Expressions.Expression<Func<Story, bool>> predicate = sets.Count switch
+        {
+            1 => Ship1(sets[0], type),
+            2 => Ship2(sets[0], sets[1], type),
+            _ => Ship3(sets[0], sets[1], sets[2], type),
+        };
+
+        return negate
+            ? query.Where(Not(predicate))
+            : query.Where(predicate);
+    }
+
+    /// <summary>Logical negation of a predicate expression (EF translates NOT(EXISTS…) fine).</summary>
+    private static System.Linq.Expressions.Expression<Func<T, bool>> Not<T>(
+        System.Linq.Expressions.Expression<Func<T, bool>> expr) =>
+        System.Linq.Expressions.Expression.Lambda<Func<T, bool>>(
+            System.Linq.Expressions.Expression.Not(expr.Body), expr.Parameters);
+
+    private static System.Linq.Expressions.Expression<Func<Story, bool>> Ship1(int[] a, CharacterPairingType? type) =>
+        s => s.StoryCharacterPairings.Any(p =>
+            (type == null || p.PairingType == type) &&
+            p.Members.Any(m => a.Contains(m.StoryCharacter.CharacterTagId)));
+
+    private static System.Linq.Expressions.Expression<Func<Story, bool>> Ship2(int[] a, int[] b, CharacterPairingType? type) =>
+        s => s.StoryCharacterPairings.Any(p =>
+            (type == null || p.PairingType == type) &&
+            p.Members.Any(m => a.Contains(m.StoryCharacter.CharacterTagId)) &&
+            p.Members.Any(m => b.Contains(m.StoryCharacter.CharacterTagId)));
+
+    private static System.Linq.Expressions.Expression<Func<Story, bool>> Ship3(int[] a, int[] b, int[] c, CharacterPairingType? type) =>
+        s => s.StoryCharacterPairings.Any(p =>
+            (type == null || p.PairingType == type) &&
+            p.Members.Any(m => a.Contains(m.StoryCharacter.CharacterTagId)) &&
+            p.Members.Any(m => b.Contains(m.StoryCharacter.CharacterTagId)) &&
+            p.Members.Any(m => c.Contains(m.StoryCharacter.CharacterTagId)));
+
     // Lean intermediate projection — SpriteIdentifier is passed through raw (no resolution here).
     private static IQueryable<StoryListingRow> ProjectListingRows(IQueryable<Story> query) =>
         query.Select(s => new StoryListingRow(
@@ -601,7 +738,12 @@ public class ServerStoryReadService(
             s.Rating,
             s.LastUpdatedDate,
             s.StoryTags.Select(st => new TagListingRow(
-                st.TagId, st.Tag.TagName, st.Tag.TagTypeId, st.Tag.Description, st.Tag.SpriteIdentifier)).ToList()));
+                st.TagId, st.Tag.TagName, st.Tag.TagTypeId, st.Tag.Description,
+                st.Tag.SpriteIdentifier ?? (st.Tag.ParentTag != null ? st.Tag.ParentTag.SpriteIdentifier : null),
+                st.Tag.IsFanon, st.Tag.AllowCustomName,
+                st.Tag.ParentTagId,
+                st.Tag.ParentTag != null ? st.Tag.ParentTag.TagName : null,
+                st.CustomName, st.Nuance)).ToList()));
 
     private StoryListingDto ToDto(StoryListingRow row) => new(
         row.StoryId,
@@ -622,7 +764,13 @@ public class ServerStoryReadService(
         TagName = tag.TagName,
         TagTypeId = tag.TagTypeId,
         Description = tag.Description,
-        SpriteIdentifier = tag.SpriteIdentifier  // raw key; component resolves via ThemeContext
+        SpriteIdentifier = tag.SpriteIdentifier,  // raw key (parent-inherited); component resolves via ThemeContext
+        IsFanon = tag.IsFanon,
+        AllowCustomName = tag.AllowCustomName,
+        ParentTagId = tag.ParentTagId,
+        ParentTagName = tag.ParentTagName,
+        CustomName = tag.CustomName,
+        Nuance = tag.Nuance
     };
 
     private sealed record StoryListingRow(
@@ -648,11 +796,14 @@ public class ServerStoryReadService(
         List<StoryExternalLinkDto> ExternalLinks);
 
     private sealed record TagListingRow(
-        int TagId, string TagName, TagTypeEnum TagTypeId, string? Description, string? SpriteIdentifier);
+        int TagId, string TagName, TagTypeEnum TagTypeId, string? Description, string? SpriteIdentifier,
+        bool IsFanon, bool AllowCustomName, int? ParentTagId, string? ParentTagName,
+        string? CustomName, string? Nuance);
 
     private sealed record CharacterDetailRow(
         int CharacterTagId, string TagName, string? SpriteIdentifier,
-        TagPriority Priority, bool IsOc, string? OcName, string? OcBio);
+        bool IsFanon, int? ParentTagId, string? ParentTagName,
+        TagPriority Priority, bool IsOc, string? CustomName, string? Nuance);
 
     private sealed record PairingDetailRow(
         CharacterPairingType PairingType, TagPriority Priority, List<string> MemberNames);

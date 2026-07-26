@@ -1056,18 +1056,39 @@ the user must explicitly un-designate first. **Settled — do not revisit** (res
 bool IsLiked)` so the UI reconciles optimistic state without a re-read. No notification fires on a
 recommendation like — anti-addictive design (§6.11), same as `CommentLike`.
 
-## Structured Tag Authoring — Routing and Validation (WU37)
+## Structured Tag Authoring — Routing and Validation (WU37, reshaped by WU-TagFanon 2026-07-26)
+
+### The overlay model — custom name vs. nuance (WU-TagFanon)
+
+Every per-story tag association can carry a two-part **overlay**:
+
+- **`CustomName`** (`[MaxLength(128)]`, nullable) — the author names a specific instance of an
+  archetype tag ("Saura" on the `Bulbasaur` tag, "Aethon Region" on `Original Setting`). **Gated** by
+  `Tag.AllowCustomName` (single flag; replaced `AllowOCDetails` + `AllowSettingDetails`), mod-set per
+  tag wherever naming an instance makes sense. On `StoryCharacter`, a non-null `CustomName`
+  additionally requires `IsOc` (an unnamed OC — `IsOc` true, `CustomName` null — is legitimate:
+  "features an OC Bulbasaur"). Fanonized tags get `AllowCustomName = false` — a specific entity, like
+  `Ash Ketchum`, must not be re-declared as someone else's character.
+- **`Nuance`** (`[MaxLength(2048)]`, nullable, plain text, NOT sanitized HTML, NOT in FTS) — what
+  *this story* does with the tag: an OC bio, "competent Ash", "slow burn, no love triangle" on
+  `Romance`. **Never gated**, available on every tag type. Renders via indicator + hover/tap reveal
+  on story page AND cards (load-bearing browse data — listing projections carry it).
+
+**Do not call custom naming "identity"** — that word belongs to ASP.NET Core Identity sitewide.
 
 ### Per-story routing table
 
-Every tag type uses a **different per-story association table**. Route by `TagChipDto.TagTypeId`:
-
 | Tag type | Per-story target | Entity |
 |---|---|---|
-| Genre, ContentWarning, CrossoverFandom | Flat junction | `StoryTag` |
-| Setting | Flat junction + optional side-row | `StoryTag` + `SettingDetail` |
-| Character | Dedicated entity (replaces StoryTag) | `StoryCharacter` |
+| Genre, Setting, ContentWarning, CrossoverFandom | Flat junction, overlay on-row | `StoryTag` (`CustomName`, `Nuance` nullable columns) |
+| Character | Dedicated entity (replaces StoryTag) | `StoryCharacter` (`IsOc`, `CustomName`, `Nuance`) |
 | Pairing (ship) | Structural, named members | `StoryCharacterPairing` + `StoryCharacterPairingMember` |
+
+`SettingDetail` is **deleted** (WU-TagFanon): the overlay is 0-or-1 per `(story, tag)` so it lives on
+the junction row. `StoryCharacter` keeps its own table because the character overlay is 1-to-many —
+a story may hold several custom-named characters of one species
+(`UNIQUE (StoryId, CharacterTagId, CustomName)` with nulls-not-distinct) — and pairings must
+reference *which* one (stable `StoryCharacterId`).
 
 Character never routes to `StoryTag`. A pairing is not a catalog tag (no `Tag` row; its name derives
 from its members). `TagTypeEnum.Relationship` is removed.
@@ -1149,8 +1170,10 @@ All rules are enforced by `ServerStoryWriteService` via `StoryValidationExceptio
 
 | Rule | Condition | Error |
 |---|---|---|
-| OC details require gate | `IsOc == true` but `Tag.AllowOCDetails == false` | Reject |
-| SettingDetail requires gate | `SettingDetail` submitted but `Tag.AllowSettingDetails == false` | Reject |
+| OC flag requires gate | `IsOc == true` but `Tag.AllowCustomName == false` | Reject |
+| Character custom name requires OC flag | `StoryCharacter.CustomName != null` but `IsOc == false` | Reject |
+| Flat custom name requires gate | `StoryTag.CustomName != null` but `Tag.AllowCustomName == false` | Reject |
+| Nuance | — | Never gated, any tag type, either table |
 | ContentWarning priority coercion | Priority != Primary | Coerce to Primary (not an error) |
 | Pairing member count | Members < 2 | Reject |
 | Pairing members in-story | Member `StoryCharacterId` must exist in this story's `StoryCharacters` | Reject |
@@ -1187,6 +1210,29 @@ queries `Tag.TagTypeId` for a given id set). The same partition applies to `Excl
 
 `StoryFilterDto` gains the per-id type metadata to support this without an extra DB round-trip; or the
 write path sends `(TagId, TagTypeId)` tuples rather than flat ids.
+
+### Tag Hierarchy Roll-Up (WU-TagFanon, 2026-07-26)
+
+Filtering by a **parent tag matches the parent plus its children** — the query the rejected
+`Cache_TagHierarchy` closure table presumed would exist (hierarchy is one level deep, so expansion is
+a single lookup, no CTE). Rules:
+
+- **Symmetric**: roll-up applies to include AND exclude. Excluding `Bulbasaur` excludes
+  `Saura`-tagged stories — avoiding a species (or a parent ContentWarning) means avoiding its
+  children.
+- **Independent AND terms**: each included tag id expands to `{self} ∪ children` and becomes one
+  `Any(expanded.Contains(...))` predicate. A story tagged only `Saura` satisfies a filter naming
+  both `Bulbasaur` AND `Saura` (one row satisfies both terms).
+- **Expansion happens server-side in `ApplyFilters`** (one `Tags.Where(t => ids.Contains(t.ParentTagId))`
+  lookup before predicate build) — never in the UI, so every consumer (discover, random batch,
+  bookshelves, profile tabs) inherits it.
+- **Silent in the UI** — child tags share the parent's sprite (render-time fallback); the chip
+  tooltip + sr-only text + child-ring carry the relationship (`layer4-style.md`).
+- **Saved Tag Selections broaden over time** as children are added under a stored parent id —
+  intended behavior of a persisted artifact, not a bug.
+- **Ship filter** (`StoryFilterDto` pairing axis) inherits roll-up on its member character ids; ship
+  filters are transient viewer intent, **never** persisted in `SavedTagSelection` (tag-axis-only,
+  settled F15 scope).
 
 ## `AllowPrivateMessages` Gate
 

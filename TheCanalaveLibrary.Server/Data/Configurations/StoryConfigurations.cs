@@ -84,11 +84,6 @@ public sealed class StoryConfiguration : IEntityTypeConfiguration<Story>
             .HasForeignKey(sel => sel.StoryId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasMany(s => s.SettingDetails)
-            .WithOne(sd => sd.Story)
-            .HasForeignKey(sd => sd.StoryId)
-            .OnDelete(DeleteBehavior.Cascade);
-
         builder.HasMany(s => s.StoryLineageSourceStories)
             .WithOne(sr => sr.SourceStory)
             .HasForeignKey(sr => sr.SourceStoryId)

@@ -7,10 +7,11 @@ using TheCanalaveLibrary.Server;
 namespace TheCanalaveLibrary.Tests.Integration;
 
 /// <summary>
-/// Integration tests for Feature 12 structured story tagging (WU37 Phase 5).
-/// Covers character routing (StoryCharacter vs StoryTag), OC + SettingDetail gates, ContentWarning
-/// priority coercion, pairing persistence, GetStoryForEditAsync round-trip, and the discovery
-/// character-filter branch in ApplyFilters.
+/// Integration tests for Feature 12 structured story tagging (WU37 Phase 5; reshaped by
+/// WU-TagFanon). Covers character routing (StoryCharacter vs StoryTag), the custom-name gate
+/// (IsOc/CustomName require Tag.AllowCustomName; Nuance never gated), multi-OC-per-species
+/// uniqueness, ContentWarning priority coercion, index-based pairing persistence,
+/// GetStoryForEditAsync round-trip, and the discovery character-filter branch in ApplyFilters.
 /// Tier: Integration (Testcontainers Postgres).
 /// </summary>
 [Collection("Postgres")]
@@ -18,10 +19,10 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
 {
     private int _authorId;
     private int _settingTagId;
-    private int _settingTagWithDetailsId;
+    private int _settingTagWithCustomNameId;
     private int _genreTagId;
     private int _charTagId;
-    private int _charTagAllowOcId;
+    private int _charTagAllowCustomNameId;
     private int _cwTagId;
 
     public override async Task InitializeAsync()
@@ -71,64 +72,156 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
         cwRow!.Priority.Should().Be(TagPriority.Primary, "server always coerces ContentWarning to Primary");
     }
 
-    // ── OC gate ───────────────────────────────────────────────────────────────
+    // ── Custom-name gate (WU-TagFanon) ─────────────────────────────────────────
 
     [Fact]
-    public async Task CreateStory_WithOcDataOnNonOcTag_ThrowsStoryValidationException()
+    public async Task CreateStory_WithOcFlagOnUngatedTag_ThrowsStoryValidationException()
     {
         SetActiveUser(_authorId);
         Func<Task> act = () => CreateStoryViaServiceAsync(characters:
         [
-            new StoryCharacterDto { CharacterTagId = _charTagId, IsOc = true, OcName = "My OC" }
+            new StoryCharacterDto { CharacterTagId = _charTagId, IsOc = true, CustomName = "My OC" }
         ]);
 
-        await act.Should().ThrowAsync<StoryValidationException>("tag does not allow OC details");
+        await act.Should().ThrowAsync<StoryValidationException>("tag does not allow custom-named characters");
     }
 
     [Fact]
-    public async Task CreateStory_WithOcDataOnOcAllowedTag_Succeeds()
+    public async Task CreateStory_WithCustomNameButNoOcFlag_ThrowsStoryValidationException()
     {
         SetActiveUser(_authorId);
         Func<Task> act = () => CreateStoryViaServiceAsync(characters:
         [
-            new StoryCharacterDto { CharacterTagId = _charTagAllowOcId, IsOc = true, OcName = "Kira", OcBio = "Friendly Pikachu OC" }
+            new StoryCharacterDto { CharacterTagId = _charTagAllowCustomNameId, IsOc = false, CustomName = "Rogue Name" }
+        ]);
+
+        await act.Should().ThrowAsync<StoryValidationException>("a character custom name requires the OC flag");
+    }
+
+    [Fact]
+    public async Task CreateStory_WithOcOverlayOnGatedTag_Succeeds()
+    {
+        SetActiveUser(_authorId);
+        Func<Task> act = () => CreateStoryViaServiceAsync(characters:
+        [
+            new StoryCharacterDto { CharacterTagId = _charTagAllowCustomNameId, IsOc = true, CustomName = "Kira", Nuance = "Friendly Pikachu OC" }
         ]);
 
         await act.Should().NotThrowAsync();
     }
 
-    // ── SettingDetail gate ─────────────────────────────────────────────────────
-
     [Fact]
-    public async Task CreateStory_WithSettingDetailOnNonDetailTag_ThrowsStoryValidationException()
+    public async Task CreateStory_NuanceOnUngatedCharacter_Succeeds()
     {
+        // Nuance is NEVER gated — a portrayal note is legal on canon/fanon characters
+        // (the WU-TagFanon split: the gate covers custom naming only).
         SetActiveUser(_authorId);
-        Func<Task> act = () => CreateStoryViaServiceAsync(settingDetails:
+        Func<Task> act = () => CreateStoryViaServiceAsync(characters:
         [
-            new SettingDetailDto { BaseTagId = _settingTagId, Name = "Custom Pallet" }
+            new StoryCharacterDto { CharacterTagId = _charTagId, Nuance = "competent portrayal" }
         ]);
-
-        await act.Should().ThrowAsync<StoryValidationException>("tag does not allow setting details");
-    }
-
-    [Fact]
-    public async Task CreateStory_WithSettingDetailOnAllowedTag_Succeeds()
-    {
-        SetActiveUser(_authorId);
-        Func<Task> act = () => CreateStoryViaServiceAsync(
-            flatSettingTagIds: [_settingTagWithDetailsId],
-            settingDetails:
-            [
-                new SettingDetailDto { BaseTagId = _settingTagWithDetailsId, Name = "Custom Viridian", Description = "Alternate timeline" }
-            ]);
 
         await act.Should().NotThrowAsync();
     }
 
-    // ── Pairing constraints ────────────────────────────────────────────────────
+    [Fact]
+    public async Task CreateStory_TwoOcsOfOneSpecies_WithDistinctNames_Succeeds()
+    {
+        SetActiveUser(_authorId);
+        int storyId = await CreateStoryViaServiceAsync(characters:
+        [
+            new StoryCharacterDto { CharacterTagId = _charTagAllowCustomNameId, IsOc = true, CustomName = "Saura" },
+            new StoryCharacterDto { CharacterTagId = _charTagAllowCustomNameId, IsOc = true, CustomName = "Spiky" }
+        ]);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        int rows = await db.Set<StoryCharacter>().CountAsync(sc => sc.StoryId == storyId && sc.CharacterTagId == _charTagAllowCustomNameId);
+        rows.Should().Be(2, "a story may hold several custom-named characters of one species");
+    }
 
     [Fact]
-    public async Task CreateStory_PairingWithFewerThanTwoMembers_ThrowsStoryValidationException()
+    public async Task CreateStory_TwoCharactersSameTagSameName_ThrowsStoryValidationException()
+    {
+        SetActiveUser(_authorId);
+        Func<Task> act = () => CreateStoryViaServiceAsync(characters:
+        [
+            new StoryCharacterDto { CharacterTagId = _charTagAllowCustomNameId, IsOc = true, CustomName = "Saura" },
+            new StoryCharacterDto { CharacterTagId = _charTagAllowCustomNameId, IsOc = true, CustomName = "Saura" }
+        ]);
+
+        await act.Should().ThrowAsync<StoryValidationException>("duplicate (tag, custom name) pairs are rejected before the unique index fires");
+    }
+
+    [Fact]
+    public async Task CreateStory_TwoUnnamedRowsOfOneSpecies_ThrowsStoryValidationException()
+    {
+        // Nulls are NOT distinct — at most one unnamed row per (story, tag).
+        SetActiveUser(_authorId);
+        Func<Task> act = () => CreateStoryViaServiceAsync(characters:
+        [
+            new StoryCharacterDto { CharacterTagId = _charTagId },
+            new StoryCharacterDto { CharacterTagId = _charTagId }
+        ]);
+
+        await act.Should().ThrowAsync<StoryValidationException>();
+    }
+
+    // ── Flat-tag overlay (WU-TagFanon: SettingDetail folded onto StoryTag) ─────
+
+    [Fact]
+    public async Task CreateStory_FlatCustomNameOnUngatedTag_ThrowsStoryValidationException()
+    {
+        SetActiveUser(_authorId);
+        Func<Task> act = () => CreateStoryViaServiceAsync(extraFlatTags:
+        [
+            new StoryTagDTO { TagId = _settingTagId, TagTypeEnum = TagTypeEnum.Setting, CustomName = "Custom Pallet" }
+        ]);
+
+        await act.Should().ThrowAsync<StoryValidationException>("tag does not allow custom names");
+    }
+
+    [Fact]
+    public async Task CreateStory_FlatOverlayOnGatedTag_PersistsOnStoryTagRow()
+    {
+        SetActiveUser(_authorId);
+        int storyId = await CreateStoryViaServiceAsync(extraFlatTags:
+        [
+            new StoryTagDTO
+            {
+                TagId = _settingTagWithCustomNameId, TagTypeEnum = TagTypeEnum.Setting,
+                CustomName = "Custom Viridian", Nuance = "Alternate timeline"
+            }
+        ]);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        StoryTag? row = await db.Set<StoryTag>().FirstOrDefaultAsync(st => st.StoryId == storyId && st.TagId == _settingTagWithCustomNameId);
+        row.Should().NotBeNull();
+        row!.CustomName.Should().Be("Custom Viridian");
+        row.Nuance.Should().Be("Alternate timeline");
+    }
+
+    [Fact]
+    public async Task CreateStory_NuanceOnUngatedGenre_Succeeds()
+    {
+        // The universal portrayal note: "slow burn, no love triangle" on a plain Genre tag.
+        SetActiveUser(_authorId);
+        int storyId = await CreateStoryViaServiceAsync(extraFlatTags:
+        [
+            new StoryTagDTO { TagId = _cwTagId, TagTypeEnum = TagTypeEnum.ContentWarning, Nuance = "chapter 3 only" }
+        ]);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        StoryTag? row = await db.Set<StoryTag>().FirstOrDefaultAsync(st => st.StoryId == storyId && st.TagId == _cwTagId);
+        row!.Nuance.Should().Be("chapter 3 only", "Nuance is never gated, any tag type");
+    }
+
+    // ── Pairing constraints (index-based members — WU-TagFanon) ────────────────
+
+    [Fact]
+    public async Task CreateStory_PairingWithFewerThanTwoDistinctMembers_ThrowsStoryValidationException()
     {
         SetActiveUser(_authorId);
         Func<Task> act = () => CreateStoryViaServiceAsync(
@@ -138,15 +231,15 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
                 new StoryCharacterPairingDto
                 {
                     PairingType = CharacterPairingType.Romantic,
-                    MemberCharacterTagIds = [_charTagId]   // only 1 member
+                    MemberIndexes = [0]   // only 1 member
                 }
             ]);
 
-        await act.Should().ThrowAsync<StoryValidationException>("pairing needs ≥2 members");
+        await act.Should().ThrowAsync<StoryValidationException>("pairing needs ≥2 distinct members");
     }
 
     [Fact]
-    public async Task CreateStory_PairingMemberNotInStoryCharacters_ThrowsStoryValidationException()
+    public async Task CreateStory_PairingMemberIndexOutOfRange_ThrowsStoryValidationException()
     {
         SetActiveUser(_authorId);
         Func<Task> act = () => CreateStoryViaServiceAsync(
@@ -156,11 +249,11 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
                 new StoryCharacterPairingDto
                 {
                     PairingType = CharacterPairingType.Romantic,
-                    MemberCharacterTagIds = [_charTagId, _charTagAllowOcId]  // _charTagAllowOcId not in StoryCharacters
+                    MemberIndexes = [0, 5]  // index 5 has no character row
                 }
             ]);
 
-        await act.Should().ThrowAsync<StoryValidationException>("pairing member not in story's character list");
+        await act.Should().ThrowAsync<StoryValidationException>("pairing member index out of range");
     }
 
     // ── Pairing persistence ────────────────────────────────────────────────────
@@ -173,7 +266,7 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
             characters:
             [
                 new StoryCharacterDto { CharacterTagId = _charTagId },
-                new StoryCharacterDto { CharacterTagId = _charTagAllowOcId }
+                new StoryCharacterDto { CharacterTagId = _charTagAllowCustomNameId }
             ],
             pairings:
             [
@@ -181,7 +274,7 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
                 {
                     PairingType = CharacterPairingType.Romantic,
                     Priority = TagPriority.Primary,
-                    MemberCharacterTagIds = [_charTagId, _charTagAllowOcId]
+                    MemberIndexes = [0, 1]
                 }
             ]);
 
@@ -197,6 +290,33 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
         pairing.Members.Should().HaveCount(2, "both character members must be persisted");
     }
 
+    [Fact]
+    public async Task CreateStory_PairingBetweenTwoOcsOfOneSpecies_ResolvesTheRightRows()
+    {
+        // The whole reason members are index-based: tag ids can't tell Saura from Spiky.
+        SetActiveUser(_authorId);
+        int storyId = await CreateStoryViaServiceAsync(
+            characters:
+            [
+                new StoryCharacterDto { CharacterTagId = _charTagAllowCustomNameId, IsOc = true, CustomName = "Saura" },
+                new StoryCharacterDto { CharacterTagId = _charTagAllowCustomNameId, IsOc = true, CustomName = "Spiky" }
+            ],
+            pairings:
+            [
+                new StoryCharacterPairingDto { PairingType = CharacterPairingType.Platonic, MemberIndexes = [0, 1] }
+            ]);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        StoryCharacterPairing? pairing = await db.Set<StoryCharacterPairing>()
+            .Include(p => p.Members).ThenInclude(m => m.StoryCharacter)
+            .FirstOrDefaultAsync(p => p.StoryId == storyId);
+
+        pairing.Should().NotBeNull();
+        pairing!.Members.Select(m => m.StoryCharacter.CustomName)
+            .Should().BeEquivalentTo(["Saura", "Spiky"], "the pairing links the two distinct same-species rows");
+    }
+
     // ── Round-trip ─────────────────────────────────────────────────────────────
 
     [Fact]
@@ -204,24 +324,27 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
     {
         SetActiveUser(_authorId);
         int storyId = await CreateStoryViaServiceAsync(
-            flatSettingTagIds: [_settingTagWithDetailsId],
             characters:
             [
-                new StoryCharacterDto { CharacterTagId = _charTagAllowOcId, Priority = TagPriority.Supporting, IsOc = true, OcName = "Pixel" }
+                new StoryCharacterDto { CharacterTagId = _charTagAllowCustomNameId, Priority = TagPriority.Supporting, IsOc = true, CustomName = "Pixel" },
+                new StoryCharacterDto { CharacterTagId = _charTagId }
             ],
-            settingDetails:
+            extraFlatTags:
             [
-                new SettingDetailDto { BaseTagId = _settingTagWithDetailsId, Name = "Custom Region" }
+                new StoryTagDTO
+                {
+                    TagId = _settingTagWithCustomNameId, TagTypeEnum = TagTypeEnum.Setting,
+                    CustomName = "Custom Region"
+                }
             ],
             pairings:
             [
                 new StoryCharacterPairingDto
                 {
                     PairingType = CharacterPairingType.Platonic,
-                    MemberCharacterTagIds = [_charTagAllowOcId, _charTagId]   // need 2 chars
+                    MemberIndexes = [0, 1]
                 }
-            ],
-            extraCharacters: [new StoryCharacterDto { CharacterTagId = _charTagId }]);
+            ]);
 
         using IServiceScope scope = Factory.Services.CreateScope();
         IStoryReadService readService = scope.ServiceProvider.GetRequiredService<IStoryReadService>();
@@ -230,11 +353,12 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
 
         editDto.Should().NotBeNull();
         editDto!.StoryCharacters.Should().HaveCount(2);
-        editDto.StoryCharacters.Should().ContainSingle(c => c.CharacterTagId == _charTagAllowOcId && c.IsOc && c.OcName == "Pixel");
-        editDto.SettingDetails.Should().ContainSingle(d => d.BaseTagId == _settingTagWithDetailsId && d.Name == "Custom Region");
+        editDto.StoryCharacters.Should().ContainSingle(c => c.CharacterTagId == _charTagAllowCustomNameId && c.IsOc && c.CustomName == "Pixel");
+        editDto.StoryTags.Should().ContainSingle(t => t.TagId == _settingTagWithCustomNameId && t.CustomName == "Custom Region");
         editDto.StoryCharacterPairings.Should().HaveCount(1);
         editDto.StoryCharacterPairings[0].PairingType.Should().Be(CharacterPairingType.Platonic);
-        editDto.StoryCharacterPairings[0].MemberCharacterTagIds.Should().HaveCount(2);
+        // Round-trip contract: member indexes point into the hydrated StoryCharacters list.
+        editDto.StoryCharacterPairings[0].MemberIndexes.Should().BeEquivalentTo([0, 1]);
     }
 
     // ── Discovery character filter ─────────────────────────────────────────────
@@ -284,21 +408,15 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
 
     private async Task<int> CreateStoryViaServiceAsync(
         IReadOnlyList<StoryCharacterDto>? characters = null,
-        IReadOnlyList<SettingDetailDto>? settingDetails = null,
         IReadOnlyList<StoryCharacterPairingDto>? pairings = null,
-        IReadOnlyList<StoryTagDTO>? extraFlatTags = null,
-        IReadOnlyList<int>? flatSettingTagIds = null,
-        IReadOnlyList<StoryCharacterDto>? extraCharacters = null)
+        IReadOnlyList<StoryTagDTO>? extraFlatTags = null)
     {
         List<IStoryTag> flatTags =
         [
             new StoryTagDTO { TagId = _settingTagId, TagTypeEnum = TagTypeEnum.Setting, Priority = TagPriority.Primary },
             new StoryTagDTO { TagId = _genreTagId, TagTypeEnum = TagTypeEnum.Genre, Priority = TagPriority.Primary },
-            ..( flatSettingTagIds ?? []).Select(id => (IStoryTag)new StoryTagDTO { TagId = id, TagTypeEnum = TagTypeEnum.Setting, Priority = TagPriority.Primary }),
             ..( extraFlatTags ?? [])
         ];
-
-        List<StoryCharacterDto> allChars = [..(characters ?? []), ..(extraCharacters ?? [])];
 
         CreateStoryDTO dto = new()
         {
@@ -309,8 +427,7 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
             LongDescription = "Integration test long description",
             PostApprovalStatus = StoryStatusEnum.InProgress,
             StoryTags = flatTags,
-            StoryCharacters = allChars,
-            SettingDetails = (settingDetails ?? []).ToList(),
+            StoryCharacters = (characters ?? []).ToList(),
             StoryCharacterPairings = (pairings ?? []).ToList()
         };
 
@@ -325,21 +442,21 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
 
         string s = Guid.NewGuid().ToString("N")[..8];
-        Tag setting          = new() { TagName = $"Setting-{s}",     TagTypeId = TagTypeEnum.Setting };
-        Tag settingWithDet   = new() { TagName = $"SettingDet-{s}",  TagTypeId = TagTypeEnum.Setting, AllowSettingDetails = true };
-        Tag genre            = new() { TagName = $"Genre-{s}",       TagTypeId = TagTypeEnum.Genre };
-        Tag character        = new() { TagName = $"Char-{s}",        TagTypeId = TagTypeEnum.Character };
-        Tag characterAllowOc = new() { TagName = $"CharOC-{s}",      TagTypeId = TagTypeEnum.Character, AllowOCDetails = true };
-        Tag cw               = new() { TagName = $"CW-{s}",          TagTypeId = TagTypeEnum.ContentWarning };
+        Tag setting            = new() { TagName = $"Setting-{s}",     TagTypeId = TagTypeEnum.Setting };
+        Tag settingCustomName  = new() { TagName = $"SettingDet-{s}",  TagTypeId = TagTypeEnum.Setting, AllowCustomName = true };
+        Tag genre              = new() { TagName = $"Genre-{s}",       TagTypeId = TagTypeEnum.Genre };
+        Tag character          = new() { TagName = $"Char-{s}",        TagTypeId = TagTypeEnum.Character };
+        Tag characterCustomName = new() { TagName = $"CharOC-{s}",     TagTypeId = TagTypeEnum.Character, AllowCustomName = true };
+        Tag cw                 = new() { TagName = $"CW-{s}",          TagTypeId = TagTypeEnum.ContentWarning };
 
-        db.Tags.AddRange(setting, settingWithDet, genre, character, characterAllowOc, cw);
+        db.Tags.AddRange(setting, settingCustomName, genre, character, characterCustomName, cw);
         await db.SaveChangesAsync();
 
-        _settingTagId           = setting.TagId;
-        _settingTagWithDetailsId = settingWithDet.TagId;
-        _genreTagId             = genre.TagId;
-        _charTagId              = character.TagId;
-        _charTagAllowOcId       = characterAllowOc.TagId;
-        _cwTagId                = cw.TagId;
+        _settingTagId               = setting.TagId;
+        _settingTagWithCustomNameId = settingCustomName.TagId;
+        _genreTagId                 = genre.TagId;
+        _charTagId                  = character.TagId;
+        _charTagAllowCustomNameId   = characterCustomName.TagId;
+        _cwTagId                    = cw.TagId;
     }
 }

@@ -76,6 +76,33 @@ property types updated.
 scope for WU23. Random-preload / "give me more" discovery pagination → WU28.
 Narrowing-within-fixed-source query → WU27/WU30.
 
+## WU-TagFanon note (2026-07-26) — F31 L2/L3-Logic/L3.5 stay Stage 5
+
+Two discovery semantics changed; both are additive to already-Stage-5 cells.
+
+**Hierarchy roll-up.** `ApplyFilters` expands every tag id to `{self} ∪ children` before building
+predicates — one lookup, hierarchy being one level deep. Symmetric (excluding a parent excludes its
+children — what avoiding a species or a parent content warning means) and AND terms stay
+independent, so a story tagged only with a child satisfies a filter naming parent AND child.
+Expansion is server-side, so every consumer (`/discover`, random batch, bookshelves, profile tabs)
+inherits it. Saved Tag Selections therefore broaden as children are added under a stored parent —
+intended behaviour of a persisted artifact, stated so it isn't later read as a bug.
+
+**Why this mattered urgently:** without it, the fanonize adoption flow would have removed a story
+from its own species' search results — the feature would have inverted its own purpose. Verified in
+the browser: an adopted story carrying *only* the fanon child still returns under its parent filter.
+
+**Ship filter axis.** `StoryFilterDto` gains `IncludedShips`/`ExcludedShips` (`ShipFilterDto`:
+1–3 member character tag ids + optional pairing type). A ship matches when ONE pairing's member set
+covers every named character — co-presence in a story is not a ship. Include and exclude mirror the
+tag axis, AND across ships, and member ids inherit roll-up. Ships are transient viewer intent and
+are deliberately **never** persisted in `SavedTagSelection` (tag-axis-only, settled F15 scope).
+Curated pairing tags did NOT return — ships are combinatorial and would reproduce the tag soup the
+curated model exists to prevent.
+
+Covered by `DiscoveryRollUpAndShipTests` (Integration). Full narrative: `audit/Tags.md`
+§"WU-TagFanon Stage note"; rules: `layer2-services.md` §"Tag Hierarchy Roll-Up".
+
 ## Feature 31 — Search Page (`/discover`)
 - **L1 — N/A** (queries Story/USI/StoryListing). **L2 — Stage 2** (Source=All query; random preload /
   "give me more" remains WU28). **L3/L3.5 — Stage 5 (WU23, 2026-06-23).** **L4 — Stage 1.**

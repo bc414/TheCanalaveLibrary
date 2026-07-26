@@ -16,23 +16,26 @@ public partial class Tag
 
     public bool IsFanon { get; set; }
 
-    [MaxLength(512)]
+    [MaxLength(500)]
     public string? Description { get; set; }
 
     public int? ParentTagId { get; set; }
 
-    [MaxLength(50)]
+    [MaxLength(100)]
     public string? SpriteIdentifier { get; set; }
 
-    public bool AllowOCDetails { get; set; }
-
-    public bool AllowSettingDetails { get; set; }
+    /// <summary>
+    /// Whether per-story associations of this tag may carry a <c>CustomName</c> (a specifically
+    /// named instance of the archetype — an OC on <c>Bulbasaur</c>, a custom region on
+    /// <c>Original Setting</c>). Mod-set per tag, any type (WU-TagFanon; replaced
+    /// <c>AllowOCDetails</c> + <c>AllowSettingDetails</c>). Fanonized tags are specific entities
+    /// and get <c>false</c>. Gates custom naming only — <c>Nuance</c> is never gated.
+    /// </summary>
+    public bool AllowCustomName { get; set; }
 
     public virtual ICollection<Tag> ChildTags { get; set; } = new List<Tag>();
 
     public virtual Tag? ParentTag { get; set; }
-
-    public virtual ICollection<SettingDetail> SettingDetails { get; set; } = new List<SettingDetail>();
 
     public virtual ICollection<StoryCharacter> StoryCharacters { get; set; } = new List<StoryCharacter>();
 

@@ -1,0 +1,161 @@
+@page "/tag-adoptions/{TagId:int}"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@inject IFanonReadService FanonService
+@inject IFanonWriteService FanonWriteService
+@inject NavigationManager NavigationManager
+@inject ILogger<TagAdoptionDetailPage> Logger
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.Extensions.Logging
+
+@* The per-tag adoption page (WU-TagFanon 8.3) — the type-26 notification's landing target.
+   Lists the author's affected rows with per-row Adopt and Adopt-all. Adoption preserves
+   everything but the custom name (naming moves to the tag; the note and priority survive;
+   pairings survive). Collisions are explained, never merged. Dismiss is reversible (8.8). *@
+
+<PageTitle>Tag Adoption — The Canalave Library</PageTitle>
+
+<div class="mx-auto max-w-2xl px-4 py-8 flex flex-col gap-5">
+    @if (_loading)
+    {
+        <p class="text-sm text-(--color-text-muted)"><em>Loading…</em></p>
+    }
+    else if (Page is null)
+    {
+        <p class="text-sm text-(--color-text-muted)">This tag has no adoption offer for you.</p>
+    }
+    else
+    {
+        <div class="flex items-center justify-between gap-3">
+            <h1 class="inline-flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+                Adopt <TagChip Tag="Page.TargetTag" />
+            </h1>
+            <a href="/tag-adoptions" class="text-sm text-(--color-action-ink) hover:underline">← All adoptions</a>
+        </div>
+
+        <p class="text-sm text-(--color-text-muted)">
+            “@Page.TargetTag.TagName” is now an official tag. These stories of yours use that name —
+            adopting switches the story to the official tag. Your notes stay; only the custom name is
+            replaced by the tag itself. This is always your choice, per story.
+        </p>
+
+        <InlineAlert Message="@_error" />
+        @if (_lastResult is { } r)
+        {
+            <p class="text-sm text-(--color-text)">
+                Adopted on @r.Adopted @(r.Adopted == 1 ? "row" : "rows")@(r.SkippedCollisions > 0
+                    ? $" — {r.SkippedCollisions} skipped (those stories already carry the tag)"
+                    : "").
+            </p>
+        }
+
+        @if (Page.Rows.Count == 0)
+        {
+            <p class="text-sm text-(--color-text-muted)">Nothing pending — every matching story has been handled.</p>
+        }
+        else
+        {
+            <div class="flex flex-col gap-2">
+                @foreach (TagAdoptionRowDto row in Page.Rows)
+                {
+                    <div class="flex flex-wrap items-center gap-3 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2">
+                        <a href="/story/@row.StoryId" class="text-sm font-medium text-(--color-action-ink) hover:underline">@row.StoryTitle</a>
+                        <span class="text-xs text-(--color-text-muted)">
+                            “@row.CustomName” on @row.BaseTagName
+                        </span>
+                        @if (row.Nuance is not null)
+                        {
+                            <span class="text-xs text-(--color-text-muted)" title="@row.Nuance">— has a note (kept on adoption)</span>
+                        }
+                        @if (row.Collides)
+                        {
+                            <span class="ml-auto text-xs text-(--color-text-muted)">
+                                already carries @Page.TargetTag.TagName — adopt would duplicate; edit the story instead
+                            </span>
+                        }
+                        else
+                        {
+                            <button type="button" @onclick="() => AdoptOneAsync(row.StoryId)"
+                                    class="ml-auto rounded-md bg-(--color-action) px-3 py-1 text-xs font-medium text-(--color-text) hover:bg-(--color-action-hover) transition-colors">
+                                Adopt
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (Page.Rows.Count(r => !r.Collides) > 1)
+            {
+                <button type="button" @onclick="AdoptAllAsync"
+                        class="self-start rounded-md bg-(--color-action) px-4 py-1.5 text-sm font-medium text-(--color-text) hover:bg-(--color-action-hover) transition-colors">
+                    Adopt on all @Page.Rows.Count(r => !r.Collides) stories
+                </button>
+            }
+        }
+
+        <div class="border-t border-(--color-border) pt-3">
+            @if (Page.IsDismissed)
+            {
+                <button type="button" @onclick="() => SetDismissedAsync(false)"
+                        class="text-xs text-(--color-action-ink) hover:underline">
+                    Restore — this IS my character/setting after all
+                </button>
+            }
+            else
+            {
+                <button type="button" @onclick="() => SetDismissedAsync(true)"
+                        class="text-xs text-(--color-text-muted) hover:text-(--color-action-ink) hover:underline">
+                    Not my character/setting — dismiss (reversible)
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int TagId { get; set; }
+
+    [PersistentState] public TagAdoptionPageDto? Page { get; set; }
+
+    private bool _loading = true;
+    private string? _error;
+    private AdoptResultDto? _lastResult;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Page ??= await FanonService.GetMyAdoptionPageAsync(TagId);
+        _loading = false;
+    }
+
+    private async Task AdoptOneAsync(int storyId)
+    {
+        await RunAsync(() => FanonWriteService.AdoptAsync(TagId, storyId));
+    }
+
+    private async Task AdoptAllAsync()
+    {
+        await RunAsync(() => FanonWriteService.AdoptAllAsync(TagId));
+    }
+
+    private async Task RunAsync(Func<Task<AdoptResultDto>> action)
+    {
+        _error = null;
+        try
+        {
+            _lastResult = await action();
+            Page = await FanonService.GetMyAdoptionPageAsync(TagId);
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Tag adoption failed for tag {TagId}", TagId);
+            _error = string.Join(" ", ExceptionPresenter.GetUserMessages(ex));
+        }
+    }
+
+    private async Task SetDismissedAsync(bool dismissed)
+    {
+        await FanonWriteService.SetDismissedAsync(TagId, dismissed);
+        Page = await FanonService.GetMyAdoptionPageAsync(TagId);
+    }
+}

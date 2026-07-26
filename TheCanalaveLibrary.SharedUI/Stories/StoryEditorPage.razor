@@ -7,6 +7,7 @@
 @inject IExternalVerificationReadService ExternalVerificationReadService
 @inject IExternalVerificationWriteService ExternalVerificationWriteService
 @inject ITagReadService TagReadService
+@inject IFanonReadService FanonReadService
 @inject NavigationManager NavigationManager
 @inject ILogger<StoryEditorPage> Logger
 @using TheCanalaveLibrary.Core
@@ -47,9 +48,10 @@ else
                              ViewModel="_viewModel"
                              InitialTagsByType="_initialTagsByType"
                              InitialCharacters="_initialCharacters"
-                             InitialSettingDetails="_initialSettingDetails"
+                             InitialCharacterChips="_initialCharacterChips"
+                             InitialFlatTags="_initialFlatTags"
                              InitialPairings="_initialPairings"
-                             InitialGenrePriorities="_initialGenrePriorities"
+                             OfficialNameLookup="@(name => FanonReadService.FindOfficialTagByNameAsync(TagTypeEnum.Character, name))"
                              ExternalPlatforms="@(ExternalPlatforms ?? [])"
                              VerifiedPlatformIds="@((IReadOnlySet<short>)(VerifiedPlatformIds ?? []))"
                              OnRequestLinkVerification="HandleRequestLinkVerification"
@@ -91,9 +93,9 @@ else
     private StoryPropertiesViewModel _viewModel = new();
     private IReadOnlyDictionary<TagTypeEnum, IReadOnlyList<TagChipDto>>? _initialTagsByType;
     private IReadOnlyList<StoryCharacterDto>? _initialCharacters;
-    private IReadOnlyList<SettingDetailDto>? _initialSettingDetails;
+    private IReadOnlyList<TagChipDto>? _initialCharacterChips;
+    private IReadOnlyList<StoryTagDTO>? _initialFlatTags;
     private IReadOnlyList<StoryCharacterPairingDto>? _initialPairings;
-    private IReadOnlyDictionary<int, TagPriority>? _initialGenrePriorities;
     private bool _isLoading = true;
     private bool _forbidden;
 
@@ -145,23 +147,23 @@ else
 
             // Load chip data for all tags (flat tags + character tags; TagSelector needs display data).
             // ??= — chip display data restores from the prerender payload; the grouped dictionary is
-            // derived from it deterministically on every pass.
+            // derived from it deterministically on every pass. Character chips are carved out
+            // POSITIONALLY (duplicates of a species are legal — WU-TagFanon), so they ride first
+            // in the id list and the grouped dictionary is built from the flat remainder only.
             List<int> charTagIds = editData.StoryCharacters.Select(c => c.CharacterTagId).ToList();
             List<int> flatTagIds = editData.StoryTags.Select(t => t.TagId).ToList();
             List<int> allTagIds = [..charTagIds, ..flatTagIds];
             if (allTagIds.Count > 0)
             {
                 TagChips ??= await TagReadService.GetTagChipsByIdsAsync(allTagIds);
-                _initialTagsByType = TagChips
+                _initialCharacterChips = TagChips.Take(charTagIds.Count).ToList();
+                _initialTagsByType = TagChips.Skip(charTagIds.Count)
                     .GroupBy(c => c.TagTypeId)
                     .ToDictionary(g => g.Key, g => (IReadOnlyList<TagChipDto>)[.. g]);
             }
-            _initialCharacters     = editData.StoryCharacters;
-            _initialSettingDetails = editData.SettingDetails;
-            _initialPairings       = editData.StoryCharacterPairings;
-            _initialGenrePriorities = editData.StoryTags
-                .Where(t => t.TagTypeEnum == TagTypeEnum.Genre)
-                .ToDictionary(t => t.TagId, t => t.Priority);
+            _initialCharacters = editData.StoryCharacters;
+            _initialFlatTags   = editData.StoryTags.OfType<StoryTagDTO>().ToList();
+            _initialPairings   = editData.StoryCharacterPairings;
 
             VerifiedPlatformIds ??= (await ExternalVerificationReadService.GetMyExternalAccountsAsync())
                 .Where(a => a.Status == VerificationStatusEnum.Verified)
@@ -202,7 +204,6 @@ else
             // Structured collections — built by the form on every selection change.
             List<IStoryTag> flatTags = _viewModel.SelectedFlatTags.Cast<IStoryTag>().ToList();
             List<StoryCharacterDto> characters   = _viewModel.SelectedCharacters;
-            List<SettingDetailDto> settingDetails = _viewModel.SelectedSettingDetails;
             List<StoryCharacterPairingDto> pairings = _viewModel.SelectedPairings;
 
             if (StoryId.HasValue)
@@ -220,7 +221,6 @@ else
                     PostApprovalStatus = _viewModel.PostApprovalStatus,
                     StoryTags = flatTags,
                     StoryCharacters = characters,
-                    SettingDetails = settingDetails,
                     StoryCharacterPairings = pairings,
                     ExternalLinks = _viewModel.ExternalLinks,
                     OriginalPublishedDate = _viewModel.OriginalPublishedDate,
@@ -261,7 +261,6 @@ else
                     PostApprovalStatus = _viewModel.PostApprovalStatus,
                     StoryTags = flatTags,
                     StoryCharacters = characters,
-                    SettingDetails = settingDetails,
                     StoryCharacterPairings = pairings,
                     ExternalLinks = _viewModel.ExternalLinks,
                     OriginalPublishedDate = _viewModel.OriginalPublishedDate,
@@ -291,8 +290,7 @@ else
                         PostApprovalStatus = _viewModel.PostApprovalStatus,
                         StoryTags = flatTags,
                         StoryCharacters = characters,
-                        SettingDetails = settingDetails,
-                        StoryCharacterPairings = pairings,
+                            StoryCharacterPairings = pairings,
                         ExternalLinks = _viewModel.ExternalLinks,
                         OriginalPublishedDate = _viewModel.OriginalPublishedDate,
                         OriginalLastUpdatedDate = _viewModel.OriginalLastUpdatedDate

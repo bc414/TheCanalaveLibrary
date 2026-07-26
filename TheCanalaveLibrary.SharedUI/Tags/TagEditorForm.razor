@@ -1,10 +1,10 @@
 @namespace TheCanalaveLibrary.SharedUI
 
 @* Presentational leaf — no @inject. bUnit-testable.
-   EditForm for creating/editing a Tag via the mod panel on TagDirectoryDesktop.
-   AllowOCDetails checkbox is only shown/enabled when TagType == Character (Character-domain concept);
-   hidden + coerced false for all other types. Parent dropdown shows same-type top-level tags only,
-   excluding the tag being edited (self-reference guard). WU27.5. *@
+   EditForm for creating/editing a Tag via the mod panel on TagDirectoryPage.
+   AllowCustomName (WU-TagFanon; replaced AllowOCDetails + AllowSettingDetails) is shown for every
+   type — mod judgment, not a structural property of the type. Parent dropdown shows same-type
+   top-level tags only, excluding the tag being edited (self-reference guard). WU27.5. *@
 
 <EditForm Model="_model" OnValidSubmit="HandleSubmit">
     <DataAnnotationsValidator />
@@ -55,7 +55,7 @@
             <textarea id="tag-description"
                       class="mt-1 w-full rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                       rows="3"
-                      maxlength="512"
+                      maxlength="500"
                       @bind="_model.Description">
             </textarea>
         </div>
@@ -66,7 +66,7 @@
                    type="text"
                    class="mt-1 w-full rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                    @bind="_model.SpriteIdentifier"
-                   maxlength="50" />
+                   maxlength="100" />
             <p class="mt-1 text-xs text-(--color-text-muted)">e.g. bulbasaur.png — path key, not a URL.</p>
         </div>
 
@@ -78,29 +78,14 @@
             <label class="text-sm text-text" for="tag-is-fanon">Fanon tag</label>
         </div>
 
-        @if (_model.TagTypeId == TagTypeEnum.Character)
-        {
-            <div class="flex items-center gap-2">
-                <input id="tag-allow-oc"
-                       type="checkbox"
-                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
-                       @bind="_model.AllowOCDetails" />
-                <label class="text-sm text-text" for="tag-allow-oc">Allow OC details</label>
-                <span class="text-xs text-(--color-text-muted)">(generic Pokémon, OC Trainer/OC Human only)</span>
-            </div>
-        }
-
-        @if (_model.TagTypeId == TagTypeEnum.Setting)
-        {
-            <div class="flex items-center gap-2">
-                <input id="tag-allow-setting-details"
-                       type="checkbox"
-                       class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
-                       @bind="_model.AllowSettingDetails" />
-                <label class="text-sm text-text" for="tag-allow-setting-details">Allow setting details</label>
-                <span class="text-xs text-(--color-text-muted)">(original settings or AU-specific locations)</span>
-            </div>
-        }
+        <div class="flex items-center gap-2">
+            <input id="tag-allow-custom-name"
+                   type="checkbox"
+                   class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
+                   @bind="_model.AllowCustomName" />
+            <label class="text-sm text-text" for="tag-allow-custom-name">Allow custom names</label>
+            <span class="text-xs text-(--color-text-muted)">(generic archetypes an author may name a specific instance of — OC bases, original settings; never specific entities)</span>
+        </div>
 
         <InlineAlert Message="@_serverError" />
 
@@ -152,14 +137,16 @@
 
         if (EditingTag is not null)
         {
-            // TagChipDto carries admin fields (IsFanon, AllowOCDetails, ParentTagId) when populated
-            // by GetTagDirectoryAsync. These fields default to false/null elsewhere (non-directory chips).
+            // Directory chips carry the full per-tag field set (WU-TagFanon populated them in
+            // every projection; the directory's additionally carry the RAW own sprite).
             _model.TagName = EditingTag.TagName;
             _model.TagTypeId = EditingTag.TagTypeId;
             _model.Description = EditingTag.Description;
+            // Previously un-hydrated — editing any sprite-bearing tag silently cleared its
+            // sprite identifier on save (latent bug found in WU-TagFanon).
+            _model.SpriteIdentifier = EditingTag.SpriteIdentifier;
             _model.IsFanon = EditingTag.IsFanon;
-            _model.AllowOCDetails = EditingTag.AllowOCDetails;
-            _model.AllowSettingDetails = EditingTag.AllowSettingDetails;
+            _model.AllowCustomName = EditingTag.AllowCustomName;
             _model.ParentTagId = EditingTag.ParentTagId;
         }
         else
@@ -173,10 +160,6 @@
         _isSaving = true;
         _serverError = null;
 
-        // Coerce gated flags for their respective types.
-        bool allowOcDetails = _model.TagTypeId == TagTypeEnum.Character && _model.AllowOCDetails;
-        bool allowSettingDetails = _model.TagTypeId == TagTypeEnum.Setting && _model.AllowSettingDetails;
-
         await OnSave.InvokeAsync(new TagEditorFormResult
         {
             TagName = _model.TagName?.Trim() ?? string.Empty,
@@ -184,8 +167,7 @@
             Description = string.IsNullOrWhiteSpace(_model.Description) ? null : _model.Description.Trim(),
             SpriteIdentifier = string.IsNullOrWhiteSpace(_model.SpriteIdentifier) ? null : _model.SpriteIdentifier.Trim(),
             IsFanon = _model.IsFanon,
-            AllowOCDetails = allowOcDetails,
-            AllowSettingDetails = allowSettingDetails,
+            AllowCustomName = _model.AllowCustomName,
             ParentTagId = _model.ParentTagId
         });
 
@@ -199,8 +181,7 @@
         public string? Description { get; set; }
         public string? SpriteIdentifier { get; set; }
         public bool IsFanon { get; set; }
-        public bool AllowOCDetails { get; set; }
-        public bool AllowSettingDetails { get; set; }
+        public bool AllowCustomName { get; set; }
         public int? ParentTagId { get; set; }
     }
 }

@@ -48,11 +48,6 @@ public sealed class TagConfiguration : IEntityTypeConfiguration<Tag>
             .HasForeignKey(sc => sc.CharacterTagId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasMany(t => t.SettingDetails)
-            .WithOne(sd => sd.BaseTag)
-            .HasForeignKey(sd => sd.BaseTagId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         // Tag names must be unique within a type — (TagName, TagTypeId) is the natural key.
         // "Paris" can be both a Character and a Setting; a single-column unique on TagName would prevent that.
         builder.HasIndex(e => new { e.TagName, e.TagTypeId }).IsUnique()
@@ -75,6 +70,14 @@ public sealed class StoryCharacterConfiguration : IEntityTypeConfiguration<Story
     public void Configure(EntityTypeBuilder<StoryCharacter> builder)
     {
         builder.Property(e => e.Priority).HasConversion<short>();
+
+        // WU-TagFanon: several custom-named characters of one species per story are legal
+        // (restores the original UQ_StoryCharacters_StoryTag (StoryID, BaseTagID, CharacterName)
+        // intent); at most one UNNAMED row per (story, tag) via nulls-not-distinct.
+        builder.HasIndex(e => new { e.StoryId, e.CharacterTagId, e.CustomName })
+            .IsUnique()
+            .AreNullsDistinct(false)
+            .HasDatabaseName("ix_story_characters_story_id_character_tag_id_custom_name");
     }
 }
 
@@ -105,12 +108,52 @@ public sealed class StoryCharacterPairingMemberConfiguration : IEntityTypeConfig
     }
 }
 
-public sealed class SettingDetailConfiguration : IEntityTypeConfiguration<SettingDetail>
+public sealed class FanonLinkConfiguration : IEntityTypeConfiguration<FanonLink>
 {
-    public void Configure(EntityTypeBuilder<SettingDetail> builder)
+    public void Configure(EntityTypeBuilder<FanonLink> builder)
     {
-        builder.HasIndex(e => new { e.StoryId, e.BaseTagId }).IsUnique()
-            .HasDatabaseName("ix_setting_details_story_id_base_tag_id");
+        builder.Property(e => e.DateLinked).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        // One link per custom-name group.
+        builder.HasIndex(e => new { e.NormalizedName, e.BaseTagId }).IsUnique()
+            .HasDatabaseName("ix_fanon_links_normalized_name_base_tag_id");
+
+        // The adoption index/pages resolve links by target tag.
+        builder.HasIndex(e => e.TargetTagId)
+            .HasDatabaseName("ix_fanon_links_target_tag_id");
+
+        builder.HasOne(e => e.BaseTag)
+            .WithMany()
+            .HasForeignKey(e => e.BaseTagId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.TargetTag)
+            .WithMany()
+            .HasForeignKey(e => e.TargetTagId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne(e => e.LinkedByUser)
+            .WithMany()
+            .HasForeignKey(e => e.LinkedByUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+    }
+}
+
+public sealed class TagAdoptionStateConfiguration : IEntityTypeConfiguration<TagAdoptionState>
+{
+    public void Configure(EntityTypeBuilder<TagAdoptionState> builder)
+    {
+        builder.HasKey(e => new { e.UserId, e.TargetTagId });
+
+        builder.HasOne(e => e.User)
+            .WithMany()
+            .HasForeignKey(e => e.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasOne(e => e.TargetTag)
+            .WithMany()
+            .HasForeignKey(e => e.TargetTagId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 

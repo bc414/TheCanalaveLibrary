@@ -122,16 +122,26 @@ else
                 </div>
             }
 
-            @* OC character names — only for characters with authored OC details *@
-            @{ var ocChars = Story.Characters.Where(c => c.IsOc && c.OcName != null).ToList(); }
-            @if (ocChars.Count > 0)
+            @* Character overlay line (WU-TagFanon 4.1) — custom-named characters, unnamed OCs, and
+               canon/fanon characters carrying a portrayal note. The * reveals the note on
+               hover/tap (title) — the intended "OC Bulbasaur *" affordance, finally built. *@
+            @{ var overlayChars = Story.Characters.Where(c => c.IsOc || c.CustomName != null || c.Nuance != null).ToList(); }
+            @if (overlayChars.Count > 0)
             {
                 <div class="text-sm text-(--color-text-muted)">
-                    @foreach (var oc in ocChars)
+                    @foreach (var ch in overlayChars)
                     {
-                        <span class="mr-3">
-                            <span class="font-medium text-(--color-text)">@oc.OcName</span>
-                            <span class="text-xs"> (@oc.Chip.TagName OC)</span>
+                        <span class="mr-3" title="@ch.Nuance">
+                            <span class="font-medium text-(--color-text)">@(ch.CustomName ?? (ch.IsOc ? $"OC {ch.Chip.TagName}" : ch.Chip.TagName))</span>
+                            @if (ch.CustomName is not null)
+                            {
+                                <span class="text-xs"> (@ch.Chip.TagName@(ch.IsOc ? " OC" : ""))</span>
+                            }
+                            @if (ch.Nuance is not null)
+                            {
+                                <span aria-hidden="true"> *</span>
+                                <span class="sr-only">has a story note: @ch.Nuance</span>
+                            }
                         </span>
                     }
                 </div>

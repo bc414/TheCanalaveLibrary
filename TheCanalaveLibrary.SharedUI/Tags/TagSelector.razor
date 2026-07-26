@@ -57,6 +57,14 @@
     [Parameter]
     public EventCallback<IReadOnlyList<TagChipDto>> OnSelectionChanged { get; set; }
 
+    /// <summary>
+    /// WU-TagFanon: the character axis allows re-selecting an already-chosen tag — a story may
+    /// carry several custom-named characters of one species, one row per pick. Flat axes keep
+    /// refusing duplicates (a story carries each flat tag at most once — StoryTag PK).
+    /// </summary>
+    [Parameter]
+    public bool AllowRepeatSelection { get; set; }
+
     private List<TagChipDto> _selected = [];
 
     protected override void OnInitialized()
@@ -67,12 +75,14 @@
     private async Task<IEnumerable<TagChipDto>> SearchMethod(string term)
     {
         List<TagChipDto> results = await TagService.SearchTagChipsAsync(TagType, term);
-        return results.Where(t => _selected.All(s => s.TagId != t.TagId));
+        return AllowRepeatSelection
+            ? results
+            : results.Where(t => _selected.All(s => s.TagId != t.TagId));
     }
 
     private async Task OnPicked(TagChipDto tag)
     {
-        if (_selected.All(s => s.TagId != tag.TagId))
+        if (AllowRepeatSelection || _selected.All(s => s.TagId != tag.TagId))
         {
             _selected.Add(tag);
             await OnSelectionChanged.InvokeAsync(_selected);

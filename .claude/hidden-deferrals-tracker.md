@@ -4,6 +4,13 @@
 items where the grid cell reads Stage 5 (or N/A), yet real work remains. Produced by a manual audit on
 **2026-07-24**. Feature 53 (External Story Links & Verification) is excluded — a separate planning session owns it.
 
+> **2026-07-26 update (WU-TagFanon).** A5 was taken up and turned out to be the visible tip of a
+> substantially non-functional tag subsystem — see A5's rewritten entry. That WU also resolved
+> **C1** (measured → reject), half-closed **C4**, closed **H5** in full, fixed **H6**'s tag-length
+> drift, and added **B0**. The pattern worth carrying forward: a one-line tracker entry is a
+> *pointer to an investigation*, not a scoped work item — three of A5's assumptions were wrong
+> before any code was written.
+
 **Status: snapshot, not authoritative.** This file is a hand-maintained convenience list, deliberately kept
 *outside* the governed process docs (`status.md` / audit files / skills) at the owner's request. It can go stale.
 Before acting on any item, **re-read the cited source of truth** (audit note / code seam / plan row) and check
@@ -59,10 +66,24 @@ decision work that has no row at all.
     feature is actually built; profile owners deleting `UserProfileComment`s on their own profile
     (same grievance shape as author-deletes-story-comments, deliberately excluded from WU-RecLifecycle).
 
-- [ ] **A5 — Fanonize notify/migrate flow (spec §14)** `[scope-cut · low · anytime]`
-  - Grid: F11/F12 L2/L3/L3.5=5.
-  - Source: `audit/Tags.md` F11 & F12 settled notes.
-  - Context: `IsFanon` is editable, but the workflow that notifies authors whose `OcName` matches a newly-fanonized tag and offers migration is unbuilt. Only the notification enum seam (`TagUpdateSuggestion = 26`) exists.
+- [x] **A5 — Fanonize flow — SUPERSEDED + BUILT, far larger than framed (WU-TagFanon, 2026-07-26)** `[scope-cut · low · anytime]`
+  - Grid: F11/F12/F31/F41 cells all stay 5 (they were 5 and remain 5 — the hidden-deferral shape).
+  - Source: `audit/Tags.md` §"WU-TagFanon Stage note" (authoritative); `workplan.md` WU-TagFanon.
+  - **The one-line framing here was wrong three times over.** "Flip `IsFanon`, match `OcName` to
+    `TagName`" had (a) no entry point — nothing ever showed a moderator which names had reached
+    critical mass; (b) no chance of working on the owner's own `"Saura (Silver Resistance)"`
+    example, since a disambiguated tag name never string-matches an `OcName` of "Saura"; and (c) no
+    way to establish the `ParentTagId` the three-tier model requires. Settled shape:
+    **mod-driven set selection** — the affected rows are the dashboard group the moderator was
+    looking at, so the tag may be named anything.
+  - **Auditing the subsystem beneath it found six defects in already-Stage-5 code**, all fixed:
+    hierarchy invisible to discovery (adoption would have *removed* stories from their species'
+    search results); the Setting/AU half unreachable AND unrenderable; `OcBio` write-only; the OC
+    gate conflating custom naming with per-story portrayal; the character overlay disagreeing with
+    itself three ways; and no ship filtering at all on a fanfiction site.
+  - Built: custom-name/nuance split, `SettingDetail` folded onto `StoryTag`, hierarchy roll-up,
+    ship-filter axis, public `/fanon` dashboard, link-and-notify, `/tag-adoptions` adoption flow,
+    full SeedTool tag world. 2258 tests green; browser-verified with psql ground truth.
 
 - [ ] **A6 — Explore candidate-pane tag/interaction filter axes** `[scope-cut · low · anytime]`
   - Grid: F33 (Manual Tree Search) L3.5=5.
@@ -82,6 +103,18 @@ decision work that has no row at all.
 ---
 
 ## B. Built-but-inert — plumbing exists, nothing drives it
+
+- [ ] **B0 — `PrefersDataSaverMode` is stored, settable, and consumed by nothing** `[inert · low · anytime]` — *Found by WU-TagFanon's audit, 2026-07-26.*
+  - Grid: F21/F22 (settings) cells=5 — invisible there.
+  - Source: `User.PrefersDataSaverMode`; `AppearanceSettingsForm.razor`; `ServerUserSettingsService`.
+  - Context: The data-saver checkbox stores, renders, and persists — and **no render path reads
+    it**. `ThemeContext` carries only `(Slug, PrefersAnimated)`, so `TagChip` and the other sprite
+    consumers could not honour it even if they wanted to. "Sprites disabled" is therefore not a
+    reachable state today. Deliberately left out of WU-TagFanon's scope (it belongs to the sprite
+    subsystem, not the tag model) — but it means any design that leans on "users with sprites off"
+    is reasoning about a state that does not exist.
+  - Next: decide whether data-saver suppresses sprites (then carry it on `ThemeContext`), or cut
+    the setting. Either way it needs its own deliberation, not a ride-along.
 
 - [ ] **B1 — Notification email fan-out (`EmailEnabled` is inert)** `[inert · med · beta]`
   - Grid: F41/F42/F43 L2=5.
@@ -172,10 +205,15 @@ pass itself,"* and a live `pg_indexes` sweep has **not** been run since the 2026
 `user_story_interactions` filtered indexes had silently collapsed to one. Several L6=5 cells therefore assert more than
 was measured. The owner's standing rule is "always measure."
 
-- [ ] **C1 — Substring search paths unindexed (need `pg_trgm` GIN)** `[index-unverified · med · anytime]`
-  - Grid: F31/F32 L6=5; F11/F12 L6=5.
-  - Source: `L6-reconciliation-matrix.md` Stories/Discovery + Tags sections; `L6-intent-ledger.md` #307/#1166.
-  - Context: `SearchStoriesByTitleAsync` and `SearchTagChipsAsync` run `ILIKE '%term%'` with no supporting index; leading-wildcard can't use a B-tree. `GetTagsByTypeAsync`'s composite also has wrong column order.
+- [x] **C1 — Tag-chip substring search — MEASURED, trigram REJECTED (WU-TagFanon, 2026-07-26)** `[index-unverified · med · anytime]`
+  - Grid: F11/F12 L6=5 (unchanged, now genuinely measured).
+  - Source: `audit/Tags.md` §"WU-TagFanon Stage note" → L6 paragraph.
+  - Context: F11's L6 note deferred a `pg_trgm` GIN index "under R4 until tag counts grow". The
+    WU-TagFanon seed generator grew the vocabulary and made it measurable for the first time.
+    **Measured: 0.079 ms over 136 tags, 2 buffers** — a trigram index would be pure overhead.
+    Recorded as a measured decision, not an assumption; re-measure if the vocabulary grows an order
+    of magnitude. **Still open:** `SearchStoriesByTitleAsync`'s `ILIKE` (F31/F32 — untouched here)
+    and `GetTagsByTypeAsync`'s composite column order.
 
 - [ ] **C2 — Recommendations filter+sort composite never built** `[index-unverified · med · anytime]`
   - Grid: F27 L6=5; F55 L6=N/A (masks the shared need); F33 L6=2 (transparent there).
@@ -187,10 +225,15 @@ was measured. The owner's standing rule is "always measure."
   - Source: `L6-reconciliation-matrix.md` Following/Vouches; `L6-intent-ledger.md` #1121.
   - Context: Sorts by `date_vouched` with only a plain FK index on the non-leading PK column serving it.
 
-- [ ] **C4 — F49 & F15 L6 flipped to Stage 5 but never measured** `[index-unverified · med · anytime]`
+- [ ] **C4 — F49 L6 never measured (F15 half CLOSED, WU-TagFanon 2026-07-26)** `[index-unverified · med · anytime]`
   - Grid: F49 L6=5; F15 L6=5.
   - Source: `L6-reconciliation-matrix.md` Messaging + Saved-Tag + "Gaps found in already-Stage-5 cells."
-  - Context: No SeedTool generator exists for these, so they were flipped to 5 without measurement — fails the "always measure" bar the project set. F49 additionally lacks a `conversation_participants(user_id, is_archived)` inbox composite.
+  - **F15 half closed:** SeedTool now generates saved tag selections + entries over the seeded tag
+    vocabulary (745 selections / 2,926 entries at default scale), so the Saved-Tag L6 claim is
+    measurable rather than asserted.
+  - **Still open — F49 Messaging:** no SeedTool generator exists for conversations/messages, so its
+    L6=5 remains flipped-without-measurement, and it still lacks a
+    `conversation_participants(user_id, is_archived)` inbox composite.
 
 - [ ] **C5 — F9 Series L6=N/A hides a wrong index** `[index-unverified · low · anytime]`
   - Grid: F9 L6=N/A.
@@ -364,17 +407,20 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - Source: `audit/Import.md` Stage-5 note + "Settled" + "Open."
   - Context: Paste-from-Word fidelity is an outstanding *manual* verification (explicitly non-gating). PDF import is a deferred future format candidate.
 
-- [ ] **H5 — Notification-UI test coverage gaps** `[test-gap · low · with B1]`
-  - Grid: F42/F43 L3-Logic/L3.5=5.
-  - Source: `audit/Notifications.md` WU33 notes + the 2026-07-13 anonymous-crash-fix note.
-  - Context: `FakeNotificationWriteService` is absent from the fakes catalog, and the anonymous-`NotificationBell` regression test (for the crash fixed 2026-07-13) is unwritten. Folded into WU-NotifEmail (B1). Tests are advisory per CLAUDE.md.
+- [x] **H5 — Notification-UI test coverage gaps — CLOSED IN FULL (WU-TagFanon, 2026-07-26)** `[test-gap · low · with B1]`
+  - Grid: F42/F43 L3-Logic/L3.5=5 (unchanged).
+  - Source: `audit/Notifications.md` §"WU-TagFanon slice".
+  - Both halves done: `FakeNotificationWriteService` joined the fakes catalog (it was needed to
+    component-test the new notification surface at all), and the anonymous-`NotificationBell`
+    regression test is written — it asserts an anonymous render resolves NO notification services,
+    which is the actual failure mode behind the crash fixed 2026-07-13. No longer folded into B1.
 
 - [ ] **H6 — Minor by-design gaps on Stage-5 cells** `[polish · low · anytime]`
   - Context (each grid-5, flagged "future pass" in its audit file):
     - Group **last-admin-leave** unhandled — `layer2-services.md:625`.
     - **Self-likes** accepted on own comment (F25) — `audit/Comments.md`.
     - **Spoiler flag not editable** after a comment is posted (F26) — `audit/Comments.md`.
-    - **Tag L1 length drift** vs spec (F11–13): `SpriteIdentifier` 50 vs 100, `Description` 512 vs 500 — `audit/Tags.md`.
+    - ~~**Tag L1 length drift** vs spec (F11–13): `SpriteIdentifier` 50 vs 100, `Description` 512 vs 500~~ — **FIXED WU-TagFanon 2026-07-26** (rode that WU's migration; `TagValidations` constants + the editor `maxlength`s follow).
     - **VouchButton `IsFollowing` staleness** (F19): vouch affordance only appears after reload if follow+vouch happen in one visit — `audit/Following.md`.
     - **StoryLineage** cosmetic item "revisit pre-launch if at all" — `layer2-services.md:1022`.
     - **Layer-8 strict "no-mature routing" toggle** deferred — `layer8-data-marts.md:257` (same "hard-mode" idea as E6).

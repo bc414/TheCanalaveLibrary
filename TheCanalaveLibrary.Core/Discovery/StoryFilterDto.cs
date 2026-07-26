@@ -62,4 +62,32 @@ public sealed record StoryFilterDto
 
     /// <summary>Results per page. Callers should cap at a reasonable max (e.g. 20).</summary>
     public int PageSize { get; init; } = 20;
+
+    /// <summary>
+    /// Ship filters the story must satisfy — ALL of them (AND across ships, mirroring the tag
+    /// axis; WU-TagFanon). Each entry matches stories containing a single pairing whose member
+    /// set covers every named character (member ids inherit hierarchy roll-up, so a base-species
+    /// id matches its fanon children). Transient viewer intent — never persisted in
+    /// SavedTagSelection (tag-axis-only, settled F15 scope).
+    /// </summary>
+    public IReadOnlyList<ShipFilterDto> IncludedShips { get; init; } = [];
+
+    /// <summary>Ship filters the story must NOT satisfy (any match = excluded) — symmetric
+    /// with the tag exclude axis, including roll-up.</summary>
+    public IReadOnlyList<ShipFilterDto> ExcludedShips { get; init; } = [];
+}
+
+/// <summary>
+/// One ship criterion (WU-TagFanon): character tag ids that must all appear among a single
+/// pairing's members, optionally constrained to romantic or platonic. One member = "any ship
+/// involving this character". Bounded at <see cref="MaxMembers"/> members (enforced server-side).
+/// </summary>
+public sealed record ShipFilterDto
+{
+    public const int MaxMembers = 3;
+
+    public IReadOnlyList<int> MemberTagIds { get; init; } = [];
+
+    /// <summary>Null = either pairing type matches.</summary>
+    public CharacterPairingType? PairingType { get; init; }
 }

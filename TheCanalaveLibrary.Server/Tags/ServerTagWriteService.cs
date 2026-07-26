@@ -30,8 +30,8 @@ public class ServerTagWriteService(
             Description = dto.Description?.Trim(),
             SpriteIdentifier = dto.SpriteIdentifier?.Trim(),
             IsFanon = dto.IsFanon,
-            AllowOCDetails = TagValidations.CoerceAllowOCDetails(dto.AllowOCDetails, dto.TagTypeId),
-            AllowSettingDetails = TagValidations.CoerceAllowSettingDetails(dto.AllowSettingDetails, dto.TagTypeId),
+            // Mod judgment, any type (WU-TagFanon) — no type coercion.
+            AllowCustomName = dto.AllowCustomName,
             ParentTagId = dto.ParentTagId
         };
 
@@ -65,8 +65,8 @@ public class ServerTagWriteService(
         tag.Description = dto.Description?.Trim();
         tag.SpriteIdentifier = dto.SpriteIdentifier?.Trim();
         tag.IsFanon = dto.IsFanon;
-        tag.AllowOCDetails = TagValidations.CoerceAllowOCDetails(dto.AllowOCDetails, dto.TagTypeId);
-        tag.AllowSettingDetails = TagValidations.CoerceAllowSettingDetails(dto.AllowSettingDetails, dto.TagTypeId);
+        // Mod judgment, any type (WU-TagFanon) — no type coercion.
+        tag.AllowCustomName = dto.AllowCustomName;
         tag.ParentTagId = dto.ParentTagId;
 
         await db.SaveChangesAsync();
@@ -82,15 +82,19 @@ public class ServerTagWriteService(
             ?? throw new KeyNotFoundException($"Tag {tagId} not found.");
 
         // Block deletion if the tag is referenced anywhere — prevents Restrict FK violations.
+        // StoryCharacters included (WU-TagFanon fix): a Character tag used only as an OC base
+        // previously passed this pre-check and hit the Restrict FK as a raw DbUpdateException.
         int storyTagCount = await db.StoryTags.CountAsync(st => st.TagId == tagId);
+        int storyCharacterCount = await db.StoryCharacters.CountAsync(sc => sc.CharacterTagId == tagId);
         int selectionEntryCount = await db.SavedTagSelectionEntries.CountAsync(e => e.TagId == tagId);
         int childCount = await db.Tags.CountAsync(t => t.ParentTagId == tagId);
 
-        int totalReferences = storyTagCount + selectionEntryCount + childCount;
+        int totalReferences = storyTagCount + storyCharacterCount + selectionEntryCount + childCount;
         if (totalReferences > 0)
         {
             List<string> parts = [];
             if (storyTagCount > 0) parts.Add($"{storyTagCount} {(storyTagCount == 1 ? "story" : "stories")}");
+            if (storyCharacterCount > 0) parts.Add($"{storyCharacterCount} story character{(storyCharacterCount == 1 ? "" : "s")}");
             if (selectionEntryCount > 0) parts.Add($"{selectionEntryCount} saved selection{(selectionEntryCount == 1 ? "" : "s")}");
             if (childCount > 0) parts.Add($"{childCount} child tag{(childCount == 1 ? "" : "s")}");
             throw new TagValidationException(

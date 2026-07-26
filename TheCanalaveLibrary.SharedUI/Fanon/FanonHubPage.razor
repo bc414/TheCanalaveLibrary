@@ -1,0 +1,74 @@
+@page "/fanon"
+@namespace TheCanalaveLibrary.SharedUI
+@inject IFanonReadService FanonService
+
+@* /fanon hub (WU-TagFanon 6.1): explains fanonization and shows the established fanon tags —
+   the payoff the whole pipeline produces. Public. Axis pages carry the ranked dashboards.
+   Further axis pages are added if other tag types ever gain AllowCustomName. *@
+
+<PageTitle>Fanon — The Canalave Library</PageTitle>
+
+<div class="mx-auto max-w-3xl px-4 py-8 flex flex-col gap-6">
+    <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+        Fanon
+    </h1>
+
+    <div class="flex flex-col gap-2 text-sm text-(--color-text)">
+        <p>
+            When many authors independently write the same original character or setting, it stops
+            being one person's invention and becomes part of the fandom's shared canon — <em>fanon</em>.
+            This page tracks the names gaining that kind of traction across the library's stories.
+        </p>
+        <p class="text-(--color-text-muted)">
+            When the community establishes a name, moderators can promote it to an official tag ✦ and
+            invite the authors who used it to adopt the tag on their stories — always the author's
+            choice, never automatic.
+        </p>
+    </div>
+
+    <div class="flex flex-wrap gap-3">
+        <a href="/fanon/characters"
+           class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-2 text-sm font-medium text-(--color-text) hover:border-(--color-action-ink) transition-colors">
+            Original characters →
+        </a>
+        <a href="/fanon/settings"
+           class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-2 text-sm font-medium text-(--color-text) hover:border-(--color-action-ink) transition-colors">
+            Original settings →
+        </a>
+    </div>
+
+    <div class="flex flex-col gap-3">
+        <h2 class="text-lg font-semibold text-(--color-text)">Established fanon tags</h2>
+        @if (EstablishedTags is null)
+        {
+            <p class="text-sm text-(--color-text-muted)"><em>Loading…</em></p>
+        }
+        else if (EstablishedTags.Count == 0)
+        {
+            <p class="text-sm text-(--color-text-muted)">
+                None yet — the community's first fanonization will appear here.
+            </p>
+        }
+        else
+        {
+            <div class="flex flex-wrap gap-2">
+                @foreach (FanonTagDto fanon in EstablishedTags)
+                {
+                    <span class="inline-flex items-center gap-1.5">
+                        <TagChip Tag="fanon.Tag" />
+                        <span class="text-xs text-(--color-text-muted)">@fanon.StoryReach @(fanon.StoryReach == 1 ? "story" : "stories")</span>
+                    </span>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [PersistentState] public List<FanonTagDto>? EstablishedTags { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        EstablishedTags ??= (await FanonService.GetEstablishedFanonTagsAsync()).ToList();
+    }
+}

@@ -17,7 +17,6 @@ public class StoryUpdateDTO : IEditableStoryProperties
     public StoryStatusEnum PostApprovalStatus { get; set; }
     public List<IStoryTag> StoryTags { get; set; } = new();
     public List<StoryCharacterDto> StoryCharacters { get; set; } = new();
-    public List<SettingDetailDto> SettingDetails { get; set; } = new();
     public List<StoryCharacterPairingDto> StoryCharacterPairings { get; set; } = new();
 
     // "Also posted on" links + original dates (Feature 53 reframe, WU38d). Deliberately NOT on

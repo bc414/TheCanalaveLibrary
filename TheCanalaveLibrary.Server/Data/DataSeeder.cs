@@ -164,14 +164,35 @@ public class DataSeeder(
         // One species tag with a sprite key matching the checked-in dev asset
         // (wwwroot/sprites/themes/pokemon/static/bulbasaur.png) so the optimistic sprite-URL
         // render path is exercisable on a fresh database.
-        characters.Add(new Tag
+        Tag bulbasaur = new()
         {
             TagName = "Bulbasaur",
             TagTypeId = TagTypeEnum.Character,
             SpriteIdentifier = "bulbasaur",
+            // A generic species is exactly what AllowCustomName exists for (WU-TagFanon).
+            AllowCustomName = true,
+        };
+        characters.Add(bulbasaur);
+        // Structured-tag gate exercise: one character allows custom-named characters (WU-TagFanon).
+        characters[0].AllowCustomName = true;
+
+        // Three-tier showcase (WU-TagFanon; Entry #1316): generic species → specific-canon child →
+        // fanon child. The children inherit Bulbasaur's sprite at projection time (no own key), and
+        // the fanon child is a specific entity — no custom names on it. Exercises hierarchy roll-up
+        // (a "Bulbasaur" filter matches stories tagged only with a child) and the ✦ fanon indicator.
+        characters.Add(new Tag
+        {
+            TagName = "Ash's Bulbasaur",
+            TagTypeId = TagTypeEnum.Character,
+            ParentTag = bulbasaur,
         });
-        // Structured-tag gate exercise: one character allows OC details.
-        characters[0].AllowOCDetails = true;
+        characters.Add(new Tag
+        {
+            TagName = "Saura (Silver Resistance)",
+            TagTypeId = TagTypeEnum.Character,
+            ParentTag = bulbasaur,
+            IsFanon = true,
+        });
 
         List<Tag> settings = new[]
             {
@@ -180,7 +201,7 @@ public class DataSeeder(
             }
             .Select(n => new Tag { TagName = n, TagTypeId = TagTypeEnum.Setting })
             .ToList();
-        settings[0].AllowSettingDetails = true;
+        settings[0].AllowCustomName = true;
 
         List<Tag> genres = new[]
             {
@@ -252,8 +273,24 @@ public class DataSeeder(
         Story flagship = Make(users.AuthorAlpha, "Seed Story: Five Chapters + Alt Version (T)",
             Rating.T, StoryStatusEnum.InProgress, 5,
             "Seed story exercising multi-chapter reading and chapter versioning.", g[0], s[0]);
-        flagship.StoryCharacters.Add(new StoryCharacter { CharacterTag = c[0], Priority = TagPriority.Primary });
+        flagship.StoryCharacters.Add(new StoryCharacter
+        {
+            CharacterTag = c[0], Priority = TagPriority.Primary,
+            // The universal portrayal note (WU-TagFanon): legal on a canon character with no OC
+            // flag — renders as the "*" reveal on the story page and card chips.
+            Nuance = "A more competent, quieter take on her than usual.",
+        });
         flagship.StoryCharacters.Add(new StoryCharacter { CharacterTag = c[1], Priority = TagPriority.Supporting });
+        // WU-TagFanon showcase cluster, part 1: "Saura" as an OC name on Bulbasaur (AuthorAlpha).
+        // Part 2 lives on story 6 (AuthorBeta) — two distinct authors put the group at the /fanon
+        // dashboard's default reach threshold on a fresh dev DB.
+        Tag bulbasaurTag = c.Single(t => t.TagName == "Bulbasaur");
+        flagship.StoryCharacters.Add(new StoryCharacter
+        {
+            CharacterTag = bulbasaurTag, Priority = TagPriority.Supporting,
+            IsOc = true, CustomName = "Saura",
+            Nuance = "A shy Bulbasaur who leads the resistance.",
+        });
 
         // 2 — two published chapters plus an unpublished draft chapter.
         Story draftChapter = Make(users.AuthorAlpha, "Seed Story: Draft Third Chapter (E)",
@@ -285,8 +322,24 @@ public class DataSeeder(
             CharacterTag = c[0],
             Priority = TagPriority.Primary,
             IsOc = true,
-            OcName = "Seed OC Name",
-            OcBio = "Seed OC bio text (plain).",
+            CustomName = "Seed OC Name",
+            Nuance = "Seed OC bio text (plain).",
+        });
+        // WU-TagFanon showcase cluster, part 2 (see story 1): a second author's "Saura" —
+        // lowercase, so the case-insensitive grouping normalization is visible on /fanon too.
+        oc.StoryCharacters.Add(new StoryCharacter
+        {
+            CharacterTag = c.Single(t => t.TagName == "Bulbasaur"),
+            Priority = TagPriority.Supporting,
+            IsOc = true, CustomName = "saura",
+        });
+        // Custom-named setting on the flat overlay (SettingDetail folded onto StoryTag) —
+        // settings[0] carries AllowCustomName in SeedTagsAsync.
+        oc.StoryTags.Add(new StoryTag
+        {
+            Tag = s[0], Priority = TagPriority.Supporting,
+            CustomName = "Aethon Region",
+            Nuance = "A post-war Sinnoh variant with no league.",
         });
 
         // 7 — character pairing.

@@ -4068,3 +4068,59 @@ Two loose ends from WU-IntTestPerf, closed same day:
   `audit/Comments.md`, `audit/Chapters.md`, `audit/Groups.md`, `audit/Recommendations.md`,
   `audit/Discovery.md`, `audit/Following.md`, `audit/Moderation.md`, `audit/Stories.md`;
   `hidden-deferrals-tracker.md` D2.
+
+---
+
+## WU-TagFanon — Tag-model overlay reshape + fanonization pipeline — DONE ✓ (2026-07-26)
+
+**Why it grew.** Started as tracker item **A5** ("fanonize notify/migrate flow"), framed as: flip
+`IsFanon`, match `OcName` to `TagName`, notify, offer a one-click update. Planning against the
+Gemini-era record (Entry #1316 + the §IV.7 architecture summary) established the real intent — a
+three-tier character model (generic archetype → specific-canon child → fanon child) where
+fanonization is a *moderator review process starting from the story data* — and auditing what
+existed against it found the subsystem beneath A5 substantially non-functional. A5's one-line
+framing was wrong three times over: no entry point existed, it breaks on the owner's own
+`"Saura (Silver Resistance)"` example, and it never establishes `ParentTagId`.
+
+**Nine requirement groups, delivered in dependency order** (plan:
+`~/.claude/plans/i-want-to-plan-resilient-sonnet.md`):
+
+1. **Doc-touch first** — the WU37 routing-table reopening recorded in `audit/Tags.md` as a
+   deliberate Stage-4 reopening; `layer1-data-model.md` + `layer2-services.md` rewritten;
+   `grid_axes.md` drift fixed (stale `Relationship` tag type + the never-implemented
+   `TR_StoryCharacters_EnforceOCLogic` trigger).
+2. **Model** — `CustomName`/`Nuance` on `StoryTag` AND `StoryCharacter`; single
+   `Tag.AllowCustomName`; `SettingDetail` deleted (folded onto the junction — cardinality rule);
+   `UNIQUE (StoryId, CharacterTagId, CustomName)` NULLS NOT DISTINCT; pairing members became row
+   indexes; L1 length drift fixed. Migration hand-edited to be **data-preserving**: flag OR-merge
+   before the drop, side-row fold before the table drop, truncation guard on the 512→500 shrink.
+3. **Seed** — SeedTool gained the whole tag world (vocabulary with parent/child trees, fanon
+   population, 14 OC-name clusters spanning both sides of the reach threshold, overlays, pairings,
+   saved selections, notification settings, one pre-linked cluster with type-26 rows). DataSeeder
+   gained the three-tier showcase + a two-author "Saura" cluster.
+4. **Display/authoring** — chip fanon ✦ + parent ring + tooltip + sr-only cue; parent-inherited
+   sprites; the `*` overlay reveal on story pages AND cards; loud/quiet nuance affordance;
+   `FlatTagOverlayEntry` generalizing the deleted Setting-only entry; repeat character selection.
+5. **Discovery** — hierarchy roll-up + the ship-filter axis.
+6–8. **Fanon pipeline** — `/fanon` hub + axis pages (public, mod controls inline), the
+   link-and-notify act, `/tag-adoptions` index + per-tag adoption page, editor nudge.
+9. **Docs** — this entry, the audit notes, status.md global condition, tracker rewrite.
+
+**Verified:** `dotnet test` **2258 green** (753 Unit / 593 RazorComponents / 912 Integration);
+design-token check green; browser pass against the extended seed with psql ground truth at every
+mutation; live `pg_indexes` sweep + EXPLAIN ANALYZE (no new indexes warranted; **tracker C1
+resolves to REJECT**, measured at 0.079 ms over 136 tags).
+
+**Two bugs found in the browser pass and fixed same-session** (per `debugging.md`): the mod link
+panel pre-filled the create-new tag name, so typing in the typeahead without selecting a result
+silently minted a duplicate tag; and `TagEditorForm` never hydrated `SpriteIdentifier`, so editing
+any sprite-bearing tag cleared its sprite key.
+
+**Tracker impact:** supersedes **A5**; resolves **C1** (measured → reject); half-closes **C4**
+(F15 seeding lands; F49 Messaging stays open); closes **H5** in full; corrects **H6**'s tag-length
+drift. Adds newly-found seams: `PrefersDataSaverMode` inert, and the six defects listed in
+`audit/Tags.md`'s Stage note.
+
+- **Tool:** Claude Code (Fable). **Pointer:** `audit/Tags.md` §"WU-TagFanon Stage note";
+  `audit/Discovery.md`, `audit/Notifications.md`; `layer1-data-model.md`, `layer2-services.md`;
+  `status.md` Global conditions; `hidden-deferrals-tracker.md`.

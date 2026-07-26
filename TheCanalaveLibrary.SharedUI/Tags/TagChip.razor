@@ -1,7 +1,15 @@
 @namespace TheCanalaveLibrary.SharedUI
 @inject ISpriteReadService Sprites
 
-<span class="@TypeClasses inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-sm" title="@Tag.Description">
+@* WU-TagFanon indicators:
+   - Child tags carry a subtle ring + tooltip/sr-only parent cue ("Saura — a Bulbasaur"); the
+     sprite is parent-inherited at projection time, so the ring + text cover sprite-less and
+     assistive-tech viewers (the sprite img is alt="" decorative).
+   - Fanon tags carry a ✦ glyph (visible fanon status — IsFanon was previously displayed nowhere).
+   - A per-story CustomName/Nuance overlay carries the * affordance with hover/tap reveal via the
+     title attribute (the intended "OC Bulbasaur *" affordance, generalized to every tag type). *@
+
+<span class="@TypeClasses inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-sm @ChildRing" title="@TooltipText">
     @if (Tag.SpriteIdentifier is not null && _themeCtx is not null)
     {
         var staticSrc = Sprites.GetSpriteUrl(_themeCtx.Slug, Tag.SpriteIdentifier, prefersAnimated: false);
@@ -13,6 +21,15 @@
              data-sprite-fallback />
     }
     @Tag.TagName
+    @if (Tag.IsFanon)
+    {
+        <span aria-hidden="true" class="text-xs leading-none">✦</span>
+    }
+    @if (HasOverlay)
+    {
+        <span aria-hidden="true" class="leading-none">*</span>
+    }
+    <span class="sr-only">@SrText</span>
     @if (OnRemove.HasDelegate)
     {
         <button type="button" @onclick="() => OnRemove.InvokeAsync()" aria-label="Remove tag" class="leading-none transition-opacity hover:opacity-60">✕</button>
@@ -27,6 +44,42 @@
 
     [Parameter]
     public EventCallback OnRemove { get; set; }
+
+    private bool HasOverlay => Tag.CustomName is not null || Tag.Nuance is not null;
+
+    /// <summary>Composed tooltip: parent cue, fanon status, description, then the per-story overlay.</summary>
+    private string? TooltipText
+    {
+        get
+        {
+            List<string> parts = [];
+            if (Tag.ParentTagName is not null) parts.Add($"{Tag.TagName} — a {Tag.ParentTagName}.");
+            if (Tag.IsFanon) parts.Add("Fanon tag (community-established).");
+            if (Tag.Description is { Length: > 0 } d) parts.Add(d);
+            if (Tag.CustomName is { Length: > 0 } n) parts.Add($"This story: {n}.");
+            if (Tag.Nuance is { Length: > 0 } nu) parts.Add(nu);
+            return parts.Count > 0 ? string.Join(" ", parts) : null;
+        }
+    }
+
+    /// <summary>Visually-hidden text — the sprite is decorative (alt=""), so parentage, fanon
+    /// status, and the overlay must reach assistive tech through real text.</summary>
+    private string? SrText
+    {
+        get
+        {
+            List<string> parts = [];
+            if (Tag.ParentTagName is not null) parts.Add($"a {Tag.ParentTagName}");
+            if (Tag.IsFanon) parts.Add("fanon tag");
+            if (Tag.CustomName is { Length: > 0 } n) parts.Add($"named {n} in this story");
+            else if (Tag.Nuance is not null) parts.Add("has a story note");
+            return parts.Count > 0 ? string.Join(", ", parts) : null;
+        }
+    }
+
+    // Subtle ring distinguishing child tags — works with sprites disabled and survives a child
+    // being provisioned its own distinct sprite.
+    private string ChildRing => Tag.ParentTagId is not null ? "ring-1 ring-(--color-border)" : string.Empty;
 
     // Solid Pokémon-type-color grounds with standard black/white text (ratified at the Phase A
     // gate, 2026-07-10 — layer4-style.md "Element Roles"). Setting's Ground tan is the one light

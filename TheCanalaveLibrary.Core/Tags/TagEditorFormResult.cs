@@ -11,7 +11,6 @@ public sealed class TagEditorFormResult
     public string? Description { get; init; }
     public string? SpriteIdentifier { get; init; }
     public bool IsFanon { get; init; }
-    public bool AllowOCDetails { get; init; }
-    public bool AllowSettingDetails { get; init; }
+    public bool AllowCustomName { get; init; }
     public int? ParentTagId { get; init; }
 }

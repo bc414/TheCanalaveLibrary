@@ -87,7 +87,6 @@ public class ServerStoryWriteService(
             .Include(s => s.StoryTags)
             .Include(s => s.StoryCharacters)
             .Include(s => s.StoryCharacterPairings).ThenInclude(scp => scp.Members)
-            .Include(s => s.SettingDetails)
             .Include(s => s.ExternalLinks)
             .FirstOrDefaultAsync(s => s.StoryId == dto.StoryId);
 
@@ -221,41 +220,58 @@ public class ServerStoryWriteService(
     {
         List<string> errors = [];
 
-        // OC gate: character tags that carry OC data must have AllowOCDetails == true.
+        // ── Custom-name gate (WU-TagFanon; replaced the OC/SettingDetail gates) ──────────
+        // Custom naming (IsOc on characters; CustomName on either table) requires
+        // Tag.AllowCustomName. Nuance is NEVER gated — any tag, any type.
+
+        // Character rule 1: a non-null CustomName requires IsOc.
+        if (dto.StoryCharacters.Any(sc => sc.CustomName != null && !sc.IsOc))
+            errors.Add("A character custom name requires the OC flag.");
+
+        // Character rule 2: IsOc requires the tag's AllowCustomName.
         List<int> ocCharTagIds = dto.StoryCharacters
-            .Where(sc => sc.IsOc || sc.OcName != null || sc.OcBio != null)
+            .Where(sc => sc.IsOc)
             .Select(sc => sc.CharacterTagId).Distinct().ToList();
         if (ocCharTagIds.Count > 0)
         {
             List<int> disallowed = await writeDb.Tags
-                .Where(t => ocCharTagIds.Contains(t.TagId) && !t.AllowOCDetails)
+                .Where(t => ocCharTagIds.Contains(t.TagId) && !t.AllowCustomName)
                 .Select(t => t.TagId).ToListAsync();
             if (disallowed.Count > 0)
-                errors.Add($"Character tag(s) {string.Join(", ", disallowed)} do not allow OC details.");
+                errors.Add($"Character tag(s) {string.Join(", ", disallowed)} do not allow custom-named characters.");
         }
 
-        // SettingDetail gate: tags with custom detail data must have AllowSettingDetails == true.
-        List<int> detailSettingTagIds = dto.SettingDetails
-            .Where(sd => sd.Name != null || sd.Description != null)
-            .Select(sd => sd.BaseTagId).Distinct().ToList();
-        if (detailSettingTagIds.Count > 0)
+        // Flat rule: a StoryTag CustomName requires the tag's AllowCustomName.
+        List<int> namedFlatTagIds = dto.StoryTags
+            .Where(st => st.CustomName != null)
+            .Select(st => st.TagId).Distinct().ToList();
+        if (namedFlatTagIds.Count > 0)
         {
             List<int> disallowed = await writeDb.Tags
-                .Where(t => detailSettingTagIds.Contains(t.TagId) && !t.AllowSettingDetails)
+                .Where(t => namedFlatTagIds.Contains(t.TagId) && !t.AllowCustomName)
                 .Select(t => t.TagId).ToListAsync();
             if (disallowed.Count > 0)
-                errors.Add($"Setting tag(s) {string.Join(", ", disallowed)} do not allow custom details.");
+                errors.Add($"Tag(s) {string.Join(", ", disallowed)} do not allow custom names.");
         }
 
-        // Pairing member count: each pairing needs ≥2 members.
-        if (dto.StoryCharacterPairings.Any(p => p.MemberCharacterTagIds.Count < 2))
-            errors.Add("Each character pairing must include at least 2 members.");
+        // Duplicate-character rule: (CharacterTagId, CustomName) must be unique within the story
+        // (nulls collide too — at most one unnamed row per tag), mirroring the DB unique index so
+        // the violation surfaces as a friendly message, not a DbUpdateException.
+        bool duplicateCharacters = dto.StoryCharacters
+            .GroupBy(sc => (sc.CharacterTagId, Name: sc.CustomName?.Trim()))
+            .Any(g => g.Count() > 1);
+        if (duplicateCharacters)
+            errors.Add("Two characters on the same tag need distinct custom names.");
 
-        // Pairing members must all be in the story's character list.
-        HashSet<int> storyCharTagIds = dto.StoryCharacters.Select(sc => sc.CharacterTagId).ToHashSet();
+        // Pairing member count: each pairing needs ≥2 distinct members.
+        if (dto.StoryCharacterPairings.Any(p => p.MemberIndexes.Distinct().Count() < 2))
+            errors.Add("Each character pairing must include at least 2 distinct members.");
+
+        // Pairing members are indexes into the story's character list — must all be in range.
+        int characterCount = dto.StoryCharacters.Count;
         bool orphanedMembers = dto.StoryCharacterPairings
-            .SelectMany(p => p.MemberCharacterTagIds)
-            .Any(tagId => !storyCharTagIds.Contains(tagId));
+            .SelectMany(p => p.MemberIndexes)
+            .Any(i => i < 0 || i >= characterCount);
         if (orphanedMembers)
             errors.Add("Pairing members must all be in the story's character list.");
 

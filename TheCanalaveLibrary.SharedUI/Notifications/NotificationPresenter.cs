@@ -70,8 +70,12 @@ public static class NotificationPresenter
             NotificationTypeEnum.YourStoryAddedToGroup =>
                 target is not null ? $"Your story was added to {target}" : "Your story was added to a group",
 
+            // WU-TagFanon reword: {target} is the official tag's name; the row deep-links to the
+            // per-tag adoption page. The old text described a different (never-built) event.
             NotificationTypeEnum.TagUpdateSuggestion =>
-                target is not null ? $"{actor} suggested tag updates for {target}" : $"{actor} suggested tag updates for your story",
+                target is not null
+                    ? $"“{target}” is now an official tag — review the stories where you used that name"
+                    : "A name you used matches a new official tag — review your stories",
 
             NotificationTypeEnum.RecommendationRevised =>
                 target is not null

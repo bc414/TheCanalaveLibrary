@@ -59,7 +59,6 @@ public partial class Story : IModeratableContent
     public virtual ICollection<GroupStory> GroupStories { get; set; } = new List<GroupStory>();
     public virtual ICollection<Recommendation> Recommendations { get; set; } = new List<Recommendation>();
     public virtual ICollection<SeriesEntry> SeriesEntries { get; set; } = new List<SeriesEntry>();
-    public virtual ICollection<SettingDetail> SettingDetails { get; set; } = new List<SettingDetail>();
     public virtual ICollection<StoryAcknowledgment> StoryAcknowledgments { get; set; } = new List<StoryAcknowledgment>();
     public virtual ICollection<StoryArc> StoryArcs { get; set; } = new List<StoryArc>();
     public virtual ICollection<StoryCharacterPairing> StoryCharacterPairings { get; set; } = new List<StoryCharacterPairing>();

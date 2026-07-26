@@ -312,4 +312,14 @@ public interface INotificationWriteService : INotificationReadService
     /// absorbs back-to-back duplicates) — intentional.
     /// </summary>
     Task NotifyNewProfileBlogPostAsync(int blogPostId, int authorId, int? storyId);
+
+    /// <summary>
+    /// Tag-adoption invitation (WU-TagFanon, <c>TagUpdateSuggestion = 26</c>): a moderator linked
+    /// a custom-name group to an official tag; the affected authors are invited to adopt it.
+    /// <c>RelatedEntityId = targetTagId</c> — the notification deep-links to
+    /// <c>/tag-adoptions/{tagId}</c>. The never-twice-per-(author, tag) rule is enforced by the
+    /// CALLER via <see cref="TagAdoptionState.DateNotified"/>, not by unread-dedup (an author who
+    /// read and moved on must never be re-notified for the same tag).
+    /// </summary>
+    Task NotifyTagAdoptionSuggestedAsync(IReadOnlyList<int> recipientAuthorIds, int targetTagId, int moderatorSourceId);
 }

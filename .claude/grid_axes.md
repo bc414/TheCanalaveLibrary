@@ -389,15 +389,21 @@ doesn't show it. Status workflow: Pending → Approved/Rejected.
 ### Tag System
 
 **11. Tag Administration** — Staff-managed, curated tag CRUD. Users cannot create tags. `Tag` table
-with `TagName`, `TagTypeId` (Character/Setting/Genre/ContentWarning/CrossoverFandom/Relationship),
-`IsFanon` boolean, `ParentTagId` for one-level-deep hierarchy, `SpriteIdentifier` for URL-builder
-pattern, `AllowOCDetails` flag, `Description` for tooltips. Tag Directory page (`/tags`) is user-facing
-for browsing, moderator-facing for editing (behind `<AuthorizeView>`).
+with `TagName`, `TagTypeId` (Character/Setting/Genre/ContentWarning/CrossoverFandom — `Relationship`
+removed in WU37; pairings are per-story compositions, not catalog tags), `IsFanon` boolean,
+`ParentTagId` for one-level-deep hierarchy, `SpriteIdentifier` for URL-builder pattern,
+`AllowCustomName` gate (WU-TagFanon; formerly `AllowOCDetails`+`AllowSettingDetails`), `Description`
+for tooltips. Tag Directory page (`/tags`) is user-facing for browsing, moderator-facing for editing
+(behind `<AuthorizeView>`). Fanonization pipeline (public `/fanon` dashboard, link-and-notify,
+author adoption) lands here (WU-TagFanon).
 
-**12. Story Tagging** — Apply tags to stories via `StoryTag` junction with `Priority` (sort/weight).
-`StoryCharacter` table for character tagging (unified canon + OC, with `OC_Name`/`OC_Bio` when
-`AllowOCDetails` is true, enforced by trigger). `StoryCharacterRelationship` / members for romantic
-('/') and platonic ('&') pairings. `SettingDetails` for custom universe/setting overrides.
+**12. Story Tagging** — Apply tags to stories via `StoryTag` junction with `Priority` (sort/weight)
+plus a per-row overlay (`CustomName` gated by `Tag.AllowCustomName`; `Nuance` ungated — WU-TagFanon
+folded the former `SettingDetail` side-row onto the junction). `StoryCharacter` table for character
+tagging (unified canon + OC; `IsOc`+`CustomName` gated, `Nuance` ungated; service-layer validation —
+the spec's SQL-Server-era trigger was never implemented, superseded by `StoryValidationException`).
+`StoryCharacterPairing` / `StoryCharacterPairingMember` for romantic ('/') and platonic ('&')
+pairings.
 
 **13. Tag Display & Sprites** — Render tags with sprites in story cards and detail pages. URL
 construction via `ISpriteReadService` using `SpriteIdentifier` + current theme + animated preference.

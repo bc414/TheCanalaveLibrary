@@ -11,7 +11,9 @@ public static class StoryMappers
         {
             TagId = storyTag.TagId,
             Priority = storyTag.Priority,
-            TagTypeEnum = storyTag.TagTypeEnum
+            TagTypeEnum = storyTag.TagTypeEnum,
+            CustomName = storyTag.CustomName,
+            Nuance = storyTag.Nuance
         };
     }
 
@@ -21,6 +23,8 @@ public static class StoryMappers
         {
             TagId = tempStoryTag.TagId,
             Priority = tempStoryTag.Priority,
+            CustomName = tempStoryTag.CustomName,
+            Nuance = tempStoryTag.Nuance,
         };
     }
 
@@ -41,7 +45,6 @@ public static class StoryMappers
             PostApprovalStatus = story.PostApprovalStatus,
                 StoryTags = new List<IStoryTag>(story.StoryTags),
             StoryCharacters = new List<StoryCharacterDto>(story.StoryCharacters),
-            SettingDetails = new List<SettingDetailDto>(story.SettingDetails),
             StoryCharacterPairings = new List<StoryCharacterPairingDto>(story.StoryCharacterPairings)
         };
     }
@@ -63,7 +66,6 @@ public static class StoryMappers
             PostApprovalStatus = story.PostApprovalStatus,
             StoryTags = new List<IStoryTag>(story.StoryTags),
             StoryCharacters = new List<StoryCharacterDto>(story.StoryCharacters),
-            SettingDetails = new List<SettingDetailDto>(story.SettingDetails),
             StoryCharacterPairings = new List<StoryCharacterPairingDto>(story.StoryCharacterPairings)
         };
     }
@@ -104,21 +106,26 @@ public static class StoryMappers
 
         // ── StoryCharacters ────────────────────────────────────────────────────────
         // Clear pairings first so their Members cascade-delete before StoryCharacter rows go.
+        // The rebuilt list preserves DTO order — pairing member indexes resolve against it below.
         actualStory.StoryCharacterPairings.Clear();
         actualStory.StoryCharacters.Clear();
+        List<StoryCharacter> rebuiltCharacters = new(tempStory.StoryCharacters.Count);
         foreach (StoryCharacterDto charDto in tempStory.StoryCharacters)
         {
-            actualStory.StoryCharacters.Add(new StoryCharacter
+            StoryCharacter sc = new()
             {
                 CharacterTagId = charDto.CharacterTagId,
                 Priority       = charDto.Priority,
                 IsOc           = charDto.IsOc,
-                OcName         = charDto.OcName,
-                OcBio          = charDto.OcBio
-            });
+                CustomName     = charDto.CustomName,
+                Nuance         = charDto.Nuance
+            };
+            rebuiltCharacters.Add(sc);
+            actualStory.StoryCharacters.Add(sc);
         }
 
-        // ── StoryCharacterPairings (members reference the rebuilt StoryCharacter objects) ──
+        // ── StoryCharacterPairings (members reference rebuilt StoryCharacter rows BY INDEX —
+        //    WU-TagFanon: tag ids are ambiguous once two OCs share a species) ──
         foreach (StoryCharacterPairingDto pairingDto in tempStory.StoryCharacterPairings)
         {
             StoryCharacterPairing pairing = new()
@@ -126,26 +133,12 @@ public static class StoryMappers
                 PairingType = pairingDto.PairingType,
                 Priority    = pairingDto.Priority
             };
-            foreach (int charTagId in pairingDto.MemberCharacterTagIds)
+            foreach (int index in pairingDto.MemberIndexes)
             {
-                StoryCharacter? sc = actualStory.StoryCharacters
-                    .FirstOrDefault(c => c.CharacterTagId == charTagId);
-                if (sc is not null)
-                    pairing.Members.Add(new StoryCharacterPairingMember { StoryCharacter = sc });
+                if (index >= 0 && index < rebuiltCharacters.Count)
+                    pairing.Members.Add(new StoryCharacterPairingMember { StoryCharacter = rebuiltCharacters[index] });
             }
             actualStory.StoryCharacterPairings.Add(pairing);
-        }
-
-        // ── SettingDetails ─────────────────────────────────────────────────────────
-        actualStory.SettingDetails.Clear();
-        foreach (SettingDetailDto detailDto in tempStory.SettingDetails)
-        {
-            actualStory.SettingDetails.Add(new SettingDetail
-            {
-                BaseTagId   = detailDto.BaseTagId,
-                Name        = detailDto.Name,
-                Description = detailDto.Description
-            });
         }
 
         return actualStory;

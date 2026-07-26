@@ -1,0 +1,311 @@
+@page "/fanon/{AxisSlug}"
+@namespace TheCanalaveLibrary.SharedUI
+@inject IFanonReadService FanonService
+@inject ITagReadService TagReadService
+@inject ITagWriteService TagWriteService
+@inject IFanonWriteService FanonWriteService
+@inject NavigationManager NavigationManager
+@inject ILogger<FanonAxisPage> Logger
+@using Microsoft.Extensions.Logging
+
+@* One /fanon axis page (WU-TagFanon Group 6): the ranked cross-author custom-name dashboard for
+   characters or settings. Public read-only; moderator link-and-notify controls render inline
+   behind AuthorizeView — the "one page, two experiences" pattern (spec §5.16). The reach
+   threshold applies identically to every viewer. Counts are complete; the expanded story list is
+   viewer-consent-filtered with a count-line disclosure. *@
+
+<PageTitle>@Title — Fanon</PageTitle>
+
+<div class="mx-auto max-w-4xl px-4 py-8 flex flex-col gap-5">
+    <div class="flex items-center justify-between gap-3">
+        <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+            @Title
+        </h1>
+        <a href="/fanon" class="text-sm text-(--color-action-ink) hover:underline">← Fanon hub</a>
+    </div>
+
+    <p class="text-sm text-(--color-text-muted)">
+        Names used independently by multiple authors, ranked by reach. A group appears once it
+        spans enough distinct authors; anyone can watch it grow, and moderators can link an
+        established name to an official tag.
+    </p>
+
+    <input type="search" value="@_search" @onchange="HandleSearchChanged"
+           placeholder="Search names…"
+           class="self-start rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" />
+
+    @if (Groups is null)
+    {
+        <p class="text-sm text-(--color-text-muted)"><em>Loading…</em></p>
+    }
+    else if (Groups.Count == 0)
+    {
+        <p class="text-sm text-(--color-text-muted)">No names above the reach threshold@(_search is { Length: > 0 } ? " match that search" : " yet").</p>
+    }
+    else
+    {
+        <div class="flex flex-col gap-2">
+            @foreach (FanonGroupDto group in Groups)
+            {
+                string groupKey = $"{group.BaseTag.TagId}:{group.Name}";
+                <div class="flex flex-col gap-2 rounded-md border border-(--color-border) bg-(--color-surface) p-3">
+                    <div class="flex flex-wrap items-center gap-3">
+                        <button type="button" @onclick="() => ToggleExpandAsync(group)"
+                                class="text-left font-medium text-(--color-text) hover:text-(--color-action-ink) transition-colors">
+                            @group.Name
+                        </button>
+                        <TagChip Tag="group.BaseTag" />
+                        <span class="text-xs text-(--color-text-muted)">
+                            @group.StoryCount @(group.StoryCount == 1 ? "story" : "stories") ·
+                            @group.AuthorCount @(group.AuthorCount == 1 ? "author" : "authors")
+                        </span>
+                        @if (group.LinkedTargetTag is not null)
+                        {
+                            <span class="inline-flex items-center gap-1.5 text-xs text-(--color-text-muted)">
+                                → linked to <TagChip Tag="group.LinkedTargetTag" /> · @group.NotifiedAuthorCount notified
+                            </span>
+                        }
+                    </div>
+
+                    @* ── Moderator controls (inline — one page, two experiences) ── *@
+                    <AuthorizeView Roles="Moderator,Admin">
+                        <Authorized Context="modContext">
+                            @if (group.LinkedTargetTag is null)
+                            {
+                                @if (_linkingGroupKey == groupKey)
+                                {
+                                    <div class="flex flex-col gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) p-3">
+                                        <p class="text-sm font-medium text-(--color-text)">Link “@group.Name” to a tag</p>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            @* Method group, not a lambda — the codebase convention
+                                               (TagSelector.OnPicked) and the shape that actually
+                                               round-trips the pick into component state. *@
+                                            <CanalaveTypeahead TItem="TagChipDto"
+                                                               SearchMethod="SearchTargetTags"
+                                                               OnSelected="OnTargetPicked"
+                                                               Placeholder="Pick an existing tag…"
+                                                               NotFoundText="No tags found">
+                                                <ResultTemplate Context="tag">
+                                                    <span>@tag.TagName</span>
+                                                </ResultTemplate>
+                                            </CanalaveTypeahead>
+                                            @if (_pickedTarget is not null)
+                                            {
+                                                <TagChip Tag="_pickedTarget" OnRemove="@(() => _pickedTarget = null)" />
+                                            }
+                                        </div>
+                                        @* The create path stays DISARMED until the moderator types a name
+                                           deliberately (the field is never pre-filled) — otherwise typing in the
+                                           typeahead without selecting a result silently mints a duplicate tag
+                                           named after the group. Browser-caught 2026-07-26. *@
+                                        <div class="flex items-center gap-2 text-xs text-(--color-text-muted)">
+                                            <span>— or create it now:</span>
+                                            <input type="text" @bind="_newTagName" placeholder="New tag name" maxlength="100"
+                                                   disabled="@(_pickedTarget is not null)"
+                                                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-xs text-(--color-text) disabled:opacity-50" />
+                                            <span>(fanon, child of @group.BaseTag.TagName, no custom names)</span>
+                                        </div>
+                                        <InlineAlert Message="@_linkError" />
+                                        <div class="flex items-center gap-2">
+                                            <button type="button" @onclick="() => ConfirmLinkAsync(group)"
+                                                    disabled="@(_pickedTarget is null && string.IsNullOrWhiteSpace(_newTagName))"
+                                                    class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) hover:bg-(--color-action-hover) disabled:opacity-50 transition-colors">
+                                                @(_pickedTarget is not null
+                                                    ? $"Link to “{_pickedTarget.TagName}” and notify"
+                                                    : string.IsNullOrWhiteSpace(_newTagName)
+                                                        ? "Pick or name a tag first"
+                                                        : $"Create “{_newTagName.Trim()}” and notify")
+                                            </button>
+                                            <button type="button" @onclick="() => _linkingGroupKey = null"
+                                                    class="rounded-md border border-(--color-border) px-3 py-1.5 text-sm text-(--color-text) hover:bg-(--color-surface-hover) transition-colors">
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <button type="button" @onclick="() => OpenLinkPanel(groupKey, group)"
+                                            class="self-start text-xs text-(--color-action-ink) hover:underline">
+                                        Link to tag…
+                                    </button>
+                                }
+                            }
+                            else if (group.UnnotifiedAuthorCount > 0)
+                            {
+                                <button type="button" @onclick="() => NotifyNewAsync(group)"
+                                        class="self-start text-xs text-(--color-action-ink) hover:underline">
+                                    Notify @group.UnnotifiedAuthorCount new @(group.UnnotifiedAuthorCount == 1 ? "author" : "authors")
+                                </button>
+                            }
+                        </Authorized>
+                    </AuthorizeView>
+
+                    @* ── Expanded story list — gated, with count-line disclosure ── *@
+                    @if (_expanded.TryGetValue(groupKey, out FanonGroupStoriesDto? stories) && stories is not null)
+                    {
+                        <div class="flex flex-col gap-1 border-t border-(--color-border) pt-2">
+                            @foreach (FanonGroupStoryDto s in stories.Visible)
+                            {
+                                <a href="/story/@s.StoryId" class="text-sm text-(--color-action-ink) hover:underline">
+                                    @s.Title <span class="text-xs text-(--color-text-muted)">by @(s.AuthorName ?? "Unknown") · @s.Rating</span>
+                                </a>
+                            }
+                            @if (stories.TotalCount > stories.Visible.Count)
+                            {
+                                <p class="text-xs text-(--color-text-muted)">
+                                    @(stories.TotalCount - stories.Visible.Count) more not shown under your content settings.
+                                </p>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <PaginationControls CurrentPage="@_page" PageSize="@PageSize" TotalCount="@(TotalCount ?? 0)"
+                            OnPageChanged="HandlePageChangedAsync" />
+    }
+</div>
+
+@code {
+    private const int PageSize = 25;
+
+    [Parameter] public string AxisSlug { get; set; } = "";
+
+    [PersistentState] public List<FanonGroupDto>? Groups { get; set; }
+    [PersistentState] public int? TotalCount { get; set; }
+
+    private TagTypeEnum _axis;
+    private string _search = "";
+    private int _page = 1;
+    private readonly Dictionary<string, FanonGroupStoriesDto?> _expanded = [];
+
+    // Mod link-panel state
+    private string? _linkingGroupKey;
+    private TagChipDto? _pickedTarget;
+    private string _newTagName = "";
+    private string? _linkError;
+    private FanonGroupDto? _linkingGroup;
+
+    private string Title => _axis == TagTypeEnum.Character ? "Original characters" : "Original settings";
+
+    protected override async Task OnInitializedAsync()
+    {
+        _axis = AxisSlug switch
+        {
+            "characters" => TagTypeEnum.Character,
+            "settings" => TagTypeEnum.Setting,
+            _ => (TagTypeEnum)(-1)
+        };
+        if ((short)_axis == -1)
+        {
+            NavigationManager.NotFound();
+            return;
+        }
+
+        if (Groups is null || TotalCount is null)
+            await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        Groups = (await FanonService.GetGroupsAsync(_axis, _search, _page, PageSize)).ToList();
+        TotalCount = await FanonService.GetGroupCountAsync(_axis, _search);
+        _expanded.Clear();
+    }
+
+    private async Task HandleSearchChanged(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString() ?? "";
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task HandlePageChangedAsync(int page)
+    {
+        _page = page;
+        await LoadAsync();
+    }
+
+    private async Task ToggleExpandAsync(FanonGroupDto group)
+    {
+        string key = $"{group.BaseTag.TagId}:{group.Name}";
+        if (_expanded.Remove(key)) return;
+        _expanded[key] = null;
+        _expanded[key] = await FanonService.GetGroupStoriesAsync(_axis, group.BaseTag.TagId, group.Name);
+    }
+
+    // ── Moderator link-and-notify ─────────────────────────────────────────────
+
+    private void OpenLinkPanel(string key, FanonGroupDto group)
+    {
+        _linkingGroupKey = key;
+        _linkingGroup = group;
+        _pickedTarget = null;
+        // Deliberately NOT pre-filled — see the create-path comment in the markup.
+        _newTagName = "";
+        _linkError = null;
+    }
+
+    private async Task<IEnumerable<TagChipDto>> SearchTargetTags(string term) =>
+        await TagReadService.SearchTagChipsAsync(_axis, term);
+
+    private void OnTargetPicked(TagChipDto tag)
+    {
+        _pickedTarget = tag;
+        // The create path is mutually exclusive with an explicit pick.
+        _newTagName = "";
+    }
+
+    private async Task ConfirmLinkAsync(FanonGroupDto group)
+    {
+        _linkError = null;
+        try
+        {
+            int targetTagId;
+            if (_pickedTarget is not null)
+            {
+                targetTagId = _pickedTarget.TagId;
+            }
+            else
+            {
+                // Create the target inline: fanon child of the group's base tag, no custom names
+                // (a fanonized character/setting is a specific entity — 7.5).
+                TagSaveResult created = await TagWriteService.CreateTagAsync(new CreateTagDto
+                {
+                    TagName = _newTagName.Trim(),
+                    TagTypeId = _axis,
+                    IsFanon = true,
+                    AllowCustomName = false,
+                    ParentTagId = group.BaseTag.ParentTagId is null ? group.BaseTag.TagId : group.BaseTag.ParentTagId
+                });
+                targetTagId = created.TagId;
+            }
+
+            await FanonWriteService.LinkGroupAsync(new FanonLinkCreateDto(group.Name, group.BaseTag.TagId, targetTagId));
+            _linkingGroupKey = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Linking fanon group {Name} failed", group.Name);
+            _linkError = string.Join(" ", ExceptionPresenter.GetUserMessages(ex));
+        }
+    }
+
+    private async Task NotifyNewAsync(FanonGroupDto group)
+    {
+        try
+        {
+            await FanonWriteService.NotifyNewAuthorsAsync(group.Name, group.BaseTag.TagId);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Notify-new failed for fanon group {Name}", group.Name);
+        }
+    }
+}

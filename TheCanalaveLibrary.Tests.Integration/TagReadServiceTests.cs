@@ -333,7 +333,7 @@ public class TagReadServiceTests(PostgresFixture postgres) : IntegrationTestBase
             TagName = $"Fanon-{suffix}",
             TagTypeId = TagTypeEnum.Character,
             IsFanon = true,
-            AllowOCDetails = true
+            AllowCustomName = true
         };
         db.Tags.Add(tag);
         await db.SaveChangesAsync();
@@ -346,6 +346,6 @@ public class TagReadServiceTests(PostgresFixture postgres) : IntegrationTestBase
             .Nodes.Single(n => n.Tag.TagId == tag.TagId).Tag;
 
         chip.IsFanon.Should().BeTrue();
-        chip.AllowOCDetails.Should().BeTrue();
+        chip.AllowCustomName.Should().BeTrue();
     }
 }

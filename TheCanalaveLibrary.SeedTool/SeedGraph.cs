@@ -62,6 +62,35 @@ public sealed record SeedNotificationRow(
     long Id, int RecipientUserId, int? SourceUserId, short TypeId, int RelatedEntityId,
     bool IsRead, DateTime DateCreatedUtc);
 
+// ── Tag world (WU-TagFanon) ────────────────────────────────────────────────────────────────────
+
+public sealed record SeedTagRow(
+    int Id, string Name, TagTypeEnum TypeId, bool IsFanon, bool AllowCustomName,
+    int? ParentTagId, string? SpriteIdentifier, string? Description);
+
+public sealed record SeedStoryTagRow(
+    int StoryId, int TagId, TagPriority Priority, string? CustomName, string? Nuance);
+
+public sealed record SeedStoryCharacterRow(
+    int Id, int StoryId, int CharacterTagId, TagPriority Priority, bool IsOc,
+    string? CustomName, string? Nuance);
+
+public sealed record SeedPairingRow(int Id, int StoryId, CharacterPairingType PairingType, TagPriority Priority);
+
+public sealed record SeedPairingMemberRow(int PairingId, int StoryCharacterId);
+
+public sealed record SeedSavedSelectionRow(
+    int Id, int UserId, string Nickname, bool IsPublic, string? Description, DateTime DateCreatedUtc);
+
+public sealed record SeedSavedSelectionEntryRow(int Id, int SelectionId, int TagId, bool IsExcluded);
+
+public sealed record SeedNotificationSettingRow(int UserId, short NotificationTypeId, bool EmailEnabled, bool Collapsed);
+
+public sealed record SeedFanonLinkRow(
+    int Id, string NormalizedName, int BaseTagId, int TargetTagId, int? LinkedByUserId, DateTime DateLinkedUtc);
+
+public sealed record SeedAdoptionStateRow(int UserId, int TargetTagId, DateTime? DateNotifiedUtc, bool IsDismissed);
+
 public sealed class SeedGraph
 {
     public required List<SeedUserRow> Users { get; init; }
@@ -74,6 +103,20 @@ public sealed class SeedGraph
     public required List<SeedChapterCommentRow> ChapterComments { get; init; }
     public required List<SeedNotificationRow> Notifications { get; init; }
     public required int HiddenGemChainCount { get; init; }
+
+    // Tag world (WU-TagFanon): vocabulary with parent/child hierarchy + fanon population,
+    // per-story overlays, pairings, saved selections (F15 — tracker C4 half), notification
+    // settings, and one pre-linked fanon cluster (link + adoption states + type-26 rows).
+    public required List<SeedTagRow> Tags { get; init; }
+    public required List<SeedStoryTagRow> StoryTags { get; init; }
+    public required List<SeedStoryCharacterRow> StoryCharacters { get; init; }
+    public required List<SeedPairingRow> Pairings { get; init; }
+    public required List<SeedPairingMemberRow> PairingMembers { get; init; }
+    public required List<SeedSavedSelectionRow> SavedSelections { get; init; }
+    public required List<SeedSavedSelectionEntryRow> SavedSelectionEntries { get; init; }
+    public required List<SeedNotificationSettingRow> NotificationSettings { get; init; }
+    public required List<SeedFanonLinkRow> FanonLinks { get; init; }
+    public required List<SeedAdoptionStateRow> AdoptionStates { get; init; }
 }
 
 /// <summary>
@@ -424,6 +467,244 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
             }
         }
 
+        // ── Tag world (WU-TagFanon): vocabulary, hierarchy, fanon population, overlays ─────────
+        // Everything roll-up, the /fanon dashboard, ship filtering, and the adoption flow need:
+        // parent/child trees (no seed row EVER set a parent before this — the hierarchy had
+        // never run), fanon tags, cross-author OC-name clusters at reach above AND below the
+        // dashboard threshold, per-story overlays, pairings, saved selections (F15), per-user
+        // notification settings, and one pre-linked cluster exercising the adoption pipeline.
+        int tagId = bases.TagId;
+        List<SeedTagRow> tagRows = [];
+        SeedTagRow AddTag(string name, TagTypeEnum type, bool allowCustom = false, bool isFanon = false,
+            int? parentId = null, string? sprite = null)
+        {
+            SeedTagRow row = new(tagId++, name, type, isFanon, allowCustom, parentId, sprite,
+                $"Seed {type} tag: {name}.");
+            tagRows.Add(row);
+            return row;
+        }
+
+        string[] speciesPre = ["Ember", "Tide", "Gale", "Moss", "Frost", "Dusk", "Iron", "Sky",
+            "Thorn", "Ridge", "Cinder", "Fen", "Bright", "Hollow", "Pine", "Storm", "Loam",
+            "Vale", "Crag", "Reed"];
+        string[] speciesSuf = ["fox", "drake", "moth", "finch", "newt", "boar", "lynx", "carp", "wren", "toad"];
+        List<SeedTagRow> species = [];
+        for (int i = 0; i < 40; i++)
+            // The i/20 term shifts the suffix on the second prefix cycle — without it, i and
+            // i+20 produce the same (prefix, suffix) pair and violate the tag-name unique index.
+            species.Add(AddTag(speciesPre[i % 20] + speciesSuf[(i * 7 + i / 20 + 3) % 10], TagTypeEnum.Character,
+                allowCustom: i % 4 != 3)); // 75% are OC bases
+        // Specific-canon children (tier 2 of the three-tier model — Entry #1316).
+        List<SeedTagRow> canonChildren = [];
+        for (int i = 0; i < 10; i++)
+            canonChildren.Add(AddTag($"Elder {species[i].Name}", TagTypeEnum.Character,
+                parentId: species[i].Id));
+        // Fanon children (tier 3): community-established, specific entities — no custom names.
+        string[] fanonNames = ["Saurel", "Voltra", "Nyxis", "Runeel", "Sablette", "Talonis",
+            "Wispera", "Junofel", "Echolin", "Onyxa", "Fablest", "Skyewin"];
+        List<SeedTagRow> fanonChildren = [];
+        for (int i = 0; i < 12; i++)
+            fanonChildren.Add(AddTag($"{fanonNames[i]} (Seed Saga)", TagTypeEnum.Character,
+                isFanon: true, parentId: species[i * 3 % 40].Id));
+
+        string[] settingSuf = ["Reach", "Expanse", "Isles", "Coast", "Basin", "Steppe"];
+        List<SeedTagRow> settingTags = [];
+        for (int i = 0; i < 12; i++)
+            settingTags.Add(AddTag($"{speciesPre[(i * 3 + 1) % 20]} {settingSuf[i % 6]}", TagTypeEnum.Setting,
+                allowCustom: i % 3 == 0)); // a third accept custom setting names
+        List<SeedTagRow> fanonSettings = [];
+        for (int i = 0; i < 2; i++)
+            fanonSettings.Add(AddTag($"The {fanonNames[i]} Wilds", TagTypeEnum.Setting,
+                isFanon: true, parentId: settingTags[i * 3].Id));
+
+        string[] genreNames = ["Voyage", "Lorekeeping", "Skybound", "Harborlore", "Tidebound",
+            "Wandering", "Homefront", "Starcrossed"];
+        List<SeedTagRow> genreTags = genreNames.Select(n => AddTag(n, TagTypeEnum.Genre)).ToList();
+        string[] cwNames = ["Storm Peril", "Deep Grief", "Old Scars", "Sharp Teeth"];
+        List<SeedTagRow> cwTags = cwNames.Select(n => AddTag(n, TagTypeEnum.ContentWarning)).ToList();
+
+        // ── Per-story assignments ──
+        int storyCharacterId = bases.StoryCharacterId;
+        int pairingId = bases.PairingId;
+        List<SeedStoryTagRow> storyTagRows = [];
+        List<SeedStoryCharacterRow> characterRows = [];
+        List<SeedPairingRow> pairingRows = [];
+        List<SeedPairingMemberRow> pairingMemberRows = [];
+        string[] regionNames = ["Aethon Region", "Vermeil Coast", "Hollow Vale", "Cindral Basin",
+            "The Split Isles", "Old Quay Province"];
+        string[] uniqueOcBank = ["Bram", "Lark", "Vex", "Ida", "Corvin", "Mira", "Tolly", "Ferrin",
+            "Oswin", "Petra", "Quill", "Sorrel"];
+
+        // OC-name clusters: 14 names on fixed base species, reach deliberately spanning both
+        // sides of the dashboard threshold (2 large, 4 medium, 8 small/single-author).
+        string[] clusterNames = ["Saura", "Volt", "Nyx", "Rune", "Sable", "Talon", "Wisp", "Juno",
+            "Echo", "Onyx", "Fable", "Skye", "Kira", "Pixel"];
+        int[] clusterStoryCounts = [18, 12, 6, 6, 5, 5, 2, 2, 1, 1, 1, 1, 2, 1];
+        SeedTagRow[] clusterBase = new SeedTagRow[clusterNames.Length];
+        for (int c = 0; c < clusterNames.Length; c++)
+        {
+            // Only AllowCustomName species can host an OC.
+            SeedTagRow baseTag;
+            do { baseTag = species[SampleZipf(species.Count)]; } while (!baseTag.AllowCustomName);
+            clusterBase[c] = baseTag;
+        }
+
+        HashSet<(int Story, int Tag, string? Name)> usedCharacterKeys = [];
+        void AddCharacterRow(int storyId2, SeedTagRow tag, bool isOc, string? customName, string? nuance)
+        {
+            (int, int, string?) key = (storyId2, tag.Id, customName?.Trim().ToLowerInvariant());
+            if (!usedCharacterKeys.Add(key)) return; // unique (story, tag, name), nulls colliding
+            characterRows.Add(new SeedStoryCharacterRow(
+                storyCharacterId++, storyId2, tag.Id,
+                _rng.NextDouble() < 0.6 ? TagPriority.Primary : TagPriority.Supporting,
+                isOc, customName, nuance));
+        }
+        string? MaybeNuance(double p) => _rng.NextDouble() < p ? Phrase(6 + _rng.Next(10)) : null;
+
+        foreach (SeedStoryRow story in stories)
+        {
+            // Genres ×2 + setting ×1 (+ overlays), CW 30%, on every story (drafts author-tag too).
+            SeedTagRow g1 = genreTags[SampleZipf(genreTags.Count)];
+            SeedTagRow g2 = genreTags[(genreTags.IndexOf(g1) + 1 + _rng.Next(genreTags.Count - 1)) % genreTags.Count];
+            storyTagRows.Add(new SeedStoryTagRow(story.Id, g1.Id, TagPriority.Primary, null, MaybeNuance(0.10)));
+            storyTagRows.Add(new SeedStoryTagRow(story.Id, g2.Id, TagPriority.Supporting, null, null));
+
+            SeedTagRow setting = _rng.NextDouble() < 0.06 && fanonSettings.Count > 0
+                ? fanonSettings[_rng.Next(fanonSettings.Count)]
+                : settingTags[SampleZipf(settingTags.Count)];
+            string? settingCustom = setting.AllowCustomName && _rng.NextDouble() < 0.30
+                ? regionNames[_rng.Next(regionNames.Length)]
+                : null;
+            storyTagRows.Add(new SeedStoryTagRow(story.Id, setting.Id, TagPriority.Primary,
+                settingCustom, settingCustom is not null ? MaybeNuance(0.5) : MaybeNuance(0.08)));
+
+            if (_rng.NextDouble() < 0.30)
+                storyTagRows.Add(new SeedStoryTagRow(story.Id, cwTags[_rng.Next(cwTags.Count)].Id,
+                    TagPriority.Primary, null, MaybeNuance(0.10)));
+
+            // Characters: 1–3 non-cluster rows per story (clusters add theirs below).
+            int rowCount = 1 + _rng.Next(3);
+            for (int r = 0; r < rowCount; r++)
+            {
+                double roll = _rng.NextDouble();
+                if (roll < 0.62)
+                    AddCharacterRow(story.Id, species[SampleZipf(species.Count)], isOc: false, null, MaybeNuance(0.15));
+                else if (roll < 0.74)
+                    AddCharacterRow(story.Id, canonChildren[_rng.Next(canonChildren.Count)], isOc: false, null, MaybeNuance(0.15));
+                else if (roll < 0.86)
+                    AddCharacterRow(story.Id, fanonChildren[_rng.Next(fanonChildren.Count)], isOc: false, null, MaybeNuance(0.20));
+                else
+                {
+                    SeedTagRow ocBase = species[SampleZipf(species.Count)];
+                    if (!ocBase.AllowCustomName) { AddCharacterRow(story.Id, ocBase, false, null, null); continue; }
+                    string ocName = $"{uniqueOcBank[_rng.Next(uniqueOcBank.Length)]}-{_rng.Next(1000):D3}";
+                    AddCharacterRow(story.Id, ocBase, isOc: true, ocName, MaybeNuance(0.40));
+                }
+            }
+        }
+
+        // Cluster rows: visible stories only feed public reach; casing varies on ~20% of rows so
+        // the case-insensitive normalization is genuinely exercised.
+        List<SeedStoryRow> visibleStories = stories.Where(s => s.IsVisible).ToList();
+        for (int c = 0; c < clusterNames.Length; c++)
+        {
+            HashSet<int> chosen = [];
+            int want = Math.Min(clusterStoryCounts[c], visibleStories.Count);
+            int guard = 0;
+            while (chosen.Count < want && guard++ < want * 30)
+            {
+                SeedStoryRow s = visibleStories[_rng.Next(visibleStories.Count)];
+                if (!chosen.Add(s.Id)) continue;
+                string name = _rng.NextDouble() < 0.20 ? clusterNames[c].ToLowerInvariant() : clusterNames[c];
+                AddCharacterRow(s.Id, clusterBase[c], isOc: true, name, MaybeNuance(0.40));
+            }
+        }
+
+        // Pairings: ~35% of stories with ≥2 character rows get one (some between same-species
+        // custom-named rows — the case tag-id member references could never express).
+        foreach (IGrouping<int, SeedStoryCharacterRow> byStory in characterRows.GroupBy(r => r.StoryId))
+        {
+            List<SeedStoryCharacterRow> rows = [.. byStory];
+            if (rows.Count < 2 || _rng.NextDouble() >= 0.35) continue;
+            int a = _rng.Next(rows.Count);
+            int b = (a + 1 + _rng.Next(rows.Count - 1)) % rows.Count;
+            SeedPairingRow pairing = new(pairingId++, byStory.Key,
+                _rng.NextDouble() < 0.6 ? CharacterPairingType.Romantic : CharacterPairingType.Platonic,
+                TagPriority.Primary);
+            pairingRows.Add(pairing);
+            pairingMemberRows.Add(new SeedPairingMemberRow(pairing.Id, rows[a].Id));
+            pairingMemberRows.Add(new SeedPairingMemberRow(pairing.Id, rows[b].Id));
+        }
+
+        // Saved tag selections (F15 — the C4 "no generator, flipped without measurement" half).
+        int savedSelectionId = bases.SavedSelectionId;
+        int savedSelectionEntryId = bases.SavedSelectionEntryId;
+        List<SeedSavedSelectionRow> savedSelections = [];
+        List<SeedSavedSelectionEntryRow> savedSelectionEntries = [];
+        foreach (SeedUserRow user in users)
+        {
+            if (_rng.NextDouble() >= 0.25) continue;
+            int count = 1 + _rng.Next(2);
+            for (int n = 0; n < count; n++)
+            {
+                SeedSavedSelectionRow sel = new(savedSelectionId++, user.Id, $"Seed selection {n + 1}",
+                    _rng.NextDouble() < 0.20,
+                    _rng.NextDouble() < 0.30 ? Phrase(8) : null,
+                    Anchor.AddDays(-_rng.Next(60)));
+                savedSelections.Add(sel);
+                HashSet<int> chosenTags = [];
+                int entries = 2 + _rng.Next(5);
+                for (int e = 0; e < entries; e++)
+                {
+                    SeedTagRow t = tagRows[_rng.Next(tagRows.Count)];
+                    if (!chosenTags.Add(t.Id)) continue;
+                    savedSelectionEntries.Add(new SeedSavedSelectionEntryRow(
+                        savedSelectionEntryId++, sel.Id, t.Id, _rng.NextDouble() < 0.25));
+                }
+            }
+        }
+
+        // Per-user notification settings (sparse overrides — never seeded anywhere before).
+        List<SeedNotificationSettingRow> notificationSettings = [];
+        short[] settableTypes = [0, 10, 20, 22, 26, 32];
+        foreach (SeedUserRow user in users)
+        {
+            if (_rng.NextDouble() >= 0.20) continue;
+            HashSet<short> chosenTypes = [];
+            int count = 1 + _rng.Next(3);
+            for (int n = 0; n < count; n++)
+            {
+                short t = settableTypes[_rng.Next(settableTypes.Length)];
+                if (!chosenTypes.Add(t)) continue;
+                notificationSettings.Add(new SeedNotificationSettingRow(
+                    user.Id, t, _rng.NextDouble() < 0.30, _rng.NextDouble() < 0.30));
+            }
+        }
+
+        // Pre-linked fanon cluster (cluster[1], "Volt"): a moderator already linked it to a new
+        // fanon tag and notified the then-current authors — the adoption pipeline is exercisable
+        // against seed data end to end (index page, per-tag page, dismiss, adopt).
+        SeedTagRow adoptionTarget = AddTag($"{clusterNames[1]} (Silver Saga)", TagTypeEnum.Character,
+            isFanon: true, parentId: clusterBase[1].Id);
+        string linkedNormalized = clusterNames[1].ToLowerInvariant();
+        List<SeedFanonLinkRow> fanonLinks =
+        [
+            new(bases.FanonLinkId, linkedNormalized, clusterBase[1].Id, adoptionTarget.Id,
+                LinkedByUserId: null, Anchor.AddDays(-5))
+        ];
+        Dictionary<int, int> authorByStory = stories.ToDictionary(s => s.Id, s => s.AuthorId);
+        List<int> linkedAuthors = characterRows
+            .Where(r => r.CharacterTagId == clusterBase[1].Id
+                && r.CustomName is not null
+                && r.CustomName.Trim().ToLowerInvariant() == linkedNormalized)
+            .Select(r => authorByStory[r.StoryId])
+            .Distinct()
+            .ToList();
+        List<SeedAdoptionStateRow> adoptionStates = linkedAuthors
+            .Select(a => new SeedAdoptionStateRow(a, adoptionTarget.Id, Anchor.AddDays(-5),
+                IsDismissed: _rng.NextDouble() < 0.10))
+            .ToList();
+
         // ── Notifications (derived from real actions, so recipients/types are semantically sane) ─
         List<SeedNotificationRow> notifications = [];
         long notificationId = bases.NotificationId;
@@ -447,6 +728,14 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
         foreach (SeedVouchRow vouch in vouches)
             Notify(vouch.VouchedUserId, vouch.VouchingUserId, NewVouchOnYou, vouch.VouchingUserId, vouch.DateUtc);
 
+        // Type-26 adoption invitations for the pre-linked fanon cluster (WU-TagFanon) — one per
+        // notified author, RelatedEntityId = the target tag, matching NotifyTagAdoptionSuggestedAsync.
+        const short TagUpdateSuggestion = 26;
+        foreach (SeedAdoptionStateRow state in adoptionStates.Where(s => s.DateNotifiedUtc is not null))
+            notifications.Add(new SeedNotificationRow(
+                notificationId++, state.UserId, SourceUserId: null, TagUpdateSuggestion,
+                state.TargetTagId, IsRead: _rng.NextDouble() < 0.5, state.DateNotifiedUtc!.Value));
+
         return new SeedGraph
         {
             Users = users,
@@ -459,6 +748,16 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
             ChapterComments = comments,
             Notifications = notifications,
             HiddenGemChainCount = chainCount,
+            Tags = tagRows,
+            StoryTags = storyTagRows,
+            StoryCharacters = characterRows,
+            Pairings = pairingRows,
+            PairingMembers = pairingMemberRows,
+            SavedSelections = savedSelections,
+            SavedSelectionEntries = savedSelectionEntries,
+            NotificationSettings = notificationSettings,
+            FanonLinks = fanonLinks,
+            AdoptionStates = adoptionStates,
         };
     }
 
@@ -551,4 +850,6 @@ public sealed record SeedToolOptions
 /// existing Full/Minimal dev seed instead of colliding with it.</summary>
 public sealed record SeedIdBases(
     int UserId, int StoryId, int ChapterId, long ChapterContentId, int RecommendationId,
-    long CommentId, long NotificationId);
+    long CommentId, long NotificationId,
+    int TagId, int StoryCharacterId, int PairingId, int SavedSelectionId, int SavedSelectionEntryId,
+    int FanonLinkId);

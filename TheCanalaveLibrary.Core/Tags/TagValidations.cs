@@ -7,8 +7,12 @@ namespace TheCanalaveLibrary.Core;
 public static class TagValidations
 {
     public const int MaxNameLength = 100;
-    public const int MaxDescriptionLength = 512;
-    public const int MaxSpriteIdentifierLength = 50;
+    public const int MaxDescriptionLength = 500;
+    public const int MaxSpriteIdentifierLength = 100;
+
+    /// <summary>Per-story overlay bounds (WU-TagFanon) — shared by StoryCharacter and StoryTag.</summary>
+    public const int MaxCustomNameLength = 128;
+    public const int MaxNuanceLength = 2048;
 
     /// <summary>
     /// Validates <see cref="CreateTagDto"/> fields and throws <see cref="TagValidationException"/>
@@ -111,17 +115,6 @@ public static class TagValidations
                 "Tag hierarchy is limited to one level deep.");
     }
 
-    /// <summary>
-    /// Returns <c>false</c> for non-Character types — <c>AllowOCDetails</c> is only meaningful on
-    /// Character tags. The service coerces the value before persisting.
-    /// </summary>
-    public static bool CoerceAllowOCDetails(bool value, TagTypeEnum tagTypeId) =>
-        tagTypeId == TagTypeEnum.Character && value;
-
-    /// <summary>
-    /// Returns <c>false</c> for non-Setting types — <c>AllowSettingDetails</c> is only meaningful on
-    /// Setting tags. The service coerces the value before persisting.
-    /// </summary>
-    public static bool CoerceAllowSettingDetails(bool value, TagTypeEnum tagTypeId) =>
-        tagTypeId == TagTypeEnum.Setting && value;
+    // WU-TagFanon: the old CoerceAllowOCDetails/CoerceAllowSettingDetails type-coercions are gone —
+    // AllowCustomName is mod judgment on any tag type, not a structural property of the type.
 }

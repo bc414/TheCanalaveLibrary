@@ -17,6 +17,17 @@ pure seed data). L4-Style may still be Stage 1 while L4.5 is 5 — visual polish
 sign-off; L4.5 only demands the feature be *usable*.
 
 Global conditions affecting many cells — kept terse; detail lives at the pointer, not here:
+- **Tag-model overlay reshape + fanonization pipeline (WU-TagFanon, 2026-07-26).** The per-story
+  tag overlay is now one concept in two shapes: `CustomName` (gated by the single new
+  `Tag.AllowCustomName`) + `Nuance` (never gated, every tag type), on `StoryTag` and
+  `StoryCharacter`. `SettingDetail` deleted (folded onto the junction); `OcName`/`OcBio` renamed;
+  pairing members became row indexes. Hierarchy roll-up now applies in `ApplyFilters` (a parent
+  matches its children, symmetric) and a ship-filter axis exists. **Deliberate Stage-4 reopening of
+  the WU37 "settled" routing table** — recorded in `audit/Tags.md`'s header note, not slipped
+  through. No cell Stage changed: every affected cell was Stage 5 and remains 5 (F11/F12 L4 stay
+  Stage 1 — the new `/fanon`, `/tag-adoptions` and overlay surfaces join the standing Phase-3
+  visual pass unsigned-off). Detail: `layer2-services.md` §"Structured Tag Authoring" +
+  §"Tag Hierarchy Roll-Up"; `audit/Tags.md`; `workplan.md` WU-TagFanon.
 - **Parent-visibility invariant established and swept (WU-ParentVisibility, 2026-07-26).** Child
   content is never more visible, nor more writable, than the parent that hosts it — now conditionality
   kind (g). 38 surfaces across 12 clusters were violating it (13 reads, 25 writes), all fixed; three

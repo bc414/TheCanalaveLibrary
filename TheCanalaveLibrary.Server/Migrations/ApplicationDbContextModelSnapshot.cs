@@ -1107,6 +1107,58 @@ namespace TheCanalaveLibrary.Server.Migrations
                         });
                 });
 
+            modelBuilder.Entity("TheCanalaveLibrary.Core.FanonLink", b =>
+                {
+                    b.Property<int>("FanonLinkId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("fanon_link_id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("FanonLinkId"));
+
+                    b.Property<int>("BaseTagId")
+                        .HasColumnType("integer")
+                        .HasColumnName("base_tag_id");
+
+                    b.Property<DateTime>("DateLinked")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_linked")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<int?>("LinkedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("linked_by_user_id");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("normalized_name");
+
+                    b.Property<int>("TargetTagId")
+                        .HasColumnType("integer")
+                        .HasColumnName("target_tag_id");
+
+                    b.HasKey("FanonLinkId")
+                        .HasName("pk_fanon_links");
+
+                    b.HasIndex("BaseTagId")
+                        .HasDatabaseName("ix_fanon_links_base_tag_id");
+
+                    b.HasIndex("LinkedByUserId")
+                        .HasDatabaseName("ix_fanon_links_linked_by_user_id");
+
+                    b.HasIndex("TargetTagId")
+                        .HasDatabaseName("ix_fanon_links_target_tag_id");
+
+                    b.HasIndex("NormalizedName", "BaseTagId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_fanon_links_normalized_name_base_tag_id");
+
+                    b.ToTable("fanon_links", (string)null);
+                });
+
             modelBuilder.Entity("TheCanalaveLibrary.Core.FollowedUser", b =>
                 {
                     b.Property<int>("UserId")
@@ -1648,8 +1700,8 @@ namespace TheCanalaveLibrary.Server.Migrations
                             NotificationTypeId = (short)26,
                             DefaultCollapsed = false,
                             DefaultEmailEnabled = false,
-                            Description = "One of your OC tags matches a new fanon tag.",
-                            DisplayName = "Tag Update Suggestion",
+                            Description = "A name you used in a story matches a new official tag.",
+                            DisplayName = "Tag adoption suggested",
                             NotificationCategory = (short)2,
                             NotificationKey = "TagUpdateSuggestion"
                         },
@@ -2680,46 +2732,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.ToTable("series_entries", (string)null);
                 });
 
-            modelBuilder.Entity("TheCanalaveLibrary.Core.SettingDetail", b =>
-                {
-                    b.Property<int>("SettingDetailId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer")
-                        .HasColumnName("setting_detail_id");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("SettingDetailId"));
-
-                    b.Property<int>("BaseTagId")
-                        .HasColumnType("integer")
-                        .HasColumnName("base_tag_id");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)")
-                        .HasColumnName("description");
-
-                    b.Property<string>("Name")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("name");
-
-                    b.Property<int>("StoryId")
-                        .HasColumnType("integer")
-                        .HasColumnName("story_id");
-
-                    b.HasKey("SettingDetailId")
-                        .HasName("pk_setting_details");
-
-                    b.HasIndex("BaseTagId")
-                        .HasDatabaseName("ix_setting_details_base_tag_id");
-
-                    b.HasIndex("StoryId", "BaseTagId")
-                        .IsUnique()
-                        .HasDatabaseName("ix_setting_details_story_id_base_tag_id");
-
-                    b.ToTable("setting_details", (string)null);
-                });
-
             modelBuilder.Entity("TheCanalaveLibrary.Core.SiteDailyStat", b =>
                 {
                     b.Property<DateOnly>("StatDate")
@@ -2851,6 +2863,11 @@ namespace TheCanalaveLibrary.Server.Migrations
                         {
                             SettingKey = "Spotlight.MonthlyGrantCap",
                             Value = "12"
+                        },
+                        new
+                        {
+                            SettingKey = "Fanon.MinAuthorReach",
+                            Value = "2"
                         });
                 });
 
@@ -3068,19 +3085,19 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("character_tag_id");
 
+                    b.Property<string>("CustomName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("custom_name");
+
                     b.Property<bool>("IsOc")
                         .HasColumnType("boolean")
                         .HasColumnName("is_oc");
 
-                    b.Property<string>("OcBio")
+                    b.Property<string>("Nuance")
                         .HasMaxLength(2048)
                         .HasColumnType("character varying(2048)")
-                        .HasColumnName("oc_bio");
-
-                    b.Property<string>("OcName")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("oc_name");
+                        .HasColumnName("nuance");
 
                     b.Property<short>("Priority")
                         .HasColumnType("smallint")
@@ -3096,8 +3113,11 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.HasIndex("CharacterTagId")
                         .HasDatabaseName("ix_story_characters_character_tag_id");
 
-                    b.HasIndex("StoryId")
-                        .HasDatabaseName("ix_story_characters_story_id");
+                    b.HasIndex("StoryId", "CharacterTagId", "CustomName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_story_characters_story_id_character_tag_id_custom_name");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("StoryId", "CharacterTagId", "CustomName"), false);
 
                     b.ToTable("story_characters", (string)null);
                 });
@@ -3444,6 +3464,16 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("tag_id");
 
+                    b.Property<string>("CustomName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("custom_name");
+
+                    b.Property<string>("Nuance")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("nuance");
+
                     b.Property<short>("Priority")
                         .HasColumnType("smallint")
                         .HasColumnName("priority");
@@ -3466,17 +3496,13 @@ namespace TheCanalaveLibrary.Server.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("TagId"));
 
-                    b.Property<bool>("AllowOCDetails")
+                    b.Property<bool>("AllowCustomName")
                         .HasColumnType("boolean")
-                        .HasColumnName("allow_oc_details");
-
-                    b.Property<bool>("AllowSettingDetails")
-                        .HasColumnType("boolean")
-                        .HasColumnName("allow_setting_details");
+                        .HasColumnName("allow_custom_name");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(512)
-                        .HasColumnType("character varying(512)")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
                         .HasColumnName("description");
 
                     b.Property<bool>("IsFanon")
@@ -3488,8 +3514,8 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnName("parent_tag_id");
 
                     b.Property<string>("SpriteIdentifier")
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
                         .HasColumnName("sprite_identifier");
 
                     b.Property<string>("TagName")
@@ -3516,6 +3542,33 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasDatabaseName("ix_tags_tag_name_tag_type_id");
 
                     b.ToTable("tags", (string)null);
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.TagAdoptionState", b =>
+                {
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.Property<int>("TargetTagId")
+                        .HasColumnType("integer")
+                        .HasColumnName("target_tag_id");
+
+                    b.Property<DateTime?>("DateNotified")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_notified");
+
+                    b.Property<bool>("IsDismissed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_dismissed");
+
+                    b.HasKey("UserId", "TargetTagId")
+                        .HasName("pk_tag_adoption_states");
+
+                    b.HasIndex("TargetTagId")
+                        .HasDatabaseName("ix_tag_adoption_states_target_tag_id");
+
+                    b.ToTable("tag_adoption_states", (string)null);
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.TagType", b =>
@@ -5012,6 +5065,35 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("UserStoryInteractionFilterType");
                 });
 
+            modelBuilder.Entity("TheCanalaveLibrary.Core.FanonLink", b =>
+                {
+                    b.HasOne("TheCanalaveLibrary.Core.Tag", "BaseTag")
+                        .WithMany()
+                        .HasForeignKey("BaseTagId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_fanon_links_tags_base_tag_id");
+
+                    b.HasOne("TheCanalaveLibrary.Core.User", "LinkedByUser")
+                        .WithMany()
+                        .HasForeignKey("LinkedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_fanon_links_users_linked_by_user_id");
+
+                    b.HasOne("TheCanalaveLibrary.Core.Tag", "TargetTag")
+                        .WithMany()
+                        .HasForeignKey("TargetTagId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_fanon_links_tags_target_tag_id");
+
+                    b.Navigation("BaseTag");
+
+                    b.Navigation("LinkedByUser");
+
+                    b.Navigation("TargetTag");
+                });
+
             modelBuilder.Entity("TheCanalaveLibrary.Core.FollowedUser", b =>
                 {
                     b.HasOne("TheCanalaveLibrary.Core.User", "FollowedUserNavigation")
@@ -5383,27 +5465,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("Story");
                 });
 
-            modelBuilder.Entity("TheCanalaveLibrary.Core.SettingDetail", b =>
-                {
-                    b.HasOne("TheCanalaveLibrary.Core.Tag", "BaseTag")
-                        .WithMany("SettingDetails")
-                        .HasForeignKey("BaseTagId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_setting_details_tags_base_tag_id");
-
-                    b.HasOne("TheCanalaveLibrary.Core.Story", "Story")
-                        .WithMany("SettingDetails")
-                        .HasForeignKey("StoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_setting_details_stories_story_id");
-
-                    b.Navigation("BaseTag");
-
-                    b.Navigation("Story");
-                });
-
             modelBuilder.Entity("TheCanalaveLibrary.Core.SpotlightSlot", b =>
                 {
                     b.HasOne("TheCanalaveLibrary.Core.User", "GrantedByUser")
@@ -5653,6 +5714,27 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Navigation("ParentTag");
 
                     b.Navigation("TagType");
+                });
+
+            modelBuilder.Entity("TheCanalaveLibrary.Core.TagAdoptionState", b =>
+                {
+                    b.HasOne("TheCanalaveLibrary.Core.Tag", "TargetTag")
+                        .WithMany()
+                        .HasForeignKey("TargetTagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_tag_adoption_states_tags_target_tag_id");
+
+                    b.HasOne("TheCanalaveLibrary.Core.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_tag_adoption_states_users_user_id");
+
+                    b.Navigation("TargetTag");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("TheCanalaveLibrary.Core.User", b =>
@@ -6238,8 +6320,6 @@ namespace TheCanalaveLibrary.Server.Migrations
 
                     b.Navigation("SeriesEntries");
 
-                    b.Navigation("SettingDetails");
-
                     b.Navigation("StoryAcknowledgments");
 
                     b.Navigation("StoryArcs");
@@ -6286,8 +6366,6 @@ namespace TheCanalaveLibrary.Server.Migrations
             modelBuilder.Entity("TheCanalaveLibrary.Core.Tag", b =>
                 {
                     b.Navigation("ChildTags");
-
-                    b.Navigation("SettingDetails");
 
                     b.Navigation("StoryCharacters");
 

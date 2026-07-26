@@ -48,6 +48,29 @@ adding that. WU-NotifEmail also folds in the untested anonymous-`NotificationBel
 gap noted below (Feature 42, "follow-up work, not done here") — small enough to ride along rather
 than get its own WU.
 
+## WU-TagFanon slice (2026-07-26) — F41/F42 L2 stay Stage 5
+
+`TagUpdateSuggestion = 26` finally has a sender. The seam was fully provisioned (enum value,
+seeded lookup row, settings-page row, presenter arm, `CategoryFor` test arm) and generated nothing.
+
+- **New semantic method** `NotifyTagAdoptionSuggestedAsync(recipients, targetTagId, moderatorId)`.
+  `RelatedEntityId = targetTagId`; a new `RelatedEntityKind.Tag` arm in `KindFor` + batch loader
+  resolves it to the tag name and `/tag-adoptions/{tagId}`.
+- **The never-twice rule lives in the CALLER, not in dedup.** `TagAdoptionState.DateNotified`
+  records that an author was told about a tag; unread-dedup would have re-fired on anyone who read
+  the notification and moved on, which is exactly the nagging case the design forbids.
+- **Presenter arm rewritten.** The existing text ("{actor} suggested tag updates for {target}")
+  described a different, never-built event — it assumed a person acting on a story. It now names
+  the tag and points at the adoption page.
+- **Seed row reworded** ("Tag adoption suggested" / "A name you used in a story matches a new
+  official tag.") — one type covers characters and settings, because one adoption surface does.
+  `DefaultEmailEnabled` stays false, so WU-NotifEmail inherits a sane default.
+
+Covered by `FanonPipelineTests` (Integration). **H5 closed in full here:**
+`FakeNotificationWriteService` joined the fakes catalog and the anonymous-`NotificationBell`
+regression test (for the crash fixed 2026-07-13) is finally written — it asserts an anonymous
+render resolves NO notification services, which is the actual failure mode.
+
 ## Feature 41 — Notification Generation
 
 - **L1 — Stage 5.** `Notification` + the fully-seeded type/category tables. Sound. **L6 — Stage 5

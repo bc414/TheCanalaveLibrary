@@ -33,6 +33,14 @@ public static class SiteSettingKeys
     public const string SpotlightMonthlyGrantCap = "Spotlight.MonthlyGrantCap";
     public const int SpotlightMonthlyGrantCapDefault = 12;
 
+    // ── Fanonization (WU-TagFanon — audit/Tags.md) ─────────────────────────────────
+
+    /// <summary>Minimum distinct-author reach for a custom-name group to appear on the /fanon
+    /// dashboard. Applies identically to public and moderator views — a group not significant
+    /// enough for the community is not significant for moderators either.</summary>
+    public const string FanonMinAuthorReach = "Fanon.MinAuthorReach";
+    public const int FanonMinAuthorReachDefault = 2;
+
     /// <summary>All seeded (key, default) pairs — drives the EF <c>HasData</c> seed.</summary>
     public static readonly IReadOnlyList<(string Key, string DefaultValue)> Seed =
     [
@@ -41,5 +49,6 @@ public static class SiteSettingKeys
         (SpotlightCooldownDays, SpotlightCooldownDaysDefault.ToString()),
         (SpotlightBookingHorizonDays, SpotlightBookingHorizonDaysDefault.ToString()),
         (SpotlightMonthlyGrantCap, SpotlightMonthlyGrantCapDefault.ToString()),
+        (FanonMinAuthorReach, FanonMinAuthorReachDefault.ToString()),
     ];
 }

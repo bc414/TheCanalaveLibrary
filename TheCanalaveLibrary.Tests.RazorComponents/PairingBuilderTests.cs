@@ -64,7 +64,7 @@ public class PairingBuilderTests : BunitContext
             {
                 PairingType = CharacterPairingType.Romantic,
                 Priority = TagPriority.Primary,
-                MemberCharacterTagIds = [1, 2]
+                MemberIndexes = [0, 1]
             }
         ];
 
@@ -87,7 +87,7 @@ public class PairingBuilderTests : BunitContext
             new StoryCharacterPairingDto
             {
                 PairingType = CharacterPairingType.Romantic,
-                MemberCharacterTagIds = [1, 2]
+                MemberIndexes = [0, 1]
             }
         ];
 

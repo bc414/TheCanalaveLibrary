@@ -1,0 +1,144 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject ITagReadService TagService
+
+@* Ship filter axis (WU-TagFanon 5.5/5.6) — build a pairing criterion from character tags:
+   stories containing a single pairing whose members cover every picked character, optionally
+   constrained to romantic/platonic, include or exclude. AND across added ships, mirroring the
+   tag axis. Member ids inherit hierarchy roll-up server-side. Ships are transient viewer
+   intent — never persisted in SavedTagSelection (settled F15 scope).
+   Axis component — owns its injection, like TagFilter. *@
+
+<div class="flex flex-col gap-2">
+    <label class="text-sm font-bold">Ships</label>
+
+    @* Added ship criteria *@
+    @if (_included.Count > 0 || _excluded.Count > 0)
+    {
+        <div class="flex flex-col gap-1">
+            @for (int i = 0; i < _included.Count; i++)
+            {
+                int idx = i;
+                <div class="flex items-center gap-2 text-sm">
+                    <span class="text-(--color-text)">@ShipLabel(_included[idx], _includedNames[idx])</span>
+                    <button type="button" @onclick="() => RemoveShip(idx, excluded: false)"
+                            aria-label="Remove ship filter"
+                            class="text-xs text-(--color-text-muted) hover:text-(--color-danger)">✕</button>
+                </div>
+            }
+            @for (int i = 0; i < _excluded.Count; i++)
+            {
+                int idx = i;
+                <div class="flex items-center gap-2 text-sm">
+                    <span class="text-(--color-text-muted) line-through">@ShipLabel(_excluded[idx], _excludedNames[idx])</span>
+                    <span class="text-xs text-(--color-text-muted)">(excluded)</span>
+                    <button type="button" @onclick="() => RemoveShip(idx, excluded: true)"
+                            aria-label="Remove excluded ship filter"
+                            class="text-xs text-(--color-text-muted) hover:text-(--color-danger)">✕</button>
+                </div>
+            }
+        </div>
+    }
+
+    @* Builder: pick 1-3 characters, choose kind, add as include or exclude *@
+    <div class="flex flex-col gap-2 rounded-md border border-(--color-border) bg-(--color-surface) p-2">
+        <div class="flex flex-wrap gap-1.5">
+            @foreach (TagChipDto chip in _pickedMembers)
+            {
+                <TagChip Tag="chip" OnRemove="@(() => RemoveMember(chip))" />
+            }
+        </div>
+        @if (_pickedMembers.Count < ShipFilterDto.MaxMembers)
+        {
+            <CanalaveTypeahead TItem="TagChipDto"
+                               SearchMethod="SearchCharacters"
+                               OnSelected="AddMember"
+                               Placeholder="Add a character to the ship…"
+                               NotFoundText="No characters found">
+                <ResultTemplate Context="tag">
+                    <span class="inline-flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-(--color-tagtype-character)"></span>
+                        @tag.TagName
+                    </span>
+                </ResultTemplate>
+            </CanalaveTypeahead>
+        }
+        <div class="flex flex-wrap items-center gap-2">
+            <select @bind="_pairingKind" aria-label="Pairing kind"
+                    class="rounded border border-(--color-border) bg-(--color-surface) px-2 py-1 text-xs text-(--color-text)">
+                <option value="">Romantic or platonic</option>
+                <option value="@CharacterPairingType.Romantic">Romantic</option>
+                <option value="@CharacterPairingType.Platonic">Platonic</option>
+            </select>
+            <button type="button" @onclick="() => AddShipAsync(excluded: false)" disabled="@(_pickedMembers.Count == 0)"
+                    class="rounded-md border border-(--color-border) px-2 py-1 text-xs text-(--color-text) hover:border-(--color-action-ink) disabled:opacity-50 transition-colors">
+                Include ship
+            </button>
+            <button type="button" @onclick="() => AddShipAsync(excluded: true)" disabled="@(_pickedMembers.Count == 0)"
+                    class="rounded-md border border-(--color-border) px-2 py-1 text-xs text-(--color-text-muted) hover:border-(--color-danger) disabled:opacity-50 transition-colors">
+                Exclude ship
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>Fires with the full (included, excluded) ship lists on every change.</summary>
+    [Parameter]
+    public EventCallback<(IReadOnlyList<ShipFilterDto> Included, IReadOnlyList<ShipFilterDto> Excluded)> OnChanged { get; set; }
+
+    private readonly List<TagChipDto> _pickedMembers = [];
+    private string _pairingKind = "";
+
+    private readonly List<ShipFilterDto> _included = [];
+    private readonly List<ShipFilterDto> _excluded = [];
+    // Parallel display-name lists (one string per ship, members joined).
+    private readonly List<string> _includedNames = [];
+    private readonly List<string> _excludedNames = [];
+
+    private async Task<IEnumerable<TagChipDto>> SearchCharacters(string term)
+    {
+        List<TagChipDto> results = await TagService.SearchTagChipsAsync(TagTypeEnum.Character, term);
+        return results.Where(t => _pickedMembers.All(p => p.TagId != t.TagId));
+    }
+
+    private void AddMember(TagChipDto chip)
+    {
+        if (_pickedMembers.Count < ShipFilterDto.MaxMembers && _pickedMembers.All(p => p.TagId != chip.TagId))
+            _pickedMembers.Add(chip);
+    }
+
+    private void RemoveMember(TagChipDto chip) => _pickedMembers.Remove(chip);
+
+    private async Task AddShipAsync(bool excluded)
+    {
+        if (_pickedMembers.Count == 0) return;
+
+        CharacterPairingType? kind = Enum.TryParse(_pairingKind, out CharacterPairingType parsed) ? parsed : null;
+        ShipFilterDto ship = new()
+        {
+            MemberTagIds = _pickedMembers.Select(p => p.TagId).ToList(),
+            PairingType = kind
+        };
+        string names = string.Join(
+            kind == CharacterPairingType.Platonic ? " & " : " ♥ ",
+            _pickedMembers.Select(p => p.TagName));
+
+        (excluded ? _excluded : _included).Add(ship);
+        (excluded ? _excludedNames : _includedNames).Add(names);
+        _pickedMembers.Clear();
+        _pairingKind = "";
+        await EmitAsync();
+    }
+
+    private async Task RemoveShip(int index, bool excluded)
+    {
+        (excluded ? _excluded : _included).RemoveAt(index);
+        (excluded ? _excludedNames : _includedNames).RemoveAt(index);
+        await EmitAsync();
+    }
+
+    private Task EmitAsync() => OnChanged.InvokeAsync((_included.ToList(), _excluded.ToList()));
+
+    private static string ShipLabel(ShipFilterDto ship, string names) =>
+        ship.PairingType is null ? names : $"{names} ({ship.PairingType})";
+}

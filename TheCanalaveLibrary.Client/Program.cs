@@ -37,6 +37,8 @@ builder.Services.AddScoped<IPublicUrlProvider>(sp =>
 // service pair; the pattern (endpoint + Client{Feature}Service + register here) is layer5-wasm.md's.
 builder.Services.AddScoped<ITagReadService, ClientTagReadService>();
 builder.Services.AddScoped<ITagWriteService, ClientTagWriteService>();
+builder.Services.AddScoped<IFanonWriteService, ClientFanonWriteService>();
+builder.Services.AddScoped<IFanonReadService>(sp => sp.GetRequiredService<IFanonWriteService>());
 
 // WU-L5Sweep (2026-07-13): mechanical add-only Layer-5 batch — every remaining ServerXXXService's
 // client impl, registered so the codebase is ready for the future InteractiveAuto flip. See

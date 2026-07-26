@@ -24,7 +24,7 @@ public class CharacterEntryTests : BunitContext
         TagId = 1,
         TagName = "Pikachu",
         TagTypeId = TagTypeEnum.Character,
-        AllowOCDetails = allowOc
+        AllowCustomName = allowOc
     };
 
     private static StoryCharacterDto MakeDto(bool isOc = false) => new()
@@ -32,8 +32,8 @@ public class CharacterEntryTests : BunitContext
         CharacterTagId = 1,
         Priority = TagPriority.Primary,
         IsOc = isOc,
-        OcName = isOc ? "Volt" : null,
-        OcBio = isOc ? "Friendly Pikachu" : null
+        CustomName = isOc ? "Volt" : null,
+        Nuance = isOc ? "Friendly Pikachu" : null
     };
 
     [Fact]
@@ -57,7 +57,7 @@ public class CharacterEntryTests : BunitContext
             p.Add(c => c.Dto, MakeDto());
         });
 
-        cut.FindAll("input[type='checkbox']").Should().NotBeEmpty("OC checkbox must be shown when AllowOCDetails=true");
+        cut.FindAll("input[type='checkbox']").Should().NotBeEmpty("OC checkbox must be shown when AllowCustomName=true");
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class CharacterEntryTests : BunitContext
         });
 
         cut.Markup.Should().Contain("OC name", "OC name input must be shown when IsOc=true");
-        cut.Markup.Should().Contain("Volt", "current OcName value must be rendered");
+        cut.Markup.Should().Contain("Volt", "current CustomName value must be rendered");
     }
 
     [Fact]

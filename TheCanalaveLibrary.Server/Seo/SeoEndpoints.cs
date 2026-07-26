@@ -153,6 +153,12 @@ public static class SeoEndpoints
             foreach (var p in profilePostRows) AppendUrl($"/blog/{p.BlogPostId}", p.LastUpdatedDate);
             foreach (var p in groupPostRows) AppendUrl($"/blog/{p.BlogPostId}", p.LastUpdatedDate);
 
+            // WU-TagFanon 6.6: the public fanon pages join the sitemap (community reference
+            // surfaces; the personal /tag-adoptions plane stays out).
+            AppendUrl("/fanon", lastmod: null);
+            AppendUrl("/fanon/characters", lastmod: null);
+            AppendUrl("/fanon/settings", lastmod: null);
+
             xml.Append("</urlset>\n");
 
             return Results.Text(xml.ToString(), "application/xml", Encoding.UTF8);

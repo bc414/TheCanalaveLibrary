@@ -2,7 +2,11 @@
 @using TheCanalaveLibrary.Core
 @inject ISpriteReadService Sprites
 
-@* Presentational sub-component. No @inject for I/O services — all I/O via parameters and callbacks. *@
+@* Presentational sub-component. No @inject for I/O services — all I/O via parameters and callbacks.
+   WU-TagFanon loud/quiet affordance: the Nuance field renders OPEN with a label when IsOc is
+   ticked (an author defining their own character is expected to say who it is) and as a quiet
+   inline "+ add a note" link otherwise (canon/fanon characters — optional flourish). An existing
+   note ALWAYS renders open — hiding authored content is how OcBio became invisible. *@
 
 <div class="flex flex-col gap-2 rounded-md border border-(--color-border) bg-(--color-surface) p-3">
     <div class="flex items-center justify-between gap-2">
@@ -17,7 +21,7 @@
                      alt="" class="h-6 w-6 object-contain"
                      data-sprite-fallback />
             }
-            <span class="font-medium text-(--color-text)">@Chip.TagName</span>
+            <span class="font-medium text-(--color-text)">@DisplayName</span>
         </div>
         <div class="flex items-center gap-3">
             <label class="text-xs text-(--color-text-muted)">Priority</label>
@@ -31,23 +35,54 @@
         </div>
     </div>
 
-    @if (Chip.AllowOCDetails)
+    @if (Chip.AllowCustomName)
     {
         <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
             <input type="checkbox" checked="@Dto.IsOc" @onchange="HandleOcToggle"
                    class="rounded border-(--color-border)" />
             OC (Original Character)
         </label>
+    }
 
-        @if (Dto.IsOc)
+    @if (Dto.IsOc)
+    {
+        @* Loud — an OC is expected to be named and described. *@
+        <input type="text" value="@Dto.CustomName" @onchange="HandleCustomNameChange"
+               placeholder="OC name (optional)" maxlength="128"
+               class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" />
+        @if (_officialMatch is not null)
         {
-            <input type="text" value="@Dto.OcName" @onchange="HandleOcNameChange"
-                   placeholder="OC name (optional)"
-                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" />
-            <textarea value="@Dto.OcBio" @onchange="HandleOcBioChange" rows="2"
-                      placeholder="OC bio / description (optional)"
-                      class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"></textarea>
+            @* Editor nudge (WU-TagFanon 7.6): the name matches an official tag — stop the
+               group re-accumulating at the source. *@
+            <div class="flex flex-wrap items-center gap-2 text-xs text-(--color-text)">
+                <span>ⓘ “@_officialMatch.TagName” is an official tag.</span>
+                <button type="button" @onclick="ConvertToOfficialAsync"
+                        class="text-(--color-action-ink) hover:underline">Use it instead</button>
+            </div>
         }
+        <div class="flex flex-col gap-1">
+            <label class="text-xs text-(--color-text-muted)">Notes</label>
+            <textarea value="@Dto.Nuance" @onchange="HandleNuanceChange" rows="2" maxlength="2048"
+                      placeholder="Who is this character? (optional)"
+                      class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"></textarea>
+        </div>
+    }
+    else if (Dto.Nuance is not null || _noteOpen)
+    {
+        @* Quiet, but an existing note always renders open. *@
+        <div class="flex flex-col gap-1">
+            <label class="text-xs text-(--color-text-muted)">Notes</label>
+            <textarea value="@Dto.Nuance" @onchange="HandleNuanceChange" rows="2" maxlength="2048"
+                      placeholder="How does this story write @(Chip.TagName)? (optional)"
+                      class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"></textarea>
+        </div>
+    }
+    else
+    {
+        <button type="button" @onclick="() => _noteOpen = true"
+                class="self-start text-xs text-(--color-text-muted) hover:text-(--color-action-ink) hover:underline">
+            + add a note
+        </button>
     }
 </div>
 
@@ -59,39 +94,79 @@
     [Parameter] public EventCallback<StoryCharacterDto> OnChanged { get; set; }
     [Parameter] public EventCallback OnRemoved { get; set; }
 
+    /// <summary>
+    /// Editor nudge lookup (WU-TagFanon 7.6) — resolves a typed custom name against official
+    /// tags. Supplied by the page through the form (this component stays I/O-free); null
+    /// disables the nudge (e.g. in bUnit).
+    /// </summary>
+    [Parameter] public Func<string, Task<TagChipDto?>>? OfficialNameLookup { get; set; }
+
+    /// <summary>Fires when the author accepts the nudge — the row should switch to the official
+    /// tag (chip + dto replaced by the parent form).</summary>
+    [Parameter] public EventCallback<TagChipDto> OnConvertToOfficial { get; set; }
+
+    private bool _noteOpen;
+    private TagChipDto? _officialMatch;
+
+    private string DisplayName => Dto.CustomName is { Length: > 0 } name
+        ? $"{name} ({Chip.TagName})"
+        : Chip.TagName;
+
     private async Task HandlePriorityChange(ChangeEventArgs e)
     {
         TagPriority priority = Enum.Parse<TagPriority>((string)e.Value!);
         await OnChanged.InvokeAsync(new StoryCharacterDto
         {
             CharacterTagId = Dto.CharacterTagId, Priority = priority,
-            IsOc = Dto.IsOc, OcName = Dto.OcName, OcBio = Dto.OcBio
+            IsOc = Dto.IsOc, CustomName = Dto.CustomName, Nuance = Dto.Nuance
         });
     }
 
     private async Task HandleOcToggle(ChangeEventArgs e)
     {
         bool isOc = (bool)e.Value!;
+        // Un-ticking OC clears the custom name (custom naming requires the flag) but keeps the
+        // note — Nuance is never OC-scoped (WU-TagFanon split).
         await OnChanged.InvokeAsync(new StoryCharacterDto
         {
             CharacterTagId = Dto.CharacterTagId, Priority = Dto.Priority,
-            IsOc = isOc, OcName = isOc ? Dto.OcName : null, OcBio = isOc ? Dto.OcBio : null
+            IsOc = isOc, CustomName = isOc ? Dto.CustomName : null, Nuance = Dto.Nuance
         });
     }
 
-    private async Task HandleOcNameChange(ChangeEventArgs e) =>
+    private async Task HandleCustomNameChange(ChangeEventArgs e)
+    {
+        string? name = NullIfBlank((string?)e.Value);
         await OnChanged.InvokeAsync(new StoryCharacterDto
         {
             CharacterTagId = Dto.CharacterTagId, Priority = Dto.Priority,
-            IsOc = Dto.IsOc, OcName = (string?)e.Value, OcBio = Dto.OcBio
+            IsOc = Dto.IsOc, CustomName = name, Nuance = Dto.Nuance
         });
 
-    private async Task HandleOcBioChange(ChangeEventArgs e) =>
+        // Nudge check runs on commit (@onchange = blur/enter), never per keystroke — prominence
+        // must not shift while typing (WU-TagFanon 4.2 analysis).
+        _officialMatch = name is not null && OfficialNameLookup is not null
+            ? await OfficialNameLookup(name)
+            : null;
+    }
+
+    private async Task ConvertToOfficialAsync()
+    {
+        if (_officialMatch is null) return;
+        TagChipDto official = _officialMatch;
+        _officialMatch = null;
+        await OnConvertToOfficial.InvokeAsync(official);
+    }
+
+    private async Task HandleNuanceChange(ChangeEventArgs e) =>
         await OnChanged.InvokeAsync(new StoryCharacterDto
         {
             CharacterTagId = Dto.CharacterTagId, Priority = Dto.Priority,
-            IsOc = Dto.IsOc, OcName = Dto.OcName, OcBio = (string?)e.Value
+            IsOc = Dto.IsOc, CustomName = Dto.CustomName, Nuance = NullIfBlank((string?)e.Value)
         });
+
+    private static string? NullIfBlank(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value;
 
     private async Task HandleRemove() => await OnRemoved.InvokeAsync();
 }

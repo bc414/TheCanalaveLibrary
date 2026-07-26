@@ -27,7 +27,12 @@ public class ServerTagReadService(
                 TagName = t.TagName,
                 TagTypeId = t.TagTypeId,
                 Description = t.Description,
-                SpriteIdentifier = t.SpriteIdentifier
+                // Child tags inherit the parent's sprite when they have none (WU-TagFanon).
+                SpriteIdentifier = t.SpriteIdentifier ?? (t.ParentTag != null ? t.ParentTag.SpriteIdentifier : null),
+                IsFanon = t.IsFanon,
+                AllowCustomName = t.AllowCustomName,
+                ParentTagId = t.ParentTagId,
+                ParentTagName = t.ParentTag != null ? t.ParentTag.TagName : null
             })
             .ToListAsync();
     }
@@ -37,23 +42,26 @@ public class ServerTagReadService(
         if (tagIds.Count == 0) return [];
 
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
-        var rows = await readDb.Tags
+        List<TagChipDto> rows = await readDb.Tags
             .Where(t => tagIds.Contains(t.TagId))
-            .Select(t => new { t.TagId, t.TagName, t.TagTypeId, t.Description, t.SpriteIdentifier, t.AllowOCDetails, t.AllowSettingDetails })
+            .Select(t => new TagChipDto
+            {
+                TagId = t.TagId,
+                TagName = t.TagName,
+                TagTypeId = t.TagTypeId,
+                Description = t.Description,
+                SpriteIdentifier = t.SpriteIdentifier ?? (t.ParentTag != null ? t.ParentTag.SpriteIdentifier : null),
+                IsFanon = t.IsFanon,
+                AllowCustomName = t.AllowCustomName,
+                ParentTagId = t.ParentTagId,
+                ParentTagName = t.ParentTag != null ? t.ParentTag.TagName : null
+            })
             .ToListAsync();
 
-        // Reorder to match the caller's id order (same reorder-to-input convention as GetListingsByIdsAsync).
-        Dictionary<int, TagChipDto> byId = rows.ToDictionary(t => t.TagId, t => new TagChipDto
-        {
-            TagId = t.TagId,
-            TagName = t.TagName,
-            TagTypeId = t.TagTypeId,
-            Description = t.Description,
-            SpriteIdentifier = t.SpriteIdentifier,
-            AllowOCDetails = t.AllowOCDetails,
-            AllowSettingDetails = t.AllowSettingDetails
-        });
-
+        // Reorder to match the caller's id order (same reorder-to-input convention as
+        // GetListingsByIdsAsync). Duplicate input ids yield duplicate chips — the character axis
+        // may legitimately hold several rows on one tag (WU-TagFanon).
+        Dictionary<int, TagChipDto> byId = rows.ToDictionary(t => t.TagId);
         return [.. tagIds.Where(byId.ContainsKey).Select(id => byId[id])];
     }
 
@@ -72,9 +80,10 @@ public class ServerTagReadService(
                 t.Description,
                 t.SpriteIdentifier,
                 t.ParentTagId,
+                ParentTagName = t.ParentTag != null ? t.ParentTag.TagName : null,
+                ParentSpriteIdentifier = t.ParentTag != null ? t.ParentTag.SpriteIdentifier : null,
                 t.IsFanon,
-                t.AllowOCDetails,
-                t.AllowSettingDetails
+                t.AllowCustomName
             })
             .ToListAsync();
 
@@ -84,12 +93,14 @@ public class ServerTagReadService(
             TagName = t.TagName,
             TagTypeId = t.TagTypeId,
             Description = t.Description,
+            // Directory chips carry the RAW own sprite (no parent inheritance) — TagEditorForm
+            // hydrates from these chips, and inheriting here would copy a parent's key into the
+            // child on the next save. Story/typeahead projections DO inherit (WU-TagFanon).
             SpriteIdentifier = t.SpriteIdentifier,
-            // Admin fields — set here so the mod editor can pre-populate without a second round-trip.
             IsFanon = t.IsFanon,
-            AllowOCDetails = t.AllowOCDetails,
-            AllowSettingDetails = t.AllowSettingDetails,
-            ParentTagId = t.ParentTagId
+            AllowCustomName = t.AllowCustomName,
+            ParentTagId = t.ParentTagId,
+            ParentTagName = t.ParentTagName
         });
 
         // Build parent→children lookup (children already come out ordered by name from the query).
