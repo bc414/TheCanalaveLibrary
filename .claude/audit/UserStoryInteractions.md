@@ -174,7 +174,7 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
   Rust). Green is now reserved for curation-tab icons (My Stories / Recommendations / Hidden Gems) in
   `BookshelfTabVisuals` — Follow was reskinned to Manaphy Teal in WU27 to free the green family for that.
 
-  | `InteractionTypeEnum` | Label | `AccentColor` | Icon concept | `IconPath` (`d=""`) |
+  | `UserStoryInteractionTypeEnum` (renamed WU23) | Label | `AccentColor` | Icon concept | `IconPath` (`d=""`) |
   |---|---|---|---|---|
   | `Favorite` | Favorite | `#E8507A` Fairy Pink | Filled heart | `M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z` |
   | `PrivateFavorite` | Private Favorite | `#C040A8` Mismagius Magenta | Filled heart — same shape, color alone signals privacy | same `d` as Favorite |

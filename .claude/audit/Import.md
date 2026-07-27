@@ -10,11 +10,13 @@ docs, and Google Docs, import is essential authoring infrastructure; UX bar is t
 
 ## Shared Context
 `Import/` cluster: Core contracts (`ImportFormat`, `ImportedChapterDraft`, `ImportWarning`,
-`SplitStrategy`, `ImportParseResult`, `IContentImportService`), Server readers + splitter
-(`ServerContentImportService`, `DocxReader`, `EpubReader`, `HtmlReader`, `TxtReader`,
-`MarkdownReader`, `ChapterSplitter`), SharedUI mode/review components (`ImportModePicker`,
-`ImportReviewPanel`, `ChapterFileImport`). **No entities** — imported chapters are ordinary
-chapters created through `IChapterWriteService`; external story links belong to Feature 53.
+`SplitStrategy`, `ImportParseResult`, `ResplitRequest`, `ImportLimits`, `IContentImportService`),
+Server readers + splitter (`ServerContentImportService`, `DocxReader`, `EpubImportReader`,
+`HtmlFileReader`, `TxtReader`, `MarkdownReader`, `ChapterSplitter`, `ImportHtmlNormalizer`,
+`ContentImportEndpoints`), SharedUI mode/review components (`StoryChapterImport` — entry + mode
+selection, `ImportReviewPanel`, `ChapterFileImport`). **No entities** — imported chapters are
+ordinary chapters created through `IChapterWriteService`; external story links belong to
+Feature 53. *(As-built names corrected 2026-07-27; the build note below always had them right.)*
 
 ## Feature 63 — Chapter Import (file ingestion)
 - **L1 — N/A** (no schema; commits go through existing Chapters tables).

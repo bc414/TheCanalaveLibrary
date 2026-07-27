@@ -21,7 +21,8 @@ rendering works.
 `InteractiveAuto` (`SKILL.md` axiom 8) — but Auto mode still creates a real Server circuit during
 its WASM-bootstrap window for any visitor whose browser doesn't already have the WASM bundle
 cached (every first-time visitor, forever, and anyone whose cache was cleared). While that circuit
-is alive, it has the same single-node constraint as full `InteractiveServer` does today.
+is alive, it has the same single-node constraint that full `InteractiveServer` rendering had
+before the flip.
 
 **Concretely, at N≥2 without affinity:** `ReconnectModal` (built in WU-ErrorHandling) exists to
 gracefully resume a dropped circuit after a network blip. Without sticky sessions, a reconnect

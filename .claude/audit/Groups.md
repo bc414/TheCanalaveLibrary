@@ -88,7 +88,8 @@ conventions. **Do not revisit these.** Pointers:
   (endpoints + client impl) exists and compiles; service-only soundness is Stage 2, same as every
   other not-yet-built L5 cell. Prior text, retained as the L2/L3 test record: `GroupServiceTests`
   (27 tests) — all pass. Blocked until 2026-06-25 by two bugs unmasked once the integration-test DB
-  wiring was corrected (see Global Conditions note in `status.md`):
+  wiring was corrected (WU31_5b — see `workplan-archive.md`; the old `status.md` Global Conditions
+  note was removed in the 2026-07-27 standing-constraints rewrite):
   (1) `ServerGroupWriteService.AddStoryAsync` fetched the story without
   `IgnoreQueryFilters(["ContentRating"])`, so M-rated stories appeared not-found when the active
   user had `ShowMatureContent=false`, causing `AddStory_Tier2_StoryRatingExceedsGroupMax_Throws`

@@ -15,8 +15,9 @@ worker).
 > 510); browser smoke at desktop width clean (loads, no error banner, zero console errors);
 > narrow rendering deliberately unpolished, no visual pass yet.
 **Entities:** `UserProfile` (cold partition — `ProfileText`, 1-to-1 cascade from `User`), `UserStat`
-(PK `UserId`, 22+ denormalized counters, 1-to-1 cascade). Settings (Reader/Privacy/Author) live as owned
-JSON on `User` (see Identity audit). Spec calls for `IUserProfileReadService` (public profile) and
+(PK `UserId`, 22+ denormalized counters, 1-to-1 cascade). Settings (Reader/Privacy/Author) live as
+`ComplexProperty(...).ToJson()` complex types on `User` (EF Core 10 mapping, `IdentityConfigurations.cs`
+— not the deprecated owned-entity JSON; see `layer1-data-model.md` §JSON and the Identity audit). Spec calls for `IUserProfileReadService` (public profile) and
 `IUserSettingsService` (the self-referential integrated read+write exception, §3.5).
 
 ---

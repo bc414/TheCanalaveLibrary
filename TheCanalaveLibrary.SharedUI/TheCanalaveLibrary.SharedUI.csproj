@@ -22,9 +22,4 @@
       <ProjectReference Include="..\TheCanalaveLibrary.Core\TheCanalaveLibrary.Core.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-      <UpToDateCheckInput Remove="Pages\Desktop\HomeDesktop.razor" />
-      <UpToDateCheckInput Remove="Pages\Desktop\StoryDesktop.razor" />
-    </ItemGroup>
-
 </Project>

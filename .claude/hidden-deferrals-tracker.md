@@ -207,7 +207,7 @@ decision work that has no row at all.
 
 ---
 
-- [ ] **B11 — Ship filter has no restore path (no URL round-trip, no seed, no persistence)** `[inert · med · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26.*
+- [ ] **B11 — Ship filter has no restore path (no URL round-trip, no seed, no persistence)** `[inert · med · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26. The blocking question below was promoted to `middle_plan_v2.md` **decision row 13** (2026-07-27) so it lives in a decision ledger; this entry keeps the full framing.*
   - Grid: F31 L2/L3-Logic/L3.5=5 — invisible there; the axis works, it just cannot be reconstructed.
   - Source: `audit/Discovery.md` §"WU-TagFanon note" → "Settled vs. open"; `ShipFilter.razor`;
     `ResultsFilterPanel.razor` `OnParametersSet`; `SearchPage.razor`.
@@ -501,18 +501,13 @@ built rows at 5 and no signal these exist.
 
 These matter most for *this* doc's purpose: they make the prose surfaces untrustworthy, which is where everything above hides.
 
-- [ ] **G1 — Login-enforcement described as unbuilt though it shipped** `[doc-drift · med · anytime]`
-  - Source (stale): `content-safety.md` §"Login enforcement is staged"; `workplan.md` "Planned/not-yet-built" (~line 2171). Source (built): `security.md` §"Account-Status Enforcement (WU38a)"; `audit/Moderation.md` / `audit/Identity.md`.
-  - Context: WU-AccountEnforcement actually shipped as **WU38a (2026-07-11)** — `CanalaveSignInManager.CanSignInAsync` blocks Suspended/Banned, security-stamp bump kills live sessions, `AccountStatusBanner` for Warned; browser-verified. Two docs still call it deferred. A future session trusting `content-safety.md` would think a shipped security control is missing.
-  - **Genuine residual (still open):** a freshly-Warned/Suspended user only sees the banner/block at next sign-in. `workplan.md:2152` notes `RefreshSignInAsync` is the ready-made tool to make it mid-session responsive — unbuilt.
+- [x] **G1 — Login-enforcement described as unbuilt though it shipped** `[doc-drift · med · anytime]` — **CLOSED 2026-07-27 (WU-DocHygiene3):** `content-safety.md` §"Login enforcement" retensed to shipped-WU38a; the `workplan.md` "Planned" entry was rewritten 2026-07-27 (WU-DocHygiene) to core-shipped + residual.
+  - Source (was stale, now fixed): `content-safety.md`; `workplan.md` "Planned/not-yet-built" WU-AccountEnforcement entry. Source (built): `security.md` §"Account-Status Enforcement (WU38a)".
+  - **Genuine residual (still open, tracked as the WU-AccountEnforcement Planned entry + Position block):** a freshly-Warned/Suspended user only sees the banner/block at next sign-in; `RefreshSignInAsync` is the ready-made tool — unbuilt.
 
-- [ ] **G2 — `audit/Lookups.md` overstates remaining work (stale Stage-4)** `[doc-drift · low · anytime]`
-  - Source: `audit/Lookups.md` Feature 2 L1.
-  - Context: Still documents Stage-4 divergences (SearchMode/DefaultSortOrder pre-three-axis seed, vestigial `ReadStatus`/`FavoriteStatus` enums, incomplete seed matrix) that current code already resolved (`DiscoveryConfigurations.cs`). Grid `5` is correct — the audit file is stale in the *opposite* direction (claims open work that's done).
+- [x] **G2 — `audit/Lookups.md` overstates remaining work (stale Stage-4)** `[doc-drift · low · anytime]` — **CLOSED 2026-07-27 (WU-DocHygiene):** the Feature 2 section was rewritten as an L1 Stage-5 record; all five divergences verified resolved against code (see its 2026-07-27 Stage note).
 
-- [ ] **G3 — Stale "deferred workers" note** `[doc-drift · low · anytime]`
-  - Source: `workplan.md` Post-MVP "Deferred workers" bullet (~line 2208).
-  - Context: Still lists workers 57 (Notification Cleanup) & 58 (UserStat Recalc) as deferred though both were built 2026-07-15. Grid L2=5 is correct.
+- [x] **G3 — Stale "deferred workers" note** `[doc-drift · low · anytime]` — **CLOSED 2026-07-27 (WU-DocHygiene3):** the Post-MVP "Deferred workers" bullet now records both workers built 2026-07-15 (WU-NotificationCleanup / WU-UserStatRecalc, archive).
 
 ---
 

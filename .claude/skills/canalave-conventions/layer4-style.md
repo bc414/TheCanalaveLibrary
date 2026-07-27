@@ -634,8 +634,8 @@ bg-(--color-surface-raised) px-6 py-3 shadow-subtle`. Layout: wordmark (`font-di
 of `<NavLink>`s (Home/Discover/Tags/Groups, `ActiveClass="font-semibold text-(--color-primary)"`,
 Home uses `Match="NavLinkMatch.All"`) → `ml-auto` right-side chrome group. No left sidebar; no
 inline search field (Discover link covers it). (2026-07-18: this bar became `MainLayout` — the
-single layout for all viewports, `flex-wrap` at narrow; `MobileLayout` and its placeholder bottom
-bar were deleted with the device-fork paradigm.)
+single layout for all viewports, `flex-wrap` at narrow; the deleted `MobileLayout` and its
+placeholder bottom bar went with the device-fork paradigm.)
 
 Two new dropdown components follow the `NotificationBell` caret pattern exactly (`relative` root +
 `@onclick` toggle + `@if(_open)` `absolute right-0 top-full z-30` panel — not a `fixed inset-0`

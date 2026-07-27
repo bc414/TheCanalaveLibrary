@@ -545,7 +545,7 @@ component owns that behavior, not get bolted onto the display bag.
 | `ConfirmDialog` | Container composite | Spoiler reveal, account deletion, leaving group, deleting list, unpublishing story |
 | `CommentSection` | Coordination composite | Chapter reading pages (WU20), Blog post view pages (WU31) — see "CommentSection — Multi-Context Dispatch" |
 | `NotificationItem` | Leaf | Notification bell flyout (WU33), Notifications page (WU33) |
-| `NotificationBell` | Coordination composite (cross-cutting layout element) | `DesktopLayout`, `MobileLayout` (WU33) |
+| `NotificationBell` | Coordination composite (cross-cutting layout element) | `MainLayout` (WU33; layouts merged 2026-07-18) |
 
 ## StoryCard and StoryDeck
 

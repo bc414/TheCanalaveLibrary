@@ -24,7 +24,13 @@ L8 keeps its historical number. See `grid_axes.md` "Layer 7 — dissolved".)
 
 ## Project Files
 
-All process artifacts live under `.claude/`. The spec and this file live at repo root.
+Process artifacts live under `.claude/`. Repo root holds the spec, this file, the
+`modernization-audit/` record, and four `*_Deliberations.md` files (pre-spec 2025 design-session
+records the spec cites — historical, never updated).
+
+**Cold-session read order:** this file → `.claude/status.md` (grid + standing constraints) →
+`.claude/workplan.md` (Position block) → `middle_plan_v2.md` (phases + open decisions) — then the
+task's audit file per the loop in `workplan.md`'s preamble.
 
 | File | Purpose | Updated by |
 |------|---------|------------|
@@ -38,7 +44,7 @@ All process artifacts live under `.claude/`. The spec and this file live at repo
 | `modernization-audit/` (repo root) | The 2026-07-17 whole-codebase modernization audit's durable record: `report.md` (executive deliverable), `fix-status.md` (finding → resolution map), `plan-of-record.md`, slices. Fix passes closed 2026-07-18 (WU-AuditFixPass ×2); open remainders live in `deferred-work.md` + tracker item H8. | Never (complete; banner on its README) |
 | `.claude/audit/<FolderName>.md` | Per-folder-cluster notes. Shared context header, then per-feature sections with per-layer stages. | Audit creates; working sessions update |
 | `.claude/skills/canalave-conventions/SKILL.md` | Authoritative code conventions (hub file + layer files). Loaded as a skill when writing code. | Refined through implementation |
-| `.claude/design/surface-registry.md` | The element-role design system's audit + ratification record: every visual element classified into one of seven roles (Canvas / Wayfinding / Container / Content Surface / Control / Indicator / Overlay). **Any work touching UI markup follows the role system** — rules in `canalave-conventions/layer4-style.md` §"Element Roles"/"Interaction States"; `scripts/check-design-tokens.ps1` (local + CI) fails builds on violations; `/dev/design-gallery` is the live composition reference. | Sweeps tick off rows; new components add rows if they mint new element kinds |
+| `.claude/design/surface-registry.md` | The element-role design system's audit + ratification record: every visual element classified into one of seven roles (Canvas / Wayfinding / Container / Content Surface / Control / Indicator / Overlay). **Any work touching UI markup follows the role system** — rules in `canalave-conventions/layer4-style.md` §"Element Roles"/"Interaction States"; `scripts/check-design-tokens.ps1` (local + CI) fails builds on violations; `/dev/design-gallery` is the live composition reference. **Caveat:** the per-component inventory is a paused artifact pending a ground-up rewrite after the foundation work — trust the taxonomy/ratifications, not its component sections (banner in the file). | On the planned ground-up rewrite (post-foundation); until then, only banner amendments |
 | `.claude/design/` (other files) | Standing cross-cutting analyses that back build passes: `access-gating-first-principles.md` (the authoritative Feature-66 viewer-permission model; `access-gating-audit.md` is its surface inventory — first-principles wins on disagreement) and the two L6 evidence reports (`L6-intent-ledger.md`, `L6-reconciliation-matrix.md` — moved from `audit/` 2026-07-27; the matrix's live-`pg_indexes` reconciliation is still PENDING). | The pass that consumes them |
 | `.claude/middle_plan_v2.md` | Live phased master plan (platform-first → features → beta → launch) + "Decisions that need you" table (open items) and a "Resolved" list (closed items, each pointing at the convention doc that now states the rule). Supersedes the retired `.claude/middle_plan.md` and `.claude/forward_plan.md` (both historical references; v1 phase-number pointers resolve via v2's mapping table). | Whoever resolves a decision or advances a phase |
 | `.claude/grid_axes.md` | Defines the grid layers (columns, incl. the L4.5-Browser band) and 66 features (rows) in detail, including the MVP-line and post-MVP-line rationale. `status.md`'s rows are drawn from this file. | Rarely — only if a layer/feature axis itself changes (e.g. the 2026-07-06 Layer-7 dissolution, the 2026-07-15 addition of Features 64–65 from `middle-addendum.md` §3, or the 2026-07-19 addition of Feature 66) |

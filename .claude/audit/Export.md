@@ -19,8 +19,9 @@ Built: `Core/Export/` (`ExportFormat`, `StoryExportResult`, `IExportService`) +
 `Server/Export/` (`ServerExportService`, six writers, `ExportEndpoints`, shared `ExportDom`
 AngleSharp helpers) + additive `IChapterReadService.GetChaptersForExportAsync`. Trigger surfaces:
 `StoryDownloadLinks` leaf (SharedUI/Stories — anchor links with the `download` attribute so
-Blazor's router doesn't intercept) on `StoryDesktop`/`StoryMobile` + a StoryCard caret Download
-submenu (the dead `OnDownload` EventCallback parameter was removed).
+Blazor's router doesn't intercept) on the story page (as-built 2026-07-11: `StoryDesktop`/
+`StoryMobile`, since merged into `StoryPage` by WU-ResponsiveMerge 2026-07-18) + a StoryCard
+caret Download submenu (the dead `OnDownload` EventCallback parameter was removed).
 **Verified:**
 - **Unit tier** (`ExportWritersTests`, 9 tests): EPUB OCF invariants (mimetype first + stored,
   well-formed XHTML per chapter — `XDocument.Parse`), PDF magic, DOCX opens via

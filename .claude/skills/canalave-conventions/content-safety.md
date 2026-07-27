@@ -358,12 +358,14 @@ non-negotiable per §13.
 philosophy ("close the loop on ALL reports — the user is entitled to know they were heard"). A community
 that shadowbans lies to its members. This is a design axiom, not a deferred decision.
 
-**Login enforcement is staged.** WU34 ships the state columns and notifications. Actual login-blocking
-(block Suspended users until `SuspendedUntilUtc`; block Banned users permanently; surface Warned banner
-in layout chrome) is a dedicated follow-up WU — it's a security surface that deserves its own careful
-slice. **Named and sequenced (2026-07-15): WU-AccountEnforcement**, already listed as
-`middle_plan_v2.md` Phase 2 item 5 (predates this formalization pass — recorded here and in
-`workplan.md` "Planned / not-yet-built named WUs" so every phase-sequenced WU has one ledger entry).
+**Login enforcement SHIPPED (WU38a, 2026-07-11).** WU34 shipped the state columns and
+notifications; the enforcement slice landed in WU38a: `CanalaveSignInManager.CanSignInAsync`
+blocks Suspended users until `SuspendedUntilUtc` and Banned users permanently, a security-stamp
+bump kills already-open sessions on Suspend/Ban, and `AccountStatusBanner` surfaces Warned in the
+layout chrome — rules in `security.md` §"Account-Status Enforcement". **The one open residual
+(WU-AccountEnforcement's remaining slice, `middle_plan_v2.md` Phase 2 item 5):** mid-session
+responsiveness — a freshly-Warned user sees the banner only at next sign-in; `RefreshSignInAsync`
+is the named tool.
 
 ### Report Targets and `ActiveReportCount`
 

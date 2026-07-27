@@ -138,7 +138,7 @@ coordination state. For all of these the component's `@code` is the model.
     private bool _isSubmitting;
 
     // Read-path data for dropdowns — NOT in the ViewModel
-    private ContentRatingEnum[] _ratingOptions = Enum.GetValues<ContentRatingEnum>();
+    private Rating[] _ratingOptions = Enum.GetValues<Rating>();  // the real enum is `Rating : short` (ModelEnums.cs)
 }
 ```
 
@@ -185,20 +185,21 @@ by default; drop to the service only when the attribute's behavior doesn't fit.
 For high-frequency interactions (Favorite/Follow/Ignore buttons):
 
 1. **Optimistic local update** on click — toggle the bool, re-render immediately.
-2. **2-second per-component debounce** (`InteractionConstants.InteractionDebounceMs` in
-   `Core/UserStoryInteractions/`, default 2000ms — lives in **Core**, not Server's `SiteConstants`,
+2. **2-second per-component debounce** (`UserStoryInteractionConstants.UserStoryInteractionDebounceMs`
+   in `Core/UserStoryInteractions/`, default 2000ms — lives in **Core**, not Server's `SiteConstants`,
    because `SharedUI` cannot reference Server; spec's literal `SiteConstants.InteractionDebounceMs`
-   wording is a historical artifact).
+   wording, and the pre-WU23 `InteractionConstants` name, are historical artifacts).
 3. When the timer fires, one API call for that one story.
 
 The debounce timer lives in the coordination composite (`UserStoryInteractionPanel`), not in
 individual leaf buttons.
 
-**Distinct from typeahead debounce.** `TagSelector`'s `DebounceMilliseconds="300"` default on `CanalaveTypeahead` (WU11 shape, in-house since the Global Flip)
-governs input responsiveness for a third-party widget's own search-as-you-type — the package manages
-that timer internally. `InteractionDebounceMs` (2000ms) governs batching optimistic writes in a
-coordination composite we own. Same word, two unrelated concerns, two different homes — don't
-conflate them or try to unify the constants.
+**Distinct from typeahead debounce.** `TagSelector`'s `DebounceMilliseconds="300"` default on
+`CanalaveTypeahead` (WU11 shape, in-house since the Global Flip) governs input responsiveness for
+search-as-you-type — that timer lives inside the typeahead component itself.
+`UserStoryInteractionDebounceMs` (2000ms) governs batching optimistic writes in a coordination
+composite. Same word, two unrelated concerns, two different homes — don't conflate them or try to
+unify the constants.
 
 ## Forcing a Child to Re-Seed via `@key` (WU43)
 
@@ -309,7 +310,7 @@ The panel composite receives `IsOwnStory` parameter.
 
 ```razor
 @code {
-    // Passed from ChapterPage dispatcher (already loaded for interaction panel)
+    // Passed from ChapterReadingPage (already loaded for interaction panel)
     [Parameter] public bool UserHasCompletedStory { get; set; }
 
     // Ephemeral — re-hides on every page load

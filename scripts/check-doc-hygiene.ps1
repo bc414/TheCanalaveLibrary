@@ -29,8 +29,8 @@ Set-Location $repoRoot
 # Format: label = regex (case-sensitive where the identifier is).
 $retiredTerms = [ordered]@{
     'Blazored.Typeahead (removed at Global Flip, 2026-07-13)' = 'Blazored\.?Typeahead'
-    'Device-fork components (WU-ResponsiveMerge, 2026-07-18)' = '\b(TreeSearch|Story|Group|Search|Home|Bookshelves)(Desktop|Mobile)\b'
-    'IDeviceDetectionService / DeviceLayout (2026-07-18)'     = 'IDeviceDetectionService|\bDeviceLayout\b'
+    'Device-fork components (WU-ResponsiveMerge, 2026-07-18)' = '(?<!WU-)\b[A-Z]\w+(Desktop|Mobile)\b(?!-)'
+    'IDeviceDetectionService / device layouts (2026-07-18)'   = 'IDeviceDetectionService|\b(Desktop|Mobile)Layout\b'
     'SettingDetail (folded onto junction, WU-TagFanon 2026-07-26)' = '\bSettingDetail\b'
     'CharacterRelationshipType (deleted WU37.5, 2026-06-26)'  = 'CharacterRelationshipType'
     'MessagesHub (SignalR permanently ruled out, 2026-07-07)' = '\bMessagesHub\b'
@@ -42,6 +42,15 @@ $retiredTerms = [ordered]@{
 $historicalMarker = 'retired|superseded|replaced|REMOVED|removed|deleted|dissolved|former|pre-merge|absorbed|carri|historical|archived|cancelled|\bruled\b|dropped|exorcised|no longer|\bno\b|\bnot\b|\bCUT\b|folded|renamed|merged|used to|\bmoot\b|proposed|\bwas\b|\bwere\b'
 
 # Live docs: loaded-as-current conventions and orientation. Everything else is a dated record.
+# Deliberate exemptions:
+#  - .claude/audit/  — dated Stage-note ledgers; entries are as-of-date records and legitimately
+#    name dead things (e.g. the 2026-06-21 HomeDesktop test-harness notes). Headline lines are
+#    kept current by the moment-3 rule, not by this lint.
+#  - workplan*.md    — dated WU ledgers, same reasoning.
+#  - surface-registry.md — halted-session artifact (Brian, 2026-07-27): its per-component
+#    inventory predates WU-ResponsiveMerge and will be REWRITTEN FROM THE GROUND UP once the
+#    foundation work (most of hidden-deferrals-tracker) completes. Linting it until then is
+#    noise; its banner carries the caveat. Remove this exemption at the rewrite.
 $liveDocs = @(
     Get-Item 'CLAUDE.md'
     Get-Item '.claude/status.md'
@@ -49,6 +58,7 @@ $liveDocs = @(
     Get-Item '.claude/folder_clusters.md'
     Get-Item '.claude/middle_plan_v2.md'
     Get-ChildItem '.claude/skills' -Recurse -Filter '*.md'
+    Get-ChildItem '.claude/design' -Filter '*.md' | Where-Object { $_.Name -ne 'surface-registry.md' }
 )
 
 $violations = New-Object System.Collections.Generic.List[string]

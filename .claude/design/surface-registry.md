@@ -1,5 +1,16 @@
 # Surface Registry — every visual element, classified by role
 
+> **PAUSED ARTIFACT — partially stale; ground-up rewrite planned (Brian, 2026-07-27).** The
+> producing session was stopped halfway: its plan called for completing the foundation first,
+> which now includes most of `hidden-deferrals-tracker.md`. Until the rewrite: the **role
+> taxonomy, ratifications (⚖️), and sweep-completion records remain valid** — but the
+> per-component inventory predates WU-ResponsiveMerge (2026-07-18), so its `{X}Desktop`/
+> `{X}Mobile`/`DesktopLayout`/`MobileLayout` sections describe deleted components (their
+> element-kind rows live on in the merged pages), and the "Blazored.Typeahead package chrome"
+> open item is void (package removed at the Global Flip; see `CanalaveTypeahead`). The live
+> rules are in `layer4-style.md`; this file is exempted from `check-doc-hygiene.ps1` until the
+> rewrite (see the script's exemption note).
+
 Phase 0 deliverable of the design-solidification plan (2026-07-10). Purpose: an exhaustive
 inventory of every visual element in the UI, its **current** treatment, its **assigned role**
 under the ratified taxonomy, and a **mismatch flag** where current treatment contradicts the

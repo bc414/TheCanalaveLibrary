@@ -2,9 +2,10 @@
 
 **No own grid Feature.** Cross-cutting cluster (same shape as `RichText/`, `Dialogs/`, `Users/`) — its
 "feature" is a shared service, not a row in `status.md`'s grid. The cells it actually serves are
-**Stories Feature 4 L2** (cover-art upload — already Stage 5, this resolves that cell's remaining open
-item) and **Profiles Features 20–22 L2** (profile-picture upload — still Stage 2, consumed by WU30, not
-built here). This file is the settled-vs-open reference both cite.
+**Stories Feature 4 L2** (cover-art upload) and **Profiles Features 20–22 L2** (profile-picture
+upload) — all Stage 5: the WU12-era "still Stage 2, consumed by WU30" framing below is historical
+(WU30 built the avatar upload; live-verified 2026-07-05/06, see the Stage notes at the end of this
+file). This file is the settled-vs-open reference both cite.
 
 ## Shared Context
 
@@ -102,8 +103,8 @@ themselves (same discipline as `UserCard`'s avatar fallback).
 
 **Consumers:** `StoryListingDto.CoverArtRelativeUrl` (WU12, copied verbatim by the read projection, like
 avatars — never re-resolved at display time); the upload **UI** (an `<InputFile>` calling `SaveAsync`)
-is WU24 (story cover) and WU30 (profile picture) — not built in WU12, which only mints the service and
-keeps the write path's `CoverArtRelativeUrl` a pass-through string.
+was WU24's (story cover) and WU30's (profile picture) — WU12 only minted the service and kept the
+write path's `CoverArtRelativeUrl` a pass-through string; both UIs have since shipped.
 
 ---
 
@@ -204,8 +205,11 @@ stored 2048×68; prior avatar orphan-deleted on replace.
 No component lives in `Images/` — it's a pure service cluster (like Sprites' read half). Upload UI
 components belong to their owning feature (`StoryPropertiesForm` for WU24, profile edit form for WU30).
 
-## L5/L6/L7/L8 — N/A
+## L5/L6/L8 — N/A (L7 dissolved 2026-07-06)
 
-No endpoint needed in MVP (server-side `InteractiveServer` calls the service directly, no HTTP hop).
-Post-MVP L5 WASM enablement would need an upload endpoint if the Client ever needs to upload directly —
-not designed yet, out of scope here.
+L5 stays N/A **by design, post-flip**: `IImageStorageService` is one of the deliberate structural
+exclusions never client-implemented — upload flows (`InputFile` → `SaveAsync`) run server-side via
+the stream/multipart endpoint pattern, not a client service body-swap. See `layer5-wasm.md`
+§"Scope Inventory"/"Avoid" and the exclusion comment in `TheCanalaveLibrary.Client/Program.cs`.
+(The original WU12-era rationale — "InteractiveServer calls the service directly, endpoint not
+designed yet" — predates the Global Flip and is superseded by that recorded exclusion.)

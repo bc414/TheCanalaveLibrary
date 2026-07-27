@@ -16,15 +16,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block)
 
-- **Last landed:** WU-DocHygiene2 (2026-07-27) — process-doc best-practices hardening
-  (doc-hygiene CI gate, standing-constraints rewrite, this split + this block).
-- **Phase (`middle_plan_v2.md`):** Phase 2 tail. **WU-Home** is the only unbuilt Phase-2 item,
-  gated on decision row 2 (homepage design). Phases 0, 1, and 5 are DONE; Phase 3 (Brian-driven
-  L4 freeze sweep + WU-A11y, the latter gated on decision row 12) follows Phase 2.
-- **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — see its
-  unchecked items (B/C/F/H groups).
-- **Blocked on Brian:** decision rows 2, 4, 6, 8, 10, 12 (`middle_plan_v2.md` §"Decisions that
-  need you").
+- **Last landed:** WU-DocHygiene3 (2026-07-27) — fresh-eyes fixes on the doc corpus (gate widened
+  to `design/`, this block's claims re-verified, Post-MVP section retensed).
+- **Phase (`middle_plan_v2.md`):** Phase 2 tail. Two unbuilt Phase-2 items: **WU-Home** (item 1,
+  gated on decision row 2 — homepage design) and **WU-AccountEnforcement's mid-session residual**
+  (item 5, unblocked — `RefreshSignInAsync` is the ready-made tool; see its Planned entry below).
+  Phases 0, 1, and 5 are DONE; Phase 3 (Brian-driven L4 freeze sweep + WU-A11y, the latter gated
+  on decision row 12) follows Phase 2.
+- **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
+  exist in **every group A–H** (~20 unchecked boxes), including two **high-priority security
+  items: E2 and E3**.
+- **Blocked on Brian:** decision rows 2, 4, 6, 8, 10, 12, and 13 (`middle_plan_v2.md` §"Decisions
+  that need you"; row 13 gates only tracker item B11).
 
 ---
 
@@ -41,8 +44,9 @@ force a 1–4 change. That architectural property is still true. The *scheduling
 followed from it — "Layers 5–8 post-MVP" — is **superseded**: `middle_plan_v2.md`'s platform-first
 inversion (2026-07-05) moved most L5–L8 work *ahead of* several still-pending MVP-surface rows
 (WU-L5Pilot shipped WASM 2026-07-04; WU-SignalBuffering dissolved the old Redis/L7 plan into L2/L6/L8
-2026-07-06; WU-Marts shipped L8 2026-07-07). So **numbered work-units below through 2026-07-05 build
-L2/L3-Logic/L3.5-Structure/L4-Style** (L1 is done — see WU0); **named work-units from WU-CI onward
+2026-07-06; WU-Marts shipped L8 2026-07-07). So **the numbered work-units (now in
+`workplan-archive.md`) through 2026-07-05 built
+L2/L3-Logic/L3.5-Structure/L4-Style** (L1 was done first — see WU0, archive); **named work-units from WU-CI onward
 follow `middle_plan_v2.md`'s ordering instead**, and several of those are L5–L8. **The "Post-MVP"
 section below is correspondingly partial** — some of what it once listed has already shipped out of
 sequence (see each bullet's own status). If this scoping is unclear, see `middle_plan_v2.md` "Why v2
@@ -58,17 +62,16 @@ so they're at Stage 5 when reached. Phases:
 - **Phase 3 — Consumers / pages.** Dispatchers and feature pages aggregating Phase-2 output. Internal
   order is loose; deps still hold.
 
-**Stage-4 cells use the resolved direction (audit-summary §0/§3).** Almost all are *stale-code traps*:
-build to spec, treat existing code as discard-not-reuse. The flag means "don't copy this code," not "open
-question." The two *genuine mechanical* reconciliations (Identity post-move refs; Story L5 endpoint wiring)
-are called out where they sit (Identity = WU1; Story L5 = Post-MVP).
+**Stage-4 / Stage-3 semantics (historical — the build arc completed).** During the arc, Stage-4
+cells were treated as stale-code traps (build to spec, discard-not-reuse — audit-summary §0/§3)
+and Stage-3 cells were *minted* as atom contracts landed, not found. Both descriptions are now
+history: as of 2026-07-27 the grid holds **zero Stage-4 cells** and **five Stage-3 cells** (L4
+rows 46/47/48/55/62, functional UI awaiting the standing Phase-3 visual pass). `status.md` is the
+live count — nothing in this preamble describes current cells.
 
-**Stage-3 is minted here, not found.** Expect ~0 Stage-3 cells now. opusplan passes on atoms create them;
-mark the consumer flip (2→3) when an atom's contract lands, and switch that consumer's tool to Sonnet.
-
-**Tool per work-unit.** opusplan for Stage-2 builds and atom-contract minting; **Opus (reconcile)** for the
-residual genuine Stage-4 (WU1); **Sonnet in Claude Code** for cells already Stage-3 (none yet — they appear
-as atoms land). L4-Style is never sequenced alone — it rides inside the same work-unit as that feature's
+**Tool per work-unit.** opusplan for Stage-2 builds and atom-contract minting; **Sonnet in Claude
+Code** for Stage-3 cells (today: the L4 visual-pass rows, which ride the Phase-3 sweep rather than
+standalone units). L4-Style is never sequenced alone — it rides inside the same work-unit as that feature's
 L3/L3.5 build (per Phase D rule; tokens are locked, `layer4-style.md` is the validated spec). "Build +
 verify" for any unit touching L4 means render-and-look, not just `dotnet build` (the Phase-E rule,
 carried forward from the retired forward_plan; mechanics in `run-server/SKILL.md`).
@@ -103,9 +106,100 @@ work-unit into Phase 3 and update `status.md` + the audit file.
 
 Named and sequenced into `middle_plan_v2.md`'s phases (Doc-Touch moment 1 formalization of the
 2026-07-07 `middle-addendum.md` §3 findings), but **no code has been written yet** — distinct from
-the DONE ✓ units above and from the "Post-MVP — Layers 5–8" section below (which is unsequenced by
-design). Each entry names its cell(s)/feature, phase, audit pointer, and deps; flip to a DONE ✓
-entry above (with cells/verification) when built.
+the DONE ✓ units (recent ones in the run later in this file; older in `workplan-archive.md`) and
+from the "Post-MVP — Layers 5–8" section below (historical framing). Each entry names its
+cell(s)/feature, phase, audit pointer, and deps; move it to the DONE ✓ run below (with
+cells/verification) when built.
+
+- **WU-Home** — **Cells:** no dedicated grid row (the homepage is persistent chrome composing
+  existing features; the spotlight slice is Feature 55, shipped). **Phase:** 2 item 1 — the
+  *remaining* homepage sections after WU-Spotlight (DONE ✓ 2026-07-12, archive) split out the
+  spotlight display. **Gated on decision row 2** (homepage design — which sections, what order).
+  **Settled inputs (do not revisit):** `audit/Spotlight.md` — no algorithmic homepage (selection
+  is always a human act) and the homepage carries N concurrent spotlight positions from
+  `site_settings`; `audit/BlogPosts.md` — homepage SitePoll surfacing is deferred INTO this WU
+  ("Open intent: SitePolls … homepage sections, not this feature's work-unit"). **Pointer:**
+  `middle_plan_v2.md` Phase 2 item 1; `SharedUI/Home/HomePage.razor` header comment points back
+  at decision row 2. **Deps:** WU-Spotlight (DONE ✓).
+- **WU-A11y** — **Cells:** Feature 65 (new), L4/L4.5 currently Stage 1. **Phase:** 3, paired with
+  the L4 freeze sweep. **Scope:** blocked on decision row 12 (scope/depth). **Pointer:**
+  `audit/Accessibility.md`. **Deps:** Phase 3's L4 freeze sweep (same pass).
+  *(Note for WU-AccountEnforcement, listed in `middle_plan_v2.md` Phase 2 item 5: the
+  `RefreshSignInAsync` claim-refresh pattern from `/content-gate` (WU-AccessGate, 2026-07-23) is
+  the ready-made tool for making `AccountStatus` responsive — a freshly-Warned/Suspended user's
+  claim currently waits for next sign-in.)*
+- **WU-EditorSprite** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
+  inline Pokémon-sprite Quill blot (spec §5.30.2), deferred at WU6. **Pointer:**
+  `audit/Chapters.md` Feature 6. **Deps:** WU6 (`EditorView`, Stage 5).
+- **WU-EditorMobile** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
+  mobile `EditorView` toolbar / desktop-mobile device composition, deferred at WU6. **Pointer:**
+  `audit/Chapters.md` Feature 6. **Deps:** WU6.
+- **WU-ErrorHandling2** — **Cells:** none (cross-cutting, extends `Errors/`). **Phase:** 5,
+  Phase-5-adjacent. **Scope:** `ProblemDetails` envelope + client HTTP error translation, deferred
+  at WU-ErrorHandling. **Pointer:** `error-handling.md`. **Deps:** WU-GlobalFlip (DONE ✓
+  2026-07-13 — the WASM client now makes the HTTP calls this envelope translates).
+- **WU-NotifEmail** — **Cells:** Features 41–43 (extends, no new cell). **Phase:** 6, Beta gate.
+  **Scope:** notification email fan-out over `UserNotificationSetting.EmailEnabled`, deferred at
+  WU-Email; also folds in the untested anonymous-`NotificationBell` RazorComponents gap noted in
+  `audit/Notifications.md` Feature 42. **Pointer:** `audit/Notifications.md`. **Deps:** WU-Email
+  (DONE ✓ 2026-07-06).
+- **WU-AccountEnforcement** — **core shipped inside WU38a (2026-07-11):** login-blocking
+  (`CanalaveSignInManager.CanSignInAsync` — Suspended until `SuspendedUntilUtc`, Banned permanently),
+  security-stamp bump on Suspend/Ban, `AccountStatusBanner` for Warned. **Residual (the only open
+  slice):** mid-session responsiveness — a freshly-Warned user sees the banner only at next sign-in;
+  `RefreshSignInAsync` is the named tool. **Cells:** Feature 1 (Identity, extends). **Pointer:**
+  `canalave-conventions/security.md` "Account-Status Enforcement"; `middle_plan_v2.md` Phase 2
+  item 5. **Deps:** WU38a (DONE ✓).
+
+---
+
+## Post-MVP — Layers 5–8 (historical framing — every item below has since closed or been removed)
+
+Per `grid_axes.md` §"The Two Boundaries": these swap method bodies / add DDL / add standalone workers
+behind the contracts frozen in Layers 1–4. The section's premise ("batch later, when stable") was
+overtaken by `middle_plan_v2.md`'s platform-first inversion — kept for its pointers; nothing here
+is pending except where a bullet says so.
+
+- **Messaging realtime push (SignalR) — REMOVED (2026-07-07).** Was tracked here as a Post-MVP
+  additive layer on top of the stateless WU35 write service; permanently ruled out instead — Discord
+  already covers real-time chat, and this site's messaging is deliberately async/long-form. Nothing
+  in this project builds it now or later. See `cross-cutting.md` "Private Messaging Architecture" and
+  `canalave-conventions/horizontal-scaling.md` §2 (no app-defined Hub means no SignalR backplane is
+  needed at N≥2 either). Feature 49 L5 stays N/A.
+- **L5 — WASM enablement — CLOSED (WU-L5Sweep + WU-GlobalFlip, 2026-07-13, archive).** Every
+  `ServerXXXService` got its endpoint + client impl and the site flipped to global
+  `InteractiveAuto`; the two once-flagged mechanical Stage-4 cells (Story L5 endpoint wiring,
+  Sprites L5) closed along the way — the grid's built-surface L5 rows all read 5. Governed by
+  `layer5-wasm.md`.
+- **L6 — SQL indexes — batch CLOSED (WU-L6, 2026-07-07, archive):** USI filtered indexes restored
+  (they had silently collapsed to one in the database), comment golden index landed, StoryTag
+  reverse index REJECTED on measurement. **Still genuinely open:** the L6 Stage-2 cells (rows 6/7,
+  33, 35, 38) awaiting the measure-first pass — evidence in `design/L6-reconciliation-matrix.md`
+  (PENDING). Governed by `layer6-indexes.md`.
+- **L7 — Redis integration.** **SUPERSEDED — see WU-SignalBuffering (2026-07-06) in
+  `workplan-archive.md`.** Layer 7 dissolved: signal buffering (44/45) built as L2 in-process
+  buffers, 16/17 stays durable-direct, 61's cache is the L8 mart itself. `layer7-redis.md` deleted.
+- **L8 — Data marts — CLOSED (WU-Marts, 2026-07-07, archive** — the "requires real user data"
+  horizontal boundary was crossed deliberately with SeedTool clustered synthetic data**):** rows
+  59/60/61 marts + service layers built; **62 SiteDailyStat Worker — DONE, see WU-SiteDailyStat
+  (2026-07-11) in `workplan-archive.md` — is the one documented exception with an EF model.**
+  Pointers: `audit/Discovery.md` L8 notes, `audit/Moderation.md` Feature 62. Governed by
+  `layer8-data-marts.md`.
+- **Deferred workers — CLOSED (2026-07-15, archive):** 57 Notification Cleanup
+  (WU-NotificationCleanup) and 58 UserStat Recalculation (WU-UserStatRecalc) both built once
+  there was data to operate on.
+- **Image storage cloud backend — DONE, see WU-S3Garage (2026-07-05, archive).** Was tracked here
+  as a Post-MVP item (`S3ImageStorageService` behind the frozen `IImageStorageService`, MinIO
+  endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
+  dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
+  Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-AccessGate + WU-AccessGate2 — viewer access gating end-to-end (Features 64 + 66) — DONE ✓ (2026-07-23/24)
+
+*(Moved out of the "Planned / not-yet-built" section 2026-07-27 — the two entries below were
+written there as planned items and updated in place to DONE without being re-filed.)*
 
 - **WU-AccessGate — DONE ✓ (2026-07-23)** *(re-minted 2026-07-19 from WU-SeoSite, which it
   absorbed — decision row 11 resolved "index all; gate access")* — **Cells:** Features 64 + 66,
@@ -144,77 +238,6 @@ entry above (with cells/verification) when built.
   test` green — 1961 total (6 new Integration `StoryVisibilityTests`); seeded curl matrix +
   browser band (author sees own draft, mod queue lists pending, sitemap in/out counts) — full
   narrative in `audit/AccessGate.md` "WU-AccessGate2" Stage note.
-
-- **WU-A11y** — **Cells:** Feature 65 (new), L4/L4.5 currently Stage 1. **Phase:** 3, paired with
-  the L4 freeze sweep. **Scope:** blocked on decision row 12 (scope/depth). **Pointer:**
-  `audit/Accessibility.md`. **Deps:** Phase 3's L4 freeze sweep (same pass).
-  *(Note for WU-AccountEnforcement, listed in `middle_plan_v2.md` Phase 2 item 5: the
-  `RefreshSignInAsync` claim-refresh pattern from `/content-gate` (WU-AccessGate, 2026-07-23) is
-  the ready-made tool for making `AccountStatus` responsive — a freshly-Warned/Suspended user's
-  claim currently waits for next sign-in.)*
-- **WU-EditorSprite** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
-  inline Pokémon-sprite Quill blot (spec §5.30.2), deferred at WU6. **Pointer:**
-  `audit/Chapters.md` Feature 6. **Deps:** WU6 (`EditorView`, Stage 5).
-- **WU-EditorMobile** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
-  mobile `EditorView` toolbar / desktop-mobile device composition, deferred at WU6. **Pointer:**
-  `audit/Chapters.md` Feature 6. **Deps:** WU6.
-- **WU-ErrorHandling2** — **Cells:** none (cross-cutting, extends `Errors/`). **Phase:** 5,
-  Phase-5-adjacent. **Scope:** `ProblemDetails` envelope + client HTTP error translation, deferred
-  at WU-ErrorHandling. **Pointer:** `error-handling.md`. **Deps:** WU-GlobalFlip (DONE ✓
-  2026-07-13 — the WASM client now makes the HTTP calls this envelope translates).
-- **WU-NotifEmail** — **Cells:** Features 41–43 (extends, no new cell). **Phase:** 6, Beta gate.
-  **Scope:** notification email fan-out over `UserNotificationSetting.EmailEnabled`, deferred at
-  WU-Email; also folds in the untested anonymous-`NotificationBell` RazorComponents gap noted in
-  `audit/Notifications.md` Feature 42. **Pointer:** `audit/Notifications.md`. **Deps:** WU-Email
-  (DONE ✓ 2026-07-06).
-- **WU-AccountEnforcement** — **core shipped inside WU38a (2026-07-11):** login-blocking
-  (`CanalaveSignInManager.CanSignInAsync` — Suspended until `SuspendedUntilUtc`, Banned permanently),
-  security-stamp bump on Suspend/Ban, `AccountStatusBanner` for Warned. **Residual (the only open
-  slice):** mid-session responsiveness — a freshly-Warned user sees the banner only at next sign-in;
-  `RefreshSignInAsync` is the named tool. **Cells:** Feature 1 (Identity, extends). **Pointer:**
-  `canalave-conventions/security.md` "Account-Status Enforcement"; `middle_plan_v2.md` Phase 2
-  item 5. **Deps:** WU38a (DONE ✓).
-
----
-
-## Post-MVP — Layers 5–8 (additive, batchable; not sequenced here)
-
-Per `grid_axes.md` §"The Two Boundaries": these swap method bodies / add DDL / add standalone workers
-behind the contracts frozen in Layers 1–4. Batch by pattern when the MVP slice they sit behind is stable.
-
-- **Messaging realtime push (SignalR) — REMOVED (2026-07-07).** Was tracked here as a Post-MVP
-  additive layer on top of the stateless WU35 write service; permanently ruled out instead — Discord
-  already covers real-time chat, and this site's messaging is deliberately async/long-form. Nothing
-  in this project builds it now or later. See `cross-cutting.md` "Private Messaging Architecture" and
-  `canalave-conventions/horizontal-scaling.md` §2 (no app-defined Hub means no SignalR backplane is
-  needed at N≥2 either). Feature 49 L5 stays N/A.
-- **L5 — WASM enablement (all features).** Map endpoints from the stable `IXService` contracts + `Client`
-  HTTP impls. Includes the two genuine mechanical Stage-4 cells — **Story L5 endpoint wiring** (4/5 L5:
-  `HttpStory*Service` call `/{id}/edit` + write routes `StoryEndpoints` never maps) and **Sprites L5**
-  (`WasmSpriteReadService` optimistic URLs, 3 L5 Stage 4). Pointers: `audit/Stories.md` §3a,
-  `audit/Sprites.md`. Governed by `layer5-wasm.md`.
-- **L6 — SQL indexes (batch DDL).** Regenerate UserStoryInteraction filtered indexes off the re-modeled
-  `has_started` columns (16/17 L6 Stage 4), comment golden index `(chapter_id, date_posted DESC)`, StoryTag
-  reverse index, etc. FTS GIN on `StoryListing.SearchVector` already in `InitialSchema`. Pointers:
-  per-folder audit L6 notes. Governed by `layer6-indexes.md`.
-- **L7 — Redis integration.** **SUPERSEDED — see WU-SignalBuffering (2026-07-06) at the end of this
-  file.** Layer 7 dissolved: signal buffering (44/45) built as L2 in-process buffers, 16/17 stays
-  durable-direct, 61's cache is the L8 mart itself. `layer7-redis.md` deleted.
-- **L8 — Data marts (+ horizontal boundary: requires real user data).** 59 Automatic Tree Search, 60 Tree
-  Search Data Mart Worker, 61 Also Favorited / Also Recommended — no EF model, raw-SQL tables,
-  zero-downtime swap. **62 SiteDailyStat Worker — DONE, see WU-SiteDailyStat (2026-07-11) below —
-  is the one documented exception with an EF model** (superseding the "no EF model" note this bullet
-  used to carry for all four rows). Pointers: `audit/Discovery.md` L8 notes, `audit/Moderation.md`
-  Feature 62. Governed by `layer8-data-marts.md`.
-- **Deferred workers (nothing to operate on yet — `grid_axes.md` horizontal note).** 57 Notification
-  Cleanup Worker (nothing 60 days old), 58 UserStat Recalculation Worker (real-time counters carry MVP).
-- **Image storage cloud backend — DONE, see WU-S3Garage (2026-07-05).** Was tracked here as a
-  Post-MVP item (`S3ImageStorageService` behind the frozen `IImageStorageService`, MinIO endpoint in
-  dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved, dev endpoint is
-  Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod. Pointer:
-  `audit/ImageStorage.md`.
-
----
 
 ## WU-ChapterArcBrowserPass — Real-circuit L4.5 pass: Story Arcs + chapter reorder/delete/reading state (Features 6, 7, 8) — DONE ✓ (2026-07-24)
 
@@ -470,6 +493,32 @@ behind the contracts frozen in Layers 1–4. Batch by pattern when the MVP slice
   `audit/BlogPosts.md` WU-B2 notes; `audit/Groups.md` amendments; `audit/Comments.md` F23 note;
   `layer2-services.md` §"Comment & blog-post semantic methods"; `hidden-deferrals-tracker.md` B2;
   `L6-reconciliation-matrix.md` story-centric USI addendum.
+
+## WU39 — External Link Verification (mod workflow) — DONE ✓ (2026-07-25) *(re-minted 2026-07-11; was "Story Import & Verification")*
+- **Cells:** 53 L1/L2/L3-Logic/L3.5-Structure/L4.5-Browser → Stage 5. L4-Style stays Stage 1
+  (pending visual/token sign-off, per the WU8/WU13/WU23/WU28/WU37/WU41 precedent).
+- **Shipped:** the two-way-link mechanism question is resolved as a **two-tier model** — an
+  account tier (`UserExternalIdentity`: one public site-wide code per user, placed on the
+  external profile, moderator-confirmed once per user×platform) plus the existing per-link
+  `StoryExternalLink.VerificationStatus` tier (an authorship check that only opens up once the
+  account tier is Verified for that platform — platform work URLs don't name their author, so
+  account-verified alone doesn't prove any specific linked story is theirs). The `/mod/submissions`
+  Imports tab now hosts two live queues (pending accounts, pending links), reusing the Stories-tab
+  Approve/Reject idiom. Reader display is settled as **no checkmark** — a muted "reviewed ·
+  author's account: `<handle>`" sub-line only, inviting comparison rather than asserting
+  permanent trust; non-reviewed states (never-requested/pending/rejected) are deliberately
+  identical to the reader. The old "route into `PendingApproval`" step stays dropped — links
+  don't gate story approval (Feature 48 untouched); verification is per-link, display-only.
+  Per-platform verification properties (placement instructions, `SupportsVerification`) live as
+  columns on `ExternalPlatform`, not code branches.
+- **Tool:** opusplan. **Pointer:** `audit/Moderation.md` Feature 53 (WU39 Stage note). **Deps:** WU34, WU38d.
+
+> **Account-status login enforcement — folded into WU38a (2026-07-11), no longer deferred.** Was:
+> "block Suspended (until `SuspendedUntilUtc`) / Banned users at login and surface the Warned banner
+> in layout chrome; WU34 ships the `AccountStatus` state + notifications it builds on; enforcement
+> is a security-surface slice to append as its own WU when scheduled (candidate: alongside WU38
+> account-deletion UI)." See WU38a above for the settled mechanism and
+> `canalave-conventions/security.md` "Account-Status Enforcement".
 
 ## WU-RecLifecycle — Recommendation lifecycle (A4) + D1 leak fix + author content control (Features 23/27/28/30) — DONE ✓ (2026-07-25)
 
@@ -1049,3 +1098,52 @@ arity 400, repeated-member 400); migration script green.
   docs); `scripts/check-design-tokens.ps1` unaffected; `dotnet test` full suite green (see
   commit). Docs/tooling only — no behavior surface; no cell Stage changed.
 - **Tool:** Fable 5 in Claude Code, direct implementation.
+
+## WU-DocHygiene3 — fresh-eyes fixes on the doc corpus (no code cells) — DONE ✓ (2026-07-27)
+
+- **Trigger:** a three-agent fresh-eyes analysis after WU-DocHygiene/-2 landed (cold-session
+  orientation walk, restructure integrity check, untouched-files probe). It confirmed the core
+  sound (grid/constraints/Position triangle unbreakable under attack; the workplan split lost
+  zero content by byte-level diff) and found three defect pools: damage the surgery itself
+  introduced, pre-existing dirt in the hygiene gate's blind spots, and routing/doctrine gaps.
+- **Gate widened:** `.claude/design/*.md` added to `check-doc-hygiene.ps1` `$liveDocs`
+  (**surface-registry.md exempted** — Brian ruled it a paused-session artifact pending a
+  ground-up rewrite once the foundation/tracker work completes; banner added to the file, caveat
+  added to its CLAUDE.md row, exemption documented in the script); device-fork regex generalized
+  from a six-name alternation to `(?<!WU-)\b[A-Z]\w+(Desktop|Mobile)\b` + `(Desktop|Mobile)Layout`
+  (immediately caught three more live-doc hits: error-handling boundary table, layer3.5
+  NotificationBell consumers, layer4 top-bar note); audit/-exemption rationale documented.
+- **Surgery repairs:** Position block rewritten with verified claims (TWO unbuilt Phase-2 items —
+  WU-Home + the WU-AccountEnforcement residual; tracker open items span groups A–H incl.
+  high-priority E2/E3); WU39 (DONE 07-25) moved back from the archive it had ridden into;
+  four cross-boundary "above/below/end of this file" pointers repointed at `workplan-archive.md`;
+  the WU-AccessGate/-2 DONE entries moved out of the "Planned / not-yet-built" section;
+  folder_clusters' 8 misplaced "Owned surfaces" clauses moved Structure→Style, 7 boilerplate
+  cells' wrong noun fixed, `LookupConfigurations.cs`/`SiteConstants` location/`ImportModePicker`
+  false claims corrected, Notifications/Messaging/BlogPosts structure cells given real component
+  facts; tracker's three stale `workplan.md:~NNNN` citations rewritten.
+- **Preamble/Post-MVP retense:** the Stage-4/Stage-3 paragraphs are now explicitly historical
+  (grid: zero 4s, five 3s — the L4 visual-pass rows); the Post-MVP section retitled historical
+  with every bullet carrying its closure (L5 flip, L6 batch + the genuinely-open Stage-2 rows
+  6/7/33/35/38, L8 marts, workers 57/58).
+- **New:** `middle_plan_v2.md` **decision row 13** (`/discover` URL state round-tripping — B11's
+  blocking question promoted into the decision ledger; B11 backlinks it); a real **WU-Home**
+  Planned entry (settled inputs from `audit/Spotlight.md` + `audit/BlogPosts.md`, row-2 gate);
+  CLAUDE.md cold-session read order + corrected root-artifacts sentence (four `*_Deliberations.md`
+  + `modernization-audit/`).
+- **Tracker closures (all three ledgers swept per the closure rule):** G1 (content-safety login
+  enforcement retensed to shipped-WU38a + residual), G2 (Lookups Stage-4 — closed by
+  WU-DocHygiene's rewrite), G3 (deferred-workers bullet).
+- **Point fixes:** ImageStorage header/consumers/L5-rationale (F20–22 L2 Stage 5; post-flip
+  structural-exclusion reasoning), Export trigger-surface + Import Shared-Context as-built names,
+  Groups.md dead Global-Conditions pointer, USI locked-mapping column header
+  (`UserStoryInteractionTypeEnum`), Profiles ComplexProperty/ToJson wording, layer3-logic ×4
+  (`Rating` enum, `ChapterReadingPage`, `UserStoryInteractionConstants` ×2, first-party typeahead
+  sentence), logging.md telemetry roster (+`UserActivity`, `Email` built — code is the roster of
+  record), layer1 JSON hedge answered from `IdentityConfigurations.cs`, horizontal-scaling tense,
+  error-handling deferral rationale retensed + MA-008 partial coverage noted, SharedUI.csproj
+  dead `UpToDateCheckInput` block for deleted fork pages removed.
+- **Verified:** `check-doc-hygiene.ps1` clean (29 live docs incl. design/), `check-design-tokens.ps1`
+  clean, `dotnet build` 0 errors, `dotnet test` full suite green (see commit).
+- **Tool:** Fable 5 in Claude Code (three parallel Explore agents for the analysis, direct
+  implementation for the fixes).

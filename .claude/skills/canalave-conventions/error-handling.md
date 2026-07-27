@@ -17,7 +17,7 @@ error state never traps the user across pages. Placement is layered:
 
 | Boundary | Where | Fallback |
 |---|---|---|
-| Page | `DesktopLayout`/`MobileLayout` around `@Body` | Full panel + Try again |
+| Page | `MainLayout` around `@Body` | Full panel + Try again |
 | Chrome | around the layout's bell/messages/menu group | Compact one-liner |
 | Card | `StoryDeck`, per `<StoryCard>` | Compact tile |
 | Comments | each `<CommentSection>` consumer site | Compact panel |
@@ -61,10 +61,12 @@ unchanged).
 
 ## Deferred (Phase-5-adjacent follow-up — not designed here) — sequenced as WU-ErrorHandling2 (2026-07-15)
 
-`ProblemDetails` API error envelope + client-service HTTP error translation. InteractiveServer
-calls services in-process; there is no HTTP error to shape until the WASM client makes those
-calls. Design it when Phase 5 gives it a testable surface. `NavigationManager.NotFound()`
-continues to cover the 404 case.
+`ProblemDetails` API error envelope + client-service HTTP error translation. The original
+deferral rationale (pre-flip, InteractiveServer called services in-process — no HTTP error
+existed to shape) expired at the Global Flip; see "Now unblocked" below. Partial coverage
+already shipped 2026-07-18: per-service 400-arm validation translation (the MA-008 unified
+validation-exception family + shared client translator) — the *general* envelope is what
+remains. `NavigationManager.NotFound()` continues to cover the 404 case.
 
 **Now unblocked:** WU-GlobalFlip (DONE ✓ 2026-07-13) landed the single global `InteractiveAuto`
 flip — the WASM client now genuinely makes HTTP calls (per `layer5-wasm.md`'s

@@ -242,9 +242,9 @@ modelBuilder.Entity<User>(entity =>
 - New settings still don't require migrations (add properties with defaults to the C# type).
 
 **Current project state:** The `User` entity has `ReaderSettings`, `PrivacySettings`, and
-`AuthorSettings` as jsonb columns. Whether these use the new complex type mapping or the older
-delegate-to-System.Text.Json approach is a Layer 1 implementation decision. The complex type
-approach is preferred for new code.
+`AuthorSettings` as jsonb columns — all three use the EF Core 10 complex type mapping
+(`ComplexProperty(...).ToJson()` ×3 in `Server/Data/Configurations/IdentityConfigurations.cs`),
+matching the example above. The complex type approach is the standing rule for new JSON columns.
 
 **Limitation:** Enums inside JSON complex types still need `.HasConversion<short>()` configured
 on the containing entity's Fluent API.

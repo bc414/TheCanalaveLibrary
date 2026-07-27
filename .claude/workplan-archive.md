@@ -1261,31 +1261,8 @@
 - **Tool:** opusplan. **Pointer:** `audit/Discovery.md` Feature 33. **Deps:** WU14, WU23, WU4, WU25,
   WU44 (shares the `TreeSearchPage` shell and the `TreeSearchResultBadge` fix).
 
-### WU39 — External Link Verification (mod workflow) — DONE ✓ (2026-07-25) *(re-minted 2026-07-11; was "Story Import & Verification")*
-- **Cells:** 53 L1/L2/L3-Logic/L3.5-Structure/L4.5-Browser → Stage 5. L4-Style stays Stage 1
-  (pending visual/token sign-off, per the WU8/WU13/WU23/WU28/WU37/WU41 precedent).
-- **Shipped:** the two-way-link mechanism question is resolved as a **two-tier model** — an
-  account tier (`UserExternalIdentity`: one public site-wide code per user, placed on the
-  external profile, moderator-confirmed once per user×platform) plus the existing per-link
-  `StoryExternalLink.VerificationStatus` tier (an authorship check that only opens up once the
-  account tier is Verified for that platform — platform work URLs don't name their author, so
-  account-verified alone doesn't prove any specific linked story is theirs). The `/mod/submissions`
-  Imports tab now hosts two live queues (pending accounts, pending links), reusing the Stories-tab
-  Approve/Reject idiom. Reader display is settled as **no checkmark** — a muted "reviewed ·
-  author's account: `<handle>`" sub-line only, inviting comparison rather than asserting
-  permanent trust; non-reviewed states (never-requested/pending/rejected) are deliberately
-  identical to the reader. The old "route into `PendingApproval`" step stays dropped — links
-  don't gate story approval (Feature 48 untouched); verification is per-link, display-only.
-  Per-platform verification properties (placement instructions, `SupportsVerification`) live as
-  columns on `ExternalPlatform`, not code branches.
-- **Tool:** opusplan. **Pointer:** `audit/Moderation.md` Feature 53 (WU39 Stage note). **Deps:** WU34, WU38d.
-
-> **Account-status login enforcement — folded into WU38a (2026-07-11), no longer deferred.** Was:
-> "block Suspended (until `SuspendedUntilUtc`) / Banned users at login and surface the Warned banner
-> in layout chrome; WU34 ships the `AccountStatus` state + notifications it builds on; enforcement
-> is a security-surface slice to append as its own WU when scheduled (candidate: alongside WU38
-> account-deletion UI)." See WU38a above for the settled mechanism and
-> `canalave-conventions/security.md` "Account-Status Enforcement".
+*(The WU39 entry — DONE ✓ 2026-07-25, inside the recent window — was moved back to
+`workplan.md`'s recent-DONE run 2026-07-27; it had ridden the Phase-3 block into this archive.)*
 
 ### WU41 — Series (Feature 9) — DONE ✓ (2026-07-11)
 - **Cells:** 9 L2/L3-Logic/L3.5-Structure/L4.5-Browser → Stage 5. L4-Style stays Stage 1 (pending

@@ -37,8 +37,9 @@ One nested class per instrumented component, each owning an `ActivitySource` + `
 ServiceDefaults→Core project reference), so a new component lights up with no registration
 change. Existing: `ImageStorage`, `ReadingProgress` + `ViewCount` (WU-SignalBuffering,
 2026-07-06 — the signal-buffer flush pipelines), `Marts` + `Discovery` (WU-Marts, 2026-07-07 —
-see below), `UserStatRecalc` (WU-UserStatRecalc, Feature 58 — see below). Reserved next: `Email`
-(WU-Email).
+see below), `UserActivity` (WU-SiteDailyStat, 2026-07-11 — the activity-buffer flush),
+`UserStatRecalc` (WU-UserStatRecalc, Feature 58 — see below), and `Email` (WU-Email, 2026-07-06).
+The full roster of record is `Core/Diagnostics/CanalaveTelemetry.cs` itself.
 
 WU-Marts components (spans are root spans for the workers — background work, no ambient parent):
 - **`Marts`** — the daily mart rebuild workers. Spans: `Marts.TreeSearchRebuild`,
