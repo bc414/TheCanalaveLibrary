@@ -298,7 +298,7 @@ split: interaction icons are small, single-color glyphs the site itself owns and
 `<svg><path d="@IconPath" /></svg>`. It has no knowledge of `InteractionTypeEnum` and injects no
 service. The `InteractionTypeEnum → (IconPath, AccentColor, Label)` mapping is **locked** in
 `audit/UserStoryInteractions.md` Feature 16 (table dated 2026-06-22) and transcribed verbatim into
-`InteractionVisuals` (`SharedUI/UserStoryInteractions/InteractionVisuals.cs`, WU16). All six
+`UserStoryInteractionVisuals` (`SharedUI/UserStoryInteractions/UserStoryInteractionVisuals.cs`, WU16 shape — renamed with the WU23 `UserStoryInteraction*` family). All six
 interaction types are represented; `PrivateFavorite` reuses `Favorite`'s `IconPath` — color alone
 signals privacy. **`InteractionTypeEnum` declaration order is the canonical left-to-right button
 order** — the panel iterates `Enum.GetValues<InteractionTypeEnum>()` and the order is Favorite →
@@ -573,7 +573,7 @@ wrapper.
 | `Abandoned` | `#9A8580` Wayward Cave Gray | House silhouette (rect+triangle roof) + CCW door-opening |
 
 The 6 interaction-backed tabs reuse `UserStoryInteractionVisuals.For(…)` verbatim. The gem + shooting
-star constants also live in `SharedUI/Recommendations/RecommendationVisuals.cs` (consumed by WU29's
+star constants also live in `SharedUI/Recommendations/RecommendationIcons.cs` (consumed by WU29's
 `RecommendationCard`). Visual sign-off for all new icons via `wwwroot/icon-preview.html` harness
 (throwaway — remove before Stage 6).
 

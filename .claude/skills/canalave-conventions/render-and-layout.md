@@ -18,7 +18,8 @@ Set the render mode **once**, on `<Routes>` and `<HeadOutlet>` in `App.razor` �
 Identity pages (`Identity/Pages/_Imports.razor`) carry `@attribute [ExcludeFromInteractiveRouting]` —
 they need a real per-request `HttpContext` for `SignInManager`/cookie auth, which an interactive
 circuit doesn't have. `App.razor` must read that via `HttpContext.AcceptsInteractiveRouting()`, not
-hardcode the render mode — confirmed current for .NET 9/10/11 against `render-modes.md`:
+hardcode the render mode — confirmed current for .NET 9/10/11 against the ASP.NET Core
+render-modes documentation:
 
 ```razor
 @* App.razor *@

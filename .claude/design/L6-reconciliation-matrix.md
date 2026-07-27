@@ -3,8 +3,9 @@
 > Companion document: [[L6-intent-ledger]] (reconstructed original design intent — cross-referenced
 > here where it matters). This matrix instead starts from **current code** (the 27
 > `Server*ReadService.cs` files) as ground truth, and reconciles against the **declared schema**
-> (`ApplicationDbContextModelSnapshot.cs` + `20260707133244_L6_IndexBatch.cs`) and the current
-> `layer6-indexes.md` claims. No code, migrations, or grid/status edits were made producing this
+> (`ApplicationDbContextModelSnapshot.cs` + the L6_IndexBatch migration — since squashed into the
+> single `InitialSchema` by WU-MigrationCollapse 2026-07-18; the snapshot remains the declared
+> source) and the current `layer6-indexes.md` claims. No code, migrations, or grid/status edits were made producing this
 > report — it is evidence for a later build/measure pass, not the pass itself.
 >
 > **`pg_indexes` live reconciliation: PENDING.** Everything below compares code-needs against the

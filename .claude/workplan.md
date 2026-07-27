@@ -4,7 +4,8 @@
 > 2026-07-05 — it superseded `.claude/middle_plan.md`, which had itself superseded
 > `forward_plan.md`); this file remains the work-unit ledger. Recent entries live here; DONE entries older than
 > the recent window are moved wholesale to `workplan-archive.md` and "workplan.md WU-X"
-> citations resolve there.
+> citations resolve there. **Sweep trigger:** when this file exceeds ~1,500 lines, archive the
+> DONE entries older than ~2 weeks (never edit them in transit).
 
 Produced by Phase D (`forward_plan.md`, now retired). This is the build sequence for Phase E. Each work-unit names
 its **cell(s)** (Feature # + layer, per `status.md`), its **tool** (per CLAUDE.md Per-Stage Guidance),
@@ -14,10 +15,11 @@ references it, does not restate it.
 
 ---
 
-## Position (updated at Doc-Touch moment 3 — the "you are here" block)
+## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-DocHygiene3 (2026-07-27) — fresh-eyes fixes on the doc corpus (gate widened
-  to `design/`, this block's claims re-verified, Post-MVP section retensed).
+- **Last landed:** WU-DocAuditSkill (2026-07-27) — the `doc-audit` fresh-eyes skill minted, gate
+  check #4 (backticked-filename existence) added, archive sweep trigger + this block's
+  verify-at-write rule recorded. (Before it, same day: WU-DocHygiene 1–3.)
 - **Phase (`middle_plan_v2.md`):** Phase 2 tail. Two unbuilt Phase-2 items: **WU-Home** (item 1,
   gated on decision row 2 — homepage design) and **WU-AccountEnforcement's mid-session residual**
   (item 5, unblocked — `RefreshSignInAsync` is the ready-made tool; see its Planned entry below).
@@ -1147,3 +1149,33 @@ arity 400, repeated-member 400); migration script green.
   clean, `dotnet build` 0 errors, `dotnet test` full suite green (see commit).
 - **Tool:** Fable 5 in Claude Code (three parallel Explore agents for the analysis, direct
   implementation for the fixes).
+
+## WU-DocAuditSkill — doc-audit skill + filename-existence gate (no code cells) — DONE ✓ (2026-07-27)
+
+- **Trigger:** the post-DocHygiene3 analysis's remaining "keep it this way" items, Brian-approved:
+  institutionalize the fresh-eyes audit, mechanize the dead-filename class, and two rule one-liners.
+- **Built:**
+  1. **`.claude/skills/doc-audit/SKILL.md`** — the fresh-eyes audit method as an invocable skill:
+     three probe shapes (cold-session orientation walk, restructure integrity check,
+     untouched-tail staleness probe), ground rules (fresh subagent eyes, confirmed-only findings
+     with both sides cited, derived-state blocks verified claim-by-claim), standing exemptions
+     (surface-registry until its rewrite; dated ledger entries), and the after-audit fold-in
+     steps. CLAUDE.md table row added. Rationale: all ~45 non-term defects found today required
+     reading, not lint — this makes that capability reusable instead of conversation-local.
+  2. **Gate check #4 (`check-doc-hygiene.ps1`):** every backticked `Name.ext` file reference in a
+     live doc must exist in the repo (basename match against a recursive index; case-sensitive
+     extensions so `System.Text.Json`-style namespaces skip; placeholder/framework allowlist —
+     `Foo*`, `Component.razor.*`, `dotnet.runtime.js`; same historical-marker escape). **First
+     run caught five real defects:** `InteractionVisuals.cs` → `UserStoryInteractionVisuals.cs`
+     (the WU23 rename family again), `RecommendationVisuals.cs` → `RecommendationIcons.cs`,
+     `SpriteEndpoints.cs` example → `ThemeEndpoints.cs`, the L6 matrix citing the migration file
+     WU-MigrationCollapse squashed away, and grid_axes' Layer-4 section still saying "Blocked on
+     design tokens (`tailwind.config.js`)" — tokens locked 2026-07-10, v4 CSS-first. All fixed.
+  3. **Rule one-liners:** archive sweep trigger (workplan.md > ~1,500 lines → move DONE entries
+     older than ~2 weeks; header note + CLAUDE.md row) and the Position block's
+     verify-at-write-never-carry rule (its only defects ever came from carried claims).
+  4. **Cosmetic:** the two unescaped in-cell pipes in `folder_clusters.md` (`static\|animated`
+     path, `Visible \| GatedMature \| NotFound` union) escaped so the rows render as 6 columns.
+- **Verified:** `check-doc-hygiene.ps1` clean (30 live docs, 4 checks); `check-design-tokens.ps1`
+  clean; `dotnet test` full suite green (see commit). Docs/tooling only; no cell Stage changed.
+- **Tool:** Fable 5 in Claude Code, direct implementation.

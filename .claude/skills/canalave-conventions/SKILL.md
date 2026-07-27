@@ -109,7 +109,7 @@ Cross-cutting clusters and their scope:
   `layer2-services.md` §"Site Settings (`ISiteSettingsService`)".
 
 API endpoint classes (`{Feature}Endpoints.cs`, `Map{Feature}Endpoints()`) colocate in the feature
-cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/SpriteEndpoints.cs`
+cluster folder next to the server service impl they wrap (e.g. `Server/Sprites/ThemeEndpoints.cs`
 beside `Server/Sprites/ServerSpriteReadService.cs`), **not** flattened into one `Endpoints/` folder.
 This is deliberately the opposite of EF configuration's rule below: a route is normally edited in
 lockstep with the service method it calls (same edit-locality argument that places service impls in

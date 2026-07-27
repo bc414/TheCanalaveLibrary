@@ -1,7 +1,7 @@
 # Grid Axes — Layers and Features for the SLF Table
 
-Companion to `step3_classify.md` (a one-time prompt file from the original bootstrapping process,
-never committed to this repo — see the retired `next_steps.md`). Defines the columns (layers) and rows (features) of the
+Companion to the never-committed, retired `step3_classify.md` (a one-time prompt file from the
+original bootstrapping process — see the retired `next_steps.md`). Defines the columns (layers) and rows (features) of the
 Feature × Layer grid. Each cell holds a Stage value (1–6) or N/A per CLAUDE.md's definitions.
 
 ---
@@ -187,7 +187,9 @@ chains, conditional rendering logic is correct, no WASM-specific NuGet in Shared
 ### Layer 4 — UI Style (Visual + Layout)
 
 Tailwind utility classes, sprite URL resolution, responsive variants, images, conditional class
-expressions. **Blocked on design tokens** (`tailwind.config.js`) being locked.
+expressions. **Design tokens locked 2026-07-10** — v4 CSS-first `@theme` in the Server input
+stylesheet; the spec's `tailwind.config.js` model was superseded (see `layer4-style.md`'s version
+note). The original "blocked on tokens" gate this section carried is history.
 
 **Component tiers** determine Style weight:
 - **Leaf** (TagChip, UserStoryInteractionButton): Full visual weight. All colors, typography, borders, shadows,

@@ -6,7 +6,7 @@
 # twice (the Global Flip and the Desktop/Mobile removal each left 8+ stale passages that survived
 # five months of sessions until the 2026-07-27 WU-DocHygiene sweep found them).
 #
-# Three checks, all heuristic line-level lints (not proofs):
+# Four checks, all heuristic line-level lints (not proofs):
 #   1. Retired terms in LIVE docs (skills, CLAUDE.md, status/grid_axes/folder_clusters,
 #      middle_plan_v2) — a hit passes only if the same line carries a historical marker word
 #      ("retired", "replaced", "former", ...). Dated ledgers (workplan*, audit/, retired plans)
@@ -99,6 +99,35 @@ foreach ($doc in $check3Docs) {
     foreach ($hit in $hits) {
         if ($hit.Line -notmatch $planMarker) {
             $violations.Add(("RETIRED-PLAN POINTER {0}:{1}: {2}" -f $hit.Path, $hit.LineNumber, $hit.Line.Trim()))
+        }
+    }
+}
+
+# --- Check 4: backticked file references must exist ---------------------------------------------
+# Docs rot silently when files are renamed/deleted (2026-07-27 found five such references:
+# LookupConfigurations.cs, HomeDesktop.razor, ImportModePicker, ...). Any `Name.ext` in a live doc
+# must exist somewhere in the repo (basename match — docs cite by name, not path), unless the line
+# carries a historical marker. Wildcards/placeholders (* { } < >) are skipped.
+$fileExtPattern = '`([A-Za-z0-9_\-./\\]+\.(?:cs|razor|ps1|md|js|csproj|sln|sql|yml|json))(?::\d+)?`'
+# Pedagogical placeholders and framework-served assets that are correct despite not existing on disk.
+$fileCheckAllowlist = '^(Foo\w*\.|Component\.razor\.|dotnet\.runtime\.js$|blazor\.web\.js$)'
+$repoFileIndex = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
+Get-ChildItem -Recurse -File -Path . |
+    Where-Object { $_.FullName -notmatch '\\(bin|obj|node_modules|\.git|TestResults)\\' } |
+    ForEach-Object { [void]$repoFileIndex.Add($_.Name) }
+foreach ($doc in $liveDocs) {
+    # -CaseSensitive: real file extensions are lowercase; skips namespace-shaped tokens
+    # like `System.Text.Json` / `Results.Json` that only match case-insensitively.
+    $hits = Select-String -Path $doc.FullName -Pattern $fileExtPattern -AllMatches -CaseSensitive
+    foreach ($hit in $hits) {
+        if ($hit.Line -match $historicalMarker) { continue }
+        foreach ($m in $hit.Matches) {
+            $token = $m.Groups[1].Value
+            $base = [System.IO.Path]::GetFileName($token)
+            if ($base -match $fileCheckAllowlist) { continue }
+            if (-not $repoFileIndex.Contains($base)) {
+                $violations.Add(("MISSING FILE [{0}] {1}:{2}: {3}" -f $base, $hit.Path, $hit.LineNumber, $hit.Line.Trim()))
+            }
         }
     }
 }
