@@ -4035,19 +4035,29 @@ Two loose ends from WU-IntTestPerf, closed same day:
 - **Two false comments corrected.** `ServerGroupWriteService` claimed "the audience filter is active on
   writeDb too" — it is not, and the same file says so correctly twice elsewhere; that false comment was
   load-bearing for the join hole. `ServerCustomListWriteService` asserted a premise the code never checked.
-- **New tests:** `Tests.Integration/ParentVisibilityContractTests.cs` — **27** tests; the enrolment list
+- **New tests:** `Tests.Integration/ParentVisibilityContractTests.cs` — **36** tests; the enrolment list
   *is* the enforcement mechanism (adding a parent-scoped read/write means adding a row). Covers each
   hidden-parent kind × read-empty/write-refused, plus the positive directions: author still sees and
   manages their own draft's poll, and the two deliberately rating-permissive writes still succeed.
   Docs alone had already failed once — the rule was written down and the WU-AccessGate sweep still
   shipped `GetUserNeighborsAsync` handing a Private profile's contents to anonymous callers.
+  **Self-audit correction (same session):** the suite shipped at 27 tests while its own doc comment
+  claimed every governed surface was enrolled — nine were not, including `RecordSuccessAsync` (the
+  badge-award path this WU called its sharpest find) and both buffered writes, whose drain-time
+  validation had nothing proving it drops hidden rows. The suite was green the whole time. The nine
+  were added and the doc comment now carries the correction, because "the guard is called from that
+  method" is not coverage. Exactly the failure mode this WU exists to prevent, found in its own
+  deliverable.
 - **Four pre-existing tests corrected, not weakened:** two `BlogPostWriteServiceTests.ToggleLike_*`
   were liking an *unpublished draft* as a non-author (asserting the leak — `CreatePostAsync` defaults to
   a draft); `CustomListServiceTests.AddStoryAsync_MRatedStory_MatureOffOwner_StillAdds` and
   `GroupServiceTests.AddStory_Tier2_StoryRatingExceedsGroupMax_Throws` documented real settled decisions
   and drove the confidentiality-only split above.
-- **Verified:** `dotnet build` clean. `dotnet test` full suite **2241/2241** green
-  (764 Unit + 591 RazorComponents + 886 Integration). `scripts/check-design-tokens.ps1` passed.
+- **Verified:** `dotnet build` clean. `dotnet test` full suite green — **2241/2241**
+  (764 Unit + 591 RazorComponents + 886 Integration) at the WU's own commit `1308f13`, and
+  **2271/2271** (753 + 591 + 927) after the nine added contract tests and the WU-TagFanon /
+  messaging commits that landed on top; the tier counts moved for reasons unrelated to this WU, so
+  the earlier figure is not reproducible on a later tree. `scripts/check-design-tokens.ps1` passed.
   **HTTP pass (anonymous + per-user cookies):** every fixed read probed against seeded fixtures — draft
   post's poll `[]` vs published control returning the poll; group-3 (M audience) members/comments/
   blog-posts empty for anonymous and for a mature-**off** user, real data for a mature-**on** user;

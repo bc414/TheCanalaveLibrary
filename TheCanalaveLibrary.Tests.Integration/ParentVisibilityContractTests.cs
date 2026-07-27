@@ -19,6 +19,14 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// </para>
 ///
 /// <para>
+/// <b>Enrolment is a claim this file has to keep honest.</b> The first draft of this suite asserted the
+/// sentence above while nine of the 38 governed surfaces had no test — including
+/// <c>RecordSuccessAsync</c>, the badge-award path, and both buffered writes whose drain-time validation
+/// had nothing proving it drops hidden rows. The suite was green throughout. If a surface is listed in
+/// the WU's inventory, it needs a test here; "the guard is called from that method" is not coverage.
+/// </para>
+///
+/// <para>
 /// <b>Why this file exists rather than trusting the convention doc.</b> The rule was already written
 /// down (as the "join-not-bare-projection rule" in <c>layer2-services.md</c>) and the WU-AccessGate
 /// sweep still shipped <c>GetUserNeighborsAsync</c> returning a Private profile's contents to
@@ -692,5 +700,234 @@ public class ParentVisibilityContractTests(PostgresFixture postgres) : Integrati
 
         await act.Should().NotThrowAsync(
             "takedown is the one hiding reason that must not block a report");
+    }
+
+    // ══ Coverage-gap closure (2026-07-26) ════════════════════════════════════════
+    // The nine surfaces below were governed by the sweep but had no test in this suite's first
+    // draft, while its doc comment already claimed full enrolment. See the note in that comment.
+
+    [Fact]
+    public async Task Recommendations_RecordSuccess_HiddenStory_Refused()
+    {
+        // The badge-award path: this awards Recommender/RecommenderSilver off the parent, so an
+        // unguarded version lets a loop over guessed rec ids farm another user's counters and real
+        // site badges without ever being able to see the stories involved.
+        int storyId = await SeedStoryAsync(_authorId);
+        int recId;
+
+        using (IServiceScope seedScope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = Resolve<ApplicationDbContext>(seedScope);
+            Recommendation rec = new()
+            {
+                StoryId = storyId,
+                RecommenderId = _strangerId,
+                StatusId = (short)RecommendationStatusEnum.Approved,
+                DatePosted = DateTime.UtcNow,
+                RecommendationDetail = new RecommendationDetail { Text = "<p>endorsement</p>" },
+            };
+            db.Recommendations.Add(rec);
+            await db.SaveChangesAsync();
+            recId = rec.RecommendationId;
+        }
+
+        await TakeDownStoryAsync(storyId); // parent now hidden
+
+        int readerId = await SeedUserAsync("pv-reader");
+        SetActiveUser(readerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+
+        Func<Task> act = () => Resolve<IRecommendationWriteService>(scope).RecordSuccessAsync(recId);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+
+        using IServiceScope verifyScope = Factory.Services.CreateScope();
+        ApplicationDbContext verifyDb = Resolve<ApplicationDbContext>(verifyScope);
+        (await verifyDb.RecommendationSuccesses.AnyAsync(s => s.RecommendationId == recId))
+            .Should().BeFalse("the refusal must leave no credit row behind");
+        (await verifyDb.Recommendations.Where(r => r.RecommendationId == recId)
+            .Select(r => r.SuccessfulRecCount).FirstAsync())
+            .Should().Be(0, "and must not have moved the counter that feeds the badge threshold");
+    }
+
+    [Fact]
+    public async Task Recommendations_RecordAttributionSource_DraftStory_Refused()
+    {
+        int storyId = await SeedStoryAsync(_authorId, status: StoryStatusEnum.Draft);
+        int recId;
+
+        using (IServiceScope seedScope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = Resolve<ApplicationDbContext>(seedScope);
+            Recommendation rec = new()
+            {
+                StoryId = storyId,
+                RecommenderId = _strangerId,
+                StatusId = (short)RecommendationStatusEnum.Approved,
+                DatePosted = DateTime.UtcNow,
+                RecommendationDetail = new RecommendationDetail { Text = "<p>endorsement</p>" },
+            };
+            db.Recommendations.Add(rec);
+            await db.SaveChangesAsync();
+            recId = rec.RecommendationId;
+        }
+
+        int readerId = await SeedUserAsync("pv-attrib");
+        SetActiveUser(readerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+
+        Func<Task> act = () => Resolve<IRecommendationWriteService>(scope)
+            .RecordAttributionSourceAsync(storyId, recId);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>(
+            "attribution feeds RecordSuccessAsync credit downstream");
+    }
+
+    [Fact]
+    public async Task Comments_ToggleLike_DraftParent_Refused()
+    {
+        // Seeded directly: posting the comment through the service would (correctly) be refused.
+        int postId = await SeedProfileBlogPostAsync(isPublished: false);
+        long commentId;
+
+        using (IServiceScope seedScope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = Resolve<ApplicationDbContext>(seedScope);
+            BlogPostComment comment = new()
+            {
+                BlogPostId = postId,
+                UserId = _authorId,
+                CommentText = "<p>author's own note on their draft</p>",
+                DatePosted = DateTime.UtcNow,
+            };
+            db.BlogPostComments.Add(comment);
+            await db.SaveChangesAsync();
+            commentId = comment.CommentId;
+        }
+
+        SetActiveUser(_strangerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+
+        Func<Task> act = () => Resolve<ICommentWriteService>(scope).ToggleLikeAsync(commentId);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>(
+            "the like is context-agnostic at the call site; the guard resolves the owning context");
+    }
+
+    [Fact]
+    public async Task UserStoryInteraction_MarkStarted_DraftStory_Refused()
+    {
+        int storyId = await SeedStoryAsync(_authorId, status: StoryStatusEnum.Draft);
+
+        SetActiveUser(_strangerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+
+        Func<Task> act = () => Resolve<IUserStoryInteractionWriteService>(scope)
+            .MarkStartedAsync(storyId);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task UserStoryInteraction_MarkCompleted_DraftStory_Refused()
+    {
+        int storyId = await SeedStoryAsync(_authorId, status: StoryStatusEnum.Draft);
+
+        SetActiveUser(_strangerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+
+        Func<Task> act = () => Resolve<IUserStoryInteractionWriteService>(scope)
+            .MarkCompletedAsync(storyId);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task ChapterReadMark_SetAll_HiddenStoryWithPublishedChapters_Refused()
+    {
+        // The existing IsPublished chapter filter already made an all-draft story a no-op; a story
+        // with PUBLISHED chapters that is itself hidden was the case it did not cover.
+        int storyId = await SeedStoryAsync(_authorId, status: StoryStatusEnum.Draft);
+        await SeedChapterAsync(storyId, isPublished: true);
+
+        SetActiveUser(_strangerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+
+        Func<Task> act = () => Resolve<IChapterReadMarkWriteService>(scope)
+            .SetAllChaptersReadAsync(storyId, true);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task StoryLineage_Request_HiddenTarget_Refused()
+    {
+        int sourceStoryId = await SeedStoryAsync(_strangerId);                                  // owned by requester
+        int targetStoryId = await SeedStoryAsync(_authorId, status: StoryStatusEnum.Draft);      // someone else's draft
+
+        SetActiveUser(_strangerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+
+        Func<Task> act = () => Resolve<IStoryLineageWriteService>(scope)
+            .RequestLineageAsync(new CreateStoryLineageDto
+            {
+                SourceStoryId = sourceStoryId,
+                TargetStoryId = targetStoryId,
+                TypeId = 1,   // seeded lookup row
+            });
+
+        await act.Should().ThrowAsync<StoryLineageValidationException>(
+            "the found-vs-not-found distinction was an id oracle over the whole Stories keyspace");
+    }
+
+    [Fact]
+    public async Task ManualTreeSearch_NodeDisplays_PrivateProfile_Pruned()
+    {
+        await SetProfileVisibilityAsync(_authorId, ProfileVisibility.Private);
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        using IServiceScope scope = Factory.Services.CreateScope();
+
+        ManualTreeNodeDisplaysDto result = await Resolve<IManualTreeSearchReadService>(scope)
+            .GetNodeDisplaysAsync([], [_authorId, _strangerId]);
+
+        result.Users.Should().NotContain(u => u.EntityId == _authorId,
+            "a node the viewer may no longer see must not come back (rehydration contract)");
+        result.Users.Should().Contain(u => u.EntityId == _strangerId,
+            "a public profile in the same batch must still resolve");
+    }
+
+    [Fact]
+    public async Task BufferedWrites_HiddenStory_DroppedAtDrainTime()
+    {
+        // The settled 2026-07-26 decision: buffer entry stays a pure in-memory write and the
+        // visibility check happens in the flusher. Nothing proved that until this test — the entry
+        // call must SUCCEED (no exception, no query) while the row never reaches the database.
+        int hiddenStoryId = await SeedStoryAsync(_authorId, status: StoryStatusEnum.Draft);
+        int visibleStoryId = await SeedStoryAsync(_authorId);
+
+        SetActiveUser(FakeActiveUserContext.Anonymous()); // view counts are anonymous-reachable
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            IViewCountWriteService views = Resolve<IViewCountWriteService>(scope);
+            await views.RecordViewAsync(hiddenStoryId);   // must not throw — buffer-only by design
+            await views.RecordViewAsync(visibleStoryId);
+        }
+
+        await Factory.Services.GetRequiredService<ViewCountFlusher>().FlushAsync();
+
+        using IServiceScope verifyScope = Factory.Services.CreateScope();
+        ApplicationDbContext db = Resolve<ApplicationDbContext>(verifyScope);
+
+        int hiddenRows = await db.Database
+            .SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM daily_story_stats WHERE story_id = {hiddenStoryId}")
+            .SingleAsync();
+        int visibleRows = await db.Database
+            .SqlQuery<int>($"SELECT count(*)::int AS \"Value\" FROM daily_story_stats WHERE story_id = {visibleStoryId}")
+            .SingleAsync();
+
+        hiddenRows.Should().Be(0, "the drain-time predicate must drop views of an unpublished story");
+        visibleRows.Should().Be(1, "and must leave the legitimate story's views untouched");
     }
 }
