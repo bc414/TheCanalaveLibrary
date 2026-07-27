@@ -1,7 +1,17 @@
 # Middle Plan v2 — The Canalave Library (Platform-First → Features → Beta → Launch)
 
+> **RETIRED (2026-07-27): superseded by `.claude/roadmap.md`.** The live master plan is now
+> `roadmap.md`, which also fixes this chain's unsustainable naming (`forward_plan.md` →
+> `middle_plan.md` → `middle_plan_v2.md` — a stage-of-project metaphor combined with a version
+> suffix, with no coherent next name) by adopting a stable, role-based name that won't need a
+> `_v3`. This file is a historical reference, the same treatment it gave `middle_plan.md` and
+> `forward_plan.md` below — its Phase 0–7 history and full Resolved index (including everything
+> carried forward from `middle_plan.md`/`forward_plan.md`) remain here **unabridged**; every
+> existing pointer into this file (a `§Resolved "…"` citation, a `Phase N item M` reference)
+> stays valid. Do not update this file — new decisions and phase changes go in `roadmap.md`.
+
 > Successor to `middle_plan.md` (now historical reference, the same treatment it gave
-> `forward_plan.md`). This is the live master plan; it carries forward the "Decisions that
+> `forward_plan.md`). ~~This is the live master plan~~; it carries forward the "Decisions that
 > need you" table (rows 1–6, plus new rows 7–10) and the Resolved index. `CLAUDE.md` remains
 > the single source of truth for file paths, artifact names, and Stage semantics;
 > `workplan.md` remains the work-unit ledger — new work-units are *sequenced* here and

@@ -106,7 +106,7 @@ decision work that has no row at all.
 
 - [ ] **A8 — Mobile-compact EditorView toolbar (WU-EditorMobile)** `[scope-cut · low · post-mvp-mobile]` — *Deliberate (re-scoped to the future mobile phase).*
   - Grid: F6 L4=5.
-  - Source: `workplan.md` Planned/not-yet-built; `cross-cutting.md` §Rich Text; `middle_plan_v2.md` Phase 4.
+  - Source: `workplan.md` Planned/not-yet-built (WU-EditorSprite entry); `cross-cutting.md` §Rich Text; `middle_plan_v2.md` Phase 4 (design-now-or-defer framing — historical, Phase 4 itself is DONE, this item's own build is not).
   - Context: WU6 shipped the desktop editor toolbar only. A compact mobile toolbar is re-scoped onto the adaptivity ladder's rung-3 trigger in the future mobile phase.
 
 ---
@@ -127,7 +127,7 @@ decision work that has no row at all.
 
 - [ ] **B1 — Notification email fan-out (`EmailEnabled` is inert)** `[inert · med · beta]`
   - Grid: F41/F42/F43 L2=5.
-  - Source: `layer2-services.md` §Notification settings; `audit/Notifications.md`; `middle_plan_v2.md` Phase 6 "WU-NotifEmail" / Resolved "Email mechanism."
+  - Source: `layer2-services.md` §Notification settings; `audit/Notifications.md`; `roadmap.md` Phase 6 "WU-NotifEmail" / `middle_plan_v2.md` Resolved "Email mechanism."
   - Context: The per-type `EmailEnabled` checkbox stores, renders, and persists — so the settings page is a legit Stage 5 — but it drives **no mail**. WU-Email shipped *transactional* mail only (confirmation/reset). Fan-out over notification settings is WU-NotifEmail, Phase 6, unbuilt.
   - Next: WU-NotifEmail also folds in the missing `FakeNotificationWriteService` + anonymous-`NotificationBell` regression test (see H5).
 
@@ -207,7 +207,7 @@ decision work that has no row at all.
 
 ---
 
-- [ ] **B11 — Ship filter has no restore path (no URL round-trip, no seed, no persistence)** `[inert · med · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26. The blocking question below was promoted to `middle_plan_v2.md` **decision row 13** (2026-07-27) so it lives in a decision ledger; this entry keeps the full framing.*
+- [ ] **B11 — Ship filter has no restore path (no URL round-trip, no seed, no persistence)** `[inert · med · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26. The blocking question below was promoted to **decision row 13** (2026-07-27, then in `middle_plan_v2.md`, now `roadmap.md`) so it lives in a decision ledger; this entry keeps the full framing.*
   - Grid: F31 L2/L3-Logic/L3.5=5 — invisible there; the axis works, it just cannot be reconstructed.
   - Source: `audit/Discovery.md` §"WU-TagFanon note" → "Settled vs. open"; `ShipFilter.razor`;
     `ResultsFilterPanel.razor` `OnParametersSet`; `SearchPage.razor`.
@@ -427,17 +427,17 @@ unless noted. All sit under Stage-5 cells.
 
 - [ ] **E1 — WU-ErrorHandling2 (`ProblemDetails` envelope + client HTTP translation)** `[off-grid · med · pre-launch]`
   - Grid: L5 column reads 5 sitewide (implies the client HTTP path is complete).
-  - Source: `error-handling.md` §"Deferred (Phase-5-adjacent) — WU-ErrorHandling2"; `middle_plan_v2.md` Phase 5.
+  - Source: `error-handling.md` §"Deferred (Phase-5-adjacent) — WU-ErrorHandling2"; `roadmap.md` §"Also still open."
   - Context: WU-ErrorHandling deferred the API error-envelope + full client-service HTTP error-translation half; "design still not done." The global flip made the HTTP surface testable but the error-shaping half is unbuilt.
 
 - [ ] **E2 — AngleSharp 0.17.1 mXSS (CVE-2026-54570) — accepted-risk live CVE** `[off-grid · high · launch]`
   - Grid: security is a global condition, no cell; F66 reads 5.
-  - Source: `security.md` §"Accepted-risk register — AngleSharp"; `middle_plan_v2.md` Phase 7.
+  - Source: `security.md` §"Accepted-risk register — AngleSharp"; `roadmap.md` Phase 7.
   - Context: Transitively pinned by HtmlSanitizer 9.x (can't just bump). Mitigated by the sanitizer allow-list; root-cause fix = replace `Ganss.Xss` with a custom AngleSharp-1.5.2 sanitizer behind the existing seam. Vuln scan stays report-only until then. A shipped known-vulnerable dep is invisible on a feature×layer grid.
 
 - [ ] **E3 — Security Phase-7 Deferred Register** `[off-grid · high · launch]` — *Deliberate (deployment-time).*
   - Grid: none.
-  - Source: `security.md` §"Phase-7 Deferred Register"; `middle_plan_v2.md` Phase 7.
+  - Source: `security.md` §"Phase-7 Deferred Register"; `roadmap.md` Phase 7.
   - Context: Cloudflare TLS Full-Strict, origin firewall to CF ranges, `ForwardedHeaders`, serving uploads from a separate origin (+ CSP `img-src` tightening), Turnstile on registration, HSTS tuning, real-domain CSP-enforce verification, and promoting the vuln scan from report-only to a hard gate.
 
 - [ ] **E4 — Default OG/social image is an SVG, not a raster** `[off-grid · low · launch]`
@@ -459,32 +459,32 @@ unless noted. All sit under Stage-5 cells.
 
 ## F. Off-grid open decisions & whole phases
 
-From `middle_plan_v2.md` "Decisions that need you" + `middle-addendum.md` §3. None maps to a grid row; a grid-scanner sees
+From `roadmap.md` "Decisions that need you" + `middle-addendum.md` §3. None maps to a grid row; a grid-scanner sees
 built rows at 5 and no signal these exist.
 
 - [ ] **F1 — Homepage is unbuilt and design-blocked (WU-Home)** `[decision · high · mvp]`
-  - Source: `middle_plan_v2.md` Decision row 2 + Phase 2 item 1; `workplan.md`.
+  - Source: `roadmap.md` Decision row 2 + Phase 2 item 1; `workplan.md`.
   - Context: The homepage is still an "honest minimal placeholder." WU-Home is gated on a design decision (recently-updated / featured-tags / active-SitePolls placement / layout). The front door itself isn't done, yet nothing on the grid signals it.
 
 - [ ] **F2 — Launch-readiness mechanics (Phase 7)** `[decision · high · launch]`
-  - Source: `middle_plan_v2.md` Phase 7 + Decision row 4; `middle-addendum.md` §2.
+  - Source: `roadmap.md` Phase 7 + Decision row 4; `middle-addendum.md` §2.
   - Context: Deploy mechanism, config/secrets contract, prod-migration convention, backup+restore drill, uptime/alerting, telemetry-destination deploy, TLS/domain. Entire launch phase is off-grid.
 
 - [ ] **F3 — Legal/policy track** `[decision · high · launch]`
-  - Source: `middle_plan_v2.md` Decision row 10; `middle-addendum.md` §3 items 1–7.
+  - Source: `roadmap.md` Decision row 10; `middle-addendum.md` §3 items 1–7.
   - Context: ToS, privacy policy, **DMCA designated agent** (addendum flags this as highest-value/lowest-cost), COPPA age assertion, mature-content interstitial-vs-verification, GDPR erasure confirmation, trademark/fan-project disclaimer. The one-line row 10 badly understates a multi-item backlog.
 
 - [ ] **F4 — Email production path (provider + domain + deliverability DNS)** `[decision · med · launch]`
-  - Source: `middle_plan_v2.md` Decision row 8 / Resolved "Email mechanism"; `middle-addendum.md` §3 #13.
+  - Source: `roadmap.md` Decision row 8 / `middle_plan_v2.md` Resolved "Email mechanism"; `middle-addendum.md` §3 #13.
   - Context: Mechanism is resolved (config-only swap), but provider + sending domain are unchosen. **SPF/DKIM/DMARC DNS is not even in the Phase-7 checklist** — directly gates whether confirmation/reset mail reaches real users. WU-Email flipped no cells, so email's production gap is fully invisible on the grid.
 
 - [ ] **F5 — Beta logistics** `[decision · med · beta]`
-  - Source: `middle_plan_v2.md` Decision row 6.
+  - Source: `roadmap.md` Decision row 6.
   - Context: Who/how-many testers, invite mechanism, feedback channel. Phase 6 gate.
 
 - [ ] **F6 — Accessibility scope/depth (WU-A11y)** `[decision · med · pre-launch]`
   - Grid: F65 L4-Style=1, L4.5=1 (*partially* transparent — cells show Stage 1, but the blocking decision isn't visible).
-  - Source: `middle_plan_v2.md` Decision row 12; `grid_axes.md` Feature 65; `audit/Accessibility.md`.
+  - Source: `roadmap.md` Decision row 12; `grid_axes.md` Feature 65; `audit/Accessibility.md`.
   - Context: Full WCAG-AA audit vs. targeted axe pass; whether to add an a11y test tier — undecided, and it gates the work.
 
 - [ ] **F7 — Operational-resilience gaps (no WU, no row, no decision)** `[off-grid · med · launch]`

@@ -35,7 +35,7 @@ create-core generates only in-app `Notification` rows; nothing sends mail off it
 the transactional email seam (`Server/Identity/SmtpEmailSender.cs`, real send over SMTP — see
 `audit/Identity.md` WU-Email Stage note) but deliberately scoped it to Identity's
 confirmation/reset/email-change flows only. **WU-NotifEmail** is where this gets consumed —
-sequenced into `middle_plan_v2.md` Phase 6 (the Beta gate: fan-out email only matters once there's
+sequenced into `roadmap.md` Phase 6 (the Beta gate: fan-out email only matters once there's
 a real audience to notify) and `workplan.md` "Planned / not-yet-built named WUs." Settled hook
 (unchanged from 2026-07-06): the natural hook is the single funnel
 `ServerNotificationWriteService.CreateCoreAsync` (`layer2-services.md` "Notification Generation") —

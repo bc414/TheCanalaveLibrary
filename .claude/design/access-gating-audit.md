@@ -15,7 +15,7 @@ plus the defects the sweeps found that must be fixed regardless of any open deci
 **Inputs already settled (2026-07-19, Brian, in chat — formal doc reconciliation rides this WU):**
 - **No `noindex` on M content — index-all.** The entire content class (AO3, Fimfiction, FFN in
   practice, Steam, Literotica) indexes mature/explicit content and gates *access*. Verdict closes
-  `middle_plan_v2.md` decision row 11.
+  `middle_plan_v2.md` decision row 11 (resolved).
 - **M = explicit.** `Rating { E, T, M }`; M includes explicit sexual content; E/T functionally
   identical. Recorded in `content-safety.md` §"Mature-Content Design Philosophy".
 - **Zero-trace is a browsing rule, not an existence rule.** Internal listings/feeds/search keep

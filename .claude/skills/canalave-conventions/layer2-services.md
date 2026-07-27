@@ -488,7 +488,7 @@ see `security.md` "Dependency Vulnerability Scan Cadence" and the `AngleSharp` p
 every element/attribute outside the 13-tag + `href` set removes the `<annotation-xml>` element and
 its `encoding` attribute before they can round-trip. So loosening the allow-list is not purely a
 UX/toolbar decision — adding `svg`, `math`, `style`, or broad attributes re-opens the mXSS surface
-until AngleSharp is off 0.17.1 (tracked as a Phase 7 root-cause fix in `middle_plan_v2.md`).
+until AngleSharp is off 0.17.1 (tracked as a Phase 7 root-cause fix in `roadmap.md`).
 
 ### Word Count Is Computed Server-Side, On Save — From Stripped Text
 

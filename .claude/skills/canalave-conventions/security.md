@@ -273,7 +273,7 @@ ignored** — `dependabot.yml` deliberately carries *no* AngleSharp entry, so a 
 AngleSharp advisory still surfaces; the specific advisory is dismissed as risk-accepted in the
 GitHub Security tab. **Root-cause fix** (a custom AngleSharp-1.5.2 sanitizer behind the existing
 `IHtmlSanitizationService` seam — drop `Ganss.Xss`, float the direct ref off 0.17.1, backed by an
-XSS-payload test corpus + security review) is a Phase 7 launch-readiness item in `middle_plan_v2.md`
+XSS-payload test corpus + security review) is a Phase 7 launch-readiness item in `roadmap.md`
 (the vuln-scan hard gate above blocks on it once real users exist). If an HtmlSanitizer release on
 AngleSharp 1.x lands first, that is the zero-code path instead.
 

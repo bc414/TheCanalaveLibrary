@@ -39,7 +39,7 @@ form inputs. This is explicitly **not** a WCAG AA claim — it's a floor, pendin
   framing is "not a full WCAG AA audit pre-launch," a targeted pass is the realistic ceiling for a
   solo dev.
 
-**Open (blocks the build) — `middle_plan_v2.md` decision row 12:**
+**Open (blocks the build) — `roadmap.md` decision row 12:**
 - **Scope/depth.** Full WCAG AA audit vs. a targeted axe-DevTools pass over the highest-traffic
   pages (search, story page, chapter reading, signup/login — the addendum's suggested set).
 - **Which pages**, if the targeted-pass option is chosen — the addendum's four-page list is a

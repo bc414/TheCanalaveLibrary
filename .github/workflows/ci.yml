@@ -6,7 +6,7 @@ name: CI
 # reflag things he already knows about. The one place CI genuinely earns its keep pre-launch is
 # vetting Dependabot's version-bump PRs on GitHub's infrastructure, so nobody has to pull each
 # bump branch and run the (Docker-heavy) suite by hand. `push: master` gets added at launch,
-# alongside branch protection and an auto-deploy step — see middle_plan_v2.md Phase 7.
+# alongside branch protection and an auto-deploy step — see roadmap.md Phase 7.
 on:
   pull_request:
   workflow_dispatch:
@@ -66,7 +66,7 @@ jobs:
 
       # Report-only: prints known-vulnerable packages (including transitive) to the log but never
       # fails the build. A CVE in a dependency-of-a-dependency you can't immediately fix shouldn't
-      # block every push. Revisit as a hard gate near launch — see middle_plan_v2.md Phase 7.
+      # block every push. Revisit as a hard gate near launch — see roadmap.md Phase 7.
       - name: Vulnerability scan (report-only)
         run: dotnet list TheCanalaveLibrary.sln package --vulnerable --include-transitive
         continue-on-error: true

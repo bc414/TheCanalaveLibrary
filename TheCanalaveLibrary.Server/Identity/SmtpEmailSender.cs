@@ -13,7 +13,7 @@ namespace TheCanalaveLibrary.Server;
 /// three Identity transactional emails (confirmation, password reset link, password reset code)
 /// over MailKit against whatever <see cref="EmailOptions.Smtp"/> points at: the Mailpit dev inbox
 /// under the Aspire path, or the chosen provider's SMTP endpoint in production (decision row 8,
-/// `.claude/middle_plan_v2.md`). Selected by the <c>Email:Provider = "Smtp"</c> switch in
+/// `.claude/roadmap.md`). Selected by the <c>Email:Provider = "Smtp"</c> switch in
 /// Program.cs; <see cref="IdentityNoOpEmailSender"/> stays registered when unconfigured.
 ///
 /// <c>public</c> (not <c>internal</c>, unlike <see cref="IdentityNoOpEmailSender"/>) per the

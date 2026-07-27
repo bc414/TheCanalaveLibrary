@@ -15,8 +15,8 @@ orchestration, read-replica readiness, delete policy, and dev-only diagnostics.
 ### Stateless, permanently — SignalR is ruled out, not deferred
 
 The spec described "real-time via SignalR" for messaging. That framing is **permanently reversed**
-(hardened 2026-07-07 from an earlier "deferred post-MVP" framing — see Resolved,
-`middle_plan_v2.md`): messaging is request/response, identical in shape to every other feature. The
+(hardened 2026-07-07 from an earlier "deferred post-MVP" framing — resolved, see
+`middle_plan_v2.md` §Resolved): messaging is request/response, identical in shape to every other feature. The
 recipient sees new messages on navigate/refresh; the global unread badge refreshes on layout render
 (navigation). The rationale: the use-case is substantive and infrequent, and real-time delivery
 already has an owner — Discord handles ambient chat, this site's messaging is deliberately for

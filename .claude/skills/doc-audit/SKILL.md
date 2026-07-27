@@ -22,7 +22,7 @@ can rerun them without re-inventing the method.
 
 **When to run:** after any restructuring of the doc corpus (splits, moves, section
 rewrites — run the Integrity probe the same session); at phase-gate transitions in
-`middle_plan_v2.md` (all three probes); or on suspicion. Not on a timer — retirement WUs
+`roadmap.md` (all three probes); or on suspicion. Not on a timer — retirement WUs
 sweep at source now (CLAUDE.md §"Retiring or closing"), so drift accumulates slowly.
 
 ## Ground rules (all probes)
@@ -49,7 +49,7 @@ probe *shapes*.
 ### Probe 1 — Cold-session orientation walk
 
 Roleplay a session that has never seen the project, arriving to do feature work. Read
-CLAUDE.md, follow its read order (status.md → workplan.md Position → middle_plan_v2), then
+CLAUDE.md, follow its read order (status.md → workplan.md Position → roadmap.md), then
 pick two plausible next tasks (one from the Position block, one from
 `hidden-deferrals-tracker.md`) and walk each task's full doc trail. Report: friction
 points (anywhere you guessed or reconciled two docs), contradictions verified against a

@@ -192,7 +192,7 @@ detailed-UI Stage-1 gap was resolved in chat 2026-07-12. **These are settled —
   rendered as blocks after post content (multiple per post allowed — matches schema). Voting:
   any authenticated user.
 - **Surface scope:** `/polls` page (active + archived SitePolls). **Open intent:** SitePolls
-  should eventually surface on the home page — belongs to `middle_plan_v2.md` decision row 2
+  should eventually surface on the home page — belongs to `roadmap.md` decision row 2
   (homepage sections), not this feature's work-unit.
 
 ### L1 reconcile note (2026-07-12)
@@ -264,7 +264,7 @@ bullet below, 2026-07-13.)
      explicit domain-word values + `@onchange`; convention recorded in `layer3-logic.md`
      §"Bool `<select>`".
 - **Deferred:** home-page SitePoll surfacing (open intent → homepage-sections decision,
-  `middle_plan_v2.md` row 2). (The formerly-deferred L5 WASM enablement landed with WU-GlobalFlip —
+  `roadmap.md` row 2). (The formerly-deferred L5 WASM enablement landed with WU-GlobalFlip —
   see the L5 bullet above.)
 
 ## Feature 56 — Feature Contributions — **CUT 2026-07-18**

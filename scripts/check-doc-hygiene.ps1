@@ -8,14 +8,14 @@
 #
 # Four checks, all heuristic line-level lints (not proofs):
 #   1. Retired terms in LIVE docs (skills, CLAUDE.md, status/grid_axes/folder_clusters,
-#      middle_plan_v2) — a hit passes only if the same line carries a historical marker word
+#      roadmap.md) — a hit passes only if the same line carries a historical marker word
 #      ("retired", "replaced", "former", ...). Dated ledgers (workplan*, audit/, retired plans)
 #      are exempt: entries there are as-of-date records and legitimately name dead things.
 #   2. Session-relative language ("this session", "just now", ...) anywhere in the process docs
 #      except workplan* (whose dated DONE blocks anchor such phrases to the entry date).
 #      CLAUDE.md bans it outright in persistent docs.
-#   3. Live pointers into the retired plan files (forward_plan.md, v1 middle_plan.md) from live
-#      docs, unless the line marks them as retired/carried-forward.
+#   3. Live pointers into the retired plan files (forward_plan.md, middle_plan.md, middle_plan_v2.md)
+#      from live docs, unless the line marks them as retired/carried-forward.
 #
 # Exit 0 = clean; exit 1 = violations listed. False positive? Add a marker word to the line
 # (say WHY the dead name is mentioned — that's the fix a reader needs anyway).
@@ -56,7 +56,7 @@ $liveDocs = @(
     Get-Item '.claude/status.md'
     Get-Item '.claude/grid_axes.md'
     Get-Item '.claude/folder_clusters.md'
-    Get-Item '.claude/middle_plan_v2.md'
+    Get-Item '.claude/roadmap.md'
     Get-ChildItem '.claude/skills' -Recurse -Filter '*.md'
     Get-ChildItem '.claude/design' -Filter '*.md' | Where-Object { $_.Name -ne 'surface-registry.md' }
 )
@@ -89,11 +89,14 @@ foreach ($doc in $processDocs) {
 }
 
 # --- Check 3: live pointers into retired plan files --------------------------------------------
-$retiredPlanPointer = 'forward_plan(\.md)?|middle_plan\.md'
-$planMarker = 'retired|carri|superseded|historical|mapping|Successor'
-# middle_plan_v2 is the successor doc — it references its ancestry (v1 rows, carried-forward
-# entries, the phase-mapping table) by design, so it is exempt from this check only.
-$check3Docs = $liveDocs | Where-Object { $_.Name -ne 'middle_plan_v2.md' }
+$retiredPlanPointer = 'forward_plan(\.md)?|middle_plan\.md|middle_plan_v2\.md'
+# resol(ved/ution)/dissolved/closes/settled cover the dominant "§Resolved '…'" citation shape into
+# middle_plan_v2.md's still-valid historical Resolved index (a permanent, correct citation — not
+# stale routing) without loosening this check to $historicalMarker's very broad no/not/was/were.
+$planMarker = 'retired|carri|superseded|historical|mapping|Successor|resol|dissolved|closes?|settled'
+# roadmap.md is the successor doc — it references its ancestry (the forward_plan/middle_plan/
+# middle_plan_v2 chain, why it was renamed) by design, so it is exempt from this check only.
+$check3Docs = $liveDocs | Where-Object { $_.Name -ne 'roadmap.md' }
 foreach ($doc in $check3Docs) {
     $hits = Select-String -Path $doc.FullName -Pattern $retiredPlanPointer
     foreach ($hit in $hits) {

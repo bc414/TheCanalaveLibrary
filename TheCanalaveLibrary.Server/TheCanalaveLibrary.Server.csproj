@@ -27,7 +27,7 @@
              <annotation-xml> element and the encoding attribute at every untrusted-HTML boundary,
              so the vector cannot survive sanitization. Root-cause fix (custom AngleSharp-1.5.2
              sanitizer, drop Ganss.Xss, float this ref off 0.17.1) is a Phase 7 launch-readiness
-             item in middle_plan_v2.md; rationale + mitigation in canalave-conventions/security.md
+             item in roadmap.md; rationale + mitigation in canalave-conventions/security.md
              "Dependency Vulnerability Scan Cadence". Dependabot's AngleSharp bump PRs are CLOSED,
              not ignored (dependabot.yml carries no AngleSharp ignore), and the advisory is
              dismissed as risk-accepted in the GitHub Security tab. -->

@@ -71,8 +71,8 @@ remains. `NavigationManager.NotFound()` continues to cover the 404 case.
 **Now unblocked:** WU-GlobalFlip (DONE ✓ 2026-07-13) landed the single global `InteractiveAuto`
 flip — the WASM client now genuinely makes HTTP calls (per `layer5-wasm.md`'s
 `ServerXXXService`/HTTP-endpoint/client-impl pattern, mechanically swept in WU-L5Sweep), so a
-testable HTTP error surface now exists. Sequenced into `middle_plan_v2.md` Phase 5 (right after
-the flip that created its need) as **WU-ErrorHandling2** and `workplan.md` "Planned / not-yet-built
+testable HTTP error surface now exists, unblocking it (right after the flip that created its need)
+as **WU-ErrorHandling2** — see `roadmap.md` §"Also still open" and `workplan.md` "Planned / not-yet-built
 named WUs." Design still not done here — this is a sequencing pointer, not a settled spec; the
 design work (envelope shape, which client-service failures map to which `ExceptionPresenter`
 message, whether `InlineAlert`/toast/boundary is the right channel per failure kind) is WU-ErrorHandling2's own Doc-Touch moment 1.

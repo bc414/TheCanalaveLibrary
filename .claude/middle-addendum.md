@@ -50,7 +50,7 @@ awareness:
 
 | Item | Pointer |
 |---|---|
-| Deploy mechanism (`aspire publish` → docker-compose candidate) | `middle_plan_v2.md` Phase 7 |
+| Deploy mechanism (`aspire publish` → docker-compose candidate) | `roadmap.md` Phase 7 |
 | Config/secrets promotion contract | Phase 7 |
 | Migration-in-production convention (gated step, not migrate-on-startup) | Phase 7 |
 | DB backup policy + one performed restore drill; R2 blob story | Phase 7 |
@@ -197,7 +197,7 @@ compliance theater).
     both implementations are widely considered mediocre, and the real retention mechanism for
     "new chapter from a followed author" is the *already-deferred* email-digest feature
     (`EmailEnabled`), not RSS. **Low priority, safe to skip at launch.** **The email-digest half is
-    now WU-NotifEmail** (`middle_plan_v2.md` Phase 6, `audit/Notifications.md`) — RSS itself remains
+    now WU-NotifEmail** (`roadmap.md` Phase 6, `audit/Notifications.md`) — RSS itself remains
     consciously un-formalized (no WU, no grid row); revisit only if WU-NotifEmail's fan-out doesn't
     satisfy the retention need it was meant to cover.
 20. **Analytics.** No traffic-counting tool of any kind exists. Given the project already runs a
@@ -228,7 +228,7 @@ compliance theater).
     (search, story page, chapter reading, signup/login) before public launch, plus a one-line
     addition to `layer4-style.md`'s Stage-5 criteria ("keyboard-navigable, visible focus states")
     so it stops being invisible to the process entirely. **→ formalized 2026-07-15: Feature 65
-    (Accessibility), WU-A11y, `middle_plan_v2.md` Phase 3 + decision row 12 (scope/depth still
+    (Accessibility), WU-A11y, `roadmap.md` Phase 3 + decision row 12 (scope/depth still
     open), `audit/Accessibility.md`. The Stage-5-criteria addition suggested here landed the same
     day in `layer4-style.md` "Interaction States."**
 

@@ -684,7 +684,7 @@ L4 Stage 5 claim should additionally mean: interactive elements are keyboard-nav
 and operable via Tab/Enter/Space, not just clickable), the global focus-visible ring is not
 suppressed, and form inputs have an associated `<label>` (or `aria-label`) — not full WCAG AA
 verification per component, which is out of scope until WU-A11y's whole-site pass (gated on
-`middle_plan_v2.md` decision row 12; see `audit/Accessibility.md`) sets the real bar and revisits
+`roadmap.md` decision row 12; see `audit/Accessibility.md`) sets the real bar and revisits
 already-shipped components.
 
 **Overlay recipe (one chrome, one z-ladder, one dismissal):**

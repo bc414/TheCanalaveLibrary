@@ -139,7 +139,7 @@ additive `<head>` output, not a change to any of those features' existing Stage-
   here since it's a design asset, not a code decision.
 - Direct-R2/CDN `<img>`-display migration — see "The migration this does NOT do" above.
 - Production values for `Site:PublicBaseUrl` (and `ImageStorage:PublicBaseUrl` if/when it diverges)
-  are a Phase-7 config/secrets-promotion concern (`middle_plan_v2.md`), not a code gap.
+  are a Phase-7 config/secrets-promotion concern (`roadmap.md`), not a code gap.
 
 ## Feature 64 — Site SEO: settled vs. open (revised 2026-07-19; built by WU-AccessGate)
 

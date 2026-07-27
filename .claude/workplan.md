@@ -1,8 +1,8 @@
 # Workplan — Ordered Work-Units (atoms-first)
 
-> New work-units are sequenced by `.claude/middle_plan_v2.md` (the live master plan, since
-> 2026-07-05 — it superseded `.claude/middle_plan.md`, which had itself superseded
-> `forward_plan.md`); this file remains the work-unit ledger. Recent entries live here; DONE entries older than
+> New work-units are sequenced by `.claude/roadmap.md` (the live master plan, since 2026-07-27 —
+> it superseded `.claude/middle_plan_v2.md`, which had itself superseded `.claude/middle_plan.md`,
+> which had itself superseded `forward_plan.md`); this file remains the work-unit ledger. Recent entries live here; DONE entries older than
 > the recent window are moved wholesale to `workplan-archive.md` and "workplan.md WU-X"
 > citations resolve there. **Sweep trigger:** when this file exceeds ~1,500 lines, archive the
 > DONE entries older than ~2 weeks (never edit them in transit).
@@ -17,10 +17,11 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-DocAuditSkill (2026-07-27) — the `doc-audit` fresh-eyes skill minted, gate
-  check #4 (backticked-filename existence) added, archive sweep trigger + this block's
-  verify-at-write rule recorded. (Before it, same day: WU-DocHygiene 1–3.)
-- **Phase (`middle_plan_v2.md`):** Phase 2 tail. Two unbuilt Phase-2 items: **WU-Home** (item 1,
+- **Last landed:** WU-DocRoadmap (2026-07-27) — retired the unsustainably-named `middle_plan_v2.md`
+  chain in favor of `.claude/roadmap.md` (stable, role-based name), which carries forward only the
+  still-open Phase/Decision content; the full historical Resolved index stays in `middle_plan_v2.md`.
+  (Before it, same day: WU-DocAuditSkill, WU-DocHygiene 1–3.)
+- **Phase (`roadmap.md`):** Phase 2 tail. Two unbuilt Phase-2 items: **WU-Home** (item 1,
   gated on decision row 2 — homepage design) and **WU-AccountEnforcement's mid-session residual**
   (item 5, unblocked — `RefreshSignInAsync` is the ready-made tool; see its Planned entry below).
   Phases 0, 1, and 5 are DONE; Phase 3 (Brian-driven L4 freeze sweep + WU-A11y, the latter gated
@@ -28,7 +29,7 @@ references it, does not restate it.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
   exist in **every group A–H** (~20 unchecked boxes), including two **high-priority security
   items: E2 and E3**.
-- **Blocked on Brian:** decision rows 2, 4, 6, 8, 10, 12, and 13 (`middle_plan_v2.md` §"Decisions
+- **Blocked on Brian:** decision rows 2, 4, 6, 8, 10, 12, and 13 (`roadmap.md` §"Decisions
   that need you"; row 13 gates only tracker item B11).
 
 ---
@@ -106,7 +107,7 @@ work-unit into Phase 3 and update `status.md` + the audit file.
 
 ## Planned / not-yet-built named WUs (2026-07-15)
 
-Named and sequenced into `middle_plan_v2.md`'s phases (Doc-Touch moment 1 formalization of the
+Named and sequenced into `roadmap.md`'s phases (Doc-Touch moment 1 formalization of the
 2026-07-07 `middle-addendum.md` §3 findings), but **no code has been written yet** — distinct from
 the DONE ✓ units (recent ones in the run later in this file; older in `workplan-archive.md`) and
 from the "Post-MVP — Layers 5–8" section below (historical framing). Each entry names its
@@ -121,12 +122,12 @@ cells/verification) when built.
   is always a human act) and the homepage carries N concurrent spotlight positions from
   `site_settings`; `audit/BlogPosts.md` — homepage SitePoll surfacing is deferred INTO this WU
   ("Open intent: SitePolls … homepage sections, not this feature's work-unit"). **Pointer:**
-  `middle_plan_v2.md` Phase 2 item 1; `SharedUI/Home/HomePage.razor` header comment points back
+  `roadmap.md` Phase 2 item 1; `SharedUI/Home/HomePage.razor` header comment points back
   at decision row 2. **Deps:** WU-Spotlight (DONE ✓).
 - **WU-A11y** — **Cells:** Feature 65 (new), L4/L4.5 currently Stage 1. **Phase:** 3, paired with
   the L4 freeze sweep. **Scope:** blocked on decision row 12 (scope/depth). **Pointer:**
   `audit/Accessibility.md`. **Deps:** Phase 3's L4 freeze sweep (same pass).
-  *(Note for WU-AccountEnforcement, listed in `middle_plan_v2.md` Phase 2 item 5: the
+  *(Note for WU-AccountEnforcement, listed in `roadmap.md` Phase 2 item 5: the
   `RefreshSignInAsync` claim-refresh pattern from `/content-gate` (WU-AccessGate, 2026-07-23) is
   the ready-made tool for making `AccountStatus` responsive — a freshly-Warned/Suspended user's
   claim currently waits for next sign-in.)*
@@ -150,7 +151,7 @@ cells/verification) when built.
   security-stamp bump on Suspend/Ban, `AccountStatusBanner` for Warned. **Residual (the only open
   slice):** mid-session responsiveness — a freshly-Warned user sees the banner only at next sign-in;
   `RefreshSignInAsync` is the named tool. **Cells:** Feature 1 (Identity, extends). **Pointer:**
-  `canalave-conventions/security.md` "Account-Status Enforcement"; `middle_plan_v2.md` Phase 2
+  `canalave-conventions/security.md` "Account-Status Enforcement"; `roadmap.md` Phase 2
   item 5. **Deps:** WU38a (DONE ✓).
 
 ---
@@ -1179,3 +1180,46 @@ arity 400, repeated-member 400); migration script green.
 - **Verified:** `check-doc-hygiene.ps1` clean (30 live docs, 4 checks); `check-design-tokens.ps1`
   clean; `dotnet test` full suite green (see commit). Docs/tooling only; no cell Stage changed.
 - **Tool:** Fable 5 in Claude Code, direct implementation.
+
+## WU-DocRoadmap — retire the `forward_plan → middle_plan → middle_plan_v2` chain in favor of `.claude/roadmap.md` (no code cells) — DONE ✓ (2026-07-27)
+
+- **Trigger:** Brian, in chat — the plan-doc chain's naming (a stage-of-project metaphor combined
+  with a version suffix, `middle_plan_v2.md`) had no coherent next name, and he asked for a
+  separate, stably-named `roadmap.md` carrying forward anything still outstanding, with the old
+  chain retired.
+- **Design (settled before writing anything, given the ~150-reference blast radius a naive
+  find-replace would touch):** don't duplicate the ~150-entry historical Resolved log — mirror the
+  `workplan.md`/`workplan-archive.md` split already proven in this repo. `roadmap.md` carries only
+  still-live content (Phase status, condensed to a one-line DONE summary for Phases 0/1/4/5;
+  full detail for the still-open Phase 2 tail/3/6/7; the "Decisions that need you" table; a fresh,
+  currently-empty Resolved section starting today). `middle_plan_v2.md` keeps its full Phase
+  history and Resolved index verbatim and gets a retirement banner (same treatment it gave
+  `middle_plan.md`/`forward_plan.md`) — every existing `§Resolved "…"` / historical `Phase N item M`
+  citation across the corpus (audit files, `workplan-archive.md`, skill files) stays valid
+  unedited, since that content never moved. Only citations describing *current* gating state
+  (an unresolved decision row, an unbuilt Phase item) were repointed to `roadmap.md` — confirmed
+  file-by-file via a full-repo grep before editing, not guessed.
+- **Repointed** (live-gating citations only, ~30 files): `CLAUDE.md` (Project Files table,
+  cold-session read order, Doc-Touch Timing moment 1, "Retiring or closing"), `status.md`
+  (Orientation bullet), `workplan.md` (intro blockquote, Position block, Planned-section pointers
+  for WU-Home/WU-AccountEnforcement), `hidden-deferrals-tracker.md` (A1/B1/B11/E1/E2/E3/F1–F6),
+  `grid_axes.md`, `audit/Accessibility.md`, `audit/BlogPosts.md` ×2, `audit/Seo.md`,
+  `audit/ImageStorage.md`, `security.md`, `content-safety.md`, `layer4-style.md`,
+  `skills/doc-audit/SKILL.md` ×2, `middle-addendum.md` ×3 (routing-table cells only, per its
+  annotate-only update rule), `audit-summary.md` (banner amendment), `.github/workflows/ci.yml` ×2,
+  `TheCanalaveLibrary.Server.csproj`, `EmailOptions.cs`, `SmtpEmailSender.cs`.
+- **Deliberately left untouched:** every `§Resolved "…"` citation (the bulk of the ~150 hits, in
+  `workplan-archive.md` and the audit/skill files) — that content still lives in `middle_plan_v2.md`.
+  `middle_plan.md`/`forward_plan.md`/`next_steps.md` themselves — already correctly self-describe
+  their own retirement one hop forward; not rewritten to point past their immediate successor,
+  matching the chain's existing convention. `modernization-audit/*.md` — frozen per its own
+  CLAUDE.md row. Code-comment citations of `forward_plan.md` (`Program.cs`,
+  `ServerChapterWriteService.cs`, `app.css`, `ModUsersPage.razor`) — historical Resolved-decision
+  pointers, still valid.
+- **check-doc-hygiene.ps1 updated:** `$liveDocs` swaps `middle_plan_v2.md` → `roadmap.md`; Check 3's
+  `$retiredPlanPointer` regex gained `middle_plan_v2\.md` (so a future stray "middle_plan_v2.md is
+  live" claim gets caught, the same mechanism already covering `forward_plan.md`/`middle_plan.md`);
+  the doc-comment and the self-exemption comment updated to name `roadmap.md`.
+- **Verified:** `scripts/check-doc-hygiene.ps1` clean. Docs/tooling only — no behavior surface, no
+  cell Stage changed.
+- **Tool:** Sonnet 5 in Claude Code, direct implementation.

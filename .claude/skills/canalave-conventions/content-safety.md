@@ -363,7 +363,7 @@ notifications; the enforcement slice landed in WU38a: `CanalaveSignInManager.Can
 blocks Suspended users until `SuspendedUntilUtc` and Banned users permanently, a security-stamp
 bump kills already-open sessions on Suspend/Ban, and `AccountStatusBanner` surfaces Warned in the
 layout chrome — rules in `security.md` §"Account-Status Enforcement". **The one open residual
-(WU-AccountEnforcement's remaining slice, `middle_plan_v2.md` Phase 2 item 5):** mid-session
+(WU-AccountEnforcement's remaining slice, `roadmap.md` Phase 2 item 5):** mid-session
 responsiveness — a freshly-Warned user sees the banner only at next sign-in; `RefreshSignInAsync`
 is the named tool.
 

@@ -119,7 +119,7 @@ gave `StoryCard` (WU13) a real, renderable cover URL to display instead of shipp
 **Open:** ~~the cloud backend (`S3ImageStorageService`)~~ — built WU-S3Garage (2026-07-05, Stage
 note below). The upload UI itself (file picker → `SaveAsync` → persist the returned path) — WU24,
 WU30 (since built). Remaining open: the production R2 configuration values (account id, API token,
-bucket) — a deployment concern (`middle_plan_v2.md` decision row 4, launch-readiness mechanics), not a code gap.
+bucket) — a deployment concern (`roadmap.md` decision row 4, launch-readiness mechanics), not a code gap.
 
 **How verified:** via `/dev/wu12/upload-test-image` (kept as a standing dev-diagnostics endpoint, not
 removed, per explicit user instruction to keep testing artifacts for later analysis) — POSTed a minimal

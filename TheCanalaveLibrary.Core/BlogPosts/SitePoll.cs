@@ -2,7 +2,7 @@ namespace TheCanalaveLibrary.Core;
 
 /// <summary>
 /// Site-wide poll — created and managed by moderators/admins only, inline on <c>/polls</c>.
-/// (Home-page surfacing is an open intent — homepage-sections decision, middle_plan_v2 row 2.)
+/// (Home-page surfacing is an open intent — homepage-sections decision, roadmap.md row 2.)
 /// </summary>
 public class SitePoll : BasePoll
 {

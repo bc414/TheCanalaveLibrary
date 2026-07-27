@@ -60,9 +60,9 @@ don't need their own line; they fall out of normal workplan sequencing.
 **Features 64–66 are cross-cutting quality rows**, not features discovered through the original
 bottom-up feature decomposition. 64–65 were minted 2026-07-15 from `middle-addendum.md` §3 (a
 point-in-time "what's missing for a live website" audit); 66 was minted 2026-07-19 from
-`middle_plan_v2.md` decision row 11's resolution. They sit above the MVP line's spirit — the site
-functions without them — but are sequenced into `middle_plan_v2.md`'s existing phases rather than
-held in a separate list, per the addendum-formalization pass.
+`middle_plan_v2.md` decision row 11's resolution (historical — both features are now built). They
+sit above the MVP line's spirit — the site functions without them — but were sequenced into the
+existing phases rather than held in a separate list, per the addendum-formalization pass.
 
 ---
 
@@ -727,7 +727,7 @@ semantic HTML and Blazor `EditForm` scaffolding, but no deliberate program — n
 keyboard-nav/screen-reader check in `layer4-style.md`'s tier rules, no accessibility test tier, and
 the L4.5-Browser band's own definition never mentions keyboard-only or screen-reader navigation.
 Scope/depth (full WCAG AA audit vs. a targeted axe-DevTools pass over the highest-traffic pages) is
-gated on `middle_plan_v2.md` decision row 12. Scheduled as WU-A11y, paired with the Phase 3 L4
+gated on `roadmap.md` decision row 12. Scheduled as WU-A11y, paired with the Phase 3 L4
 freeze sweep. Detail: `audit/Accessibility.md`.
 
 **66. Viewer Access Gating** — *(added 2026-07-19, minted from decision row 11's resolution; see

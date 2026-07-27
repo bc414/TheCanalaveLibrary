@@ -16,9 +16,10 @@ Global conditions — **standing constraints only** (genre rule, 2026-07-27): ea
 fact that currently binds new work. When it stops binding, delete it — the event history lives in
 `workplan.md`/`workplan-archive.md`'s dated entries, and per-cell narrative lives in audit files.
 
-- **Orientation:** `middle_plan_v2.md` is the live master plan (the retired v1 `middle_plan.md`
-  had itself superseded the retired `forward_plan.md`); `workplan.md` is the work-unit ledger and
-  carries the Position block (DONE entries older than the recent window: `workplan-archive.md`).
+- **Orientation:** `roadmap.md` is the live master plan (2026-07-27; retired the unsustainably-named
+  chain `middle_plan_v2.md` ← `middle_plan.md` ← `forward_plan.md`, all now historical references —
+  full historical Resolved log stays in `middle_plan_v2.md`); `workplan.md` is the work-unit ledger
+  and carries the Position block (DONE entries older than the recent window: `workplan-archive.md`).
 - **No Stage-4 cells remain.** The spec-supersedes-stale-code adjudication doctrine is retained in
   `audit-summary.md` §0/§3 for any future reopening.
 - **L1 migration-verified.** Every L1 Stage-5 cell has an applied migration. Detail:

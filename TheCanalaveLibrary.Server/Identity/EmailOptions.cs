@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Server;
 /// keeps <see cref="IdentityNoOpEmailSender"/> registered instead — see cross-cutting.md
 /// "Identity & Auth"). Under Aspire the AppHost injects the SMTP host/port at the Mailpit dev
 /// inbox; in production they point at whichever transactional provider's SMTP endpoint is chosen
-/// (decision row 8, `.claude/middle_plan_v2.md`) — every candidate provider (Postmark/SES/
+/// (decision row 8, `.claude/roadmap.md`) — every candidate provider (Postmark/SES/
 /// Resend/SendGrid/Mailgun) exposes SMTP, so swapping providers is a config change only.
 /// </summary>
 public sealed class EmailOptions

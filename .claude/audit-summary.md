@@ -1,7 +1,7 @@
 # Audit Summary
 
 > **Snapshot as of the initial Step-3 classification pass (pre-2026-06 build-out).** Superseded by
-> `.claude/status.md` for current stage numbers and by `.claude/workplan.md`/`middle_plan_v2.md` for
+> `.claude/status.md` for current stage numbers and by `.claude/workplan.md`/`.claude/roadmap.md` for
 > current sequencing — retained only for its historical findings (§2) and reconciliation index
 > (§3), not as a source of current percentages.
 
