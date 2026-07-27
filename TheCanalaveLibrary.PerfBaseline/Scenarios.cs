@@ -169,6 +169,116 @@ public static class Scenarios
             """
             SELECT story_id FROM also_favorited_scores GROUP BY story_id ORDER BY COUNT(*) DESC, story_id LIMIT 50
             """),
+
+        // ── Messaging inbox listing: WU-MsgReadPath before/after (added 2026-07-26) ──────────
+        // Three scenarios, not two, because the rework split ONE query into TWO. Compare
+        // `messaging_inbox_legacy_single_query` against the SUM of `..._step1_metadata` and
+        // `..._step2_hydrate`. That sum omits exactly one client↔server round trip (sub-ms on
+        // localhost, larger across a real network) — the honest caveat on any verdict drawn here.
+        //
+        // These SKIP with an empty parameter pool unless the DB carries messaging volume, which
+        // SeedTool does NOT generate (see audit/L6-reconciliation-matrix.md Messaging: F49 was
+        // flipped to L6=5 unmeasured for exactly this reason). Seed conversations/messages before
+        // running, or these three report SKIPPED and the other scenarios are unaffected.
+
+        new(
+            "messaging_inbox_legacy_single_query",
+            "ServerMessagingReadService.GetConversationsAsync BEFORE WU-MsgReadPath (single query, "
+            + "full message_text transferred per row)",
+            """
+            SELECT c.conversation_id, c0.subject, c.is_archived, c.last_read_timestamp,
+                   (SELECT count(*)::int FROM private_messages AS p2
+                    WHERE c0.conversation_id = p2.conversation_id
+                      AND (p2.sender_user_id <> @id OR p2.sender_user_id IS NULL)
+                      AND (c.last_read_timestamp IS NULL OR p2.date_sent > c.last_read_timestamp)),
+                   s0."UserId", s0."Username", s0."AvatarUrl", p4."MessageText", p4."DateSent"
+            FROM conversation_participants AS c
+            INNER JOIN conversations AS c0 ON c.conversation_id = c0.conversation_id
+            LEFT JOIN (
+                SELECT s."UserId", s."Username", s."AvatarUrl", s.conversation_id
+                FROM (SELECT c1.user_id AS "UserId", a.user_name AS "Username",
+                             a.profile_picture_relative_url AS "AvatarUrl", c1.conversation_id,
+                             ROW_NUMBER() OVER(PARTITION BY c1.conversation_id
+                                               ORDER BY c1.conversation_id, c1.user_id, a.id) AS row
+                      FROM conversation_participants AS c1
+                      INNER JOIN "AspNetUsers" AS a ON c1.user_id = a.id
+                      WHERE c1.user_id <> @id) AS s
+                WHERE s.row <= 1) AS s0 ON c0.conversation_id = s0.conversation_id
+            LEFT JOIN (
+                SELECT p1."MessageText", p1."DateSent", p1.conversation_id
+                FROM (SELECT p.message_text AS "MessageText", p.date_sent AS "DateSent",
+                             p.conversation_id,
+                             ROW_NUMBER() OVER(PARTITION BY p.conversation_id
+                                               ORDER BY p.date_sent DESC) AS row
+                      FROM private_messages AS p) AS p1
+                WHERE p1.row <= 1) AS p4 ON c0.conversation_id = p4.conversation_id
+            WHERE c.user_id = @id AND NOT (c.is_archived)
+            ORDER BY EXISTS (SELECT 1 FROM private_messages AS p
+                             WHERE c0.conversation_id = p.conversation_id) DESC,
+                     (SELECT p0.date_sent FROM private_messages AS p0
+                      WHERE c0.conversation_id = p0.conversation_id
+                      ORDER BY p0.date_sent DESC LIMIT 1) DESC
+            """,
+            """
+            SELECT user_id FROM conversation_participants
+            GROUP BY user_id ORDER BY COUNT(*) DESC, user_id LIMIT 50
+            """),
+
+        new(
+            "messaging_inbox_step1_metadata",
+            "ServerMessagingReadService.GetConversationsAsync step 1 (ids + MAX(date_sent) only)",
+            """
+            SELECT c.conversation_id
+            FROM conversation_participants AS c
+            INNER JOIN conversations AS c0 ON c.conversation_id = c0.conversation_id
+            WHERE c.user_id = @id AND NOT (c.is_archived)
+            ORDER BY (SELECT max(p.date_sent) FROM private_messages AS p
+                      WHERE c0.conversation_id = p.conversation_id) IS NOT NULL DESC,
+                     (SELECT max(p0.date_sent) FROM private_messages AS p0
+                      WHERE c0.conversation_id = p0.conversation_id) DESC
+            """,
+            """
+            SELECT user_id FROM conversation_participants
+            GROUP BY user_id ORDER BY COUNT(*) DESC, user_id LIMIT 50
+            """),
+
+        new(
+            "messaging_inbox_step2_hydrate",
+            "ServerMessagingReadService.GetConversationsAsync step 2 as SHIPPED — correlated "
+            + "ORDER BY/LIMIT 1 subqueries (index seeks), substring applied OUTSIDE them. "
+            + "Unpaged, so `conversation_id = ANY(ids)` covers exactly the same rows as the scope "
+            + "predicate — substituted here because the harness binds one scalar, not an array.",
+            """
+            SELECT c.conversation_id, c0.subject,
+                   (SELECT count(*)::int FROM private_messages AS p0
+                    WHERE c0.conversation_id = p0.conversation_id
+                      AND (p0.sender_user_id <> @id OR p0.sender_user_id IS NULL)
+                      AND (c.last_read_timestamp IS NULL OR p0.date_sent > c.last_read_timestamp)),
+                   s0."UserId", s0."Username", s0."AvatarUrl",
+                   (SELECT p.date_sent FROM private_messages AS p
+                    WHERE c0.conversation_id = p.conversation_id
+                    ORDER BY p.date_sent DESC LIMIT 1) AS "LastMessageDate",
+                   substring((SELECT p1.message_text FROM private_messages AS p1
+                              WHERE c0.conversation_id = p1.conversation_id
+                              ORDER BY p1.date_sent DESC LIMIT 1), 1, 2048) AS "HtmlPrefix"
+            FROM conversation_participants AS c
+            INNER JOIN conversations AS c0 ON c.conversation_id = c0.conversation_id
+            LEFT JOIN (
+                SELECT s."UserId", s."Username", s."AvatarUrl", s.conversation_id
+                FROM (SELECT c1.user_id AS "UserId", a.user_name AS "Username",
+                             a.profile_picture_relative_url AS "AvatarUrl", c1.conversation_id,
+                             ROW_NUMBER() OVER(PARTITION BY c1.conversation_id
+                                               ORDER BY c1.conversation_id, c1.user_id, a.id) AS row
+                      FROM conversation_participants AS c1
+                      INNER JOIN "AspNetUsers" AS a ON c1.user_id = a.id
+                      WHERE c1.user_id <> @id) AS s
+                WHERE s.row <= 1) AS s0 ON c0.conversation_id = s0.conversation_id
+            WHERE c.user_id = @id AND NOT (c.is_archived)
+            """,
+            """
+            SELECT user_id FROM conversation_participants
+            GROUP BY user_id ORDER BY COUNT(*) DESC, user_id LIMIT 50
+            """),
     ];
 
     /// <summary>The F59 rCTE, shape-identical to ServerTreeSearchReadService (anonymous viewer,

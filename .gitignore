@@ -4,6 +4,15 @@ obj/
 riderModule.iml
 /_ReSharper.Caches/
 
+# Test-run artifacts (`dotnet test --logger trx`, coverage collectors). Ephemeral build output,
+# never source. Added 2026-07-26 after ~30 MB of .trx files were found tracked (they had entered
+# history via a test run committed alongside feature work); the four offenders were removed with
+# `git rm --cached`. History still carries the blobs — this only stops further accumulation.
+TestResults/
+*.trx
+*.coverage
+coverage.cobertura.xml
+
 # Visual Studio / Rider IDE state and caches
 .vs/
 .idea/

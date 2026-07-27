@@ -1,0 +1,71 @@
+-- messaging_inbox_step2_hydrate
+-- provenance: ServerMessagingReadService.GetConversationsAsync step 2 (SUBSTRING preview, no ORDER BY). Unpaged, so `conversation_id = ANY(ids)` covers exactly the same rows as the scope predicate — substituted here because the harness binds one scalar, not an array.
+
+Hash Right Join  (cost=1202.15..377476.09 rows=8463 width=608) (actual time=3.401..11.157 rows=401.00 loops=1)
+  Hash Cond: (p.conversation_id = c0.conversation_id)
+  Buffers: shared hit=2350
+  ->  WindowAgg  (cost=1091.73..1282.13 rows=8463 width=52) (actual time=2.812..8.775 rows=401.00 loops=1)
+        Window: w1 AS (PARTITION BY p.conversation_id ORDER BY p.date_sent ROWS UNBOUNDED PRECEDING)
+        Run Condition: (row_number() OVER w1 <= 1)
+        Storage: Memory  Maximum Storage: 20kB
+        Buffers: shared hit=455
+        ->  Sort  (cost=1091.71..1112.87 rows=8463 width=390) (actual time=2.807..3.109 rows=8463.00 loops=1)
+              Sort Key: p.conversation_id, p.date_sent DESC
+              Sort Method: quicksort  Memory: 3615kB
+              Buffers: shared hit=455
+              ->  Seq Scan on private_messages p  (cost=0.00..539.63 rows=8463 width=390) (actual time=0.006..0.792 rows=8463.00 loops=1)
+                    Buffers: shared hit=455
+  ->  Hash  (cost=105.41..105.41 rows=401 width=576) (actual time=0.573..0.577 rows=401.00 loops=1)
+        Buckets: 1024  Batches: 1  Memory Usage: 46kB
+        Buffers: shared hit=31
+        ->  Hash Join  (cost=89.24..105.41 rows=401 width=576) (actual time=0.313..0.526 rows=401.00 loops=1)
+              Hash Cond: (c0.conversation_id = c.conversation_id)
+              Buffers: shared hit=31
+              ->  Hash Right Join  (cost=69.21..84.30 rows=401 width=564) (actual time=0.225..0.393 rows=401.00 loops=1)
+                    Hash Cond: (c1.conversation_id = c0.conversation_id)
+                    Buffers: shared hit=26
+                    ->  WindowAgg  (cost=56.18..66.21 rows=401 width=551) (actual time=0.168..0.282 rows=401.00 loops=1)
+                          Window: w1 AS (PARTITION BY c1.conversation_id ORDER BY c1.conversation_id, c1.user_id, a.id ROWS UNBOUNDED PRECEDING)
+                          Run Condition: (row_number() OVER w1 <= 1)
+                          Storage: Memory  Maximum Storage: 17kB
+                          Buffers: shared hit=22
+                          ->  Sort  (cost=56.18..57.19 rows=401 width=543) (actual time=0.163..0.176 rows=401.00 loops=1)
+                                Sort Key: c1.conversation_id, c1.user_id
+                                Sort Method: quicksort  Memory: 40kB
+                                Buffers: shared hit=22
+                                ->  Merge Join  (cost=0.43..38.85 rows=401 width=543) (actual time=0.040..0.110 rows=401.00 loops=1)
+                                      Merge Cond: (c1.user_id = a.id)
+                                      Buffers: shared hit=22
+                                      ->  Index Scan using ix_conversation_participants_user_id on conversation_participants c1  (cost=0.15..32.53 rows=401 width=8) (actual time=0.032..0.068 rows=401.00 loops=1)
+                                            Filter: (user_id <> 1)
+                                            Rows Removed by Filter: 401
+                                            Index Searches: 1
+                                            Buffers: shared hit=19
+                                      ->  Index Scan using pk_asp_net_users on "AspNetUsers" a  (cost=0.28..289.38 rows=2007 width=535) (actual time=0.005..0.006 rows=7.00 loops=1)
+                                            Index Searches: 1
+                                            Buffers: shared hit=3
+                    ->  Hash  (cost=8.01..8.01 rows=401 width=29) (actual time=0.055..0.055 rows=401.00 loops=1)
+                          Buckets: 1024  Batches: 1  Memory Usage: 34kB
+                          Buffers: shared hit=4
+                          ->  Seq Scan on conversations c0  (cost=0.00..8.01 rows=401 width=29) (actual time=0.005..0.024 rows=401.00 loops=1)
+                                Buffers: shared hit=4
+              ->  Hash  (cost=15.03..15.03 rows=401 width=12) (actual time=0.087..0.087 rows=401.00 loops=1)
+                    Buckets: 1024  Batches: 1  Memory Usage: 27kB
+                    Buffers: shared hit=5
+                    ->  Seq Scan on conversation_participants c  (cost=0.00..15.03 rows=401 width=12) (actual time=0.010..0.058 rows=401.00 loops=1)
+                          Filter: ((NOT is_archived) AND (user_id = 1))
+                          Rows Removed by Filter: 401
+                          Buffers: shared hit=5
+  SubPlan 1
+    ->  Aggregate  (cost=44.40..44.41 rows=1 width=4) (actual time=0.004..0.004 rows=1.00 loops=401)
+          Buffers: shared hit=1864
+          ->  Index Scan using ix_private_messages_conversation_id_date_sent on private_messages p0  (cost=0.29..44.39 rows=4 width=0) (actual time=0.004..0.004 rows=0.00 loops=401)
+                Index Cond: (conversation_id = c0.conversation_id)
+                Filter: (((sender_user_id <> 1) OR (sender_user_id IS NULL)) AND ((c.last_read_timestamp IS NULL) OR (date_sent > c.last_read_timestamp)))
+                Rows Removed by Filter: 21
+                Index Searches: 401
+                Buffers: shared hit=1864
+Planning:
+  Buffers: shared hit=27
+Planning Time: 0.476 ms
+Execution Time: 11.569 ms

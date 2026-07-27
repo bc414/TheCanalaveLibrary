@@ -1288,15 +1288,33 @@ The read is **two-step** (the same page-the-ids-then-hydrate idiom as the thread
    nothing else changes.
 2. **Hydration step** — for exactly those ids: other participant, unread count, and the last
    message's `SUBSTRING(message_text, 1, 2048)` (`PreviewFetchPrefixChars`) — never the whole
-   body; the preview is ≤100 plain-text chars, so unbounded `MessageText` transfer was the read
-   path's dominant waste. `MakePreview` guards against a SQL-bisected trailing tag fragment.
+   body; the preview is ≤100 plain-text chars, so unbounded `MessageText` transfer is waste.
+   `MakePreview` guards against a SQL-bisected trailing tag fragment.
    No SQL ORDER BY here; rows are reassembled in step-1 order in C#.
 
+> **Where the preview `Substring` sits is measured, not stylistic — do not "simplify" it.**
+> Write it in the **outer projection**, applied to a scalar subquery result:
+> `…PrivateMessages.OrderByDescending(m => m.DateSent).Select(m => m.MessageText).FirstOrDefault()!.Substring(0, N)`.
+> Two things follow from that exact shape, both verified 2026-07-26 (`ToQueryString` + PerfBaseline
+> + `EXPLAIN (ANALYZE, BUFFERS)` on a 400-conversation / 8.5k-message / 28 MB inbox):
+> - EF emits a **correlated `ORDER BY … LIMIT 1` subquery** (an index seek on
+>   `ix_private_messages_conversation_id_date_sent`), *not* a `ROW_NUMBER()` window over the whole
+>   `private_messages` table. Selecting multiple columns in one `FirstOrDefault` projection is what
+>   triggers the window form — splitting date and text into two scalar subqueries is what avoids it.
+> - Putting the `Substring` **inside** the `FirstOrDefault` projection pushes it into that window,
+>   where Postgres evaluates it on **every** message row before row elimination — forcing a detoast
+>   per row. Measured cost of that mistake: hydration 2.53 ms → 10.55 ms (`WindowAgg` 0.88 ms →
+>   5.96 ms); the whole listing went from a 45 % improvement to an 88 % regression versus the
+>   pre-rework single query. This exact regression shipped once and was caught only by measuring.
+>
+> Numbers, both runs, and EXPLAIN plans: `TheCanalaveLibrary.PerfBaseline/results/msgreadpath*.json`
+> (+ `explain-*` dirs). Regenerate with
+> `TheCanalaveLibrary.PerfBaseline/seed-messaging-volume.sql` — SeedTool generates no messaging
+> volume, which is why F49's L6 cells were flipped unmeasured in the first place.
+
 Unpaged stays correct because conversation counts are bounded by human effort (someone must start
-each one), unlike machine-generated notifications, which are paged. SQL shape verified via
-`ToQueryString` 2026-07-26: step 1's two ordering keys emit as correlated `MAX()` subqueries
-(single min/max seeks on `ix_private_messages_conversation_id_date_sent`); step 2 emits
-ROW_NUMBER window joins with the substring inside the join.
+each one), unlike machine-generated notifications, which are paged. Step 1's two ordering keys emit
+as correlated `MAX()` subqueries (min/max seeks on the same index).
 
 ## Self-Referential Editing Exception — `IUserSettingsService` (spec §3.5)
 

@@ -315,11 +315,47 @@ as foundation). **L2 stays Stage 5** — behavior-preserving restructure plus a 
   a ≤101-char preview, which also proves the `Substring` SQL translation against real Postgres
   (an untranslatable expression would throw there). Browser smoke (server-only path, TestUser):
   Inbox renders; Archived tab empty-state; archive → Archived tab lists it (via the new
-  scope=Archived read) with preview rendered from the bounded prefix; unarchive → back in Inbox;
+  scope=Archived read) with its preview rendered; unarchive → back in Inbox;
   `psql`-confirmed both flags false afterwards (workbench restored); zero console errors.
+  **Scope of that browser pass, stated precisely:** the seed conversation's messages are far under
+  `PreviewFetchPrefixChars`, so the browser exercised the *scoped read and the UI*, not the
+  truncation — for short bodies the SUBSTRING is a no-op. Bounded-prefix behavior is covered at the
+  Integration tier only. An earlier revision of this note claimed the browser verified "preview
+  rendered from the bounded prefix"; it did not, and could not have.
   Note: the L6 story is unchanged — `(user_id, is_archived)` remains served by the plain
   `ix_conversation_participants_user_id` (C4's messaging half stays open; all index work deferred
   to a later pass per the owner's standing instruction).
+
+#### Measurement — and the regression it caught (2026-07-26, post-WU review)
+
+The WU-MsgReadPath entry above originally claimed a payload improvement **without measuring** —
+a violation of the project's standing "always measure" rule, flagged in review. Measuring it
+reversed the conclusion twice, so the numbers matter more than the narrative:
+
+| shape | p50 | verdict |
+|---|---|---|
+| pre-rework single query (full `message_text` per row) | **5.72 ms** | baseline |
+| WU-MsgReadPath **as first shipped** (substring inside the window) | **11.31 ms** (0.61 + 10.55) | **88 % regression** |
+| corrected shape (substring in the outer projection) | **3.14 ms** (0.61 + 2.53) | **45 % improvement** |
+
+Measured on 400 conversations / 8 460 messages / 28 MB of body text via
+`TheCanalaveLibrary.PerfBaseline` (`msgreadpath` and `msgreadpath_fixed` labels, EXPLAIN plans
+alongside); volume seeded by `PerfBaseline/seed-messaging-volume.sql` (SeedTool generates none —
+the same gap that left F49's L6 unmeasured).
+
+**Root cause of the regression.** Writing the `Substring` inside the `FirstOrDefault` projection put
+it inside EF's `ROW_NUMBER()` window over the *entire* `private_messages` table, so Postgres
+evaluated it — and detoasted `message_text` — for all 8 460 rows before eliminating them to 401
+(`WindowAgg` 0.88 ms → 5.96 ms). Moving it to the outer projection, over a scalar subquery result,
+made EF emit a correlated `ORDER BY … LIMIT 1` instead: an **index seek** on
+`ix_private_messages_conversation_id_date_sent` with `Memoize`, and **no `Seq Scan` on
+`private_messages` at all**. That is also why the corrected shape beats the pre-rework baseline
+rather than merely matching it — the old single query seq-scanned every message too.
+
+The constraint is recorded as a do-not-simplify rule in `layer2-services.md`. Two lessons worth
+carrying: a payload optimization can cost more in per-row function evaluation than it saves in
+transfer, and `dotnet test` green plus a clean browser pass said nothing about either — only the
+measurement did.
 
 ### Tests (WU35, 2026-06-24)
 

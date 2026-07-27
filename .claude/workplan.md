@@ -4210,3 +4210,37 @@ arity 400, repeated-member 400); migration script green.
   L6 untouched: C4's messaging half stays open, all index work deferred per standing instruction.
 - **Tool:** Claude Code (Fable). **Pointer:** `audit/Messaging.md` §"WU-MsgReadPath";
   `layer2-services.md` §"Conversation listing is scoped, ID-first, and unpaged".
+
+- **Post-WU review addendum (2026-07-26) — WU-MsgReadPath.** A self-review after the WU closed found
+  seven items; all fixed in-session. The consequential one:
+  1. **The claimed payload improvement had never been measured** (violating the standing "always
+     measure" rule). Measuring reversed the conclusion **twice**: the shape as shipped was an
+     **88 % regression** (11.31 ms vs the pre-rework 5.72 ms), because writing the preview
+     `Substring` inside the `FirstOrDefault` projection pushed it into EF's `ROW_NUMBER()` window
+     over the whole `private_messages` table — detoasting all 8 460 rows before eliminating them to
+     401. Moving it to the outer projection makes EF emit a correlated `ORDER BY … LIMIT 1` index
+     seek instead (no `Seq Scan` on messages at all), giving **3.14 ms — a 45 % improvement** over
+     baseline. Now a do-not-simplify rule in `layer2-services.md`; numbers + EXPLAIN plans in
+     `PerfBaseline/results/msgreadpath*`; volume reproducible via the new
+     `PerfBaseline/seed-messaging-volume.sql` (three permanent `messaging_inbox_*` scenarios added).
+     **Neither the green suite nor the clean browser pass detected this** — only measurement did.
+  2. **Repo hygiene (pre-existing, not this WU):** ~30 MB of `.trx`/coverage artifacts were tracked
+     in git (two entered history in `f2d7527`). `.gitignore` now covers `TestResults/`/`*.trx`/
+     coverage output and the four files are `git rm --cached`'d. History still carries the blobs.
+  3. **Two untested branches closed:** the `MakePreview` bisected-tag guard (the long-message test
+     cut mid-word, never mid-tag) and the accepted "markup-dense bodies yield a shorter preview"
+     behavior — both now Integration-pinned.
+  4. **Corrected an overclaim in `audit/Messaging.md`:** it said the browser pass verified the
+     preview "rendered from the bounded prefix". It did not and could not — the seed conversation's
+     messages are far under the prefix, so the SUBSTRING is a no-op there. Bounded-prefix behavior
+     is Integration-covered only; the note now says so explicitly.
+  5. **Process deviation, recorded rather than hidden:** WU-MsgReadPath opened by stating the
+     `layer2-services.md` rewrite was a Doc-Touch *moment-1* item to be done first, then actually
+     wrote it last, after all code. CLAUDE.md requires moment-1 touches to complete **before** any
+     code change. No harm resulted here (the convention text landed accurate), but the sequence was
+     wrong and stating the rule while breaking it is worth the record.
+  6. **Deploy note (`?includeArchived=` → `?scope=`):** a breaking query-param rename with no API
+     versioning story. A stale cached WASM client would send the old param, bind nothing, and
+     silently render the **inbox** under the Archived tab. Harmless pre-launch (no external
+     consumers, no cached clients in the wild); flagged for the Phase-7 launch checklist because
+     the failure mode is silent rather than an error.

@@ -1,0 +1,45 @@
+-- messaging_inbox_step1_metadata
+-- provenance: ServerMessagingReadService.GetConversationsAsync step 1 (ids + MAX(date_sent) only)
+
+Sort  (cost=449.84..450.84 rows=401 width=13) (actual time=1.172..1.183 rows=401.00 loops=1)
+  Sort Key: (((SubPlan 2) IS NOT NULL)) DESC, ((SubPlan 4)) DESC
+  Sort Method: quicksort  Memory: 37kB
+  Buffers: shared hit=1615
+  ->  Hash Join  (cost=13.02..432.50 rows=401 width=13) (actual time=0.059..1.130 rows=401.00 loops=1)
+        Hash Cond: (c.conversation_id = c0.conversation_id)
+        Buffers: shared hit=1615
+        ->  Seq Scan on conversation_participants c  (cost=0.00..15.03 rows=401 width=4) (actual time=0.006..0.049 rows=401.00 loops=1)
+              Filter: ((NOT is_archived) AND (user_id = 1))
+              Rows Removed by Filter: 401
+              Buffers: shared hit=5
+        ->  Hash  (cost=8.01..8.01 rows=401 width=4) (actual time=0.043..0.043 rows=401.00 loops=1)
+              Buckets: 1024  Batches: 1  Memory Usage: 23kB
+              Buffers: shared hit=4
+              ->  Seq Scan on conversations c0  (cost=0.00..8.01 rows=401 width=4) (actual time=0.003..0.019 rows=401.00 loops=1)
+                    Buffers: shared hit=4
+        SubPlan 2
+          ->  Result  (cost=0.49..0.50 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=401)
+                Buffers: shared hit=803
+                InitPlan 1
+                  ->  Limit  (cost=0.29..0.49 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=401)
+                        Buffers: shared hit=803
+                        ->  Index Only Scan Backward using ix_private_messages_conversation_id_date_sent on private_messages p  (cost=0.29..4.65 rows=21 width=8) (actual time=0.001..0.001 rows=1.00 loops=401)
+                              Index Cond: (conversation_id = c0.conversation_id)
+                              Heap Fetches: 0
+                              Index Searches: 401
+                              Buffers: shared hit=803
+        SubPlan 4
+          ->  Result  (cost=0.49..0.50 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=401)
+                Buffers: shared hit=803
+                InitPlan 3
+                  ->  Limit  (cost=0.29..0.49 rows=1 width=8) (actual time=0.001..0.001 rows=1.00 loops=401)
+                        Buffers: shared hit=803
+                        ->  Index Only Scan Backward using ix_private_messages_conversation_id_date_sent on private_messages p0  (cost=0.29..4.65 rows=21 width=8) (actual time=0.001..0.001 rows=1.00 loops=401)
+                              Index Cond: (conversation_id = c0.conversation_id)
+                              Heap Fetches: 0
+                              Index Searches: 401
+                              Buffers: shared hit=803
+Planning:
+  Buffers: shared hit=10
+Planning Time: 0.197 ms
+Execution Time: 1.215 ms

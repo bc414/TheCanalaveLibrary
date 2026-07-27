@@ -80,17 +80,24 @@ public partial class ServerMessagingReadService(
                     })
                     .FirstOrDefault(),
                 // Bounded prefix, not the whole body: the preview is ≤100 plain-text chars, so
-                // shipping a multi-KB message across the wire to truncate it in C# was the read
-                // path's dominant waste. Substring translates to SQL substring(), which is
-                // length-tolerant on shorter strings.
-                LastMessage = cp.Conversation.PrivateMessages
+                // shipping a multi-KB message across the wire to truncate it in C# is waste.
+                //
+                // MEASURED CONSTRAINT (2026-07-26 — do not "simplify" this back):
+                // the Substring must sit in the OUTER projection, applied to the subquery's
+                // scalar result. Putting it inside the FirstOrDefault projection pushes it into
+                // EF's ROW_NUMBER window, where Postgres evaluates it on EVERY message row
+                // before row elimination — forcing a detoast per row and taking the hydration
+                // step from ~5 ms to ~10.5 ms on a 400-conversation / 8.5k-message inbox
+                // (WindowAgg 0.88 ms → 5.96 ms). See audit/Messaging.md §WU-MsgReadPath measurement.
+                LastMessageDate = cp.Conversation.PrivateMessages
                     .OrderByDescending(m => m.DateSent)
-                    .Select(m => new
-                    {
-                        HtmlPrefix = m.MessageText.Substring(0, PreviewFetchPrefixChars),
-                        DateSent = (DateTime?)m.DateSent
-                    })
+                    .Select(m => (DateTime?)m.DateSent)
                     .FirstOrDefault(),
+                LastMessageHtmlPrefix = cp.Conversation.PrivateMessages
+                    .OrderByDescending(m => m.DateSent)
+                    .Select(m => m.MessageText)
+                    .FirstOrDefault()!
+                    .Substring(0, PreviewFetchPrefixChars),
                 // Messages sent by the other participant after my LastReadTimestamp.
                 UnreadCount = cp.Conversation.PrivateMessages
                     .Count(m => m.SenderUserId != viewerId
@@ -114,8 +121,8 @@ public partial class ServerMessagingReadService(
                         r.OtherParticipant.UserId,
                         r.OtherParticipant.Username ?? "[deleted]",
                         r.OtherParticipant.AvatarUrl ?? DefaultAvatarUrl),
-                r.LastMessage is null ? null : MakePreview(r.LastMessage.HtmlPrefix),
-                r.LastMessage?.DateSent,
+                r.LastMessageHtmlPrefix is null ? null : MakePreview(r.LastMessageHtmlPrefix),
+                r.LastMessageDate,
                 r.UnreadCount))
             .ToList();
     }

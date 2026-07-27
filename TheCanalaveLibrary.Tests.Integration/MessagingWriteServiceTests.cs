@@ -348,6 +348,56 @@ public class MessagingWriteServiceTests(PostgresFixture postgres) : IntegrationT
     }
 
     /// <summary>
+    /// The 2048-char fetch prefix can bisect an HTML tag, leaving a fragment like
+    /// <c>&lt;a hre</c> at the end. MakePreview drops an unterminated trailing fragment; without
+    /// that guard the stripped text would leak raw markup into the listing. This test lands the
+    /// cut inside a long anchor tag deliberately — the WU-MsgReadPath long-message test cuts
+    /// mid-word and never exercises this branch.
+    /// </summary>
+    [Fact]
+    public async Task GetConversations_Preview_DropsTagFragmentLeftByPrefixTruncation()
+    {
+        // Short visible text, then an anchor whose href alone runs past the 2048-char prefix, so
+        // the cut necessarily lands inside the tag rather than between tags.
+        string body = "<p>Visible lead text.</p><p><a href=\"https://example.com/"
+                      + new string('x', 2500) + "\">link</a></p>";
+        await CallStartAsync("Bisected", body);
+
+        IReadOnlyList<ConversationSummaryDto> list = await CallGetConversationsAsync();
+
+        string? preview = list.Single().LastMessagePreview;
+        preview.Should().NotBeNull();
+        preview.Should().StartWith("Visible lead text.");
+        preview.Should().NotContain("<", "an unterminated tag fragment must never reach the preview");
+        preview.Should().NotContain("href", "raw attribute text must never reach the preview");
+    }
+
+    /// <summary>
+    /// Documents an accepted consequence of the bounded prefix (WU-MsgReadPath): plain-text yield
+    /// depends on markup density, so a link-dense body can produce a preview shorter than the
+    /// 100-char cap even though the full message has far more text. Deliberate trade — a listing
+    /// excerpt is not a contract to always fill 100 chars. Pinned so the behavior is a recorded
+    /// decision rather than a surprise if someone later measures preview lengths.
+    /// </summary>
+    [Fact]
+    public async Task GetConversations_Preview_MayBeShorterThanCap_WhenMarkupDense()
+    {
+        // ~40 links, each ~60 raw chars yielding 2 plain chars ("Aa" + space).
+        string body = "<p>" + string.Concat(Enumerable.Range(0, 40).Select(i =>
+            $"<a href=\"https://example.com/some/fairly/long/path/segment/{i:D4}\">Aa</a> ")) + "</p>";
+        await CallStartAsync("Dense", body);
+
+        IReadOnlyList<ConversationSummaryDto> list = await CallGetConversationsAsync();
+
+        string? preview = list.Single().LastMessagePreview;
+        preview.Should().NotBeNull();
+        preview.Should().NotContain("http", "hrefs are stripped, not previewed");
+        preview!.Trim().Should().StartWith("Aa");
+        // The point of the test: markup density, not message length, bounds the yield.
+        preview.Length.Should().BeLessThan(101);
+    }
+
+    /// <summary>
     /// Archiving mutes the global badge but must NOT suppress the per-conversation unread count —
     /// that count is what keeps a reply to an archived thread discoverable inside the Archived
     /// tab. See layer2-services.md §"Conversation Archiving Is Sticky".

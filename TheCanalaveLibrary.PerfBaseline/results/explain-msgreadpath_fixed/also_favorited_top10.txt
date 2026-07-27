@@ -1,0 +1,23 @@
+-- also_favorited_top10
+-- provenance: ServerCoOccurrenceReadService.GetAlsoFavoritedAsync (ranked mart read)
+
+Limit  (cost=9.35..9.35 rows=1 width=8) (actual time=0.009..0.009 rows=0.00 loops=1)
+  Buffers: shared hit=4
+  ->  Sort  (cost=9.35..9.35 rows=1 width=8) (actual time=0.008..0.009 rows=0.00 loops=1)
+        Sort Key: m.score DESC, m.also_favorited_story_id
+        Sort Method: quicksort  Memory: 25kB
+        Buffers: shared hit=4
+        ->  Nested Loop  (cost=0.28..9.34 rows=1 width=8) (actual time=0.007..0.007 rows=0.00 loops=1)
+              Buffers: shared hit=4
+              ->  Seq Scan on also_favorited_scores m  (cost=0.00..1.02 rows=1 width=8) (actual time=0.003..0.003 rows=1.00 loops=1)
+                    Filter: (story_id = 1)
+                    Rows Removed by Filter: 1
+                    Buffers: shared hit=1
+              ->  Index Scan using pk_stories on stories s  (cost=0.28..8.30 rows=1 width=4) (actual time=0.003..0.003 rows=0.00 loops=1)
+                    Index Cond: (story_id = m.also_favorited_story_id)
+                    Filter: ((NOT is_taken_down) AND (story_status_id >= 2) AND (story_status_id <= 7) AND (rating <= 1))
+                    Rows Removed by Filter: 1
+                    Index Searches: 1
+                    Buffers: shared hit=3
+Planning Time: 0.073 ms
+Execution Time: 0.016 ms

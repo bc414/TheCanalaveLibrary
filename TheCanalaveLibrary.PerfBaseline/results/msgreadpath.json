@@ -1,0 +1,107 @@
+{
+  "bookshelf_favorites_tab": {
+    "Median": 0.14150000000000001,
+    "P95": 0.16543499999999994,
+    "Min": 0.1235,
+    "Max": 0.2469,
+    "Iterations": 40
+  },
+  "bookshelf_actively_reading_tab": {
+    "Median": 0.114,
+    "P95": 0.12016999999999999,
+    "Min": 0.1113,
+    "Max": 0.1258,
+    "Iterations": 40
+  },
+  "discover_date_published_page1": {
+    "Median": 0.1031,
+    "P95": 0.2846799999999996,
+    "Min": 0.0978,
+    "Max": 0.4591,
+    "Iterations": 40
+  },
+  "discover_exclusion_probe_page1": {
+    "Median": 0.23775,
+    "P95": 0.3347599999999998,
+    "Min": 0.2218,
+    "Max": 0.4824,
+    "Iterations": 40
+  },
+  "tag_filter_and_include_page1": {
+    "Median": 0.35860000000000003,
+    "P95": 0.5497949999999999,
+    "Min": 0.2527,
+    "Max": 0.6017,
+    "Iterations": 40
+  },
+  "comment_roots_page1": {
+    "Median": 0.25975000000000004,
+    "P95": 0.34798,
+    "Min": 0.2278,
+    "Max": 0.3625,
+    "Iterations": 40
+  },
+  "comment_roots_count": {
+    "Median": 0.5822499999999999,
+    "P95": 0.7427449999999999,
+    "Min": 0.5522,
+    "Max": 0.7889,
+    "Iterations": 40
+  },
+  "notifications_feed_newest_page1": {
+    "Median": 0.11829999999999999,
+    "P95": 0.18356499999999984,
+    "Min": 0.1036,
+    "Max": 0.2893,
+    "Iterations": 40
+  },
+  "notifications_unread_count": {
+    "Median": 0.09565000000000001,
+    "P95": 0.17012999999999998,
+    "Min": 0.0867,
+    "Max": 0.1872,
+    "Iterations": 40
+  },
+  "tree_search_wide_degree2": {
+    "Median": 0.5616000000000001,
+    "P95": 0.722835,
+    "Min": 0.5425,
+    "Max": 7.7309,
+    "Iterations": 40
+  },
+  "tree_search_deep_degree5": {
+    "Median": 0.5574,
+    "P95": 0.758225,
+    "Min": 0.5334,
+    "Max": 0.9594,
+    "Iterations": 40
+  },
+  "also_favorited_top10": {
+    "Median": 0.15115,
+    "P95": 0.175885,
+    "Min": 0.1468,
+    "Max": 0.1865,
+    "Iterations": 40
+  },
+  "messaging_inbox_legacy_single_query": {
+    "Median": 6.009650000000001,
+    "P95": 8.57048,
+    "Min": 5.6312,
+    "Max": 9.6439,
+    "Iterations": 40
+  },
+  "messaging_inbox_step1_metadata": {
+    "Median": 0.7644,
+    "P95": 1.72488,
+    "Min": 0.6154,
+    "Max": 1.7811,
+    "Iterations": 40
+  },
+  "messaging_inbox_step2_hydrate": {
+    "Median": 10.55005,
+    "P95": 12.736315,
+    "Min": 10.2172,
+    "Max": 13.0464,
+    "Iterations": 40
+  }
+}

@@ -1,0 +1,19 @@
+-- notifications_feed_newest_page1
+-- provenance: ServerNotificationReadService.GetNotificationsAsync (NewestFirst)
+
+Limit  (cost=252.43..252.48 rows=20 width=16) (actual time=0.238..0.239 rows=20.00 loops=1)
+  Buffers: shared hit=154
+  ->  Sort  (cost=252.43..254.30 rows=750 width=16) (actual time=0.238..0.238 rows=20.00 loops=1)
+        Sort Key: date_created DESC, notification_id DESC
+        Sort Method: top-N heapsort  Memory: 26kB
+        Buffers: shared hit=154
+        ->  Bitmap Heap Scan on notifications  (cost=58.09..232.47 rows=750 width=16) (actual time=0.087..0.190 rows=750.00 loops=1)
+              Recheck Cond: (recipient_user_id = 8)
+              Heap Blocks: exact=149
+              Buffers: shared hit=154
+              ->  Bitmap Index Scan on ix_notifications_recipient_read_date  (cost=0.00..57.91 rows=750 width=0) (actual time=0.065..0.065 rows=750.00 loops=1)
+                    Index Cond: (recipient_user_id = 8)
+                    Index Searches: 1
+                    Buffers: shared hit=5
+Planning Time: 0.041 ms
+Execution Time: 0.249 ms
