@@ -1,7 +1,8 @@
 # Audit — Accessibility (Feature 65)
 
 **Cross-cutting quality attribute, minted 2026-07-15 as Feature 65 in `status.md`'s grid** (an
-exception to the "cross-cutting cluster = no grid row" precedent `Seo/`/`Errors/`/`Toasts/` follow —
+exception to the "cross-cutting cluster = no grid row" precedent `Errors/`/`Toasts/` follow;
+`Seo/` since gained its own row, Feature 64 —
 Brian's explicit choice, since accessibility needs its own Stage tracking rather than folding
 silently into every consuming feature's L4 cell). No owning folder — see `folder_clusters.md`'s
 `Accessibility` row (folder `—`). Addendum-sourced: `.claude/middle-addendum.md` §3 item **#22**

@@ -51,7 +51,7 @@ over a message that already has a first-class home and its own unread boundary.
 
 **Rule:** private messages **never** create `Notification` rows. `INotificationWriteService` is not
 injected by `IMessagingWriteService`. The global unread-messages badge (a `MessagesNavLink` component
-in the Desktop/Mobile layout chrome, `render-and-layout.md`) calls
+in `MainLayout`'s chrome, `render-and-layout.md`) calls
 `IMessagingReadService.GetUnreadConversationCountAsync()` directly — that badge is the cross-cutting
 signal; the notification bell is for social/content events.
 
@@ -68,9 +68,10 @@ Never trust client sanitization, never persist raw user HTML. Full allow-list + 
 `layer2-services.md` §"User HTML Is Sanitized Once, On Save — Never On Display".
 
 **EditorView** (universal across all text surfaces): chapters, comments, author notes, descriptions,
-recommendations, profile bios, blog posts, AND private messages. Desktop shows full toolbar; mobile
-shows compact toolbar with overflow for less-used formatting **(deferred — WU6 shipped desktop only;
-not MVP-blocking, see `layer3.5-structure.md` "Third-Party Wrapper Composite")**.
+recommendations, profile bios, blog posts, AND private messages. WU6 shipped the full toolbar; a
+compact narrow-viewport toolbar with overflow, **if ever built**, rides the adaptivity ladder's
+rung-3 trigger — not a device fork, which no longer exists as a pattern (see
+`layer3.5-structure.md` "Third-Party Wrapper Composite" and `layer4-style.md`'s adaptivity ladder).
 
 ## Aspire 13 Configuration
 

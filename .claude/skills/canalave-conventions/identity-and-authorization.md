@@ -1,8 +1,10 @@
 # Identity & Authorization
 
 The scoped active-user abstraction, the two-identity-source rule that keeps SharedUI WASM-safe, the
-six kinds of active-user conditionality, and cookie/role-based authorization. Split out of
-`cross-cutting.md` (2026-07-07) as its own coherent theme.
+seven kinds of active-user conditionality, and cookie/role-based authorization. Split out of
+`cross-cutting.md` (2026-07-07) as its own coherent theme. The Class-A/Class-B viewer-permission
+split this file enforces is modeled in `.claude/design/access-gating-first-principles.md`
+(authoritative) with the per-surface inventory in `access-gating-audit.md`.
 
 ## Active-User Context
 
@@ -19,15 +21,17 @@ public interface IActiveUserContext
     bool ShowMatureContent { get; }    // feeds the content-rating filter (content-safety.md)
     string Theme { get; }              // URL-safe theme SLUG (e.g. "pokemon") — feeds ThemeContext / sprite URL builder
     bool PrefersAnimatedSprites { get; }
-    bool IsModerator { get; }          // query-shaping hint only — NOT the auth authority
+    bool IsModerator { get; }          // server-side enforcement input (RequireModerator) + query shaping — the UI affordance half lives in AuthorizeView
     bool IsAdmin { get; }
 }
 ```
 
 `ServerActiveUserContext` (Server/Identity/) is scoped, populated once per circuit from
-`AuthenticationState`/claims. `IsModerator`/`IsAdmin` exist only to decide when a query legitimately
-calls `IgnoreQueryFilters` or shows admin/author UI — real access control stays with `AuthorizeView`/
-policies, not this context.
+`AuthenticationState`/claims. `IsModerator`/`IsAdmin` are not the *UI* auth surface — `AuthorizeView`/
+policies own affordance (what renders) — but they ARE the server-side enforcement input: service-layer
+`RequireModerator()` and `entity.OwnerId == UserId` checks are the enforcement point of record (see
+§"Authorization Has Two Enforcement Surfaces" below), and they also decide when a query legitimately
+calls `IgnoreQueryFilters`.
 
 **What stays out, deliberately:** display name/avatar URL (presentation — comes via `UserCardDto` per
 view); `ReaderDisplaySettings` (already a separate cascading slim bag, a UI-layer concern — see
@@ -284,7 +288,7 @@ the type matched by the router. To gate part of an otherwise-public page (e.g., 
 edit button on a public `StoryPage`), use `<AuthorizeView Roles="...">` around just that markup, not
 a page-level attribute.
 
-### Default-Deny for MVP, Default-Allow Post-Launch
+### Authorization Posture: Default-Allow (a Default-Deny Recipe Retained, Never Implemented)
 
 **Operative posture (recorded 2026-07-18, MA-104): the app runs default-allow.** The MVP
 fallback-policy block below was never implemented — anonymous browsing has been the verified-normal

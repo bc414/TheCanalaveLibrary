@@ -112,8 +112,8 @@ namespace). Only a stale comment remained (fixed). `dotnet build` green; `/Accou
 - **L3-Logic / L3.5-Structure — Stage 5.** `DeletePersonalData.razor` rewired from the old direct
   `UserManager.DeleteAsync(user)` (which would throw on the `Restrict` FKs) to
   `DeletionService.DeleteUserAsync(user.Id)`; a `false` return (not found) now redirects to the existing
-  invalid-user path instead of throwing. Inherits the resolved post-move reconciliation. **L4 — Stage 1
-  (unchanged). L5 — N/A.**
+  invalid-user path instead of throwing. Inherits the resolved post-move reconciliation. **L4 — Stage 5
+  (WU38a, 2026-07-11 — see the WU38a Stage note below). L5 — N/A.**
 
 ## WU-Security + WU-DataProtection Stage note (2026-07-06) — F1 L2 remains Stage 5, hardened
 

@@ -113,8 +113,9 @@ Covered by `DiscoveryRollUpAndShipTests` (Integration). Full narrative: `audit/T
 §"WU-TagFanon Stage note"; rules: `layer2-services.md` §"Tag Hierarchy Roll-Up".
 
 ## Feature 31 — Search Page (`/discover`)
-- **L1 — N/A** (queries Story/USI/StoryListing). **L2 — Stage 2** (Source=All query; random preload /
-  "give me more" remains WU28). **L3/L3.5 — Stage 5 (WU23, 2026-06-23).** **L4 — Stage 1.**
+- **L1 — N/A** (queries Story/USI/StoryListing). **L2 — Stage 5** (WU23 built the Source=All query;
+  WU28 closed random preload / "give me more" — see the WU28 Stage note below). **L3/L3.5 — Stage 5
+  (WU23, 2026-06-23).** **L4 — Stage 1.**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; search page verified in a real WASM runtime during the
   flip's browser wave (random batch + filtered `POST /query` + sort switch). Full wave narrative +
@@ -150,9 +151,8 @@ Covered by `DiscoveryRollUpAndShipTests` (Integration). Full narrative: `audit/T
   per-`SearchMode` default-settings matrix (§8.7 → WU28 Phase 1b, now settled).
 
   **L2 note (WU23):** partially advanced — `GetListingsAsync(StoryFilterDto)` (Source=All filtered
-  query) is built. The random-preload and "give me more" pagination remain Stage 2 → WU28.
-  **L2 (WU28, in progress):** `GetRandomBatchAsync` + `IDiscoveryDefaultsReadService` are the
-  remaining L2 deliverables.
+  query) was built here; the random-preload and "give me more" pagination were then closed by WU28
+  (`GetRandomBatchAsync` + `IDiscoveryDefaultsReadService` — see the WU28 Stage note, 2026-06-25).
 
   **WU23 Stage note — L3/L3.5 (2026-06-23):**
   Built: `Core/Discovery/StoryFilterDto.cs` (sealed record: `TextQuery?`, `IncludedTagIds`,
@@ -600,9 +600,10 @@ Covered by `DiscoveryRollUpAndShipTests` (Integration). Full narrative: `audit/T
   pane (recorded as not-built in `layer3.5-structure.md`); L6 index measurement.
 
 ## Feature 34 — Tag Directory (`/tags`)
-- **L1 — N/A.** **L2 — Stage 2** (browse query). **L3/L3.5 — Stage 2** (`TagDirectoryPage`: user browse +
-  mod CRUD behind `AuthorizeView`; mobile browse, desktop-only edit). Depends on the `TagChip` atom owned
-  by Tags/. **L4 — Stage 1. L5 — Stage 5 (WU-L5Pilot, see Stage note below).**
+- **L1 — N/A.** **L2 — Stage 5 (WU27.5, 2026-06-25 — see Stage note below:** `GetTagDirectoryAsync`
+  **built + tested). L3/L3.5 — Stage 5 (same note:** `TagDirectoryPage` + `TagDirectorySection`,
+  5 Integration + 15 RazorComponents tests**).** Depends on the `TagChip` atom owned by Tags/.
+  **L4 — Stage 1. L5 — Stage 5 (WU-L5Pilot, see Stage note below).**
 
   **Settled for WU27.5 (2026-06-24, do not revisit):**
   - **Browse layout:** sections per type (enum order), parent→child nesting everywhere (TOC-style,
@@ -613,8 +614,10 @@ Covered by `DiscoveryRollUpAndShipTests` (Integration). Full narrative: `audit/T
     chip and "+ New Tag". Edit/new open a WU9-shell modal with `TagEditorForm`; delete opens
     `ConfirmDialog`. `TagDirectoryDesktop` emits `EventCallback`s up to the page.
   - **Mobile:** browse-only, no edit controls, unbounded sections collapsed by default.
-  - **Dispatcher pattern:** `TagDirectoryPage` (public, no `[Authorize]`) injects `ITagReadService` +
-    `IDeviceDetectionService`, owns write calls, branches mobile/desktop.
+  - **Page owns data + writes:** `TagDirectoryPage` (public, no `[Authorize]`) injects
+    `ITagReadService`, owns write calls. (The original device-fork branching and
+    `IDeviceDetectionService` were removed by WU-ResponsiveMerge, 2026-07-18 — single responsive
+    page now.)
 
   **WU27.5 Stage note — L2/L3/L3.5 (2026-06-25):**
 
@@ -671,7 +674,7 @@ Covered by `DiscoveryRollUpAndShipTests` (Integration). Full narrative: `audit/T
 
   **2026-07-04 (same day, post-verification):** island directives + page-level
   `ThemeContextProvider` wrap removed from `TagDirectoryPage` per the settled single-flip
-  rollout strategy (`middle_plan.md` Resolved "L5 rollout strategy") — `/tags` rides global
+  rollout strategy (`middle_plan_v2.md` §Resolved "L5 rollout strategy", carried forward) — `/tags` rides global
   `InteractiveServer` until the site-wide `InteractiveAuto` flip; `[PersistentState]` kept
   (prevents the prerender double fetch under the circuit too). L5 remains Stage 5: endpoints,
   client impls, and tests are live and green, and the WASM-runtime verification above is the
@@ -680,8 +683,9 @@ Covered by `DiscoveryRollUpAndShipTests` (Integration). Full narrative: `audit/T
 
 ## Feature 59 — Automatic Tree Search (formerly below the line — line crossed 2026-07-07)
 - **L1 — N/A** (Phase A removed the EF model; `user_story_tree_search_entries` is a raw-SQL mart — divergence
-  resolved). **L2 — Stage 5 (WU-Marts, 2026-07-07 — see Stage note).** **L3/L3.5 — Stage 2** (unified with
-  manual tree search; degree controls + edge-type selector — UI deferred past WU-Marts). **L4 — Stage 1.**
+  resolved). **L2 — Stage 5 (WU-Marts, 2026-07-07 — see Stage note).** **L3/L3.5 — Stage 5 (WU44,
+  2026-07-11 — see Stage note below:** unified with manual tree search; Automatic tab UI built,
+  RazorComponents + browser-verified**). L4 — Stage 1.**
   **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; the Automatic tree-search tab verified in a real WASM
   runtime during the flip's browser wave, incl. the stale-root dispatcher fix (workplan bug 6).

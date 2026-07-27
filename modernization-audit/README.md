@@ -1,9 +1,16 @@
 # Modernization Audit — Progress
 
-Plan of record: `~/.claude/plans/this-codebase-was-made-parsed-dawn.md` (v3, approved 2026-07-17).
-Workspace layout, artifact schemas, standing rules, and the reference-frame rule live in that plan.
+> **COMPLETE (audit 2026-07-17; fix passes closed 2026-07-18 by WU-AuditFixPass + WU-AuditFixPass-2
+> — see `fix-status.md` and `workplan.md`).** This tree is the audit's durable record, not live
+> work. Still-open remainders live in `deferred-work.md` and `hidden-deferrals-tracker.md` H8.
+> The State table below is the frozen as-of-2026-07-17 progress log.
 
-## State
+Plan of record: [plan-of-record.md](plan-of-record.md) (v3, approved 2026-07-17; copied into the
+repo 2026-07-27 from `~/.claude/plans/this-codebase-was-made-parsed-dawn.md`, which future sessions
+cannot reach). Workspace layout, artifact schemas, standing rules, and the reference-frame rule
+live in that plan.
+
+## State (frozen 2026-07-17)
 
 | Field | Value |
 |---|---|
@@ -29,9 +36,8 @@ Workspace layout, artifact schemas, standing rules, and the reference-frame rule
 | Next action | Synthesis: (1) conventions-vs-ecosystem (Bucket B) agent — web-verified, ~30 doc-vs-code flags accumulated; (2) cross-slice inventory comparison + lead-chasing; (3) Tier-1 verify batch (4 of 5 already spot-verified in verification.md; MA-101 ReconnectModal remains); (4) executive report.md. |
 | Tier-1 ledger | MA-201 (Stories XSS) ✓CONFIRMED · MA-301 (Chapters authz) ✓CONFIRMED · MA-601 (Badges IDOR) ✓CONFIRMED · MA-602 (UserProfile anon-read) ✓CONFIRMED · MA-101 (ReconnectModal path) — pending verify. |
 
-## Resume instructions (for a session picking this up cold)
+## Resume instructions
 
-1. Read the plan file above in full.
-2. Read this README's State table.
-3. Continue from "Next action". Never re-read files already covered by a completed artifact —
-   `calibration.md`, `slices/0-atoms-findings.md`, and `slices/<n>-*.md` are the durable memory.
+None — the audit and both fix passes are complete. For remaining items see `deferred-work.md`
+(prune-vs-keep and org-move decisions) and `hidden-deferrals-tracker.md` H8. `report.md` is the
+executive deliverable; `fix-status.md` maps every finding to its resolution.

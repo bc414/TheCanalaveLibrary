@@ -19,8 +19,9 @@ items where the grid cell reads Stage 5 (or N/A), yet real work remains. Produce
 > only ever run against an empty database. Worth carrying forward: **every one of those was found by
 > re-reading the diff** — the 2258-test suite was green and the browser pass was clean throughout.
 
-**Status: snapshot, not authoritative.** This file is a hand-maintained convenience list, deliberately kept
-*outside* the governed process docs (`status.md` / audit files / skills) at the owner's request. It can go stale.
+**Status: snapshot, not authoritative.** This file is a hand-maintained convenience list — listed in
+`CLAUDE.md`'s Project Files table (added 2026-07-27, owner-approved) so sessions can find it, but still
+*not* a governed source of truth like `status.md` / audit files / skills. It can go stale.
 Before acting on any item, **re-read the cited source of truth** (audit note / code seam / plan row) and check
 whether a later work-unit already closed it — several items in the original report were dropped precisely because
 a later WU had resolved them (see "Already-closed, do not re-report" at the bottom). Treat a checked box as "someone
@@ -330,7 +331,7 @@ decision work that has no row at all.
 
 ## C. L6 cells marked verified but never measured / known-missing indexes
 
-Context for all of C: `audit/L6-reconciliation-matrix.md` is explicitly *"evidence for a later build/measure pass, not the
+Context for all of C: `design/L6-reconciliation-matrix.md` is explicitly *"evidence for a later build/measure pass, not the
 pass itself,"* and a live `pg_indexes` sweep has **not** been run since the 2026-07-07 discovery that six
 `user_story_interactions` filtered indexes had silently collapsed to one. Several L6=5 cells therefore assert more than
 was measured. The owner's standing rule is "always measure."
@@ -556,8 +557,9 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     - **Layer-8 strict "no-mature routing" toggle** deferred — `layer8-data-marts.md:257` (same "hard-mode" idea as E6).
 
 - [ ] **H7 — Open test-hygiene backlog** `[test-gap · low · anytime]`
-  - Source: `test-hygiene-manifest.md` header + §5.
-  - Context: 25 non-mobile consolidate merges; Integration `NotificationServiceTests` flake fix; Integration format-dupes; Unit tautology trim; deferred `*Mobile` test-file deletions (pending a holistic Desktop/Mobile split assessment). Suite is green, so nothing signals the pending cleanup.
+  - Source: `test-hygiene-manifest.md` (retired 2026-07-27 — this item is now the ledger of record; the manifest's §5 table lists the individual merge targets).
+  - Context, all that remains open: the 25 non-mobile **C-consolidate** merges (manifest §5); Integration `NotificationServiceTests` flake fix; Integration format-dupes; Unit tautology trim. The formerly-deferred `*Mobile` test-file deletions were discharged by WU-ResponsiveMerge (2026-07-18) — no `*Mobile*` test file exists. Suite is green, so nothing signals the pending cleanup.
+  - Note: `CanalaveTypeaheadTests.Escape_ClosesDropdown_WithoutSelecting` is a known pre-existing intermittent flake (passes on isolated re-run).
 
 - [ ] **H8 — MA-610 Identity scaffold prune-vs-keep** `[decision · low · pre-launch]` — *Partially disclosed (status.md line 85 🧑).*
   - Grid: F1 mostly 5 (L4=1).

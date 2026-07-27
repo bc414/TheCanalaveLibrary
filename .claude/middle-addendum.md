@@ -60,10 +60,10 @@ awareness:
 | TLS/domain | Phase 7 |
 | Legal/policy track (ToS, privacy policy, DMCA agent, moderation obligations) | Decision row 10 — **see §3, this is far less resolved than one line implies** |
 | Email provider + sending domain choice | Decision row 8, Phase 7 |
-| L6 index batch (comment golden index, StoryTag reverse index) + performance baseline | Phase 1 item 3 |
-| SignalR messaging push | Phase 1 item 8 |
-| L5 WASM global flip | Phase 5 |
-| Story Arcs / Polls / Custom Lists / Spotlight donation infra / Feature Contributions | Phase 4, decision row 3 |
+| L6 index batch (comment golden index, StoryTag reverse index) + performance baseline | Phase 1 item 3 — **since DONE (WU-L6, 2026-07-07)** |
+| SignalR messaging push | Phase 1 item 8 — **since REMOVED (2026-07-07): SignalR permanently ruled out, see `middle_plan_v2.md` Resolved** |
+| L5 WASM global flip | Phase 5 — **since DONE (WU-GlobalFlip, 2026-07-13)** |
+| Story Arcs / Polls / Custom Lists / Spotlight donation infra / Feature Contributions | Phase 4, decision row 3 — **row 3 resolved 2026-07-18: Feature 56 CUT; Custom Lists/Polls since built** |
 | Beta logistics | Decision row 6 |
 | Log retention / PII-in-logs policy | `logging.md`: "revisit at Phase 7, pairs with decision row 10" — flagged but not detailed |
 

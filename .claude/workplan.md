@@ -51,8 +51,8 @@ mark the consumer flip (2→3) when an atom's contract lands, and switch that co
 residual genuine Stage-4 (WU1); **Sonnet in Claude Code** for cells already Stage-3 (none yet — they appear
 as atoms land). L4-Style is never sequenced alone — it rides inside the same work-unit as that feature's
 L3/L3.5 build (per Phase D rule; tokens are locked, `layer4-style.md` is the validated spec). "Build +
-verify" for any unit touching L4 means render-and-look, not just `dotnet build` — see `forward_plan.md`
-Phase E.
+verify" for any unit touching L4 means render-and-look, not just `dotnet build` (the Phase-E rule,
+carried forward from the retired forward_plan; mechanics in `run-server/SKILL.md`).
 
 **Per-unit loop (Phase E).** pick next → read its audit pointer → feed audit "settled" notes to the tool as
 "do not revisit" → build → `dotnet build` + `dotnet test` (should be green; add asserted tests for any new
@@ -2175,11 +2175,13 @@ entry above (with cells/verification) when built.
   WU-Email; also folds in the untested anonymous-`NotificationBell` RazorComponents gap noted in
   `audit/Notifications.md` Feature 42. **Pointer:** `audit/Notifications.md`. **Deps:** WU-Email
   (DONE ✓ 2026-07-06).
-- **WU-AccountEnforcement** — already listed as Phase 2 item 5 in `middle_plan_v2.md` (unchanged by
-  this pass — recorded here only so every phase-sequenced named WU has one ledger entry). **Cells:**
-  Feature 1 (Identity, extends). **Scope:** login-blocking (Suspended until `SuspendedUntilUtc`,
-  Banned permanently) + Warned banner in layout chrome — staged and deferred at WU34. **Pointer:**
-  `canalave-conventions/content-safety.md` "Login enforcement is staged". **Deps:** WU34 (DONE ✓).
+- **WU-AccountEnforcement** — **core shipped inside WU38a (2026-07-11):** login-blocking
+  (`CanalaveSignInManager.CanSignInAsync` — Suspended until `SuspendedUntilUtc`, Banned permanently),
+  security-stamp bump on Suspend/Ban, `AccountStatusBanner` for Warned. **Residual (the only open
+  slice):** mid-session responsiveness — a freshly-Warned user sees the banner only at next sign-in;
+  `RefreshSignInAsync` is the named tool. **Cells:** Feature 1 (Identity, extends). **Pointer:**
+  `canalave-conventions/security.md` "Account-Status Enforcement"; `middle_plan_v2.md` Phase 2
+  item 5. **Deps:** WU38a (DONE ✓).
 
 ---
 
@@ -3579,7 +3581,7 @@ Two loose ends from WU-IntTestPerf, closed same day:
   UI at all, and the page requires "browser-verify folder writes" to be answerable; (4) add the
   deferred L5 test tiers (`GroupEndpointsTests`, `ClientGroupServiceTests`); (5) browser-verify
   end-to-end. L6 row-38's two missing composite indexes are a separate, real, explicitly
-  out-of-scope gap (`audit/L6-reconciliation-matrix.md`).
+  out-of-scope gap (`design/L6-reconciliation-matrix.md`).
 - **Built:** `TheCanalaveLibrary.SharedUI/Groups/GroupFolderManagementPage.razor` — admin-gated
   (mirrors `GroupCreateEditPage`'s pattern: `[Authorize]` + UX admin pre-check +
   `[PersistentState]` + `InlineAlert` + exception-to-message mapping), own recursive interactive
@@ -4254,3 +4256,82 @@ arity 400, repeated-member 400); migration script green.
      silently render the **inbox** under the Archived tab. Harmless pre-launch (no external
      consumers, no cached clients in the wild); flagged for the Phase-7 launch checklist because
      the failure mode is silent rather than an error.
+
+## WU-DocHygiene — process-doc contradiction & staleness cleanup (no code cells) — DONE ✓ (2026-07-27)
+
+- **Trigger:** a four-agent cross-check sweep of the full process-doc corpus (~28k lines: CLAUDE.md,
+  status.md, grid_axes, folder_clusters, middle_plan_v2, middle-addendum, all audit files, all
+  canalave-conventions skills, design/, tracker, workplan) found ~60 confirmed contradictions and
+  stale claims. Three root causes: paradigm shifts never swept through the corpus (the Global Flip
+  2026-07-13 and the Desktop/Mobile fork removal 2026-07-18), status.md Global Conditions drifting
+  into a changelog, and audit-file headline stage lines never revisited after later Stage notes
+  superseded them.
+- **Grid corrections (the only cell changes):** F44 L5 `N/A → 5` (ReadingProgressEndpoints +
+  ClientReadingProgressWriteService exist — the grid_axes buffered-signal L5 exception);
+  F47/F48 L5 `N/A → 5` (ClientModerationRead/WriteService + endpoints exist; `/mod/*` pages
+  WASM-verified in WU-GlobalFlip's wave — Brian-approved 2026-07-27). Row 66's Folder cell
+  `AccessGate → ContentGate` (no AccessGate folder exists in code); row 53's Folder → `Stories`
+  (WU39 settlement); row 17 renamed to grid_axes' "Story Interaction Lists & Bookshelves".
+- **status.md:** seven single-cell narratives collapsed to pointers (their full text already lived
+  in audit files); dead "Stage-4 cells" doctrine note, both contradictory F4/F5 L5 clauses, the
+  superseded alias-bridge/"Phases B–F executing"/"design underway" clauses, and the three retired
+  forward_plan/middle_plan pointers all fixed; the missing WU-AccessGate Global condition added;
+  the WU-GroupsL5 note's "(27–30)"/"one genuine gap" claims corrected.
+- **grid_axes.md:** Layer 4.5 section added (definition moved from status.md, pointer left);
+  Features 65/66 reordered; "64–65" cross-cutting note extended to 64–66; typeahead ref updated.
+  **CLAUDE.md:** feature count 65→66.
+- **Audit headline reconciliation:** Lookups.md L1 Stage-4 divergence list rewritten as the
+  Stage-5 record (all five items verified resolved in code — SiteSearchModes catalog,
+  DefaultSortOrder axis, ReadStatus/FavoriteStatus removal); Identity.md F52 L4; Discovery.md
+  F31 L2 / F34 L2-L3.5 / F59 L3-L3.5 headlines (own later Stage notes contradicted them) +
+  IDeviceDetectionService ref; Tags.md WU-TagFanon title overclaim + F14 L5 supersession;
+  Moderation.md F46 L5 note re-scoped to F47/48 with both stage notes corrected; Sprites/Lookups
+  L7 enumerations; Accessibility.md's Seo/ precedent claim; Stories.md + layer4-style.md
+  session-relative language replaced with dated references.
+- **folder_clusters.md:** F56 removed (CUT); Vouch question marked settled; dispatcher wording
+  struck; `Images/`/`Errors/`/`Toasts/` cross-cutting rows added; SiteSettings ledger note;
+  Core/Series relocation note; UserStoryInteractionPanel name.
+- **middle_plan_v2.md:** eight shipped items retensed with DONE dates (WU-Observability, WU-Email,
+  WU40, WU43, WU38a, WU-AccountEnforcement-in-WU38a + residual, WU-AccessGate/+2, workers
+  57/58/62); Phase 5 retitled DONE (WU-L5Sweep + WU-GlobalFlip) and the Phase-6 gate updated;
+  three intra-doc supersessions fixed (WU35 SignalR pointer, OG noindex deferral, the 07-05
+  snapshot banner); Phase-7 checklist gains SPF/DKIM/DMARC DNS (row 8 + addendum #13) and the
+  addendum #8–#14 operational-resilience group. middle-addendum §2's table annotated with later
+  DONE/superseded outcomes.
+- **Conventions skills:** Global Flip retensed everywhere (SKILL.md axiom 8, render-and-layout
+  code sample `InteractiveServer → InteractiveAuto` + dev-shortcut note, security.md ×2,
+  layer5-wasm ×4 incl. the L5-Stage-Semantics 2026-07-24 correction note); device-fork teaching
+  purged (SKILL.md scope rows + taxonomy table, cross-cutting MessagesNavLink + EditorView
+  toolbar reframe, layer3.5 TreeSearch/GroupPage refs, layer4 StoryPage ref); the layer3.5
+  TagSelector recipe rewritten against the real `CanalaveTypeahead` contract (pick-fires-a-
+  callback, no SelectedTemplate) and layer3-logic's debounce ref updated; identity file: "six"→
+  "seven" kinds, posture heading renamed to match its own MA-104 correction, IsModerator
+  comment + intro reworded to match §"Two Enforcement Surfaces" (it IS the server-side
+  enforcement input), access-gating design-doc pointers added here + security.md;
+  render-and-layout's dead "won't exist post-WASM-split" claim fixed; SKILL.md hub: ContentGate/
+  + Controls/ cluster bullets, layer2 topic list expanded, content-safety summary + author-
+  controlled actions, retired-plan pointer swaps (layer4-style, layer2-services ×2); two soft
+  anchors promoted to real headings (layer2-services §"Publish-immediately + the Recommendation
+  Lifecycle", run-server §"Extended seed").
+- **Lifecycle (all Brian-decided 2026-07-27):** `hidden-deferrals-tracker.md` + `middle-addendum.md`
+  + `modernization-audit/` + a `.claude/design/` genre row added to CLAUDE.md's table;
+  audit-summary row rewritten (superseded caveat); L6-intent-ledger + L6-reconciliation-matrix
+  moved `audit/ → design/` (wrong genre for audit/; all references repointed incl.
+  PerfBaseline/Scenarios.cs + seed-messaging-volume.sql comments); test-hygiene-manifest folded
+  into tracker H7 (the deferred `*Mobile` deletions were already discharged by WU-ResponsiveMerge)
+  and retired with a banner; modernization-audit README got a completion banner + its plan of
+  record copied into the repo (`plan-of-record.md` — the `~/.claude/plans/` original is
+  unreachable to future sessions); middle-audit.md marked DISCHARGED (all 2026-07-07 findings
+  verified actioned); forward_plan banner now points through to v2; workplan preamble's
+  forward_plan rule pointer + the stale WU-AccountEnforcement "planned" entry fixed. New CLAUDE.md
+  process rule (Brian-approved): when a WU retires a pattern/term/component, grep all process docs
+  for the retired name in the same WU.
+- **Verified:** grep gates clean — zero non-historical hits for BlazoredTypeahead, `{X}Desktop`/
+  `{X}Mobile` components, `IDeviceDetectionService`, "this session" (outside dated workplan
+  blocks), live `forward_plan`/`middle_plan.md` rule pointers, or Stage-4 claims. `dotnet build`
+  0 errors. `dotnet test` full suite green **2271/2271** (753 Unit + 591 RazorComponents +
+  927 Integration). Docs-only change (two .cs/.sql comment
+  lines repointed); no behavior surface touched — Unit/Integration/RazorComponents cover nothing
+  new because nothing testable changed.
+- **Tool:** Fable 5 in Claude Code (four parallel Explore agents for the cross-check sweep, then
+  direct implementation).

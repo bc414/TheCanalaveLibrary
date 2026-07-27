@@ -145,7 +145,7 @@ render resolves NO notification services, which is the actual failure mode.
   draft-silent / no-transition / republish-after-read behaviors; enrichment URL pins `/blog/{id}` +
   chapter deep-link) + **Unit** — `NotificationPresenterTests` +5 (new `NewCommentOnBlog` arm,
   reworded 14/15/16). L6 note: the fan-out's three story-centric USI queries feed the existing
-  "Rejected-vs-live conflict" — see `L6-reconciliation-matrix.md` WU-B2 addendum (measure-first,
+  "Rejected-vs-live conflict" — see `design/L6-reconciliation-matrix.md` WU-B2 addendum (measure-first,
   low-frequency write path).
 
 ## Feature 42 — Notification Display

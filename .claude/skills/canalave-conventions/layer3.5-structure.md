@@ -411,70 +411,79 @@ descriptions, recommendations, profile bios, blog posts, AND private messages. `
 sanitizes its own output — see `layer2-services.md` "User HTML Is Sanitized Once, On Save — Never On
 Display" and "The allow-list is the inverse of the toolbar".
 
-**`TagSelector` is the same composite subtype with a different third-party wrapper (WU11):**
-single-select `BlazoredTypeahead` sourced by a per-keystroke `SearchMethod`, with the selector's own
-chip list rendered *above* the input (the package's built-in multi-select renders chips *inside* the
-input — wrong layout per spec §5.30.4, so it's not used). Selecting a result adds to the chip list and
-resets the bound value to `null`, clearing the input for the next pick:
+**`TagSelector` composes the in-house `CanalaveTypeahead` (WU11 shape, rebuilt at the Global Flip
+2026-07-13):** the selector's chip list renders *above* the input; the typeahead below it is
+sourced by a per-keystroke `SearchMethod`. `CanalaveTypeahead` (`SharedUI/Controls/`) replaced
+Blazored.Typeahead, whose programmatic-Value-clear bug crashed the WASM renderer (archived repo,
+Blazored/Typeahead#221) — see `layer5-wasm.md` §"Blazored.Typeahead is REMOVED".
+
+The load-bearing contract is **pick-fires-a-callback**: there is no bound value at all. The
+typeahead clears its own input after every pick and raises `OnSelected`; the *caller* owns all
+persistent selection state (here, the chip list). This eliminated the old
+`ValueChanged`/reset-to-`null` dance entirely:
 
 ```razor
-@* TagSelector.razor — wraps a single-select BlazoredTypeahead *@
+@* TagSelector.razor — chips above, CanalaveTypeahead below *@
 <div class="flex flex-col gap-2">
-    <label class="...">@Label</label>
+    <label class="text-sm font-bold">@Label</label>
 
     <div class="flex flex-wrap gap-2">
-        @foreach (var tag in _selected)
+        @foreach (TagChipDto tag in _selected)
         {
             <TagChip Tag="tag" OnRemove="@(() => Remove(tag))" />
         }
     </div>
 
-    <BlazoredTypeahead TValue="TagChipDto" TItem="TagChipDto"
-                       SearchMethod="SearchMethod" Debounce="300" MinimumLength="2"
-                       ValueChanged="OnPicked" ValueExpression="@(() => _picked)">
+    <CanalaveTypeahead TItem="TagChipDto"
+                       SearchMethod="SearchMethod"
+                       OnSelected="OnPicked"
+                       Placeholder="Type to search for a tag..."
+                       NotFoundText="No tags found">
         <ResultTemplate Context="tag">
             <span class="inline-flex items-center gap-2">
                 <span class="w-2 h-2 rounded-full @DotClass(tag.TagTypeId)"></span>
-                @if (tag.SpriteIdentifier is not null && _themeCtx is not null) { <img src="@Sprites.GetSpriteUrl(_themeCtx.Slug, tag.SpriteIdentifier, _themeCtx.PrefersAnimated)" class="w-4 h-4" alt="" /> }
+                @* sprite <img> with data-sprite-fallback chain elided *@
                 @tag.TagName
             </span>
         </ResultTemplate>
-        <SelectedTemplate Context="tag">@tag.TagName</SelectedTemplate>
-        <NotFoundTemplate>No tags found</NotFoundTemplate>
-    </BlazoredTypeahead>
+    </CanalaveTypeahead>
 </div>
 
 @code {
     [Parameter, EditorRequired] public TagTypeEnum TagType { get; set; }
     [Parameter] public IReadOnlyList<TagChipDto> SelectedTags { get; set; } = [];
     [Parameter] public EventCallback<IReadOnlyList<TagChipDto>> OnSelectionChanged { get; set; }
+    // WU-TagFanon: AllowRepeatSelection lets the character axis re-pick a species
+    // (one row per custom-named character); flat axes keep refusing duplicates.
+    [Parameter] public bool AllowRepeatSelection { get; set; }
 
     private List<TagChipDto> _selected = [];
-    private TagChipDto? _picked;
 
-    private async Task<IEnumerable<TagChipDto>> SearchMethod(string term) =>
-        (await TagService.SearchTagChipsAsync(TagType, term))
-            .Where(t => _selected.All(s => s.TagId != t.TagId));
-
-    private async Task OnPicked(TagChipDto? tag)
+    private async Task<IEnumerable<TagChipDto>> SearchMethod(string term)
     {
-        if (tag is not null && _selected.All(s => s.TagId != tag.TagId))
+        List<TagChipDto> results = await TagService.SearchTagChipsAsync(TagType, term);
+        return AllowRepeatSelection
+            ? results
+            : results.Where(t => _selected.All(s => s.TagId != t.TagId));
+    }
+
+    private async Task OnPicked(TagChipDto tag)
+    {
+        if (AllowRepeatSelection || _selected.All(s => s.TagId != tag.TagId))
         {
             _selected.Add(tag);
             await OnSelectionChanged.InvokeAsync(_selected);
         }
-        _picked = null; // clears the input for the next pick
     }
 }
 ```
 
-**`SelectedTemplate` is mandatory, not optional.** `BlazoredTypeahead.OnInitialized()` throws
-`InvalidOperationException: ... requires a SelectedTemplate parameter` if it's omitted — unlike
-`ResultTemplate`/`NotFoundTemplate`, which the package defaults sensibly. Omitting it doesn't fail
-quietly in single-select mode (the bound value silently resets to `null` after each pick), making
-it tempting to assume the template is decorative. The failure eventually surfaces as an unrelated
-`NullReferenceException` in `Dispose()` — a downstream symptom of `OnInitialized()` never
-completing. Chase `OnInitialized()`, not the disposal trace.
+**`CanalaveTypeahead`'s own design constraints** (documented in its header comment): 100%
+Blazor-managed DOM — no JS interop except `typeahead.js`'s delegated document-level keydown that
+`preventDefault`s Enter on `[data-typeahead-input]` (stops implicit `EditForm` submit); selection
+on `@onmousedown` with `:preventDefault` so focus never leaves the input mid-pick; required
+parameters are `SearchMethod`, `OnSelected`, and `ResultTemplate` (no `SelectedTemplate` exists —
+that was a Blazored concept).
 
 **Contract deviation from the spec's literal wording, deliberate:** §5.30.4 says
 `EventCallback<IReadOnlyList<Tag>> OnSelectionChanged` — `Tag` is the EF entity. The DTO Firewall
@@ -871,12 +880,13 @@ composition.
 
 ### Unified Tree Search Page — Automatic Tab (WU44)
 
-`TreeSearchPage.razor` (`SharedUI/Discovery/`) is the dispatcher for spec §5.26's Unified Tree
-Search Page — routes `/discover/me`, `/discover/user/{userId:int}`, `/discover/story/{storyId:int}`
-(`[AllowAnonymous]`; `/discover/me` resolves the current user from the auth cascade). It resolves
-the root entity, branches mobile/desktop (`TreeSearchDesktop`/`TreeSearchMobile`, same
-dispatcher-owns-data pattern as `SearchPage`), and renders a root-entity header (story → compact
-story header; user (incl. `/discover/me`) → `UserCard`) above a tab strip. **Corrected 2026-07-12
+`TreeSearchPage.razor` (`SharedUI/Discovery/`) is the data-owning page for spec §5.26's Unified
+Tree Search Page — routes `/discover/me`, `/discover/user/{userId:int}`,
+`/discover/story/{storyId:int}` (`[AllowAnonymous]`; `/discover/me` resolves the current user from
+the auth cascade). It resolves the root entity and renders its own single responsive markup tree
+(the former `TreeSearchDesktop`/`TreeSearchMobile` fork merged into the page 2026-07-18) with a
+root-entity header (story → compact story header; user (incl. `/discover/me`) → `UserCard`) above
+a tab strip. **Corrected 2026-07-12
 (WU40): three tabs, not two** — **Automatic** (built here), **Explore**, and **Deep Dive** (the
 latter two were a single "Manual" placeholder — "Graph view coming soon" — until WU40 designed and
 split them; see "Manual Tree Search — Explore & Deep Dive (WU40)" below). This diverges from spec
@@ -959,7 +969,7 @@ direction with direction-annotated labels; Deep Dive shows all four whitelisted 
 Left pane: the **persistent, client-curated tree canvas** the user builds by hand, root seeded
 from the route. Right pane: a **disposable, stateless "candidate results" pane** for the
 currently-selected node's neighbors, with the anchor pinned above the results as a reminder of
-context. Injection-free — data flows from `TreeSearchDesktop`/`TreeSearchMobile` exactly as the
+context. Injection-free — data flows from `TreeSearchPage` exactly as the
 Automatic tab's controls do.
 
 - A node added but not yet selected/explored renders in the **ghost state** — a visible frontier
@@ -1166,8 +1176,8 @@ Each tab has a distinct layout — comments and story decks are **never on the s
   (→ `/blog/{id}/edit`); tab header carries a **"+ New Post"** button (→ `/blog/new`).
   `BlogPostCard` is extended with optional owner affordances gated by an `IsOwner`/edit-href
   parameter — the Edit link is a **sibling** of the title anchor (not nested — invalid HTML).
-  `GroupDesktop`'s existing `<BlogPostCard Post=...>` usage passes no owner params and is
-  unaffected.
+  `GroupPage`'s existing `<BlogPostCard Post=...>` usage (pre-merge: `GroupDesktop`) passes no
+  owner params and is unaffected.
 
 ### Story-tab candidate-id pattern (mirrors BookshelvesPage)
 

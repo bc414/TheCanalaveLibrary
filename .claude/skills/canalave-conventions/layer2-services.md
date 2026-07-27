@@ -97,7 +97,7 @@ builder.Services.AddScoped<IStoryWriteService, ServerStoryWriteService>();
 
 ### DbContext Registration: Plain `AddDbContext`, Never `AddNpgsqlDbContext`/Pooled
 
-Settled WU12 (`forward_plan.md` "Aspire orchestration during MVP dev" — narrower correction): register
+Settled WU12 (the "Aspire orchestration during MVP dev" resolution, carried in `middle_plan_v2.md` §Resolved — narrower correction): register
 both DbContexts with the plain EF Core API, never the `Aspire.Npgsql.EntityFrameworkCore.PostgreSQL`
 package's `AddNpgsqlDbContext<T>` helper:
 
@@ -1015,7 +1015,9 @@ service strips HTML and decodes entities before counting characters — same Cor
 `RecommendationValidationException` if the count is below the threshold. The minimum is enforced on
 the **sanitized** text (after `sanitizer.Sanitize(rawHtml)`) so markup inflation never passes through.
 
-**Publish-immediately + the Recommendation Lifecycle (WU-RecLifecycle, 2026-07-25 — supersedes the
+### Publish-immediately + the Recommendation Lifecycle
+
+**(WU-RecLifecycle, 2026-07-25 — supersedes the
 WU29 "auto-approve MVP / deferred to WU34" note):** `SubmitAsync` writes `StatusId = Approved`
 directly — permanently, not as a shortcut. The pre-publication gate (and any moderator approval) was
 **rejected** on first-principles review: recommendations are discovery, not feedback; a gate delays
@@ -1050,7 +1052,7 @@ mechanism. Statuses: `NeedsRevision=1` / `Approved=2` / `Rejected=3` (`PendingAp
 `RecommendationValidationException`. `MaxHiddenGemsPerUser = 5`; `MaxHighlightedPerStory = 5`.
 Mirrors the Vouch 5-limit pattern (`FollowingConstants.MaxVouchesPerUser`). No auto-evict, no swap —
 the user must explicitly un-designate first. **Settled — do not revisit** (resolved Phase B,
-`forward_plan.md` "Hidden Gem at-limit behavior").
+"Hidden Gem at-limit behavior" — carried in `middle_plan_v2.md` §Resolved).
 
 **Like toggle (no notification):** `ToggleLikeAsync` returns `RecommendationLikeResultDto(int LikeCount,
 bool IsLiked)` so the UI reconciles optimistic state without a re-read. No notification fires on a

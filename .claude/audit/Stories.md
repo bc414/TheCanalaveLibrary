@@ -782,8 +782,8 @@ create (like `AuthorId`) and bumps `LastUpdatedDate` in `UpdateStoryAsync`. Veri
 after a browser round-trip.
 
 **Coverage exception:** the cover-art `InputFile` → `IImageStorageService` browser interaction
-could not be driven (browser-automation file-upload API mismatch in this session's tooling —
-not an app defect); the storage service itself is Integration-covered and was WU12
+could not be driven (browser-automation file-upload API mismatch in the 2026-07-11 WU38 pass's
+tooling — not an app defect); the storage service itself is Integration-covered and was WU12
 endpoint-verified. Re-verify the InputFile wiring when a browser pass with working file upload
 is available.
 

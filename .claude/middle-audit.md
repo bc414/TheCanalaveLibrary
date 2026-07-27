@@ -1,5 +1,10 @@
 # Documentation Audit — Stale & Contradictory Content
 
+> **DISCHARGED (verified 2026-07-27) — all findings actioned.** Every §1/§3 fix was applied
+> (retirement banners, workplan preamble rewrite, grid_axes/folder_clusters CLAUDE.md rows,
+> audit-summary snapshot banner, WU37 DONE marker); §1.1's grid claim was superseded rather than
+> applied (WU-GlobalFlip flipped those L5 cells to 5). Historical snapshot — do not update.
+
 **Date:** 2026-07-07. **Scope:** cross-checked `CLAUDE.md`, `.claude/status.md`, `.claude/grid_axes.md`,
 `.claude/folder_clusters.md`, `.claude/workplan.md`, `.claude/middle_plan_v2.md` (+ retired
 `middle_plan.md`/`forward_plan.md`/`next_steps.md`), `.claude/audit-summary.md`, all 23

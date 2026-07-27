@@ -57,11 +57,12 @@ A few other features naturally sort late but for a different reason — there's 
 (Notification Cleanup has nothing 60 days old to clean; SiteDailyStat has no usage to aggregate). These
 don't need their own line; they fall out of normal workplan sequencing.
 
-**Features 64–65 are cross-cutting quality rows, minted 2026-07-15 from `middle-addendum.md` §3**
-(a point-in-time "what's missing for a live website" audit), not features discovered through the
-original bottom-up feature decomposition. They sit above the MVP line's spirit — the site functions
-without them — but are sequenced into `middle_plan_v2.md`'s existing phases rather than held in a
-separate list, per the addendum-formalization pass.
+**Features 64–66 are cross-cutting quality rows**, not features discovered through the original
+bottom-up feature decomposition. 64–65 were minted 2026-07-15 from `middle-addendum.md` §3 (a
+point-in-time "what's missing for a live website" audit); 66 was minted 2026-07-19 from
+`middle_plan_v2.md` decision row 11's resolution. They sit above the MVP line's spirit — the site
+functions without them — but are sequenced into `middle_plan_v2.md`'s existing phases rather than
+held in a separate list, per the addendum-formalization pass.
 
 ---
 
@@ -211,6 +212,20 @@ and any Quill.js stylesheet interaction concerns.
 changes, sprite resolution works, conditional styling reflects state correctly, outer margin rule honored.
 
 **Governed by:** `layer4-style.md`
+
+### Layer 4.5 — Browser Verification
+
+The end-to-end browser-verification band (real circuit, per `run-server/SKILL.md` "Browser-based
+debugging & verification"). Not a build layer — a verification band recording that the feature was
+exercised in a real browser.
+
+**Stage-5 means:** the feature was driven in a real browser and behaves as its audit file intends.
+**Stage 1** = not yet browser-verified (or prerequisite layers unbuilt). **N/A** = no browser-facing
+surface (workers, pure seed data).
+
+L4-Style may still be Stage 1 while L4.5 is 5 — visual polish is a separate sign-off; L4.5 only
+demands the feature be *usable*. (Column added after the original audit; `status.md` carries a
+one-line pointer here.)
 
 ───────── **MVP boundary (vertical)** ─────────
 
@@ -410,7 +425,7 @@ construction via `ISpriteReadService` using `SpriteIdentifier` + current theme +
 Tag tooltips from `Description` field. Tag type grouping in display. `TagChip` leaf component.
 
 **14. Tag Filtering & Selection UI** — Tag selection with typeahead/autocomplete (300ms debounce,
-Blazored.Typeahead). `TagSelector` coordination composite: selected chips above typeahead input,
+`CanalaveTypeahead` — in-house, replaced Blazored.Typeahead at the Global Flip 2026-07-13). `TagSelector` coordination composite: selected chips above typeahead input,
 dropdown items as lightweight rows (color dot + sprite + name, NOT full chips). Raises
 `EventCallback<IReadOnlyList<Tag>> OnSelectionChanged`. Small categories loaded entirely on init;
 medium categories client-side.
@@ -703,6 +718,16 @@ serving (`Seo:TrustVerifiedBots`, activated at Phase 7's Cloudflare trust bounda
 (attributed to the consuming content features — Stories, Chapters, Profiles, Series, BlogPosts,
 Groups — per `audit/Seo.md`). Built by WU-AccessGate. Detail: `audit/Seo.md`.
 
+**65. Accessibility** — *(added 2026-07-15, minted from `middle-addendum.md` §3 #22.)*
+Cross-cutting quality attribute, not a vertical feature — no owning folder, no L1–L3 surface of its
+own. Today: 237 incidental `aria-`/`role=`/`<label>`/`tabindex` occurrences exist from ordinary
+semantic HTML and Blazor `EditForm` scaffolding, but no deliberate program — no WCAG reference, no
+keyboard-nav/screen-reader check in `layer4-style.md`'s tier rules, no accessibility test tier, and
+the L4.5-Browser band's own definition never mentions keyboard-only or screen-reader navigation.
+Scope/depth (full WCAG AA audit vs. a targeted axe-DevTools pass over the highest-traffic pages) is
+gated on `middle_plan_v2.md` decision row 12. Scheduled as WU-A11y, paired with the Phase 3 L4
+freeze sweep. Detail: `audit/Accessibility.md`.
+
 **66. Viewer Access Gating** — *(added 2026-07-19, minted from decision row 11's resolution; see
 `.claude/design/access-gating-first-principles.md` (authoritative model) and
 `access-gating-audit.md` (surface inventory).)* The viewer-permission model as a first-class
@@ -716,13 +741,3 @@ Intentionality Doctrine (Class-B JSON child APIs deliberately ungated; the four 
 detail endpoints return a gated envelope); count-line mature disclosures on person/collection-
 scoped listings; spotlight M/non-M slot pools; the sign-in-required experience for `[Authorize]`
 pages; honest profile-privacy states. Built by WU-AccessGate. Detail: `audit/AccessGate.md`.
-
-**65. Accessibility** — *(added 2026-07-15, minted from `middle-addendum.md` §3 #22.)*
-Cross-cutting quality attribute, not a vertical feature — no owning folder, no L1–L3 surface of its
-own. Today: 237 incidental `aria-`/`role=`/`<label>`/`tabindex` occurrences exist from ordinary
-semantic HTML and Blazor `EditForm` scaffolding, but no deliberate program — no WCAG reference, no
-keyboard-nav/screen-reader check in `layer4-style.md`'s tier rules, no accessibility test tier, and
-the L4.5-Browser band's own definition never mentions keyboard-only or screen-reader navigation.
-Scope/depth (full WCAG AA audit vs. a targeted axe-DevTools pass over the highest-traffic pages) is
-gated on `middle_plan_v2.md` decision row 12. Scheduled as WU-A11y, paired with the Phase 3 L4
-freeze sweep. Detail: `audit/Accessibility.md`.

@@ -1,5 +1,10 @@
 # bUnit Test-Hygiene Manifest
 
+> **RETIRED (2026-07-27) — historical reference only.** The open remainder was folded into
+> `hidden-deferrals-tracker.md` item **H7**, now the ledger of record; §5 below stays useful only
+> as the itemized list of the 25 C-consolidate merge targets H7 points back to. The deferred
+> `*Mobile` deletions were discharged by WU-ResponsiveMerge (2026-07-18). Do not update this file.
+
 **Status (2026-07-18): DELETIONS EXECUTED.** The 77 non-mobile deletions below (buckets A,
 B-redundant, B-static) were applied; RazorComponents tier green at 563/563 (method count 602 → 525).
 `CanalaveTypeaheadTests.Escape_ClosesDropdown_WithoutSelecting` is a pre-existing intermittent flake

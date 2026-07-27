@@ -177,7 +177,7 @@ public static class Scenarios
         // localhost, larger across a real network) — the honest caveat on any verdict drawn here.
         //
         // These SKIP with an empty parameter pool unless the DB carries messaging volume, which
-        // SeedTool does NOT generate (see audit/L6-reconciliation-matrix.md Messaging: F49 was
+        // SeedTool does NOT generate (see .claude/design/L6-reconciliation-matrix.md Messaging: F49 was
         // flipped to L6=5 unmeasured for exactly this reason). Seed conversations/messages before
         // running, or these three report SKIPPED and the other scenarios are unaffected.
 

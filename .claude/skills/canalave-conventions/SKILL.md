@@ -50,7 +50,7 @@ These have documented rationale and rejected alternatives. **Do not propose alte
    SQL-Server-era "write-behind Redis queue" axiom — its protect-reads-from-locks rationale is
    void under Postgres MVCC. N≥2 scale-out (Valkey body-swap, session affinity) is never a
    day-one dependency — see `horizontal-scaling.md`.
-8. **Global `InteractiveAuto` (end state)** — SSR prerender → SPA via WASM. Set render mode on `<Routes>`/`<HeadOutlet>` in `App.razor` (never on `RouteView`); `InteractiveServer` is the spec-sanctioned dev shortcut until WASM ships. See `render-and-layout.md` §"Render Mode".
+8. **Global `InteractiveAuto` (live since the Global Flip, 2026-07-13)** — SSR prerender → SPA via WASM: circuit on first visit, WebAssembly on revisits. Set render mode on `<Routes>`/`<HeadOutlet>` in `App.razor` (never on `RouteView`). See `render-and-layout.md` §"Render Mode".
 9. **Tailwind CSS v4 + the element-role design system (2026-07-10)** — utility-first, no
    component library. Every visual element has exactly one of seven roles (Canvas / Wayfinding /
    Container / Content Surface / Control / Indicator / Overlay); roles define grounds, inks, and
@@ -94,6 +94,8 @@ Cross-cutting clusters and their scope:
 - **`Toasts/`** — `IToastService`/`ToastHost` (SharedUI) transient non-blocking system-event channel; deliberately minimal — never for validation errors.
 - **`Drafts/`** — `DraftStore`/`DraftAutosave` (SharedUI) device-local editor draft safety over `draft-autosave.js`; consumed by the long-form edit pages.
 - **`Messaging/`** — Messaging feature cluster; `EditorView` and `UserCard` remain in their own cross-cutting clusters.
+- **`ContentGate/`** — the Feature-66 viewer-permission machinery (`ContentGateInterstitial`, `MatureDisclosureLine`, gated mini-cards, consent endpoints, viewer-context resolution) consumed by every M-rated page-backing feature; see `content-safety.md` and `identity-and-authorization.md` §"Viewer Consent State".
+- **`Controls/`** (SharedUI) — universal input atoms with no owning feature; first resident: `CanalaveTypeahead` (in-house, replaced Blazored.Typeahead at the Global Flip — see `layer5-wasm.md`).
 - **`Profiles/`** — projection and settings-edit services *over* the `User` entity. Boundary: Identity = entity + auth plumbing; Profiles = how the entity is read and edited by owner or public viewer.
 - **`Seo/`** — `IPublicUrlProvider` (Core: absolute-URL resolution) + `ServerPublicUrlProvider`/client
   impl + `<SocialMetaTags>` (SharedUI: the shared `<HeadContent>` block for Open Graph/Twitter/description
@@ -160,16 +162,16 @@ exactly how Bootstrap-template classnames (`top-row`, `nav-pills`, …) get copi
 | File | Layer | Scope |
 |---|---|---|
 | [layer1-data-model.md](layer1-data-model.md) | 1 | EF Core entities, Fluent API, TPT, enums, migrations, vertical partitioning |
-| [layer2-services.md](layer2-services.md) | 2 | Service interfaces, CQRS split, DTOs, DbContext injection, service composition |
+| [layer2-services.md](layer2-services.md) | 2 | Service interfaces, CQRS split, DTOs, DbContext injection/registration, read-context factory-per-method concurrency, service composition, validation exceptions, signal buffering, counters, notifications + semantic methods, structured tag authoring + hierarchy roll-up, site settings, messaging archive, recommendation lifecycle, parent-visibility rule |
 | [layer3-logic.md](layer3-logic.md) | 3 | `@code` blocks: parameters, services, events, state, `[PersistentState]`, `EditForm`, debounce, optimistic updates, component tier × logic |
-| [layer3.5-structure.md](layer3.5-structure.md) | 3.5 | Markup skeleton: component composition, HTML elements, `@if`/`@foreach`, `@ChildContent`, data flow through `[Parameter]`, `<AuthorizeView>`, dispatcher pattern, desktop/mobile branching |
+| [layer3.5-structure.md](layer3.5-structure.md) | 3.5 | Markup skeleton: component composition, HTML elements, `@if`/`@foreach`, `@ChildContent`, data flow through `[Parameter]`, `<AuthorizeView>`, page-owns-data pattern (single responsive tree — device forks retired 2026-07-18) |
 | [layer4-style.md](layer4-style.md) | 4 | The element-role design system (seven roles, locked tokens, Interaction States recipes, ContentSurface rule, enforcement script), Tailwind utility classes, sprite resolution, responsive variants, outer margin rule, parameter-based variants, conditional class expressions |
 | [layer5-wasm.md](layer5-wasm.md) | 5 | API endpoints, client services, `PersistentAuthenticationStateProvider` |
 | [layer6-indexes.md](layer6-indexes.md) | 6 | Filtered, composite, golden, GIN indexes — pure DDL; MVCC storage tuning (fillfactor, autovacuum) |
 | [layer8-data-marts.md](layer8-data-marts.md) | 8 | Non-EF background workers, raw SQL, table swap (Layer 7 dissolved — see numbering note above; signal buffering lives in [layer2-services.md](layer2-services.md)) |
-| [render-and-layout.md](render-and-layout.md) | All | Render mode, route-parameter conventions, `NavigationManager.NotFound()`, JS interop, device detection & layout architecture (notification bell, messages nav link), ThemeContext cascading provider |
-| [identity-and-authorization.md](identity-and-authorization.md) | All | `IActiveUserContext`, viewer consent state (anon prefs cookie, reveals, responsive claim, verified bots), the two-identity-source rule, the six kinds of active-user conditionality, security-vs-affordance, cookie/role-based authorization, default-deny posture |
-| [content-safety.md](content-safety.md) | All | Mature-content design philosophy (three reader tiers, no-ads, E/T/M binary, discovery bridge), the three-plane access model (Discovery/Direct-nav/Personal, interstitials, reveals, Intentionality Doctrine), content rating filtering, group audience-visibility filter, moderation model (soft-delete, auto-hide policy, account actions, report targets) |
+| [render-and-layout.md](render-and-layout.md) | All | Render mode, route-parameter conventions, `NavigationManager.NotFound()`, JS interop, responsive layout architecture (single `MainLayout`, no device detection; notification bell, messages nav link), ThemeContext cascading provider |
+| [identity-and-authorization.md](identity-and-authorization.md) | All | `IActiveUserContext`, viewer consent state (anon prefs cookie, reveals, responsive claim, verified bots), the two-identity-source rule, the seven kinds of active-user conditionality, security-vs-affordance, cookie/role-based authorization, default-allow posture (a default-deny fallback-policy recipe is retained, never implemented — MA-104), parent-visibility guards |
+| [content-safety.md](content-safety.md) | All | Mature-content design philosophy (three reader tiers, no-ads, E/T/M binary, discovery bridge), the three-plane access model (Discovery/Direct-nav/Personal, interstitials, reveals, Intentionality Doctrine), content rating filtering, group audience-visibility filter, moderation model (soft-delete, auto-hide policy, account actions, report targets), author-controlled content actions (WU-RecLifecycle) |
 | [error-handling.md](error-handling.md) | All | Layered error boundaries, inline/toast feedback channels, exception-message discipline, editor draft safety |
 | [cross-cutting.md](cross-cutting.md) | All | Genuinely cross-cutting infra/misc: private messaging architecture, rich-text sanitization posture, Aspire dev orchestration, read-replica readiness, delete policy, dev-only diagnostic endpoints |
 | [logging.md](logging.md) | All | OpenTelemetry three-signal conventions: structured log templates, level semantics, no-silent-catches + sanctioned registry, `CanalaveTelemetry` custom sources/meters + naming, dispatch-boundary scopes (`TelemetryCircuitHandler`), per-surface recipes (external call / worker / hub), telemetry testing patterns |
@@ -184,7 +186,7 @@ exactly how Bootstrap-template classnames (`top-row`, `nav-pills`, …) get copi
 |---|---|---|---|---|
 | **Leaf** | Thin: params, EventCallbacks, computed display props | Full: HTML elements, `@if`/`@foreach` | Full: all visual identity | Never |
 | **Composite** | Varies by subtype (coordination = heavy) | Main job: compose children | Light: layout Tailwind, container framing | Rarely (independent concerns only) |
-| **Page/Dispatcher** | Heavy: service injection, data loading, device detection | Thin: `@if (mobile)` branch | Near zero: loading skeleton | Always |
+| **Page** | Heavy: service injection, data loading | Owns its responsive markup tree (no device branch — forks retired 2026-07-18) | Near zero: loading skeleton | Always |
 
 **Composite subtypes:** pass-through layout, coordination, container, third-party wrapper.
 

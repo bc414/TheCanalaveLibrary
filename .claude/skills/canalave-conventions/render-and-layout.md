@@ -31,12 +31,13 @@ hardcode the render mode — confirmed current for .NET 9/10/11 against `render-
     private HttpContext HttpContext { get; set; } = default!;
 
     private IComponentRenderMode? PageRenderMode
-        => HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
+        => HttpContext.AcceptsInteractiveRouting() ? InteractiveAuto : null;
 }
 ```
 
-**Dev shortcut (spec-sanctioned):** during active development, use `InteractiveServer` globally
-(faster debugging, no API controllers needed yet). Switch to `InteractiveAuto` when shipping WASM.
+**Current state:** the site runs global `InteractiveAuto` — the Global Flip landed 2026-07-13
+(WU-GlobalFlip): circuit on first visit, WebAssembly on revisits. (`InteractiveServer` was the
+spec-sanctioned dev shortcut during the pre-flip build era; that era is over.)
 
 **L5 rollout (settled):** per-feature endpoints + client impls land incrementally (headless,
 inert until a WASM pass runs); the render-mode conversion happens **once, globally** — no
@@ -195,7 +196,9 @@ pages. Until that trigger fires, CSS carries everything.
 `INotificationReadService` is injected directly into this layout element (N+1 exception; confirmed in
 `grid_axes.md`). Rules for this component:
 - Wrapped in `<AuthorizeView><Authorized>` — renders only when logged in.
-- **Does NOT inject `IActiveUserContext`** — server-only service, will not exist post-WASM-split. The
+- **Does NOT inject `IActiveUserContext`** — the rule is retained as a consistency/testability
+  discipline (the original "won't exist in WASM" justification is dead — `WasmActiveUserContext`
+  exists in `Client/`; see `identity-and-authorization.md` §"The two identity sources"). The
   underlying read service self-scopes via `IActiveUserContext` internally.
 - **UserCard caret pattern** — `relative` container + `@onclick="Toggle"` button (with unread-count badge) +
   `@if (_open)` absolute `top-full z-10` flyout panel. NOT the `fixed inset-0` modal pattern (notifications

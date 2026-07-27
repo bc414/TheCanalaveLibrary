@@ -46,9 +46,11 @@ L6=5 (composite index `ix_reports_reported_entity_type_reported_entity_id` added
 `20260625140459_WU34_Moderation`).
 
 **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
-site now runs global InteractiveAuto; report-queue reads verified as AdminUser in a real WASM
-runtime during the flip's browser wave (`/mod/reports`, `/mod/submissions`, `/mod/users`; report
-submission not driven). Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
+site now runs global InteractiveAuto. The browser-wave verification of `/mod/reports`,
+`/mod/submissions`, `/mod/users` as AdminUser is Features 47/48's queue surface (their L5 cells
+were mismarked N/A until 2026-07-27 — see their Stage notes); F46's own client surface is report
+submission via `ClientModerationWriteService` (not driven in the wave). Full wave narrative + the
+7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 
 ## Feature 47 — Moderation Queue & Actions
 
@@ -75,8 +77,10 @@ submission not driven). Full wave narrative + the 7 bugs found/fixed: `workplan.
 built at `/mod/reports` + `/mod/users` — server-rendered, mod-gated. Claim/resolve/soft-remove/warn-user
 flows implemented and covered by `ModerationServiceTests.ResolveNoActionAsync_*` and
 `ResolveWithRemovalAsync_SoftHides_*` (Integration). `AdjustActiveReportCount` switch verified — Message
-type is no-op (unit test). L4=3 (functional styling, not design-reviewed). L5=N/A. L6=5 (same migration
-as Feature 46).
+type is no-op (unit test). L4=3 (functional styling, not design-reviewed). L5 was N/A at WU34 —
+**corrected to Stage 5 (2026-07-27):** `ClientModerationReadService`/`WriteService` + endpoints exist
+(WU-L5Sweep) and `/mod/reports` + `/mod/users` were verified in a real WASM runtime in WU-GlobalFlip's
+browser wave (see the F46 L5 note above). L6=5 (same migration as Feature 46).
 
 **Stage note (WU38a — 2026-07-11):** L2 stays Stage 5, re-verified (additive). `ApplyAccountActionAsync`
 now calls `UserManager.UpdateSecurityStampAsync(targetUser)` after setting `Suspended`/`Banned` (not
@@ -120,7 +124,10 @@ green (see Feature 48 note below for the pending-submissions half of this same c
 `/mod/submissions` with tabbed shell (Stories tab active, Imports tab placeholder for WU39). Approve/reject
 flows implemented and covered by `ModerationServiceTests.ApproveStoryAsync_*` /
 `RejectStoryAsync_*` (Integration). `StoryApproved` notification wired end-to-end
-(`NotifyStoryApprovedAsync` → `CreateCoreAsync` → notification row). L4=3 (functional styling). L5=N/A.
+(`NotifyStoryApprovedAsync` → `CreateCoreAsync` → notification row). L4=3 (functional styling).
+L5 was N/A at WU34 — **corrected to Stage 5 (2026-07-27):** the approve/reject queue rides the same
+`ClientModerationReadService`/`WriteService` + endpoints as F47, and `/mod/submissions` was verified
+in a real WASM runtime in WU-GlobalFlip's browser wave (see the F46 L5 note above).
 
 **Stage note (pre-integration cleanup — 2026-06-26):** Features 46/47/48, all L1-L3 cells updated.
 Soft-delete columns renamed from `IsHidden`/`DateModeratedRemoved`/`ModerationRemovalReason` → `IsTakenDown`/

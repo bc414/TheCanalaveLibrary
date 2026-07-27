@@ -222,7 +222,9 @@ community content. Seed rows that participate in workflow state machines must ca
 workflow a silent no-op (see the `PostApprovalStatus` comment in `DataSeeder.cs` for the worked
 example).
 
-**Extended seed (volume, on demand — WU-Marts):** when the work needs realistic-volume clustered
+### Extended seed
+
+**(volume, on demand — WU-Marts):** when the work needs realistic-volume clustered
 interaction data (discovery marts, tree search, co-occurrence, index/planner behavior), run the
 standalone bulk-load tool against the persistent DB — it composes around the Full seed and never
 touches startup or the test suite:

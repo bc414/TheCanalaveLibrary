@@ -7,6 +7,11 @@ MIME types, file contents, form values, event payloads — is attacker-controlla
 the browser claims about itself is trusted; validation happens server-side, at or below the
 service layer.
 
+Viewer access gating (the Class-A security-boundary vs Class-B mature-consent split, interstitials,
+gated-existence reads) is governed by `.claude/design/access-gating-first-principles.md`
+(authoritative model; surface inventory in `access-gating-audit.md`) — this file owns the
+transport/hardening half, that model owns which reads a viewer may see at all.
+
 ## Upload Content Pipeline (sniff + re-encode)
 
 All user image uploads pass through `ImageUploadProcessor` (`Server/Images/`), the single
@@ -57,12 +62,11 @@ still flow. Revisit only if 3.1.x stops receiving security patches. Constants li
 
 ## Write Throttling (service layer — the transport-agnostic boundary)
 
-**Why the service layer:** user writes reach L2 services over the SignalR circuit today
-(`InteractiveServer`) and over per-feature HTTP endpoints after the L5 WASM flip — and
-`InteractiveAuto` keeps the circuit path alive permanently even post-flip (first visit renders
-over the circuit while WASM downloads). HTTP rate-limiting middleware never sees circuit
-traffic, so the only single enforcement point covering every transport, present and future, is
-the service method itself. This parallels the authorization rule in `identity-and-authorization.md`
+**Why the service layer:** user writes reach L2 services over BOTH transports — the SignalR
+circuit (first visit under `InteractiveAuto`, which keeps the circuit path alive permanently)
+and per-feature HTTP endpoints (WASM revisits, live since the Global Flip 2026-07-13). HTTP
+rate-limiting middleware never sees circuit traffic, so the only single enforcement point
+covering every transport is the service method itself. This parallels the authorization rule in `identity-and-authorization.md`
 §"Authorization Has Two Enforcement Surfaces": UI affordances are UX, the service is the
 boundary.
 
@@ -98,7 +102,7 @@ retry-after seconds) when the per-user token bucket for that action kind is exha
 - Edits/deletes and bounded toggles are **deliberately unthrottled**: interaction/follow/like
   toggles (UX-hostile to limit; the 2s client debounce absorbs the frequency), vouches / Hidden
   Gems (hard count limits already exist), tag writes (mod-only; HTTP policy covers).
-- L5 endpoint contract (applies at the WASM flip): endpoints translate
+- L5 endpoint contract (live since the Global Flip, 2026-07-13): endpoints translate
   `WriteRateLimitExceededException` → **429** with `Retry-After`, joining `layer5-wasm.md`'s
   error-translation table.
 - Tests: `TestAppFactory` registers a pass-through `FakeWriteRateLimitService` by default

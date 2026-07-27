@@ -1,8 +1,9 @@
 # Forward Plan — The Canalave Library
 
-> **RETIRED (2026-07-03) — historical reference only.** Superseded by `.claude/middle_plan.md`,
-> which carries forward the "Decisions that need you" table and the Resolved index. Do not
-> update this file; new decisions and phases go in `middle_plan.md`.
+> **RETIRED (2026-07-03) — historical reference only.** Superseded by `.claude/middle_plan.md`
+> (itself retired 2026-07-05 — the live plan is `.claude/middle_plan_v2.md`), which carried
+> forward the "Decisions that need you" table and the Resolved index. Do not update this file;
+> new decisions and phases go in `middle_plan_v2.md`.
 
 > Successor to the last-gen `next_steps.md` + `step4/5/6`. Those are kept only as historical reference;
 > this was the live plan for the MVP build arc (Phases A–E, complete as of 2026-07-02). It picks up

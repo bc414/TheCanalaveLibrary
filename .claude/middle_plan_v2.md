@@ -42,7 +42,8 @@ Two deliberate exceptions where feature and platform work are intertwined:
 | Phase 5 Beta | Phase 6 |
 | Phase 6 Launch | Phase 7 (expanded into a launch-readiness checklist) |
 
-## Where you are (as of 2026-07-05)
+## Where you are (as of 2026-07-05 — superseded snapshot; `status.md` is current. Phases 0–1 and 5
+have since completed — see the DONE markers below; the suite was 2,271 green as of 2026-07-26.)
 
 The MVP build arc is complete and browser-verified feature-by-feature (see v1 "Where you are"
 for the full history). Platform groundwork already landed:
@@ -65,7 +66,7 @@ for the full history). Platform groundwork already landed:
       → 1. PLATFORM BUILD-OUT (observability, signal buffers, indexes, error handling,
            email, security, data-protection, marts)
       → 2. MVP-surface completeness → 3. Full L4 sweep + Stage-6 freezes
-      → 4. Beta-scope decisions → 5. L5 WASM global flip
+      → 4. Beta-scope decisions → 5. L5 WASM global flip [DONE 2026-07-13, out of order]
       → 6. Beta → 7. Launch readiness + Launch (DigitalOcean)
 ```
 
@@ -114,15 +115,16 @@ Each item names its test bed (the already-built surface that makes it meaningful
 and its doc deliverable — every settled practice lands as a convention file or an extension of
 one, same as `testing.md`/`debugging.md` accreted.
 
-1. **WU-Observability** — logging & telemetry conventions. OpenTelemetry plumbing already
-   exists (ServiceDefaults: logs/traces/metrics + OTLP → Aspire dashboard in dev); this WU adds
-   the *practice*: a new `canalave-conventions/logging.md` (structured message templates, level
-   semantics, scopes for userId/storyId context, **no silent catches** — log-and-continue, never
-   swallow-without-trace); the sweep that fixes the existing `/* best-effort; log in a future
-   structured-logging pass */` sites; Npgsql tracing instrumentation in ServiceDefaults (per-query
-   spans); a custom `ActivitySource`/`Meter` primer for domain instrumentation. Test bed: the
-   whole app under the Aspire dashboard. Decision row 7 (production telemetry destination)
-   resolved 2026-07-06 — Grafana LGTM container, see Resolved; deployment stays Phase 7.
+1. **WU-Observability — DONE ✓ (2026-07-06)** — logging & telemetry conventions. OpenTelemetry
+   plumbing already existed (ServiceDefaults: logs/traces/metrics + OTLP → Aspire dashboard in
+   dev); this WU added the *practice*: `canalave-conventions/logging.md` (structured message
+   templates, level semantics, scopes for userId/storyId context, **no silent catches** —
+   log-and-continue, never swallow-without-trace); the sweep that fixed the existing
+   `/* best-effort; log in a future structured-logging pass */` sites; Npgsql tracing
+   instrumentation in ServiceDefaults (per-query spans); a custom `ActivitySource`/`Meter` primer
+   (`CanalaveTelemetry`, pilot: ImageStorage). Decision row 7 (production telemetry destination)
+   resolved 2026-07-06 — Grafana LGTM container, see Resolved; deployment stays Phase 7. Detail:
+   `workplan.md` WU-Observability.
 2. **WU-SignalBuffering — DONE ✓ (2026-07-06). Supersedes WU-Redis** (the 2026-07-05 "L7
    end-to-end" sequencing — see Resolved "Layer 7 dissolved"). A first-principles audit of the
    deferred L7 assumptions found the write-behind's protect-reads-from-locks rationale was a
@@ -165,15 +167,17 @@ one, same as `testing.md`/`debugging.md` accreted.
    draft loop end-to-end; `dotnet test` 1374/1374. The `ProblemDetails` envelope + client HTTP
    translation half is deferred to a Phase-5-adjacent follow-up (no testable HTTP error surface
    until the WASM client makes those calls). Detail: `workplan.md` WU-ErrorHandling.
-5. **WU-Email** — the sharpest beta blocker: Identity runs `RequireConfirmedAccount = true`
-   against `IdentityNoOpEmailSender`, so real users cannot activate accounts. Mechanism settled
-   2026-07-06 (see Resolved): a provider-agnostic **SMTP** seam (`Email:Provider` = `Smtp`/`NoOp`,
-   mirroring `ImageStorage:Provider`), a real `IEmailSender<User>` over MailKit (confirmation,
-   password reset, email-change), and a **Mailpit** dev inbox via Aspire. **Scope: transactional
-   only** — notification email fan-out (the `EmailEnabled` per-user setting already exists,
-   unconsumed) is deferred to a follow-up WU (see `audit/Notifications.md`). The prod provider +
-   sending domain remain open (decision row 8 residual), deferred to Phase 7. Test bed:
-   registration + reset + email-change flows verified end-to-end against Mailpit (Aspire path).
+5. **WU-Email — DONE ✓ (2026-07-06)** — closed what was the sharpest beta blocker (Identity ran
+   `RequireConfirmedAccount = true` against `IdentityNoOpEmailSender`, so real users could not
+   activate accounts). Built per the mechanism settled 2026-07-06 (see Resolved): the
+   provider-agnostic **SMTP** seam (`Email:Provider` = `Smtp`/`NoOp`, mirroring
+   `ImageStorage:Provider`), a real `IEmailSender<User>` over MailKit (confirmation, password
+   reset, email-change), and a **Mailpit** dev inbox via Aspire; registration + reset +
+   email-change verified end-to-end against Mailpit (a real double-HTML-encoding bug found and
+   fixed live). **Scope was transactional only** — notification email fan-out (`EmailEnabled`,
+   unconsumed) remains a deferred follow-up (see `audit/Notifications.md`). The prod provider +
+   sending domain remain open (decision row 8 residual), deferred to Phase 7. Detail:
+   `workplan.md` WU-Email; `audit/Identity.md`.
 6. **WU-Security** — DONE ✓ (2026-07-06) — hardening pass + new
    `canalave-conventions/security.md`. As-built differs from the original wording in one
    settled way: comment/upload writes are NOT HTTP endpoints (SignalR circuit; and
@@ -201,8 +205,9 @@ one, same as `testing.md`/`debugging.md` accreted.
    discovery mart family + workers (F60 narrow edge-list mart, F61 co-occurrence marts —
    raw SQL, `_a`/`_b` swap, `CanalaveTelemetry.Marts`); (c) the F61 ranked-read and F59 rCTE
    **service layers** (+ diagnostics probes; UI stays deferred); (d) headless verification
-   (Integration graph fixture + Unit + diagnostics JSON). Workers 57/58/62 are NOT in scope
-   (nothing to clean/aggregate yet — they keep the old sequencing). Conventions:
+   (Integration graph fixture + Unit + diagnostics JSON). Workers 57/58/62 were not in this WU's
+   scope and landed separately — WU-SiteDailyStat (F62) 2026-07-11, WU-NotificationCleanup (F57)
+   + WU-UserStatRecalc (F58) 2026-07-15; see `workplan.md`. Conventions:
    `layer8-data-marts.md`; decisions: `audit/Discovery.md` F59/F60/F61 + F33.
 
 ## Phase 2 — MVP-surface completeness (v1 Phase 1, minus WU38b)
@@ -217,12 +222,17 @@ Ordered as v1, all deps Stage 5, settled directions in the audit files named in 
    Phase 1's conventions (logging, error UX, rate limits) from day one.
 2. **WU41 Series — DONE ✓ (2026-07-11), WU42 Story Lineage (renamed from "Story↔Story
    Relationships," 2026-07-12 — see `audit/Stories.md` Feature 10) — DONE ✓ (2026-07-12), WU43 Saved
-   Tag Selections.**
-3. **WU40 Manual Tree Search** (stateless pivot; does not wait on marts — settled 2026-07-03).
+   Tag Selections — DONE ✓ (2026-07-11).**
+3. **WU40 Manual Tree Search — DONE ✓ (2026-07-12)** (stateless pivot; split the Manual placeholder
+   into the Explore + Deep Dive tabs — see `layer3.5-structure.md` §"Manual Tree Search").
    **WU44 Automatic Tree Search UI — DONE ✓ (2026-07-11)** (Feature 59; shipped the unified-page
-   shell + Automatic tab; Manual tab is a placeholder for WU40 to fill in).
-4. **WU38a Account Deletion UI** (surface the existing service from `/settings`).
-5. **WU-AccountEnforcement** (Suspended/Banned at login; Warned banner).
+   shell + Automatic tab).
+4. **WU38a Account Deletion UI — DONE ✓ (2026-07-11)** (surfaced the existing service from
+   `/settings`, plus account-status login enforcement — see item 5).
+5. **WU-AccountEnforcement — core shipped inside WU38a (2026-07-11):** `CanalaveSignInManager.CanSignInAsync`
+   blocks Suspended/Banned at login, security-stamp bump kills open sessions, `AccountStatusBanner`
+   covers Warned. **Residual (unbuilt):** mid-session responsiveness — a freshly-Warned user only
+   sees the banner at next sign-in; `RefreshSignInAsync` is the named tool (`workplan.md` deferred list).
 6. **WU39 External Link Verification (mod workflow) — DONE ✓ (2026-07-25).** Re-minted 2026-07-11
    (was "Story Import & Verification"); its author-facing half (links + story-page display) moved
    into WU38d, file ingestion became Feature 63/WU38d. Shipped the two-tier verification model
@@ -237,8 +247,10 @@ Ordered as v1, all deps Stage 5, settled directions in the audit files named in 
    `StoryExternalLink`/`ExternalPlatform` remodel). 1600 tests green; export/import round-trips +
    browser-verified. WU39 (item 6) now owns only the mod link-verification tab. See
    `audit/Export.md`, `audit/Import.md`, `audit/Moderation.md` F53, `workplan.md` WU38c/WU38d.
-8. **WU-AccessGate** *(re-minted 2026-07-19 from WU-SeoSite, which it absorbs; Features 64 + 66).*
-   Implements the resolved row-11 model end-to-end: Class-A fixes (ProfileVisibility API
+8. **WU-AccessGate — DONE ✓ (2026-07-23; WU-AccessGate2 follow-up 2026-07-24 shipped the
+   `"StoryStatus"` named filter + `GetChapterGateAsync`)** *(re-minted 2026-07-19 from WU-SeoSite,
+   which it absorbs; Features 64 + 66).*
+   Implemented the resolved row-11 model end-to-end: Class-A fixes (ProfileVisibility API
    enforcement, sign-in-required pages, soft-404s, author self-access, group-blog permalinks),
    consent infrastructure (per-story/group/blog-post reveals, anon prefs cookie, responsive
    `ShowMatureContent` via `RefreshSignInAsync`), the interstitials + adult labels, Personal-plane
@@ -275,12 +287,15 @@ a future *mobile-phase* UX decision riding the adaptivity ladder's rung-3 trigge
 device-specific-composition framing is obsolete, the desktop/mobile axis having been dissolved by
 the single-responsive-site resolution — see "Resolved"). See `audit/Chapters.md`.
 
-## Phase 5 — L5 WASM enablement (v1 Phase 4 item 6, deliberately after features)
+## Phase 5 — L5 WASM enablement — DONE ✓ (2026-07-13: WU-L5Sweep + WU-GlobalFlip)
 
-Kept last-before-beta on purpose — see "the inversion" above. Per-feature endpoint + client
-pairs built headlessly for the *final* Phase-2 surface, then the single global `InteractiveAuto`
-flip + one whole-site browser wave, per `layer5-wasm.md` §"Rollout Strategy" / §"The Global
-Flip". Battle-tested pattern (WU-L5Pilot); this batch is application, not discovery.
+Landed earlier than the "last-before-beta" sequencing above intended (the flip's economics were
+accepted: post-flip L2 contract changes also cost an endpoint + client-impl touch). The
+mechanical endpoint/client sweep (WU-L5Sweep) plus the single global `InteractiveAuto` flip and
+whole-site browser wave (WU-GlobalFlip — 7 bugs found/fixed same-session) both landed 2026-07-13,
+per `layer5-wasm.md` §"Rollout Strategy" / §"The Global Flip". Later Phase-2 features build their
+L5 slice as they land (e.g. WU-GroupsL5, 2026-07-24). Only the item below remains live in this
+phase.
 
 **WU-ErrorHandling2** *(Phase-5-adjacent follow-up, named 2026-07-15)* — the `ProblemDetails`
 envelope + client HTTP error translation half WU-ErrorHandling deliberately deferred (no HTTP
@@ -292,7 +307,7 @@ See `error-handling.md`.
 ## Phase 6 — Beta
 
 Small audience from the existing community (logistics: decision row 6). Entry gate: Phases 0–3
-and 5 done; every Phase 4 item resolved or explicitly deferred; email (Phase 1 item 5) live.
+done (5 already is); every Phase 4 item resolved or explicitly deferred; email (Phase 1 item 5) live.
 L2/L3 changes from feedback remain normal and planned for — each also touches its L5
 endpoint/client impl (accepted 2026-07-03).
 
@@ -322,8 +337,16 @@ checklist — each bullet becomes a checkable item, most are small:
   dev's migrate-on-startup; write it into `layer1-data-model.md` or the deploy doc.
 - **Backups you have restored** — managed-PG backup policy + one performed restore drill; R2
   story for blobs (versioning or periodic sync). A backup never restored is a hypothesis.
-- **Uptime & alerting** — safely-exposed health endpoint (currently dev-only-mapped) + external
-  pinger + an alert channel that reaches Brian.
+- **Uptime & alerting** — safely-exposed health endpoint (currently dev-only-mapped; "safely" =
+  the exposure mechanism itself is undecided — `middle-addendum.md` §3 #10) + external pinger +
+  an alert channel that reaches Brian.
+- **Sending-domain DNS (SPF/DKIM/DMARC)** — part of decision row 8's provider+domain choice
+  (`middle-addendum.md` §3 #13): the records must exist and verify before beta invitations go
+  out, or confirmation mail lands in spam.
+- **Operational resilience group** (`middle-addendum.md` §3 #8–#14, previously unowned by any
+  phase item): minimal ops runbook (restart/redeploy/rollback), DR beyond the DB (droplet
+  rebuild path), cost monitoring/billing alerts, and the explicit no-staging-environment
+  decision (accepted risk or a cheap pre-prod check, decided here).
 - **Telemetry destination live** (decision row 7, resolved 2026-07-06: self-hosted Grafana LGTM
   single container on the droplet — see Resolved). Deploy the container; set
   `OTEL_EXPORTER_OTLP_ENDPOINT` on the web app (the exporter is already gated on it — config
@@ -376,7 +399,7 @@ left as gaps rather than renumbered, since other docs cite them by number.
 | 2 | **Homepage design — remaining sections.** The spotlight-curation half was resolved 2026-07-11 (see Resolved "Community Spotlight model"); the spotlight section of `/` is built by WU-Spotlight and no longer gated. What remains open: what else the front door shows (recently updated, featured tags, active SitePolls — open intent recorded 2026-07-12, see `audit/BlogPosts.md` F37 — etc.) and its layout. | Spec §5.28: `/` = Community Spotlight stories; other sections undecided. | Front-door product design. Gates the rest of Phase 2 item 1 (WU-Home). |
 | 4 | **Launch-readiness mechanics** — now the full Phase 7 checklist: deploy mechanism, config contract, migration-in-prod, backup+restore drill, uptime/alerting, TLS/domain, R2 values. | Topology settled (droplet + managed PG + R2); `aspire publish` compose output is the default deploy candidate. | Operational cost/effort trade-offs. Phase 7. |
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Phase 6 gate. |
-| 8 | **Email provider + sending domain** (residual — mechanism resolved 2026-07-06, see Resolved) — which SMTP provider to point the seam at, and the sending domain. | Postmark or Amazon SES (cheap at this scale) or Resend; needs a sending domain, which ties into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Config-only swap once decided (no code change) — gates Phase 7, not Phase 1 anymore. |
+| 8 | **Email provider + sending domain** (residual — mechanism resolved 2026-07-06, see Resolved) — which SMTP provider to point the seam at, the sending domain, and the domain's SPF/DKIM/DMARC DNS records (see the Phase 7 checklist bullet — `middle-addendum.md` §3 #13). | Postmark or Amazon SES (cheap at this scale) or Resend; needs a sending domain, which ties into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Config-only swap once decided (no code change) — gates Phase 7, not Phase 1 anymore. |
 | 10 | **Legal/policy track ownership + timing** — ToS, privacy policy, DMCA agent/process, moderation obligations for a fanfiction UGC site. | None. | Legal exposure and community policy are yours; engineering only hosts the documents. Gates Phase 7 (lighter obligation defensible for the trusted-audience beta — your call). |
 | 12 | **Accessibility scope/depth** — a full WCAG AA audit vs. a targeted axe-DevTools pass over the highest-traffic pages (search, story, chapter reading, signup/login); which pages if targeted; whether to add an automated a11y test tier (axe-core/Lighthouse-CI) to the three-tier test suite. | None — genuine Stage-1 intent gap (`middle-addendum.md` §3 #22 names the gap but not a scope). | Product/effort trade-off; solo-dev realistic scope is yours to set. Gates WU-A11y (Phase 3). |
 
@@ -499,8 +522,9 @@ left as gaps rather than renumbered, since other docs cite them by number.
   WU-Spotlight.
 - **Open Graph / social-sharing meta tags (addendum §3 #15/#17, WU-Seo)** — **resolved 2026-07-11**
   (Brian). Scope: OG + Twitter card + `<meta name="description">` on all shareable content pages
-  (Stories, Chapters, Profiles, Series, BlogPosts, Groups); mature-content `noindex` (addendum #18)
-  deliberately deferred to a follow-up unit. Absolute `og:url`/`og:image` resolve via a **configured**
+  (Stories, Chapters, Profiles, Series, BlogPosts, Groups); the mature-content `noindex` deferral
+  (addendum #18) was superseded 2026-07-19 — row 11 resolved as "index all, no `noindex` ever";
+  gating is Feature 66's job. Absolute `og:url`/`og:image` resolve via a **configured**
   `Site:PublicBaseUrl` (not `NavigationManager.BaseUri`) — request-derived URLs are unsafe behind the
   Cloudflare→DigitalOcean topology and don't generalize to N≥2 droplets. `og:image` reads a separate
   `ImageStorage:PublicBaseUrl` (defaults to the site base) — wired now as the seam for a future
@@ -964,10 +988,11 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   `layer1-data-model.md` §"Denormalization with TPT", `audit/BlogPosts.md` Feature 35,
   `audit/Comments.md`.
 
-- **WU35 Messaging architecture** — resolved (2026-06-24): 1-on-1 only; stateless MVP, SignalR
-  post-MVP (now Phase 1 item 8); global unread badge in chrome; no PM Notification rows
-  (watermark only). See `cross-cutting.md` "Private Messaging Architecture",
-  `audit/Messaging.md` WU35.
+- **WU35 Messaging architecture** — resolved (2026-06-24): 1-on-1 only; stateless MVP; the
+  "SignalR post-MVP" half was superseded 2026-07-07 — SignalR is permanently ruled out, not
+  deferred (see Resolved "SignalR permanently ruled out for private messaging"); global unread
+  badge in chrome; no PM Notification rows (watermark only). See `cross-cutting.md` "Private
+  Messaging Architecture", `audit/Messaging.md` WU35.
 
 - **WU31 Blog Post** — resolved (2026-06-24): F56 deferred; edit-page pattern for blog posts;
   `GroupBlogPost` UI in WU32; optional story-link picker via `GetStoryIdsByAuthorAsync`;

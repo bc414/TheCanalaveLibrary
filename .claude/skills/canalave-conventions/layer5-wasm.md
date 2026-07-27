@@ -21,14 +21,14 @@ verification narrative: `workplan.md` WU-L5Pilot).
 - **Per-feature service surface lands incrementally.** Endpoints + client impls are inert until
   a page renders in WASM and are fully testable headlessly (see §"Testing"), so they ship
   feature-by-feature with zero user-facing risk.
-- **The render-mode conversion happens once, globally.** When every reachable page's services
-  have client impls, `App.razor` flips to `InteractiveAuto` in a single pass, followed by one
+- **The render-mode conversion happened once, globally — the Global Flip landed 2026-07-13
+  (WU-GlobalFlip).** `App.razor` flipped to `InteractiveAuto` in a single pass, followed by one
   whole-site browser debug wave (§"The Global Flip"). No long-lived mixed-mode state: islands
   degrade UX (inert layout chrome, full-reload navigation), deliver nothing users need early,
   and each one is a standing forgotten-attribute circuit-crash hazard (§"The Island Recipe").
-- Pages carry no `@rendermode` of their own in the resting state — before the flip they ride the
-  global `InteractiveServer` mode; after it, the global `InteractiveAuto` mode (axiom 8: render
-  mode is set once, on `<Routes>`/`<HeadOutlet>` in `App.razor`).
+- Pages carry no `@rendermode` of their own in the resting state — they ride the global
+  `InteractiveAuto` mode (axiom 8: render mode is set once, on `<Routes>`/`<HeadOutlet>` in
+  `App.razor`; the pre-flip resting state was global `InteractiveServer`).
 
 ## L5 Stage Semantics (corrects a grid mistake — 2026-07-12)
 
@@ -44,8 +44,12 @@ body-swap compiles, not that the service behind it does).
 Service-layer soundness alone (no HTTP surface) is **Stage 2** — "intent settled, no plan/code" for
 this layer specifically, same as every other not-yet-built L5 cell. The Groups/Recommendations
 cells were corrected to 2 in the same pass that reconciled this section (`status.md`, audit Stage
-notes). Layer 5 Stage 5 still does **not** imply Stage-5 *verification* per WU-L5Sweep's
-add-without-verify pass above — see that bullet for the distinction between "built" and "verified."
+notes). **Correction (2026-07-24, WU-GroupsL5):** the Groups half of that premise was itself stale —
+F38–F40's endpoints/client impl HAD been built and browser-verified by WU-GlobalFlip (2026-07-13),
+the flip's grid update just skipped the cluster; those cells are back at 5. The *ruling* stands
+unchanged — it's the 2026-07-12 factual snapshot that aged. Layer 5 Stage 5 still does **not**
+imply Stage-5 *verification* per WU-L5Sweep's add-without-verify pass above — see that bullet for
+the distinction between "built" and "verified."
 
 ## How `InteractiveAuto` Works
 
@@ -421,8 +425,8 @@ island boundary, so a page running as an island must wrap its own content in
 ## Avoiding the double fetch: `[PersistentState]` (.NET 10)
 
 Interactive pages prerender, then the interactive pass re-runs `OnInitializedAsync` — refetching
-and flashing "Loading…". Applies to InteractiveServer today and WASM after the flip. Persist the
-prerendered data instead:
+and flashing "Loading…". Applies to both `InteractiveAuto` runtimes (circuit and WASM). Persist
+the prerendered data instead:
 
 ```csharp
 [PersistentState]                                   // public property — required by the attribute
@@ -568,8 +572,8 @@ The vertical-line test: can this feature's Layer 1–4 contract be fully defined
 correct implementation behind it, such that Layer 5 only changes what's *behind* the contract?
 
 Layer 5 is naturally batchable: the same endpoint + `HttpClient` wrapper pattern applies to N
-stable interfaces. The Phase-4 batch (middle_plan.md item 6) applies it feature-by-feature
-(headless), then §"The Global Flip" closes the layer.
+stable interfaces. This is how it played out: WU-L5Sweep batched the pattern feature-by-feature
+(headless), then §"The Global Flip" closed the layer (both 2026-07-13).
 
 ## Avoid
 

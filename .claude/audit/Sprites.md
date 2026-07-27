@@ -80,7 +80,7 @@ URL**. The URL is computed at render time from `(SpriteBaseUrl, slug, id, prefer
   different behaviors) is resolved: the two impls collapsed into one `OptimisticSpriteReadService` in
   Core (registered on both Server and Client). No endpoint needed (pure URL construction). No WASM
   proxy required; SharedUI components inject the Core service directly on both sides.
-- **L6/L7/L8 — N/A.**
+- **L6/L8 — N/A.** (L7 dissolved 2026-07-06.)
 
 - **L4.5-Browser verification (2026-07-02) — Feature 3 → L4.5=5.** The optimistic-URL design was
   driven end to end in a real browser:

@@ -1,7 +1,7 @@
 -- Messaging volume seed for the three `messaging_inbox_*` PerfBaseline scenarios.
 --
 -- WHY THIS EXISTS SEPARATELY FROM SeedTool: SeedTool generates no conversations or messages, which
--- is exactly why F49's L6 cells were flipped to Stage 5 unmeasured (audit/L6-reconciliation-matrix.md
+-- is exactly why F49's L6 cells were flipped to Stage 5 unmeasured (.claude/design/L6-reconciliation-matrix.md
 -- §Messaging). Adding a messaging generator to SeedTool is tracked separately (C4's messaging half);
 -- this script is the minimum needed to make the WU-MsgReadPath measurement reproducible without
 -- pre-empting that work.

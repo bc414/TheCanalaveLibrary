@@ -90,7 +90,7 @@ no migration; `TagConfigurations.cs` `HasMany` call updated to match).
 
 ---
 
-## WU-TagFanon Stage note (2026-07-26) — F11 + F12 + F31 + F41, all cells stay Stage 5
+## WU-TagFanon Stage note (2026-07-26) — F11 + F12 + F31 + F41, all touched cells keep their current Stage (F11/F12/F31 L4 remain Stage 1 — standing Phase-3 visual pass)
 
 **What changed.** The tag model's per-story overlay was rebuilt around the custom-name/nuance
 split, hierarchy roll-up was implemented, and the fanonization pipeline was built on top. Cells
@@ -466,8 +466,8 @@ enough. Recorded as a measured decision, not an assumption.
   shapes, deserialization, blank-term short-circuit); Integration tier `TagEndpointsTests` (read
   endpoints incl. binding); browser band — `TagChip` sprites render on the live `/tags` WASM
   island with the full `onerror` fallback chain (animated 404 → static 200), byte-identical to
-  server rendering. `TagSelector`'s typeahead path in WASM remains untested-in-browser (no WASM
-  page hosts it yet — that's Feature 14 L5, still Stage 2).
+  server rendering. `TagSelector`'s typeahead path in WASM remained untested-in-browser at this
+  point (superseded 2026-07-13: WU-GlobalFlip took F14 L5 to Stage 5 — see Feature 14's L5 line).
 
 ## Feature 14 — Tag Filtering & Selection UI
 - **L1 — N/A.**

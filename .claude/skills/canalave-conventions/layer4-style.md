@@ -7,7 +7,7 @@ expressions. Blocked on design tokens being locked.
 > in an `@theme {}` block inside `TheCanalaveLibrary.Server/Styles/app.css` (the input stylesheet),
 > not in a `tailwind.config.js`. Spec §2.1 and the original Axiom 9 phrasing describe the older v3
 > `tailwind.config.js` model; the spec is a read-only historical snapshot and is not edited — this is
-> the resolved, authoritative convention. See `forward_plan.md` Phase C "Resolved."
+> the resolved, authoritative convention (settled Phase C; carried in `middle_plan_v2.md` §Resolved).
 
 > **Bootstrap debris warning:** the original ASP.NET template and the Identity scaffold left
 > Bootstrap/template classnames throughout the tree — `top-row`, `page`, `sidebar`, `bottom-nav`,
@@ -275,7 +275,8 @@ element means:
    `onerror="this.style.display='none'"` (`UserCard`, `BadgeSettingsForm`).
 3. **Placeholder swap** when the slot must stay visually occupied — avatars (`onerror` → the
    default-avatar asset), cover art (`@onerror` flips a `_coverArtFailed` flag to a styled
-   placeholder block — `StoryDesktop`/`StoryMobile`).
+   placeholder block — `StoryPage`, which absorbed the former `StoryDesktop`/`StoryMobile` pair
+   2026-07-18).
 
 New image-bearing components pick one of these at build time — the miss case is part of the
 component's contract, not an ops problem (badge icons shipped without one and rendered broken
@@ -651,12 +652,13 @@ modal):
 Dropdown list items share one class string:
 `block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface)`, panel
 chrome is `w-44`–`w-48 rounded-xl border border-(--color-border) bg-(--color-surface-raised) py-1
-shadow-medium`, dividers are `my-1 border-t border-(--color-border)`. Verified via HTTP/HTML
-inspection (no Chrome MCP tool available this session): anonymous shows only "Log in", no Write
+shadow-medium`, dividers are `my-1 border-t border-(--color-border)`. Verified 2026-07-01 via
+HTTP/HTML inspection (no browser tool existed yet): anonymous shows only "Log in", no Write
 button; TestUser shows username + Write, no Mod tools; AdminUser shows Mod tools; `/mod/reports`
-returns 403 for TestUser and 200 for AdminUser. Click-driven flyout-open behavior was not
-browser-verified this session (relies on the same `@onclick`/`_open` mechanism already proven by
-`NotificationBell` in production) — worth a follow-up visual pass once a browser tool is available.
+returns 403 for TestUser and 200 for AdminUser. The click-driven flyout-open behavior was later
+exercised in real browsers across the WU-BrowserPass and WU-GlobalFlip waves (same
+`@onclick`/`_open` mechanism as `NotificationBell`); visual polish sign-off rides the standing
+Phase-3 L4 pass like every other surface.
 
 ## Interaction States (one recipe per role — Phase C, 2026-07-10)
 
