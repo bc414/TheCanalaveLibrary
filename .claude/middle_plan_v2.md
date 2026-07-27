@@ -725,8 +725,8 @@ intact at the named pointer; `middle_plan.md` remains the unabridged historical 
   (2026-07-07, Brian): messaging will never use SignalR — Discord already serves the real-time-chat
   need, and this site's private messaging is deliberately for substantive, async, long-form
   conversation, the same reasoning that already kept group conversations off-site. This hardens
-  WU35's original "SignalR deferred post-MVP" framing into a permanent decision: `MessagesHub` (the
-  only app-level SignalR Hub ever proposed anywhere in this project) is cancelled, not shelved.
+  WU35's original "SignalR deferred post-MVP" framing into a permanent decision: `MessagesHub` is cancelled,
+  not shelved (it was the only app-level SignalR Hub ever proposed anywhere in this project).
   Consequence for horizontal scaling: since no app-defined Hub exists or ever will, there is no
   SignalR backplane need at N≥2 — only load-balancer session affinity for Blazor Server's own
   circuits remains relevant, which is a different concern entirely (a backplane routes cross-node

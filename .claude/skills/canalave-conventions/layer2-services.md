@@ -1137,33 +1137,39 @@ not incremental substring matching); the same search method also retrofits Group
 Route by `TagTypeId` on the incoming DTO:
 
 ```csharp
-// StoryMappers.cs — structured routing (WU37)
-foreach (var sc in dto.StoryCharacters)
-    story.StoryCharacters.Add(new StoryCharacter { CharacterTagId = sc.TagId, ... });
-
-foreach (var st in dto.FlatTags)   // Genre/ContentWarning/CrossoverFandom/Setting
-    story.StoryTags.Add(new StoryTag { TagId = st.TagId, Priority = st.Priority });
-
-foreach (var sd in dto.SettingDetails)
-    story.SettingDetails.Add(new SettingDetail { BaseTagId = sd.BaseTagId, ... });
-
-foreach (var sp in dto.StoryCharacterPairings)
+// StoryMappers.cs — structured routing (WU37 shape, reshaped WU-TagFanon 2026-07-26)
+// Flat rows (Genre/ContentWarning/CrossoverFandom/Setting): overlay lives ON the junction row.
+foreach (IStoryTag tempTag in tempStory.StoryTags)          // carries CustomName + Nuance
 {
-    var pairing = new StoryCharacterPairing { PairingType = sp.PairingType, Priority = sp.Priority };
-    foreach (var memberId in sp.MemberStoryCharacterIds)
-        pairing.Members.Add(new StoryCharacterPairingMember { StoryCharacterId = memberId });
-    story.StoryCharacterPairings.Add(pairing);
+    StoryTag st = tempTag.ToStoryTag();
+    if (tempTag.TagTypeEnum == TagTypeEnum.ContentWarning)
+        st.Priority = TagPriority.Primary;                  // no priority picker for warnings
+    actualStory.StoryTags.Add(st);
 }
+
+// Characters: dedicated entity, rebuilt in DTO order (IsOc / CustomName / Nuance on-row).
+List<StoryCharacter> rebuilt = new();
+foreach (StoryCharacterDto c in tempStory.StoryCharacters)
+    rebuilt.Add(new StoryCharacter { CharacterTagId = c.CharacterTagId, Priority = c.Priority,
+                                     IsOc = c.IsOc, CustomName = c.CustomName, Nuance = c.Nuance });
+
+// Pairings reference rebuilt StoryCharacter rows BY INDEX, not tag id — WU-TagFanon: tag ids
+// are ambiguous once two custom-named OCs share a species.
+foreach (StoryCharacterPairingDto p in tempStory.StoryCharacterPairings)
+    foreach (int index in p.MemberIndexes)
+        pairing.Members.Add(new StoryCharacterPairingMember { StoryCharacter = rebuilt[index] });
 ```
 
-**Character never touches `StoryTag`.** Setting appears in both `StoryTag` (for catalog association)
-and optionally `SettingDetail` (for per-story custom name/description).
+**Character never touches `StoryTag`.** The former `SettingDetail` side-table is gone
+(WU-TagFanon folded it onto the junction): a Setting's per-story custom name/description is just
+`StoryTag.CustomName`/`Nuance` on its flat row, same as every other flat type.
 
 ### Validation — server re-reads gates from Tag
 
 The write service calls `ServerStoryWriteService.ValidateStructuredTagsAsync` (or extends `CanSave()`)
-after loading `Tag` rows for all referenced TagIds. **Never trust DTO-carried `AllowOCDetails` or
-`AllowSettingDetails`** — load fresh from the `Tag` table. Full rules table below.
+after loading `Tag` rows for all referenced TagIds. **Never trust a DTO-carried gate value
+(`AllowCustomName` — the single flag that replaced `AllowOCDetails`/`AllowSettingDetails`)** —
+load fresh from the `Tag` table. Full rules table below.
 
 ### Legality rules — enforced at service layer
 

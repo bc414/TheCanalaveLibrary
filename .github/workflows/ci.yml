@@ -47,6 +47,14 @@ jobs:
         shell: pwsh
         run: ./scripts/check-design-tokens.ps1
 
+      # Process-doc hygiene (WU-DocHygiene2, 2026-07-27): fails on retired terms mentioned as if
+      # live, session-relative language in persistent docs, and live pointers into retired plan
+      # files. Retirement WUs append their term to the script's registry — the doc analog of the
+      # token check's "recurs with generated code, needs a permanent feedback loop" rationale.
+      - name: Doc-hygiene check
+        shell: pwsh
+        run: ./scripts/check-doc-hygiene.ps1
+
       # No services:/secrets: block needed — Unit/RazorComponents tests have no external deps,
       # and Integration + the Garage/S3 test spin up their own ephemeral Testcontainers
       # (postgres:18-alpine, dxflrs/garage:v2.3.0) against the Docker daemon ubuntu-latest ships

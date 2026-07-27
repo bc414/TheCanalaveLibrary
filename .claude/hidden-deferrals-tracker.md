@@ -561,7 +561,7 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - Context, all that remains open: the 25 non-mobile **C-consolidate** merges (manifest §5); Integration `NotificationServiceTests` flake fix; Integration format-dupes; Unit tautology trim. The formerly-deferred `*Mobile` test-file deletions were discharged by WU-ResponsiveMerge (2026-07-18) — no `*Mobile*` test file exists. Suite is green, so nothing signals the pending cleanup.
   - Note: `CanalaveTypeaheadTests.Escape_ClosesDropdown_WithoutSelecting` is a known pre-existing intermittent flake (passes on isolated re-run).
 
-- [ ] **H8 — MA-610 Identity scaffold prune-vs-keep** `[decision · low · pre-launch]` — *Partially disclosed (status.md line 85 🧑).*
+- [ ] **H8 — MA-610 Identity scaffold prune-vs-keep** `[decision · low · pre-launch]` — *Partially disclosed (the 🧑 deliberately-not-done list in `workplan.md`'s WU-AuditFixPass-2 entry).*
   - Grid: F1 mostly 5 (L4=1).
   - Source: `modernization-audit/deferred-work.md` §2; `report.md` MA-610.
   - Context: ~1,325 LOC of scaffolded 2FA/passkey/external-login pages with no provider configured. A product decision (prune vs keep), untouched. Also: MA-112/608/012 just-in-time org moves (`UserDeletionService`, `MainLayout.razor` still under `Server/Components/Layout/`, `Core/Models` scaffold, `NotFound.razor`) — deferred by the "empty folders just-in-time" convention.
