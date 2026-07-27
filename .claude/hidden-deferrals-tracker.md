@@ -427,7 +427,7 @@ unless noted. All sit under Stage-5 cells.
 
 - [ ] **E1 — WU-ErrorHandling2 (`ProblemDetails` envelope + client HTTP translation)** `[off-grid · med · pre-launch]`
   - Grid: L5 column reads 5 sitewide (implies the client HTTP path is complete).
-  - Source: `error-handling.md` §"Deferred (Phase-5-adjacent) — WU-ErrorHandling2"; `roadmap.md` §"Also still open."
+  - Source: `error-handling.md` §"Deferred (Phase-5-adjacent) — WU-ErrorHandling2"; `roadmap.md` §"Recommended next work units."
   - Context: WU-ErrorHandling deferred the API error-envelope + full client-service HTTP error-translation half; "design still not done." The global flip made the HTTP surface testable but the error-shaping half is unbuilt.
 
 - [ ] **E2 — AngleSharp 0.17.1 mXSS (CVE-2026-54570) — accepted-risk live CVE** `[off-grid · high · launch]`

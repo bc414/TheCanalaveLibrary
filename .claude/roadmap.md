@@ -18,12 +18,25 @@
 
 ## Where things stand (2026-07-27)
 
-MVP build-out + platform build-out (Phases 0, 1, 5) are complete and browser-verified. Recent
-trajectory (`git log`): after WU-AccessGate/WU-AccessGate2 closed viewer access gating end-to-end
-(Features 64 + 66, 2026-07-23/24), the last few weeks' work shifted to closing hidden deferrals
-surfaced by a 2026-07-24 audit (`hidden-deferrals-tracker.md`) — WU-TagFanon, WU-RecLifecycle,
-WU-GroupsL5b, WU-MsgArchive, WU-TokenGreen, WU-ParentVisibility — plus three doc-hygiene passes
-(WU-DocHygiene/2/3) and this file's own consolidation. Only two Phase-2 items and the whole of
+MVP build-out + platform build-out (Phases 0, 1, 5) are complete and browser-verified. `git log`
+shows a bursty pattern, not a steady drip — relevant to how "Recommended next work units" below is
+sequenced:
+
+- **2026-07-05 → 07-07:** all nine Phase 1 platform items in three days (Observability,
+  SignalBuffering, L6 index batch, ErrorHandling, Email, Security, DataProtection, Marts).
+- **2026-07-10 → 07-13:** most of Phases 2/4/5 — Design System, seven MVP-surface features landing
+  in a single day (07-11: Series, Story Lineage, Saved Tag Selections, Account Deletion UI,
+  Import/Export, Open Graph, Site Daily Stat), Spotlight/Polls/Story Arcs (07-12), the L5 WASM
+  global flip + Custom Lists (07-13).
+- **2026-07-18:** one 20-commit day removing the desktop/mobile device-fork paradigm
+  (WU-ResponsiveMerge) plus the Feature-56 cut.
+- **2026-07-24 → 07-27 (most recent four days):** zero new features — entirely hidden-deferral
+  closures surfaced by the 2026-07-24 audit (`hidden-deferrals-tracker.md`: WU-AccessGate2,
+  WU-ChapterArcBrowserPass, WU-GroupsL5/L5b, A3, WU-RecLifecycle, WU-B2, WU39, WU-TagFanon,
+  WU-MsgArchive, WU-TokenGreen, WU-ParentVisibility) plus three doc-hygiene passes and this file's
+  own creation.
+
+The pattern is build-in-bursts, then harden-in-a-burst. Only two Phase-2 items and the whole of
 Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s Position block.
 
 ## Phase status
@@ -56,7 +69,7 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
 - **Phase 4 — Beta-scope decisions — DONE ✓ (2026-07-18, last verdict: Feature 56 cut).** Every
   per-feature verdict rendered. Full detail: `middle_plan_v2.md` Phase 4.
 - **Phase 5 — L5 WASM enablement — DONE ✓ (2026-07-13, WU-L5Sweep + WU-GlobalFlip).** One
-  Phase-5-adjacent follow-up remains — see "Also still open" below.
+  Phase-5-adjacent follow-up remains — see "Recommended next work units" below.
 - **Phase 6 — Beta — not started.** Small audience from the existing community. Entry gate:
   Phases 0–3 done (0/1 already are), every Phase 4 item resolved (is), email live (is).
   **Blocked on decision row 6** below. **WU-NotifEmail** (notification email fan-out over the
@@ -111,17 +124,57 @@ genuine open decision gets promoted here, not left buried in the tracker).
 | 12 | **Accessibility scope/depth** — full WCAG AA audit vs. a targeted axe-DevTools pass over the highest-traffic pages; whether to add an automated a11y test tier. | None — genuine Stage-1 intent gap. | Product/effort trade-off; solo-dev realistic scope is yours to set. Gates WU-A11y (Phase 3). |
 | 13 | **`/discover` URL state round-tripping** — should `/discover` round-trip filter state through the URL at all? (1) yes, all axes, `TreeSearchPage`-style; (2) no URL state but add ship seeding anyway, closing the ships-die-on-navigation asymmetry cheaply; (3) leave as-is — only defensible if URL round-tripping is rejected permanently. Full framing: `hidden-deferrals-tracker.md` B11. | None. | Shareable-URL product behavior + a privacy-perception call (tag ids visible in URLs). Gates only tracker item B11; no phase gate. |
 
-## Also still open (unblocked, not phase-gated)
+## Recommended next work units (2026-07-27)
 
-- **WU-ErrorHandling2** — the `ProblemDetails` envelope + client HTTP error translation half
-  WU-ErrorHandling deferred. Unblocked since WU-GlobalFlip (2026-07-13) made the WASM client's
-  HTTP calls exist to translate; simply never picked up since. Pointer: `error-handling.md`
-  §"Deferred (Phase-5-adjacent)."
+*A full-backlog sequencing recommendation, not a mandate — priorities stay yours to reweigh.
+Reanalyzed 2026-07-27 against the current tracker state (unchanged since the 2026-07-24 audit
+except for closures already reflected in "Already-closed" there) and the `git log` trajectory
+above. Work units cluster by shared surface — the pattern WU-TagFanon/WU-RecLifecycle/WU-GroupsL5b
+already proved: one WU per shared file/subsystem beats one WU per tracker checkbox — not by
+tracker letter. Full narrative/rationale for every item stays in `hidden-deferrals-tracker.md`;
+this table adds sequencing only, it doesn't restate content.*
 
-The broader off-grid/deferred backlog (built-but-inert plumbing, unmeasured indexes, polish,
-test-hygiene) lives in `hidden-deferrals-tracker.md` — a snapshot checklist with its own
-priority/window labels, not phase-gated the way the items above are. This roadmap tracks only
-phase-gated and decision-gated work; consult the tracker for everything else.
+**Why this order:** the debt-paydown burst (07-24 → 07-27) hasn't run dry — tracker groups A–H
+still hold roughly 20 open items, two flagged high-priority security (E2, E3 — both already
+deliberately gated to Phase 7/launch, not moved up by this reanalysis). Tiers 1–2 continue that
+burst a little further on the cheapest, most-unblocked items rather than context-switching back to
+feature work mid-burst; Tier 3 onward is the pivot back onto the Phase 2/3 critical path once it's
+done.
+
+| Tier | Proposed work unit | Tracker items closed | Why here |
+|---|---|---|---|
+| **0** — decisions only, chat, no code | Decision row 2 (homepage sections) | — | Unblocks WU-Home, the last unstarted Phase-2 item |
+| **0** | Decision row 13 (`/discover` URL state) | — | Unblocks B11/B12; already fully framed, cheap to resolve |
+| **1** — already unblocked, no decision needed | WU-AccountEnforcement residual | *(G1's residual)* | Small `RefreshSignInAsync` wiring, Phase 2 item 5 above — the cheapest win on the board |
+| **1** | WU-ErrorHandling2 | E1 | Unblocked since WU-GlobalFlip (2026-07-13), never picked up since |
+| **2** — continue the debt-paydown burst, clustered by shared surface | WU-L6MeasurePass | C2, C3, C4, C5, C6 | Same "always measure" origin; C4 needs one new Messaging SeedTool generator, reused by the other four |
+| **2** | WU-DiscoveryURLState | B11, B12 | Same review, same `ApplyFiltersAsync`/`ShipFilter` surface — needs decision row 13 first |
+| **2** | WU-StatBadgeProducers | B3, B4 | B4's BetaReader badge literally depends on B3's counter existing |
+| **2** | WU-DataSaver | B0 | Small standalone decision ("suppress sprites, or cut the setting") + build |
+| **2** | WU-DiscoveryOverrideUI | B7 | Per-user filter-override editing surface (§8.7) |
+| **3** | WU-Home | F1 | Once decision row 2 lands — closes Phase 2 entirely |
+| **4** — Phase 3 (L4 freeze sweep) | WU-A11y | F6 | Resolve decision row 12 just before the sweep starts |
+| **4** | *(fold into the same sweep — don't build standalone)* | H1, E4, H8 | Each cheap enough to ride the sweep rather than justify its own WU |
+| **5** — beta window | WU-EditorSprite | A1 | Spec'd authoring capability; design the sanitizer allow-list addition alongside it |
+| **5** | Decision row 6 (beta logistics) | F5 | Chat-only, shortly before beta opens |
+| **5** | WU-NotifEmail | B1 | Stays at the Phase 6 gate itself — no live audience to fan out to before then |
+| **6** — cheap filler, anytime, no phase dependency | WU-PolishSweep | D4, D5, H2, H6 | Code-economy items, 401-mapping cleanup, StoryDeck skeleton, the by-design-gap list |
+| **6** | WU-TestHygieneSweep | H3, H4 (manual-verify half) | Cover-art browser-verify, paste-from-Word manual check |
+| **6** | *(fold H7 into whichever WU next touches the test suite, or its own pass)* | H7 | The 25 C-consolidate merges are mechanical, no urgency, no dependency |
+| **6** | *(standalone, own WU whenever convenient)* | A6, A7 | Discovery-adjacent but distinct from Tier 2's cluster (Explore filter axes; the frozen `DiscoveryMartSchema`'s 7th UNION arm) — heavier lift, `anytime` window, no forcing function |
+
+**Deliberately not reordered** — each already has an explicit gate and a stated reason; this
+reanalysis found no case for moving any of them up: A8 (post-mvp-mobile), B8 (post-beta), B9/B10
+(launch), E3/E5 (launch/post-launch), E6 (pre-launch — no rate-limit abuse signal exists yet), F8
+(post-launch). F2/F3/F4/F7 are already tracked above via the Decisions table and the Phase 7
+checklist, not re-listed here. H4's PDF-import half stays a deliberate future-format candidate.
+
+**E2 (AngleSharp CVE) flagged, not moved.** Tracker priority is `high`, but the risk is accepted
+and mitigated (the 13-tag/`href`-only allow-list strips the attack vector) with a concrete Phase 7
+root-cause fix already designed. Leaving it at Phase 7 is a decision worth your explicit
+re-confirmation given the `high` label, not a silent default this reanalysis is making for you.
+
+Group G is fully closed (2026-07-27) — nothing to sequence.
 
 ## Resolved
 

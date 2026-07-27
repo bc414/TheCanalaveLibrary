@@ -20,7 +20,11 @@ references it, does not restate it.
 - **Last landed:** WU-DocRoadmap (2026-07-27) — retired the unsustainably-named `middle_plan_v2.md`
   chain in favor of `.claude/roadmap.md` (stable, role-based name), which carries forward only the
   still-open Phase/Decision content; the full historical Resolved index stays in `middle_plan_v2.md`.
-  (Before it, same day: WU-DocAuditSkill, WU-DocHygiene 1–3.)
+  Same-day addendum added a git-log-informed "Recommended next work units" section to `roadmap.md`
+  — see that section for the actual next-step sequence (short version: clear decision rows 2/13,
+  land the already-unblocked WU-AccountEnforcement residual + WU-ErrorHandling2, then continue the
+  hidden-deferral debt-paydown burst before pivoting back to WU-Home/Phase 3). (Before WU-DocRoadmap,
+  same day: WU-DocAuditSkill, WU-DocHygiene 1–3.)
 - **Phase (`roadmap.md`):** Phase 2 tail. Two unbuilt Phase-2 items: **WU-Home** (item 1,
   gated on decision row 2 — homepage design) and **WU-AccountEnforcement's mid-session residual**
   (item 5, unblocked — `RefreshSignInAsync` is the ready-made tool; see its Planned entry below).
@@ -1223,3 +1227,25 @@ arity 400, repeated-member 400); migration script green.
 - **Verified:** `scripts/check-doc-hygiene.ps1` clean. Docs/tooling only — no behavior surface, no
   cell Stage changed.
 - **Tool:** Sonnet 5 in Claude Code, direct implementation.
+- **Same-day addendum (2026-07-27): "Recommended next work units" section.** Brian asked for a
+  git-log-informed sequencing recommendation written into `roadmap.md` itself, not left in chat.
+  Trajectory read from `git log --format=%ad %h %s -100`: build-in-bursts-then-harden-in-a-burst
+  (Phase 1's nine items in three days, most of Phases 2/4/5 in a week, WU-ResponsiveMerge's
+  20-commit day, then four straight days — 07-24→07-27 — of zero new features, entirely
+  hidden-deferral closures + doc hygiene). `roadmap.md`'s "Where things stand" now carries that
+  breakdown; a new "Recommended next work units" section replaces the old "Also still open" stub
+  with a 6-step sequence (decisions first → already-unblocked wins → clustered debt-paydown
+  WUs — WU-L6MeasurePass/WU-DiscoveryURLState/WU-StatBadgeProducers — → WU-Home → Phase 3 → beta
+  work), explicitly framed as a recommendation, not a mandate. Three stale
+  `§"Also still open"` cross-references (`hidden-deferrals-tracker.md` E1, `error-handling.md`)
+  updated to the new section title. `check-doc-hygiene.ps1` re-verified clean.
+- **Second same-day addendum (2026-07-27): full-backlog reanalysis.** Brian asked for a reanalysis
+  of the tiered table from the original chat-only ordering (not just the condensed 6-step version
+  above) to be written into `roadmap.md`. Re-verified against the tracker's current state (no
+  checkbox changes since 2026-07-24) and re-derived the tiering from scratch rather than
+  copy-pasting; the re-derivation matched the original 1:1 (all 42 open tracker items accounted
+  for exactly once, confirmed by tally). The condensed prose steps were replaced with a full
+  Tier 0–6 table covering every open tracker item (not just the phase-gated ones), plus an
+  explicit "deliberately not reordered" list and a standalone flag on E2 (AngleSharp CVE — `high`
+  priority but risk-accepted, worth an explicit re-confirmation rather than a silent default).
+  `check-doc-hygiene.ps1` re-verified clean.
