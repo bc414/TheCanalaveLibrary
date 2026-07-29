@@ -97,6 +97,7 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     public DbSet<BaseBlogPost> BlogPosts { get; set; }
     public DbSet<ProfileBlogPost> ProfileBlogPosts { get; set; }
     public DbSet<GroupBlogPost> GroupBlogPosts { get; set; }
+    public DbSet<SiteBlogPost> SiteBlogPosts { get; set; }
 
     //Advanced Search
     public DbSet<SearchMode> SearchModes { get; set; } //discovery surfaces (SearchPage, TreeSearch, etc.)

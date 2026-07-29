@@ -49,8 +49,6 @@ internal sealed class FakeRelatedStoriesStoryReadService : IStoryReadService
     public Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds) =>
         Task.FromResult(storyIds.Where(StoriesById.ContainsKey).Select(id => StoriesById[id]).ToArray());
 
-    public Task<(StoryListingDto[] Items, int TotalCount)> GetRecentListingsAsync(int page, int pageSize) =>
-        Task.FromResult((Array.Empty<StoryListingDto>(), 0));
     public Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(
         StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null, bool personalScope = false) =>
         Task.FromResult((Array.Empty<StoryListingDto>(), 0));

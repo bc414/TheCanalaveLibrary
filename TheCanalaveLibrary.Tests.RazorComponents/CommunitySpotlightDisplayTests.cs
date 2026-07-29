@@ -1,5 +1,6 @@
 using Bunit;
 using FluentAssertions;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.SharedUI;
@@ -107,6 +108,42 @@ public class CommunitySpotlightDisplayTests : BunitContext
         cut.Markup.Should().Contain("Second Spotlight");
         cut.FindComponents<StoryCard>().Count.Should().Be(2);
         cut.FindComponents<RecommendationCard>().Count.Should().Be(1);
+    }
+
+    // ── OnLoaded (WU-Home — HomePage's mission-blurb expander input) ──────────────
+
+    [Fact]
+    public void NoActiveSpotlights_OnLoadedFiresFalse()
+    {
+        _fakeSpotlights.Active = [];
+        bool? hasLive = null;
+
+        Render<CommunitySpotlightDisplay>(ps => ps
+            .Add(c => c.OnLoaded, EventCallback.Factory.Create<bool>(this, v => hasLive = v)));
+
+        hasLive.Should().Be(false);
+    }
+
+    [Fact]
+    public void WithActiveSpotlights_OnLoadedFiresTrue()
+    {
+        _fakeSpotlights.Active = [MakeSpotlight(1, MakeStory(), MakeRec())];
+        bool? hasLive = null;
+
+        Render<CommunitySpotlightDisplay>(ps => ps
+            .Add(c => c.OnLoaded, EventCallback.Factory.Create<bool>(this, v => hasLive = v)));
+
+        hasLive.Should().Be(true);
+    }
+
+    [Fact]
+    public void OnLoaded_Unwired_DoesNotThrow()
+    {
+        // HasDelegate-gated no-op — every other test in this file already exercises this path
+        // implicitly (none wire OnLoaded), but this makes the contract explicit.
+        _fakeSpotlights.Active = [];
+        Action act = () => Render<CommunitySpotlightDisplay>();
+        act.Should().NotThrow();
     }
 
     // ── Fake ──────────────────────────────────────────────────────────────────────

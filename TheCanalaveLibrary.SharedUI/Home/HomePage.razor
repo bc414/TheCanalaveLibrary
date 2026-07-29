@@ -1,21 +1,133 @@
 @page "/"
 @namespace TheCanalaveLibrary.SharedUI
+@inject IPollReadService PollService
+@inject IPublicUrlProvider PublicUrlProvider
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Authorization
 
-@* The Community Spotlight section is live (WU-Spotlight, Feature 55); the rest of the Home
-   page (discovery surface) remains a future work-unit — WU-Home, gated by roadmap.md
-   decision row 2's remaining half. Single responsive tree (WU-ResponsiveMerge). *@
+@* The home page IS the community page (decision row 2, resolved 2026-07-28 — roadmap.md
+   §Resolved, WU-Home). A focused surface, not a broad discovery one: no story listings in any
+   form (spec §5.3.3's "no sort by last updated" reasoning generalizes to any automatic story
+   selection here — a random draw was considered and rejected on the same "focused purpose, not
+   broad" framing), and no personalized/signed-in strip (Continue Reading, follows, bookshelves
+   are already one click away via NotificationBell/UserMenu — duplicating persistent chrome here
+   adds nothing). Composition, top to bottom: Welcome blurb (expander — open while Spotlight is
+   empty, collapsed once it isn't; state derived from CommunitySpotlightDisplay's own load, no
+   new site_settings key) → Community Spotlight (the site's sole revenue mechanism, unchanged) →
+   the active SitePoll inline, only when one is open (closes audit/BlogPosts.md's F37 open
+   intent) → a community-discourse link cluster (Polls, Fanon, Spotlight explained, Site News —
+   surfaces deliberately kept off the persistent top nav because they're community discourse, not
+   primary navigation; Groups stays out of this cluster because it's already a top-nav link).
+   Single responsive tree (WU-ResponsiveMerge) — one composition for every viewer and viewport. *@
 
 <PageTitle>Home</PageTitle>
 
+<SocialMetaTags Title="The Canalave Library" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="website" />
+
 <DevLoginBar />
 
-<div class="flex flex-col gap-5 p-4 md:gap-6 md:p-8">
-    <div class="text-center text-(--color-text-muted)">
-        <h1 class="mb-3 inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text) md:mb-4">The Canalave Library</h1>
-        <p class="text-sm">Use the navigation above to explore stories, profiles, and groups.</p>
-    </div>
+<div class="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 md:gap-8 md:p-8">
 
-    <div class="mx-auto w-full max-w-5xl">
-        <CommunitySpotlightDisplay />
-    </div>
+    @* ── Welcome / mission blurb ─────────────────────────────────────────────── *@
+    <details class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-4 md:p-6"
+              open="@_blurbExpanded">
+        <summary class="cursor-pointer font-display text-xl font-semibold text-(--color-text)">
+            Welcome to The Canalave Library
+        </summary>
+        <p class="text-sm leading-relaxed text-(--color-text)">@MissionBlurb</p>
+    </details>
+
+    @* ── Community Spotlight — the uncontested visual anchor; unchanged. ────── *@
+    <section aria-label="Community Spotlight section">
+        <CommunitySpotlightDisplay OnLoaded="HandleSpotlightsLoaded" />
+    </section>
+
+    @* ── Active site poll — inline, only when one is open; nothing otherwise
+         (RelatedStoriesSection precedent: no empty-state stub). ────────────── *@
+    @if (OpenPoll is not null)
+    {
+        <section aria-label="Community Poll" class="flex flex-col gap-3">
+            <div class="flex items-center justify-between gap-3">
+                <h2 class="font-display text-lg font-semibold text-(--color-text)">Community Poll</h2>
+                <a href="/polls" class="text-sm text-(--color-action-ink) hover:underline">All polls →</a>
+            </div>
+            <PollView Poll="OpenPoll" CurrentUserId="_currentUserId" CanManage="false"
+                      OnPollChanged="HandlePollChanged" />
+        </section>
+    }
+
+    @* ── Community — discourse surfaces deliberately off the persistent nav ──── *@
+    <section aria-label="Community" class="flex flex-col gap-3">
+        <h2 class="font-display text-lg font-semibold text-(--color-text)">Community</h2>
+        <div class="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <a href="/polls" class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-3 text-center text-sm font-medium text-(--color-text) transition-colors hover:border-(--color-action-ink)">
+                Polls
+            </a>
+            <a href="/fanon" class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-3 text-center text-sm font-medium text-(--color-text) transition-colors hover:border-(--color-action-ink)">
+                Fanon
+            </a>
+            <a href="/spotlight" class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-3 text-center text-sm font-medium text-(--color-text) transition-colors hover:border-(--color-action-ink)">
+                Community Spotlight
+            </a>
+            <a href="/news" class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-3 text-center text-sm font-medium text-(--color-text) transition-colors hover:border-(--color-action-ink)">
+                Site News
+            </a>
+        </div>
+    </section>
 </div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    // Drafted from spec §1 (Torterra-as-ecosystem framing, "deep thought, deep engagement," the
+    // community-sustained/ad-free model) — a first pass for Brian to redline, not final copy.
+    private const string MissionBlurb =
+        "The Canalave Library is a Pokémon-fandom fanfiction community built for readers and " +
+        "writers who care about depth over speed. Like Torterra carrying its own ecosystem, this " +
+        "site rests on the community that sustains it — no ads, no algorithmic feeds chasing " +
+        "engagement, just stories and the people who read and write them. The Community " +
+        "Spotlight below is how we keep the lights on: donations fund the site, and a donation " +
+        "earns you the chance to spotlight someone else's work.";
+
+    // Starts open (safe default before Spotlight's own load reports in — matches the pre-beta
+    // empty state) and flips per HandleSpotlightsLoaded, never re-evaluated afterward.
+    private bool _blurbExpanded = true;
+
+    // Persisted across the prerender→interactive handoff (layer5-wasm.md §"Avoiding the double
+    // fetch") — the ??= guard in OnInitializedAsync skips the refetch when the prerender payload
+    // restored it.
+    [PersistentState]
+    public PollDto[]? SitePolls { get; set; }
+
+    private int? _currentUserId;
+
+    private PollDto? OpenPoll => (SitePolls ?? []).FirstOrDefault(p => p.Status == PollStatus.Open);
+
+    // Open Graph/Twitter meta (Feature 64) — root URL had none; every other shareable page does.
+    // Mirrors StoryPage/GroupPage/SeriesPage's backing-property convention (avoids nested-quote
+    // parsing inside a Razor attribute value).
+    private string? OgDescription => SocialDescriptionHelper.Clean(MissionBlurb);
+    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(null, "/img/default-cover.svg");
+    private string OgUrl => PublicUrlProvider.AbsolutePageUrl("/");
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            AuthenticationState state = await AuthState;
+            string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            _currentUserId = int.TryParse(idStr, out int parsedId) ? parsedId : null;
+        }
+
+        SitePolls ??= await PollService.GetSitePollsAsync(includeArchived: false);
+    }
+
+    private void HandleSpotlightsLoaded(bool hasLiveSpotlights) => _blurbExpanded = !hasLiveSpotlights;
+
+    private void HandlePollChanged(PollDto? updated)
+    {
+        if (updated is null || SitePolls is null) return;
+        SitePolls = SitePolls.Select(p => p.PollId == updated.PollId ? updated : p).ToArray();
+    }
+}

@@ -331,25 +331,6 @@ public class ServerStoryReadService(
             .ToListAsync();
     }
 
-    public async Task<(StoryListingDto[] Items, int TotalCount)> GetRecentListingsAsync(int page, int pageSize)
-    {
-        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
-        int totalCount = await readDb.Stories.CountAsync();
-
-        // Page on scalar StoryId first — keeps Skip/Take scoped to story-level rows, not a join cartesian
-        // product, then hands off to GetListingsByIdsAsync for the actual presentation projection (the
-        // same domain-ids-then-presentation-DTOs composition as the spec §6.6 building-block pattern).
-        int[] pageStoryIds = await readDb.Stories
-            .OrderByDescending(s => s.LastUpdatedDate)
-            .Skip(Math.Max(0, page - 1) * pageSize)
-            .Take(pageSize)
-            .Select(s => s.StoryId)
-            .ToArrayAsync();
-
-        StoryListingDto[] items = await GetListingsByIdsAsync(pageStoryIds);
-        return (items, totalCount);
-    }
-
     public async Task<long> GetStoryTotalViewsAsync(int storyId)
     {
         // daily_story_stats is migration-managed raw DDL with no EF model (accumulated stat

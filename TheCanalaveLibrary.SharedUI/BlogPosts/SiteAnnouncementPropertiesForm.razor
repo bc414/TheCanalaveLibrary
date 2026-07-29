@@ -1,0 +1,79 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Forms
+
+@* Presentational form for site-announcement create/edit. No @inject — all I/O lives in
+   SiteAnnouncementEditorPage. Mirrors BlogPostPropertiesForm's contract (ViewModel + errors +
+   OnValidSubmit + pull-on-submit EditorView), minus the Rating/HasSpoilers/story-picker fields
+   (not meaningful for staff announcements) and plus the NotifyAllUsers checkbox. *@
+
+<InlineAlert Messages="@ViewModel.ServerValidationErrors" />
+
+<EditForm Model="@ViewModel" OnValidSubmit="HandleValidSubmit" FormName="site-announcement-properties-form"
+          class="flex flex-col gap-6">
+    <DataAnnotationsValidator />
+
+    @* ── Title ───────────────────────────────────────────────────────────────── *@
+    <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold text-(--color-text)">Title</label>
+        <InputText @bind-Value="ViewModel.Title"
+                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                   placeholder="Announcement title" />
+        <ValidationMessage For="@(() => ViewModel.Title)" class="text-sm text-(--color-danger)" />
+    </div>
+
+    @* ── Content (rich text) ──────────────────────────────────────────────────── *@
+    <div class="flex flex-col gap-1">
+        <label class="text-sm font-semibold text-(--color-text)">Content</label>
+        <ContentSurface Variant="ContentSurfaceVariant.Input">
+            <EditorView @ref="_editor" Html="@ViewModel.Content" Placeholder="Write the announcement…" />
+        </ContentSurface>
+    </div>
+
+    @* ── Notify all users ─────────────────────────────────────────────────────── *@
+    <div class="flex items-center gap-3">
+        <InputCheckbox @bind-Value="ViewModel.NotifyAllUsers" id="notify-all-users"
+                       class="h-4 w-4 rounded border-(--color-border) text-(--color-action-ink) focus:ring-(--color-action-ink)" />
+        <label for="notify-all-users" class="text-sm text-(--color-text)">
+            Notify every user <span class="text-(--color-text-muted)">(fires once, on publish — a later edit never re-notifies)</span>
+        </label>
+    </div>
+
+    @* ── Publish toggle ───────────────────────────────────────────────────────── *@
+    <div class="flex items-center gap-3">
+        <InputCheckbox @bind-Value="ViewModel.IsPublished" id="is-published"
+                       class="h-4 w-4 rounded border-(--color-border) text-(--color-action-ink) focus:ring-(--color-action-ink)" />
+        <label for="is-published" class="text-sm text-(--color-text)">
+            Publish <span class="text-(--color-text-muted)">(uncheck to save as draft)</span>
+        </label>
+    </div>
+
+    @* ── Submit ──────────────────────────────────────────────────────────────── *@
+    <button type="submit"
+            disabled="@ViewModel.IsLoading"
+            aria-label="Save site announcement"
+            class="self-start rounded-md bg-(--color-action) px-5 py-2 font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50">
+        @(ViewModel.IsLoading ? "Saving…" : SubmitLabel)
+    </button>
+</EditForm>
+
+@code {
+    [Parameter, EditorRequired] public SiteAnnouncementPropertiesViewModel ViewModel { get; set; } = null!;
+    [Parameter] public EventCallback OnValidSubmit { get; set; }
+    [Parameter] public string SubmitLabel { get; set; } = "Save";
+
+    private EditorView? _editor;
+
+    /// <summary>Pull the current editor HTML. Called by the page on submit before building the DTO.</summary>
+    public async Task<string> GetContentAsync() =>
+        _editor is not null ? await _editor.GetHtmlAsync() : string.Empty;
+
+    // Push counterpart for draft restore (DraftAutosave) — Quill ignores later Html parameter
+    // changes, so restored content must go through EditorView.SetHtmlAsync.
+    public async Task SetContentAsync(string html)
+    {
+        if (_editor is not null) await _editor.SetHtmlAsync(html);
+    }
+
+    private async Task HandleValidSubmit() => await OnValidSubmit.InvokeAsync();
+}

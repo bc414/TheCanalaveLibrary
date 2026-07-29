@@ -34,6 +34,17 @@ public sealed class GroupBlogPostConfiguration : IEntityTypeConfiguration<GroupB
     }
 }
 
+public sealed class SiteBlogPostConfiguration : IEntityTypeConfiguration<SiteBlogPost>
+{
+    public void Configure(EntityTypeBuilder<SiteBlogPost> builder)
+    {
+        builder.Property(e => e.Rating).HasConversion<short>();
+        builder.Property(e => e.DateCreated).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+        builder.ToTable("site_blog_posts");
+    }
+}
+
 public sealed class BasePollConfiguration : IEntityTypeConfiguration<BasePoll>
 {
     public void Configure(EntityTypeBuilder<BasePoll> builder)

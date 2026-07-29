@@ -31,7 +31,9 @@ public class NpgsqlTracingSmokeTests(PostgresFixture postgres) : IntegrationTest
 
         using IServiceScope scope = Factory.Services.CreateScope();
         IStoryReadService stories = scope.ServiceProvider.GetRequiredService<IStoryReadService>();
-        await stories.GetRecentListingsAsync(1, 10); // empty result is fine — the query still runs
+        // Repointed to GetListingsAsync (WU-Home, 2026-07-28) — GetRecentListingsAsync removed;
+        // any query that reaches Npgsql satisfies this smoke test.
+        await stories.GetListingsAsync(new StoryFilterDto { Page = 1, PageSize = 10 }); // empty result is fine — the query still runs
 
         captured.Should().NotBeEmpty(
             "ServiceDefaults' AddNpgsql() subscription depends on Npgsql emitting under the source name \"Npgsql\"");

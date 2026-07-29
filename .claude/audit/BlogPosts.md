@@ -7,7 +7,9 @@ for composition (§5.30.2; stale §5.19 reference corrected 2026-06-24).
 ## Shared Context
 **Entities (moving Core/Models/ → Core/BlogPosts/ as part of WU31):** `BaseBlogPost` (TPT root,
 `ToTable("base_blog_posts")`, `Rating`→short, M:N `LikedByUsers`) → `ProfileBlogPost` (optional
-`StoryId`, `SetNull`), `GroupBlogPost` (`GroupId`). `BasePoll` (TPT) → `SitePoll` / `BlogPostPoll`;
+`StoryId`, `SetNull`), `GroupBlogPost` (`GroupId`), **`SiteBlogPost`** (site-owned staff
+announcements, WU-SiteNews 2026-07-28 — see below; structural mirror of the `SitePoll : BasePoll`
+split one line down). `BasePoll` (TPT) → `SitePoll` / `BlogPostPoll`;
 `PollOption` (unique `(PollId,Text)` and `(PollId,SortOrder)`). All blog posts support comments
 (see Comments cluster). WU31 delivers L2/L3/L3.5/L4 for features 35/36 (profile blog posts only).
 (The `FeatureContribution` entity and its `SetNull` diamond-breaking FKs were removed 2026-07-18
@@ -161,6 +163,136 @@ auth services; listed in E2E checklist). Convention in
 
 ---
 
+## WU-SiteNews — staff site announcements (extends Features 35/36, no new grid row) — Stage 5 (2026-07-28)
+
+**Trigger:** resolving `roadmap.md` decision row 2 (homepage design, WU-Home) surfaced a real gap
+— the site had no channel for staff-authored announcements, and `NotificationTypeEnum.
+SiteAnnouncement` had sat seeded and tested since the notification system was built with no
+producer. Built as the companion WU alongside WU-Home (`workplan.md`'s DONE entry carries the
+full narrative — this note is the audit-file Stage record).
+
+**Model:** `SiteBlogPost : BaseBlogPost` (`Core/BlogPosts/`) — the exact structural mirror of the
+`SitePoll : BasePoll` split above. Site-owned, not person-owned: no `StoryId`, no `HasSpoilers`,
+`Rating` always `E` (never exposed to the editor). Adds `NotifyAllUsers` (author's per-post
+choice) + `NotifiedAtUtc` (server-stamped fire-once guard — a later edit never re-fires the
+fan-out). Migration `WU_SiteNews_SiteBlogPost` (new `site_blog_posts` table only).
+
+**Security model diverges from Features 35/36's author-only rule** — `IsModerator || IsAdmin`
+gates every mutation (create/update/delete), and any moderator/admin manages any site post, not
+just its creator. This is the `SitePoll` precedent exactly (`ServerPollWriteService.
+LoadAuthorizedPollWithOptionsAsync`'s site-poll branch), not the `ProfileBlogPost`/`GroupBlogPost`
+author-ownership rule the rest of this file documents.
+
+**Service surface:** `IBlogPostReadService` gained `GetSiteAnnouncementsAsync(page, pageSize,
+includeUnpublished)` and `GetSiteAnnouncementForEditAsync`, plus a **third `GetByIdAsync` branch**
+— required because `/blog/{id}/{*Slug}` (`BlogPostPage`) is genuinely shared routing across all
+three `BaseBlogPost` subtypes and needed to resolve the new type unmodified.
+`IBlogPostWriteService` gained dedicated `CreateSiteBlogPostAsync`/`UpdateSiteBlogPostAsync`/
+`DeleteSiteBlogPostAsync` — deliberately NOT built by branching the existing
+`UpdateBlogPostAsync`/`DeleteBlogPostAsync`/`GetForEditAsync`, which turned out to be hardcoded to
+the `ProfileBlogPosts` table despite their generic-sounding names (a pre-existing latent gap,
+discovered while confirming they were safe to extend — editing/deleting a `GroupBlogPost` through
+them silently no-ops the child-table update; not introduced by this WU, not fixed by it either,
+worth its own tracker item if `GroupBlogPost` editing is ever exercised for real).
+
+**Parent-visibility invariant (identity-and-authorization.md):**
+`BlogPostVisibilityGuard.LoadFactsAsync` — the enrolment list comments/likes on any blog post
+resolve through — gained a third `SiteBlogPost` branch. Omitting it would have silently made
+comments/likes on a site announcement permanently unreachable (`IsBlogPostVisibleAsync` returns
+`false` on an absent facts row) rather than erroring, so this was treated as required, not
+optional polish.
+
+**Notification fan-out:** new `INotificationWriteService.NotifyNewSiteAnnouncementAsync` —
+`NotifyNewGroupBlogPostAsync`'s shape with `GroupMembers` swapped for the full `Users` table,
+reusing the shared `CreateCoreAsync` drop-self/dedup path. Fires once — on the false→true publish
+transition (or immediately if created already-published) and only when `NotifyAllUsers` is true —
+finally giving the long-dormant `SiteAnnouncement` notification type a producer.
+
+**UI:** `/news` (public list, `NewsPage.razor`), `/news/new` + `/news/{id}/edit`
+(`[Authorize(Roles="Moderator,Admin")]`, `SiteAnnouncementEditorPage.razor`, Pattern-1 shape
+mirroring `BlogPostEditorPage`) via a sibling `SiteAnnouncementPropertiesForm` (drops
+Rating/HasSpoilers/story-picker, adds the `NotifyAllUsers` checkbox — a conditional-field mode on
+`BlogPostPropertiesForm` was considered and rejected in favor of a dedicated form, matching how
+`CreateGroupBlogPostDto` already gets its own DTO rather than overloading `CreateProfileBlogPostDto`).
+`BlogPostPage` (`/blog/{id}/{*Slug}`) needs **no changes** to view a `SiteBlogPost` — the
+`GetByIdAsync` branch above is sufficient. Its Edit-link affordance is deliberately **not**
+extended to moderators there (it's `isAuthor`-gated, linking to the profile-post-only
+`/blog/{id}/edit`) — editing a site announcement happens from `/news`'s per-card Edit links
+instead, avoiding a second edit-route-selection branch on an already-complex page.
+
+**Endpoints:** `/api/blog-posts/site` (list, POST), `/api/blog-posts/site/{id}` (PUT, DELETE),
+`/api/blog-posts/site/{id}/edit` (GET) — same `RequireAuthorization()` + `ExecuteWriteAsync`
+403-translation posture as every other route in `BlogPostEndpoints.cs`.
+
+**Verified (2026-07-28):** `dotnet build` (whole solution) green. `dotnet test` green across all
+three tiers. Covering tiers:
+- **Integration** — `SiteAnnouncementServiceTests.cs` (24 tests): moderator/plain-user/anonymous
+  authorization on create/update/delete; any-moderator-manages-any-post (not creator-only);
+  sanitize-on-save; create-already-published (no forced draft-first, unlike `ProfileBlogPost`);
+  the fan-out's recipient set (drop-self) and fire-once guard on both the create-published and
+  draft→publish-transition paths, including a re-edit-after-notified case; `GetSiteAnnouncementsAsync`'s
+  published-only default, `includeUnpublished`, and newest-first ordering; the `GetByIdAsync` third
+  branch's anonymous-visible/draft-hidden-to-non-author behavior; `BlogPostVisibilityGuard`'s third
+  branch exercised directly.
+- **RazorComponents** — `SiteAnnouncementPropertiesFormTests.cs` (7 tests, mirroring
+  `BlogPostPropertiesFormTests.cs` minus the removed fields, plus a NotifyAllUsers-checkbox
+  presence test and a not-rendered assertion for Rating/HasSpoilers/story-picker markup);
+  `CommunitySpotlightDisplayTests.cs` gained 3 tests for the new `OnLoaded` callback (WU-Home's
+  input, not WU-SiteNews' — both landed 2026-07-28; see that file / `audit/Spotlight.md`).
+- **Unit** — no new cases (no host-free pure logic introduced beyond DTO mapping).
+
+**L4.5-Browser — Stage 5 (2026-07-28, server-only path, standing dev DB kept).** As AdminUser:
+`/news/new` rendered Title/EditorView/`NotifyAllUsers`/Publish exactly as designed; created a
+published, `NotifyAllUsers=true` post → landed on `/news` immediately showing it (title, `E`
+rating, date, snippet, Edit link). `psql`-confirmed: exactly one `site_blog_posts` row (no
+double-submit), `notified_at_utc` stamped, and — the dev DB's standing workbench happens to carry
+2,007 users from a prior `SeedTool` bulk-load — exactly 2,006 `SiteAnnouncement` notification rows
+inserted (every user except the poster; drop-self confirmed at scale, not just the 2-3-user
+Integration-test scale). `/polls` and `/fanon` both render correctly (empty-state and full
+established-fanon-tags content respectively). One transient Blazor Server "Something went wrong
+with your connection" reconnect banner appeared mid-flow; investigated per `debugging.md` before
+treating it as a non-issue — server log showed the standard `ReconnectModal` init/render/dispose
+cycle with zero exceptions/warnings around it, the write and redirect both completed correctly,
+and the DB state was exactly as expected (no duplicate row) — consistent with a benign dev-mode
+circuit blip under the automation tooling's rapid-fire interaction, not an application defect. All
+verification rows (the post + its 2,006 notifications) cleaned up afterward via `psql`.
+
+`scripts/check-doc-hygiene.ps1` clean throughout.
+
+**Post-implementation review (2026-07-28, diff re-read — the WU-TagFanon precedent: the suite was
+green and the browser pass clean throughout, and none of this would have surfaced without
+re-reading).** Two authorization gaps found and fixed same-session, both violating the 2026-07-18
+endpoint-authz sweep rules this very WU cited as its precedent:
+
+1. **`GetSiteAnnouncementsAsync` trusted the HTTP-riding `includeUnpublished` flag** — the
+   in-code comment claimed "BlogPostEndpoints gates the true value," but the route is public and
+   passed it straight through: any anonymous caller could list draft titles/snippets via
+   `GET /api/blog-posts/site?includeUnpublished=true`. Fixed with the exact `GetByAuthorAsync`
+   shape — service-side demotion to the published view unless `IsModerator || IsAdmin`.
+2. **`GetSiteAnnouncementForEditAsync` had no gate of its own** — the `/site/{id}/edit` route
+   carries only `RequireAuthorization()`, so any signed-in user could read a draft announcement's
+   *full content*. Fixed with a service-side `IsModerator || IsAdmin` gate throwing
+   `UnauthorizedAccessException` (the `GetForEditAsync` author-gate shape; endpoint translates
+   to 403, client translates back).
+
+Regression net: +4 Integration tests (forged flag as plain user AND anonymous → published-only;
+edit read as plain user → Unauthorized; edit read by a *different* moderator → succeeds, pinning
+the role-not-authorship rule). Suite now 952/952 Integration. Also fixed in the same pass: the
+mission-blurb copy said "the Community Spotlight **above**" while the blurb renders above the
+spotlight ("below" now); a `NewsPage` comment falsely claimed prerender runs before role
+resolution (behavior was correct; comment rewritten).
+
+**Known-behavior notes (deliberate, recorded so they aren't re-litigated):** a draft site post is
+view-page-visible (`/blog/{id}`) only to its own author — a *different* moderator edits it via
+`/news`/the edit form but can't preview it on the view page (asymmetric with the manage rule;
+harmless, all-staff audience). `NotifyAllUsers` fires only on the false→true publish transition —
+notifying an already-published post requires unpublish→republish. Announcements carry no report
+affordance (`NewsPage` doesn't wire `BlogPostCard.OnReport`) — deliberate: staff content is
+moderated at the source, and `ReportedEntityType.BlogPost`'s mod-queue resolution was never
+exercised against the new TPT type.
+
+---
+
 ## Feature 37 — Polls
 
 ### Requirements settled 2026-07-12 (chat deliberation; closes spec Open Question #6)
@@ -191,9 +323,8 @@ detailed-UI Stage-1 gap was resolved in chat 2026-07-12. **These are settled —
   separate admin area). BlogPostPolls by the blog post's author, managed in the blog editor,
   rendered as blocks after post content (multiple per post allowed — matches schema). Voting:
   any authenticated user.
-- **Surface scope:** `/polls` page (active + archived SitePolls). **Open intent:** SitePolls
-  should eventually surface on the home page — belongs to `roadmap.md` decision row 2
-  (homepage sections), not this feature's work-unit.
+- **Surface scope:** `/polls` page (active + archived SitePolls), plus the homepage's inline
+  active-poll section (WU-Home, 2026-07-28 — see below).
 
 ### L1 reconcile note (2026-07-12)
 
@@ -263,9 +394,12 @@ bullet below, 2026-07-13.)
      (case-sensitive DOM match vs C# `"True"`) — `AllowMultiple` never persisted. Fixed with
      explicit domain-word values + `@onchange`; convention recorded in `layer3-logic.md`
      §"Bool `<select>`".
-- **Deferred:** home-page SitePoll surfacing (open intent → homepage-sections decision,
-  `roadmap.md` row 2). (The formerly-deferred L5 WASM enablement landed with WU-GlobalFlip —
-  see the L5 bullet above.)
+- **Home-page SitePoll surfacing — closed 2026-07-28 (WU-Home).** `HomePage` calls
+  `GetSitePollsAsync(includeArchived: false)` and takes the first `PollStatus.Open` result
+  client-side (no new service method — `PollStatus` was already computed at projection time);
+  renders it via the existing `<PollView CanManage="false">`; renders nothing when no poll is
+  open. (The formerly-deferred L5 WASM enablement landed with WU-GlobalFlip — see the L5 bullet
+  above.)
 
 ## Feature 56 — Feature Contributions — **CUT 2026-07-18**
 

@@ -106,8 +106,10 @@ ix_stories_published_date      ON stories (published_date)
 ix_stories_last_updated_date   ON stories (last_updated_date)
 ```
 
-DatePublished is /discover's sorted default; LastUpdated drives `GetRecentListingsAsync` and the
-Relevance tie-break. Top-N pages walk the index in order with the global rating/`is_taken_down`
+DatePublished is /discover's sorted default; LastUpdated drives the Relevance tie-break
+(`GetRecentListingsAsync`, its other consumer, was removed 2026-07-28, WU-Home — spec §5.3.3
+rules out "sort by last updated" as a homepage/discovery surface; `roadmap.md` §Resolved). Top-N
+pages walk the index in order with the global rating/`is_taken_down`
 filters as cheap residuals (deliberately NOT prefixed into the index — a rating-prefixed variant
 would fragment across ceiling values). Measured: 0.39→0.09 ms p50 at 3k stories; this is the
 index whose value grows fastest with story count. The discovery-exclusion probe page

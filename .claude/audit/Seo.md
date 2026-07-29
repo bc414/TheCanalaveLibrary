@@ -127,6 +127,18 @@ Cell mapping: this cluster has no grid row (see header). The consuming features'
 (Stories F4, Chapters F6, Profiles F20, BlogPosts F35, Groups F38) are unaffected — OG tags are
 additive `<head>` output, not a change to any of those features' existing Stage-5 behavior.
 
+### Addendum (2026-07-28, WU-Home) — root `/` gains `<SocialMetaTags>`
+
+The homepage was the one shareable page still missing OG tags — not one of the original six
+(content pages), but the single most-shared URL on the site and the one beta invitations will
+carry. Added in the same shape as the rest: `Title="The Canalave Library"`, `Description` from the
+mission blurb via `SocialDescriptionHelper.Clean`, `ImageUrl` falling back to
+`/img/default-cover.svg` (no site-specific image exists yet), `Url` = `AbsolutePageUrl("/")`,
+`OgType="website"`. Followed the backing-`@code`-property convention from the mid-build correction
+above (nested-quote parsing) from the start, not rediscovered the hard way. `HomePage.razor`
+carries no direct bUnit render test (same reasoning as five of the original six dispatchers — see
+above); verified via prerendered-HTML `curl` alongside the rest of WU-Home's browser pass.
+
 ## Open
 
 - **Default OG image is an SVG re-use, not a proper raster asset.** No-cover/no-avatar/no-image

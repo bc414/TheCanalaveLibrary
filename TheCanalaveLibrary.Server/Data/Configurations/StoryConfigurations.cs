@@ -106,7 +106,9 @@ public sealed class StoryConfiguration : IEntityTypeConfiguration<Story>
             .OnDelete(DeleteBehavior.Restrict);
 
         // L6 (2026-07-07): the two discovery sort spines. DatePublished is /discover's default
-        // sorted order; LastUpdated drives GetRecentListingsAsync + the Relevance tie-break.
+        // sorted order; LastUpdated drives the Relevance tie-break (GetRecentListingsAsync, its
+        // only other consumer, was removed 2026-07-28 — spec §5.3.3 rules out "sort by last
+        // updated" as a homepage/discovery surface; see roadmap.md §Resolved, WU-Home).
         // Both are top-N pages under the global rating/is_taken_down filters — an ordered walk
         // with residual filtering beats sort-the-world as stories grow. Single-column (no
         // rating/is_taken_down prefix): the residuals are cheap and a prefixed index would

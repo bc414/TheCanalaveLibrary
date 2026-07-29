@@ -36,13 +36,6 @@ public interface IStoryReadService
     Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds);
 
     /// <summary>
-    /// One simple unfiltered browse projection (most-recently-updated first), shaped for
-    /// PaginationControls. Kept for home-page hot-path (no filter overhead); use
-    /// <see cref="GetListingsAsync"/> when the caller has filter criteria.
-    /// </summary>
-    Task<(StoryListingDto[] Items, int TotalCount)> GetRecentListingsAsync(int page, int pageSize);
-
-    /// <summary>
     /// Full filtered listing query (WU23, spec §5.27). Source=All (every story visible to the
     /// current viewer, modulo the global content-rating filter). Two-step: filtered IQueryable →
     /// scalar id page → <see cref="GetListingsByIdsAsync"/> for the presentation projection.

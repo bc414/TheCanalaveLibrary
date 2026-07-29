@@ -6,9 +6,9 @@ namespace TheCanalaveLibrary.Client;
 /// <summary>
 /// WASM-side <see cref="IStoryReadService"/>: HttpClient wrapper over
 /// Server/Stories/StoryEndpoints.cs. Same DTOs, same method contracts — only the transport differs
-/// (the Layer-5 body-swap). <see cref="GetListingsAsync"/>/<see cref="GetRecentListingsAsync"/>
-/// translate through <see cref="PagedResult{T}"/> at the HTTP boundary only (layer5-wasm.md
-/// §"Paged results") — the tuple shape the interface expects is unchanged.
+/// (the Layer-5 body-swap). <see cref="GetListingsAsync"/> translates through
+/// <see cref="PagedResult{T}"/> at the HTTP boundary only (layer5-wasm.md §"Paged results") — the
+/// tuple shape the interface expects is unchanged.
 /// </summary>
 public class ClientStoryReadService(HttpClient http) : IStoryReadService
 {
@@ -39,13 +39,6 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
 
         string query = string.Join('&', storyIds.Select(id => $"storyIds={id}"));
         return await Http.GetFromJsonAsync<StoryListingDto[]>($"api/stories/by-ids?{query}") ?? [];
-    }
-
-    public async Task<(StoryListingDto[] Items, int TotalCount)> GetRecentListingsAsync(int page, int pageSize)
-    {
-        PagedResult<StoryListingDto> result = (await Http.GetFromJsonAsync<PagedResult<StoryListingDto>>(
-            $"api/stories/recent?page={page}&pageSize={pageSize}"))!;
-        return (result.Items, result.TotalCount);
     }
 
     public async Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(

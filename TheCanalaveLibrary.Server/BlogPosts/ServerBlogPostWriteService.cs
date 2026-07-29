@@ -299,4 +299,131 @@ public class ServerBlogPostWriteService(
 
         return post.BlogPostId;
     }
+
+    // ── Site announcements (WU-SiteNews) ──────────────────────────────────────────
+    // Security model diverges from the rest of this service: IsModerator || IsAdmin gates every
+    // mutation (listed explicitly — Admin does not inherit Moderator), not author-only ownership
+    // — the SitePoll precedent (ServerPollWriteService.CreateSitePollAsync / the
+    // LoadAuthorizedPollWithOptionsAsync site-poll branch: any moderator manages any site post).
+    // Deliberately NOT UserStats.BlogPostsWritten-tracked (unlike the profile/group create paths
+    // above) — that counter feeds community-content badges; site announcements are staff output,
+    // not community contribution.
+
+    public async Task<int> CreateSiteBlogPostAsync(CreateSiteBlogPostDto dto)
+    {
+        if (ActiveUser.UserId is not int authorId)
+            throw new InvalidOperationException("Creating a site announcement requires an authenticated user.");
+        if (!(ActiveUser.IsModerator || ActiveUser.IsAdmin))
+            throw new UnauthorizedAccessException("Only moderators can create site announcements.");
+        rateLimit.EnsureAllowed(WriteActionKind.ContentCreate, authorId);
+
+        List<string> errors = dto.CanSave();
+        if (errors.Count > 0) throw new BlogPostValidationException(errors);
+
+        string sanitizedContent = sanitizer.Sanitize(dto.Content);
+
+        SiteBlogPost post = new()
+        {
+            AuthorId        = authorId,             // server-stamped; absent from DTO
+            Title           = dto.Title.Trim(),
+            Content         = sanitizedContent,
+            Rating          = Rating.E,              // never exposed to the editor — staff content
+            IsPublished     = dto.IsPublished,
+            NotifyAllUsers  = dto.NotifyAllUsers,
+            DateCreated     = DateTime.UtcNow,
+            LastUpdatedDate = DateTime.UtcNow
+        };
+
+        writeDb.SiteBlogPosts.Add(post);
+        await writeDb.SaveChangesAsync();
+
+        // Fire immediately when created already-published with NotifyAllUsers set (unlike
+        // Profile/GroupBlogPost, a SiteBlogPost can be created published — no forced draft-first).
+        // The false→true transition case lives in UpdateSiteBlogPostAsync.
+        if (post.IsPublished && post.NotifyAllUsers)
+            await FireAnnouncementFanOutAsync(post.BlogPostId, authorId);
+
+        return post.BlogPostId;
+    }
+
+    public async Task UpdateSiteBlogPostAsync(UpdateSiteBlogPostDto dto)
+    {
+        if (ActiveUser.UserId is not int userId)
+            throw new InvalidOperationException("Updating a site announcement requires an authenticated user.");
+        if (!(ActiveUser.IsModerator || ActiveUser.IsAdmin))
+            throw new UnauthorizedAccessException("Only moderators can manage site announcements.");
+
+        List<string> errors = dto.CanSave();
+        if (errors.Count > 0) throw new BlogPostValidationException(errors);
+
+        var existing = await writeDb.SiteBlogPosts
+            .Where(p => p.BlogPostId == dto.BlogPostId)
+            .Select(p => new { p.IsPublished, p.NotifiedAtUtc })
+            .FirstOrDefaultAsync();
+
+        if (existing is null)
+            throw new KeyNotFoundException($"Site announcement {dto.BlogPostId} not found.");
+
+        string sanitizedContent = sanitizer.Sanitize(dto.Content);
+
+        // Base-table columns: Title and Content only (author_id never changes after creation).
+        await writeDb.BlogPosts
+            .Where(b => b.BlogPostId == dto.BlogPostId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(b => b.Title,   dto.Title.Trim())
+                .SetProperty(b => b.Content, sanitizedContent));
+
+        // Child-table columns.
+        await writeDb.SiteBlogPosts
+            .Where(p => p.BlogPostId == dto.BlogPostId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.IsPublished,     dto.IsPublished)
+                .SetProperty(p => p.LastUpdatedDate, DateTime.UtcNow)
+                .SetProperty(p => p.NotifyAllUsers,  dto.NotifyAllUsers));
+
+        // Fire-once guard (SiteBlogPost.NotifiedAtUtc doc): only the false→true publish
+        // transition, only when NotifyAllUsers is set, and only if it hasn't already fired — a
+        // later edit (including flipping NotifyAllUsers back on after the first fan-out) never
+        // re-notifies. There is no quiet-period debounce here (unlike BasePoll's edit-notification
+        // sweep) — a single staff post either announces once or it doesn't.
+        if (existing.IsPublished == false && dto.IsPublished && dto.NotifyAllUsers && existing.NotifiedAtUtc is null)
+            await FireAnnouncementFanOutAsync(dto.BlogPostId, userId);
+    }
+
+    public async Task DeleteSiteBlogPostAsync(int blogPostId)
+    {
+        if (ActiveUser.UserId is not int)
+            throw new InvalidOperationException("Deleting a site announcement requires an authenticated user.");
+        if (!(ActiveUser.IsModerator || ActiveUser.IsAdmin))
+            throw new UnauthorizedAccessException("Only moderators can delete site announcements.");
+
+        bool exists = await writeDb.SiteBlogPosts.AnyAsync(p => p.BlogPostId == blogPostId);
+        if (!exists)
+            throw new KeyNotFoundException($"Site announcement {blogPostId} not found.");
+
+        // Change-tracker stub delete: EF issues child-then-base DELETE in one transaction.
+        // BlogPostLike / BlogPostComment rows cascade. Mirrors DeleteBlogPostAsync's
+        // ProfileBlogPost stub, typed to SiteBlogPost (ExecuteDeleteAsync is unsupported on TPT
+        // base-type DbSets).
+        writeDb.Remove(new SiteBlogPost { BlogPostId = blogPostId });
+        await writeDb.SaveChangesAsync();
+    }
+
+    private async Task FireAnnouncementFanOutAsync(int blogPostId, int authorId)
+    {
+        try
+        {
+            await notifications.NotifyNewSiteAnnouncementAsync(blogPostId, authorId);
+            await writeDb.SiteBlogPosts
+                .Where(p => p.BlogPostId == blogPostId)
+                .ExecuteUpdateAsync(s => s.SetProperty(p => p.NotifiedAtUtc, DateTime.UtcNow));
+        }
+        catch (Exception ex)
+        {
+            // Notification failure must never roll back the primary action.
+            logger.LogWarning(ex,
+                "SiteAnnouncement notification fan-out failed for blog post {BlogPostId}",
+                blogPostId);
+        }
+    }
 }

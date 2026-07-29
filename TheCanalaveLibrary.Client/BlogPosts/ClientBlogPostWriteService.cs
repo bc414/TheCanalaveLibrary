@@ -50,6 +50,25 @@ public sealed class ClientBlogPostWriteService(HttpClient http)
         return await response.Content.ReadFromJsonAsync<int>();
     }
 
+    public async Task<int> CreateSiteBlogPostAsync(CreateSiteBlogPostDto dto)
+    {
+        HttpResponseMessage response = await Http.PostAsJsonAsync("api/blog-posts/site", dto);
+        await ThrowIfWriteFailedAsync(response);
+        return await response.Content.ReadFromJsonAsync<int>();
+    }
+
+    public async Task UpdateSiteBlogPostAsync(UpdateSiteBlogPostDto dto)
+    {
+        HttpResponseMessage response = await Http.PutAsJsonAsync($"api/blog-posts/site/{dto.BlogPostId}", dto);
+        await ThrowIfWriteFailedAsync(response);
+    }
+
+    public async Task DeleteSiteBlogPostAsync(int blogPostId)
+    {
+        HttpResponseMessage response = await Http.DeleteAsync($"api/blog-posts/site/{blogPostId}");
+        await ThrowIfWriteFailedAsync(response);
+    }
+
     /// <summary>Status-code → contract-exception translation (inverse of BlogPostEndpoints') — the
     /// shared MA-008 shape.</summary>
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>

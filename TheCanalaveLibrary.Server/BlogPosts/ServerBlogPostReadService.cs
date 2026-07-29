@@ -91,6 +91,37 @@ public class ServerBlogPostReadService(
             isGroupPost = row is not null;
         }
 
+        // Third branch (WU-SiteNews): SiteBlogPosts — never group-owned, never story-linked, no
+        // spoilers. Rating stays E/T in practice (the create/update DTOs don't expose a picker),
+        // so StoryId/LinkedStoryTitle/GroupId/GroupAudience all project as null markers to unify
+        // with the other two branches, same as the group branch does for StoryId.
+        if (row is null)
+        {
+            row = await readDb.SiteBlogPosts
+                .Where(p => p.BlogPostId == blogPostId)
+                .Select(p => new
+                {
+                    p.BlogPostId,
+                    p.AuthorId,
+                    AuthorDisplayName = p.Author != null ? p.Author.UserName : null,
+                    p.Title,
+                    p.Content,
+                    p.Rating,
+                    p.DateCreated,
+                    p.LastUpdatedDate,
+                    p.LikeCount,
+                    p.IsPublished,
+                    HasSpoilers = false,
+                    StoryId = (int?)null,
+                    LinkedStoryTitle = (string?)null,
+                    GroupId = (int?)null,
+                    GroupAudience = (Rating?)null,
+                    IsLikedByCurrentUser = currentUserId != null
+                        && p.Likes.Any(l => l.UserId == currentUserId)
+                })
+                .FirstOrDefaultAsync();
+        }
+
         if (row is null) return null;
 
         // Draft gate + consent resolution (WU-AccessGate, Direct-navigation plane) both live in
@@ -288,5 +319,68 @@ public class ServerBlogPostReadService(
             .ToArray();
 
         return (items, totalCount);
+    }
+
+    public async Task<(BlogPostListingDto[] Items, int TotalCount)> GetSiteAnnouncementsAsync(
+        int page, int pageSize, bool includeUnpublished = false)
+    {
+        // No profile-visibility guard (unlike GetByAuthorAsync) and no rating ceiling (unlike
+        // GetByGroupAsync) — site announcements are staff content, not a person's or group's
+        // content, and never mature.
+        //
+        // The unpublished view is moderator/admin-only, enforced HERE, not by trusting the
+        // caller's flag (the GetByAuthorAsync precedent from the 2026-07-18 endpoint-authz
+        // sweep): the flag rides the public HTTP route, so a forged includeUnpublished=true
+        // must degrade to the published view rather than leak draft titles/snippets.
+        if (includeUnpublished && !(ActiveUser.IsModerator || ActiveUser.IsAdmin))
+            includeUnpublished = false;
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        IQueryable<SiteBlogPost> query = includeUnpublished
+            ? readDb.SiteBlogPosts
+            : readDb.SiteBlogPosts.Where(p => p.IsPublished);
+
+        int totalCount = await query.CountAsync();
+        if (totalCount == 0) return ([], 0);
+
+        List<(int BlogPostId, string Title, string Content, DateTime DateCreated, Rating Rating, bool IsPublished)> rows
+            = await query
+                .OrderByDescending(p => p.DateCreated)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .Select(p => new ValueTuple<int, string, string, DateTime, Rating, bool>(
+                    p.BlogPostId, p.Title, p.Content, p.DateCreated, p.Rating, p.IsPublished))
+                .ToListAsync();
+
+        BlogPostListingDto[] items = rows
+            .Select(r => new BlogPostListingDto(
+                r.Item1, r.Item2, BlogPostText.MakeSnippet(r.Item3), r.Item4, r.Item5,
+                HasSpoilers: false, IsPublished: r.Item6))
+            .ToArray();
+
+        return (items, totalCount);
+    }
+
+    public async Task<SiteAnnouncementEditDto?> GetSiteAnnouncementForEditAsync(int blogPostId)
+    {
+        // Moderator/admin gate enforced HERE, not just in the write service (GetForEditAsync
+        // precedent, endpoint-authz sweep 2026-07-18): the /site/{id}/edit route carries only
+        // RequireAuthorization(), so without this gate any authenticated user could read a
+        // DRAFT announcement's full content. Role, not authorship — any moderator manages any
+        // site post (SitePoll's rule).
+        if (!(ActiveUser.IsModerator || ActiveUser.IsAdmin))
+            throw new UnauthorizedAccessException("Only moderators can manage site announcements.");
+
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+        var row = await readDb.SiteBlogPosts
+            .Where(p => p.BlogPostId == blogPostId)
+            .Select(p => new { p.AuthorId, p.Title, p.Content, p.IsPublished, p.NotifyAllUsers })
+            .FirstOrDefaultAsync();
+
+        if (row is null) return null;
+
+        return new SiteAnnouncementEditDto(
+            blogPostId, row.AuthorId, row.Title, row.Content, row.IsPublished, row.NotifyAllUsers);
     }
 }

@@ -50,12 +50,10 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
   permanently ruled out for messaging), Marts. Full detail: `middle_plan_v2.md` Phase 1.
 - **Phase 2 — MVP-surface completeness — tail end, in progress.** Items 2–8 are DONE (Series/
   Story Lineage/Saved Tag Selections, Manual+Automatic Tree Search, Account Deletion UI, External
-  Link Verification, Export/Import, AccessGate) — full detail: `middle_plan_v2.md` Phase 2. Two
-  items remain open:
-  1. **WU-Home** — the front door's remaining sections (recently-updated / featured-tags /
-     active-SitePolls placement / layout). The spotlight slice already shipped as WU-Spotlight.
-     **Gated on decision row 2** below. Pointer: `workplan.md` "Planned" WU-Home entry.
-  2. **WU-AccountEnforcement (residual)** — core login-blocking + banner shipped inside WU38a
+  Link Verification, Export/Import, AccessGate) — full detail: `middle_plan_v2.md` Phase 2.
+  **Item 1, WU-Home, is DONE ✓ (2026-07-28)** — decision row 2 resolved and built; see §Resolved
+  above and `workplan.md`'s DONE entry. One item remains open:
+  1. **WU-AccountEnforcement (residual)** — core login-blocking + banner shipped inside WU38a
      (2026-07-11); the only open slice is mid-session responsiveness (a freshly-Warned/Suspended
      user only sees the effect at next sign-in). `RefreshSignInAsync` (from WU-AccessGate's
      `/content-gate` work) is the ready-made tool. **Unblocked, unsequenced.** Pointer:
@@ -116,7 +114,6 @@ genuine open decision gets promoted here, not left buried in the tracker).
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
-| 2 | **Homepage design — remaining sections.** Spotlight is resolved and shipped. What remains: what else the front door shows (recently updated, featured tags, active SitePolls, etc.) and its layout. | Spec §5.28: `/` = Community Spotlight stories; other sections undecided. | Front-door product design. Gates Phase 2's WU-Home. |
 | 4 | **Launch-readiness mechanics** — the full Phase 7 checklist above. | Topology settled (droplet + managed PG + R2); `aspire publish` compose output is the default deploy candidate. | Operational cost/effort trade-offs. Gates Phase 7. |
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Gates Phase 6. |
 | 8 | **Email provider + sending domain** — mechanism is resolved (config-only SMTP swap); which provider, the sending domain, and its SPF/DKIM/DMARC DNS records remain open. | Postmark, SES, or Resend (cheap at this scale); needs a sending domain, tying into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Gates Phase 7. |
@@ -143,7 +140,7 @@ done.
 
 | Tier | Proposed work unit | Tracker items closed | Why here |
 |---|---|---|---|
-| **0** — decisions only, chat, no code | Decision row 2 (homepage sections) | — | Unblocks WU-Home, the last unstarted Phase-2 item |
+| **0** — decisions only, chat, no code | ~~Decision row 2 (homepage sections)~~ **DONE 2026-07-28** | — | Unblocks WU-Home, the last unstarted Phase-2 item |
 | **0** | Decision row 13 (`/discover` URL state) | — | Unblocks B11/B12; already fully framed, cheap to resolve |
 | **1** — already unblocked, no decision needed | WU-AccountEnforcement residual | *(G1's residual)* | Small `RefreshSignInAsync` wiring, Phase 2 item 5 above — the cheapest win on the board |
 | **1** | WU-ErrorHandling2 | E1 | Unblocked since WU-GlobalFlip (2026-07-13), never picked up since |
@@ -152,7 +149,7 @@ done.
 | **2** | WU-StatBadgeProducers | B3, B4 | B4's BetaReader badge literally depends on B3's counter existing |
 | **2** | WU-DataSaver | B0 | Small standalone decision ("suppress sprites, or cut the setting") + build |
 | **2** | WU-DiscoveryOverrideUI | B7 | Per-user filter-override editing surface (§8.7) |
-| **3** | WU-Home | F1 | Once decision row 2 lands — closes Phase 2 entirely |
+| **3** | ~~WU-Home~~ **DONE 2026-07-28** | F1 | Closed Phase 2's last content item; the surviving item (WU-AccountEnforcement residual, Tier 1) is what remains |
 | **4** — Phase 3 (L4 freeze sweep) | WU-A11y | F6 | Resolve decision row 12 just before the sweep starts |
 | **4** | *(fold into the same sweep — don't build standalone)* | H1, E4, H8 | Each cheap enough to ride the sweep rather than justify its own WU |
 | **5** — beta window | WU-EditorSprite | A1 | Spec'd authoring capability; design the sanitizer allow-list addition alongside it |
@@ -178,7 +175,22 @@ Group G is fully closed (2026-07-27) — nothing to sequence.
 
 ## Resolved
 
-*(Empty as of 2026-07-27 — this file was just created. New entries go here going forward, newest
-first, each pointing at the doc that now states the rule, same convention as the retired chain.
-The full historical Resolved index — every decision from 2025's design sessions through
-2026-07-27 — lives in `middle_plan_v2.md` §Resolved.)*
+- **Decision row 2 — Homepage design (2026-07-28, WU-Home).** The home page is the community
+  page: a focused surface, not a broad discovery one. Composition: a "Welcome" mission blurb
+  (expanded when Spotlight is empty, collapsed once a spotlight is live) → Community Spotlight →
+  the active SitePoll inline when one is open → a community-discourse link cluster (Polls, Fanon,
+  Spotlight explained, Site News) surfacing what the persistent nav/UserMenu deliberately omit.
+  Deliberately excluded: any story discovery (Recently Updated and a random draw were both
+  considered and rejected — spec §5.3.3's "no sort by last updated" reasoning and the "focused
+  purpose, not broad" framing) and any personalized/signed-in strip (Continue Reading/follows/
+  bookshelves are already one click away via NotificationBell/UserMenu). This decision's only
+  stated purpose for `GetRecentListingsAsync`/`GET /api/stories/recent` is gone, so both were
+  removed as dead code rather than left in place. Surfaced a second gap along the way — no
+  site-announcement channel — closed
+  by the companion WU-SiteNews (`SiteBlogPost`, extends Features 35/36) on the same date. Detail:
+  `audit/BlogPosts.md`, `audit/Seo.md`.
+
+*(Empty as of 2026-07-27 — this file was just created; the entry above is the first addition.
+New entries go here going forward, newest first, each pointing at the doc that now states the
+rule, same convention as the retired chain. The full historical Resolved index — every decision
+from 2025's design sessions through 2026-07-27 — lives in `middle_plan_v2.md` §Resolved.)*

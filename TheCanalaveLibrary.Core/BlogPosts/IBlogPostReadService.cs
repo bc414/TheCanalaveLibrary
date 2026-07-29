@@ -55,4 +55,26 @@ public interface IBlogPostReadService
     /// </summary>
     Task<(BlogPostListingDto[] Items, int TotalCount)> GetByGroupAsync(
         int groupId, int page, int pageSize);
+
+    /// <summary>
+    /// Returns a page of <see cref="SiteBlogPost"/> listings (WU-SiteNews), ordered newest-first.
+    /// By default published-only (the public <c>/news</c> feed). The unpublished view is
+    /// moderator/admin-only, <b>enforced in the service, not by trusting the caller's flag</b>
+    /// (mirrors <see cref="GetByAuthorAsync"/>'s owner enforcement — the flag rides the public
+    /// HTTP route, so a forged <paramref name="includeUnpublished"/> degrades to the published
+    /// view). Never rating-filtered — site announcements aren't mature content.
+    /// </summary>
+    Task<(BlogPostListingDto[] Items, int TotalCount)> GetSiteAnnouncementsAsync(
+        int page, int pageSize, bool includeUnpublished = false);
+
+    /// <summary>
+    /// Returns the edit-form DTO for a given site announcement, or <c>null</c> if not found.
+    /// Separate from <see cref="GetForEditAsync"/> (which only ever resolves a
+    /// <see cref="ProfileBlogPost"/>) — see <see cref="SiteAnnouncementEditDto"/>'s doc.
+    /// Gated <c>IsModerator || IsAdmin</c> here as well as at the write service (throws
+    /// <see cref="UnauthorizedAccessException"/> otherwise) — role, not authorship; without
+    /// this read-side gate any authenticated user could pull a draft's full content over the
+    /// <c>/site/{id}/edit</c> route (the <see cref="GetForEditAsync"/> precedent).
+    /// </summary>
+    Task<SiteAnnouncementEditDto?> GetSiteAnnouncementForEditAsync(int blogPostId);
 }

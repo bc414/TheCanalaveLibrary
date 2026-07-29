@@ -56,8 +56,20 @@
     [PersistentState]
     public IReadOnlyList<SpotlightDisplayDto>? Spotlights { get; set; }
 
+    /// <summary>
+    /// Fired once the spotlight list is known (restored or fetched), with whether any are live —
+    /// lets a parent (WU-Home's HomePage) react to Spotlight's emptiness without duplicating its
+    /// own service call or changing this component's self-contained data-load contract. Optional
+    /// — HasDelegate-gated, no-op when unwired, same convention as StoryCard's OnReport.
+    /// </summary>
+    [Parameter]
+    public EventCallback<bool> OnLoaded { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
         Spotlights ??= await SpotlightReadService.GetActiveSpotlightsAsync();
+
+        if (OnLoaded.HasDelegate)
+            await OnLoaded.InvokeAsync(Spotlights.Count > 0);
     }
 }

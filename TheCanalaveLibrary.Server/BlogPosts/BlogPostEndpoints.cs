@@ -70,6 +70,28 @@ public static class BlogPostEndpoints
             return Results.Ok(new PagedResult<BlogPostListingDto>(result.Items, result.TotalCount));
         });
 
+        // Site announcements (WU-SiteNews) — public list. includeUnpublished is NOT trusted here:
+        // the read service demotes a forged true to the published view unless the viewer is a
+        // moderator/admin (same service-side enforcement as GetByAuthorAsync's owner rule —
+        // endpoint-authz sweep 2026-07-18 posture).
+        group.MapGet("/site", async (
+            IBlogPostReadService blogPosts, int page, int pageSize, bool includeUnpublished = false) =>
+        {
+            (BlogPostListingDto[] Items, int TotalCount) result =
+                await blogPosts.GetSiteAnnouncementsAsync(page, pageSize, includeUnpublished);
+            return Results.Ok(new PagedResult<BlogPostListingDto>(result.Items, result.TotalCount));
+        });
+
+        // Moderator/admin-only editor read — same ExecuteWriteAsync wrapping as /edit above:
+        // GetSiteAnnouncementForEditAsync itself throws UnauthorizedAccessException for a
+        // non-moderator (translated to 403 here), exactly the GetForEditAsync author-gate shape.
+        // Without the service-side gate, RequireAuthorization() alone would let any signed-in
+        // user read a draft announcement's full content.
+        group.MapGet("/site/{blogPostId:int}/edit", (IBlogPostReadService blogPosts, int blogPostId) =>
+                EndpointHelpers.ExecuteWriteAsync(async () =>
+                    Results.Json(await blogPosts.GetSiteAnnouncementForEditAsync(blogPostId))))
+            .RequireAuthorization();
+
         // ── Writes (authenticated — author/membership ownership enforced by the service) ──
 
         group.MapPost("/", (IBlogPostWriteService blogPosts, CreateProfileBlogPostDto dto) =>
@@ -103,12 +125,42 @@ public static class BlogPostEndpoints
                     Results.Ok(await blogPosts.CreateGroupBlogPostAsync(dto))))
             .RequireAuthorization();
 
+        // Site announcements (WU-SiteNews) — RequireAuthorization() only; the real
+        // IsModerator || IsAdmin gate lives in the write service (translated to 403 by
+        // ExecuteWriteAsync), same posture as every other write route in this file.
+        group.MapPost("/site", (IBlogPostWriteService blogPosts, CreateSiteBlogPostDto dto) =>
+                EndpointHelpers.ExecuteWriteAsync(async () =>
+                    Results.Ok(await blogPosts.CreateSiteBlogPostAsync(dto))))
+            .RequireAuthorization();
+
+        group.MapPut("/site/{blogPostId:int}", (IBlogPostWriteService blogPosts, int blogPostId, UpdateSiteBlogPostDto dto) =>
+                EndpointHelpers.ExecuteWriteAsync(async () =>
+                    blogPostId != dto.BlogPostId
+                        ? Results.Problem(detail: "Route blogPostId does not match body BlogPostId.",
+                            statusCode: StatusCodes.Status400BadRequest)
+                        : await UpdateSiteAndRespondAsync(blogPosts, dto)))
+            .RequireAuthorization();
+
+        group.MapDelete("/site/{blogPostId:int}", (IBlogPostWriteService blogPosts, int blogPostId) =>
+                EndpointHelpers.ExecuteWriteAsync(async () =>
+                {
+                    await blogPosts.DeleteSiteBlogPostAsync(blogPostId);
+                    return Results.NoContent();
+                }))
+            .RequireAuthorization();
+
         return app;
     }
 
     private static async Task<IResult> UpdateAndRespondAsync(IBlogPostWriteService blogPosts, UpdateBlogPostDto dto)
     {
         await blogPosts.UpdateBlogPostAsync(dto);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> UpdateSiteAndRespondAsync(IBlogPostWriteService blogPosts, UpdateSiteBlogPostDto dto)
+    {
+        await blogPosts.UpdateSiteBlogPostAsync(dto);
         return Results.NoContent();
     }
 }

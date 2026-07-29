@@ -462,9 +462,12 @@ unless noted. All sit under Stage-5 cells.
 From `roadmap.md` "Decisions that need you" + `middle-addendum.md` §3. None maps to a grid row; a grid-scanner sees
 built rows at 5 and no signal these exist.
 
-- [ ] **F1 — Homepage is unbuilt and design-blocked (WU-Home)** `[decision · high · mvp]`
+- [x] **F1 — Homepage is unbuilt and design-blocked (WU-Home)** `[decision · high · mvp]` —
+  **CLOSED 2026-07-28 (WU-Home):** decision row 2 resolved (`roadmap.md` §Resolved) and built —
+  home = the community page (Welcome blurb → Spotlight → active-poll-if-open → community-discourse
+  link cluster). No story discovery, no personal strip. Companion WU-SiteNews closed the
+  site-announcement gap the resolution surfaced.
   - Source: `roadmap.md` Decision row 2 + Phase 2 item 1; `workplan.md`.
-  - Context: The homepage is still an "honest minimal placeholder." WU-Home is gated on a design decision (recently-updated / featured-tags / active-SitePolls placement / layout). The front door itself isn't done, yet nothing on the grid signals it.
 
 - [ ] **F2 — Launch-readiness mechanics (Phase 7)** `[decision · high · launch]`
   - Source: `roadmap.md` Phase 7 + Decision row 4; `middle-addendum.md` §2.

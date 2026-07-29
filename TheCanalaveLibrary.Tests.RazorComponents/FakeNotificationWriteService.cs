@@ -70,4 +70,5 @@ public sealed class FakeNotificationWriteService : INotificationWriteService
     public Task NotifyNewProfileBlogPostAsync(int blogPostId, int authorId, int? storyId) => Task.CompletedTask;
     public Task NotifyTagAdoptionSuggestedAsync(IReadOnlyList<int> recipientAuthorIds, int targetTagId, int moderatorSourceId)
     { TagAdoptionCalls.Add((recipientAuthorIds, targetTagId, moderatorSourceId)); return Task.CompletedTask; }
+    public Task NotifyNewSiteAnnouncementAsync(int blogPostId, int authorId) => Task.CompletedTask;
 }

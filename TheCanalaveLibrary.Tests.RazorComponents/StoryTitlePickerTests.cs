@@ -49,7 +49,6 @@ public class StoryTitlePickerTests : BunitContext
     public Task<GatedMetadataDto?> GetStoryGateAsync(int storyId) => Task.FromResult<GatedMetadataDto?>(null);
         public Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId) => Task.FromResult<StoryUpdateDTO?>(null);
         public Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds) => Task.FromResult(Array.Empty<StoryListingDto>());
-        public Task<(StoryListingDto[] Items, int TotalCount)> GetRecentListingsAsync(int page, int pageSize) => Task.FromResult((Array.Empty<StoryListingDto>(), 0));
         public Task<(StoryListingDto[] Items, int TotalCount)> GetListingsAsync(StoryFilterDto filter, IReadOnlyCollection<int>? restrictToStoryIds = null, bool personalScope = false) => Task.FromResult((Array.Empty<StoryListingDto>(), 0));
         public Task<IReadOnlyList<GatedMetadataDto>> GetGatedCardsAsync(IReadOnlyCollection<int> storyIds) => Task.FromResult<IReadOnlyList<GatedMetadataDto>>([]);
         public Task<IReadOnlyList<GatedMetadataDto>> GetGatedStoriesByAuthorAsync(int authorId) => Task.FromResult<IReadOnlyList<GatedMetadataDto>>([]);

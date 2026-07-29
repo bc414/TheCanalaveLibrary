@@ -71,9 +71,14 @@ public static class DevDiagnosticsEndpoints
             return Results.Ok(new { storyId });
         });
 
+        // Repointed to GetListingsAsync (WU-Home, 2026-07-28) — GetRecentListingsAsync was
+        // removed: its only stated purpose was a homepage hot-path that decision row 2 ruled out
+        // (spec §5.3.3's "no sort by last updated" reasoning). Default StoryFilterDto sorts
+        // DatePublished, the nearest equivalent unfiltered browse probe.
         devApi.MapGet("/wu12/listings/recent", async (int page, int pageSize, IStoryReadService readService) =>
         {
-            (StoryListingDto[] items, int totalCount) = await readService.GetRecentListingsAsync(page, pageSize);
+            (StoryListingDto[] items, int totalCount) = await readService.GetListingsAsync(
+                new StoryFilterDto { Page = page, PageSize = pageSize });
             return Results.Ok(new
             {
                 totalCount,

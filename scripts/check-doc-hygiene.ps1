@@ -35,6 +35,7 @@ $retiredTerms = [ordered]@{
     'CharacterRelationshipType (deleted WU37.5, 2026-06-26)'  = 'CharacterRelationshipType'
     'MessagesHub (SignalR permanently ruled out, 2026-07-07)' = '\bMessagesHub\b'
     'layer7-redis.md (L7 dissolved, 2026-07-06)'              = 'layer7-redis'
+    'GetRecentListingsAsync (removed 2026-07-28, WU-Home)'    = 'GetRecentListingsAsync'
 }
 
 # A line mentioning a retired term is legitimate when it says so. Loose by design — this is a

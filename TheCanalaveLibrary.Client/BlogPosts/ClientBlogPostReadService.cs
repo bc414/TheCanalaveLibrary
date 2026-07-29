@@ -48,4 +48,22 @@ public class ClientBlogPostReadService(HttpClient http) : IBlogPostReadService
             $"api/blog-posts/by-group/{groupId}?page={page}&pageSize={pageSize}"))!;
         return (result.Items, result.TotalCount);
     }
+
+    public async Task<(BlogPostListingDto[] Items, int TotalCount)> GetSiteAnnouncementsAsync(
+        int page, int pageSize, bool includeUnpublished = false)
+    {
+        PagedResult<BlogPostListingDto> result = (await Http.GetFromJsonAsync<PagedResult<BlogPostListingDto>>(
+            $"api/blog-posts/site?page={page}&pageSize={pageSize}&includeUnpublished={includeUnpublished}"))!;
+        return (result.Items, result.TotalCount);
+    }
+
+    public async Task<SiteAnnouncementEditDto?> GetSiteAnnouncementForEditAsync(int blogPostId)
+    {
+        // 401/403 → UnauthorizedAccessException, same error-translation contract as GetForEditAsync.
+        using HttpResponseMessage response = await Http.GetAsync($"api/blog-posts/site/{blogPostId}/edit");
+        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+            throw new UnauthorizedAccessException("Only moderators can manage site announcements.");
+        response.EnsureSuccessStatusCode();
+        return await ClientHttpHelpers.ReadNullableFromJsonAsync<SiteAnnouncementEditDto?>(response.Content);
+    }
 }

@@ -193,6 +193,20 @@ public class ServerNotificationWriteService(
     // ── Semantic generation methods (WU42 slice — Story Lineage) ─────────────────
 
     /// <inheritdoc/>
+    public async Task NotifyNewSiteAnnouncementAsync(int blogPostId, int authorId)
+    {
+        // Fan-out to every user on the site (type SiteAnnouncement = 0). Mirrors
+        // NotifyNewGroupBlogPostAsync's shape — GroupMembers swapped for the full Users table.
+        List<int> allUserIds = await writeDb.Users.Select(u => u.Id).ToListAsync();
+
+        IReadOnlyList<(int recipientId, int relatedEntityId)> targets =
+            allUserIds.Select(id => (id, blogPostId)).ToArray();
+
+        if (targets.Count > 0)
+            await CreateCoreAsync(NotificationTypeEnum.SiteAnnouncement, authorId, targets);
+    }
+
+    /// <inheritdoc/>
     public Task NotifyStoryLineageRequestedAsync(int targetAuthorId, int requesterId, int sourceStoryId) =>
         CreateCoreAsync(
             NotificationTypeEnum.StoryLineageRequested,

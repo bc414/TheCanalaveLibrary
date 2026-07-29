@@ -96,12 +96,25 @@ public static class BlogPostVisibilityGuard
         // Group branch: the GroupAudience filter is bypassed so the audience decision can be made
         // reveal-aware in IsVisible — the filtered navigation join would drop the row before we
         // could ask. Mirrors ServerBlogPostReadService.GetByIdAsync.
-        return await readDb.GroupBlogPosts
+        row = await readDb.GroupBlogPosts
             .IgnoreQueryFilters(["GroupAudience"]) // elevated read: audience decided post-load (reveal-aware)
             .Where(p => p.BlogPostId == blogPostId)
             .Select(p => (BlogPostVisibilityFacts?)new BlogPostVisibilityFacts(
                 p.BlogPostId, p.AuthorId, p.IsPublished, p.Rating, true, p.GroupId,
                 p.Group != null ? p.Group.AudienceRating : Rating.E))
+            .FirstOrDefaultAsync();
+
+        if (row is not null) return row;
+
+        // Site branch (WU-SiteNews): staff announcements — never group-owned, never M-rated
+        // (Rating stays E, so the rating gate below always passes for a published post). Parent-
+        // visibility invariant enrolment: this branch is what makes comments/likes on a
+        // SiteBlogPost visible at all — omitting it would silently hide them, not just skip a
+        // feature (identity-and-authorization.md §"Parent-visibility guards").
+        return await readDb.SiteBlogPosts
+            .Where(p => p.BlogPostId == blogPostId)
+            .Select(p => (BlogPostVisibilityFacts?)new BlogPostVisibilityFacts(
+                p.BlogPostId, p.AuthorId, p.IsPublished, p.Rating, false, null, null))
             .FirstOrDefaultAsync();
     }
 

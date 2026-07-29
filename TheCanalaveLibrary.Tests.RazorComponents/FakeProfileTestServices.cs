@@ -35,7 +35,6 @@ internal sealed class FakeStoryReadService : IStoryReadService
     public Task<GatedMetadataDto?> GetStoryGateAsync(int storyId) => Task.FromResult<GatedMetadataDto?>(null);
     public Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId) => Task.FromResult<StoryUpdateDTO?>(null);
     public Task<StoryListingDto[]> GetListingsByIdsAsync(IReadOnlyList<int> storyIds) => Task.FromResult(Array.Empty<StoryListingDto>());
-    public Task<(StoryListingDto[] Items, int TotalCount)> GetRecentListingsAsync(int page, int pageSize) => Task.FromResult((Array.Empty<StoryListingDto>(), 0));
 
     /// <summary>Configurable knob for page tests whose listings load through the filter path
     /// (BookshelvesPageTests). Default empty preserves the original no-op behavior.</summary>
@@ -102,6 +101,9 @@ internal sealed class FakeBlogPostReadService : IBlogPostReadService
     public Task<BlogPostEditDto?> GetForEditAsync(int blogPostId) => Task.FromResult<BlogPostEditDto?>(null);
     public Task<(BlogPostListingDto[] Items, int TotalCount)> GetByGroupAsync(int groupId, int page, int pageSize) =>
         Task.FromResult((Array.Empty<BlogPostListingDto>(), 0));
+    public Task<(BlogPostListingDto[] Items, int TotalCount)> GetSiteAnnouncementsAsync(int page, int pageSize, bool includeUnpublished = false) =>
+        Task.FromResult((Array.Empty<BlogPostListingDto>(), 0));
+    public Task<SiteAnnouncementEditDto?> GetSiteAnnouncementForEditAsync(int blogPostId) => Task.FromResult<SiteAnnouncementEditDto?>(null);
 }
 
 // ── Series (WU41) ─────────────────────────────────────────────────────────────────────────────

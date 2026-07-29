@@ -64,13 +64,6 @@ public static class StoryEndpoints
         group.MapGet("/by-ids", async (IStoryReadService stories, int[] storyIds) =>
             Results.Ok(await stories.GetListingsByIdsAsync(storyIds)));
 
-        group.MapGet("/recent", async (IStoryReadService stories, int page, int pageSize) =>
-        {
-            (StoryListingDto[] Items, int TotalCount) result =
-                await stories.GetRecentListingsAsync(page, pageSize);
-            return Results.Ok(new PagedResult<StoryListingDto>(result.Items, result.TotalCount));
-        });
-
         // POST-for-complex-read (layer5-wasm.md §"Reads with non-scalar parameters"): StoryFilterDto
         // isn't GET-bindable. restrictToStoryIds still binds from the query string (repeated-key
         // array) alongside the JSON-bound filter. [FromQuery] is REQUIRED here, not cosmetic:

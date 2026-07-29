@@ -17,24 +17,20 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-DocRoadmap (2026-07-27) — retired the unsustainably-named `middle_plan_v2.md`
-  chain in favor of `.claude/roadmap.md` (stable, role-based name), which carries forward only the
-  still-open Phase/Decision content; the full historical Resolved index stays in `middle_plan_v2.md`.
-  Same-day addendum added a git-log-informed "Recommended next work units" section to `roadmap.md`
-  — see that section for the actual next-step sequence (short version: clear decision rows 2/13,
-  land the already-unblocked WU-AccountEnforcement residual + WU-ErrorHandling2, then continue the
-  hidden-deferral debt-paydown burst before pivoting back to WU-Home/Phase 3). (Before WU-DocRoadmap,
-  same day: WU-DocAuditSkill, WU-DocHygiene 1–3.)
-- **Phase (`roadmap.md`):** Phase 2 tail. Two unbuilt Phase-2 items: **WU-Home** (item 1,
-  gated on decision row 2 — homepage design) and **WU-AccountEnforcement's mid-session residual**
-  (item 5, unblocked — `RefreshSignInAsync` is the ready-made tool; see its Planned entry below).
-  Phases 0, 1, and 5 are DONE; Phase 3 (Brian-driven L4 freeze sweep + WU-A11y, the latter gated
-  on decision row 12) follows Phase 2.
+- **Last landed:** WU-Home + WU-SiteNews (2026-07-28) — decision row 2 resolved and built (the
+  home page is the community page; see `roadmap.md` §Resolved), plus the companion staff-
+  announcement type (`SiteBlogPost`) it surfaced a need for. Closes tracker item F1 and Phase 2's
+  last content item. (Before this, 2026-07-27: WU-DocRoadmap retired `middle_plan_v2.md` in favor
+  of `roadmap.md`; WU-DocAuditSkill, WU-DocHygiene 1–3.)
+- **Phase (`roadmap.md`):** Phase 2 tail — one item left: **WU-AccountEnforcement's mid-session
+  residual** (unblocked — `RefreshSignInAsync` is the ready-made tool; see its Planned entry
+  below). Phases 0, 1, and 5 are DONE; Phase 3 (Brian-driven L4 freeze sweep + WU-A11y, the latter
+  gated on decision row 12) follows once that residual lands.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
   exist in **every group A–H** (~20 unchecked boxes), including two **high-priority security
   items: E2 and E3**.
-- **Blocked on Brian:** decision rows 2, 4, 6, 8, 10, 12, and 13 (`roadmap.md` §"Decisions
-  that need you"; row 13 gates only tracker item B11).
+- **Blocked on Brian:** decision rows 4, 6, 8, 10, 12, and 13 (`roadmap.md` §"Decisions
+  that need you"; row 13 gates only tracker item B11; row 2 resolved 2026-07-28).
 
 ---
 
@@ -118,16 +114,6 @@ from the "Post-MVP — Layers 5–8" section below (historical framing). Each en
 cell(s)/feature, phase, audit pointer, and deps; move it to the DONE ✓ run below (with
 cells/verification) when built.
 
-- **WU-Home** — **Cells:** no dedicated grid row (the homepage is persistent chrome composing
-  existing features; the spotlight slice is Feature 55, shipped). **Phase:** 2 item 1 — the
-  *remaining* homepage sections after WU-Spotlight (DONE ✓ 2026-07-12, archive) split out the
-  spotlight display. **Gated on decision row 2** (homepage design — which sections, what order).
-  **Settled inputs (do not revisit):** `audit/Spotlight.md` — no algorithmic homepage (selection
-  is always a human act) and the homepage carries N concurrent spotlight positions from
-  `site_settings`; `audit/BlogPosts.md` — homepage SitePoll surfacing is deferred INTO this WU
-  ("Open intent: SitePolls … homepage sections, not this feature's work-unit"). **Pointer:**
-  `roadmap.md` Phase 2 item 1; `SharedUI/Home/HomePage.razor` header comment points back
-  at decision row 2. **Deps:** WU-Spotlight (DONE ✓).
 - **WU-A11y** — **Cells:** Feature 65 (new), L4/L4.5 currently Stage 1. **Phase:** 3, paired with
   the L4 freeze sweep. **Scope:** blocked on decision row 12 (scope/depth). **Pointer:**
   `audit/Accessibility.md`. **Deps:** Phase 3's L4 freeze sweep (same pass).
@@ -1249,3 +1235,114 @@ arity 400, repeated-member 400); migration script green.
   explicit "deliberately not reordered" list and a standalone flag on E2 (AngleSharp CVE — `high`
   priority but risk-accepted, worth an explicit re-confirmation rather than a silent default).
   `check-doc-hygiene.ps1` re-verified clean.
+
+## WU-Home + WU-SiteNews — the front door + staff site announcements (closes Phase 2) — DONE ✓ (2026-07-28)
+
+- **Cells:** neither carries a dedicated grid row — WU-Home is persistent chrome composing
+  existing features (Spotlight is Feature 55, shipped separately); WU-SiteNews extends Features
+  35/36 (BlogPosts cluster), same "extends, no new cell" treatment as WU-EditorSprite/
+  WU-EditorMobile.
+- **Decision row 2 resolved in chat first** (Doc-Touch moment 1, before code): the home page is
+  the community page — a focused surface, not a broad discovery one. Full settled design:
+  `roadmap.md` §Resolved. Closed tracker item F1.
+- **WU-Home shipped:** `SharedUI/Home/HomePage.razor` rebuilt — Welcome/mission-blurb `<details>`
+  expander (open while Spotlight is empty, collapsed once live — driven by
+  `CommunitySpotlightDisplay`'s new `OnLoaded(bool)` callback, no new `site_settings` key) →
+  `<CommunitySpotlightDisplay>` unchanged → the active SitePoll inline via
+  `IPollReadService.GetSitePollsAsync(includeArchived:false)` + client-side
+  `FirstOrDefault(Status == Open)` (no new service method), rendered via the existing `<PollView
+  CanManage="false">`, nothing when none is open → a community-discourse link cluster (Polls,
+  Fanon, Spotlight-explained, Site News — surfaces deliberately off the persistent top nav; Groups
+  excluded, already a nav link) → root `<SocialMetaTags>` (Feature 64 — every other shareable page
+  had one, Home didn't).
+- **No story discovery on the front door, in any form** — Recently Updated and a random draw were
+  both considered and rejected in the design conversation (spec §5.3.3's "no sort by last updated"
+  reasoning; "focused purpose, not broad" framing). Consequently removed as dead code:
+  `IStoryReadService.GetRecentListingsAsync` (interface + `ServerStoryReadService`/
+  `ClientStoryReadService` impls) and `GET /api/stories/recent` (`StoryEndpoints.cs`) — its sole
+  stated purpose ("kept for home-page hot-path") no longer exists. `Tests.Integration/
+  RecentListingsTests.cs` deleted (its only subject); `DevDiagnosticsEndpoints.cs`'s
+  `/wu12/listings/recent` probe and two host-concurrency/tracing smoke tests
+  (`ConcurrentReadAccessTests`, `NpgsqlTracingSmokeTests`) repointed to `GetListingsAsync` rather
+  than deleted (they only needed *some* story query, not this one). Three now-orphaned fake
+  `GetRecentListingsAsync` overrides removed from `Tests.RazorComponents`. Registered in
+  `check-doc-hygiene.ps1`'s retired-term registry; `layer2-services.md`/`layer6-indexes.md`
+  (live) and `roadmap.md`/`L6-reconciliation-matrix.md` (dated) updated with historical markers —
+  `ix_stories_last_updated_date` itself is **kept**, still driving the Relevance sort tie-break.
+- **No personalized/signed-in strip** — Continue Reading/follows/bookshelves are already one click
+  away via `NotificationBell`/`UserMenu`; `HomePage` stays render-mode uniform for every viewer
+  (only the blurb's *initial* expand state varies, and that's driven by data, not by viewer).
+- **WU-SiteNews shipped (the gap the resolution surfaced — no site-announcement channel existed,
+  and `NotificationTypeEnum.SiteAnnouncement` had sat seeded/tested but unproduced since the
+  notification system was built):** `SiteBlogPost : BaseBlogPost` (`Core/BlogPosts/`), the exact
+  structural mirror of the already-shipped `SitePoll : BasePoll` split — site-owned, no `StoryId`,
+  no `HasSpoilers`, `Rating` always `E` (not exposed to the editor), plus
+  `NotifyAllUsers`/`NotifiedAtUtc` for a per-post, fire-once notification fan-out. Migration
+  `WU_SiteNews_SiteBlogPost` (new `site_blog_posts` table only — applied + `psql`-verified against
+  local dev Postgres). `IBlogPostReadService` gained `GetSiteAnnouncementsAsync`/
+  `GetSiteAnnouncementForEditAsync` + a third `GetByIdAsync` branch (needed for `/blog/{id}/{*Slug}`
+  — `BlogPostPage` — to serve the new type unmodified); `IBlogPostWriteService` gained
+  `Create/Update/DeleteSiteBlogPostAsync`, gated `IsModerator || IsAdmin` throughout (any
+  moderator/admin manages any site post, not just its creator — the `SitePoll` precedent, verified
+  against `ServerPollWriteService.LoadAuthorizedPollWithOptionsAsync`'s exact rule). New pages:
+  `/news` (public list), `/news/new` + `/news/{id}/edit` (`[Authorize(Roles="Moderator,Admin")]`,
+  Pattern-1 shape mirroring `BlogPostEditorPage`) via a sibling `SiteAnnouncementPropertiesForm`
+  (no Rating/HasSpoilers/story-picker; adds the `NotifyAllUsers` checkbox). New endpoints under
+  `/api/blog-posts/site*`.
+- **Parent-visibility invariant enrolment (identity-and-authorization.md):**
+  `BlogPostVisibilityGuard.LoadFactsAsync` — the mechanism comments/likes on any blog post go
+  through — got a third `SiteBlogPost` branch. Missing this would have silently made comments on
+  a site announcement permanently invisible rather than erroring, since `IsBlogPostVisibleAsync`
+  returns `false` on an absent facts row.
+- **NotifyAllUsers fan-out:** new `INotificationWriteService.NotifyNewSiteAnnouncementAsync`
+  (`ServerNotificationWriteService`; `ClientNotificationWriteService` throws `NotSupportedException`
+  same as every other server-internal `Notify*` method) selects all `Users` and reuses the private
+  `CreateCoreAsync` drop-self/dedup path — the `NotifyNewGroupBlogPostAsync` shape with
+  `GroupMembers` swapped for the full `Users` table. Fires once, on the false→true publish
+  transition (or immediately on create if already published) and only when `NotifyAllUsers` is
+  true; `SiteBlogPost.NotifiedAtUtc` is stamped after a successful fan-out so a later edit never
+  re-fires it — verified by `Update_AfterAlreadyNotified_DoesNotReNotify`.
+- **Discovered, deliberately not fixed (out of scope):** `UpdateBlogPostAsync`/
+  `DeleteBlogPostAsync`/`GetForEditAsync` are hardcoded to the `ProfileBlogPosts` table despite
+  their generic-sounding names — editing/deleting a `GroupBlogPost` through them silently no-ops
+  the child-table update (a pre-existing latent gap, found while confirming these methods were
+  safe to extend, not introduced by this WU). WU-SiteNews avoided the landmine entirely by adding
+  dedicated `*SiteBlogPostAsync` methods rather than branching the existing ones. Worth its own
+  tracker item if `GroupBlogPost` editing is ever exercised for real.
+- **BlogPostPage (`/blog/{id}/{*Slug}`) view compatibility — no changes needed** beyond the
+  `GetByIdAsync` branch above: it already renders any `BaseBlogPost` subtype generically. The
+  Edit-link affordance was deliberately *not* extended to moderators there (it's `isAuthor`-gated,
+  linking to `/blog/{id}/edit` which is profile-post-only) — editing a site announcement happens
+  from `/news`'s per-card Edit links instead, avoiding a second edit-route-selection branch on an
+  already-complex page.
+- **Verified:** `dotnet build` (whole solution) green. `dotnet test` green across all three tiers:
+  **Unit** 753/753 (no new cases — no host-free pure logic introduced beyond DTO mapping).
+  **Integration** 948/948, including the new `SiteAnnouncementServiceTests.cs` (24 tests:
+  moderator/plain-user/anonymous authorization on create/update/delete; any-moderator-manages-
+  any-post; sanitize-on-save; create-already-published; the fan-out's recipient set and
+  fire-once guard on both create-published and draft→publish paths;
+  `GetSiteAnnouncementsAsync`'s published-only default, `includeUnpublished`, and newest-first
+  ordering; the `GetByIdAsync` third branch's anonymous-visible/draft-hidden behavior; the
+  `BlogPostVisibilityGuard` third branch directly). **RazorComponents** 601/601, including
+  `CommunitySpotlightDisplay`'s new `OnLoaded` callback (3 tests) and
+  `SiteAnnouncementPropertiesFormTests.cs` (7 tests, mirroring `BlogPostPropertiesFormTests.cs`
+  minus the removed fields). `scripts/check-doc-hygiene.ps1` clean throughout.
+- **Post-implementation review (2026-07-28, diff re-read):** two authz gaps found + fixed
+  same-session — a forged `includeUnpublished=true` on the public `/api/blog-posts/site` route
+  leaked draft titles/snippets to anyone (now service-demoted unless moderator/admin, the
+  `GetByAuthorAsync` shape), and `/api/blog-posts/site/{id}/edit` leaked draft *full content* to
+  any signed-in user (read service now gates `IsModerator || IsAdmin`, the `GetForEditAsync`
+  shape). +4 Integration regression tests → 952/952. Plus a blurb copy fix ("above"→"below") and
+  a false `NewsPage` comment rewritten. Both gaps violated the very 2026-07-18 endpoint-authz
+  precedents this WU cited — caught only by re-reading the diff (the WU-TagFanon review lesson,
+  again). Full detail + known-behavior notes: `audit/BlogPosts.md` §"Post-implementation review".
+- **L4.5-Browser pass (2026-07-28, server-only path, standing dev DB kept):** `/` confirmed —
+  blurb expander open (empty Spotlight), no story-discovery section anywhere, Community link row
+  (Polls/Fanon/Community Spotlight/Site News) all present and correctly styled;
+  `curl`'d the prerendered HTML and confirmed the full OG/Twitter tag set (`og:title`="The
+  Canalave Library", correctly truncated `og:description`, `og:image` falling back to
+  `/img/default-cover.svg`). `/polls`/`/fanon` reachable and rendering (previously `/polls` had
+  no inbound link anywhere in the app). Full WU-SiteNews browser narrative (create → publish →
+  fan-out at the dev DB's actual 2,007-user scale → cleanup, plus a transient reconnect-banner
+  non-issue investigated and ruled out): `audit/BlogPosts.md`'s L4.5-Browser note.
+- **Tool:** Opus 5 in Claude Code (plan mode → build), 2026-07-28.

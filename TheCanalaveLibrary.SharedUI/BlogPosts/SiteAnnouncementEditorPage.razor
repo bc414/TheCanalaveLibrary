@@ -1,0 +1,182 @@
+@page "/news/new"
+@page "/news/{BlogPostId:int}/edit"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize(Roles = "Moderator,Admin")]
+@inject IBlogPostWriteService BlogPostService
+@inject NavigationManager NavigationManager
+@inject ILogger<SiteAnnouncementEditorPage> Logger
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.Extensions.Logging
+
+@* Site-announcement create/edit page (WU-SiteNews) — the SiteBlogPost counterpart to
+   BlogPostEditorPage. Pattern 1 edit side (cross-cutting.md "Two content-editing patterns");
+   view side is BlogPostPage (unmodified — GetByIdAsync's third branch already serves it).
+   No polls section, no story picker, no Rating/HasSpoilers — those aren't meaningful for staff
+   announcements. IsModerator||IsAdmin gates every mutation in the write service (any moderator
+   manages any site post, the SitePoll precedent) — the page-level role attribute is the UI
+   affordance; the service gate is the actual control. *@
+
+<PageTitle>@(BlogPostId.HasValue ? "Edit Announcement" : "New Announcement")</PageTitle>
+
+<AuthorizeView Roles="Moderator,Admin">
+    <Authorized>
+        @if (_isLoading)
+        {
+            <p class="text-(--color-text-muted)"><em>Loading…</em></p>
+        }
+        else if (_notFound)
+        {
+            <p class="text-(--color-danger)">Announcement not found.</p>
+        }
+        else
+        {
+            <div class="mx-auto max-w-2xl px-4 py-8">
+                <h1 class="mb-6 inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+                    @(BlogPostId.HasValue ? "Edit Announcement" : "New Announcement")
+                </h1>
+
+                @* ── Draft safety (cross-cutting.md §"Error Handling Strategy") ── *@
+                <div class="mb-4">
+                    <DraftAutosave @ref="_autosave" @key="@DraftKey"
+                                   DraftKey="@DraftKey"
+                                   Capture="CaptureDraftAsync"
+                                   OnRestore="RestoreDraftAsync" />
+                </div>
+
+                <div class="rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+                    <SiteAnnouncementPropertiesForm @ref="_form"
+                                                     ViewModel="_viewModel"
+                                                     SubmitLabel="@(BlogPostId.HasValue ? "Save Changes" : "Create Announcement")"
+                                                     OnValidSubmit="HandleValidSubmit" />
+                </div>
+            </div>
+        }
+    </Authorized>
+    @* No <NotAuthorized> branch: the role attribute means the router renders the denial
+       (SignInRequired/forbidden via Routes.razor) — mirrors BlogPostEditorPage's rationale. *@
+</AuthorizeView>
+
+@code {
+    [Parameter] public int? BlogPostId { get; set; }
+
+    private SiteAnnouncementPropertiesForm? _form;
+    private DraftAutosave? _autosave;
+    private SiteAnnouncementPropertiesViewModel _viewModel = new();
+
+    // Persisted across the prerender→interactive handoff — the loaded-for-edit source only
+    // (layer5-wasm.md §"Avoiding the double fetch"). The ??= guard in OnInitializedAsync skips
+    // the second GetSiteAnnouncementForEditAsync; _viewModel is re-seeded deterministically from
+    // this. Live form/editor state and DraftAutosave stay ephemeral.
+    [PersistentState] public SiteAnnouncementEditDto? EditSource { get; set; }
+
+    private bool _isLoading = true;
+    private bool _notFound;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (BlogPostId.HasValue)
+        {
+            // ??= restore-or-fetch: skip the refetch when [PersistentState] restored the
+            // prerender pass's load. No ownership pre-check (unlike BlogPostEditorPage's
+            // author comparison) — the real gate is IsModerator || IsAdmin, already enforced by
+            // this page's role attribute and, authoritatively, by the write service.
+            EditSource ??= await BlogPostService.GetSiteAnnouncementForEditAsync(BlogPostId.Value);
+
+            if (EditSource is null)
+            {
+                _notFound = true;
+                _isLoading = false;
+                return;
+            }
+
+            PopulateViewModelFromEdit(EditSource);
+        }
+
+        _isLoading = false;
+    }
+
+    private void PopulateViewModelFromEdit(SiteAnnouncementEditDto dto)
+    {
+        _viewModel.Title          = dto.Title;
+        _viewModel.Content        = dto.Content;
+        _viewModel.IsPublished    = dto.IsPublished;
+        _viewModel.NotifyAllUsers = dto.NotifyAllUsers;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        _viewModel.IsLoading = true;
+        _viewModel.ServerValidationErrors.Clear();
+
+        try
+        {
+            // Pull content from the EditorView (pull-on-submit — layer3-logic.md §"EditorView Pull-on-Submit").
+            string content = _form is not null ? await _form.GetContentAsync() : string.Empty;
+            _viewModel.Content = content;
+
+            if (BlogPostId.HasValue)
+            {
+                await BlogPostService.UpdateSiteBlogPostAsync(new UpdateSiteBlogPostDto
+                {
+                    BlogPostId     = BlogPostId.Value,
+                    Title          = _viewModel.Title,
+                    Content        = _viewModel.Content,
+                    IsPublished    = _viewModel.IsPublished,
+                    NotifyAllUsers = _viewModel.NotifyAllUsers
+                });
+                if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
+                // forceLoad: same-component redirect on a Quill-hosting page — the in-place diff
+                // around Quill's JS-inserted toolbar crashes the WASM renderer (mirrors
+                // BlogPostEditorPage/StoryEditorPage's twin comment — Blazored.TextEditor#71).
+                NavigationManager.NavigateTo($"/news/{BlogPostId.Value}/edit", forceLoad: true);
+            }
+            else
+            {
+                int newId = await BlogPostService.CreateSiteBlogPostAsync(new CreateSiteBlogPostDto
+                {
+                    Title          = _viewModel.Title,
+                    Content        = _viewModel.Content,
+                    IsPublished    = _viewModel.IsPublished,
+                    NotifyAllUsers = _viewModel.NotifyAllUsers
+                });
+                if (_autosave is not null) await _autosave.ClearAsync(); // persisted save supersedes the local backup
+                // Navigate to the public feed after creation — there is no per-post view route
+                // dedicated to announcements; /blog/{id} (BlogPostPage) also renders it, but /news
+                // is the natural landing spot for a moderator who just posted one.
+                NavigationManager.NavigateTo("/news");
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Saving site announcement {BlogPostId} failed unexpectedly", BlogPostId);
+            _viewModel.ServerValidationErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+        }
+        finally
+        {
+            _viewModel.IsLoading = false;
+        }
+    }
+
+    // ── Draft safety (DraftAutosave contract) ─────────────────────────────────────
+    private string DraftKey => BlogPostId.HasValue ? $"draft:siteannouncement:{BlogPostId.Value}" : "draft:siteannouncement:new";
+
+    private async Task<Dictionary<string, string?>?> CaptureDraftAsync()
+    {
+        if (_form is null || _isLoading) return null;
+        return new Dictionary<string, string?>
+        {
+            ["Title"] = _viewModel.Title,
+            ["Content"] = await _form.GetContentAsync(),
+        };
+    }
+
+    private async Task RestoreDraftAsync(IReadOnlyDictionary<string, string?> fields)
+    {
+        if (_form is null) return;
+        _viewModel.Title = fields.GetValueOrDefault("Title") ?? _viewModel.Title;
+        await _form.SetContentAsync(fields.GetValueOrDefault("Content") ?? string.Empty);
+        StateHasChanged();
+    }
+}

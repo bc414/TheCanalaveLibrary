@@ -217,6 +217,13 @@ public class BlogPostPageTests : BunitContext
             int groupId, int page, int pageSize) =>
             Task.FromResult((Array.Empty<BlogPostListingDto>(), 0));
 
+        public Task<(BlogPostListingDto[] Items, int TotalCount)> GetSiteAnnouncementsAsync(
+            int page, int pageSize, bool includeUnpublished = false) =>
+            Task.FromResult((Array.Empty<BlogPostListingDto>(), 0));
+
+        public Task<SiteAnnouncementEditDto?> GetSiteAnnouncementForEditAsync(int blogPostId) =>
+            Task.FromResult<SiteAnnouncementEditDto?>(null);
+
         public Task<int> CreateProfileBlogPostAsync(CreateProfileBlogPostDto dto) =>
             throw new NotImplementedException();
 
@@ -230,6 +237,15 @@ public class BlogPostPageTests : BunitContext
             Task.FromResult(new BlogPostLikeResultDto(1, true));
 
         public Task<int> CreateGroupBlogPostAsync(CreateGroupBlogPostDto dto) =>
+            throw new NotImplementedException();
+
+        public Task<int> CreateSiteBlogPostAsync(CreateSiteBlogPostDto dto) =>
+            throw new NotImplementedException();
+
+        public Task UpdateSiteBlogPostAsync(UpdateSiteBlogPostDto dto) =>
+            throw new NotImplementedException();
+
+        public Task DeleteSiteBlogPostAsync(int blogPostId) =>
             throw new NotImplementedException();
     }
 

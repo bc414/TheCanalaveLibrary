@@ -322,4 +322,15 @@ public interface INotificationWriteService : INotificationReadService
     /// read and moved on must never be re-notified for the same tag).
     /// </summary>
     Task NotifyTagAdoptionSuggestedAsync(IReadOnlyList<int> recipientAuthorIds, int targetTagId, int moderatorSourceId);
+
+    /// <summary>
+    /// Site-wide announcement fan-out (WU-SiteNews, <c>SiteAnnouncement = 0</c> — seeded and
+    /// tested since the notification catalogue's original build, unproduced until now). Every
+    /// user on the site is a target (drop-self excludes the posting moderator/admin). Called only
+    /// when a <c>SiteBlogPost</c> publishes with <c>NotifyAllUsers = true</c>, and only once per
+    /// post — the caller (<c>ServerBlogPostWriteService.CreateSiteBlogPostAsync</c>/
+    /// <c>UpdateSiteBlogPostAsync</c>) stamps <c>SiteBlogPost.NotifiedAtUtc</c> after a successful
+    /// call so a later edit never re-fires it. <c>RelatedEntityId = blogPostId</c>.
+    /// </summary>
+    Task NotifyNewSiteAnnouncementAsync(int blogPostId, int authorId);
 }

@@ -88,7 +88,10 @@ public class ConcurrentReadAccessTests(PostgresFixture postgres) : IntegrationTe
 
         Task<int> bell = notifications.GetUnreadCountAsync();
         Task<int> envelope = messaging.GetUnreadConversationCountAsync();
-        Task<(StoryListingDto[] Items, int TotalCount)> page = stories.GetRecentListingsAsync(1, 10);
+        // Repointed to GetListingsAsync (WU-Home, 2026-07-28) — GetRecentListingsAsync removed;
+        // this test only needs *some* third concurrent read, not a specific ordering.
+        Task<(StoryListingDto[] Items, int TotalCount)> page =
+            stories.GetListingsAsync(new StoryFilterDto { Page = 1, PageSize = 10 });
 
         await Task.WhenAll(bell, envelope, page);
 

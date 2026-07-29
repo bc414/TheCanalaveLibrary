@@ -1,0 +1,107 @@
+@page "/news"
+@namespace TheCanalaveLibrary.SharedUI
+@inject IBlogPostReadService BlogPostService
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Authorization
+
+@* Site announcements feed (WU-SiteNews) — the public /news list. Mirrors PollsPage's
+   [PersistentState] fetch-once shape. Moderators/admins get a "New Announcement" link and, via
+   BlogPostCard's IsOwner (true for any manager here — not "is this my post"), an Edit link on
+   every card: any moderator manages any site post (the SitePoll precedent), so IsOwner is
+   repurposed as "can manage," which is exactly what BlogPostCard already means by the flag. *@
+
+<PageTitle>Site News</PageTitle>
+
+<div class="mx-auto flex max-w-2xl flex-col gap-6 px-4 py-8">
+
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+            Site News
+        </h1>
+        @if (_isManager)
+        {
+            <a href="/news/new"
+               class="rounded-md bg-(--color-mission) px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-(--color-mission-hover)">
+                New Announcement
+            </a>
+        }
+    </div>
+
+    @if (_isLoading)
+    {
+        <p class="text-(--color-text-muted)"><em>Loading…</em></p>
+    }
+    else if (Posts is { Length: 0 })
+    {
+        <p class="text-(--color-text-muted)">No announcements yet — check back later.</p>
+    }
+    else
+    {
+        <div class="flex flex-col gap-3">
+            @foreach (BlogPostListingDto post in Posts ?? [])
+            {
+                <BlogPostCard @key="post.BlogPostId"
+                              Post="post"
+                              IsOwner="_isManager"
+                              EditHref="@($"/news/{post.BlogPostId}/edit")" />
+            }
+        </div>
+
+        <PaginationControls CurrentPage="_page" PageSize="PageSize" TotalCount="_totalCount"
+                             OnPageChanged="HandlePageChangedAsync" />
+    }
+</div>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private const int PageSize = 20;
+
+    // Persisted across the prerender→interactive handoff — restore-or-fetch in OnInitializedAsync
+    // (layer5-wasm.md §"Avoiding the double fetch"). Page-1, manager-unaware fetch only: a
+    // moderator's includeUnpublished view is loaded fresh once role is resolved (see below), same
+    // "public prerender, richer interactive load" shape PollsPage doesn't need (polls have no
+    // draft concept) but BlogPostCard's Draft badge does.
+    [PersistentState] public BlogPostListingDto[]? Posts { get; set; }
+
+    private bool _isLoading = true;
+    private bool _isManager;
+    private int _page = 1;
+    private int _totalCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            AuthenticationState state = await AuthState;
+            _isManager = state.User.IsInRole("Moderator") || state.User.IsInRole("Admin");
+        }
+
+        // Restore-or-fetch for non-managers (layer5-wasm.md §"Avoiding the double fetch").
+        // Managers refetch once even when [PersistentState] restored the prerender payload —
+        // cheap insurance that the draft-inclusive view reflects the LIVE role resolution on
+        // this side of the handoff rather than whatever view the persisted payload carried.
+        // (The service demotes a non-manager's includeUnpublished server-side regardless —
+        // this flag is affordance, not the control.)
+        if (Posts is null || _isManager)
+            await LoadAsync();
+
+        _isLoading = false;
+    }
+
+    private async Task LoadAsync()
+    {
+        (BlogPostListingDto[] items, int totalCount) = await BlogPostService.GetSiteAnnouncementsAsync(
+            _page, PageSize, includeUnpublished: _isManager);
+        Posts = items;
+        _totalCount = totalCount;
+    }
+
+    private async Task HandlePageChangedAsync(int page)
+    {
+        _page = page;
+        _isLoading = true;
+        await LoadAsync();
+        _isLoading = false;
+    }
+}

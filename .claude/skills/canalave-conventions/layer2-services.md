@@ -913,7 +913,8 @@ public record StoryFilterDto(
 - The per-`SearchMode` default-settings matrix (§8.7, `DefaultUserStoryInteractionFilterSetting`/`UserStoryInteractionFilterSetting`) — deferred post-WU23 — **built in WU28**, see "Discovery Defaults + Random Batch (WU28)" above.
 - The **Source** axis — `GetListingsAsync` is `Source=All` only. Narrowed sources (bookshelves, profiles, groups) pass pre-selected IDs to `GetListingsByIdsAsync` instead.
 
-**`GetListingsAsync` two-step (mirrors `GetRecentListingsAsync`):**
+**`GetListingsAsync` two-step** (formerly "mirrors `GetRecentListingsAsync`" — that method was
+removed 2026-07-28, WU-Home; see `layer6-indexes.md` §"stories — the two discovery sort spines"):
 
 ```csharp
 // Step 1 — build filtered IQueryable<Story>, page on scalar IDs, capture TotalCount.
