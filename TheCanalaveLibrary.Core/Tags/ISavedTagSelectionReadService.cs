@@ -29,4 +29,21 @@ public interface ISavedTagSelectionReadService
     /// <see cref="GetMySelectionsAsync"/> instead, via the Load flyout).
     /// </summary>
     Task<List<SavedTagSelectionDetailDto>> GetPublicSelectionsByUserAsync(int userId);
+
+    /// <summary>
+    /// Returns one selection for its <b>permalink</b> (<c>/discover/selection/{id}/{*slug}</c>,
+    /// decision row 13), or <c>null</c>. Unlike <see cref="GetSelectionDetailAsync"/> this read is
+    /// anonymous-callable, so it enforces both gates itself and is deliberately stricter:
+    /// <list type="bullet">
+    ///   <item>the selection must be <c>IsPublic</c> — a private one is never permalinked, not even
+    ///         for its owner (same rule as <see cref="GetPublicSelectionsByUserAsync"/>: a link
+    ///         exists to be shared, and an unpublished selection has nothing to share), and</item>
+    ///   <item>the owner's <c>ProfileVisibility</c> must admit the caller — Class A access control
+    ///         (<c>design/access-gating-first-principles.md</c>), enforced server-side because the
+    ///         adversary picks the access path.</item>
+    /// </list>
+    /// Missing, unpublished and not-visible are all the same contractual <c>null</c>: callers must
+    /// never distinguish them, or the permalink becomes an existence oracle for private profiles.
+    /// </summary>
+    Task<SavedTagSelectionDetailDto?> GetPublicSelectionByIdAsync(int id);
 }

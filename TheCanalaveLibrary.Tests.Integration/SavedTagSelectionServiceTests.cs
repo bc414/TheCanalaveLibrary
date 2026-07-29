@@ -450,8 +450,101 @@ public class SavedTagSelectionServiceTests(PostgresFixture postgres) : Integrati
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // Permalink read — GetPublicSelectionByIdAsync (decision row 13)
+    //
+    // This path is anonymous-callable, so it carries BOTH gates itself: IsPublic and the owner's
+    // ProfileVisibility (Class A — design/access-gating-first-principles.md). The denial cases are
+    // the point of these tests: a permalink that leaks a private-profile user's selection is a
+    // privacy bug, and every failure mode must be the same null so the endpoint can't be used as an
+    // existence oracle.
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task GetPublicSelectionByIdAsync_PublicSelection_VisibleProfile_ReturnsIt_ForAnonymous()
+    {
+        int tagId = await SeedTagAsync();
+        SetActiveUser(_ownerId);
+        int id = await CreateAsync(new SavedTagSelectionInput("Shared", "for everyone", true, [tagId], []));
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        SavedTagSelectionDetailDto? detail = await GetPermalinkAsync(id);
+
+        detail.Should().NotBeNull("a permalink is reachable logged-out by design");
+        detail!.Nickname.Should().Be("Shared");
+        detail.IncludedTags.Should().ContainSingle(t => t.TagId == tagId);
+    }
+
+    [Fact]
+    public async Task GetPublicSelectionByIdAsync_PrivateSelection_ReturnsNull_EvenForItsOwner()
+    {
+        // Stricter than GetSelectionDetailAsync's owner-or-public rule on purpose: a link exists to
+        // be shared, and an unpublished selection has nothing to share. Same rule as
+        // GetPublicSelectionsByUserAsync, which also excludes private rows from the owner's own tab.
+        int tagId = await SeedTagAsync();
+        SetActiveUser(_ownerId);
+        int id = await CreateAsync(new SavedTagSelectionInput("Mine only", null, false, [tagId], []));
+
+        (await GetPermalinkAsync(id)).Should().BeNull("the owner is viewing, but it isn't published");
+
+        SetActiveUser(_otherUserId);
+        (await GetPermalinkAsync(id)).Should().BeNull();
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        (await GetPermalinkAsync(id)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetPublicSelectionByIdAsync_PrivateProfile_ReturnsNull_ForAnonymousAndOtherUsers()
+    {
+        // The selection is public, but its owner's profile is not — ProfileVisibility governs
+        // profile-tab data and a permalink is just another path to it.
+        int tagId = await SeedTagAsync();
+        SetActiveUser(_ownerId);
+        int id = await CreateAsync(new SavedTagSelectionInput("Public but hidden", null, true, [tagId], []));
+        await SetProfileVisibilityAsync(_ownerId, ProfileVisibility.Private);
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        (await GetPermalinkAsync(id)).Should().BeNull("Class A: the adversary picks the access path");
+
+        SetActiveUser(_otherUserId);
+        (await GetPermalinkAsync(id)).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetPublicSelectionByIdAsync_UsersOnlyProfile_HidesFromAnonymous_ButNotFromLoggedInViewers()
+    {
+        int tagId = await SeedTagAsync();
+        SetActiveUser(_ownerId);
+        int id = await CreateAsync(new SavedTagSelectionInput("Members only", null, true, [tagId], []));
+        await SetProfileVisibilityAsync(_ownerId, ProfileVisibility.UsersOnly);
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        (await GetPermalinkAsync(id)).Should().BeNull();
+
+        SetActiveUser(_otherUserId);
+        (await GetPermalinkAsync(id)).Should().NotBeNull("UsersOnly admits any authenticated viewer");
+    }
+
+    [Fact]
+    public async Task GetPublicSelectionByIdAsync_MissingId_ReturnsNull_IndistinguishableFromAGatedOne()
+    {
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        (await GetPermalinkAsync(999_999)).Should().BeNull();
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // Seeding helper — local to this class (mirrors TreeSearchComposeTests.SeedTagAsync)
     // ─────────────────────────────────────────────────────────────────────────────
+
+    private async Task SetProfileVisibilityAsync(int userId, ProfileVisibility visibility)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        User user = await db.Users.FirstAsync(u => u.Id == userId);
+        user.PrivacySettings.ProfileVisibility = visibility;
+        await db.SaveChangesAsync();
+    }
 
     private async Task<int> SeedTagAsync()
     {
@@ -515,5 +608,12 @@ public class SavedTagSelectionServiceTests(PostgresFixture postgres) : Integrati
         using IServiceScope scope = Factory.Services.CreateScope();
         ISavedTagSelectionReadService svc = scope.ServiceProvider.GetRequiredService<ISavedTagSelectionReadService>();
         return await svc.GetPublicSelectionsByUserAsync(userId);
+    }
+
+    private async Task<SavedTagSelectionDetailDto?> GetPermalinkAsync(int id)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ISavedTagSelectionReadService svc = scope.ServiceProvider.GetRequiredService<ISavedTagSelectionReadService>();
+        return await svc.GetPublicSelectionByIdAsync(id);
     }
 }

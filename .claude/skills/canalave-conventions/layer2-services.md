@@ -432,11 +432,36 @@ folding a state-mutating save form into the same list that exists to overwrite t
 as unneeded fragility, not a simplification.
 
 **Sharing is copy-on-write, not subscription.** `SavedTagSelection.IsPublic=true` surfaces a selection on
-the owner's `ProfileTab.TagSelections` tab only — there is no public browse/gallery surface. Another
+the owner's `ProfileTab.TagSelections` tab and at its permalink (below) — there is no public
+browse/gallery surface. Another
 viewer's "Add to my filters" (`ISavedTagSelectionWriteService.CopyPublicSelectionAsync`) creates a new,
 independently-owned `SavedTagSelection` + copied `SavedTagSelectionEntry` rows; the copy and the source
 never affect each other afterward (no many-to-many "subscription" model — rejected because editing a
 shared row would silently change it for every subscriber).
+
+**A permalink does not make a selection a saved query (decision row 13, 2026-07-28).**
+`/discover/selection/{SelectionId:int}/{*Slug}` renders *results* for a public selection, but the
+artifact still contributes **only the tag axis**. Sort, free text and interaction exclusions come
+from the **viewer's own** §8.7 defaults via `IDiscoveryDefaultsReadService`, exactly as they do on a
+bare `/discover` visit — so two people opening the same permalink can legitimately see different
+orderings and exclusions. That is the point: the shared object is the tag combination, not the
+viewer's session. Nothing about the permalink widens what the entity persists.
+
+`GetSelectionDetailAsync` stays authenticated (owner-or-public, for Load/copy). The permalink is fed
+by a **separate anonymous-callable read** that enforces both `IsPublic` **and** the owner's
+`ProfileVisibility` server-side — Class A access control, not a UX nicety
+(`design/access-gating-first-principles.md`). Gate failure and "no such selection" are the same
+contractual `null`: never distinguish them in the response.
+
+**Device-local filter restore is not a competing persistence mechanism.** The "transient viewer
+intent" ruling above is about what a *named, server-side, shareable artifact* carries. `/discover`
+separately restores the viewer's last-applied filter from **browser localStorage** (ids only,
+rehydrated through the existing batch reads, unseeable entities pruned — `layer3.5-structure.md`
+§"The shared tree canvas" is the established shape). Device-local, per-browser, never synced, works
+for anonymous viewers, and invisible to every other user. It answers "don't lose my work on a back
+navigation"; the artifact answers "let me name and share this combination." Keep them separate:
+nothing restored from localStorage may ever be written to `SavedTagSelection`, and `[PersistentState]`
+is not usable for restore (`error-handling.md` — prerender-handoff only).
 
 **`SpriteBaseUrl` is a config seam** (`appsettings` key `Sprites:BaseUrl`, default `/sprites/themes`
 for wwwroot). At R2/CDN time, changing this one config value — together with an Rclone sync of the

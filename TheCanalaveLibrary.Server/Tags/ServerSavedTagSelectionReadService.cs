@@ -76,6 +76,27 @@ public class ServerSavedTagSelectionReadService(
         return result;
     }
 
+    public async Task<SavedTagSelectionDetailDto?> GetPublicSelectionByIdAsync(int id)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        SavedTagSelectionDetailDto? detail = await HydrateDetailAsync(readDb, id);
+        if (detail is null) return null;
+
+        // Both permalink gates live here, not at the endpoint — the endpoint is anonymous-callable
+        // and services are the single enforcement point (layer2-services.md). HydrateDetailAsync
+        // allows owner-or-public; the permalink is public-only, so an owner's unpublished selection
+        // is not reachable by link either.
+        if (!detail.IsPublic) return null;
+
+        // Class A: the owner's ProfileVisibility governs their profile-tab data, and a permalink is
+        // just another path to it (WU-AccessGate Phase 1).
+        if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, detail.OwnerUserId))
+            return null;
+
+        return detail;
+    }
+
     // ── Shared hydration ─────────────────────────────────────────────────────────
 
     /// <summary>

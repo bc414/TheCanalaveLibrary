@@ -25,4 +25,8 @@ public class ClientSavedTagSelectionReadService(HttpClient http) : ISavedTagSele
     public async Task<List<SavedTagSelectionDetailDto>> GetPublicSelectionsByUserAsync(int userId) =>
         await Http.GetFromJsonAsync<List<SavedTagSelectionDetailDto>>(
             $"api/saved-tag-selections/public/{userId}") ?? [];
+
+    public async Task<SavedTagSelectionDetailDto?> GetPublicSelectionByIdAsync(int id) =>
+        await Http.GetNullableFromJsonAsync<SavedTagSelectionDetailDto?>(
+            $"api/saved-tag-selections/permalink/{id}");
 }

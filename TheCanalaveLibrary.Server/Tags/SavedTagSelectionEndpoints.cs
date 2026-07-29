@@ -44,6 +44,14 @@ public static class SavedTagSelectionEndpoints
         group.MapGet("/public/{userId:int}", async (ISavedTagSelectionReadService selections, int userId) =>
             Results.Ok(await selections.GetPublicSelectionsByUserAsync(userId)));
 
+        // Anonymous-callable: feeds the selection permalink (/discover/selection/{id}/{*slug},
+        // decision row 13). Both gates — IsPublic and the owner's ProfileVisibility — are enforced
+        // in the service. 200 with a JSON null body for every failure mode, same as /{id:int}:
+        // missing, unpublished and not-visible must be indistinguishable, or the permalink becomes
+        // an existence oracle for private profiles.
+        group.MapGet("/permalink/{id:int}", async (ISavedTagSelectionReadService selections, int id) =>
+            Results.Json(await selections.GetPublicSelectionByIdAsync(id)));
+
         // ── Writes (owner-only enforced in the service; endpoint translates the resulting exceptions) ──
 
         group.MapPost("/", (ISavedTagSelectionWriteService selections, SavedTagSelectionInput input) =>

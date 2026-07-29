@@ -18,6 +18,7 @@ builder.Services.AddAuthenticationStateDeserialization();
 builder.Services.AddScoped<IActiveUserContext, WasmActiveUserContext>();
 builder.Services.AddScoped<Microsoft.Extensions.Hosting.IHostEnvironment, WasmHostEnvironmentAdapter>();
 builder.Services.AddScoped<ManualTreeStore>();
+builder.Services.AddScoped<DiscoveryFilterStore>();
 
 //Client side service registration for dependency injection
 // Error-handling UX seams (WU-ErrorHandling) — same pair as the Server host, so ToastHost and

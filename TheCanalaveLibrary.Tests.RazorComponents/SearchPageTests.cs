@@ -23,6 +23,7 @@ public class SearchPageTests : BunitContext
 {
     private readonly FakeUserStoryInteractionWriteService _fakeUsiService = new();
     private readonly FakeStoryReadService _storyReadService = new();
+    private readonly FakeSavedTagSelectionReadService _selectionReadService = new();
 
     public SearchPageTests()
     {
@@ -39,6 +40,12 @@ public class SearchPageTests : BunitContext
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
         // ReportDialog (inside the page) injects IModerationWriteService.
         Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
+        // Permalink route resolution (decision row 13). Empty by default: the bare /discover route
+        // never calls it.
+        Services.AddScoped<ISavedTagSelectionReadService>(_ => _selectionReadService);
+        // Device-local filter restore. Under Loose JSInterop the load returns null, so the restore
+        // is a no-op unless a test primes it — which is the correct default for a fresh browser.
+        Services.AddScoped<DiscoveryFilterStore>();
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         // Supplies the Task<AuthenticationState> cascade the page awaits (anonymous is fine —
@@ -135,5 +142,84 @@ public class SearchPageTests : BunitContext
 
         cut.FindComponents<StoryCard>().Should().HaveCount(2,
             "clicking 'Give me more' appends the next batch to the accumulated deck");
+    }
+
+    // ── Saved-selection permalink (decision row 13) ──────────────────────────────
+
+    private static TagChipDto MakeChip(int id, string name) =>
+        new() { TagId = id, TagName = name, TagTypeId = TagTypeEnum.Genre };
+
+    private static SavedTagSelectionDetailDto MakeSelection() =>
+        new(42, "Starlight Fluff", "soft ship fic, no angst", IsPublic: true, OwnerUserId: 7,
+            IncludedTags: [MakeChip(1, "Fluff"), MakeChip(2, "Romance")],
+            ExcludedTags: [MakeChip(3, "Angst")]);
+
+    private IRenderedComponent<SearchPage> RenderPermalink(int selectionId = 42, string? slug = "starlight-fluff")
+    {
+        _storyReadService.RandomBatch = [MakeStory(1)];
+        return Render<SearchPage>(p => p
+            .Add(c => c.SelectionId, selectionId)
+            .Add(c => c.Slug, slug));
+    }
+
+    [Fact]
+    public void Permalink_RendersTheSelectionBanner_AndSeedsTheTagAxis()
+    {
+        _selectionReadService.PermalinkById[42] = MakeSelection();
+
+        IRenderedComponent<SearchPage> cut = RenderPermalink();
+
+        cut.FindComponents<SelectionPermalinkBanner>().Should().ContainSingle(
+            "a permalink names the artifact its results are filtered by");
+        cut.Markup.Should().Contain("Starlight Fluff").And.Contain("soft ship fic, no angst");
+        // Chips ride on the detail DTO, so seeding the panel needs no second read.
+        cut.Markup.Should().Contain("Fluff").And.Contain("Angst");
+    }
+
+    [Fact]
+    public void Permalink_LeavesTheFilterPanelEditable()
+    {
+        // The point of landing in SearchPage rather than a read-only view: the recipient is
+        // searching, not just looking.
+        _selectionReadService.PermalinkById[42] = MakeSelection();
+
+        IRenderedComponent<SearchPage> cut = RenderPermalink();
+
+        cut.FindComponents<ResultsFilterPanel>().Should().ContainSingle();
+        cut.FindAll("#rfp-apply").Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Permalink_ToAnUnavailableSelection_ShowsOneNeutralNotice()
+    {
+        // Missing, unpublished and gated-by-ProfileVisibility all return the same null from the
+        // service; the page must not distinguish them, or the permalink becomes an existence
+        // oracle for private profiles.
+        IRenderedComponent<SearchPage> cut = RenderPermalink(selectionId: 999);
+
+        cut.FindComponents<SelectionPermalinkBanner>().Should().BeEmpty();
+        cut.Markup.Should().Contain("isn't available");
+    }
+
+    [Fact]
+    public void Permalink_IgnoresTheSlugTail()
+    {
+        // The id is the source of truth; the slug is decorative, so a stale one still resolves.
+        _selectionReadService.PermalinkById[42] = MakeSelection();
+
+        IRenderedComponent<SearchPage> cut = RenderPermalink(slug: "an-old-nickname-from-before-a-rename");
+
+        cut.Markup.Should().Contain("Starlight Fluff");
+    }
+
+    [Fact]
+    public void BareDiscoverRoute_RendersNoPermalinkChrome()
+    {
+        _selectionReadService.PermalinkById[42] = MakeSelection();
+
+        IRenderedComponent<SearchPage> cut = RenderPage();
+
+        cut.FindComponents<SelectionPermalinkBanner>().Should().BeEmpty();
+        cut.Markup.Should().NotContain("isn't available");
     }
 }

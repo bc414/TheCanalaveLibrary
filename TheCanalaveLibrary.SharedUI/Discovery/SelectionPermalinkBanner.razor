@@ -1,0 +1,89 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Header shown on a saved-selection permalink (/discover/selection/{id}/{*slug}, decision row 13).
+   Names the shared artifact the results are filtered by, and offers the adoption path.
+
+   Injection-free wrapper: the adopt action's @inject ISavedTagSelectionWriteService lives in
+   SelectionAdoptButton, instantiated only when AuthorizeView renders Authorized — @inject resolves
+   at construction time regardless of surrounding markup, so a bare inject here would break every
+   bUnit test that renders SearchPage anonymously (layer3-logic.md "Deferring DI Behind
+   AuthorizeView (WU43)").
+
+   Anonymous viewers get a log-in affordance rather than a missing or dead control — a permalink is
+   reachable logged-out by design, so "nothing here for you" is the wrong answer
+   (access-gating-audit B1/B2).
+
+   Outer Margin Rule: root has no m-* — parent controls spacing. *@
+
+<section class="flex flex-col gap-3 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4"
+         aria-labelledby="selection-permalink-heading">
+
+    <div class="flex flex-wrap items-start justify-between gap-2">
+        <div class="flex flex-col gap-1 min-w-0">
+            <span class="text-xs font-medium uppercase tracking-wide text-(--color-text-muted)">Saved tag selection</span>
+            <h2 id="selection-permalink-heading" class="text-lg font-bold text-(--color-text)">@Selection.Nickname</h2>
+        </div>
+
+        <AuthorizeView>
+            <Authorized>
+                @if (Selection.OwnerUserId != CurrentUserId)
+                {
+                    <SelectionAdoptButton SelectionId="@Selection.Id" />
+                }
+            </Authorized>
+            <NotAuthorized>
+                <a href="@LoginUrl"
+                   class="shrink-0 rounded-md border border-(--color-border) px-3 py-1.5 text-xs font-medium text-(--color-action-ink) hover:border-(--color-action-ink) transition-colors">
+                    Log in to save these filters
+                </a>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Selection.Description))
+    {
+        <p class="text-sm text-(--color-text-muted)">@Selection.Description</p>
+    }
+
+    @if (Selection.IncludedTags.Count > 0)
+    {
+        <div class="flex flex-wrap gap-2">
+            @foreach (TagChipDto tag in Selection.IncludedTags)
+            {
+                <TagChip Tag="tag" />
+            }
+        </div>
+    }
+
+    @if (Selection.ExcludedTags.Count > 0)
+    {
+        <div class="flex flex-col gap-1">
+            <span class="text-xs font-medium text-(--color-text-muted)">Excludes:</span>
+            <div class="flex flex-wrap gap-2">
+                @foreach (TagChipDto tag in Selection.ExcludedTags)
+                {
+                    <TagChip Tag="tag" />
+                }
+            </div>
+        </div>
+    }
+
+    <p class="text-xs text-(--color-text-muted)">
+        Filters below are pre-set from this selection — change anything you like; you're searching,
+        not just viewing.
+        <a href="/user/@Selection.OwnerUserId/tag-selections" class="text-(--color-action-ink) hover:underline">
+            See their other selections
+        </a>
+    </p>
+</section>
+
+@code {
+    /// <summary>The public selection this permalink resolved to.</summary>
+    [Parameter, EditorRequired] public SavedTagSelectionDetailDto Selection { get; set; } = default!;
+
+    /// <summary>Viewer id, so the owner isn't offered a copy of their own selection.</summary>
+    [Parameter] public int? CurrentUserId { get; set; }
+
+    private string LoginUrl =>
+        $"/Account/Login?ReturnUrl={Uri.EscapeDataString($"/discover/selection/{Selection.Id}")}";
+}

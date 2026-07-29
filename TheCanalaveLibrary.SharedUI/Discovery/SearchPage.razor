@@ -1,4 +1,5 @@
 @page "/discover"
+@page "/discover/selection/{SelectionId:int}/{*Slug}"
 @namespace TheCanalaveLibrary.SharedUI
 @attribute [AllowAnonymous]
 @using Microsoft.AspNetCore.Authorization
@@ -6,6 +7,8 @@
 @inject IUserStoryInteractionReadService InteractionReadService
 @inject IDiscoveryDefaultsReadService DiscoveryDefaults
 @inject ITagReadService TagReadService
+@inject ISavedTagSelectionReadService SelectionReadService
+@inject DiscoveryFilterStore FilterStore
 
 @* SearchPage — /discover (WU28, spec §5.3 / §5.28; former SearchDesktop composite folded in
    2026-07-18, WU-ResponsiveMerge — single responsive tree, page owns its markup).
@@ -22,7 +25,37 @@
    double fetch on full document loads (layer5-wasm.md §"Avoiding the double fetch"). Only the
    INITIAL load reads the persisted payload — every user-driven search/page/batch afterward is a
    plain assignment to the same properties. Per-viewer interaction states (_states) stay ephemeral
-   and are reloaded on hydration. *@
+   and are reloaded on hydration.
+
+   Two routes (decision row 13):
+   - /discover — the ordinary search surface. Carries NO filter state in the URL, ever. Filters
+     instead survive navigation device-locally via DiscoveryFilterStore (localStorage, ids only).
+   - /discover/selection/{SelectionId:int}/{*Slug} — a public SavedTagSelection's permalink,
+     following the story-slug contract: the id is the source of truth and the slug is a decorative
+     tail that is never parsed, so renaming a selection never breaks a link. Seeds the tag axis from
+     the artifact and otherwise behaves exactly like /discover — sort and interaction exclusions
+     stay the VIEWER's own §8.7 defaults, which is what keeps a saved selection a tag combination
+     rather than a saved query (layer2-services.md §"Saved Tag Selections Persist Only the Tag
+     Axis"). Both permalink gates (IsPublic, owner's ProfileVisibility) are enforced server-side in
+     GetPublicSelectionByIdAsync; every failure mode is one indistinguishable null. *@
+
+@* ── Permalink chrome (only on /discover/selection/…) ──────────────────────────────────── *@
+@if (_selection is not null)
+{
+    <div class="px-3 pt-4 md:px-4">
+        <SelectionPermalinkBanner Selection="@_selection" CurrentUserId="@_currentUserId" />
+    </div>
+}
+else if (_selectionUnavailable)
+{
+    @* Missing, unpublished and not-visible collapse to one message on purpose — distinguishing
+       them would turn the permalink into an existence oracle for private profiles. *@
+    <div class="px-3 pt-4 md:px-4">
+        <p class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4 text-sm text-(--color-text-muted)">
+            That saved tag selection isn't available. Showing everything instead.
+        </p>
+    </div>
+}
 
 <div class="flex flex-col gap-6 items-start px-3 py-4 md:flex-row md:px-4">
 
@@ -33,6 +66,8 @@
                             InitialFilter="@_filter"
                             InitialIncludedTags="@_includedTagChips"
                             InitialExcludedTags="@_excludedTagChips"
+                            InitialIncludedShipNames="@_includedShipNames"
+                            InitialExcludedShipNames="@_excludedShipNames"
                             AvailableSorts="@AvailableSorts"
                             ShowTextSearch="true"
                             ShowTagFilter="true"
@@ -85,6 +120,16 @@
 @code {
     [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
 
+    /// <summary>Permalink route only — the selection whose tag axis seeds this visit.</summary>
+    [Parameter] public int? SelectionId { get; set; }
+
+    /// <summary>
+    /// Decorative slug tail. Never parsed and never validated: the id is the source of truth, so a
+    /// stale or hand-edited slug still resolves (the story-slug contract, minus the SEO-driven
+    /// canonical 301 — selections are out of the sitemap).
+    /// </summary>
+    [Parameter] public string? Slug { get; set; }
+
     private const int RandomBatchSize = 20;
 
     private int? _currentUserId;
@@ -112,7 +157,18 @@
     private IReadOnlyList<TagChipDto> _includedTagChips = [];
     private IReadOnlyList<TagChipDto> _excludedTagChips = [];
 
+    // Resolved ship labels for seeding ShipFilter — index-aligned with _filter.Included/ExcludedShips.
+    // ShipFilter builds labels from picked chips and cannot rebuild them from bare member ids, so
+    // seed labels are the dispatcher's job (layer3.5-structure.md §"Seed state vs. live fetch").
+    private IReadOnlyList<string> _includedShipNames = [];
+    private IReadOnlyList<string> _excludedShipNames = [];
+
     private bool _isLoadingMore;
+    private bool _restoreAttempted;
+
+    // Permalink state. _selectionUnavailable covers missing/unpublished/not-visible alike.
+    private SavedTagSelectionDetailDto? _selection;
+    private bool _selectionUnavailable;
 
     // ── Presentation state (from the former SearchDesktop composite) ──────────────
     private ReportDialog _reportDialog = default!;
@@ -138,6 +194,12 @@
 
         _filter = _filter with { ExcludedInteractions = DefaultExcludedInteractions };
 
+        // Permalink: the artifact contributes the tag axis only — sort and interaction exclusions
+        // above stay this viewer's own, which is what keeps it a shared tag combination rather than
+        // a shared query. Runs before the first load so the batch already reflects the selection.
+        if (SelectionId is int selectionId)
+            await SeedFromSelectionAsync(selectionId);
+
         if (Items is null)
         {
             // Pre-load initial random batch — spec §5.28: area is never blank on load.
@@ -154,14 +216,108 @@
         }
     }
 
+    // ── Permalink seeding (decision row 13) ────────────────────────────────────────────────────────
+
+    private async Task SeedFromSelectionAsync(int selectionId)
+    {
+        // Both gates (IsPublic, owner's ProfileVisibility) live in the service; every failure mode
+        // returns the same null, so this page cannot leak which one fired.
+        _selection = await SelectionReadService.GetPublicSelectionByIdAsync(selectionId);
+        if (_selection is null)
+        {
+            _selectionUnavailable = true;
+            return;
+        }
+
+        _filter = _filter with
+        {
+            IncludedTagIds = [.. _selection.IncludedTags.Select(t => t.TagId)],
+            ExcludedTagIds = [.. _selection.ExcludedTags.Select(t => t.TagId)],
+            Page = 1
+        };
+
+        // The detail DTO already carries hydrated chips — seeding the panel needs no second read.
+        _includedTagChips = _selection.IncludedTags;
+        _excludedTagChips = _selection.ExcludedTags;
+    }
+
+    // ── Device-local filter restore (decision row 13) ──────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Waits for interactivity: localStorage needs JS, which is unavailable during prerender.
+        // The restored filter therefore arrives as a LATE seed — which is exactly what the panel's
+        // MA-402 re-seed-until-first-interaction guard exists to absorb.
+        if (!firstRender || _restoreAttempted) return;
+        _restoreAttempted = true;
+
+        // A permalink is explicit intent: never let the device's remembered filter overwrite the
+        // selection someone deliberately followed a link to.
+        if (SelectionId is not null) return;
+
+        await TryRestoreFilterAsync();
+    }
+
+    private async Task TryRestoreFilterAsync()
+    {
+        DiscoveryFilterSnapshot? snapshot = await FilterStore.LoadAsync(DiscoveryFilterStore.FilterKey(_currentUserId));
+        if (snapshot is null) return;
+
+        // Ids only on disk: resolve what the viewer can still see, and prune the rest. A tag deleted
+        // or gated since the save silently drops out rather than filtering the page into nothing.
+        int[] tagIds = snapshot.AllTagIds();
+        HashSet<int> visible = tagIds.Length == 0
+            ? []
+            : [.. (await TagReadService.GetTagChipsByIdsAsync(tagIds)).Select(c => c.TagId)];
+
+        StoryFilterDto restored = snapshot.ToFilter(visible);
+
+        // Nothing to do when the restored filter would produce the batch already on screen.
+        if (!NarrowsDifferently(restored)) return;
+
+        _filter = restored;
+        await ResolveSeedDisplayAsync();
+
+        Items = [];
+        _totalCount = 0;
+        if (IsRandomMode)
+            await LoadRandomBatchAsync(append: false);
+        else
+            await LoadSortedPageAsync();
+
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// True when applying <paramref name="candidate"/> would change what is currently displayed.
+    /// Guards against a pointless second query on every visit whose saved filter is just the
+    /// default one. Record equality can't do this — <c>StoryFilterDto</c>'s list members compare
+    /// by reference.
+    /// </summary>
+    private bool NarrowsDifferently(StoryFilterDto candidate) =>
+        !string.IsNullOrWhiteSpace(candidate.TextQuery)
+        || candidate.IncludedTagIds.Count > 0
+        || candidate.ExcludedTagIds.Count > 0
+        || candidate.IncludedShips.Count > 0
+        || candidate.ExcludedShips.Count > 0
+        || candidate.IncludeMode != _filter.IncludeMode
+        || candidate.Sort != _filter.Sort
+        || !candidate.ExcludedInteractions.Order().SequenceEqual(_filter.ExcludedInteractions.Order());
+
     // ── Filter changes (panel Apply) ──────────────────────────────────────────────────────────────
 
     private async Task HandleFilterChangedAsync(StoryFilterDto filter)
     {
         _filter = filter with { Page = 1 };
 
-        // Resolve tag chips for the new filter (feeds back into panel seed on next render).
-        await ResolveTagChipsAsync();
+        // Resolve seed display data for the new filter (feeds the panel on the next render).
+        await ResolveSeedDisplayAsync();
+
+        // Remember it for the next visit on this device. Ids only, per-viewer key; a refused write
+        // (private mode, quota) costs nothing but the restore, so it isn't surfaced.
+        await FilterStore.SaveAsync(
+            DiscoveryFilterStore.FilterKey(_currentUserId),
+            DiscoveryFilterSnapshot.From(_filter));
 
         // Reset accumulation on any filter/mode change.
         Items = [];
@@ -224,6 +380,17 @@
         }
     }
 
+    /// <summary>
+    /// Resolves every piece of display data the filter panel needs to render <c>_filter</c> —
+    /// tag chips and ship labels. Seed resolution is the dispatcher's job; the panel and the axis
+    /// components never fetch it themselves.
+    /// </summary>
+    private async Task ResolveSeedDisplayAsync()
+    {
+        await ResolveTagChipsAsync();
+        await ResolveShipNamesAsync();
+    }
+
     private async Task ResolveTagChipsAsync()
     {
         _includedTagChips = _filter.IncludedTagIds.Count > 0
@@ -233,5 +400,36 @@
         _excludedTagChips = _filter.ExcludedTagIds.Count > 0
             ? await TagReadService.GetTagChipsByIdsAsync(_filter.ExcludedTagIds)
             : [];
+    }
+
+    private async Task ResolveShipNamesAsync()
+    {
+        // One batch read covers both axes — ships are small, but a per-ship call would be an N+1.
+        int[] memberIds =
+        [
+            .. _filter.IncludedShips.Concat(_filter.ExcludedShips)
+                .SelectMany(s => s.MemberTagIds)
+                .Distinct()
+        ];
+
+        if (memberIds.Length == 0)
+        {
+            _includedShipNames = [];
+            _excludedShipNames = [];
+            return;
+        }
+
+        Dictionary<int, string> namesById = (await TagReadService.GetTagChipsByIdsAsync(memberIds))
+            .ToDictionary(c => c.TagId, c => c.TagName);
+
+        _includedShipNames = [.. _filter.IncludedShips.Select(s => Label(s, namesById))];
+        _excludedShipNames = [.. _filter.ExcludedShips.Select(s => Label(s, namesById))];
+
+        // A member the viewer can no longer resolve renders as "?" rather than vanishing — the
+        // ship is still filtering, so hiding the member would misrepresent the active query.
+        static string Label(ShipFilterDto ship, Dictionary<int, string> namesById) =>
+            ShipFilterDto.JoinMemberNames(
+                ship.PairingType,
+                ship.MemberTagIds.Select(id => namesById.TryGetValue(id, out string? name) ? name : "?"));
     }
 }

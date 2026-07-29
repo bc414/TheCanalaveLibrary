@@ -1,0 +1,49 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject ISavedTagSelectionWriteService WriteService
+@inject IToastService Toasts
+
+@* "Add to my filters" on a selection permalink — copy-on-write adoption (WU43 semantics, surfaced
+   on the permalink by decision row 13). Creates an independently-owned copy; the source is never
+   touched afterward.
+
+   This component is instantiated ONLY inside SelectionPermalinkBanner's <AuthorizeView><Authorized>,
+   so its @inject resolves only for authenticated viewers — @inject resolves at construction time
+   unconditionally, which is exactly why the split exists (layer3-logic.md "Deferring DI Behind
+   AuthorizeView (WU43)").
+
+   Outer Margin Rule: root has no m-* — parent controls spacing. *@
+
+<button type="button"
+        class="shrink-0 rounded-md bg-(--color-mission) px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-(--color-mission-hover) disabled:opacity-50"
+        disabled="@(_busy || _adopted)"
+        @onclick="AdoptAsync">
+    @(_adopted ? "Added to your filters" : _busy ? "Adding…" : "Add to my filters")
+</button>
+
+@code {
+    /// <summary>Source selection to copy. Must be a public selection the viewer can see.</summary>
+    [Parameter, EditorRequired] public int SelectionId { get; set; }
+
+    private bool _busy;
+    private bool _adopted;
+
+    private async Task AdoptAsync()
+    {
+        _busy = true;
+        try
+        {
+            await WriteService.CopyPublicSelectionAsync(SelectionId);
+            _adopted = true;
+            // A system event with no inline home — the correct toast case, not a validation error.
+            Toasts.Show("Added to your saved tag selections.", ToastLevel.Success);
+        }
+        catch (SavedTagSelectionValidationException ex)
+        {
+            Toasts.Show(ex.Message, ToastLevel.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

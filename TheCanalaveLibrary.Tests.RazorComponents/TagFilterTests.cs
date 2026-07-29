@@ -93,6 +93,50 @@ public class TagFilterTests : BunitContext
         emitted.ExcludedTagIds.Should().Equal(200);
     }
 
+    // ── Late seed arrival (regression: WU-DiscoveryFilterRestore browser pass) ────────
+
+    [Fact]
+    public void LateSeed_AfterFirstRender_DisplaysItsChips()
+    {
+        // Found in the browser, not by the suite: the device-local filter restore resolves chips
+        // only once JS interop is available, i.e. AFTER first render. TagFilter used to seed in
+        // OnInitialized only, so the selectors sat visibly empty while the query behind them WAS
+        // filtered — the worst kind of mismatch, because the page looks unfiltered and isn't.
+        IRenderedComponent<TagFilter> cut = Render<TagFilter>(p => p
+            .Add(c => c.TagTypes, [TagTypeEnum.Genre]));
+
+        cut.Markup.Should().NotContain("Adventure");
+
+        cut.Render(p => p
+            .Add(c => c.TagTypes, [TagTypeEnum.Genre])
+            .Add(c => c.IncludedTags, [new TagChipDto { TagId = 100, TagName = "Adventure", TagTypeId = TagTypeEnum.Genre }]));
+
+        cut.Markup.Should().Contain("Adventure",
+            "a seed arriving after first render must still reach the TagSelectors (@key remount)");
+    }
+
+    [Fact]
+    public async Task LateSeed_DoesNotClobberTheUsersOwnEdit()
+    {
+        // MA-402: once the user has touched the axis, a later seed must lose.
+        TagFilterSelection? emitted = null;
+        IRenderedComponent<TagFilter> cut = Render<TagFilter>(p => p
+            .Add(c => c.TagTypes, [TagTypeEnum.Genre])
+            .Add(c => c.IncludedTags, [new TagChipDto { TagId = 100, TagName = "Adventure", TagTypeId = TagTypeEnum.Genre }])
+            .Add(c => c.OnChanged, (TagFilterSelection s) => emitted = s));
+
+        // The user removes the seeded chip (only one chip is on screen, so one remove button).
+        await cut.Find("button[aria-label='Remove tag']").ClickAsync(new MouseEventArgs());
+        emitted!.IncludedTagIds.Should().BeEmpty();
+
+        // A late re-seed of the same content must not resurrect it.
+        cut.Render(p => p
+            .Add(c => c.TagTypes, [TagTypeEnum.Genre])
+            .Add(c => c.IncludedTags, [new TagChipDto { TagId = 100, TagName = "Adventure", TagTypeId = TagTypeEnum.Genre }]));
+
+        cut.Markup.Should().NotContain("Adventure");
+    }
+
     /// <summary>
     /// A fake ITagReadService whose SearchTagChipsAsync is never expected to be exercised in these
     /// tests (no typeahead interaction) — present only so TagSelector (nested under TagFilter) can

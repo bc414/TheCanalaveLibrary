@@ -206,6 +206,86 @@ public class ResultsFilterPanelTests : BunitContext
         emitted!.TextQuery.Should().Be("torterra",
             "after the user's first interaction the panel stops re-syncing from InitialFilter (MA-402)");
     }
+
+    // ── Ship seeding parity (decision row 13, closes tracker B11) ────────────────────
+
+    private static StoryFilterDto ShipSeedFilter() => new()
+    {
+        IncludedShips = [new ShipFilterDto { MemberTagIds = [10, 11], PairingType = CharacterPairingType.Romantic }],
+        ExcludedShips = [new ShipFilterDto { MemberTagIds = [12] }]
+    };
+
+    [Fact]
+    public void SeededShips_RenderTheirDispatcherResolvedLabels()
+    {
+        // Ships were previously the only axis with no reconstruction path: ShipFilter builds labels
+        // from picked chips, so a seeded ship can only be shown if the dispatcher hands the label in.
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
+            .Add(c => c.InitialFilter, ShipSeedFilter())
+            .Add(c => c.InitialIncludedShipNames, ["Ash ♥ Misty"])
+            .Add(c => c.InitialExcludedShipNames, ["Brock"]));
+
+        cut.Markup.Should().Contain("Ash ♥ Misty").And.Contain("Brock");
+    }
+
+    [Fact]
+    public async Task SeededShips_SurviveApply_WithoutTheUserTouchingTheShipAxis()
+    {
+        StoryFilterDto? emitted = null;
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
+            .Add(c => c.InitialFilter, ShipSeedFilter())
+            .Add(c => c.InitialIncludedShipNames, ["Ash ♥ Misty"])
+            .Add(c => c.InitialExcludedShipNames, ["Brock"])
+            .Add(c => c.OnSearch, (StoryFilterDto dto) => emitted = dto));
+
+        await cut.Find("#rfp-apply").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        emitted!.IncludedShips.Should().ContainSingle()
+            .Which.MemberTagIds.Should().Equal(10, 11);
+        emitted.IncludedShips[0].PairingType.Should().Be(CharacterPairingType.Romantic);
+        emitted.ExcludedShips.Should().ContainSingle().Which.MemberTagIds.Should().Equal(12);
+    }
+
+    [Fact]
+    public void SeededShips_ReSyncOnLateParameterSet()
+    {
+        // The dispatcher resolves ship labels asynchronously, so the first render hands the panel
+        // empty lists. Without the MA-402 re-seed the axis would stay blank forever.
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
+            .Add(c => c.InitialFilter, new StoryFilterDto()));
+
+        cut.Markup.Should().NotContain("Ash ♥ Misty");
+
+        cut.Render(p => p
+            .Add(c => c.InitialFilter, ShipSeedFilter())
+            .Add(c => c.InitialIncludedShipNames, ["Ash ♥ Misty"])
+            .Add(c => c.InitialExcludedShipNames, ["Brock"]));
+
+        cut.Markup.Should().Contain("Ash ♥ Misty");
+    }
+
+    [Fact]
+    public async Task SeededShips_StopReSyncing_OnceTheUserRemovesOne()
+    {
+        StoryFilterDto? emitted = null;
+        IRenderedComponent<ResultsFilterPanel> cut = Render<ResultsFilterPanel>(p => p
+            .Add(c => c.InitialFilter, ShipSeedFilter())
+            .Add(c => c.InitialIncludedShipNames, ["Ash ♥ Misty"])
+            .Add(c => c.InitialExcludedShipNames, ["Brock"])
+            .Add(c => c.OnSearch, (StoryFilterDto dto) => emitted = dto));
+
+        await cut.Find("button[aria-label='Remove ship filter']")
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        // A late re-seed must not resurrect what the user just removed.
+        cut.Render(p => p
+            .Add(c => c.InitialFilter, ShipSeedFilter())
+            .Add(c => c.InitialIncludedShipNames, ["Ash ♥ Misty"])
+            .Add(c => c.InitialExcludedShipNames, ["Brock"]));
+
+        await cut.Find("#rfp-apply").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        emitted!.IncludedShips.Should().BeEmpty("the user's removal wins over any later seed (MA-402)");
+    }
 }
 
 // ── Test double ─────────────────────────────────────────────────────────────────────────────

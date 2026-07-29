@@ -5,7 +5,10 @@
    behind a single "Apply Filters" button. The panel buffers each axis's emitted selection in @code
    and fires OnSearch with a StoryFilterDto only when the user clicks Apply.
 
-   Injection-free: axis components (TagFilter, UserStoryInteractionFilter) own their own injections.
+   Injection-free, and specifically: live fetch-on-user-input belongs to whichever leaf owns the
+   input (TagSelector's and ShipFilter's typeaheads), while SEED state is resolved by the page
+   dispatcher and passed in as Initial* parameters. TagFilter and UserStoryInteractionFilter inject
+   nothing either. See layer3.5-structure.md §"Seed state vs. live fetch in filter components".
    No ViewModel: @code holds the buffered selections (flat fields — no separate class).
 
    Composition rules (spec §5.27 "ResultsFilterPanel is the assembler, not the component"):
@@ -47,7 +50,11 @@
     @* ── Ship filters (WU-TagFanon) ────────────────────────────────────────────────────── *@
     @if (ShowShipFilter)
     {
-        <ShipFilter OnChanged="OnShipFilterChanged" />
+        <ShipFilter InitialIncluded="@_seedIncludedShips"
+                    InitialExcluded="@_seedExcludedShips"
+                    InitialIncludedNames="@InitialIncludedShipNames"
+                    InitialExcludedNames="@InitialExcludedShipNames"
+                    OnChanged="OnShipFilterChanged" />
     }
 
     @* ── Interaction filters ───────────────────────────────────────────────────────────── *@
@@ -98,8 +105,9 @@
 
     /// <summary>
     /// Show the ship filter axis (WU-TagFanon). Default follows <see cref="ShowTagFilter"/> — a
-    /// surface narrowing by tags almost certainly wants ships too. Ships are transient viewer
-    /// intent (never part of SavedTagSelection), so no seed parameter exists.
+    /// surface narrowing by tags almost certainly wants ships too. Ships are never part of a
+    /// SavedTagSelection and have no URL representation, but they DO seed — from
+    /// <see cref="InitialFilter"/> plus the display names below (decision row 13).
     /// </summary>
     [Parameter] public bool ShowShipFilter { get; set; } = true;
 
@@ -162,6 +170,18 @@
     /// </summary>
     [Parameter] public IReadOnlyList<TagChipDto> InitialExcludedTags { get; set; } = [];
 
+    /// <summary>
+    /// Display labels for <c>InitialFilter.IncludedShips</c>, index-aligned (decision row 13). The
+    /// ships themselves ride on <see cref="InitialFilter"/>; only their labels need resolving,
+    /// because <c>ShipFilter</c> builds labels from picked chips and cannot rebuild them from bare
+    /// member ids. Dispatcher-resolved via <c>ITagReadService.GetTagChipsByIdsAsync</c>, same
+    /// sourcing rule as <see cref="InitialIncludedTags"/> — the panel injects nothing.
+    /// </summary>
+    [Parameter] public IReadOnlyList<string> InitialIncludedShipNames { get; set; } = [];
+
+    /// <summary>Display labels for <c>InitialFilter.ExcludedShips</c>, index-aligned.</summary>
+    [Parameter] public IReadOnlyList<string> InitialExcludedShipNames { get; set; } = [];
+
     // ── Output ────────────────────────────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -183,6 +203,8 @@
     private IReadOnlyList<TagChipDto> _seedIncludedTags = [];
     private IReadOnlyList<TagChipDto> _seedExcludedTags = [];
     private IReadOnlyList<UserStoryInteractionTypeEnum> _seedExcludedInteractions = [];
+    private IReadOnlyList<ShipFilterDto> _seedIncludedShips = [];
+    private IReadOnlyList<ShipFilterDto> _seedExcludedShips = [];
 
     // Re-sync from Initial* on every parameter set UNTIL the user's first interaction, then stop —
     // the TreeSearchControls pattern (MA-402). A one-time OnInitialized snapshot is wrong here:
@@ -207,6 +229,12 @@
         _sort = InitialFilter.Sort;
         _excludedInteractions = InitialFilter.ExcludedInteractions;
         _seedExcludedInteractions = InitialFilter.ExcludedInteractions;
+
+        // Ships seed from the DTO itself; only their labels come in as separate params.
+        _includedShips = InitialFilter.IncludedShips;
+        _excludedShips = InitialFilter.ExcludedShips;
+        _seedIncludedShips = InitialFilter.IncludedShips;
+        _seedExcludedShips = InitialFilter.ExcludedShips;
 
         // Mirror the IncludeMode from InitialFilter so re-seeded panels emit the right mode on Apply.
         _tagSelection = new TagFilterSelection(

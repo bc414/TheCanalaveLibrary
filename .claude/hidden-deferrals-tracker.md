@@ -207,7 +207,7 @@ decision work that has no row at all.
 
 ---
 
-- [ ] **B11 — Ship filter has no restore path (no URL round-trip, no seed, no persistence)** `[inert · med · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26. The blocking question below was promoted to **decision row 13** (2026-07-27, then in `middle_plan_v2.md`, now `roadmap.md`) so it lives in a decision ledger; this entry keeps the full framing.*
+- [ ] **B11 — Ship filter has no restore path (no URL round-trip, no seed, no persistence)** `[inert · med · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26. The blocking question below was promoted to **decision row 13** (2026-07-27, then in `middle_plan_v2.md`, now `roadmap.md`) so it lives in a decision ledger; **row 13 was resolved 2026-07-28** — see "Resolution" below. Closed by WU-DiscoveryFilterRestore.*
   - Grid: F31 L2/L3-Logic/L3.5=5 — invisible there; the axis works, it just cannot be reconstructed.
   - Source: `audit/Discovery.md` §"WU-TagFanon note" → "Settled vs. open"; `ShipFilter.razor`;
     `ResultsFilterPanel.razor` `OnParametersSet`; `SearchPage.razor`.
@@ -241,17 +241,19 @@ decision work that has no row at all.
   ships are the one axis with no id→state path. Fixing it later means touching the DTO, the panel,
   the component and the page; fixing it alongside the URL work means one parameter and one seed block.
 
-  **The decision to make first — a genuine open question, not an implementation detail.**
-  Should `/discover` round-trip filter state through the URL at all?
-  1. **Yes, all axes** — follow `TreeSearchPage`'s pattern. Gains shareable/bookmarkable searches
-     and working back/forward. Costs: URL length with many tag ids; a serialization format for
-     ships (nested member lists); and an explicit note that tag ids in a URL are not a privacy
-     surface (tags are public) so nobody re-litigates it later.
-  2. **No URL state, but add ship seeding anyway** — closes the asymmetry cheaply (an
-     `InitialShips` parameter, a seed block, `[PersistentState]`) so ships stop being second-class
-     without committing to URL design. Leaves `/discover` unshareable, which is the status quo.
-  3. **Leave as-is** — accept that ships die on navigation. Only defensible if URL round-tripping
-     is decided against permanently; otherwise this is deferral wearing a decision's clothes.
+  **Resolution (decision row 13, 2026-07-28).** `/discover` never carries filter state in its URL.
+  The option list above is superseded — its option 1 rested on "follow `TreeSearchPage`'s pattern,"
+  but that page carries *control* state (small legible scalars), which is not precedent for
+  serialising arbitrary id lists. What replaces it:
+  1. **Sharing → the artifact**, via a permalink on the public selection
+     (`/discover/selection/{SelectionId:int}/{*Slug}`, story-slug contract: id is truth, slug is a
+     never-parsed decorative tail). WU-SelectionPermalink.
+  2. **Return integrity → device-local restore** through the ratified localStorage seam, not a URL.
+     WU-DiscoveryFilterRestore.
+  3. **Ships → seeding parity only.** Non-shareable and non-persisted by design; F15's
+     tag-axis-only scope untouched. Ships cannot enter a `SavedTagSelection` without new L1 child
+     tables — the flat `(SelectionId, TagId, IsExcluded)` row unique on `(SelectionId, TagId)`
+     degrades a ship into co-presence, which WU-TagFanon ruled is *not* a ship.
 
   **Explicitly NOT the same question as F15.** Ships are settled as *never persisted in
   `SavedTagSelection`* — a saved selection is a curated artifact the user names and shares as an
@@ -260,16 +262,19 @@ decision work that has no row at all.
   `audit/Discovery.md` revision blurred the two; that note has been corrected. **Do not let the F15
   decision be cited as covering this.**
 
-  **Implementation sketch (if option 1 or 2 wins).** Add `InitialIncludedShips`/`InitialExcludedShips`
-  to `ResultsFilterPanel` and seed them in `OnParametersSet` beside the tag block; add a matching
-  seed parameter to `ShipFilter` (it currently initializes its lists empty with no `OnInitialized`
+  **Implementation sketch (per the resolution).** Add `InitialIncludedShips`/`InitialExcludedShips`
+  to `ResultsFilterPanel` and seed them in `OnParametersSet` beside the tag block, reusing the
+  existing `_userHasInteracted` re-seed-until-first-interaction guard (MA-402); add matching seed
+  parameters to `ShipFilter` (it currently initializes its lists empty with no `OnInitialized`
   seeding). Note a real snag: `ShipFilter` keeps parallel `_includedNames`/`_excludedNames` display
-  strings built at pick time from the chips the user selected — those **cannot currently be rebuilt
-  from member tag ids**, so seeding needs either a name-resolution step (the `ResolveTagChipsAsync`
-  equivalent, via `ITagReadService.GetTagChipsByIdsAsync`) or a DTO that carries display names.
-  For option 1, settle a compact URL encoding before building — ships are a list of (member id
-  list, optional pairing type), so something like `ship=21.47~R&ship=25.30`; `ShipFilterDto.MaxMembers`
-  (3) bounds each entry.
+  strings built at pick time from the chips the user selected — those **cannot be rebuilt from
+  member tag ids**, so seeding needs a name-resolution step (the `ResolveTagChipsAsync` equivalent,
+  via `ITagReadService.GetTagChipsByIdsAsync`). That resolution belongs to the **page dispatcher**,
+  not the panel or the axis — seed state is dispatcher-resolved and passed down; only
+  fetch-on-user-input lives in the component (`layer3.5-structure.md` §"Seed state vs. live fetch
+  in filter components"). **Do not use `[PersistentState]` for cross-navigation restore** — an
+  earlier revision of this sketch proposed it, but `error-handling.md` rejects it as
+  prerender-handoff-only; use the localStorage seam instead.
 
   **Blast radius.** All four `ResultsFilterPanel` consumers (`/discover`, Tree Search, Bookshelves,
   Profile story tabs) inherit `ShowShipFilter` defaulting true, so seeding work benefits all four

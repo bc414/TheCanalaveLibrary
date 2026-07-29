@@ -100,22 +100,87 @@ a ship. Include and exclude mirror the tag axis, AND across ships, and member id
 Curated pairing tags did NOT return — ships are combinatorial and would reproduce the tag soup the
 curated model exists to prevent.
 
-**Settled vs. open — do not conflate these two (correction, 2026-07-26).**
-- **Settled:** ships are **not** persisted in `SavedTagSelection`. A saved selection is a curated
-  artifact the user names and shares as an object, and its scope is tag-axis-only (F15, WU43).
-- **NOT settled, and never discussed:** whether ship state participates in **filter round-tripping**
-  (URL query params, `InitialFilter` seeding, `[PersistentState]`). An earlier revision of this note
-  let the first decision read as though it covered the second. It does not — a saved artifact and
-  the address of a view are different concerns. Ships currently have **no restore path of any kind**,
-  which is an open gap rather than a decision. See `hidden-deferrals-tracker.md` **B11**.
+**Settled vs. open — do not conflate these two (correction, 2026-07-26; both now settled, 2026-07-28).**
+- **Settled (F15, WU43):** ships are **not** persisted in `SavedTagSelection`. A saved selection is a
+  curated artifact the user names and shares as an object, and its scope is tag-axis-only.
+- **Settled (decision row 13, 2026-07-28):** ship state participates in filter round-tripping only as
+  far as **seeding** — `Initial*` parameters, dispatcher-resolved display names, and device-local
+  restore. Ships are **not** shareable: they carry no URL representation (nothing on `/discover` does)
+  and cannot enter a `SavedTagSelection` without new L1 child tables, because
+  `SavedTagSelectionEntry` is a flat `(SelectionId, TagId, IsExcluded)` row unique on
+  `(SelectionId, TagId)` while a ship is a *group* — flattening it degrades to co-presence, which
+  this same WU ruled is **not** a ship. A saved artifact and the address of a view stay different
+  concerns; the earlier revision that blurred them is corrected above. See
+  `hidden-deferrals-tracker.md` **B11** and `roadmap.md` §Resolved row 13.
 
 Covered by `DiscoveryRollUpAndShipTests` (Integration). Full narrative: `audit/Tags.md`
 §"WU-TagFanon Stage note"; rules: `layer2-services.md` §"Tag Hierarchy Roll-Up".
 
+## WU-DiscoveryFilterRestore + WU-SelectionPermalink note (2026-07-28) — F31 L2/L3-Logic/L3.5 stay Stage 5
+
+Decision row 13 resolved (`roadmap.md` §Resolved): **`/discover` never carries filter state in its
+URL.** Both work-units are additive to already-Stage-5 cells; closes tracker **B11**.
+
+**Device-local filter restore.** `SearchPage` persists the applied filter to browser localStorage
+via `DiscoveryFilterStore` + `js/discovery-filter.js` (the third instance of the ratified thin-JS
+seam, after `DraftStore` and `ManualTreeStore`) and re-applies it on the next visit. Ids and scalars
+only (`DiscoveryFilterSnapshot`, in Core so its transforms are Unit-testable): chips and ship labels
+rehydrate through `GetTagChipsByIdsAsync`, and ids the viewer can no longer resolve **prune
+silently** — a ship that loses some members narrows rather than widening to "any ship"; one that
+loses all is dropped. Keyed per viewer (`canalave.discover.filter.{userId|anon}`) so a shared device
+never hands one account's filter to the next visitor. Restore runs in `OnAfterRenderAsync` (JS is
+unavailable during prerender) and is skipped entirely on the permalink route, where the URL is
+explicit intent. `[PersistentState]` is **not** used for this — `error-handling.md` rejects it as
+prerender-handoff-only, and B11's original sketch was wrong to propose it; `SearchPage`'s existing
+`[PersistentState]` on `Items` is the unrelated double-fetch fix and is untouched.
+
+**Ship seeding parity (the B11 gap itself).** `ResultsFilterPanel` gained
+`InitialIncludedShipNames`/`InitialExcludedShipNames`; the ships themselves ride on `InitialFilter`.
+`ShipFilter` seeds from them under the same `_userHasInteracted` re-seed guard the panel uses
+(MA-402). Labels are resolved by the **dispatcher**, not the axis — `ShipFilter` builds labels at
+pick time from selected chips and cannot rebuild them from bare member ids. `ShipFilterDto`
+.`JoinMemberNames` is now the single label implementation, so the pick-time and seed-time paths
+cannot render the same ship differently.
+
+**Permalink.** `/discover/selection/{SelectionId:int}/{*Slug}` on the same page — see
+`audit/Tags.md` §Feature 15 for the artifact side and the access gates.
+
+**Doc drift corrected in the same pass:** `ShipFilter`'s header claimed it "owns its injection, like
+TagFilter" — `TagFilter` injects nothing. `layer3.5-structure.md` gained §"Seed state vs. live fetch
+in filter components" stating the invariant the code actually follows (live fetch-on-user-input
+lives where the input is; seed state is dispatcher-resolved and passed down).
+
+**How verified:** `dotnet build` green; `dotnet test` green (761 Unit + 612 RazorComponents + 957
+Integration = 2,330). Covering tiers — **Unit** (`DiscoveryFilterSnapshotTests`: round-trip,
+page-reset, tag prune, ship narrow-vs-drop, `AllTagIds` dedup); **RazorComponents**
+(`ResultsFilterPanelTests` ship-seeding four cases incl. late re-seed and the user-removal override;
+`SearchPageTests` permalink five cases incl. the unavailable notice and slug-is-ignored);
+**Integration** (`SavedTagSelectionServiceTests` — the gates, below). localStorage itself is outside
+bUnit, so the restore round-trip is **manual band**, browser-verified below.
+
+**Browser pass (2026-07-28)** — applied a genre tag + a ship, navigated away and back: both axes
+restored, the persisted payload confirmed to be ids only under a per-user key; permalink followed
+from the profile tab; stale slug still resolved; missing id showed the neutral notice; anonymous
+visitor got results plus a log-in affordance; owner's profile flipped to `Private` in the DB → the
+same URL returned the identical notice, no leak.
+
+**Runtime bug found and fixed in the same pass (`debugging.md` "Fix same-session").** `TagFilter`
+seeded only in `OnInitialized` ("applied on first render only"), so the late-arriving restored tag
+seed never reached the `TagSelector`s: the sidebar rendered **empty while the query behind it was
+filtered** — a page that looks unfiltered and isn't, which is worse than either honest state. Fixed
+by re-seeding in `OnParametersSet` until the user's first edit (MA-402) and bumping the existing
+WU43 `_selectionGeneration` `@key` so the selectors remount with the new seed; a seed *signature*
+guards against remounting on unrelated re-renders (which would discard in-flight typeahead text).
+Regression-covered by `TagFilterTests.LateSeed_AfterFirstRender_DisplaysItsChips` and
+`LateSeed_DoesNotClobberTheUsersOwnEdit`. The ship axis never had the bug — it was built with the
+re-seed guard from the start.
+
 ## Feature 31 — Search Page (`/discover`)
 - **L1 — N/A** (queries Story/USI/StoryListing). **L2 — Stage 5** (WU23 built the Source=All query;
-  WU28 closed random preload / "give me more" — see the WU28 Stage note below). **L3/L3.5 — Stage 5
-  (WU23, 2026-06-23).** **L4 — Stage 1.**
+  WU28 closed random preload / "give me more" — see the WU28 Stage note below; WU-SelectionPermalink
+  added the permalink read, 2026-07-28). **L3/L3.5 — Stage 5 (WU23, 2026-06-23; extended by
+  WU-DiscoveryFilterRestore + WU-SelectionPermalink, 2026-07-28 — see their Stage note below).**
+  **L4 — Stage 1.**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; search page verified in a real WASM runtime during the
   flip's browser wave (random batch + filtered `POST /query` + sort switch). Full wave narrative +

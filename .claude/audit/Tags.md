@@ -553,17 +553,91 @@ Settled additively against the Stage-5 L1 (two new columns, no other L1 change):
   dedicated `ProfileTab.TagSelections` tab (like Recommendations) — **no public browse/gallery surface**.
   "Add to my filters" on someone else's public selection creates an independent owned copy
   (`CopyPublicSelectionAsync`); editing/deleting either side never affects the other.
+- **Permalink (decision row 13, 2026-07-28).** Each public selection is additionally addressable at
+  `/discover/selection/{SelectionId:int}/{*Slug}` — the story-slug contract, so **the id is the
+  source of truth and the slug is a decorative tail that is never parsed** (no slug column, no
+  migration; renaming a selection never breaks a link). The permalink lands the visitor in
+  `SearchPage` with the tag axis pre-seeded and fully editable, which is what makes a shared
+  selection *runnable* rather than merely visible. **A permalink is not a browse surface**: there is
+  still no gallery, no cross-user index, and selections stay out of the sitemap under
+  WU-AccessGate2's "rearrangements/navigation out" paradigm (`audit/Seo.md`). Gated on **both**
+  `IsPublic` and the owner's `ProfileVisibility`, server-side (Class A —
+  `design/access-gating-first-principles.md`).
 - **L6 indexes required**: the table aggregates every user's rows and queries are always
   `UserId`-scoped with sort as a first-class concern — `(UserId, DateCreated)` +
   `(UserId, IsPublic)` alongside the existing unique `(UserId, Nickname)`. See `layer6-indexes.md`.
 
-**L1 — Stage 5** (extended additively via `WU43_SavedTagSelectionExcludeAndDescription`).
-**L2/L3-Logic/L3.5-Structure — Stage 5** (WU43, verified below). **L4-Style / L4.5-Browser — Stage 1**
-(pending visual/live-browser sign-off, WU8/WU13/WU23 precedent). **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
+**L1 — Stage 5** (extended additively via `WU43_SavedTagSelectionExcludeAndDescription`; the
+permalink needed **no** L1 change — see WU-SelectionPermalink below).
+**L2/L3-Logic/L3.5-Structure — Stage 5** (WU43, verified below; extended by WU-SelectionPermalink,
+2026-07-28). **L4-Style / L4.5-Browser — Stage 1**
+(pending visual/live-browser sign-off, WU8/WU13/WU23 precedent). **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; permalink read + its client twin added 2026-07-28)** — endpoints + client impl live (WU-L5Sweep) and the
 site now runs global InteractiveAuto; the saved-selection flyout fetch is interactive-only and was
 not browser-driven in the flip's wave. Full wave narrative + the 7 bugs found/fixed: `workplan.md`
 WU-GlobalFlip. **L6 — Stage 5** (two new indexes, see `layer6-indexes.md` "Saved Tag
 Selections").
+
+### WU-SelectionPermalink Stage note (2026-07-28) — F15 L2/L3-Logic/L3.5/L5 stay Stage 5
+
+Decision row 13's sharing half (`roadmap.md` §Resolved). A public selection is now addressable at
+`/discover/selection/{SelectionId:int}/{*Slug}` and, more to the point, **runnable**: before this,
+the profile tab could show a shared selection but offered no way to see its stories, and nothing at
+all to an anonymous visitor.
+
+**No L1 change, deliberately.** The route follows the story-slug contract — `StoryPage` is
+`/story/{StoryId:int}/{*StorySlug}` — so the **id is the source of truth and the slug is a
+decorative tail that is never parsed**. Links render `StorySlug.Slugify(Nickname)` from the
+already-loaded nickname, which means renaming a selection never breaks a link someone shared, and no
+slug column, uniqueness scan or migration is needed. (Nickname→slug is not injective — "Fluff!" and
+"Fluff?" both slugify to `fluff` — which is precisely why the slug must not be the lookup key.)
+Unlike stories there is no canonical 301: selections are out of the sitemap, so a stale tail is
+simply ignored.
+
+**Access control — the load-bearing part.** `GetSelectionDetailAsync` is authenticated
+(`RequireAuthorization()`), so the permalink needed a **new** anonymous-callable read,
+`GetPublicSelectionByIdAsync`, enforcing **both** gates in the service (single enforcement point;
+the endpoint only translates):
+1. `IsPublic` — stricter than `GetSelectionDetailAsync`'s owner-or-public rule: a private selection
+   is unreachable by link **even for its owner**, matching `GetPublicSelectionsByUserAsync`, which
+   likewise excludes private rows from the owner's own tab. A link exists to be shared.
+2. the owner's `ProfileVisibility` — **Class A** (`design/access-gating-first-principles.md`
+   §1b: private/UsersOnly profile-tab data must respect it server-side, adversary model applies). A
+   permalink is just another path to profile-tab data.
+
+Missing, unpublished and not-visible all return the same contractual `null`, and the page renders
+one neutral notice for all three — distinguishing them would make the permalink an existence oracle
+for private profiles.
+
+**Sort/text/interaction exclusions stay the viewer's own** §8.7 defaults; the artifact contributes
+the tag axis alone. That is what keeps a permalink from turning a saved *tag selection* into a saved
+*query* — F15's scope ruling is untouched (`layer2-services.md` §"Saved Tag Selections Persist Only
+the Tag Axis", extended with this rule).
+
+**Ships remain out**, and not merely unimplemented: `SavedTagSelectionEntry` is a flat
+`(SelectionId, TagId, IsExcluded)` row unique on `(SelectionId, TagId)`, while a ship is a *group*
+of 1–3 member ids plus a pairing type. Flattening degrades it to co-presence — which WU-TagFanon
+ruled is **not** a ship — and the unique constraint forbids one character appearing in two ships.
+Admitting ships would need new child tables and a reopened F15 scope; recorded as a known future
+decision, not a silent deferral.
+
+**Surfacing:** profile Tag Selections cards link to the permalink (title + a "See these stories →"
+action). The banner offers "Add to my filters" to logged-in non-owners via the ratified
+`<AuthorizeView>` DI split (`SelectionPermalinkBanner` injection-free → `SelectionAdoptButton` holds
+the write service), and a log-in link to anonymous viewers rather than a missing control. Still **no
+gallery, no cross-user index, and out of the sitemap** under WU-AccessGate2's
+"rearrangements/navigation out" paradigm.
+
+**How verified:** `dotnet build` green; `dotnet test` green (2,330 total). **Integration**
+(`SavedTagSelectionServiceTests`, 5 new cases, denial-first): public+visible returns for anonymous;
+private returns null for owner, other user and anonymous; public-but-Private-profile returns null
+for anonymous and other users; `UsersOnly` hides from anonymous but not from a logged-in viewer;
+missing id is indistinguishable. **RazorComponents** (`SearchPageTests`: banner renders and seeds
+the tag axis, panel stays editable, unavailable notice, slug ignored, bare `/discover` has no
+permalink chrome). **Manual band:** browser pass 2026-07-28 — followed the link from the profile
+tab, confirmed a stale slug still resolves, confirmed the anonymous view, then flipped the owner's
+`ProfileVisibility` to `Private` in Postgres and reloaded the same URL: identical neutral notice, no
+nickname/description/tag leak. Full browser narrative: `audit/Discovery.md`
+§"WU-DiscoveryFilterRestore + WU-SelectionPermalink note".
 
 ### WU43 Stage-5 verification note (2026-07-11)
 

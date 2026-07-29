@@ -50,6 +50,8 @@ builder.Services.AddScoped<IToastService, ToastService>();
 builder.Services.AddScoped<DraftStore>();
 // Manual Tree Search gestures + localStorage persistence (WU40; same pattern as DraftStore).
 builder.Services.AddScoped<ManualTreeStore>();
+// Device-local /discover filter restore (decision row 13; same pattern again).
+builder.Services.AddScoped<DiscoveryFilterStore>();
 
 // --- Database Contexts ---
 // Plain AddDbContext, never the Aspire Npgsql package's AddNpgsqlDbContext — settled WU12

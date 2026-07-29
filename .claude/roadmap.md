@@ -110,7 +110,7 @@ Row numbers preserved from the retired chain (other docs cite them by number —
 `middle_plan_v2.md` §"Decisions that need you" header for which rows resolved when, up to
 2026-07-27). Row 13 was added 2026-07-27 (promoted out of `hidden-deferrals-tracker.md` B11's
 blocking question, same treatment now applied going forward: a tracker item that turns out to be a
-genuine open decision gets promoted here, not left buried in the tracker).
+genuine open decision gets promoted here, not left buried in the tracker) and resolved 2026-07-28.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -119,7 +119,6 @@ genuine open decision gets promoted here, not left buried in the tracker).
 | 8 | **Email provider + sending domain** — mechanism is resolved (config-only SMTP swap); which provider, the sending domain, and its SPF/DKIM/DMARC DNS records remain open. | Postmark, SES, or Resend (cheap at this scale); needs a sending domain, tying into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Gates Phase 7. |
 | 10 | **Legal/policy track ownership + timing** — ToS, privacy policy, DMCA agent/process, moderation obligations for a fanfiction UGC site. | None. | Legal exposure and community policy are yours; engineering only hosts the documents. Gates Phase 7. |
 | 12 | **Accessibility scope/depth** — full WCAG AA audit vs. a targeted axe-DevTools pass over the highest-traffic pages; whether to add an automated a11y test tier. | None — genuine Stage-1 intent gap. | Product/effort trade-off; solo-dev realistic scope is yours to set. Gates WU-A11y (Phase 3). |
-| 13 | **`/discover` URL state round-tripping** — should `/discover` round-trip filter state through the URL at all? (1) yes, all axes, `TreeSearchPage`-style; (2) no URL state but add ship seeding anyway, closing the ships-die-on-navigation asymmetry cheaply; (3) leave as-is — only defensible if URL round-tripping is rejected permanently. Full framing: `hidden-deferrals-tracker.md` B11. | None. | Shareable-URL product behavior + a privacy-perception call (tag ids visible in URLs). Gates only tracker item B11; no phase gate. |
 
 ## Recommended next work units (2026-07-27)
 
@@ -141,11 +140,13 @@ done.
 | Tier | Proposed work unit | Tracker items closed | Why here |
 |---|---|---|---|
 | **0** — decisions only, chat, no code | ~~Decision row 2 (homepage sections)~~ **DONE 2026-07-28** | — | Unblocks WU-Home, the last unstarted Phase-2 item |
-| **0** | Decision row 13 (`/discover` URL state) | — | Unblocks B11/B12; already fully framed, cheap to resolve |
+| **0** | ~~Decision row 13 (`/discover` URL state)~~ **DONE 2026-07-28** | — | Resolved against URL state; see "Resolved" below |
 | **1** — already unblocked, no decision needed | WU-AccountEnforcement residual | *(G1's residual)* | Small `RefreshSignInAsync` wiring, Phase 2 item 5 above — the cheapest win on the board |
 | **1** | WU-ErrorHandling2 | E1 | Unblocked since WU-GlobalFlip (2026-07-13), never picked up since |
 | **2** — continue the debt-paydown burst, clustered by shared surface | WU-L6MeasurePass | C2, C3, C4, C5, C6 | Same "always measure" origin; C4 needs one new Messaging SeedTool generator, reused by the other four |
-| **2** | WU-DiscoveryURLState | B11, B12 | Same review, same `ApplyFiltersAsync`/`ShipFilter` surface — needs decision row 13 first |
+| **2** | WU-DiscoveryFilterRestore | B11 | Device-local filter restore + ship seeding parity — same `SearchPage`/`ResultsFilterPanel`/`ShipFilter` surface. Replaces the misnamed "WU-DiscoveryURLState" (row 13 decided *against* filter URL state) |
+| **2** | WU-SelectionPermalink | — | Artifact-addressed sharing for public saved selections (`/discover/selection/{id}/{*slug}`); row 13's other half |
+| **2** | WU-ApplyFiltersPurity | B12 | No longer blocked by row 13 — `ApplyFiltersAsync` impurity/uncached expansion is independent of how filter state is addressed |
 | **2** | WU-StatBadgeProducers | B3, B4 | B4's BetaReader badge literally depends on B3's counter existing |
 | **2** | WU-DataSaver | B0 | Small standalone decision ("suppress sprites, or cut the setting") + build |
 | **2** | WU-DiscoveryOverrideUI | B7 | Per-user filter-override editing surface (§8.7) |
@@ -174,6 +175,37 @@ re-confirmation given the `high` label, not a silent default this reanalysis is 
 Group G is fully closed (2026-07-27) — nothing to sequence.
 
 ## Resolved
+
+- **Decision row 13 — `/discover` URL state round-tripping (2026-07-28).** **`/discover` never
+  carries filter state in its URL.** The row's original framing ("follow `TreeSearchPage`'s
+  pattern") was itself wrong and is superseded: `TreeSearchPage` carries *control* state
+  (`?degrees=2&sort=…` — small legible scalars), which is not precedent for serialising arbitrary
+  id lists. No surface in this codebase has ever done that; every addressable surface uses clean
+  paths (`/story/{id}/{slug}`, `/user/{id}/tag-selections`). Three separable calls settled:
+  - **Sharing is the artifact's job.** A public `SavedTagSelection` gets a permalink,
+    `/discover/selection/{SelectionId:int}/{*Slug}`, following the story-slug contract exactly —
+    **the id is the source of truth, the slug is a decorative tail that is never parsed** (so no
+    slug column, no migration, and renaming a selection never breaks a link). It lands the visitor
+    in `SearchPage` pre-seeded and fully editable. Requires a new anonymous-callable read gated on
+    **both** `IsPublic` **and** the owner's `ProfileVisibility` (Class A —
+    `design/access-gating-first-principles.md`). → WU-SelectionPermalink.
+  - **Return integrity is device-local, not a URL and not server state.** `/discover` restores the
+    last-applied filter through the ratified localStorage seam (`layer3.5-structure.md` §"The
+    shared tree canvas": ids only, display data rehydrated via the existing batch reads, entities
+    the viewer can no longer see pruned silently). `[PersistentState]` is **not** usable for this —
+    `error-handling.md` rejects it as prerender-handoff-only, and B11's own sketch was wrong to
+    propose it. → WU-DiscoveryFilterRestore.
+  - **Ships get seeding parity only.** `Initial*` params + re-seed + dispatcher-resolved display
+    names. Ships stay non-shareable and non-persisted; F15's tag-axis-only scope is untouched.
+    Making ships shareable would need new L1 child tables, because `SavedTagSelectionEntry` is a
+    flat `(SelectionId, TagId, IsExcluded)` row unique on `(SelectionId, TagId)` while a ship is a
+    *group* — flattening it degrades to co-presence, which WU-TagFanon ruled **is not a ship**, and
+    the unique constraint forbids one character appearing in two ships. Recorded as the known cost
+    of a future decision, not a silent deferral.
+
+  Conventions now stating the rules: `layer2-services.md` §"Saved Tag Selections Persist Only the
+  Tag Axis" (permalink ≠ saved query; artifact vs. device-local restoration) and
+  `layer3.5-structure.md` §"Seed state vs. live fetch in filter components".
 
 - **Decision row 2 — Homepage design (2026-07-28, WU-Home).** The home page is the community
   page: a focused surface, not a broad discovery one. Composition: a "Welcome" mission blurb

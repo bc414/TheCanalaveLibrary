@@ -99,11 +99,14 @@
     [Parameter]
     public bool AllowSavedSelections { get; set; } = true;
 
-    /// <summary>Seed included tags (ids + display data). Applied on first render only.</summary>
+    /// <summary>
+    /// Seed included tags (ids + display data). Re-applied whenever the seed CHANGES, until the
+    /// user's first edit — see <see cref="OnParametersSet"/>.
+    /// </summary>
     [Parameter]
     public IReadOnlyList<TagChipDto> IncludedTags { get; set; } = [];
 
-    /// <summary>Seed excluded tags (ids + display data). Applied on first render only.</summary>
+    /// <summary>Seed excluded tags (ids + display data). Same re-seed rule as <see cref="IncludedTags"/>.</summary>
     [Parameter]
     public IReadOnlyList<TagChipDto> ExcludedTags { get; set; } = [];
 
@@ -133,10 +136,37 @@
     private Dictionary<TagTypeEnum, List<TagChipDto>> _excluded = [];
     private TagIncludeMode _includeMode = TagIncludeMode.And;
 
-    // Bumped by ApplySavedSelectionAsync to force TagSelector remount — see the @key comment above.
+    // Bumped whenever the displayed chips are replaced wholesale (a changed seed, or an applied
+    // saved selection) to force TagSelector remount — see the @key comment above.
     private int _selectionGeneration;
 
-    protected override void OnInitialized()
+    // MA-402, the same guard ResultsFilterPanel uses. Seeds routinely arrive AFTER first render:
+    // the dispatcher resolves §8.7 defaults asynchronously, and the device-local filter restore
+    // (decision row 13) only runs once JS interop is available, i.e. post-render. A first-render-only
+    // seed would leave the selectors visibly empty while the query behind them was filtered —
+    // exactly the mismatch found in browser verification of WU-DiscoveryFilterRestore.
+    private bool _userHasInteracted;
+    private bool _seeded;
+    private string _seedSignature = "";
+
+    protected override void OnParametersSet()
+    {
+        if (_userHasInteracted) return;
+
+        string signature = SeedSignature();
+        if (_seeded && signature == _seedSignature) return;
+
+        SeedFromParameters();
+
+        // Only force a remount on a LATER seed: on the first pass the selectors have not rendered
+        // yet, so bumping would churn for nothing.
+        if (_seeded) _selectionGeneration++;
+
+        _seeded = true;
+        _seedSignature = signature;
+    }
+
+    private void SeedFromParameters()
     {
         // Seed from parameters; each type gets its own list.
         _included = TagTypes.ToDictionary(t => t, _ => new List<TagChipDto>());
@@ -151,10 +181,16 @@
                 bucket.Add(tag);
     }
 
+    // Identity of the current seed, so an unrelated re-render doesn't remount the selectors (which
+    // would discard in-flight typeahead text) but a genuinely new seed does.
+    private string SeedSignature() =>
+        $"{string.Join(',', IncludedTags.Select(t => t.TagId))}|{string.Join(',', ExcludedTags.Select(t => t.TagId))}";
+
     // ── Handlers ──────────────────────────────────────────────────────────────────────────────────
 
     private async Task OnIncludeChangedAsync(TagTypeEnum type, IReadOnlyList<TagChipDto> tags)
     {
+        _userHasInteracted = true;
         _included[type] = [.. tags];
         // Cross-dedup: remove from excluded any tag now in included
         HashSet<int> includedIds = [.. tags.Select(t => t.TagId)];
@@ -164,6 +200,7 @@
 
     private async Task OnExcludeChangedAsync(TagTypeEnum type, IReadOnlyList<TagChipDto> tags)
     {
+        _userHasInteracted = true;
         _excluded[type] = [.. tags];
         // Cross-dedup: remove from included any tag now in excluded
         HashSet<int> excludedIds = [.. tags.Select(t => t.TagId)];
@@ -194,6 +231,9 @@
     /// </summary>
     private async Task ApplySavedSelectionAsync(SavedTagSelectionDetailDto detail)
     {
+        // A deliberate user choice, so it outranks any later seed re-sync (MA-402).
+        _userHasInteracted = true;
+
         _included = TagTypes.ToDictionary(t => t, _ => new List<TagChipDto>());
         _excluded = TagTypes.ToDictionary(t => t, _ => new List<TagChipDto>());
 

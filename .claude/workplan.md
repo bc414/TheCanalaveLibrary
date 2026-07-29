@@ -17,11 +17,13 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-Home + WU-SiteNews (2026-07-28) — decision row 2 resolved and built (the
-  home page is the community page; see `roadmap.md` §Resolved), plus the companion staff-
-  announcement type (`SiteBlogPost`) it surfaced a need for. Closes tracker item F1 and Phase 2's
-  last content item. (Before this, 2026-07-27: WU-DocRoadmap retired `middle_plan_v2.md` in favor
-  of `roadmap.md`; WU-DocAuditSkill, WU-DocHygiene 1–3.)
+- **Last landed:** WU-DiscoveryFilterRestore + WU-SelectionPermalink (2026-07-28) — decision row 13
+  resolved (`/discover` never carries filter state in its URL; sharing goes through a saved
+  selection's permalink, return integrity through device-local localStorage) and built. Closes
+  tracker item **B11**. (Earlier the same day: WU-Home + WU-SiteNews — decision row 2 resolved and
+  built, closing tracker item F1 and Phase 2's last content item. Before that, 2026-07-27:
+  WU-DocRoadmap retired `middle_plan_v2.md` in favor of `roadmap.md`; WU-DocAuditSkill,
+  WU-DocHygiene 1–3.)
 - **Phase (`roadmap.md`):** Phase 2 tail — one item left: **WU-AccountEnforcement's mid-session
   residual** (unblocked — `RefreshSignInAsync` is the ready-made tool; see its Planned entry
   below). Phases 0, 1, and 5 are DONE; Phase 3 (Brian-driven L4 freeze sweep + WU-A11y, the latter
@@ -29,8 +31,8 @@ references it, does not restate it.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
   exist in **every group A–H** (~20 unchecked boxes), including two **high-priority security
   items: E2 and E3**.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10, 12, and 13 (`roadmap.md` §"Decisions
-  that need you"; row 13 gates only tracker item B11; row 2 resolved 2026-07-28).
+- **Blocked on Brian:** decision rows 4, 6, 8, 10, and 12 (`roadmap.md` §"Decisions
+  that need you"; rows 2 and 13 resolved 2026-07-28).
 
 ---
 
@@ -186,6 +188,56 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-DiscoveryFilterRestore + WU-SelectionPermalink — decision row 13 resolved and built (Features 31 + 15) — DONE ✓ (2026-07-28)
+
+- **Cells:** F31 L2/L3-Logic/L3.5 and F15 L2/L3-Logic/L3.5/L5 — all already Stage 5, extended
+  additively; **no grid numbers changed**. F15 L1 unchanged (the permalink needs no column).
+  **Closes tracker B11.**
+- **Doc-Touch moment 1 (first, before code):** resolved **decision row 13** — `/discover` never
+  carries filter state in its URL. The row's own framing was superseded: it argued "follow
+  `TreeSearchPage`'s pattern", but that page carries *control* state (`?degrees=2&sort=…`), which is
+  not precedent for serialising arbitrary id lists — nothing in this codebase has ever done that.
+  Moved to `roadmap.md` §Resolved with the three-call resolution; rewrote the Tier-2 row (the
+  planned "WU-DiscoveryURLState" was a misnomer once the decision went *against* URL state) and
+  **re-homed B12**, whose only stated blocker was row 13, as its own WU-ApplyFiltersPurity.
+- **Shipped — sharing (WU-SelectionPermalink):** `/discover/selection/{SelectionId:int}/{*Slug}` on
+  `SearchPage`, story-slug contract (id is truth, slug decorative and never parsed → no slug column,
+  no migration, renames don't break links). New anonymous-callable
+  `ISavedTagSelectionReadService.GetPublicSelectionByIdAsync` + server/client impls + endpoint,
+  enforcing `IsPublic` **and** the owner's `ProfileVisibility` (Class A) with every failure mode
+  collapsing to one indistinguishable null. `SelectionPermalinkBanner` (injection-free) +
+  `SelectionAdoptButton` behind `<AuthorizeView>` per the WU43 DI-split rule; profile Tag Selections
+  cards link out. Sort/text/interaction exclusions stay the *viewer's* §8.7 defaults, so the
+  artifact is still a tag combination, not a saved query.
+- **Shipped — return integrity (WU-DiscoveryFilterRestore):** `DiscoveryFilterStore` +
+  `js/discovery-filter.js` (third instance of the ratified thin-JS seam) persisting
+  `DiscoveryFilterSnapshot` — **ids only**, per-viewer key, chips/ship labels rehydrated via
+  `GetTagChipsByIdsAsync` and unresolvable ids pruned. `[PersistentState]` deliberately not used
+  (`error-handling.md`: prerender-handoff only — B11's own sketch was wrong here).
+- **Shipped — ship seeding parity (the B11 gap):** `InitialIncludedShipNames`/`InitialExcludedShipNames`
+  on `ResultsFilterPanel`, seed params on `ShipFilter` under the MA-402 re-seed guard, labels
+  resolved by the dispatcher, and `ShipFilterDto.JoinMemberNames` as the single label
+  implementation so pick-time and seed-time can't diverge.
+- **Runtime bug found in the browser pass and fixed same-session:** `TagFilter` seeded only in
+  `OnInitialized`, so a late-arriving restored seed left the sidebar visibly empty while the query
+  behind it *was* filtered. Fixed with an `OnParametersSet` re-seed + the existing WU43
+  `_selectionGeneration` `@key` remount, guarded by a seed signature; two regression tests added.
+- **Doc drift corrected:** `ShipFilter` claimed it "owns its injection, like TagFilter" —
+  `TagFilter` injects nothing. `layer3.5-structure.md` gained §"Seed state vs. live fetch in filter
+  components"; `layer2-services.md` gained the permalink-≠-saved-query and artifact-vs-device-local
+  rules; `audit/Tags.md`'s "sole discovery path for a shared selection" and `audit/Discovery.md`'s
+  "NOT settled, and never discussed" both amended.
+- **Verified:** `dotnet build` green; `dotnet test` green — 761 Unit + 612 RazorComponents + 957
+  Integration = **2,330**. Both gates clean (`check-design-tokens.ps1`, `check-doc-hygiene.ps1`).
+  Browser pass: filter+ship restored across a navigation, payload confirmed ids-only, permalink
+  followed from the profile tab, stale slug resolved, missing id → neutral notice, anonymous view
+  with log-in affordance, and owner's profile flipped to `Private` in Postgres → same URL, identical
+  notice, no leak (DB state restored afterward).
+- **Tool:** opusplan. **Pointers:** `audit/Discovery.md` §"WU-DiscoveryFilterRestore +
+  WU-SelectionPermalink note"; `audit/Tags.md` §"WU-SelectionPermalink Stage note".
 
 ---
 

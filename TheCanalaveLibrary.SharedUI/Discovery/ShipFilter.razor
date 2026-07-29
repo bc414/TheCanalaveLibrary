@@ -4,9 +4,18 @@
 @* Ship filter axis (WU-TagFanon 5.5/5.6) — build a pairing criterion from character tags:
    stories containing a single pairing whose members cover every picked character, optionally
    constrained to romantic/platonic, include or exclude. AND across added ships, mirroring the
-   tag axis. Member ids inherit hierarchy roll-up server-side. Ships are transient viewer
-   intent — never persisted in SavedTagSelection (settled F15 scope).
-   Axis component — owns its injection, like TagFilter. *@
+   tag axis. Member ids inherit hierarchy roll-up server-side. Ships are never persisted in
+   SavedTagSelection and carry no URL representation (settled F15 scope + decision row 13).
+
+   Injection is for the inline character typeahead ONLY — live fetch-on-user-input lives where the
+   input is. Seed state (Initial*) is resolved by the page dispatcher and handed down; this
+   component never re-fetches what it was given. TagFilter injects nothing because it delegates its
+   typeahead to TagSelector; this component inlines its own. See layer3.5-structure.md
+   §"Seed state vs. live fetch in filter components".
+
+   Seeded ships re-sync on every parameter set until the user's first ship edit (MA-402, the same
+   guard ResultsFilterPanel uses) — the dispatcher resolves member display names asynchronously, so
+   a one-time OnInitialized snapshot would freeze on the empty pre-resolve lists. *@
 
 <div class="flex flex-col gap-2">
     <label class="text-sm font-bold">Ships</label>
@@ -86,6 +95,22 @@
     [Parameter]
     public EventCallback<(IReadOnlyList<ShipFilterDto> Included, IReadOnlyList<ShipFilterDto> Excluded)> OnChanged { get; set; }
 
+    /// <summary>Ships to pre-populate the include list with (restored filter, permalink, back-navigation).</summary>
+    [Parameter] public IReadOnlyList<ShipFilterDto> InitialIncluded { get; set; } = [];
+
+    /// <summary>Ships to pre-populate the exclude list with.</summary>
+    [Parameter] public IReadOnlyList<ShipFilterDto> InitialExcluded { get; set; } = [];
+
+    /// <summary>
+    /// Display labels for <see cref="InitialIncluded"/>, index-aligned. Supplied by the dispatcher —
+    /// this component builds labels at pick time from selected chips and cannot rebuild them from
+    /// member ids alone (it has no id→name read of its own for seeds, by design).
+    /// </summary>
+    [Parameter] public IReadOnlyList<string> InitialIncludedNames { get; set; } = [];
+
+    /// <summary>Display labels for <see cref="InitialExcluded"/>, index-aligned.</summary>
+    [Parameter] public IReadOnlyList<string> InitialExcludedNames { get; set; } = [];
+
     private readonly List<TagChipDto> _pickedMembers = [];
     private string _pairingKind = "";
 
@@ -94,6 +119,32 @@
     // Parallel display-name lists (one string per ship, members joined).
     private readonly List<string> _includedNames = [];
     private readonly List<string> _excludedNames = [];
+
+    // Stops the re-seed loop once the user edits ships themselves (MA-402).
+    private bool _userHasInteracted;
+
+    protected override void OnParametersSet()
+    {
+        if (_userHasInteracted) return;
+
+        Seed(_included, _includedNames, InitialIncluded, InitialIncludedNames);
+        Seed(_excluded, _excludedNames, InitialExcluded, InitialExcludedNames);
+    }
+
+    // Ships and their labels are replaced wholesale — a partial seed would desynchronise the two
+    // parallel lists the markup indexes in lockstep.
+    private static void Seed(
+        List<ShipFilterDto> ships,
+        List<string> names,
+        IReadOnlyList<ShipFilterDto> seedShips,
+        IReadOnlyList<string> seedNames)
+    {
+        ships.Clear();
+        names.Clear();
+        ships.AddRange(seedShips);
+        for (int i = 0; i < seedShips.Count; i++)
+            names.Add(i < seedNames.Count ? seedNames[i] : "…");
+    }
 
     private async Task<IEnumerable<TagChipDto>> SearchCharacters(string term)
     {
@@ -113,15 +164,15 @@
     {
         if (_pickedMembers.Count == 0) return;
 
+        _userHasInteracted = true;
+
         CharacterPairingType? kind = Enum.TryParse(_pairingKind, out CharacterPairingType parsed) ? parsed : null;
         ShipFilterDto ship = new()
         {
             MemberTagIds = _pickedMembers.Select(p => p.TagId).ToList(),
             PairingType = kind
         };
-        string names = string.Join(
-            kind == CharacterPairingType.Platonic ? " & " : " ♥ ",
-            _pickedMembers.Select(p => p.TagName));
+        string names = ShipFilterDto.JoinMemberNames(kind, _pickedMembers.Select(p => p.TagName));
 
         (excluded ? _excluded : _included).Add(ship);
         (excluded ? _excludedNames : _includedNames).Add(names);
@@ -132,6 +183,7 @@
 
     private async Task RemoveShip(int index, bool excluded)
     {
+        _userHasInteracted = true;
         (excluded ? _excluded : _included).RemoveAt(index);
         (excluded ? _excludedNames : _includedNames).RemoveAt(index);
         await EmitAsync();

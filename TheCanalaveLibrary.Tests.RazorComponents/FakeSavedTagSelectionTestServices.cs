@@ -14,6 +14,14 @@ internal sealed class FakeSavedTagSelectionReadService : ISavedTagSelectionReadS
     public Dictionary<int, SavedTagSelectionDetailDto> DetailsById { get; set; } = [];
     public List<SavedTagSelectionDetailDto> PublicSelections { get; set; } = [];
 
+    /// <summary>
+    /// Permalink-reachable selections, keyed by id. Deliberately a SEPARATE dictionary from
+    /// <see cref="DetailsById"/>: the real service applies two extra gates (IsPublic, the owner's
+    /// ProfileVisibility) to this path, so a fake that aliased them would let a component test pass
+    /// against a shape the server would refuse.
+    /// </summary>
+    public Dictionary<int, SavedTagSelectionDetailDto> PermalinkById { get; set; } = [];
+
     public Task<List<SavedTagSelectionSummaryDto>> GetMySelectionsAsync(SavedTagSelectionSortEnum sort) =>
         Task.FromResult(MySelections);
 
@@ -22,6 +30,9 @@ internal sealed class FakeSavedTagSelectionReadService : ISavedTagSelectionReadS
 
     public Task<List<SavedTagSelectionDetailDto>> GetPublicSelectionsByUserAsync(int userId) =>
         Task.FromResult(PublicSelections);
+
+    public Task<SavedTagSelectionDetailDto?> GetPublicSelectionByIdAsync(int id) =>
+        Task.FromResult(PermalinkById.GetValueOrDefault(id));
 }
 
 internal sealed class FakeSavedTagSelectionWriteService : ISavedTagSelectionWriteService

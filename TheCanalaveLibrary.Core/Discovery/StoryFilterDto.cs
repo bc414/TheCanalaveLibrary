@@ -90,4 +90,14 @@ public sealed record ShipFilterDto
 
     /// <summary>Null = either pairing type matches.</summary>
     public CharacterPairingType? PairingType { get; init; }
+
+    /// <summary>
+    /// Joins member display names into a ship label ("Ash ♥ Misty", "Ash &amp; Brock"). Shared by
+    /// <c>ShipFilter</c> (which builds the label at pick time from the chips the user selected) and
+    /// by the page dispatcher (which rebuilds it when *seeding* a ship from bare member ids — see
+    /// <c>layer3.5-structure.md</c> §"Seed state vs. live fetch in filter components"). One
+    /// implementation so the two paths can never render the same ship differently.
+    /// </summary>
+    public static string JoinMemberNames(CharacterPairingType? pairingType, IEnumerable<string> memberNames) =>
+        string.Join(pairingType == CharacterPairingType.Platonic ? " & " : " ♥ ", memberNames);
 }

@@ -838,9 +838,30 @@ rejected a bundled `UserListPage`; `StoryDeck` is also used without any panel at
   `TagFilter.AllowIncludeModeToggle`. Only `/discover` passes `true`; Bookshelves/Profile unaffected.
 - `[Parameter] IReadOnlyList<TagChipDto> InitialIncludedTags` / `InitialExcludedTags` (default `[]`)
   — seed tag chips into `TagFilter` in `OnInitialized`. The dispatcher pre-loads chips
-  via `ITagReadService.GetTagChipsByIdsAsync` and passes them in; the panel is still injection-free.
+  via `ITagReadService.GetTagChipsByIdsAsync` and passes them in (see the rule below).
 - Buffer `TagIncludeMode` from `TagFilterSelection.IncludeMode`; set `StoryFilterDto.IncludeMode`
   on Apply; seed from `InitialFilter.IncludeMode`.
+
+#### Seed state vs. live fetch in filter components
+
+The rule these components actually follow — stated precisely because "the panel is injection-free"
+was previously written as if it were a blanket composite rule, which misdescribes both `ShipFilter`
+and `TagFilter`:
+
+- **Live fetch-on-user-input lives where the input is.** A component that queries in response to
+  typing or rendering injects what it needs: `TagSelector` (`ITagReadService` typeahead +
+  `ISpriteReadService`), `TagChip` (sprite resolution), `ShipFilter` (its *inline* character
+  typeahead, `SearchTagChipsAsync`).
+- **Seed / initial state is resolved by the page dispatcher and passed down as parameters.**
+  `SearchPage.ResolveTagChipsAsync` → `InitialIncludedTags`/`InitialExcludedTags`; ship member
+  display names → `InitialIncludedShips`/`InitialExcludedShips` + their name lists. The dispatcher
+  already holds `ITagReadService`; the axis components must not re-fetch what they were handed.
+
+Consequences worth stating: `ResultsFilterPanel`, `TagFilter` and `UserStoryInteractionFilter`
+inject **nothing** — the first two because they delegate every live query to leaves, the third
+because it needs no data at all. `ShipFilter` injects **only** for its typeahead; it never resolves
+its own seed. Do not "fix" `ShipFilter` by removing its injection (its typeahead would break), and
+do not add injection to `ResultsFilterPanel` to resolve seeds (the dispatcher owns that).
 
 **WU28 additions to `TagFilter`:**
 - `[Parameter] bool AllowIncludeModeToggle { get; set; } = false` — when `true`, render a small

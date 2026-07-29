@@ -198,8 +198,10 @@ else
             else if (_tab == ProfileTab.TagSelections)
             {
                 @* Tag Selections tab (WU43) — public (IsPublic) selections only, full-width grid, no
-                   filter sidebar (small, unpaginated set — same shape as Series). No public browse/
-                   gallery surface exists; this tab is the sole discovery path for a shared selection. *@
+                   filter sidebar (small, unpaginated set — same shape as Series). Still no public
+                   browse/gallery surface: this tab lists a given owner's selections, and each card
+                   links to that selection's own permalink (decision row 13), which is what makes a
+                   shared selection runnable rather than merely visible. *@
                 @if (TagSelectionItems is null || TagSelectionItems.Count == 0)
                 {
                     <p class="text-sm text-(--color-text-muted)">@(_isOwner ? "You haven't made any saved tag selections public yet." : "No public saved tag selections yet.")</p>
@@ -211,7 +213,9 @@ else
                         {
                             <div class="flex flex-col gap-2 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
                                 <div class="flex items-start justify-between gap-2">
-                                    <h3 class="font-semibold text-text">@selection.Nickname</h3>
+                                    <h3 class="font-semibold text-text">
+                                        <a href="@SelectionPermalink(selection)" class="hover:underline">@selection.Nickname</a>
+                                    </h3>
                                     @if (_currentUserId.HasValue && !_isOwner)
                                     {
                                         <button type="button"
@@ -246,6 +250,10 @@ else
                                         </div>
                                     </div>
                                 }
+                                <a href="@SelectionPermalink(selection)"
+                                   class="text-sm font-medium text-(--color-action-ink) hover:underline">
+                                    See these stories →
+                                </a>
                             </div>
                         }
                     </div>
@@ -395,6 +403,20 @@ else
         ProfileTab.Authored        => "No stories written yet.",
         _                          => "No stories."
     };
+
+    /// <summary>
+    /// Permalink for a public saved selection (decision row 13). Follows the story-slug contract:
+    /// the id is the source of truth and the slug is decorative, regenerated from the current
+    /// nickname at render time — so renaming a selection never breaks a link someone already
+    /// shared, and no slug column is needed.
+    /// </summary>
+    private static string SelectionPermalink(SavedTagSelectionDetailDto selection)
+    {
+        string slug = StorySlug.Slugify(selection.Nickname);
+        return slug.Length == 0
+            ? $"/discover/selection/{selection.Id}"
+            : $"/discover/selection/{selection.Id}/{slug}";
+    }
 
     private static string TabLabel(ProfileTab tab) => tab switch
     {
