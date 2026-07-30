@@ -193,11 +193,12 @@ grow script directives. All non-CSP headers are enforced in every environment.
 - `RequireConfirmedAccount = true` stands; real activation email is WU-Email's deliverable
   (`IdentityNoOpEmailSender` is the current placeholder).
 
-## Account-Status Enforcement (WU38a)
+## Account-Status Enforcement (WU38a + WU-AccountEnforcement)
 
 WU34 modeled `User.AccountStatus` (`Active`/`Warned`/`Suspended`/`Banned`) + `SuspendedUntilUtc` and
 wired moderator actions + notifications, but deliberately deferred login-blocking (see
-`audit/Moderation.md` Feature 47). WU38a closes that gap.
+`audit/Moderation.md` Feature 47). WU38a closed that gap. WU-AccountEnforcement (2026-07-30) closed
+the remaining mid-session-responsiveness gap described below.
 
 - **Single choke point:** `CanalaveSignInManager : SignInManager<User>` overrides
   `CanSignInAsync(User)` — `Banned` → always `false`; `Suspended` with `SuspendedUntilUtc` still in
@@ -217,13 +218,29 @@ wired moderator actions + notifications, but deliberately deferred login-blockin
   `Suspended`/`Banned` — the existing 30-minute stamp revalidation
   (`IdentityRevalidatingAuthenticationStateProvider`) then invalidates the live cookie on its next
   check, and the following request re-authenticates through the now-blocking `CanSignInAsync`. A
-  `Warned` user is not logged out — the warning surfaces as a banner, not an ejection.
-- **Warned banner:** `canalave:accountstatus` is baked into auth-cookie claims alongside
+  `Warned` user is not logged out — the warning surfaces as a banner, not an ejection. **This
+  30-minute ejection window is a deliberate, accepted latency** (settled 2026-07-30, not revisited
+  by WU-AccountEnforcement) — server-side enforcement holds throughout it regardless (every
+  read/write still goes through `RequireModerator()`/owner checks and the blocked cookie), and the
+  banner below now discloses the window rather than leaving it silent.
+- **`canalave:account_status`** is baked into auth-cookie claims at sign-in alongside
   `ShowMatureContent`/`Theme`/`PrefersAnimatedSprites` (`ApplicationUserClaimsPrincipalFactory`,
-  `SerializeAllClaims = true` already covers WASM). `AccountStatusBanner` (SharedUI/Layout, an
-  Indicator-role element) reads the claim from cascaded `AuthenticationState` and renders only when
-  `Warned`. Same staleness caveat as the other baked claims: a freshly-warned user sees the banner
-  starting at their next sign-in, not mid-session — the WU34 notification is the immediate channel.
+  `SerializeAllClaims = true` already covers WASM). This baked claim is only ever the **first-paint**
+  value now — see the live-read mechanism below for how staleness is actually closed.
+- **`AccountStatusBanner` is responsive via a live per-navigation read, not the claim.**
+  `IAccountStatusReadService.GetMyAccountStatusAsync()` (Identity cluster; server impl queries
+  `User.AccountStatus`/`SuspendedUntilUtc` directly, client impl calls `GET /api/account-status`) is
+  re-queried on `NavigationManager.LocationChanged`, the same pattern `MessagesNavLink` already used
+  for its unread-count badge. **`RefreshSignInAsync` was considered and rejected as the tool here**:
+  every existing call site (`ContentGateEndpoints.cs`, the stock Identity `Manage/*` pages) reissues
+  the *caller's own* cookie from their own `HttpContext` — a warn/suspend/ban is applied by a
+  *moderator*, in a different DI scope and a different circuit, so nothing in the app can reach the
+  target's session to reissue its cookie. A live per-navigation read sidesteps the problem entirely:
+  `AccountStatus` is display-only (not part of `IActiveUserContext`, not used for query-shaping or
+  authorization), so there is no cookie-reissue requirement to satisfy in the first place. The
+  banner renders all three non-Active states (Warned/Suspended/Banned) — see
+  `content-safety.md` §"Account Actions" for why Suspended/Banned display was brought into scope
+  alongside Warned.
 
 ## Data Protection Keyring
 

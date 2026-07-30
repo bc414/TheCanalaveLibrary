@@ -81,11 +81,14 @@ public static class ActiveUserClaimTypes
     /// <summary>
     /// <see cref="AccountStatusEnum"/>'s name (e.g. <c>"Warned"</c>), baked at sign-in — WU38a.
     /// Not part of <see cref="IActiveUserContext"/> (that interface is scoped to query-shaping
-    /// fields only): this claim exists purely for <c>AccountStatusBanner</c> to read from cascaded
-    /// <c>AuthenticationState</c>, no service injection. Same staleness caveat as the other baked
-    /// claims — stale until next sign-in unless the write path calls
-    /// <c>SignInManager.RefreshSignInAsync</c>; a freshly-Warned user sees the banner starting at
-    /// their next sign-in, with the WU34 notification as the immediate channel meanwhile.
+    /// fields only): this claim exists purely to give <c>AccountStatusBanner</c> a zero-flash
+    /// first-paint value from cascaded <c>AuthenticationState</c>. Deliberately NOT the source of
+    /// truth after that first paint — unlike the other baked claims here, this one is
+    /// display-only (never used for query-shaping or authorization), so
+    /// <c>WU-AccountEnforcement</c> (2026-07-30) closed its staleness by having the banner
+    /// re-query <c>IAccountStatusReadService.GetMyAccountStatusAsync()</c> live on every
+    /// in-app navigation instead of reissuing the cookie — see
+    /// <c>identity-and-authorization.md</c> §"Account Status Is Display-Only, Read Live".
     /// </summary>
     public const string AccountStatus = "canalave:account_status";
 }

@@ -62,7 +62,10 @@ namespace). Only a stale comment remained (fixed). `dotnet build` green; `/Accou
   `/account/login` when not — composed into `DesktopLayout`/`MobileLayout` and the Identity `MainLayout`
   (the Manage section's nested `@layout`, found live via `ManageLayout` → `MainLayout` chaining, not
   debris). **Scope note:** this is the minimal trigger only — full nav links, notification bell, and
-  profile avatar dropdown are deferred to WU22/WU30/WU33 per §3.19's fuller spec.
+  profile avatar dropdown are deferred to WU22/WU30/WU33 per §3.19's fuller spec. **`AccountStatusBanner`
+  additionally re-reads status live on every in-app navigation** (WU-AccountEnforcement, 2026-07-30 —
+  see the Stage note below), so a moderator's Warn/Suspend/Ban action surfaces within one navigation
+  rather than at next sign-in.
 - **L3.5-Structure — Stage 5.** Pages present and structurally standard; reconciled with the move.
   Verified live: anonymous home page renders `<a href="Account/Login">Log in</a>`.
 - **L4-Style — Stage 1.** Default Identity/Bootstrap styling; blocked on tokens (unchanged by WU1).
@@ -257,8 +260,9 @@ gets the generic message); `ServerModerationWriteService.ApplyAccountActionAsync
 already-open session via the existing 30-minute `IdentityRevalidatingAuthenticationStateProvider`
 revalidation; `ApplicationUserClaimsPrincipalFactory` bakes a new `canalave:account_status` claim
 (`ActiveUserClaimTypes.AccountStatus`) alongside the existing baked claims, consumed by the new
-`AccountStatusBanner` (SharedUI/Layout, Indicator role) composed into `DesktopLayout`/
-`MobileLayout` — renders only for `Warned`.
+`AccountStatusBanner` (SharedUI/Layout, Indicator role) composed into `MainLayout` (the single
+responsive layout post-WU-ResponsiveMerge) — at the time, rendered only for `Warned`; see the
+WU-AccountEnforcement Stage note below for how that changed.
 
 **Verified:** `dotnet build` 0 warnings/errors (8 projects); `dotnet test` 1483/1483 green (530
 Unit / 517 RazorComponents / 436 Integration). New tests: `AccountStatusEnforcementTests`
@@ -289,6 +293,76 @@ disclosure + goodbye page, above). F1 L2/L3-Logic/L3.5 stay Stage 5, re-verified
 Stage change. F1 L4-Style is unchanged (Stage 1) — this WU visually confirmed only the new Login
 error copy and the banner, not a full Identity-feature sign-off. Rule:
 `canalave-conventions/security.md` "Account-Status Enforcement".
+
+## WU-AccountEnforcement Stage note (2026-07-30) — F1 L2/L3-Logic re-verified (additive); closes the residual `roadmap.md` Phase 2 tracked
+
+**Scope:** closed the one open slice WU38a left behind — mid-session responsiveness. A
+freshly-Warned/Suspended/Banned user previously saw nothing until their next sign-in
+(`canalave:account_status` is a claim baked once at sign-in). `RefreshSignInAsync`, the tool named
+in the original deferral, turned out not to apply: every existing call site
+(`ContentGateEndpoints.cs`, the stock Identity `Manage/*` pages) reissues the *caller's own*
+cookie from their own `HttpContext` — a moderator applying an action runs in a different DI scope
+and a different circuit than the target user, so nothing can reach the target's session to reissue
+its cookie.
+
+**What shipped instead — a live read, not a claim/cookie refresh.** `AccountStatus` turned out to
+have exactly one consumer (`AccountStatusBanner`) and is never used for query-shaping or
+authorization (see `identity-and-authorization.md` §"Account Status Is Display-Only, Read Live",
+new this WU) — so there is nothing to reissue in the cookie in the first place. New
+`IAccountStatusReadService`/`ServerAccountStatusReadService`/`ClientAccountStatusReadService` +
+`GET /api/account-status` (Identity cluster, modeled on the existing
+`IUserActivityWriteService` quartet). `AccountStatusBanner` keeps the baked claim as its
+first-paint value only (no query on initial render) and re-reads live on
+`NavigationManager.LocationChanged` — the same pattern `MessagesNavLink` already used for its own
+unread badge, not a new one. **Deliberately widened while doing this:** the banner now renders all
+three non-Active states, not just Warned — Suspended/Banned are reachable *only* via the live read
+(a claim can never carry them, since `CanalaveSignInManager` blocks that user at sign-in), and the
+30-minute stamp-bump ejection window is a deliberate, unshortened latency (settled with the user,
+2026-07-30) that would otherwise leave a Suspended/Banned viewer silently sitting in a dead
+session — the banner is the disclosure that window now requires (§13 transparency axiom,
+`content-safety.md` "Account Actions"). Suspended/Banned copy reuses `Login.razor`'s
+`BuildAccountStatusMessageAsync` wording verbatim and adds a sign-out affordance (reusing
+`UserMenu`'s logout form-POST pattern); Warned is unchanged and carries no sign-out link.
+**Folded in, same bug class:** `NotificationBellInner`'s header comment always claimed "refresh on
+mount / navigation" but never actually subscribed to `LocationChanged` — fixed identically, so the
+moderator notifications this same action generates are no longer subject to the same staleness.
+
+**Verified:** `dotnet build` clean; `dotnet test` green — 763 Unit (+2: `ClientAccountStatusServiceTests`)
+/ 620 RazorComponents (+9: extended `AccountStatusBannerTests` covering claim-only first paint vs.
+live-read Warned/Suspended/Banned/Active/throw-degrades; +1 `NotificationBellTests` navigation
+case; +1 `ModUsersPageTests`, an unrelated bug found live and fixed same-session — see
+`audit/Moderation.md` Feature 47) / 961 Integration (+4: `AccountStatusEndpointsTests`, including
+the load-bearing `GetMyStatus_ReflectsALiveWriteThroughApplyAccountActionAsync` — proves the read
+is live off the DB row via the real `IModerationWriteService` path, not a shortcut direct update).
+Both hygiene gates clean (`check-design-tokens.ps1`, `check-doc-hygiene.ps1`).
+
+**Manual/browser band — real Chrome, two tabs, `psql` ground truth throughout.** As TestUser (one
+tab) and AdminUser (another), drove the actual `/mod/users` UI: AdminUser Warned TestUser via the
+real form → in TestUser's tab, one in-app navigation (no reload) surfaced the banner and
+incremented the bell badge, both live. Suspended TestUser via the real form (this is what surfaced
+the `ModUsersPage` DateTime.Kind bug, `audit/Moderation.md` Feature 47 — fixed same-session) →
+TestUser's next navigation showed the exact suspended-until date and a working `Log out` link. A
+freshly-`login-as`'d session (the Dev-only bypass, which skips `CanSignInAsync`) legitimately shows
+the claim-only first-paint gap this WU's own code comments describe: the claim can carry
+`Suspended` (baked at sign-in from whatever `AccountStatus` already was) but never a date, so the
+banner briefly reads "suspended until ." before the first live read corrects it — an artifact of
+signing in via the dev bypass while already Suspended, impossible for a *real* sign-in
+(`CanalaveSignInManager` blocks it), not a defect. One early two-tab run threw
+`AntiforgeryValidationException` on `Log out`; root-caused to the test methodology, not the app —
+logging in as a second identity in one tab silently overwrites the shared session cookie for every
+other tab of the same browser profile (cookies are per-origin, not per-tab). A clean single-session
+repro (moderator action completed first, target's tab never touched again by the other identity)
+reproduced with no error. Confirms the live-read mechanism, the banner's actual DOM re-render on
+`LocationChanged`, and the sign-out affordance all work end-to-end over the real render pipeline —
+not just what the `curl`+`psql` HTTP-level check and the `NavigateTo`-triggered bUnit cases
+individually cover.
+
+**Test tier:** Integration (`AccountStatusEndpointsTests.cs`) + Unit
+(`ClientAccountStatusServiceTests.cs`) + RazorComponents (`AccountStatusBannerTests.cs` extended,
+`NotificationBellTests.cs` extended). No Stage change — F1 L2/L3-Logic stay Stage 5, re-verified,
+additive; F42 (Notifications, `audit/Notifications.md`) likewise stays Stage 5. Rule:
+`canalave-conventions/security.md` "Account-Status Enforcement";
+`canalave-conventions/identity-and-authorization.md` §"Account Status Is Display-Only, Read Live".
 
 ### WU-AuditFixPass note (2026-07-18)
 

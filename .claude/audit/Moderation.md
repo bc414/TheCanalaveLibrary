@@ -67,7 +67,10 @@ submission via `ClientModerationWriteService` (not driven in the wave). Full wav
   **Login-blocking enforcement landed in WU38a** (`CanalaveSignInManager.CanSignInAsync` +
   security-stamp bump on Suspend/Ban in `ApplyAccountActionAsync` — see
   `canalave-conventions/security.md` "Account-Status Enforcement" and this file's WU38a Stage note
-  below).
+  below). **Mid-session disclosure landed in WU-AccountEnforcement (2026-07-30):** the target now
+  learns of a Warn/Suspend/Ban within one in-app navigation, not just via the notification and not
+  just at next sign-in — see this file's WU-AccountEnforcement Stage note below and
+  `audit/Identity.md`'s.
 - Polymorphic target label + deep-link resolved via two-pass `BatchLoadEntitiesAsync` pattern (one query
   per present target type — same pattern as `GetNotificationsAsync`).
 - `User.ActiveReportCount` added (symmetric with other targets); `AdjustActiveReportCount` switch skips
@@ -92,6 +95,37 @@ sign-in-side half, `CanalaveSignInManager`, lives in Identity, not here). **Veri
 (`AccountStatusEnforcementTests.ApplyAccountActionAsync_SuspendUser_BumpsSecurityStamp`/
 `_BanUser_BumpsSecurityStamp`/`_WarnUser_DoesNotBumpSecurityStamp`) — stamp changes on Suspend/Ban,
 unchanged on Warn. `dotnet test` 1483/1483 green.
+
+**Stage note (WU-AccountEnforcement — 2026-07-30):** L2 stays Stage 5, unchanged — this WU touched
+nothing in `ServerModerationWriteService`/`ApplyAccountActionAsync` itself; the read-side fix lives
+in Identity (`audit/Identity.md`'s WU-AccountEnforcement Stage note has the full mechanism).
+Recorded here because it closes this feature's outward-facing gap: previously a target's *only*
+mid-session signal was the WU34 notification (and, for Suspend/Ban, an up-to-30-minute silent
+ejection); now `AccountStatusBanner` also surfaces the new status within one in-app navigation, and
+the notification itself is no longer subject to the identical staleness bug (`NotificationBellInner`
+never actually subscribed to `NavigationManager.LocationChanged` despite claiming to — fixed in the
+same WU). **Verified:** `AccountStatusEndpointsTests.GetMyStatus_ReflectsALiveWriteThroughApplyAccountActionAsync`
+drives the real `ApplyAccountActionAsync` path (not a `psql` shortcut) and confirms the change is
+visible through `GET /api/account-status` on the same HTTP client immediately afterward — proof
+this feature's write path needed no change for the read side to go live.
+
+**Bug found and fixed live in the same WU (2026-07-30) — L3-Logic stays Stage 5, no Stage
+change.** Unrelated to WU-AccountEnforcement's own scope, but surfaced by its browser-verification
+pass and fixed in the same session per `debugging.md`'s "fix same-session" discipline: driving a
+real `SuspendUser` action through `ModUsersPage.razor`'s form for the first time (every prior
+verification of Suspend, including WU38a's, set `SuspendedUntilUtc` directly via `psql`/fixture,
+never through this UI) crashed with `ArgumentException: Cannot write DateTime with Kind=Unspecified
+to PostgreSQL type 'timestamp with time zone'`. The `<input type="datetime-local">` bound to
+`_suspendUntil` via `@bind` produces `DateTime.Kind=Unspecified`; the label reads "(UTC)" but
+nothing tagged the Kind before handing it to `ApplyAccountActionAsync`. Fixed by re-tagging (not
+shifting) the value with `DateTime.SpecifyKind(local, DateTimeKind.Utc)` at the call site in
+`ConfirmAccountActionAsync`. **Verified:** new RazorComponents `ModUsersPageTests.SuspendUser_SubmitsUtcKindDateTime`
+drives the real form (Suspend → fill date/reason → Confirm) against a recording fake write service
+and asserts the passed `DateTime.Kind == Utc`; mutation-sanity confirmed (reverting the
+`SpecifyKind` call fails the test). Live re-verified via the real browser + `psql` ground truth
+after the fix: Suspend through the mod UI now succeeds (`ResolvedActionTaken`), `suspended_until_utc`
+lands correctly in Postgres, and the target's `AccountStatusBanner` shows the live-corrected date on
+its next navigation.
 
 **Settled 2026-07-18 — report-target rating routing (decision row 1), "work surface, show all."**
 Superseded the WU34 "moderator's ContentRating reach = personal ShowMatureContent, mirrors

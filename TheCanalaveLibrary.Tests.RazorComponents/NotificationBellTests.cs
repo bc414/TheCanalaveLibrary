@@ -1,5 +1,6 @@
 using Bunit;
 using FluentAssertions;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
 using TheCanalaveLibrary.SharedUI;
@@ -38,5 +39,30 @@ public class NotificationBellTests : BunitContext
         IRenderedComponent<NotificationBell> cut = Render<NotificationBell>();
 
         cut.WaitForAssertion(() => cut.Markup.Should().Contain("4", "the unread badge renders from the read service"));
+    }
+
+    [Fact]
+    public void AuthorizedRender_Navigates_RefreshesUnreadCount()
+    {
+        // WU-AccountEnforcement: NotificationBellInner's header comment always claimed "refresh
+        // on mount / navigation", but nothing ever subscribed to LocationChanged — a notification
+        // landing mid-session (e.g. the account-status moderator notifications
+        // AccountStatusBanner now surfaces alongside) stayed invisible until the next full page
+        // load. This pins the fix: a second in-app navigation must re-query the count.
+        FakeNotificationWriteService fake = new() { UnreadCount = 2 };
+        Services.AddSingleton<INotificationReadService>(fake);
+        Services.AddSingleton<INotificationWriteService>(fake);
+        Services.AddLogging();
+        this.AddAuthorization().SetAuthorized("SeedReader");
+
+        IRenderedComponent<NotificationBell> cut = Render<NotificationBell>();
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("2"));
+
+        // A moderator-fired notification lands server-side between the initial mount and the
+        // next in-app navigation.
+        fake.UnreadCount = 5;
+        Services.GetRequiredService<NavigationManager>().NavigateTo("/somewhere-else");
+
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("5"));
     }
 }

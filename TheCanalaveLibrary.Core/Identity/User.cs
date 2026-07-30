@@ -76,7 +76,10 @@ public class User : IdentityUser<int>
     public bool ShowMatureContent { get; set; } = false;
 
     // --- Moderation state (WU34) ---
-    // Login-blocking enforcement deferred to a follow-up WU; this models the state + enables notifications.
+    // Login-blocking enforcement: CanalaveSignInManager.CanSignInAsync (WU38a). Mid-session
+    // responsiveness (AccountStatusBanner live-reads this via IAccountStatusReadService,
+    // re-queried per navigation): WU-AccountEnforcement. See security.md "Account-Status
+    // Enforcement".
     public AccountStatusEnum AccountStatus { get; set; } = AccountStatusEnum.Active;
     public DateTime? SuspendedUntilUtc { get; set; }
     public int ActiveReportCount { get; set; }

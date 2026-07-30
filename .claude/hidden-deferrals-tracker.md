@@ -511,7 +511,7 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
 
 - [x] **G1 — Login-enforcement described as unbuilt though it shipped** `[doc-drift · med · anytime]` — **CLOSED 2026-07-27 (WU-DocHygiene3):** `content-safety.md` §"Login enforcement" retensed to shipped-WU38a; the `workplan.md` "Planned" entry was rewritten 2026-07-27 (WU-DocHygiene) to core-shipped + residual.
   - Source (was stale, now fixed): `content-safety.md`; `workplan.md` "Planned/not-yet-built" WU-AccountEnforcement entry. Source (built): `security.md` §"Account-Status Enforcement (WU38a)".
-  - **Genuine residual (still open, tracked as the WU-AccountEnforcement Planned entry + Position block):** a freshly-Warned/Suspended user only sees the banner/block at next sign-in; `RefreshSignInAsync` is the ready-made tool — unbuilt.
+  - **Residual CLOSED 2026-07-30 (WU-AccountEnforcement):** `RefreshSignInAsync` turned out not to be usable (caller-scoped, can't reach a moderator's target). Built instead: `AccountStatusBanner` re-reads status live via `IAccountStatusReadService` on every in-app navigation (the `MessagesNavLink` pattern), now covering Warned/Suspended/Banned. `NotificationBell`'s identical mid-session staleness (found during this WU, not previously tracked) closed the same way. See `security.md` §"Account-Status Enforcement", `identity-and-authorization.md` §"Account Status Is Display-Only, Read Live".
 
 - [x] **G2 — `audit/Lookups.md` overstates remaining work (stale Stage-4)** `[doc-drift · low · anytime]` — **CLOSED 2026-07-27 (WU-DocHygiene):** the Feature 2 section was rewritten as an L1 Stage-5 record; all five divergences verified resolved against code (see its 2026-07-27 Stage note).
 

@@ -205,11 +205,20 @@
 
         try
         {
+            // The datetime-local input's @bind produces DateTime.Kind=Unspecified; the label
+            // instructs the moderator to enter it as UTC already, so re-tag the Kind rather than
+            // shifting the value — Npgsql refuses to persist Unspecified into a timestamptz column
+            // (found live, 2026-07-30: this path had never been exercised through the real form
+            // before, only via direct psql/fixture dates).
+            DateTime? suspendedUntilUtc = _pendingAction == ModeratorActionType.SuspendUser && _suspendUntil is { } local
+                ? DateTime.SpecifyKind(local, DateTimeKind.Utc)
+                : null;
+
             await ModerationWriteService.ApplyAccountActionAsync(
                 _actionReport!.ReportId,
                 _pendingAction,
                 _actionReason!,
-                _pendingAction == ModeratorActionType.SuspendUser ? _suspendUntil : null);
+                suspendedUntilUtc);
 
             CancelAccountAction();
             // Post-action refetch — plain assignment (persistence only reads at hydration).

@@ -377,6 +377,10 @@ builder.Services.AddScoped<IUserActivityWriteService, ServerUserActivityWriteSer
 builder.Services.AddSingleton<UserActivityBuffer>();
 builder.Services.AddSingleton<UserActivityFlusher>();
 builder.Services.AddHostedService<UserActivityFlushWorker>();
+// WU-AccountEnforcement: live per-navigation account-status read (AccountStatusBanner) —
+// display-only, deliberately not claim-based. See identity-and-authorization.md §"Account Status
+// Is Display-Only, Read Live".
+builder.Services.AddScoped<IAccountStatusReadService, ServerAccountStatusReadService>();
 // Comments (WU19) — L2 read/write services (Features 23/24/25/26, chapter context only for MVP).
 builder.Services.AddScoped<ICommentReadService, ServerCommentReadService>();
 builder.Services.AddScoped<ICommentWriteService, ServerCommentWriteService>();
@@ -626,6 +630,7 @@ app.MapSiteSettingsEndpoints();
 app.MapBadgeEndpoints();
 app.MapContentImportEndpoints();
 app.MapUserActivityEndpoints();
+app.MapAccountStatusEndpoints();
 
 // S3 mode only: stored /uploads/… URLs resolve from the bucket instead of wwwroot. Local mode
 // must NOT map this — without a configured IAmazonS3 the handler can't resolve, and static

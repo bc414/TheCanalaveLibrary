@@ -264,6 +264,25 @@ render resolves NO notification services, which is the actual failure mode.
   messages, no 500; Integration — `ConcurrentReadAccessTests` (two-services-one-scope,
   one-service-parallel-calls, chrome-plus-page shapes); full suite green post-refactor.
 
+- **Mid-session refresh bug found and fixed (WU-AccountEnforcement, 2026-07-30) — L3-Logic stays
+  Stage 5, no Stage change.** `NotificationBellInner`'s own header comment claimed "Count and
+  preview refresh on mount / navigation," but nothing ever subscribed to
+  `NavigationManager.LocationChanged` — only the mount half was true. A notification landing
+  mid-session (this WU's own motivating case: the account-status moderator notifications
+  `AccountStatusBanner` surfaces alongside) stayed invisible in the bell until the next full page
+  load, even though its sibling `MessagesNavLink` had the correct pattern all along. Found while
+  building the account-status live-read fix (`audit/Identity.md`'s WU-AccountEnforcement Stage
+  note), not independently reported — same bug class, fixed the same way: `LocationChanged`
+  subscription re-queries `GetUnreadCountAsync`/`GetNotificationsAsync`, `IDisposable`
+  unsubscribe, `try`/`catch` → `LogWarning` degrade-to-last-known on failure (parity with
+  `MessagesNavLink.RefreshCountAsync`). **Verified:** RazorComponents —
+  `NotificationBellTests.AuthorizedRender_Navigates_RefreshesUnreadCount` (fake unread count
+  changes between mount and a simulated `NavigateTo`, badge reflects the new count without a
+  reload). `dotnet test` full suite green (2344 total: 763 Unit + 620 RazorComponents + 961
+  Integration). Live-verified via real Chrome + `psql` in the same WU (`audit/Identity.md`
+  WU-AccountEnforcement Stage note): a moderator's Warn action incremented this badge in the
+  target's tab on the same in-app navigation that surfaced `AccountStatusBanner`.
+
 ## Feature 43 — Notification Settings
 
 - **L1 — Stage 5** (`UserNotificationSetting` sparse-override; `EmailEnabled`/`Collapsed` — see Shared

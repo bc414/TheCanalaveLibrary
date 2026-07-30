@@ -87,6 +87,30 @@ endpoints (reveal story/group/blog-post) follow the identical POST→303 pattern
 ForwardedHeaders/origin-lockdown lands, or the elevation is spoofable by direct-to-origin
 requests. Crawlers only ever hit the SSR/prerender pass, which always has an HttpContext.
 
+## Account Status Is Display-Only, Read Live — Not a Claim-Freshness Problem (WU-AccountEnforcement, 2026-07-30)
+
+`AccountStatus` looks like it belongs in the same "baked claim, needs a cookie reissue to update"
+family as `ShowMatureContent` above — it is not. `ShowMatureContent` is a **query-shaping** claim
+(`IActiveUserContext.ShowMatureContent` feeds the content-rating filter and other query decisions),
+so a stale value silently changes what a request returns — that's what forces the
+`RefreshSignInAsync` + 303 round-trip. `AccountStatus` (`ActiveUserClaimTypes.AccountStatus`) has
+exactly one consumer, `AccountStatusBanner`, and is never used for query-shaping or authorization
+(enforcement is `CanalaveSignInManager.CanSignInAsync` at login + the security-stamp bump at
+Suspend/Ban — see `security.md` "Account-Status Enforcement" — neither reads this claim).
+
+Because the value is purely a display concern, `AccountStatusBanner` doesn't need the cookie
+reissued at all — it needs a **fresh read**, which is a much smaller problem than a fresh *claim*.
+It re-queries `IAccountStatusReadService.GetMyAccountStatusAsync()` on
+`NavigationManager.LocationChanged`, following the same in-circuit refresh pattern
+`MessagesNavLink` already used for its unread-count badge (no document reload, works identically on
+the server circuit and on WASM). The baked claim still supplies the first-paint value only, so
+there's no flash before the first live read lands.
+
+**Rule of thumb when a new baked claim goes stale:** if the claim shapes a query or an authorization
+decision, it needs the `/content-gate/refresh-claims`-style full-document round-trip. If it's purely
+what gets displayed, prefer a small live-read service re-queried on navigation instead — cheaper,
+and it works the same on both render modes without touching the cookie.
+
 ## Active-User-Conditional Handling
 
 ### The two identity sources — which to use where

@@ -17,17 +17,16 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-DiscoveryFilterRestore + WU-SelectionPermalink (2026-07-28) — decision row 13
-  resolved (`/discover` never carries filter state in its URL; sharing goes through a saved
-  selection's permalink, return integrity through device-local localStorage) and built. Closes
-  tracker item **B11**. (Earlier the same day: WU-Home + WU-SiteNews — decision row 2 resolved and
-  built, closing tracker item F1 and Phase 2's last content item. Before that, 2026-07-27:
-  WU-DocRoadmap retired `middle_plan_v2.md` in favor of `roadmap.md`; WU-DocAuditSkill,
-  WU-DocHygiene 1–3.)
-- **Phase (`roadmap.md`):** Phase 2 tail — one item left: **WU-AccountEnforcement's mid-session
-  residual** (unblocked — `RefreshSignInAsync` is the ready-made tool; see its Planned entry
-  below). Phases 0, 1, and 5 are DONE; Phase 3 (Brian-driven L4 freeze sweep + WU-A11y, the latter
-  gated on decision row 12) follows once that residual lands.
+- **Last landed:** WU-AccountEnforcement (2026-07-30) — mid-session account-status responsiveness
+  (`AccountStatusBanner` live-reads status per navigation instead of relying on the sign-in claim;
+  now covers Warned/Suspended/Banned; `NotificationBellInner`'s identical mid-session-staleness bug
+  folded in and fixed the same way). Closes tracker item **G1**'s residual and Phase 2's last open
+  item. (Before that, 2026-07-28: WU-DiscoveryFilterRestore + WU-SelectionPermalink — decision row
+  13 resolved, closing tracker item **B11**; earlier the same day, WU-Home + WU-SiteNews — decision
+  row 2 resolved, closing tracker item F1.)
+- **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
+  **Phase 3 is next** — Brian-driven L4 freeze sweep + WU-A11y (the latter gated on decision
+  row 12) — nothing further blocks starting it.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
   exist in **every group A–H** (~20 unchecked boxes), including two **high-priority security
   items: E2 and E3**.
@@ -119,10 +118,6 @@ cells/verification) when built.
 - **WU-A11y** — **Cells:** Feature 65 (new), L4/L4.5 currently Stage 1. **Phase:** 3, paired with
   the L4 freeze sweep. **Scope:** blocked on decision row 12 (scope/depth). **Pointer:**
   `audit/Accessibility.md`. **Deps:** Phase 3's L4 freeze sweep (same pass).
-  *(Note for WU-AccountEnforcement, listed in `roadmap.md` Phase 2 item 5: the
-  `RefreshSignInAsync` claim-refresh pattern from `/content-gate` (WU-AccessGate, 2026-07-23) is
-  the ready-made tool for making `AccountStatus` responsive — a freshly-Warned/Suspended user's
-  claim currently waits for next sign-in.)*
 - **WU-EditorSprite** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
   inline Pokémon-sprite Quill blot (spec §5.30.2), deferred at WU6. **Pointer:**
   `audit/Chapters.md` Feature 6. **Deps:** WU6 (`EditorView`, Stage 5).
@@ -138,14 +133,6 @@ cells/verification) when built.
   WU-Email; also folds in the untested anonymous-`NotificationBell` RazorComponents gap noted in
   `audit/Notifications.md` Feature 42. **Pointer:** `audit/Notifications.md`. **Deps:** WU-Email
   (DONE ✓ 2026-07-06).
-- **WU-AccountEnforcement** — **core shipped inside WU38a (2026-07-11):** login-blocking
-  (`CanalaveSignInManager.CanSignInAsync` — Suspended until `SuspendedUntilUtc`, Banned permanently),
-  security-stamp bump on Suspend/Ban, `AccountStatusBanner` for Warned. **Residual (the only open
-  slice):** mid-session responsiveness — a freshly-Warned user sees the banner only at next sign-in;
-  `RefreshSignInAsync` is the named tool. **Cells:** Feature 1 (Identity, extends). **Pointer:**
-  `canalave-conventions/security.md` "Account-Status Enforcement"; `roadmap.md` Phase 2
-  item 5. **Deps:** WU38a (DONE ✓).
-
 ---
 
 ## Post-MVP — Layers 5–8 (historical framing — every item below has since closed or been removed)
@@ -188,6 +175,72 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-AccountEnforcement — mid-session account-status responsiveness (Feature 1, extends) — DONE ✓ (2026-07-30)
+
+- **Cells:** F1 L2/L3-Logic stay Stage 5, re-verified — additive, no Stage change. Closes the last
+  open Phase 2 item and tracker item G1's genuine residual.
+- **Scope:** the only slice WU38a (2026-07-11) left open — a freshly-Warned/Suspended/Banned user
+  saw nothing until their next sign-in, since `canalave:account_status` is a claim baked once at
+  sign-in.
+- **`RefreshSignInAsync`, the tool `roadmap.md`/the tracker named, turned out not to apply and was
+  dropped before any code was written (Doc-Touch moment 1):** every existing call site
+  (`ContentGateEndpoints.cs`, the stock Identity `Manage/*` pages) reissues the *caller's own*
+  cookie — a moderator's Warn/Suspend/Ban runs in a different DI scope and a different circuit
+  than the target, so nothing can reach the target's session to reissue its cookie.
+- **Shipped instead — a live read, not a claim/cookie refresh.** `AccountStatus` turned out to
+  have exactly one consumer (`AccountStatusBanner`) and is never used for query-shaping or
+  authorization, so there was nothing to reissue in the first place — new
+  `IAccountStatusReadService`/`ServerAccountStatusReadService`/`ClientAccountStatusReadService` +
+  `GET /api/account-status` (modeled on the existing `IUserActivityWriteService` quartet).
+  `AccountStatusBanner` keeps the baked claim as its first-paint value only and re-reads live on
+  `NavigationManager.LocationChanged` — the `MessagesNavLink` unread-badge pattern, not a new one.
+- **Widened while building it (settled with the user):** the banner now renders all three
+  non-Active states, not just Warned — Suspended/Banned are reachable *only* via the live read (a
+  claim can never carry them, `CanalaveSignInManager` blocks that user at sign-in) — and the
+  30-minute stamp-bump ejection window stays unshortened by deliberate choice; the banner is the
+  disclosure that window now requires. Suspended/Banned copy reuses `Login.razor`'s wording
+  verbatim and adds a sign-out affordance; Warned is unchanged.
+- **Folded in, same bug class:** `NotificationBellInner` claimed to refresh "on mount / navigation"
+  but never subscribed to `LocationChanged` — fixed identically, found while building the above,
+  not independently reported.
+- **Real bug found and fixed live during browser verification (Feature 47, out of this WU's own
+  scope but fixed same-session per `debugging.md`):** driving a real Suspend action through
+  `ModUsersPage.razor`'s form for the first time ever (every prior Suspend verification, including
+  WU38a's, set the date via `psql`/fixture, never through this UI) crashed with
+  `ArgumentException: Cannot write DateTime with Kind=Unspecified to PostgreSQL type 'timestamp
+  with time zone'` — the `datetime-local` input's `@bind` produces `Kind=Unspecified`, never tagged
+  before reaching `ApplyAccountActionAsync`. Fixed with `DateTime.SpecifyKind(..., Utc)` at the
+  call site; new `ModUsersPageTests.SuspendUser_SubmitsUtcKindDateTime` (RazorComponents,
+  mutation-sanity confirmed) pins it. Detail: `audit/Moderation.md` Feature 47.
+- **Verified:** `dotnet build` clean; `dotnet test` green — 2344 total (763 Unit + 620
+  RazorComponents + 961 Integration). Both hygiene gates clean. **Real Chrome browser pass**
+  (server-only path, two tabs, `psql` ground truth): a moderator Warn/Suspend through the real
+  `/mod/users` UI was visible to the target within one in-app navigation with no reload — banner
+  text, bell count, and (for Suspend) the exact date and sign-out affordance all correct; the
+  claim-only first-paint value self-corrected to the live value on the next navigation, exactly as
+  designed; anonymous → 401 on the endpoint; `Log out` verified working end-to-end. One early
+  two-tab run hit an `AntiforgeryValidationException` — traced to the test methodology, not the
+  app: logging in as a second user in one browser tab silently overwrites the shared session cookie
+  for every other tab of the same profile (cookies are per-origin, not per-tab); a clean single-session
+  repro (moderator action completed first, target logs in after and is never touched again)
+  reproduced cleanly with no error. Not a defect, but worth remembering for any future two-identity
+  browser verification in this app.
+- **Doc corrections in the same WU (Doc-Touch moment 1):** `security.md`'s claim literal
+  (`canalave:accountstatus` → the actual `canalave:account_status`); `roadmap.md`'s Phase 2 →
+  DONE and the "Group G is fully closed" line, which contradicted G1's own still-open residual;
+  `hidden-deferrals-tracker.md` G1 residual ticked; stale in-code comments on `User.AccountStatus`,
+  `ActiveUserClaimTypes.AccountStatus`, and `ApplicationUserClaimsPrincipalFactory`'s `<remarks>`.
+  New rule minted: `identity-and-authorization.md` §"Account Status Is Display-Only, Read Live" —
+  the general "claim-shapes-a-query → needs cookie reissue; claim-is-display-only → prefer a live
+  read" distinction, for the next baked claim that goes stale.
+- **Tool:** opusplan. **Pointers:** `audit/Identity.md` WU-AccountEnforcement Stage note;
+  `audit/Moderation.md` Feature 47 WU-AccountEnforcement Stage note; `audit/Notifications.md`
+  Feature 42 mid-session-refresh note; `canalave-conventions/security.md` "Account-Status
+  Enforcement"; `identity-and-authorization.md` §"Account Status Is Display-Only, Read Live".
+  **Deps:** WU38a (DONE ✓).
 
 ---
 

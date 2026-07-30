@@ -48,18 +48,20 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
   shipped: Observability, SignalBuffering (supersedes the dissolved Redis/L7 plan), L6 index
   batch + perf baseline, ErrorHandling, Email, Security, DataProtection, SignalR (removed —
   permanently ruled out for messaging), Marts. Full detail: `middle_plan_v2.md` Phase 1.
-- **Phase 2 — MVP-surface completeness — tail end, in progress.** Items 2–8 are DONE (Series/
-  Story Lineage/Saved Tag Selections, Manual+Automatic Tree Search, Account Deletion UI, External
-  Link Verification, Export/Import, AccessGate) — full detail: `middle_plan_v2.md` Phase 2.
-  **Item 1, WU-Home, is DONE ✓ (2026-07-28)** — decision row 2 resolved and built; see §Resolved
-  above and `workplan.md`'s DONE entry. One item remains open:
-  1. **WU-AccountEnforcement (residual)** — core login-blocking + banner shipped inside WU38a
-     (2026-07-11); the only open slice is mid-session responsiveness (a freshly-Warned/Suspended
-     user only sees the effect at next sign-in). `RefreshSignInAsync` (from WU-AccessGate's
-     `/content-gate` work) is the ready-made tool. **Unblocked, unsequenced.** Pointer:
-     `workplan.md` "Planned" WU-AccountEnforcement entry; `security.md` "Account-Status
-     Enforcement."
-- **Phase 3 — Full L4 sweep + Stage-6 freezes — not started, blocked behind Phase 2's tail.**
+- **Phase 2 — MVP-surface completeness — DONE ✓ (2026-07-30, WU-AccountEnforcement closing the
+  last item).** Items 2–8 are DONE (Series/Story Lineage/Saved Tag Selections, Manual+Automatic
+  Tree Search, Account Deletion UI, External Link Verification, Export/Import, AccessGate) — full
+  detail: `middle_plan_v2.md` Phase 2. Item 1, WU-Home, is DONE ✓ (2026-07-28) — decision row 2
+  resolved and built; see §Resolved above and `workplan.md`'s DONE entry.
+  **WU-AccountEnforcement (residual) — DONE ✓ (2026-07-30).** Core login-blocking + banner shipped
+  inside WU38a (2026-07-11); the mid-session-responsiveness residual is closed. `RefreshSignInAsync`
+  turned out not to be the tool — it reissues only the *caller's* cookie, and a moderator cannot
+  reach a different user's session with it. Built instead: `AccountStatusBanner` re-reads status
+  live via a new `IAccountStatusReadService`, re-queried on every in-app navigation (the
+  `MessagesNavLink` unread-badge pattern), now covering Warned/Suspended/Banned rather than Warned
+  alone. Pointer: `workplan.md` DONE entry; `security.md` "Account-Status Enforcement";
+  `identity-and-authorization.md` §"Account Status Is Display-Only, Read Live".
+- **Phase 3 — Full L4 sweep + Stage-6 freezes — not started; Phase 2 is done, so this is next.**
   Brian-driven, per-cluster render → fix → Pattern-Accumulate → 5→6 on sign-off. Surface decision
   row 1 is resolved (see Resolved below in `middle_plan_v2.md`). **WU-A11y** (Feature 65) pairs
   with this sweep — both are a final whole-site pass over already-built surfaces — gated on
@@ -141,7 +143,7 @@ done.
 |---|---|---|---|
 | **0** — decisions only, chat, no code | ~~Decision row 2 (homepage sections)~~ **DONE 2026-07-28** | — | Unblocks WU-Home, the last unstarted Phase-2 item |
 | **0** | ~~Decision row 13 (`/discover` URL state)~~ **DONE 2026-07-28** | — | Resolved against URL state; see "Resolved" below |
-| **1** — already unblocked, no decision needed | WU-AccountEnforcement residual | *(G1's residual)* | Small `RefreshSignInAsync` wiring, Phase 2 item 5 above — the cheapest win on the board |
+| **1** — already unblocked, no decision needed | ~~WU-AccountEnforcement residual~~ **DONE 2026-07-30** | *(G1's residual)* | Closed Phase 2's last item — see Phase status above |
 | **1** | WU-ErrorHandling2 | E1 | Unblocked since WU-GlobalFlip (2026-07-13), never picked up since |
 | **2** — continue the debt-paydown burst, clustered by shared surface | WU-L6MeasurePass | C2, C3, C4, C5, C6 | Same "always measure" origin; C4 needs one new Messaging SeedTool generator, reused by the other four |
 | **2** | WU-DiscoveryFilterRestore | B11 | Device-local filter restore + ship seeding parity — same `SearchPage`/`ResultsFilterPanel`/`ShipFilter` surface. Replaces the misnamed "WU-DiscoveryURLState" (row 13 decided *against* filter URL state) |
@@ -150,7 +152,7 @@ done.
 | **2** | WU-StatBadgeProducers | B3, B4 | B4's BetaReader badge literally depends on B3's counter existing |
 | **2** | WU-DataSaver | B0 | Small standalone decision ("suppress sprites, or cut the setting") + build |
 | **2** | WU-DiscoveryOverrideUI | B7 | Per-user filter-override editing surface (§8.7) |
-| **3** | ~~WU-Home~~ **DONE 2026-07-28** | F1 | Closed Phase 2's last content item; the surviving item (WU-AccountEnforcement residual, Tier 1) is what remains |
+| **3** | ~~WU-Home~~ **DONE 2026-07-28** | F1 | Closed Phase 2's last content item; Phase 2 fully closed 2026-07-30 (WU-AccountEnforcement, Tier 1) |
 | **4** — Phase 3 (L4 freeze sweep) | WU-A11y | F6 | Resolve decision row 12 just before the sweep starts |
 | **4** | *(fold into the same sweep — don't build standalone)* | H1, E4, H8 | Each cheap enough to ride the sweep rather than justify its own WU |
 | **5** — beta window | WU-EditorSprite | A1 | Spec'd authoring capability; design the sanitizer allow-list addition alongside it |
@@ -172,7 +174,9 @@ and mitigated (the 13-tag/`href`-only allow-list strips the attack vector) with 
 root-cause fix already designed. Leaving it at Phase 7 is a decision worth your explicit
 re-confirmation given the `high` label, not a silent default this reanalysis is making for you.
 
-Group G is fully closed (2026-07-27) — nothing to sequence.
+Group G is fully closed (2026-07-30) — G1's genuine residual (mid-session account-status
+responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above) shipped
+2026-07-30; nothing left to sequence.
 
 ## Resolved
 

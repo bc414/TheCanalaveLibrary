@@ -26,9 +26,13 @@ namespace TheCanalaveLibrary.Server;
 /// unwired — <c>ServerUserSettingsService</c> is transport-agnostic (also reached over HTTP from
 /// WASM, where no <c>SignInManager</c>/<c>HttpContext</c> sign-in refresh is straightforward), so
 /// the settings write does NOT refresh the cookie and the change takes effect at next sign-in.
-/// Whether to accept that permanently (like the AccountStatus/Warned staleness) or wire a
-/// server-render-path refresh is an open product/UX call — surface it before beta if mature-toggle
-/// feedback matters. Do not silently treat this note as "accepted".
+/// Whether to accept that permanently or wire a server-render-path refresh is an open product/UX
+/// call — surface it before beta if mature-toggle feedback matters. Do not silently treat this
+/// note as "accepted". (Contrast with the <c>AccountStatus</c> claim below: that one's staleness
+/// is closed differently — WU-AccountEnforcement made it a live per-navigation read instead of a
+/// claim-freshness problem, because unlike ShowMatureContent/Theme it is display-only and never
+/// shapes a query. See <c>identity-and-authorization.md</c> §"Account Status Is Display-Only,
+/// Read Live".)
 /// </remarks>
 public class ApplicationUserClaimsPrincipalFactory(
     UserManager<User> userManager,

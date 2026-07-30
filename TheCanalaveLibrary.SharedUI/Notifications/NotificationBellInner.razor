@@ -1,7 +1,11 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.Extensions.Logging
+@implements IDisposable
 @inject INotificationWriteService NotificationService
 @inject NavigationManager Nav
+@inject ILogger<NotificationBellInner> Logger
 
 @* The actual authenticated-only content for NotificationBell (see that file's doc comment).
    Split out of the thin AuthorizeView wrapper so its @inject services — and the notification
@@ -12,7 +16,12 @@
    Does NOT inject IActiveUserContext — the service is self-scoped (uses its own
    IActiveUserContext via DI) so we avoid double-injection.
 
-   No live push (post-MVP L7). Count and preview refresh on mount / navigation. *@
+   No live push (post-MVP L7). Count and preview refresh on mount / navigation — genuinely true as
+   of WU-AccountEnforcement (2026-07-30): this component previously claimed the "/ navigation"
+   half but never subscribed to LocationChanged, so a notification landing mid-session (e.g. the
+   account-status moderator notifications AccountStatusBanner now surfaces alongside) stayed
+   invisible until the next full page load. Fixed with the same NavigationManager.LocationChanged
+   pattern MessagesNavLink already used for its own unread badge. *@
 
 <div class="relative">
 
@@ -90,12 +99,41 @@
 
     protected override async Task OnInitializedAsync()
     {
+        Nav.LocationChanged += OnLocationChangedAsync;
+
         // Parallel loads are safe: each read-service method creates its own short-lived
         // DbContext from IDbContextFactory (layer2-services.md "Read-context concurrency").
         // ??= — restore-or-fetch for the count; the preview always loads fresh.
         var previewTask = NotificationService.GetNotificationsAsync(1, PreviewSize);
         UnreadCount ??= await NotificationService.GetUnreadCountAsync();
         _preview      = await previewTask;
+    }
+
+    // async void is the correct pattern for Blazor Server event handlers;
+    // InvokeAsync marshals the re-render back to the sync context.
+    private async void OnLocationChangedAsync(object? sender, LocationChangedEventArgs e)
+    {
+        await RefreshAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshAsync()
+    {
+        try
+        {
+            // Parallel loads are safe — see the OnInitializedAsync comment above. Both re-fetch
+            // fresh here (no ??= — a navigation-triggered refresh must reflect the current count,
+            // not restore a stale persisted one).
+            var previewTask = NotificationService.GetNotificationsAsync(1, PreviewSize);
+            UnreadCount = await NotificationService.GetUnreadCountAsync();
+            _preview    = await previewTask;
+        }
+        catch (Exception ex)
+        {
+            // Degraded but continuing — keeps whatever was last shown; a real query bug must
+            // still leave a trace (logging.md §"No silent catches").
+            Logger.LogWarning(ex, "Notification refresh on navigation failed — showing last-known state");
+        }
     }
 
     private void Toggle() => _open = !_open;
@@ -122,4 +160,6 @@
         _preview    = [.. _preview.Select(n => n with { IsRead = true })];
         UnreadCount = 0;
     }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChangedAsync;
 }

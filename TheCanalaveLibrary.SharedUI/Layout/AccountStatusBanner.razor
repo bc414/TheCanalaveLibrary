@@ -1,21 +1,132 @@
 @namespace TheCanalaveLibrary.SharedUI
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.Extensions.Logging
+@implements IDisposable
+@inject IAccountStatusReadService StatusService
+@inject NavigationManager Nav
+@inject ILogger<AccountStatusBanner> Logger
 
-@* Indicator-role element (layer4-style.md "Element Roles") — reads the canalave:account_status
-   claim baked at sign-in (ApplicationUserClaimsPrincipalFactory) from cascaded
-   AuthenticationState, same pattern as LoginDisplay's claims read: no service injection. Renders
-   only for a Warned account; Suspended/Banned never reach here (CanalaveSignInManager blocks
-   sign-in, and an already-open session for either is killed by the security-stamp bump in
-   ApplyAccountActionAsync — WU38a). Staleness note: a freshly-Warned user sees this starting at
-   their next sign-in, per ActiveUserClaimTypes.AccountStatus's own doc comment. *@
+@* Indicator-role element (layer4-style.md "Element Roles"). First paint uses the
+   canalave:account_status claim baked at sign-in (ApplicationUserClaimsPrincipalFactory) — that
+   claim can only ever say Warned for a user who reached a live circuit at all, since Suspended/
+   Banned are blocked at sign-in by CanalaveSignInManager. From then on, WU-AccountEnforcement
+   re-reads status live via IAccountStatusReadService on every in-app navigation (the
+   MessagesNavLink unread-badge pattern) — this is what surfaces a freshly-Warned status, and what
+   surfaces Suspended/Banned during the (deliberately unshortened, security.md "Account-Status
+   Enforcement") 30-minute window before the security-stamp bump ejects the session. Deliberately
+   a live read, not a claim/cookie refresh: this value is display-only, never used for
+   query-shaping or authorization, so there is nothing to reissue and no document round-trip is
+   needed — see identity-and-authorization.md §"Account Status Is Display-Only, Read Live". *@
 
 <AuthorizeView>
     <Authorized>
-        @if (context.User.FindFirst(ActiveUserClaimTypes.AccountStatus)?.Value == nameof(AccountStatusEnum.Warned))
+        @if (_status is not AccountStatusEnum.Active)
         {
-            <div class="rounded-md border border-(--color-warning)/40 bg-(--color-warning)/10 px-4 py-2 text-sm text-(--color-warning)" role="alert">
-                Your account has received a moderator warning. Repeated violations may lead to
-                suspension or a permanent ban.
+            <div class="@ContainerClasses" role="alert">
+                <span>@Message</span>
+                @if (_status is AccountStatusEnum.Suspended or AccountStatusEnum.Banned)
+                {
+                    @* Live-read-only case (a claim can never carry these two — see header comment
+                       above): the banner doubles as the disclosure that this session is a dead
+                       man walking until the next stamp-revalidation ejects it, so it offers the
+                       same exit early. Reuses UserMenu's logout form-POST pattern verbatim. *@
+                    <form action="Account/Logout" method="post" class="inline">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="ReturnUrl" value="@CurrentUrl" />
+                        <button type="submit" class="underline hover:no-underline">Log out</button>
+                    </form>
+                }
             </div>
         }
     </Authorized>
 </AuthorizeView>
+
+@code {
+    private AccountStatusEnum _status = AccountStatusEnum.Active;
+    private DateTime? _suspendedUntilUtc;
+
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnLocationChangedAsync;
+
+        // First-paint value only, straight off the claim — no query yet. The live read (below)
+        // only ever corrects this, starting at the first in-app navigation.
+        if (AuthState is not null)
+        {
+            AuthenticationState auth = await AuthState;
+            if (Enum.TryParse(auth.User.FindFirst(ActiveUserClaimTypes.AccountStatus)?.Value,
+                    out AccountStatusEnum claimStatus))
+            {
+                _status = claimStatus;
+            }
+        }
+    }
+
+    // async void is the correct pattern for Blazor Server event handlers;
+    // InvokeAsync marshals the re-render back to the sync context.
+    private async void OnLocationChangedAsync(object? sender, LocationChangedEventArgs e)
+    {
+        await RefreshStatusAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshStatusAsync()
+    {
+        // Anonymous viewers render nothing (AuthorizeView) — skip the query outright instead of
+        // relying on the service throwing, so the catch below only sees genuine failures.
+        if (AuthState is not null)
+        {
+            AuthenticationState auth = await AuthState;
+            if (auth.User.Identity?.IsAuthenticated != true)
+            {
+                _status = AccountStatusEnum.Active;
+                return;
+            }
+        }
+
+        try
+        {
+            AccountStatusDto dto = await StatusService.GetMyAccountStatusAsync();
+            _status = dto.Status;
+            _suspendedUntilUtc = dto.SuspendedUntilUtc;
+        }
+        catch (Exception ex)
+        {
+            // Degraded but continuing — keeps whatever _status already held (the claim's
+            // first-paint value, or the last successful live read). A real query bug must still
+            // leave a trace (logging.md §"No silent catches").
+            Logger.LogWarning(ex, "Account-status refresh failed — showing last-known status");
+        }
+    }
+
+    // Copy matches Login.razor's BuildAccountStatusMessageAsync verbatim (minus its "Error: "
+    // prefix, which is that page's validation-message convention, not this banner's) — a user
+    // ejected mid-session and then signing back in reads the same sentence twice, not two
+    // different ones.
+    private string Message => _status switch
+    {
+        AccountStatusEnum.Warned =>
+            "Your account has received a moderator warning. Repeated violations may lead to suspension or a permanent ban.",
+        AccountStatusEnum.Suspended =>
+            $"This account is suspended until {_suspendedUntilUtc:d}.",
+        AccountStatusEnum.Banned =>
+            "This account has been permanently banned.",
+        _ => string.Empty,
+    };
+
+    private string ContainerClasses => _status switch
+    {
+        AccountStatusEnum.Warned =>
+            "flex flex-wrap items-center justify-between gap-3 rounded-md border border-(--color-warning)/40 bg-(--color-warning)/10 px-4 py-2 text-sm text-(--color-warning)",
+        _ =>
+            "flex flex-wrap items-center justify-between gap-3 rounded-md border border-(--color-danger)/40 bg-(--color-danger)/10 px-4 py-2 text-sm text-(--color-danger)",
+    };
+
+    // Same "resolve current-page ReturnUrl for a logout form" idiom as UserMenu.razor.
+    private string CurrentUrl => Nav.ToBaseRelativePath(Nav.Uri);
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChangedAsync;
+}

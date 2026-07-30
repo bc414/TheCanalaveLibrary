@@ -104,6 +104,7 @@ builder.Services.AddScoped<IBadgeReadService, ClientBadgeReadService>();
 builder.Services.AddScoped<IBadgeWriteService, ClientBadgeWriteService>();
 builder.Services.AddScoped<IContentImportService, ClientContentImportService>();
 builder.Services.AddScoped<IUserActivityWriteService, ClientUserActivityWriteService>();
+builder.Services.AddScoped<IAccountStatusReadService, ClientAccountStatusReadService>();
 // Remaining unregistered interfaces are deliberate structural exclusions — never client-implemented
 // (server-only infra) or already WASM-native via a shared impl. See layer5-wasm.md "Scope
 // Inventory"/"Avoid": IImageStorageService, IHtmlSanitizationService, IWriteRateLimitService,

@@ -358,14 +358,24 @@ non-negotiable per §13.
 philosophy ("close the loop on ALL reports — the user is entitled to know they were heard"). A community
 that shadowbans lies to its members. This is a design axiom, not a deferred decision.
 
-**Login enforcement SHIPPED (WU38a, 2026-07-11).** WU34 shipped the state columns and
-notifications; the enforcement slice landed in WU38a: `CanalaveSignInManager.CanSignInAsync`
-blocks Suspended users until `SuspendedUntilUtc` and Banned users permanently, a security-stamp
-bump kills already-open sessions on Suspend/Ban, and `AccountStatusBanner` surfaces Warned in the
-layout chrome — rules in `security.md` §"Account-Status Enforcement". **The one open residual
-(WU-AccountEnforcement's remaining slice, `roadmap.md` Phase 2 item 5):** mid-session
-responsiveness — a freshly-Warned user sees the banner only at next sign-in; `RefreshSignInAsync`
-is the named tool.
+**Login enforcement SHIPPED (WU38a, 2026-07-11); mid-session responsiveness SHIPPED
+(WU-AccountEnforcement, 2026-07-30).** WU34 shipped the state columns and notifications; the
+enforcement slice landed in WU38a: `CanalaveSignInManager.CanSignInAsync` blocks Suspended users
+until `SuspendedUntilUtc` and Banned users permanently, a security-stamp bump kills already-open
+sessions on Suspend/Ban — rules in `security.md` §"Account-Status Enforcement". The residual
+tracked at G1 (`hidden-deferrals-tracker.md`) is closed: `AccountStatusBanner` now re-reads status
+live on every in-app navigation instead of relying on the baked sign-in claim, so a freshly-Warned
+(or Suspended/Banned) user sees it within one navigation, not at next sign-in. Turned out the WU34
+notification was **not** actually "the immediate channel" it was described as — `NotificationBell`
+had the identical mid-session-staleness bug (no refresh mechanism at all until this WU added the
+same navigation-triggered re-query the messaging unread-badge already used).
+
+**The banner discloses all three non-Active states, not just Warned.** Ejection latency for
+Suspend/Ban stays at 30 minutes (`security.md`, deliberate, not shortened by this WU) — leaving the
+banner silent for a Suspended/Banned viewer for that whole window would mean a user staring at a
+dead-man-walking session with no explanation, which contradicts this section's own §13 axiom below
+("the user is entitled to know they were heard" / always told why). The banner is purely
+*disclosure* — it changes nothing about how or when enforcement actually happens.
 
 ### Report Targets and `ActiveReportCount`
 
