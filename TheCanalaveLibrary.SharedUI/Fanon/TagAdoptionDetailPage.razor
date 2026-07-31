@@ -39,7 +39,7 @@
             replaced by the tag itself. This is always your choice, per story.
         </p>
 
-        <InlineAlert Message="@_error" />
+        <ErrorAlert Message="@_error" ShowSignIn="@_errorIsSessionExpired" />
         @if (_lastResult is { } r)
         {
             <p class="text-sm text-(--color-text)">
@@ -119,6 +119,7 @@
 
     private bool _loading = true;
     private string? _error;
+    private bool _errorIsSessionExpired;
     private AdoptResultDto? _lastResult;
 
     protected override async Task OnInitializedAsync()
@@ -140,6 +141,7 @@
     private async Task RunAsync(Func<Task<AdoptResultDto>> action)
     {
         _error = null;
+        _errorIsSessionExpired = false;
         try
         {
             _lastResult = await action();
@@ -150,6 +152,7 @@
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Tag adoption failed for tag {TagId}", TagId);
             _error = string.Join(" ", ExceptionPresenter.GetUserMessages(ex));
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
     }
 

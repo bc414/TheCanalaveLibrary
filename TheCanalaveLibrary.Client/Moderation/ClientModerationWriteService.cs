@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -9,16 +8,13 @@ namespace TheCanalaveLibrary.Client;
 /// ServerModerationWriteService : ServerModerationReadService. Auth rides the same-origin Identity
 /// cookie — WASM's fetch-backed HttpClient sends it automatically for same-origin requests.
 /// <para>
-/// Translates ModerationEndpoints' status codes back into the service contract's typed exceptions:
-/// 400 → <see cref="ArgumentException"/> (message from <c>ProblemDetails.Detail</c> — defensive; no
-/// method on this service actually produces 400 today, see ModerationEndpoints' class doc), 401/403
-/// → <see cref="UnauthorizedAccessException"/> (message read through — covers both
-/// <c>RequireModerator()</c>'s genuine "not signed in"/"not a mod" denial and the several other
-/// <see cref="InvalidOperationException"/>-throwing business-rule guards EndpointHelpers also maps to
-/// 401; see ModerationEndpoints' class doc's "Known EndpointHelpers mismatch" note — same shape as
-/// <c>ClientFollowingWriteService</c>'s documented caveat), 404 →
-/// <see cref="KeyNotFoundException"/> (defensive; this service raises <c>SingleAsync</c>/EF exceptions
-/// rather than <see cref="KeyNotFoundException"/> for a missing report/story today).
+/// Standard mapping, delegated to <see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>: 400 →
+/// <see cref="ArgumentException"/> (defensive; no method on this service actually produces 400
+/// today, see ModerationEndpoints' class doc). 401/403/404 are the shared helper's standard arms
+/// (WU-ErrorHandling2, 2026-07-30 — previously collapsed 401/403 into one
+/// <see cref="UnauthorizedAccessException"/>, predating <see cref="SessionExpiredException"/>; see
+/// ModerationEndpoints' class doc's "Known EndpointHelpers mismatch" note for why 401 can arrive
+/// here for what is really a business-rule guard, not just "not signed in").
 /// </para>
 /// </summary>
 public sealed class ClientModerationWriteService(HttpClient http)
@@ -80,25 +76,6 @@ public sealed class ClientModerationWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of ModerationEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                throw new ArgumentException(detail ?? "The moderation request was rejected.");
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException(
-                    detail ?? "This action requires an authenticated moderator or admin.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException(detail ?? "Report or story not found.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, detail => new ArgumentException(detail));
 }

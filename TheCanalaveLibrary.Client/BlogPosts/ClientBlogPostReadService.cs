@@ -31,13 +31,10 @@ public class ClientBlogPostReadService(HttpClient http) : IBlogPostReadService
 
     public async Task<BlogPostEditDto?> GetForEditAsync(int blogPostId)
     {
-        // 401/403 → UnauthorizedAccessException, mirroring the server service's author gate so
-        // BlogPostEditorPage's forbidden handling works identically under both render modes
-        // (status→contract-exception translation, layer5-wasm.md "The Error-Translation Contract").
+        // 401 → SessionExpiredException, 403 → UnauthorizedAccessException (the server's author
+        // gate), delegated to the shared read translator (WU-ErrorHandling2, 2026-07-30).
         using HttpResponseMessage response = await Http.GetAsync($"api/blog-posts/{blogPostId}/edit");
-        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
-            throw new UnauthorizedAccessException("You can only edit your own blog posts.");
-        response.EnsureSuccessStatusCode();
+        await ClientHttpHelpers.ThrowIfReadFailedAsync(response);
         return await ClientHttpHelpers.ReadNullableFromJsonAsync<BlogPostEditDto?>(response.Content);
     }
 
@@ -59,11 +56,9 @@ public class ClientBlogPostReadService(HttpClient http) : IBlogPostReadService
 
     public async Task<SiteAnnouncementEditDto?> GetSiteAnnouncementForEditAsync(int blogPostId)
     {
-        // 401/403 → UnauthorizedAccessException, same error-translation contract as GetForEditAsync.
+        // Same error-translation contract as GetForEditAsync.
         using HttpResponseMessage response = await Http.GetAsync($"api/blog-posts/site/{blogPostId}/edit");
-        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
-            throw new UnauthorizedAccessException("Only moderators can manage site announcements.");
-        response.EnsureSuccessStatusCode();
+        await ClientHttpHelpers.ThrowIfReadFailedAsync(response);
         return await ClientHttpHelpers.ReadNullableFromJsonAsync<SiteAnnouncementEditDto?>(response.Content);
     }
 }

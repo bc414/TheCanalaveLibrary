@@ -27,7 +27,7 @@ namespace TheCanalaveLibrary.Server;
 /// (Program.cs <c>OnRedirectToLogin</c>) always wins before the service runs.
 /// </para>
 /// <para>
-/// Writes wrap in the shared <see cref="EndpointHelpers.ExecuteWriteAsync"/> for exception→status
+/// Writes wrap in the shared <see cref="EndpointHelpers.ExecuteAsync"/> for exception→status
 /// translation (layer5-wasm.md §"The Error-Translation Contract"), even though none of the three
 /// mapped write methods throws a typed exception in practice today — defense-in-depth, mirrors
 /// ChapterReadMarkEndpoints/StoryLineageEndpoints.
@@ -61,14 +61,14 @@ public static class NotificationEndpoints
 
         group.MapPost("/{notificationId:long}/mark-read",
             (INotificationWriteService notifications, long notificationId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await notifications.MarkAsReadAsync(notificationId);
                     return Results.NoContent();
                 }));
 
         group.MapPost("/mark-all-read", (INotificationWriteService notifications) =>
-            EndpointHelpers.ExecuteWriteAsync(async () =>
+            EndpointHelpers.ExecuteAsync(async () =>
             {
                 await notifications.MarkAllAsReadAsync();
                 return Results.NoContent();
@@ -79,7 +79,7 @@ public static class NotificationEndpoints
                 NotificationTypeEnum notifType,
                 bool emailEnabled,
                 bool collapsed) =>
-            EndpointHelpers.ExecuteWriteAsync(async () =>
+            EndpointHelpers.ExecuteAsync(async () =>
             {
                 await notifications.SetSettingAsync(notifType, emailEnabled, collapsed);
                 return Results.NoContent();

@@ -13,8 +13,8 @@ namespace TheCanalaveLibrary.Server;
 /// <para>
 /// Auth: <c>RequireAuthorization()</c> on every route, defense-in-depth alongside the service's own
 /// <c>RequireCurrentUserId</c> guard (throws <see cref="InvalidOperationException"/>, already mapped
-/// to 401 by the shared <see cref="EndpointHelpers.ExecuteWriteAsync"/>). Every write — and the read,
-/// wrapped in <see cref="EndpointHelpers.ExecuteWriteAsync"/> solely for that exception→status
+/// to 401 by the shared <see cref="EndpointHelpers.ExecuteAsync"/>). Every write — and the read,
+/// wrapped in <see cref="EndpointHelpers.ExecuteAsync"/> solely for that exception→status
 /// translation, same as <c>UserStoryInteractionEndpoints.GetBookshelfStoryIdsAsync</c> — goes through
 /// the shared helper.
 /// </para>
@@ -22,7 +22,7 @@ namespace TheCanalaveLibrary.Server;
 /// <b>Status-code seam resolved (MA-611, 2026-07-18).</b> <c>UpdateAuthorSettingsAsync</c>'s
 /// pinned-story ownership/visibility guard is a genuine business-rule rejection, not an auth failure —
 /// it now throws <see cref="UserSettingsValidationException"/> (a <c>CanalaveValidationException</c>)
-/// → <b>400</b> via <see cref="EndpointHelpers.ExecuteWriteAsync"/>, the accurate status. Only the
+/// → <b>400</b> via <see cref="EndpointHelpers.ExecuteAsync"/>, the accurate status. Only the
 /// <c>RequireCurrentUserId</c> auth guard's <see cref="InvalidOperationException"/> still maps to 401.
 /// <c>ClientUserSettingsService</c> reconstructs <see cref="UserSettingsValidationException"/> from
 /// the 400 body. Same resolution shape as <c>FollowingEndpoints</c>.
@@ -44,14 +44,14 @@ public static class UserSettingsEndpoints
         // ── Read ──
 
         group.MapGet("/", (IUserSettingsService settings) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await settings.GetMySettingsAsync())))
             .RequireAuthorization();
 
         // ── Writes — JSON sub-forms ──
 
         group.MapPut("/profile", (IUserSettingsService settings, UpdateProfileDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await settings.UpdateProfileAsync(dto);
                     return Results.NoContent();
@@ -59,7 +59,7 @@ public static class UserSettingsEndpoints
             .RequireAuthorization();
 
         group.MapPut("/reader", (IUserSettingsService settings, ReaderSettingsDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await settings.UpdateReaderSettingsAsync(dto);
                     return Results.NoContent();
@@ -67,7 +67,7 @@ public static class UserSettingsEndpoints
             .RequireAuthorization();
 
         group.MapPut("/privacy", (IUserSettingsService settings, PrivacySettingsDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await settings.UpdatePrivacySettingsAsync(dto);
                     return Results.NoContent();
@@ -75,7 +75,7 @@ public static class UserSettingsEndpoints
             .RequireAuthorization();
 
         group.MapPut("/author", (IUserSettingsService settings, AuthorSettingsDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await settings.UpdateAuthorSettingsAsync(dto);
                     return Results.NoContent();
@@ -86,7 +86,7 @@ public static class UserSettingsEndpoints
         // PUT (same pattern as FollowingEndpoints' SetReceiveAlertsAsync ?receiveAlerts=...).
         group.MapPut("/appearance", (
                 IUserSettingsService settings, int themeId, bool prefersAnimated, bool prefersDataSaver) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await settings.UpdateAppearanceAsync(themeId, prefersAnimated, prefersDataSaver);
                     return Results.NoContent();
@@ -98,7 +98,7 @@ public static class UserSettingsEndpoints
         // Identity cookie, not a Razor form post, so the global UseAntiforgery() middleware's
         // token requirement is correctly bypassed here (mirrors StoryEndpoints' cover-art upload).
         group.MapPost("/profile-picture", (IUserSettingsService settings, IFormFile file) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await settings.UploadProfilePictureAsync(
                         file.OpenReadStream(), file.ContentType))))
             .RequireAuthorization()

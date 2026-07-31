@@ -28,6 +28,13 @@ builder.Services.AddRazorComponents()
 // Add HttpContextAccessor to access the HttpContext from services.
 builder.Services.AddHttpContextAccessor();
 
+// ProblemDetails envelope for the JSON API surface (WU-ErrorHandling2, 2026-07-30):
+// error-handling.md §"The API error envelope". ApiExceptionHandler is the backstop for
+// exceptions no endpoint's own EndpointHelpers.ExecuteAsync caught; scoped to /api/* only, so
+// the HTML UseExceptionHandler("/Error") path below is unaffected.
+builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
@@ -503,12 +510,22 @@ catch (Exception ex)
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+    // No HTML fallback path in dev (matches prior behavior for non-/api requests — this app had
+    // no exception-handling middleware at all in dev before WU-ErrorHandling2). The parameterless
+    // overload only runs the DI-registered IExceptionHandler set: ApiExceptionHandler answers
+    // /api/* failures with the JSON envelope (needed for local dev/testing against the API
+    // surface); anything else falls through and rethrows exactly as before.
+    app.UseExceptionHandler();
     app.UseWebAssemblyDebugging();
     app.UseMigrationsEndPoint();
     app.MapDevDiagnosticsEndpoints();
 }
 else
 {
+    // Same DI-registered IExceptionHandler set runs first here too (ExceptionHandlerMiddleware
+    // always consults it regardless of which overload configured the instance) — ApiExceptionHandler
+    // answers /api/* failures with the JSON envelope; everything else falls back to the HTML
+    // "/Error" page (Error.razor) as before. error-handling.md §"The API error envelope".
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }

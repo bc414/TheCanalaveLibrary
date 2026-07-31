@@ -7,7 +7,7 @@ namespace TheCanalaveLibrary.Server;
 /// (Features 46/47/48). Thin pass-throughs: no business logic here — validation and the mod/admin
 /// gate for write actions live in the service (<c>ServerModerationWriteService.RequireModerator</c>,
 /// the single enforcement point). Every write handler wraps in the shared
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> for exception→status translation
+/// <see cref="EndpointHelpers.ExecuteAsync"/> for exception→status translation
 /// (layer5-wasm.md §"The Error-Translation Contract").
 /// <para>
 /// <b>Read auth.</b> <see cref="IModerationReadService.GetReportReasonsAsync"/> is
@@ -35,7 +35,7 @@ namespace TheCanalaveLibrary.Server;
 /// SiteDailyStat siblings (MA-702). The service gate remains the enforcement point of record: a
 /// signed-in non-mod who somehow reaches the service gets <see cref="UnauthorizedAccessException"/>
 /// → 403 (MA-701 fix); the unauthenticated branch throws <see cref="InvalidOperationException"/> →
-/// 401 via <see cref="EndpointHelpers.ExecuteWriteAsync"/>'s auth-safety-net case. <b>Known
+/// 401 via <see cref="EndpointHelpers.ExecuteAsync"/>'s auth-safety-net case. <b>Known
 /// EndpointHelpers mismatch (flagged, deferred):</b> <c>SubmitReportAsync</c>'s target-type
 /// allow-set guard, <c>ApplyAccountActionAsync</c>'s "target must be a User" guard, and
 /// <c>ApproveStoryAsync</c>/<c>RejectStoryAsync</c>'s "not pending approval" guards all also throw
@@ -76,7 +76,7 @@ public static class ModerationEndpoints
         // Report submission (Feature 46): any authenticated user. SubmitReportRequest is a request
         // object → POST-with-body per layer5-wasm.md's non-scalar-parameter rule.
         group.MapPost("/reports", (IModerationWriteService moderation, SubmitReportRequest request) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await moderation.SubmitReportAsync(request);
                     return Results.NoContent();
@@ -87,7 +87,7 @@ public static class ModerationEndpoints
 
         group.MapPost("/reports/{reportId:long}/claim",
                 (IModerationWriteService moderation, long reportId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await moderation.ClaimReportAsync(reportId);
                         return Results.NoContent();
@@ -98,7 +98,7 @@ public static class ModerationEndpoints
         // automatically, no lambda default needed (unlike the non-nullable bools above/below).
         group.MapPost("/reports/{reportId:long}/resolve-no-action",
                 (IModerationWriteService moderation, long reportId, string? actionNotes) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await moderation.ResolveNoActionAsync(reportId, actionNotes);
                         return Results.NoContent();
@@ -110,7 +110,7 @@ public static class ModerationEndpoints
         group.MapPost("/reports/{reportId:long}/resolve-removal",
                 (IModerationWriteService moderation, long reportId, string removalReason,
                         bool hardDelete) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await moderation.ResolveWithRemovalAsync(reportId, removalReason, hardDelete);
                         return Results.NoContent();
@@ -121,7 +121,7 @@ public static class ModerationEndpoints
         group.MapPost("/reports/{reportId:long}/account-action",
                 (IModerationWriteService moderation, long reportId, ModeratorActionType action,
                         string reason, DateTime? suspendedUntilUtc) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await moderation.ApplyAccountActionAsync(reportId, action, reason, suspendedUntilUtc);
                         return Results.NoContent();
@@ -132,7 +132,7 @@ public static class ModerationEndpoints
 
         group.MapPost("/submissions/{storyId:int}/approve",
                 (IModerationWriteService moderation, int storyId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await moderation.ApproveStoryAsync(storyId);
                         return Results.NoContent();
@@ -141,7 +141,7 @@ public static class ModerationEndpoints
 
         group.MapPost("/submissions/{storyId:int}/reject",
                 (IModerationWriteService moderation, int storyId, string reason) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await moderation.RejectStoryAsync(storyId, reason);
                         return Results.NoContent();

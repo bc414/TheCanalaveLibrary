@@ -25,18 +25,23 @@ internal static class ClientHttpHelpers
 
     /// <summary>
     /// The standard write-response translation — the inverse of the server's
-    /// <c>EndpointHelpers.ExecuteWriteAsync</c>. 400 → <paramref name="validationFactory"/> over
+    /// <c>EndpointHelpers.ExecuteAsync</c>. 400 → <paramref name="validationFactory"/> over
     /// <c>ProblemDetails.Detail</c> (the server-side exception's user-facing message; the server
     /// joins each feature's error list into one string via <c>ex.Message</c>, so list-shaped
     /// exceptions reconstruct as a single-element list — per-item errors don't round-trip); 401 →
-    /// <see cref="InvalidOperationException"/> carrying the detail through (the server maps the
-    /// services' "…requires an authenticated user" InvalidOperationException to 401); 403 →
+    /// <see cref="SessionExpiredException"/> (the cookie handler's bare 401 and the server's
+    /// "…requires an authenticated user" arm both land here — a session signal, not an
+    /// authorization denial; error-handling.md §"The API error envelope"); 403 →
     /// <see cref="UnauthorizedAccessException"/>; 404 → <see cref="KeyNotFoundException"/>; 429 →
     /// <see cref="WriteRateLimitExceededException"/> reconstruction when
     /// <paramref name="rateLimitedAction"/> is set (write surfaces behind the write throttle —
-    /// security.md); anything else → <c>EnsureSuccessStatusCode</c>. Services whose endpoint
-    /// mapping deviates from this shape (e.g. Messaging's 403 → MessagingPermissionException,
-    /// Groups' content-rating 403 disambiguation) keep their own private translation.
+    /// security.md); anything else (an unhandled 5xx carrying the <c>ApiExceptionHandler</c>
+    /// envelope) → <see cref="ServerFaultException"/> with the server's <c>traceId</c>, falling
+    /// back to <c>EnsureSuccessStatusCode</c> for a genuinely non-<c>ProblemDetails</c> response
+    /// (e.g. a network-layer failure with no body at all). Services whose endpoint mapping
+    /// deviates from this shape (e.g. Messaging's 403 → MessagingPermissionException, Groups'
+    /// content-rating 403 disambiguation) keep their own private translation for that one arm and
+    /// delegate everything else here.
     /// </summary>
     public static async Task ThrowIfWriteFailedAsync(
         HttpResponseMessage response,
@@ -51,9 +56,7 @@ internal static class ClientHttpHelpers
                 string? detail = await ReadProblemDetailAsync(response);
                 throw validationFactory(detail ?? "The request failed validation.");
             case HttpStatusCode.Unauthorized:
-                string? authDetail = await ReadProblemDetailAsync(response);
-                throw new InvalidOperationException(
-                    authDetail ?? "This operation requires an authenticated user.");
+                throw new SessionExpiredException();
             case HttpStatusCode.Forbidden:
                 throw new UnauthorizedAccessException("You don't have permission to perform this action.");
             case HttpStatusCode.NotFound:
@@ -63,9 +66,55 @@ internal static class ClientHttpHelpers
                 throw new WriteRateLimitExceededException(
                     rateLimitedAction.Value, TimeSpan.FromSeconds(retryAfterSeconds ?? 60));
             default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
+                await ThrowServerFaultOrEnsureSuccessAsync(response);
                 return;
         }
+    }
+
+    /// <summary>
+    /// The read-side twin of <see cref="ThrowIfWriteFailedAsync"/> — same table minus the
+    /// 429/validation-factory arms, for read services whose server counterpart can throw but has
+    /// no per-feature validation type of its own (a read endpoint's 400 comes from a shared/base
+    /// exception, e.g. <c>ArgumentException</c>, so there is no feature-specific factory to call —
+    /// the <see cref="ProblemPayload.Detail"/> is surfaced as a plain
+    /// <see cref="InvalidOperationException"/> for the caller's catch site to translate via
+    /// <c>ExceptionPresenter</c>). Added at WU-ErrorHandling2 (2026-07-30) — see layer5-wasm.md
+    /// §"The Error-Translation Contract".
+    /// </summary>
+    public static async Task ThrowIfReadFailedAsync(HttpResponseMessage response)
+    {
+        if (response.IsSuccessStatusCode) return;
+
+        switch (response.StatusCode)
+        {
+            case HttpStatusCode.BadRequest:
+                string? detail = await ReadProblemDetailAsync(response);
+                throw new InvalidOperationException(detail ?? "The request failed validation.");
+            case HttpStatusCode.Unauthorized:
+                throw new SessionExpiredException();
+            case HttpStatusCode.Forbidden:
+                throw new UnauthorizedAccessException("You don't have permission to perform this action.");
+            case HttpStatusCode.NotFound:
+                throw new KeyNotFoundException("The requested content was not found.");
+            default:
+                await ThrowServerFaultOrEnsureSuccessAsync(response);
+                return;
+        }
+    }
+
+    /// <summary>Shared 5xx fall-through for both translators — reconstructs
+    /// <see cref="ServerFaultException"/> off the <c>ApiExceptionHandler</c> envelope's
+    /// <c>traceId</c> extension when present; otherwise falls back to
+    /// <c>EnsureSuccessStatusCode</c> (a genuinely bodyless failure, e.g. a network error).</summary>
+    private static async Task ThrowServerFaultOrEnsureSuccessAsync(HttpResponseMessage response)
+    {
+        ProblemPayload? problem = await ReadNullableFromJsonAsync<ProblemPayload>(response.Content);
+        if (problem is null)
+        {
+            response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
+            return;
+        }
+        throw new ServerFaultException(problem.TraceId);
     }
 
     /// <summary>
@@ -99,7 +148,7 @@ internal static class ClientHttpHelpers
 
     /// <summary>
     /// Reads the <c>retryAfterSeconds</c> extension a 429 <c>WriteRateLimitExceededException</c>
-    /// carries (see <c>EndpointHelpers.ExecuteWriteAsync</c> on the server). Null if absent.
+    /// carries (see <c>EndpointHelpers.ExecuteAsync</c> on the server). Null if absent.
     /// </summary>
     public static async Task<double?> ReadRetryAfterSecondsAsync(HttpResponseMessage response)
     {
@@ -107,6 +156,8 @@ internal static class ClientHttpHelpers
         return problem?.RetryAfterSeconds;
     }
 
-    /// <summary>Just the ProblemDetails fields consumed client-side — MVC's type isn't referenced in WASM.</summary>
-    private sealed record ProblemPayload(string? Detail, double? RetryAfterSeconds);
+    /// <summary>Just the ProblemDetails fields consumed client-side — MVC's type isn't referenced
+    /// in WASM. <c>TraceId</c> is the <c>ApiExceptionHandler</c> envelope's extension
+    /// (WU-ErrorHandling2, 2026-07-30), present only on the unhandled-5xx path.</summary>
+    private sealed record ProblemPayload(string? Detail, double? RetryAfterSeconds, string? TraceId);
 }

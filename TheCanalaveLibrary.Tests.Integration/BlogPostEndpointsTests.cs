@@ -16,7 +16,7 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// the published-only public view instead of leaking drafts (owner check lives in
 /// <c>ServerBlogPostReadService.GetByAuthorAsync</c>); and <c>GET /api/blog-posts/{id}/edit</c>
 /// enforces authorship in <c>GetForEditAsync</c> (<see cref="UnauthorizedAccessException"/> → 403
-/// via <c>EndpointHelpers.ExecuteWriteAsync</c>, same wire shape as the Chapter/Story /edit routes).
+/// via <c>EndpointHelpers.ExecuteAsync</c>, same wire shape as the Chapter/Story /edit routes).
 /// Tier: Integration.
 /// </summary>
 [Collection("Postgres")]

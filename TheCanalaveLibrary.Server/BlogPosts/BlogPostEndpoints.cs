@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Server;
 /// Layer-5 API surface for <see cref="IBlogPostReadService"/> / <see cref="IBlogPostWriteService"/>.
 /// Thin pass-throughs: no business logic here — validation, sanitization, and the author-only
 /// ownership checks live in the service (single enforcement point). Every write handler wraps in
-/// the shared <see cref="EndpointHelpers.ExecuteWriteAsync"/> for exception→status translation
+/// the shared <see cref="EndpointHelpers.ExecuteAsync"/> for exception→status translation
 /// (layer5-wasm.md §"The Error-Translation Contract"). <see cref="IBlogPostReadService.GetByAuthorAsync"/>/
 /// <see cref="IBlogPostReadService.GetByGroupAsync"/> translate through <see cref="PagedResult{T}"/>
 /// at the HTTP boundary only (layer5-wasm.md §"Paged results") — the tuple shape the interface
@@ -23,7 +23,7 @@ namespace TheCanalaveLibrary.Server;
 /// <para>
 /// Write auth: <c>RequireAuthorization()</c> on every write — create/like require only an
 /// authenticated user; update/delete/like additionally enforce author-only ownership via
-/// <c>UnauthorizedAccessException</c>, translated to 403 by <c>ExecuteWriteAsync</c>. Group blog
+/// <c>UnauthorizedAccessException</c>, translated to 403 by <c>ExecuteAsync</c>. Group blog
 /// post creation additionally enforces group membership the same way (also translated to 403).
 /// </para>
 /// </summary>
@@ -52,13 +52,13 @@ public static class BlogPostEndpoints
             return Results.Ok(new PagedResult<BlogPostListingDto>(result.Items, result.TotalCount));
         });
 
-        // Author-only editor read — wrapped in ExecuteWriteAsync (unlike the other reads) because
+        // Author-only editor read — wrapped in ExecuteAsync (unlike the other reads) because
         // GetForEditAsync enforces the author gate and throws UnauthorizedAccessException for a
         // non-author; the shared helper translates that to 403 so the client's
         // 403→UnauthorizedAccessException mapping works over WASM (same wire shape as the
         // ChapterEndpoints/StoryEndpoints /edit routes — endpoint-authz sweep 2026-07-18).
         group.MapGet("/{blogPostId:int}/edit", (IBlogPostReadService blogPosts, int blogPostId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Json(await blogPosts.GetForEditAsync(blogPostId))))
             .RequireAuthorization();
 
@@ -82,25 +82,25 @@ public static class BlogPostEndpoints
             return Results.Ok(new PagedResult<BlogPostListingDto>(result.Items, result.TotalCount));
         });
 
-        // Moderator/admin-only editor read — same ExecuteWriteAsync wrapping as /edit above:
+        // Moderator/admin-only editor read — same ExecuteAsync wrapping as /edit above:
         // GetSiteAnnouncementForEditAsync itself throws UnauthorizedAccessException for a
         // non-moderator (translated to 403 here), exactly the GetForEditAsync author-gate shape.
         // Without the service-side gate, RequireAuthorization() alone would let any signed-in
         // user read a draft announcement's full content.
         group.MapGet("/site/{blogPostId:int}/edit", (IBlogPostReadService blogPosts, int blogPostId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Json(await blogPosts.GetSiteAnnouncementForEditAsync(blogPostId))))
             .RequireAuthorization();
 
         // ── Writes (authenticated — author/membership ownership enforced by the service) ──
 
         group.MapPost("/", (IBlogPostWriteService blogPosts, CreateProfileBlogPostDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await blogPosts.CreateProfileBlogPostAsync(dto))))
             .RequireAuthorization();
 
         group.MapPut("/{blogPostId:int}", (IBlogPostWriteService blogPosts, int blogPostId, UpdateBlogPostDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     blogPostId != dto.BlogPostId
                         ? Results.Problem(detail: "Route blogPostId does not match body BlogPostId.",
                             statusCode: StatusCodes.Status400BadRequest)
@@ -108,7 +108,7 @@ public static class BlogPostEndpoints
             .RequireAuthorization();
 
         group.MapDelete("/{blogPostId:int}", (IBlogPostWriteService blogPosts, int blogPostId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await blogPosts.DeleteBlogPostAsync(blogPostId);
                     return Results.NoContent();
@@ -116,25 +116,25 @@ public static class BlogPostEndpoints
             .RequireAuthorization();
 
         group.MapPost("/{blogPostId:int}/like", (IBlogPostWriteService blogPosts, int blogPostId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await blogPosts.ToggleLikeAsync(blogPostId))))
             .RequireAuthorization();
 
         group.MapPost("/group", (IBlogPostWriteService blogPosts, CreateGroupBlogPostDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await blogPosts.CreateGroupBlogPostAsync(dto))))
             .RequireAuthorization();
 
         // Site announcements (WU-SiteNews) — RequireAuthorization() only; the real
         // IsModerator || IsAdmin gate lives in the write service (translated to 403 by
-        // ExecuteWriteAsync), same posture as every other write route in this file.
+        // ExecuteAsync), same posture as every other write route in this file.
         group.MapPost("/site", (IBlogPostWriteService blogPosts, CreateSiteBlogPostDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await blogPosts.CreateSiteBlogPostAsync(dto))))
             .RequireAuthorization();
 
         group.MapPut("/site/{blogPostId:int}", (IBlogPostWriteService blogPosts, int blogPostId, UpdateSiteBlogPostDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     blogPostId != dto.BlogPostId
                         ? Results.Problem(detail: "Route blogPostId does not match body BlogPostId.",
                             statusCode: StatusCodes.Status400BadRequest)
@@ -142,7 +142,7 @@ public static class BlogPostEndpoints
             .RequireAuthorization();
 
         group.MapDelete("/site/{blogPostId:int}", (IBlogPostWriteService blogPosts, int blogPostId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await blogPosts.DeleteSiteBlogPostAsync(blogPostId);
                     return Results.NoContent();

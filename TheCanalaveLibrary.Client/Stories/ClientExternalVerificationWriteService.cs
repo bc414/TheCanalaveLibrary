@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -9,13 +8,12 @@ namespace TheCanalaveLibrary.Client;
 /// mirroring <c>ServerExternalVerificationWriteService : ServerExternalVerificationReadService</c>.
 /// Auth rides the same-origin Identity cookie.
 ///
-/// Translates ExternalVerificationEndpoints' status codes back into the service contract's typed
-/// exceptions: 401/403 → <see cref="UnauthorizedAccessException"/> (covers
+/// Delegates the standard status-code mapping to
+/// <see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>: 401/403 covers
 /// <c>RequireModerator()</c>'s genuine denial AND the several <see cref="InvalidOperationException"/>
 /// business-rule guards EndpointHelpers also maps to 401 — e.g. "Verify your X account first",
-/// same known mismatch as <c>ClientModerationWriteService</c>), 404 →
-/// <see cref="KeyNotFoundException"/> (defensive — this service raises <c>SingleAsync</c>
-/// exceptions rather than 404 for a missing identity/link today).
+/// same known mismatch as <c>ClientModerationWriteService</c>; 404 is defensive (this service
+/// raises <c>SingleAsync</c> exceptions rather than 404 for a missing identity/link today).
 /// </summary>
 public sealed class ClientExternalVerificationWriteService(HttpClient http)
     : ClientExternalVerificationReadService(http), IExternalVerificationWriteService
@@ -70,23 +68,6 @@ public sealed class ClientExternalVerificationWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of ExternalVerificationEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException(
-                    detail ?? "This action requires an authenticated moderator or admin.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException(detail ?? "Account or link not found.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, detail => new InvalidOperationException(detail));
 }

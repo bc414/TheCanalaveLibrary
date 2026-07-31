@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
@@ -77,31 +76,14 @@ public sealed class ClientUserSettingsService(HttpClient http) : IUserSettingsSe
     }
 
     /// <summary>
-    /// Status-code → contract-exception translation. <c>UpdateAuthorSettingsAsync</c>'s pinned-story
-    /// ownership/visibility business rule now throws <see cref="UserSettingsValidationException"/>
-    /// server-side → 400, reconstructed here carrying <c>ProblemDetails.Detail</c> (user-facing,
-    /// surfaces the real cause). The remaining throw site is
-    /// <c>ServerUserSettingsService.RequireCurrentUserId</c>'s unauthenticated-caller guard
-    /// (<see cref="InvalidOperationException"/> → 401); the interface declares no dedicated auth
-    /// exception, so 401/403 both translate to <see cref="InvalidOperationException"/> here, carrying
-    /// the server's message through rather than losing it.
+    /// Status-code → contract-exception translation, delegated to the shared
+    /// <see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/> (WU-ErrorHandling2, 2026-07-30 —
+    /// previously collapsed 401/403 into one <see cref="InvalidOperationException"/>, predating
+    /// <see cref="SessionExpiredException"/>). <c>UpdateAuthorSettingsAsync</c>'s pinned-story
+    /// ownership/visibility business rule throws <see cref="UserSettingsValidationException"/>
+    /// server-side → 400, reconstructed here carrying <c>ProblemDetails.Detail</c>.
     /// </summary>
-    private static async Task ThrowIfFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                string? badRequestDetail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new UserSettingsValidationException([badRequestDetail ?? "The request failed validation."]);
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new InvalidOperationException(detail ?? "This operation requires an authenticated user.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    private static Task ThrowIfFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(
+            response, detail => new UserSettingsValidationException([detail]));
 }

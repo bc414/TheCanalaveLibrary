@@ -123,7 +123,7 @@
 
             @if (_actionError is not null)
             {
-                <div class="mb-2"><InlineAlert Message="@_actionError" /></div>
+                <div class="mb-2"><ErrorAlert Message="@_actionError" ShowSignIn="@_actionErrorIsSessionExpired" /></div>
             }
 
             <div class="flex flex-wrap gap-2">
@@ -169,6 +169,7 @@
     private string? _actionNotes;
     private bool _acting;
     private string? _actionError;
+    private bool _actionErrorIsSessionExpired;
 
     protected override async Task OnInitializedAsync()
     {
@@ -194,6 +195,7 @@
         catch (Exception ex)
         {
             _actionError = Translate(ex, "Claiming a report failed unexpectedly");
+            _actionErrorIsSessionExpired = ex is SessionExpiredException;
         }
     }
 
@@ -218,6 +220,7 @@
         _activeReport = report;
         _actionNotes = null;
         _actionError = null;
+        _actionErrorIsSessionExpired = false;
     }
 
     private void CloseActionPanel()
@@ -225,19 +228,25 @@
         _activeReport = null;
         _actionNotes = null;
         _actionError = null;
+        _actionErrorIsSessionExpired = false;
     }
 
     private async Task ResolveNoActionAsync(long reportId)
     {
         _acting = true;
         _actionError = null;
+        _actionErrorIsSessionExpired = false;
         try
         {
             await ModerationService.ResolveNoActionAsync(reportId, _actionNotes);
             CloseActionPanel();
             await LoadAsync();
         }
-        catch (Exception ex) { _actionError = Translate(ex, "Resolving a report (no action) failed unexpectedly"); }
+        catch (Exception ex)
+        {
+            _actionError = Translate(ex, "Resolving a report (no action) failed unexpectedly");
+            _actionErrorIsSessionExpired = ex is SessionExpiredException;
+        }
         finally { _acting = false; }
     }
 
@@ -251,13 +260,18 @@
 
         _acting = true;
         _actionError = null;
+        _actionErrorIsSessionExpired = false;
         try
         {
             await ModerationService.ResolveWithRemovalAsync(report.ReportId, _actionNotes);
             CloseActionPanel();
             await LoadAsync();
         }
-        catch (Exception ex) { _actionError = Translate(ex, "Resolving a report (removal) failed unexpectedly"); }
+        catch (Exception ex)
+        {
+            _actionError = Translate(ex, "Resolving a report (removal) failed unexpectedly");
+            _actionErrorIsSessionExpired = ex is SessionExpiredException;
+        }
         finally { _acting = false; }
     }
 
@@ -271,6 +285,7 @@
 
         _acting = true;
         _actionError = null;
+        _actionErrorIsSessionExpired = false;
         try
         {
             await ModerationService.ApplyAccountActionAsync(
@@ -278,7 +293,11 @@
             CloseActionPanel();
             await LoadAsync();
         }
-        catch (Exception ex) { _actionError = Translate(ex, "Applying an account action failed unexpectedly"); }
+        catch (Exception ex)
+        {
+            _actionError = Translate(ex, "Applying an account action failed unexpectedly");
+            _actionErrorIsSessionExpired = ex is SessionExpiredException;
+        }
         finally { _acting = false; }
     }
 

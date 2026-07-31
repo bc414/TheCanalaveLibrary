@@ -7,7 +7,7 @@ namespace TheCanalaveLibrary.Server;
 /// <see cref="ICustomListWriteService"/> (Feature 51, WU-CustomLists). Thin pass-throughs:
 /// validation and ownership checks live in the service (single enforcement point); the endpoint's
 /// only added job is exception→status translation via the shared
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> (layer5-wasm.md §"The Error-Translation
+/// <see cref="EndpointHelpers.ExecuteAsync"/> (layer5-wasm.md §"The Error-Translation
 /// Contract").
 /// <para>
 /// Read auth mirrors the consuming pages: <c>/mine</c> and <c>/memberships</c> back
@@ -55,12 +55,12 @@ public static class CustomListEndpoints
         // ── Writes ────────────────────────────────────────────────────────────────
 
         group.MapPost("/", (ICustomListWriteService lists, string listName, bool isPublic) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await lists.CreateListAsync(listName, isPublic))))
             .RequireAuthorization();
 
         group.MapPut("/{listId:int}/name", (ICustomListWriteService lists, int listId, string newName) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await lists.RenameListAsync(listId, newName);
                     return Results.NoContent();
@@ -68,7 +68,7 @@ public static class CustomListEndpoints
             .RequireAuthorization();
 
         group.MapPut("/{listId:int}/visibility", (ICustomListWriteService lists, int listId, bool isPublic) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await lists.SetListVisibilityAsync(listId, isPublic);
                     return Results.NoContent();
@@ -76,7 +76,7 @@ public static class CustomListEndpoints
             .RequireAuthorization();
 
         group.MapDelete("/{listId:int}", (ICustomListWriteService lists, int listId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await lists.DeleteListAsync(listId);
                     return Results.NoContent();
@@ -85,7 +85,7 @@ public static class CustomListEndpoints
 
         group.MapPost("/{listId:int}/stories/{storyId:int}",
                 (ICustomListWriteService lists, int listId, int storyId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await lists.AddStoryAsync(listId, storyId);
                         return Results.NoContent();
@@ -94,7 +94,7 @@ public static class CustomListEndpoints
 
         group.MapDelete("/{listId:int}/stories/{storyId:int}",
                 (ICustomListWriteService lists, int listId, int storyId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await lists.RemoveStoryAsync(listId, storyId);
                         return Results.NoContent();
@@ -102,7 +102,7 @@ public static class CustomListEndpoints
             .RequireAuthorization();
 
         group.MapPost("/{sourceListId:int}/clone", (ICustomListWriteService lists, int sourceListId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await lists.CloneListAsync(sourceListId))))
             .RequireAuthorization();
 

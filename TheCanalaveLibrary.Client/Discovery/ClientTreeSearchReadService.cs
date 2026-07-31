@@ -22,17 +22,28 @@ public class ClientTreeSearchReadService(HttpClient http) : ITreeSearchReadServi
 
     public async Task<TreeSearchResultDto> TraverseAsync(TreeSearchRequest request, CancellationToken ct = default)
     {
+        // Server-side Validate(request) throws ArgumentException (400) for a malformed request —
+        // now wrapped in ExecuteAsync server-side (WU-ErrorHandling2, 2026-07-30, same WU); read
+        // translator here so it surfaces as a 400, not an unhandled 500.
         HttpResponseMessage response = await Http.PostAsJsonAsync("api/tree-search/traverse", request);
-        response.EnsureSuccessStatusCode();
+        await ClientHttpHelpers.ThrowIfReadFailedAsync(response);
         return (await response.Content.ReadFromJsonAsync<TreeSearchResultDto>())!;
     }
 
     public async Task<TreeSearchListingResultDto> SearchAsync(
         TreeSearchRequest request, StoryFilterDto filter, CancellationToken ct = default)
     {
+        // Two independent 400 sources land on the same status code: Validate(request)'s
+        // ArgumentException (malformed tree-search shape) and — since this calls through to
+        // IStoryReadService.FilterCandidateIdsAsync internally — ApplyFiltersAsync's
+        // ValidateShipShape StoryValidationException (malformed ship criteria, same as
+        // StoryEndpoints' /query et al). Reconstructing as StoryValidationException either way
+        // keeps the message user-facing via ExceptionPresenter rather than losing it to the
+        // generic "unexpected error" path a plain InvalidOperationException would hit.
         HttpResponseMessage response = await Http.PostAsJsonAsync(
             "api/tree-search/search", new TreeSearchListingRequest(request, filter));
-        response.EnsureSuccessStatusCode();
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(
+            response, detail => new StoryValidationException([detail]));
         return (await response.Content.ReadFromJsonAsync<TreeSearchListingResultDto>())!;
     }
 }

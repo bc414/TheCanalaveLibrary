@@ -117,7 +117,7 @@ else
 @if (_error is not null)
 {
     <div class="mt-2">
-        <InlineAlert Message="@_error" />
+        <ErrorAlert Message="@_error" ShowSignIn="@_errorIsSessionExpired" />
     </div>
 }
 
@@ -187,6 +187,7 @@ else
     private long _pendingDeleteId;
     private bool _busy;
     private string? _error;
+    private bool _errorIsSessionExpired;
     private CommentEditor? _composer; // persistent "Leave a comment" composer — cleared after post
 
     // ── Tree helpers ──────────────────────────────────────────────────────────────
@@ -223,6 +224,7 @@ else
     private async Task LoadAsync()
     {
         _error = null;
+        _errorIsSessionExpired = false;
         Page = _target switch
         {
             CommentTarget.Chapter     => await Comments.GetChapterCommentsAsync(ChapterId!.Value, _currentPage, PageSize),
@@ -273,6 +275,7 @@ else
             idx = _comments.FindIndex(c => c.CommentId == id);
             if (idx >= 0) _comments[idx] = original;
             _error = Translate(ex, "Toggling like on comment {CommentId} failed unexpectedly", id);
+            _errorIsSessionExpired = ex is SessionExpiredException;
             StateHasChanged();
         }
     }
@@ -299,6 +302,7 @@ else
         _replyingToId = id;
         _editingId = null; // close any open edit
         _error = null;
+        _errorIsSessionExpired = false;
     }
 
     private void HandleReplyCancel() => _replyingToId = null;
@@ -307,6 +311,7 @@ else
     {
         _busy = true;
         _error = null;
+        _errorIsSessionExpired = false;
         try
         {
             switch (_target)
@@ -348,6 +353,7 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Posting a reply to comment {CommentId} failed unexpectedly", parentId);
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {
@@ -361,6 +367,7 @@ else
         _editingId    = id;
         _replyingToId = null; // close any open reply composer
         _error        = null;
+        _errorIsSessionExpired = false;
     }
 
     private void HandleEditCancel() => _editingId = null;
@@ -370,6 +377,7 @@ else
         if (_editingId is null) return;
         _busy  = true;
         _error = null;
+        _errorIsSessionExpired = false;
         try
         {
             await Comments.EditCommentAsync(new UpdateCommentDto
@@ -383,6 +391,7 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Editing comment {CommentId} failed unexpectedly", _editingId ?? 0);
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {
@@ -396,12 +405,14 @@ else
         _pendingDeleteId     = id;
         _showDeleteConfirm   = true;
         _error               = null;
+        _errorIsSessionExpired = false;
     }
 
     private async Task HandleDeleteConfirmAsync()
     {
         _busy  = true;
         _error = null;
+        _errorIsSessionExpired = false;
         try
         {
             await Comments.DeleteCommentAsync(_pendingDeleteId);
@@ -410,6 +421,7 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Deleting comment {CommentId} failed unexpectedly", _pendingDeleteId);
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {
@@ -422,6 +434,7 @@ else
     {
         _busy  = true;
         _error = null;
+        _errorIsSessionExpired = false;
         try
         {
             switch (_target)
@@ -464,6 +477,7 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Posting a comment failed unexpectedly (target {TargetId})", TargetId());
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {

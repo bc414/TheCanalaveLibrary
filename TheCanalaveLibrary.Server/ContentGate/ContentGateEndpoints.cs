@@ -117,7 +117,7 @@ public static class ContentGateEndpoints
 
         api.MapDelete("/reveals/{entityType:int}/{entityId:int}", (
                 IContentRevealService reveals, int entityType, int entityId) =>
-            EndpointHelpers.ExecuteWriteAsync(async () =>
+            EndpointHelpers.ExecuteAsync(async () =>
             {
                 await reveals.RemoveAsync((RevealedEntityType)entityType, entityId);
                 return Results.NoContent();

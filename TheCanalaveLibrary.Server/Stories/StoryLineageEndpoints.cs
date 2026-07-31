@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Server;
 /// Layer-5 API surface for <see cref="IStoryLineageReadService"/> / <see cref="IStoryLineageWriteService"/>
 /// (Feature 10, WU42). Thin pass-throughs: no business logic here — validation and the source/target
 /// ownership gates live in <see cref="ServerStoryLineageWriteService"/> (single enforcement point).
-/// Every write handler wraps in the shared <see cref="EndpointHelpers.ExecuteWriteAsync"/> for
+/// Every write handler wraps in the shared <see cref="EndpointHelpers.ExecuteAsync"/> for
 /// exception→status translation (layer5-wasm.md §"The Error-Translation Contract").
 /// <para>
 /// Read auth: <see cref="IStoryLineageReadService.GetLineageForStoryAsync"/> is public — its own doc
@@ -48,7 +48,7 @@ public static class StoryLineageEndpoints
         // ── Writes (authenticated — source/target ownership enforced by the service) ──
 
         group.MapPost("/", (IStoryLineageWriteService lineage, CreateStoryLineageDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await lineage.RequestLineageAsync(dto);
                     return Results.NoContent();
@@ -57,7 +57,7 @@ public static class StoryLineageEndpoints
 
         group.MapPost("/{sourceStoryId:int}/{targetStoryId:int}/{typeId}/approve",
                 (IStoryLineageWriteService lineage, int sourceStoryId, int targetStoryId, short typeId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await lineage.ApproveLineageAsync(sourceStoryId, targetStoryId, typeId);
                         return Results.NoContent();
@@ -66,7 +66,7 @@ public static class StoryLineageEndpoints
 
         group.MapPost("/{sourceStoryId:int}/{targetStoryId:int}/{typeId}/reject",
                 (IStoryLineageWriteService lineage, int sourceStoryId, int targetStoryId, short typeId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await lineage.RejectLineageAsync(sourceStoryId, targetStoryId, typeId);
                         return Results.NoContent();
@@ -75,7 +75,7 @@ public static class StoryLineageEndpoints
 
         group.MapDelete("/{sourceStoryId:int}/{targetStoryId:int}/{typeId}",
                 (IStoryLineageWriteService lineage, int sourceStoryId, int targetStoryId, short typeId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await lineage.DeleteLineageAsync(sourceStoryId, targetStoryId, typeId);
                         return Results.NoContent();

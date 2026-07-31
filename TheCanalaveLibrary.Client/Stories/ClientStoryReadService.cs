@@ -23,13 +23,13 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
 
     public async Task<StoryUpdateDTO?> GetStoryForEditAsync(int storyId)
     {
-        // 401/403 → UnauthorizedAccessException, mirroring the server service's author gate so
-        // StoryEditorPage's forbidden handling works identically under both render modes
-        // (status→contract-exception translation, layer5-wasm.md "The Error-Translation Contract").
+        // 401 → SessionExpiredException, 403 → UnauthorizedAccessException (the server's author
+        // gate — StoryEditorPage's forbidden handling works identically under both render modes),
+        // delegated to the shared read translator (WU-ErrorHandling2, 2026-07-30 — previously
+        // collapsed both statuses into one UnauthorizedAccessException, predating the session/
+        // permission distinction).
         using HttpResponseMessage response = await Http.GetAsync($"api/stories/{storyId}/edit");
-        if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
-            throw new UnauthorizedAccessException("You must be the author of this story.");
-        response.EnsureSuccessStatusCode();
+        await ClientHttpHelpers.ThrowIfReadFailedAsync(response);
         return await ClientHttpHelpers.ReadNullableFromJsonAsync<StoryUpdateDTO?>(response.Content);
     }
 
@@ -54,7 +54,13 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
             url += "?" + string.Join('&', queryParts);
 
         HttpResponseMessage response = await Http.PostAsJsonAsync(url, filter);
-        response.EnsureSuccessStatusCode();
+        // ApplyFiltersAsync's ValidateShipShape can throw StoryValidationException (400) for
+        // malformed ship criteria — the ExecuteAsync wrap on the server side that makes this
+        // reachable (rather than a 500) landed at the same WU (WU-ErrorHandling2, 2026-07-30); the
+        // write-shaped translator is reused here (not ThrowIfReadFailedAsync) because this is the
+        // one story read with a genuine validation factory to reconstruct.
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(
+            response, detail => new StoryValidationException([detail]));
         PagedResult<StoryListingDto> result =
             (await response.Content.ReadFromJsonAsync<PagedResult<StoryListingDto>>())!;
         return (result.Items, result.TotalCount);
@@ -75,7 +81,8 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
     {
         HttpResponseMessage response =
             await Http.PostAsJsonAsync($"api/stories/random-batch?batchSize={batchSize}", filter);
-        response.EnsureSuccessStatusCode();
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(
+            response, detail => new StoryValidationException([detail]));
         return await response.Content.ReadFromJsonAsync<StoryListingDto[]>() ?? [];
     }
 
@@ -86,7 +93,8 @@ public class ClientStoryReadService(HttpClient http) : IStoryReadService
 
         string query = string.Join('&', candidateIds.Select(id => $"candidateIds={id}"));
         HttpResponseMessage response = await Http.PostAsJsonAsync($"api/stories/filter-candidates?{query}", filter);
-        response.EnsureSuccessStatusCode();
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(
+            response, detail => new StoryValidationException([detail]));
         return await response.Content.ReadFromJsonAsync<List<int>>() ?? [];
     }
 

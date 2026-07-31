@@ -7,7 +7,7 @@ namespace TheCanalaveLibrary.Server;
 /// (Feature 55, WU-Spotlight). Thin pass-throughs: no business logic here — validation and the
 /// block-capacity/cooldown/ownership checks live in the service (single enforcement point). The
 /// endpoint's only added job is exception→status translation via the shared
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> (layer5-wasm.md §"The Error-Translation
+/// <see cref="EndpointHelpers.ExecuteAsync"/> (layer5-wasm.md §"The Error-Translation
 /// Contract").
 /// <para>
 /// <see cref="ISpotlightReadService.GetActiveSpotlightsAsync"/> is public — it backs the homepage
@@ -53,7 +53,7 @@ public static class SpotlightEndpoints
         // ── Writes ──
 
         group.MapPost("/redeem", (ISpotlightWriteService spotlights, RedeemSpotlightSlotDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await spotlights.RedeemSlotAsync(dto);
                     return Results.NoContent();

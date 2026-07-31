@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Server;
 /// Layer-5 API surface for <see cref="ITagReadService"/> / <see cref="ITagWriteService"/>.
 /// Thin pass-throughs: no business logic here — validation and the mod/admin gate live in the
 /// service (single enforcement point). Exception→status translation is
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/>'s (MA-407 — this class carried the original
+/// <see cref="EndpointHelpers.ExecuteAsync"/>'s (MA-407 — this class carried the original
 /// private 3-case copy): TagValidationException → 400 (ProblemDetails.Detail carries the message
 /// verbatim — it is user-facing), UnauthorizedAccessException → 403,
 /// KeyNotFoundException → 404. The write routes carry a <c>RequireAuthorization()</c> floor
@@ -42,12 +42,12 @@ public static class TagEndpoints
         // is the one write surface that is plain HTTP today (security.md "HTTP Edge Rate Limiting").
 
         group.MapPost("/", (ITagWriteService tags, CreateTagDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () => Results.Ok(await tags.CreateTagAsync(dto))))
+                EndpointHelpers.ExecuteAsync(async () => Results.Ok(await tags.CreateTagAsync(dto))))
             .RequireAuthorization()
             .RequireRateLimiting("TagWrites");
 
         group.MapPut("/{tagId:int}", (ITagWriteService tags, int tagId, UpdateTagDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     tagId != dto.TagId
                         ? Results.Problem(detail: "Route tagId does not match body TagId.",
                             statusCode: StatusCodes.Status400BadRequest)
@@ -58,7 +58,7 @@ public static class TagEndpoints
             .RequireRateLimiting("TagWrites");
 
         group.MapDelete("/{tagId:int}", (ITagWriteService tags, int tagId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await tags.DeleteTagAsync(tagId);
                     return Results.NoContent();

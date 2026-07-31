@@ -32,7 +32,7 @@ namespace TheCanalaveLibrary.Server;
 /// <b>Status-code seam resolved (MA-611, 2026-07-18).</b> <c>SetDisplayOrderAsync</c>'s unowned-key
 /// rejection (a requested display key the caller hasn't earned) is a business rule, not an auth
 /// failure — it now throws <see cref="BadgeValidationException"/> (a <c>CanalaveValidationException</c>)
-/// → <b>400</b> via the shared <see cref="EndpointHelpers.ExecuteWriteAsync"/>, the accurate status.
+/// → <b>400</b> via the shared <see cref="EndpointHelpers.ExecuteAsync"/>, the accurate status.
 /// Only the <c>RequireUserId</c> auth-safety-net guard's <see cref="InvalidOperationException"/> still
 /// maps to 401. <see cref="ClientBadgeWriteService"/> reconstructs <see cref="BadgeValidationException"/>
 /// from the 400 body.
@@ -50,7 +50,7 @@ public static class BadgeEndpoints
         // already filters to DisplayOrder > 0 and isn't touched by this interface at all).
         // userId is the caller's own id (IActiveUserContext), never a client-supplied parameter.
         group.MapGet("/", (IBadgeReadService badges, IActiveUserContext activeUser) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await badges.GetMyBadgesForCurationAsync(RequireUserId(activeUser)))))
             .RequireAuthorization();
 
@@ -62,7 +62,7 @@ public static class BadgeEndpoints
         // userId is the caller's own id, never client-supplied (MA-601).
         group.MapPut("/display-order",
                 (IBadgeWriteService badges, IActiveUserContext activeUser, [FromBody] List<string> orderedVisibleKeys) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await badges.SetDisplayOrderAsync(RequireUserId(activeUser), orderedVisibleKeys);
                         return Results.NoContent();
@@ -74,7 +74,7 @@ public static class BadgeEndpoints
 
     // Auth safety net, same idiom as ServerChapterWriteService.RequireAuthenticatedUser — in
     // practice RequireAuthorization() above already guarantees this, so the InvalidOperationException
-    // path (mapped to 401 by EndpointHelpers.ExecuteWriteAsync) is a defense-in-depth backstop.
+    // path (mapped to 401 by EndpointHelpers.ExecuteAsync) is a defense-in-depth backstop.
     private static int RequireUserId(IActiveUserContext activeUser) =>
         activeUser.UserId ?? throw new InvalidOperationException("This operation requires an authenticated user.");
 }

@@ -7,7 +7,7 @@ namespace TheCanalaveLibrary.Server;
 /// <see cref="ISavedTagSelectionWriteService"/> (Feature 15, WU43). Thin pass-throughs: no business
 /// logic here — validation and ownership checks live in the service (single enforcement point). The
 /// endpoint's only added job is exception→status translation, via the shared
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> (layer5-wasm.md §"The Error-Translation Contract").
+/// <see cref="EndpointHelpers.ExecuteAsync"/> (layer5-wasm.md §"The Error-Translation Contract").
 /// <para>
 /// Saved tag selections are a per-user feature (saved filter presets) — every write and every
 /// self-scoped read requires an authenticated user (<c>RequireAuthorization()</c>).
@@ -55,12 +55,12 @@ public static class SavedTagSelectionEndpoints
         // ── Writes (owner-only enforced in the service; endpoint translates the resulting exceptions) ──
 
         group.MapPost("/", (ISavedTagSelectionWriteService selections, SavedTagSelectionInput input) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await selections.CreateAsync(input))))
             .RequireAuthorization();
 
         group.MapPut("/{id:int}", (ISavedTagSelectionWriteService selections, int id, SavedTagSelectionInput input) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await selections.UpdateAsync(id, input);
                     return Results.NoContent();
@@ -68,7 +68,7 @@ public static class SavedTagSelectionEndpoints
             .RequireAuthorization();
 
         group.MapDelete("/{id:int}", (ISavedTagSelectionWriteService selections, int id) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await selections.DeleteAsync(id);
                     return Results.NoContent();
@@ -76,7 +76,7 @@ public static class SavedTagSelectionEndpoints
             .RequireAuthorization();
 
         group.MapPost("/{sourceId:int}/copy", (ISavedTagSelectionWriteService selections, int sourceId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await selections.CopyPublicSelectionAsync(sourceId))))
             .RequireAuthorization();
 

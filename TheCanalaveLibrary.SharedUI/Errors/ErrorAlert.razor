@@ -1,0 +1,46 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject NavigationManager Nav
+
+@* The session-expiry-aware error surface (error-handling.md §"The API error envelope" —
+   WU-ErrorHandling2, 2026-07-30). Wraps InlineAlert — still the channel for
+   form/validation/operation feedback — and appends an inline Sign-in affordance only when the
+   caller sets ShowSignIn (the catch site's failure was SessionExpiredException). The user stays
+   on the page rather than being redirected mid-form: DraftAutosave already covers long-form
+   editors, and a hard redirect would lose in-progress input on a short form. Self-hides when
+   there's nothing to show, same contract as InlineAlert. Outer Margin Rule: root has no m-*;
+   parent spaces it. Leaf-ish: only NavigationManager injected, for the ReturnUrl. *@
+
+@if (HasContent)
+{
+    <div class="flex flex-col gap-2">
+        <InlineAlert Messages="@Messages" Message="@Message" Variant="@Variant" />
+        @if (ShowSignIn)
+        {
+            <a href="@SignInHref"
+               class="self-start text-sm font-semibold text-(--color-action-ink) hover:underline">
+                Sign in
+            </a>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>Message list (mirrors <see cref="InlineAlert"/>). Null/empty with no
+    /// <see cref="Message"/> ⇒ renders nothing.</summary>
+    [Parameter] public IReadOnlyList<string>? Messages { get; set; }
+
+    /// <summary>Single-message convenience (mirrors <see cref="InlineAlert"/>).</summary>
+    [Parameter] public string? Message { get; set; }
+
+    [Parameter] public InlineAlertVariant Variant { get; set; } = InlineAlertVariant.Danger;
+
+    /// <summary>Set by the catch site when the underlying failure was
+    /// <c>SessionExpiredException</c> (<c>ex is SessionExpiredException</c>) — appends the Sign
+    /// in link carrying the current path as <c>ReturnUrl</c>.</summary>
+    [Parameter] public bool ShowSignIn { get; set; }
+
+    private bool HasContent => !string.IsNullOrWhiteSpace(Message) || (Messages?.Count ?? 0) > 0;
+
+    private string SignInHref =>
+        $"/Account/Login?ReturnUrl={Uri.EscapeDataString("/" + Nav.ToBaseRelativePath(Nav.Uri))}";
+}

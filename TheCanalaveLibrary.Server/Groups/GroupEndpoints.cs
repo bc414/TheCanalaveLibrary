@@ -9,7 +9,7 @@ namespace TheCanalaveLibrary.Server;
 /// member/admin gates, the content-rating waterfall, and the <c>GroupAudience</c> visibility
 /// filter all live in <c>ServerGroupReadService</c>/<c>ServerGroupWriteService</c> (single
 /// enforcement point). Every write handler wraps in the shared
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> for exception→status translation
+/// <see cref="EndpointHelpers.ExecuteAsync"/> for exception→status translation
 /// (layer5-wasm.md §"The Error-Translation Contract"). <c>GetListingsAsync</c>/
 /// <c>GetMembersAsync</c> return <c>Task&lt;(T[] Items, int TotalCount)&gt;</c> tuples, translated
 /// to <see cref="PagedResult{T}"/> at the HTTP boundary per layer5-wasm.md §"Paged results."
@@ -24,7 +24,7 @@ namespace TheCanalaveLibrary.Server;
 /// Write auth: <c>RequireAuthorization()</c> on every write, as the authenticated-user floor.
 /// The finer-grained member/admin distinction rides through the service's own
 /// <see cref="UnauthorizedAccessException"/> throws (translated to 403 by
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/>) — folder CRUD and <c>RemoveStoryAsync</c> are
+/// <see cref="EndpointHelpers.ExecuteAsync"/>) — folder CRUD and <c>RemoveStoryAsync</c> are
 /// admin-only, <c>AddStoryAsync</c> is member-only, <c>JoinAsync</c>/<c>LeaveAsync</c>/
 /// <c>CreateGroupAsync</c> require only authentication. No <c>RequireRateLimiting(...)</c> at the
 /// edge — <c>CreateGroupAsync</c> throttles at the service layer via the transport-agnostic
@@ -66,12 +66,12 @@ public static class GroupEndpoints
         // ── Writes (authenticated floor — member/admin gates enforced by the service, translated here) ──
 
         group.MapPost("/", (IGroupWriteService groups, CreateGroupDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await groups.CreateGroupAsync(dto))))
             .RequireAuthorization();
 
         group.MapPut("/{groupId:int}", (IGroupWriteService groups, int groupId, UpdateGroupDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     groupId != dto.GroupId
                         ? Results.Problem(detail: "Route groupId does not match body GroupId.",
                             statusCode: StatusCodes.Status400BadRequest)
@@ -79,7 +79,7 @@ public static class GroupEndpoints
             .RequireAuthorization();
 
         group.MapPost("/{groupId:int}/join", (IGroupWriteService groups, int groupId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await groups.JoinAsync(groupId);
                     return Results.NoContent();
@@ -87,7 +87,7 @@ public static class GroupEndpoints
             .RequireAuthorization();
 
         group.MapPost("/{groupId:int}/leave", (IGroupWriteService groups, int groupId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await groups.LeaveAsync(groupId);
                     return Results.NoContent();
@@ -95,7 +95,7 @@ public static class GroupEndpoints
             .RequireAuthorization();
 
         group.MapPost("/stories", (IGroupWriteService groups, AddGroupStoryDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await groups.AddStoryAsync(dto);
                     return Results.NoContent();
@@ -103,7 +103,7 @@ public static class GroupEndpoints
             .RequireAuthorization();
 
         group.MapDelete("/stories/{groupStoryId:int}", (IGroupWriteService groups, int groupStoryId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await groups.RemoveStoryAsync(groupStoryId);
                     return Results.NoContent();
@@ -112,7 +112,7 @@ public static class GroupEndpoints
 
         group.MapPut("/stories/{groupStoryId:int}/folder/{groupFolderId:int}",
                 (IGroupWriteService groups, int groupStoryId, int groupFolderId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await groups.AssignStoryToFolderAsync(groupStoryId, groupFolderId);
                         return Results.NoContent();
@@ -121,7 +121,7 @@ public static class GroupEndpoints
 
         group.MapDelete("/stories/{groupStoryId:int}/folder/{groupFolderId:int}",
                 (IGroupWriteService groups, int groupStoryId, int groupFolderId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await groups.UnassignStoryFromFolderAsync(groupStoryId, groupFolderId);
                         return Results.NoContent();
@@ -129,7 +129,7 @@ public static class GroupEndpoints
             .RequireAuthorization();
 
         group.MapPost("/folders", (IGroupWriteService groups, CreateFolderDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await groups.CreateFolderAsync(dto))))
             .RequireAuthorization();
 
@@ -137,7 +137,7 @@ public static class GroupEndpoints
         // string from the query string by default (same reasoning as FollowingEndpoints' vouchText).
         group.MapPut("/folders/{groupFolderId:int}/name",
                 (IGroupWriteService groups, int groupFolderId, [FromBody] string newName) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await groups.RenameFolderAsync(groupFolderId, newName);
                         return Results.NoContent();
@@ -145,7 +145,7 @@ public static class GroupEndpoints
             .RequireAuthorization();
 
         group.MapDelete("/folders/{groupFolderId:int}", (IGroupWriteService groups, int groupFolderId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await groups.DeleteFolderAsync(groupFolderId);
                     return Results.NoContent();
@@ -154,7 +154,7 @@ public static class GroupEndpoints
 
         group.MapPut("/folders/{groupFolderId:int}/sort-order",
                 (IGroupWriteService groups, int groupFolderId, int newSortOrder) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await groups.ReorderFolderAsync(groupFolderId, newSortOrder);
                         return Results.NoContent();

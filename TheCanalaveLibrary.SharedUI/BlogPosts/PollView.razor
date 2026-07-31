@@ -159,7 +159,7 @@
 
     @if (_error is not null)
     {
-        <InlineAlert Message="@_error" />
+        <ErrorAlert Message="@_error" ShowSignIn="@_errorIsSessionExpired" />
     }
 
     @* ── Manage row (owner / mods; service gates are the authority) ───────── *@
@@ -227,6 +227,7 @@
     private bool _busy;
     private bool _confirmDelete;
     private string? _error;
+    private bool _errorIsSessionExpired;
     private int _loadedPollId = int.MinValue;
 
     private bool CanSelect => CurrentUserId is not null && Poll.Status == PollStatus.Open;
@@ -321,6 +322,7 @@
         if (_busy) return;
         _busy = true;
         _error = null;
+        _errorIsSessionExpired = false;
         try
         {
             await action();
@@ -328,6 +330,7 @@
         catch (Exception ex)
         {
             _error = ExceptionPresenter.GetUserMessage(ex);
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {

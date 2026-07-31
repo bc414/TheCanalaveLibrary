@@ -17,19 +17,26 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-AccountEnforcement (2026-07-30) — mid-session account-status responsiveness
+- **Last landed:** WU-ErrorHandling2 (2026-07-30) — the `ProblemDetails` API error envelope +
+  full client HTTP error translation, completing what WU-ErrorHandling (2026-07-06) deferred.
+  Closes tracker item **E1** and D5's behavior-change half; found and fixed a live gap along the
+  way (`StoryEndpoints`' filter/random-batch/filter-candidates reads still 500ing on malformed
+  ship input after WU-TagFanon typed the exception but never wrapped the endpoint). (Before that,
+  same day: WU-AccountEnforcement — mid-session account-status responsiveness
   (`AccountStatusBanner` live-reads status per navigation instead of relying on the sign-in claim;
   now covers Warned/Suspended/Banned; `NotificationBellInner`'s identical mid-session-staleness bug
-  folded in and fixed the same way). Closes tracker item **G1**'s residual and Phase 2's last open
-  item. (Before that, 2026-07-28: WU-DiscoveryFilterRestore + WU-SelectionPermalink — decision row
+  folded in and fixed the same way), closing tracker item **G1**'s residual and Phase 2's last open
+  item. Before that, 2026-07-28: WU-DiscoveryFilterRestore + WU-SelectionPermalink — decision row
   13 resolved, closing tracker item **B11**; earlier the same day, WU-Home + WU-SiteNews — decision
   row 2 resolved, closing tracker item F1.)
 - **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
   **Phase 3 is next** — Brian-driven L4 freeze sweep + WU-A11y (the latter gated on decision
-  row 12) — nothing further blocks starting it.
+  row 12) — nothing further blocks starting it. WU-ErrorHandling2 was Tier 1 between-phase work
+  (below), not itself a phase gate.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
-  exist in **every group A–H** (~20 unchecked boxes), including two **high-priority security
-  items: E2 and E3**.
+  exist in **every group A–H** (~20 unchecked boxes, one fewer now that E1 is closed), including
+  two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also left a named follow-up:
+  the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption (see its DONE entry).
 - **Blocked on Brian:** decision rows 4, 6, 8, 10, and 12 (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28).
 
@@ -124,10 +131,6 @@ cells/verification) when built.
 - **WU-EditorMobile** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
   mobile `EditorView` toolbar / desktop-mobile device composition, deferred at WU6. **Pointer:**
   `audit/Chapters.md` Feature 6. **Deps:** WU6.
-- **WU-ErrorHandling2** — **Cells:** none (cross-cutting, extends `Errors/`). **Phase:** 5,
-  Phase-5-adjacent. **Scope:** `ProblemDetails` envelope + client HTTP error translation, deferred
-  at WU-ErrorHandling. **Pointer:** `error-handling.md`. **Deps:** WU-GlobalFlip (DONE ✓
-  2026-07-13 — the WASM client now makes the HTTP calls this envelope translates).
 - **WU-NotifEmail** — **Cells:** Features 41–43 (extends, no new cell). **Phase:** 6, Beta gate.
   **Scope:** notification email fan-out over `UserNotificationSetting.EmailEnabled`, deferred at
   WU-Email; also folds in the untested anonymous-`NotificationBell` RazorComponents gap noted in
@@ -175,6 +178,77 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-ErrorHandling2 — `ProblemDetails` envelope + client HTTP error translation (cross-cutting, extends `Errors/`) — DONE ✓ (2026-07-30)
+
+- **Cells:** none — cross-cutting; the L5 column stays Stage 5 everywhere, unchanged. Closes
+  tracker item **E1** and D5's "shipped behavior change" half.
+- **Scope:** completes what WU-ErrorHandling (2026-07-06) deferred — the API error-envelope +
+  full client-service HTTP error translation, unblocked by WU-GlobalFlip (2026-07-13).
+- **Server:** `AddProblemDetails()` + a `/api`-scoped `ApiExceptionHandler` (`Server/Http/`) —
+  an unhandled `/api/*` exception now answers JSON (with a `traceId` extension), not the HTML
+  `/Error` page. `EndpointHelpers.ExecuteWriteAsync` renamed to `ExecuteAsync` (mechanical, 204
+  call sites) — the mapping was never write-specific. Applied to every read endpoint whose
+  service can throw a typed exception (`TreeSearchEndpoints`, `MessagingEndpoints`'
+  `GetConversationsAsync`/`GetConversationThreadAsync`), closing 500s that were previously
+  unhandled. **Found live during the audit, not previously known:** `StoryEndpoints`' `/query`,
+  `/random-batch`, `/filter-candidates` were still unwrapped after WU-TagFanon upgraded
+  `ApplyFiltersAsync`'s ship-shape validation to a proper `StoryValidationException` — malformed
+  ship input was still 500ing. Fixed in the same pass. Full endpoint audit swept all 42
+  `*Endpoints.cs`; the only bare `Results.NotFound()` found (`FanonEndpoints`' adoption-page
+  read) is now a bodied `Results.Problem`. Exemption list (binary/dev-only surfaces) recorded in
+  `layer5-wasm.md`.
+- **New Core types:** `SessionExpiredException` (401 — a session signal, distinct from
+  `UnauthorizedAccessException`'s 403 authorization denial) and `ServerFaultException(traceId)`
+  (unhandled 5xx, carries the server's own trace id so the id a user reports is the id of the
+  request that actually failed, correct under both InteractiveServer and the WASM hop —
+  `Activity.Current` is null in WASM). `ExceptionPresenter` extended for both.
+- **Client:** `ClientHttpHelpers` gained `ThrowIfReadFailedAsync` (the read-side twin of
+  `ThrowIfWriteFailedAsync`) and both now reconstruct 401→`SessionExpiredException`/
+  5xx→`ServerFaultException`. Ten private per-service write translators collapsed onto the
+  shared helper (closing D5's "shipped behavior change" — several previously conflated 401 with
+  403 into one exception type, predating the session/permission distinction); Messaging/Groups
+  keep their documented 403-disambiguation deviation but delegate every other arm. Ten gated
+  client read services gained translation (`ClientStoryReadService`, `ClientBlogPostReadService`,
+  `ClientChapterReadService`, `ClientTreeSearchReadService`, `ClientMessagingReadService`, +
+  `ClientUserStoryInteractionReadService`'s shared bookshelf/write translator); genuinely-public
+  reads (`ClientManualTreeSearchReadService`, `ClientCoOccurrenceReadService`,
+  `ClientNotificationReadService`) were audited and confirmed to need no change — their server
+  counterparts never throw.
+- **UI:** new `SharedUI/Errors/ErrorAlert.razor` — drop-in `InlineAlert` replacement with a
+  `ShowSignIn` affordance (inline "Sign in" link, current path as `ReturnUrl`; the user stays on
+  the page so `DraftAutosave` keeps unsaved work, no hard redirect). Adopted across all 19
+  `ExceptionPresenter`+`InlineAlert` PAIR components identified in planning (`CommentSection`,
+  `RecommendationSection`, the three `Mod*Page`s, `SettingsPage`, `StoryArcManagerPanel`, etc.) —
+  each catch site that sets the component's error field now also sets a sibling
+  `_...IsSessionExpired` bool from `ex is SessionExpiredException`. `ProfilePage.razor` was
+  audited and correctly excluded (its one catch site reports via `Toasts.Show`, not an inline
+  field). **Not done — explicit follow-up, not a silent gap:** the 8 SOLO editor pages
+  (`StoryEditorPage`, `ChapterEditorPage`, `BlogPostEditorPage`, `PollsPage`,
+  `SiteAnnouncementEditorPage`, `GroupBlogPostEditorPage`, `GroupPage`, `ReportDialog`) render
+  errors a different way each and were out of this WU's scope per the plan's own fallback —
+  needs its own pass to establish (and possibly redesign) each one's error surface before
+  `ErrorAlert` can drop in. **Minor known gap:** a few `Mod*Page`/`SeriesCreateEditPage`/
+  `StoryArcManagerPanel` handlers set the error field via a hardcoded early-return validation
+  string (not `ExceptionPresenter`) and don't reset `_...IsSessionExpired`; harmless in practice
+  (a stale `true` only shows a spurious Sign-in link if a session-expired error preceded a
+  same-handler validation error) but not swept in this pass.
+- **Related, pre-existing, out of scope:** `StoryValidationException.Message` is always the
+  fixed "Story validation failed." text — `EndpointHelpers.ExecuteAsync`'s 400 arm reads
+  `ex.Message`, not `ex.Errors`, so the specific ship-filter constraint text never crosses the
+  wire as `Detail` (present for every `StoryValidationException` site, including the pre-existing
+  write path, not something this WU introduced or was scoped to fix).
+- **Verified:** `dotnet build` clean; `dotnet test` green — 2362 total (769 Unit + 625
+  RazorComponents + 968 Integration; new: `ApiExceptionHandlerTests`, `ExceptionPresenterTests`
+  additions, `ErrorAlertTests`, `ApiErrorEnvelopeTests`). Four pre-existing Unit tests pinning the
+  old 401 mapping (`ClientGroupServiceTests`, `ClientExternalVerificationServiceTests`,
+  `ClientTagServiceTests`, `ClientCustomListServiceTests`) updated to assert
+  `SessionExpiredException`. Both hygiene gates clean.
+- **Tool:** opusplan. **Pointers:** `error-handling.md` §"The API error envelope";
+  `layer5-wasm.md` §"The Error-Translation Contract"; `identity-and-authorization.md`'s 401
+  pointer. **Deps:** WU-GlobalFlip (DONE ✓ 2026-07-13).
 
 ---
 

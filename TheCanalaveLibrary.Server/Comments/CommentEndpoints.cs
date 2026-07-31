@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Server;
 /// Layer-5 API surface for <see cref="ICommentReadService"/> / <see cref="ICommentWriteService"/>.
 /// Thin pass-throughs: no business logic here — validation, sanitization, and the author-only
 /// ownership checks live in the service (single enforcement point). The endpoint's only added job
-/// is exception→status translation, via the shared <see cref="EndpointHelpers.ExecuteWriteAsync"/>
+/// is exception→status translation, via the shared <see cref="EndpointHelpers.ExecuteAsync"/>
 /// (layer5-wasm.md §"The Error-Translation Contract").
 /// <para>
 /// Comments are polymorphic across four contexts (chapter/blog-post/group/profile-wall), each with
@@ -25,7 +25,7 @@ namespace TheCanalaveLibrary.Server;
 /// and comments on drafts, M-audience groups and Private profiles were all independently reachable
 /// (WU-ParentVisibility). Writes (post/edit/delete/like) require an authenticated user: the service throws
 /// <see cref="InvalidOperationException"/> for unauthenticated callers (translated to 401 by
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/>); <c>RequireAuthorization()</c> is added as
+/// <see cref="EndpointHelpers.ExecuteAsync"/>); <c>RequireAuthorization()</c> is added as
 /// defense-in-depth so the cookie handler's own 401 (Program.cs <c>OnRedirectToLogin</c>) wins the
 /// race first in the normal case.
 /// </para>
@@ -57,27 +57,27 @@ public static class CommentEndpoints
         // ── Writes (any authenticated user — author-only edit/delete enforced in the service) ──
 
         group.MapPost("/chapter", (ICommentWriteService comments, PostChapterCommentDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await comments.PostChapterCommentAsync(dto))))
             .RequireAuthorization();
 
         group.MapPost("/blog-post", (ICommentWriteService comments, PostBlogPostCommentDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await comments.PostBlogPostCommentAsync(dto))))
             .RequireAuthorization();
 
         group.MapPost("/group", (ICommentWriteService comments, PostGroupCommentDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await comments.PostGroupCommentAsync(dto))))
             .RequireAuthorization();
 
         group.MapPost("/profile", (ICommentWriteService comments, PostUserProfileCommentDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await comments.PostUserProfileCommentAsync(dto))))
             .RequireAuthorization();
 
         group.MapPut("/{commentId:long}", (ICommentWriteService comments, long commentId, UpdateCommentDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     commentId != dto.CommentId
                         ? Results.Problem(detail: "Route commentId does not match body CommentId.",
                             statusCode: StatusCodes.Status400BadRequest)
@@ -85,7 +85,7 @@ public static class CommentEndpoints
             .RequireAuthorization();
 
         group.MapDelete("/{commentId:long}", (ICommentWriteService comments, long commentId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await comments.DeleteCommentAsync(commentId);
                     return Results.NoContent();
@@ -93,7 +93,7 @@ public static class CommentEndpoints
             .RequireAuthorization();
 
         group.MapPost("/{commentId:long}/like", (ICommentWriteService comments, long commentId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await comments.ToggleLikeAsync(commentId))))
             .RequireAuthorization();
 

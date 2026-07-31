@@ -13,7 +13,7 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// just the service. Regression coverage for the MA-301 edit-read gate: the browser pass found that
 /// <c>GET /api/chapters/edit/{id}</c> returned 500 (unhandled <see cref="UnauthorizedAccessException"/>)
 /// instead of 403 for a non-author, because the read route was the one endpoint not wrapped in
-/// <c>EndpointHelpers.ExecuteWriteAsync</c> — a wire-level gap the service-level
+/// <c>EndpointHelpers.ExecuteAsync</c> — a wire-level gap the service-level
 /// <c>ChapterWriteServiceTests</c> could not see (they call the service directly and assert the raw
 /// exception). Tier: Integration.
 /// </summary>

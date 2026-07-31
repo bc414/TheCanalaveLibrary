@@ -54,6 +54,12 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 - **Doc-hygiene gate:** `scripts/check-doc-hygiene.ps1` (local + CI) fails on retired terms,
   session-relative language, and retired-plan pointers in live docs; retirement WUs append their
   term to its registry (rule in CLAUDE.md §"Retiring or closing").
+- **The `/api/*` JSON surface always answers with a bodied `ProblemDetails`** — every read/write
+  endpoint capable of throwing wraps in `EndpointHelpers.ExecuteAsync` (renamed from
+  `ExecuteWriteAsync`; the mapping was never write-specific), and a scoped `ApiExceptionHandler`
+  backstops anything unhandled with a 500 + `traceId`. 401 is a session-expiry signal
+  (`SessionExpiredException`), never conflated with a 403 authorization denial. Detail:
+  `error-handling.md` §"The API error envelope", `layer5-wasm.md` §"The Error-Translation Contract".
 
 | # | Feature | Folder | L1 | L2 | L3-Logic | L3.5-Struct | L4-Style | L4.5-Browser | L5 | L6 | L8 |
 |---|---------|--------|----|----|----------|-------------|----------|--------------|----|----|----|

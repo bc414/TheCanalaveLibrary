@@ -156,14 +156,15 @@ public class ClientExternalVerificationServiceTests
     // ── Status-code → contract-exception translation ────────────────────────
 
     [Fact]
-    public async Task ApproveAccountVerificationAsync_Unauthorized_ThrowsUnauthorizedAccessException()
+    public async Task ApproveAccountVerificationAsync_Unauthorized_ThrowsSessionExpiredException()
     {
         var handler = new CannedHandler(HttpStatusCode.Unauthorized, "");
         ClientExternalVerificationWriteService svc = new(NewClient(handler));
 
         Func<Task> act = () => svc.ApproveAccountVerificationAsync(7);
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        // WU-ErrorHandling2 (2026-07-30): 401 is a session signal, not authorization denial.
+        await act.Should().ThrowAsync<SessionExpiredException>();
     }
 
     [Fact]

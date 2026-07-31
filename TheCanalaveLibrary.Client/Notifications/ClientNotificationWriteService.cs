@@ -1,4 +1,3 @@
-using System.Net;
 using System.Runtime.CompilerServices;
 using TheCanalaveLibrary.Core;
 
@@ -12,9 +11,9 @@ namespace TheCanalaveLibrary.Client;
 /// <b>Component-reachable surface</b> (the three methods <c>NotificationBell.razor</c>/
 /// <c>NotificationsPage.razor</c>/<c>NotificationSettingsPage.razor</c> actually call):
 /// <see cref="MarkAsReadAsync"/>, <see cref="MarkAllAsReadAsync"/>, <see cref="SetSettingAsync"/> —
-/// these call NotificationEndpoints.cs and translate its status codes back into the service
-/// contract's typed exceptions: 401/403 → <see cref="UnauthorizedAccessException"/>, 404 →
-/// <see cref="KeyNotFoundException"/>.
+/// these call NotificationEndpoints.cs and delegate the standard status-code mapping to
+/// <see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/> (none produces a 400, so the validation
+/// factory is defensive-only).
 /// </para>
 /// <para>
 /// <b>Internal-only surface</b> — every <c>NotifyNew*Async</c>/
@@ -57,24 +56,8 @@ public sealed class ClientNotificationWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of NotificationEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new UnauthorizedAccessException(detail ?? "This action requires you to be signed in.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException("Notification not found.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, detail => new InvalidOperationException(detail));
 
     // ── Internal-only (server-to-server; never invoked from a WASM component) ────
 

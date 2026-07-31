@@ -9,7 +9,7 @@ namespace TheCanalaveLibrary.Server;
 /// self-follow/self-vouch guards, the <see cref="FollowingConstants.MaxVouchesPerUser"/> limit, and
 /// the incoming-vouches viewer-scoping all live in <c>ServerFollowingReadService</c>/
 /// <c>ServerFollowingWriteService</c> (single enforcement point). Every write handler wraps in the
-/// shared <see cref="EndpointHelpers.ExecuteWriteAsync"/> for exception→status translation
+/// shared <see cref="EndpointHelpers.ExecuteAsync"/> for exception→status translation
 /// (layer5-wasm.md §"The Error-Translation Contract").
 /// <para>
 /// Read auth: <see cref="IFollowingReadService.GetRelationshipStateAsync"/>,
@@ -35,7 +35,7 @@ namespace TheCanalaveLibrary.Server;
 /// self-target guards and <c>SetReceiveAlertsAsync</c>'s "you don't follow this user" guard are
 /// genuine business-rule rejections, not auth failures — they now throw
 /// <see cref="FollowingValidationException"/> (a <c>CanalaveValidationException</c>), which the shared
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> maps to <b>400</b>, the accurate status. Only the
+/// <see cref="EndpointHelpers.ExecuteAsync"/> maps to <b>400</b>, the accurate status. Only the
 /// <c>RequireAuthenticatedUser</c> guard's <see cref="InvalidOperationException"/> still maps to 401.
 /// The <see cref="FollowingConstants.MaxVouchesPerUser"/> limit keeps its own
 /// <see cref="VouchLimitException"/> (also 400). <c>ClientFollowingWriteService</c> reconstructs
@@ -69,7 +69,7 @@ public static class FollowingEndpoints
         //    see class summary "Status-code seam resolved") ──
 
         group.MapPost("/{targetUserId:int}", (IFollowingWriteService following, int targetUserId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await following.FollowAsync(targetUserId);
                     return Results.NoContent();
@@ -77,7 +77,7 @@ public static class FollowingEndpoints
             .RequireAuthorization();
 
         group.MapDelete("/{targetUserId:int}", (IFollowingWriteService following, int targetUserId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await following.UnfollowAsync(targetUserId);
                     return Results.NoContent();
@@ -86,7 +86,7 @@ public static class FollowingEndpoints
 
         group.MapPut("/{targetUserId:int}/alerts",
                 (IFollowingWriteService following, int targetUserId, bool receiveAlerts) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await following.SetReceiveAlertsAsync(targetUserId, receiveAlerts);
                         return Results.NoContent();
@@ -95,7 +95,7 @@ public static class FollowingEndpoints
 
         group.MapPost("/vouches/{targetUserId:int}",
                 (IFollowingWriteService following, int targetUserId, [FromBody] string? vouchText) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await following.VouchAsync(targetUserId, vouchText);
                         return Results.NoContent();
@@ -104,7 +104,7 @@ public static class FollowingEndpoints
 
         group.MapDelete("/vouches/{targetUserId:int}",
                 (IFollowingWriteService following, int targetUserId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await following.RemoveVouchAsync(targetUserId);
                         return Results.NoContent();

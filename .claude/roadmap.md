@@ -144,7 +144,7 @@ done.
 | **0** — decisions only, chat, no code | ~~Decision row 2 (homepage sections)~~ **DONE 2026-07-28** | — | Unblocks WU-Home, the last unstarted Phase-2 item |
 | **0** | ~~Decision row 13 (`/discover` URL state)~~ **DONE 2026-07-28** | — | Resolved against URL state; see "Resolved" below |
 | **1** — already unblocked, no decision needed | ~~WU-AccountEnforcement residual~~ **DONE 2026-07-30** | *(G1's residual)* | Closed Phase 2's last item — see Phase status above |
-| **1** | WU-ErrorHandling2 | E1 | Unblocked since WU-GlobalFlip (2026-07-13), never picked up since |
+| **1** | ~~WU-ErrorHandling2~~ **DONE 2026-07-30** | E1 | Unblocked since WU-GlobalFlip (2026-07-13), never picked up since |
 | **2** — continue the debt-paydown burst, clustered by shared surface | WU-L6MeasurePass | C2, C3, C4, C5, C6 | Same "always measure" origin; C4 needs one new Messaging SeedTool generator, reused by the other four |
 | **2** | WU-DiscoveryFilterRestore | B11 | Device-local filter restore + ship seeding parity — same `SearchPage`/`ResultsFilterPanel`/`ShipFilter` surface. Replaces the misnamed "WU-DiscoveryURLState" (row 13 decided *against* filter URL state) |
 | **2** | WU-SelectionPermalink | — | Artifact-addressed sharing for public saved selections (`/discover/selection/{id}/{*slug}`); row 13's other half |

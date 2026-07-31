@@ -36,9 +36,10 @@ else
     <div class="flex flex-col gap-8">
         <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Settings</h1>
 
-        @* Success / error banner — InlineAlert is the standard channel (error-handling.md) *@
+        @* Success / error banner — InlineAlert is the standard channel (error-handling.md);
+           the error slot uses ErrorAlert so an expired session offers a Sign in link. *@
         <InlineAlert Message="@_successMessage" Variant="InlineAlertVariant.Success" />
-        <InlineAlert Message="@_errorMessage" />
+        <ErrorAlert Message="@_errorMessage" ShowSignIn="@_errorMessageIsSessionExpired" />
 
         @* Profile sub-form *@
         <ProfileSettingsForm
@@ -139,6 +140,7 @@ else
 
     private string? _successMessage;
     private string? _errorMessage;
+    private bool _errorMessageIsSessionExpired;
 
     protected override async Task OnInitializedAsync()
     {
@@ -310,6 +312,7 @@ else
     {
         _successMessage = null;
         _errorMessage   = null;
+        _errorMessageIsSessionExpired = false;
         setBusy(true);
         try
         {
@@ -323,6 +326,7 @@ else
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Settings save failed unexpectedly");
             _errorMessage = ExceptionPresenter.GetUserMessage(ex);
+            _errorMessageIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {

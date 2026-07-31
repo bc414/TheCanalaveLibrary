@@ -10,7 +10,7 @@ namespace TheCanalaveLibrary.Server;
 /// <c>AllowPrivateMessages</c> privacy gate (<see cref="MessagingPermissionException"/>), and message
 /// validation all live in <c>ServerMessagingReadService</c>/<c>ServerMessagingWriteService</c> (single
 /// enforcement point). Every write handler wraps in the shared
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> for exception→status translation
+/// <see cref="EndpointHelpers.ExecuteAsync"/> for exception→status translation
 /// (layer5-wasm.md §"The Error-Translation Contract"; <see cref="MessagingPermissionException"/> → 403
 /// is already one of the shared cases there).
 /// <para>
@@ -25,7 +25,7 @@ namespace TheCanalaveLibrary.Server;
 /// <c>IWriteRateLimitService.EnsureAllowed(WriteActionKind.Message, ...)</c> in
 /// <c>StartConversationAsync</c>/<c>SendMessageAsync</c> (service-layer token bucket,
 /// security.md §"Write Throttling"); <see cref="WriteRateLimitExceededException"/> → 429 is handled by
-/// the shared <see cref="EndpointHelpers.ExecuteWriteAsync"/>, so an additional HTTP-edge policy would
+/// the shared <see cref="EndpointHelpers.ExecuteAsync"/>, so an additional HTTP-edge policy would
 /// be redundant (mirrors FollowingEndpoints'/GroupEndpoints' reasoning for the inverse case).
 /// </para>
 /// </summary>
@@ -37,16 +37,24 @@ public static class MessagingEndpoints
 
         // ── Reads (all authenticated — see class summary) ──
 
+        // Both wrap in ExecuteAsync: RequireAuthenticatedUser's InvalidOperationException (401
+        // safety net) and — for the thread read — the membership guard's KeyNotFoundException
+        // (404) can both reach here (WU-ErrorHandling2, 2026-07-30). GetUnreadConversationCountAsync
+        // and FindUserByUsernameAsync below stay unwrapped — neither throws (anon short-circuits
+        // to 0 / null-safe lookup, no RequireAuthenticatedUser call).
+
         // Enum query binding: minimal APIs bind ConversationScope via case-insensitive TryParse
         // ("?scope=Archived"); absent → Active (the default everywhere).
         group.MapGet("/conversations",
-                async (IMessagingReadService messaging, ConversationScope scope = ConversationScope.Active) =>
-                    Results.Ok(await messaging.GetConversationsAsync(scope)))
+                (IMessagingReadService messaging, ConversationScope scope = ConversationScope.Active) =>
+                    EndpointHelpers.ExecuteAsync(async () =>
+                        Results.Ok(await messaging.GetConversationsAsync(scope))))
             .RequireAuthorization();
 
         group.MapGet("/conversations/{conversationId:int}",
-                async (IMessagingReadService messaging, int conversationId, int page, int pageSize) =>
-                    Results.Ok(await messaging.GetConversationThreadAsync(conversationId, page, pageSize)))
+                (IMessagingReadService messaging, int conversationId, int page, int pageSize) =>
+                    EndpointHelpers.ExecuteAsync(async () =>
+                        Results.Ok(await messaging.GetConversationThreadAsync(conversationId, page, pageSize))))
             .RequireAuthorization();
 
         group.MapGet("/unread-count", async (IMessagingReadService messaging) =>
@@ -60,7 +68,7 @@ public static class MessagingEndpoints
         // ── Writes (authenticated — service enforces membership/privacy gates, translated here) ──
 
         group.MapPost("/conversations", (IMessagingWriteService messaging, StartConversationDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await messaging.StartConversationAsync(dto))))
             .RequireAuthorization();
 
@@ -68,13 +76,13 @@ public static class MessagingEndpoints
         // string from the query string by default (same reasoning as FollowingEndpoints' vouchText).
         group.MapPost("/conversations/{conversationId:int}/messages",
                 (IMessagingWriteService messaging, int conversationId, [FromBody] string messageHtml) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                         Results.Ok(await messaging.SendMessageAsync(conversationId, messageHtml))))
             .RequireAuthorization();
 
         group.MapPut("/conversations/{conversationId:int}/read",
                 (IMessagingWriteService messaging, int conversationId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await messaging.MarkConversationReadAsync(conversationId);
                         return Results.NoContent();
@@ -83,7 +91,7 @@ public static class MessagingEndpoints
 
         group.MapPut("/conversations/{conversationId:int}/archived",
                 (IMessagingWriteService messaging, int conversationId, bool archived) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await messaging.SetArchivedAsync(conversationId, archived);
                         return Results.NoContent();

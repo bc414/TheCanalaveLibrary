@@ -206,15 +206,16 @@ public class ClientGroupServiceTests
     }
 
     [Fact]
-    public async Task CreateFolderAsync_Unauthorized_ThrowsUnauthorizedAccessException()
+    public async Task CreateFolderAsync_Unauthorized_ThrowsSessionExpiredException()
     {
         var handler = new CannedHandler(HttpStatusCode.Unauthorized, "");
         ClientGroupWriteService svc = new(NewClient(handler));
 
         Func<Task> act = () => svc.CreateFolderAsync(new CreateFolderDto { GroupId = 7, Name = "X" });
 
-        await act.Should().ThrowAsync<UnauthorizedAccessException>(
-            "401 means not signed in at all — distinct from Groups' own 403 gate below");
+        // 401 means the session expired/was never established — a distinct signal from Groups'
+        // own 403 member/admin gate below (WU-ErrorHandling2, 2026-07-30).
+        await act.Should().ThrowAsync<SessionExpiredException>();
     }
 
     [Fact]

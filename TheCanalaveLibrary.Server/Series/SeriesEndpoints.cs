@@ -8,7 +8,7 @@ namespace TheCanalaveLibrary.Server;
 /// (Feature 9, WU41). Thin pass-throughs: no business logic or auth logic here — validation and
 /// the owner-only gate (<c>Series.AuthorId == Story.AuthorId == ActiveUser.UserId</c>) live in
 /// <see cref="ServerSeriesWriteService"/> (single enforcement point). Every write handler wraps in
-/// the shared <see cref="EndpointHelpers.ExecuteWriteAsync"/> for exception→status translation
+/// the shared <see cref="EndpointHelpers.ExecuteAsync"/> for exception→status translation
 /// (layer5-wasm.md §"The Error-Translation Contract").
 /// <para>
 /// Read auth: public. A series row has no visibility filter of its own (member stories are
@@ -26,7 +26,7 @@ namespace TheCanalaveLibrary.Server;
 /// <see cref="ISeriesWriteService"/> method requires an authenticated user
 /// (<c>ServerSeriesWriteService.RequireAuthenticatedUser</c>), and membership/edit/delete
 /// mutations additionally enforce ownership via <c>UnauthorizedAccessException</c>, translated to
-/// 403 by <see cref="EndpointHelpers.ExecuteWriteAsync"/>. No <c>RequireRateLimiting(...)</c> —
+/// 403 by <see cref="EndpointHelpers.ExecuteAsync"/>. No <c>RequireRateLimiting(...)</c> —
 /// unlike Tags, <see cref="ServerSeriesWriteService"/> doesn't call an
 /// <c>IWriteRateLimitService</c> token bucket.
 /// </para>
@@ -51,12 +51,12 @@ public static class SeriesEndpoints
         // ── Writes (authenticated — ownership enforced by the service, translated here) ──
 
         group.MapPost("/", (ISeriesWriteService series, CreateSeriesDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await series.CreateSeriesAsync(dto))))
             .RequireAuthorization();
 
         group.MapPut("/{seriesId:int}", (ISeriesWriteService series, int seriesId, UpdateSeriesDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     seriesId != dto.SeriesId
                         ? Results.Problem(detail: "Route seriesId does not match body SeriesId.",
                             statusCode: StatusCodes.Status400BadRequest)
@@ -64,7 +64,7 @@ public static class SeriesEndpoints
             .RequireAuthorization();
 
         group.MapDelete("/{seriesId:int}", (ISeriesWriteService series, int seriesId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await series.DeleteSeriesAsync(seriesId);
                     return Results.NoContent();
@@ -73,7 +73,7 @@ public static class SeriesEndpoints
 
         group.MapPost("/{seriesId:int}/stories/{storyId:int}",
                 (ISeriesWriteService series, int seriesId, int storyId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await series.AddStoryAsync(seriesId, storyId);
                         return Results.NoContent();
@@ -82,7 +82,7 @@ public static class SeriesEndpoints
 
         group.MapDelete("/{seriesId:int}/stories/{storyId:int}",
                 (ISeriesWriteService series, int seriesId, int storyId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await series.RemoveStoryAsync(seriesId, storyId);
                         return Results.NoContent();
@@ -96,7 +96,7 @@ public static class SeriesEndpoints
         // bare List<int>/int[] parameter defaults to query-string binding in minimal APIs).
         group.MapPut("/{seriesId:int}/order",
                 (ISeriesWriteService series, int seriesId, [FromBody] List<int> orderedStoryIds) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await series.ReorderAsync(seriesId, orderedStoryIds);
                         return Results.NoContent();

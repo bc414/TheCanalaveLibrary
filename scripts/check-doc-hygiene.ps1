@@ -36,6 +36,7 @@ $retiredTerms = [ordered]@{
     'MessagesHub (SignalR permanently ruled out, 2026-07-07)' = '\bMessagesHub\b'
     'layer7-redis.md (L7 dissolved, 2026-07-06)'              = 'layer7-redis'
     'GetRecentListingsAsync (removed 2026-07-28, WU-Home)'    = 'GetRecentListingsAsync'
+    'ExecuteWriteAsync (renamed to ExecuteAsync, WU-ErrorHandling2 2026-07-30)' = '\bExecuteWriteAsync\b'
 }
 
 # A line mentioning a retired term is legitimate when it says so. Loose by design — this is a

@@ -144,7 +144,7 @@ else
 @* ── Inline error feedback ────────────────────────────────────────────────────── *@
 @if (_error is not null)
 {
-    <div class="mt-2"><InlineAlert Message="@_error" /></div>
+    <div class="mt-2"><ErrorAlert Message="@_error" ShowSignIn="@_errorIsSessionExpired" /></div>
 }
 
 @code {
@@ -173,6 +173,7 @@ else
     private int _pendingDeleteId;
     private bool _busy;
     private string? _error;
+    private bool _errorIsSessionExpired;
 
     // WU-RecLifecycle author-action state
     private int? _revisionRequestId;
@@ -200,6 +201,7 @@ else
     {
         _loading = true;
         _error = null;
+        _errorIsSessionExpired = false;
         Recs = await Recommendations.GetForStoryAsync(StoryId);
         _alreadyRecommended = CurrentUserId is not null
             && Recs.Any(r => r.IsOwnRecommendation);
@@ -211,6 +213,7 @@ else
     {
         _busy = true;
         _error = null;
+        _errorIsSessionExpired = false;
         try
         {
             await Recommendations.SubmitAsync(new RecommendationSubmitDto(StoryId, html));
@@ -220,6 +223,7 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Submitting a recommendation for story {StoryId} failed unexpectedly", StoryId);
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {
@@ -231,6 +235,7 @@ else
     {
         _composing = false;
         _error = null;
+        _errorIsSessionExpired = false;
     }
 
     // ── Like (optimistic) ─────────────────────────────────────────────────────────
@@ -264,6 +269,7 @@ else
             idx = Recs.FindIndex(r => r.RecommendationId == id);
             if (idx >= 0) Recs[idx] = original;
             _error = Translate(ex, "Toggling like on recommendation {RecommendationId} failed unexpectedly", id);
+            _errorIsSessionExpired = ex is SessionExpiredException;
             StateHasChanged();
         }
     }
@@ -274,6 +280,7 @@ else
         _editingId = id;
         _composing = false;
         _error = null;
+        _errorIsSessionExpired = false;
     }
 
     private void HandleEditCancel() => _editingId = null;
@@ -283,6 +290,7 @@ else
         if (_editingId is not int editId) return;
         _busy = true;
         _error = null;
+        _errorIsSessionExpired = false;
         try
         {
             await Recommendations.EditAsync(new UpdateRecommendationDto(editId, html));
@@ -292,6 +300,7 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Editing recommendation {RecommendationId} failed unexpectedly", editId);
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {
@@ -305,12 +314,14 @@ else
         _pendingDeleteId = id;
         _showDeleteConfirm = true;
         _error = null;
+        _errorIsSessionExpired = false;
     }
 
     private async Task HandleDeleteConfirmAsync()
     {
         _busy = true;
         _error = null;
+        _errorIsSessionExpired = false;
         try
         {
             await Recommendations.DeleteAsync(_pendingDeleteId);
@@ -319,6 +330,7 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Deleting recommendation {RecommendationId} failed unexpectedly", _pendingDeleteId);
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {
@@ -330,6 +342,7 @@ else
     private async Task HandleToggleHiddenGem(int id)
     {
         _error = null;
+        _errorIsSessionExpired = false;
         if (Recs is null) return;
         int idx = Recs.FindIndex(r => r.RecommendationId == id);
         if (idx < 0) return;
@@ -343,6 +356,7 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Toggling Hidden Gem on recommendation {RecommendationId} failed unexpectedly", id);
+            _errorIsSessionExpired = ex is SessionExpiredException;
             StateHasChanged();
         }
     }
@@ -351,6 +365,7 @@ else
     private async Task HandleToggleHighlight(int id)
     {
         _error = null;
+        _errorIsSessionExpired = false;
         if (Recs is null) return;
         int idx = Recs.FindIndex(r => r.RecommendationId == id);
         if (idx < 0) return;
@@ -363,6 +378,7 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Toggling author spotlight on recommendation {RecommendationId} failed unexpectedly", id);
+            _errorIsSessionExpired = ex is SessionExpiredException;
             StateHasChanged();
         }
     }
@@ -374,6 +390,7 @@ else
         _revisionNote = string.Empty;
         _editingId = null;
         _error = null;
+        _errorIsSessionExpired = false;
     }
 
     private void HandleRequestRevisionCancel()
@@ -387,6 +404,7 @@ else
         if (_revisionRequestId is not int recId || string.IsNullOrWhiteSpace(_revisionNote)) return;
         _busy = true;
         _error = null;
+        _errorIsSessionExpired = false;
         try
         {
             await Recommendations.RequestRevisionAsync(recId, _revisionNote);
@@ -397,6 +415,7 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Requesting a revision on recommendation {RecommendationId} failed unexpectedly", recId);
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {
@@ -409,12 +428,14 @@ else
         _pendingRemoveId = id;
         _showRemoveConfirm = true;
         _error = null;
+        _errorIsSessionExpired = false;
     }
 
     private async Task HandleRemoveConfirmAsync()
     {
         _busy = true;
         _error = null;
+        _errorIsSessionExpired = false;
         try
         {
             await Recommendations.RemoveAsync(_pendingRemoveId);
@@ -423,6 +444,7 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Removing recommendation {RecommendationId} failed unexpectedly", _pendingRemoveId);
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {
@@ -433,6 +455,7 @@ else
     private async Task HandleUnblockAsync(int id)
     {
         _error = null;
+        _errorIsSessionExpired = false;
         try
         {
             await Recommendations.UnblockAsync(id);
@@ -441,6 +464,7 @@ else
         catch (Exception ex)
         {
             _error = Translate(ex, "Unblocking recommendation {RecommendationId} failed unexpectedly", id);
+            _errorIsSessionExpired = ex is SessionExpiredException;
             StateHasChanged();
         }
     }

@@ -18,7 +18,7 @@
         Group chapters into volumes ("Book 1", "Book 2"). Chapters outside every arc are fine —
         prologues and interludes don't need one.
     </p>
-    <div class="mb-2"><InlineAlert Messages="_errorMessages"/></div>
+    <div class="mb-2"><ErrorAlert Messages="_errorMessages" ShowSignIn="_errorMessagesIsSessionExpired"/></div>
 
     @if (_isLoading)
     {
@@ -109,6 +109,7 @@
     // (and prerendered markup is never interactive, so there are none to discard).
     private readonly List<ArcRowModel> _rows = [];
     private List<string> _errorMessages = [];
+    private bool _errorMessagesIsSessionExpired;
     private bool _isLoading = true;
 
     // Persisted across the prerender→interactive handoff ([PersistentState]) — the panel's primary
@@ -165,6 +166,7 @@
         try
         {
             _errorMessages = [];
+            _errorMessagesIsSessionExpired = false;
             if (row.StoryArcId is int arcId)
                 await StoryArcWriteService.UpdateArcAsync(
                     new UpdateStoryArcDto(arcId, row.Title, row.Start, row.End));
@@ -176,12 +178,14 @@
         catch (StoryArcValidationException ex)
         {
             _errorMessages = [.. ex.Errors];
+            _errorMessagesIsSessionExpired = false;
         }
         catch (Exception ex)
         {
             _errorMessages = ExceptionPresenter.IsUserFacing(ex)
                 ? [.. ExceptionPresenter.GetUserMessages(ex)]
                 : ["Couldn't save the arc. Please try again."];
+            _errorMessagesIsSessionExpired = ex is SessionExpiredException;
         }
     }
 
@@ -191,6 +195,7 @@
         try
         {
             _errorMessages = [];
+            _errorMessagesIsSessionExpired = false;
             await StoryArcWriteService.DeleteArcAsync(arcId);
             await ReloadArcsAsync();
         }
@@ -199,6 +204,7 @@
             _errorMessages = ExceptionPresenter.IsUserFacing(ex)
                 ? [.. ExceptionPresenter.GetUserMessages(ex)]
                 : ["Couldn't delete the arc. Please try again."];
+            _errorMessagesIsSessionExpired = ex is SessionExpiredException;
         }
     }
 }

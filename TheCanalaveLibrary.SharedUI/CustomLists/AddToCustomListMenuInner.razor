@@ -57,7 +57,7 @@
                     + New list
                 </button>
             }
-            <InlineAlert Messages="@_errors" />
+            <ErrorAlert Messages="@_errors" ShowSignIn="@_errorsIsSessionExpired" />
         }
     </div>
 }
@@ -70,6 +70,7 @@
     private string _newListName = "";
     private List<CustomListMembershipDto>? _memberships;
     private IReadOnlyList<string>? _errors;
+    private bool _errorsIsSessionExpired;
 
     private async Task ToggleAsync()
     {
@@ -81,6 +82,7 @@
     private async Task ToggleMembershipAsync(CustomListMembershipDto list)
     {
         _errors = null;
+        _errorsIsSessionExpired = false;
         try
         {
             if (list.ContainsStory)
@@ -96,12 +98,14 @@
         catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
         {
             _errors = ExceptionPresenter.GetUserMessages(ex);
+            _errorsIsSessionExpired = ex is SessionExpiredException;
         }
     }
 
     private async Task CreateAndAddAsync()
     {
         _errors = null;
+        _errorsIsSessionExpired = false;
         try
         {
             // New lists default private (settled 2026-07-13); publish later from the list page.
@@ -115,6 +119,7 @@
         catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
         {
             _errors = ExceptionPresenter.GetUserMessages(ex);
+            _errorsIsSessionExpired = ex is SessionExpiredException;
         }
     }
 }

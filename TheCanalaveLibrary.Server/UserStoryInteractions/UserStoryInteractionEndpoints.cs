@@ -14,7 +14,7 @@ namespace TheCanalaveLibrary.Server;
 /// enforced in the service: hidden favorites are owner-only (MA-602 server-derived
 /// <c>includePrivate</c>), and the owner's <c>ProfileVisibility</c> gates the whole read.
 /// <para>
-/// Thin pass-throughs: no business logic here. <see cref="EndpointHelpers.ExecuteWriteAsync"/>
+/// Thin pass-throughs: no business logic here. <see cref="EndpointHelpers.ExecuteAsync"/>
 /// handles the exception→status translation (layer5-wasm.md §"The Error-Translation Contract").
 /// This cluster mints no dedicated <c>*ValidationException</c> type — the write service throws
 /// plain <see cref="InvalidOperationException"/> for "no authenticated user" (translated to 401,
@@ -22,8 +22,8 @@ namespace TheCanalaveLibrary.Server;
 /// <see cref="IUserStoryInteractionReadService.GetBookshelfStoryIdsAsync"/> throws
 /// <see cref="ArgumentOutOfRangeException"/> for tabs not backed by <c>UserStoryInteraction</c>
 /// (translated to 400 — <c>ArgumentOutOfRangeException</c> is an <c>ArgumentException</c>, so
-/// <c>ExecuteWriteAsync</c>'s validation-exception branch already covers it). That bookshelf read
-/// is therefore wrapped in <c>ExecuteWriteAsync</c> too, even though it performs no mutation — the
+/// <c>ExecuteAsync</c>'s validation-exception branch already covers it). That bookshelf read
+/// is therefore wrapped in <c>ExecuteAsync</c> too, even though it performs no mutation — the
 /// helper is exception-driven, not write-specific by name.
 /// </para>
 /// <para>
@@ -51,10 +51,10 @@ public static class UserStoryInteractionEndpoints
         group.MapGet("/by-ids", async (IUserStoryInteractionReadService interactions, int[] storyIds) =>
             Results.Ok(await interactions.GetStatesByStoryIdsAsync(storyIds)));
 
-        // Wrapped in ExecuteWriteAsync solely for the ArgumentOutOfRangeException → 400
+        // Wrapped in ExecuteAsync solely for the ArgumentOutOfRangeException → 400
         // translation (see type doc comment above) — GetBookshelfStoryIdsAsync itself is read-only.
         group.MapGet("/bookshelf", (IUserStoryInteractionReadService interactions, BookshelfTab tab) =>
-            EndpointHelpers.ExecuteWriteAsync(async () =>
+            EndpointHelpers.ExecuteAsync(async () =>
                 Results.Ok(await interactions.GetBookshelfStoryIdsAsync(tab))));
 
         // includePrivate is derived server-side (owner-only hidden favorites) — never accepted from
@@ -73,7 +73,7 @@ public static class UserStoryInteractionEndpoints
                 IUserStoryInteractionWriteService interactions,
                 int storyId,
                 UserStoryInteractionStateUpdate update) =>
-            EndpointHelpers.ExecuteWriteAsync(async () =>
+            EndpointHelpers.ExecuteAsync(async () =>
             {
                 await interactions.SetUserStoryInteractionStateAsync(storyId, update);
                 return Results.NoContent();
@@ -81,7 +81,7 @@ public static class UserStoryInteractionEndpoints
 
         group.MapPost("/{storyId:int}/started",
             (IUserStoryInteractionWriteService interactions, int storyId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await interactions.MarkStartedAsync(storyId);
                     return Results.NoContent();
@@ -91,7 +91,7 @@ public static class UserStoryInteractionEndpoints
         // write, not a buffered signal, so 204 No Content like an ordinary write.
         group.MapPost("/{storyId:int}/completed",
             (IUserStoryInteractionWriteService interactions, int storyId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await interactions.MarkCompletedAsync(storyId);
                     return Results.NoContent();

@@ -7,7 +7,7 @@ namespace TheCanalaveLibrary.Server;
 /// read-marks (WU45; deliberately NOT the buffered Feature-44 progress-ping seam, see the
 /// interface's own doc comment). Both methods require an authenticated user: the service throws
 /// <see cref="InvalidOperationException"/> for anonymous callers (translated to 401 by
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/>); <c>RequireAuthorization()</c> is added as
+/// <see cref="EndpointHelpers.ExecuteAsync"/>); <c>RequireAuthorization()</c> is added as
 /// defense-in-depth so the cookie handler's own 401 (Program.cs <c>OnRedirectToLogin</c>) wins the
 /// race first in the normal case (mirrors CommentEndpoints/TagEndpoints).
 /// </summary>
@@ -19,7 +19,7 @@ public static class ChapterReadMarkEndpoints
 
         group.MapPut("/{chapterId:int}",
                 (IChapterReadMarkWriteService marks, int chapterId, bool isRead) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await marks.SetChapterReadAsync(chapterId, isRead);
                         return Results.NoContent();
@@ -28,7 +28,7 @@ public static class ChapterReadMarkEndpoints
 
         group.MapPut("/story/{storyId:int}",
                 (IChapterReadMarkWriteService marks, int storyId, bool isRead) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await marks.SetAllChaptersReadAsync(storyId, isRead);
                         return Results.NoContent();

@@ -9,7 +9,7 @@ namespace TheCanalaveLibrary.Server;
 /// case). Every route is authenticated: importing content is an authoring action, only reachable
 /// from the authenticated chapter-import UI.
 /// <para>
-/// All four handlers wrap in the shared <see cref="EndpointHelpers.ExecuteWriteAsync"/> even though
+/// All four handlers wrap in the shared <see cref="EndpointHelpers.ExecuteAsync"/> even though
 /// three of the four are reads-that-can-throw — same precedent as
 /// <c>UserStoryInteractionEndpoints.GetBookshelfStoryIdsAsync</c> and <c>UserSettingsEndpoints</c>'
 /// read: a "read" that still needs exception translation gets the write wrapper.
@@ -48,7 +48,7 @@ namespace TheCanalaveLibrary.Server;
 /// pass):</b> when <see cref="ImportParseResult.NormalizedHtml"/> is null (EPUB results),
 /// <c>Resplit</c> throws <see cref="InvalidOperationException"/> for a genuine business-rule reason
 /// ("re-split requires a parsed document; EPUB chapters are spine-defined"), not because the caller
-/// is unauthenticated — <see cref="EndpointHelpers.ExecuteWriteAsync"/> still maps it to 401
+/// is unauthenticated — <see cref="EndpointHelpers.ExecuteAsync"/> still maps it to 401
 /// uniformly. Same shape as the flagged mismatch in <c>UserSettingsEndpoints</c> and
 /// <c>FollowingEndpoints</c>; the message survives via <c>ProblemDetails.Detail</c>.
 /// </para>
@@ -67,7 +67,7 @@ public static class ContentImportEndpoints
         // re-splits an already-parsed result (bounded by ImportLimits, no file decode).
 
         group.MapPost("/single", (IContentImportService import, IFormFile file, ImportFormat format) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await import.ParseSingleAsync(
                         file.OpenReadStream(), file.FileName, format))))
             .RequireAuthorization()
@@ -75,7 +75,7 @@ public static class ContentImportEndpoints
             .DisableAntiforgery();
 
         group.MapPost("/document", (IContentImportService import, IFormFile file, ImportFormat format) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await import.ParseDocumentAsync(
                         file.OpenReadStream(), file.FileName, format))))
             .RequireAuthorization()
@@ -83,18 +83,18 @@ public static class ContentImportEndpoints
             .DisableAntiforgery();
 
         group.MapPost("/epub", (IContentImportService import, IFormFile file) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await import.ParseEpubAsync(file.OpenReadStream()))))
             .RequireAuthorization()
             .RequireRateLimiting("ImportParse")
             .DisableAntiforgery();
 
         // Resplit itself is synchronous (see class doc comment) — the async lambda exists purely to
-        // satisfy ExecuteWriteAsync's Func<Task<IResult>> shape. Any exception Resplit throws still
+        // satisfy ExecuteAsync's Func<Task<IResult>> shape. Any exception Resplit throws still
         // surfaces during the synchronous evaluation inside the awaited call and is caught by the
         // shared helper exactly as if it had been thrown from an awaited async method.
         group.MapPost("/resplit", (IContentImportService import, ResplitRequest request) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     await Task.FromResult(
                         Results.Ok(import.Resplit(request.Parsed, request.Strategy)))))
             .RequireAuthorization();

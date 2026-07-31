@@ -150,7 +150,7 @@ else
             }
         </div>
 
-        <InlineAlert Message="@_likeError" />
+        <ErrorAlert Message="@_likeError" ShowSignIn="@_likeErrorIsSessionExpired" />
 
     </article>
 
@@ -215,6 +215,7 @@ else
     private bool _isLiked;
     private bool _likeBusy;
     private string? _likeError;
+    private bool _likeErrorIsSessionExpired;
 
     // Spoiler curtain state (WU-B2) — ephemeral component state, re-hides on every page load
     // (mirrors CommentItem's _isRevealed, spec §5.9.1). Reset in LoadPostAsync so navigating
@@ -266,6 +267,7 @@ else
         if (BlogPostId == _loadedBlogPostId) return;
         _notFound = false;
         _likeError = null;
+        _likeErrorIsSessionExpired = false;
         await LoadPostAsync();
     }
 
@@ -334,6 +336,7 @@ else
         _isLiked   = newLiked;
         _likeCount = newLiked ? _likeCount + 1 : Math.Max(0, _likeCount - 1);
         _likeError = null;
+        _likeErrorIsSessionExpired = false;
         _likeBusy  = true;
         StateHasChanged();
 
@@ -352,6 +355,7 @@ else
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Toggling like on blog post {BlogPostId} failed unexpectedly", BlogPostId);
             _likeError = ExceptionPresenter.GetUserMessage(ex);
+            _likeErrorIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {

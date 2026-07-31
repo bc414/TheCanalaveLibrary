@@ -24,11 +24,11 @@ public static class SpotlightSlotAllocatorEndpoints
         // maxStoryRating: E (default) = non-M slot, M = Mature-pool slot (WU-AccessGate).
         group.MapPost("/", (ISpotlightSlotAllocator allocator, int toUserId, SpotlightSlotSource source,
                 Rating maxStoryRating = Rating.E) =>
-            EndpointHelpers.ExecuteWriteAsync(async () =>
+            EndpointHelpers.ExecuteAsync(async () =>
                 Results.Ok(await allocator.GrantSlotAsync(toUserId, source, maxStoryRating))));
 
         group.MapDelete("/{slotId:int}", (ISpotlightSlotAllocator allocator, int slotId) =>
-            EndpointHelpers.ExecuteWriteAsync(async () =>
+            EndpointHelpers.ExecuteAsync(async () =>
             {
                 await allocator.RevokeSlotAsync(slotId);
                 return Results.NoContent();

@@ -7,7 +7,7 @@ namespace TheCanalaveLibrary.Server;
 /// <see cref="IRecommendationWriteService"/>. Thin pass-throughs: no business logic here —
 /// validation, author-only ownership checks, and the Hidden Gem / spotlight limits all live in the
 /// service (single enforcement point). The endpoint's only added job is exception→status
-/// translation, via the shared <see cref="EndpointHelpers.ExecuteWriteAsync"/> (layer5-wasm.md
+/// translation, via the shared <see cref="EndpointHelpers.ExecuteAsync"/> (layer5-wasm.md
 /// §"The Error-Translation Contract").
 /// <para>
 /// Reads are public — recommendations cannot have spoilers (audit/Recommendations.md), mirroring
@@ -26,7 +26,7 @@ namespace TheCanalaveLibrary.Server;
 /// defense-in-depth so the cookie handler's own 401 (Program.cs <c>OnRedirectToLogin</c>) wins the
 /// race first in the normal case. <c>SubmitAsync</c> additionally throttles via
 /// <c>IWriteRateLimitService</c> (<c>WriteActionKind.ContentCreate</c>) — translated to 429 by
-/// <c>ExecuteWriteAsync</c>.
+/// <c>ExecuteAsync</c>.
 /// </para>
 /// <para>
 /// <b>Status-code seam resolved (MA-505, 2026-07-18).</b>
@@ -77,7 +77,7 @@ public static class RecommendationEndpoints
         // ── Writes (authenticated — author-only ownership enforced in the service) ──
 
         group.MapPost("/", (IRecommendationWriteService recs, RecommendationSubmitDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await recs.SubmitAsync(dto))))
             .RequireAuthorization();
 
@@ -85,7 +85,7 @@ public static class RecommendationEndpoints
                 IRecommendationWriteService recs,
                 int recommendationId,
                 UpdateRecommendationDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     recommendationId != dto.RecommendationId
                         ? Results.Problem(
                             detail: "Route recommendationId does not match body RecommendationId.",
@@ -95,7 +95,7 @@ public static class RecommendationEndpoints
 
         group.MapDelete("/{recommendationId:int}",
                 (IRecommendationWriteService recs, int recommendationId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await recs.DeleteAsync(recommendationId);
                         return Results.NoContent();
@@ -104,7 +104,7 @@ public static class RecommendationEndpoints
 
         group.MapPost("/{recommendationId:int}/like",
                 (IRecommendationWriteService recs, int recommendationId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                         Results.Ok(await recs.ToggleLikeAsync(recommendationId))))
             .RequireAuthorization();
 
@@ -112,7 +112,7 @@ public static class RecommendationEndpoints
                 IRecommendationWriteService recs,
                 int recommendationId,
                 bool isHiddenGem) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await recs.SetHiddenGemAsync(recommendationId, isHiddenGem);
                     return Results.NoContent();
@@ -123,7 +123,7 @@ public static class RecommendationEndpoints
                 IRecommendationWriteService recs,
                 int recommendationId,
                 bool isHighlighted) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await recs.SetHighlightedByAuthorAsync(recommendationId, isHighlighted);
                     return Results.NoContent();
@@ -132,7 +132,7 @@ public static class RecommendationEndpoints
 
         group.MapPost("/{recommendationId:int}/success",
                 (IRecommendationWriteService recs, int recommendationId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await recs.RecordSuccessAsync(recommendationId);
                         return Results.NoContent();
@@ -145,7 +145,7 @@ public static class RecommendationEndpoints
                 IRecommendationWriteService recs,
                 int recommendationId,
                 [Microsoft.AspNetCore.Mvc.FromBody] string note) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await recs.RequestRevisionAsync(recommendationId, note);
                     return Results.NoContent();
@@ -154,7 +154,7 @@ public static class RecommendationEndpoints
 
         group.MapPost("/{recommendationId:int}/remove",
                 (IRecommendationWriteService recs, int recommendationId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await recs.RemoveAsync(recommendationId);
                         return Results.NoContent();
@@ -163,7 +163,7 @@ public static class RecommendationEndpoints
 
         group.MapPost("/{recommendationId:int}/unblock",
                 (IRecommendationWriteService recs, int recommendationId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await recs.UnblockAsync(recommendationId);
                         return Results.NoContent();
@@ -174,7 +174,7 @@ public static class RecommendationEndpoints
                 IRecommendationWriteService recs,
                 int storyId,
                 int recommendationId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await recs.RecordAttributionSourceAsync(storyId, recommendationId);
                     return Results.NoContent();

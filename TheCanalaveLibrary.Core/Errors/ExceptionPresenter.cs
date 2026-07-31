@@ -33,6 +33,10 @@ public static class ExceptionPresenter
     /// True when <see cref="GetUserMessages"/> returns a message that fully explains the failure
     /// to the user (typed domain exceptions + the two fixed-text BCL translations). False means
     /// "unexpected" — the catch site must log at Error before showing the generic message.
+    /// <see cref="ServerFaultException"/> is deliberately excluded even though it carries a
+    /// server-produced trace id: it IS the generic-message path (the server already logged the
+    /// failure at Error when it produced the envelope), so a catch site must not log it again —
+    /// see error-handling.md §"The API error envelope".
     /// </summary>
     public static bool IsUserFacing(Exception ex) => ex
         is CanalaveValidationException
@@ -40,6 +44,7 @@ public static class ExceptionPresenter
         or ContentRatingExceededException
         or MessagingPermissionException
         or WriteRateLimitExceededException
+        or SessionExpiredException
         or UnauthorizedAccessException
         or KeyNotFoundException;
 
@@ -52,12 +57,17 @@ public static class ExceptionPresenter
 
         // Single-message typed exceptions whose Message is deliberately user-ready.
         VouchLimitException or ContentRatingExceededException
-            or MessagingPermissionException or WriteRateLimitExceededException => [ex.Message],
+            or MessagingPermissionException or WriteRateLimitExceededException
+            or SessionExpiredException => [ex.Message],
 
         // BCL types the write services use by documented convention — fixed friendly text;
         // their actual Message may be framework-generated developer text.
         UnauthorizedAccessException => [PermissionMessage],
         KeyNotFoundException => [NotFoundMessage],
+
+        // The server already logged this at Error when it produced the envelope — present with
+        // ITS trace id (correct under both InteractiveServer and the WASM hop), never re-log.
+        ServerFaultException e => [WithErrorId(GenericMessage, e.TraceId)],
 
         _ => [WithErrorId(GenericMessage)],
     };
@@ -66,12 +76,16 @@ public static class ExceptionPresenter
     public static string GetUserMessage(Exception ex) => string.Join(" ", GetUserMessages(ex));
 
     /// <summary>
-    /// Appends the ambient trace id so a user-reported generic error can be found in the logs.
-    /// No ambient activity (unit tests, unsampled) → the plain message.
+    /// Appends a trace id so a user-reported generic error can be found in the logs. Prefers
+    /// <paramref name="explicitId"/> — the server-produced id off a <see cref="ServerFaultException"/>
+    /// envelope, correct under the WASM hop where there is no ambient <see cref="Activity"/> — and
+    /// falls back to <see cref="Activity.Current"/> (correct for the InteractiveServer in-process
+    /// path, where the exception was never carried across HTTP). Neither present (unit tests,
+    /// unsampled) → the plain message.
     /// </summary>
-    public static string WithErrorId(string message)
+    public static string WithErrorId(string message, string? explicitId = null)
     {
-        string? traceId = Activity.Current?.TraceId.ToString();
+        string? traceId = explicitId ?? Activity.Current?.TraceId.ToString();
         return traceId is null ? message : $"{message} (Error ID: {traceId})";
     }
 }

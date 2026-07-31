@@ -8,7 +8,7 @@ namespace TheCanalaveLibrary.Server;
 /// (Feature 37). Thin pass-throughs: no business logic here — the viewer-relative projection
 /// (results visibility, voter-name blanking) and the mod/author authorization gates live in the
 /// service (single enforcement point). Every write handler wraps in the shared
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> for exception→status translation
+/// <see cref="EndpointHelpers.ExecuteAsync"/> for exception→status translation
 /// (layer5-wasm.md §"The Error-Translation Contract").
 /// <para>
 /// Read auth: public — mirrors the public <c>/polls</c> page and the blog-post pages that render
@@ -48,17 +48,17 @@ public static class PollEndpoints
         // ── Writes (authenticated — mod/owner ownership enforced by the service) ──
 
         group.MapPost("/site", (IPollWriteService polls, PollEditDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await polls.CreateSitePollAsync(dto))))
             .RequireAuthorization();
 
         group.MapPost("/blog-post/{blogPostId:int}", (IPollWriteService polls, int blogPostId, PollEditDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await polls.CreateBlogPostPollAsync(blogPostId, dto))))
             .RequireAuthorization();
 
         group.MapPut("/{pollId:int}", (IPollWriteService polls, int pollId, PollEditDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await polls.UpdatePollAsync(pollId, dto);
                     return Results.NoContent();
@@ -66,7 +66,7 @@ public static class PollEndpoints
             .RequireAuthorization();
 
         group.MapPost("/{pollId:int}/close", (IPollWriteService polls, int pollId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await polls.ClosePollAsync(pollId);
                     return Results.NoContent();
@@ -74,7 +74,7 @@ public static class PollEndpoints
             .RequireAuthorization();
 
         group.MapPost("/{pollId:int}/archive", (IPollWriteService polls, int pollId, bool archived) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await polls.SetSitePollArchivedAsync(pollId, archived);
                     return Results.NoContent();
@@ -82,7 +82,7 @@ public static class PollEndpoints
             .RequireAuthorization();
 
         group.MapDelete("/{pollId:int}", (IPollWriteService polls, int pollId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await polls.DeletePollAsync(pollId);
                     return Results.NoContent();
@@ -96,7 +96,7 @@ public static class PollEndpoints
         // Global Flip browser wave. Sibling rule to StoryEndpoints' /query [FromQuery] note.
         group.MapPost("/{pollId:int}/vote", (
                 IPollWriteService polls, int pollId, [FromQuery] int[] optionIds, bool voteAnonymously) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await polls.VoteAsync(pollId, optionIds, voteAnonymously))))
             .RequireAuthorization();
 

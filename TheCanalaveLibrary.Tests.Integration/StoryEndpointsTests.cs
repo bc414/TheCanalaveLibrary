@@ -12,7 +12,7 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// <see cref="IStoryReadService"/>, exercised through <c>Factory.CreateClient()</c>. Regression
 /// coverage for the endpoint-authz sweep (2026-07-18): <c>GET /api/stories/{id}/edit</c> now
 /// enforces story authorship in <c>ServerStoryReadService.GetStoryForEditAsync</c>
-/// (<see cref="UnauthorizedAccessException"/> → 403 via <c>EndpointHelpers.ExecuteWriteAsync</c>,
+/// (<see cref="UnauthorizedAccessException"/> → 403 via <c>EndpointHelpers.ExecuteAsync</c>,
 /// same wire shape as the MA-301 chapter-edit route), and
 /// <c>GET /api/stories/by-author/{authorId}</c> no longer keys its ContentRating-filter bypass to
 /// the client-supplied <c>authorId</c> — only the author's own list is an elevated read. Also pins
@@ -47,7 +47,7 @@ public class StoryEndpointsTests(PostgresFixture postgres) : IntegrationTestBase
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden,
             "a non-author must get a translated 403 — GetStoryForEditAsync's author gate throws " +
-            "UnauthorizedAccessException and ExecuteWriteAsync maps it (endpoint-authz sweep 2026-07-18)");
+            "UnauthorizedAccessException and ExecuteAsync maps it (endpoint-authz sweep 2026-07-18)");
     }
 
     [Fact]

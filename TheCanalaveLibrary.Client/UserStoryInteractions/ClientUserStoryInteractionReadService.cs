@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -50,32 +49,17 @@ public class ClientUserStoryInteractionReadService(HttpClient http) : IUserStory
 
     /// <summary>
     /// Status→exception translation (inverse of UserStoryInteractionEndpoints' use of
-    /// EndpointHelpers.ExecuteWriteAsync). Shared by the bookshelf read above and every write in
-    /// the subclass — the mapping is identical everywhere in this cluster since it mints no
-    /// dedicated ValidationException type: 400 → ArgumentOutOfRangeException (the exact type the
-    /// server's GetBookshelfStoryIdsAsync throws), 401 → InvalidOperationException (mirrors
-    /// IUserSettingsService's "requires an authenticated user" contract), 403 →
-    /// UnauthorizedAccessException, 404 → KeyNotFoundException, per layer5-wasm.md's contract table.
+    /// EndpointHelpers.ExecuteAsync). Shared by the bookshelf read above and every write in the
+    /// subclass — the mapping is identical everywhere in this cluster since it mints no dedicated
+    /// ValidationException type, so this delegates to the shared
+    /// <see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/> with an <c>ArgumentOutOfRangeException</c>
+    /// factory (the exact type the server's <c>GetBookshelfStoryIdsAsync</c> throws for 400).
+    /// 401/403/404 are the shared helper's standard arms (WU-ErrorHandling2, 2026-07-30 —
+    /// previously its own private 401 → <c>InvalidOperationException</c> arm, predating
+    /// <see cref="SessionExpiredException"/> — this closes tracker item D5's "shipped behavior
+    /// change" for this cluster).
     /// </summary>
-    protected static async Task ThrowIfFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                throw new ArgumentOutOfRangeException(null, detail ?? "The request was rejected.");
-            case HttpStatusCode.Unauthorized:
-                throw new InvalidOperationException(
-                    detail ?? "This operation requires an authenticated user.");
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException(detail ?? "This operation is not permitted.");
-            case HttpStatusCode.NotFound:
-                throw new KeyNotFoundException(detail ?? "Not found.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    protected static Task ThrowIfFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(
+            response, detail => new ArgumentOutOfRangeException(null, detail));
 }

@@ -5,13 +5,13 @@ namespace TheCanalaveLibrary.Server;
 /// <summary>
 /// Shared write-endpoint exception→status translation (layer5-wasm.md §"The Error-Translation
 /// Contract"). Every <c>{Feature}Endpoints.cs</c> write handler wraps its body in
-/// <see cref="ExecuteWriteAsync"/> instead of hand-rolling its own try/catch — this is the single
+/// <see cref="ExecuteAsync"/> instead of hand-rolling its own try/catch — this is the single
 /// copy of the mapping, extended past TagEndpoints' original 3-case version to the full set of
 /// exception types thrown across the service layer.
 /// </summary>
 public static class EndpointHelpers
 {
-    public static async Task<IResult> ExecuteWriteAsync(Func<Task<IResult>> action)
+    public static async Task<IResult> ExecuteAsync(Func<Task<IResult>> action)
     {
         try
         {

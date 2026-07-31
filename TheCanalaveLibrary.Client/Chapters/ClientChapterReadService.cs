@@ -50,13 +50,10 @@ public class ClientChapterReadService(HttpClient http) : IChapterReadService
 
     public async Task<ChapterReadingDto?> GetChapterForEditAsync(long chapterContentId)
     {
-        // 401/403 → UnauthorizedAccessException, mirroring the server service's author gate so
-        // ChapterEditorPage's forbidden handling works identically under both render modes
-        // (status→contract-exception translation, layer5-wasm.md "The Error-Translation Contract").
+        // 401 → SessionExpiredException, 403 → UnauthorizedAccessException (the server's author
+        // gate), delegated to the shared read translator (WU-ErrorHandling2, 2026-07-30).
         using HttpResponseMessage response = await Http.GetAsync($"api/chapters/edit/{chapterContentId}");
-        if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            throw new UnauthorizedAccessException("You must be the author of this story.");
-        response.EnsureSuccessStatusCode();
+        await ClientHttpHelpers.ThrowIfReadFailedAsync(response);
         return await ClientHttpHelpers.ReadNullableFromJsonAsync<ChapterReadingDto?>(response.Content);
     }
 

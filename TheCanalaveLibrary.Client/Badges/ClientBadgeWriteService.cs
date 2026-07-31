@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -9,14 +8,12 @@ namespace TheCanalaveLibrary.Client;
 /// ServerBadgeWriteService : ServerBadgeReadService. Auth rides the same-origin Identity cookie —
 /// WASM's fetch-backed HttpClient sends it automatically for same-origin requests.
 /// <para>
-/// <c>SetDisplayOrderAsync</c>'s unowned-key business rule now throws
+/// <c>SetDisplayOrderAsync</c>'s unowned-key business rule throws
 /// <see cref="BadgeValidationException"/> server-side → 400, reconstructed here carrying
-/// <c>ProblemDetails.Detail</c> (user-facing, surfaces the real cause). The only remaining
-/// unauthenticated case is the <c>RequireAuthorization</c> floor / <c>RequireUserId</c> guard's
-/// <see cref="InvalidOperationException"/> → 401; the interface declares no
-/// <see cref="UnauthorizedAccessException"/>, so 401/403 map to <see cref="InvalidOperationException"/>
-/// here too, mirroring <c>ClientChapterReadMarkWriteService</c>'s approach for interfaces with no
-/// dedicated auth exception, reading the server's message through rather than hardcoding it.
+/// <c>ProblemDetails.Detail</c> (user-facing, surfaces the real cause). Everything else is the
+/// standard mapping — delegates to <see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>
+/// (WU-ErrorHandling2, 2026-07-30 — this class previously collapsed 401/403 into one
+/// <see cref="InvalidOperationException"/> arm, predating <see cref="SessionExpiredException"/>).
 /// </para>
 /// </summary>
 public sealed class ClientBadgeWriteService(HttpClient http) : ClientBadgeReadService(http), IBadgeWriteService
@@ -36,30 +33,7 @@ public sealed class ClientBadgeWriteService(HttpClient http) : ClientBadgeReadSe
     public async Task SetDisplayOrderAsync(int userId, IReadOnlyList<string> orderedVisibleKeys)
     {
         HttpResponseMessage response = await Http.PutAsJsonAsync("api/badges/display-order", orderedVisibleKeys);
-        await ThrowIfWriteFailedAsync(response);
-    }
-
-    /// <summary>Status-code → contract-exception translation (inverse of BadgeEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                // SetDisplayOrderAsync's unowned-key business rule (a requested key the caller
-                // hasn't earned) now maps to 400 — reconstruct the family type carrying the
-                // server's ProblemDetails.Detail.
-                string? badRequestDetail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new BadgeValidationException([badRequestDetail ?? "The request failed validation."]);
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new InvalidOperationException(
-                    detail ?? "This operation requires an authenticated user.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(
+            response, detail => new BadgeValidationException([detail]));
     }
 }

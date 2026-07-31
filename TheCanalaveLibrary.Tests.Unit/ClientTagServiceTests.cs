@@ -124,17 +124,18 @@ public class ClientTagServiceTests
     }
 
     [Fact]
-    public async Task CreateTagAsync_Unauthorized_ThrowsInvalidOperationException()
+    public async Task CreateTagAsync_Unauthorized_ThrowsSessionExpiredException()
     {
         // The server maps the services' "…requires an authenticated user" InvalidOperationException
-        // to 401 (EndpointHelpers.ExecuteWriteAsync) — the shared client translation (MA-008)
-        // reconstructs it, tolerating the cookie handler's body-less 401.
+        // to 401 (EndpointHelpers.ExecuteAsync) — the cookie handler's own body-less 401 lands the
+        // same way. The shared client translation reconstructs both as SessionExpiredException
+        // (WU-ErrorHandling2, 2026-07-30) — a session signal, not an authorization denial.
         var handler = new CannedHandler(HttpStatusCode.Unauthorized, "");
         ClientTagWriteService svc = new(NewClient(handler));
 
         Func<Task> act = () => svc.CreateTagAsync(NewCreateDto("Blocked"));
 
-        await act.Should().ThrowAsync<InvalidOperationException>();
+        await act.Should().ThrowAsync<SessionExpiredException>();
     }
 
     [Fact]

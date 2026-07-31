@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Server;
 /// Layer-5 API surface for <see cref="IStoryArcReadService"/> / <see cref="IStoryArcWriteService"/>
 /// (Feature 8, WU45). Thin pass-throughs: no business logic here — the range/title validation and
 /// the author-only gate live in <see cref="ServerStoryArcWriteService"/> (single enforcement point).
-/// Every write handler wraps in the shared <see cref="EndpointHelpers.ExecuteWriteAsync"/> for
+/// Every write handler wraps in the shared <see cref="EndpointHelpers.ExecuteAsync"/> for
 /// exception→status translation (layer5-wasm.md §"The Error-Translation Contract").
 /// <para>
 /// Read auth: public. <see cref="IStoryArcReadService.GetArcsForStoryAsync"/> feeds
@@ -38,12 +38,12 @@ public static class StoryArcEndpoints
         // ── Writes (authenticated — author ownership enforced by the service, translated here) ──
 
         group.MapPost("/", (IStoryArcWriteService arcs, CreateStoryArcDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await arcs.CreateArcAsync(dto))))
             .RequireAuthorization();
 
         group.MapPut("/{storyArcId:int}", (IStoryArcWriteService arcs, int storyArcId, UpdateStoryArcDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     storyArcId != dto.StoryArcId
                         ? Results.Problem(detail: "Route storyArcId does not match body StoryArcId.",
                             statusCode: StatusCodes.Status400BadRequest)
@@ -51,7 +51,7 @@ public static class StoryArcEndpoints
             .RequireAuthorization();
 
         group.MapDelete("/{storyArcId:int}", (IStoryArcWriteService arcs, int storyArcId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await arcs.DeleteArcAsync(storyArcId);
                     return Results.NoContent();

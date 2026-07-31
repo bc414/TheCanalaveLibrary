@@ -48,6 +48,53 @@ public class ExceptionPresenterTests
         ExceptionPresenter.GetUserMessage(new VouchLimitException()).Should().Contain("maximum");
     }
 
+    // ── session vs. server fault (WU-ErrorHandling2, 2026-07-30) ──────────────────
+
+    [Fact]
+    public void SessionExpiredException_IsUserFacing_AndSurfacesItsOwnMessage()
+    {
+        var ex = new SessionExpiredException();
+
+        ExceptionPresenter.IsUserFacing(ex).Should().BeTrue();
+        ExceptionPresenter.GetUserMessage(ex).Should().Be(ex.Message);
+        ExceptionPresenter.GetUserMessage(ex).Should().Contain("session has expired");
+    }
+
+    [Fact]
+    public void ServerFaultException_IsNotUserFacing_AndMapsToGenericWithTheSuppliedTraceId()
+    {
+        // Deliberately not user-facing (error-handling.md §"The API error envelope"): the server
+        // already logged this at Error when it produced the envelope, so a catch site must not
+        // double-log it — it's the generic-message path, just with the failing request's own id.
+        var ex = new ServerFaultException("server-trace-id-123");
+
+        ExceptionPresenter.IsUserFacing(ex).Should().BeFalse();
+        ExceptionPresenter.GetUserMessage(ex).Should()
+            .Be($"{ExceptionPresenter.GenericMessage} (Error ID: server-trace-id-123)");
+    }
+
+    [Fact]
+    public void ServerFaultException_WithNoTraceId_FallsBackToPlainGenericMessage()
+    {
+        var ex = new ServerFaultException(traceId: null);
+
+        ExceptionPresenter.GetUserMessage(ex).Should().Be(ExceptionPresenter.GenericMessage);
+    }
+
+    [Fact]
+    public void WithErrorId_PrefersTheExplicitId_OverAmbientActivity()
+    {
+        using var activity = new System.Diagnostics.Activity("test");
+        activity.SetIdFormat(System.Diagnostics.ActivityIdFormat.W3C);
+        activity.Start();
+
+        // The server-produced id must win — it's the id of the request that actually failed,
+        // correct under the WASM hop where there is no ambient Activity at all.
+        string message = ExceptionPresenter.WithErrorId("Oops.", "server-trace-id-456");
+
+        message.Should().Be("Oops. (Error ID: server-trace-id-456)");
+    }
+
     // ── BCL conventions: fixed friendly text, never the developer message ─────────
 
     [Fact]

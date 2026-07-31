@@ -59,7 +59,7 @@
                 }
             </label>
 
-            <InlineAlert Messages="@_errors" />
+            <ErrorAlert Messages="@_errors" ShowSignIn="@_errorsIsSessionExpired" />
 
             @* ── EPUB metadata (display-only) ───────────────────────────────────── *@
             @if (_parsed?.BookTitle is not null)
@@ -140,6 +140,7 @@
     private IReadOnlyList<ImportedChapterDraft>? _drafts;
     private List<ImportWarning> _documentWarnings = [];
     private readonly List<string> _errors = [];
+    private bool _errorsIsSessionExpired;
     private string? _successMessage;
 
     private string UploadLabel => _mode switch
@@ -171,6 +172,7 @@
         _drafts = null;
         _documentWarnings = [];
         _errors.Clear();
+        _errorsIsSessionExpired = false;
         _successMessage = null;
     }
 
@@ -305,6 +307,7 @@
     private async Task CommitAsync(IReadOnlyList<ImportedChapterDraft> finalDrafts)
     {
         _errors.Clear();
+        _errorsIsSessionExpired = false;
         _isCommitting = true;
         try
         {
@@ -337,6 +340,7 @@
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Bulk chapter import commit failed for story {StoryId}", StoryId);
             _errors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _errorsIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {

@@ -15,7 +15,7 @@
 
 <section>
     <h2 class="mb-2 text-lg font-semibold text-(--color-text)">Chapters</h2>
-    <div class="mb-2"><InlineAlert Message="@_errorMessage"/></div>
+    <div class="mb-2"><ErrorAlert Message="@_errorMessage" ShowSignIn="@_errorMessageIsSessionExpired"/></div>
 
     @if (_isLoading || Chapters is null)
     {
@@ -84,6 +84,7 @@
 
     private bool _isLoading = true;
     private string? _errorMessage;
+    private bool _errorMessageIsSessionExpired;
     private int? _dragFromNumber;
     private int? _dragOverNumber;
     private ChapterListEntryDto? _deleteTarget;
@@ -126,6 +127,7 @@
         try
         {
             _errorMessage = null;
+            _errorMessageIsSessionExpired = false;
             await ChapterWriteService.MoveChapterAsync(StoryId, from, targetNumber);
             await ReloadAsync();
         }
@@ -134,6 +136,7 @@
             _errorMessage = ExceptionPresenter.IsUserFacing(ex)
                 ? string.Join(" ", ExceptionPresenter.GetUserMessages(ex))
                 : "Couldn't reorder the chapters. Please try again.";
+            _errorMessageIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {
@@ -150,6 +153,7 @@
         try
         {
             _errorMessage = null;
+            _errorMessageIsSessionExpired = false;
             await ChapterWriteService.DeleteChapterAsync(_deleteTarget.ChapterId);
             await ReloadAsync();
         }
@@ -158,6 +162,7 @@
             _errorMessage = ExceptionPresenter.IsUserFacing(ex)
                 ? string.Join(" ", ExceptionPresenter.GetUserMessages(ex))
                 : "Couldn't delete the chapter. Please try again.";
+            _errorMessageIsSessionExpired = ex is SessionExpiredException;
         }
         finally
         {

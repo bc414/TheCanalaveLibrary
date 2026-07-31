@@ -421,19 +421,22 @@ unless noted. All sit under Stage-5 cells.
   - Source: `modernization-audit/deferred-work.md` §3 & §6.
   - Context: **MA-107** DI double-registration (7 clusters register the write class twice → two instances per scope); **MA-408** `SavedTagSelection` N+1 (`GetPublicSelectionsByUserAsync` loops `HydrateDetailAsync`); **MA-006** `ContentSurface` hardcodes 3 `ReadingBackground` palettes as raw hex in a `style=` attr (`layer4-style.md` itself calls this a defect the CI token-checker can't catch); **MA-007** leftover `FrameStyle` magic-int param; **MA-211** field-copy idiom divergence in `ServerStoryArcWriteService`.
 
-- [ ] **D5 — Client 401-mapping deviations + a shipped behavior change** `[latent-risk · low · anytime]`
-  - Grid: F16/F17/F38/F49 L5=5.
+- [x] **D5 — Client 401-mapping deviations + a shipped behavior change — CLOSED (WU-ErrorHandling2, 2026-07-30)** `[latent-risk · low · anytime]`
+  - Grid: F16/F17/F38/F49 L5=5 (unchanged).
   - Source: `modernization-audit/deferred-work.md` §8; `fix-status.md` line 131.
-  - Context: `ClientGroupWriteService`, `ClientMessagingWriteService`, `ClientUserStoryInteraction*` still use deviant 401-mapping. Separately, ~14 converted services now map bare-401 → `InvalidOperationException`, routing expired-cookie 401s to the generic-error path instead of the forbidden banner. Labeled "optional cleanup, not a bug" — but L5 reads uniformly done.
+  - Context: `ClientGroupWriteService`, `ClientMessagingWriteService`, `ClientUserStoryInteraction*` still use deviant 401-mapping. Separately, ~14 converted services now map bare-401 → `InvalidOperationException`, routing expired-cookie 401s to the generic-error path instead of the forbidden banner.
+  - **Resolution: both halves closed together, folded into WU-ErrorHandling2** (the "shipped behavior change" turned out to be the same root cause as the deviant mappings — no real per-service 401 semantics, just staleness predating a proper session-vs-permission distinction). New `SessionExpiredException` (401) is now distinct from `UnauthorizedAccessException` (403) everywhere; ten private per-service translators (including `ClientGroupWriteService`, `ClientUserStoryInteractionReadService`'s shared bookshelf/write translator) collapsed onto the shared `ClientHttpHelpers` helpers, which now construct `SessionExpiredException` for every 401. `ClientMessagingWriteService` keeps its documented 403-disambiguation deviation (unrelated to the 401 question) but delegates the 401/404/5xx arms. A new `ErrorAlert` component gives the expired-session case an actual affordance (inline Sign-in link) instead of the old generic-error path. Detail: `workplan.md` WU-ErrorHandling2; `error-handling.md` §"The API error envelope".
 
 ---
 
 ## E. Cross-cutting work with no grid cell at all
 
-- [ ] **E1 — WU-ErrorHandling2 (`ProblemDetails` envelope + client HTTP translation)** `[off-grid · med · pre-launch]`
-  - Grid: L5 column reads 5 sitewide (implies the client HTTP path is complete).
-  - Source: `error-handling.md` §"Deferred (Phase-5-adjacent) — WU-ErrorHandling2"; `roadmap.md` §"Recommended next work units."
-  - Context: WU-ErrorHandling deferred the API error-envelope + full client-service HTTP error-translation half; "design still not done." The global flip made the HTTP surface testable but the error-shaping half is unbuilt.
+- [x] **E1 — WU-ErrorHandling2 (`ProblemDetails` envelope + client HTTP translation) — DONE (2026-07-30)** `[off-grid · med · pre-launch]`
+  - Grid: L5 column reads 5 sitewide (unchanged — the cross-cutting shape this tracker exists for).
+  - Source: `error-handling.md` §"The API error envelope" (was §"Deferred (Phase-5-adjacent)");
+    `roadmap.md` §"Recommended next work units" (row struck).
+  - Context: WU-ErrorHandling deferred the API error-envelope + full client-service HTTP error-translation half; "design still not done." The global flip made the HTTP surface testable but the error-shaping half was unbuilt.
+  - **Resolution: built in full — envelope, endpoint audit, client translation, and a session-expiry UI affordance.** `AddProblemDetails()` + a `/api`-scoped `ApiExceptionHandler` (traceId-carrying 500s); `EndpointHelpers.ExecuteWriteAsync` renamed `ExecuteAsync` and applied to every typed-exception-throwing read endpoint (found and fixed a live gap: `StoryEndpoints`' filter/random-batch/filter-candidates reads were still 500ing on malformed ship input); new `SessionExpiredException`/`ServerFaultException` Core types; `ClientHttpHelpers` gained `ThrowIfReadFailedAsync`, ten private write translators unified, ten gated read services translated; new `ErrorAlert.razor` adopted across 19 SharedUI components (8 SOLO editor pages named as a follow-up, not silently dropped). Also closed **D5** in the same pass. Detail: `workplan.md` WU-ErrorHandling2.
 
 - [ ] **E2 — AngleSharp 0.17.1 mXSS (CVE-2026-54570) — accepted-risk live CVE** `[off-grid · high · launch]`
   - Grid: security is a global condition, no cell; F66 reads 5.

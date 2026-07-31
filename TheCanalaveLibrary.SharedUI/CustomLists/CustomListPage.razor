@@ -95,7 +95,7 @@ else
                     </button>
                 }
             </div>
-            <InlineAlert Messages="@_errors" />
+            <ErrorAlert Messages="@_errors" ShowSignIn="@_errorsIsSessionExpired" />
         </div>
 
         @* ── Owner: add stories ─────────────────────────────────────────────────── *@
@@ -165,6 +165,7 @@ else
     private bool _isLoading = true;
     private int? _currentUserId;
     private IReadOnlyList<string>? _errors;
+    private bool _errorsIsSessionExpired;
 
     private bool _renaming;
     private string _renameValue = "";
@@ -197,6 +198,7 @@ else
         _page = 1;
         _renaming = false;
         _errors = null;
+        _errorsIsSessionExpired = false;
         await LoadListAsync(restore: false);
         _loadedListId = ListId;
     }
@@ -265,6 +267,7 @@ else
     private async Task SaveRenameAsync()
     {
         _errors = null;
+        _errorsIsSessionExpired = false;
         try
         {
             await CustomListService.RenameListAsync(ListId, _renameValue);
@@ -274,12 +277,14 @@ else
         catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
         {
             _errors = ExceptionPresenter.GetUserMessages(ex);
+            _errorsIsSessionExpired = ex is SessionExpiredException;
         }
     }
 
     private async Task ToggleVisibilityAsync()
     {
         _errors = null;
+        _errorsIsSessionExpired = false;
         try
         {
             bool newValue = !Detail!.IsPublic;
@@ -289,6 +294,7 @@ else
         catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
         {
             _errors = ExceptionPresenter.GetUserMessages(ex);
+            _errorsIsSessionExpired = ex is SessionExpiredException;
         }
     }
 
@@ -302,12 +308,14 @@ else
         catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
         {
             _errors = ExceptionPresenter.GetUserMessages(ex);
+            _errorsIsSessionExpired = ex is SessionExpiredException;
         }
     }
 
     private async Task AddPickedStoryAsync(StoryTitleSearchDto story)
     {
         _errors = null;
+        _errorsIsSessionExpired = false;
         try
         {
             await CustomListService.AddStoryAsync(ListId, story.StoryId);
@@ -316,12 +324,14 @@ else
         catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
         {
             _errors = ExceptionPresenter.GetUserMessages(ex);
+            _errorsIsSessionExpired = ex is SessionExpiredException;
         }
     }
 
     private async Task RemoveStoryAsync(int storyId)
     {
         _errors = null;
+        _errorsIsSessionExpired = false;
         try
         {
             await CustomListService.RemoveStoryAsync(ListId, storyId);
@@ -330,6 +340,7 @@ else
         catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
         {
             _errors = ExceptionPresenter.GetUserMessages(ex);
+            _errorsIsSessionExpired = ex is SessionExpiredException;
         }
     }
 
@@ -349,6 +360,7 @@ else
     private async Task CloneAsync()
     {
         _errors = null;
+        _errorsIsSessionExpired = false;
         try
         {
             int newListId = await CustomListService.CloneListAsync(ListId);
@@ -358,6 +370,7 @@ else
         catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
         {
             _errors = ExceptionPresenter.GetUserMessages(ex);
+            _errorsIsSessionExpired = ex is SessionExpiredException;
         }
     }
 

@@ -7,7 +7,7 @@ namespace TheCanalaveLibrary.Server;
 /// <see cref="IExternalVerificationWriteService"/> (Feature 53, WU39). Thin pass-throughs: no
 /// business logic here — validation and the mod/admin gate live in the service
 /// (<c>ServerExternalVerificationWriteService.RequireModerator</c>, the enforcement point of
-/// record). Every write handler wraps in <see cref="EndpointHelpers.ExecuteWriteAsync"/> for
+/// record). Every write handler wraps in <see cref="EndpointHelpers.ExecuteAsync"/> for
 /// exception→status translation, mirroring <c>ModerationEndpoints</c>.
 ///
 /// <para><b>Read auth.</b> The author-facing reads (platforms, my-accounts) are
@@ -21,7 +21,7 @@ namespace TheCanalaveLibrary.Server;
 /// service's own <c>RequireModerator()</c> gate — defense in depth (MA-702 pattern). The service
 /// gate remains authoritative: a signed-in non-mod who somehow reaches it gets
 /// <see cref="UnauthorizedAccessException"/> → 403; unauthenticated throws
-/// <see cref="InvalidOperationException"/> → 401 via <c>ExecuteWriteAsync</c>'s auth-safety-net
+/// <see cref="InvalidOperationException"/> → 401 via <c>ExecuteAsync</c>'s auth-safety-net
 /// case (same known EndpointHelpers 401-vs-400 business-rule mismatch as <c>ModerationEndpoints</c>
 /// — e.g. "Verify your X account first" also maps to 401, not 400).</para>
 /// </summary>
@@ -54,14 +54,14 @@ public static class ExternalVerificationEndpoints
         // ── Writes — author, account tier ─────────────────────────────────────────
 
         group.MapPost("/my-code", (IExternalVerificationWriteService svc) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await svc.EnsureMyVerificationCodeAsync())))
             .RequireAuthorization();
 
         // AddExternalAccountRequest is a request object → POST-with-body per layer5-wasm.md's
         // non-scalar-parameter rule.
         group.MapPost("/accounts", (IExternalVerificationWriteService svc, AddExternalAccountRequest request) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     await svc.SubmitAccountForVerificationAsync(request);
                     return Results.NoContent();
@@ -72,7 +72,7 @@ public static class ExternalVerificationEndpoints
 
         group.MapPost("/links/{storyExternalLinkId:int}/request",
                 (IExternalVerificationWriteService svc, int storyExternalLinkId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await svc.RequestLinkVerificationAsync(storyExternalLinkId);
                         return Results.NoContent();
@@ -83,7 +83,7 @@ public static class ExternalVerificationEndpoints
 
         group.MapPost("/accounts/{userExternalIdentityId:int}/approve",
                 (IExternalVerificationWriteService svc, int userExternalIdentityId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await svc.ApproveAccountVerificationAsync(userExternalIdentityId);
                         return Results.NoContent();
@@ -92,7 +92,7 @@ public static class ExternalVerificationEndpoints
 
         group.MapPost("/accounts/{userExternalIdentityId:int}/reject",
                 (IExternalVerificationWriteService svc, int userExternalIdentityId, string reason) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await svc.RejectAccountVerificationAsync(userExternalIdentityId, reason);
                         return Results.NoContent();
@@ -103,7 +103,7 @@ public static class ExternalVerificationEndpoints
 
         group.MapPost("/links/{storyExternalLinkId:int}/approve",
                 (IExternalVerificationWriteService svc, int storyExternalLinkId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await svc.ApproveLinkVerificationAsync(storyExternalLinkId);
                         return Results.NoContent();
@@ -112,7 +112,7 @@ public static class ExternalVerificationEndpoints
 
         group.MapPost("/links/{storyExternalLinkId:int}/reject",
                 (IExternalVerificationWriteService svc, int storyExternalLinkId, string reason) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await svc.RejectLinkVerificationAsync(storyExternalLinkId, reason);
                         return Results.NoContent();

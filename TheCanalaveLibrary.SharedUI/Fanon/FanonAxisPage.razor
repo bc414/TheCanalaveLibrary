@@ -105,7 +105,7 @@
                                                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-xs text-(--color-text) disabled:opacity-50" />
                                             <span>(fanon, child of @group.BaseTag.TagName, no custom names)</span>
                                         </div>
-                                        <InlineAlert Message="@_linkError" />
+                                        <ErrorAlert Message="@_linkError" ShowSignIn="@_linkErrorIsSessionExpired" />
                                         <div class="flex items-center gap-2">
                                             <button type="button" @onclick="() => ConfirmLinkAsync(group)"
                                                     disabled="@(_pickedTarget is null && string.IsNullOrWhiteSpace(_newTagName))"
@@ -186,6 +186,7 @@
     private TagChipDto? _pickedTarget;
     private string _newTagName = "";
     private string? _linkError;
+    private bool _linkErrorIsSessionExpired;
 
     private string Title => _axis == TagTypeEnum.Character ? "Original characters" : "Original settings";
 
@@ -244,6 +245,7 @@
         // Deliberately NOT pre-filled — see the create-path comment in the markup.
         _newTagName = "";
         _linkError = null;
+        _linkErrorIsSessionExpired = false;
     }
 
     private async Task<IEnumerable<TagChipDto>> SearchTargetTags(string term) =>
@@ -259,6 +261,7 @@
     private async Task ConfirmLinkAsync(FanonGroupDto group)
     {
         _linkError = null;
+        _linkErrorIsSessionExpired = false;
         try
         {
             int targetTagId;
@@ -290,6 +293,7 @@
             if (!ExceptionPresenter.IsUserFacing(ex))
                 Logger.LogError(ex, "Linking fanon group {Name} failed", group.Name);
             _linkError = string.Join(" ", ExceptionPresenter.GetUserMessages(ex));
+            _linkErrorIsSessionExpired = ex is SessionExpiredException;
         }
     }
 

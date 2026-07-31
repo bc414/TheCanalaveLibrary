@@ -27,7 +27,7 @@ public static class UserActivityEndpoints
         RouteGroupBuilder group = app.MapGroup("/api/user-activity");
 
         group.MapPost("/", (IUserActivityWriteService activity, IActiveUserContext activeUser) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                 {
                     if (activeUser.UserId is int userId)
                     {

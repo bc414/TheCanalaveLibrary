@@ -8,7 +8,7 @@ namespace TheCanalaveLibrary.Server;
 /// (WU-Spotlight's cross-cutting settings cluster). Thin pass-through: no business logic here — the
 /// mod gate for writes lives in <c>ServerSiteSettingsWriteService.RequireModerator</c> (single
 /// enforcement point). The write handler wraps in the shared
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> for exception→status translation
+/// <see cref="EndpointHelpers.ExecuteAsync"/> for exception→status translation
 /// (layer5-wasm.md §"The Error-Translation Contract").
 /// <para>
 /// <b>Read auth.</b> <c>ServerSiteSettingsReadService</c> performs no role check of its own (plain
@@ -27,7 +27,7 @@ namespace TheCanalaveLibrary.Server;
 /// 2026-07-18 — the write previously carried only the plain floor while this file's own read was
 /// role-gated) on top of the service's own <c>RequireModerator()</c>, which throws
 /// <see cref="UnauthorizedAccessException"/> for a non-mod caller →
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> maps to 403.
+/// <see cref="EndpointHelpers.ExecuteAsync"/> maps to 403.
 /// </para>
 /// </summary>
 public static class SiteSettingsEndpoints
@@ -45,7 +45,7 @@ public static class SiteSettingsEndpoints
         // plain scalar from the body implicitly; mirrors GroupEndpoints'/FollowingEndpoints' pattern).
         group.MapPost("/{settingKey}",
                 (ISiteSettingsWriteService settings, string settingKey, [FromBody] int value) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await settings.SetIntAsync(settingKey, value);
                         return Results.NoContent();

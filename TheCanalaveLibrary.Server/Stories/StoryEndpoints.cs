@@ -8,7 +8,7 @@ namespace TheCanalaveLibrary.Server;
 /// Layer-5 API surface for <see cref="IStoryReadService"/> / <see cref="IStoryWriteService"/>.
 /// Thin pass-throughs: no business logic here — validation and the author-only gate live in the
 /// service (single enforcement point). Every write handler wraps in the shared
-/// <see cref="EndpointHelpers.ExecuteWriteAsync"/> for exception→status translation
+/// <see cref="EndpointHelpers.ExecuteAsync"/> for exception→status translation
 /// (layer5-wasm.md §"The Error-Translation Contract").
 /// <para>
 /// Read auth: public for every browse/listing/detail read — mirrors the public
@@ -30,11 +30,11 @@ namespace TheCanalaveLibrary.Server;
 /// Write auth: <c>RequireAuthorization()</c> on every write — every
 /// <see cref="IStoryWriteService"/> method requires an authenticated user, and
 /// update/cover-upload additionally enforce story ownership via
-/// <c>UnauthorizedAccessException</c>, translated to 403 by <see cref="EndpointHelpers.ExecuteWriteAsync"/>.
+/// <c>UnauthorizedAccessException</c>, translated to 403 by <see cref="EndpointHelpers.ExecuteAsync"/>.
 /// No <c>RequireRateLimiting(...)</c> — unlike Tags (the one write surface that is plain HTTP today),
 /// <see cref="ServerStoryWriteService.CreateStoryAsync"/> already throttles via the transport-agnostic
 /// <c>IWriteRateLimitService</c> token bucket (<c>WriteActionKind.ContentCreate</c>), which surfaces as
-/// a 429 through the same <see cref="EndpointHelpers.ExecuteWriteAsync"/> path
+/// a 429 through the same <see cref="EndpointHelpers.ExecuteAsync"/> path
 /// (<c>WriteRateLimitExceededException</c> — see <c>security.md</c> §"Write Throttling").
 /// </para>
 /// </summary>
@@ -49,13 +49,13 @@ public static class StoryEndpoints
         group.MapGet("/{storyId:int}", async (IStoryReadService stories, int storyId) =>
             Results.Json(await stories.GetStoryByIdAsync(storyId)));
 
-        // Author-only editor read — wrapped in ExecuteWriteAsync (unlike the other reads) because
+        // Author-only editor read — wrapped in ExecuteAsync (unlike the other reads) because
         // GetStoryForEditAsync enforces the author gate and throws UnauthorizedAccessException for
         // a non-author; the shared helper translates that to 403 so ClientStoryReadService's
         // 403→UnauthorizedAccessException mapping works over WASM (same wire shape as the
         // ChapterEndpoints /edit route, MA-301 precedent).
         group.MapGet("/{storyId:int}/edit", (IStoryReadService stories, int storyId) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Json(await stories.GetStoryForEditAsync(storyId))))
             .RequireAuthorization();
 
@@ -73,17 +73,24 @@ public static class StoryEndpoints
         // metadata is built eagerly for the AuthorizationPolicyCache, so this one bad handler took
         // down every Integration test — caught via `dotnet test`, not `dotnet build`, since MSBuild
         // has no static check for minimal-API parameter-source inference).
-        group.MapPost("/query", async (
-            IStoryReadService stories, StoryFilterDto filter, [FromQuery] int[]? restrictToStoryIds,
-            [FromQuery] bool personalScope = false) =>
-        {
-            // personalScope: Personal-plane hydration for the WASM bookshelf/owner-list pass —
-            // see IStoryReadService doc (only effective with a restrict set; a forged flag is a
-            // deliberate API call per the Intentionality Doctrine, not a browse leak).
-            (StoryListingDto[] Items, int TotalCount) result =
-                await stories.GetListingsAsync(filter, restrictToStoryIds, personalScope);
-            return Results.Ok(new PagedResult<StoryListingDto>(result.Items, result.TotalCount));
-        });
+        // Wrapped in ExecuteAsync (WU-ErrorHandling2 audit, 2026-07-30): ApplyFiltersAsync's
+        // ValidateShipShape throws StoryValidationException for malformed ship criteria — this
+        // and the other two ApplyFiltersAsync-backed reads below (/random-batch,
+        // /filter-candidates) were left unwrapped after WU-TagFanon upgraded the exception type
+        // to a user-facing one but never touched the endpoint, so malformed ship input still
+        // 500'd instead of 400ing.
+        group.MapPost("/query", (
+                IStoryReadService stories, StoryFilterDto filter, [FromQuery] int[]? restrictToStoryIds,
+                [FromQuery] bool personalScope = false) =>
+            EndpointHelpers.ExecuteAsync(async () =>
+            {
+                // personalScope: Personal-plane hydration for the WASM bookshelf/owner-list pass —
+                // see IStoryReadService doc (only effective with a restrict set; a forged flag is a
+                // deliberate API call per the Intentionality Doctrine, not a browse leak).
+                (StoryListingDto[] Items, int TotalCount) result =
+                    await stories.GetListingsAsync(filter, restrictToStoryIds, personalScope);
+                return Results.Ok(new PagedResult<StoryListingDto>(result.Items, result.TotalCount));
+            }));
 
         // Mature count-line disclosure reads (WU-AccessGate) — interstitial-grade metadata only.
         group.MapGet("/gated-cards", async (IStoryReadService stories, [FromQuery] int[] storyIds) =>
@@ -92,15 +99,17 @@ public static class StoryEndpoints
         group.MapGet("/gated-by-author/{authorId:int}", async (IStoryReadService stories, int authorId) =>
             Results.Ok(await stories.GetGatedStoriesByAuthorAsync(authorId)));
 
-        group.MapPost("/random-batch", async (
+        group.MapPost("/random-batch", (
                 IStoryReadService stories, StoryFilterDto filter, int batchSize) =>
-            Results.Ok(await stories.GetRandomBatchAsync(filter, batchSize)));
+            EndpointHelpers.ExecuteAsync(async () =>
+                Results.Ok(await stories.GetRandomBatchAsync(filter, batchSize))));
 
         // Same [FromQuery] requirement as /query above — candidateIds sits alongside the
         // body-inferred filter DTO in one handler.
-        group.MapPost("/filter-candidates", async (
+        group.MapPost("/filter-candidates", (
                 IStoryReadService stories, [FromQuery] int[] candidateIds, StoryFilterDto filter) =>
-            Results.Ok(await stories.FilterCandidateIdsAsync(candidateIds, filter)));
+            EndpointHelpers.ExecuteAsync(async () =>
+                Results.Ok(await stories.FilterCandidateIdsAsync(candidateIds, filter))));
 
         // Gated: bypasses the content-rating filter so authors always see their own mature stories
         // Anonymous-callable (WU-AccessGate Phase 1): feeds the PUBLIC profile Stories tab, which
@@ -138,12 +147,12 @@ public static class StoryEndpoints
         // ── Writes (authenticated — ownership enforced by the service, translated here) ──
 
         group.MapPost("/", (IStoryWriteService stories, CreateStoryDTO dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await stories.CreateStoryAsync(dto))))
             .RequireAuthorization();
 
         group.MapPut("/{storyId:int}", (IStoryWriteService stories, int storyId, StoryUpdateDTO dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     storyId != dto.StoryId
                         ? Results.Problem(detail: "Route storyId does not match body StoryId.",
                             statusCode: StatusCodes.Status400BadRequest)
@@ -155,7 +164,7 @@ public static class StoryEndpoints
         // unless explicitly disabled — this is a stateless API call authenticated by the same-origin
         // Identity cookie, not a Razor form post, so DisableAntiforgery() is correct here.
         group.MapPost("/{storyId:int}/cover", (IStoryWriteService stories, int storyId, IFormFile file) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await stories.UploadCoverArtAsync(
                         file.OpenReadStream(), file.ContentType, storyId))))
             .RequireAuthorization()

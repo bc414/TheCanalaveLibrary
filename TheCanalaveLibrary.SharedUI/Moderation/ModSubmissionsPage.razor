@@ -105,7 +105,7 @@
                                           @bind="_rejectReason"></textarea>
                                 @if (_rejectError is not null)
                                 {
-                                    <div class="mt-1"><InlineAlert Message="@_rejectError" /></div>
+                                    <div class="mt-1"><ErrorAlert Message="@_rejectError" ShowSignIn="@_rejectErrorIsSessionExpired" /></div>
                                 }
                                 <div class="mt-2 flex gap-2">
                                     <button type="button"
@@ -192,7 +192,7 @@
                                                   @bind="_rejectAccountReason"></textarea>
                                         @if (_rejectAccountError is not null)
                                         {
-                                            <div class="mt-1"><InlineAlert Message="@_rejectAccountError" /></div>
+                                            <div class="mt-1"><ErrorAlert Message="@_rejectAccountError" ShowSignIn="@_rejectAccountErrorIsSessionExpired" /></div>
                                         }
                                         <div class="mt-2 flex gap-2">
                                             <button type="button"
@@ -278,7 +278,7 @@
                                                   @bind="_rejectLinkReason"></textarea>
                                         @if (_rejectLinkError is not null)
                                         {
-                                            <div class="mt-1"><InlineAlert Message="@_rejectLinkError" /></div>
+                                            <div class="mt-1"><ErrorAlert Message="@_rejectLinkError" ShowSignIn="@_rejectLinkErrorIsSessionExpired" /></div>
                                         }
                                         <div class="mt-2 flex gap-2">
                                             <button type="button"
@@ -320,6 +320,7 @@
     private int? _rejectingStoryId;
     private string? _rejectReason;
     private string? _rejectError;
+    private bool _rejectErrorIsSessionExpired;
 
     // ── Imports tab state (Feature 53, WU39) — two independent queues ────────────
     [PersistentState]
@@ -334,11 +335,13 @@
     private int? _rejectingAccountId;
     private string? _rejectAccountReason;
     private string? _rejectAccountError;
+    private bool _rejectAccountErrorIsSessionExpired;
 
     private int? _actingLinkId;
     private int? _rejectingLinkId;
     private string? _rejectLinkReason;
     private string? _rejectLinkError;
+    private bool _rejectLinkErrorIsSessionExpired;
 
     protected override async Task OnInitializedAsync()
     {
@@ -363,12 +366,17 @@
     {
         _actingStoryId = storyId;
         _rejectError = null;
+        _rejectErrorIsSessionExpired = false;
         try
         {
             await ModerationService.ApproveStoryAsync(storyId);
             await LoadAsync();
         }
-        catch (Exception ex) { _rejectError = Translate(ex, "Approving a story submission failed unexpectedly"); }
+        catch (Exception ex)
+        {
+            _rejectError = Translate(ex, "Approving a story submission failed unexpectedly");
+            _rejectErrorIsSessionExpired = ex is SessionExpiredException;
+        }
         finally { _actingStoryId = null; }
     }
 
@@ -377,6 +385,7 @@
         _rejectingStoryId = sub.StoryId;
         _rejectReason = null;
         _rejectError = null;
+        _rejectErrorIsSessionExpired = false;
     }
 
     private void CancelReject()
@@ -384,6 +393,7 @@
         _rejectingStoryId = null;
         _rejectReason = null;
         _rejectError = null;
+        _rejectErrorIsSessionExpired = false;
     }
 
     private async Task ConfirmRejectAsync(int storyId)
@@ -396,13 +406,18 @@
 
         _actingStoryId = storyId;
         _rejectError = null;
+        _rejectErrorIsSessionExpired = false;
         try
         {
             await ModerationService.RejectStoryAsync(storyId, _rejectReason!);
             CancelReject();
             await LoadAsync();
         }
-        catch (Exception ex) { _rejectError = Translate(ex, "Rejecting a story submission failed unexpectedly"); }
+        catch (Exception ex)
+        {
+            _rejectError = Translate(ex, "Rejecting a story submission failed unexpectedly");
+            _rejectErrorIsSessionExpired = ex is SessionExpiredException;
+        }
         finally { _actingStoryId = null; }
     }
 
@@ -419,12 +434,17 @@
     {
         _actingAccountId = userExternalIdentityId;
         _rejectAccountError = null;
+        _rejectAccountErrorIsSessionExpired = false;
         try
         {
             await ExternalVerificationService.ApproveAccountVerificationAsync(userExternalIdentityId);
             await LoadAccountsAsync();
         }
-        catch (Exception ex) { _rejectAccountError = Translate(ex, "Approving an account verification failed unexpectedly"); }
+        catch (Exception ex)
+        {
+            _rejectAccountError = Translate(ex, "Approving an account verification failed unexpectedly");
+            _rejectAccountErrorIsSessionExpired = ex is SessionExpiredException;
+        }
         finally { _actingAccountId = null; }
     }
 
@@ -433,6 +453,7 @@
         _rejectingAccountId = userExternalIdentityId;
         _rejectAccountReason = null;
         _rejectAccountError = null;
+        _rejectAccountErrorIsSessionExpired = false;
     }
 
     private void CancelRejectAccount()
@@ -440,6 +461,7 @@
         _rejectingAccountId = null;
         _rejectAccountReason = null;
         _rejectAccountError = null;
+        _rejectAccountErrorIsSessionExpired = false;
     }
 
     private async Task ConfirmRejectAccountAsync(int userExternalIdentityId)
@@ -452,13 +474,18 @@
 
         _actingAccountId = userExternalIdentityId;
         _rejectAccountError = null;
+        _rejectAccountErrorIsSessionExpired = false;
         try
         {
             await ExternalVerificationService.RejectAccountVerificationAsync(userExternalIdentityId, _rejectAccountReason!);
             CancelRejectAccount();
             await LoadAccountsAsync();
         }
-        catch (Exception ex) { _rejectAccountError = Translate(ex, "Rejecting an account verification failed unexpectedly"); }
+        catch (Exception ex)
+        {
+            _rejectAccountError = Translate(ex, "Rejecting an account verification failed unexpectedly");
+            _rejectAccountErrorIsSessionExpired = ex is SessionExpiredException;
+        }
         finally { _actingAccountId = null; }
     }
 
@@ -475,12 +502,17 @@
     {
         _actingLinkId = storyExternalLinkId;
         _rejectLinkError = null;
+        _rejectLinkErrorIsSessionExpired = false;
         try
         {
             await ExternalVerificationService.ApproveLinkVerificationAsync(storyExternalLinkId);
             await LoadLinksAsync();
         }
-        catch (Exception ex) { _rejectLinkError = Translate(ex, "Approving a link verification failed unexpectedly"); }
+        catch (Exception ex)
+        {
+            _rejectLinkError = Translate(ex, "Approving a link verification failed unexpectedly");
+            _rejectLinkErrorIsSessionExpired = ex is SessionExpiredException;
+        }
         finally { _actingLinkId = null; }
     }
 
@@ -489,6 +521,7 @@
         _rejectingLinkId = storyExternalLinkId;
         _rejectLinkReason = null;
         _rejectLinkError = null;
+        _rejectLinkErrorIsSessionExpired = false;
     }
 
     private void CancelRejectLink()
@@ -496,6 +529,7 @@
         _rejectingLinkId = null;
         _rejectLinkReason = null;
         _rejectLinkError = null;
+        _rejectLinkErrorIsSessionExpired = false;
     }
 
     private async Task ConfirmRejectLinkAsync(int storyExternalLinkId)
@@ -508,13 +542,18 @@
 
         _actingLinkId = storyExternalLinkId;
         _rejectLinkError = null;
+        _rejectLinkErrorIsSessionExpired = false;
         try
         {
             await ExternalVerificationService.RejectLinkVerificationAsync(storyExternalLinkId, _rejectLinkReason!);
             CancelRejectLink();
             await LoadLinksAsync();
         }
-        catch (Exception ex) { _rejectLinkError = Translate(ex, "Rejecting a link verification failed unexpectedly"); }
+        catch (Exception ex)
+        {
+            _rejectLinkError = Translate(ex, "Rejecting a link verification failed unexpectedly");
+            _rejectLinkErrorIsSessionExpired = ex is SessionExpiredException;
+        }
         finally { _actingLinkId = null; }
     }
 

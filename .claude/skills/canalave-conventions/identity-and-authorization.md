@@ -275,7 +275,13 @@ is the reference.
 
 `AddIdentityCore<User>().AddRoles<ApplicationRole>()` with `int` keys.
 Cookie auth via `AddAuthentication(IdentityConstants.ApplicationScheme).AddIdentityCookies()`.
-Configured for **401/403 status codes, not 302 redirects** (critical for WASM API calls).
+Configured for **401/403 status codes, not 302 redirects** (critical for WASM API calls). **401 is
+a session-expiry signal, not an authorization denial** — the API client reconstructs every 401
+(cookie-handler bare 401 or a service's `InvalidOperationException`→401 arm alike) as
+`SessionExpiredException`, presented as "sign in again," never conflated with a genuine
+authenticated-but-forbidden 403 (`UnauthorizedAccessException`). See `error-handling.md` §"The API
+error envelope" / `layer5-wasm.md` §"The Error-Translation Contract" (WU-ErrorHandling2,
+2026-07-30).
 `RequireConfirmedAccount = true`.
 
 Data Protection: `PersistKeysToFileSystem` (dev), `PersistKeysToDbContext` (prod).

@@ -36,7 +36,7 @@
                 Create list
             </button>
         </div>
-        <InlineAlert Messages="@_createErrors" />
+        <ErrorAlert Messages="@_createErrors" ShowSignIn="@_createErrorsIsSessionExpired" />
     </div>
 
     @* Lists *@
@@ -94,6 +94,7 @@
     private string _newListName = "";
     private bool _newListIsPublic; // default private (settled 2026-07-13)
     private IReadOnlyList<string>? _createErrors;
+    private bool _createErrorsIsSessionExpired;
     private CustomListSummaryDto? _pendingDelete;
 
     protected override async Task OnInitializedAsync()
@@ -104,6 +105,7 @@
     private async Task CreateListAsync()
     {
         _createErrors = null;
+        _createErrorsIsSessionExpired = false;
         try
         {
             await CustomListService.CreateListAsync(_newListName, _newListIsPublic);
@@ -114,6 +116,7 @@
         catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
         {
             _createErrors = ExceptionPresenter.GetUserMessages(ex);
+            _createErrorsIsSessionExpired = ex is SessionExpiredException;
         }
     }
 
@@ -128,6 +131,7 @@
         catch (Exception ex) when (ExceptionPresenter.IsUserFacing(ex))
         {
             _createErrors = ExceptionPresenter.GetUserMessages(ex);
+            _createErrorsIsSessionExpired = ex is SessionExpiredException;
         }
         _pendingDelete = null;
     }

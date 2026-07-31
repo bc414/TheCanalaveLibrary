@@ -1,4 +1,3 @@
-using System.Net;
 using System.Net.Http.Json;
 using TheCanalaveLibrary.Core;
 
@@ -9,9 +8,10 @@ namespace TheCanalaveLibrary.Client;
 /// ServerSiteSettingsWriteService : ServerSiteSettingsReadService. Auth rides the same-origin
 /// Identity cookie — WASM's fetch-backed HttpClient sends it automatically for same-origin requests.
 /// <para>
-/// Translates SiteSettingsEndpoints' status codes back into the service contract's typed exceptions:
-/// 401/403 → <see cref="UnauthorizedAccessException"/> (the service's own <c>RequireModerator</c>
-/// denial — this is the only failure mode <c>SetIntAsync</c> documents).
+/// Delegates the standard status-code mapping to
+/// <see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/> — the service's own
+/// <c>RequireModerator</c> denial (401/403) is the only failure mode <c>SetIntAsync</c> documents,
+/// so the validation factory is defensive-only.
 /// </para>
 /// </summary>
 public sealed class ClientSiteSettingsWriteService(HttpClient http)
@@ -21,23 +21,7 @@ public sealed class ClientSiteSettingsWriteService(HttpClient http)
     {
         HttpResponseMessage response =
             await Http.PostAsJsonAsync($"api/site-settings/{Uri.EscapeDataString(settingKey)}", value);
-        await ThrowIfWriteFailedAsync(response);
-    }
-
-    /// <summary>Status-code → contract-exception translation (inverse of SiteSettingsEndpoints').</summary>
-    private static async Task ThrowIfWriteFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new UnauthorizedAccessException(detail ?? "This operation requires a moderator.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
+        await ClientHttpHelpers.ThrowIfWriteFailedAsync(
+            response, detail => new InvalidOperationException(detail));
     }
 }

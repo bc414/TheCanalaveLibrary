@@ -6,7 +6,7 @@ namespace TheCanalaveLibrary.Server;
 /// Layer-5 API surface for <see cref="IChapterReadService"/> / <see cref="IChapterWriteService"/>.
 /// Thin pass-throughs: no business logic here — validation lives in the service (single
 /// enforcement point). The endpoint's only added job is exception→status translation via the
-/// shared <see cref="EndpointHelpers.ExecuteWriteAsync"/> (layer5-wasm.md §"The Error-Translation
+/// shared <see cref="EndpointHelpers.ExecuteAsync"/> (layer5-wasm.md §"The Error-Translation
 /// Contract").
 /// <para>
 /// Reads are public — mirrors <c>ChapterReadingPage</c> (SharedUI/Chapters/ChapterReadingPage.razor),
@@ -64,33 +64,33 @@ public static class ChapterEndpoints
             Results.Ok(await chapters.GetChaptersForExportAsync(storyId)));
 
         // Author-only editor read — see class doc's authorization note. Wrapped in
-        // ExecuteWriteAsync (unlike the other reads) because GetChapterForEditAsync enforces the
+        // ExecuteAsync (unlike the other reads) because GetChapterForEditAsync enforces the
         // author gate and throws UnauthorizedAccessException for a non-author — the shared helper
         // translates that to 403 so ClientChapterReadService's 403→UnauthorizedAccessException
         // mapping works over WASM (MA-301). Results.Json's null becomes an empty-body 200, which
         // ClientHttpHelpers.GetNullableFromJsonAsync tolerates.
         group.MapGet("/edit/{chapterContentId:long}",
                 (IChapterReadService chapters, long chapterContentId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                         Results.Json(await chapters.GetChapterForEditAsync(chapterContentId))))
             .RequireAuthorization();
 
         // ── Writes (authenticated author — RequireAuthorization(); see class doc) ──
 
         group.MapPost("/", (IChapterWriteService chapters, CreateChapterDto dto) =>
-                EndpointHelpers.ExecuteWriteAsync(async () =>
+                EndpointHelpers.ExecuteAsync(async () =>
                     Results.Ok(await chapters.CreateChapterAsync(dto))))
             .RequireAuthorization();
 
         group.MapPost("/{chapterId:int}/versions",
                 (IChapterWriteService chapters, int chapterId, CreateChapterDto dto) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                         Results.Ok(await chapters.AddAlternateVersionAsync(chapterId, dto))))
             .RequireAuthorization();
 
         group.MapPut("/content/{chapterContentId:long}",
                 (IChapterWriteService chapters, long chapterContentId, UpdateChapterContentDto dto) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                         chapterContentId != dto.ChapterContentId
                             ? Results.Problem(
                                 detail: "Route chapterContentId does not match body ChapterContentId.",
@@ -100,7 +100,7 @@ public static class ChapterEndpoints
 
         group.MapPut("/{chapterId:int}/primary/{chapterContentId:long}",
                 (IChapterWriteService chapters, int chapterId, long chapterContentId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await chapters.SetPrimaryVersionAsync(chapterId, chapterContentId);
                         return Results.NoContent();
@@ -109,7 +109,7 @@ public static class ChapterEndpoints
 
         group.MapPut("/{chapterId:int}/published",
                 (IChapterWriteService chapters, int chapterId, bool isPublished) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await chapters.SetPublishedAsync(chapterId, isPublished);
                         return Results.NoContent();
@@ -118,7 +118,7 @@ public static class ChapterEndpoints
 
         group.MapPut("/{storyId:int}/move",
                 (IChapterWriteService chapters, int storyId, int fromNumber, int toNumber) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await chapters.MoveChapterAsync(storyId, fromNumber, toNumber);
                         return Results.NoContent();
@@ -127,7 +127,7 @@ public static class ChapterEndpoints
 
         group.MapDelete("/{chapterId:int}",
                 (IChapterWriteService chapters, int chapterId) =>
-                    EndpointHelpers.ExecuteWriteAsync(async () =>
+                    EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await chapters.DeleteChapterAsync(chapterId);
                         return Results.NoContent();

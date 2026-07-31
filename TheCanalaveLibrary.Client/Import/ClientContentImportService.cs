@@ -99,40 +99,26 @@ public sealed class ClientContentImportService(HttpClient http) : IContentImport
         return form;
     }
 
-    /// <summary>Status-code → contract-exception translation (inverse of ContentImportEndpoints').</summary>
-    private static async Task ThrowIfFailedAsync(HttpResponseMessage response)
-    {
-        if (response.IsSuccessStatusCode) return;
-
-        switch (response.StatusCode)
-        {
-            case HttpStatusCode.BadRequest:
-                string? detail = await ClientHttpHelpers.ReadProblemDetailAsync(response);
-                throw new ImportException(detail ?? "This file couldn't be imported.");
-            case HttpStatusCode.Unauthorized:
-            case HttpStatusCode.Forbidden:
-                throw new UnauthorizedAccessException("Importing content requires an authenticated user.");
-            default:
-                response.EnsureSuccessStatusCode(); // throws HttpRequestException with the status
-                return;
-        }
-    }
+    private static Task ThrowIfFailedAsync(HttpResponseMessage response) =>
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, detail => new ImportException(detail));
 
     /// <summary>
     /// Synchronous counterpart to <see cref="ThrowIfFailedAsync"/>, used only by <see cref="Resplit"/>
-    /// (see class doc comment for why that method can't await). Reads the response body via the
-    /// synchronous <see cref="JsonSerializer"/> overload instead of
-    /// <c>ClientHttpHelpers.ReadProblemDetailAsync</c> (async-only shared plumbing) — duplicating the
-    /// one-field <c>ProblemPayload</c> shape locally rather than adding a sync variant to the shared
-    /// helper for this single caller.
+    /// (see class doc comment for why that method can't await) — it cannot delegate to the shared
+    /// (async-only) <c>ClientHttpHelpers</c> plumbing, so it stays a hand-written, narrower
+    /// duplicate: reads the response body via the synchronous <see cref="JsonSerializer"/> overload,
+    /// with its own one-field <c>ProblemPayload</c> shape.
     /// <para>
     /// Maps 401/403 to <see cref="InvalidOperationException"/>, not
-    /// <see cref="UnauthorizedAccessException"/> — <c>Resplit</c>'s own business-rule guard ("re-split
-    /// requires a parsed document") is thrown as <see cref="InvalidOperationException"/> server-side
-    /// and gets uniformly (mis)mapped to 401 by <c>EndpointHelpers.ExecuteWriteAsync</c>'s documented,
-    /// out-of-scope mismatch (see <c>ContentImportEndpoints</c>' doc comment) — this preserves that
-    /// exception type and the message, same as <c>ClientUserSettingsService.ThrowIfFailedAsync</c>'s
-    /// analogous case, instead of collapsing it into a generic "you're not logged in" exception.
+    /// <see cref="SessionExpiredException"/>/<see cref="UnauthorizedAccessException"/> —
+    /// <c>Resplit</c>'s own business-rule guard ("re-split requires a parsed document") is thrown as
+    /// <see cref="InvalidOperationException"/> server-side and gets uniformly (mis)mapped to 401 by
+    /// <c>EndpointHelpers.ExecuteAsync</c>'s documented, out-of-scope mismatch (see
+    /// <c>ContentImportEndpoints</c>' doc comment) — this preserves that exception type and the real
+    /// business message instead of the standard table's generic session-expired text, which would be
+    /// actively wrong for this specific mis-mapped case. Deliberately narrower than
+    /// WU-ErrorHandling2's other unifications (2026-07-30) — the sync/async split, not the deviation
+    /// itself, is why this one can't fold onto the shared helper.
     /// </para>
     /// </summary>
     private static void ThrowIfFailedSync(HttpResponseMessage response)
