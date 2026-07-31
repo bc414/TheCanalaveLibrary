@@ -159,7 +159,6 @@ public class User : IdentityUser<int>
     public virtual ICollection<StoryAcknowledgment> StoryAcknowledgments { get; set; } = new List<StoryAcknowledgment>();
     public virtual ICollection<UserBadge> UserBadges { get; set; } = new List<UserBadge>();
     public virtual ICollection<UserChapterInteraction> UserChapterInteractions { get; set; } = new List<UserChapterInteraction>();
-    public virtual ICollection<UserCustomFilter> UserCustomFilters { get; set; } = new List<UserCustomFilter>();
     public virtual ICollection<UserNotificationSetting> UserNotificationSettings { get; set; } = new List<UserNotificationSetting>();
     public virtual ICollection<UserProfileComment> UserProfileComments { get; set; } = new List<UserProfileComment>();
     public virtual ICollection<UserStoryInteractionFilterSetting> UserStoryInteractionFilterSettings { get; set; } = new List<UserStoryInteractionFilterSetting>();

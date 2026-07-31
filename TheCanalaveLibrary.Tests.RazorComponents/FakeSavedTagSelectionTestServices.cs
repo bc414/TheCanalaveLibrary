@@ -76,14 +76,22 @@ internal sealed class FakeUserSettingsService : IUserSettingsService
 {
     public SavedTagSelectionSortEnum SavedTagSelectionSort { get; set; } = SavedTagSelectionSortEnum.DateCreatedDesc;
 
+    /// <summary>Configurable knob (WU-DiscoveryOverrideUI): SearchPageTests sets a non-default
+    /// value to verify SearchPage reads this instead of its hardcoded fallback.</summary>
+    public int DefaultPaginationSize { get; set; } = 20;
+
+    /// <summary>Configurable knob (WU-DiscoveryOverrideUI): default DatePublished preserves the
+    /// original hardcoded value for every test that doesn't care about this field.</summary>
+    public DefaultSortOrder DefaultSearchSort { get; set; } = DefaultSortOrder.DatePublished;
+
     public Task<UserSettingsDto> GetMySettingsAsync() => Task.FromResult(new UserSettingsDto(
         Tagline: null,
         ProfilePictureRelativeUrl: null,
         ThemeId: 1,
         PrefersAnimatedSprites: true,
         Reader: new ReaderSettingsDto(
-            "Georgia", 16, 1.5f, 800, false, true, 20,
-            DefaultSortOrder.DatePublished, ReadingBackgroundEnum.SiteDefault, SavedTagSelectionSort),
+            "Georgia", 16, 1.5f, 800, false, true, DefaultPaginationSize,
+            DefaultSearchSort, ReadingBackgroundEnum.SiteDefault, SavedTagSelectionSort),
         Privacy: new PrivacySettingsDto(
             ProfileVisibility.Public, true, SocialInteractionPermission.Public,
             SocialInteractionPermission.UsersOnly, true, true, false, false),

@@ -279,6 +279,9 @@ builder.Services.AddSingleton<ViewCountBuffer>();
 builder.Services.AddSingleton<ViewCountFlusher>();
 builder.Services.AddHostedService<ViewCountFlushWorker>();
 builder.Services.AddScoped<IDiscoveryDefaultsReadService, ServerDiscoveryDefaultsReadService>();
+// Self-referential write half (WU-DiscoveryOverrideUI): the /settings override editor. Separate
+// service/interface from the anonymous-callable read above — see the interface's doc comment.
+builder.Services.AddScoped<IDiscoveryFilterSettingsService, ServerDiscoveryFilterSettingsService>();
 // Discovery marts (WU-Marts, layer8-data-marts.md): the scoped rebuilder does the raw-SQL
 // staging-swap rebuilds; the hosted worker drives them daily (+ bootstrap when empty).
 // TestAppFactory removes the worker (tests rebuild deterministically via the rebuilder).

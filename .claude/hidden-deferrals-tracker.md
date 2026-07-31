@@ -220,10 +220,54 @@ decision work that has no row at all.
   - Context: `AssignStoryToFolderAsync`/`UnassignStoryFromFolderAsync` exist and are tested. WU-GroupsL5 (2026-07-24) built the folder-management page but **pointedly excluded** story-assignment — there was no UI anywhere to file a story into a group folder.
   - Residual: **done 2026-07-25.** Investigating the fix surfaced that admin-gating the read side too (the first-draft design) would have shipped a display gap affecting *every* viewer, not just admins — the folder tree had never rendered folder contents at all, for anyone, since WU32. Root-fixed by retyping `GroupDetailDto.StoryIds`/`GroupFolderDto.StoryIds` (bare `int`) to `IReadOnlyList<GroupStoryDto>` (`GroupStoryId` + `StoryId`) at the source rather than bolting on a parallel admin-only endpoint. `GroupPage` now renders folder contents (story titles, linked) for every viewer unconditionally, and admin-only controls (assign/reassign via a per-story `StoryDeck` overlay, per-folder unassign, and — closing a second dead handler found in the same investigation — the previously-unwired `RemoveStoryAsync`) on top. Folds in **D3.1** (see below). Browser-verified both directions (admin: assign/reassign/unassign/remove, all `psql`-confirmed; non-member viewer: sees folder contents, zero admin controls). `dotnet test` full suite green. Detail: `workplan.md` WU-GroupsL5b; `audit/Groups.md` F39/F40 Stage notes.
 
-- [ ] **B7 — Discovery per-user filter-override editing UI (§8.7)** `[inert · low · anytime]`
-  - Grid: F31 L2=5 (no dedicated cell for the override UI).
+- [x] **B7 — Discovery per-user filter-override editing UI (§8.7) — DONE (WU-DiscoveryOverrideUI, 2026-07-31)** `[inert · low · anytime]`
+  - Grid: F31 L2=5, F21/F22=5 — unchanged (already Stage 5 across the board; this closed the
+    invisible gap under it, same shape as B0/B11/B12/B4).
   - Source: `audit/Discovery.md` "Note on search-result narrowing"; WU28 "Deferred."
-  - Context: The §8.7 defaults *read/merge* exists (`IDiscoveryDefaultsReadService`), but there's no surface for users to edit per-search-mode overrides. Per-user random batch size is stubbed to a constant 20. The `UserCustomFilter` entity's purpose stays unresolved pending this UI.
+  - Context: The §8.7 defaults *read/merge* existed (`IDiscoveryDefaultsReadService`), but there was no surface for users to edit per-search-mode overrides. Per-user random batch size was stubbed to a constant 20. The `UserCustomFilter` entity's purpose stayed unresolved pending this UI.
+  - **Resolution (2026-07-31, Brian-ratified).** Surface is a `/settings` section
+    (`DiscoverySettingsForm.razor`), not `ResultsFilterPanel` — supersedes this file's own earlier
+    guess (see `audit/Discovery.md` §"Note on search-result narrowing"). New self-referential
+    `IDiscoveryFilterSettingsService` (sparse upsert/delete, mirrors
+    `INotificationWriteService.SetSettingAsync`). `UserCustomFilter` **cut entirely** — both
+    directions (group whitelist/blacklist) were unbuilt, unrequested, and undesigned; the
+    list-reference half already lost its rationale in the 2026-07-13 Custom Lists settlement.
+    `DefaultSearchSort`/`DefaultPaginationSize` wired into `SearchPage` (with a validity clamp —
+    only `DatePublished` is applied besides Random; `Score`/`Relevance`/`RecentlyRead` fall back
+    to Random rather than being misapplied). `CollapseCommentThreads` deliberately left inert — see
+    **B15** below. `dotnet test` green (Unit 776, RazorComponents 635, Integration 1021).
+    Full narrative: `audit/Discovery.md` §"WU-DiscoveryOverrideUI Stage note"; `workplan.md`
+    WU-DiscoveryOverrideUI entry.
+
+- [ ] **B15 — `CollapseCommentThreads` reader setting is stored, editable, and consumed by nothing** `[inert · low · anytime]` — *Found scoping WU-DiscoveryOverrideUI, 2026-07-31.*
+  - Grid: F23/F24/F25/F26 (Comments) cells unaffected — invisible there, same shape as B0/B14.
+  - Source: `ReaderSettingsForm.razor` (edits it), `ServerUserSettingsService.cs` (persists it),
+    `SharedUI/Comments/CommentSection.razor` (the surface that would consume it — grep for
+    "collaps" across `Comments/` returns nothing; there is no collapse/expand behavior at all today).
+  - Context: Unlike B0/B14 (a suppress-or-cut binary), this one isn't a wiring job — threads are one
+    level deep (roots + `RepliesOf(rootId)`), so building it means designing a new per-root
+    show/hide affordance, not reading an existing one. Deliberately not built as part of
+    WU-DiscoveryOverrideUI (found adjacent, not part of B7): comment-thread behavior is a design
+    question Brian wants to answer from using the site, not one a Claude session should pre-empt.
+  - Next: once a call is made on what "collapsed" should mean for a thread, wire the setting's
+    initial state and build the toggle affordance in the same pass.
+
+- [ ] **B16 — `ResultsFilterPanel.ApplyAsync` hardcodes `PageSize = 20` for every sorted-mode Apply** `[inert · low · anytime]` — *Found building WU-DiscoveryOverrideUI's random-batch-size fix, 2026-07-31.*
+  - Grid: F31/F14/F17/F21 (the panel's consumers — `/discover`, Bookshelves, Profile story tabs)
+    cells unaffected — invisible there, same shape as B0/B14/B15.
+  - Source: `SharedUI/Discovery/ResultsFilterPanel.razor` `ApplyAsync` (`PageSize = 20` literal);
+    `PaginationControls.razor:8`'s doc comment already documents `PageSize` as meant to be
+    dispatcher-supplied.
+  - Context: The random-mode half of this exact bug (`SearchPage`'s hardcoded `RandomBatchSize`)
+    is what WU-DiscoveryOverrideUI closed via B7 — `ReaderSettingsDto.DefaultPaginationSize` now
+    reaches the random batch. The **sorted-mode** offset-pagination half was deliberately left
+    alone: `ResultsFilterPanel` is a shared cross-cutting component with (at least) three
+    consumers, so fixing this means passing an `InitialPageSize` seed through its contract and
+    checking every consumer, not a SearchPage-local change — a full audit of the panel's consumers
+    before touching the contract, one WU, not a point fix riding this one's coattails.
+  - Next: enumerate every `ResultsFilterPanel` consumer, decide whether `PageSize` becomes a new
+    `InitialPageSize` parameter (seed pattern, mirrors `InitialFilter`) or is read by each dispatcher
+    from `IUserSettingsService` directly, then wire it everywhere in one pass.
 
 - [ ] **B8 — Spotlight donation/payment pipeline** `[inert · low · post-beta]` — *Deliberate (deferred past beta).*
   - Grid: F55 L1/L2/L3/L3.5/L4.5/L5=5 (L4=3).

@@ -1,0 +1,55 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Discovery filter-override sub-form (WU-DiscoveryOverrideUI, closes tracker item B7, spec §8.7).
+   No @inject: the matrix is passed in by SettingsPage (parameter-driven, bUnit-testable in
+   isolation — the convention every SettingsPage sub-form follows). Each toggle raises OnToggle
+   immediately — no Save button, same instant-save-per-row convention as NotificationSettingsPage
+   (the settled precedent for this shape, audit/Discovery.md §"Note on search-result narrowing").
+   Reuses UserStoryInteractionFilter.LabelFor so the wording matches the live filter panel exactly
+   for the same interaction kind. *@
+
+<section class="flex flex-col gap-4">
+    <div>
+        <h2 class="text-base font-semibold text-(--color-text)">Discovery Defaults</h2>
+        <p class="text-sm text-(--color-text-muted)">
+            Choose which stories are excluded by default each time you visit a discovery surface —
+            these apply on every device, unlike the filters you set for a single search session.
+        </p>
+    </div>
+
+    <div class="flex flex-col gap-6 rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-4">
+        @foreach (DiscoveryFilterModeDto mode in Modes)
+        {
+            <div>
+                <h3 class="mb-2 text-sm font-semibold text-(--color-text)">@mode.ModeDisplayName</h3>
+                <div class="flex flex-col gap-1.5">
+                    @foreach (DiscoveryFilterRowDto row in mode.Rows)
+                    {
+                        <label class="flex items-center gap-2 cursor-pointer select-none">
+                            <input type="checkbox"
+                                   checked="@row.EffectiveValue"
+                                   disabled="@Busy"
+                                   class="rounded accent-(--color-mission)"
+                                   @onchange="@(e => HandleToggleAsync(mode.SearchModeKey, row, (bool)e.Value!))" />
+                            <span class="text-sm text-(--color-text)">@UserStoryInteractionFilter.LabelFor(row.InteractionType)</span>
+                        </label>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<DiscoveryFilterModeDto> Modes { get; set; } = [];
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>
+    /// Raised immediately when a checkbox is toggled — no Save button. The page calls
+    /// <c>IDiscoveryFilterSettingsService.SetOverrideAsync</c> with these three values.
+    /// </summary>
+    [Parameter] public EventCallback<(string SearchModeKey, string FilterKey, bool IsEnabled)> OnToggle { get; set; }
+
+    private async Task HandleToggleAsync(string searchModeKey, DiscoveryFilterRowDto row, bool isEnabled) =>
+        await OnToggle.InvokeAsync((searchModeKey, row.FilterKey, isEnabled));
+}

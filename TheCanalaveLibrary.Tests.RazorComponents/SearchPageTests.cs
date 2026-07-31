@@ -1,4 +1,6 @@
+using System.Security.Claims;
 using Bunit;
+using Bunit.TestDoubles;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using TheCanalaveLibrary.Core;
@@ -24,13 +26,18 @@ public class SearchPageTests : BunitContext
     private readonly FakeUserStoryInteractionWriteService _fakeUsiService = new();
     private readonly FakeStoryReadService _storyReadService = new();
     private readonly FakeSavedTagSelectionReadService _selectionReadService = new();
+    private readonly FakeUserSettingsService _settingsService = new();
+    private readonly BunitAuthorizationContext _auth;
 
     public SearchPageTests()
     {
         // Page injections: random batches + sorted listings (IStoryReadService), per-viewer
         // states (IUserStoryInteractionReadService), §8.7 defaults (IDiscoveryDefaultsReadService),
-        // tag chip resolution (ITagReadService).
+        // tag chip resolution (ITagReadService), reader-setting defaults (IUserSettingsService,
+        // WU-DiscoveryOverrideUI — registered unconditionally since the page now always injects
+        // it, even though it's only called on the authenticated path).
         Services.AddScoped<IStoryReadService>(_ => _storyReadService);
+        Services.AddScoped<IUserSettingsService>(_ => _settingsService);
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
         Services.AddScoped<IDiscoveryDefaultsReadService>(_ => new FakeDiscoveryDefaultsReadService());
         Services.AddScoped<IUserStoryInteractionWriteService>(_ => _fakeUsiService);
@@ -43,6 +50,9 @@ public class SearchPageTests : BunitContext
         // Permalink route resolution (decision row 13). Empty by default: the bare /discover route
         // never calls it.
         Services.AddScoped<ISavedTagSelectionReadService>(_ => _selectionReadService);
+        // TagFilter's save/load flyouts render only for an authenticated viewer (WU43) — the
+        // write side wasn't needed until this WU's Authenticated_* tests started authenticating.
+        Services.AddScoped<ISavedTagSelectionWriteService>(_ => new FakeSavedTagSelectionWriteService());
         // Device-local filter restore. Under Loose JSInterop the load returns null, so the restore
         // is a no-op unless a test primes it — which is the correct default for a fresh browser.
         Services.AddScoped<DiscoveryFilterStore>();
@@ -50,8 +60,14 @@ public class SearchPageTests : BunitContext
 
         // Supplies the Task<AuthenticationState> cascade the page awaits (anonymous is fine —
         // discovery is public). TagFilter's WU43 flyouts stay off the DOM the same way.
-        this.AddAuthorization();
+        _auth = this.AddAuthorization();
     }
+
+    /// <summary>Authenticates the viewer as the given user id (drives the reader-setting-default
+    /// path in SearchPage.OnInitializedAsync — WU-DiscoveryOverrideUI).</summary>
+    private void AuthenticateAs(int userId) =>
+        _auth.SetAuthorized($"user-{userId}")
+             .SetClaims(new Claim(ClaimTypes.NameIdentifier, userId.ToString()));
 
     // ── Factory helpers ──────────────────────────────────────────────────────────
 
@@ -221,5 +237,63 @@ public class SearchPageTests : BunitContext
 
         cut.FindComponents<SelectionPermalinkBanner>().Should().BeEmpty();
         cut.Markup.Should().NotContain("isn't available");
+    }
+
+    // ── Reader-setting defaults (WU-DiscoveryOverrideUI, closes tracker item B7) ─────
+
+    [Fact]
+    public void Anonymous_RandomBatch_UsesHardcodedBatchSizeOfTwenty()
+    {
+        RenderPage();
+
+        _storyReadService.LastRequestedBatchSize.Should().Be(20,
+            "anonymous viewers have no account to read a setting from, so the hardcoded fallback applies");
+    }
+
+    [Fact]
+    public void Authenticated_RandomBatch_UsesReaderSettingDefaultPaginationSize()
+    {
+        AuthenticateAs(7);
+        _settingsService.DefaultPaginationSize = 35;
+        _settingsService.DefaultSearchSort = DefaultSortOrder.Random; // isolate the batch-size assertion
+        _storyReadService.RandomBatch = [MakeStory(1)];
+
+        Render<SearchPage>();
+
+        _storyReadService.LastRequestedBatchSize.Should().Be(35,
+            "an authenticated viewer's DefaultPaginationSize replaces the hardcoded constant");
+    }
+
+    [Fact]
+    public void Authenticated_DefaultSearchSortDatePublished_LoadsSortedModeOnInitialRender()
+    {
+        AuthenticateAs(7);
+        _settingsService.DefaultSearchSort = DefaultSortOrder.DatePublished;
+        _storyReadService.ListingsResult = ([MakeStory(1), MakeStory(2)], 2);
+
+        IRenderedComponent<SearchPage> cut = Render<SearchPage>();
+
+        cut.FindAll("button")
+            .Select(b => b.TextContent.Trim())
+            .Should().NotContain("Give me more",
+                "a DatePublished default sort means the initial load dispatches to the sorted page path, not random");
+    }
+
+    [Fact]
+    public void Authenticated_DefaultSearchSortScore_FallsBackToRandom_NotMisapplied()
+    {
+        // Score isn't in SearchPage's AvailableSorts at all (ReaderSettingsForm's dropdown offers
+        // every DefaultSortOrder value with no per-surface restriction) — a default set to it must
+        // not be applied verbatim; the page falls back to Random rather than passing an
+        // inapplicable sort straight through to the query.
+        AuthenticateAs(7);
+        _settingsService.DefaultSearchSort = DefaultSortOrder.Score;
+        _storyReadService.RandomBatch = [MakeStory(1)];
+
+        IRenderedComponent<SearchPage> cut = Render<SearchPage>();
+
+        cut.FindAll("button")
+            .Select(b => b.TextContent.Trim())
+            .Should().Contain("Give me more", "an inapplicable default sort falls back to random mode");
     }
 }

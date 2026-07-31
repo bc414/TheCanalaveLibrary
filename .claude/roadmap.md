@@ -154,7 +154,7 @@ done.
 | **2** — continue the debt-paydown burst, clustered by shared surface | ~~WU-ApplyFiltersPurity~~ **DONE 2026-07-30** | B12 | Cached `ITagHierarchyReadService` restored `ApplyFilters` to pure/sync — no numbered decision row; resolutions recorded directly in `hidden-deferrals-tracker.md` B12 and `workplan.md`'s DONE entry |
 | **2** | WU-StatBadgeProducers (in progress, 2026-07-30) | B3 (partial), B4 | Scoped: builds the Story Acknowledgments feature (`AcknowledgedAsBetaReaderCount`) + a producer hook on the already-built `StoryLineage` approval (`AcknowledgedAsInspirationCount`); re-files `SpotlightCount` under B8 rather than building it. Surfaced a site-wide badge-tier retirement along the way — see Resolved below. |
 | **2** | ~~WU-DataSaver~~ **DONE 2026-07-31** | B0 | Measured, not just decided — "suppress sprites, or cut the setting" turned out to have a wrong premise; see "Resolved" below |
-| **2** | WU-DiscoveryOverrideUI | B7 | Per-user filter-override editing surface (§8.7) |
+| **2** | ~~WU-DiscoveryOverrideUI~~ **DONE 2026-07-31** | B7 | Per-user filter-override editing surface (§8.7) — see "Resolved" below |
 | **3** | ~~WU-Home~~ **DONE 2026-07-28** | F1 | Closed Phase 2's last content item; Phase 2 fully closed 2026-07-30 (WU-AccountEnforcement, Tier 1) |
 | **4** — Phase 3 (L4 freeze sweep) | WU-A11y | F6 | Resolve decision row 12 just before the sweep starts |
 | **4** | *(fold into the same sweep — don't build standalone)* | H1, E4, H8 | Each cheap enough to ride the sweep rather than justify its own WU |
@@ -183,6 +183,41 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 2026-07-30; nothing left to sequence.
 
 ## Resolved
+
+- **WU-DiscoveryOverrideUI — §8.7 per-user filter-override editing UI built, `UserCustomFilter` cut
+  (2026-07-31, closes tracker item B7).** The read/merge half (`IDiscoveryDefaultsReadService`) had
+  shipped since WU28 with no way for a user to ever change their per-search-mode defaults — every
+  viewer was permanently stuck on the seeded matrix, adjustable only per-browser via
+  `DiscoveryFilterStore`'s localStorage seam. Three decisions settled (Brian-ratified, do not
+  revisit):
+  - **Surface: a `/settings` section** (`DiscoverySettingsForm.razor`), not an inline
+    `ResultsFilterPanel` affordance — `audit/Discovery.md`'s own earlier guess is superseded.
+    `NotificationSettingsPage` is the precedent: instant-save per toggle, sparse upsert/delete, no
+    Save button. New self-referential `IDiscoveryFilterSettingsService` (mirrors
+    `INotificationWriteService.SetSettingAsync`'s contract exactly), deliberately kept separate
+    from the anonymous-callable `IDiscoveryDefaultsReadService`.
+  - **`UserCustomFilter` cut entirely**, not merely trimmed. It's bidirectional (group whitelist —
+    "only search my groups" — as well as blacklist), so the 2026-07-13 Custom Lists ethics argument
+    only ever cleared the `PersonalList`/`PublicList` half; the surviving group/folder half is
+    simply unbuilt, unrequested, and undesigned. Six columns, trivially re-addable. Retires the last
+    of spec §8 row 7.
+  - **The two inert discovery `ReaderSettings` are wired**: `DefaultPaginationSize` replaces
+    `SearchPage`'s hardcoded `RandomBatchSize = 20`; `DefaultSearchSort` seeds the initial sort,
+    with a validity clamp (only `DatePublished` besides Random — `ReaderSettingsForm`'s dropdown
+    offers every `DefaultSortOrder` with no per-surface restriction, so `Relevance`/`Score`/
+    `RecentlyRead` fall back to Random rather than being misapplied). `CollapseCommentThreads` was
+    found adjacent but deliberately **not** wired — Comments has no collapse behavior to hook into
+    at all, and that's a design call for Brian to make from using the site, not a Claude session to
+    pre-empt; opened as tracker **B15**. A second adjacent gap was found and deliberately **not**
+    fixed in the same WU: `ResultsFilterPanel.ApplyAsync` hardcodes `PageSize = 20` for sorted-mode
+    pagination across all its consumers — a genuine cross-cutting fix, not a SearchPage-local one,
+    opened as tracker **B16** rather than folded in as a point fix.
+
+  Built the same day: `dotnet build`/`dotnet test` green (Unit 776, RazorComponents 635, Integration
+  1021 — 2,432 total). Migration `DropUserCustomFilter` applies cleanly to a fresh database.
+  Pointer: `hidden-deferrals-tracker.md` B7/B15/B16; `workplan.md` WU-DiscoveryOverrideUI;
+  `audit/Discovery.md` §"WU-DiscoveryOverrideUI Stage note"; `audit/Profiles.md` Feature 20;
+  `layer2-services.md` §8.7.
 
 - **WU-DataSaver — `PrefersDataSaverMode` cut, image derivative sizing opened as B14 (2026-07-31).**
   Tracker item B0 framed the choice as "suppress sprites, or cut the setting." Measurement before

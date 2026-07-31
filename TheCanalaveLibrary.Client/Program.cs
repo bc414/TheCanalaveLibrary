@@ -89,6 +89,7 @@ builder.Services.AddScoped<INotificationWriteService, ClientNotificationWriteSer
 builder.Services.AddScoped<IManualTreeSearchReadService, ClientManualTreeSearchReadService>();
 builder.Services.AddScoped<ITreeSearchReadService, ClientTreeSearchReadService>();
 builder.Services.AddScoped<IDiscoveryDefaultsReadService, ClientDiscoveryDefaultsReadService>();
+builder.Services.AddScoped<IDiscoveryFilterSettingsService, ClientDiscoveryFilterSettingsService>();
 builder.Services.AddScoped<ICoOccurrenceReadService, ClientCoOccurrenceReadService>();
 builder.Services.AddScoped<IGroupReadService, ClientGroupReadService>();
 builder.Services.AddScoped<IGroupWriteService, ClientGroupWriteService>();

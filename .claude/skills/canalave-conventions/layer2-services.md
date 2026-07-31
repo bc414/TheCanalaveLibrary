@@ -874,7 +874,17 @@ has 7 keys but `UserStoryInteractionTypeEnum` has 6 values) — drop it from the
 documented in the service.
 
 **Seed is authoritative and unchanged** (Ignored=true on the 5 discovery surfaces; profiles=none).
-No migration. Per-user override *editing* UI is deferred post-MVP (entity supports it).
+No migration.
+
+**Per-user override *editing*** ships as a separate service, `IDiscoveryFilterSettingsService`
+(`Core/Discovery/`, WU-DiscoveryOverrideUI, 2026-07-31) — deliberately not added to
+`IDiscoveryDefaultsReadService` above, which stays anonymous-callable and a pure read.
+`GetMyMatrixAsync()` returns one row per (confirmed-consumer search mode × mappable filter key)
+with its system default, effective value, and override-exists flag; `SetOverrideAsync(searchModeKey,
+filterKey, isEnabled)` is a sparse upsert/delete — mirrors `INotificationWriteService.SetSettingAsync`'s
+contract exactly (when the value matches the system default the override row is deleted, so absence
+means "use default"). Surfaces on `/settings` (`DiscoverySettingsForm.razor`), not
+`ResultsFilterPanel` — see `audit/Discovery.md` §"Note on search-result narrowing" for why.
 
 ### Optional caller-supplied exclusions — `ICoOccurrenceReadService` (F61, WU-RelatedStories)
 

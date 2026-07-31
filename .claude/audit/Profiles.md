@@ -35,11 +35,16 @@ worker).
   next pass — connection tested via `GetMySettingsAsync` and write-path round-trips).
   **`UpdateAppearanceAsync` dropped its third parameter (WU-DataSaver, 2026-07-31)** — see this
   feature's dedicated Stage note below.
-- **L3-Logic — Stage 5** (WU30). `SettingsPage.razor` at `/settings` dispatches to 5 sub-forms.
+- **L3-Logic — Stage 5** (WU30). `SettingsPage.razor` at `/settings` dispatches to its sub-forms.
   `ProfileSettingsForm`, `ReaderSettingsForm`, `PrivacySettingsForm`, `AuthorSettingsForm`,
   `AppearanceSettingsForm` all injection-free (bUnit-testable); page holds all service calls.
   `_seeded` guard prevents re-init on re-render. Per-section busy flags decouple save operations.
-  Verified: build green, 373 RazorComponents tests pass.
+  Verified: build green, 373 RazorComponents tests pass. **`DiscoverySettingsForm` added
+  (WU-DiscoveryOverrideUI, 2026-07-31)** — the §8.7 per-search-mode override matrix; same
+  injection-free/busy-flag pattern, instant-save per toggle via `IDiscoveryFilterSettingsService`.
+  Full narrative: `audit/Discovery.md` §"WU-DiscoveryOverrideUI Stage note". This bullet's "5
+  sub-forms" count and the Badges/ExternalAccounts/RevealManagementList additions since WU30 are
+  otherwise unreconciled here — pre-existing staleness, not touched by this WU.
 - **L3.5-Structure — Stage 5** (WU30). 5 sub-form Razor components with clear param/callback
   boundaries; picture upload raises `IBrowserFile` callback; page handles stream + URL patch.
   Verified: build green.

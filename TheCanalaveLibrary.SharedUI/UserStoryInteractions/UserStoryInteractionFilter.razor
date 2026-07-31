@@ -78,7 +78,12 @@
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────────────────
 
-    private static string LabelFor(UserStoryInteractionTypeEnum kind) => kind switch
+    /// <summary>
+    /// <c>internal</c> (not <c>private</c>) so <c>DiscoverySettingsForm</c> (WU-DiscoveryOverrideUI)
+    /// can reuse the exact same wording for the settings-page override matrix — the live filter
+    /// panel and the /settings editor should read identically for the same interaction kind.
+    /// </summary>
+    internal static string LabelFor(UserStoryInteractionTypeEnum kind) => kind switch
     {
         UserStoryInteractionTypeEnum.Favorite => "Hide stories I've favorited",
         UserStoryInteractionTypeEnum.PrivateFavorite => "Hide stories I've privately favorited",

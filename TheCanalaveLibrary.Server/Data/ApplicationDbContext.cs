@@ -106,8 +106,6 @@ public class ApplicationDbContext : IdentityDbContext<User, ApplicationRole, int
     public DbSet<DefaultUserStoryInteractionFilterSetting> DefaultUserStoryInteractionFilterSettings { get; set; } //system default matrix: (SearchMode × filter kind) → IsEnabled
     public DbSet<UserStoryInteractionFilterSetting> UserStoryInteractionFilterSettings { get; set; } //sparse per-user overrides of the default matrix
 
-    public DbSet<UserCustomFilter> UserCustomFilters { get; set; } //User can designate a list or group to use as a custom exclusion filter
-
     //massive table that stores interaction history - ignored, favorited, followed, read it later, completed/in progress
     public virtual DbSet<UserStoryInteraction> UserStoryInteractions { get; set; }
     public virtual DbSet<UserStoryInteractionDate> UserStoryInteractionDates { get; set; }

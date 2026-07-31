@@ -37,16 +37,6 @@ public enum ReportedEntityType : short
 // HasStarted/IsCompleted/IsIgnored flags on UserStoryInteraction (§4, §5.12), and favorite status
 // by IsFavorite/IsHiddenFavorite.
 
-public enum FilterEntityType : short
-{
-    PersonalList = 0,
-    PublicList = 1,
-    Group = 2,
-    GroupFolder = 3
-}
-
-
-
 public enum StoryLineageStatus : short
 {
     Pending = 0,

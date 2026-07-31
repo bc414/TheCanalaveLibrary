@@ -9,6 +9,7 @@
 @inject ITagReadService TagReadService
 @inject ISavedTagSelectionReadService SelectionReadService
 @inject DiscoveryFilterStore FilterStore
+@inject IUserSettingsService SettingsService
 
 @* SearchPage — /discover (WU28, spec §5.3 / §5.28; former SearchDesktop composite folded in
    2026-07-18, WU-ResponsiveMerge — single responsive tree, page owns its markup).
@@ -130,7 +131,10 @@ else if (_selectionUnavailable)
     /// </summary>
     [Parameter] public string? Slug { get; set; }
 
-    private const int RandomBatchSize = 20;
+    // Reader-setting default (WU-DiscoveryOverrideUI, closes tracker item B7's "stubbed to a
+    // constant 20" clause). Resolved from ReaderSettingsDto.DefaultPaginationSize in
+    // OnInitializedAsync for authenticated viewers; anonymous viewers keep this default.
+    private int _randomBatchSize = 20;
 
     private int? _currentUserId;
     private StoryFilterDto _filter = new() { Sort = DefaultSortOrder.Random };
@@ -194,6 +198,27 @@ else if (_selectionUnavailable)
 
         _filter = _filter with { ExcludedInteractions = DefaultExcludedInteractions };
 
+        // Reader-setting defaults (WU-DiscoveryOverrideUI): DefaultPaginationSize governs the
+        // random-mode batch size; DefaultSearchSort seeds the initial sort. Anonymous viewers keep
+        // the hardcoded fallbacks (_randomBatchSize=20, Sort=Random from _filter's field
+        // initializer). A later device-local restore (OnAfterRenderAsync) still wins over both —
+        // it runs after this and only applies when it narrows differently (decision row 13).
+        if (_currentUserId is int)
+        {
+            ReaderSettingsDto reader = (await SettingsService.GetMySettingsAsync()).Reader;
+
+            if (reader.DefaultPaginationSize > 0)
+                _randomBatchSize = reader.DefaultPaginationSize;
+
+            // Only DatePublished is valid as this surface's INITIAL sort besides Random: Relevance
+            // needs a live text query (none exists pre-load — ResultsFilterPanel itself hides
+            // Relevance from its dropdown for the same reason), and Score/RecentlyRead aren't in
+            // this surface's AvailableSorts at all. A default set to either falls back to Random
+            // rather than silently misapplying an inapplicable sort.
+            if (reader.DefaultSearchSort == DefaultSortOrder.DatePublished)
+                _filter = _filter with { Sort = DefaultSortOrder.DatePublished };
+        }
+
         // Permalink: the artifact contributes the tag axis only — sort and interaction exclusions
         // above stay this viewer's own, which is what keeps it a shared tag combination rather than
         // a shared query. Runs before the first load so the batch already reflects the selection.
@@ -202,8 +227,14 @@ else if (_selectionUnavailable)
 
         if (Items is null)
         {
-            // Pre-load initial random batch — spec §5.28: area is never blank on load.
-            await LoadRandomBatchAsync(append: false);
+            // Pre-load the initial batch/page — spec §5.28: area is never blank on load. Random
+            // is still the common case (the field initializer's default, and every anonymous
+            // viewer), but an authenticated viewer's DefaultSearchSort may have just set Sort to
+            // DatePublished above, so this must dispatch on the resolved mode, not assume Random.
+            if (IsRandomMode)
+                await LoadRandomBatchAsync(append: false);
+            else
+                await LoadSortedPageAsync();
         }
         else
         {
@@ -354,7 +385,7 @@ else if (_selectionUnavailable)
 
     private async Task LoadRandomBatchAsync(bool append)
     {
-        StoryListingDto[] batch = await StoryReadService.GetRandomBatchAsync(_filter, RandomBatchSize);
+        StoryListingDto[] batch = await StoryReadService.GetRandomBatchAsync(_filter, _randomBatchSize);
 
         StoryListingDto[] items = append ? [.. Items ?? [], .. batch] : batch;
         Items = items;

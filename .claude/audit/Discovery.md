@@ -19,13 +19,20 @@ of per-search-mode defaults).
 > 510); browser smoke at desktop width clean (loads, no error banner, zero console errors);
 > narrow rendering deliberately unpolished, no visual pass yet.
 
-**Entities (Core/Models/):** `SearchMode`, `UserInteractionFilter`, `DefaultSearchSetting` (matrix),
-`UserSearchSetting` (overrides), `UserCustomFilter`. Data marts: `AlsoFavoritedScore`,
-`AlsoRecommendedScore`, `UserStoryTreeSearchEntry`. FTS lives on `StoryListing.SearchVector`
-(generated `tsvector` column + GIN index `ix_story_listing_search_vector`, both in `OnModelCreating`).
+**Entities (Core/Discovery/):** `SearchMode`, `UserStoryInteractionFilterType`,
+`DefaultUserStoryInteractionFilterSetting` (matrix), `UserStoryInteractionFilterSetting`
+(sparse per-user overrides) — renamed from the spec's `UserInteractionFilter`/
+`DefaultSearchSetting`/`UserSearchSetting` at WU23 (§"WU23 Shared Context" below).
+`UserCustomFilter` (list/group inclusion-exclusion filter) was **cut entirely**
+(WU-DiscoveryOverrideUI, 2026-07-31 — both directions unbuilt/unrequested; see the Stage note
+below). Data marts: `AlsoFavoritedScore`, `AlsoRecommendedScore`, `UserStoryTreeSearchEntry`. FTS
+lives on `StoryListing.SearchVector` (generated `tsvector` column + GIN index
+`ix_story_listing_search_vector`, both in `OnModelCreating`).
 
-**Nothing in Layers 2–7 of search/discovery is built.** The three-axis search engine (Source × Filter ×
-Sort) exists only as spec §5.3.
+**Every layer of search/discovery is built as of WU-DiscoveryOverrideUI (2026-07-31).** The
+three-axis search engine (Source × Filter × Sort, spec §5.3) is fully implemented across L1–L6 —
+this headline predates that work and is corrected here; see each feature's per-layer Stage numbers
+in `status.md` and the Stage notes throughout this file for what shipped and when.
 
 ---
 
@@ -337,8 +344,57 @@ re-seed guard from the start.
     toggle** — the tag AND/OR toggle is set-combination *within* a fixed include selector, not that
     rejected flip; they remain separate selectors. OR-include has §9 whitelist-union precedent.
 
-  *Deferred:* per-user override editing UI (no settings surface in MVP — entity supports it);
-  per-user random batch size (`User.ReaderSettings`) — MVP uses constant 20.
+  *Deferred, closed by WU-DiscoveryOverrideUI (2026-07-31):* per-user override editing UI (no
+  settings surface in MVP — entity supports it); per-user random batch size
+  (`User.ReaderSettings`) — MVP uses constant 20. See the Stage note below.
+
+- **WU-DiscoveryOverrideUI Stage note (2026-07-31) — closes tracker item B7:**
+
+  Built the write half `IDiscoveryDefaultsReadService` never carried, and wired the two inert
+  discovery `ReaderSettings` this WU found alongside it:
+  - **`IDiscoveryFilterSettingsService`** (`Core/Discovery/`, self-referential CQRS-lite exception):
+    `GetMyMatrixAsync()` returns one `DiscoveryFilterModeDto` per confirmed-consumer search mode
+    (`SearchPage`, `AutoTreeSearch`, `AlsoFavorited`, `AlsoRecommended` — `TreeSearch`/`Profile*`
+    have no consumer and are omitted, per `ServerDiscoveryFilterSettingsService.ConsumedModes`);
+    `SetOverrideAsync` mirrors `INotificationWriteService.SetSettingAsync`'s sparse upsert/delete
+    exactly. Deliberately a separate interface from `IDiscoveryDefaultsReadService` (anonymous-
+    callable, stays a pure read) rather than adding a write there.
+  - **Surface:** a `/settings` section (`DiscoverySettingsForm.razor`, parameter-driven, no
+    `@inject`), not `ResultsFilterPanel` — settled 2026-07-31, superseding this file's own earlier
+    "likely composes into ResultsFilterPanel" guess. Instant-save per toggle, `NotificationSettingsPage`
+    precedent. Reuses `UserStoryInteractionFilter.LabelFor` (promoted to `internal`) so the wording
+    matches the live filter panel.
+  - **`UserCustomFilter` cut entirely** — see "Note on search-result narrowing" above.
+  - **`DefaultPaginationSize`/`DefaultSearchSort` wired into `SearchPage`:** replaces the hardcoded
+    `RandomBatchSize = 20` and the hardcoded `Sort = Random` initial seed for authenticated
+    viewers. `DefaultSearchSort` is applied only when it equals `DatePublished` — `Relevance`
+    needs a live text query (none exists pre-load) and `Score`/`RecentlyRead` aren't in this
+    surface's `AvailableSorts` at all, so either falls back to Random rather than being
+    misapplied (`ReaderSettingsForm`'s dropdown offers every `DefaultSortOrder` value with no
+    per-surface restriction — a latent gap this WU works around rather than fixes). The initial-load
+    branch now dispatches on `IsRandomMode` instead of unconditionally loading a random batch.
+  - **`CollapseCommentThreads` deliberately NOT wired** — Comments has no collapse behavior to hook
+    into at all (a build, not a wiring), which is a design question for Brian to answer from using
+    the site. Filed as a new tracker item rather than silently left inert with no record.
+  - **Found, not fixed (flagged, not silently patched):** `ResultsFilterPanel.ApplyAsync` hardcodes
+    `PageSize = 20` for every sorted-mode Apply, across all of its consumers (`/discover`,
+    Bookshelves, Profile tabs) — the same inert-setting shape as the random-batch-size bug this WU
+    closes, but fixing it means passing an `InitialPageSize` seed through a shared cross-cutting
+    component's contract, not a SearchPage-local change. Filed as a new tracker item so the fix
+    enumerates every `ResultsFilterPanel` consumer up front, one WU, rather than landing as a
+    point fix.
+
+  **How verified:** `dotnet build` green (0 errors). `dotnet test` green: Unit 776, RazorComponents
+  635, Integration 1021. New test files: `DiscoveryFilterSettingsServiceTests.cs` (Integration —
+  matrix read merges system defaults with user rows; `SetOverrideAsync` inserts on divergence,
+  deletes on return-to-default, idempotent, unauthenticated throws, unmappable key no-ops, and a
+  round-trip test confirming `IDiscoveryDefaultsReadService` observes rows the new write path
+  persists); `DiscoverySettingsFormTests.cs` (RazorComponents — section/checkbox rendering, label
+  wording, `OnToggle` payload, `Busy` disables); `SearchPageTests.cs` additions (RazorComponents —
+  anonymous keeps batch size 20, authenticated reads `DefaultPaginationSize`, `DatePublished`
+  default loads sorted mode on first render, `Score` default falls back to random). Migration
+  `DropUserCustomFilter` verified against a fresh database. Browser-verified end to end (see
+  `workplan.md` WU-DiscoveryOverrideUI entry for the full checklist).
 
 - **WU8 Stage note (2026-06-21):** the **pagination slice** of this feature's L3.5/L4 is built —
   `PaginationControls` (`SharedUI/Pagination/`), a leaf settled per spec §3.11.1/
@@ -1127,16 +1183,30 @@ re-seed guard from the start.
 ---
 
 ### Note on search-result narrowing
-The user-level filter-override UI (formerly tracked as `Filtering/`) is **Missing/Stage 2** (§8.7) — it
-likely composes into `ResultsFilterPanel`. Distinct from `CustomLists/` (personal organization).
+
+**Settled design (2026-07-31, Brian-ratified — WU-DiscoveryOverrideUI, do not revisit).** Resolves
+the surface question this note previously left open and discharges the `UserCustomFilter`
+re-derivation §"Custom-lists-as-filter-source DROPPED" (below) deferred here.
+
+- **Surface: a `/settings` section, not `ResultsFilterPanel`.** The panel is deliberately
+  injection-free with dispatcher-resolved seed state (`layer3.5-structure.md` §"Seed state vs. live
+  fetch in filter components"); an inline "save as default" affordance would only ever reach
+  whichever search mode the user happens to be on. `NotificationSettingsPage` is exact precedent
+  for a sparse per-row override matrix (instant-save toggles, no Save button) and is the shape this
+  builds from. This **supersedes** the "likely composes into `ResultsFilterPanel` — no structure
+  settled" framing this note and `folder_clusters.md`'s `Discovery/` row previously carried.
+- **`UserCustomFilter` is CUT, not trimmed.** The list-reference half already lost its rationale in
+  the 2026-07-13 Custom Lists settlement below. The surviving group/folder half (bidirectional —
+  "only show me my groups'" as well as "never show me this group's") is unbuilt, unrequested, and
+  undesigned, and `GroupFolder` having full CRUD elsewhere doesn't supply that design. Six columns,
+  trivially re-addable if group-scoped discovery is ever wanted. Entity, `FilterEntityType` enum,
+  DbSet, EF config, and table dropped via migration.
 
 **Custom-lists-as-filter-source DROPPED (2026-07-13, Brian):** the Feature-51 design settlement
 removed public custom lists as `UserCustomFilter` blacklist/whitelist sources (shared blocklists cut
 against the site ethos; whitelists are redundant with the list view + clone surface — full rationale:
-`audit/CustomLists.md` §"Settled design"). Consequence for this cluster: `UserCustomFilter`'s
-list-reference half loses its rationale — when the filter-override UI is designed, re-derive whether
-the entity keeps group/folder sources only, or is trimmed/dropped. Nothing here consumes it yet;
-no code change made.
+`audit/CustomLists.md` §"Settled design"). `UserCustomFilter`'s list-reference half lost its
+rationale here; see the settled design above for its full resolution.
 
 ---
 

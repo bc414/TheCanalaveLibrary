@@ -49,7 +49,16 @@ internal sealed class FakeStoryReadService : IStoryReadService
     /// <summary>Configurable knob for random-mode discovery tests (SearchPageTests).
     /// Default empty preserves the original no-op behavior.</summary>
     public StoryListingDto[] RandomBatch { get; set; } = [];
-    public Task<StoryListingDto[]> GetRandomBatchAsync(StoryFilterDto filter, int batchSize) => Task.FromResult(RandomBatch);
+
+    /// <summary>Captures the caller's requested batch size (WU-DiscoveryOverrideUI): verifies
+    /// SearchPage passes the viewer's DefaultPaginationSize instead of a hardcoded constant.</summary>
+    public int? LastRequestedBatchSize { get; private set; }
+
+    public Task<StoryListingDto[]> GetRandomBatchAsync(StoryFilterDto filter, int batchSize)
+    {
+        LastRequestedBatchSize = batchSize;
+        return Task.FromResult(RandomBatch);
+    }
     public Task<IReadOnlyList<int>> FilterCandidateIdsAsync(IReadOnlyCollection<int> candidateIds, StoryFilterDto filter) => Task.FromResult<IReadOnlyList<int>>([.. candidateIds]);
     public Task<IReadOnlyList<int>> GetStoryIdsByAuthorAsync(int authorId) => Task.FromResult<IReadOnlyList<int>>([]);
     public Task<IReadOnlyList<StoryTitleSearchDto>> SearchStoriesByTitleAsync(string term) => Task.FromResult<IReadOnlyList<StoryTitleSearchDto>>([]);

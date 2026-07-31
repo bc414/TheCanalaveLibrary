@@ -17,12 +17,26 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-DataSaver (2026-07-31) — `PrefersDataSaverMode` removed end to end rather than
+- **Last landed:** WU-DiscoveryOverrideUI (2026-07-31) — built the §8.7 per-user filter-override
+  editing surface `IDiscoveryDefaultsReadService`'s read/merge never carried: a new self-referential
+  `IDiscoveryFilterSettingsService` (sparse upsert/delete, mirrors
+  `INotificationWriteService.SetSettingAsync`) surfaced on `/settings` via `DiscoverySettingsForm`,
+  not `ResultsFilterPanel` (supersedes an earlier guess in `audit/Discovery.md`). Cut
+  `UserCustomFilter` entirely (both directions unbuilt/unrequested — a migration drops the table).
+  Wired the two inert discovery `ReaderSettings` found alongside it (`DefaultPaginationSize`,
+  `DefaultSearchSort`, the latter with a validity clamp against surfaces where it doesn't apply).
+  Closes tracker item **B7**; opens **B15** (`CollapseCommentThreads` inert — deliberately left for
+  Brian to design after using the site) and **B16** (`ResultsFilterPanel`'s separate `PageSize=20`
+  hardcode — a cross-cutting fix across its several consumers, not folded in as a point fix). No
+  cell flips (F31, F21, F22 all stay Stage 5 — closing an invisible gap under an already-sound
+  cell, same shape as B0/B4/B12). `dotnet test` green: Unit 776, RazorComponents 635, Integration
+  1021 (2,432 total).
+  (Before that, same day: WU-DataSaver — `PrefersDataSaverMode` removed end to end rather than
   wired up: measurement before building showed B0's own "suppress sprites, or cut the setting"
   framing was wrong on the numbers (sprites are a rounding error; cover art/avatars are the real
   weight and no derivative-sizing mechanism exists to honor the checkbox's promise). Closes tracker
   item **B0**; opens **B14** (image derivative sizing, sequenced with Phase 7). No cell flips.
-  (Before that, same day: WU-StatBadgeProducers — Story Acknowledgments (consent-gated credit
+  Before that, same day: WU-StatBadgeProducers — Story Acknowledgments (consent-gated credit
   feature) + a producer hook on the already-built `StoryLineage` approval, closing tracker item
   **B4** in full and **B3**'s two acknowledgment-counter rows (`SpotlightCount` re-filed under
   **B8**). Surfaced and retired the Bronze/Silver badge-tier paradigm site-wide along the way (no
@@ -43,10 +57,10 @@ references it, does not restate it.
   WU-ApplyFiltersPurity, and WU-ErrorHandling2 were all Tier-1/Tier-2 between-phase work (below),
   not phase gates.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
-  exist in **every group A–H** (fewer now that B0/B3/B4/B12 are closed; B14 newly opened), including
-  two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also left a named follow-up:
-  the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption (see its DONE entry).
-  WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its DONE entry.
+  exist in **every group A–H** (fewer now that B0/B3/B4/B7/B12 are closed; B14/B15/B16 newly
+  opened), including two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also left a
+  named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption (see its
+  DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its DONE entry.
 - **Blocked on Brian:** decision rows 4, 6, 8, 10, and 12 (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28).
 
@@ -188,6 +202,78 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-DiscoveryOverrideUI — §8.7 filter-override editing UI; `UserCustomFilter` cut (Features 31/21/22, extends `Discovery/`, `Profiles/`) — DONE ✓ (2026-07-31)
+
+- **Cells:** none flip — F31 (Search Page), F21/F22 (Profiles) all stay Stage 5; the read/merge half
+  was already Stage 5 and this closes the invisible gap under it (same shape as B0/B4/B12). Closes
+  tracker item **B7**; opens **B15** (`CollapseCommentThreads` inert) and **B16**
+  (`ResultsFilterPanel`'s separate `PageSize=20` hardcode).
+- **Decisions settled (2026-07-31, Brian-ratified — do not revisit; see `roadmap.md` §Resolved for
+  full reasoning):**
+  - **Surface: `/settings`, not `ResultsFilterPanel`.** `audit/Discovery.md`'s own earlier "likely
+    composes into ResultsFilterPanel" guess is superseded — the panel is deliberately injection-free
+    with dispatcher-resolved seed state, and an inline affordance would only ever reach whichever
+    search mode the user happens to be on. `NotificationSettingsPage` is the precedent.
+  - **`UserCustomFilter` cut entirely, not trimmed.** It's bidirectional (group whitelist as well as
+    blacklist), so the 2026-07-13 Custom Lists ethics ruling only ever cleared the
+    `PersonalList`/`PublicList` half; the surviving group/folder half is simply unbuilt, unrequested,
+    and undesigned. Six columns, trivially re-addable.
+  - **`CollapseCommentThreads` deliberately excluded.** Comments has no collapse behavior to hook
+    into at all — building it means designing new thread UI, a call for Brian to make from using
+    the site, not one this WU should pre-empt.
+- **Built:**
+  - `Core/Discovery/`: `IDiscoveryFilterSettingsService`, `DiscoveryFilterModeDto`,
+    `DiscoveryFilterRowDto` — new self-referential CQRS-lite exception, separate from the
+    anonymous-callable `IDiscoveryDefaultsReadService`.
+  - `Server/Discovery/ServerDiscoveryFilterSettingsService.cs`: `GetMyMatrixAsync` (four confirmed-
+    consumer modes × six mappable keys); `SetOverrideAsync` sparse upsert/delete, mirrors
+    `ServerNotificationWriteService.SetSettingAsync` exactly. `ServerDiscoveryDefaultsReadService
+    .KeyToEnum` promoted `internal` so both services share one source of truth for mappable keys.
+  - `Client/Discovery/ClientDiscoveryFilterSettingsService.cs` + `DiscoveryDefaultsEndpoints.cs`'s
+    new `[Authorize]`d `/my-matrix` sub-group (GET + PUT), leaving the anonymous `GET /` untouched.
+  - `SharedUI/Profiles/DiscoverySettingsForm.razor` (parameter-driven, no `@inject`) wired into
+    `SettingsPage.razor` alongside its eight existing sub-forms; instant-save per toggle with
+    optimistic local update (mirrors `NotificationSettingsPage.HandleToggleAsync`). Reuses
+    `UserStoryInteractionFilter.LabelFor` (promoted `internal`) for identical wording with the live
+    filter panel.
+  - **`UserCustomFilter` removed:** `Core/Models/UserCustomFilter.cs`, `FilterEntityType` enum,
+    the DbSet, `DiscoveryConfigurations`' `UserCustomFilterConfiguration`, and the `SearchMode`/
+    `User` nav-collection wiring in `IdentityConfigurations`/`SearchMode.cs`. Migration
+    `DropUserCustomFilter` (clean `DropTable`). Both retired names added to
+    `scripts/check-doc-hygiene.ps1`'s registry.
+  - **`SearchPage.razor`:** `RandomBatchSize` constant → `_randomBatchSize` field, seeded from
+    `ReaderSettingsDto.DefaultPaginationSize` for authenticated viewers (anonymous keeps the
+    hardcoded 20). `DefaultSearchSort` seeds the initial `Sort` only when it equals `DatePublished`
+    — `Relevance` needs a live text query that doesn't exist pre-load, and `Score`/`RecentlyRead`
+    aren't in this surface's `AvailableSorts` at all, so either falls back to Random rather than
+    being misapplied (`ReaderSettingsForm`'s dropdown offers every `DefaultSortOrder` value with no
+    per-surface restriction — a latent gap worked around here, not fixed). The initial-load branch
+    now dispatches on `IsRandomMode` instead of unconditionally loading a random batch — required
+    once Sort could be non-Random on first render.
+  - **Found, not fixed:** `ResultsFilterPanel.ApplyAsync`'s separate `PageSize = 20` hardcode
+    (sorted-mode pagination, shared across `/discover`/Bookshelves/Profile tabs) — a genuine
+    cross-cutting fix across several consumers, filed as **B16** rather than folded in here.
+- **Verified:** `dotnet build` green (0 errors). `dotnet test` green — 776 Unit + 635 RazorComponents
+  + 1,021 Integration = **2,432 total**. New coverage: `DiscoveryFilterSettingsServiceTests.cs`
+  (Integration — matrix read merges defaults with overrides; `SetOverrideAsync` inserts on
+  divergence/deletes on return-to-default/idempotent/unauthenticated throws/unmappable key no-ops;
+  a round-trip test confirms `IDiscoveryDefaultsReadService` observes rows the new write path
+  persists); `DiscoverySettingsFormTests.cs` (RazorComponents — section/checkbox rendering, label
+  wording, `OnToggle` payload, `Busy` disables); `SearchPageTests.cs` additions (anonymous keeps
+  batch size 20; authenticated reads `DefaultPaginationSize`; `DatePublished` default loads sorted
+  mode on first render; `Score` default falls back to random). Migration applies cleanly to a fresh
+  database. `check-doc-hygiene.ps1` / `check-design-tokens.ps1` both clean. Browser-verified end to
+  end (toggle persists/round-trips as a DB row, deletes on return to default, takes effect on
+  `/discover` and Also-Favorited after a fresh navigation, survives cross-browser, anonymous still
+  gets system defaults; Reader Settings page size/sort honored on `/discover` with the
+  device-local restore still winning over the account default).
+- **Tool:** Sonnet in Claude Code (Stage 2/3 mixed — surface/cut decisions settled via
+  `AskUserQuestion`, then built from spec + audit). **Pointers:** `hidden-deferrals-tracker.md`
+  B7/B15/B16; `roadmap.md` §Resolved; `audit/Discovery.md` §"WU-DiscoveryOverrideUI Stage note";
+  `audit/Profiles.md` Feature 20; `layer2-services.md` §8.7. **Deps:** none.
 
 ---
 

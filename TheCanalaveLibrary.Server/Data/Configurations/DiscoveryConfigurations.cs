@@ -13,11 +13,6 @@ public sealed class SearchModeConfiguration : IEntityTypeConfiguration<SearchMod
             .HasForeignKey(us => us.SearchModeKey)
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasMany(sm => sm.UserCustomFilters)
-            .WithOne(ucf => ucf.SearchModeKeyNavigation)
-            .HasForeignKey(ucf => ucf.SearchModeKey)
-            .OnDelete(DeleteBehavior.Restrict);
-
         builder.HasMany(sm => sm.DefaultUserStoryInteractionFilterSettings)
             .WithOne(dss => dss.SearchModeKeyNavigation)
             .HasForeignKey(dss => dss.SearchModeKey)
@@ -98,14 +93,5 @@ public sealed class UserStoryInteractionFilterSettingConfiguration : IEntityType
         // A user can only have one setting for a specific filter/mode
         builder.HasIndex(e => new { e.UserId, e.SearchModeKey, e.UserStoryInteractionFilterKey }).IsUnique();
         // Future indexes for querying...
-    }
-}
-
-public sealed class UserCustomFilterConfiguration : IEntityTypeConfiguration<UserCustomFilter>
-{
-    public void Configure(EntityTypeBuilder<UserCustomFilter> builder)
-    {
-        builder.Property(e => e.FilterEntityType).HasConversion<short>();
-        // Future indexes for querying (e.g., by UserId)...
     }
 }

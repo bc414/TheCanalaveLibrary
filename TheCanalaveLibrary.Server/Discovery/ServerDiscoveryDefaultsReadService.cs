@@ -17,8 +17,10 @@ public class ServerDiscoveryDefaultsReadService(
     /// to the six <see cref="UserStoryInteractionTypeEnum"/> values.
     /// <c>HasStarted</c> is intentionally absent — no enum value covers it and the filter panel
     /// does not expose it. Rows with that key are silently dropped from the merged result.
+    /// <c>internal</c> (not <c>private</c>) so <see cref="ServerDiscoveryFilterSettingsService"/>
+    /// shares this single source of truth rather than re-deriving which keys are mappable.
     /// </summary>
-    private static readonly Dictionary<string, UserStoryInteractionTypeEnum> KeyToEnum = new()
+    internal static readonly Dictionary<string, UserStoryInteractionTypeEnum> KeyToEnum = new()
     {
         [UserStoryInteractionFilters.Completed]      = UserStoryInteractionTypeEnum.Complete,
         [UserStoryInteractionFilters.Favorited]      = UserStoryInteractionTypeEnum.Favorite,

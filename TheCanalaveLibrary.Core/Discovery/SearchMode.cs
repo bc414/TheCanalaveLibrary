@@ -22,7 +22,5 @@ public partial class SearchMode
 
     public virtual ICollection<DefaultUserStoryInteractionFilterSetting> DefaultUserStoryInteractionFilterSettings { get; set; } = new List<DefaultUserStoryInteractionFilterSetting>();
 
-    public virtual ICollection<UserCustomFilter> UserCustomFilters { get; set; } = new List<UserCustomFilter>();
-
     public virtual ICollection<UserStoryInteractionFilterSetting> UserStoryInteractionFilterSettings { get; set; } = new List<UserStoryInteractionFilterSetting>();
 }
