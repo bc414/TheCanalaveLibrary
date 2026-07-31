@@ -76,9 +76,8 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
   Phase-5-adjacent follow-up remains — see "Recommended next work units" below.
 - **Phase 6 — Beta — not started.** Small audience from the existing community. Entry gate:
   Phases 0–3 done (0/1 already are), every Phase 4 item resolved (is), email live (is).
-  **Blocked on decision row 6** below. **WU-NotifEmail** (notification email fan-out over the
-  inert `EmailEnabled` setting) is sequenced at this gate — a live audience is the natural trigger
-  for fan-out email. Hook point: `audit/Notifications.md`.
+  **Blocked on decision row 6** below. *(**WU-NotifEmail** was sequenced at this gate until
+  2026-07-31, when it moved to Tier 2 of "Recommended next work units" — see that row for why.)*
 - **Phase 7 — Launch readiness + Launch (DigitalOcean) — not started.** Topology settled: droplet
   (server only — Redis superseded by in-process signal buffers; Valkey joins only at the N≥2
   trigger), managed PostgreSQL, Cloudflare R2 + CDN. The checklist, each item small:
@@ -165,7 +164,7 @@ done.
 | **4** | ~~WU-SweepRiders~~ **DONE 2026-07-31** | H1, E4, H8 | Pulled ahead of the Phase 3 sweep rather than ridden alongside it — H8 was a decision that needed settling before the sweep styles ~1,325 LOC of Identity scaffold, not during it; H1 turned out to need no code change (stale tracker context — verified already-resolved) and E4 was small enough to travel with H8. See "Resolved" below. |
 | **5** — beta window | WU-EditorSprite | A1 | Spec'd authoring capability; design the sanitizer allow-list addition alongside it |
 | **5** | Decision row 6 (beta logistics) | F5 | Chat-only, shortly before beta opens |
-| **5** | WU-NotifEmail | B1 | Stays at the Phase 6 gate itself — no live audience to fan out to before then |
+| **2** | WU-NotifEmail (in progress, 2026-07-31) | B1 | **Pulled off the Phase-6 gate 2026-07-31.** The old placement assumed a live audience was the forcing function and that the unchosen email provider was in the way; neither holds. Provider selection is a config switch over plain SMTP (decision row 8's *mechanism* half was resolved at WU-Email) and the whole path is Mailpit-verifiable today, so there is nothing a beta audience teaches that a dev inbox doesn't. Building it before beta also means the settings page stops lying to the first real users. Does **not** close row 8 / F4 — deliverability (provider, sending domain, SPF/DKIM/DMARC) stays at Phase 7. Settled constraints: `audit/Notifications.md` §"Notification email fan-out." |
 | **6** — cheap filler, anytime, no phase dependency | WU-PolishSweep | D4, D5, H2, H6 | Code-economy items, 401-mapping cleanup, StoryDeck skeleton, the by-design-gap list |
 | **6** | WU-TestHygieneSweep | H3, H4 (manual-verify half) | Cover-art browser-verify, paste-from-Word manual check |
 | **6** | *(fold H7 into whichever WU next touches the test suite, or its own pass)* | H7 | The 25 C-consolidate merges are mechanical, no urgency, no dependency |
@@ -188,6 +187,23 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 2026-07-30; nothing left to sequence.
 
 ## Resolved
+
+- **Notification-email send path and unsubscribe mechanism — resolved 2026-07-31 (Brian-ratified,
+  during WU-NotifEmail planning).** Two constraints that had no decision row because the WU was
+  parked at the Phase-6 gate:
+  1. **Write-behind worker, not inline send** — supersedes `audit/Notifications.md`'s own
+     2026-07-06 "build the inline version first and measure" note. ~22 seeded notification types
+     default `EmailEnabled = true` and several fan out to every follower of a story or author, so
+     inline sending would put N SMTP round-trips inside a SignalR circuit write. That is a
+     known-shape problem, not an open empirical one.
+  2. **RFC 8058 one-click unsubscribe** — `List-Unsubscribe` + `List-Unsubscribe-Post` headers over
+     a Data-Protection-signed anonymous endpoint, plus a visible footer link. Retrofitting
+     unsubscribe headers after mail is already flowing means re-touching every template, and bulk
+     senders without them get spam-foldered.
+
+  Both now stated in `audit/Notifications.md` §"Notification email fan-out" (settled constraints) and
+  `canalave-conventions/layer2-services.md` §"Notification Generation". **Decision row 8 / tracker F4
+  remain open** — provider, sending domain, and SPF/DKIM/DMARC are deliverability, not code.
 
 - **Decision row 12 (accessibility scope/depth) — resolved 2026-07-31.** Sweep **by defect class,
   not by page**: the addendum's original four-page framing (search, story page, chapter reading,

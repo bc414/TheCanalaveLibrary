@@ -99,6 +99,12 @@ builder.AddProject<Projects.TheCanalaveLibrary_Server>("web", launchProfileName:
     .WithEnvironment("Email__Smtp__UseStartTls", "false")
     .WithEnvironment("Email__FromAddress", "noreply@canalave.local")
     .WithEnvironment("Email__FromName", "The Canalave Library (dev)")
+    // Notification email fan-out (WU-NotifEmail) puts absolute links in mail via
+    // IPublicUrlProvider, which reads Site:PublicBaseUrl. Its unset default is
+    // https://localhost:7248 (the https launch profile), but this path pins the app to the "http"
+    // profile on 5028 - so without this line every link in a Mailpit message points at a port
+    // nothing is listening on, and the whole flow looks broken for a config reason.
+    .WithEnvironment("Site__PublicBaseUrl", "http://localhost:5028")
     .WaitFor(canalaveDb)
     .WaitFor(garage)
     .WaitFor(mailpit);

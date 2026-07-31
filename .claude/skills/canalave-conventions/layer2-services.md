@@ -703,14 +703,61 @@ followed story, new story by a followed user, etc.) are sent only to followers w
 semantic method — not a per-type setting.
 
 **`UserNotificationSetting` governs email and display, not in-app generation.** The sparse-override
-table stores exactly two user-settable fields per type — `EmailEnabled` (post-MVP email side-channel)
-and `Collapsed` (display override for the panel — a per-user override of
+table stores exactly two user-settable fields per type — `EmailEnabled` (the email side-channel; see
+"Email fan-out" below) and `Collapsed` (display override for the panel — a per-user override of
 `NotificationType.DefaultCollapsed`). NULL for either field means "use the type's default."
 No in-app mute column exists; that toggle was deliberately dropped from spec §5.18 (recorded in
 `audit/Notifications.md`).
 
 9 categories, ~35 types with gap-based numbering. `DefaultEmailEnabled` and `DefaultCollapsed` are
 required non-nullable on all types.
+
+### Email fan-out (WU-NotifEmail, 2026-07-31)
+
+**Create-core enqueues; it never sends.** After the in-app rows commit, `CreateCoreAsync` pushes the
+inserted rows onto `NotificationEmailBuffer` (in-process, bounded, singleton) and returns. A
+`BackgroundService` drains it and sends the batch over **one** pooled SMTP connection. This is the
+standard buffer/flusher/worker trio — see §"Signal Buffering" and `ReadingProgressFlushWorker.cs`.
+
+Inline sending is **rejected**, not deferred: ~22 seeded types default `EmailEnabled = true` and
+several fan out to every follower of a story or author, so an inline send puts N ×
+(connect → auth → send → disconnect) inside a SignalR circuit write path.
+
+Rules that bind the flusher:
+
+- **Eligibility is the flusher's job, not the enqueuer's.** Effective `EmailEnabled` = the sparse
+  `UserNotificationSetting` row's value, falling back to `NotificationType.DefaultEmailEnabled` —
+  the same LEFT JOIN `GetSettingsAsync` implements. Resolve it at drain time, not enqueue time, so
+  a user who unsubscribes between the two is honored.
+- **Gate on `EmailConfirmed`. Do not gate on account status.** `AccountWarning`,
+  `AccountSuspended`, and `AccountBanned` default `EmailEnabled = true` and are exactly the
+  notifications a restricted user must receive.
+- **Skip rows already `IsRead` at drain time** — the user saw it in-app first.
+- **Mail failure never touches the in-app row.** Log with batch size, restore the batch, let the
+  worker survive. Same best-effort posture as the rest of create-core.
+- **Never silently drop.** If the buffer's bound is hit, log and increment a counter — a fan-out
+  that quietly stops emailing is indistinguishable from one that works.
+
+**Transport.** Notification mail does not ride `IEmailSender<User>` (Identity's three-method
+confirmation/reset contract). Both paths sit on `IMailTransport` (`Server/Identity/`), so the
+`Email:Provider` switch, `EmailOptions`, and the `CanalaveTelemetry.Email` span/counters are
+single-sourced. Selecting a provider is a config change; no code depends on which one.
+
+**Absolute links.** Use `IPublicUrlProvider.AbsolutePageUrl` (`Core/Seo/`, backed by
+`Site:PublicBaseUrl`). A worker has no `HttpContext`, and a request-derived base is wrong here for
+the same reason it is wrong for Open Graph tags. No email-specific base-URL config exists — do not
+add one.
+
+**Unsubscribe.** Every notification email carries RFC 8058 `List-Unsubscribe` +
+`List-Unsubscribe-Post` headers pointing at an anonymous Data-Protection-signed endpoint, plus a
+visible footer link. Unsubscribing flips one type via the same sparse upsert/delete semantics as
+`SetSettingAsync` — reuse that method's body, never reimplement the "matches default ⇒ delete the
+row" rule.
+
+**Email bodies reuse `NotificationPresenter.Compose`** (SharedUI) for message text — the ~40-type
+switch is not forked. Bodies are table-based inline-CSS HTML and are the one markup surface
+**exempt** from the design-token rules in `layer4-style.md`: email clients do not support custom
+properties, and `check-design-tokens.ps1` governs app markup only.
 
 ### Comment & blog-post semantic methods (WU-B2, 2026-07-25)
 

@@ -145,10 +145,15 @@ public static class CanalaveTelemetry
     }
 
     /// <summary>
-    /// Transactional email (WU-Email) — the send path behind <c>IEmailSender&lt;User&gt;</c>.
-    /// HttpClient/socket auto-instrumentation is blind to SMTP, so this names "one transactional
-    /// email" as its own span; sent/failed counters split by kind (confirmation vs. reset) so a
-    /// provider outage or misconfiguration shows up as a metric, not just an exception trace.
+    /// All outbound email — Identity's transactional mail (WU-Email) and notification fan-out
+    /// (WU-NotifEmail), both of which run through <c>IMailTransport</c>.
+    /// HttpClient/socket auto-instrumentation is blind to SMTP, so this names "one email" as its
+    /// own span; sent/failed counters split by kind (confirmation vs. reset vs. each notification
+    /// type) so a provider outage or misconfiguration shows up as a metric, not just an exception
+    /// trace.
+    ///
+    /// <para>The buffer-depth ObservableGauge ("canalave.email.buffer.depth") is created by
+    /// <c>NotificationEmailBuffer</c>'s constructor — same rationale as ReadingProgress's gauge.</para>
     /// </summary>
     public static class Email
     {
@@ -159,11 +164,20 @@ public static class CanalaveTelemetry
 
         public static readonly Counter<long> Sent = Meter.CreateCounter<long>(
             "canalave.email.sent", unit: "{email}",
-            description: "Transactional emails successfully sent.");
+            description: "Emails successfully sent.");
 
         public static readonly Counter<long> Failed = Meter.CreateCounter<long>(
             "canalave.email.failed", unit: "{email}",
-            description: "Transactional emails that failed to send.");
+            description: "Emails that failed to send.");
+
+        /// <summary>
+        /// Notification emails discarded without being attempted because the write-behind buffer
+        /// was at capacity. Exists so a fan-out that quietly stops emailing is distinguishable from
+        /// one that is working — a silent drop here would otherwise be invisible in every signal.
+        /// </summary>
+        public static readonly Counter<long> Dropped = Meter.CreateCounter<long>(
+            "canalave.email.dropped", unit: "{email}",
+            description: "Notification emails dropped because the send buffer was full.");
     }
 
     /// <summary>

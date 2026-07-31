@@ -17,7 +17,27 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-A11y (Structure) (2026-07-31) — decision row 12 resolved same day (sweep by
+- **Last landed:** WU-NotifEmail (2026-07-31) — closed tracker **B1**: `UserNotificationSetting.EmailEnabled`
+  had stored, rendered and persisted since WU22 while driving no mail, and the deferral's stated
+  blocker (an unchosen email provider) turned out never to touch the code path — `Email:Provider` is
+  a config switch over plain SMTP and Mailpit made the whole flow locally verifiable, so it was
+  pulled off the Phase-6 gate. Built: a new `Server/Email/` cross-cutting cluster holding an
+  `IMailTransport` seam extracted from `SmtpEmailSender` (Identity's `IEmailSender<User>` is a fixed
+  three-method contract and could not carry notification mail); a buffer/flusher/worker trio draining
+  every 30s, enqueued from `CreateCoreAsync` so drop-self and dedup carry through for free;
+  eligibility (effective `EmailEnabled`, `EmailConfirmed`, still-unread) resolved at drain time, with
+  account status deliberately NOT a gate since suspension/ban notices default email-on;
+  RFC 8058 one-click unsubscribe over a Data-Protection token (no schema, no migration), split
+  GET-confirms/POST-acts so link scanners can't unsubscribe anyone; and `NotificationEnricher`
+  lifted out of `ServerNotificationReadService` so the ~40-arm `RelatedEntityId` switch is shared
+  with the in-app panel rather than forked. Doc-Touch moment 1 superseded the audit file's own
+  settled "build inline first and measure" note (Brian-ratified) and fixed a stale "folds in H5"
+  claim across three docs. No cell numbers changed — F41/F42/F43 L2 were already 5 and are now
+  truthful rather than inert. `dotnet test` green: Unit 793 (+17), Integration 1039 (+18),
+  RazorComponents 650. Live SMTP pass against Mailpit confirmed delivery, headers, absolute links,
+  and post-unsubscribe suppression. **Tracker F4 / decision row 8 remain open** — provider, sending
+  domain and SPF/DKIM/DMARC are Phase 7, and no mail reaches a real inbox until they land.
+  Before that, 2026-07-31: WU-A11y (Structure) — decision row 12 resolved same day (sweep by
   defect class not by page; no fourth test tier; extract the shared `Modal` primitive; Identity in
   scope), then split into two work units the dividing line itself produced: ARIA that names
   existing structure (this WU) vs. ARIA that promises an interaction model not yet built
@@ -117,8 +137,8 @@ references it, does not restate it.
   WU-ApplyFiltersPurity, and WU-ErrorHandling2 were all Tier-1/Tier-2 between-phase work (below),
   not phase gates.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
-  exist in **every group A–H** (fewer now that B0/B3/B4/B7/B12/H1/E4/H8 are closed; B14/B15/B16/H9
-  newly opened), including two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also
+  exist in **every group A–H** (fewer now that B0/B1/B3/B4/B7/B12/H1/E4/H8 are closed;
+  B14/B15/B16/H9 newly opened), including two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
@@ -224,11 +244,7 @@ cells/verification) when built.
 - **WU-EditorMobile** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
   mobile `EditorView` toolbar / desktop-mobile device composition, deferred at WU6. **Pointer:**
   `audit/Chapters.md` Feature 6. **Deps:** WU6.
-- **WU-NotifEmail** — **Cells:** Features 41–43 (extends, no new cell). **Phase:** 6, Beta gate.
-  **Scope:** notification email fan-out over `UserNotificationSetting.EmailEnabled`, deferred at
-  WU-Email; also folds in the untested anonymous-`NotificationBell` RazorComponents gap noted in
-  `audit/Notifications.md` Feature 42. **Pointer:** `audit/Notifications.md`. **Deps:** WU-Email
-  (DONE ✓ 2026-07-06).
+*(WU-NotifEmail moved to the DONE run below, 2026-07-31.)*
 ---
 
 ## Post-MVP — Layers 5–8 (historical framing — every item below has since closed or been removed)
@@ -271,6 +287,52 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-NotifEmail — notification email fan-out; new `Email/` cluster (Features 41/42/43, extends `Notifications/`, `Identity/`) — DONE ✓ (2026-07-31)
+
+- **Cells:** none flipped. F41/F42/F43 L2 were already Stage 5 and stay 5 — this closed the inert
+  plumbing beneath them (tracker **B1**), the same invisible-gap shape as B0/B7/B11.
+- **Trigger:** a question about whether B1 could be built before an email provider was chosen. It
+  could. The Phase-6 placement rested on the provider being a blocker; `Email:Provider` is a config
+  switch over plain SMTP, every candidate provider exposes SMTP, addresses already existed on
+  `User : IdentityUser<int>`, and Mailpit made the path locally verifiable. Pulled off the gate.
+- **Doc-Touch moment 1 (before code):** the settled `audit/Notifications.md` note said "build the
+  inline version first and measure" — **superseded**, Brian-ratified, because ~22 seeded types
+  default `EmailEnabled = true` and several fan out to every follower, so inline sending is a
+  known-shape problem rather than an open measurement. Unsubscribe mechanism settled as RFC 8058
+  one-click. Both recorded in `roadmap.md` §Resolved and `layer2-services.md` §"Email fan-out". Also
+  fixed a stale "folds in H5" claim carried by three docs (H5 closed at WU-TagFanon, 2026-07-26).
+- **Done:**
+  - New `Server/Email/` cross-cutting cluster — `IMailTransport`/`OutgoingMail`, `SmtpMailTransport`
+    (MailKit body + `Email.Send` span + counters, extracted from `SmtpEmailSender`, plus a
+    one-connection `SendBatchAsync`), `NoOpMailTransport`, `EmailOptions` (moved out of
+    `Identity/`). `SmtpEmailSender` reduced to an adapter; Identity's behaviour unchanged.
+  - `NotificationEnricher` extracted from `ServerNotificationReadService` — recipient-agnostic, so
+    the ~40-arm `RelatedEntityId` switch is shared by the panel and email instead of forked.
+  - `NotificationEmailBuffer`/`Flusher`/`Worker` (30s), enqueued from `CreateCoreAsync` — which
+    inherits drop-self and dedup for free. Eligibility resolved at drain time.
+  - `UnsubscribeTokenService` + `NotificationEmailEndpoints` (GET confirms, POST acts) +
+    an "Unsubscribe" rate-limit policy. No schema, no migration.
+  - `NotificationSettingUpsert` — sparse upsert/delete rule shared by `SetSettingAsync` and the
+    token-authenticated unsubscribe.
+  - `NotificationEmailBodies` composing over `NotificationPresenter.Compose`.
+- **Two corrections the build made to the plan:** `IPublicUrlProvider`/`Site:PublicBaseUrl` already
+  solved absolute URLs, so the planned `Email:SiteBaseUrl` key was never added (AppHost did need
+  `Site__PublicBaseUrl` pinned to the http profile's port); and the plan's claim that this "goes
+  against an interface" was half-right — `IEmailSender<User>` is Identity's fixed three-method
+  contract and could not carry notification mail, which is why a general seam was extracted.
+- **Verified:** `dotnet test` green — Unit 793 (+17), Integration 1039 (+18), RazorComponents 650.
+  All three gate scripts clean. **Live SMTP pass** (server-only run with `Email__Provider=Smtp` at
+  the Mailpit container): follow → notification row → mail in 12s, correct recipient/subject, both
+  `List-Unsubscribe` headers, three absolute body links; unsubscribe GET left the settings table
+  untouched, POST wrote the sparse override, and a fresh unread notification of the unsubscribed
+  type sat through two drain cycles with no mail while the in-app notification remained.
+  `psql`-confirmed at each step; verification rows removed afterwards.
+- **Tool:** Claude Code (Opus; plan approved 2026-07-31). **Pointer:** `audit/Notifications.md`
+  §"WU-NotifEmail Stage note"; `layer2-services.md` §"Email fan-out"; tracker **B1** ticked.
+  **Left open:** tracker **F4** / decision row 8 — provider, sending domain, SPF/DKIM/DMARC.
 
 ---
 

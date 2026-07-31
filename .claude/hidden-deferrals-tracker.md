@@ -158,11 +158,25 @@ decision work that has no row at all.
     that checklist. Not folded into WU-DataSaver: this is upload-pipeline + both storage impls +
     ~16 markup sites, properly its own WU.
 
-- [ ] **B1 — Notification email fan-out (`EmailEnabled` is inert)** `[inert · med · beta]`
-  - Grid: F41/F42/F43 L2=5.
-  - Source: `layer2-services.md` §Notification settings; `audit/Notifications.md`; `roadmap.md` Phase 6 "WU-NotifEmail" / `middle_plan_v2.md` Resolved "Email mechanism."
-  - Context: The per-type `EmailEnabled` checkbox stores, renders, and persists — so the settings page is a legit Stage 5 — but it drives **no mail**. WU-Email shipped *transactional* mail only (confirmation/reset). Fan-out over notification settings is WU-NotifEmail, Phase 6, unbuilt.
-  - Next: WU-NotifEmail also folds in the missing `FakeNotificationWriteService` + anonymous-`NotificationBell` regression test (see H5).
+- [x] **B1 — Notification email fan-out — DONE (WU-NotifEmail, 2026-07-31)** `[inert · med · beta]`
+  - Grid: F41/F42/F43 L2=5 — unchanged (this closed the invisible gap under already-Stage-5 cells,
+    same shape as B0/B7/B11).
+  - Source: `layer2-services.md` §"Email fan-out"; `audit/Notifications.md` §"WU-NotifEmail Stage note".
+  - Context: The per-type `EmailEnabled` checkbox stored, rendered, and persisted — so the settings page was a legit Stage 5 — but it drove **no mail**. WU-Email shipped *transactional* mail only (confirmation/reset).
+  - **The premise was wrong.** This sat at the Phase-6 gate partly because the email provider was
+    unchosen. It never blocked the code: `Email:Provider` is a config switch over plain SMTP, every
+    candidate provider exposes SMTP, addresses already existed on `User : IdentityUser<int>`, and
+    Mailpit made the whole path locally verifiable. Worth carrying forward — a deferral whose stated
+    blocker is "we haven't picked a vendor" deserves a check that the vendor is actually in the code
+    path before the deferral is trusted.
+  - **Resolution.** Write-behind (buffer/flusher/worker, 30s), a new `Server/Email/` cluster holding
+    the `IMailTransport` seam extracted from `SmtpEmailSender`, enrichment lifted to
+    `NotificationEnricher` so email and the in-app panel share one ~40-arm type switch, RFC 8058
+    one-click unsubscribe over a Data-Protection token (no schema), bodies composed over
+    `NotificationPresenter`. Inline sending was rejected outright rather than measured — see the
+    Stage note. `dotnet test` green (Unit 793, Integration 1039, RazorComponents 650);
+    Mailpit-verified end to end including the post-unsubscribe suppression.
+  - **Does not close F4.** Provider + sending domain + SPF/DKIM/DMARC remain Phase 7.
 
 - [x] **B2 — Comment & blog-follower notifications — DONE (WU-B2, 2026-07-25)** `[inert · med · beta]`
   - Grid: F23/F24/F35 L2=5 (now genuinely live, not inert).

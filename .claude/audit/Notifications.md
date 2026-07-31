@@ -28,25 +28,63 @@ complete parts of the model.
    (per-user display override of `NotificationType.DefaultCollapsed`, consumed by the notification
    panel). The §5.18 in-app toggle language should be understood as aspirational/stale.
 
-**Notification email fan-out — deferred, hook point documented (WU-Email, 2026-07-06); sequenced as
-WU-NotifEmail (2026-07-15):** `EmailEnabled` above is fully plumbed (written/read by the settings
-page via `SetSettingAsync`/`GetSettingsAsync`) but remains genuinely **unconsumed** — the
-create-core generates only in-app `Notification` rows; nothing sends mail off it. WU-Email built
-the transactional email seam (`Server/Identity/SmtpEmailSender.cs`, real send over SMTP — see
-`audit/Identity.md` WU-Email Stage note) but deliberately scoped it to Identity's
-confirmation/reset/email-change flows only. **WU-NotifEmail** is where this gets consumed —
-sequenced into `roadmap.md` Phase 6 (the Beta gate: fan-out email only matters once there's
-a real audience to notify) and `workplan.md` "Planned / not-yet-built named WUs." Settled hook
-(unchanged from 2026-07-06): the natural hook is the single funnel
-`ServerNotificationWriteService.CreateCoreAsync` (`layer2-services.md` "Notification Generation") —
-after the in-app rows are inserted, resolve each recipient's effective `EmailEnabled` (the sparse
-row's value, or `NotificationType.DefaultEmailEnabled` when no row exists) + email address, and
-send best-effort post-commit (never fail the notification on a mail-send error, same posture as
-the rest of this create-core). If volume ever warrants it, that send should route through a
-write-behind worker rather than inline — but build the inline version first and measure before
-adding that. WU-NotifEmail also folds in the untested anonymous-`NotificationBell` RazorComponents
-gap noted below (Feature 42, "follow-up work, not done here") — small enough to ride along rather
-than get its own WU.
+**Notification email fan-out — hook point documented (WU-Email, 2026-07-06); sequenced as
+WU-NotifEmail (2026-07-15); settled constraints revised 2026-07-31 (tracker B1):** `EmailEnabled`
+above is fully plumbed (written/read by the settings page via `SetSettingAsync`/`GetSettingsAsync`)
+but remains genuinely **unconsumed** — the create-core generates only in-app `Notification` rows;
+nothing sends mail off it. WU-Email built the transactional email seam
+(`Server/Identity/SmtpEmailSender.cs`, real send over SMTP — see `audit/Identity.md` WU-Email Stage
+note) but deliberately scoped it to Identity's confirmation/reset/email-change flows only.
+**WU-NotifEmail** is where this gets consumed.
+
+**Settled (do not revisit):**
+
+- **Hook — unchanged from 2026-07-06.** The single funnel
+  `ServerNotificationWriteService.CreateCoreAsync` (`layer2-services.md` "Notification Generation").
+  Hooking there inherits both create-core invariants for free: only rows that survived drop-self and
+  dedup, and actually got inserted, are eligible for mail.
+- **Eligibility rule — unchanged.** Effective `EmailEnabled` = the sparse `UserNotificationSetting`
+  row's value, or `NotificationType.DefaultEmailEnabled` when no row exists. Same LEFT JOIN shape
+  `GetSettingsAsync` already implements.
+- **Best-effort posture — unchanged.** A mail failure never fails, delays, or mutates the in-app
+  notification. Same posture as the rest of create-core.
+- **Write-behind, not inline (revised 2026-07-31; Brian-ratified).** This **supersedes** the
+  2026-07-06 wording, which said to "build the inline version first and measure before" adding a
+  worker. The measurement is not needed: ~22 of the seeded types carry
+  `DefaultEmailEnabled = true` (`Server/Data/Configurations/NotificationConfigurations.cs`), and
+  several of those — `NewChapterOnFollowedStory`, `NewStoryFollower`, `NewStoryFavorite`,
+  `NewStoryComment` — fan out to every follower of a story or author. Inline means
+  N × (connect → auth → send → disconnect) inside a SignalR circuit write path. That is a
+  known-shape latency and provider-rate-limit problem, not an open empirical question. Create-core
+  enqueues to an in-process buffer; a `BackgroundService` drains it and sends the batch over one
+  pooled SMTP connection. Follows the established buffer/flusher/worker trio
+  (`layer2-services.md` §"Signal Buffering"; `Server/Chapters/ReadingProgressFlushWorker.cs`).
+- **Transport seam (settled 2026-07-31).** Notification mail does **not** ride `IEmailSender<User>`
+  — that is Identity's three-method contract (confirmation link / reset link / reset code). A
+  general `IMailTransport` is extracted from `SmtpEmailSender`'s send body and shared by both paths,
+  so the `Email:Provider` switch, `EmailOptions`, and the `CanalaveTelemetry.Email` span/counters
+  stay single-sourced.
+- **One-click unsubscribe (settled 2026-07-31; Brian-ratified).** Every notification email carries
+  RFC 8058 `List-Unsubscribe` + `List-Unsubscribe-Post` headers pointing at an anonymous tokenized
+  endpoint, plus a visible footer link. Token is Data-Protection-signed (no schema, no migration).
+  Unsubscribing sets `EmailEnabled = false` for that one type via the same sparse upsert/delete
+  semantics as `SetSettingAsync`.
+- **Absolute links (settled 2026-07-31).** Reuse `IPublicUrlProvider` / `Site:PublicBaseUrl`
+  (`Core/Seo/`) — a configured canonical origin deliberately not derived from the current request,
+  which is exactly what a worker with no `HttpContext` needs. No new config key.
+- **Recipient gating (settled 2026-07-31).** Gate on `EmailConfirmed == true` — never mail an
+  unverified address. **Do not** gate on account status: `AccountWarning`, `AccountSuspended`, and
+  `AccountBanned` all seed `DefaultEmailEnabled = true` and are precisely the notifications a
+  restricted user must receive. A future pass that "hardens" this by suppressing mail to suspended
+  users would be a regression — the Integration tier asserts the current behavior.
+
+**Not folded in.** The anonymous-`NotificationBell` RazorComponents gap once attached to this WU is
+**closed** — tracker H5, done in full at WU-TagFanon (2026-07-26). Nothing about that gap remains
+for WU-NotifEmail.
+
+**Does not close tracker F4.** F4 (provider + sending domain + SPF/DKIM/DMARC DNS) is orthogonal and
+stays open after this WU: the code path is complete and Mailpit-verifiable, but no mail reaches a
+real inbox until Phase 7's deliverability work lands.
 
 ## WU-TagFanon slice (2026-07-26) — F41/F42 L2 stay Stage 5
 
@@ -71,6 +109,64 @@ Covered by `FanonPipelineTests` (Integration). **H5 closed in full here:**
 regression test (for the crash fixed 2026-07-13) is finally written — it asserts an anonymous
 render resolves NO notification services, which is the actual failure mode.
 
+## WU-NotifEmail Stage note (2026-07-31) — F41/F42/F43 L2 stay Stage 5; tracker B1 closed
+
+**`EmailEnabled` finally drives mail.** The setting had stored, rendered, and persisted since WU22
+while driving nothing — the settings page was a legitimate Stage 5 sitting on top of dead plumbing
+(tracker B1, the same invisible-gap shape as B0/B7/B11). No cell number changes: the cells were
+already 5 and the surfaces they describe are unchanged. What changed is that they are now truthful.
+
+**Why this ran before the Phase-6 gate it was parked at.** The stated blocker — an unchosen email
+provider — was never a code blocker. `Email:Provider` selects between plain-SMTP implementations,
+every candidate provider exposes SMTP, and Mailpit makes the whole path verifiable locally.
+Recipient addresses already existed on `User : IdentityUser<int>`. The roadmap's other reason ("no
+live audience") argued for delay but not for blockage, and building it before beta means the
+settings page stops lying to the first real users.
+
+**Built:**
+- `Server/Email/` — new cross-cutting cluster (`folder_clusters.md`): `IMailTransport`/`OutgoingMail`,
+  `SmtpMailTransport` (the MailKit send body + `Email.Send` span + sent/failed counters, extracted
+  verbatim from `SmtpEmailSender`, plus a one-connection `SendBatchAsync`), `NoOpMailTransport`, and
+  `EmailOptions` (moved from `Server/Identity/`). `SmtpEmailSender` is now a ~10-line adapter;
+  Identity's behaviour and telemetry tags are unchanged.
+- `Notifications/NotificationEnricher.cs` — the `RelatedEntityKind`/`KindFor`/batch-load trio lifted
+  out of `ServerNotificationReadService`, recipient-agnostic so a worker with no `IActiveUserContext`
+  can use it. The ~40-arm type switch is now single-sourced across the panel and email.
+- `NotificationEmailBuffer` / `NotificationEmailFlusher` / `NotificationEmailWorker` — the standard
+  buffer/flusher/worker trio, 30s cadence. `CreateCoreAsync` enqueues ids only; eligibility is
+  resolved at drain time.
+- `UnsubscribeTokenService` + `NotificationEmailEndpoints` — RFC 8058 one-click unsubscribe over a
+  Data-Protection-signed token. No schema, no migration.
+- `NotificationSettingUpsert` — the sparse upsert/delete rule extracted so `SetSettingAsync` and the
+  token-authenticated unsubscribe share one implementation.
+- `NotificationEmailBodies` — composes over `NotificationPresenter.Compose`, so email text cannot
+  drift from the in-app panel.
+
+**Two things worth carrying forward:**
+1. **`IPublicUrlProvider` already solved the absolute-URL problem.** The plan proposed a new
+   `Email:SiteBaseUrl`; `Site:PublicBaseUrl` (Core/Seo/, WU-Seo) is the same idea with the same
+   rationale — a configured canonical origin deliberately not derived from the request. No new key
+   was added. The AppHost did need `Site__PublicBaseUrl` pinned to the http profile's port, or every
+   mailed link points at the unused https port.
+2. **The GET/POST split on unsubscribe is not ceremony.** Corporate link scanners follow every GET
+   in a message; a mutating GET would unsubscribe users who never clicked. GET renders a
+   confirmation whose button POSTs.
+
+**Verification.** `dotnet test` green: Unit 793 (+17), Integration 1039 (+18), RazorComponents 650
+(unchanged). Tiers: Unit covers body composition and token round-trip/tamper/foreign-key-ring;
+Integration covers every eligibility gate, both create-core invariants carrying through, the
+restore-on-connection-failure path, and the three unsubscribe routes. **Live-verified** against a
+real SMTP send to Mailpit (server-only run with `Email__Provider=Smtp`): follow → notification row →
+email delivered within 12s, correct recipient/subject, both `List-Unsubscribe` headers, all three
+body links absolute; the unsubscribe GET left `user_notification_settings` untouched, the POST wrote
+the sparse override, and a **fresh unread notification of the unsubscribed type sat through two
+drain cycles with no mail sent while the in-app notification remained** — `psql`-confirmed at each
+step.
+
+**Still open: tracker F4 / decision row 8.** Provider, sending domain, and SPF/DKIM/DMARC are
+untouched by this WU. Mail is built and locally verifiable; it cannot reach a real inbox until
+Phase 7.
+
 ## Feature 41 — Notification Generation
 
 - **L1 — Stage 5.** `Notification` + the fully-seeded type/category tables. Sound. **L6 — Stage 5
@@ -79,7 +175,8 @@ render resolves NO notification services, which is the actual failure mode.
   seeded notifications: unread count −47%; newest-first feed neutral by design (per-user residual
   sort, bounded by the 60-day cleanup worker). Detail: `layer6-indexes.md`.
 
-- **L2 — Stage 2 → 5 (WU22).** Settled constraints (do not revisit):
+- **L2 — Stage 2 → 5 (WU22; extended WU-NotifEmail 2026-07-31 — create-core now also enqueues the
+  email fan-out, stage unchanged).** Settled constraints (do not revisit):
   - **Mechanism:** direct injected call — `INotificationWriteService` injected into feature write
     services; called via a semantic per-event method after the primary `SaveChangesAsync` (best-effort
     post-commit, `try/catch`-with-log). See `layer2-services.md` "Notification Generation"
@@ -161,7 +258,9 @@ render resolves NO notification services, which is the actual failure mode.
 
 ## Feature 42 — Notification Display
 
-- **L1 — Stage 5.** **L2 — Stage 2 → 5 (WU22).** Settled constraints:
+- **L1 — Stage 5.** **L2 — Stage 2 → 5 (WU22; the two-pass enrichment moved out to
+  `NotificationEnricher` at WU-NotifEmail 2026-07-31 so email shares it — stage unchanged).**
+  Settled constraints:
   - `INotificationReadService`: `GetUnreadCountAsync()`, `GetNotificationsAsync(page, pageSize)`. All
     self-scoped via `IActiveUserContext` (the whole surface is "my notifications").
   - `GetNotificationsAsync` returns `NotificationDto` with effective `Collapsed` (type default
@@ -297,7 +396,9 @@ render resolves NO notification services, which is the actual failure mode.
 ## Feature 43 — Notification Settings
 
 - **L1 — Stage 5** (`UserNotificationSetting` sparse-override; `EmailEnabled`/`Collapsed` — see Shared
-  Context correction; `NULL` for either = use default, §5.18 as corrected). **L2 — Stage 2 → 5 (WU22).**
+  Context correction; `NULL` for either = use default, §5.18 as corrected). **L2 — Stage 2 → 5 (WU22;
+  `EmailEnabled` stopped being inert at WU-NotifEmail 2026-07-31 — it now gates real mail and is
+  writable from the one-click unsubscribe endpoint as well as this page; stage unchanged).**
   Settled constraints:
   - `GetSettingsAsync()` returns `NotificationSettingDto[]` grouped by category — LEFT JOIN
     `UserNotificationSetting` onto `NotificationType`; NULL ⇒ type defaults (`DefaultEmailEnabled`,

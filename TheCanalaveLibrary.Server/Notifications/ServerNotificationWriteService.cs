@@ -26,11 +26,22 @@ namespace TheCanalaveLibrary.Server;
 /// after their own <c>SaveChangesAsync</c>, inside a <c>try/catch</c> that logs and swallows.
 /// This service's own <c>SaveChangesAsync</c> inside <see cref="CreateCoreAsync"/> is a
 /// separate transaction covering only the notification rows.</para>
+///
+/// <para><b>Email fan-out (WU-NotifEmail):</b> create-core <em>enqueues</em>, it never sends.
+/// After the notification rows commit, their ids go onto <see cref="NotificationEmailBuffer"/> and
+/// <see cref="NotificationEmailWorker"/> drains them out-of-band. Hooking the fan-out here rather
+/// than at each semantic method inherits both invariants for free — only rows that survived
+/// drop-self and dedup, and were actually inserted, become candidates for email. Eligibility
+/// (per-type <c>EmailEnabled</c>, confirmed address, still-unread) is resolved at drain time by
+/// <see cref="NotificationEmailFlusher"/>, not here. See <c>layer2-services.md</c>
+/// §"Email fan-out".</para>
 /// </summary>
 public class ServerNotificationWriteService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     ApplicationDbContext writeDb,
-    IActiveUserContext activeUser)
+    IActiveUserContext activeUser,
+    NotificationEmailBuffer emailBuffer,
+    ILogger<ServerNotificationWriteService> logger)
     : ServerNotificationReadService(readDbFactory, activeUser), INotificationWriteService
 {
     // ── Read-side mutations ──────────────────────────────────────────────────────
@@ -59,47 +70,14 @@ public class ServerNotificationWriteService(
     {
         int userId = RequireAuthenticatedUser();
 
-        // Load the type defaults from the read context (no-tracking, fast).
+        // The sparse upsert/delete rule itself lives in NotificationSettingUpsert — shared with the
+        // one-click unsubscribe endpoint, which writes for a user resolved from a signed token
+        // rather than from IActiveUserContext and so cannot come through this self-scoped method.
+        //
         // Uses ReadDbFactory (the protected property on the base class), not the readDbFactory
         // constructor parameter directly, to avoid CS9107 double-capture (layer2-services.md).
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
-        NotificationType? type = await readDb.NotificationTypes
-            .FirstOrDefaultAsync(t => t.NotificationTypeId == notifType);
-        if (type is null) return; // unknown type enum — no-op (should not happen in practice)
-
-        bool matchesDefault = emailEnabled == type.DefaultEmailEnabled
-                              && collapsed == type.DefaultCollapsed;
-
-        if (matchesDefault)
-        {
-            // Sparse model: delete the override row so that NULL = "use default."
-            await writeDb.UserNotificationSettings
-                .Where(s => s.UserId == userId && s.NotificationTypeId == notifType)
-                .ExecuteDeleteAsync();
-        }
-        else
-        {
-            UserNotificationSetting? existing = await writeDb.UserNotificationSettings
-                .FirstOrDefaultAsync(s => s.UserId == userId && s.NotificationTypeId == notifType);
-
-            if (existing is null)
-            {
-                writeDb.UserNotificationSettings.Add(new UserNotificationSetting
-                {
-                    UserId = userId,
-                    NotificationTypeId = notifType,
-                    EmailEnabled = emailEnabled,
-                    Collapsed = collapsed
-                });
-            }
-            else
-            {
-                existing.EmailEnabled = emailEnabled;
-                existing.Collapsed = collapsed;
-            }
-
-            await writeDb.SaveChangesAsync();
-        }
+        await NotificationSettingUpsert.ApplyAsync(writeDb, readDb, userId, notifType, emailEnabled, collapsed);
     }
 
     // ── Semantic generation methods (WU22 slice — single-recipient) ──────────────
@@ -473,6 +451,18 @@ public class ServerNotificationWriteService(
 
         writeDb.Notifications.AddRange(rows);
         await writeDb.SaveChangesAsync();
+
+        // Email fan-out hand-off. After the commit, so every queued id references a durable row
+        // (identity values are populated by SaveChangesAsync). Enqueue is an in-memory append and
+        // cannot throw for a caller-visible reason, but it is still not allowed to break the
+        // notification: the in-app row is the contract, mail is the side-channel.
+        int dropped = emailBuffer.Enqueue(rows.Select(r => r.NotificationId));
+        if (dropped > 0)
+        {
+            logger.LogError(
+                "Notification email buffer at capacity ({MaxDepth}); dropped {DroppedCount} of {RowCount} {NotificationType} notification(s) without sending. The drain has stalled.",
+                NotificationEmailBuffer.MaxDepth, dropped, rows.Count, type);
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────────

@@ -65,6 +65,11 @@ public abstract class IntegrationTestBase(PostgresFixture postgres) : IAsyncLife
         // never through ServerTagWriteService, so write-invalidation does not fire for them — without
         // this line a warm snapshot from an earlier test silently disables roll-up for every later one.
         Factory.Services.GetRequiredService<ServerTagHierarchyCache>().Invalidate();
+        // Notification email fan-out (WU-NotifEmail): the buffer holds ids and the recording
+        // transport holds messages, both on the shared host. Every notification-creating test
+        // enqueues, so without this an email assertion would see the previous test's traffic.
+        Factory.Services.GetRequiredService<NotificationEmailBuffer>().Clear();
+        Factory.Services.GetRequiredService<RecordingMailTransport>().Clear();
     }
 
     /// <summary>

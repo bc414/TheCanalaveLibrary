@@ -181,16 +181,39 @@ builder.Services.AddScoped<IUserClaimsPrincipalFactory<User>, ApplicationUserCla
 // MailKit against whatever Email:Smtp points at — Mailpit under the Aspire AppHost's env
 // injection, the chosen provider's SMTP endpoint in production). Same shape as the
 // ImageStorage:Provider switch above. See cross-cutting.md "Identity & Auth".
+//
+// Two registrations per branch since WU-NotifEmail (2026-07-31): IMailTransport is the general
+// outbound-mail seam (Server/Email/) that notification fan-out uses, and IEmailSender<User> is
+// Identity's three-method contract adapted onto it. One switch governs both — choosing a
+// transactional provider stays a config + DNS change, never a code change (roadmap decision row 8 /
+// tracker F4, both still open; this switch is why they don't gate any code).
+//
+// The Smtp branch also registers NotificationEmailWorker: the drain half of the write-behind email
+// fan-out (layer2-services.md §"Email fan-out"). Deliberately NOT registered on the NoOp branch —
+// an unconfigured host should do no drain work rather than drain into a sink. The buffer itself is
+// always registered, because ServerNotificationWriteService depends on it unconditionally; on a
+// NoOp host it simply stays empty (create-core checks IsEnabled before enqueuing).
 string emailProvider = builder.Configuration["Email:Provider"] ?? "NoOp";
-if (emailProvider.Equals("Smtp", StringComparison.OrdinalIgnoreCase))
+bool smtpEmailEnabled = emailProvider.Equals("Smtp", StringComparison.OrdinalIgnoreCase);
+builder.Services.AddSingleton(new NotificationEmailBuffer(smtpEmailEnabled));
+if (smtpEmailEnabled)
 {
     builder.Services.Configure<EmailOptions>(builder.Configuration.GetSection(EmailOptions.SectionName));
+    builder.Services.AddSingleton<IMailTransport, SmtpMailTransport>();
     builder.Services.AddSingleton<IEmailSender<User>, SmtpEmailSender>();
+    builder.Services.AddScoped<NotificationEmailFlusher>();
+    builder.Services.AddHostedService<NotificationEmailWorker>();
 }
 else
 {
+    builder.Services.AddSingleton<IMailTransport, NoOpMailTransport>();
     builder.Services.AddSingleton<IEmailSender<User>, IdentityNoOpEmailSender>();
 }
+// Unsubscribe-link signing (WU-NotifEmail). Data Protection is already in the container via
+// Identity; this only names a purpose over it, so there is no schema, migration, or new package.
+// Registered unconditionally: an unsubscribe link mailed before a config change must keep working
+// after one, and the endpoints are mapped unconditionally too.
+builder.Services.AddSingleton<UnsubscribeTokenService>();
 
 // HTTP edge rate limiting (WU-Security) — covers the surfaces that are plain HTTP today:
 // per-IP window on the /Account/* auth form posts (credential-stuffing damping) and the
@@ -239,6 +262,22 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
+    // "Unsubscribe" (WU-NotifEmail): /unsubscribe/{token} is anonymous, antiforgery-exempt, and
+    // does a database write — the one endpoint group with all three properties at once. The token
+    // space is not enumerable (Data-Protection-signed), so this is not the primary defence; it
+    // exists so an unauthenticated write path is never unbounded. Partitioned by IP because there
+    // is no user identity to partition by, and generous enough that a mail client retrying a
+    // one-click POST is never rejected.
+    options.AddPolicy("Unsubscribe", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            $"unsub:{httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"}",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 20,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
             }));
@@ -613,6 +652,11 @@ app.MapAdditionalIdentityEndpoints();
 
 // Mature-content consent endpoints (Feature 66, WU-AccessGate).
 app.MapContentGateEndpoints();
+
+// One-click unsubscribe for notification email (WU-NotifEmail). Mapped unconditionally, unlike the
+// worker: a link mailed while Email:Provider was "Smtp" must keep working on a host that has since
+// been reconfigured, and the routes only ever turn a setting off.
+app.MapNotificationEmailEndpoints();
 
 // Site-level crawlability (Feature 64): robots.txt + sitemap.xml.
 app.MapSeoEndpoints();
