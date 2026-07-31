@@ -1,0 +1,49 @@
+@namespace TheCanalaveLibrary.SharedUI
+@inject IUserProfileReadService UserProfiles
+@using TheCanalaveLibrary.Core
+
+@* Reusable incremental username-search picker (WU-StatBadgeProducers) — the same retrofit
+   StoryTitlePicker performed for stories. Backed by IUserProfileReadService.SearchUsersByNameAsync
+   (ILike substring, deliberately ignores ProfileVisibility — see that method's doc). Powers the
+   Story Acknowledgments create form (MyAcknowledgmentsPage), and replaces the free-text "type it
+   exactly right" username inputs in ComposeConversationModal (Messaging) and ModSpotlightPage
+   (Spotlight grant), both of which previously borrowed IMessagingReadService.FindUserByUsernameAsync
+   as a stopgap — see that method's doc for the retired rationale. Pick-fires-a-callback contract,
+   same as StoryTitlePicker: no persistent selected-chip list, each consumer owns what happens after
+   a pick. *@
+
+<CanalaveTypeahead TItem="UserCardDto"
+                   SearchMethod="SearchMethod"
+                   OnSelected="OnPickedAsync"
+                   Placeholder="@Placeholder"
+                   NotFoundText="No users found">
+    <ResultTemplate Context="user">
+        <span class="flex items-center gap-2">
+            <img src="@(user.AvatarUrl ?? DefaultAvatarUrl)" alt="" class="size-6 rounded-full shrink-0" loading="lazy" />
+            <span>@user.Username</span>
+        </span>
+    </ResultTemplate>
+</CanalaveTypeahead>
+
+@code {
+    private const string DefaultAvatarUrl = "/img/default-avatar.svg";
+
+    [Parameter] public string Placeholder { get; set; } = "Type to search for a user...";
+
+    /// <summary>Excludes this user id from results — e.g. the caller's own id, so a self-credit
+    /// isn't even offered as a pick (defense in depth; the write service also rejects it).</summary>
+    [Parameter] public int? ExcludeUserId { get; set; }
+
+    [Parameter, EditorRequired] public EventCallback<UserCardDto> OnUserSelected { get; set; }
+
+    private async Task<IEnumerable<UserCardDto>> SearchMethod(string term)
+    {
+        IReadOnlyList<UserCardDto> results = await UserProfiles.SearchUsersByNameAsync(term);
+        return ExcludeUserId.HasValue
+            ? results.Where(u => u.UserId != ExcludeUserId.Value)
+            : results;
+    }
+
+    private async Task OnPickedAsync(UserCardDto user)
+        => await OnUserSelected.InvokeAsync(user);
+}

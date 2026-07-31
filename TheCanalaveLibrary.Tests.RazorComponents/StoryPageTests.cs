@@ -37,6 +37,7 @@ public class StoryPageTests : BunitContext
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeRelatedStoriesInteractionReadService());
         Services.AddScoped<ISeriesReadService>(_ => new FakeSeriesReadService());
         Services.AddScoped<IStoryLineageReadService>(_ => new FakeStoryLineageReadService());
+        Services.AddScoped<IStoryAcknowledgmentReadService>(_ => new FakeStoryAcknowledgmentReadService());
         Services.AddScoped<IStoryArcReadService>(_ => new FakeStoryArcReadService());
         Services.AddScoped<IViewCountWriteService>(_ => new FakeViewCountWriteService());
         // SocialMetaTags (inside the page) injects IPublicUrlProvider (pure Core class).

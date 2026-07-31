@@ -148,7 +148,7 @@ done.
 | **2** | ~~WU-DiscoveryFilterRestore~~ **DONE 2026-07-28** | B11 | Device-local filter restore + ship seeding parity, shipped same day as decision row 13's resolution — see "Resolved" below |
 | **2** | ~~WU-SelectionPermalink~~ **DONE 2026-07-28** | — | Artifact-addressed sharing for public saved selections (`/discover/selection/{id}/{*slug}`); row 13's other half, shipped same day |
 | **2** — continue the debt-paydown burst, clustered by shared surface | ~~WU-ApplyFiltersPurity~~ **DONE 2026-07-30** | B12 | Cached `ITagHierarchyReadService` restored `ApplyFilters` to pure/sync — no numbered decision row; resolutions recorded directly in `hidden-deferrals-tracker.md` B12 and `workplan.md`'s DONE entry |
-| **2** | WU-StatBadgeProducers | B3, B4 | B4's BetaReader badge literally depends on B3's counter existing |
+| **2** | WU-StatBadgeProducers (in progress, 2026-07-30) | B3 (partial), B4 | Scoped: builds the Story Acknowledgments feature (`AcknowledgedAsBetaReaderCount`) + a producer hook on the already-built `StoryLineage` approval (`AcknowledgedAsInspirationCount`); re-files `SpotlightCount` under B8 rather than building it. Surfaced a site-wide badge-tier retirement along the way — see Resolved below. |
 | **2** | WU-DataSaver | B0 | Small standalone decision ("suppress sprites, or cut the setting") + build |
 | **2** | WU-DiscoveryOverrideUI | B7 | Per-user filter-override editing surface (§8.7) |
 | **3** | ~~WU-Home~~ **DONE 2026-07-28** | F1 | Closed Phase 2's last content item; Phase 2 fully closed 2026-07-30 (WU-AccountEnforcement, Tier 1) |
@@ -179,6 +179,22 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 2026-07-30; nothing left to sequence.
 
 ## Resolved
+
+- **Badge tier paradigm retired site-wide (2026-07-30, WU-StatBadgeProducers).** Scoping B4 (the
+  BetaReader badge) surfaced that the Bronze/Silver tier model (`Recommender`@10 /
+  `RecommenderSilver`@50, WU36) has no design provenance — traced to a single unrequested Gemini
+  transcript turn (Entry #1577, 2025-10-25 11:59, in response to a pure document-transcription
+  request) whose own column headers read "Badge Name (Suggestion)" / "Tiers (Example)". An identical
+  synthesis run four minutes earlier over the same source produced zero tier data, and the tiers are
+  never revisited or affirmed anywhere else in the ~75,000-line corpus — the same shape as the
+  retired `AutoLoadNextChapter` feature (tracker A2). **Settled: a badge is earned at ≥1 and displays
+  its count; `RecommenderSilver` is retired outright** (pre-production, so removal is a clean seed-row
+  + constant + literal deletion, no data migration). Anti-farm protection moves from the threshold to
+  the *gate* — every badge built under this model requires another person's cooperation per increment.
+  Rule now stated in `layer2-services.md` §"Synchronous Inline Badge Awards"; provenance record in
+  `audit/Badges.md` §"Tier paradigm — RETIRED site-wide"; `RecommenderSilver` added to
+  `scripts/check-doc-hygiene.ps1`'s retired-name registry. **Build in progress** — this entry records
+  the decision; `workplan.md`'s WU-StatBadgeProducers entry carries build/verification status.
 
 - **Decision row 13 — `/discover` URL state round-tripping (2026-07-28).** **`/discover` never
   carries filter state in its URL.** The row's original framing ("follow `TreeSearchPage`'s

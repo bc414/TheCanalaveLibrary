@@ -25,6 +25,9 @@ internal sealed class FakeUserProfileReadService : IUserProfileReadService
 
     public Task<ProfileAccessState> GetProfileAccessStateAsync(int userId) =>
         Task.FromResult(ProfileAccessState.Visible);
+
+    public Task<IReadOnlyList<UserCardDto>> SearchUsersByNameAsync(string term) =>
+        Task.FromResult<IReadOnlyList<UserCardDto>>([]);
 }
 
 // ── Story ─────────────────────────────────────────────────────────────────────────────────────

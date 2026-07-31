@@ -3,11 +3,12 @@
 **Feature:** 50 (badge system). MVP: synchronous inline award-checking (§5.20).
 
 ## Shared Context
-**Entities (Core/Models/):** `Badge` (string PK `BadgeKey`, `DisplayName` unique, `Description`,
-`IconBaseUrl`, `SortOrder`; seeded — BetaReader/Patron/Recommender/Architect/Artist, with a
-`// ... add other badges` gap), `UserBadge` (composite `(UserId,BadgeKey)`, `DisplayOrder` curation where
-0 = hidden, `DateEarned` default, Restrict on Badge). `SiteBadges` string constants in `SiteConstants.cs`.
-**No services or components built.**
+**Entities (Core/Badges/):** `Badge` (string PK `BadgeKey`, `DisplayName` unique, `Description`,
+`IconBaseUrl`, `SortOrder`; seeded — BetaReader/Patron/Recommender/Architect/Artist), `UserBadge`
+(composite `(UserId,BadgeKey)`, `DisplayOrder` curation where 0 = hidden, `DateEarned` default,
+`EarnedCount` — the no-tiers display count, WU-StatBadgeProducers — Restrict on Badge).
+`SiteBadges` string constants moved to `Server/Badges/SiteBadges.cs` (WU-StatBadgeProducers,
+closing MA-108; formerly the top-level `SiteConstants.cs`).
 
 ## Feature 50 — Badge System
 - **L1 — Stage 5.** String-keyed `Badge` + `UserBadge` junction with curation ordering. Seed is partially
@@ -27,6 +28,35 @@
   - Verified: `dotnet build` green (0 errors). Integration tier: `BadgeServiceTests` (11 tests) and
     6 new Tastemaker award-chain tests in `RecommendationWriteServiceTests` — all 317 integration
     tests pass (7 pre-existing `ModerationServiceTests` DI failures unrelated to WU36).
+  - **WU-StatBadgeProducers (2026-07-31) — no-tiers model + BetaReader auto-award.** `RecommenderSilver`
+    retired outright (const/seed row/threshold literal removed — see "Tier paradigm — RETIRED
+    site-wide" below); `Recommender` changed from threshold 10 to ≥1, displaying `EarnedCount`.
+    `IBadgeWriteService.AwardAsync` gained an `earnedCount` parameter, setting `UserBadge.EarnedCount`
+    on both first award and every repeat qualifying event (one call keeps both in step). New
+    `Core/Collaboration/` + `Server/Collaboration/` cluster:
+    `IStoryAcknowledgmentReadService`/`WriteService`, mirroring `IStoryLineageReadService`/
+    `WriteService`'s shape exactly (request/accept/decline/revoke, consent-gated, composite-PK row
+    reuse on re-request-after-decline). `StoryAcknowledgment` gained `StatusId`
+    (`StoryAcknowledgmentStatus`: Pending/Accepted/Declined) + `DateResponded`. Producer:
+    `ServerStoryAcknowledgmentWriteService.AcceptAsync` increments
+    `UserStat.AcknowledgedAsBetaReaderCount` (role Beta Reader only, anti-self-farm — self-credit is
+    rejected outright at request time) and awards `BetaReader` at ≥1; `RevokeAsync` decrements only
+    when the credit was Accepted (transition-delta). Relocated `StoryAcknowledgment`,
+    `AcknowledgmentRole`, `BetaReader`, `CoAuthor` from `Core/Models/` to `Core/Collaboration/`
+    (MA-112). `AcknowledgmentRole` id 5 "Inspiration" retired — see `audit/Stories.md` Feature 10.
+    `UserStatRecalculator` gained a third drift-correction pass syncing `UserBadge.EarnedCount` from
+    the corrected `UserStat` columns (deliberately does not award — see the class doc).
+  - Verified: `dotnet build` green. Full suite green — Unit 776/776, RazorComponents 626/626,
+    Integration 1012/1012 (2,414 total, up from the 2,330 baseline). New Integration coverage:
+    `StoryAcknowledgmentServiceTests` (request/accept/decline/revoke lifecycle, self-credit
+    rejection, kind-(g) recipient gating, counter inc/dec, `BetaReader` badge award +
+    `EarnedCount`), `RecommendationWriteServiceTests` (≥1 award + `EarnedCount` tracking replacing
+    the retired 10/50 boundary pair), `UserStatRecalculatorTests` (new aggregates for both
+    counters, the `EarnedCount` sync pass, and a "does not award missing badges" guard),
+    `UserProfileEndpointsTests` (`SearchUsersByNameAsync` substring/case/cap/Private-still-returned).
+    Browser-verified end to end against the dev DB: full credit→notify→accept→badge round trip
+    (`×1` display, no tier), public `StoryAcknowledgmentsBox` on the story page, `Recommender×12`
+    seeded count rendering, and `RecommenderSilver` absent from the live `badges` table.
 - **L3-Logic — Stage 5 (2026-06-25, WU36).**
   - `SharedUI/Profiles/BadgeSettingsForm.razor`: `_seeded`-guarded `OnParametersSet`; `_visibleKeys`
     list mutated by `Hide`, `Show`, `MoveUp`, `MoveDown`; `HandleSave` emits ordered visible-key list.
@@ -72,6 +102,24 @@ award). No background worker for MVP. **Settled — do not revisit.**
 **Scope — one live award trigger in WU36:** the Recommender / "Tastemaker" badge. All other catalogue
 badges remain deferred to the WUs that build their source features. **Settled — do not revisit.**
 
+**Tier paradigm — RETIRED site-wide (WU-StatBadgeProducers, 2026-07-30).** The Bronze/Silver tier
+decision below (originally "Settled — do not revisit") is **superseded**. Provenance investigation
+found the Bronze/Silver tier table has no design basis: it originates in a single Gemini transcript
+turn (Entry #1577, 2025-10-25 11:59, `Badge_Deliberations.md` §1) produced in response to a pure
+document-transcription request ("create a detailed document of features... I want an organized,
+verbose document"), with Gemini's own column headers reading `Badge Name (Suggestion)` / `Tiers
+(Example)` — hedges dropped when copied into `Badge_Deliberations.md`. An identical synthesis run
+four minutes earlier (#1578, same source files) produced zero tier data. Bronze/Silver occurs exactly
+once in the ~75,000-line transcript and is never revisited, justified, or affirmed by the owner — the
+same shape as the retired `AutoLoadNextChapter` feature (tracker A2). **New model: a badge is earned
+at ≥1 and displays its `UserBadge.EarnedCount`, no tiers.** Anti-farm protection moved from the
+threshold to the *gate* — every badge added under this model requires another person's cooperation
+per increment (an acknowledgment must be accepted; a lineage link must be approved). `Recommender`'s
+threshold changed from 10 to ≥1; `RecommenderSilver` (threshold 50) is **retired outright** — its
+constant, seed row, and threshold literal are removed, and `RecommenderSilver` is added to
+`scripts/check-doc-hygiene.ps1`'s retired-name registry. This is a documentation record of the
+supersession; the removal itself is described in `workplan.md`'s WU-StatBadgeProducers entry.
+
 **The Tastemaker chain (WU26/WU29 already built):** `?rec={id}` URL param →
 `RecordAttributionSourceAsync` → `UserStoryRecommendationSource`; reading Ch.1 to ≥90% →
 `RecommendationHelpfulPrompt`; "Yes" → `RecordSuccessAsync`. WU36 wires the missing tail:
@@ -86,10 +134,11 @@ Anonymous recs and self-recorded successes skip silently.
 migration). Do NOT reuse `RecommendationsFoundUseful` — that is a reader-side concept with different
 semantics.
 
-**Tier definitions (settled):**
-- Tier 1: `SiteBadges.Recommender` (existing constant + seed row) — threshold 10.
-- Tier 2: `SiteBadges.RecommenderSilver` (new constant + seed row added in WU36 migration) — threshold 50.
-Both checks run on every qualifying `RecordSuccessAsync` (idempotent re-calls are no-ops).
+**Tier definitions — RETIRED, see "Tier paradigm — RETIRED site-wide" above (WU-StatBadgeProducers,
+2026-07-30).** Historical record of what WU36 originally shipped: Tier 1 `SiteBadges.Recommender` at
+threshold 10, Tier 2 `SiteBadges.RecommenderSilver` (threshold 50), both checked on every qualifying
+`RecordSuccessAsync`. `RecommenderSilver` no longer exists in the catalogue; `Recommender` now awards
+at ≥1 and displays its count.
 
 **Default visibility on award (settled):** newly earned badges get `DisplayOrder = (max existing
 DisplayOrder for that user) + 1` — visible by default. The curation UI lets users hide or reorder.
@@ -99,13 +148,24 @@ DisplayOrder for that user) + 1` — visible by default. The curation UI lets us
 | Badge | Status | Blocking reason |
 |---|---|---|
 | `Patron` | Manual/future | No automated producer. (Formerly cited the `FeatureContributions` counter — **removed 2026-07-18** with the Feature 56 cut; that citation was a stale copy-paste anyway.) Grant via direct `user_badges` insert. |
-| `BetaReader` | Deferred | `AcknowledgedAsBetaReaderCount` counter not populated (acknowledgment/beta-reader producer has no assigned WU) |
+| `BetaReader` | **Built (WU-StatBadgeProducers, 2026-07-31)** | Auto-awards at ≥1 accepted `StoryAcknowledgment` (role Beta Reader). See "WU-StatBadgeProducers Stage note" below. |
 | `Architect` | Manual grant | **Feature 56 (its intended automated producer) was CUT 2026-07-18** — the `FeatureContributions` counter no longer exists. The badge is deliberately **retained** in the catalogue as the site-stewardship recognition lever; grant it by direct `user_badges` insert (psql). `IBadgeWriteService.AwardAsync` stays unmapped (no admin HTTP route). See `audit/BlogPosts.md` Feature 56 CUT note. |
 | `Artist` | Manual/future | No automated producer. (Formerly cited the `FeatureContributions` counter — **removed 2026-07-18** with the Feature 56 cut; that citation was a stale copy-paste anyway.) Grant via direct `user_badges` insert. |
 
-**Open:** none. All WU36 decisions are settled. (Feature 56 cut 2026-07-18 removed the never-built
-`FeatureContributions` counter that three of the above rows had cited as their producer — the
-Architect badge is retained as a manual grant; see the CUT note in `audit/BlogPosts.md`.)
+**Open:** none. All WU36 decisions are settled except the tier paradigm (see above, retired
+2026-07-30). (Feature 56 cut 2026-07-18 removed the never-built `FeatureContributions` counter that
+three of the above rows had cited as their producer — the Architect badge is retained as a manual
+grant; see the CUT note in `audit/BlogPosts.md`.)
+
+## WU-StatBadgeProducers Stage note (2026-07-31)
+
+Closed tracker B4 in full and B3's two acknowledgment-counter rows (`SpotlightCount` re-filed
+under B8, not built here). Full narrative: `workplan.md` WU-StatBadgeProducers; `audit/Profiles.md`
+Feature 22/58 and `audit/Stories.md` Feature 10 for the counter-producer side;
+`audit/Messaging.md` and `audit/Spotlight.md` for the `UserPicker` retrofits;
+`design/access-gating-first-principles.md` for the search's visibility exclusion. `dotnet test`
+green (Unit 776, RazorComponents 626, Integration 1012 — 2,414 total); browser-verified end to
+end (see the L2 note above for both the automated and manual verification detail).
 
 ### WU-AuditFixPass note (2026-07-18)
 

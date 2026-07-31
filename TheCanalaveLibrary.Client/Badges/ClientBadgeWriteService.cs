@@ -24,7 +24,7 @@ public sealed class ClientBadgeWriteService(HttpClient http) : ClientBadgeReadSe
     /// would let a WASM caller mint any catalogue badge). Implemented only to satisfy the interface;
     /// reaching it over WASM is a bug — same pattern as <c>ClientNotificationWriteService</c>.
     /// </summary>
-    public Task<bool> AwardAsync(int userId, string badgeKey) =>
+    public Task<bool> AwardAsync(int userId, string badgeKey, int earnedCount) =>
         throw new NotSupportedException(
             "AwardAsync is a server-internal badge-generation method (called only from other " +
             "server-side write services, in-process). BadgeEndpoints maps no HTTP surface for it, " +

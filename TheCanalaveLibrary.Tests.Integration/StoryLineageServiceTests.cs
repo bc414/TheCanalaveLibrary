@@ -492,6 +492,121 @@ public class StoryLineageServiceTests(PostgresFixture postgres) : IntegrationTes
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // AcknowledgedAsInspirationCount producer (WU-StatBadgeProducers) — Inspired By (type 1) only,
+    // counted toward the TARGET story's author, on Approve/Reject/Delete transitions.
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ApproveLineage_InspiredByCrossAuthor_IncrementsTargetAuthorCounter()
+    {
+        // The same-transaction ExecuteUpdateAsync producer is a silent no-op when the target
+        // author has no UserStat row yet (SeedUserAsync never creates one). Integration tests
+        // must seed one explicitly, matching RecommendationWriteServiceTests' SeedUserStatAsync.
+        await SeedUserStatAsync(_otherUserId);
+        int sourceStoryId = await SeedStoryAsync(authorId: _authorId);
+        int targetStoryId = await SeedStoryAsync(authorId: _otherUserId);
+
+        SetActiveUser(_authorId);
+        await RequestLineageAsync(sourceStoryId, targetStoryId, 1); // 1 = Inspired By
+
+        SetActiveUser(_otherUserId);
+        await ApproveLineageAsync(sourceStoryId, targetStoryId, 1);
+
+        (await LoadInspirationCounterAsync(_otherUserId)).Should().Be(1,
+            "the TARGET author is the one who inspired the source — the counter is theirs");
+        (await LoadInspirationCounterAsync(_authorId)).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task ApproveLineage_NonInspiredByType_DoesNotIncrementCounter()
+    {
+        int sourceStoryId = await SeedStoryAsync(authorId: _authorId);
+        int targetStoryId = await SeedStoryAsync(authorId: _otherUserId);
+
+        SetActiveUser(_authorId);
+        await RequestLineageAsync(sourceStoryId, targetStoryId, 3); // 3 = Sequel, not Inspired By
+
+        SetActiveUser(_otherUserId);
+        await ApproveLineageAsync(sourceStoryId, targetStoryId, 3);
+
+        (await LoadInspirationCounterAsync(_otherUserId)).Should().Be(0,
+            "only Inspired By (type 1) feeds AcknowledgedAsInspirationCount");
+    }
+
+    [Fact]
+    public async Task RequestLineage_InspiredBySelfOwned_AutoApprovedDoesNotIncrementCounter()
+    {
+        // Self-owned links auto-approve, but the recalculator's anti-self-link guard means the
+        // producer must mirror it exactly — a same-author link is not "someone else was inspired."
+        int sourceStoryId = await SeedStoryAsync(authorId: _authorId);
+        int targetStoryId = await SeedStoryAsync(authorId: _authorId);
+
+        SetActiveUser(_authorId);
+        await RequestLineageAsync(sourceStoryId, targetStoryId, 1);
+
+        (await GetRawLineageAsync(sourceStoryId, targetStoryId, 1))!.StatusId.Should().Be(StoryLineageStatus.Approved);
+        (await LoadInspirationCounterAsync(_authorId)).Should().Be(0, "a self-owned link is not a real inspiration credit");
+    }
+
+    [Fact]
+    public async Task RejectLineage_PreviouslyApproved_DecrementsCounter()
+    {
+        // RejectLineageAsync can act on an already-Approved row (no status guard in the write
+        // service) — the producer must still only decrement on a genuine Approved→not-Approved
+        // transition, mirroring the UserStoryInteraction transition-delta rule.
+        await SeedUserStatAsync(_otherUserId);
+        int sourceStoryId = await SeedStoryAsync(authorId: _authorId);
+        int targetStoryId = await SeedStoryAsync(authorId: _otherUserId);
+
+        SetActiveUser(_authorId);
+        await RequestLineageAsync(sourceStoryId, targetStoryId, 1);
+        SetActiveUser(_otherUserId);
+        await ApproveLineageAsync(sourceStoryId, targetStoryId, 1);
+        (await LoadInspirationCounterAsync(_otherUserId)).Should().Be(1);
+
+        await RejectLineageAsync(sourceStoryId, targetStoryId, 1);
+
+        (await LoadInspirationCounterAsync(_otherUserId)).Should().Be(0,
+            "the link WAS approved, so rejecting it must undo the counter");
+    }
+
+    [Fact]
+    public async Task RejectLineage_StillPending_DoesNotDecrementCounter()
+    {
+        int sourceStoryId = await SeedStoryAsync(authorId: _authorId);
+        int targetStoryId = await SeedStoryAsync(authorId: _otherUserId);
+
+        SetActiveUser(_authorId);
+        await RequestLineageAsync(sourceStoryId, targetStoryId, 1);
+
+        SetActiveUser(_otherUserId);
+        await RejectLineageAsync(sourceStoryId, targetStoryId, 1); // never approved
+
+        (await LoadInspirationCounterAsync(_otherUserId)).Should().Be(0, "a Pending link was never counted");
+    }
+
+    [Fact]
+    public async Task DeleteLineage_PreviouslyApproved_DecrementsCounter()
+    {
+        await SeedUserStatAsync(_otherUserId);
+        int sourceStoryId = await SeedStoryAsync(authorId: _authorId);
+        int targetStoryId = await SeedStoryAsync(authorId: _otherUserId);
+
+        SetActiveUser(_authorId);
+        await RequestLineageAsync(sourceStoryId, targetStoryId, 1);
+        SetActiveUser(_otherUserId);
+        await ApproveLineageAsync(sourceStoryId, targetStoryId, 1);
+        (await LoadInspirationCounterAsync(_otherUserId)).Should().Be(1);
+
+        // Deletion is the SOURCE owner's action.
+        SetActiveUser(_authorId);
+        await DeleteLineageAsync(sourceStoryId, targetStoryId, 1);
+
+        (await LoadInspirationCounterAsync(_otherUserId)).Should().Be(0,
+            "the link WAS approved, so deleting it must undo the counter");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // Private helpers — service calls
     // ─────────────────────────────────────────────────────────────────────────────
 
@@ -557,6 +672,26 @@ public class StoryLineageServiceTests(PostgresFixture postgres) : IntegrationTes
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.StoryLineages.AsNoTracking().FirstOrDefaultAsync(l =>
             l.SourceStoryId == sourceStoryId && l.TargetStoryId == targetStoryId && l.RelationshipTypeId == typeId);
+    }
+
+    /// <summary>The same-transaction ExecuteUpdateAsync producer is a silent no-op when the
+    /// target has no UserStat row (no production write path creates one at registration).</summary>
+    private async Task SeedUserStatAsync(int userId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.UserStats.Add(new UserStat { UserId = userId });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<int> LoadInspirationCounterAsync(int userId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.UserStats
+            .Where(us => us.UserId == userId)
+            .Select(us => us.AcknowledgedAsInspirationCount)
+            .FirstOrDefaultAsync();
     }
 
     /// <summary>Overwrites a seeded story's title (SeedStoryAsync's default titles are randomized

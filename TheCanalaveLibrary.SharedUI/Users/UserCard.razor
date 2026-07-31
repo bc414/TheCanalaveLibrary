@@ -25,9 +25,13 @@
                 @foreach (var badge in User.Badges.Take(3))
                 {
                     @* Badge icons are provisioned out-of-band (same policy as sprites); hide on
-                       miss rather than render a broken-image glyph. *@
-                    <img src="@badge.IconUrl" alt="" title="@badge.Name" class="size-4" loading="lazy"
-                         data-hide-on-error />
+                       miss rather than render a broken-image glyph. Count displayed instead of a
+                       tier (no-tiers model, WU-StatBadgeProducers — see audit/Badges.md "Tier
+                       paradigm — RETIRED site-wide"). *@
+                    <span class="inline-flex items-center gap-0.5" title="@($"{badge.Name} ({badge.EarnedCount})")">
+                        <img src="@badge.IconUrl" alt="" class="size-4" loading="lazy" data-hide-on-error />
+                        <span class="text-[10px] leading-none text-(--color-text-muted)">@badge.EarnedCount</span>
+                    </span>
                 }
             </div>
         }

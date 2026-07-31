@@ -53,6 +53,16 @@ public class BadgeSettingsFormTests : BunitContext
     }
 
     [Fact]
+    public void VisibleBadge_ShowsEarnedCount()
+    {
+        IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
+            p.Add(f => f.EarnedBadges, [MakeBadge("Recommender", displayOrder: 1, earnedCount: 7)]));
+
+        cut.Markup.Should().Contain("×7",
+            "the no-tiers model displays the producing counter's value, not a Bronze/Silver split");
+    }
+
+    [Fact]
     public void VisibleBadge_ShowsHideButton()
     {
         IRenderedComponent<BadgeSettingsForm> cut = Render<BadgeSettingsForm>(p =>
@@ -240,12 +250,14 @@ public class BadgeSettingsFormTests : BunitContext
     private static EarnedBadgeDto MakeBadge(
         string key,
         int displayOrder = 1,
-        int sortOrder = 10) =>
+        int sortOrder = 10,
+        int earnedCount = 1) =>
         new(
             BadgeKey:    key,
             DisplayName: $"{key} Name",
             Description: $"{key} description",
             IconUrl:     $"/img/badges/{key}.png",
             SortOrder:   sortOrder,
-            DisplayOrder: displayOrder);
+            DisplayOrder: displayOrder,
+            EarnedCount: earnedCount);
 }

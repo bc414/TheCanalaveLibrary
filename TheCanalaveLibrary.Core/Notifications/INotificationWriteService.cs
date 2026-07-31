@@ -141,6 +141,13 @@ public interface INotificationWriteService : INotificationReadService
     /// </summary>
     Task NotifyStoryLineageApprovedAsync(int sourceAuthorId, int approverId, int targetStoryId);
 
+    /// <summary>
+    /// Sends <c>NewStoryAcknowledgement = 52</c> to <paramref name="acknowledgedUserId"/> when a
+    /// story's author credits them (WU-StatBadgeProducers). <c>RelatedEntityId = storyId</c>.
+    /// Not sent on self-credit (rejected outright by the write service before this would fire).
+    /// </summary>
+    Task NotifyStoryAcknowledgedAsync(int acknowledgedUserId, int authorId, int storyId);
+
     // ── Semantic generation methods (WU34 slice — moderation) ────────────────────
 
     /// <summary>

@@ -46,6 +46,18 @@ internal sealed class FakeStoryLineageReadService : IStoryLineageReadService
         Task.FromResult<IReadOnlyList<StoryLineageTypeDto>>([]);
 }
 
+// ── Story acknowledgments (read, WU-StatBadgeProducers) ─────────────────────────────────────────
+
+internal sealed class FakeStoryAcknowledgmentReadService : IStoryAcknowledgmentReadService
+{
+    public Task<IReadOnlyList<StoryAcknowledgmentDto>> GetAcknowledgmentsForStoryAsync(int storyId) =>
+        Task.FromResult<IReadOnlyList<StoryAcknowledgmentDto>>([]);
+    public Task<StoryAcknowledgmentManageDto> GetManageDataForUserAsync() =>
+        Task.FromResult(new StoryAcknowledgmentManageDto([], []));
+    public Task<IReadOnlyList<AcknowledgmentRoleDto>> GetAcknowledgmentRolesAsync() =>
+        Task.FromResult<IReadOnlyList<AcknowledgmentRoleDto>>([]);
+}
+
 // ── Story arcs (read, WU45) ───────────────────────────────────────────────────────────────────
 
 internal sealed class FakeStoryArcReadService : IStoryArcReadService

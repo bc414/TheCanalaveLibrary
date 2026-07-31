@@ -8,6 +8,7 @@
 @inject IUserStoryInteractionReadService UsiReadService
 @inject ISeriesReadService SeriesReadService
 @inject IStoryLineageReadService StoryLineageReadService
+@inject IStoryAcknowledgmentReadService StoryAcknowledgmentReadService
 @inject IStoryArcReadService StoryArcReadService
 @inject IViewCountWriteService ViewCountWriteService
 @inject NavigationManager NavigationManager
@@ -173,6 +174,9 @@ else
 
             @* Story lineage — Approved outgoing links only (Feature 10, WU42) *@
             <StoryLineageBox Links="_lineageLinks" />
+
+            @* Acknowledgments — Accepted credits only (WU-StatBadgeProducers) *@
+            <StoryAcknowledgmentsBox Credits="_acknowledgments" />
         </div>
 
         @* ── Cover art ────────────────────────────────────────────────────────────── *@
@@ -265,6 +269,10 @@ else
     // Approved outgoing lineage links — WU42. Same ephemeral treatment as _seriesMemberships.
     private IReadOnlyList<StoryLineageDto> _lineageLinks = [];
 
+    // Accepted acknowledgment credits — WU-StatBadgeProducers. Same ephemeral treatment as
+    // _lineageLinks (loaded in LoadSupplementaryAsync, never persisted).
+    private IReadOnlyList<StoryAcknowledgmentDto> _acknowledgments = [];
+
     // Story arcs + the viewer's New-badge watermark — WU45. Ephemeral like _seriesMemberships:
     // both are deterministic per viewer, so the prerender→interactive re-fetch is flicker-free.
     private IReadOnlyList<StoryArcDto> _arcs = [];
@@ -352,10 +360,12 @@ else
             SeriesReadService.GetMembershipsForStoryAsync(StoryId);
         Task<IReadOnlyList<StoryLineageDto>> lineageTask =
             StoryLineageReadService.GetLineageForStoryAsync(StoryId);
+        Task<IReadOnlyList<StoryAcknowledgmentDto>> acknowledgmentsTask =
+            StoryAcknowledgmentReadService.GetAcknowledgmentsForStoryAsync(StoryId);
         Task<IReadOnlyList<StoryArcDto>> arcsTask = StoryArcReadService.GetArcsForStoryAsync(StoryId);
         Task<DateTime?> watermarkTask = ChapterReadService.GetViewerLastInteractionUtcAsync(StoryId);
 
-        List<Task> pending = [membershipsTask, lineageTask, arcsTask, watermarkTask];
+        List<Task> pending = [membershipsTask, lineageTask, acknowledgmentsTask, arcsTask, watermarkTask];
         if (chaptersTask is not null) pending.Add(chaptersTask);
         if (usiTask is not null) pending.Add(usiTask);
         await Task.WhenAll(pending);
@@ -364,6 +374,7 @@ else
         _usiState = usiTask is not null ? await usiTask : null;
         _seriesMemberships = await membershipsTask;
         _lineageLinks = await lineageTask;
+        _acknowledgments = await acknowledgmentsTask;
         _arcs = await arcsTask;
         _viewerWatermarkUtc = await watermarkTask;
     }

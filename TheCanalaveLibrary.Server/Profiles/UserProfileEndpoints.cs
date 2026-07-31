@@ -35,6 +35,11 @@ public static class UserProfileEndpoints
         group.MapGet("/{userId:int}/access-state", async (IUserProfileReadService profiles, int userId) =>
             Results.Ok(await profiles.GetProfileAccessStateAsync(userId)));
 
+        // Public — see SearchUsersByNameAsync's doc for why ProfileVisibility is deliberately not
+        // applied here (addressing a user is not disclosing their profile).
+        group.MapGet("/search", async (IUserProfileReadService profiles, string term) =>
+            Results.Ok(await profiles.SearchUsersByNameAsync(term)));
+
         return app;
     }
 }

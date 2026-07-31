@@ -32,6 +32,7 @@ public class StoryExternalLinksRowTests : BunitContext
         Services.AddScoped<IChapterReadService>(_ => _chapterReadService);
         Services.AddScoped<ISeriesReadService>(_ => new FakeSeriesReadService());
         Services.AddScoped<IStoryLineageReadService>(_ => new FakeStoryLineageReadService());
+        Services.AddScoped<IStoryAcknowledgmentReadService>(_ => new FakeStoryAcknowledgmentReadService());
         Services.AddScoped<IStoryArcReadService>(_ => new FakeStoryArcReadService());
         Services.AddScoped<IViewCountWriteService>(_ => new FakeViewCountWriteService());
         Services.AddScoped<IPublicUrlProvider>(_ => new PublicUrlProvider("https://test.local"));

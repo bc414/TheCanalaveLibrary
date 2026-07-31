@@ -428,6 +428,9 @@ builder.Services.AddScoped<ISeriesWriteService, ServerSeriesWriteService>();
 // Story Lineage (WU42) — L2 read/write services (Feature 10, formerly "Story Relationships").
 builder.Services.AddScoped<IStoryLineageReadService, ServerStoryLineageWriteService>();
 builder.Services.AddScoped<IStoryLineageWriteService, ServerStoryLineageWriteService>();
+// Story Acknowledgments (WU-StatBadgeProducers) — L2 read/write services.
+builder.Services.AddScoped<IStoryAcknowledgmentReadService, ServerStoryAcknowledgmentWriteService>();
+builder.Services.AddScoped<IStoryAcknowledgmentWriteService, ServerStoryAcknowledgmentWriteService>();
 // Story Arcs (WU45) — L2 read/write services (Feature 8).
 builder.Services.AddScoped<IStoryArcReadService, ServerStoryArcWriteService>();
 builder.Services.AddScoped<IStoryArcWriteService, ServerStoryArcWriteService>();
@@ -622,6 +625,7 @@ app.MapExportEndpoints();
 // Integration/browser verification wave is future work, not part of landing these routes.
 app.MapStoryArcEndpoints();
 app.MapStoryLineageEndpoints();
+app.MapStoryAcknowledgmentEndpoints();
 app.MapViewCountEndpoints();
 app.MapSeriesEndpoints();
 app.MapChapterEndpoints();

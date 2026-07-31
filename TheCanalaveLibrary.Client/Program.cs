@@ -54,6 +54,8 @@ builder.Services.AddScoped<IStoryArcReadService, ClientStoryArcReadService>();
 builder.Services.AddScoped<IStoryArcWriteService, ClientStoryArcWriteService>();
 builder.Services.AddScoped<IStoryLineageReadService, ClientStoryLineageReadService>();
 builder.Services.AddScoped<IStoryLineageWriteService, ClientStoryLineageWriteService>();
+builder.Services.AddScoped<IStoryAcknowledgmentReadService, ClientStoryAcknowledgmentReadService>();
+builder.Services.AddScoped<IStoryAcknowledgmentWriteService, ClientStoryAcknowledgmentWriteService>();
 builder.Services.AddScoped<IViewCountWriteService, ClientViewCountWriteService>();
 builder.Services.AddScoped<ISeriesReadService, ClientSeriesReadService>();
 builder.Services.AddScoped<ISeriesWriteService, ClientSeriesWriteService>();

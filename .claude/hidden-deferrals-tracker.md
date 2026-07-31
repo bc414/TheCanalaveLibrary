@@ -146,15 +146,22 @@ decision work that has no row at all.
     slice, `audit/BlogPosts.md`, `audit/Groups.md`, `layer2-services.md` §"Comment & blog-post
     semantic methods".
 
-- [ ] **B3 — UserStat counters with no producer (always read 0)** `[inert · med · beta]`
-  - Grid: F22 all=5; F58 (recalc worker) L2=5.
-  - Source: `audit/Profiles.md` Feature 22 deferred-counters note; `layer2-services.md` §"Counters deferred — producer not yet built"; `UserStatRecalculator.cs` (deliberately skips them).
-  - Context: `SpotlightCount`, `AcknowledgedAsBetaReaderCount`, `AcknowledgedAsInspirationCount` have no producer wired; the recalc worker skips them on purpose ("recomputing to 0 would mask missing producers"). They display 0 forever. `SpotlightCount`'s definition is also unsettled; the acknowledgment source is ambiguous (`BetaReader` entity vs `StoryAcknowledgment`).
+- [x] **B3 — UserStat counters with no producer (always read 0) — SPLIT + CLOSED (WU-StatBadgeProducers, 2026-07-31)** `[inert · med · beta]`
+  - Grid: F22 all=5; F58 (recalc worker) L2=5 — unchanged, producers filled in under already-Stage-5 cells.
+  - Source: `audit/Profiles.md` Feature 22 deferred-counters note; `layer2-services.md` §"Counters deferred — producer not yet built"; `UserStatRecalculator.cs`.
+  - **`AcknowledgedAsBetaReaderCount` + `AcknowledgedAsInspirationCount` — DONE.** Source ambiguity resolved: `StoryAcknowledgment` role 1 (consent-gated — self-credit rejected outright, recipient must accept) for BetaReader; the already-built, already consent-gated `StoryLineage` "Inspired By" approval for Inspiration (a producer hook, not a new feature). Both recomputed by `UserStatRecalculator` now. Full narrative: `audit/Badges.md` §"WU-StatBadgeProducers"; `audit/Profiles.md` Feature 22/58; `audit/Stories.md` Feature 10.
+  - **`SpotlightCount` → re-filed under B8** (below) as its owner. Not built by WU-StatBadgeProducers — no badge consumes it, and `audit/Spotlight.md:58` already files it as riding with the donation pipeline.
 
-- [ ] **B4 — Badge award automation: 1 of 5 (BetaReader has no producer)** `[inert · med · beta]`
-  - Grid: F50 L1/L2/L3/L3.5/L5=5.
-  - Source: `audit/Badges.md` "Deferred award triggers" table + WU36 settled decisions.
-  - Context: Only Recommender/RecommenderSilver auto-award. **BetaReader has no producer and no assigned WU** (`AcknowledgedAsBetaReaderCount` never populated — ties to B3). Architect/Patron/Artist are *deliberate manual grants* (settled after the Feature 56 cut) — not pending.
+- [x] **B4 — Badge award automation: 1 of 5 (BetaReader has no producer) — DONE (WU-StatBadgeProducers, 2026-07-31)** `[inert · med · beta]`
+  - Grid: F50 L1/L2/L3/L3.5/L5=5 — unchanged.
+  - Source: `audit/Badges.md` "Deferred award triggers" table + WU36 settled decisions (tier paradigm since retired — see "Tier paradigm — RETIRED site-wide").
+  - Context: BetaReader now auto-awards at ≥1 accepted `StoryAcknowledgment` credit (ties to B3's split), displaying `EarnedCount` — no threshold. Architect/Patron/Artist remain *deliberate manual grants* (settled after the Feature 56 cut) — not pending.
+  - **Scope grew beyond the original item, same pattern as A5/WU-TagFanon:** closing B4 surfaced that the Bronze/Silver tier paradigm itself had no design provenance (traced to a single unrequested Gemini transcript turn — see `audit/Badges.md`). **Retired site-wide, not just for the new badge:** `RecommenderSilver` removed outright (const/seed row/threshold literal/tests — pre-production, so a clean migration); `Recommender` moved from threshold 10 to ≥1. Every badge now shows a count, none shows a tier. Full narrative: `audit/Badges.md` §"WU-StatBadgeProducers"; `workplan.md` WU-StatBadgeProducers. `dotnet test` green (2,414 total); browser-verified end to end.
+
+- [ ] **B13 — `ModUsersPage`'s `{UserId:int?}` route parameter is declared and never read** `[polish · low · anytime]` — *Found by WU-StatBadgeProducers' `UserPicker` research, 2026-07-31.*
+  - Grid: F48 (Moderation) cells unaffected — this is a single-page dead parameter, not a stage-bearing gap.
+  - Source: `audit/Spotlight.md` §"WU-StatBadgeProducers" trace; `SharedUI/Moderation/ModUsersPage.razor:1` (`@page "/mod/users/{UserId:int?}"`), `:143` (`[Parameter] public int? UserId`), `:10`'s own comment claims "Moderator user lookup page."
+  - Context: The page renders a static table of already-reported users only (`GetReportQueueAsync` filtered to `ReportedEntityType.User`) — a moderator cannot act on a user who has never been reported, and the route parameter that looks like it should enable direct lookup is never read anywhere in the file. Not fixed as part of WU-StatBadgeProducers — it needs a moderator user-lookup *capability* (a feature decision: should mods be able to act on unreported users at all?), not a `UserPicker` swap. Now that `IUserProfileReadService.SearchUsersByNameAsync` exists, building this capability is cheaper than it was.
 
 - [x] **B5 — Private-message archive/unarchive UI — DONE (WU-MsgArchive, 2026-07-26)** `[inert · low · anytime]`
   - Grid: F49 L3-Logic/L3.5/L4/L4.5=5 (unchanged — this filled in inert plumbing under already-Stage-5 cells).
@@ -194,6 +201,7 @@ decision work that has no row at all.
   - Grid: F55 L1/L2/L3/L3.5/L4.5/L5=5 (L4=3).
   - Source: `audit/Spotlight.md` "Deferred"; code `ServerSpotlightSlotAllocator.cs` (throws `NotSupportedException` on donation-sourced slots), `SpotlightEnums.cs`, `SiteSettingKeys.cs`.
   - Context: The mod-grant slot path works. The *second* `ISpotlightSlotAllocator` source — donation/payment — is a reserved seam that throws. Unbuilt: `SpotlightSlot.PaymentId` population, payment provider, the activity/cost-scaled N formula, Patron/Spotlighter badge, and slot-redemption expiry. A whole sub-system absent under a near-complete feature row.
+  - **Now also owns `UserStat.SpotlightCount`** (re-filed from B3, WU-StatBadgeProducers 2026-07-30) — the counter's definition (slots granted vs. redeemed vs. times featured) is unsettled and its only badge consumer (Patron) is a manual grant, so it stays deferred to this item rather than the recalc worker's scope.
 
 - [ ] **B9 — Verified-crawler serving is inert (config-gated OFF)** `[inert · low · launch]` — *Deliberate (Phase-7 trust boundary).*
   - Grid: F64 L2=5; F66 all=5.

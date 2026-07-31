@@ -22,4 +22,7 @@ public class ClientUserProfileReadService(HttpClient http) : IUserProfileReadSer
 
     public async Task<ProfileAccessState> GetProfileAccessStateAsync(int userId) =>
         await Http.GetFromJsonAsync<ProfileAccessState>($"api/user-profiles/{userId}/access-state");
+
+    public async Task<IReadOnlyList<UserCardDto>> SearchUsersByNameAsync(string term) =>
+        await Http.GetFromJsonAsync<List<UserCardDto>>($"api/user-profiles/search?term={Uri.EscapeDataString(term)}") ?? [];
 }

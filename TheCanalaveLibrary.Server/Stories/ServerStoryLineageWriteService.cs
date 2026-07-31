@@ -9,6 +9,16 @@ namespace TheCanalaveLibrary.Server;
 /// primary-constructor chaining, mirroring <see cref="ServerSeriesWriteService"/>. Ownership rule:
 /// requesting/deleting requires owning the <b>source</b> story; approving/rejecting requires owning
 /// the <b>target</b> story (see <c>audit/Stories.md</c> Feature 10 settled note).
+///
+/// <para><b>Producer of <c>UserStat.AcknowledgedAsInspirationCount</c> (WU-StatBadgeProducers)</b> —
+/// type id 1 ("Inspired By") only, counted toward the TARGET story's author (the person who
+/// inspired), guarded against same-author links. Increments on <see cref="ApproveLineageAsync"/>
+/// (a genuine Pending→Approved transition — a self-owned link auto-approves via
+/// <see cref="RequestLineageAsync"/> instead, but is always same-author and so never passes the
+/// guard, meaning no increment call is needed there). Decrements on <see cref="RejectLineageAsync"/>
+/// / <see cref="DeleteLineageAsync"/> only when the row was Approved beforehand — the transition-
+/// delta rule (<c>layer2-services.md</c>) — since both methods can act on an already-Approved row
+/// without a status precondition.</para>
 /// </summary>
 public class ServerStoryLineageWriteService(
     ApplicationDbContext writeDb,
@@ -18,6 +28,26 @@ public class ServerStoryLineageWriteService(
     ILogger<ServerStoryLineageWriteService> logger)
     : ServerStoryLineageReadService(readDbFactory, activeUser), IStoryLineageWriteService
 {
+    /// <summary>Type id whose Approved count feeds <c>AcknowledgedAsInspirationCount</c> — matches
+    /// the seeded "Inspired By" row (StoryConfigurations.cs).</summary>
+    private const short InspiredByTypeId = 1;
+
+    /// <summary>Adjusts the TARGET author's inspiration counter by <paramref name="delta"/>,
+    /// guarded to Inspired-By links between two different authors — mirrors
+    /// <c>UserStatRecalculator.AcknowledgedAsInspirationCountAgg</c>'s <c>IS DISTINCT FROM</c>
+    /// exclusion exactly (a null source author is never "the same" as a real target author).</summary>
+    private async Task AdjustInspirationCounterAsync(short typeId, int? targetAuthorId, int? sourceAuthorId, int delta)
+    {
+        if (typeId != InspiredByTypeId) return;
+        if (targetAuthorId is not int realTargetAuthorId) return;
+        if (realTargetAuthorId == sourceAuthorId) return; // same-author link — not a real inspiration credit
+
+        await writeDb.UserStats
+            .Where(us => us.UserId == realTargetAuthorId)
+            .ExecuteUpdateAsync(s => s.SetProperty(
+                us => us.AcknowledgedAsInspirationCount, us => us.AcknowledgedAsInspirationCount + delta));
+    }
+
     public async Task RequestLineageAsync(CreateStoryLineageDto dto)
     {
         int userId = RequireAuthenticatedUser();
@@ -110,6 +140,9 @@ public class ServerStoryLineageWriteService(
         await writeDb.SaveChangesAsync();
 
         Story? source = await writeDb.Stories.FirstOrDefaultAsync(s => s.StoryId == sourceStoryId);
+
+        await AdjustInspirationCounterAsync(typeId, target.AuthorId, source?.AuthorId, delta: 1);
+
         if (source?.AuthorId is int sourceAuthorId)
         {
             try
@@ -136,10 +169,21 @@ public class ServerStoryLineageWriteService(
         if (target is null || target.AuthorId != userId)
             throw new UnauthorizedAccessException("You must own the target story to reject a lineage request.");
 
+        // Transition-delta: this method carries no status precondition, so it can act on an
+        // already-Approved row — capture that BEFORE mutating, so the counter only unwinds a
+        // genuine Approved→Rejected transition, never a Pending→Rejected one (never counted).
+        bool wasApproved = link.StatusId == StoryLineageStatus.Approved;
+
         // Kept as a Rejected row (not deleted) — prevents immediate re-request spam and preserves
         // an audit trail. No notification (silent rejection, matching the moderation model).
         link.StatusId = StoryLineageStatus.Rejected;
         await writeDb.SaveChangesAsync();
+
+        if (wasApproved)
+        {
+            Story? source = await writeDb.Stories.FirstOrDefaultAsync(s => s.StoryId == sourceStoryId);
+            await AdjustInspirationCounterAsync(typeId, target.AuthorId, source?.AuthorId, delta: -1);
+        }
     }
 
     public async Task DeleteLineageAsync(int sourceStoryId, int targetStoryId, short typeId)
@@ -153,7 +197,17 @@ public class ServerStoryLineageWriteService(
         if (source is null || source.AuthorId != userId)
             throw new UnauthorizedAccessException("You must own the source story to remove a lineage link.");
 
+        // Transition-delta — same reasoning as RejectLineageAsync: capture status before removing.
+        // (typeId is already the method's own parameter — the FindAsync lookup key above.)
+        bool wasApproved = link.StatusId == StoryLineageStatus.Approved;
+
         writeDb.StoryLineages.Remove(link);
         await writeDb.SaveChangesAsync();
+
+        if (wasApproved)
+        {
+            Story? target = await writeDb.Stories.FirstOrDefaultAsync(s => s.StoryId == targetStoryId);
+            await AdjustInspirationCounterAsync(typeId, target?.AuthorId, source.AuthorId, delta: -1);
+        }
     }
 }

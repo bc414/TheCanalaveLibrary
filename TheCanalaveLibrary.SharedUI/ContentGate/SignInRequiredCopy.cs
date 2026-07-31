@@ -28,6 +28,8 @@ public static class SignInRequiredCopy
             new Entry("Your lists", "Create, organize, and share custom story collections.")),
         (p => p.StartsWith("/story-lineages", StringComparison.OrdinalIgnoreCase),
             new Entry("Story lineage", "Manage prequel, sequel, and inspired-by links between your stories.")),
+        (p => p.StartsWith("/acknowledgments", StringComparison.OrdinalIgnoreCase),
+            new Entry("Acknowledgments", "Credit collaborators on your stories, and respond to credits from others.")),
         (p => p.StartsWith("/notifications", StringComparison.OrdinalIgnoreCase),
             new Entry("Your notifications", "Updates about your stories, your follows, and replies to you.")),
         (p => p.StartsWith("/messages", StringComparison.OrdinalIgnoreCase),

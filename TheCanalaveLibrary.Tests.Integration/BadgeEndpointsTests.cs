@@ -29,7 +29,7 @@ public class BadgeEndpointsTests(PostgresFixture postgres) : IntegrationTestBase
     private async Task AwardDirectlyAsync(int userId, string badgeKey)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
-        await scope.ServiceProvider.GetRequiredService<IBadgeWriteService>().AwardAsync(userId, badgeKey);
+        await scope.ServiceProvider.GetRequiredService<IBadgeWriteService>().AwardAsync(userId, badgeKey, 1);
     }
 
     [Fact]

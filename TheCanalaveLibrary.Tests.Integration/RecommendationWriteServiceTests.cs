@@ -419,39 +419,63 @@ public class RecommendationWriteServiceTests(PostgresFixture postgres) : Integra
         await act.Should().NotThrowAsync("anonymous-rec RecordSuccess must not crash");
     }
 
-    // Mutation-sanity: disabling the `if (total >= 10)` award check makes this test fail.
+    // No-tiers model (WU-StatBadgeProducers) — a badge is earned at ≥1 and displays its count;
+    // RecommenderSilver (threshold 50) is retired. Mutation-sanity: disabling the
+    // `if (total >= 1)` award check makes RecordSuccess_AtFirstSuccess_AwardsRecommenderBadge fail.
     [Fact]
-    public async Task RecordSuccess_AtTenthSuccess_AwardsBronzeBadge()
+    public async Task RecordSuccess_AtFirstSuccess_AwardsRecommenderBadge()
     {
-        // Seed the counter at 9 so that one more qualifying success crosses the threshold.
-        await SeedUserStatAsync(_recommenderUserId, successesEarned: 9);
+        await SeedUserStatAsync(_recommenderUserId, successesEarned: 0);
         int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
 
         SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
-        await CallRecordSuccessAsync(recId); // takes counter to 10 — award fires
+        await CallRecordSuccessAsync(recId); // takes counter to 1 — award fires immediately
 
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        bool badgeExists = await db.UserBadges
-            .AnyAsync(ub => ub.UserId == _recommenderUserId && ub.BadgeKey == SiteBadges.Recommender);
-        badgeExists.Should().BeTrue("the tenth qualifying success must award the bronze Recommender badge");
+        UserBadge? badge = await db.UserBadges
+            .FirstOrDefaultAsync(ub => ub.UserId == _recommenderUserId && ub.BadgeKey == SiteBadges.Recommender);
+        badge.Should().NotBeNull("the FIRST qualifying success must award the Recommender badge — no threshold");
+        badge!.EarnedCount.Should().Be(1);
     }
 
     [Fact]
-    public async Task RecordSuccess_AtNinthSuccess_DoesNotAwardBronzeBadge()
+    public async Task RecordSuccess_ZeroSuccesses_DoesNotAwardBadge()
     {
-        // Seed the counter at 8 — one more success brings it to 9, below the bronze threshold of 10.
-        await SeedUserStatAsync(_recommenderUserId, successesEarned: 8);
-        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
-
-        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
-        await CallRecordSuccessAsync(recId); // takes counter to 9 — below threshold
+        // Seed the counter row but record no qualifying success — confirms the award check itself
+        // gates on the counter, not merely on the row existing.
+        await SeedUserStatAsync(_recommenderUserId, successesEarned: 0);
 
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         bool badgeExists = await db.UserBadges
             .AnyAsync(ub => ub.UserId == _recommenderUserId && ub.BadgeKey == SiteBadges.Recommender);
-        badgeExists.Should().BeFalse("nine qualifying successes must NOT yet award the bronze badge (threshold is 10)");
+        badgeExists.Should().BeFalse("zero qualifying successes must not award the badge");
+    }
+
+    [Fact]
+    public async Task RecordSuccess_SecondSuccess_UpdatesEarnedCountOnExistingBadge()
+    {
+        await SeedUserStatAsync(_recommenderUserId, successesEarned: 1);
+        using (IServiceScope seedScope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            seedDb.UserBadges.Add(new UserBadge
+            {
+                UserId = _recommenderUserId, BadgeKey = SiteBadges.Recommender, DisplayOrder = 1, EarnedCount = 1,
+            });
+            await seedDb.SaveChangesAsync();
+        }
+
+        int recId = await CallSubmitAsync(new RecommendationSubmitDto(_storyId, ValidHtml()));
+        SetActiveUser(FakeActiveUserContext.AuthenticatedUser(_authorUserId, showMatureContent: false));
+        await CallRecordSuccessAsync(recId); // takes counter to 2
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        UserBadge badge = await db.UserBadges
+            .SingleAsync(ub => ub.UserId == _recommenderUserId && ub.BadgeKey == SiteBadges.Recommender);
+        badge.EarnedCount.Should().Be(2, "a repeat qualifying success must keep EarnedCount in step with the counter");
     }
 
     // ── RecordAttributionSourceAsync ──────────────────────────────────────────────

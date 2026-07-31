@@ -12,12 +12,19 @@ public interface IBadgeWriteService : IBadgeReadService
     /// <paramref name="badgeKey"/>) if it does not already exist. The new row is visible by
     /// default (<c>DisplayOrder = max existing DisplayOrder + 1</c>).
     /// <para>
-    /// Returns <c>true</c> if newly awarded; <c>false</c> if the user already holds this badge.
-    /// Never throws for a duplicate award — safe to call on every qualifying event without a
-    /// prior existence check.
+    /// No-tiers model (WU-StatBadgeProducers): <paramref name="earnedCount"/> is the producing
+    /// counter's current value, written to <c>UserBadge.EarnedCount</c> in the same call — on
+    /// both first award AND on every subsequent qualifying event, so the displayed count never
+    /// drifts from the counter that earned it. One call keeps both in step; callers never write
+    /// <c>EarnedCount</c> directly.
+    /// </para>
+    /// <para>
+    /// Returns <c>true</c> if newly awarded; <c>false</c> if the user already held this badge
+    /// (the count is still updated). Never throws for a duplicate award — safe to call on every
+    /// qualifying event without a prior existence check.
     /// </para>
     /// </summary>
-    Task<bool> AwardAsync(int userId, string badgeKey);
+    Task<bool> AwardAsync(int userId, string badgeKey, int earnedCount);
 
     /// <summary>
     /// Owner curation: sets <c>DisplayOrder</c> for all earned badges belonging to

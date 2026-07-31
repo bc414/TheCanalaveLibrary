@@ -76,7 +76,7 @@ public class ServerFollowingReadService(
                 f.FollowedUserNavigation.UserBadges
                     .Where(ub => ub.DisplayOrder > 0)
                     .OrderBy(ub => ub.DisplayOrder)
-                    .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                    .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                     .ToList()
             ))
             .ToListAsync();
@@ -102,7 +102,7 @@ public class ServerFollowingReadService(
                     v.VouchedUser.UserBadges
                         .Where(ub => ub.DisplayOrder > 0)
                         .OrderBy(ub => ub.DisplayOrder)
-                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()
                 ),
                 v.VouchText,
@@ -130,7 +130,7 @@ public class ServerFollowingReadService(
                     v.VouchingUser.UserBadges
                         .Where(ub => ub.DisplayOrder > 0)
                         .OrderBy(ub => ub.DisplayOrder)
-                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()
                 ),
                 v.VouchText,

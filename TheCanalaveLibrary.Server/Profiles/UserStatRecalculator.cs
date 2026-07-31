@@ -26,12 +26,24 @@ public sealed record UserStatRecalcResult(int RowsInserted, long CountersCorrect
 /// is their first populator.</item>
 /// <item>1 raw-SQL counter (<c>ViewsOnStories</c>) reading the <c>daily_story_stats</c> L8 mart
 /// (no EF model exists for it).</item>
-/// <item>Deferred, not recomputed: <c>SpotlightCount</c>, <c>AcknowledgedAsBetaReaderCount</c>,
-/// <c>AcknowledgedAsInspirationCount</c> — producers are
-/// unbuilt/unsettled; recomputing them to 0 would mask the missing producer, not correct drift.</item>
+/// <item>2 newly-wired counters (WU-StatBadgeProducers): <c>AcknowledgedAsBetaReaderCount</c>
+/// (Accepted <c>StoryAcknowledgment</c> rows, role Beta Reader) and
+/// <c>AcknowledgedAsInspirationCount</c> (Approved "Inspired By" <c>StoryLineage</c> rows toward the
+/// target author, anti-self-link guarded) — mirror their wired formulas exactly, same discipline as
+/// the 14 above.</item>
+/// <item>Deferred, not recomputed: <c>SpotlightCount</c> — producer deferred to tracker item B8
+/// (Spotlight donation pipeline); recomputing it to 0 would mask the missing producer, not correct
+/// drift.</item>
 /// <item><c>ActiveReportCount</c> was dropped from <c>UserStat</c> entirely (orphaned duplicate,
 /// never written) — nothing to recompute.</item>
 /// </list>
+///
+/// A third step (<see cref="SyncBadgeEarnedCountsAsync"/>) drift-corrects <c>UserBadge.EarnedCount</c>
+/// from the now-corrected <c>UserStat</c> columns for badges with an automated producer — a separate
+/// table from the 18 <c>UserStat</c> columns above, so it isn't one of <see cref="CounterSpecs"/>.
+/// Deliberately does NOT award missing badges: award stays the producers' job, and a recalc that
+/// mints badges would hide a broken producer instead of surfacing it — the same reasoning that keeps
+/// <c>SpotlightCount</c> deferred above.
 ///
 /// Every counter UPDATE runs in two passes: one that corrects rows whose ground truth differs
 /// (guarded by <c>IS DISTINCT FROM</c> so the rows-affected count is a genuine "drift corrected"
@@ -192,6 +204,41 @@ public sealed class UserStatRecalculator(ApplicationDbContext context)
         GROUP BY s.author_id
         """;
 
+    // ── 2 newly-wired counters (WU-StatBadgeProducers) ──────────────────────────────────────────
+
+    // Role 1 = "Beta Reader" (StoryConfigurations.cs); StatusId 1 = Accepted
+    // (StoryAcknowledgmentStatus). No self-credit exclusion needed — RequestAcknowledgmentAsync
+    // rejects self-crediting outright, so no such row can exist in the table at all (contrast with
+    // RecommendationSuccessesEarnedAgg above, whose self-farm row DOES get inserted and is excluded
+    // only from the counter/badge check, not the insert).
+    // language=sql
+    private const string AcknowledgedAsBetaReaderCountAgg =
+        """
+        SELECT acknowledged_user_id AS user_id, COUNT(*)::integer AS value
+        FROM story_acknowledgments
+        WHERE status_id = 1 AND acknowledgment_role_id = 1
+        GROUP BY acknowledged_user_id
+        """;
+
+    // RelationshipTypeId 1 = "Inspired By" (StoryConfigurations.cs); StatusId 1 = Approved
+    // (StoryLineageStatus). Counted toward the TARGET story's author (the person who inspired).
+    // Mirrors ServerStoryLineageWriteService.ApproveLineageAsync's producer guard exactly: unlike
+    // acknowledgments, a self-owned lineage link (same author on both sides) auto-approves and DOES
+    // exist in the table — IS DISTINCT FROM is the NULL-safe exclusion (a story with no author, e.g.
+    // author account deleted, is never "self" and must not be silently dropped by a plain <>).
+    // language=sql
+    private const string AcknowledgedAsInspirationCountAgg =
+        """
+        SELECT target.author_id AS user_id, COUNT(*)::integer AS value
+        FROM story_lineages sl
+        JOIN stories source ON source.story_id = sl.source_story_id
+        JOIN stories target ON target.story_id = sl.target_story_id
+        WHERE sl.status_id = 1 AND sl.relationship_type_id = 1
+          AND target.author_id IS NOT NULL
+          AND source.author_id IS DISTINCT FROM target.author_id
+        GROUP BY target.author_id
+        """;
+
     private readonly record struct CounterSpec(string ColumnName, string AggregateSql);
 
     private static readonly CounterSpec[] CounterSpecs =
@@ -214,6 +261,19 @@ public sealed class UserStatRecalculator(ApplicationDbContext context)
         new("words_read", WordsReadAgg),
         new("recommendations_found_useful", RecommendationsFoundUsefulAgg),
         new("views_on_stories", ViewsOnStoriesAgg),
+        new("acknowledged_as_beta_reader_count", AcknowledgedAsBetaReaderCountAgg),
+        new("acknowledged_as_inspiration_count", AcknowledgedAsInspirationCountAgg),
+    ];
+
+    /// <summary>Badge key → the <c>UserStat</c> column that backs its <c>EarnedCount</c>. Only
+    /// badges with an automated producer appear here — Patron/Architect/Artist are manual grants
+    /// with no counter to sync against and are deliberately absent.</summary>
+    private readonly record struct BadgeCounterSpec(string BadgeKey, string CounterColumn);
+
+    private static readonly BadgeCounterSpec[] BadgeCounterSpecs =
+    [
+        new(SiteBadges.Recommender, "recommendation_successes_earned"),
+        new(SiteBadges.BetaReader, "acknowledged_as_beta_reader_count"),
     ];
 
     /// <summary>
@@ -238,6 +298,13 @@ public sealed class UserStatRecalculator(ApplicationDbContext context)
             long countersCorrected = 0;
             foreach (CounterSpec spec in CounterSpecs)
                 countersCorrected += await ApplyCounterAsync(spec, ct);
+
+            // Step 3 — sync UserBadge.EarnedCount from the now-corrected UserStat columns above.
+            // Folded into the same signal as the UserStat counters: both are "denormalized value
+            // corrected from ground truth," just on different tables.
+            foreach (BadgeCounterSpec spec in BadgeCounterSpecs)
+                countersCorrected += await SyncBadgeEarnedCountAsync(spec, ct);
+
             activity?.SetTag("canalave.userstatrecalc.counters_corrected", countersCorrected);
 
             double durationMs = Stopwatch.GetElapsedTime(startTimestamp).TotalMilliseconds;
@@ -285,5 +352,30 @@ public sealed class UserStatRecalculator(ApplicationDbContext context)
         int matched = await context.Database.ExecuteSqlRawAsync(updateMatched, ct);
         int zeroed = await context.Database.ExecuteSqlRawAsync(zeroUnmatched, ct);
         return matched + zeroed;
+    }
+
+    /// <summary>
+    /// Syncs one badge's <c>EarnedCount</c> from its backing <c>UserStat</c> column. No "zero
+    /// unmatched" pass like <see cref="ApplyCounterAsync"/> — a <c>UserBadge</c> row only exists
+    /// once earned, and this method never creates or removes one (award stays the producers' job;
+    /// see the class doc). <c>IS DISTINCT FROM</c>-guarded so rows-affected stays a genuine
+    /// "drift corrected" signal.
+    /// </summary>
+    private async Task<long> SyncBadgeEarnedCountAsync(BadgeCounterSpec spec, CancellationToken ct)
+    {
+        // BadgeKey is interpolated directly, not parameterized — same trust level as ColumnName
+        // above (both come from this file's own hardcoded specs, never external input; matches
+        // this file's existing style of interpolating trusted identifiers straight into the SQL).
+        string sql =
+            $"""
+            UPDATE user_badges ub
+            SET earned_count = us.{spec.CounterColumn}
+            FROM user_stats us
+            WHERE ub.user_id = us.user_id
+              AND ub.badge_key = '{spec.BadgeKey}'
+              AND ub.earned_count IS DISTINCT FROM us.{spec.CounterColumn}
+            """;
+
+        return await context.Database.ExecuteSqlRawAsync(sql, ct);
     }
 }

@@ -236,11 +236,6 @@ namespace TheCanalaveLibrary.Server.Migrations
                         {
                             AcknowledgmentRoleId = (short)4,
                             RoleName = "Editor"
-                        },
-                        new
-                        {
-                            AcknowledgmentRoleId = (short)5,
-                            RoleName = "Inspiration"
                         });
                 });
 
@@ -358,18 +353,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                         new
                         {
                             BadgeKey = "Recommender",
-                            Description = "10+ readers followed your recommendation and found the story genuinely helpful.",
+                            Description = "A reader followed your recommendation and found the story genuinely helpful.",
                             DisplayName = "Recommender",
                             IconBaseUrl = "icons/badges/recommender.png",
                             SortOrder = 3
-                        },
-                        new
-                        {
-                            BadgeKey = "RecommenderSilver",
-                            Description = "50+ readers followed your recommendation and found the story genuinely helpful.",
-                            DisplayName = "Recommender (Silver)",
-                            IconBaseUrl = "icons/badges/recommender_silver.png",
-                            SortOrder = 30
                         },
                         new
                         {
@@ -3019,14 +3006,22 @@ namespace TheCanalaveLibrary.Server.Migrations
                         .HasColumnName("date_acknowledged")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
+                    b.Property<DateTime?>("DateResponded")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("date_responded");
+
+                    b.Property<short>("StatusId")
+                        .HasColumnType("smallint")
+                        .HasColumnName("status_id");
+
                     b.HasKey("StoryId", "AcknowledgedUserId", "AcknowledgmentRoleId")
                         .HasName("pk_story_acknowledgments");
 
-                    b.HasIndex("AcknowledgedUserId")
-                        .HasDatabaseName("ix_story_acknowledgments_acknowledged_user_id");
-
                     b.HasIndex("AcknowledgmentRoleId")
                         .HasDatabaseName("ix_story_acknowledgments_acknowledgment_role_id");
+
+                    b.HasIndex("AcknowledgedUserId", "StatusId")
+                        .HasDatabaseName("ix_story_acknowledgments_acknowledged_user_status");
 
                     b.ToTable("story_acknowledgments", (string)null);
                 });
@@ -3912,6 +3907,10 @@ namespace TheCanalaveLibrary.Server.Migrations
                     b.Property<int>("DisplayOrder")
                         .HasColumnType("integer")
                         .HasColumnName("display_order");
+
+                    b.Property<int>("EarnedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("earned_count");
 
                     b.HasKey("UserId", "BadgeKey")
                         .HasName("pk_user_badges");

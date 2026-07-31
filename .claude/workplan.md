@@ -17,31 +17,31 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-ApplyFiltersPurity (2026-07-30) — `ServerStoryReadService.ApplyFilters`
-  reverts to pure/synchronous (the tag-hierarchy expansion map is now an explicit argument, resolved
-  via a new cached `ITagHierarchyReadService`/`ServerTagHierarchyCache`, invalidated on any `Tag`
-  write plus a 60 s TTL). Closes tracker item **B12** — the per-filtered-read DB round-trip
-  WU-TagFanon's roll-up introduced is gone from the steady state; no cell flips (F31 L2, F11/F12 L2
-  all stay Stage 5). (Before that, same day: WU-ErrorHandling2 — the `ProblemDetails` API error
-  envelope + full client HTTP error translation, completing what WU-ErrorHandling (2026-07-06)
-  deferred, closing tracker item **E1** and D5's behavior-change half; found and fixed a live gap
-  along the way (`StoryEndpoints`' filter/random-batch/filter-candidates reads still 500ing on
-  malformed ship input after WU-TagFanon typed the exception but never wrapped the endpoint).
-  Before that, same day: WU-AccountEnforcement — mid-session account-status responsiveness
-  (`AccountStatusBanner` live-reads status per navigation instead of relying on the sign-in claim;
-  now covers Warned/Suspended/Banned; `NotificationBellInner`'s identical mid-session-staleness bug
-  folded in and fixed the same way), closing tracker item **G1**'s residual and Phase 2's last open
-  item. Before that, 2026-07-28: WU-DiscoveryFilterRestore + WU-SelectionPermalink — decision row
-  13 resolved, closing tracker item **B11**; earlier the same day, WU-Home + WU-SiteNews — decision
-  row 2 resolved, closing tracker item F1.)
+- **Last landed:** WU-StatBadgeProducers (2026-07-31) — Story Acknowledgments (consent-gated credit
+  feature) + a producer hook on the already-built `StoryLineage` approval, closing tracker item
+  **B4** in full and **B3**'s two acknowledgment-counter rows (`SpotlightCount` re-filed under
+  **B8**). Surfaced and retired the Bronze/Silver badge-tier paradigm site-wide along the way (no
+  design provenance — see `audit/Badges.md`); a badge now displays `UserBadge.EarnedCount` instead.
+  Retrofitted `ComposeConversationModal`/`ModSpotlightPage` onto a new `UserPicker` (owed work, per
+  their own stopgap comments). No cell flips — producer/plumbing under already-Stage-5 cells.
+  (Before that, 2026-07-30: WU-ApplyFiltersPurity — `ServerStoryReadService.ApplyFilters` reverts to
+  pure/synchronous via a new cached `ITagHierarchyReadService`, closing tracker item **B12**. Before
+  that, same day: WU-ErrorHandling2 — the `ProblemDetails` API error envelope + full client HTTP
+  error translation, closing tracker item **E1** and D5's behavior-change half. Before that, same
+  day: WU-AccountEnforcement — mid-session account-status responsiveness, closing tracker item
+  **G1**'s residual and Phase 2's last open item. Before that, 2026-07-28: WU-DiscoveryFilterRestore
+  + WU-SelectionPermalink — decision row 13 resolved, closing tracker item **B11**; earlier the same
+  day, WU-Home + WU-SiteNews — decision row 2 resolved, closing tracker item F1.)
 - **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
   **Phase 3 is next** — Brian-driven L4 freeze sweep + WU-A11y (the latter gated on decision
-  row 12) — nothing further blocks starting it. WU-ApplyFiltersPurity and WU-ErrorHandling2 were
-  both Tier-1/Tier-2 between-phase work (below), not phase gates.
+  row 12) — nothing further blocks starting it. WU-StatBadgeProducers, WU-ApplyFiltersPurity, and
+  WU-ErrorHandling2 were all Tier-1/Tier-2 between-phase work (below), not phase gates.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
-  exist in **every group A–H** (~19 unchecked boxes, one fewer now that B12 is closed), including
-  two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also left a named follow-up:
-  the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption (see its DONE entry).
+  exist in **every group A–H** (fewer now that B3/B4/B12 are closed), including two
+  **high-priority security items: E2 and E3**. WU-ErrorHandling2 also left a named follow-up: the 8
+  SOLO editor pages' error surfaces still want `ErrorAlert` adoption (see its DONE entry).
+  WU-StatBadgeProducers left one named follow-up: `SeedTool` generators for acknowledgments/
+  lineage-approvals (measurability at volume, not blocking).
 - **Blocked on Brian:** decision rows 4, 6, 8, 10, and 12 (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28).
 
@@ -183,6 +183,83 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-StatBadgeProducers — Story Acknowledgments + Inspiration producer + no-tiers badge model (Features 10/22/50/58, extends `Messaging/`, `Spotlight/`) — DONE ✓ (2026-07-31)
+
+- **Cells:** none flip — F10, F22, F50, F58 (and F49/F55 for the picker retrofits) all stay Stage 5;
+  this is producer/plumbing work under already-sound cells, same shape as WU-MsgArchive/
+  WU-GroupsL5b/WU-ApplyFiltersPurity above. Closes tracker item **B4** in full and **B3**'s two
+  acknowledgment-counter rows (`SpotlightCount` re-filed under **B8** as its owner — no badge
+  consumes it, and `audit/Spotlight.md` already filed it as riding with the donation pipeline).
+- **Scope reasoning (why the one-line B3/B4 framing understated it, same lesson as A5/WU-TagFanon):**
+  `AcknowledgedAsInspirationCount` turned out to be a producer hook onto the already-built
+  `StoryLineage` "Inspired By" approval, not a new feature; `AcknowledgedAsBetaReaderCount` needed a
+  whole new consent-gated feature (`StoryAcknowledgment` had schema and nothing else); scoping B4
+  then surfaced that the Bronze/Silver tier paradigm itself had no design provenance (see
+  `audit/Badges.md` "Tier paradigm — RETIRED site-wide" for the full Entry-#1577 trace) and was
+  retired site-wide as part of this WU, not left as a parallel model beside the new badge.
+- **New `Core/Collaboration/` + `Server/Collaboration/` cluster** (relocated from `Core/Models/`,
+  closing MA-108/MA-112 for these four files): `StoryAcknowledgment` gained `StatusId`
+  (`StoryAcknowledgmentStatus`: Pending/Accepted/Declined) + `DateResponded`;
+  `IStoryAcknowledgmentReadService`/`WriteService` mirror `IStoryLineageReadService`/`WriteService`'s
+  shape (request/accept/decline/revoke; consent always required — no self-owned-auto-approve case,
+  since self-crediting is rejected outright; composite-PK row reuse on re-request-after-decline).
+  `AcknowledgmentRole` id 5 "Inspiration" retired (redundant with the lineage-sourced counter — see
+  `audit/Stories.md` Feature 10).
+- **Producers:** `ServerStoryAcknowledgmentWriteService.AcceptAsync`/`RevokeAsync` drive
+  `AcknowledgedAsBetaReaderCount` (role Beta Reader only, transition-delta decrement on revoke-while-
+  Accepted). `ServerStoryLineageWriteService.ApproveLineageAsync`/`RejectLineageAsync`/
+  `DeleteLineageAsync` drive `AcknowledgedAsInspirationCount` (type-1 "Inspired By" only, cross-author
+  guarded via `IS DISTINCT FROM`, same transition-delta shape — both reject/delete can act on an
+  already-Approved row with no status precondition, so prior status is captured before mutating).
+- **No-tiers badge model (settled, retires WU36's Bronze/Silver — see `audit/Badges.md`):** a badge
+  is earned at ≥1 and displays `UserBadge.EarnedCount` (new column). `IBadgeWriteService.AwardAsync`
+  gained an `earnedCount` parameter, updating the count on both first award and every repeat
+  qualifying event. `RecommenderSilver` removed outright (const/seed row/threshold literal/tests) —
+  pre-production, so a clean generated migration with no hand-written data-preserving SQL.
+  `Recommender` moved from threshold 10 to ≥1. `UserStatRecalculator` gained a third pass syncing
+  `EarnedCount` from the corrected `UserStat` columns for badges with an automated producer
+  (deliberately does not award — that stays the producers' job).
+- **`UserPicker` retrofit (owed work, not new scope — see `audit/Badges.md`):** new
+  `IUserProfileReadService.SearchUsersByNameAsync` (`ILike`, cap 10, deliberately ignores
+  `ProfileVisibility` — addressing a user isn't disclosing their profile) backs a new
+  `SharedUI/Users/UserPicker.razor` (mirrors `StoryTitlePicker`). Retrofitted into
+  `ComposeConversationModal` (Messaging) and `ModSpotlightPage` (Spotlight, which also **drops its
+  cross-cluster `IMessagingReadService` injection**) — both previously borrowed
+  `IMessagingReadService.FindUserByUsernameAsync` (exact-match) as a documented stopgap.
+  `FindUserByUsernameAsync` stays live for the `ComposeForUsername` deep-link path.
+- **New UI:** `MyAcknowledgmentsPage` (`/acknowledgments`, mirrors `MyStoryLineagesPage` — incoming
+  Accept/Decline inbox + outgoing Revoke list + create form), `StoryAcknowledgmentsBox` (public
+  display leaf, Accepted-only, mirrors `StoryLineageBox`), wired into `StoryPage`, `StoryEditorPage`
+  ("Manage acknowledgments →" link), `UserMenu`/`CreateMenu`. Badge count renders as `×N` in
+  `UserCard.razor` and `BadgeSettingsForm.razor`.
+- **Verified:** `dotnet build` clean. `dotnet test` full suite green — 776 Unit + 626 RazorComponents
+  + 1,012 Integration = **2,414 total** (up from the 2,330 baseline). New: `StoryAcknowledgmentServiceTests`
+  (full lifecycle, self-credit rejection, counter inc/dec, badge award + `EarnedCount`), 6 new tests
+  in `StoryLineageServiceTests` (Inspiration producer), `UserStatRecalculatorTests` (both new
+  aggregates, the `EarnedCount` sync pass, a does-not-award-missing-badges guard), `RecommendationWriteServiceTests`
+  (≥1 award replacing the retired 10/50 boundary pair), `UserProfileEndpointsTests`
+  (`SearchUsersByNameAsync`). Two real bugs found by the test run itself, not anticipated in the
+  plan: the new counter producers are silent no-ops without a seeded `UserStat` row (same documented
+  caveat as `RecommendationSuccessesEarned`) — seven new tests initially failed until
+  `SeedUserStatAsync` calls were added; `ModSpotlightPageTests`/`StoryPageTests`/
+  `StoryExternalLinksRowTests` needed new fake-service registrations for the added `@inject`s.
+  Browser-verified end to end against a freshly reseeded dev DB: full credit→notify→accept→badge
+  round trip (`BetaReader×1`, no tier) with `psql` ground truth at each step; public
+  `StoryAcknowledgmentsBox` renders on the story page; `Recommender×12` (seeded) renders correctly;
+  `RecommenderSilver` absent from the live `badges` table and the role dropdown shows only 4 roles;
+  both `UserPicker` retrofits driven live (Spotlight grant end to end, Messaging compose modal).
+- **Deferred, not built this WU:** `SeedTool` generators for acknowledgments/lineage-approvals (would
+  make these counters measurable at volume, per the C4/WU-TagFanon lesson) — noted for a future
+  session, not blocking.
+- **Tool:** opusplan. **Pointers:** `layer2-services.md` §"Synchronous Inline Badge Awards" and
+  §"UserStats Updates"; `audit/Badges.md` §"WU-StatBadgeProducers" (primary narrative + provenance
+  trace); `audit/Profiles.md` Feature 22/58; `audit/Stories.md` Feature 10; `audit/Messaging.md` and
+  `audit/Spotlight.md` (picker retrofits); `design/access-gating-first-principles.md` (search
+  visibility exclusion); `.claude/hidden-deferrals-tracker.md` B3/B4/B8. **Deps:** none (built on
+  already-Stage-5 `StoryLineage`, `UserStat`, `Badge` cells).
 
 ---
 

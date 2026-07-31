@@ -832,6 +832,7 @@ public class DataSeeder(
             BadgeKey = SiteBadges.Recommender,
             DisplayOrder = 1,
             DateEarned = Now.AddDays(-4),
+            EarnedCount = 12, // no-tiers model (WU-StatBadgeProducers) — a display seed count, not a threshold
         });
 
         await context.SaveChangesAsync();

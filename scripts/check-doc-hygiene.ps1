@@ -39,6 +39,7 @@ $retiredTerms = [ordered]@{
     'ExecuteWriteAsync (renamed to ExecuteAsync, WU-ErrorHandling2 2026-07-30)' = '\bExecuteWriteAsync\b'
     'ExpandWithChildrenAsync (folded into ITagHierarchyReadService, WU-ApplyFiltersPurity 2026-07-30)' = '\bExpandWithChildrenAsync\b'
     'ApplyFiltersAsync (reverted to sync ApplyFilters, WU-ApplyFiltersPurity 2026-07-30)' = '\bApplyFiltersAsync\b'
+    'RecommenderSilver badge tier (tiers retired site-wide, WU-StatBadgeProducers 2026-07-30)' = '\bRecommenderSilver\b'
 }
 
 # A line mentioning a retired term is legitimate when it says so. Loose by design — this is a

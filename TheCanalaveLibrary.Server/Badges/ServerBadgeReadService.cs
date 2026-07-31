@@ -37,7 +37,8 @@ public class ServerBadgeReadService(
                 ub.BadgeKeyNavigation.Description,
                 ub.BadgeKeyNavigation.IconBaseUrl,
                 ub.BadgeKeyNavigation.SortOrder,
-                ub.DisplayOrder))
+                ub.DisplayOrder,
+                ub.EarnedCount))
             .ToListAsync();
     }
 }

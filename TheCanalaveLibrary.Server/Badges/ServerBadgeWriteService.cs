@@ -25,12 +25,21 @@ public class ServerBadgeWriteService(
     : ServerBadgeReadService(readDbFactory), IBadgeWriteService
 {
     /// <inheritdoc/>
-    public async Task<bool> AwardAsync(int userId, string badgeKey)
+    public async Task<bool> AwardAsync(int userId, string badgeKey, int earnedCount)
     {
-        // Idempotency: no-op if already earned.
-        bool alreadyEarned = await writeDb.UserBadges
-            .AnyAsync(ub => ub.UserId == userId && ub.BadgeKey == badgeKey);
-        if (alreadyEarned) return false;
+        // Idempotency: on a repeat qualifying event, just keep EarnedCount in step — no second
+        // insert, no DisplayOrder churn.
+        UserBadge? existing = await writeDb.UserBadges
+            .FirstOrDefaultAsync(ub => ub.UserId == userId && ub.BadgeKey == badgeKey);
+        if (existing is not null)
+        {
+            if (existing.EarnedCount != earnedCount)
+            {
+                existing.EarnedCount = earnedCount;
+                await writeDb.SaveChangesAsync();
+            }
+            return false;
+        }
 
         // Visible-by-default: slot after the current highest DisplayOrder for this user.
         int? maxOrder = await writeDb.UserBadges
@@ -42,7 +51,8 @@ public class ServerBadgeWriteService(
         {
             UserId       = userId,
             BadgeKey     = badgeKey,
-            DisplayOrder = newDisplayOrder
+            DisplayOrder = newDisplayOrder,
+            EarnedCount  = earnedCount
             // DateEarned defaults to CURRENT_TIMESTAMP via EF HasDefaultValueSql.
         });
 

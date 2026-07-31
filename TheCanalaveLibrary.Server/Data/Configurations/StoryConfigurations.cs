@@ -378,10 +378,14 @@ public sealed class StoryAcknowledgmentConfiguration : IEntityTypeConfiguration<
 {
     public void Configure(EntityTypeBuilder<StoryAcknowledgment> builder)
     {
+        builder.Property(e => e.StatusId).HasConversion<short>();
         builder.Property(e => e.DateAcknowledged).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
         builder.HasKey(e => new { e.StoryId, e.AcknowledgedUserId, e.AcknowledgmentRoleId });
-        // Future indexes for querying (e.g., by AcknowledgedUserId)...
+
+        // Recipient's pending inbox + the recompute aggregate's shape (AcceptedUserId, StatusId).
+        builder.HasIndex(e => new { e.AcknowledgedUserId, e.StatusId })
+            .HasDatabaseName("ix_story_acknowledgments_acknowledged_user_status");
     }
 }
 
@@ -394,12 +398,16 @@ public sealed class AcknowledgmentRoleConfiguration : IEntityTypeConfiguration<A
             .HasForeignKey(sa => sa.AcknowledgmentRoleId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Role 5 "Inspiration" is retired (WU-StatBadgeProducers): AcknowledgedAsInspirationCount
+        // is sourced from the already-built StoryLineage "Inspired By" approval instead — a
+        // credit needs the credited author's consent, and lineage already models that consent
+        // relationship, so acknowledgment stays scoped to the four collaboration roles below.
+        // See audit/Stories.md Feature 10/22 note.
         builder.HasData(
             new { AcknowledgmentRoleId = (short)1, RoleName = "Beta Reader" },
             new { AcknowledgmentRoleId = (short)2, RoleName = "Planner" },
             new { AcknowledgmentRoleId = (short)3, RoleName = "Cover Artist" },
-            new { AcknowledgmentRoleId = (short)4, RoleName = "Editor" },
-            new { AcknowledgmentRoleId = (short)5, RoleName = "Inspiration" }
+            new { AcknowledgmentRoleId = (short)4, RoleName = "Editor" }
         );
 
         // Future indexes for querying...

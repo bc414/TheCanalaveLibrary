@@ -33,15 +33,21 @@
                             <span class="text-sm font-medium text-(--color-text)">@RecipientPreset.Username</span>
                         </div>
                     }
+                    else if (_pickedRecipient is not null)
+                    {
+                        <div class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2">
+                            <img src="@(_pickedRecipient.AvatarUrl ?? "/img/default-avatar.svg")"
+                                 alt="" class="h-6 w-6 rounded-full object-cover" />
+                            <span class="flex-1 text-sm font-medium text-(--color-text)">@_pickedRecipient.Username</span>
+                            <button type="button" @onclick="() => _pickedRecipient = null" disabled="@Busy"
+                                    class="text-xs text-(--color-action-ink) hover:underline">
+                                Change
+                            </button>
+                        </div>
+                    }
                     else
                     {
-                        <input id="compose-recipient"
-                               type="text"
-                               class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) placeholder-(--color-text-muted) focus:border-(--color-action-ink) focus:outline-none"
-                               placeholder="Username"
-                               @bind="RecipientUsername"
-                               @bind:event="oninput"
-                               disabled="@Busy" />
+                        <UserPicker OnUserSelected="user => _pickedRecipient = user" Placeholder="Type a username..." />
                     }
                 </div>
 
@@ -103,12 +109,12 @@
     [Parameter] public string? ErrorMessage { get; set; }
 
     private string Subject { get; set; } = string.Empty;
-    private string RecipientUsername { get; set; } = string.Empty;
+    private UserCardDto? _pickedRecipient;
     private MessageComposer? _composer;
 
     private async Task HandleSendAsync(string html)
     {
-        string resolvedUsername = RecipientPreset?.Username ?? RecipientUsername;
+        string resolvedUsername = RecipientPreset?.Username ?? _pickedRecipient?.Username ?? string.Empty;
         await OnSubmit.InvokeAsync((resolvedUsername, Subject, html));
     }
 }

@@ -7,5 +7,6 @@ namespace TheCanalaveLibrary.Core;
 /// </summary>
 public record UserCardBadgeDto(
     string IconUrl,
-    string Name
+    string Name,
+    int EarnedCount
 );

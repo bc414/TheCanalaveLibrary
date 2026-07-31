@@ -97,6 +97,9 @@ public sealed class ClientNotificationWriteService(HttpClient http)
     public Task NotifyStoryLineageApprovedAsync(int sourceAuthorId, int approverId, int targetStoryId) =>
         throw NotExposedOverHttp();
 
+    public Task NotifyStoryAcknowledgedAsync(int acknowledgedUserId, int authorId, int storyId) =>
+        throw NotExposedOverHttp();
+
     public Task NotifyReportReceivedAsync(int reporterUserId, int moderatorSourceId) =>
         throw NotExposedOverHttp();
 

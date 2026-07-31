@@ -1,0 +1,28 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Leaf component — public "acknowledgments" display for the story page (WU-StatBadgeProducers).
+   No @inject. Renders one line per Accepted StoryAcknowledgmentDto (already filtered/hydrated by
+   the read service — this component never re-checks consent). Renders nothing when empty. Mirrors
+   StoryLineageBox's role and placement. *@
+
+@if (Credits.Count > 0)
+{
+    <div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-3 flex flex-col gap-1.5 text-sm">
+        <span class="text-(--color-text-muted)">Acknowledgments:</span>
+        <ul class="flex flex-col gap-1">
+            @foreach (StoryAcknowledgmentDto credit in Credits)
+            {
+                <li>
+                    <a href="/user/@credit.AcknowledgedUserId"
+                       class="font-medium text-(--color-action-ink) hover:underline">@credit.AcknowledgedUserName</a>
+                    <span class="text-(--color-text-muted)">— @credit.RoleName</span>
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<StoryAcknowledgmentDto> Credits { get; set; } = [];
+}

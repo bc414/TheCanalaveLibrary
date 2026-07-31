@@ -7,23 +7,32 @@ using TheCanalaveLibrary.SharedUI;
 namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
-/// Render tests for <see cref="ModSpotlightPage"/> (Feature 55, WU-Spotlight): remaining
-/// capacity + settings values render; granting by exact username resolves and calls the
-/// allocator; unknown username surfaces an inline error; revoke shown only for Available slots.
-/// Tier: RazorComponents (bUnit — allocator/settings/lookup faked; role gating is the services'
-/// concern, covered in Integration).
+/// Render tests for <see cref="ModSpotlightPage"/> (Feature 55, WU-Spotlight; retrofitted onto
+/// <see cref="UserPicker"/> in WU-StatBadgeProducers, replacing the prior "exact username" text
+/// input and its <c>IMessagingReadService</c> dependency): remaining capacity + settings values
+/// render; the Grant button starts disabled with no recipient picked; revoke shown only for
+/// Available slots.
+///
+/// <b>What is NOT tested here:</b> picking a user via <see cref="UserPicker"/> (keyboard input →
+/// search → selection) requires JavaScript simulation that bUnit doesn't drive reliably — same
+/// documented limitation as <c>StoryTitlePickerTests</c>. The full grant flow (pick → Grant slot →
+/// allocator call) is covered by manual/live-browser verification; the search itself
+/// (<c>IUserProfileReadService.SearchUsersByNameAsync</c>) and the allocator's
+/// <c>GrantSlotAsync</c> are covered at the Integration tier.
+/// Tier: RazorComponents (bUnit — allocator/settings/user-search faked; role gating is the
+/// services' concern, covered in Integration).
 /// </summary>
 public class ModSpotlightPageTests : BunitContext
 {
     private readonly FakeAllocator _allocator = new();
     private readonly FakeSettings _settings = new();
-    private readonly FakeUserLookup _lookup = new();
+    private readonly FakeUserProfileReadService _userSearch = new();
 
     public ModSpotlightPageTests()
     {
         Services.AddSingleton<ISpotlightSlotAllocator>(_allocator);
         Services.AddSingleton<ISiteSettingsWriteService>(_settings);
-        Services.AddSingleton<IMessagingReadService>(_lookup);
+        Services.AddSingleton<IUserProfileReadService>(_userSearch);
         Services.AddSingleton<IToastService, ToastService>();
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
@@ -42,28 +51,21 @@ public class ModSpotlightPageTests : BunitContext
     }
 
     [Fact]
-    public async Task Grant_KnownUsername_CallsAllocator()
+    public void Renders_UserPicker_ForGrantRecipient()
     {
-        _lookup.User = new MessagingParticipantDto(42, "Sponsor", "/avatar.png");
-
         IRenderedComponent<ModSpotlightPage> cut = Render<ModSpotlightPage>();
-        await cut.Find("input[type=text]").ChangeAsync(new() { Value = "Sponsor" });
-        await cut.FindAll("button").First(b => b.TextContent.Contains("Grant slot")).ClickAsync(new());
 
-        _allocator.LastGrantedTo.Should().Be(42);
+        cut.Find("input[type=text]").GetAttribute("placeholder").Should().Be("Type a username...");
     }
 
     [Fact]
-    public async Task Grant_UnknownUsername_ShowsInlineError_AndDoesNotGrant()
+    public void GrantButton_StartsDisabled_WithNoRecipientPicked()
     {
-        _lookup.User = null;
-
         IRenderedComponent<ModSpotlightPage> cut = Render<ModSpotlightPage>();
-        await cut.Find("input[type=text]").ChangeAsync(new() { Value = "Nobody" });
-        await cut.FindAll("button").First(b => b.TextContent.Contains("Grant slot")).ClickAsync(new());
 
-        cut.Markup.Should().Contain("was found");
-        _allocator.LastGrantedTo.Should().BeNull();
+        var grantButton = cut.FindAll("button").First(b => b.TextContent.Contains("Grant slot"));
+        grantButton.HasAttribute("disabled").Should().BeTrue(
+            "no recipient has been picked yet — the button must not allow a no-op grant call");
     }
 
     [Fact]
@@ -115,18 +117,14 @@ public class ModSpotlightPageTests : BunitContext
         }
     }
 
-    private sealed class FakeUserLookup : IMessagingReadService
+    // The page only calls SearchUsersByNameAsync (via UserPicker) — everything else unreachable here.
+    private sealed class FakeUserProfileReadService : IUserProfileReadService
     {
-        public MessagingParticipantDto? User { get; set; }
-
-        public Task<MessagingParticipantDto?> FindUserByUsernameAsync(string username) => Task.FromResult(User);
-
-        // The mod page uses only the username lookup — everything else is unreachable here.
-        public Task<IReadOnlyList<ConversationSummaryDto>> GetConversationsAsync(
-            ConversationScope scope = ConversationScope.Active) =>
+        public Task<ProfileHeaderDto?> GetProfileHeaderAsync(int userId, bool includePrivate) =>
             throw new NotSupportedException();
-        public Task<ConversationThreadDto> GetConversationThreadAsync(int conversationId, int page, int pageSize) =>
-            throw new NotSupportedException();
-        public Task<int> GetUnreadConversationCountAsync() => Task.FromResult(0);
+        public Task<string?> GetProfileTextAsync(int userId) => throw new NotSupportedException();
+        public Task<ProfileAccessState> GetProfileAccessStateAsync(int userId) => throw new NotSupportedException();
+        public Task<IReadOnlyList<UserCardDto>> SearchUsersByNameAsync(string term) =>
+            Task.FromResult<IReadOnlyList<UserCardDto>>([]);
     }
 }

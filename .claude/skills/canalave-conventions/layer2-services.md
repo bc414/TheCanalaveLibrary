@@ -1516,12 +1516,19 @@ content — a distinct action, not a flag.
 !IsRead)` — `RelatedEntityId` was missing from the original WHERE clause (WU34 fix). This ensures two
 moderation notifications about *different* targets both reach the recipient.
 
-## Synchronous Inline Badge Awards (WU36)
+## Synchronous Inline Badge Awards (WU36; no-tiers model WU-StatBadgeProducers)
 
 A write service that triggers a badge-eligible event calls `IBadgeWriteService.AwardAsync` after the
 primary `SaveChangesAsync`, **best-effort** — inside a `try/catch` so a badge failure never rolls back
 the primary operation. `AwardAsync` is **idempotent** (no-op if already earned); the caller does NOT
 need a separate "has badge" check first.
+
+**No tiers (settled, WU-StatBadgeProducers, 2026-07-30 — supersedes WU36's Bronze/Silver model).** A
+badge is earned at **≥1** and displays its `UserBadge.EarnedCount`. The tier paradigm had no design
+provenance (traced to a single unrequested AI transcript turn, never revisited — see
+`audit/Badges.md` "Tier paradigm — RETIRED site-wide") and a published threshold is definitionally a
+grind target. Anti-farm protection now lives at the **gate** (the event itself must require another
+person's cooperation — an acknowledgment accepted, a lineage link approved), not at a count.
 
 **Pattern:**
 
@@ -1534,8 +1541,9 @@ int total = await writeDb.UserStats
 
 try
 {
-    if (total >= 10) await badgeService.AwardAsync(targetUserId, SiteBadges.SomeBadge);
-    if (total >= 50) await badgeService.AwardAsync(targetUserId, SiteBadges.SomeBadgeSilver);
+    // AwardAsync is idempotent and sets UserBadge.EarnedCount = total in the same call —
+    // no separate write keeps the two in step.
+    if (total >= 1) await badgeService.AwardAsync(targetUserId, SiteBadges.SomeBadge, total);
 }
 catch (Exception ex)
 {
@@ -1544,8 +1552,9 @@ catch (Exception ex)
 ```
 
 **Anti-self-farm guard:** when the mechanic is social (e.g., a reader marking a recommendation
-helpful), guard `actorId != beneficiaryId` AND `nullableFk != null` **before** incrementing or
-calling `AwardAsync`. Violations skip silently — no throw, no log.
+helpful, an author crediting a beta reader), guard `actorId != beneficiaryId` AND
+`nullableFk != null` **before** incrementing or calling `AwardAsync`. Violations skip silently — no
+throw, no log.
 
 **A write service MAY depend on `IBadgeWriteService`** (inject it in the primary constructor; no DAG
 cycles since `IBadgeWriteService` depends only on `ApplicationDbContext` /
@@ -1556,10 +1565,11 @@ hide or reorder. `UserCard.razor` caps to 3 badges.
 
 **Post-MVP:** a background worker will replace inline checks without changing callers' interface.
 
-Live `SiteBadges` constants: `Patron`, `Recommender`, `RecommenderSilver`, `BetaReader`, `Architect`,
-`Artist`. Keys are `public const string` fields on the top-level `SiteBadges` static class (it
-lives in `Server/Data/SiteConstants.cs` but is NOT nested inside a `SiteConstants` type — MA-108;
-move it to `Server/Badges/` with the next work-unit that touches it, per the vertical rule).
+Live `SiteBadges` constants: `Patron`, `Recommender`, `BetaReader`, `Architect`, `Artist`.
+`RecommenderSilver` is **retired** (WU-StatBadgeProducers) — see `scripts/check-doc-hygiene.ps1`'s
+retired-name registry. Keys are `public const string` fields on the top-level `SiteBadges` static
+class, moved to `Server/Badges/SiteBadges.cs` (WU-StatBadgeProducers closed MA-108; it previously
+lived in `Server/Data/SiteConstants.cs`, not nested inside a `SiteConstants` type).
 
 ## UserStats Updates
 
@@ -1616,12 +1626,14 @@ serializes correctly under any isolation level.
 **Counters deferred — producer not yet built:**
 - `ViewsOnStories` — WU38 (story view events); recomputable today only via raw SQL over the
   `daily_story_stats` L8 mart (no EF model) — WU-UserStatRecalc reads it that way.
-- `SpotlightCount` — post-MVP (source now exists post WU-Spotlight, but the counter's exact
-  definition is unsettled).
-- Acknowledgment counters (`AcknowledgedAsBetaReaderCount`, `AcknowledgedAsInspirationCount`) — the
-  story-acknowledgment/beta-reader-crediting producer has **no assigned WU** and is unbuilt (not
-  WU37 — WU37 is Story Tagging, done; this was a stale cross-reference, corrected 2026-07-15).
-  Source ambiguity also unsettled: `BetaReader` entity vs. `StoryAcknowledgment` role 1.
+- `SpotlightCount` — deferred to **tracker B8** (Spotlight donation/payment pipeline). No badge
+  consumes it (Patron is a settled manual grant); it rides with donations, not with this WU.
+- ~~Acknowledgment counters (`AcknowledgedAsBetaReaderCount`, `AcknowledgedAsInspirationCount`)~~ —
+  **being built (WU-StatBadgeProducers).** `AcknowledgedAsInspirationCount` is a producer hook onto
+  the already-built `StoryLineage` "Inspired By" approval (not a new feature). Source ambiguity
+  resolved: `AcknowledgedAsBetaReaderCount` is sourced from `StoryAcknowledgment` role 1 (consent-
+  gated — the recipient must accept), not the dormant `BetaReader` authorization entity, which
+  remains a separate, unbuilt concept (draft-access grant, not credit — see `audit/Stories.md`).
 - ~~`FeatureContributions` — producer is Feature 56.~~ **Removed 2026-07-18:** Feature 56 was cut
   and the `UserStat.FeatureContributions` column dropped — no longer a deferred counter. See
   `audit/BlogPosts.md` Feature 56 CUT note.

@@ -659,6 +659,37 @@ dedicated Integration tests with real-DB assertions).
 regression-test; CRUD-UI authority for this page is the Integration tier, per the same precedent
 `SeriesCreateEditPageTests`' scope note set.
 
+**WU-StatBadgeProducers Stage note (2026-07-31) — Story Lineage becomes a producer.** Cell stays
+Stage 5 (unchanged — this filled in a producer under already-Stage-5 cells, same shape as
+WU-MsgArchive/WU-GroupsL5b). `ServerStoryLineageWriteService` now drives
+`UserStat.AcknowledgedAsInspirationCount`: `ApproveLineageAsync` increments the TARGET author's
+counter for type-1 ("Inspired By") links between two different authors; `RejectLineageAsync`/
+`DeleteLineageAsync` decrement only when the link was Approved beforehand (transition-delta — both
+methods can act on an already-Approved row with no status precondition, so the prior status is
+captured before mutating). A self-owned link auto-approves via `RequestLineageAsync` but never
+increments — same-author is excluded by the guard, mirroring
+`UserStatRecalculator.AcknowledgedAsInspirationCountAgg`'s `IS DISTINCT FROM` exclusion exactly.
+
+**This closes B3's "source is ambiguous" question.** `AcknowledgedAsInspirationCount` is sourced
+from this already-built, already-consent-gated mechanism — not a new acknowledgment role. Role 5
+"Inspiration" on `AcknowledgmentRole` is retired (seed row removed; roles 1–4 remain): crediting
+someone as an inspiration is a claim about a relationship between two STORIES with the source
+author's consent already modeled here, not a claim about a person that needs a separate consent
+step. See `audit/Badges.md` §"WU-StatBadgeProducers" for the sibling `StoryAcknowledgment` feature
+(role Beta Reader) this pairs with, and `.claude/hidden-deferrals-tracker.md` B3.
+
+Verified: Integration tier — 6 new tests in `StoryLineageServiceTests`
+(`ApproveLineage_InspiredByCrossAuthor_IncrementsTargetAuthorCounter`,
+`ApproveLineage_NonInspiredByType_DoesNotIncrementCounter`,
+`RequestLineage_InspiredBySelfOwned_AutoApprovedDoesNotIncrementCounter`,
+`RejectLineage_PreviouslyApproved_DecrementsCounter`,
+`RejectLineage_StillPending_DoesNotDecrementCounter`,
+`DeleteLineage_PreviouslyApproved_DecrementsCounter`) plus the recalculator aggregate test in
+`UserStatRecalculatorTests`. Full suite green (2,414 total). Not separately browser-driven this
+round — the mechanism is a producer hook onto the already browser-verified (2026-07-12) approve/
+reject/delete flow above; the sibling `StoryAcknowledgment` credit→accept→badge round trip was
+browser-verified end to end instead (`audit/Badges.md`).
+
 ## Feature 45 — View Count Tracking
 
 **Built end-to-end (WU-SignalBuffering, 2026-07-06).** Divergence from spec (§7 `Story.ViewCount`

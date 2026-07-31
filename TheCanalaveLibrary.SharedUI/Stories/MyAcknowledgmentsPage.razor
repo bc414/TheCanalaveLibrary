@@ -1,0 +1,333 @@
+@page "/acknowledgments"
+@namespace TheCanalaveLibrary.SharedUI
+@attribute [Authorize]
+@inject IStoryAcknowledgmentWriteService AcknowledgmentService
+@inject IToastService Toasts
+@using TheCanalaveLibrary.Core
+@using Microsoft.AspNetCore.Authorization
+
+@* Owner-wide Story Acknowledgments management page (WU-StatBadgeProducers) — the single create +
+   approval-inbox surface, mirroring MyStoryLineagesPage's shape (one aggregated inbox, not one
+   scattered per story-edit-page). Two sections: incoming Pending credits naming the caller as
+   recipient (Accept/Decline), and outgoing credits the caller has authored (any status, with
+   Revoke). Reachable from UserMenu ("My Acknowledgments") and a "Manage acknowledgments →" link on
+   the story edit page. *@
+
+<PageTitle>Story Acknowledgments</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        <div class="mx-auto max-w-3xl px-4 py-8 flex flex-col gap-8">
+            <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text) w-fit">
+                Story Acknowledgments
+            </h1>
+
+            @if (_isLoading || ManageData is null || Roles is null || OwnStories is null)
+            {
+                <p class="text-(--color-text-muted)"><em>Loading…</em></p>
+            }
+            else
+            {
+                @* ── Incoming requests ───────────────────────────────────────────── *@
+                <section class="flex flex-col gap-3">
+                    <h2 class="text-lg font-semibold text-(--color-text)">Credits waiting on you</h2>
+
+                    <ErrorAlert Message="@_incomingError" ShowSignIn="@_incomingErrorIsSessionExpired" />
+
+                    @if (ManageData.IncomingRequests.Count == 0)
+                    {
+                        <p class="text-sm text-(--color-text-muted)">No pending credits.</p>
+                    }
+                    else
+                    {
+                        <ul class="flex flex-col gap-2">
+                            @foreach (StoryAcknowledgmentIncomingRequestDto req in ManageData.IncomingRequests)
+                            {
+                                <li class="flex flex-wrap items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm">
+                                    <span>
+                                        @(req.CreditingAuthorName is not null ? $"{req.CreditingAuthorName} " : "")
+                                        credited you as <span class="font-medium">@req.RoleName</span> on
+                                        <a href="/story/@req.StoryId" class="font-medium text-(--color-action-ink) hover:underline">@req.StoryTitle</a>
+                                    </span>
+                                    <span class="ml-auto flex gap-2">
+                                        <button type="button" @onclick="() => HandleAcceptAsync(req)" disabled="@_busy"
+                                                class="rounded-md bg-(--color-action) px-3 py-1 text-xs font-medium text-(--color-text) hover:bg-(--color-action-hover) disabled:opacity-50">
+                                            Accept
+                                        </button>
+                                        <button type="button" @onclick="() => HandleDeclineAsync(req)" disabled="@_busy"
+                                                class="rounded-md border border-(--color-border) px-3 py-1 text-xs text-(--color-danger) hover:bg-(--color-danger)/10 disabled:opacity-50">
+                                            Decline
+                                        </button>
+                                    </span>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+
+                @* ── Outgoing credits ─────────────────────────────────────────────── *@
+                <section class="flex flex-col gap-3">
+                    <h2 class="text-lg font-semibold text-(--color-text)">Credits you've given</h2>
+
+                    @if (ManageData.Outgoing.Count == 0)
+                    {
+                        <p class="text-sm text-(--color-text-muted)">You haven't credited anyone yet.</p>
+                    }
+                    else
+                    {
+                        <ul class="flex flex-col gap-2">
+                            @foreach (StoryAcknowledgmentOutgoingDto credit in ManageData.Outgoing)
+                            {
+                                <li class="flex flex-wrap items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm">
+                                    <span>
+                                        <a href="/story/@credit.StoryId" class="font-medium text-(--color-action-ink) hover:underline">@credit.StoryTitle</a>
+                                        — @(credit.AcknowledgedUserName ?? "[deleted user]") as <span class="font-medium">@credit.RoleName</span>
+                                    </span>
+                                    <span class="@StatusBadgeClass(credit.Status) px-2 py-0.5 rounded-full text-xs font-medium">@StatusLabel(credit.Status)</span>
+                                    <button type="button" @onclick="() => HandleRevokeAsync(credit)" disabled="@_busy"
+                                            class="ml-auto rounded px-2 py-1 text-xs text-(--color-danger) hover:bg-(--color-danger)/10 disabled:opacity-30">
+                                        Revoke
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+
+                @* ── Credit a user ────────────────────────────────────────────────── *@
+                <section class="flex flex-col gap-3 rounded-xl border border-(--color-border) bg-(--color-surface) p-6">
+                    <h2 class="text-lg font-semibold text-(--color-text)">Credit someone on a story</h2>
+
+                    <ErrorAlert Messages="@_createErrors" ShowSignIn="@_createErrorsIsSessionExpired" />
+
+                    @if (OwnStories.Count == 0)
+                    {
+                        <p class="text-sm text-(--color-text-muted)">
+                            You don't have any stories to credit someone on yet — publish one first.
+                        </p>
+                    }
+                    else
+                    {
+                        <div class="flex flex-col gap-1">
+                            <label class="text-sm font-semibold text-(--color-text)">Your story</label>
+                            <select @bind="_storyId"
+                                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
+                                <option value="">-- Choose one of your stories --</option>
+                                @foreach (StoryListingDto story in OwnStories)
+                                {
+                                    <option value="@story.StoryId">@story.Title</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <label class="text-sm font-semibold text-(--color-text)">Role</label>
+                            <select @bind="_roleId"
+                                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
+                                <option value="">-- Choose a role --</option>
+                                @foreach (AcknowledgmentRoleDto role in Roles)
+                                {
+                                    <option value="@role.RoleId">@role.RoleName</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="flex flex-col gap-1">
+                            <label class="text-sm font-semibold text-(--color-text)">Who to credit</label>
+                            @if (_pickedUser is not null)
+                            {
+                                <div class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm">
+                                    <span class="flex-1">@_pickedUser.Username</span>
+                                    <button type="button" @onclick="() => _pickedUser = null"
+                                            class="text-xs text-(--color-action-ink) hover:underline">
+                                        Change
+                                    </button>
+                                </div>
+                            }
+                            else
+                            {
+                                <UserPicker OnUserSelected="HandleUserSelected"
+                                            ExcludeUserId="_currentUserId"
+                                            Placeholder="Type to search for a user..." />
+                            }
+                        </div>
+
+                        <button type="button" @onclick="HandleRequestAsync"
+                                disabled="@(_storyId is null || _roleId is null || _pickedUser is null || _busy)"
+                                class="mt-2 w-fit rounded-md bg-(--color-mission) px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-(--color-mission-hover) disabled:opacity-50">
+                            @(_busy ? "Crediting…" : "Send Credit")
+                        </button>
+                    }
+                </section>
+            }
+        </div>
+    </Authorized>
+    @* No <NotAuthorized> branch: page-level [Authorize] means the router renders the denial
+       (SignInRequired via Routes.razor) — mirrors MyStoryLineagesPage. *@
+</AuthorizeView>
+
+@code {
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool _isLoading = true;
+    private bool _busy;
+    private int? _currentUserId;
+
+    // Persisted across the prerender→interactive handoff — mirrors MyStoryLineagesPage.
+    [PersistentState] public StoryAcknowledgmentManageDto? ManageData { get; set; }
+    [PersistentState] public IReadOnlyList<AcknowledgmentRoleDto>? Roles { get; set; }
+    [PersistentState] public List<StoryListingDto>? OwnStories { get; set; }
+
+    private string? _incomingError;
+    private bool _incomingErrorIsSessionExpired;
+    private readonly List<string> _createErrors = [];
+    private bool _createErrorsIsSessionExpired;
+
+    private int? _storyId;
+    private short? _roleId;
+    private UserCardDto? _pickedUser;
+
+    [Inject] private IStoryReadService StoryService { get; set; } = null!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            AuthenticationState state = await AuthState;
+            string? idStr = state.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            _currentUserId = int.TryParse(idStr, out int id) ? id : null;
+        }
+
+        if (ManageData is null || Roles is null || OwnStories is null)
+            await ReloadAsync();
+        _isLoading = false;
+    }
+
+    private async Task ReloadAsync()
+    {
+        ManageData = await AcknowledgmentService.GetManageDataForUserAsync();
+        Roles = await AcknowledgmentService.GetAcknowledgmentRolesAsync();
+
+        if (_currentUserId is not null)
+        {
+            IReadOnlyList<int> ownIds = await StoryService.GetStoryIdsByAuthorAsync(_currentUserId.Value);
+            OwnStories = ownIds.Count > 0 ? [.. await StoryService.GetListingsByIdsAsync(ownIds)] : [];
+        }
+        else
+        {
+            OwnStories = [];
+        }
+    }
+
+    private void HandleUserSelected(UserCardDto user) => _pickedUser = user;
+
+    private async Task HandleRequestAsync()
+    {
+        if (_storyId is null || _roleId is null || _pickedUser is null) return;
+        _createErrors.Clear();
+        _createErrorsIsSessionExpired = false;
+        _busy = true;
+        try
+        {
+            await AcknowledgmentService.RequestAcknowledgmentAsync(new CreateStoryAcknowledgmentDto
+            {
+                StoryId = _storyId.Value,
+                AcknowledgedUserId = _pickedUser.UserId,
+                AcknowledgmentRoleId = _roleId.Value
+            });
+            _pickedUser = null;
+            _roleId = null;
+            await ReloadAsync();
+        }
+        catch (StoryAcknowledgmentValidationException ex)
+        {
+            _createErrors.AddRange(ex.Errors);
+            _createErrorsIsSessionExpired = false;
+        }
+        catch (Exception ex)
+        {
+            _createErrors.Add(ExceptionPresenter.GetUserMessage(ex));
+            _createErrorsIsSessionExpired = ex is SessionExpiredException;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task HandleAcceptAsync(StoryAcknowledgmentIncomingRequestDto req)
+    {
+        _incomingError = null;
+        _incomingErrorIsSessionExpired = false;
+        _busy = true;
+        try
+        {
+            await AcknowledgmentService.AcceptAsync(req.StoryId, req.RoleId);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _incomingError = ExceptionPresenter.GetUserMessage(ex);
+            _incomingErrorIsSessionExpired = ex is SessionExpiredException;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task HandleDeclineAsync(StoryAcknowledgmentIncomingRequestDto req)
+    {
+        _incomingError = null;
+        _incomingErrorIsSessionExpired = false;
+        _busy = true;
+        try
+        {
+            await AcknowledgmentService.DeclineAsync(req.StoryId, req.RoleId);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            _incomingError = ExceptionPresenter.GetUserMessage(ex);
+            _incomingErrorIsSessionExpired = ex is SessionExpiredException;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task HandleRevokeAsync(StoryAcknowledgmentOutgoingDto credit)
+    {
+        _busy = true;
+        try
+        {
+            await AcknowledgmentService.RevokeAsync(credit.StoryId, credit.AcknowledgedUserId, credit.RoleId);
+            await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            Toasts.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string StatusLabel(StoryAcknowledgmentStatus status) => status switch
+    {
+        StoryAcknowledgmentStatus.Pending  => "Pending",
+        StoryAcknowledgmentStatus.Accepted => "Accepted",
+        StoryAcknowledgmentStatus.Declined => "Declined",
+        _                                  => "Unknown"
+    };
+
+    private static string StatusBadgeClass(StoryAcknowledgmentStatus status) => status switch
+    {
+        StoryAcknowledgmentStatus.Pending  => "bg-(--color-text-muted)/15 text-(--color-text-muted)",
+        StoryAcknowledgmentStatus.Accepted => "bg-(--color-action)/15 text-(--color-action-ink)",
+        StoryAcknowledgmentStatus.Declined => "bg-(--color-danger)/15 text-(--color-danger)",
+        _                                  => "bg-(--color-text-muted)/15 text-(--color-text-muted)"
+    };
+}

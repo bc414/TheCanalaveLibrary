@@ -345,7 +345,8 @@ numbering), `AcknowledgmentRole`, `RecommendationStatus`, `StoryLineageType` (re
 `StoryRelationshipType` in WU42, 2026-07-12), `SearchMode`,
 `UserInteractionFilter`, `Theme`, `Badge`, `DefaultSearchSetting` (SearchMode × InteractionFilter
 matrix). Seeded via `HasData()` for enum-backed tables, explicit IDs for non-enum tables. Includes
-`SiteConstants.cs` string-key constants.
+string-key constants (`Server/Badges/SiteBadges.cs` — moved from the retired `SiteConstants.cs`,
+WU-StatBadgeProducers 2026-07-31).
 
 SearchMode entries (revised per three-axis model §5.3): `SearchPage`, `TreeSearch`, `AutoTreeSearch`,
 `AlsoFavorited`, `AlsoRecommended`, `ProfilePublishedStories`, `ProfileFavorites`,

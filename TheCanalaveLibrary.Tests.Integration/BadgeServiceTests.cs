@@ -8,11 +8,14 @@ namespace TheCanalaveLibrary.Tests.Integration;
 
 /// <summary>
 /// Integration tests for <see cref="IBadgeWriteService"/> / <see cref="IBadgeReadService"/>
-/// (Feature 50, WU36). Covers: AwardAsync idempotency + DisplayOrder assignment; SetDisplayOrderAsync
-/// visibility/ordering/ownership guard; GetMyBadgesForCurationAsync ordering (visible first by
-/// DisplayOrder, then hidden by SortOrder); profile projection filter (DisplayOrder > 0).
+/// (Feature 50, WU36; no-tiers model WU-StatBadgeProducers). Covers: AwardAsync idempotency +
+/// DisplayOrder assignment + EarnedCount tracking; SetDisplayOrderAsync visibility/ordering/
+/// ownership guard; GetMyBadgesForCurationAsync ordering (visible first by DisplayOrder, then
+/// hidden by SortOrder); profile projection filter (DisplayOrder > 0).
 /// Badge seed rows (e.g. <see cref="SiteBadges.Recommender"/>) survive Respawn (badges is a
 /// TablesToIgnore table). UserBadge rows are wiped on each reset — each test starts clean.
+/// Uses Recommender + BetaReader as the two catalogue keys (RecommenderSilver is retired —
+/// see audit/Badges.md "Tier paradigm — RETIRED site-wide").
 /// Tier: Integration (real Testcontainers Postgres via <see cref="PostgresFixture"/>).
 /// </summary>
 [Collection("Postgres")]
@@ -32,7 +35,7 @@ public class BadgeServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
     [Fact]
     public async Task AwardAsync_NewBadge_ReturnsTrue()
     {
-        bool awarded = await CallAwardAsync(_userId, SiteBadges.Recommender);
+        bool awarded = await CallAwardAsync(_userId, SiteBadges.Recommender, 1);
 
         awarded.Should().BeTrue("AwardAsync must return true when the badge is newly earned");
     }
@@ -40,7 +43,7 @@ public class BadgeServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
     [Fact]
     public async Task AwardAsync_NewBadge_DefaultsToVisible()
     {
-        await CallAwardAsync(_userId, SiteBadges.Recommender);
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 1);
 
         UserBadge? ub = await LoadUserBadgeAsync(_userId, SiteBadges.Recommender);
         ub.Should().NotBeNull();
@@ -48,9 +51,18 @@ public class BadgeServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
     }
 
     [Fact]
+    public async Task AwardAsync_NewBadge_SetsEarnedCount()
+    {
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 3);
+
+        UserBadge? ub = await LoadUserBadgeAsync(_userId, SiteBadges.Recommender);
+        ub!.EarnedCount.Should().Be(3, "EarnedCount must be set from the producer's counter value on first award");
+    }
+
+    [Fact]
     public async Task AwardAsync_FirstBadge_SetsDisplayOrderToOne()
     {
-        await CallAwardAsync(_userId, SiteBadges.Recommender);
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 1);
 
         UserBadge? ub = await LoadUserBadgeAsync(_userId, SiteBadges.Recommender);
         ub!.DisplayOrder.Should().Be(1, "first badge earns DisplayOrder = 0+1 = 1");
@@ -59,27 +71,37 @@ public class BadgeServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
     [Fact]
     public async Task AwardAsync_SecondBadge_IncrementsDisplayOrder()
     {
-        await CallAwardAsync(_userId, SiteBadges.Recommender);
-        await CallAwardAsync(_userId, SiteBadges.RecommenderSilver);
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 1);
+        await CallAwardAsync(_userId, SiteBadges.BetaReader, 1);
 
-        UserBadge? ub = await LoadUserBadgeAsync(_userId, SiteBadges.RecommenderSilver);
+        UserBadge? ub = await LoadUserBadgeAsync(_userId, SiteBadges.BetaReader);
         ub!.DisplayOrder.Should().Be(2, "second badge earns DisplayOrder = max(1)+1 = 2");
     }
 
     [Fact]
     public async Task AwardAsync_AlreadyEarned_ReturnsFalse()
     {
-        await CallAwardAsync(_userId, SiteBadges.Recommender); // first
-        bool awarded = await CallAwardAsync(_userId, SiteBadges.Recommender); // duplicate
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 1); // first
+        bool awarded = await CallAwardAsync(_userId, SiteBadges.Recommender, 2); // repeat qualifying event
 
         awarded.Should().BeFalse("AwardAsync must return false when the badge was already earned (idempotent)");
     }
 
     [Fact]
+    public async Task AwardAsync_AlreadyEarned_UpdatesEarnedCount()
+    {
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 1);
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 4); // a later qualifying event
+
+        UserBadge? ub = await LoadUserBadgeAsync(_userId, SiteBadges.Recommender);
+        ub!.EarnedCount.Should().Be(4, "a repeat award call must keep EarnedCount in step with the producer's counter");
+    }
+
+    [Fact]
     public async Task AwardAsync_AlreadyEarned_DoesNotCreateDuplicateRow()
     {
-        await CallAwardAsync(_userId, SiteBadges.Recommender);
-        await CallAwardAsync(_userId, SiteBadges.Recommender); // duplicate
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 1);
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 2); // duplicate
 
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -94,43 +116,43 @@ public class BadgeServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
     public async Task SetDisplayOrderAsync_SetsOrderForVisibleAndHidesOthers()
     {
         // Award two badges (both visible by default — DisplayOrder 1 and 2).
-        await CallAwardAsync(_userId, SiteBadges.Recommender);
-        await CallAwardAsync(_userId, SiteBadges.RecommenderSilver);
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 1);
+        await CallAwardAsync(_userId, SiteBadges.BetaReader, 1);
 
-        // Put only RecommenderSilver first, hide Recommender.
-        await CallSetDisplayOrderAsync(_userId, [SiteBadges.RecommenderSilver]);
+        // Put only BetaReader first, hide Recommender.
+        await CallSetDisplayOrderAsync(_userId, [SiteBadges.BetaReader]);
 
-        UserBadge? silver = await LoadUserBadgeAsync(_userId, SiteBadges.RecommenderSilver);
-        UserBadge? bronze = await LoadUserBadgeAsync(_userId, SiteBadges.Recommender);
+        UserBadge? betaReader = await LoadUserBadgeAsync(_userId, SiteBadges.BetaReader);
+        UserBadge? recommender = await LoadUserBadgeAsync(_userId, SiteBadges.Recommender);
 
-        silver!.DisplayOrder.Should().Be(1, "the only visible key gets position 1");
-        bronze!.DisplayOrder.Should().Be(0, "a badge not in the visible list must be zeroed (hidden)");
+        betaReader!.DisplayOrder.Should().Be(1, "the only visible key gets position 1");
+        recommender!.DisplayOrder.Should().Be(0, "a badge not in the visible list must be zeroed (hidden)");
     }
 
     [Fact]
     public async Task SetDisplayOrderAsync_MultipleVisible_AssignsSequentialPositions()
     {
-        await CallAwardAsync(_userId, SiteBadges.Recommender);
-        await CallAwardAsync(_userId, SiteBadges.RecommenderSilver);
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 1);
+        await CallAwardAsync(_userId, SiteBadges.BetaReader, 1);
 
-        // Reverse the default order: silver first, bronze second.
-        await CallSetDisplayOrderAsync(_userId, [SiteBadges.RecommenderSilver, SiteBadges.Recommender]);
+        // Reverse the default order: BetaReader first, Recommender second.
+        await CallSetDisplayOrderAsync(_userId, [SiteBadges.BetaReader, SiteBadges.Recommender]);
 
-        UserBadge? silver = await LoadUserBadgeAsync(_userId, SiteBadges.RecommenderSilver);
-        UserBadge? bronze = await LoadUserBadgeAsync(_userId, SiteBadges.Recommender);
+        UserBadge? betaReader = await LoadUserBadgeAsync(_userId, SiteBadges.BetaReader);
+        UserBadge? recommender = await LoadUserBadgeAsync(_userId, SiteBadges.Recommender);
 
-        silver!.DisplayOrder.Should().Be(1);
-        bronze!.DisplayOrder.Should().Be(2);
+        betaReader!.DisplayOrder.Should().Be(1);
+        recommender!.DisplayOrder.Should().Be(2);
     }
 
     [Fact]
     public async Task SetDisplayOrderAsync_UnownedBadgeKey_ThrowsValidation()
     {
-        // User only has Recommender, not RecommenderSilver.
-        await CallAwardAsync(_userId, SiteBadges.Recommender);
+        // User only has Recommender, not BetaReader.
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 1);
 
         Func<Task> act = async () =>
-            await CallSetDisplayOrderAsync(_userId, [SiteBadges.RecommenderSilver]);
+            await CallSetDisplayOrderAsync(_userId, [SiteBadges.BetaReader]);
 
         await act.Should().ThrowAsync<BadgeValidationException>(
             "SetDisplayOrderAsync must reject a key the user has not earned");
@@ -149,16 +171,16 @@ public class BadgeServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
     [Fact]
     public async Task GetMyBadgesForCurationAsync_ReturnsAllEarned_VisibleFirst()
     {
-        // Award both; then hide Recommender (bronze) so RecommenderSilver is visible.
-        await CallAwardAsync(_userId, SiteBadges.Recommender);       // DisplayOrder 1
-        await CallAwardAsync(_userId, SiteBadges.RecommenderSilver); // DisplayOrder 2
-        // Make silver visible at 1, hide bronze.
-        await CallSetDisplayOrderAsync(_userId, [SiteBadges.RecommenderSilver]);
+        // Award both; then hide Recommender so BetaReader is the only visible one.
+        await CallAwardAsync(_userId, SiteBadges.Recommender, 1); // DisplayOrder 1
+        await CallAwardAsync(_userId, SiteBadges.BetaReader, 1);  // DisplayOrder 2
+        // Make BetaReader visible at 1, hide Recommender.
+        await CallSetDisplayOrderAsync(_userId, [SiteBadges.BetaReader]);
 
         IReadOnlyList<EarnedBadgeDto> result = await CallGetCurationAsync(_userId);
 
         result.Should().HaveCount(2, "GetMyBadgesForCurationAsync returns ALL earned badges, visible and hidden");
-        result[0].BadgeKey.Should().Be(SiteBadges.RecommenderSilver,
+        result[0].BadgeKey.Should().Be(SiteBadges.BetaReader,
             "visible badge (DisplayOrder = 1) must come first");
         result[0].DisplayOrder.Should().Be(1);
         result[1].BadgeKey.Should().Be(SiteBadges.Recommender,
@@ -168,11 +190,11 @@ public class BadgeServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
 
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
-    private async Task<bool> CallAwardAsync(int userId, string badgeKey)
+    private async Task<bool> CallAwardAsync(int userId, string badgeKey, int earnedCount)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         return await scope.ServiceProvider.GetRequiredService<IBadgeWriteService>()
-            .AwardAsync(userId, badgeKey);
+            .AwardAsync(userId, badgeKey, earnedCount);
     }
 
     private async Task CallSetDisplayOrderAsync(int userId, IReadOnlyList<string> orderedVisibleKeys)

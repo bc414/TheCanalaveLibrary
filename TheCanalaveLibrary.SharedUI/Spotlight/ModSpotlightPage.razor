@@ -3,7 +3,6 @@
 @attribute [Authorize(Roles = "Moderator,Admin")]
 @inject ISpotlightSlotAllocator Allocator
 @inject ISiteSettingsWriteService Settings
-@inject IMessagingReadService UserLookup
 @inject IToastService Toasts
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Authorization
@@ -11,10 +10,13 @@
 @* Mod surface for Community Spotlight (Feature 55, WU-Spotlight): grant slot entitlements
    (the mods-now half of the ISpotlightSlotAllocator seam — the donation pipeline is the
    deferred later half), revoke unredeemed grants, and tune the site_settings knobs. Desktop-
-   first, no dispatcher — the Moderation-cluster page convention. Username resolution reuses
-   IMessagingReadService.FindUserByUsernameAsync (the existing exact-match lookup building
-   block) rather than minting a new user-search service. Grant/settings authorization is
-   enforced in the services; the [Authorize] attribute is affordance.
+   first, no dispatcher — the Moderation-cluster page convention. Recipient is chosen via
+   UserPicker (WU-StatBadgeProducers) — retired the prior "exact username" text input, which
+   borrowed IMessagingReadService.FindUserByUsernameAsync as a stopgap rather than minting a
+   proper user-search service; that service now exists
+   (IUserProfileReadService.SearchUsersByNameAsync), and this page no longer depends on the
+   Messaging cluster at all. Grant/settings authorization is enforced in the services; the
+   [Authorize] attribute is affordance.
    [PersistentState] on RemainingCapacity + RecentGrants avoids the prerender→interactive double
    fetch. The settings knobs are @bind form state, so they stay ephemeral fields and refetch on
    hydration (cheap site_settings reads; persisting form state is out of scope by convention). *@
@@ -43,15 +45,30 @@
             </p>
 
             <div class="flex flex-wrap items-center gap-2">
-                <input type="text" placeholder="Exact username" @bind="_grantUsername" disabled="@_busy"
-                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text)" />
+                @if (_grantRecipient is not null)
+                {
+                    <div class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-1.5">
+                        <img src="@(_grantRecipient.AvatarUrl ?? "/img/default-avatar.svg")" alt="" class="h-5 w-5 rounded-full object-cover" />
+                        <span class="text-sm font-medium text-(--color-text)">@_grantRecipient.Username</span>
+                        <button type="button" @onclick="() => _grantRecipient = null" disabled="@_busy"
+                                class="text-xs text-(--color-action-ink) hover:underline">
+                            Change
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="w-64">
+                        <UserPicker OnUserSelected="user => _grantRecipient = user" Placeholder="Type a username..." />
+                    </div>
+                }
                 @* Dedicated M / non-M slot pools (WU-AccessGate, settled 2026-07-19): a Mature
                    slot books M stories only and reaches mature-enabled viewers only. *@
                 <label class="flex items-center gap-1.5 text-sm text-(--color-text)">
                     <input type="checkbox" @bind="_grantMature" disabled="@_busy" />
                     Mature slot
                 </label>
-                <button type="button" disabled="@(_busy || string.IsNullOrWhiteSpace(_grantUsername))"
+                <button type="button" disabled="@(_busy || _grantRecipient is null)"
                         class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
                         @onclick="GrantAsync">
                     Grant slot
@@ -140,7 +157,7 @@
     private string? _grantError;
     private string? _settingsError;
 
-    private string? _grantUsername;
+    private UserCardDto? _grantRecipient;
     private bool _grantMature; // grant into the Mature slot pool (WU-AccessGate)
 
     // Persisted across the prerender→interactive handoff (restore-or-fetch ??= in
@@ -201,23 +218,16 @@
 
     private async Task GrantAsync()
     {
-        if (string.IsNullOrWhiteSpace(_grantUsername) || _busy) return;
+        if (_grantRecipient is null || _busy) return;
 
         _busy = true;
         _grantError = null;
         try
         {
-            MessagingParticipantDto? user = await UserLookup.FindUserByUsernameAsync(_grantUsername.Trim());
-            if (user is null)
-            {
-                _grantError = $"No user named \"{_grantUsername}\" was found (exact match).";
-                return;
-            }
-
-            await Allocator.GrantSlotAsync(user.UserId, SpotlightSlotSource.ModAward,
+            await Allocator.GrantSlotAsync(_grantRecipient.UserId, SpotlightSlotSource.ModAward,
                 _grantMature ? Rating.M : Rating.E);
-            Toasts.Show($"{(_grantMature ? "Mature slot" : "Slot")} granted to {user.Username}.", ToastLevel.Success);
-            _grantUsername = null;
+            Toasts.Show($"{(_grantMature ? "Mature slot" : "Slot")} granted to {_grantRecipient.Username}.", ToastLevel.Success);
+            _grantRecipient = null;
             _grantMature = false;
             await LoadAsync();
         }

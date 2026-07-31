@@ -47,4 +47,20 @@ public interface IUserProfileReadService
     /// header-null path — the common visible case never pays for it.
     /// </summary>
     Task<ProfileAccessState> GetProfileAccessStateAsync(int userId);
+
+    /// <summary>
+    /// Substring username search (ILike, case-insensitive, capped at 10), for the <c>UserPicker</c>
+    /// component (WU-StatBadgeProducers) — modelled on
+    /// <see cref="IStoryReadService.SearchStoriesByTitleAsync"/>. Empty/whitespace
+    /// <paramref name="term"/> returns an empty list (no "browse all users" surface).
+    ///
+    /// <para><b>Ignores <see cref="ProfileVisibility"/> deliberately</b> (settled,
+    /// <c>design/access-gating-first-principles.md</c> "UserPicker search ignores ProfileVisibility"):
+    /// addressing a user (crediting them, messaging them, granting them a Spotlight slot) is not the
+    /// same as disclosing their profile, and the result row carries only username + avatar — data a
+    /// <c>UserCard</c> already exposes wherever it renders. Excluding Private profiles would also
+    /// silently change two already-shipped behaviors: <c>FindUserByUsernameAsync</c> (Messaging) and
+    /// the Spotlight grant flow both resolve a Private user today.</para>
+    /// </summary>
+    Task<IReadOnlyList<UserCardDto>> SearchUsersByNameAsync(string term);
 }

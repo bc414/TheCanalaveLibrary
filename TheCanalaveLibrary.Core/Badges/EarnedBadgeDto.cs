@@ -19,10 +19,13 @@ namespace TheCanalaveLibrary.Core;
 /// 0 = hidden (not shown on profile or UserCards); &gt; 0 = visible, ordered ascending.
 /// Newly awarded badges default to visible (<c>max existing DisplayOrder + 1</c>).
 /// </param>
+/// <param name="EarnedCount">The producing counter's value at last award/drift-correction
+/// (no-tiers model, WU-StatBadgeProducers) — 0 for a manually-granted badge with no producer.</param>
 public record EarnedBadgeDto(
     string BadgeKey,
     string DisplayName,
     string? Description,
     string IconUrl,
     int SortOrder,
-    int DisplayOrder);
+    int DisplayOrder,
+    int EarnedCount);

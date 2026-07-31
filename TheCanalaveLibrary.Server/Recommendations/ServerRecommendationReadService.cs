@@ -68,7 +68,7 @@ public class ServerRecommendationReadService(
                     r.Recommender.UserBadges
                         .Where(ub => ub.DisplayOrder > 0)
                         .OrderBy(ub => ub.DisplayOrder)
-                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()),
                 r.RecommendationDetail.Text,
                 r.LikeCount,
@@ -146,7 +146,7 @@ public class ServerRecommendationReadService(
                     r.Recommender.UserBadges
                         .Where(ub => ub.DisplayOrder > 0)
                         .OrderBy(ub => ub.DisplayOrder)
-                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()),
                 r.RecommendationDetail.Text,
                 r.LikeCount,

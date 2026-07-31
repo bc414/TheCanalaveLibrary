@@ -104,3 +104,25 @@ Booking" and §"Site Settings (`ISiteSettingsService`)".
   allocator directly. Full wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 - **L6 / L8 — N/A.** Index shipped with L1 (above); the go-live worker is an L2-style hosted
   service, not a mart.
+
+### WU-StatBadgeProducers — ModSpotlightPage retrofitted onto UserPicker (2026-07-31)
+
+No grid cells changed — F55 was already Stage 5 (L4 stays 3, unrelated to this WU) and remains so.
+`ModSpotlightPage`'s "Exact username" free-text grant-recipient input is replaced with `UserPicker`.
+This also **drops the page's `@inject IMessagingReadService`** — the page's own header comment used
+to document that it "reuses `IMessagingReadService.FindUserByUsernameAsync` … rather than minting a
+new user-search service"; that service now exists
+(`IUserProfileReadService.SearchUsersByNameAsync`), so the cross-cluster dependency (a Spotlight
+mod page depending on Messaging purely for a lookup) is gone. `ModSpotlightPageTests` (bUnit)
+updated: the `FakeUserLookup : IMessagingReadService` fake is replaced with a minimal
+`FakeUserProfileReadService : IUserProfileReadService`; the two tests that drove the old text
+input + button click (`Grant_KnownUsername_CallsAllocator`,
+`Grant_UnknownUsername_ShowsInlineError_AndDoesNotGrant`) could not be ported — picking a result
+from `UserPicker`'s typeahead needs JS-level interaction bUnit doesn't drive reliably, the same
+documented limitation as `StoryTitlePickerTests`. Replaced with what bUnit *can* assert: the picker
+renders with the right placeholder, and the Grant button starts disabled with no recipient picked.
+The full grant flow is covered by Integration (`SpotlightServiceTests`'s existing
+`GrantSlotAsync` coverage, unaffected — only the recipient-resolution UI changed) and was
+browser-verified end to end: search "TestUser" → pick → Grant slot → toast "Slot granted to
+TestUser." → row appears in Recent grants, `psql`-confirmed. Full context: `audit/Badges.md`
+§"WU-StatBadgeProducers".

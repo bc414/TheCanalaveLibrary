@@ -106,7 +106,8 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
   (single-pane + back button, injection-free), `MessageThread` (composite: header + load-older +
   messages + reply composer; newest-first list + `flex-col-reverse` = newest at bottom),
   `ComposeConversationModal` (composite: recipient + subject + `MessageComposer`; preset from
-  `RecipientPreset` or manual username), `ConversationListItem` (leaf: link, avatar, subject,
+  `RecipientPreset` or picked via `UserPicker` — retrofitted off a free-text username input,
+  WU-StatBadgeProducers 2026-07-31, see below), `ConversationListItem` (leaf: link, avatar, subject,
   preview, unread badge, ~~archived label~~ — chip removed 2026-07-26, see WU-MsgArchive below),
   `MessageItem` (leaf: own=right `flex-row-reverse`,
   other=left; `RichTextView` for HTML), `MessageComposer` (leaf: `EditorView` pull-on-submit via
@@ -356,6 +357,22 @@ The constraint is recorded as a do-not-simplify rule in `layer2-services.md`. Tw
 carrying: a payload optimization can cost more in per-row function evaluation than it saves in
 transfer, and `dotnet test` green plus a clean browser pass said nothing about either — only the
 measurement did.
+
+### WU-StatBadgeProducers — ComposeConversationModal retrofitted onto UserPicker (2026-07-31)
+
+No grid cells changed: F49 was already Stage 5 and remains so — inert-plumbing-under-Stage-5 shape,
+same as WU-MsgArchive above. `ComposeConversationModal`'s free-text `<input type="text">` recipient
+field (the manual-compose path only — the `RecipientPreset` chip path from a UserCard "Send PM" is
+untouched) is replaced with `UserPicker`, the same retrofit `StoryTitlePicker` performed for
+stories. `IMessagingReadService.FindUserByUsernameAsync` (exact-match) stays live for the
+`ComposeForUsername` deep-link resolution — it is not this WU's job to relocate a messaging method,
+and that path still needs an exact-username resolver. The public contract
+(`OnSubmit`'s `(RecipientUsername, Subject, MessageHtml)` tuple) is unchanged — the modal derives
+`RecipientUsername` from the picked `UserCardDto.Username` internally. Full context (why the picker
+now exists, the `SearchUsersByNameAsync` service behind it, the visibility decision):
+`audit/Badges.md` §"WU-StatBadgeProducers". Verified: `dotnet test` full suite green (2,414 total);
+browser-verified — `/messages` → New → picker renders in place of the old text input, typeahead
+returns live results.
 
 ### Tests (WU35, 2026-06-24)
 

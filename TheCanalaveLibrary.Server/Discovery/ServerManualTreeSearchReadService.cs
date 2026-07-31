@@ -57,7 +57,7 @@ public class ServerManualTreeSearchReadService(
                     s.Author.UserBadges
                         .Where(ub => ub.DisplayOrder > 0)
                         .OrderBy(ub => ub.DisplayOrder)
-                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()))
                 .FirstOrDefaultAsync(ct);
         }
@@ -99,7 +99,7 @@ public class ServerManualTreeSearchReadService(
                     u.UserBadges
                         .Where(ub => ub.DisplayOrder > 0)
                         .OrderBy(ub => ub.DisplayOrder)
-                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()))
                 .ToListAsync(ct);
             favoriters = new ManualTreeSectionDto<UserCardDto>(items, total);
@@ -286,7 +286,7 @@ public class ServerManualTreeSearchReadService(
                     r.Recommender.UserBadges
                         .Where(ub => ub.DisplayOrder > 0)
                         .OrderBy(ub => ub.DisplayOrder)
-                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                        .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()),
                 r.RecommendationDetail.Text,
                 r.LikeCount,

@@ -367,18 +367,56 @@ public class UserStatRecalculatorTests(PostgresFixture postgres) : IntegrationTe
     }
 
     [Fact]
-    public async Task RecalculateAllAsync_LeavesDeferredCountersUntouched()
+    public async Task RecalculateAllAsync_LeavesSpotlightCountUntouched()
     {
+        // Only SpotlightCount remains deferred (WU-StatBadgeProducers re-filed it under tracker B8)
+        // — AcknowledgedAsBetaReaderCount/AcknowledgedAsInspirationCount are now recomputed, covered
+        // by the tests below.
         int userId = await SeedUserAsync("Deferred");
         using (IServiceScope scope = Factory.Services.CreateScope())
         {
             ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-            db.UserStats.Add(new UserStat
+            db.UserStats.Add(new UserStat { UserId = userId, SpotlightCount = 7 });
+            await db.SaveChangesAsync();
+        }
+
+        await RecalculateAsync();
+
+        using IServiceScope readScope = Factory.Services.CreateScope();
+        ApplicationDbContext read = readScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await read.UserStats.SingleAsync(s => s.UserId == userId)).SpotlightCount.Should().Be(
+            7, "producer deferred to tracker B8 — recomputing to 0 would mask that, not correct drift");
+    }
+
+    [Fact]
+    public async Task RecalculateAllAsync_CorrectsAcknowledgedAsBetaReaderCount_AcceptedRoleOneOnly()
+    {
+        int authorId = await SeedUserAsync("CreditingAuthor");
+        int recipientId = await SeedUserAsync("Recipient");
+        int storyId = await SeedStoryAsync(authorId);
+        int secondStoryId = await SeedStoryAsync(authorId);
+        int thirdStoryId = await SeedStoryAsync(authorId);
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            // Counts: Accepted, role 1 (Beta Reader).
+            db.StoryAcknowledgments.Add(new StoryAcknowledgment
             {
-                UserId = userId,
-                SpotlightCount = 7,
-                AcknowledgedAsBetaReaderCount = 3,
-                AcknowledgedAsInspirationCount = 2,
+                StoryId = storyId, AcknowledgedUserId = recipientId, AcknowledgmentRoleId = 1,
+                StatusId = StoryAcknowledgmentStatus.Accepted,
+            });
+            // Does NOT count: still Pending.
+            db.StoryAcknowledgments.Add(new StoryAcknowledgment
+            {
+                StoryId = secondStoryId, AcknowledgedUserId = recipientId, AcknowledgmentRoleId = 1,
+                StatusId = StoryAcknowledgmentStatus.Pending,
+            });
+            // Does NOT count: Accepted, but role 2 (Planner) — not Beta Reader.
+            db.StoryAcknowledgments.Add(new StoryAcknowledgment
+            {
+                StoryId = thirdStoryId, AcknowledgedUserId = recipientId, AcknowledgmentRoleId = 2,
+                StatusId = StoryAcknowledgmentStatus.Accepted,
             });
             await db.SaveChangesAsync();
         }
@@ -387,10 +425,135 @@ public class UserStatRecalculatorTests(PostgresFixture postgres) : IntegrationTe
 
         using IServiceScope readScope = Factory.Services.CreateScope();
         ApplicationDbContext read = readScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        UserStat stat = await read.UserStats.SingleAsync(s => s.UserId == userId);
-        stat.SpotlightCount.Should().Be(7, "producer unbuilt/unsettled — recomputing to 0 would mask that, not correct drift");
-        stat.AcknowledgedAsBetaReaderCount.Should().Be(3);
-        stat.AcknowledgedAsInspirationCount.Should().Be(2);
+        (await read.UserStats.SingleAsync(s => s.UserId == recipientId)).AcknowledgedAsBetaReaderCount
+            .Should().Be(1, "only the Accepted, role-1 (Beta Reader) row counts");
+    }
+
+    [Fact]
+    public async Task RecalculateAllAsync_CorrectsAcknowledgedAsInspirationCount_ApprovedInspiredByCrossAuthorOnly()
+    {
+        int inspiringAuthorId = await SeedUserAsync("InspiringAuthor");
+        int otherAuthorId = await SeedUserAsync("OtherAuthor");
+        int sourceStoryId = await SeedStoryAsync(otherAuthorId);
+        int targetStoryId = await SeedStoryAsync(inspiringAuthorId);
+        int pendingSourceId = await SeedStoryAsync(otherAuthorId);
+        int pendingTargetId = await SeedStoryAsync(inspiringAuthorId);
+        int selfSourceId = await SeedStoryAsync(inspiringAuthorId);
+        int selfTargetId = await SeedStoryAsync(inspiringAuthorId);
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            // Counts: Approved, type 1 (Inspired By), cross-author — target author was inspired BY
+            // the source, so the counter belongs to the TARGET author.
+            db.StoryLineages.Add(new StoryLineage
+            {
+                SourceStoryId = sourceStoryId, TargetStoryId = targetStoryId, RelationshipTypeId = 1,
+                StatusId = StoryLineageStatus.Approved,
+            });
+            // Does NOT count: still Pending.
+            db.StoryLineages.Add(new StoryLineage
+            {
+                SourceStoryId = pendingSourceId, TargetStoryId = pendingTargetId, RelationshipTypeId = 1,
+                StatusId = StoryLineageStatus.Pending,
+            });
+            // Does NOT count: Approved and type 1, but same author on both sides (self-owned,
+            // auto-approved by RequestLineageAsync) — not a real inspiration credit.
+            db.StoryLineages.Add(new StoryLineage
+            {
+                SourceStoryId = selfSourceId, TargetStoryId = selfTargetId, RelationshipTypeId = 1,
+                StatusId = StoryLineageStatus.Approved,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await RecalculateAsync();
+
+        using IServiceScope readScope = Factory.Services.CreateScope();
+        ApplicationDbContext read = readScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await read.UserStats.SingleAsync(s => s.UserId == inspiringAuthorId)).AcknowledgedAsInspirationCount
+            .Should().Be(1, "only the Approved, type-1 (Inspired By) cross-author link counts");
+    }
+
+    [Fact]
+    public async Task RecalculateAllAsync_SyncsUserBadgeEarnedCount_FromCorrectedUserStatColumn()
+    {
+        int recommenderId = await SeedUserAsync("BadgeHolder");
+        int readerId = await SeedUserAsync("HelpfulReader2");
+        int authorId = await SeedUserAsync("RecAuthor2");
+        int storyId = await SeedStoryAsync(authorId);
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            Recommendation rec = new()
+            {
+                StoryId = storyId, RecommenderId = recommenderId, StatusId = 2, DatePosted = DateTime.UtcNow,
+                RecommendationDetail = new RecommendationDetail { Text = "great story" },
+            };
+            db.Recommendations.Add(rec);
+            await db.SaveChangesAsync();
+
+            db.RecommendationSuccesses.Add(new RecommendationSuccess
+            {
+                UserId = readerId, RecommendationId = rec.RecommendationId, DateRecorded = DateTime.UtcNow,
+            });
+            // A drifted UserBadge row: earned, but EarnedCount stuck at a stale value.
+            db.UserBadges.Add(new UserBadge
+            {
+                UserId = recommenderId, BadgeKey = SiteBadges.Recommender, DisplayOrder = 1, EarnedCount = 99,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        UserStatRecalcResult result = await RecalculateAsync();
+        result.CountersCorrected.Should().BeGreaterThanOrEqualTo(2, "both the UserStat column and the badge EarnedCount drift-correct");
+
+        using IServiceScope readScope = Factory.Services.CreateScope();
+        ApplicationDbContext read = readScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await read.UserStats.SingleAsync(s => s.UserId == recommenderId)).RecommendationSuccessesEarned.Should().Be(1);
+        UserBadge badge = await read.UserBadges.SingleAsync(ub => ub.UserId == recommenderId && ub.BadgeKey == SiteBadges.Recommender);
+        badge.EarnedCount.Should().Be(1, "EarnedCount must sync to the now-corrected UserStat column, not stay at the drifted value");
+    }
+
+    [Fact]
+    public async Task RecalculateAllAsync_DoesNotAwardMissingBadges()
+    {
+        // A user whose counter would justify the badge, but who was never actually awarded it
+        // (e.g. a broken producer) — recalc must NOT mint the badge. Awarding stays the
+        // producers' job; a recalc that mints badges would hide a broken producer instead of
+        // surfacing it (see UserStatRecalculator's class doc).
+        int recommenderId = await SeedUserAsync("NeverAwarded");
+        int readerId = await SeedUserAsync("HelpfulReader3");
+        int authorId = await SeedUserAsync("RecAuthor3");
+        int storyId = await SeedStoryAsync(authorId);
+
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            Recommendation rec = new()
+            {
+                StoryId = storyId, RecommenderId = recommenderId, StatusId = 2, DatePosted = DateTime.UtcNow,
+                RecommendationDetail = new RecommendationDetail { Text = "great story" },
+            };
+            db.Recommendations.Add(rec);
+            await db.SaveChangesAsync();
+
+            db.RecommendationSuccesses.Add(new RecommendationSuccess
+            {
+                UserId = readerId, RecommendationId = rec.RecommendationId, DateRecorded = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+            // Deliberately no UserBadge row inserted.
+        }
+
+        await RecalculateAsync();
+
+        using IServiceScope readScope = Factory.Services.CreateScope();
+        ApplicationDbContext read = readScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await read.UserStats.SingleAsync(s => s.UserId == recommenderId)).RecommendationSuccessesEarned.Should().Be(1);
+        (await read.UserBadges.AnyAsync(ub => ub.UserId == recommenderId && ub.BadgeKey == SiteBadges.Recommender))
+            .Should().BeFalse("recalc corrects counters, it never awards — that would mask a broken producer");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────

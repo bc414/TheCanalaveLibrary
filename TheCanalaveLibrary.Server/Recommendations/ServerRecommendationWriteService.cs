@@ -512,7 +512,7 @@ public class ServerRecommendationWriteService(
             .ExecuteUpdateAsync(s => s.SetProperty(
                 r => r.SuccessfulRecCount, r => r.SuccessfulRecCount + 1));
 
-        // ── Tastemaker badge check (WU36) ────────────────────────────────────────
+        // ── Tastemaker badge check (WU36; no-tiers model WU-StatBadgeProducers) ──────────────
         // Anti-self-farm: skip if the reader IS the recommender, or if the rec is anonymous.
         // Best-effort: badge failure must never propagate back to the calling UI.
         int? recommenderId = rec.RecommenderId;
@@ -528,7 +528,9 @@ public class ServerRecommendationWriteService(
                     us => us.RecommendationSuccessesEarned,
                     us => us.RecommendationSuccessesEarned + 1));
 
-            // Read the new total and evaluate badge thresholds.
+            // Read the new total and award/keep EarnedCount in step. No tiers (RecommenderSilver
+            // retired — see audit/Badges.md "Tier paradigm — RETIRED site-wide"): a badge is
+            // earned at ≥1 and displays this count.
             int total = await writeDb.UserStats
                 .Where(us => us.UserId == recommenderId.Value)
                 .Select(us => us.RecommendationSuccessesEarned)
@@ -536,10 +538,7 @@ public class ServerRecommendationWriteService(
 
             try
             {
-                // Tier 1 (bronze) — 10 successful recommendations.
-                if (total >= 10) await badges.AwardAsync(recommenderId.Value, SiteBadges.Recommender);
-                // Tier 2 (silver) — 50 successful recommendations.
-                if (total >= 50) await badges.AwardAsync(recommenderId.Value, SiteBadges.RecommenderSilver);
+                if (total >= 1) await badges.AwardAsync(recommenderId.Value, SiteBadges.Recommender, total);
             }
             catch (Exception ex)
             {

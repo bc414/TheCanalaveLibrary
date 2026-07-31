@@ -114,7 +114,8 @@ render resolves NO notification services, which is the actual failure mode.
   (fan-out to `ReceiveAlerts` followers, with WU17/chapter-publish flow); `NotifyNewRecommendationAsync` /
   etc. (with WU19/20/29). The create-core and DAG pattern are built now; each deferred method is a
   thin wrapper addition. The comment + profile-blog wrappers landed 2026-07-25 — see the WU-B2 slice
-  below.
+  below. `NotifyStoryAcknowledgedAsync` (type 52, `NewStoryAcknowledgement`) landed 2026-07-31 — see
+  the WU-StatBadgeProducers slice below.
   **WU-Spotlight slice (2026-07-12):** three new types 90–92 (`SpotlightSlotGranted` /
   `StorySpotlighted` / `RecommendationSpotlighted` — categories SiteNews / YourStories /
   YourRecommendations, email-default on) + thin semantic wrappers + `KindFor` Story branches for
@@ -147,6 +148,16 @@ render resolves NO notification services, which is the actual failure mode.
   reworded 14/15/16). L6 note: the fan-out's three story-centric USI queries feed the existing
   "Rejected-vs-live conflict" — see `design/L6-reconciliation-matrix.md` WU-B2 addendum (measure-first,
   low-frequency write path).
+  **WU-StatBadgeProducers slice (2026-07-31):** `NotifyStoryAcknowledgedAsync` (type 52,
+  `NewStoryAcknowledgement`) was the only missing piece — the enum member, seed row,
+  `NotificationPresenter` arm ("{actor} acknowledged {target}"), and `KindFor` → Story mapping were
+  all already in place before this work-unit. Fires from
+  `ServerStoryAcknowledgmentWriteService.RequestAcknowledgmentAsync` (best-effort post-commit,
+  `try/catch`-with-log, matching `NotifyStoryLineageRequestedAsync`'s shape). Not sent on self-credit
+  — rejected outright by the write service before this would fire, so no drop-self case exists in
+  practice for this type. Verified: `RequestAcknowledgment_Author_CreatesPendingAndNotifiesRecipient`
+  in `StoryAcknowledgmentServiceTests` (asserts the notification row); browser-verified end to end
+  (credit → notification renders for the recipient → accept → badge).
 
 ## Feature 42 — Notification Display
 

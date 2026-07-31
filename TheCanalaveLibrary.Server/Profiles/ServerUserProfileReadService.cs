@@ -41,7 +41,7 @@ public class ServerUserProfileReadService(
                 Badges           = u.UserBadges
                     .Where(ub => ub.DisplayOrder > 0)
                     .OrderBy(ub => ub.DisplayOrder)
-                    .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                    .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                     .ToList()
             })
             .FirstOrDefaultAsync();
@@ -74,7 +74,7 @@ public class ServerUserProfileReadService(
                     v.VouchedUser.UserBadges
                     .Where(ub => ub.DisplayOrder > 0)
                     .OrderBy(ub => ub.DisplayOrder)
-                    .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName))
+                    .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                     .ToList()),
                 v.VouchText,
                 v.DateVouched))
@@ -163,5 +163,32 @@ public class ServerUserProfileReadService(
         }
 
         return row.Text;
+    }
+
+    private const int MaxUsernameSearchResults = 10;
+
+    public async Task<IReadOnlyList<UserCardDto>> SearchUsersByNameAsync(string term)
+    {
+        if (string.IsNullOrWhiteSpace(term)) return [];
+
+        await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
+
+        // Ignores ProfileVisibility deliberately — see IUserProfileReadService.SearchUsersByNameAsync
+        // doc ("addressing a user is not disclosing their profile").
+        return await readDb.Users
+            .Where(u => EF.Functions.ILike(u.UserName!, $"%{term}%"))
+            .OrderBy(u => u.UserName)
+            .Take(MaxUsernameSearchResults)
+            .Select(u => new UserCardDto(
+                u.Id,
+                u.UserName!,
+                u.Tagline,
+                u.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
+                u.UserBadges
+                    .Where(ub => ub.DisplayOrder > 0)
+                    .OrderBy(ub => ub.DisplayOrder)
+                    .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
+                    .ToList()))
+            .ToListAsync();
     }
 }

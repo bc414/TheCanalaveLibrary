@@ -220,6 +220,13 @@ public class ServerNotificationWriteService(
             sourceUserId: approverId,
             targets: [(sourceAuthorId, targetStoryId)]);
 
+    /// <inheritdoc/>
+    public Task NotifyStoryAcknowledgedAsync(int acknowledgedUserId, int authorId, int storyId) =>
+        CreateCoreAsync(
+            NotificationTypeEnum.NewStoryAcknowledgement,
+            sourceUserId: authorId,
+            targets: [(acknowledgedUserId, storyId)]);
+
     // ── Semantic generation methods (WU34 slice — moderation) ────────────────────
 
     /// <inheritdoc/>

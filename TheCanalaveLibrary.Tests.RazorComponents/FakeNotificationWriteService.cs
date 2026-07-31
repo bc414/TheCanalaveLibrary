@@ -46,6 +46,7 @@ public sealed class FakeNotificationWriteService : INotificationWriteService
     public Task NotifyNewGroupBlogPostAsync(int groupId, int blogPostId, int authorId) => Task.CompletedTask;
     public Task NotifyStoryLineageRequestedAsync(int targetAuthorId, int requesterId, int sourceStoryId) => Task.CompletedTask;
     public Task NotifyStoryLineageApprovedAsync(int sourceAuthorId, int approverId, int targetStoryId) => Task.CompletedTask;
+    public Task NotifyStoryAcknowledgedAsync(int acknowledgedUserId, int authorId, int storyId) => Task.CompletedTask;
     public Task NotifyReportReceivedAsync(int reporterUserId, int moderatorSourceId) => Task.CompletedTask;
     public Task NotifyReportResolvedAsync(int reporterUserId, int moderatorSourceId) => Task.CompletedTask;
     public Task NotifyReportResolvedNoActionAsync(int reporterUserId, int moderatorSourceId) => Task.CompletedTask;

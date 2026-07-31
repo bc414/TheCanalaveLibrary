@@ -142,16 +142,24 @@ Covering tier: **RazorComponents** —
   - `ServerUserStoryInteractionWriteService`: `FavoritesOnStories` (story author) + `StoriesRead`/
     `StoriesInProgress`/`StoriesIgnored` (actor) via transition-delta (increment/decrement only when
     the effective boolean state flips).
-  Counters deferred (producer not yet built): `ViewsOnStories` (WU38), `SpotlightCount` (post-MVP,
-  definition unsettled), acknowledgment counters (no assigned WU — the acknowledgment/beta-reader
-  producer is unbuilt; NOT WU37, which is Story Tagging — stale cross-reference corrected
-  2026-07-15). (`FeatureContributions` was a deferred counter here too, but the column was
-  **removed entirely 2026-07-18** when Feature 56 was cut — see `audit/BlogPosts.md` Feature 56 CUT
-  note.) `ActiveReportCount` was
+  Counters deferred (producer not yet built): `ViewsOnStories` (WU38), `SpotlightCount` (deferred to
+  tracker **B8** — the Spotlight donation pipeline — as of WU-StatBadgeProducers, 2026-07-31; no
+  badge consumes it, Patron is a settled manual grant). (`FeatureContributions` was a deferred
+  counter here too, but the column was **removed entirely 2026-07-18** when Feature 56 was cut —
+  see `audit/BlogPosts.md` Feature 56 CUT note.) `ActiveReportCount` was
   found to be an orphaned duplicate (never written; live data is `User.ActiveReportCount` on
   `AspNetUsers`) and dropped via migration in WU-UserStatRecalc — see Feature 58 below.
   Verified: `dotnet build` green; 373 RazorComponents pass; integration counter-specific tests deferred
   to Phase 5.
+  - **WU-StatBadgeProducers (2026-07-31) — the two acknowledgment counters are now wired.**
+    `AcknowledgedAsBetaReaderCount`: `ServerStoryAcknowledgmentWriteService.AcceptAsync`/`RevokeAsync`
+    (role Beta Reader only, consent-gated — an author's credit alone doesn't count until the
+    credited user accepts; self-credit rejected outright). `AcknowledgedAsInspirationCount`: a
+    producer hook onto the already-built `StoryLineage` "Inspired By" approval
+    (`ServerStoryLineageWriteService.ApproveLineageAsync`/`RejectLineageAsync`/`DeleteLineageAsync`),
+    not a new feature — see `audit/Stories.md` Feature 10. Source ambiguity resolved: the dormant
+    `BetaReader` entity (draft-access authorization, not credit) stays unbuilt. Full detail:
+    `audit/Badges.md` §"WU-StatBadgeProducers" (L2 note), `workplan.md` WU-StatBadgeProducers.
 - **L3-Logic — Stage 5** (WU30). `ProfileBanner` receives `UserStatsDto?` from header; null means
   stats hidden for non-owner. `UserStatsBlock` renders the counter snapshot.
 - **L3.5-Structure — Stage 5** (WU30). `UserStatsBlock` leaf: flex-wrap stat chips with bold count
@@ -187,13 +195,20 @@ Covering tier: **RazorComponents** —
       count).
     - **Recompute — 1 raw-SQL counter:** `ViewsOnStories` (`daily_story_stats` mart, joined to the
       author's stories).
-    - **Deferred, no recompute query:** `SpotlightCount`, `AcknowledgedAsBetaReaderCount`,
-      `AcknowledgedAsInspirationCount` — producers unbuilt/unsettled, see
-      Feature 22's deferred-counters note above. Recomputing these to 0 would mask missing
-      producers, not correct drift. (`FeatureContributions` was in this list until 2026-07-18, when
-      the column was removed with the Feature 56 cut.)
+    - **Deferred, no recompute query:** `SpotlightCount` alone — deferred to tracker B8, see
+      Feature 22's deferred-counters note above. (`FeatureContributions` was in this list until
+      2026-07-18, when the column was removed with the Feature 56 cut.)
     - **Dropped:** `ActiveReportCount` — orphaned duplicate column, removed via migration (not
       recomputed).
+    - **Recompute — 2 newly-wired counters (WU-StatBadgeProducers, 2026-07-31):**
+      `AcknowledgedAsBetaReaderCount` (Accepted `StoryAcknowledgment` rows, role Beta Reader) and
+      `AcknowledgedAsInspirationCount` (Approved "Inspired By" `StoryLineage` rows toward the target
+      author, anti-self-link guarded via `IS DISTINCT FROM` — a self-owned link auto-approves but
+      is not a real inspiration credit). A **third pass** was added to `RecalculateAllAsync` syncing
+      `UserBadge.EarnedCount` from the now-corrected `UserStat` columns for badges with an automated
+      producer (`Recommender`, `BetaReader`) — deliberately does not award missing badges (that
+      stays the producers' job; see `UserStatRecalculator`'s class doc and the
+      `RecalculateAllAsync_DoesNotAwardMissingBadges` regression test).
   - Insert-then-recompute: the worker also inserts any missing `UserStat` row before recomputing
     (heals the latent silent-no-op in the real-time `ExecuteUpdateAsync` path for users without a
     row). **Real finding, not anticipated in the plan:** no production write path creates a

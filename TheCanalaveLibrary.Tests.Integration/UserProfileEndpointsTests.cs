@@ -1,3 +1,4 @@
+using System.Net.Http.Json;
 using System.Text.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -150,5 +151,75 @@ public class UserProfileEndpointsTests(PostgresFixture postgres) : IntegrationTe
         header.Should().NotBeNull();
         header!.LastSeenUtc.Should().BeNull(
             "a client-asserted includePrivate=true must not unlock another user's hidden last-seen timestamp");
+    }
+
+    // ── SearchUsersByNameAsync (WU-StatBadgeProducers — UserPicker) ─────────────────
+
+    [Fact]
+    public async Task SearchUsers_SubstringMatch_ReturnsMatchingUser()
+    {
+        int userId = await SeedUserAsync("FindableAcorn");
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync("/api/user-profiles/search?term=indableAco");
+
+        response.EnsureSuccessStatusCode();
+        List<UserCardDto>? results = await response.Content.ReadFromJsonAsync<List<UserCardDto>>();
+        results.Should().ContainSingle(u => u.UserId == userId);
+    }
+
+    [Fact]
+    public async Task SearchUsers_CaseInsensitive_ReturnsMatch()
+    {
+        int userId = await SeedUserAsync("MixedCaseTarget");
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync("/api/user-profiles/search?term=mixedcase");
+
+        List<UserCardDto>? results = await response.Content.ReadFromJsonAsync<List<UserCardDto>>();
+        results.Should().ContainSingle(u => u.UserId == userId);
+    }
+
+    [Fact]
+    public async Task SearchUsers_NoMatch_ReturnsEmpty()
+    {
+        await SeedUserAsync();
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync("/api/user-profiles/search?term=zzz-no-such-user-zzz");
+
+        List<UserCardDto>? results = await response.Content.ReadFromJsonAsync<List<UserCardDto>>();
+        results.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task SearchUsers_CapsAtTenResults()
+    {
+        for (int i = 0; i < 12; i++)
+            await SeedUserAsync($"CapTestUser{i}");
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync("/api/user-profiles/search?term=CapTestUser");
+
+        List<UserCardDto>? results = await response.Content.ReadFromJsonAsync<List<UserCardDto>>();
+        results.Should().HaveCount(10);
+    }
+
+    [Fact]
+    public async Task SearchUsers_PrivateProfile_IsStillReturned()
+    {
+        // Settled (WU-StatBadgeProducers, design/access-gating-first-principles.md): addressing a
+        // user is not disclosing their profile — the search deliberately ignores ProfileVisibility,
+        // preserving the shipped behavior of FindUserByUsernameAsync (Messaging) and the Spotlight
+        // grant flow, both of which already resolve a Private user today.
+        int userId = await SeedUserAsync("PrivateButFindable");
+        await SetProfileVisibilityAsync(userId, ProfileVisibility.Private);
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.GetAsync("/api/user-profiles/search?term=PrivateButFindable");
+
+        List<UserCardDto>? results = await response.Content.ReadFromJsonAsync<List<UserCardDto>>();
+        results.Should().ContainSingle(u => u.UserId == userId,
+            "a Private profile must still be addressable by username search");
     }
 }
