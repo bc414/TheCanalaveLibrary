@@ -40,8 +40,7 @@ references it, does not restate it.
   exist in **every group A–H** (fewer now that B3/B4/B12 are closed), including two
   **high-priority security items: E2 and E3**. WU-ErrorHandling2 also left a named follow-up: the 8
   SOLO editor pages' error surfaces still want `ErrorAlert` adoption (see its DONE entry).
-  WU-StatBadgeProducers left one named follow-up: `SeedTool` generators for acknowledgments/
-  lineage-approvals (measurability at volume, not blocking).
+  WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its DONE entry.
 - **Blocked on Brian:** decision rows 4, 6, 8, 10, and 12 (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28).
 
@@ -251,9 +250,20 @@ is pending except where a bullet says so.
   `StoryAcknowledgmentsBox` renders on the story page; `Recommender×12` (seeded) renders correctly;
   `RecommenderSilver` absent from the live `badges` table and the role dropdown shows only 4 roles;
   both `UserPicker` retrofits driven live (Spotlight grant end to end, Messaging compose modal).
-- **Deferred, not built this WU:** `SeedTool` generators for acknowledgments/lineage-approvals (would
-  make these counters measurable at volume, per the C4/WU-TagFanon lesson) — noted for a future
-  session, not blocking.
+- **`SeedTool` follow-up (2026-07-31, same day):** added `SeedAcknowledgmentRow`/`SeedLineageRow`
+  generators (~15% of stories get 1-3 acknowledgment credits, roles 1-4, Accepted/Pending/Declined
+  mix; ~8% get a cross-author "Inspired By" link, Approved/Pending/Rejected mix — self-credit and
+  same-author links are excluded by construction, matching the write services' own guards).
+  `CopyUserStatsAsync`'s two counter columns — previously hardcoded to 0 in every COPY row — now
+  compute real values from the generated graph, mirroring the producers' exact formula (Accepted +
+  role 1 for beta-reader; Approved for inspiration). Notifications (types 50/51/52) generated too,
+  matching the tool's existing one-notification-per-social-action convention. **Verified independently,
+  not just "ran without error":** a 500-user/800-story run (seed 42) produced 208 acknowledgments /
+  58 lineage links with zero FK violations, and a direct `psql` cross-check running
+  `UserStatRecalculator`'s own aggregate SQL against the loaded data returned **zero mismatches**
+  against what `SeedBulkWriter` wrote — the seeded counters are provably correct by the same formula
+  the production recalculator uses, not merely plausible. Verification run wiped afterward
+  (`reset-dev-db.ps1`) — the persistent dev DB is back to a clean `DataSeeder`-only state.
 - **Tool:** opusplan. **Pointers:** `layer2-services.md` §"Synchronous Inline Badge Awards" and
   §"UserStats Updates"; `audit/Badges.md` §"WU-StatBadgeProducers" (primary narrative + provenance
   trace); `audit/Profiles.md` Feature 22/58; `audit/Stories.md` Feature 10; `audit/Messaging.md` and

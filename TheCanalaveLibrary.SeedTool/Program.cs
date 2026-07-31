@@ -92,6 +92,10 @@ Console.WriteLine($"Generated in {stopwatch.Elapsed.TotalSeconds:F1}s: {graph.Us
                   $"{graph.Recommendations.Count(r => r.IsHighlightedByAuthor)} spotlights / " +
                   $"{graph.Recommendations.Count(r => r.RecommenderId is null)} anonymized), " +
                   $"{graph.Vouches.Count} vouches, {graph.HiddenGemChainCount} gem chains, " +
+                  $"{graph.Acknowledgments.Count} acknowledgments " +
+                  $"({graph.Acknowledgments.Count(a => a.StatusId == 1)} accepted / " +
+                  $"{graph.Acknowledgments.Count(a => a.StatusId == 1 && a.RoleId == 1)} beta-reader accepted), " +
+                  $"{graph.Lineages.Count} \"Inspired By\" links ({graph.Lineages.Count(l => l.StatusId == 1)} approved), " +
                   $"{graph.ChapterComments.Count} chapter comments ({graph.ChapterComments.Count(c => c.ParentCommentId is not null)} replies), " +
                   $"{graph.Notifications.Count} notifications");
 

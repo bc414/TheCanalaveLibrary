@@ -41,6 +41,8 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
         await CopyRecommendationsAsync(graph.Recommendations);
         await CopyRecommendationDetailsAsync(graph.Recommendations);
         await CopyVouchesAsync(graph.Vouches);
+        await CopyAcknowledgmentsAsync(graph.Acknowledgments);
+        await CopyLineagesAsync(graph.Lineages);
         await CopyChapterCommentsAsync(graph.ChapterComments);
         await CopyNotificationsAsync(graph.Notifications);
         // ── Tag world (WU-TagFanon) — FK order: tags → per-story rows → pairings → the rest ──
@@ -335,6 +337,15 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
                 g.Count(i => i.IsIgnored)));
         Dictionary<int, int> commentsWritten = graph.ChapterComments
             .GroupBy(c => c.UserId).ToDictionary(g => g.Key, g => g.Count());
+        // WU-StatBadgeProducers: mirror the real producers exactly — Accepted + role 1 (Beta
+        // Reader) only for the acknowledgment counter; Approved only for the lineage counter
+        // (cross-author is already guaranteed by construction, so no extra guard needed here).
+        Dictionary<int, int> ackBetaReader = graph.Acknowledgments
+            .Where(a => a.StatusId == 1 && a.RoleId == 1)
+            .GroupBy(a => a.AcknowledgedUserId).ToDictionary(g => g.Key, g => g.Count());
+        Dictionary<int, int> inspirationCount = graph.Lineages
+            .Where(l => l.StatusId == 1)
+            .GroupBy(l => storyAuthor[l.TargetStoryId]).ToDictionary(g => g.Key, g => g.Count());
 
         const string copy = """
             COPY user_stats (user_id, acknowledged_as_beta_reader_count, acknowledged_as_inspiration_count,
@@ -352,8 +363,8 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             (int read, int inProgress, int ignored) = reading.GetValueOrDefault(user.Id);
             await writer.StartRowAsync();
             await writer.WriteAsync(user.Id, NpgsqlDbType.Integer);
-            await writer.WriteAsync(0, NpgsqlDbType.Integer); // acknowledged_as_beta_reader_count
-            await writer.WriteAsync(0, NpgsqlDbType.Integer); // acknowledged_as_inspiration_count
+            await writer.WriteAsync(ackBetaReader.GetValueOrDefault(user.Id), NpgsqlDbType.Integer);
+            await writer.WriteAsync(inspirationCount.GetValueOrDefault(user.Id), NpgsqlDbType.Integer);
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // authors_followed
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // blog_posts_written
             await writer.WriteAsync(0, NpgsqlDbType.Integer); // chapters_read
@@ -589,6 +600,51 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             await writer.WriteAsync(vouch.VouchedUserId, NpgsqlDbType.Integer);
             await writer.WriteNullAsync();
             await writer.WriteAsync(vouch.DateUtc, NpgsqlDbType.TimestampTz);
+        }
+        await writer.CompleteAsync();
+    }
+
+    // WU-StatBadgeProducers: acknowledged_user_id/acknowledgment_role_id FK the seeded
+    // acknowledgment_roles lookup (1-4); status_id mirrors StoryAcknowledgmentStatus (0/1/2).
+    private async Task CopyAcknowledgmentsAsync(List<SeedAcknowledgmentRow> acknowledgments)
+    {
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync("""
+            COPY story_acknowledgments (story_id, acknowledged_user_id, acknowledgment_role_id,
+                status_id, date_acknowledged, date_responded)
+            FROM STDIN (FORMAT BINARY)
+            """);
+        foreach (SeedAcknowledgmentRow ack in acknowledgments)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(ack.StoryId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(ack.AcknowledgedUserId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(ack.RoleId, NpgsqlDbType.Smallint);
+            await writer.WriteAsync(ack.StatusId, NpgsqlDbType.Smallint);
+            await writer.WriteAsync(ack.DateAcknowledgedUtc, NpgsqlDbType.TimestampTz);
+            if (ack.DateRespondedUtc is DateTime responded) await writer.WriteAsync(responded, NpgsqlDbType.TimestampTz);
+            else await writer.WriteNullAsync();
+        }
+        await writer.CompleteAsync();
+    }
+
+    // WU-StatBadgeProducers: relationship_type_id is always 1 ("Inspired By") — the only lineage
+    // type generated here, since it's the only one a UserStat counter reads. status_id mirrors
+    // StoryLineageStatus (0=Pending/1=Approved/2=Rejected).
+    private async Task CopyLineagesAsync(List<SeedLineageRow> lineages)
+    {
+        await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync("""
+            COPY story_lineages (source_story_id, target_story_id, relationship_type_id, status_id,
+                date_created)
+            FROM STDIN (FORMAT BINARY)
+            """);
+        foreach (SeedLineageRow link in lineages)
+        {
+            await writer.StartRowAsync();
+            await writer.WriteAsync(link.SourceStoryId, NpgsqlDbType.Integer);
+            await writer.WriteAsync(link.TargetStoryId, NpgsqlDbType.Integer);
+            await writer.WriteAsync((short)1, NpgsqlDbType.Smallint); // Inspired By
+            await writer.WriteAsync(link.StatusId, NpgsqlDbType.Smallint);
+            await writer.WriteAsync(link.DateCreatedUtc, NpgsqlDbType.TimestampTz);
         }
         await writer.CompleteAsync();
     }

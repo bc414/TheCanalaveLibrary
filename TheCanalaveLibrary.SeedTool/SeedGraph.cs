@@ -54,6 +54,19 @@ public sealed class SeedRecommendationRow(int id, int storyId, int? recommenderI
 
 public sealed record SeedVouchRow(int VouchingUserId, int VouchedUserId, DateTime DateUtc);
 
+/// <summary>WU-StatBadgeProducers — a story-author credit to another user. Composite PK
+/// (StoryId, AcknowledgedUserId, AcknowledgmentRoleId); no surrogate id.</summary>
+public sealed record SeedAcknowledgmentRow(
+    int StoryId, int AcknowledgedUserId, short RoleId, short StatusId,
+    DateTime DateAcknowledgedUtc, DateTime? DateRespondedUtc);
+
+/// <summary>WU-StatBadgeProducers — an "Inspired By" (RelationshipTypeId 1) link between two
+/// different authors' stories, the source for `UserStat.AcknowledgedAsInspirationCount`.
+/// Composite PK (SourceStoryId, TargetStoryId, RelationshipTypeId); no surrogate id. Only type 1
+/// is generated here — the other three lineage types have no counter to make measurable.</summary>
+public sealed record SeedLineageRow(
+    int SourceStoryId, int TargetStoryId, short StatusId, DateTime DateCreatedUtc);
+
 /// <summary>TPT: one base_comments row + one chapter_comments row per instance.</summary>
 public sealed record SeedChapterCommentRow(
     long Id, int ChapterId, int UserId, long? ParentCommentId, string Text, DateTime DatePostedUtc, bool IsSpoiler);
@@ -100,6 +113,8 @@ public sealed class SeedGraph
     public required List<SeedInteractionRow> Interactions { get; init; }
     public required List<SeedRecommendationRow> Recommendations { get; init; }
     public required List<SeedVouchRow> Vouches { get; init; }
+    public required List<SeedAcknowledgmentRow> Acknowledgments { get; init; }
+    public required List<SeedLineageRow> Lineages { get; init; }
     public required List<SeedChapterCommentRow> ChapterComments { get; init; }
     public required List<SeedNotificationRow> Notifications { get; init; }
     public required int HiddenGemChainCount { get; init; }
@@ -433,6 +448,61 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
             }
         }
 
+        // ── Story Acknowledgments (WU-StatBadgeProducers) — author credits on ~15% of stories ──
+        // Feeds AcknowledgedAsBetaReaderCount (Accepted, role 1) and the BetaReader badge at
+        // volume — per the C4/WU-TagFanon lesson, a counter with no seed generator stays an
+        // assertion, never a measurement (index/planner behavior, curation-UI states at scale).
+        List<SeedAcknowledgmentRow> acknowledgments = [];
+        HashSet<(int Story, int User, short Role)> ackKeys = [];
+        foreach (SeedStoryRow story in stories)
+        {
+            if (_rng.NextDouble() >= 0.15) continue;
+            int creditCount = 1 + _rng.Next(3);
+            for (int k = 0; k < creditCount; k++)
+            {
+                int recipientId = bases.UserId + _rng.Next(options.Users);
+                if (recipientId == story.AuthorId) continue; // self-credit forbidden (write-service rule)
+                short roleId = (short)(1 + _rng.Next(4)); // 1=Beta Reader, 2=Planner, 3=Cover Artist, 4=Editor
+                if (!ackKeys.Add((story.Id, recipientId, roleId))) continue;
+
+                DateTime credited = AfterPublish(story);
+                double roll = _rng.NextDouble();
+                (short statusId, DateTime? responded) = roll switch
+                {
+                    < 0.60 => ((short)1, (DateTime?)credited.AddDays(1 + _rng.Next(14))), // Accepted
+                    < 0.85 => ((short)0, null),                                          // Pending
+                    _ => ((short)2, (DateTime?)credited.AddDays(1 + _rng.Next(14))),      // Declined
+                };
+                acknowledgments.Add(new SeedAcknowledgmentRow(
+                    story.Id, recipientId, roleId, statusId, credited, responded));
+            }
+        }
+
+        // ── Story Lineage "Inspired By" (WU-StatBadgeProducers) — cross-author, ~8% of stories ──
+        // Feeds AcknowledgedAsInspirationCount (Approved, type 1) at volume. Cross-author only —
+        // a same-author link is real in production but never counts (anti-self-farm guard), so it
+        // would add volume without adding anything measurable.
+        List<SeedLineageRow> lineages = [];
+        HashSet<(int Source, int Target)> lineageKeys = [];
+        foreach (SeedStoryRow source in stories)
+        {
+            if (_rng.NextDouble() >= 0.08) continue;
+            SeedStoryRow? target = null;
+            for (int attempt = 0; attempt < 5; attempt++)
+            {
+                SeedStoryRow candidate = stories[_rng.Next(stories.Count)];
+                if (candidate.Id == source.Id || candidate.AuthorId == source.AuthorId) continue;
+                target = candidate;
+                break;
+            }
+            if (target is null) continue;
+            if (!lineageKeys.Add((source.Id, target.Id))) continue;
+
+            double roll = _rng.NextDouble();
+            short statusId = roll switch { < 0.55 => 1, < 0.85 => 0, _ => 2 }; // Approved/Pending/Rejected
+            lineages.Add(new SeedLineageRow(source.Id, target.Id, statusId, AfterPublish(source)));
+        }
+
         // ── Chapter comments (threaded, popularity-weighted — L6 comment-paging measurability) ──
         // Hub stories accumulate hundreds of comments, the tail a handful — the same power law
         // that makes co-occurrence rankable makes the (chapter_id, date_posted) paging index earn
@@ -728,6 +798,27 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
         foreach (SeedVouchRow vouch in vouches)
             Notify(vouch.VouchedUserId, vouch.VouchingUserId, NewVouchOnYou, vouch.VouchingUserId, vouch.DateUtc);
 
+        // WU-StatBadgeProducers: NewStoryAcknowledgement (52) fires for every credit (mirrors
+        // RequestAcknowledgmentAsync, which always notifies on request regardless of eventual
+        // Accept/Decline outcome).
+        const short NewStoryAcknowledgement = 52;
+        foreach (SeedAcknowledgmentRow ack in acknowledgments)
+            Notify(ack.AcknowledgedUserId, authorByStory[ack.StoryId], NewStoryAcknowledgement,
+                ack.StoryId, ack.DateAcknowledgedUtc);
+
+        // WU-StatBadgeProducers: StoryLineageRequested (50) fires for every link (a request always
+        // happens first); StoryLineageApproved (51) additionally fires for the Approved subset —
+        // mirrors ApproveLineageAsync notifying the source author back.
+        const short StoryLineageRequested = 50, StoryLineageApproved = 51;
+        foreach (SeedLineageRow link in lineages)
+        {
+            Notify(authorByStory[link.TargetStoryId], authorByStory[link.SourceStoryId],
+                StoryLineageRequested, link.SourceStoryId, link.DateCreatedUtc);
+            if (link.StatusId == 1) // Approved
+                Notify(authorByStory[link.SourceStoryId], authorByStory[link.TargetStoryId],
+                    StoryLineageApproved, link.TargetStoryId, link.DateCreatedUtc.AddDays(1 + _rng.Next(5)));
+        }
+
         // Type-26 adoption invitations for the pre-linked fanon cluster (WU-TagFanon) — one per
         // notified author, RelatedEntityId = the target tag, matching NotifyTagAdoptionSuggestedAsync.
         const short TagUpdateSuggestion = 26;
@@ -745,6 +836,8 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
             Interactions = [.. interactions.Values],
             Recommendations = recommendations,
             Vouches = vouches,
+            Acknowledgments = acknowledgments,
+            Lineages = lineages,
             ChapterComments = comments,
             Notifications = notifications,
             HiddenGemChainCount = chainCount,
