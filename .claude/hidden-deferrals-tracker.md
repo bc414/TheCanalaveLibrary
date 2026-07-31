@@ -113,7 +113,7 @@ decision work that has no row at all.
 
 ## B. Built-but-inert — plumbing exists, nothing drives it
 
-- [ ] **B0 — `PrefersDataSaverMode` is stored, settable, and consumed by nothing** `[inert · low · anytime]` — *Found by WU-TagFanon's audit, 2026-07-26.*
+- [x] **B0 — `PrefersDataSaverMode` is stored, settable, and consumed by nothing — DONE (WU-DataSaver, 2026-07-31)** `[inert · low · anytime]` — *Found by WU-TagFanon's audit, 2026-07-26.*
   - Grid: F21/F22 (settings) cells=5 — invisible there.
   - Source: `User.PrefersDataSaverMode`; `AppearanceSettingsForm.razor`; `ServerUserSettingsService`.
   - Context: The data-saver checkbox stores, renders, and persists — and **no render path reads
@@ -122,8 +122,36 @@ decision work that has no row at all.
     reachable state today. Deliberately left out of WU-TagFanon's scope (it belongs to the sprite
     subsystem, not the tag model) — but it means any design that leans on "users with sprites off"
     is reasoning about a state that does not exist.
-  - Next: decide whether data-saver suppresses sprites (then carry it on `ThemeContext`), or cut
-    the setting. Either way it needs its own deliberation, not a ride-along.
+  - **Closed 2026-07-31 — cut, not wired up. This item's own "suppress sprites, or cut the setting"
+    framing measured out wrong**, not just under-scoped (same lesson as A5/B3-B4): sprites render at
+    16px across 3 sites in low-KB static PNGs, and the one sprite saving that was ever material
+    (animated `.webp` → static `.png`) is already delivered by `PrefersAnimatedSprites = false` — so
+    "suppress sprites" could never have made the checkbox's "(reduces image quality)" promise true.
+    The real weight is cover art/avatars (`ImageUploadProcessor.MaxStoredDimension = 2048`, one
+    stored size served into 24–144px display slots on 20-item listing grids), which a per-user
+    toggle can't fix for anonymous traffic or Core Web Vitals anyway. `PrefersDataSaverMode` removed
+    end to end (Core/Server/Client/SharedUI/SeedTool + a real `DropColumn` migration,
+    `20260731152702_DropPrefersDataSaverMode`). See item below for the derivative-sizing gap this
+    measurement surfaced. Full detail: `workplan.md` WU-DataSaver; `audit/Profiles.md` Feature 20
+    Stage note; `audit/Sprites.md` Feature 3 L3-Logic note.
+
+- [ ] **B14 — No image derivative sizing; covers/avatars serve one 2048px original into 24–144px slots** `[perf · med · phase-7]` — *Found scoping WU-DataSaver's cut, 2026-07-31.*
+  - Grid: no cell owns this — cross-cutting on `ImageUploadProcessor` (Server/Images/) and every
+    `<img>` consumer of `CoverArtRelativeUrl`/`ProfilePictureRelativeUrl` (~16 sites across
+    Stories/Users/Messaging/Discovery).
+  - Context: `ImageUploadProcessor.MaxStoredDimension = 2048` downscales and stores exactly one size
+    per upload; no thumbnail derivative, `srcset`, or resize endpoint exists anywhere in the app
+    (repo-wide grep for `srcset`/`sizes=`/thumbnail in app code: zero hits). Display sizes are far
+    smaller: `StoryCard` cover renders at `h-36` (144px, ~200× the pixels of a 2048px source);
+    avatars render at 24–80px (up to ~7,000×). Listing pages are 20 items
+    (`ResultsFilterPanel`/`CustomListPage`/`ProfilePage.StoryPageSize`/`NewsPage`), and PNG uploads
+    re-encode losslessly, so a browse grid can have a multi-megabyte first paint — for 100% of
+    traffic, not just opted-in users.
+  - Next: generate derivatives at upload in `ImageUploadProcessor` (plus a backfill for existing
+    uploads) or put Cloudflare Image Resizing in front of R2, then emit `srcset`/`sizes` at the
+    consumer sites. Naturally sequenced with `roadmap.md` Phase 7's R2/Cloudflare CDN work — see
+    that checklist. Not folded into WU-DataSaver: this is upload-pipeline + both storage impls +
+    ~16 markup sites, properly its own WU.
 
 - [ ] **B1 — Notification email fan-out (`EmailEnabled` is inert)** `[inert · med · beta]`
   - Grid: F41/F42/F43 L2=5.

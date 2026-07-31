@@ -48,12 +48,11 @@ public sealed class ClientUserSettingsService(HttpClient http) : IUserSettingsSe
         await ThrowIfFailedAsync(response);
     }
 
-    public async Task UpdateAppearanceAsync(int themeId, bool prefersAnimated, bool prefersDataSaver)
+    public async Task UpdateAppearanceAsync(int themeId, bool prefersAnimated)
     {
         HttpResponseMessage response = await Http.PutAsync(
             $"api/user-settings/appearance?themeId={themeId}" +
-            $"&prefersAnimated={(prefersAnimated ? "true" : "false")}" +
-            $"&prefersDataSaver={(prefersDataSaver ? "true" : "false")}",
+            $"&prefersAnimated={(prefersAnimated ? "true" : "false")}",
             content: null);
         await ThrowIfFailedAsync(response);
     }

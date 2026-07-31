@@ -260,7 +260,7 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             COPY "AspNetUsers" (id, access_failed_count, account_status, active_report_count,
                 allow_discovery_from_hidden_favorites, concurrency_stamp, email, email_confirmed,
                 lockout_enabled, lockout_end, normalized_email, normalized_user_name, password_hash,
-                phone_number, phone_number_confirmed, prefers_animated_sprites, prefers_data_saver_mode,
+                phone_number, phone_number_confirmed, prefers_animated_sprites,
                 profile_picture_relative_url, security_stamp, show_mature_content, suspended_until_utc,
                 tagline, theme_id, two_factor_enabled, user_name,
                 author_settings, privacy_settings, reader_settings)
@@ -287,7 +287,6 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             await writer.WriteNullAsync();                                          // phone_number
             await writer.WriteAsync(false, NpgsqlDbType.Boolean);                   // phone_number_confirmed
             await writer.WriteAsync(true, NpgsqlDbType.Boolean);                    // prefers_animated_sprites
-            await writer.WriteAsync(false, NpgsqlDbType.Boolean);                   // prefers_data_saver_mode
             await writer.WriteNullAsync();                                          // profile_picture_relative_url
             await writer.WriteAsync(Guid.NewGuid().ToString("N").ToUpperInvariant(), NpgsqlDbType.Text); // security_stamp
             await writer.WriteAsync(user.ShowMatureContent, NpgsqlDbType.Boolean);

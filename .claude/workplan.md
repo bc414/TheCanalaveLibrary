@@ -17,14 +17,19 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-StatBadgeProducers (2026-07-31) — Story Acknowledgments (consent-gated credit
+- **Last landed:** WU-DataSaver (2026-07-31) — `PrefersDataSaverMode` removed end to end rather than
+  wired up: measurement before building showed B0's own "suppress sprites, or cut the setting"
+  framing was wrong on the numbers (sprites are a rounding error; cover art/avatars are the real
+  weight and no derivative-sizing mechanism exists to honor the checkbox's promise). Closes tracker
+  item **B0**; opens **B14** (image derivative sizing, sequenced with Phase 7). No cell flips.
+  (Before that, same day: WU-StatBadgeProducers — Story Acknowledgments (consent-gated credit
   feature) + a producer hook on the already-built `StoryLineage` approval, closing tracker item
   **B4** in full and **B3**'s two acknowledgment-counter rows (`SpotlightCount` re-filed under
   **B8**). Surfaced and retired the Bronze/Silver badge-tier paradigm site-wide along the way (no
   design provenance — see `audit/Badges.md`); a badge now displays `UserBadge.EarnedCount` instead.
   Retrofitted `ComposeConversationModal`/`ModSpotlightPage` onto a new `UserPicker` (owed work, per
   their own stopgap comments). No cell flips — producer/plumbing under already-Stage-5 cells.
-  (Before that, 2026-07-30: WU-ApplyFiltersPurity — `ServerStoryReadService.ApplyFilters` reverts to
+  Before that, 2026-07-30: WU-ApplyFiltersPurity — `ServerStoryReadService.ApplyFilters` reverts to
   pure/synchronous via a new cached `ITagHierarchyReadService`, closing tracker item **B12**. Before
   that, same day: WU-ErrorHandling2 — the `ProblemDetails` API error envelope + full client HTTP
   error translation, closing tracker item **E1** and D5's behavior-change half. Before that, same
@@ -34,12 +39,13 @@ references it, does not restate it.
   day, WU-Home + WU-SiteNews — decision row 2 resolved, closing tracker item F1.)
 - **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
   **Phase 3 is next** — Brian-driven L4 freeze sweep + WU-A11y (the latter gated on decision
-  row 12) — nothing further blocks starting it. WU-StatBadgeProducers, WU-ApplyFiltersPurity, and
-  WU-ErrorHandling2 were all Tier-1/Tier-2 between-phase work (below), not phase gates.
+  row 12) — nothing further blocks starting it. WU-DataSaver, WU-StatBadgeProducers,
+  WU-ApplyFiltersPurity, and WU-ErrorHandling2 were all Tier-1/Tier-2 between-phase work (below),
+  not phase gates.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
-  exist in **every group A–H** (fewer now that B3/B4/B12 are closed), including two
-  **high-priority security items: E2 and E3**. WU-ErrorHandling2 also left a named follow-up: the 8
-  SOLO editor pages' error surfaces still want `ErrorAlert` adoption (see its DONE entry).
+  exist in **every group A–H** (fewer now that B0/B3/B4/B12 are closed; B14 newly opened), including
+  two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also left a named follow-up:
+  the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption (see its DONE entry).
   WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its DONE entry.
 - **Blocked on Brian:** decision rows 4, 6, 8, 10, and 12 (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28).
@@ -182,6 +188,55 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-DataSaver — `PrefersDataSaverMode` cut; image derivative sizing opened as B14 (Features 3/20/21/22, extends `Profiles/`, `Sprites/`) — DONE ✓ (2026-07-31)
+
+- **Cells:** none flip — F3 (Sprites), F20/F21/F22 (Profiles) all stay Stage 5; removing an inert
+  setting doesn't change any layer's soundness. Closes tracker item **B0**; opens **B14**.
+- **Decision (measured before building, not just decided — see `roadmap.md` §Resolved for the full
+  reasoning):** B0's own framing ("suppress sprites, or cut the setting") was wrong on the numbers.
+  Sprites render at 16px across 3 sites (`TagChip`/`TagSelector`/`CharacterEntry`) in low-KB static
+  PNGs, and the one sprite saving that was ever material — animated `.webp` → static `.png` — is
+  already delivered by `PrefersAnimatedSprites = false`. The real weight is cover art/avatars:
+  `ImageUploadProcessor.MaxStoredDimension = 2048` stores one size per upload, served into 24–144px
+  display slots on 20-item listing grids, and no `srcset`/thumbnail mechanism exists anywhere in
+  the app. **Settled: cut the setting; open the real gap as its own item (B14), sequenced with
+  Phase 7's R2/Cloudflare work — not a ride-along here** (upload pipeline + both storage impls +
+  ~16 markup consumer sites is properly its own WU).
+- **Removed end to end:** `User.PrefersDataSaverMode` (Core); `UserSettingsDto`/`IUserSettingsService`
+  member and `UpdateAppearanceAsync` parameter (3→2); `ServerUserSettingsService`'s projection/DTO-
+  arg/`ExecuteUpdateAsync` `SetProperty`; the `/api/user-settings/appearance` query parameter;
+  `ClientUserSettingsService`'s query segment; `AppearanceSettingsForm`'s checkbox + `AppearanceArgs`
+  member (also fixed a pre-existing doc/code name drift: audit called it `AppearanceModel`, code has
+  always been `AppearanceArgs`); `SettingsPage`'s wiring; the `FakeSavedTagSelectionTestServices`
+  fake. **`SeedTool`'s `SeedBulkWriter.CopyUsersAsync`** uses a positional binary COPY — column list
+  and write sequence edited together (a misalignment there fails silently, not loudly, writing
+  plausible-looking wrong data into a neighboring column). `scripts/verify-tagfanon-migration.ps1`
+  left untouched deliberately: it inserts at the pre-migration (`RecLifecycle`) schema state where
+  the column still existed and isn't CI-invoked, so it remains a correct historical snapshot.
+- **Migration:** `20260731152702_DropPrefersDataSaverMode` — a real `DropColumn` (hot scalar column,
+  not part of a JSON settings group, so unlike `RemoveAutoLoadNextChapter` this isn't an empty
+  jsonb-only migration).
+- **Verified:** `dotnet build` green (0 errors). `dotnet test` green — 776 Unit + 626 RazorComponents
+  + 1,012 Integration = **2,414 total**, unchanged from the pre-removal baseline (no new testable
+  surface; the fake-service signature edit is compiler-enforced conformance). Migration applied
+  against local Postgres via server startup (`Database.MigrateAsync`); `prefers_data_saver_mode`
+  confirmed absent from `AspNetUsers`, `prefers_animated_sprites` confirmed present. `SeedTool` run
+  (seed 42, 2,000 users) verified **by value, not just success**: `prefers_animated_sprites`,
+  `show_mature_content`, `profile_picture_relative_url`, `theme_id`, `two_factor_enabled` all
+  checked directly against the hardcoded seed values — the positional-COPY risk was a silent
+  misalignment, not a thrown error. No browser tool available in this environment; substituted a
+  live HTTP round-trip against the running dev server instead (`dev-login` → `PUT
+  /api/user-settings/appearance?themeId=1&prefersAnimated=false` → 204 → `GET
+  /api/user-settings` reflects the change with no `prefersDataSaverMode` field anywhere in the
+  response). Verification run wiped afterward (`reset-dev-db.ps1`) — the persistent dev DB is back
+  to a clean pre-seed state.
+- **Tool:** opusplan (plan-mode decision + build). **Pointers:** `hidden-deferrals-tracker.md`
+  B0/B14; `roadmap.md` §Resolved; `audit/Profiles.md` Feature 20 Stage note (primary narrative);
+  `audit/Sprites.md` Feature 3 L3-Logic/L3.5-Structure notes; `audit/Identity.md` Shared Context;
+  `layer2-services.md` §"Self-Referential Editing Exception." **Deps:** none.
 
 ---
 

@@ -94,6 +94,10 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
     alerts, the explicit no-staging-environment decision.
   - **Telemetry destination live** — self-hosted Grafana LGTM container (resolved mechanism, see
     `middle_plan_v2.md` §Resolved); deploy it, set `OTEL_EXPORTER_OTLP_ENDPOINT`.
+  - **Image derivative sizing** — covers/avatars currently store one 2048px original served into
+    24–144px display slots on every listing grid (tracker **B14**, surfaced scoping WU-DataSaver's
+    cut). Generate derivatives at upload or front R2 with Cloudflare Image Resizing, then emit
+    `srcset`/`sizes` at consumer sites; natural fit alongside this checklist's R2/CDN work.
   - **CI hardening for a live master** — add `push: master` trigger + branch protection + promote
     the vuln scan from report-only to a hard gate (all deliberately deferred from Phase 0 until
     master means "what's deployed" — see `middle_plan_v2.md` §Resolved).
@@ -149,7 +153,7 @@ done.
 | **2** | ~~WU-SelectionPermalink~~ **DONE 2026-07-28** | — | Artifact-addressed sharing for public saved selections (`/discover/selection/{id}/{*slug}`); row 13's other half, shipped same day |
 | **2** — continue the debt-paydown burst, clustered by shared surface | ~~WU-ApplyFiltersPurity~~ **DONE 2026-07-30** | B12 | Cached `ITagHierarchyReadService` restored `ApplyFilters` to pure/sync — no numbered decision row; resolutions recorded directly in `hidden-deferrals-tracker.md` B12 and `workplan.md`'s DONE entry |
 | **2** | WU-StatBadgeProducers (in progress, 2026-07-30) | B3 (partial), B4 | Scoped: builds the Story Acknowledgments feature (`AcknowledgedAsBetaReaderCount`) + a producer hook on the already-built `StoryLineage` approval (`AcknowledgedAsInspirationCount`); re-files `SpotlightCount` under B8 rather than building it. Surfaced a site-wide badge-tier retirement along the way — see Resolved below. |
-| **2** | WU-DataSaver | B0 | Small standalone decision ("suppress sprites, or cut the setting") + build |
+| **2** | ~~WU-DataSaver~~ **DONE 2026-07-31** | B0 | Measured, not just decided — "suppress sprites, or cut the setting" turned out to have a wrong premise; see "Resolved" below |
 | **2** | WU-DiscoveryOverrideUI | B7 | Per-user filter-override editing surface (§8.7) |
 | **3** | ~~WU-Home~~ **DONE 2026-07-28** | F1 | Closed Phase 2's last content item; Phase 2 fully closed 2026-07-30 (WU-AccountEnforcement, Tier 1) |
 | **4** — Phase 3 (L4 freeze sweep) | WU-A11y | F6 | Resolve decision row 12 just before the sweep starts |
@@ -179,6 +183,30 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 2026-07-30; nothing left to sequence.
 
 ## Resolved
+
+- **WU-DataSaver — `PrefersDataSaverMode` cut, image derivative sizing opened as B14 (2026-07-31).**
+  Tracker item B0 framed the choice as "suppress sprites, or cut the setting." Measurement before
+  building showed that framing was wrong on the numbers, not just under-specified: sprites render
+  at 16px across 3 sites in low-KB static PNGs, and the one sprite saving that was ever material —
+  animated `.webp` → static `.png` — is already delivered by `PrefersAnimatedSprites = false`, so
+  "suppress sprites" could never have made the checkbox's "(reduces image quality)" promise true.
+  The actual weight is cover art/avatars: `ImageUploadProcessor.MaxStoredDimension = 2048` stores
+  exactly one size per upload, served into 24–144px display slots on 20-item listing grids (up to
+  ~200×–7,000× more pixels than displayed) — no `srcset`/thumbnail mechanism exists anywhere in the
+  app. That's a real gap, but it helps 100% of traffic with no opt-in and no visual downgrade once
+  built, making a user-facing toggle nearly redundant — so it's opened as its own item (tracker
+  **B14**) sequenced with Phase 7's R2/Cloudflare work above, not built as a ride-along here.
+  **Settled: `PrefersDataSaverMode` is removed end to end** — Core entity, `UserSettingsDto`,
+  `IUserSettingsService`/both impls, the `/api/user-settings/appearance` endpoint, the
+  `AppearanceSettingsForm` checkbox, `SeedTool`'s binary-COPY column, and a real `DropColumn`
+  migration (`20260731152702_DropPrefersDataSaverMode` — a hot scalar column, not jsonb, so unlike
+  `RemoveAutoLoadNextChapter` this is genuine DDL). No grid cell flips (F20/F21/F22/F3 all stay
+  Stage 5 — removing an inert setting doesn't change any layer's soundness). Built the same day:
+  `dotnet build`/`dotnet test` green (776 Unit + 626 RazorComponents + 1,012 Integration = 2,414,
+  unchanged), migration applied and column absence confirmed against local Postgres, `SeedTool` run
+  verified by value (not just success — a positional-COPY misalignment fails silently), endpoint
+  round-trip confirmed live. Pointer: `hidden-deferrals-tracker.md` B0/B14; `workplan.md` WU-DataSaver;
+  `audit/Profiles.md` Feature 20 Stage note; `audit/Sprites.md` Feature 3 L3-Logic note.
 
 - **Badge tier paradigm retired site-wide (2026-07-30, WU-StatBadgeProducers).** Scoping B4 (the
   BetaReader badge) surfaced that the Bronze/Silver tier model (`Recommender`@10 /

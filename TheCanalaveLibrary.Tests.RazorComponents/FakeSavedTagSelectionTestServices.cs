@@ -81,7 +81,6 @@ internal sealed class FakeUserSettingsService : IUserSettingsService
         ProfilePictureRelativeUrl: null,
         ThemeId: 1,
         PrefersAnimatedSprites: true,
-        PrefersDataSaverMode: false,
         Reader: new ReaderSettingsDto(
             "Georgia", 16, 1.5f, 800, false, true, 20,
             DefaultSortOrder.DatePublished, ReadingBackgroundEnum.SiteDefault, SavedTagSelectionSort),
@@ -94,6 +93,6 @@ internal sealed class FakeUserSettingsService : IUserSettingsService
     public Task UpdateReaderSettingsAsync(ReaderSettingsDto dto) => Task.CompletedTask;
     public Task UpdatePrivacySettingsAsync(PrivacySettingsDto dto) => Task.CompletedTask;
     public Task UpdateAuthorSettingsAsync(AuthorSettingsDto dto) => Task.CompletedTask;
-    public Task UpdateAppearanceAsync(int themeId, bool prefersAnimated, bool prefersDataSaver) => Task.CompletedTask;
+    public Task UpdateAppearanceAsync(int themeId, bool prefersAnimated) => Task.CompletedTask;
     public Task<string> UploadProfilePictureAsync(Stream content, string contentType) => Task.FromResult("");
 }

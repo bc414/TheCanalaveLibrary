@@ -1447,7 +1447,7 @@ public interface IUserSettingsService
     Task UpdateReaderSettingsAsync(ReaderSettingsDto dto);
     Task UpdatePrivacySettingsAsync(PrivacySettingsDto dto);
     Task UpdateAuthorSettingsAsync(AuthorSettingsDto dto);
-    Task UpdateAppearanceAsync(int themeId, bool prefersAnimated, bool prefersDataSaver);
+    Task UpdateAppearanceAsync(int themeId, bool prefersAnimated);
     Task<string> UploadProfilePictureAsync(Stream content, string contentType);
 }
 ```

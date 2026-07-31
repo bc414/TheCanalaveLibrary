@@ -47,7 +47,6 @@ public class ServerUserSettingsService(
                 u.ProfilePictureRelativeUrl,
                 u.ThemeId,
                 u.PrefersAnimatedSprites,
-                u.PrefersDataSaverMode,
                 u.ShowMatureContent,
                 u.AllowDiscoveryFromHiddenFavorites,
                 u.PinnedStoryId,
@@ -87,7 +86,6 @@ public class ServerUserSettingsService(
             row.ProfilePictureRelativeUrl,
             row.ThemeId,
             row.PrefersAnimatedSprites,
-            row.PrefersDataSaverMode,
             reader,
             privacy,
             author);
@@ -218,17 +216,16 @@ public class ServerUserSettingsService(
     // ── Write — Appearance section (Feature 3) ───────────────────────────────────
 
     /// <inheritdoc/>
-    public async Task UpdateAppearanceAsync(int themeId, bool prefersAnimated, bool prefersDataSaver)
+    public async Task UpdateAppearanceAsync(int themeId, bool prefersAnimated)
     {
         int userId = RequireCurrentUserId();
 
-        // All three are hot scalar columns — ExecuteUpdateAsync avoids a round-trip load.
+        // Both are hot scalar columns — ExecuteUpdateAsync avoids a round-trip load.
         int rows = await writeDb.Users
             .Where(u => u.Id == userId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(u => u.ThemeId,               themeId)
-                .SetProperty(u => u.PrefersAnimatedSprites, prefersAnimated)
-                .SetProperty(u => u.PrefersDataSaverMode,  prefersDataSaver));
+                .SetProperty(u => u.PrefersAnimatedSprites, prefersAnimated));
 
         if (rows == 0)
             throw new InvalidOperationException($"User {userId} not found.");

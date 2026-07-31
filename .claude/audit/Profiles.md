@@ -33,6 +33,8 @@ worker).
   hot scalar columns (same sub-form, same save path). Verified: `dotnet build` green; `dotnet test`
   373 RazorComponents tests pass; Integration: covered by new Integration tests (Phase 5 deferred to
   next pass — connection tested via `GetMySettingsAsync` and write-path round-trips).
+  **`UpdateAppearanceAsync` dropped its third parameter (WU-DataSaver, 2026-07-31)** — see this
+  feature's dedicated Stage note below.
 - **L3-Logic — Stage 5** (WU30). `SettingsPage.razor` at `/settings` dispatches to 5 sub-forms.
   `ProfileSettingsForm`, `ReaderSettingsForm`, `PrivacySettingsForm`, `AuthorSettingsForm`,
   `AppearanceSettingsForm` all injection-free (bUnit-testable); page holds all service calls.
@@ -282,3 +284,39 @@ reconstructing `UserSettingsValidationException` from `ProblemDetails.Detail`. C
 tier — `ManualTreeSearchTests.UpdateAuthorSettings_PinsOwnPublishedStory_AndRejectsForeignOrMissing`
 (the "Pinned Story write gate" section) retyped from `InvalidOperationException` to
 `UserSettingsValidationException`. Full detail: `modernization-audit/deferred-work.md` §4.
+
+### WU-DataSaver Stage note (2026-07-31)
+
+**Cell affected:** F20 L2/L3-Logic/L3.5-Structure — removal inside an already-aligned Stage-5 cell;
+no stage transition. Closes tracker item **B0**.
+
+`User.PrefersDataSaverMode` was cut end to end rather than wired up. B0's own framing ("suppress
+sprites, or cut the setting") measured out wrong: sprites render at 16px across 3 sites in low-KB
+static PNGs, and the one sprite saving that was ever material (animated `.webp` → static `.png`) is
+already delivered by `PrefersAnimatedSprites = false`. The actual weight is cover art/avatars —
+`ImageUploadProcessor.MaxStoredDimension = 2048` stores one size per upload, served into 24–144px
+display slots on 20-item listing grids — which a checkbox promising "reduces image quality" cannot
+honestly address without a real derivative-sizing mechanism (no `srcset`/thumbnail exists anywhere
+in the app today). That gap is real but is its own properly-scoped item, not this one — see
+`hidden-deferrals-tracker.md` group B and `roadmap.md` Phase 7 checklist.
+
+Removed: `User.PrefersDataSaverMode` (Core), the `UserSettingsDto`/`IUserSettingsService` member and
+parameter, `ServerUserSettingsService`'s projection/DTO-arg/`ExecuteUpdateAsync` `SetProperty`, the
+`/api/user-settings/appearance` query parameter, `ClientUserSettingsService`'s query segment, the
+`AppearanceSettingsForm` checkbox + `AppearanceArgs` member, `SettingsPage`'s wiring, the
+`FakeSavedTagSelectionTestServices` fake, and the `SeedTool` binary-COPY column (column list and
+positional write updated together — a COPY misalignment fails silently, not loudly). Migration
+`20260731152702_DropPrefersDataSaverMode` — a real `DropColumn`, not an empty jsonb-only migration
+(the property was a hot scalar column, not part of a JSON settings group).
+
+**Verified:** `dotnet build` green (0 errors). `dotnet test` green — 776 Unit + 626 RazorComponents +
+1,012 Integration = 2,414, unchanged from the pre-removal baseline (no new testable surface; the two
+fake-service signature edits are compiler-enforced conformance, not new behavior). Migration applied
+against local Postgres via `dotnet ef database update`; confirmed `prefers_data_saver_mode` absent
+from `AspNetUsers`. `SeedTool` run (seed 42) verified independently, not just "ran without error":
+seeded users' `prefers_animated_sprites`/`show_mature_content`/`profile_picture_relative_url` values
+checked directly, not just seeding success — the positional-COPY risk was that a misalignment would
+write plausible-looking wrong data into a neighboring column without throwing. Browser-verified at
+`/settings`: Appearance section shows theme + animated-sprites only; save round-trips; the PUT
+request carries exactly two query parameters. `scripts/check-doc-hygiene.ps1` and
+`scripts/check-design-tokens.ps1` both clean.

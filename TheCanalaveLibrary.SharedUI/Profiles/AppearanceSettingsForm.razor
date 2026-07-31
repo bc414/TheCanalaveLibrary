@@ -1,6 +1,6 @@
 @namespace TheCanalaveLibrary.SharedUI
 
-@* Appearance settings sub-form — Feature 3 (WU30). Theme selection + sprite/data-saver prefs.
+@* Appearance settings sub-form — Feature 3 (WU30). Theme selection + sprite pref.
    No @inject: themes and the current values are passed in by the page dispatcher (SettingsPage).
    Raises OnSave(AppearanceArgs) when the user clicks Save; the page calls
    IUserSettingsService.UpdateAppearanceAsync. *@
@@ -35,16 +35,6 @@
             Prefer animated Pokémon sprites
         </label>
 
-        @* Data saver *@
-        <label class="flex cursor-pointer items-center gap-2 text-sm text-(--color-text)">
-            <input type="checkbox"
-                   class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
-                   checked="@_prefersDataSaver"
-                   @onchange="e => _prefersDataSaver = (bool)(e.Value ?? false)" />
-            Enable data saver mode
-            <span class="text-xs text-(--color-text-muted)">(reduces image quality)</span>
-        </label>
-
         <button type="button"
                 class="self-start rounded-md bg-(--color-action) px-4 py-2 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
                 disabled="@Busy"
@@ -58,7 +48,6 @@
     [Parameter, EditorRequired] public IReadOnlyList<ThemeDto> Themes { get; set; } = [];
     [Parameter] public int InitialThemeId { get; set; }
     [Parameter] public bool InitialPrefersAnimated { get; set; }
-    [Parameter] public bool InitialPrefersDataSaver { get; set; }
     [Parameter] public bool Busy { get; set; }
 
     /// <summary>Raised with the selected appearance values when the user clicks Save.</summary>
@@ -66,7 +55,6 @@
 
     private int _themeId;
     private bool _prefersAnimated;
-    private bool _prefersDataSaver;
 
     protected override void OnParametersSet()
     {
@@ -78,12 +66,11 @@
                 ? Themes[0].ThemeId
                 : InitialThemeId;
             _prefersAnimated = InitialPrefersAnimated;
-            _prefersDataSaver = InitialPrefersDataSaver;
         }
     }
 
     private async Task HandleSave() =>
-        await OnSave.InvokeAsync(new AppearanceArgs(_themeId, _prefersAnimated, _prefersDataSaver));
+        await OnSave.InvokeAsync(new AppearanceArgs(_themeId, _prefersAnimated));
 
-    public record AppearanceArgs(int ThemeId, bool PrefersAnimated, bool PrefersDataSaver);
+    public record AppearanceArgs(int ThemeId, bool PrefersAnimated);
 }

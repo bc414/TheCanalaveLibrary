@@ -57,13 +57,12 @@ public interface IUserSettingsService
     Task UpdateAuthorSettingsAsync(AuthorSettingsDto dto);
 
     /// <summary>
-    /// Updates the Appearance sub-form: theme FK (<c>User.ThemeId</c>), animated-sprite pref
-    /// (<c>User.PrefersAnimatedSprites</c>), and data-saver pref (<c>User.PrefersDataSaverMode</c>).
-    /// These are all hot scalar columns, not part of a JSON group.
+    /// Updates the Appearance sub-form: theme FK (<c>User.ThemeId</c>) and animated-sprite pref
+    /// (<c>User.PrefersAnimatedSprites</c>). Both are hot scalar columns, not part of a JSON group.
     /// This is the Feature-3 theme-selection write path (L3-Logic gate for F3 L3/L3.5 cells).
     /// </summary>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
-    Task UpdateAppearanceAsync(int themeId, bool prefersAnimated, bool prefersDataSaver);
+    Task UpdateAppearanceAsync(int themeId, bool prefersAnimated);
 
     /// <summary>
     /// Uploads a new profile picture, stores it via <see cref="IImageStorageService"/> under

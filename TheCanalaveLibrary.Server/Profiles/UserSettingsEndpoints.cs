@@ -82,13 +82,13 @@ public static class UserSettingsEndpoints
                 }))
             .RequireAuthorization();
 
-        // Three hot scalar columns, not a JSON group — GET-bindable scalars query-bind even on a
+        // Two hot scalar columns, not a JSON group — GET-bindable scalars query-bind even on a
         // PUT (same pattern as FollowingEndpoints' SetReceiveAlertsAsync ?receiveAlerts=...).
         group.MapPut("/appearance", (
-                IUserSettingsService settings, int themeId, bool prefersAnimated, bool prefersDataSaver) =>
+                IUserSettingsService settings, int themeId, bool prefersAnimated) =>
                 EndpointHelpers.ExecuteAsync(async () =>
                 {
-                    await settings.UpdateAppearanceAsync(themeId, prefersAnimated, prefersDataSaver);
+                    await settings.UpdateAppearanceAsync(themeId, prefersAnimated);
                     return Results.NoContent();
                 }))
             .RequireAuthorization();

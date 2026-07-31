@@ -100,7 +100,6 @@ public class User : IdentityUser<int>
     public AuthorSettings AuthorSettings { get; set; } = new AuthorSettings();
     
     // --- Other Settings ---
-    public bool PrefersDataSaverMode { get; set; } = false;
     public bool PrefersAnimatedSprites { get; set; } = true;
     public bool AllowDiscoveryFromHiddenFavorites { get; set; } = false;
 

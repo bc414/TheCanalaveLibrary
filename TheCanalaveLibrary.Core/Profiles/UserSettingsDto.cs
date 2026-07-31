@@ -3,8 +3,8 @@ namespace TheCanalaveLibrary.Core;
 /// <summary>
 /// Aggregate read DTO for the settings page (<c>/settings</c>). Loaded once by
 /// <see cref="IUserSettingsService.GetMySettingsAsync"/> and used to seed all five sub-forms.
-/// <c>ThemeId</c>, <c>PrefersAnimatedSprites</c>, and <c>PrefersDataSaverMode</c> are lifted
-/// to the top level because they are updated by the Appearance sub-form handler
+/// <c>ThemeId</c> and <c>PrefersAnimatedSprites</c> are lifted to the top level because they
+/// are updated by the Appearance sub-form handler
 /// (<see cref="IUserSettingsService.UpdateAppearanceAsync"/>), separate from all JSON groups.
 /// <c>ShowMatureContent</c> and <c>AllowDiscoveryFromHiddenFavorites</c> live inside
 /// <see cref="PrivacySettingsDto"/> — they are hot scalar columns updated together with the
@@ -19,7 +19,6 @@ public record UserSettingsDto(
     // Appearance section (Feature 3)
     int ThemeId,
     bool PrefersAnimatedSprites,
-    bool PrefersDataSaverMode,
     // JSON group sub-records (Privacy also carries ShowMatureContent + AllowDiscoveryFromHiddenFavorites)
     ReaderSettingsDto Reader,
     PrivacySettingsDto Privacy,

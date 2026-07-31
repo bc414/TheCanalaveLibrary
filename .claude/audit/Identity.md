@@ -8,9 +8,10 @@ Server-project only; permanently **L5 N/A**.
 
 **Entities:** `User : IdentityUser<int>` (Core/Identity/), `ApplicationRole : IdentityRole<int>`
 (Core/Models/). `User` carries hot filter `ShowMatureContent`, `ThemeId`, `PrefersAnimatedSprites`,
-`PrefersDataSaverMode`, `AllowDiscoveryFromHiddenFavorites`, and three owned JSON columns
-(`ReaderSettings`, `PrivacySettings`, `AuthorSettings`) mapped via `OwnsOne(...).ToJson()` with inner
-enum→short conversions. Cold `UserProfile` partition is 1-to-1.
+`AllowDiscoveryFromHiddenFavorites`, and three owned JSON columns (`ReaderSettings`,
+`PrivacySettings`, `AuthorSettings`) mapped via `OwnsOne(...).ToJson()` with inner enum→short
+conversions. Cold `UserProfile` partition is 1-to-1. (`PrefersDataSaverMode` removed WU-DataSaver,
+2026-07-31 — inert, no render-path consumer; see `audit/Sprites.md` Feature 3 L3-Logic note.)
 
 **Pages (Server/Identity/Pages + /Shared):** full default Blazor-Identity scaffold (Login, Register,
 2FA, recovery, ExternalLogin, Manage/*, ConfirmEmail, ResetPassword, Passkeys, …). Plus

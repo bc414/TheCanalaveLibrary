@@ -81,7 +81,6 @@ else
             Themes="@(Themes ?? [])"
             InitialThemeId="@Settings.ThemeId"
             InitialPrefersAnimated="@Settings.PrefersAnimatedSprites"
-            InitialPrefersDataSaver="@Settings.PrefersDataSaverMode"
             Busy="@_appearanceBusy"
             OnSave="HandleSaveAppearanceAsync" />
 
@@ -275,7 +274,7 @@ else
 
     private async Task HandleSaveAppearanceAsync(AppearanceSettingsForm.AppearanceArgs args) =>
         await RunWithFeedbackAsync(
-            () => SettingsService.UpdateAppearanceAsync(args.ThemeId, args.PrefersAnimated, args.PrefersDataSaver),
+            () => SettingsService.UpdateAppearanceAsync(args.ThemeId, args.PrefersAnimated),
             v => _appearanceBusy = v,
             "Appearance saved.");
 
