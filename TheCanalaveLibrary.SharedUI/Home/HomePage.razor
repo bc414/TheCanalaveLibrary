@@ -107,7 +107,7 @@
     // Mirrors StoryPage/GroupPage/SeriesPage's backing-property convention (avoids nested-quote
     // parsing inside a Razor attribute value).
     private string? OgDescription => SocialDescriptionHelper.Clean(MissionBlurb);
-    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(null, "/img/default-cover.svg");
+    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(null, SeoDefaults.OgFallbackImagePath);
     private string OgUrl => PublicUrlProvider.AbsolutePageUrl("/");
 
 

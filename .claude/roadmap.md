@@ -157,7 +157,7 @@ done.
 | **2** | ~~WU-DiscoveryOverrideUI~~ **DONE 2026-07-31** | B7 | Per-user filter-override editing surface (§8.7) — see "Resolved" below |
 | **3** | ~~WU-Home~~ **DONE 2026-07-28** | F1 | Closed Phase 2's last content item; Phase 2 fully closed 2026-07-30 (WU-AccountEnforcement, Tier 1) |
 | **4** — Phase 3 (L4 freeze sweep) | WU-A11y | F6 | Resolve decision row 12 just before the sweep starts |
-| **4** | *(fold into the same sweep — don't build standalone)* | H1, E4, H8 | Each cheap enough to ride the sweep rather than justify its own WU |
+| **4** | ~~WU-SweepRiders~~ **DONE 2026-07-31** | H1, E4, H8 | Pulled ahead of the Phase 3 sweep rather than ridden alongside it — H8 was a decision that needed settling before the sweep styles ~1,325 LOC of Identity scaffold, not during it; H1 turned out to need no code change (stale tracker context — verified already-resolved) and E4 was small enough to travel with H8. See "Resolved" below. |
 | **5** — beta window | WU-EditorSprite | A1 | Spec'd authoring capability; design the sanitizer allow-list addition alongside it |
 | **5** | Decision row 6 (beta logistics) | F5 | Chat-only, shortly before beta opens |
 | **5** | WU-NotifEmail | B1 | Stays at the Phase 6 gate itself — no live audience to fan out to before then |
@@ -183,6 +183,41 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 2026-07-30; nothing left to sequence.
 
 ## Resolved
+
+- **WU-SweepRiders — H1/E4/H8 closed (2026-07-31).** Pulled ahead of the Phase 3 L4 sweep (see
+  Tier 4 above) rather than ridden alongside it, since H8 was a decision blocking whether the
+  sweep needs to style the Identity 2FA/passkey/external-login scaffold at all.
+  - **H8 (MA-610 prune-vs-keep) — keep, across all three flows.** Brian intends to support them
+    going forward. Corrected the entry's own over-generalization along the way: only external
+    login is provider-dependent (its `ManageNavMenu` entry is already conditional); TOTP 2FA and
+    passkeys are functional today with no external config. No code changed. Opened a genuine
+    follow-up rather than treating "keep" as "verified": `hidden-deferrals-tracker.md` **H9** — none
+    of these flows has ever been driven end-to-end. Detail: `modernization-audit/deferred-work.md`
+    §2 MA-610 (updated in place).
+  - **H1 (`Error.razor` mismatch) — closed with no code change; the tracker entry was stale.**
+    MA-110 (2026-07-18) had already fixed the plaque/vessel content this entry described. The one
+    thing left to check — whether `/Error` gets any layout — turned out to already be yes:
+    `AuthorizeRouteView`'s `DefaultLayout="typeof(MainLayout)"` ambient default wraps it in the
+    real site chrome even though Error.razor has no `@layout` of its own and the Server assembly
+    is excluded from `Routes.razor`'s Router (that exclusion governs client-side SPA-navigation
+    matching, not which layout a statically-routed SSR endpoint gets). The wire status code is
+    already correctly 500. Verified live via a forced-throw endpoint under a non-Development
+    environment, `curl` + browser. Detail: `error-handling.md` §"The `/Error` HTML path";
+    `design/surface-registry.md` §"Sweep completion" (corrected — Error.razor was never actually
+    the remaining-open item it claimed).
+  - **E4 (default OG image is SVG, not a raster) — built.** A real 1200×630 PNG
+    (`wwwroot/img/og-default.png`) replaces the `default-cover.svg`/`default-avatar.svg` fallback
+    across all eight `og:image`/`twitter:image` call sites, behind one new shared constant
+    (`TheCanalaveLibrary.Core.SeoDefaults.OgFallbackImagePath`) rather than a literal repeated
+    across seven files. The in-page `<img>` placeholders are untouched. The asset is an
+    AI-generated placeholder (ImageSharp render from the site's design tokens) carrying a visible
+    "AI-generated placeholder — replace before launch" caption, at Brian's request, so a real
+    branded asset is still owed before launch. Detail: `audit/Seo.md` (Open item moved to
+    Resolved); `hidden-deferrals-tracker.md` E4.
+
+  Verified: `dotnet build`/`dotnet test` green; H1/E4 needed no new automated coverage (static
+  markup + a constant swap); browser-verified `/Error` and the OG tags on six page types via
+  prerendered-HTML `curl` (crawler-equivalent fetch). Full record: `workplan.md` WU-SweepRiders.
 
 - **WU-DiscoveryOverrideUI — §8.7 per-user filter-override editing UI built, `UserCustomFilter` cut
   (2026-07-31, closes tracker item B7).** The read/merge half (`IDiscoveryDefaultsReadService`) had

@@ -946,9 +946,20 @@ primary/accent everywhere (alias bridge deleted); one neutral hover (surface-hov
 :focus-visible ring; z-ladder/backdrop/shadow tokens on every overlay; uniform dismissal
 (dismiss.js: catchers + data-dropdown); mod buttons on tint recipes; Identity fully restyled
 (31 pages + Shared, Bootstrap debris deleted); NotFound/MobileLayout bar/plaques/vessels done;
-scripts/check-design-tokens.ps1 enforces all of it in CI. Remaining known-open: Error.razor
-(Server template page, low priority); Blazored.Typeahead package chrome (documented MVP
-carve-out); visual sign-off of swept pages = the standing L4 human pass.
+scripts/check-design-tokens.ps1 enforces all of it in CI. Remaining known-open: Blazored.Typeahead
+package chrome (documented MVP carve-out); visual sign-off of swept pages = the standing L4 human
+pass.
+
+**Error.razor correction (2026-07-31, WU-SweepRiders, tracker H1 — closed, no defect found):** the
+"Error.razor (Server template page, low priority)" item listed above as remaining-open was itself
+stale by the time this note was written. MA-110 (2026-07-18) had already rewritten Error.razor to
+the plaque/vessel treatment (see the h1/vessel/request-id/links pattern §"NotFound.razor /
+Error.razor" above described, pre-fix). Verified live 2026-07-31: `/Error` already renders wrapped
+in the real `SharedUI.MainLayout` (full nav chrome, correct tokens, no bare canvas) via the
+`AuthorizeRouteView DefaultLayout="typeof(MainLayout)"` ambient default — a page needs no `@layout`
+of its own to get it, Server-assembly exclusion from `Routes.razor`'s Router notwithstanding (that
+exclusion is about client-side SPA-navigation matching, not which layout a statically-routed SSR
+endpoint receives). Nothing here needed fixing.
 
 ---
 

@@ -141,17 +141,33 @@ above); verified via prerendered-HTML `curl` alongside the rest of WU-Home's bro
 
 ## Open
 
-- **Default OG image is an SVG re-use, not a proper raster asset.** No-cover/no-avatar/no-image
-  content types (Series, BlogPosts, Groups; Chapter falls back to its story's cover which falls
-  back to this) fall back to the existing `wwwroot/img/default-cover.svg` — the same placeholder
-  `<img>` tags already use. Wired correctly, but social crawlers (Twitter/Facebook in particular)
-  often don't rasterize SVG for `og:image`/`twitter:image` reliably — the OG spec and Twitter's
-  card docs both assume PNG/JPG/WEBP/GIF. A proper branded raster asset (1200×630, the OG-recommended
-  aspect ratio) should replace this before the OG rollout is genuinely launch-ready; not fabricated
-  here since it's a design asset, not a code decision.
 - Direct-R2/CDN `<img>`-display migration — see "The migration this does NOT do" above.
 - Production values for `Site:PublicBaseUrl` (and `ImageStorage:PublicBaseUrl` if/when it diverges)
   are a Phase-7 config/secrets-promotion concern (`roadmap.md`), not a code gap.
+
+### RESOLVED (2026-07-31, WU-SweepRiders, tracker E4) — default OG image was an SVG re-use
+
+No-cover/no-avatar/no-image content types (Series, BlogPosts, Groups; Chapter falls back to its
+story's cover which falls back to this; Profile falls back for no-avatar) fell back to the same
+`wwwroot/img/default-cover.svg`/`default-avatar.svg` the placeholder `<img>` tags use. Wired
+correctly, but social crawlers (Twitter/Facebook in particular) don't reliably rasterize SVG for
+`og:image`/`twitter:image` — the OG spec and Twitter's card docs both assume PNG/JPG/WEBP/GIF.
+
+**Fix:** a real 1200×630 raster, `wwwroot/img/og-default.png`, replaces the SVG fallback at all
+eight call sites (Home, Story, Chapter, Series, Group, BlogPost, Profile,
+ContentGateInterstitial), behind one new shared constant —
+`TheCanalaveLibrary.Core.SeoDefaults.OgFallbackImagePath` — rather than the path literal repeated
+across seven files. The in-page `<img>` placeholders themselves are untouched; this only changes
+the crawler-facing fallback. The asset is an AI-generated placeholder (ImageSharp render from the
+site's own design tokens) carrying a visible "AI-generated placeholder — replace before launch"
+caption, so its provisional nature is legible on the card itself pending a real branded asset.
+
+**Verified:** `curl`'d prerendered HTML for a coverless story, a series, a group, a blog post, a
+no-avatar profile, and the homepage — `og:image`/`twitter:image` resolve absolute and end in
+`og-default.png`; direct fetch of `/img/og-default.png` confirms 1200×630 PNG. No automated test
+tier applies (a static-asset + constant swap with no branching); `PublicUrlProviderTests`'
+existing fallback-resolution coverage needed no change (its literals are arbitrary test inputs,
+not the production constant).
 
 ## Feature 64 — Site SEO: settled vs. open (revised 2026-07-19; built by WU-AccessGate)
 

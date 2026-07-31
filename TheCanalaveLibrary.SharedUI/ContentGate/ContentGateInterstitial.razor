@@ -20,7 +20,7 @@
    instead of a bare URL. Deliberately NO description and the site-default image, never the
    cover — the un-consented viewer rule extends to unfurl surfaces. *@
 <SocialMetaTags Title="@Metadata.Title"
-                ImageUrl="@PublicUrlProvider.AbsoluteImageUrl(null, "/img/default-cover.svg")"
+                ImageUrl="@PublicUrlProvider.AbsoluteImageUrl(null, SeoDefaults.OgFallbackImagePath)"
                 Url="@PublicUrlProvider.AbsolutePageUrl(ReturnUrl)"
                 OgType="article" />
 

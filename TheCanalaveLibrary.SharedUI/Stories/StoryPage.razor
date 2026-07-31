@@ -301,7 +301,7 @@ else
     private string? OgDescription => Story is null
         ? null
         : SocialDescriptionHelper.Clean(Story.ShortDescription) ?? SocialDescriptionHelper.Clean(Story.LongDescription);
-    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(Story?.CoverArtRelativeUrl, "/img/default-cover.svg");
+    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(Story?.CoverArtRelativeUrl, SeoDefaults.OgFallbackImagePath);
     private string OgUrl => PublicUrlProvider.AbsolutePageUrl(Story is null
         ? $"/story/{StoryId}"
         : string.IsNullOrEmpty(Story.Slug) ? $"/story/{Story.StoryId}" : $"/story/{Story.StoryId}/{Story.Slug}");

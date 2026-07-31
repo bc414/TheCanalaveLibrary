@@ -17,7 +17,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-DiscoveryOverrideUI (2026-07-31) — built the §8.7 per-user filter-override
+- **Last landed:** WU-SweepRiders (2026-07-31) — closed tracker items H1, E4, H8 ahead of the
+  Phase 3 L4 sweep rather than riding alongside it (H8 gated whether the sweep needs to style
+  ~1,325 LOC of Identity scaffold at all). H8: keep the 2FA/passkey/external-login scaffold
+  (Brian) — corrected the entry's "no provider configured" over-generalization (only external
+  login is provider-dependent) and opened **H9** (never verified end-to-end) rather than treating
+  "keep" as "verified." H1: closed with **no code change** — the tracker's "Development Mode
+  boilerplate"/no-layout premise was stale; `/Error` already gets `MainLayout` via
+  `AuthorizeRouteView`'s ambient `DefaultLayout`, and the wire status is already 500. E4: built —
+  a real 1200×630 `og-default.png` (ImageSharp, site tokens, visible "AI-generated placeholder"
+  caption) replaces the SVG OG fallback at all 8 call sites behind a new `SeoDefaults` constant.
+  No cell flips. `dotnet test` green, unchanged count.
+  (Before that, same day: WU-DiscoveryOverrideUI — built the §8.7 per-user filter-override
   editing surface `IDiscoveryDefaultsReadService`'s read/merge never carried: a new self-referential
   `IDiscoveryFilterSettingsService` (sparse upsert/delete, mirrors
   `INotificationWriteService.SetSettingAsync`) surfaced on `/settings` via `DiscoverySettingsForm`,
@@ -30,7 +41,7 @@ references it, does not restate it.
   hardcode — a cross-cutting fix across its several consumers, not folded in as a point fix). No
   cell flips (F31, F21, F22 all stay Stage 5 — closing an invisible gap under an already-sound
   cell, same shape as B0/B4/B12). `dotnet test` green: Unit 776, RazorComponents 635, Integration
-  1021 (2,432 total).
+  1021 (2,432 total).)
   (Before that, same day: WU-DataSaver — `PrefersDataSaverMode` removed end to end rather than
   wired up: measurement before building showed B0's own "suppress sprites, or cut the setting"
   framing was wrong on the numbers (sprites are a rounding error; cover art/avatars are the real
@@ -53,14 +64,17 @@ references it, does not restate it.
   day, WU-Home + WU-SiteNews — decision row 2 resolved, closing tracker item F1.)
 - **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
   **Phase 3 is next** — Brian-driven L4 freeze sweep + WU-A11y (the latter gated on decision
-  row 12) — nothing further blocks starting it. WU-DataSaver, WU-StatBadgeProducers,
+  row 12) — nothing further blocks starting it. WU-SweepRiders was pulled *ahead of* Phase 3
+  specifically because H8 was a decision the sweep's own scope depended on (keep vs. prune the
+  Identity scaffold it would otherwise style); WU-DataSaver, WU-StatBadgeProducers,
   WU-ApplyFiltersPurity, and WU-ErrorHandling2 were all Tier-1/Tier-2 between-phase work (below),
   not phase gates.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
-  exist in **every group A–H** (fewer now that B0/B3/B4/B7/B12 are closed; B14/B15/B16 newly
-  opened), including two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also left a
-  named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption (see its
-  DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its DONE entry.
+  exist in **every group A–H** (fewer now that B0/B3/B4/B7/B12/H1/E4/H8 are closed; B14/B15/B16/H9
+  newly opened), including two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also
+  left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
+  (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
+  DONE entry.
 - **Blocked on Brian:** decision rows 4, 6, 8, 10, and 12 (`roadmap.md` §"Decisions
   that need you"; rows 2 and 13 resolved 2026-07-28).
 
@@ -202,6 +216,75 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-SweepRiders — closes tracker H1, E4, H8 (cross-cutting, extends `Errors/`, `Seo/`, Identity) — DONE ✓ (2026-07-31)
+
+- **Cells:** none flip. H1/E4 are off-grid (no cell); H8 leaves F1 L4 at Stage 1, unchanged —
+  this WU settled the *decision* the Phase 3 sweep needed, not the sweep's own styling pass.
+- **Why pulled ahead of Phase 3** (`roadmap.md` Tier 4 originally read "fold into the same sweep —
+  don't build standalone"): H8 governs whether ~1,325 LOC of Identity 2FA/passkey/external-login
+  pages get styled at all during that sweep, so it needed settling first, not during.
+- **H8 — MA-610 prune-vs-keep: keep, across 2FA, passkeys, and external login (Brian, 2026-07-31).**
+  Corrected the tracker/audit entry's own over-generalization along the way: only external login is
+  provider-dependent (OAuth/OIDC client registration) — its `ManageNavMenu.razor` entry is already
+  conditional on `hasExternalLogins`. TOTP 2FA (`RequiresTwoFactor` → `LoginWith2fa.razor`) and
+  passkeys (`SignInManager.PasskeySignInAsync`/`MakePasskeyCreationOptionsAsync`, wired via
+  `PasskeySubmit.razor` and two endpoint maps in `IdentityComponentsEndpointRouteBuilderExtensions.cs`)
+  are functional today with no external config — not inert scaffold. No code changed; kept as-is:
+  `ManageNavMenu.razor`, `CanalaveSignInManager`'s overrides, `Login.razor`'s passkey/2FA branches,
+  the four `/Account/*` endpoint maps. **Not closed by this decision:** the MA-112/608/012
+  just-in-time org moves bundled into the same tracker entry (`UserDeletionService`,
+  `MainLayout.razor` under `Server/Components/Layout/`, `Core/Models` scaffold, `NotFound.razor`) —
+  a distinct organizational question this WU's clusters (`Errors/`/`Seo/`) don't touch. **Opened
+  H9** — none of these three flows has ever been driven end-to-end; "keep" rests on the code
+  looking intact, not on verified behavior.
+- **H1 — `Error.razor` mismatch: closed with no code change; the tracker context was stale.**
+  MA-110 (2026-07-18) had already replaced the "Development Mode boilerplate" this entry
+  described with the plaque/vessel treatment, before this WU started. The one open question —
+  whether `/Error` gets any layout, given it carries no `@layout` and the Server assembly is
+  excluded from `Routes.razor`'s Router `AppAssembly`/`AdditionalAssemblies` — turned out to
+  already be resolved: `AuthorizeRouteView`'s `DefaultLayout="typeof(MainLayout)"` ambient default
+  wraps it in the real site chrome regardless (that Router exclusion governs client-side
+  SPA-navigation matching only, not which layout a statically-routed SSR endpoint receives).
+  Verified live: started the server under a non-Development (`Staging`) environment via an
+  explicit `ConnectionStrings__canalavedb` env var (bypassing `appsettings.Development.json`,
+  which only loads under `Development`), hit a temporary forced-throw endpoint, and confirmed via
+  both `curl` and a real browser tab: single "Canalave Library" header (no duplication), full nav
+  chrome, correct plaque/request-id content, and — separately — that the wire status code is
+  already **500**, not 200, so no `OnInitialized` status re-assert (the pattern
+  `StatusCodePage.razor` uses for a *different* middleware, the status-code re-execute path) was
+  needed. The temporary endpoint and the Staging-only env vars were removed before finishing;
+  no production code path changed.
+- **E4 — default OG/social image was an SVG, not a raster: built.** New shared constant
+  `TheCanalaveLibrary.Core.SeoDefaults.OgFallbackImagePath` = `/img/og-default.png`, replacing the
+  `/img/default-cover.svg`/`default-avatar.svg` literal previously repeated across seven files, at
+  all eight `og:image`/`twitter:image` call sites: `HomePage`, `StoryPage`, `ChapterReadingPage`,
+  `SeriesPage`, `GroupPage`, `BlogPostPage`, `ProfilePage`, `ContentGateInterstitial`. The in-page
+  `<img>` placeholders (`StoryCard.DefaultCoverArtFallback` and every avatar `<img>` fallback)
+  are untouched — this only changes the crawler-facing fallback, since crawlers don't reliably
+  rasterize SVG for card images but do for `<img>` (a decorative element the crawler doesn't
+  render). Asset: `wwwroot/img/og-default.png`, 1200×630, generated with ImageSharp from a
+  throwaway scratchpad console app (not committed) rendering the site's own design tokens
+  (`--color-surface`/`--color-border`/`--color-action-ink`, Fraunces via the site's own
+  `fraunces-var.woff2`) — no new package dependency added to the Server project, since the
+  rendering need is build-time-only. At Brian's request the asset carries a visible
+  "AI-generated placeholder — replace before launch" caption baked into the image, so its
+  provisional status is legible on the card itself, not only in commit history.
+- **Verified:** `dotnet build` clean; `dotnet test` green, unchanged count (no new automated tier
+  applies to any of the three — H1/E4 are markup/asset/constant changes with no new branching,
+  H8 is a decision; `PublicUrlProviderTests`' existing fallback-resolution coverage needed no
+  change, since its literals are arbitrary test inputs, not the production constant). Browser
+  band: `/Error` per above; OG tags via prerendered-HTML `curl` (crawler-equivalent fetch, no JS)
+  across a coverless story, a series, a group, a blog post, a no-avatar profile, and the homepage
+  — `og:image`/`twitter:image` all resolve absolute and end in `og-default.png`; direct fetch of
+  `/img/og-default.png` confirmed 1200×630 `image/png`.
+- **Tool:** Sonnet in Claude Code (H1/E4 execution) + chat (H8 decision, Brian). **Pointers:**
+  `hidden-deferrals-tracker.md` H1/E4/H8/H9; `modernization-audit/deferred-work.md` §2 MA-610
+  (updated in place); `error-handling.md` §"The `/Error` HTML path"; `design/surface-registry.md`
+  §"Sweep completion" (corrected); `audit/Seo.md` (Open item moved to Resolved); `roadmap.md`
+  §Resolved. **Deps:** none.
 
 ---
 

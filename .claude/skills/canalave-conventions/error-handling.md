@@ -72,6 +72,21 @@ read or write, expected or not — is a bodied `ProblemDetails`, and every clien
 reconstructs the contract's typed exception from it. `NavigationManager.NotFound()` continues to
 cover the 404-document case; this section covers the JSON API surface only.
 
+**The `/Error` HTML path** (`UseExceptionHandler("/Error")`, non-Development only —
+`Server/Components/Error.razor`): verified end-to-end 2026-07-31 (WU-SweepRiders, tracker H1,
+closed with no code change). Two facts worth stating explicitly because they read as surprising
+from the code alone: (1) **`/Error` is wrapped in the real `SharedUI.MainLayout`** — full nav
+chrome, no bare canvas — even though Error.razor carries no `@layout` directive and the Server
+assembly is excluded from `Routes.razor`'s Router `AppAssembly`/`AdditionalAssemblies`. That
+exclusion governs client-side SPA-navigation matching only; a page reached via ASP.NET's own
+static-SSR endpoint routing (which does include Server, since it's `App`'s own assembly) still
+gets `AuthorizeRouteView`'s `DefaultLayout="typeof(MainLayout)"` as its ambient default. Do not
+add an explicit `@layout` to Error.razor to "fix" this — it already has one, and adding a second
+chrome header duplicates the site wordmark. (2) **The wire status code is already 500**, not 200 —
+`ExceptionHandlerMiddleware` sets it before re-executing to `/Error`, so no `OnInitialized`
+status-code re-assert (the pattern `StatusCodePage.razor` uses for the *status-code* re-execute
+path, a different middleware) is needed here.
+
 **Server side.** `Program.cs` registers `AddProblemDetails()` plus an `ApiExceptionHandler :
 IExceptionHandler` scoped to `/api/*` only (returns `false` for everything else, so the existing
 `UseExceptionHandler("/Error")` HTML path and `Error.razor` are untouched): an unhandled

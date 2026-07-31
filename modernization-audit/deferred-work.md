@@ -40,16 +40,30 @@ audited at best.
 
 ## 2. 🧑 Product decisions (need a human call, not an engineering one)
 
-### MA-610 — the Identity scaffold (~1,325 LOC, the single biggest dead-weight block)
-`Server/Identity/Pages/**` carries untouched ASP.NET-Identity scaffold for features **not** in the
-65-feature set: two-factor auth (`LoginWith2fa`, `LoginWithRecoveryCode`, `Manage/EnableAuthenticator`/
+### MA-610 — the Identity scaffold (~1,325 LOC, the single biggest dead-weight block) — RESOLVED: KEEP (2026-07-31, WU-SweepRiders, tracker H8)
+`Server/Identity/Pages/**` carries ASP.NET-Identity scaffold for features **not** in the 65-feature
+set: two-factor auth (`LoginWith2fa`, `LoginWithRecoveryCode`, `Manage/EnableAuthenticator`/
 `Disable2fa`/`ResetAuthenticator`/`GenerateRecoveryCodes`/`TwoFactorAuthentication`), passkeys
-(`Manage/Passkeys`/`RenamePasskey`), external-login (`ExternalLogin`, `Manage/ExternalLogins`). No provider
-is configured. **NOT a namespace/asset defect** — the historical `Components.Account → Identity` drift and
-the `PasskeySubmit.razor.js` asset path are both already resolved.
-- **The call:** keep-as-framework-flow (leave it — it's the stock Identity UI, harmless and inert) vs.
-  prune the unbuilt-feature pages + their `Manage/ManageNavMenu.razor` entries. Removal is ~L effort but
-  purely subtractive.
+(`Manage/Passkeys`/`RenamePasskey`), external-login (`ExternalLogin`, `Manage/ExternalLogins`). **NOT a
+namespace/asset defect** — the historical `Components.Account → Identity` drift and the
+`PasskeySubmit.razor.js` asset path are both already resolved.
+
+**Correction to this entry's original framing:** "No provider is configured" over-generalized across
+all three flows. Only **external login** is provider-dependent (OAuth/OIDC client registration) —
+and its `ManageNavMenu.razor` entry is already conditional on `hasExternalLogins`, so it doesn't
+advertise itself when unconfigured. **TOTP 2FA and passkeys are functional today with no external
+provider** — `SignInManager.PasskeySignInAsync`/`MakePasskeyCreationOptionsAsync` and the
+`RequiresTwoFactor` flow are real, wired code paths, not inert scaffold.
+
+**The call: keep, as framework-flow, across all three (Brian, 2026-07-31)** — Brian intends to
+support these login methods going forward. No code removed; `ManageNavMenu.razor` and the four
+`/Account/Passkey*`/`/Account/PerformExternalLogin` endpoint maps in
+`IdentityComponentsEndpointRouteBuilderExtensions.cs` stay as-is.
+
+**Follow-up opened, not closed silently:** none of these flows (enroll-TOTP, enroll-passkey, login
+via either, the external-login callback) has ever been driven end-to-end — "keep because it looks
+functional" is not the same claim as "verified functional." Tracked as
+`hidden-deferrals-tracker.md` **H9**.
 
 ### Beta-scope / launch / legal / a11y rows — `middle_plan_v2.md` "Decisions that need you"
 Untouched by this pass because they are genuinely yours (rows 1, 3-Feature-51/56, 4, 6, 8, 10, 12): beta

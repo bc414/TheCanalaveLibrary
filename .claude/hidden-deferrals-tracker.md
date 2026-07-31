@@ -568,10 +568,19 @@ unless noted. All sit under Stage-5 cells.
   - Source: `security.md` §"Phase-7 Deferred Register"; `roadmap.md` Phase 7.
   - Context: Cloudflare TLS Full-Strict, origin firewall to CF ranges, `ForwardedHeaders`, serving uploads from a separate origin (+ CSP `img-src` tightening), Turnstile on registration, HSTS tuning, real-domain CSP-enforce verification, and promoting the vuln scan from report-only to a hard gate.
 
-- [ ] **E4 — Default OG/social image is an SVG, not a raster** `[off-grid · low · launch]`
+- [x] **E4 — Default OG/social image is an SVG, not a raster — CLOSED (2026-07-31, WU-SweepRiders)** `[off-grid · low · launch]`
   - Grid: `Seo/` cluster has no row; consuming features (F4/F6/F20/F35/F38) read 5.
-  - Source: `audit/Seo.md` "Open."
-  - Context: Default social image reuses `default-cover.svg`. Crawlers often won't rasterize SVG — a real 1200×630 raster is needed before OG rollout is launch-ready.
+  - Source: `audit/Seo.md` "Open" (now resolved).
+  - **Resolution:** a real 1200×630 PNG (`wwwroot/img/og-default.png`) replaces the `default-cover.svg`/
+    `default-avatar.svg` re-use across all eight `og:image`/`twitter:image` call sites (Home, Story,
+    Chapter, Series, Group, BlogPost, Profile, ContentGateInterstitial), behind one new shared
+    constant, `TheCanalaveLibrary.Core.SeoDefaults.OgFallbackImagePath` — previously the path was a
+    literal repeated across seven files. The in-page `<img>` placeholders (`default-cover.svg`/
+    `default-avatar.svg` themselves) are untouched; this only changes the crawler-facing fallback.
+    The asset is AI-generated (ImageSharp render from the site's design tokens — surface/border/
+    action-ink colors, Fraunces display font) and carries a visible "AI-generated placeholder —
+    replace before launch" caption baked into the image, at Brian's request, so the placeholder
+    nature is legible on the card itself, not just in commit history.
 
 - [ ] **E5 — N≥2 horizontal-scale work** `[off-grid · low · post-launch]` — *Deliberate (activates only at N≥2).*
   - Grid: none (L7 dissolved; buffers are Stage 5 at N=1).
@@ -644,10 +653,20 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
 
 ## H. Design/polish & test-hygiene (lower priority)
 
-- [ ] **H1 — `Error.razor` server error page mismatch** `[polish · low · pre-launch]`
+- [x] **H1 — `Error.razor` server error page mismatch — CLOSED, no defect found (2026-07-31, WU-SweepRiders)** `[polish · low · pre-launch]`
   - Grid: `Errors/` cluster has no row.
   - Source: `design/surface-registry.md` §"Sweep completion (Phases B–F)" + Synthesis 8.
-  - Context: Last surviving Surface-Registry mismatch — bare on canvas, and ships the template "Development Mode" boilerplate user-facing. Listed "remaining known-open, low priority."
+  - **This entry's own context was stale.** The "Development Mode boilerplate" it describes was
+    already replaced by MA-110's rewrite (2026-07-18) — plaque + vessel, no boilerplate — before
+    this WU even started. Verified live (Staging-mode server, forced 500, `curl` + browser):
+    (1) `/Error` already renders wrapped in the real `SharedUI.MainLayout` — full nav chrome,
+    single "Canalave Library" wordmark, no duplication — via the `AuthorizeRouteView
+    DefaultLayout="typeof(MainLayout)"` ambient default in `Routes.razor`, which applies to any
+    page without its own `@layout`, Error.razor included, regardless of Server-assembly exclusion
+    from the Router's `AppAssembly`/`AdditionalAssemblies` (that exclusion governs client-side
+    SPA-navigation matching, not which layout an ASP.NET-routed static-SSR endpoint gets). (2) the
+    wire status code is already correctly **500**, not 200 — no `OnInitialized` fix needed. No code
+    change made; `error-handling.md` corrected to state the actual (not assumed) contract.
 
 - [ ] **H2 — `StoryDeck` skeleton + `UserMenu`/`CreateMenu` flyout browser-verify** `[polish · low · anytime]`
   - Grid: cross-cutting chrome, no row.
@@ -687,10 +706,34 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - Context, all that remains open: the 25 non-mobile **C-consolidate** merges (manifest §5); Integration `NotificationServiceTests` flake fix; Integration format-dupes; Unit tautology trim. The formerly-deferred `*Mobile` test-file deletions were discharged by WU-ResponsiveMerge (2026-07-18) — no `*Mobile*` test file exists. Suite is green, so nothing signals the pending cleanup.
   - Note: `CanalaveTypeaheadTests.Escape_ClosesDropdown_WithoutSelecting` is a known pre-existing intermittent flake (passes on isolated re-run).
 
-- [ ] **H8 — MA-610 Identity scaffold prune-vs-keep** `[decision · low · pre-launch]` — *Partially disclosed (the 🧑 deliberately-not-done list in `workplan.md`'s WU-AuditFixPass-2 entry).*
-  - Grid: F1 mostly 5 (L4=1).
-  - Source: `modernization-audit/deferred-work.md` §2; `report.md` MA-610.
-  - Context: ~1,325 LOC of scaffolded 2FA/passkey/external-login pages with no provider configured. A product decision (prune vs keep), untouched. Also: MA-112/608/012 just-in-time org moves (`UserDeletionService`, `MainLayout.razor` still under `Server/Components/Layout/`, `Core/Models` scaffold, `NotFound.razor`) — deferred by the "empty folders just-in-time" convention.
+- [x] **H8 — MA-610 Identity scaffold prune-vs-keep — DECISION RECORDED: KEEP (2026-07-31, WU-SweepRiders)** `[decision · low · pre-launch]`
+  - Grid: F1 mostly 5 (L4=1, unchanged — this WU didn't touch L4).
+  - Source: `modernization-audit/deferred-work.md` §2 (updated in place with the resolution); `report.md` MA-610.
+  - **Resolved: keep all three flows (2FA, passkeys, external login), across the board** — Brian
+    intends to support them going forward. No code change (kept as-is): `ManageNavMenu.razor`'s
+    entries, `CanalaveSignInManager`'s overrides, `Login.razor`'s passkey/2FA branches, and the
+    four `/Account/*` endpoint maps in `IdentityComponentsEndpointRouteBuilderExtensions.cs`.
+    Correction folded into `deferred-work.md`'s MA-610 entry: "no provider is configured"
+    over-generalized — only external login is provider-dependent; TOTP 2FA and passkeys are
+    functional today with no external config. **New follow-up: H9** (below) — none of these flows
+    has ever been driven end-to-end, so "keep" rests on the code looking intact, not on verified
+    behavior.
+  - **Still open, NOT closed by this decision:** the MA-112/608/012 just-in-time org moves bundled
+    into this entry (`UserDeletionService`, `MainLayout.razor` still under
+    `Server/Components/Layout/`, `Core/Models` scaffold, `NotFound.razor`) are a distinct
+    organizational question, deferred by the "empty folders just-in-time" convention — this WU
+    touched `Errors/`/`Seo/`, not those clusters, so they stay open here.
+
+- [ ] **H9 — Identity alternate-login flows never verified end-to-end** `[test-gap · low · pre-launch]`
+  - Grid: F1 mostly 5 (L4=1); no cell captures this specifically.
+  - Source: opened by H8's resolution (2026-07-31, WU-SweepRiders); `modernization-audit/deferred-work.md` §2 MA-610.
+  - Context: keeping the 2FA/passkey/external-login scaffold (H8) rests on the code *looking*
+    intact, not on having been driven. No test tier and no browser pass has ever exercised
+    enroll-TOTP, enroll-passkey, sign-in via either, or the `RequiresTwoFactor`/external-login
+    callback redirect. Per `canalave-conventions/testing.md`'s auth-cookie/claims manual band, this
+    is browser-verification work, not something an automated tier absorbs. Close by driving each
+    flow live against a real Development session and recording the result in an `Identity`-adjacent
+    audit note (none exists yet — this is also the trigger to create one).
 
 ---
 

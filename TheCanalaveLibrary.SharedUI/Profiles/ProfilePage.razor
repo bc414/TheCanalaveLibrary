@@ -440,7 +440,7 @@ else
     // Open Graph/Twitter meta (WU-Seo).
     private string OgTitle => Header is null ? "Profile" : $"{Header.Username} — Profile";
     private string? OgDescription => Header is null ? null : SocialDescriptionHelper.Clean(Header.Tagline);
-    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(Header?.AvatarUrl, "/img/default-avatar.svg");
+    private string OgImageUrl => PublicUrlProvider.AbsoluteImageUrl(Header?.AvatarUrl, SeoDefaults.OgFallbackImagePath);
     private string OgUrl => PublicUrlProvider.AbsolutePageUrl($"/user/{UserId}");
 
     protected override async Task OnInitializedAsync()
