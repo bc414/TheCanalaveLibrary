@@ -37,6 +37,8 @@ $retiredTerms = [ordered]@{
     'layer7-redis.md (L7 dissolved, 2026-07-06)'              = 'layer7-redis'
     'GetRecentListingsAsync (removed 2026-07-28, WU-Home)'    = 'GetRecentListingsAsync'
     'ExecuteWriteAsync (renamed to ExecuteAsync, WU-ErrorHandling2 2026-07-30)' = '\bExecuteWriteAsync\b'
+    'ExpandWithChildrenAsync (folded into ITagHierarchyReadService, WU-ApplyFiltersPurity 2026-07-30)' = '\bExpandWithChildrenAsync\b'
+    'ApplyFiltersAsync (reverted to sync ApplyFilters, WU-ApplyFiltersPurity 2026-07-30)' = '\bApplyFiltersAsync\b'
 }
 
 # A line mentioning a retired term is legitimate when it says so. Loose by design — this is a

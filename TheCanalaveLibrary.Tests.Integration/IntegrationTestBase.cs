@@ -60,7 +60,21 @@ public abstract class IntegrationTestBase(PostgresFixture postgres) : IAsyncLife
         Factory.Services.GetRequiredService<ViewCountBuffer>().Clear();
         Factory.Services.GetRequiredService<ReadingProgressBuffer>().Clear();
         Factory.Services.GetRequiredService<UserActivityBuffer>().Clear();
+        // Tag hierarchy map (WU-ApplyFiltersPurity): a process-lifetime cache on a collection-shared
+        // host outlives Respawn's row wipe. Most tests seed Tag rows directly via ApplicationDbContext,
+        // never through ServerTagWriteService, so write-invalidation does not fire for them — without
+        // this line a warm snapshot from an earlier test silently disables roll-up for every later one.
+        Factory.Services.GetRequiredService<ServerTagHierarchyCache>().Invalidate();
     }
+
+    /// <summary>
+    /// Drops the cached tag-hierarchy map. Only needed by a test that inserts or re-parents a Tag row
+    /// DIRECTLY (via ApplicationDbContext) AFTER it has already performed a filtered story read in the
+    /// same test — the per-test reset in <see cref="ResetSharedHostState"/> covers everything else.
+    /// Writes made through <c>ITagWriteService</c> invalidate on their own.
+    /// </summary>
+    protected void InvalidateTagHierarchy() =>
+        Factory.Services.GetRequiredService<ServerTagHierarchyCache>().Invalidate();
 
     // ── Seeding helpers ───────────────────────────────────────────────────────────
 

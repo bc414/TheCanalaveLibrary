@@ -9,7 +9,8 @@ namespace TheCanalaveLibrary.Server;
 // carries the raw SpriteIdentifier key. See layer2-services.md §"Sprite URLs Are Resolved At Render Time."
 public class ServerStoryReadService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
-    IActiveUserContext activeUser) : IStoryReadService
+    IActiveUserContext activeUser,
+    ITagHierarchyReadService tagHierarchy) : IStoryReadService
 {
     /// <summary>
     /// Exposed as a protected property so derived write services can access the user context
@@ -435,7 +436,8 @@ public class ServerStoryReadService(
             query = query.Where(s => restrictToStoryIds.Contains(s.StoryId));
 
         bool hasFts = !string.IsNullOrWhiteSpace(filter.TextQuery);
-        query = await ApplyFiltersAsync(readDb, query, filter, hasFts);
+        TagExpansionMap expansion = await ResolveExpansionAsync(filter);
+        query = ApplyFilters(query, filter, expansion, ActiveUser.UserId, hasFts);
 
         // ── Count (before Skip/Take so it reflects the full filtered set) ─────────────────
         int totalCount = await query.CountAsync();
@@ -503,7 +505,8 @@ public class ServerStoryReadService(
 
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
         IQueryable<Story> query = readDb.Stories.Where(s => candidateIds.Contains(s.StoryId));
-        query = await ApplyFiltersAsync(readDb, query, filter, !string.IsNullOrWhiteSpace(filter.TextQuery));
+        TagExpansionMap expansion = await ResolveExpansionAsync(filter);
+        query = ApplyFilters(query, filter, expansion, ActiveUser.UserId, !string.IsNullOrWhiteSpace(filter.TextQuery));
 
         return await query.Select(s => s.StoryId).ToListAsync();
     }
@@ -514,7 +517,9 @@ public class ServerStoryReadService(
         // consulted — batchSize is the only take-cap and EF.Functions.Random() is the only order.
         // No shown-id tracking; "give me more" is a second call that appends a fresh independent draw.
         await using ReadOnlyApplicationDbContext readDb = await readDbFactory.CreateDbContextAsync();
-        IQueryable<Story> query = await ApplyFiltersAsync(readDb, readDb.Stories, filter, !string.IsNullOrWhiteSpace(filter.TextQuery));
+        TagExpansionMap expansion = await ResolveExpansionAsync(filter);
+        IQueryable<Story> query = ApplyFilters(readDb.Stories, filter, expansion, ActiveUser.UserId,
+            !string.IsNullOrWhiteSpace(filter.TextQuery));
 
         int[] ids = await query
             .OrderBy(_ => EF.Functions.Random())
@@ -526,35 +531,44 @@ public class ServerStoryReadService(
     }
 
     /// <summary>
+    /// Resolves ship-shape validation and the tag-hierarchy expansion map for a filter, in that
+    /// order — malformed ship input must still throw before any cache/DB work, exactly as the
+    /// former <c>ApplyFiltersAsync</c> did. The map is skipped entirely when the filter names no
+    /// tag ids: unfiltered browse pays nothing (the honest half of hidden-deferrals-tracker B12
+    /// §3), and only filtered reads can ever trigger a (cached) hierarchy load.
+    /// </summary>
+    private async Task<TagExpansionMap> ResolveExpansionAsync(StoryFilterDto filter)
+    {
+        ValidateShipShape(filter);
+        return NamesTagIds(filter) ? await tagHierarchy.GetExpansionMapAsync() : TagExpansionMap.Empty;
+    }
+
+    private static bool NamesTagIds(StoryFilterDto f) =>
+        f.IncludedTagIds.Count > 0 || f.ExcludedTagIds.Count > 0 ||
+        f.IncludedShips.Count > 0 || f.ExcludedShips.Count > 0;
+
+    /// <summary>
     /// Shared filter-building helper used by <see cref="GetListingsAsync"/>,
     /// <see cref="FilterCandidateIdsAsync"/> and <see cref="GetRandomBatchAsync"/>. Applies tag
     /// include (AND or OR per <c>filter.IncludeMode</c>), tag exclude (ANY/none), ship filters,
     /// FTS, and viewer-relative interaction exclusions. Does NOT add OrderBy or pagination —
     /// those are the caller's responsibility.
     ///
-    /// <para><b>Hierarchy roll-up (WU-TagFanon):</b> every tag id — include, exclude, and ship
-    /// member — expands to {self} ∪ children before the predicate builds (one lookup; hierarchy
-    /// is one level deep). Symmetric: excluding a parent excludes its children. AND terms are
-    /// independent: a story tagged only with a child satisfies a filter naming parent AND child.
-    /// See layer2-services.md §"Tag Hierarchy Roll-Up".</para>
+    /// <para><b>Pure and synchronous (WU-ApplyFiltersPurity, closes hidden-deferrals-tracker
+    /// B12).</b> No DbContext, no I/O, no ambient state: the hierarchy roll-up arrives as the
+    /// <paramref name="expansion"/> argument (see <see cref="ResolveExpansionAsync"/>) and the
+    /// viewer as <paramref name="viewerId"/>, so the result is a function of its inputs alone —
+    /// reproducible from them, loggable, replayable. WU-TagFanon had made this method async and
+    /// given it a <c>ReadOnlyApplicationDbContext</c> parameter; that is reverted. Every tag id —
+    /// include, exclude, and ship member — expands to {self} ∪ children via
+    /// <paramref name="expansion"/> (hierarchy is one level deep). Symmetric: excluding a parent
+    /// excludes its children. AND terms are independent: a story tagged only with a child
+    /// satisfies a filter naming parent AND child. See layer2-services.md §"Tag Hierarchy
+    /// Roll-Up".</para>
     /// </summary>
-    private async Task<IQueryable<Story>> ApplyFiltersAsync(
-        ReadOnlyApplicationDbContext readDb, IQueryable<Story> query, StoryFilterDto filter, bool hasFts)
+    private static IQueryable<Story> ApplyFilters(
+        IQueryable<Story> query, StoryFilterDto filter, TagExpansionMap expansion, int? viewerId, bool hasFts)
     {
-        // Shape validation up front, as a user-facing domain exception — NOT an ArgumentException
-        // from deep inside predicate assembly, which would surface as a 500 for what is ordinary
-        // bad input.
-        ValidateShipShape(filter);
-
-        // ── One child-expansion lookup covering every axis that names tag ids ─────────────
-        Dictionary<int, int[]> expansion = await ExpandWithChildrenAsync(readDb,
-        [
-            ..filter.IncludedTagIds,
-            ..filter.ExcludedTagIds,
-            ..filter.IncludedShips.SelectMany(sh => sh.MemberTagIds),
-            ..filter.ExcludedShips.SelectMany(sh => sh.MemberTagIds),
-        ]);
-
         // ── Tag include ────────────────────────────────────────────────────────────────────
         // Character tags live in StoryCharacters; all others live in StoryTags. Since every
         // TagId belongs to exactly one entity type, the || always resolves to one side only —
@@ -564,7 +578,7 @@ public class ServerStoryReadService(
             if (filter.IncludeMode == TagIncludeMode.Or)
             {
                 // OR — story must match at least one included tag (or child) in either collection.
-                int[] anyOf = [.. filter.IncludedTagIds.SelectMany(id => expansion[id]).Distinct()];
+                int[] anyOf = [.. filter.IncludedTagIds.SelectMany(expansion.Expand).Distinct()];
                 query = query.Where(s =>
                     s.StoryCharacters.Any(sc => anyOf.Contains(sc.CharacterTagId)) ||
                     s.StoryTags.Any(st => anyOf.Contains(st.TagId)));
@@ -575,7 +589,7 @@ public class ServerStoryReadService(
                 // {self ∪ children} set with its own subquery, evaluated independently.
                 foreach (int tagId in filter.IncludedTagIds)
                 {
-                    int[] set = expansion[tagId];
+                    int[] set = expansion.Expand(tagId);
                     query = query.Where(s =>
                         s.StoryCharacters.Any(sc => set.Contains(sc.CharacterTagId)) ||
                         s.StoryTags.Any(st => set.Contains(st.TagId)));
@@ -586,7 +600,7 @@ public class ServerStoryReadService(
         // ── Tag exclude (story must have none of the excluded tags OR their children) ──
         if (filter.ExcludedTagIds.Count > 0)
         {
-            int[] noneOf = [.. filter.ExcludedTagIds.SelectMany(id => expansion[id]).Distinct()];
+            int[] noneOf = [.. filter.ExcludedTagIds.SelectMany(expansion.Expand).Distinct()];
             query = query.Where(s =>
                 !s.StoryCharacters.Any(sc => noneOf.Contains(sc.CharacterTagId)) &&
                 !s.StoryTags.Any(st => noneOf.Contains(st.TagId)));
@@ -611,9 +625,9 @@ public class ServerStoryReadService(
         }
 
         // ── Interaction exclusions (authenticated viewer only) ────────────────────────────
-        if (filter.ExcludedInteractions.Count > 0 && ActiveUser.UserId.HasValue)
+        if (filter.ExcludedInteractions.Count > 0 && viewerId.HasValue)
         {
-            int viewerId = ActiveUser.UserId.Value;
+            int viewerIdValue = viewerId.Value;
 
             bool exclFav    = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.Favorite);
             bool exclHidden = filter.ExcludedInteractions.Contains(UserStoryInteractionTypeEnum.PrivateFavorite);
@@ -627,7 +641,7 @@ public class ServerStoryReadService(
             // SQL as literal true/false, which Postgres optimises away. Zero SQL overhead for bits that
             // aren't excluded.
             query = query.Where(s => !s.UserStoryInteractions
-                .Any(usi => usi.UserId == viewerId &&
+                .Any(usi => usi.UserId == viewerIdValue &&
                     (exclFav    && usi.IsFavorite      ||
                      exclHidden && usi.IsHiddenFavorite ||
                      exclFollow && usi.IsFollowed       ||
@@ -660,25 +674,6 @@ public class ServerStoryReadService(
     }
 
     /// <summary>
-    /// Expands each distinct input tag id to <c>{self} ∪ children</c> (hierarchy is one level
-    /// deep — a single lookup, no CTE; the query the rejected Cache_TagHierarchy presumed).
-    /// </summary>
-    private static async Task<Dictionary<int, int[]>> ExpandWithChildrenAsync(
-        ReadOnlyApplicationDbContext readDb, IEnumerable<int> tagIds)
-    {
-        List<int> ids = tagIds.Distinct().ToList();
-        if (ids.Count == 0) return [];
-
-        var childRows = await readDb.Tags
-            .Where(t => t.ParentTagId != null && ids.Contains(t.ParentTagId.Value))
-            .Select(t => new { Parent = t.ParentTagId!.Value, t.TagId })
-            .ToListAsync();
-
-        ILookup<int, int> childrenByParent = childRows.ToLookup(r => r.Parent, r => r.TagId);
-        return ids.ToDictionary(id => id, id => (int[])[id, .. childrenByParent[id]]);
-    }
-
-    /// <summary>
     /// One ship term: the story must (or, negated, must not) contain a single pairing whose
     /// member set covers every named character — each member id already roll-up-expanded.
     /// Members beyond <see cref="ShipFilterDto.MaxMembers"/> are rejected, not silently capped.
@@ -686,10 +681,10 @@ public class ServerStoryReadService(
     /// assembly.
     /// </summary>
     private static IQueryable<Story> ApplyShipTerm(
-        IQueryable<Story> query, ShipFilterDto ship, Dictionary<int, int[]> expansion, bool negate)
+        IQueryable<Story> query, ShipFilterDto ship, TagExpansionMap expansion, bool negate)
     {
         // Arity is already validated by ValidateShipShape at the entry point.
-        List<int[]> sets = ship.MemberTagIds.Select(id => expansion[id]).ToList();
+        List<int[]> sets = ship.MemberTagIds.Select(expansion.Expand).ToList();
         if (sets.Count == 0) return query;
 
         CharacterPairingType? type = ship.PairingType;

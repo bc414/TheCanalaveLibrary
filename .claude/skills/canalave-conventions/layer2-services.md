@@ -831,7 +831,8 @@ body does. This is the same "body swap behind a stable interface" principle that
 `GetRandomBatchAsync(StoryFilterDto filter, int batchSize)` on `IStoryReadService`:
 
 ```csharp
-IQueryable<Story> q = ApplyFilters(readDb.Stories, filter); // shared helper, see below
+TagExpansionMap expansion = await ResolveExpansionAsync(filter); // ValidateShipShape + cached lookup
+IQueryable<Story> q = ApplyFilters(readDb.Stories, filter, expansion, ActiveUser.UserId, hasFts);
 int[] ids = await q.OrderBy(_ => EF.Functions.Random()).Take(batchSize).Select(s => s.StoryId).ToArrayAsync();
 return await GetListingsByIdsAsync(ids);
 ```
@@ -843,11 +844,17 @@ pagination uses offset (`Skip`/`Take` on `GetListingsAsync`); the random path ne
 Interaction exclusions flow through `filter.ExcludedInteractions` the same as any other filter.
 The page seeds those from the §8.7 defaults read service; the random path is not special-cased.
 
-**`ApplyFilters(IQueryable<Story> q, StoryFilterDto filter) → IQueryable<Story>`** is a private
-helper extracted from `GetListingsAsync` so the random path and the sorted path share it (DRY).
-It applies: tag include (AND loop / OR Any by `filter.IncludeMode`), tag exclude, FTS Matches,
-and interaction-state exclusions. It does **not** add `OrderBy` or pagination — those live in
-the caller.
+**`ApplyFilters(IQueryable<Story> query, StoryFilterDto filter, TagExpansionMap expansion, int?
+viewerId, bool hasFts) → IQueryable<Story>`** is a private, **synchronous, side-effect-free**
+helper extracted from `GetListingsAsync` so the random path and the sorted path share it (DRY). It
+applies: tag include (AND loop / OR Any by `filter.IncludeMode`), tag exclude, ship filters, FTS
+Matches, and interaction-state exclusions. It does **not** add `OrderBy` or pagination — those live
+in the caller. **It takes no `DbContext` and does no I/O** (WU-ApplyFiltersPurity, closes
+hidden-deferrals-tracker B12) — the hierarchy roll-up map and the viewer id are explicit arguments,
+so the method is a pure function of its inputs. Callers obtain the map via the sibling
+`ResolveExpansionAsync(filter)`, which runs `ValidateShipShape` first and then resolves a cached
+process-local map from `ITagHierarchyReadService` — see §"Tag Hierarchy Roll-Up" and
+§"Reference-Data Caching" below.
 
 ### §8.7 Discovery Defaults — `IDiscoveryDefaultsReadService`
 
@@ -1004,7 +1011,9 @@ Task<TreeSearchListingResultDto> SearchAsync(
 2. Calls a new thin read on `IStoryReadService`:
    ```csharp
    Task<IReadOnlyList<int>> FilterCandidateIdsAsync(IReadOnlyCollection<int> candidateIds, StoryFilterDto filter);
-   // body: return ApplyFilters(readDb.Stories.Where(s => candidateIds.Contains(s.StoryId)), filter, hasFts)
+   // body: TagExpansionMap expansion = await ResolveExpansionAsync(filter);
+   //       return ApplyFilters(readDb.Stories.Where(s => candidateIds.Contains(s.StoryId)),
+   //                            filter, expansion, ActiveUser.UserId, hasFts)
    //           .Select(s => s.StoryId).ToListAsync();
    ```
    reusing the existing `ApplyFilters` verbatim — the single implementation of rating (global query
@@ -1220,7 +1229,14 @@ post-MVP defense-in-depth if wanted.
 `TagPriority { Primary=0, Supporting=1 }`. Primary default. No `None` value. ContentWarning gets no
 priority picker and its priority is coerced to `Primary` at service layer.
 
-### Per-type filter branch in `ApplyFilters`
+### Per-type filter branch in `ApplyFilters` (historical WU37 sketch)
+
+**Historical design sketch — the two-arg signature below predates WU-ApplyFiltersPurity's current
+signature (`ApplyFilters(query, filter, expansion, viewerId, hasFts)`, see "Random batch" above)
+and the shipped code never partitioned by type this way** (the real predicate ORs `StoryCharacters`
+and `StoryTags` per id in one pass — see `ServerStoryReadService.ApplyFilters`). Kept for the
+provenance trail on why Character ids don't appear in `StoryTags`, not as current implementation
+guidance.
 
 `ApplyFilters(IQueryable<Story> q, StoryFilterDto filter)` must partition tag ids by type **before**
 building the include/exclude predicates, because Character ids no longer appear in `StoryTags`:
@@ -1257,9 +1273,18 @@ a single lookup, no CTE). Rules:
 - **Independent AND terms**: each included tag id expands to `{self} ∪ children` and becomes one
   `Any(expanded.Contains(...))` predicate. A story tagged only `Saura` satisfies a filter naming
   both `Bulbasaur` AND `Saura` (one row satisfies both terms).
-- **Expansion happens server-side in `ApplyFilters`** (one `Tags.Where(t => ids.Contains(t.ParentTagId))`
-  lookup before predicate build) — never in the UI, so every consumer (discover, random batch,
-  bookshelves, profile tabs) inherits it.
+- **Expansion comes from a cached `TagExpansionMap`, resolved before `ApplyFilters` runs (WU-
+  ApplyFiltersPurity, 2026-07-30)**, never in the UI, so every consumer (discover, random batch,
+  bookshelves, profile tabs) inherits it. `ServerStoryReadService.ResolveExpansionAsync(filter)`
+  validates ship shape, then — only if the filter names any tag id — asks
+  `ITagHierarchyReadService.GetExpansionMapAsync()` for the whole parent→children map. That map is a
+  **process-local cache**: refreshed on any `Tag` write and bounded by a short absolute TTL, so
+  reads are **eventually consistent with a bounded staleness window** (moderator edits land near-
+  instantly at N=1 through the write service; up to the TTL for writes made outside it, e.g. a
+  seeder or direct SQL, or across nodes at N≥2). One cycle of staleness is an accepted cost — see
+  §"Reference-Data Caching" below for the full rationale and the conditions that license this.
+  `ApplyFilters` itself receives the resolved map as a plain argument and is pure/synchronous — it
+  does no I/O and knows nothing about caching.
 - **Silent in the UI** — child tags share the parent's sprite (render-time fallback); the chip
   tooltip + sr-only text + child-ring carry the relationship (`layer4-style.md`).
 - **Saved Tag Selections broaden over time** as children are added under a stored parent id —
@@ -1267,6 +1292,63 @@ a single lookup, no CTE). Rules:
 - **Ship filter** (`StoryFilterDto` pairing axis) inherits roll-up on its member character ids; ship
   filters are transient viewer intent, **never** persisted in `SavedTagSelection` (tag-axis-only,
   settled F15 scope).
+
+### Reference-Data Caching — the tag-hierarchy precedent (WU-ApplyFiltersPurity)
+
+The codebase's first in-process cache. Before caching any reference data, check it against all four
+conditions below — **all four must hold**, not just some:
+
+- **Tiny.** The whole dataset is small enough to hold in memory without a size/eviction policy (the
+  tag hierarchy is ~136 rows today).
+- **Viewer-independent.** No global query filter or per-viewer scoping applies to the underlying
+  entity — verify this in the DbContext's `OnModelCreating`, don't assume it. A cache loaded in a
+  background DI scope (no `HttpContext`, no authenticated viewer) must return exactly what a
+  per-request query would return for *any* viewer, or the cache is unsound. (`Tag` has no
+  `HasQueryFilter` and no soft-delete column — checked against
+  `ReadOnlyApplicationDbContext.OnModelCreating`.)
+- **Single write choke point.** Exactly one service (or a small, enumerable set) is the only path
+  that writes the data, so invalidation has one place to hook.
+- **One cycle of staleness is harmless.** The write is a rare, deliberate action (a moderator edit),
+  and a reader briefly seeing the pre-write state is an acceptable, bounded cost — not a correctness
+  violation.
+
+**Mechanism:** a plain `volatile` snapshot field on a singleton, reloaded through a
+`SemaphoreSlim(1, 1)` double-checked gate (warm reads take zero locks; concurrent cold reads collapse
+to one load), invalidated by the write service after a successful `SaveChangesAsync`, and bounded by
+a short absolute TTL on top (`Stopwatch`-based, monotonic — never wall-clock) so the cache also
+self-heals against writes made outside the write service (seeders, direct SQL) and converges across
+nodes at N≥2 with **no shared store**. This matches the repo's existing in-process-state idiom —
+`ViewCountBuffer`/`ReadingProgressBuffer`/`UserActivityBuffer` are all plain fields on a singleton,
+not a caching abstraction.
+
+**Not `IMemoryCache` or `HybridCache`.** Neither has any precedent in this codebase (repo-wide grep
+for `IMemoryCache|HybridCache|IDistributedCache` turns up nothing but a comment noting Redis is
+post-MVP). `IMemoryCache` would need an `AddMemoryCache()` registration this project doesn't carry,
+and buys nothing for a single entry with no eviction pressure. `HybridCache`'s entire value is its L2
+(distributed) tier and cross-node stampede protection — there is no L2 store at N=1
+(`horizontal-scaling.md`), and a `SemaphoreSlim` gives single-node stampede protection in a few lines.
+Reach for either only once an actual distributed L2 exists to justify it.
+
+**Singletons cannot inject scoped services.** `IDbContextFactory<ReadOnlyApplicationDbContext>` is
+registered scoped, so a singleton cache takes `IServiceScopeFactory` and opens a short-lived scope
+per load — the same discipline `ViewCountFlusher` already uses for its periodic flush.
+
+**The anti-precedent stands as written.** `ISiteSettingsReadService`'s "Deliberately uncached: reads
+are single-row…" is the contrast case, not something this convention supersedes — site settings and
+tag hierarchy make opposite calls because they satisfy different subsets of the four conditions
+above (settings reads are cheap enough that "instant on next read" beats caching; a settings write
+is not necessarily rare). Do not cite this section to justify caching settings, or vice versa.
+
+**Mandatory obligations for any cache built this way:**
+- **Register its invalidation in `IntegrationTestBase.ResetSharedHostState`.** The integration test
+  host is one process shared collection-wide (`testing.md` §"Integration test host is shared
+  collection-wide"); a process-lifetime cache outlives Respawn's per-test row reset and will leak
+  state across tests unless explicitly cleared. This is not optional — `ResetSharedHostState`'s own
+  doc comment claims to enumerate every stateful singleton in the host, and a cache added without a
+  matching reset falsifies that claim silently.
+- **Re-verify viewer-independence if the cached entity ever gains a query filter.** The whole design
+  is only sound as long as the "viewer-independent" condition holds; a future migration adding a
+  filter to the cached entity (e.g. a soft-delete column) would silently break it.
 
 ## `AllowPrivateMessages` Gate
 

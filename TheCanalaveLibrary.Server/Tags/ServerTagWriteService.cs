@@ -7,7 +7,8 @@ public class ServerTagWriteService(
     ApplicationDbContext db,
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IActiveUserContext activeUser,
-    ISpriteAssetProbe spriteProbe)
+    ISpriteAssetProbe spriteProbe,
+    ServerTagHierarchyCache tagHierarchyCache)
     : ServerTagReadService(readDbFactory), ITagWriteService
 {
     public async Task<TagSaveResult> CreateTagAsync(CreateTagDto dto)
@@ -37,6 +38,11 @@ public class ServerTagWriteService(
 
         db.Tags.Add(tag);
         await db.SaveChangesAsync();
+        // Broad invalidation — ANY tag write, not just ParentTagId changes. Tag writes are rare
+        // moderator actions, so the narrow trigger's only reward is a subtle way to be wrong
+        // (hidden-deferrals-tracker B12's own framing). After commit, never before: pre-commit
+        // invalidation lets a concurrent reader re-cache the old rows.
+        tagHierarchyCache.Invalidate();
 
         string? warning = await BuildSpriteWarningAsync(dto.SpriteIdentifier?.Trim());
         return new TagSaveResult(tag.TagId, warning);
@@ -70,6 +76,7 @@ public class ServerTagWriteService(
         tag.ParentTagId = dto.ParentTagId;
 
         await db.SaveChangesAsync();
+        tagHierarchyCache.Invalidate();
 
         return await BuildSpriteWarningAsync(dto.SpriteIdentifier?.Trim());
     }
@@ -103,6 +110,7 @@ public class ServerTagWriteService(
 
         db.Tags.Remove(tag);
         await db.SaveChangesAsync();
+        tagHierarchyCache.Invalidate();
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

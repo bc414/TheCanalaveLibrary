@@ -306,6 +306,12 @@ var spriteBaseUrl = builder.Configuration["Sprites:BaseUrl"] ?? "/sprites/themes
 builder.Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService(spriteBaseUrl));
 builder.Services.AddScoped<ITagReadService, ServerTagReadService>();
 builder.Services.AddScoped<ITagWriteService, ServerTagWriteService>();
+// Tag hierarchy roll-up map (WU-ApplyFiltersPurity, closes hidden-deferrals-tracker B12) — the
+// codebase's first cache. Singleton concrete + forwarded interface (same shape as
+// IFanonReadService/Write below): ServerTagWriteService and IntegrationTestBase need Invalidate(),
+// which is not on the read contract. See layer2-services.md §"Reference-Data Caching".
+builder.Services.AddSingleton<ServerTagHierarchyCache>();
+builder.Services.AddSingleton<ITagHierarchyReadService>(sp => sp.GetRequiredService<ServerTagHierarchyCache>());
 // WU-TagFanon: forwarding-delegate shape (MA-107's safer default) — one instance per scope.
 builder.Services.AddScoped<IFanonWriteService, ServerFanonWriteService>();
 builder.Services.AddScoped<IFanonReadService>(sp => sp.GetRequiredService<IFanonWriteService>());

@@ -50,7 +50,7 @@ public class ApiErrorEnvelopeTests(PostgresFixture postgres) : IntegrationTestBa
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    // ── StoryEndpoints — ApplyFiltersAsync's ValidateShipShape StoryValidationException ──
+    // ── StoryEndpoints — ResolveExpansionAsync's ValidateShipShape StoryValidationException ──
     // Found live by this WU's audit: WU-TagFanon upgraded the exception type to a user-facing
     // one but never wrapped these read handlers, so malformed ship input still 500'd.
 

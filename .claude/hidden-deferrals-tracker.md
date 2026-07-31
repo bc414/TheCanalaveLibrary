@@ -301,7 +301,7 @@ decision work that has no row at all.
   WU-SelectionPermalink"; `audit/Discovery.md` §"WU-DiscoveryFilterRestore + WU-SelectionPermalink
   note". `dotnet test` green (2,330); browser-verified.
 
-- [ ] **B12 — Hierarchy roll-up made `ApplyFilters` impure; expansion is uncached and unshared** `[latent-risk · low · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26.*
+- [x] **B12 — Hierarchy roll-up made `ApplyFilters` impure; expansion is uncached and unshared — DONE (WU-ApplyFiltersPurity, 2026-07-30)** `[latent-risk · low · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26.*
   - Grid: F31 L2=5; F59/F60 (marts) L8=5 — invisible on all of them.
   - Source: `ServerStoryReadService.ApplyFiltersAsync` + `ExpandWithChildrenAsync`;
     `layer2-services.md` §"Tag Hierarchy Roll-Up"; `layer6-indexes.md` §"Measured, no DDL needed".
@@ -338,22 +338,41 @@ decision work that has no row at all.
   leans cacheable: edits are rare, one cycle of staleness is harmless, and the invalidation point
   is a single write service.
 
-  **Questions to settle before building anything:**
-  - Cache the expansion map, or keep the per-request lookup? If cached: process-local
-    `IMemoryCache` (fine at N=1) versus something that survives N≥2 (see `horizontal-scaling.md`).
-    A stale map on one node for one cycle is probably acceptable — but decide it deliberately
-    rather than by omission.
-  - Invalidation trigger: any `Tag` write, or specifically `ParentTagId` changes? The narrow
-    trigger is easy to get subtly wrong; the broad one is trivially correct and nearly free.
+  **Questions to settle before building anything — settled 2026-07-30, then built same-day:**
+  - Cache the expansion map, or keep the per-request lookup? **Cached.** Process-local snapshot
+    (`ServerTagHierarchyCache`, `volatile` field + `SemaphoreSlim` double-checked reload) — not
+    `IMemoryCache` (no precedent, buys nothing for one entry). Survives N≥2 via a 60 s absolute TTL
+    layered on top of write-invalidation, so every node converges independently with **zero shared
+    store** (`horizontal-scaling.md` §5) rather than needing something that "survives N≥2" in the
+    Valkey sense — the question's own framing assumed a shared-store answer that turned out
+    unnecessary.
+  - Invalidation trigger: any `Tag` write, or specifically `ParentTagId` changes? **Broad — any
+    `Tag` write.** Trivially correct and nearly free, exactly as this entry predicted.
   - Should expansion be *exposed* (e.g. `ITagReadService.GetChildIdsAsync`) so Layer 8 and any
-    future consumer share one implementation instead of copying the rule?
-  - **Re-measure on a network-separated database before concluding it does not matter.** The
-    existing number cannot answer the question it is currently being used to answer.
+    future consumer share one implementation instead of copying the rule? **Exposed, but via its
+    own `ITagHierarchyReadService`, not `ITagReadService`.** `ITagReadService` has 5 implementers
+    (server, client/WASM, both write services by inheritance, a test fake); adding a server-only
+    concern there ships it over HTTP for no client consumer. A dedicated interface serves B12's
+    actual goal — one shared implementation — without that cost.
+  - **Re-measure on a network-separated database before concluding it does not matter.** **Obviated
+    by removal, not performed.** That measurement existed to justify *keeping* a per-read
+    round-trip; this WU removes the round-trip instead, and its cost is monotonically non-negative
+    under any network topology, so eliminating it cannot be the wrong call regardless of what a
+    future measurement would show. **If the cache is ever removed and per-read expansion restored,
+    this measurement becomes necessary again** — the existing 0.02 ms figure is a localhost EXPLAIN
+    number and cannot answer the production-latency question on its own.
 
   **Not urgent, and not a defect.** Roll-up is correct and load-bearing — without it, fanonize
   adoption removes stories from their own species' search results. This entry is about the
   architectural debt the fix introduced, so a future session can weigh it deliberately instead of
   rediscovering it.
+
+  **Built (2026-07-30).** `ApplyFilters` reverted to pure/synchronous — `TagExpansionMap` (Core) and
+  `ITagHierarchyReadService`/`ServerTagHierarchyCache` (Server) landed exactly per the resolutions
+  above; `ServerTagWriteService`'s three write methods invalidate the cache post-commit. Full
+  record: `workplan.md` §"WU-ApplyFiltersPurity"; `audit/Discovery.md` §"WU-ApplyFiltersPurity
+  note"; `audit/Tags.md` §"WU-ApplyFiltersPurity Stage note"; convention:
+  `layer2-services.md` §"Reference-Data Caching". `dotnet test` green (2,374), run twice.
 
 ## C. L6 cells marked verified but never measured / known-missing indexes
 

@@ -40,6 +40,12 @@ public interface IStoryReadService
     /// current viewer, modulo the global content-rating filter). Two-step: filtered IQueryable →
     /// scalar id page → <see cref="GetListingsByIdsAsync"/> for the presentation projection.
     ///
+    /// <b>Tag hierarchy roll-up staleness (WU-ApplyFiltersPurity):</b> a filter naming any tag id
+    /// resolves its parent→children expansion from a cached, process-local map — eventually
+    /// consistent with a bounded staleness window (near-instant for edits made through the tag
+    /// admin UI; up to a short TTL otherwise), not a live per-request lookup. See
+    /// `layer2-services.md` §"Reference-Data Caching".
+    ///
     /// <b>Sort rules:</b> <see cref="DefaultSortOrder.Relevance"/> falls back to
     /// <see cref="DefaultSortOrder.DatePublished"/> when <paramref name="filter"/>.TextQuery is
     /// null/empty. <see cref="DefaultSortOrder.Score"/> is not meaningful on Source=All and
@@ -88,8 +94,9 @@ public interface IStoryReadService
     /// <summary>
     /// Returns a random selection of listing DTOs from the post-filter valid set (WU28, spec §5.3).
     /// Applies the same tag / FTS / interaction-exclusion filters as <see cref="GetListingsAsync"/>
-    /// via the shared <c>ApplyFilters</c> helper, then orders by <c>EF.Functions.Random()</c> and
-    /// takes up to <paramref name="batchSize"/> results.
+    /// via the shared <c>ApplyFilters</c> helper (including its cached tag-hierarchy roll-up — see
+    /// that method's staleness note), then orders by <c>EF.Functions.Random()</c> and takes up to
+    /// <paramref name="batchSize"/> results.
     ///
     /// <b>No shown-id tracking.</b> "Give me more" is a second call that appends a fresh draw — the
     /// caller accumulates results for display; this method has no memory of prior calls. Repeats are
@@ -102,7 +109,9 @@ public interface IStoryReadService
     /// <summary>
     /// Filters an arbitrary candidate id set down to the ones surviving <paramref name="filter"/>'s
     /// tag / FTS / interaction-exclusion predicate — the same <c>ApplyFilters</c> helper
-    /// <see cref="GetListingsAsync"/> and <see cref="GetRandomBatchAsync"/> use — plus the always-on
+    /// <see cref="GetListingsAsync"/> and <see cref="GetRandomBatchAsync"/> use (including its
+    /// cached tag-hierarchy roll-up — see <see cref="GetListingsAsync"/>'s staleness note) — plus
+    /// the always-on
     /// content-rating global filter. No sort, no pagination, no hydration: this is the thin
     /// building-block Automatic Tree Search composes against (WU44,
     /// `layer2-services.md` "Tree Search — Automatic Tab Composition"), for a Source whose candidate

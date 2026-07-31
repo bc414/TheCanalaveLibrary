@@ -81,12 +81,14 @@ Narrowing-within-fixed-source query → WU27/WU30.
 Two discovery semantics changed; both are additive to already-Stage-5 cells.
 
 **Hierarchy roll-up.** `ApplyFilters` expands every tag id to `{self} ∪ children` before building
-predicates — one lookup, hierarchy being one level deep. Symmetric (excluding a parent excludes its
+predicates, hierarchy being one level deep. Symmetric (excluding a parent excludes its
 children — what avoiding a species or a parent content warning means) and AND terms stay
 independent, so a story tagged only with a child satisfies a filter naming parent AND child.
 Expansion is server-side, so every consumer (`/discover`, random batch, bookshelves, profile tabs)
 inherits it. Saved Tag Selections therefore broaden as children are added under a stored parent —
 intended behaviour of a persisted artifact, stated so it isn't later read as a bug.
+**(Expansion is now a cached lookup, not a per-request query — see the WU-ApplyFiltersPurity note
+below, 2026-07-30.)**
 
 **Why this mattered urgently:** without it, the fanonize adoption flow would have removed a story
 from its own species' search results — the feature would have inverted its own purpose. Verified in
@@ -115,6 +117,48 @@ curated model exists to prevent.
 
 Covered by `DiscoveryRollUpAndShipTests` (Integration). Full narrative: `audit/Tags.md`
 §"WU-TagFanon Stage note"; rules: `layer2-services.md` §"Tag Hierarchy Roll-Up".
+
+## WU-ApplyFiltersPurity note (2026-07-30) — F31 L2 stays Stage 5
+
+Closes `hidden-deferrals-tracker.md` **B12**. WU-TagFanon's roll-up (above) had made
+`ServerStoryReadService.ApplyFilters` async and dependent on a live `ReadOnlyApplicationDbContext` —
+impure, and unreproducible from its `StoryFilterDto` alone. `ApplyFilters` is now **pure and
+synchronous** again: the tag-hierarchy expansion map is resolved once by the new
+`ITagHierarchyReadService` / `ServerTagHierarchyCache` (a process-local, whole-table cache —
+`layer2-services.md` §"Reference-Data Caching") and passed in as a plain argument, alongside the
+viewer id. No interface, DTO, endpoint, or component changed — additive to the already-Stage-5
+cell, same as WU-TagFanon's own note above.
+
+**Behavior change, deliberate and bounded:** roll-up was a live per-request query; it is now
+eventually consistent, refreshed on any `Tag` write (near-instant at N=1 through the tag admin UI)
+and bounded by a 60 s TTL otherwise (a seeder/direct-SQL write, or another node at N≥2). One cycle
+of staleness was judged harmless by B12 itself — tag edits are rare moderator actions.
+
+**The re-measure B12 asked for ("re-measure on a network-separated database before concluding the
+round-trip doesn't matter") is obviated, not deferred.** That measurement existed to justify
+*keeping* a per-read round-trip; this WU removes it instead, and the round-trip's cost is
+monotonically non-negative under any network topology, so eliminating it cannot be the wrong call
+regardless of what a future measurement would show. If the cache is ever removed and per-read
+expansion restored, that measurement becomes necessary again — the localhost figure
+(`audit/Tags.md` L6 paragraph) cannot answer it.
+
+**How verified:** `dotnet build` green; `dotnet test` green, run twice (2,374 total — the
+order-dependence risk below is why it was run twice, not once). Covering tiers — **Unit**
+(`TagExpansionMapTests`: grouping, self-first ordering, and the miss-returns-self contract that
+replaces the old per-request dictionary's cannot-miss guarantee); **Integration**
+(`TagHierarchyCacheTests`: cold load against real rows, cross-scope cache reuse by
+`ReferenceEquals`, and write-invalidation through the real `ITagWriteService` for create/
+re-parent/delete; `DiscoveryRollUpAndShipTests`, `StoryListingsTests`, `RandomBatchTests`,
+`TreeSearchComposeTests`, `ApiErrorEnvelopeTests` all still green unmodified, confirming roll-up
+semantics and the ship-validation 400 path are unchanged by the refactor).
+
+**Integration-harness risk, real and fixed.** The suite shares one `TestAppFactory` for the whole
+run; most tests seed `Tag` rows directly via `ApplicationDbContext` rather than through
+`ITagWriteService`, so write-invalidation never fires for them. `ServerTagHierarchyCache.Invalidate()`
+is now part of `IntegrationTestBase.ResetSharedHostState()` (`testing.md` §"Integration test host is
+shared collection-wide") — without it, a snapshot warmed by an early test silently disables roll-up
+for every later test that seeds a fresh parent/child pair, an order-dependent false negative rather
+than a crash.
 
 ## WU-DiscoveryFilterRestore + WU-SelectionPermalink note (2026-07-28) — F31 L2/L3-Logic/L3.5 stay Stage 5
 

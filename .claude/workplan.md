@@ -17,12 +17,17 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-ErrorHandling2 (2026-07-30) — the `ProblemDetails` API error envelope +
-  full client HTTP error translation, completing what WU-ErrorHandling (2026-07-06) deferred.
-  Closes tracker item **E1** and D5's behavior-change half; found and fixed a live gap along the
-  way (`StoryEndpoints`' filter/random-batch/filter-candidates reads still 500ing on malformed
-  ship input after WU-TagFanon typed the exception but never wrapped the endpoint). (Before that,
-  same day: WU-AccountEnforcement — mid-session account-status responsiveness
+- **Last landed:** WU-ApplyFiltersPurity (2026-07-30) — `ServerStoryReadService.ApplyFilters`
+  reverts to pure/synchronous (the tag-hierarchy expansion map is now an explicit argument, resolved
+  via a new cached `ITagHierarchyReadService`/`ServerTagHierarchyCache`, invalidated on any `Tag`
+  write plus a 60 s TTL). Closes tracker item **B12** — the per-filtered-read DB round-trip
+  WU-TagFanon's roll-up introduced is gone from the steady state; no cell flips (F31 L2, F11/F12 L2
+  all stay Stage 5). (Before that, same day: WU-ErrorHandling2 — the `ProblemDetails` API error
+  envelope + full client HTTP error translation, completing what WU-ErrorHandling (2026-07-06)
+  deferred, closing tracker item **E1** and D5's behavior-change half; found and fixed a live gap
+  along the way (`StoryEndpoints`' filter/random-batch/filter-candidates reads still 500ing on
+  malformed ship input after WU-TagFanon typed the exception but never wrapped the endpoint).
+  Before that, same day: WU-AccountEnforcement — mid-session account-status responsiveness
   (`AccountStatusBanner` live-reads status per navigation instead of relying on the sign-in claim;
   now covers Warned/Suspended/Banned; `NotificationBellInner`'s identical mid-session-staleness bug
   folded in and fixed the same way), closing tracker item **G1**'s residual and Phase 2's last open
@@ -31,10 +36,10 @@ references it, does not restate it.
   row 2 resolved, closing tracker item F1.)
 - **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
   **Phase 3 is next** — Brian-driven L4 freeze sweep + WU-A11y (the latter gated on decision
-  row 12) — nothing further blocks starting it. WU-ErrorHandling2 was Tier 1 between-phase work
-  (below), not itself a phase gate.
+  row 12) — nothing further blocks starting it. WU-ApplyFiltersPurity and WU-ErrorHandling2 were
+  both Tier-1/Tier-2 between-phase work (below), not phase gates.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
-  exist in **every group A–H** (~20 unchecked boxes, one fewer now that E1 is closed), including
+  exist in **every group A–H** (~19 unchecked boxes, one fewer now that B12 is closed), including
   two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also left a named follow-up:
   the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption (see its DONE entry).
 - **Blocked on Brian:** decision rows 4, 6, 8, 10, and 12 (`roadmap.md` §"Decisions
@@ -178,6 +183,66 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-ApplyFiltersPurity — `ApplyFilters` reverts to pure/sync; cached tag-hierarchy service (Feature 31, extends `Stories/`, `Tags/`) — DONE ✓ (2026-07-30)
+
+- **Cells:** none flip — F31 L2, F11/F12 L2, F59/F60 L8 all stay Stage 5; additive to already-sound
+  cells, same shape as WU-TagFanon's own note. Closes tracker item **B12**.
+- **Scope:** WU-TagFanon (2026-07-26) had made `ServerStoryReadService.ApplyFilters` async and
+  dependent on a live `ReadOnlyApplicationDbContext` for tag-hierarchy roll-up — impure, and
+  unreproducible from its `StoryFilterDto` alone (B12 complaint 1); the expansion rule was also
+  unshared with any future consumer (complaint 2), and the 0.02 ms measurement that justified the
+  per-read round-trip captured localhost DB execution, not a production network hop (complaint 3).
+- **Decisions settled before building (per B12's open questions):** cache the map (not keep the
+  per-request lookup) — process-local snapshot, invalidated on any `Tag` write, plus a 60 s absolute
+  TTL; broad invalidation trigger (any `Tag` write, not just `ParentTagId` changes); expansion gets
+  its own `ITagHierarchyReadService` interface rather than joining `ITagReadService` (5 existing
+  implementers, server-only concern); the "re-measure on a network-separated database" precondition
+  is **obviated, not deferred** — that measurement existed to justify keeping the round-trip, and
+  this WU removes it instead, so the round-trip's cost being ≥0 and network-topology-dependent means
+  eliminating it is non-worse under any possible measurement outcome.
+- **New Core types:** `TagExpansionMap` (`Core/Tags/`) — immutable `{self} ∪ children` snapshot,
+  `Expand(id)` returns `[id]` on a miss (never throws — the highest-likelihood refactor bug, since
+  the retired per-request dictionary was keyed on the caller's own ids and could not miss).
+  `ITagHierarchyReadService.GetExpansionMapAsync()`.
+- **New Server type:** `ServerTagHierarchyCache` (`Server/Tags/`) — singleton; `volatile` snapshot +
+  `SemaphoreSlim(1,1)` double-checked reload; opens a fresh `IServiceScopeFactory` scope per load
+  (the read-context factory is scoped, same discipline as `ViewCountFlusher`); no try/catch (a
+  failed load leaves the snapshot null, exception propagates — `logging.md` "No Silent Catches").
+  Registered singleton concrete + forwarded interface, same shape as `IFanonReadService`/Write.
+- **Invalidation:** `ServerTagWriteService.CreateTagAsync`/`UpdateTagAsync`/`DeleteTagAsync` each
+  call `Invalidate()` immediately after their `SaveChangesAsync()` (after commit, never before — a
+  pre-commit call would let a concurrent reader re-cache the stale rows).
+- **`ApplyFilters` refactor:** signature is now `ApplyFilters(query, filter, TagExpansionMap
+  expansion, int? viewerId, bool hasFts)` — `static`, synchronous, no `DbContext`, no ambient
+  `ActiveUser` read. New `ResolveExpansionAsync(filter)` runs `ValidateShipShape` first (malformed
+  ship input still 400s before any cache/DB work, unchanged), then resolves the map only if the
+  filter names any tag id (`TagExpansionMap.Empty` otherwise — unfiltered browse still touches the
+  hierarchy not at all, the property B12 itself credited). `ExpandWithChildrenAsync` deleted; its
+  query moved into the cache's loader. All three call sites (`GetListingsAsync`,
+  `FilterCandidateIdsAsync`, `GetRandomBatchAsync`) updated. No interface, DTO, endpoint, or
+  component change anywhere.
+- **Integration-harness fix (the largest implementation risk):** the suite shares one
+  `TestAppFactory` for its whole run, and most tests seed `Tag` rows directly via
+  `ApplicationDbContext` rather than through `ITagWriteService` — write-invalidation never fires for
+  them. `ServerTagHierarchyCache.Invalidate()` added to `IntegrationTestBase.ResetSharedHostState`
+  (its own doc claims to enumerate every stateful singleton in the host); a new
+  `InvalidateTagHierarchy()` helper covers the rarer mid-test case. Confirmed by inspection that no
+  existing test seeds a `Tag` row *after* a filtered story read within the same method.
+- **Verified:** `dotnet build` clean; `dotnet test` green, run twice (order-dependence risk) —
+  2,374 total (776 Unit + 625 RazorComponents + 973 Integration; new:
+  `TagExpansionMapTests` — grouping, self-first ordering, miss-returns-self; `TagHierarchyCacheTests`
+  — cold load, cross-scope `ReferenceEquals` reuse, write-invalidation through the real
+  `ITagWriteService` for create/re-parent/delete). `DiscoveryRollUpAndShipTests`,
+  `StoryListingsTests`, `RandomBatchTests`, `TreeSearchComposeTests`, `ApiErrorEnvelopeTests` all
+  green unmodified.
+- **Tool:** opusplan. **Pointers:** `layer2-services.md` §"Reference-Data Caching" and §"Tag
+  Hierarchy Roll-Up"; `horizontal-scaling.md` §5 (process-local caches need no shared store at
+  N≥2); `testing.md` §"Integration test host is shared collection-wide"; `audit/Discovery.md`
+  §"WU-ApplyFiltersPurity note"; `audit/Tags.md` §"WU-ApplyFiltersPurity Stage note". **Deps:**
+  WU-TagFanon (DONE ✓ 2026-07-26).
 
 ---
 

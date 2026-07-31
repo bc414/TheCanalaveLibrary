@@ -82,6 +82,24 @@ Keys are persisted to Postgres (`PersistKeysToDbContext<ApplicationDbContext>`, 
 source of truth across every node, this works identically at N=1 or N≥2 with zero additional work
 — noted here only so the full N≥2 picture is in one place instead of scattered.
 
+## 5. Process-local reference-data caches (e.g. the tag-hierarchy map) — no shared store needed
+
+`ServerTagHierarchyCache` (`layer2-services.md` §"Reference-Data Caching") is the codebase's first
+in-process cache — a whole-table snapshot of the tag parent→children map, invalidated on any `Tag`
+write and bounded by a short absolute TTL. Unlike the signal buffers above, this **does not join the
+Valkey body-swap list at N≥2**.
+
+**Why it doesn't need a shared store:** each node's copy is independently correct, not a partial
+slice that needs merging. The signal buffers (§3) are unsound at N≥2 without a shared store because
+two nodes' *writes* land in two disjoint dictionaries — max-progress/sum-of-views merging silently
+under-counts unless the writes are unified. A reference-data cache has no writes of its own; each
+node independently reads the same source-of-truth table and reaches the same answer. Write-
+invalidation only guarantees same-node freshness (a write on node A doesn't invalidate node B's
+copy), but the TTL is exactly what closes that gap: every node reloads from the shared database
+within one TTL window regardless of which node handled the write, with zero cross-node coordination.
+
+**Action, whenever N≥2 happens:** none. The design is self-healing by construction.
+
 ## Summary: the whole N≥2 story in one table
 
 | Concern | Needed? | What it takes |
@@ -90,3 +108,4 @@ source of truth across every node, this works identically at N=1 or N≥2 with z
 | SignalR backplane | **No** | No app-defined Hub exists or is planned (messaging's Hub permanently dropped 2026-07-07) |
 | Signal-buffer store swap | **Yes, when N≥2 happens** | Body swap to Valkey behind the unchanged buffer interface — already designed, not yet built |
 | Data Protection keyring | **No further action** | Already Postgres-backed; works today, unchanged at N≥2 |
+| Process-local reference-data caches (tag hierarchy) | **No further action** | TTL converges every node independently — no shared store, ever |

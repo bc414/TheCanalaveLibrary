@@ -147,7 +147,7 @@ done.
 | **1** | ~~WU-ErrorHandling2~~ **DONE 2026-07-30** | E1 | Unblocked since WU-GlobalFlip (2026-07-13), never picked up since |
 | **2** | ~~WU-DiscoveryFilterRestore~~ **DONE 2026-07-28** | B11 | Device-local filter restore + ship seeding parity, shipped same day as decision row 13's resolution — see "Resolved" below |
 | **2** | ~~WU-SelectionPermalink~~ **DONE 2026-07-28** | — | Artifact-addressed sharing for public saved selections (`/discover/selection/{id}/{*slug}`); row 13's other half, shipped same day |
-| **2** — continue the debt-paydown burst, clustered by shared surface | WU-ApplyFiltersPurity | B12 | No longer blocked by row 13 — `ApplyFiltersAsync` impurity/uncached expansion is independent of how filter state is addressed |
+| **2** — continue the debt-paydown burst, clustered by shared surface | ~~WU-ApplyFiltersPurity~~ **DONE 2026-07-30** | B12 | Cached `ITagHierarchyReadService` restored `ApplyFilters` to pure/sync — no numbered decision row; resolutions recorded directly in `hidden-deferrals-tracker.md` B12 and `workplan.md`'s DONE entry |
 | **2** | WU-StatBadgeProducers | B3, B4 | B4's BetaReader badge literally depends on B3's counter existing |
 | **2** | WU-DataSaver | B0 | Small standalone decision ("suppress sprites, or cut the setting") + build |
 | **2** | WU-DiscoveryOverrideUI | B7 | Per-user filter-override editing surface (§8.7) |

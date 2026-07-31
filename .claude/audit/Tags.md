@@ -181,6 +181,25 @@ warranted.** **Tracker C1 resolves to REJECT** — the tag-chip `ILIKE` runs in 
 tags; F11's L6 note deferred a trigram index "until tag counts grow" and they have not grown
 enough. Recorded as a measured decision, not an assumption.
 
+**Relevance changed 2026-07-30 (WU-ApplyFiltersPurity, see Stage note below):** this 0.02 ms figure
+was originally cited to argue the per-request roll-up query was cheap enough to keep. It still is
+the correct EXPLAIN number for that query, but the query itself no longer runs per filtered read —
+`ServerTagHierarchyCache` runs it at most once per 60 s TTL window per process. The figure is now
+informational (how expensive a cold/expired reload is), not a justification for a live per-request
+round-trip.
+
+## WU-ApplyFiltersPurity Stage note (2026-07-30) — F11 + F12 L2 stay Stage 5
+
+Closes `hidden-deferrals-tracker.md` **B12**. `ServerTagWriteService.CreateTagAsync` /
+`UpdateTagAsync` / `DeleteTagAsync` each now call `ServerTagHierarchyCache.Invalidate()`
+immediately after their `SaveChangesAsync()` — the single choke point that lets
+`ITagHierarchyReadService`'s cached parent→children map stay eventually consistent (bounded ≤60 s
+TTL on top, for writes made outside this service). No change to `ITagWriteService`'s public
+contract, `TagValidations`, or any DTO. Full narrative and the `ApplyFilters` purity side of this
+WU: `audit/Discovery.md` §"WU-ApplyFiltersPurity note"; convention: `layer2-services.md`
+§"Reference-Data Caching". Verified by `TagHierarchyCacheTests` (Integration) plus
+`TagWriteServiceTests`/`TagReadServiceTests`/`TagEndpointsTests` unmodified and green.
+
 ## Feature 11 — Tag Administration
 - **L1 — Stage 5.** `Tag` shape matches §5.16 (curated, staff-only, hierarchy, sprite key, OC flag,
   tooltip description). Sound. **L2 — Stage 5 (WU27.5, see Stage note below).** **L3/L3.5 — Stage 5

@@ -103,13 +103,24 @@ with "clean state per test":
 - **DB rows** — reset by `PostgresFixture.ResetAsync()` (Respawn) before every test. Unchanged;
   this is the load-bearing isolation that licenses absolute assertions.
 - **In-memory host state** — reset by `IntegrationTestBase.ResetSharedHostState()` before every
-  test: the mutable `FakeActiveUserContext` singleton back to `Anonymous()`, plus the signal
-  buffers (`ViewCountBuffer` / `ReadingProgressBuffer` / `UserActivityBuffer`, each has a test-only
-  `Clear()`). **This is the complete set of stateful singletons in the host** (the real write-rate
-  limiter is swapped for a stateless fake; import service and sprite probe are stateless). **Rule:
-  any new stateful singleton registered in `Program.cs` MUST be reset here** — otherwise it leaks
-  across the shared host and tests fail order-dependently with `ObjectDisposedException` or stale
-  data.
+  test: the mutable `FakeActiveUserContext` singleton back to `Anonymous()`, the signal buffers
+  (`ViewCountBuffer` / `ReadingProgressBuffer` / `UserActivityBuffer`, each has a test-only
+  `Clear()`), and `ServerTagHierarchyCache.Invalidate()` (WU-ApplyFiltersPurity — the tag-hierarchy
+  reference-data cache, `layer2-services.md` §"Reference-Data Caching"). **This is the complete set
+  of stateful singletons in the host** (the real write-rate limiter is swapped for a stateless
+  fake; import service and sprite probe are stateless). **Rule: any new stateful singleton
+  registered in `Program.cs` MUST be reset here** — otherwise it leaks across the shared host and
+  tests fail order-dependently with `ObjectDisposedException` or stale data.
+
+  `ServerTagHierarchyCache` needs the reset for a reason the buffers don't share: most integration
+  tests insert `Tag` rows directly via `ApplicationDbContext` rather than through
+  `ITagWriteService`, so the cache's own write-invalidation never fires for them. Without the reset,
+  a snapshot warmed by an early test would silently disable roll-up for every later test that seeds
+  a fresh parent/child pair — order-dependent false negatives, not a crash, which makes it the
+  quieter failure mode of the two. A test that inserts or re-parents a `Tag` row directly *after*
+  already performing a filtered story read in the same method needs one more manual call —
+  `IntegrationTestBase.InvalidateTagHierarchy()` — since the per-test reset only covers the
+  boundary *between* tests.
 
 **A test that needs its own host builds its own `TestAppFactory`** (never disposes or mutates the
 shared one — that poisons the rest of the run). Three do, and each documents why:

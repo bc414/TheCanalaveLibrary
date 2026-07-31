@@ -10,8 +10,9 @@ public class ServerStoryWriteService(
     IImageStorageService imageStorage,
     IWriteRateLimitService rateLimit,
     IHtmlSanitizationService sanitizer,
-    ILogger<ServerStoryWriteService> logger)
-    : ServerStoryReadService(readDbFactory, activeUser), IStoryWriteService
+    ILogger<ServerStoryWriteService> logger,
+    ITagHierarchyReadService tagHierarchy)
+    : ServerStoryReadService(readDbFactory, activeUser, tagHierarchy), IStoryWriteService
 {
     public async Task<int> CreateStoryAsync(CreateStoryDTO newStoryDTO)
     {
