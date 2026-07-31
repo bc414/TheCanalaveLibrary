@@ -15,8 +15,10 @@
 <a href="/messages/@Conversation.ConversationId"
    class="block rounded-xl border @(IsSelected ? "border-(--color-action-ink) bg-(--color-action-ink)/10" : "border-(--color-border) bg-(--color-surface)") p-3 transition-colors hover:bg-(--color-surface-hover)">
     <div class="flex items-start gap-3">
+        @* alt="" (WU-A11y, 2026-07-31): the adjacent username <span> already carries the name -
+           see AccessibleNameAssertions/check-a11y.ps1 rule F for the site-wide avatar convention. *@
         <img src="@Conversation.OtherParticipant.AvatarUrl"
-             alt="@Conversation.OtherParticipant.Username"
+             alt=""
              class="h-10 w-10 flex-none rounded-full object-cover"
              data-fallback-src="/img/default-avatar.svg" />
 

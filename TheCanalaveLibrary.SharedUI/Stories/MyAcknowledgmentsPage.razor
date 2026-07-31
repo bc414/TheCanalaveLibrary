@@ -109,8 +109,8 @@
                     else
                     {
                         <div class="flex flex-col gap-1">
-                            <label class="text-sm font-semibold text-(--color-text)">Your story</label>
-                            <select @bind="_storyId"
+                            <label for="ack-story" class="text-sm font-semibold text-(--color-text)">Your story</label>
+                            <select id="ack-story" @bind="_storyId"
                                     class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                                 <option value="">-- Choose one of your stories --</option>
                                 @foreach (StoryListingDto story in OwnStories)
@@ -121,8 +121,8 @@
                         </div>
 
                         <div class="flex flex-col gap-1">
-                            <label class="text-sm font-semibold text-(--color-text)">Role</label>
-                            <select @bind="_roleId"
+                            <label for="ack-role" class="text-sm font-semibold text-(--color-text)">Role</label>
+                            <select id="ack-role" @bind="_roleId"
                                     class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                                 <option value="">-- Choose a role --</option>
                                 @foreach (AcknowledgmentRoleDto role in Roles)
@@ -132,8 +132,8 @@
                             </select>
                         </div>
 
-                        <div class="flex flex-col gap-1">
-                            <label class="text-sm font-semibold text-(--color-text)">Who to credit</label>
+                        <div class="flex flex-col gap-1" role="group" aria-labelledby="ack-credit-label">
+                            <span id="ack-credit-label" class="text-sm font-semibold text-(--color-text)">Who to credit</span>
                             @if (_pickedUser is not null)
                             {
                                 <div class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm">

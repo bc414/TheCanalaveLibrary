@@ -19,16 +19,16 @@
 
     @* ── Title ───────────────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-(--color-text)">Title</label>
-        <InputText @bind-Value="ViewModel.Title"
+        <label for="blogpost-title" class="text-sm font-semibold text-(--color-text)">Title</label>
+        <InputText id="blogpost-title" @bind-Value="ViewModel.Title" aria-describedby="blogpost-title-error"
                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                    placeholder="Post title" />
-        <ValidationMessage For="@(() => ViewModel.Title)" class="text-sm text-(--color-danger)" />
+        <ValidationMessage id="blogpost-title-error" For="@(() => ViewModel.Title)" class="text-sm text-(--color-danger)" />
     </div>
 
     @* ── Content (rich text) ──────────────────────────────────────────────────── *@
-    <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-(--color-text)">Content</label>
+    <div class="flex flex-col gap-1" role="group" aria-labelledby="blogpost-content-label">
+        <span id="blogpost-content-label" class="text-sm font-semibold text-(--color-text)">Content</span>
         <ContentSurface Variant="ContentSurfaceVariant.Input">
             <EditorView @ref="_editor" Html="@ViewModel.Content" Placeholder="Write your post…" />
         </ContentSurface>
@@ -37,8 +37,8 @@
     @* ── Rating + Spoilers (side by side) ────────────────────────────────────── *@
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div class="flex flex-col gap-1">
-            <label class="text-sm font-semibold text-(--color-text)">Rating</label>
-            <InputSelect @bind-Value="ViewModel.Rating"
+            <label for="blogpost-rating" class="text-sm font-semibold text-(--color-text)">Rating</label>
+            <InputSelect id="blogpost-rating" @bind-Value="ViewModel.Rating"
                          class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                 @foreach (Rating r in Enum.GetValues<Rating>())
                 {
@@ -57,8 +57,8 @@
     @if (AuthorStories is not null)
     {
         <div class="flex flex-col gap-1">
-            <label class="text-sm font-semibold text-(--color-text)">Linked Story <span class="font-normal text-(--color-text-muted)">(optional)</span></label>
-            <select @bind="ViewModel.StoryId"
+            <label for="blogpost-linked-story" class="text-sm font-semibold text-(--color-text)">Linked Story <span class="font-normal text-(--color-text-muted)">(optional)</span></label>
+            <select id="blogpost-linked-story" @bind="ViewModel.StoryId"
                     class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                 <option value="">— none —</option>
                 @foreach ((int id, string title) in AuthorStories)

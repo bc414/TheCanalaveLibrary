@@ -120,6 +120,25 @@
     outline-offset: 2px;
 }
 
+/* prefers-reduced-motion (WU-A11y (Structure), 2026-07-31): neutralizes Tailwind's transition-
+   and animate- utilities (93 files use them) for a user with the OS-level setting. Deliberately
+   incomplete, and documented as such rather than silently narrow: this covers CSS transitions and
+   animations only. It does NOT cover animated sprite .webp images (SpriteIdentifier resolution,
+   layer4-style.md/folder_clusters.md "Sprites") — animated images ignore CSS animation properties
+   entirely, so an anonymous visitor with OS-level reduce-motion still gets animated sprites; that
+   axis is owned by the PrefersAnimated profile setting (defaults true), which this rule cannot
+   reach. Seeding PrefersAnimated from this media query would need a matchMedia service, which
+   render-and-layout.md bans absolutely (no IDeviceDetectionService-style client-hint plumbing).
+   Accepted gap — logged in hidden-deferrals-tracker.md, not silently narrowed. */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
 /* The page ground + chrome body font. Nothing else paints the body (Tailwind preflight leaves
    it transparent → browser-default white), so this single rule owns the site's overall
    background. Components sit on it with bg-surface et al. RichTextView overrides font-family

@@ -5,39 +5,34 @@
    Organization). First consumer is the chapter-comment spoiler reveal (audit/Comments.md Feature 26);
    also named for account deletion, leaving a group, deleting a custom list, unpublishing a story.
 
-   Shell (backdrop + panel) mirrors EditorView's preview popup — see layer3.5-structure.md
-   "Container Composite" ConfirmDialog example for the shared convention and why it isn't extracted
-   into a further Modal primitive yet (only two consumers, two different flows). *@
+   Built on the shared Modal primitive (extracted WU-A11y, 2026-07-31 — see
+   layer3.5-structure.md "Container Composite"). Public @bind-IsOpen contract is unchanged for all
+   14 existing consumers. IsOpenChanged is wired explicitly (not via @bind-IsOpen on <Modal>)
+   because backdrop-dismiss must be treated as Cancel — see HandleModalIsOpenChanged below. *@
 
-@if (IsOpen)
-{
-    <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="Cancel">
-        <div class="max-w-md rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation="true">
-            @if (Title is not null)
-            {
-                <h2 class="mb-2 text-lg font-semibold text-text">@Title</h2>
-            }
-            @if (ChildContent is not null)
-            {
-                @ChildContent
-            }
-            else
-            {
-                <p class="text-text">@Message</p>
-            }
-            <div class="mt-4 flex justify-end gap-2">
-                <button type="button" class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-surface-hover)"
-                        @onclick="Cancel">
-                    @CancelText
-                </button>
-                <button type="button" class="@(IsDestructive ? "bg-danger text-white hover:bg-(--color-danger-strong)" : "bg-(--color-action) text-(--color-text) hover:bg-(--color-action-hover)") rounded-md px-3 py-1 transition-colors"
-                        @onclick="Confirm">
-                    @ConfirmText
-                </button>
-            </div>
-        </div>
-    </div>
-}
+<Modal IsOpen="IsOpen" IsOpenChanged="HandleModalIsOpenChanged"
+       Title="@(Title ?? "Confirm")" ShowTitleHeading="@(Title is not null)" PanelClass="max-w-md">
+    <ChildContent>
+        @if (ChildContent is not null)
+        {
+            @ChildContent
+        }
+        else
+        {
+            <p class="text-(--color-text)">@Message</p>
+        }
+    </ChildContent>
+    <Footer>
+        <button type="button" class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-surface-hover)"
+                @onclick="Cancel">
+            @CancelText
+        </button>
+        <button type="button" class="@(IsDestructive ? "bg-danger text-white hover:bg-(--color-danger-strong)" : "bg-(--color-action) text-(--color-text) hover:bg-(--color-action-hover)") rounded-md px-3 py-1 transition-colors"
+                @onclick="Confirm">
+            @ConfirmText
+        </button>
+    </Footer>
+</Modal>
 
 @code {
     [Parameter] public bool IsOpen { get; set; }
@@ -76,5 +71,18 @@
     {
         IsOpen = false;
         await IsOpenChanged.InvokeAsync(false);
+    }
+
+    /// <summary>Modal's only closing action is backdrop-click (it has no Escape/trap yet — see
+    /// Modal.razor). Treat that exactly like clicking Cancel: fire OnCancel, then close once. This
+    /// intentionally does NOT use Modal's @bind-IsOpen sugar, which would only assign this
+    /// component's local IsOpen field and never invoke this component's own IsOpenChanged —
+    /// silently breaking upward propagation to ConfirmDialog's own @bind-IsOpen consumers.</summary>
+    private async Task HandleModalIsOpenChanged(bool value)
+    {
+        if (!value && IsOpen)
+        {
+            await Cancel();
+        }
     }
 }

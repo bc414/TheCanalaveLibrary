@@ -72,10 +72,15 @@ the palette-report artifact carries swatches/hex/contrast.
 
 ## Element Roles (design constitution, ratified 2026-07-10)
 
-Every visual element has exactly one **role**; the role determines its ground, border, ink, and
-states. The seven roles — Canvas / Wayfinding / Container / Content Surface / Control /
-Indicator / Overlay — are defined with game-metaphor rationale and a full per-component audit in
-`.claude/design/surface-registry.md`; the durable rules live here.
+Every visual element has exactly one **element role**; the element role determines its ground,
+border, ink, and states. The seven element roles — Canvas / Wayfinding / Container / Content
+Surface / Control / Indicator / Overlay — are defined with game-metaphor rationale and a full
+per-component audit in `.claude/design/surface-registry.md`; the durable rules live here.
+
+> **Terminology note (added WU-A11y, 2026-07-31):** this file's "role" and HTML's `role="dialog"`/
+> `role="group"`/etc. ARIA attribute are unrelated vocabularies that happen to share a word. From
+> here on this file says **"element role"** for the design-constitution concept and **"ARIA role"**
+> for the HTML attribute — never bare "role" where either could be meant.
 
 **The Content Surface vs Container test (ratified):**
 
@@ -677,27 +682,46 @@ resolved by this grammar. Components look these up; they never invent states.
 | **Disabled** | `disabled:opacity-50 cursor-not-allowed` (or `opacity-50` on non-button roots) | One opacity everywhere; the 30/40 variants are retired. |
 | **Links** | `text-(--color-action-ink) hover:underline` | Green links, ratified. |
 
-**Accessibility as a Stage-5 criterion (added 2026-07-15, Feature 65 / WU-A11y, `middle-addendum.md`
-§3 #22).** The global focus-visible rule and the WCAG AA 4.5:1 contrast policy above are necessary
-but not sufficient — neither is currently *verified* as part of any Stage-5 sign-off. A component's
-L4 Stage 5 claim should additionally mean: interactive elements are keyboard-navigable (reachable
-and operable via Tab/Enter/Space, not just clickable), the global focus-visible ring is not
-suppressed, and form inputs have an associated `<label>` (or `aria-label`) — not full WCAG AA
-verification per component, which is out of scope until WU-A11y's whole-site pass (gated on
-`roadmap.md` decision row 12; see `audit/Accessibility.md`) sets the real bar and revisits
-already-shipped components.
+**Accessibility as a Stage-5 criterion (added 2026-07-15; split by WU-A11y 2026-07-31, Feature 65,
+`middle-addendum.md` §3 #22).** The global focus-visible rule and the WCAG AA 4.5:1 contrast policy
+above are necessary but not sufficient. As of WU-A11y (static/naming pass), a component's L4 Stage 5
+claim means:
+- **Verified and gated:** form inputs have an associated `<label>` (`for=`/`id=` or wrapping) or an
+  `aria-label`; images carry `alt`; modals carry an ARIA role and an accessible name. Enforced by
+  `scripts/check-a11y.ps1` (CI).
+- **Still forward-looking, not yet verified — WU-A11y-Keyboard's scope, paired with the Phase-3 L4
+  freeze sweep (see `audit/Accessibility.md`):** interactive elements are keyboard-navigable
+  (reachable and operable via Tab/Enter/Space, not just clickable) and the global focus-visible ring
+  is not suppressed. Do not read "L4-Style = 5" as a claim about either of these until that WU lands.
+
+Neither clause is a full WCAG AA verification per component — that stays out of scope by design
+(`audit/Accessibility.md` "Settled").
 
 **Overlay recipe (one chrome, one z-ladder, one dismissal):**
 - Dropdown/flyout panels: `absolute … z-(--z-dropdown) rounded-xl border border-(--color-border) bg-(--color-surface-raised) py-1 shadow-medium`.
-- Modals: backdrop `fixed inset-0 z-(--z-modal) bg-(--color-backdrop)`; panel `rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent`.
+- **Modals: `SharedUI/Dialogs/Modal.razor`** (extracted WU-A11y, 2026-07-31 — see
+  `layer3.5-structure.md` "Container Composite"). Backdrop `fixed inset-0 z-(--z-modal)
+  bg-(--color-backdrop)`; panel `rounded-xl border border-(--color-border)
+  bg-(--color-surface-raised) p-6 shadow-prominent`; ARIA `role="dialog"` + `aria-label`. **This
+  recipe lives in `Modal.razor` now — `z-(--z-modal)` appearing anywhere else is a defect**
+  (`scripts/check-a11y.ps1` gate B). No focus trap, no `aria-modal`, no Escape yet — deferred to
+  WU-A11y-Keyboard.
 - Drawers (mobile filter panels): `z-(--z-drawer)`, `shadow-prominent`, backdrop token.
 - Sticky top bar `z-(--z-sticky) shadow-subtle`; ToastHost `z-(--z-toast)`; `#blazor-error-ui` `z-(--z-error)`. Raw `z-10/20/30/50`, raw `shadow-sm/md/lg/xl`, and `bg-black/50` are defects.
-- **Dismissal** (`js/dismiss.js`, loaded in App.razor): Blazor-stateful flyouts render a
-  transparent `[data-flyout-catcher]` div (`fixed inset-0 z-(--z-dropdown)`, `@onclick` = the
-  component's Close) inside their `@if(open)` block, before the panel — outside-click closes via
-  Blazor state, Escape "clicks" the topmost catcher, and exclusive-open falls out naturally.
-  Native `<details>` dropdowns carry `data-dropdown` and are closed by the same script on
-  outside-click/Escape. New flyouts MUST use one of these two shapes.
+- **Dismissal** (`js/dismiss.js`, loaded in App.razor) — **three shapes as of WU-A11y (2026-07-31),
+  not two:**
+  1. Blazor-stateful flyouts render a transparent `[data-flyout-catcher]` div (`fixed inset-0
+     z-(--z-dropdown)`, `@onclick` = the component's Close) inside their `@if(open)` block, before
+     the panel — outside-click closes via Blazor state, Escape "clicks" the topmost catcher, and
+     exclusive-open falls out naturally.
+  2. Native `<details>` dropdowns carry `data-dropdown` and are closed by the same script on
+     outside-click/Escape.
+  3. **`Modal.razor`** — outside-click closes via its own backdrop `@onclick` today. It does **not**
+     use `[data-flyout-catcher]`, deliberately: a catcher is defined as a *transparent sibling
+     rendered before the panel*, and a modal backdrop is neither transparent nor a sibling — it
+     *contains* the panel. Escape-key precedence for modals (and the focus-trap machinery) is
+     WU-A11y-Keyboard's scope, not decided here.
+  New flyouts MUST use one of these three shapes.
 
 **Errors surface through the standing components:** transient action failures →
 `IToastService.Show(ExceptionPresenter.GetUserMessage(ex), ToastLevel.Danger)` (GroupPage's

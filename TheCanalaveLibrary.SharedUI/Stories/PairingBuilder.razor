@@ -55,8 +55,8 @@
                     Platonic
                 </label>
                 <div class="flex items-center gap-2">
-                    <label class="text-xs text-(--color-text-muted)">Priority</label>
-                    <select @bind="_newPairingPriority"
+                    <label for="@($"pairingPriority_{_instanceId}")" class="text-xs text-(--color-text-muted)">Priority</label>
+                    <select id="@($"pairingPriority_{_instanceId}")" @bind="_newPairingPriority"
                             class="rounded border border-(--color-border) bg-(--color-surface) px-2 py-1 text-xs text-(--color-text)">
                         <option value="@TagPriority.Primary">Primary</option>
                         <option value="@TagPriority.Supporting">Supporting</option>

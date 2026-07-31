@@ -109,6 +109,11 @@ decision work that has no row at all.
   - Source: `workplan.md` Planned/not-yet-built (WU-EditorSprite entry); `cross-cutting.md` §Rich Text; `middle_plan_v2.md` Phase 4 (design-now-or-defer framing — historical, Phase 4 itself is DONE, this item's own build is not).
   - Context: WU6 shipped the desktop editor toolbar only. A compact mobile toolbar is re-scoped onto the adaptivity ladder's rung-3 trigger in the future mobile phase.
 
+- [ ] **A9 — `prefers-reduced-motion` doesn't reach animated sprites** `[scope-cut · low · anytime]`
+  - Grid: `Sprites/` cluster L4 — cell reads whatever the sprite feature's own stage is; invisible there, same class as B0 (a cross-cutting setting gap a grid-scanner can't see).
+  - Source: `Server/Styles/app.css` (the new `@media (prefers-reduced-motion: reduce)` block, WU-A11y (Structure), 2026-07-31); `layer4-style.md`; `folder_clusters.md` `Sprites/` row.
+  - Context: the new reduced-motion CSS block neutralizes `transition-`/`animate-` utilities but does nothing for animated `.webp` sprites — animated images ignore CSS animation properties entirely. That axis is owned by `User.PrefersAnimated` (defaults true), so an anonymous visitor with OS-level reduce-motion still gets animated sprites. Seeding `PrefersAnimated` from the media query would need a `matchMedia` service, which `render-and-layout.md` bans absolutely (same "no client-hint plumbing" rule B0's `PrefersDataSaverMode` gap ran into). Not built here — logged so it isn't silently narrowed into "reduced motion: done."
+
 ---
 
 ## B. Built-but-inert — plumbing exists, nothing drives it
@@ -622,10 +627,77 @@ built rows at 5 and no signal these exist.
   - Source: `roadmap.md` Decision row 6.
   - Context: Who/how-many testers, invite mechanism, feedback channel. Phase 6 gate.
 
-- [ ] **F6 — Accessibility scope/depth (WU-A11y)** `[decision · med · pre-launch]`
-  - Grid: F65 L4-Style=1, L4.5=1 (*partially* transparent — cells show Stage 1, but the blocking decision isn't visible).
-  - Source: `roadmap.md` Decision row 12; `grid_axes.md` Feature 65; `audit/Accessibility.md`.
-  - Context: Full WCAG-AA audit vs. targeted axe pass; whether to add an a11y test tier — undecided, and it gates the work.
+- [x] **F6 — Accessibility, static/naming half — DONE (WU-A11y (Structure), 2026-07-31)** `[build · med · pre-launch]`
+  - Grid: F65 L4-Style 1 → 5. L4.5 unaffected (see F6b).
+  - Source: `roadmap.md` Decision row 12 (resolved 2026-07-31) + §Resolved; `grid_axes.md` Feature 65; `audit/Accessibility.md`.
+  - **Resolution:** swept by defect class (labelling, validation association, the `Modal` primitive
+    + ARIA naming, image `alt`, `prefers-reduced-motion`) across `SharedUI` + `Server/Identity`,
+    gated by `scripts/check-a11y.ps1` (7 gates, wired into CI). **Addendum, same day:** the
+    axe-DevTools pass ran after all once Chrome tooling became available mid-session — fixed
+    missing `<h1>`/`<PageTitle>` (Home, Discover), two `<aside>`s nested inside `<main>` (Discover,
+    Messages), `ChapterNavigation`'s duplicate `<nav aria-label>` and its disabled spans'
+    `aria-prohibited-attr`. Measured real contrast failures in locked design tokens — see **H11**.
+    Full record: `workplan.md` WU-A11y (Structure) DONE entry; `audit/Accessibility.md` Stage note
+    Addendum.
+
+- [ ] **H10 — Identity/auth pages return a raw 500 for every visitor (found via WU-A11y's browser pass, 2026-07-31)** `[bug · critical · blocking]`
+  - Grid: F1 (Identity/Login-Register) — not visible on the grid; L4.5/L5 both read Stage 5 for
+    reasons unrelated to this (same invisible-to-a-grid-scan class as B0/B4/B12).
+  - Source: `audit/Accessibility.md` Stage note Addendum; `workplan.md` WU-A11y (Structure) DONE entry.
+  - Context: `/Account/Login` and `/Account/Register` both throw
+    `System.InvalidOperationException: The registered callback PersistProperty must be associated
+    with a component or define an explicit render mode type during registration.` — a raw
+    ProblemDetails 500, no page renders at all. Reproduces for an anonymous visitor and a
+    signed-in one identically; confirmed unrelated to WU-A11y's own edits to those files (pure
+    `id=`/`aria-describedby=` attribute additions, nowhere near the exception's render-mode-
+    inference/prerendered-state stack trace). **The entire Identity/auth funnel is currently
+    broken** — this blocks login, registration, password reset, 2FA, everything under
+    `/Account/*` that a real user would hit.
+  - Hypothesis, not confirmed: same-day WU-SweepRiders' H1 finding established that
+    `AuthorizeRouteView`'s ambient `DefaultLayout="typeof(MainLayout)"` wraps statically-routed
+    pages (like `/Error`, and presumably Identity pages) in `MainLayout`. `MainLayout` carries
+    three `[PersistentState]`-bearing descendants (`NotificationBellInner`, `MessagesNavLink`,
+    `ReaderDisplayProvider`) that normally get an explicit render mode via `Routes.razor`'s own
+    `@rendermode` — but Identity pages are excluded from `Routes.razor`'s `AppAssembly`/
+    `AdditionalAssemblies` entirely, so if `MainLayout` reaches them through the *ambient* path
+    instead, it may arrive with no inferred render mode, and `[PersistentState]` registration
+    throws. Deliberately not diagnosed further by WU-A11y (real risk of an unrelated Blazor-routing
+    rabbit hole, and this needs focused attention, not a rushed patch inside an a11y WU).
+  - Next: reproduce with `ASPNETCORE_ENVIRONMENT=Development` to get the full dev exception page
+    (this was checked in a non-Development-adjacent state via the raw ProblemDetails response —
+    confirm locally with full diagnostics on); bisect whether H1's verification the same day is
+    actually the trigger, or whether this predates it.
+
+- [ ] **H11 — Design-token contrast failures, measured via axe-DevTools (found via WU-A11y, 2026-07-31)** `[decision · med · pre-launch]`
+  - Grid: no single cell — spans every consumer of the tag-type palette and the Indicator tint recipe (Tags/, Moderation/, wherever badges render).
+  - Source: `audit/Accessibility.md` Stage note Addendum; `layer4-style.md` "Prerequisite: Design Tokens" (the locked `@theme` manifest these values live in).
+  - Context: real `getComputedStyle`-backed contrast ratios, not estimates:
+    `--color-tagtype-character` (white text) = 3.07:1; `--color-tagtype-genre` (white text) =
+    3.11:1; the Indicator "success" tint recipe (`text-(--color-success)` on
+    `bg-(--color-success)/15`, composited over a card ground) = 2.88:1; one other tint pairing =
+    1.7:1. All fail the ratified WCAG AA 4.5:1 policy (`layer4-style.md`, Brian-ratified
+    2026-07-10). These are locked, gate-reviewed, live-tuned-with-Brian tokens — several
+    "transcribed verbatim from *Visuals.cs*" (Pokémon-canon type colors) — so no session should
+    change the hex values without Brian's sign-off against `/dev/design-gallery`, the same process
+    every other token went through at the Phase A gate.
+  - Next: Brian picks new values (or an alternate treatment — e.g. darkening the ink instead of
+    the ground, or a border/outline instead of a filled background for the tag-type badges) against
+    `/dev/design-gallery`; natural fit for the Phase-3 L4 freeze sweep rather than a standalone WU.
+
+- [ ] **F6b — Accessibility, keyboard half (WU-A11y-Keyboard, filed 2026-07-31)** `[decision-resolved-not-built · med · pairs with Phase-3 L4 sweep]`
+  - Grid: F65 L4.5-Browser=1, stays 1 until this lands.
+  - Source: `roadmap.md` Decision row 12 §Resolved; `audit/Accessibility.md`; `layer3.5-structure.md` "Container Composite" (`Modal` primitive, deliberately no trap yet).
+  - Context: focus trap + restore (`modal.js`, document-level `MutationObserver`, no `IJSRuntime`
+    interop — InteractiveAuto prerender/circuit/WASM timing rules it out), the `dismiss.js`
+    modal-first Escape branch, `aria-modal="true"` on `Modal`, `CanalaveTypeahead` combobox ARIA
+    (`role="combobox"`/`listbox`/`option`), the manual keyboard script, **and now also the
+    axe-DevTools browser pass F6 didn't reach** (six pages, contrast verification — see F6). Two
+    traps for whoever
+    picks this up: the focusable selector inside the trap **must** include
+    `[contenteditable="true"]` or `ComposeConversationModal`'s Quill body becomes
+    keyboard-unreachable (axe cannot catch this — it doesn't test focus order); `dismiss.js`
+    selects by document order, not z-order, and has zero automated coverage, so any change to it
+    must be purely additive and manually re-checked against the five working flyouts.
 
 - [ ] **F7 — Operational-resilience gaps (no WU, no row, no decision)** `[off-grid · med · launch]`
   - Source: `middle-addendum.md` §3 items 8–14.

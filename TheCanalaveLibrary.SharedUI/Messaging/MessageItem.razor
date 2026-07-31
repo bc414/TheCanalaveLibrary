@@ -8,8 +8,9 @@
    No service injection. *@
 
 <div class="flex @(Message.IsOwnMessage ? "flex-row-reverse" : "flex-row") items-start gap-2">
+    @* alt="" (WU-A11y, 2026-07-31): the adjacent sender-name <span> already carries the name. *@
     <img src="@Message.SenderAvatarUrl"
-         alt="@Message.SenderUsername"
+         alt=""
          class="h-8 w-8 flex-none rounded-full object-cover"
          data-fallback-src="/img/default-avatar.svg" />
 

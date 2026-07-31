@@ -44,8 +44,8 @@
         }
         <div class="flex flex-col gap-1">
             <label for="Input.NewEmail" class="text-sm font-semibold text-(--color-text)">New email</label>
-            <InputText @bind-Value="Input.NewEmail" id="Input.NewEmail" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" autocomplete="email" aria-required="true" placeholder="Enter a new email"/>
-            <ValidationMessage For="() => Input.NewEmail" class="text-danger"/>
+            <InputText @bind-Value="Input.NewEmail" id="Input.NewEmail" aria-describedby="Input.NewEmail-error" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" autocomplete="email" aria-required="true" placeholder="Enter a new email"/>
+            <ValidationMessage id="Input.NewEmail-error" For="() => Input.NewEmail" class="text-danger"/>
         </div>
         <button type="submit" class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">Change email</button>
     </EditForm>

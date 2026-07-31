@@ -77,8 +77,12 @@
             @if (_parsed is not null && _parsed.AvailableStrategies.Count > 1)
             {
                 <div class="flex flex-wrap items-center gap-2 text-sm">
-                    <label class="text-xs font-medium text-(--color-text-muted)">Split chapters at:</label>
-                    <select value="@_strategy" @onchange="HandleStrategyChanged" aria-label="Split strategy"
+                    <label for="chapter-import-split-strategy" class="text-xs font-medium text-(--color-text-muted)">Split chapters at:</label>
+                    @* aria-label removed in favor of the for=/id= association above — keeping both
+                       would let the announced name ("Split strategy") drift from the visible text
+                       ("Split chapters at:"), which WCAG 2.5.3 flags (aria-label always wins over
+                       label[for] in accessible-name computation). *@
+                    <select id="chapter-import-split-strategy" value="@_strategy" @onchange="HandleStrategyChanged"
                             class="rounded-md border border-(--color-border) bg-(--color-surface) px-2 py-1 text-sm text-(--color-text)">
                         @foreach (SplitStrategy strategy in _parsed.AvailableStrategies)
                         {

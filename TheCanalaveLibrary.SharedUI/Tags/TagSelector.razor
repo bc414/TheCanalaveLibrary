@@ -8,8 +8,8 @@
    The pick-fires-a-callback contract removed the _picked bind entirely: OnSelected appends the
    chip, the typeahead clears itself. *@
 
-<div class="flex flex-col gap-2">
-    <label class="text-sm font-bold">@Label</label>
+<div class="flex flex-col gap-2" role="group" aria-labelledby="@_labelId">
+    <span id="@_labelId" class="text-sm font-bold">@Label</span>
 
     <div class="flex flex-wrap gap-2">
         @foreach (TagChipDto tag in _selected)
@@ -22,6 +22,7 @@
                        SearchMethod="SearchMethod"
                        OnSelected="OnPicked"
                        Placeholder="Type to search for a tag..."
+                       AriaLabel="@($"Search for a {Label} tag")"
                        NotFoundText="No tags found">
         <ResultTemplate Context="tag">
             <span class="inline-flex items-center gap-2">
@@ -66,6 +67,11 @@
     public bool AllowRepeatSelection { get; set; }
 
     private List<TagChipDto> _selected = [];
+
+    // Multiple TagSelector instances (one per axis — Character/Setting/Genre/…) render on the same
+    // page simultaneously (e.g. StoryPropertiesForm), so the group label's id must be per-instance,
+    // not a static string. WU-A11y (Structure), 2026-07-31.
+    private readonly string _labelId = $"tag-selector-{Guid.NewGuid():N}";
 
     protected override void OnInitialized()
     {

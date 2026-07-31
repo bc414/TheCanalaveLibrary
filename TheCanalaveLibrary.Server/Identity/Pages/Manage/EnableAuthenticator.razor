@@ -51,8 +51,8 @@ else
                         <DataAnnotationsValidator/>
                         <div class="flex flex-col gap-1">
                             <label for="Input.Code" class="text-sm font-semibold text-(--color-text)">Verification Code</label>
-                            <InputText @bind-Value="Input.Code" id="Input.Code" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" autocomplete="off" placeholder="Enter the code"/>
-                            <ValidationMessage For="() => Input.Code" class="text-danger"/>
+                            <InputText @bind-Value="Input.Code" id="Input.Code" aria-describedby="Input.Code-error" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" autocomplete="off" placeholder="Enter the code"/>
+                            <ValidationMessage id="Input.Code-error" For="() => Input.Code" class="text-danger"/>
                         </div>
                         <button type="submit" class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">Verify</button>
                         <ValidationSummary class="text-danger" role="alert"/>

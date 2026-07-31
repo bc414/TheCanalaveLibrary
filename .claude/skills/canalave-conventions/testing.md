@@ -184,7 +184,11 @@ inverted condition or a wrong string). When in doubt, **keep** the behavior asse
   `flex-row-reverse`. bUnit does not apply CSS, so a class-string assertion is **not evidence the
   styling works** — it only checks that a substring appears in the markup. Style is owned by
   `check-design-tokens.ps1` (token correctness, in CI) and the human visual pass. This is a hard
-  rule: no class-presence assertions, ever.
+  rule: no class-presence assertions, ever. **Not the same rule:** semantic attributes (`role=`,
+  `aria-*`, `for=`/`id=`, `alt=`) are semantic *output*, not styling, and asserting their presence
+  is in scope — `ChapterNavigationTests.cs` and WU-A11y's `ModalTests` do exactly this. The
+  distinguishing case is `class="sr-only"`: that's a class, and asserting its presence is still
+  banned — assert the ARIA attribute it exists to satisfy instead.
 - **Redundant restatements** — the inverse half of a `ShowsX` / `NoX` pair on the same bare
   parameter (keep one); the same computed attribute (`disabled="@Busy"`) asserted three times;
   a mobile test file that only re-asserts a desktop file's identical computed mappings (Layer-4

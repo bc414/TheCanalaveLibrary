@@ -34,8 +34,12 @@
                         if (b is null) continue;
                         int idx = i; // capture by value, not loop variable, to avoid lambda closure issue
                         <div class="flex items-center gap-3 rounded-md px-2 py-1.5">
-                            @* Badge icons are provisioned out-of-band; hide on miss (L4.5 pass). *@
-                            <img src="@b.IconUrl" alt="" title="@b.DisplayName" class="size-6 shrink-0" loading="lazy"
+                            @* Badge icons are provisioned out-of-band; hide on miss (L4.5 pass).
+                               alt="" (not title=, removed WU-A11y 2026-07-31): the adjacent
+                               DisplayName text already names the badge, and title= is
+                               hover-only/not reliably exposed to AT anyway - layer4-style.md's
+                               "no title-only essential info" rule. *@
+                            <img src="@b.IconUrl" alt="" class="size-6 shrink-0" loading="lazy"
                                  data-hide-on-error />
                             <div class="flex min-w-0 flex-1 flex-col">
                                 <span class="text-sm font-medium text-(--color-text)">
@@ -80,8 +84,12 @@
                     {
                         string key = b.BadgeKey;
                         <div class="flex items-center gap-3 rounded-md px-2 py-1.5 opacity-50">
-                            @* Badge icons are provisioned out-of-band; hide on miss (L4.5 pass). *@
-                            <img src="@b.IconUrl" alt="" title="@b.DisplayName" class="size-6 shrink-0 grayscale" loading="lazy"
+                            @* Badge icons are provisioned out-of-band; hide on miss (L4.5 pass).
+                               alt="" (not title=, removed WU-A11y 2026-07-31): the adjacent
+                               DisplayName text already names the badge, and title= is
+                               hover-only/not reliably exposed to AT anyway - layer4-style.md's
+                               "no title-only essential info" rule. *@
+                            <img src="@b.IconUrl" alt="" class="size-6 shrink-0 grayscale" loading="lazy"
                                  data-hide-on-error />
                             <div class="flex min-w-0 flex-1 flex-col">
                                 <span class="text-sm font-medium text-(--color-text)">

@@ -13,54 +13,51 @@
     Save current…
 </button>
 
-@if (_open)
-{
-    <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="Close">
-        <div class="w-full max-w-sm rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation="true">
-            <h2 class="mb-3 text-lg font-semibold text-text">Save current tag selection</h2>
+@* Built on the shared Modal primitive (extracted WU-A11y, 2026-07-31 — see
+   layer3.5-structure.md "Container Composite"). *@
+<Modal IsOpen="_open" IsOpenChanged="(bool open) => { if (!open) Close(); }"
+       Title="Save current tag selection" PanelClass="w-full max-w-sm">
+    <ChildContent>
+        <InlineAlert Messages="@_errors" />
 
-            <InlineAlert Messages="@_errors" />
-
-            <div class="flex flex-col gap-3">
-                <div class="flex flex-col gap-1">
-                    <label for="stsd-nickname" class="text-sm font-medium text-text">Nickname</label>
-                    <input id="stsd-nickname" type="text" maxlength="@SavedTagSelectionValidations.MaxNicknameLength"
-                           class="rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
-                           value="@_nickname"
-                           @oninput="e => _nickname = e.Value?.ToString() ?? string.Empty" />
-                </div>
-
-                <div class="flex flex-col gap-1">
-                    <label for="stsd-description" class="text-sm font-medium text-text">Note (optional)</label>
-                    <textarea id="stsd-description" rows="2" maxlength="@SavedTagSelectionValidations.MaxDescriptionLength"
-                              class="rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
-                              value="@_description"
-                              @oninput="e => _description = e.Value?.ToString() ?? string.Empty"></textarea>
-                </div>
-
-                <label class="flex cursor-pointer items-center gap-2 text-sm text-text">
-                    <input type="checkbox" class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
-                           checked="@_isPublic"
-                           @onchange="e => _isPublic = (bool)(e.Value ?? false)" />
-                    Make public (appears on your profile's Tag Selections tab)
-                </label>
+        <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-1">
+                <label for="stsd-nickname" class="text-sm font-medium text-text">Nickname</label>
+                <input id="stsd-nickname" type="text" maxlength="@SavedTagSelectionValidations.MaxNicknameLength"
+                       class="rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                       value="@_nickname"
+                       @oninput="e => _nickname = e.Value?.ToString() ?? string.Empty" />
             </div>
 
-            <div class="mt-4 flex justify-end gap-2">
-                <button type="button" class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-surface-hover)"
-                        @onclick="Close">
-                    Cancel
-                </button>
-                <button type="button"
-                        class="rounded-md bg-(--color-mission) px-3 py-1 text-white transition-colors hover:bg-(--color-mission-hover) disabled:opacity-50"
-                        disabled="@(_saving || !CanSave)"
-                        @onclick="SaveAsync">
-                    @(_saving ? "Saving…" : "Save")
-                </button>
+            <div class="flex flex-col gap-1">
+                <label for="stsd-description" class="text-sm font-medium text-text">Note (optional)</label>
+                <textarea id="stsd-description" rows="2" maxlength="@SavedTagSelectionValidations.MaxDescriptionLength"
+                          class="rounded-md border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
+                          value="@_description"
+                          @oninput="e => _description = e.Value?.ToString() ?? string.Empty"></textarea>
             </div>
+
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-text">
+                <input type="checkbox" class="h-4 w-4 rounded border-(--color-border) accent-(--color-action-ink)"
+                       checked="@_isPublic"
+                       @onchange="e => _isPublic = (bool)(e.Value ?? false)" />
+                Make public (appears on your profile's Tag Selections tab)
+            </label>
         </div>
-    </div>
-}
+    </ChildContent>
+    <Footer>
+        <button type="button" class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-surface-hover)"
+                @onclick="Close">
+            Cancel
+        </button>
+        <button type="button"
+                class="rounded-md bg-(--color-mission) px-3 py-1 text-white transition-colors hover:bg-(--color-mission-hover) disabled:opacity-50"
+                disabled="@(_saving || !CanSave)"
+                @onclick="SaveAsync">
+            @(_saving ? "Saving…" : "Save")
+        </button>
+    </Footer>
+</Modal>
 
 @code {
     /// <summary>Current on-screen included tag ids (from TagFilter's aggregate, across all types).</summary>

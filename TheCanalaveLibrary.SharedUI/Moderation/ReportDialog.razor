@@ -4,8 +4,9 @@
 @inject ILogger<ReportDialog> Logger
 
 @* Report dialog (WU34 Feature 46). Cross-cutting leaf — consumed by StoryCard, UserCard,
-   CommentItem, BlogPostCard, recommendation cards, and the message thread. Shell matches
-   ConfirmDialog (fixed backdrop + panel). Reports are submitted without page navigation.
+   CommentItem, BlogPostCard, recommendation cards, and the message thread. Built on the shared
+   Modal primitive (extracted WU-A11y, 2026-07-31 — see layer3.5-structure.md "Container
+   Composite"). Reports are submitted without page navigation.
 
    Usage:
      <ReportDialog @ref="_reportDialog" />
@@ -13,70 +14,67 @@
      await _reportDialog.OpenAsync(ReportedEntityType.Story, story.StoryId);
 *@
 
-@if (_isOpen)
-{
-    <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="Cancel">
-        <div class="w-full max-w-sm rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation="true">
-            <h2 class="mb-4 text-lg font-semibold text-text">Report Content</h2>
-
-            @if (_reasons is null)
-            {
-                <p class="text-sm text-(--color-text-muted)">Loading…</p>
-            }
-            else
-            {
-                <div class="mb-4">
-                    <label class="mb-1 block text-sm font-medium text-text" for="report-reason">Reason</label>
-                    <select id="report-reason"
-                            class="w-full rounded-md border border-(--color-border) bg-surface px-3 py-2 text-sm text-text"
-                            @bind="_selectedReasonId">
-                        <option value="0">— Select a reason —</option>
-                        @foreach (var r in _reasons)
-                        {
-                            <option value="@r.ReasonId">@r.ReasonName</option>
-                        }
-                    </select>
-                </div>
-
-                <div class="mb-4">
-                    <label class="mb-1 block text-sm font-medium text-text" for="report-notes">Additional notes (optional)</label>
-                    <textarea id="report-notes" rows="3"
-                              class="w-full rounded-md border border-(--color-border) bg-surface px-3 py-2 text-sm text-text"
-                              @bind="_notes"
-                              placeholder="Provide any context that may help a moderator.">
-                    </textarea>
-                </div>
-
-                @if (_errorMessage is not null)
-                {
-                    <p class="mb-3 text-sm text-danger">@_errorMessage</p>
-                }
-
-                @if (_submitted)
-                {
-                    <p class="mb-3 text-sm text-success">Your report has been submitted. Thank you.</p>
-                }
-
-                <div class="flex justify-end gap-2">
-                    <button type="button"
-                            class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-surface-hover)"
-                            @onclick="Cancel">
-                        @(_submitted ? "Close" : "Cancel")
-                    </button>
-                    @if (!_submitted)
+<Modal IsOpen="_isOpen" IsOpenChanged="(bool _) => Cancel()" Title="Report Content" PanelClass="w-full max-w-sm">
+    <ChildContent>
+        @if (_reasons is null)
+        {
+            <p class="text-sm text-(--color-text-muted)">Loading…</p>
+        }
+        else
+        {
+            <div class="mb-4">
+                <label class="mb-1 block text-sm font-medium text-text" for="report-reason">Reason</label>
+                <select id="report-reason"
+                        class="w-full rounded-md border border-(--color-border) bg-surface px-3 py-2 text-sm text-text"
+                        @bind="_selectedReasonId">
+                    <option value="0">— Select a reason —</option>
+                    @foreach (var r in _reasons)
                     {
-                        <button type="button"
-                                class="rounded-md bg-(--color-action) px-3 py-1 text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
-                                disabled="@(_submitting || _selectedReasonId == 0)"
-                                @onclick="SubmitAsync">
-                            @(_submitting ? "Submitting…" : "Submit Report")
-                        </button>
+                        <option value="@r.ReasonId">@r.ReasonName</option>
                     }
-                </div>
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label class="mb-1 block text-sm font-medium text-text" for="report-notes">Additional notes (optional)</label>
+                <textarea id="report-notes" rows="3"
+                          class="w-full rounded-md border border-(--color-border) bg-surface px-3 py-2 text-sm text-text"
+                          @bind="_notes"
+                          placeholder="Provide any context that may help a moderator.">
+                </textarea>
+            </div>
+
+            @if (_errorMessage is not null)
+            {
+                <p class="mb-3 text-sm text-danger">@_errorMessage</p>
             }
-        </div>
-    </div>
-}
+
+            @if (_submitted)
+            {
+                <p class="mb-3 text-sm text-success">Your report has been submitted. Thank you.</p>
+            }
+        }
+    </ChildContent>
+    <Footer>
+        @if (_reasons is not null)
+        {
+            <button type="button"
+                    class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-text transition-colors hover:bg-(--color-surface-hover)"
+                    @onclick="Cancel">
+                @(_submitted ? "Close" : "Cancel")
+            </button>
+            @if (!_submitted)
+            {
+                <button type="button"
+                        class="rounded-md bg-(--color-action) px-3 py-1 text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50"
+                        disabled="@(_submitting || _selectedReasonId == 0)"
+                        @onclick="SubmitAsync">
+                    @(_submitting ? "Submitting…" : "Submit Report")
+                </button>
+            }
+        }
+    </Footer>
+</Modal>
 
 @code {
     private bool _isOpen;

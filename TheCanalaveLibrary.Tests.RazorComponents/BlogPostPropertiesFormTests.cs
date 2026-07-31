@@ -55,6 +55,18 @@ public class BlogPostPropertiesFormTests : BunitContext
     }
 
     [Fact]
+    public void AllFields_HaveAccessibleNames()
+    {
+        // WU-A11y (Structure), 2026-07-31. See AccessibleNameAssertions for what this catches
+        // beyond check-a11y.ps1's static gates.
+        IRenderedComponent<BlogPostPropertiesForm> cut = Render<BlogPostPropertiesForm>(p => p
+            .Add(f => f.ViewModel, MakeValidViewModel())
+            .Add(f => f.AuthorStories, (IReadOnlyList<(int Id, string Title)>)[(1, "My Story")]));
+
+        AccessibleNameAssertions.AllFieldsHaveAccessibleNames(cut);
+    }
+
+    [Fact]
     public void Form_AuthorStoriesNonNull_ShowsStoryPickerSelect()
     {
         IReadOnlyList<(int Id, string Title)> stories = [(1, "My Story"), (2, "Another Story")];

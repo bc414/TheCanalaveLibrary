@@ -24,8 +24,8 @@
             <ValidationSummary class="text-danger text-sm" role="alert"/>
             <div class="flex flex-col gap-1">
                 <label for="Input.Email" class="text-sm font-semibold text-(--color-text)">Email</label>
-                <InputText @bind-Value="Input.Email" id="Input.Email" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" aria-required="true" placeholder="name@example.com"/>
-                <ValidationMessage For="() => Input.Email" class="text-danger text-sm"/>
+                <InputText @bind-Value="Input.Email" id="Input.Email" aria-describedby="Input.Email-error" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) placeholder:text-(--color-text-muted) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" aria-required="true" placeholder="name@example.com"/>
+                <ValidationMessage id="Input.Email-error" For="() => Input.Email" class="text-danger text-sm"/>
             </div>
             <button type="submit" class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">Resend</button>
         </div>

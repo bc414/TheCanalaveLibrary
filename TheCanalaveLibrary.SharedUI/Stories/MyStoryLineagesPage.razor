@@ -113,8 +113,8 @@
                     else
                     {
                         <div class="flex flex-col gap-1">
-                            <label class="text-sm font-semibold text-(--color-text)">Your story</label>
-                            <select @bind="_sourceStoryId" @bind:after="HandleSourceChanged"
+                            <label for="lineage-source-story" class="text-sm font-semibold text-(--color-text)">Your story</label>
+                            <select id="lineage-source-story" @bind="_sourceStoryId" @bind:after="HandleSourceChanged"
                                     class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                                 <option value="">-- Choose one of your stories --</option>
                                 @foreach (StoryListingDto story in OwnStories)
@@ -125,8 +125,8 @@
                         </div>
 
                         <div class="flex flex-col gap-1">
-                            <label class="text-sm font-semibold text-(--color-text)">Lineage type</label>
-                            <select @bind="_typeId"
+                            <label for="lineage-type" class="text-sm font-semibold text-(--color-text)">Lineage type</label>
+                            <select id="lineage-type" @bind="_typeId"
                                     class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                                 <option value="">-- Choose a type --</option>
                                 @foreach (StoryLineageTypeDto type in Types)
@@ -136,8 +136,8 @@
                             </select>
                         </div>
 
-                        <div class="flex flex-col gap-1">
-                            <label class="text-sm font-semibold text-(--color-text)">Target story</label>
+                        <div class="flex flex-col gap-1" role="group" aria-labelledby="lineage-target-story-label">
+                            <span id="lineage-target-story-label" class="text-sm font-semibold text-(--color-text)">Target story</span>
                             @if (_targetStory is not null)
                             {
                                 <div class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm">

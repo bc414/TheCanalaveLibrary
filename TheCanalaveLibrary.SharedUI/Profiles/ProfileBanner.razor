@@ -23,8 +23,9 @@
         @* Avatar *@
         @if (Header.AvatarUrl is not null)
         {
+            @* alt="" (WU-A11y, 2026-07-31): the adjacent <h1> already carries the username. *@
             <img src="@Header.AvatarUrl"
-                 alt="@Header.Username"
+                 alt=""
                  class="h-20 w-20 shrink-0 rounded-full object-cover shadow-subtle md:h-24 md:w-24"
                  data-fallback-src="/img/default-avatar.svg" />
         }

@@ -46,8 +46,8 @@
 
                     @* ── Group name ───────────────────────────────────────────── *@
                     <div class="flex flex-col gap-1">
-                        <label class="text-sm font-semibold text-(--color-text)">Group Name</label>
-                        <input type="text" @bind="_name" maxlength="@GroupConstants.MaxGroupNameLength"
+                        <label for="group-name" class="text-sm font-semibold text-(--color-text)">Group Name</label>
+                        <input id="group-name" type="text" @bind="_name" maxlength="@GroupConstants.MaxGroupNameLength"
                                class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                                placeholder="Enter group name" />
                         <p class="text-xs text-(--color-text-muted)">@GroupConstants.MaxGroupNameLength characters max.</p>
@@ -55,18 +55,18 @@
 
                     @* ── Description ─────────────────────────────────────────── *@
                     <div class="flex flex-col gap-1">
-                        <label class="text-sm font-semibold text-(--color-text)">
+                        <label for="group-description" class="text-sm font-semibold text-(--color-text)">
                             Description <span class="font-normal text-(--color-text-muted)">(optional)</span>
                         </label>
-                        <textarea @bind="_description" rows="4" maxlength="@GroupConstants.MaxDescriptionLength"
+                        <textarea id="group-description" @bind="_description" rows="4" maxlength="@GroupConstants.MaxDescriptionLength"
                                   class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink) resize-y"
                                   placeholder="Describe what this group is about…"></textarea>
                     </div>
 
                     @* ── Audience type (preset radio) ─────────────────────────── *@
                     <div class="flex flex-col gap-2">
-                        <label class="text-sm font-semibold text-(--color-text)">Audience Type</label>
-                        <div class="flex flex-col gap-2">
+                        <span id="group-audience-type-label" class="text-sm font-semibold text-(--color-text)">Audience Type</span>
+                        <div class="flex flex-col gap-2" role="radiogroup" aria-labelledby="group-audience-type-label">
                             @foreach (GroupAudienceType type in Enum.GetValues<GroupAudienceType>())
                             {
                                 string id = $"audience-{type}";

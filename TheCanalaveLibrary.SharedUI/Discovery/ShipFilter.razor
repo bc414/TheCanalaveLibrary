@@ -17,8 +17,8 @@
    guard ResultsFilterPanel uses) — the dispatcher resolves member display names asynchronously, so
    a one-time OnInitialized snapshot would freeze on the empty pre-resolve lists. *@
 
-<div class="flex flex-col gap-2">
-    <label class="text-sm font-bold">Ships</label>
+<div class="flex flex-col gap-2" role="group" aria-labelledby="ship-filter-label">
+    <span id="ship-filter-label" class="text-sm font-bold">Ships</span>
 
     @* Added ship criteria *@
     @if (_included.Count > 0 || _excluded.Count > 0)
@@ -62,6 +62,7 @@
                                SearchMethod="SearchCharacters"
                                OnSelected="AddMember"
                                Placeholder="Add a character to the ship…"
+                               AriaLabel="Add a character to the ship"
                                NotFoundText="No characters found">
                 <ResultTemplate Context="tag">
                     <span class="inline-flex items-center gap-2">

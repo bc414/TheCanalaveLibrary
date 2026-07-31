@@ -84,6 +84,7 @@
                                                                SearchMethod="SearchTargetTags"
                                                                OnSelected="OnTargetPicked"
                                                                Placeholder="Pick an existing tag…"
+                                                               AriaLabel="@($"Link {group.Name} to a tag")"
                                                                NotFoundText="No tags found">
                                                 <ResultTemplate Context="tag">
                                                     <span>@tag.TagName</span>

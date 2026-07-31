@@ -18,27 +18,27 @@
 
     @* ── Title ───────────────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-(--color-text)">Title</label>
-        <InputText @bind-Value="ViewModel.Title"
+        <label for="story-title" class="text-sm font-semibold text-(--color-text)">Title</label>
+        <InputText id="story-title" @bind-Value="ViewModel.Title" aria-describedby="story-title-error"
                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                    placeholder="Story title" />
-        <ValidationMessage For="@(() => ViewModel.Title)" class="text-sm text-(--color-danger)" />
+        <ValidationMessage id="story-title-error" For="@(() => ViewModel.Title)" class="text-sm text-(--color-danger)" />
     </div>
 
     @* ── Short description ────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-(--color-text)">Short Description</label>
-        <InputTextArea @bind-Value="ViewModel.ShortDescription" rows="2"
+        <label for="story-short-description" class="text-sm font-semibold text-(--color-text)">Short Description</label>
+        <InputTextArea id="story-short-description" @bind-Value="ViewModel.ShortDescription" rows="2" aria-describedby="story-short-description-error"
                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                        placeholder="One-line hook shown in story listings (max 500 chars)" />
-        <ValidationMessage For="@(() => ViewModel.ShortDescription)" class="text-sm text-(--color-danger)" />
+        <ValidationMessage id="story-short-description-error" For="@(() => ViewModel.ShortDescription)" class="text-sm text-(--color-danger)" />
     </div>
 
     @* ── Rating + Status (side by side on wider screens) ─────────────────────── *@
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div class="flex flex-col gap-1">
-            <label class="text-sm font-semibold text-(--color-text)">Rating</label>
-            <InputSelect @bind-Value="ViewModel.Rating"
+            <label for="story-rating" class="text-sm font-semibold text-(--color-text)">Rating</label>
+            <InputSelect id="story-rating" @bind-Value="ViewModel.Rating"
                          class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                 @foreach (Rating r in Enum.GetValues<Rating>())
                 {
@@ -47,8 +47,8 @@
             </InputSelect>
         </div>
         <div class="flex flex-col gap-1">
-            <label class="text-sm font-semibold text-(--color-text)">Status</label>
-            <InputSelect @bind-Value="ViewModel.StoryStatusId"
+            <label for="story-status" class="text-sm font-semibold text-(--color-text)">Status</label>
+            <InputSelect id="story-status" @bind-Value="ViewModel.StoryStatusId"
                          class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                 @foreach (StoryStatusEnum s in Enum.GetValues<StoryStatusEnum>())
                 {
@@ -60,21 +60,21 @@
 
     @* ── Cover art ───────────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-2">
-        <label class="text-sm font-semibold text-(--color-text)">Cover Art</label>
+        <label for="story-cover-art" class="text-sm font-semibold text-(--color-text)">Cover Art</label>
         @if (!string.IsNullOrEmpty(ViewModel.CoverArtRelativeUrl))
         {
             <img src="@ViewModel.CoverArtRelativeUrl"
                  alt="Current cover"
                  class="h-32 w-24 rounded-md object-cover shadow-subtle" />
         }
-        <InputFile OnChange="HandleCoverSelected" accept="image/jpeg,image/png,image/webp"
+        <InputFile id="story-cover-art" OnChange="HandleCoverSelected" accept="image/jpeg,image/png,image/webp"
                    class="text-sm text-(--color-text-muted) file:mr-3 file:rounded-md file:border-0 file:bg-(--color-action) file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-(--color-text) file:transition-colors hover:file:bg-(--color-action-hover)" />
         <p class="text-xs text-(--color-text-muted)">JPEG, PNG, or WebP · max 10 MB</p>
     </div>
 
     @* ── Long description (rich text) ─────────────────────────────────────────── *@
-    <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-(--color-text)">Summary / Long Description</label>
+    <div class="flex flex-col gap-1" role="group" aria-labelledby="story-long-description-label">
+        <span id="story-long-description-label" class="text-sm font-semibold text-(--color-text)">Summary / Long Description</span>
         <ContentSurface Variant="ContentSurfaceVariant.Input">
             <EditorView @ref="_editor" Html="@ViewModel.LongDescription" Placeholder="Full story summary…" />
         </ContentSurface>
@@ -233,13 +233,13 @@
 
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div class="flex flex-col gap-1">
-                <label class="text-xs text-(--color-text-muted)">Originally published (elsewhere)</label>
-                <InputDate @bind-Value="ViewModel.OriginalPublishedDate"
+                <label for="story-original-published-date" class="text-xs text-(--color-text-muted)">Originally published (elsewhere)</label>
+                <InputDate id="story-original-published-date" @bind-Value="ViewModel.OriginalPublishedDate"
                            class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text)" />
             </div>
             <div class="flex flex-col gap-1">
-                <label class="text-xs text-(--color-text-muted)">Original last update</label>
-                <InputDate @bind-Value="ViewModel.OriginalLastUpdatedDate"
+                <label for="story-original-last-updated-date" class="text-xs text-(--color-text-muted)">Original last update</label>
+                <InputDate id="story-original-last-updated-date" @bind-Value="ViewModel.OriginalLastUpdatedDate"
                            class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text)" />
             </div>
         </div>

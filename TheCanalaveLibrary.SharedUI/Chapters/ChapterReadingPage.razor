@@ -94,7 +94,8 @@ else
                                PreviousChapterNumber="@Chapter.PreviousChapterNumber"
                                NextChapterNumber="@Chapter.NextChapterNumber"
                                Toc="@(Toc ?? [])"
-                               Versions="@(Versions ?? [])" />
+                               Versions="@(Versions ?? [])"
+                               NavLabel="Chapter navigation, top" />
         </div>
 
         @* Chapter body — chapter-body id is the scroll-tracking anchor for reading-progress.js *@
@@ -130,7 +131,8 @@ else
                                PreviousChapterNumber="@Chapter.PreviousChapterNumber"
                                NextChapterNumber="@Chapter.NextChapterNumber"
                                Toc="@(Toc ?? [])"
-                               Versions="@(Versions ?? [])" />
+                               Versions="@(Versions ?? [])"
+                               NavLabel="Chapter navigation, bottom" />
         </div>
 
         @* Author-only edit link — visibility only; the write service is the real gate. *@

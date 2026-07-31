@@ -63,9 +63,13 @@ Phases 3, 6, 7 remain before launch. Live count/Position detail: `workplan.md`'s
   `identity-and-authorization.md` §"Account Status Is Display-Only, Read Live".
 - **Phase 3 — Full L4 sweep + Stage-6 freezes — not started; Phase 2 is done, so this is next.**
   Brian-driven, per-cluster render → fix → Pattern-Accumulate → 5→6 on sign-off. Surface decision
-  row 1 is resolved (see Resolved below in `middle_plan_v2.md`). **WU-A11y** (Feature 65) pairs
-  with this sweep — both are a final whole-site pass over already-built surfaces — gated on
-  **decision row 12** below.
+  row 1 is resolved (see Resolved below in `middle_plan_v2.md`). **WU-A11y split in two on
+  2026-07-31 (decision row 12, resolved — see §Resolved):** the static/naming half
+  (labelling, validation association, `Modal` primitive, image `alt`, mechanical gates) does not
+  need the sweep and is sequenced ahead of it (Tier 2); **WU-A11y-Keyboard** (focus trap, Escape,
+  combobox ARIA, the manual keyboard script) still pairs with this sweep — both are final
+  whole-site passes over already-built surfaces, and keyboard verification needs Brian's browser
+  pass regardless.
 - **Phase 4 — Beta-scope decisions — DONE ✓ (2026-07-18, last verdict: Feature 56 cut).** Every
   per-feature verdict rendered. Full detail: `middle_plan_v2.md` Phase 4.
 - **Phase 5 — L5 WASM enablement — DONE ✓ (2026-07-13, WU-L5Sweep + WU-GlobalFlip).** One
@@ -117,6 +121,7 @@ Row numbers preserved from the retired chain (other docs cite them by number —
 2026-07-27). Row 13 was added 2026-07-27 (promoted out of `hidden-deferrals-tracker.md` B11's
 blocking question, same treatment now applied going forward: a tracker item that turns out to be a
 genuine open decision gets promoted here, not left buried in the tracker) and resolved 2026-07-28.
+Row 12 (accessibility scope/depth) resolved 2026-07-31 — see §Resolved.
 
 | # | Decision | Default (per spec/§0) | Why it's yours |
 |---|----------|----------------------|----------------|
@@ -124,7 +129,6 @@ genuine open decision gets promoted here, not left buried in the tracker) and re
 | 6 | **Beta logistics** — who, how many, invite mechanism, feedback channel. | None. | Community relationships are yours. Gates Phase 6. |
 | 8 | **Email provider + sending domain** — mechanism is resolved (config-only SMTP swap); which provider, the sending domain, and its SPF/DKIM/DMARC DNS records remain open. | Postmark, SES, or Resend (cheap at this scale); needs a sending domain, tying into row 4's domain work. | Cost, deliverability reputation, and the domain is yours. Gates Phase 7. |
 | 10 | **Legal/policy track ownership + timing** — ToS, privacy policy, DMCA agent/process, moderation obligations for a fanfiction UGC site. | None. | Legal exposure and community policy are yours; engineering only hosts the documents. Gates Phase 7. |
-| 12 | **Accessibility scope/depth** — full WCAG AA audit vs. a targeted axe-DevTools pass over the highest-traffic pages; whether to add an automated a11y test tier. | None — genuine Stage-1 intent gap. | Product/effort trade-off; solo-dev realistic scope is yours to set. Gates WU-A11y (Phase 3). |
 
 ## Recommended next work units (2026-07-27)
 
@@ -156,7 +160,8 @@ done.
 | **2** | ~~WU-DataSaver~~ **DONE 2026-07-31** | B0 | Measured, not just decided — "suppress sprites, or cut the setting" turned out to have a wrong premise; see "Resolved" below |
 | **2** | ~~WU-DiscoveryOverrideUI~~ **DONE 2026-07-31** | B7 | Per-user filter-override editing surface (§8.7) — see "Resolved" below |
 | **3** | ~~WU-Home~~ **DONE 2026-07-28** | F1 | Closed Phase 2's last content item; Phase 2 fully closed 2026-07-30 (WU-AccountEnforcement, Tier 1) |
-| **4** — Phase 3 (L4 freeze sweep) | WU-A11y | F6 | Resolve decision row 12 just before the sweep starts |
+| **2** | WU-A11y (Structure) | F6 (static half) | Decision row 12 resolved 2026-07-31 (sweep by defect class, no fourth test tier, extract `Modal`, Identity in scope). Static/naming pass — labelling, validation association, `Modal` primitive, image `alt`, mechanical gates. Does not need the L4 sweep; sequenced here. See "Resolved" below. |
+| **4** — Phase 3 (L4 freeze sweep) | WU-A11y-Keyboard | F6 (keyboard half, filed 2026-07-31) | Focus trap, Escape, combobox ARIA, manual keyboard script. Needs Brian's browser pass — pairs with the sweep as originally scoped. |
 | **4** | ~~WU-SweepRiders~~ **DONE 2026-07-31** | H1, E4, H8 | Pulled ahead of the Phase 3 sweep rather than ridden alongside it — H8 was a decision that needed settling before the sweep styles ~1,325 LOC of Identity scaffold, not during it; H1 turned out to need no code change (stale tracker context — verified already-resolved) and E4 was small enough to travel with H8. See "Resolved" below. |
 | **5** — beta window | WU-EditorSprite | A1 | Spec'd authoring capability; design the sanitizer allow-list addition alongside it |
 | **5** | Decision row 6 (beta logistics) | F5 | Chat-only, shortly before beta opens |
@@ -183,6 +188,23 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 2026-07-30; nothing left to sequence.
 
 ## Resolved
+
+- **Decision row 12 (accessibility scope/depth) — resolved 2026-07-31.** Sweep **by defect class,
+  not by page**: the addendum's original four-page framing (search, story page, chapter reading,
+  signup/login) would have missed most of the actual defect concentration — the 43 orphan `<label>`
+  elements sit in authoring forms (`StoryPropertiesForm`, `ChapterPropertiesForm`, `PollEditorForm`,
+  `GroupCreateEditPage`) none of which are in that list, and `ConfirmDialog`/`ReportDialog` appear
+  on no single page. **No fourth test tier** — extend the existing bUnit `RazorComponents` tier +
+  add mechanical gates (`scripts/check-a11y.ps1`) instead of axe-core/Lighthouse-CI. **Extract a
+  shared `Modal` primitive** — the `layer3.5-structure.md` deferral note's own trigger ("until a
+  third consumer's shape clarifies what the shared part actually is") had fired: 9 overlay sites
+  existed by the time this was decided. **`Server/Identity/` in scope.**
+  **Split into two work units, same day:** WU-A11y (Structure) lands everything statically
+  verifiable — naming/association ARIA, never an interaction promise the code doesn't keep yet —
+  and ships with full mechanical gate coverage. WU-A11y-Keyboard (focus trap, Escape, combobox
+  ARIA, the manual keyboard script) stays paired with the Phase-3 L4 sweep, since axe-DevTools
+  cannot test keyboard behavior at all and Feature 65's L4.5-Browser cell can't legitimately move
+  without Brian's own browser pass. Detail: `audit/Accessibility.md`.
 
 - **WU-SweepRiders — H1/E4/H8 closed (2026-07-31).** Pulled ahead of the Phase 3 L4 sweep (see
   Tier 4 above) rather than ridden alongside it, since H8 was a decision blocking whether the

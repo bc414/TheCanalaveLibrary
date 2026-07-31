@@ -72,20 +72,24 @@
     Preview
 </button>
 
-@if (_isPreviewMode)
-{
-    <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="ClosePreview">
-        <div class="max-h-full max-w-2xl overflow-y-auto rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation="true">
-            <ContentSurface Variant="ContentSurfaceVariant.Reading">
-                <RichTextView HtmlContent="@_previewHtml" />
-            </ContentSurface>
-            <button type="button" class="mt-4 rounded-md bg-(--color-action) px-3 py-1 text-(--color-text) transition-colors hover:bg-(--color-action-hover)"
-                    @onclick="ClosePreview">
-                Close
-            </button>
-        </div>
-    </div>
-}
+@* Preview popup — built on the shared Modal primitive (extracted WU-A11y, 2026-07-31 — see
+   layer3.5-structure.md "Container Composite"). This is the "different flow" (content preview,
+   not confirm/cancel) the pre-extraction deferral note worried about; it fits the primitive
+   without strain via PanelClass + a single-button Footer. *@
+<Modal IsOpen="_isPreviewMode" IsOpenChanged="(bool open) => { if (!open) ClosePreview(); }"
+       Title="Preview" PanelClass="max-w-2xl max-h-full overflow-y-auto">
+    <ChildContent>
+        <ContentSurface Variant="ContentSurfaceVariant.Reading">
+            <RichTextView HtmlContent="@_previewHtml" />
+        </ContentSurface>
+    </ChildContent>
+    <Footer>
+        <button type="button" class="rounded-md bg-(--color-action) px-3 py-1 text-(--color-text) transition-colors hover:bg-(--color-action-hover)"
+                @onclick="ClosePreview">
+            Close
+        </button>
+    </Footer>
+</Modal>
 
 @code {
     [Parameter] public string? Html { get; set; }

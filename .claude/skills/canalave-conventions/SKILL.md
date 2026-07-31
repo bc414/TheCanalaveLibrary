@@ -80,7 +80,10 @@ These have documented rationale and rejected alternatives. **Do not propose alte
 Cross-cutting clusters and their scope:
 - **`Lookups/`** — seeded reference data (themes, report reasons, etc.) every cluster queries by FK; no single owning feature.
 - **`RichText/`** — `RichTextView`/`EditorView` universal render/edit atoms consumed by Chapters, Comments, Recommendations, BlogPosts, Profiles, Messaging.
-- **`Dialogs/`** — `ConfirmDialog` universal confirm/cancel modal (spoiler reveal, account deletion, leaving a group, etc.); no owning feature.
+- **`Dialogs/`** — the shared `Modal` primitive (shell + ARIA role + accessible name, extracted
+  WU-A11y 2026-07-31 — see `layer3.5-structure.md` "Container Composite") plus `ConfirmDialog`, the
+  universal confirm/cancel modal built on it (spoiler reveal, account deletion, leaving a group,
+  etc.); no owning feature.
 - **`Users/`** — `UserCardDto`/`UserCard` universal user-summary atom consumed across Following, Profiles, Groups, Comments, Recommendations, Messaging, tree-search. Distinct from `Identity/` (which owns the `User` entity).
 - **`Images/`** — `IImageStorageService` universal user-upload-blob write path (story covers, profile pictures). Distinct from `Sprites/` (read-only git-managed static assets).
 - **`Identity/`** — `User` entity + `IActiveUserContext` + auth plumbing (Server impl: `Server/Identity/`). Distinct from `Users/` (summary atom) and `Profiles/` (read/edit layer).

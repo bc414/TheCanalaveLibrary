@@ -152,7 +152,7 @@ landing page (`StoryPage`), which instead uses the `ChapterList` leaf (WU25, `Sh
 
 ```razor
 @* ChapterNavigation.razor — SharedUI/Chapters/ *@
-<nav class="flex flex-wrap items-center gap-2" aria-label="Chapter navigation">
+<nav class="flex flex-wrap items-center gap-2" aria-label="@NavLabel">
     @if (PreviousChapterNumber.HasValue)
     {
         <a href="/story/@StoryId/@PreviousChapterNumber" class="@NavLinkClasses(false)"
@@ -160,7 +160,7 @@ landing page (`StoryPage`), which instead uses the `ChapterList` leaf (WU25, `Sh
     }
     else
     {
-        <span class="@NavLinkClasses(true)" aria-disabled="true"
+        <span class="@NavLinkClasses(true)" role="link" aria-disabled="true"
               aria-label="Previous chapter">&lsaquo;</span>
     }
 
@@ -222,8 +222,17 @@ landing page (`StoryPage`), which instead uses the `ChapterList` leaf (WU25, `Sh
 - **`<details>`/`<summary>` for CSS disclosures** — native open/close, no JS/Blazor state.
   Apply `display: flex` to `<summary>` (via `flex` Tailwind class) to suppress the default
   browser marker triangle without needing `list-none` alone.
-- **`<a>` for link variants; `<span aria-disabled>` for unavailable endpoints** — not
-  `<button disabled>`, because these are navigation, not actions.
+- **`<a>` for link variants; `<span role="link" aria-disabled>` for unavailable endpoints** — not
+  `<button disabled>`, because these are navigation, not actions. The `role="link"` was added by
+  the WU-A11y browser pass (2026-07-31, axe's `aria-prohibited-attr` rule): a bare `<span>`'s
+  implicit ARIA role is `generic`, which doesn't support `aria-label` in strict ARIA conformance —
+  `role="link"` + `aria-disabled` is the ARIA Authoring Practices pattern for a disabled link and
+  is what makes the `aria-label` legal.
+- **`NavLabel` parameter distinguishes the top/bottom instances** (same pass, axe's
+  `landmark-unique` rule) — two `<nav>` landmarks with the identical accessible name are
+  indistinguishable to a screen-reader user navigating by landmark. `ChapterReadingPage` passes
+  `"Chapter navigation, top"` / `"Chapter navigation, bottom"`; the default (`"Chapter
+  navigation"`) covers a hypothetical single-instance consumer.
 - **`aria-current="page"` on the currently-selected entry** in both the chapter dropdown and
   the version picker. Blazor renders `aria-current="@(condition ? "page" : null)"` as either
   the attribute (present, value `"page"`) or absent (not `aria-current=""`), matching
@@ -245,45 +254,98 @@ landing page (`StoryPage`), which instead uses the `ChapterList` leaf (WU25, `Sh
 }
 ```
 
-`ConfirmDialog` (WU9, universal — spec §5.30.9) is the same subtype with a `@bind-IsOpen` contract
-instead of always-rendered `ChildContent`, since a dialog's defining behavior is *whether it renders at
-all*:
+**`Modal` (`SharedUI/Dialogs/Modal.razor`, extracted WU-A11y 2026-07-31) is the shared overlay
+primitive** every dialog/modal in the app now builds on. Nine call sites shared one hand-rolled
+shell before extraction (`ConfirmDialog`, `ReportDialog`, `ComposeConversationModal`, EditorView's
+preview popup, both `SavedTagSelection*Inner` dialogs, `TagDirectoryPage`, `DesignGalleryPage` ×2)
+— this file used to defer the extraction "until a third consumer's shape clarifies what the shared
+part actually is"; nine sites is well past that trigger, and the shape that falls out is narrower
+than the original note expected: the shared part is **the shell plus the accessible name**, not the
+button row (`Footer` stays a caller-supplied `RenderFragment`, which is what lets EditorView's
+Preview/Close flow and ConfirmDialog's Confirm/Cancel flow both sit on the same primitive without
+either owning the other's buttons).
 
 ```razor
-@* ConfirmDialog.razor — SharedUI/Dialogs/ (cross-cutting cluster, no owning feature) *@
+@* Modal.razor — SharedUI/Dialogs/ (cross-cutting cluster, no owning feature) *@
 @if (IsOpen)
 {
-    <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" @onclick="Cancel">
-        <div class="max-w-md rounded-xl bg-surface p-6 shadow-lg" @onclick:stopPropagation="true">
-            @if (Title is not null) { <h2 class="...">@Title</h2> }
-            @if (ChildContent is not null) { @ChildContent } else { <p>@Message</p> }
-            <div class="flex justify-end gap-2">
-                <button @onclick="Cancel">@CancelText</button>
-                <button class="@(IsDestructive ? "bg-danger" : "bg-primary")" @onclick="Confirm">@ConfirmText</button>
-            </div>
+    <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4"
+         @onclick="Close">
+        <div class="@($"rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent {PanelClass}")"
+             role="dialog" aria-label="@Title" @onclick:stopPropagation="true">
+            @if (ShowTitleHeading) { <h2 class="mb-2 text-lg font-semibold text-(--color-text)">@Title</h2> }
+            @ChildContent
+            @if (Footer is not null) { <div class="mt-4 flex justify-end gap-2">@Footer</div> }
         </div>
     </div>
 }
 
 @code {
     [Parameter] public bool IsOpen { get; set; }
-    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }  // enables @bind-IsOpen
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }     // enables @bind-IsOpen
+    [Parameter, EditorRequired] public string Title { get; set; } = "";    // the accessible name — required, not optional
+    [Parameter] public bool ShowTitleHeading { get; set; } = true;         // false = name without a visible <h2>
+    [Parameter, EditorRequired] public RenderFragment ChildContent { get; set; } = default!;
+    [Parameter] public RenderFragment? Footer { get; set; }                // action row; caller owns its buttons
+    [Parameter] public string? PanelClass { get; set; }                    // size/scroll deltas only
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task Close()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+        await OnClose.InvokeAsync();
+    }
+}
+```
+
+Three choices worth recording so they aren't re-litigated:
+
+- **`Title` is `EditorRequired` and non-nullable.** The accessible name is the entire point of the
+  primitive; making it compile-nagged is what keeps the defect (8 of 9 overlays had none before
+  this WU) from recurring.
+- **`aria-label="@Title"`, not `aria-labelledby` pointing at the heading.** Under InteractiveAuto the
+  prerendered and interactive instances are different component instances, so a generated heading id
+  would change across the WASM handoff. `aria-label` needs no id machinery and is prerender-stable.
+  The usual objection to `aria-label` over `aria-labelledby` — drift between the visible heading and
+  the announced name — can't happen here, because `Title` is the source of both.
+- **`Modal` never mutates `IsOpen` itself** — `Close()` invokes `IsOpenChanged(false)` and
+  `OnClose()`; the parent always owns the open/closed state. This is what lets `ReportDialog`
+  (private field, no two-way binding) and `ConfirmDialog` (`@bind-IsOpen`, below) both sit on the
+  same primitive.
+
+`ConfirmDialog` (WU9, universal — spec §5.30.9) is now built **on top of** `Modal`, with its own
+`@bind-IsOpen` contract preserved unchanged for its 14 existing consumers:
+
+```razor
+@* ConfirmDialog.razor — SharedUI/Dialogs/ *@
+<Modal @bind-IsOpen="IsOpen" Title="@(Title ?? "Confirm")" ShowTitleHeading="@(Title is not null)" OnClose="Cancel">
+    @if (ChildContent is not null) { @ChildContent } else { <p class="text-(--color-text)">@Message</p> }
+    <Footer>
+        <button type="button" @onclick="Cancel">@CancelText</button>
+        <button type="button" class="@(IsDestructive ? "bg-danger" : "bg-(--color-action)")" @onclick="Confirm">@ConfirmText</button>
+    </Footer>
+</Modal>
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
     [Parameter] public string? Title { get; set; }
     [Parameter] public string? Message { get; set; }
-    [Parameter] public RenderFragment? ChildContent { get; set; }       // wins over Message when set
+    [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public string ConfirmText { get; set; } = "Confirm";
     [Parameter] public string CancelText { get; set; } = "Cancel";
     [Parameter] public bool IsDestructive { get; set; }
     [Parameter] public EventCallback OnConfirm { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
-    private async Task Confirm() { await OnConfirm.InvokeAsync(); await Close(); }
-    private async Task Cancel() { await OnCancel.InvokeAsync(); await Close(); }
-    private async Task Close() { IsOpen = false; await IsOpenChanged.InvokeAsync(false); }
+    private async Task Confirm() { await OnConfirm.InvokeAsync(); IsOpen = false; await IsOpenChanged.InvokeAsync(false); }
+    private async Task Cancel() { await OnCancel.InvokeAsync(); IsOpen = false; await IsOpenChanged.InvokeAsync(false); }
 }
 ```
 
-Consumer side mirrors the spec's spoiler example (`layer3-logic.md` "Spoiler Comment State"):
+Consumer side is unchanged and still mirrors the spec's spoiler example (`layer3-logic.md` "Spoiler
+Comment State"):
 
 ```razor
 <ConfirmDialog @bind-IsOpen="_showConfirmDialog"
@@ -293,12 +355,14 @@ Consumer side mirrors the spec's spoiler example (`layer3-logic.md` "Spoiler Com
 ```
 
 Backdrop click cancels (safe default before a destructive action); `@onclick:stopPropagation` on the
-panel keeps clicks inside the dialog from bubbling to the backdrop. No escape-key dismissal in MVP —
-backdrop + Cancel button cover it; deferred, not blocking. The overlay shell (`fixed inset-0 z-50 ...
-bg-black/50` backdrop, `rounded-xl bg-surface ... shadow-lg` panel) is the same shell EditorView's
-preview popup uses (see below) — reused, not reinvented, but **not extracted into a shared `Modal`
-primitive** with only two consumers and two different flows (confirm/cancel vs. content-preview); that
-extraction is deferred until a third consumer's shape clarifies what the shared part actually is.
+panel keeps clicks inside the dialog from bubbling to the backdrop.
+
+**Escape-key dismissal is still deferred, not blocking — this remains settled.** `Modal` carries an
+ARIA `role="dialog"` and an accessible name, but deliberately **no focus trap, no `aria-modal`, and
+no Escape handling** — that is WU-A11y-Keyboard's scope (paired with the Phase-3 L4 freeze sweep;
+see `audit/Accessibility.md`), not this pass's. Do not add `aria-modal="true"` to a `Modal` consumer
+ahead of that WU: it tells assistive tech the background is inert, which isn't true until the trap
+exists.
 
 ### Owner-Conditional Edit Affordances on a Display Composite
 

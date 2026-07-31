@@ -17,7 +17,50 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-SweepRiders (2026-07-31) — closed tracker items H1, E4, H8 ahead of the
+- **Last landed:** WU-A11y (Structure) (2026-07-31) — decision row 12 resolved same day (sweep by
+  defect class not by page; no fourth test tier; extract the shared `Modal` primitive; Identity in
+  scope), then split into two work units the dividing line itself produced: ARIA that names
+  existing structure (this WU) vs. ARIA that promises an interaction model not yet built
+  (WU-A11y-Keyboard, deferred, paired with the Phase-3 L4 sweep below). Built: the `Modal`
+  primitive (`SharedUI/Dialogs/Modal.razor`, 9 prior hand-rolled overlays migrated onto it, no
+  trap/`aria-modal` — `ModalTests` asserts the absence directly); labelling swept by defect class
+  across 17 files (43 orphan `<label>`s + 2 dangling `for=` targets, hand-classified not
+  estimated) via three shapes (`for=`/`id=` pairs, `role="group"`/`aria-labelledby` for
+  no-single-control composites, a new `CanalaveTypeahead.AriaLabel` parameter for the
+  picker-owns-its-name case); all 43 `ValidationMessage`s wired to `aria-describedby`; the avatar
+  `alt=` convention standardized on `alt=""` (5 sites fixed off `alt="@Username"`, which
+  double-announced against adjacent visible name text); `BadgeSettingsForm`'s redundant `title=`
+  removed; a `prefers-reduced-motion` CSS block added (documented gap: doesn't reach animated
+  sprites, tracker item **A9**); `scripts/check-a11y.ps1` (7 gates, each mutation-tested by hand)
+  wired into CI; a new bUnit `AccessibleNameAssertions` helper applied to the 4 densest label
+  files — it caught one real bug a static gate structurally can't (`ChapterPropertiesForm`'s
+  Version-Rating `role="group"` named the group, not the `<select>` inside it). Cell flip:
+  Feature 65 L4-Style 1 → 5; L4.5-Browser stays 1. `dotnet test` green: RazorComponents 650
+  (+8 new). **Addendum, same day:** Chrome browser tooling became available mid-session, so the
+  axe-DevTools pass the plan scoped as this WU's own step *did* run after all, over all six pages
+  (real axe-core 4.10.2, loaded via a `<script>` tag — the extension's isolated-JS-world `eval`
+  silently failed to attach `window.axe`, a real `<script src>` tag worked). Found and fixed:
+  missing `<h1>`/`<PageTitle>` (Home, Discover — sr-only, no visual change), two sidebar `<aside>`s
+  nested inside `<main>` (Discover, Messages — changed to `<div>`), `ChapterNavigation`'s duplicate
+  `<nav aria-label>` (top/bottom now distinguished via a new `NavLabel` parameter) and its disabled
+  spans' `aria-prohibited-attr` (added `role="link"`, the ARIA APG pattern for a disabled link).
+  Confirmed as accepted, not fixed: Quill's own toolbar chrome (matches the already-documented
+  exemption), the not-yet-rendered `ValidationMessage`/`aria-describedby` id (matches the plan's
+  own prediction verbatim — axe reports it "incomplete," not a violation), and **real
+  measured contrast failures in Brian's locked design tokens** (`--color-tagtype-character`
+  white-on-blue 3.07:1, `--color-tagtype-genre` white-on-pink 3.11:1, the Indicator success-tint
+  recipe 2.88:1 — all below the ratified 4.5:1; not changed unilaterally, flagged for Brian's
+  token decision). New, unrelated, out-of-scope discovery this pass surfaced and did **not**
+  fix: `/Account/Login` and `/Account/Register` both return a raw 500
+  (`PersistProperty must be associated with a component or define an explicit render mode type`)
+  for every visitor, authenticated or not — **the entire Identity/auth funnel is currently
+  broken**. Possibly connected to this same session's own WU-SweepRiders H1 verification (below)
+  that `AuthorizeRouteView`'s ambient `DefaultLayout` wraps statically-routed pages in `MainLayout`
+  — `MainLayout` carries three `[PersistentState]`-bearing descendants that may be arriving with
+  no inferred render mode on Identity's routing path. Not diagnosed further (real risk of a rabbit
+  hole unrelated to accessibility) — flagged at high priority, see tracker **H10**. Full evidence
+  table: `audit/Accessibility.md` Stage note Addendum.
+  Before that, 2026-07-31: WU-SweepRiders — closed tracker items H1, E4, H8 ahead of the
   Phase 3 L4 sweep rather than riding alongside it (H8 gated whether the sweep needs to style
   ~1,325 LOC of Identity scaffold at all). H8: keep the 2FA/passkey/external-login scaffold
   (Brian) — corrected the entry's "no provider configured" over-generalization (only external
@@ -63,10 +106,14 @@ references it, does not restate it.
   + WU-SelectionPermalink — decision row 13 resolved, closing tracker item **B11**; earlier the same
   day, WU-Home + WU-SiteNews — decision row 2 resolved, closing tracker item F1.)
 - **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
-  **Phase 3 is next** — Brian-driven L4 freeze sweep + WU-A11y (the latter gated on decision
-  row 12) — nothing further blocks starting it. WU-SweepRiders was pulled *ahead of* Phase 3
-  specifically because H8 was a decision the sweep's own scope depended on (keep vs. prune the
-  Identity scaffold it would otherwise style); WU-DataSaver, WU-StatBadgeProducers,
+  **Phase 3 is next** — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
+  which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
+  static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
+  further blocks starting it. WU-SweepRiders and WU-A11y (Structure) were both pulled *ahead of*
+  Phase 3 rather than riding alongside it: WU-SweepRiders because H8 was a decision the sweep's
+  own scope depended on (keep vs. prune the Identity scaffold it would otherwise style); WU-A11y
+  (Structure) because its half of the work doesn't need Brian's browser pass the way
+  WU-A11y-Keyboard and the sweep both do. WU-DataSaver, WU-StatBadgeProducers,
   WU-ApplyFiltersPurity, and WU-ErrorHandling2 were all Tier-1/Tier-2 between-phase work (below),
   not phase gates.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
@@ -75,8 +122,11 @@ references it, does not restate it.
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
-- **Blocked on Brian:** decision rows 4, 6, 8, 10, and 12 (`roadmap.md` §"Decisions
-  that need you"; rows 2 and 13 resolved 2026-07-28).
+- **Blocked on Brian:** decision rows 4, 6, 8, and 10 (`roadmap.md` §"Decisions
+  that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31). Separately, not a
+  numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
+  now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own
+  browser session — see that WU's DONE entry and `audit/Accessibility.md`.
 
 ---
 
@@ -160,9 +210,14 @@ from the "Post-MVP — Layers 5–8" section below (historical framing). Each en
 cell(s)/feature, phase, audit pointer, and deps; move it to the DONE ✓ run below (with
 cells/verification) when built.
 
-- **WU-A11y** — **Cells:** Feature 65 (new), L4/L4.5 currently Stage 1. **Phase:** 3, paired with
-  the L4 freeze sweep. **Scope:** blocked on decision row 12 (scope/depth). **Pointer:**
-  `audit/Accessibility.md`. **Deps:** Phase 3's L4 freeze sweep (same pass).
+- **WU-A11y-Keyboard** — **Cells:** Feature 65, L4.5 Stage 1 (L4-Style already flipped to 5 by
+  WU-A11y (Structure), 2026-07-31 — see DONE run below). **Phase:** 3, paired with the L4 freeze
+  sweep. **Scope:** focus trap/restore (`modal.js`), the `dismiss.js` modal-first Escape branch,
+  `aria-modal="true"` on `Modal`, `CanalaveTypeahead` combobox ARIA, the manual keyboard script —
+  plus the axe-DevTools browser pass WU-A11y (Structure) didn't reach (contrast is unverified, not
+  just ungated — fold it into this WU's own browser session rather than running two). **Pointer:**
+  `audit/Accessibility.md`; tracker item **F6b**. **Deps:** Phase 3's L4 freeze sweep (same pass) —
+  both need Brian's own browser-driven verification.
 - **WU-EditorSprite** — **Cells:** Feature 6 (extends, no new cell). **Phase:** 4. **Scope:**
   inline Pokémon-sprite Quill blot (spec §5.30.2), deferred at WU6. **Pointer:**
   `audit/Chapters.md` Feature 6. **Deps:** WU6 (`EditorView`, Stage 5).
@@ -216,6 +271,170 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-A11y (Structure) — static/naming accessibility sweep + Modal primitive (Feature 65, extends `Dialogs/`, `Controls/`, most SharedUI clusters) — DONE ✓ (2026-07-31)
+
+- **Cells:** Feature 65 L4-Style 1 → 5. L4.5-Browser stays 1 — deliberately (see below).
+- **Decision row 12, resolved same day:** sweep by defect class, not by page; no fourth test tier
+  (extend bUnit + add `scripts/check-a11y.ps1`); extract the shared `Modal` primitive
+  (`layer3.5-structure.md`'s "third consumer" deferral trigger had fired — 9 sites);
+  `Server/Identity/` in scope. Full rationale: `roadmap.md` §Resolved.
+- **Scope split, same day, along the line the decision itself drew:** ARIA that *names* existing
+  structure (this WU) vs. ARIA that *promises an interaction model* not yet built
+  (`aria-modal`, focus trap, combobox roles — WU-A11y-Keyboard, paired with the Phase-3 L4 sweep).
+  Rationale: axe-DevTools cannot test keyboard behavior at all, and shipping the naming half
+  under full mechanical-gate coverage is strictly better than shipping a floor that immediately
+  decays unverified.
+- **`Modal` primitive** — `SharedUI/Dialogs/Modal.razor`: `role="dialog"` + `aria-label="@Title"`
+  (not `aria-labelledby`, deliberately — a generated heading id would drift across the
+  InteractiveAuto prerender→WASM handoff; `aria-label` needs no id machinery and can't drift from
+  the visible heading since `Title` is the source of both). No `aria-modal`, no focus trap — an
+  honest omission until WU-A11y-Keyboard, not silently promised. All 9 prior hand-rolled overlay
+  sites migrated onto it with contracts preserved: `ConfirmDialog` (rebuilt on top, 14 consumers
+  untouched — its own `IsOpenChanged` is wired explicitly rather than via `@bind-IsOpen` sugar on
+  `<Modal>`, because that sugar only assigns a local field and would silently break upward
+  propagation to `ConfirmDialog`'s own consumers), `ReportDialog`, `ComposeConversationModal`,
+  `EditorView`'s preview popup, both `SavedTagSelection*Inner` dialogs, `TagDirectoryPage`,
+  `DesignGalleryPage` (×2, including the gallery's own living-reference sample).
+- **Labelling swept by defect class across 17 files** — 43 orphan `<label>`s + 2 dangling `for=`
+  targets, found by hand-writing and running the exact classifier gate E now runs (not estimated):
+  `StoryPropertiesForm` (8), `ChapterPropertiesForm` (6, plus one real bug — see below),
+  `BlogPostPropertiesForm` (4), `SiteAnnouncementPropertiesForm` (2), `SeriesCreateEditPage` (3),
+  `MyStoryLineagesPage` (3), `CharacterEntry` (3), `MyAcknowledgmentsPage` (3),
+  `GroupCreateEditPage` (3), `StoryChapterImport` (1 real + 1 false positive — a label wrapping a
+  hidden `<InputFile>` across Razor `@if` branches, which an earlier draft of gate E's regex
+  mis-classified as orphan; fixed by matching `Input[A-Za-z]+` instead of `Input[A-Z]\b`, which
+  never matches multi-letter component names since `\b` needs a word boundary immediately after
+  the single capital), `TagSelector` (1), `PairingBuilder` (1), `ChapterFileImport` (0 real, same
+  false-positive class), `GroupPage` (1), `ShipFilter` (1), `FlatTagOverlayEntry` (1),
+  `ProfileSettingsForm` (1), `ComposeConversationModal` (2, incl. the dangling `for=`),
+  `LoginWith2fa` (1 dangling `for=`, resolved by removing it — the label already wraps its
+  checkbox, so `for=` was redundant debris, not a missing association).
+  Three mechanical shapes: `for=`/`id=` pairs (kebab-case, matching the house pattern already in
+  `stsd-nickname`/`Input.Email`; 4 loop-rendered components — `CharacterEntry`,
+  `FlatTagOverlayEntry`, `PairingBuilder`, `TagSelector` — get a `Guid`-based per-instance id,
+  since a static id would collide across simultaneously-rendered instances);
+  `role="group"`/`aria-labelledby` for composites with no single native control (mostly
+  `ContentSurface`/`EditorView` wrappers — a `<span id>` demotes the old `<label>`, never a
+  `<label for>` pointing at a non-labelable element like a `<p>`); and a new
+  `CanalaveTypeahead.AriaLabel` parameter (nullable, renders no attribute when unset) threaded
+  through `TagSelector`, `ShipFilter`, `UserPicker`, `StoryTitlePicker`, `FanonAxisPage` — the
+  picker-owns-its-name case, which also incidentally names every one of those inputs for the
+  first time (none had any accessible name before, not just a mismatched one).
+- **One real bug found via the new bUnit helper (below), not the static gates:**
+  `ChapterPropertiesForm`'s "Version Rating" `role="group"`/`aria-labelledby` wrapper named the
+  *group*, not the `<select>` inside it — `aria-labelledby` on an ancestor doesn't propagate to a
+  descendant control's own accessible name (WCAG 4.1.2 needs the control itself named). Fixed
+  with a direct `aria-label="Version Rating"` on the `InputSelect`. Audited every other
+  `role="group"` site introduced this WU for the same shape; all others wrap either a
+  `ContentSurface`/`EditorView` composite (no native control the selector matches) or a component
+  that already self-names via the new `AriaLabel` parameter (`UserPicker`/`StoryTitlePicker`
+  inside `MyAcknowledgmentsPage`/`MyStoryLineagesPage`/`ComposeConversationModal`/`GroupPage`) —
+  confirmed safe, not just assumed.
+- **All 43 `ValidationMessage` usages** (18 files — the 3 SharedUI forms above + 15 Identity
+  scaffold pages) carry an `id="{Prop}-error"`; their inputs carry a matching
+  `aria-describedby`. The 15 Identity pages were transformed by a small idempotent script (not
+  hand-edited file by file) exploiting the scaffold's exactly-uniform
+  `id="Input.X"`/`For="() => Input.X"` pattern — diffed by hand afterward to confirm nothing
+  beyond the intended two insertions changed per field, and that the file's own em-dash/unicode
+  prose survived the UTF-8-explicit read/write round trip.
+- **Avatar `alt=` convention standardized on `alt=""`** — 5 sites moved off `alt="@Username"`
+  (`ComposeConversationModal`'s preset-recipient branch, `ConversationListItem`, `MessageItem`,
+  `MessageThread`, `ProfileBanner`): every one sits beside visible username text, so a matching
+  `alt` double-announces the name to screen readers. `alt=""` was already the majority pattern
+  (`UserCard`, `UserPicker`, `CommentItem`, `ModSpotlightPage`) — this makes it universal, not a
+  new decision.
+- **`BadgeSettingsForm`'s `alt="" title="@b.DisplayName"` fixed** — `title=` removed (redundant
+  with the adjacent visible `DisplayName` span; hover-only and not reliably exposed to AT anyway —
+  `layer4-style.md`'s "no title-only essential info" rule).
+- **`prefers-reduced-motion` CSS block added** to `Server/Styles/app.css`, confirmed present in
+  the Tailwind-compiled `wwwroot/app.css` output (built and grepped, not assumed). **Documented,
+  not silently narrow:** covers `transition-`/`animate-` utilities only — does nothing for
+  animated `.webp` sprites (animated images ignore CSS animation properties entirely); that axis
+  is `User.PrefersAnimated` (defaults `true`), unreachable from a media query without a
+  `matchMedia` service, which `render-and-layout.md` bans absolutely. Logged as tracker **A9**,
+  not left implicit.
+- **`scripts/check-a11y.ps1`** — 7 gates, mirroring `check-design-tokens.ps1`'s structure as a
+  separate script (that script's name/header narrate a token-specific purpose; a11y rules churn
+  independently): **B** modal recipe (`z-(--z-modal)`) confined to `Modal.razor` — the
+  highest-value rule, since it's what stops the shell being re-hand-rolled; **A** every
+  `<label for="X">` resolves to an `id="X">` in the same file; **C** every `ValidationMessage` has
+  an id referenced by a matching `aria-describedby`; **D** icon-only `<button>`s (glyph set built
+  from `\u`-codepoint escapes at runtime, not literal characters, to keep the script's own
+  executable lines pure ASCII — Windows PowerShell 5.1 misreads non-BOM UTF-8 in executable code,
+  which is exactly the bug that broke an earlier draft of gate B's own message string) need a
+  name; **E** orphan-label detection (the classifier described above); **F** `<img>` alt
+  presence/misuse; **G** the reduced-motion rule stays present. A shared `Get-RazorMarkup` helper
+  strips `@* ... *@` Razor comments before every gate scans a file — without it, gate F flagged
+  `Sprites/ThemeContextProvider.razor`'s doc-comment example `<img src>` as a real violation.
+  **Every gate mutation-tested by hand** (deliberately broke a known-good file — removed an
+  `aria-describedby`, stripped an `alt=` — confirmed the gate caught it, restored the file) rather
+  than trusted on the strength of passing against an already-clean tree. Wired into
+  `.github/workflows/ci.yml` alongside the design-token check.
+- **New bUnit `AccessibleNameAssertions` helper** (`TheCanalaveLibrary.Tests.RazorComponents`) —
+  renders a component, asserts every `<input>`/`<select>`/`<textarea>` has an accessible name
+  (`aria-label`, a `for=`/`id=` match, or a wrapping `<label>` ancestor), skipping `type="hidden"`
+  fields and Quill's own toolbar chrome (`EditorView`'s `<ToolbarContent>` — third-party markup
+  Quill.js enhances client-side; bUnit never runs real JS so it renders unlabelled, an accepted
+  exception mirroring `check-design-tokens.ps1`'s own named exemption list). Complements, doesn't
+  duplicate, the static gates: it inspects the rendered DOM, so it catches names supplied by a
+  *child* component and — as the Version-Rating bug above shows — catches a class of gap the
+  source-level regexes structurally cannot. Applied to the four densest label files:
+  `StoryPropertiesFormTests`, `BlogPostPropertiesFormTests`, `SeriesCreateEditPageTests` (existing
+  files, one test added each), `ChapterPropertiesFormTests` (new file — none existed before).
+- **Addendum, same day — the axe-DevTools browser pass ran after all.** Chrome browser-automation
+  tooling became available mid-session, closing the gap above. Real axe-core 4.10.2 (`<script>`
+  tag injection — the extension's isolated-JS-world `eval` path silently failed to attach
+  `window.axe`, a page-main-world `<script src>` worked) ran against all six planned pages.
+  **Fixed:** missing `<h1>`/`<PageTitle>` on `/` and `/discover` (sr-only additions,
+  `HomePage.razor`/`SearchPage.razor` — no visual change, since adding a *visible* header row is
+  Phase-3 L4 sweep territory, not a structural fix); two sidebar `<aside>`s nested inside `<main>`
+  on `/discover` and `/messages` (axe's `landmark-complementary-is-top-level` — changed to `<div>`
+  in `SearchPage.razor`/`MessagesPage.razor`, arguably the better semantic fit anyway since both
+  are integral to the page's primary task, not tangential content); `ChapterNavigation.razor`'s
+  duplicate `<nav aria-label="Chapter navigation">` (landmark-unique — added a `NavLabel`
+  parameter, `ChapterReadingPage.razor` passes `"...top"`/`"...bottom"`) and its disabled
+  prev/next `<span>`s' `aria-prohibited-attr` (added `role="link"` — the ARIA APG pattern for a
+  disabled link; a bare `<span>`'s implicit role doesn't support `aria-label`). Doc synced in the
+  same edit: `layer3.5-structure.md`'s `ChapterNavigation` exemplar code sample.
+  **Confirmed as accepted, not fixed, exactly as designed:** Quill's own toolbar chrome
+  (`button-name`/`aria-command-name`, matches `AccessibleNameAssertions`' documented exemption);
+  the not-yet-rendered `ValidationMessage`/`aria-describedby` id on `#story-title` etc.
+  (`aria-valid-attr-value` incomplete — matches the plan's own prediction verbatim: axe reports
+  "incomplete," not a violation). **New real finding, measured not guessed, NOT fixed —
+  Brian's design-token decision:** `--color-tagtype-character` white-on-`#6890f0` = 3.07:1,
+  `--color-tagtype-genre` white-on-`#f85888` = 3.11:1, the Indicator success-tint recipe = 2.88:1,
+  one other tint pairing = 1.7:1 — all fail the ratified 4.5:1 policy. These are locked,
+  gate-reviewed, live-tuned-with-Brian tokens (some "transcribed verbatim from *Visuals.cs*" —
+  Pokémon-canon colors), so WU-A11y (Structure) did not change the hex values unilaterally.
+  **New, unrelated, severe, NOT fixed — flagged for immediate attention:**
+  `/Account/Login` and `/Account/Register` both return a raw 500
+  (`System.InvalidOperationException: The registered callback PersistProperty must be associated
+  with a component or define an explicit render mode type during registration.`) for every
+  visitor, authenticated or not — reproduced twice, independent of auth state, confirmed unrelated
+  to this WU's own attribute-only edits to those files. **The entire Identity/auth funnel is
+  currently broken.** Hypothesis, not confirmed: connects to this same session's own
+  WU-SweepRiders H1 finding (below) that `AuthorizeRouteView`'s ambient `DefaultLayout` wraps
+  statically-routed pages in `MainLayout`, which carries three `[PersistentState]`-bearing
+  descendants (`NotificationBellInner`, `MessagesNavLink`, `ReaderDisplayProvider`) that normally
+  get an explicit render mode via `Routes.razor`'s `@rendermode` — Identity pages sit outside that
+  component entirely. Deliberately not diagnosed further (real risk of an unrelated Blazor-routing
+  rabbit hole) — logged as tracker **H10**, high priority, Brian's call on sequencing.
+- **Verified:** `dotnet build` clean across the solution. `dotnet test` green:
+  RazorComponents 650 (was 642; +8 new tests, 0 regressions). No Unit/Integration tier impact (no
+  service-layer changes). `check-a11y.ps1`/`check-design-tokens.ps1`/`check-doc-hygiene.ps1` all
+  green. Tailwind build confirmed the reduced-motion rule compiles into the real
+  minified CSS output, not just the source.
+- **Tool:** Sonnet in Claude Code. **Pointers:** `audit/Accessibility.md` (Stage note, settled/open,
+  claims statement); `layer3.5-structure.md` "Container Composite" (`Modal`'s full rationale);
+  `layer4-style.md` "Accessibility as a Stage-5 criterion" + "Overlay recipe"; `testing.md`
+  (class-presence carve-out for semantic attributes); `hidden-deferrals-tracker.md` **F6**
+  (closed, split into the done half above) / **F6b** (WU-A11y-Keyboard, open) / **A9** (new,
+  reduced-motion/sprite gap); `roadmap.md` §Resolved (decision row 12). **Deps:** none for this
+  half; WU-A11y-Keyboard depends on nothing this WU didn't already provide (the `Modal` primitive
+  it extends with a trap).
 
 ---
 

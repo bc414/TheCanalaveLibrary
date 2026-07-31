@@ -37,8 +37,8 @@
         </div>
 
         @* Profile bio (rich text) *@
-        <div class="flex flex-col gap-1">
-            <label class="text-sm font-medium text-(--color-text)">About me</label>
+        <div class="flex flex-col gap-1" role="group" aria-labelledby="profile-about-me-label">
+            <span id="profile-about-me-label" class="text-sm font-medium text-(--color-text)">About me</span>
             <ContentSurface Variant="ContentSurfaceVariant.Input">
                 <EditorView @ref="_editor" Html="@InitialBioHtml" Placeholder="Write something about yourself…" />
             </ContentSurface>

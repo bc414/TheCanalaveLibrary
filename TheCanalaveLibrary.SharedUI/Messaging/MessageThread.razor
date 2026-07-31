@@ -20,8 +20,9 @@ else
     <div class="flex h-full flex-col">
         @* Header *@
         <div class="flex items-center gap-3 border-b border-(--color-border) px-4 py-3">
+            @* alt="" (WU-A11y, 2026-07-31): the adjacent name <p> already carries the name. *@
             <img src="@Thread.OtherParticipant.AvatarUrl"
-                 alt="@Thread.OtherParticipant.Username"
+                 alt=""
                  class="h-9 w-9 rounded-full object-cover"
                  data-fallback-src="/img/default-avatar.svg" />
             <div class="min-w-0">

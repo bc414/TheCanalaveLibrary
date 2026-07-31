@@ -95,25 +95,19 @@ else
         }
     </div>
 
-    @* Create / Edit modal *@
-    @if (_editorOpen)
-    {
-        <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="CloseEditor">
-            <div class="max-w-lg w-full rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation="true">
-                <h2 class="mb-4 text-lg font-semibold text-text">
-                    @(_editingTag is null ? "New Tag" : $"Edit: {_editingTag.TagName}")
-                </h2>
-                @* ServerError needs @: string-typed parameters take attribute text LITERALLY (the
-                   form rendered the text "_editorError" in red on every open — browser pass
-                   2026-07-01). Non-string params (EditingTag/Directory) compile as expressions. *@
-                <TagEditorForm Directory="Directory"
-                               EditingTag="_editingTag"
-                               ServerError="@_editorError"
-                               OnSave="HandleEditorSaveAsync"
-                               OnCancel="CloseEditor" />
-            </div>
-        </div>
-    }
+    @* Create / Edit modal — built on the shared Modal primitive (extracted WU-A11y, 2026-07-31 —
+       see layer3.5-structure.md "Container Composite"). *@
+    <Modal IsOpen="_editorOpen" IsOpenChanged="(bool open) => { if (!open) CloseEditor(); }"
+           Title="@(_editingTag is null ? "New Tag" : $"Edit: {_editingTag.TagName}")" PanelClass="max-w-lg w-full">
+        @* ServerError needs @: string-typed parameters take attribute text LITERALLY (the
+           form rendered the text "_editorError" in red on every open — browser pass
+           2026-07-01). Non-string params (EditingTag/Directory) compile as expressions. *@
+        <TagEditorForm Directory="Directory"
+                       EditingTag="_editingTag"
+                       ServerError="@_editorError"
+                       OnSave="HandleEditorSaveAsync"
+                       OnCancel="CloseEditor" />
+    </Modal>
 
     @* Delete confirmation modal *@
     <ConfirmDialog IsOpen="_deleteOpen"

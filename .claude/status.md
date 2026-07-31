@@ -35,6 +35,12 @@ fact that currently binds new work. When it stops binding, delete it — the eve
   `/dev/design-gallery` is the living reference. Visual sign-off of individual pages is the
   standing Phase-3 human pass — that is why L4 cells sit at Stage 1/3 with built, functional UI.
   Detail: `layer4-style.md`, `.claude/design/surface-registry.md`.
+- **Accessibility floor mechanically gated.** Static/naming accessibility (form labelling,
+  validation association, modal naming, image alt text) is enforced by
+  `scripts/check-a11y.ps1` (local + CI) as of WU-A11y (Structure), 2026-07-31 — new UI work must
+  satisfy it. Keyboard operability, focus management, and combobox ARIA remain unverified and
+  ungated pending WU-A11y-Keyboard (paired with the Phase-3 L4 freeze sweep). Detail:
+  `layer4-style.md` "Accessibility as a Stage-5 criterion", `audit/Accessibility.md`.
 - **Parent-visibility invariant** (conditionality kind (g)): child content is never more visible,
   nor more writable, than the parent hosting it. Enforced by `ParentVisibilityContractTests`
   (the enrolment list is the mechanism — adding a parent-scoped read/write means adding a row).
@@ -126,5 +132,5 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 62 | SiteDailyStat Worker | Moderation | 5 | 5 | 5 | 5 | 3 | 5 | N/A | N/A | 5 |
 | 63 | Chapter Import (file ingestion) | Import | N/A | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 64 | Site SEO | Seo | N/A | 5 | 5 | 5 | N/A | 5 | N/A | N/A | N/A |
-| 65 | Accessibility | — | N/A | N/A | N/A | N/A | 1 | 1 | N/A | N/A | N/A |
+| 65 | Accessibility | — | N/A | N/A | N/A | N/A | 5 | 1 | N/A | N/A | N/A |
 | 66 | Viewer Access Gating | ContentGate | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 5 |

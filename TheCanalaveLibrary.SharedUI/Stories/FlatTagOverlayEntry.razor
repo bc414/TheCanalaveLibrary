@@ -11,8 +11,8 @@
         <span class="flex-1 text-sm text-(--color-text)">@Chip.TagName</span>
         @if (ShowPriority)
         {
-            <label class="text-xs text-(--color-text-muted)">Priority</label>
-            <select value="@Priority"
+            <label for="@($"flat-tag-{_uid}-priority")" class="text-xs text-(--color-text-muted)">Priority</label>
+            <select id="@($"flat-tag-{_uid}-priority")" value="@Priority"
                     @onchange="@(e => OnPriorityChanged.InvokeAsync(Enum.Parse<TagPriority>((string)e.Value!)))"
                     class="rounded border border-(--color-border) bg-(--color-surface) px-2 py-1 text-xs text-(--color-text)">
                 <option value="@TagPriority.Primary">Primary</option>
@@ -60,6 +60,10 @@
     [Parameter] public EventCallback<TagPriority> OnPriorityChanged { get; set; }
 
     private bool _open;
+
+    // Rendered in a loop (one row per flat tag), so the Priority select's id must be
+    // per-instance. WU-A11y (Structure), 2026-07-31.
+    private readonly string _uid = Guid.NewGuid().ToString("N")[..8];
 
     private bool HasOverlay => CustomName is not null || Nuance is not null;
 

@@ -16,9 +16,14 @@
    The chapter-select dropdown uses <details>/<summary> (CSS disclosure, no JS/Blazor state) so
    all links are always present in the DOM and testable by bUnit regardless of open state. *@
 
-<nav class="flex flex-wrap items-center gap-2" aria-label="Chapter navigation">
+<nav class="flex flex-wrap items-center gap-2" aria-label="@NavLabel">
 
-    @* Prev chapter — link when available, disabled span at the start of the story. *@
+    @* Prev chapter — link when available, disabled span at the start of the story.
+       role="link" on the disabled span (WU-A11y browser pass, 2026-07-31): a bare <span> has
+       the implicit ARIA role "generic", which does not support aria-label in strict ARIA
+       conformance — axe's aria-prohibited-attr rule flagged it. role="link" + aria-disabled is
+       the ARIA Authoring Practices pattern for a disabled link and is what makes the
+       aria-label legal here. *@
     @if (PreviousChapterNumber.HasValue)
     {
         <a href="@ChapterUrl(PreviousChapterNumber.Value)"
@@ -28,6 +33,7 @@
     else
     {
         <span class="@NavLinkClasses(true)"
+              role="link"
               aria-disabled="true"
               aria-label="Previous chapter">&lsaquo;</span>
     }
@@ -91,6 +97,7 @@
     else
     {
         <span class="@NavLinkClasses(true)"
+              role="link"
               aria-disabled="true"
               aria-label="Next chapter">&rsaquo;</span>
     }
@@ -107,6 +114,11 @@
     [Parameter] public int? PreviousChapterNumber { get; set; }
     [Parameter] public int? NextChapterNumber { get; set; }
     [Parameter, EditorRequired] public IReadOnlyList<ChapterTocEntryDto> Toc { get; set; } = [];
+    /// <summary>Distinguishes the top and bottom instances for landmark navigation (WU-A11y
+    /// browser pass, 2026-07-31 — axe's landmark-unique rule: two &lt;nav&gt; landmarks with the
+    /// identical accessible name are indistinguishable to a screen-reader user navigating by
+    /// landmark). Default covers the common single-instance case.</summary>
+    [Parameter] public string NavLabel { get; set; } = "Chapter navigation";
     /// <summary>
     /// The versions accessible to the current viewer for this chapter, from
     /// <c>IChapterReadService.GetChapterVersionsAsync</c>. Empty or single-element → version

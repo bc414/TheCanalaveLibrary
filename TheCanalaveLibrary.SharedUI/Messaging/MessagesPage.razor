@@ -26,8 +26,13 @@ else
        below — pure CSS, no list/thread swap logic). *@
     <div class="flex flex-col md:flex-row h-[calc(100vh-4rem)] overflow-hidden">
 
-        @* ── Conversation list sidebar (stacks above the thread at narrow) ── *@
-        <aside class="flex w-full max-h-64 md:w-72 md:max-h-none md:shrink-0 flex-col border-b md:border-b-0 md:border-r border-(--color-border) bg-(--color-surface)">
+        @* ── Conversation list sidebar (stacks above the thread at narrow) ──
+           A plain div, not <aside>: WU-A11y browser pass (2026-07-31) found axe's
+           landmark-complementary-is-top-level violation here — nested inside <main>
+           (MainLayout), but ARIA's complementary role must be a top-level landmark. The
+           conversation list is also the primary navigation for this page, not tangential
+           content, so a plain div is the better semantic fit anyway. *@
+        <div class="flex w-full max-h-64 md:w-72 md:max-h-none md:shrink-0 flex-col border-b md:border-b-0 md:border-r border-(--color-border) bg-(--color-surface)">
             <div class="border-b border-(--color-border) px-4 py-3">
                 <div class="flex items-center justify-between">
                     <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">Messages</h1>
@@ -82,7 +87,7 @@ else
                     }
                 }
             </div>
-        </aside>
+        </div>
 
         @* ── Thread pane ── *@
         <section class="flex flex-1 flex-col overflow-hidden">

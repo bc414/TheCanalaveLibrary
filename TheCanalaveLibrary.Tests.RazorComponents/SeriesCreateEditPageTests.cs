@@ -68,6 +68,19 @@ public class SeriesCreateEditPageTests : BunitContext
         cut.Markup.Should().Contain(ExistingSeriesName,
             "OnParametersSetAsync must reload the series data for the new SeriesId");
     }
+
+    [Fact]
+    public void AllFields_HaveAccessibleNames()
+    {
+        // WU-A11y (Structure), 2026-07-31. Edit mode (not create) so the Series Name/Description
+        // fields and the "Add a story" picker (when AddableStories resolves non-empty) are both
+        // exercised. See AccessibleNameAssertions for what this catches beyond check-a11y.ps1's
+        // static gates.
+        IRenderedComponent<SeriesCreateEditPage> cut = Render<SeriesCreateEditPage>(p => p
+            .Add(c => c.SeriesId, ExistingSeriesId));
+
+        AccessibleNameAssertions.AllFieldsHaveAccessibleNames(cut);
+    }
 }
 
 // ── Fakes ────────────────────────────────────────────────────────────────────────────────────

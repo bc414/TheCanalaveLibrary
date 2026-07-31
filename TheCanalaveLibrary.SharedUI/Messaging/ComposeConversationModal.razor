@@ -3,84 +3,82 @@
 @* Coordination composite — modal overlay for starting a new 1-on-1 conversation.
    Injection-free; owning page provides OnSubmit and OnCancel callbacks.
    RecipientPreset is provided when navigating here from a UserCard "Send PM" caret action;
-   RecipientUsername is editable when the user opens compose from the standalone "New Message" button. *@
+   RecipientUsername is editable when the user opens compose from the standalone "New Message" button.
 
-@if (IsOpen)
-{
-    <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4"
-         @onclick="() => OnCancel.InvokeAsync()" role="dialog" aria-modal="true" aria-labelledby="compose-title">
-        <div class="w-full max-w-lg rounded-xl border border-(--color-border) bg-(--color-surface-raised) shadow-prominent"
-             @onclick:stopPropagation>
-            <div class="border-b border-(--color-border) px-5 py-4">
-                <h2 id="compose-title" class="text-base font-semibold text-(--color-text)">
-                    New Message
-                </h2>
+   Built on the shared Modal primitive (extracted WU-A11y, 2026-07-31 — see
+   layer3.5-structure.md "Container Composite"). This migrates the modal off its previous
+   hand-rolled aria-modal="true"/aria-labelledby wiring: aria-modal is deferred site-wide to
+   WU-A11y-Keyboard (no focus trap exists yet, so asserting it would be a false claim), and the
+   accessible name now comes from Modal's Title parameter via aria-label. *@
+
+<Modal IsOpen="IsOpen" IsOpenChanged="HandleModalIsOpenChanged" Title="New Message" PanelClass="w-full max-w-lg">
+    <ChildContent>
+        <div class="flex flex-col gap-4">
+            @* Recipient *@
+            <div class="flex flex-col gap-1" role="group" aria-labelledby="compose-recipient-label">
+                <span id="compose-recipient-label" class="text-sm font-medium text-(--color-text)">
+                    To
+                </span>
+                @if (RecipientPreset is not null)
+                {
+                    <div class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2">
+                        @* alt="" (WU-A11y, 2026-07-31): the adjacent <span> already shows the
+                           username, so an alt matching it would double-announce it to screen
+                           readers. Matches the site-wide avatar convention. *@
+                        <img src="@RecipientPreset.AvatarUrl"
+                             alt=""
+                             class="h-6 w-6 rounded-full object-cover"
+                             data-fallback-src="/img/default-avatar.svg" />
+                        <span class="text-sm font-medium text-(--color-text)">@RecipientPreset.Username</span>
+                    </div>
+                }
+                else if (_pickedRecipient is not null)
+                {
+                    <div class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2">
+                        <img src="@(_pickedRecipient.AvatarUrl ?? "/img/default-avatar.svg")"
+                             alt="" class="h-6 w-6 rounded-full object-cover" />
+                        <span class="flex-1 text-sm font-medium text-(--color-text)">@_pickedRecipient.Username</span>
+                        <button type="button" @onclick="() => _pickedRecipient = null" disabled="@Busy"
+                                class="text-xs text-(--color-action-ink) hover:underline">
+                            Change
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <UserPicker OnUserSelected="user => _pickedRecipient = user" Placeholder="Type a username..." />
+                }
             </div>
 
-            <div class="flex flex-col gap-4 px-5 py-4">
-                @* Recipient *@
-                <div class="flex flex-col gap-1">
-                    <label class="text-sm font-medium text-(--color-text)" for="compose-recipient">
-                        To
-                    </label>
-                    @if (RecipientPreset is not null)
-                    {
-                        <div class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2">
-                            <img src="@RecipientPreset.AvatarUrl"
-                                 alt="@RecipientPreset.Username"
-                                 class="h-6 w-6 rounded-full object-cover"
-                                 data-fallback-src="/img/default-avatar.svg" />
-                            <span class="text-sm font-medium text-(--color-text)">@RecipientPreset.Username</span>
-                        </div>
-                    }
-                    else if (_pickedRecipient is not null)
-                    {
-                        <div class="flex items-center gap-2 rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2">
-                            <img src="@(_pickedRecipient.AvatarUrl ?? "/img/default-avatar.svg")"
-                                 alt="" class="h-6 w-6 rounded-full object-cover" />
-                            <span class="flex-1 text-sm font-medium text-(--color-text)">@_pickedRecipient.Username</span>
-                            <button type="button" @onclick="() => _pickedRecipient = null" disabled="@Busy"
-                                    class="text-xs text-(--color-action-ink) hover:underline">
-                                Change
-                            </button>
-                        </div>
-                    }
-                    else
-                    {
-                        <UserPicker OnUserSelected="user => _pickedRecipient = user" Placeholder="Type a username..." />
-                    }
-                </div>
-
-                @* Subject *@
-                <div class="flex flex-col gap-1">
-                    <label class="text-sm font-medium text-(--color-text)" for="compose-subject">
-                        Subject
-                    </label>
-                    <input id="compose-subject"
-                           type="text"
-                           class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) placeholder-(--color-text-muted) focus:border-(--color-action-ink) focus:outline-none"
-                           placeholder="What's this about?"
-                           maxlength="2048"
-                           @bind="Subject"
-                           @bind:event="oninput"
-                           disabled="@Busy" />
-                </div>
-
-                @* Message body *@
-                <div class="flex flex-col gap-1">
-                    <label class="text-sm font-medium text-(--color-text)">Message</label>
-                    <MessageComposer @ref="_composer"
-                                     SendLabel="Send"
-                                     OnSend="HandleSendAsync"
-                                     OnCancel="OnCancel"
-                                     Busy="@Busy" />
-                </div>
-
-                <InlineAlert Message="@ErrorMessage" />
+            @* Subject *@
+            <div class="flex flex-col gap-1">
+                <label class="text-sm font-medium text-(--color-text)" for="compose-subject">
+                    Subject
+                </label>
+                <input id="compose-subject"
+                       type="text"
+                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) placeholder-(--color-text-muted) focus:border-(--color-action-ink) focus:outline-none"
+                       placeholder="What's this about?"
+                       maxlength="2048"
+                       @bind="Subject"
+                       @bind:event="oninput"
+                       disabled="@Busy" />
             </div>
+
+            @* Message body *@
+            <div class="flex flex-col gap-1" role="group" aria-labelledby="compose-message-label">
+                <span id="compose-message-label" class="text-sm font-medium text-(--color-text)">Message</span>
+                <MessageComposer @ref="_composer"
+                                 SendLabel="Send"
+                                 OnSend="HandleSendAsync"
+                                 OnCancel="OnCancel"
+                                 Busy="@Busy" />
+            </div>
+
+            <InlineAlert Message="@ErrorMessage" />
         </div>
-    </div>
-}
+    </ChildContent>
+</Modal>
 
 @code {
     /// <summary>Controls modal visibility. Use @bind-IsOpen from the owning page.</summary>
@@ -116,5 +114,19 @@
     {
         string resolvedUsername = RecipientPreset?.Username ?? _pickedRecipient?.Username ?? string.Empty;
         await OnSubmit.InvokeAsync((resolvedUsername, Subject, html));
+    }
+
+    /// <summary>Modal's only closing action today is backdrop-click (no trap/Escape yet — see
+    /// Modal.razor). Treat that exactly like the previous hand-rolled backdrop handler did:
+    /// invoke OnCancel, then cascade to this component's own IsOpenChanged so @bind-IsOpen
+    /// consumers stay correct if one ever binds two-way (MessagesPage currently doesn't —
+    /// it closes via OnCancel alone).</summary>
+    private async Task HandleModalIsOpenChanged(bool value)
+    {
+        if (!value)
+        {
+            await OnCancel.InvokeAsync();
+        }
+        await IsOpenChanged.InvokeAsync(value);
     }
 }

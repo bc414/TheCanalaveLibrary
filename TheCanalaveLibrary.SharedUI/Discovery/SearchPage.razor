@@ -40,6 +40,14 @@
      Axis"). Both permalink gates (IsPublic, owner's ProfileVisibility) are enforced server-side in
      GetPublicSelectionByIdAsync; every failure mode is one indistinguishable null. *@
 
+@* PageTitle + h1 added by the WU-A11y browser pass (2026-07-31) — axe flagged both
+   document-title and page-has-heading-one missing here. sr-only, not a visible header row: this
+   page has no existing header band, and adding one is a visual-design decision (Phase-3 L4 sweep
+   territory), not a structural fix. A screen-reader-only h1 satisfies the same landmark/heading
+   need without it. *@
+<PageTitle>Discover</PageTitle>
+<h1 class="sr-only">Discover</h1>
+
 @* ── Permalink chrome (only on /discover/selection/…) ──────────────────────────────────── *@
 @if (_selection is not null)
 {
@@ -60,8 +68,14 @@ else if (_selectionUnavailable)
 
 <div class="flex flex-col gap-6 items-start px-3 py-4 md:flex-row md:px-4">
 
-    @* ── ResultsFilterPanel sidebar (stacks above the deck at narrow) ──────────────────── *@
-    <aside class="w-full md:w-72 md:shrink-0 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+    @* ── ResultsFilterPanel sidebar (stacks above the deck at narrow) ────────────────────
+       A plain div, not <aside>: WU-A11y browser pass (2026-07-31) found axe's
+       landmark-complementary-is-top-level violation here — this panel is nested inside
+       <main> (MainLayout), but ARIA's complementary role is defined as a top-level
+       landmark, sibling to main, not a descendant. It's also semantically the better fit:
+       these filter controls are integral to the page's primary search task, not tangential
+       "complementary" content the way a related-links widget would be. *@
+    <div class="w-full md:w-72 md:shrink-0 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
         <h2 class="mb-3 text-sm font-bold text-(--color-text-muted) uppercase tracking-wide">Filters</h2>
         <ResultsFilterPanel OnSearch="@HandleFilterChangedAsync"
                             InitialFilter="@_filter"
@@ -74,7 +88,7 @@ else if (_selectionUnavailable)
                             ShowTagFilter="true"
                             ShowInteractionFilters="true"
                             ShowTagIncludeModeToggle="true" />
-    </aside>
+    </div>
 
     @* ── Main area: StoryDeck + mode-dependent controls ─────────────────────────────────── *@
     <div class="w-full min-w-0 flex-1 flex flex-col gap-4">

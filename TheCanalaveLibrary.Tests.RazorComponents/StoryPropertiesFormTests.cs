@@ -159,6 +159,18 @@ public class StoryPropertiesFormTests : BunitContext
         cut.Find("button[type='submit']").HasAttribute("disabled").Should().BeTrue();
     }
 
+    [Fact]
+    public void AllFields_HaveAccessibleNames()
+    {
+        // WU-A11y (Structure), 2026-07-31 — the densest orphan-label file in the pre-fix survey
+        // (8 of 43). See AccessibleNameAssertions for what this catches beyond check-a11y.ps1's
+        // static gates.
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
+            p => p.Add(f => f.ViewModel, MakeValidViewModel()));
+
+        AccessibleNameAssertions.AllFieldsHaveAccessibleNames(cut);
+    }
+
     // ── "Also posted on" per-link verification (Feature 53, WU39) ────────────────
 
     private static readonly ExternalPlatformDto Ao3Platform = new(1, "Archive of Our Own", "archiveofourown.org");

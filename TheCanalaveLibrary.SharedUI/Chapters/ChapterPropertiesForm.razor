@@ -19,17 +19,17 @@
 
     @* ── Title ───────────────────────────────────────────────────────────────── *@
     <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-(--color-text)">Chapter Title <span class="font-normal text-(--color-text-muted)">(optional — defaults to "Chapter N")</span></label>
-        <InputText @bind-Value="ViewModel.Title"
+        <label for="chapter-title" class="text-sm font-semibold text-(--color-text)">Chapter Title <span class="font-normal text-(--color-text-muted)">(optional — defaults to "Chapter N")</span></label>
+        <InputText id="chapter-title" @bind-Value="ViewModel.Title"
                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                    placeholder="Chapter title" />
     </div>
 
     @* ── Top author's note ───────────────────────────────────────────────────── *@
-    <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-(--color-text)">
+    <div class="flex flex-col gap-1" role="group" aria-labelledby="chapter-top-note-label">
+        <span id="chapter-top-note-label" class="text-sm font-semibold text-(--color-text)">
             Top Author's Note <span class="font-normal text-(--color-text-muted)">(optional)</span>
-        </label>
+        </span>
         @* Html= (not InitialHtml=) — EditorView's parameter surface; the Compact variant was
            tried and discarded (see EditorView header comment). Unmatched component parameters
            fail at RUNTIME, not compile time — found via browser pass 2026-07-01. *@
@@ -39,26 +39,26 @@
     </div>
 
     @* ── Chapter text ─────────────────────────────────────────────────────────── *@
-    <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-(--color-text)">Chapter Text</label>
+    <div class="flex flex-col gap-1" role="group" aria-labelledby="chapter-text-label">
+        <span id="chapter-text-label" class="text-sm font-semibold text-(--color-text)">Chapter Text</span>
         <ContentSurface Variant="ContentSurfaceVariant.Input">
             <EditorView @ref="_textEditor" Html="@ViewModel.ChapterText" />
         </ContentSurface>
     </div>
 
     @* ── Bottom author's note ────────────────────────────────────────────────── *@
-    <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-(--color-text)">
+    <div class="flex flex-col gap-1" role="group" aria-labelledby="chapter-bottom-note-label">
+        <span id="chapter-bottom-note-label" class="text-sm font-semibold text-(--color-text)">
             Bottom Author's Note <span class="font-normal text-(--color-text-muted)">(optional)</span>
-        </label>
+        </span>
         <ContentSurface Variant="ContentSurfaceVariant.Input">
             <EditorView @ref="_bottomNoteEditor" Html="@ViewModel.BottomAuthorsNote" />
         </ContentSurface>
     </div>
 
     @* ── Rating ──────────────────────────────────────────────────────────────── *@
-    <div class="flex flex-col gap-1">
-        <label class="text-sm font-semibold text-(--color-text)">Version Rating</label>
+    <div class="flex flex-col gap-1" role="group" aria-labelledby="chapter-version-rating-label">
+        <span id="chapter-version-rating-label" class="text-sm font-semibold text-(--color-text)">Version Rating</span>
         @if (IsPrimary)
         {
             <p class="text-sm text-(--color-text-muted)">
@@ -68,7 +68,12 @@
         }
         else
         {
-            <InputSelect @bind-Value="ViewModel.Rating"
+            @* aria-label (not just the ancestor's role="group"/aria-labelledby) because
+               aria-labelledby on the wrapper names the GROUP, not this control — a <select> still
+               needs its own programmatically-determinable name per WCAG 4.1.2. Caught by
+               AccessibleNameAssertions, not by check-a11y.ps1's static gates (this is exactly the
+               class of gap the bUnit helper exists to catch that a source-level regex can't). *@
+            <InputSelect @bind-Value="ViewModel.Rating" aria-label="Version Rating"
                          class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
                 <option value="">Same as story (@StoryRating — inherit)</option>
                 @foreach (Rating r in Enum.GetValues<Rating>().Where(r => r >= StoryRating))
@@ -84,10 +89,10 @@
     @if (VersionCount > 1)
     {
         <div class="flex flex-col gap-1">
-            <label class="text-sm font-semibold text-(--color-text)">
+            <label for="chapter-version-name" class="text-sm font-semibold text-(--color-text)">
                 Version Name <span class="font-normal text-(--color-text-muted)">(optional)</span>
             </label>
-            <InputText @bind-Value="ViewModel.VersionName"
+            <InputText id="chapter-version-name" @bind-Value="ViewModel.VersionName"
                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                        placeholder="e.g. T-rated version, Director's cut…" />
         </div>

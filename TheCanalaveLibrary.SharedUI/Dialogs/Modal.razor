@@ -1,0 +1,69 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Shared overlay primitive (extracted WU-A11y, 2026-07-31 — see layer3.5-structure.md "Container
+   Composite" for the full rationale and layer4-style.md "Overlay recipe" for the token contract).
+   Cross-cutting container composite — no owning feature; cluster's feature is "modal/overlay
+   dialogs" (canalave-conventions/SKILL.md Code Organization).
+
+   Renders the tokenized backdrop/panel shell plus an ARIA role="dialog" and an accessible name
+   (Title, via aria-label — see the rationale in layer3.5-structure.md for why aria-label rather
+   than aria-labelledby). Deliberately does NOT include aria-modal, a focus trap, initial focus, or
+   Escape handling — that is WU-A11y-Keyboard's scope (paired with the Phase-3 L4 freeze sweep).
+   Asserting aria-modal="true" ahead of the trap would tell assistive tech the background is inert
+   when it isn't, which is worse than the omission it would replace. *@
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4"
+         @onclick="Close">
+        <div class="@PanelCssClass" role="dialog" aria-label="@Title" @onclick:stopPropagation="true">
+            @if (ShowTitleHeading)
+            {
+                <h2 class="mb-2 text-lg font-semibold text-(--color-text)">@Title</h2>
+            }
+            @ChildContent
+            @if (Footer is not null)
+            {
+                <div class="mt-4 flex justify-end gap-2">
+                    @Footer
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+
+    /// <summary>The modal's accessible name (rendered as both the visible heading, when
+    /// <see cref="ShowTitleHeading"/> is true, and <c>aria-label</c> always). Required — a modal
+    /// with no name is the defect this primitive exists to make unrepeatable.</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter] public bool ShowTitleHeading { get; set; } = true;
+
+    [Parameter, EditorRequired] public RenderFragment ChildContent { get; set; } = default!;
+
+    /// <summary>Action row. The caller owns its own buttons — Modal never assumes a Confirm/Cancel
+    /// shape, since EditorView's preview (a single Close button) and ConfirmDialog (Confirm +
+    /// Cancel) are both built on this primitive.</summary>
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    /// <summary>Size/scroll deltas only (e.g. "max-w-2xl max-h-full overflow-y-auto") — never a
+    /// second source of the shell's ground/border/shadow, which stay owned by this file.</summary>
+    [Parameter] public string? PanelClass { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string PanelCssClass =>
+        $"rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent {PanelClass}";
+
+    private async Task Close()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(false);
+        await OnClose.InvokeAsync();
+    }
+}

@@ -19,12 +19,15 @@
         Load saved
     </button>
 
-    @if (_open)
-    {
-        <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="Close">
-            <div class="flex max-h-[80vh] w-full max-w-md flex-col rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation="true">
-                <h2 class="mb-3 text-lg font-semibold text-text">Saved tag selections</h2>
-
+    @* Built on the shared Modal primitive (extracted WU-A11y, 2026-07-31 — see
+       layer3.5-structure.md "Container Composite"). Named "Flyout" but is a fixed-overlay modal —
+       not renamed as part of this WU (component rename is registry + doc-sweep work, orthogonal
+       scope). Nests a ConfirmDialog (itself Modal-based, below) for row deletion — no focus-trap
+       stack exists yet (WU-A11y-Keyboard's scope), so nested-open behavior is unchanged from
+       before this migration. *@
+    <Modal IsOpen="_open" IsOpenChanged="(bool open) => { if (!open) Close(); }"
+           Title="Saved tag selections" PanelClass="flex max-h-[80vh] w-full max-w-md flex-col">
+        <ChildContent>
                 <InlineAlert Messages="@_errors" />
 
                 <div class="mb-3 flex flex-col gap-2 sm:flex-row">
@@ -121,16 +124,14 @@
                         </ul>
                     }
                 </div>
-
-                <div class="mt-4 flex justify-end">
-                    <button type="button" class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-sm text-text transition-colors hover:bg-(--color-surface-hover)"
-                            @onclick="Close">
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
-    }
+        </ChildContent>
+        <Footer>
+            <button type="button" class="rounded-md border border-(--color-border) bg-surface px-3 py-1 text-sm text-text transition-colors hover:bg-(--color-surface-hover)"
+                    @onclick="Close">
+                Close
+            </button>
+        </Footer>
+    </Modal>
 </div>
 
 <ConfirmDialog IsOpen="@(_confirmDeleteId is not null)"

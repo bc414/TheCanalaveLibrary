@@ -21,8 +21,8 @@
         <ValidationSummary class="text-danger" role="alert"/>
         <div class="flex flex-col gap-1">
             <label for="Input.Name" class="text-sm font-semibold text-(--color-text)">Passkey name</label>
-            <InputText @bind-Value="Input.Name" id="Input.Name" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" aria-required="true" placeholder="My passkey"/>
-            <ValidationMessage For="() => Input.Name" class="text-danger"/>
+            <InputText @bind-Value="Input.Name" id="Input.Name" aria-describedby="Input.Name-error" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" aria-required="true" placeholder="My passkey"/>
+            <ValidationMessage id="Input.Name-error" For="() => Input.Name" class="text-danger"/>
         </div>
         <div>
             <button type="submit" class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">Continue</button>

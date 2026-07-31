@@ -22,6 +22,12 @@
 
 <PageTitle>Home</PageTitle>
 
+@* sr-only, not a visible header: added by the WU-A11y browser pass (2026-07-31, axe
+   page-has-heading-one) — the page's own composition is deliberately headerless ("Welcome to The
+   Canalave Library" lives in a <summary>, not a heading), and that's a documented design choice
+   above, not something to override without a visual-design sign-off. *@
+<h1 class="sr-only">The Canalave Library</h1>
+
 <SocialMetaTags Title="The Canalave Library" Description="@OgDescription" ImageUrl="@OgImageUrl" Url="@OgUrl" OgType="website" />
 
 <DevLoginBar />

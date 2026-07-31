@@ -24,8 +24,8 @@
             <span class="font-medium text-(--color-text)">@DisplayName</span>
         </div>
         <div class="flex items-center gap-3">
-            <label class="text-xs text-(--color-text-muted)">Priority</label>
-            <select value="@Dto.Priority" @onchange="HandlePriorityChange"
+            <label for="@($"character-{_uid}-priority")" class="text-xs text-(--color-text-muted)">Priority</label>
+            <select id="@($"character-{_uid}-priority")" value="@Dto.Priority" @onchange="HandlePriorityChange"
                     class="rounded border border-(--color-border) bg-(--color-surface) px-2 py-1 text-xs text-(--color-text)">
                 <option value="@TagPriority.Primary">Primary</option>
                 <option value="@TagPriority.Supporting">Supporting</option>
@@ -61,8 +61,8 @@
             </div>
         }
         <div class="flex flex-col gap-1">
-            <label class="text-xs text-(--color-text-muted)">Notes</label>
-            <textarea value="@Dto.Nuance" @onchange="HandleNuanceChange" rows="2" maxlength="2048"
+            <label for="@($"character-{_uid}-notes")" class="text-xs text-(--color-text-muted)">Notes</label>
+            <textarea id="@($"character-{_uid}-notes")" value="@Dto.Nuance" @onchange="HandleNuanceChange" rows="2" maxlength="2048"
                       placeholder="Who is this character? (optional)"
                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"></textarea>
         </div>
@@ -71,8 +71,8 @@
     {
         @* Quiet, but an existing note always renders open. *@
         <div class="flex flex-col gap-1">
-            <label class="text-xs text-(--color-text-muted)">Notes</label>
-            <textarea value="@Dto.Nuance" @onchange="HandleNuanceChange" rows="2" maxlength="2048"
+            <label for="@($"character-{_uid}-notes")" class="text-xs text-(--color-text-muted)">Notes</label>
+            <textarea id="@($"character-{_uid}-notes")" value="@Dto.Nuance" @onchange="HandleNuanceChange" rows="2" maxlength="2048"
                       placeholder="How does this story write @(Chip.TagName)? (optional)"
                       class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"></textarea>
         </div>
@@ -107,6 +107,13 @@
 
     private bool _noteOpen;
     private TagChipDto? _officialMatch;
+
+    // Rendered in a loop (StoryPropertiesForm's character rows), so field ids must be per-instance
+    // to avoid label/id collisions across rows — see canalave-conventions/testing.md and
+    // layer4-style.md "Accessibility as a Stage-5 criterion". Hydration-instability-safe: for=/id=
+    // are emitted in the same render, so both sides always agree even if the value changes across
+    // the InteractiveAuto WASM handoff.
+    private readonly string _uid = Guid.NewGuid().ToString("N")[..8];
 
     private string DisplayName => Dto.CustomName is { Length: > 0 } name
         ? $"{name} ({Chip.TagName})"

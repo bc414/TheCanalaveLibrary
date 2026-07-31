@@ -23,8 +23,8 @@
         </div>
         <div class="flex flex-col gap-1">
             <label for="Input.PhoneNumber" class="text-sm font-semibold text-(--color-text)">Phone number</label>
-            <InputText @bind-Value="Input.PhoneNumber" id="Input.PhoneNumber" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" placeholder="Enter your phone number"/>
-            <ValidationMessage For="() => Input.PhoneNumber" class="text-danger"/>
+            <InputText @bind-Value="Input.PhoneNumber" id="Input.PhoneNumber" aria-describedby="Input.PhoneNumber-error" class="rounded-md border border-(--color-border) bg-(--color-surface-raised) px-3 py-2 text-sm text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)" placeholder="Enter your phone number"/>
+            <ValidationMessage id="Input.PhoneNumber-error" For="() => Input.PhoneNumber" class="text-danger"/>
         </div>
         <button type="submit" class="rounded-md bg-(--color-action) px-4 py-2 text-sm font-semibold text-(--color-text) transition-colors hover:bg-(--color-action-hover)">Save</button>
     </EditForm>

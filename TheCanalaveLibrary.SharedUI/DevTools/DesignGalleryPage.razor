@@ -201,19 +201,19 @@ else
             </div>
         </section>
 
-        @if (_modalOpen)
-        {
-            <div class="fixed inset-0 z-(--z-modal) flex items-center justify-center bg-(--color-backdrop) p-4" @onclick="() => _modalOpen = false">
-                <div class="w-full max-w-md rounded-xl border border-(--color-border) bg-(--color-surface-raised) p-6 shadow-prominent" @onclick:stopPropagation>
-                    <h3 class="mb-2 text-lg font-semibold text-(--color-text)">Modal on the Overlay recipe</h3>
-                    <p class="mb-4 text-sm text-(--color-text-muted)">Backdrop token, raised ground, border, prominent shadow, z-(--z-modal).</p>
-                    <div class="flex justify-end gap-2">
-                        <button type="button" class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-1.5 text-sm text-(--color-text) hover:bg-(--color-surface-hover)" @onclick="() => _modalOpen = false">Cancel</button>
-                        <button type="button" class="rounded-md bg-(--color-action) px-4 py-1.5 text-sm font-semibold text-(--color-text) hover:bg-(--color-action-hover)" @onclick="() => _modalOpen = false">Confirm</button>
-                    </div>
-                </div>
-            </div>
-        }
+        @* Living reference for the shared Modal primitive itself (extracted WU-A11y, 2026-07-31 —
+           see layer3.5-structure.md "Container Composite") — this gallery sample used to hand-roll
+           the shell directly; it now demonstrates the real recipe instead of a copy of it. *@
+        <Modal IsOpen="_modalOpen" IsOpenChanged="(bool open) => _modalOpen = open"
+               Title="Modal on the Overlay recipe" PanelClass="w-full max-w-md">
+            <ChildContent>
+                <p class="text-sm text-(--color-text-muted)">Backdrop token, raised ground, border, prominent shadow, the modal z-layer — now sourced from a single component (Dialogs/Modal.razor), not copied per consumer.</p>
+            </ChildContent>
+            <Footer>
+                <button type="button" class="rounded-md border border-(--color-border) bg-(--color-surface) px-4 py-1.5 text-sm text-(--color-text) hover:bg-(--color-surface-hover)" @onclick="() => _modalOpen = false">Cancel</button>
+                <button type="button" class="rounded-md bg-(--color-action) px-4 py-1.5 text-sm font-semibold text-(--color-text) hover:bg-(--color-action-hover)" @onclick="() => _modalOpen = false">Confirm</button>
+            </Footer>
+        </Modal>
 
         @* ── Indicator alerts (unified tint recipe) ── *@
         <section class="flex flex-col gap-2">

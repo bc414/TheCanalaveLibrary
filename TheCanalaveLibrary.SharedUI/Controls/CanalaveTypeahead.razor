@@ -25,6 +25,7 @@
     <input type="text"
            class="w-full rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-sm text-(--color-text) placeholder:text-(--color-text-muted)"
            placeholder="@Placeholder"
+           aria-label="@AriaLabel"
            value="@_term"
            autocomplete="off"
            data-typeahead-input
@@ -73,6 +74,13 @@
     [Parameter, EditorRequired] public RenderFragment<TItem> ResultTemplate { get; set; } = default!;
 
     [Parameter] public string Placeholder { get; set; } = "Type to search...";
+
+    /// <summary>Accessible name for the search input (WU-A11y, 2026-07-31 — a placeholder is
+    /// never a substitute for a name: it disappears once typing starts and isn't reliably
+    /// exposed to assistive tech). Null renders no aria-label — callers with an on-screen
+    /// &lt;label&gt;/`role="group"` already covering this input may leave it unset.</summary>
+    [Parameter] public string? AriaLabel { get; set; }
+
     [Parameter] public string NotFoundText { get; set; } = "No results found";
     [Parameter] public int MinimumLength { get; set; } = 2;
     [Parameter] public int DebounceMilliseconds { get; set; } = 300;
