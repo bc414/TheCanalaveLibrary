@@ -145,10 +145,9 @@ done.
 | **0** | ~~Decision row 13 (`/discover` URL state)~~ **DONE 2026-07-28** | — | Resolved against URL state; see "Resolved" below |
 | **1** — already unblocked, no decision needed | ~~WU-AccountEnforcement residual~~ **DONE 2026-07-30** | *(G1's residual)* | Closed Phase 2's last item — see Phase status above |
 | **1** | ~~WU-ErrorHandling2~~ **DONE 2026-07-30** | E1 | Unblocked since WU-GlobalFlip (2026-07-13), never picked up since |
-| **2** — continue the debt-paydown burst, clustered by shared surface | WU-L6MeasurePass | C2, C3, C4, C5, C6 | Same "always measure" origin; C4 needs one new Messaging SeedTool generator, reused by the other four |
-| **2** | WU-DiscoveryFilterRestore | B11 | Device-local filter restore + ship seeding parity — same `SearchPage`/`ResultsFilterPanel`/`ShipFilter` surface. Replaces the misnamed "WU-DiscoveryURLState" (row 13 decided *against* filter URL state) |
-| **2** | WU-SelectionPermalink | — | Artifact-addressed sharing for public saved selections (`/discover/selection/{id}/{*slug}`); row 13's other half |
-| **2** | WU-ApplyFiltersPurity | B12 | No longer blocked by row 13 — `ApplyFiltersAsync` impurity/uncached expansion is independent of how filter state is addressed |
+| **2** | ~~WU-DiscoveryFilterRestore~~ **DONE 2026-07-28** | B11 | Device-local filter restore + ship seeding parity, shipped same day as decision row 13's resolution — see "Resolved" below |
+| **2** | ~~WU-SelectionPermalink~~ **DONE 2026-07-28** | — | Artifact-addressed sharing for public saved selections (`/discover/selection/{id}/{*slug}`); row 13's other half, shipped same day |
+| **2** — continue the debt-paydown burst, clustered by shared surface | WU-ApplyFiltersPurity | B12 | No longer blocked by row 13 — `ApplyFiltersAsync` impurity/uncached expansion is independent of how filter state is addressed |
 | **2** | WU-StatBadgeProducers | B3, B4 | B4's BetaReader badge literally depends on B3's counter existing |
 | **2** | WU-DataSaver | B0 | Small standalone decision ("suppress sprites, or cut the setting") + build |
 | **2** | WU-DiscoveryOverrideUI | B7 | Per-user filter-override editing surface (§8.7) |
@@ -162,6 +161,7 @@ done.
 | **6** | WU-TestHygieneSweep | H3, H4 (manual-verify half) | Cover-art browser-verify, paste-from-Word manual check |
 | **6** | *(fold H7 into whichever WU next touches the test suite, or its own pass)* | H7 | The 25 C-consolidate merges are mechanical, no urgency, no dependency |
 | **6** | *(standalone, own WU whenever convenient)* | A6, A7 | Discovery-adjacent but distinct from Tier 2's cluster (Explore filter axes; the frozen `DiscoveryMartSchema`'s 7th UNION arm) — heavier lift, `anytime` window, no forcing function |
+| **6** | WU-L6MeasurePass | C2, C3, C4, C5, C6 | Moved down from Tier 2 (2026-07-30) — Recommendations/Vouches/Messaging/Series/Comments are already Stage 5 across every column and nothing else open touches their query shapes (checked against the full tracker, not inferred from the stage number — Stage 5 means "matches current spec," not "won't change"). No hard gate forces it earlier: Phase 3's freeze only mints Stage 6 on the L4-Style column (`middle_plan.md:106`), so C2–C6's L6=5 claims aren't at risk of being frozen unverified. **Soft floor this tier doesn't otherwise carry: finish before Phase 6 Beta opens** — Recommendations/Comments/Messaging/Vouches take real concurrent traffic there, the exact paths C2–C6 flag as unindexed, and re-measuring/re-indexing after the fact is cheap but discovering the gap via slow beta pages isn't a good look. |
 
 **Deliberately not reordered** — each already has an explicit gate and a stated reason; this
 reanalysis found no case for moving any of them up: A8 (post-mvp-mobile), B8 (post-beta), B9/B10
@@ -210,6 +210,13 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   Conventions now stating the rules: `layer2-services.md` §"Saved Tag Selections Persist Only the
   Tag Axis" (permalink ≠ saved query; artifact vs. device-local restoration) and
   `layer3.5-structure.md` §"Seed state vs. live fetch in filter components".
+
+  **Built the same day.** Both WUs shipped 2026-07-28, not merely decided — `dotnet test` green
+  (2,330), browser-verified end to end (filter+ship restore across a navigation, permalink follow,
+  stale slug, missing id, anonymous view, owner-turned-Private no-leak check). Full record:
+  `workplan.md` §"WU-DiscoveryFilterRestore + WU-SelectionPermalink"; `audit/Discovery.md`
+  §"WU-DiscoveryFilterRestore + WU-SelectionPermalink note"; `audit/Tags.md` §"WU-SelectionPermalink
+  Stage note".
 
 - **Decision row 2 — Homepage design (2026-07-28, WU-Home).** The home page is the community
   page: a focused surface, not a broad discovery one. Composition: a "Welcome" mission blurb

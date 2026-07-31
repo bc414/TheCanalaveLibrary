@@ -207,7 +207,7 @@ decision work that has no row at all.
 
 ---
 
-- [ ] **B11 — Ship filter has no restore path (no URL round-trip, no seed, no persistence)** `[inert · med · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26. The blocking question below was promoted to **decision row 13** (2026-07-27, then in `middle_plan_v2.md`, now `roadmap.md`) so it lives in a decision ledger; **row 13 was resolved 2026-07-28** — see "Resolution" below. Closed by WU-DiscoveryFilterRestore.*
+- [x] **B11 — Ship filter has no restore path — DONE (WU-DiscoveryFilterRestore, 2026-07-28)** `[inert · med · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26. The blocking question below was promoted to **decision row 13** (2026-07-27, then in `middle_plan_v2.md`, now `roadmap.md`) so it lives in a decision ledger; **row 13 was resolved 2026-07-28** — see "Resolution" below, then built same-day.*
   - Grid: F31 L2/L3-Logic/L3.5=5 — invisible there; the axis works, it just cannot be reconstructed.
   - Source: `audit/Discovery.md` §"WU-TagFanon note" → "Settled vs. open"; `ShipFilter.razor`;
     `ResultsFilterPanel.razor` `OnParametersSet`; `SearchPage.razor`.
@@ -218,7 +218,8 @@ decision work that has no row at all.
   `_userHasInteracted` so the panel's re-seed loop stops overwriting them, and pagination preserves
   them. **There is no user-visible bug today.**
 
-  **What is missing.** Ships are the ONLY axis with no reconstruction path:
+  **What was missing (historical — as of 2026-07-26, before the build below).** Ships were the ONLY
+  axis with no reconstruction path:
 
   | Mechanism | Tags | Interactions | Text/Sort | Ships |
   |---|---|---|---|---|
@@ -227,6 +228,9 @@ decision work that has no row at all.
   | Re-hydration of display data from bare ids | `ResolveTagChipsAsync` | n/a | n/a | **none** |
   | `[PersistentState]` across prerender→interactive | chip lists persisted | n/a | n/a | **none** |
   | Seeded in `OnParametersSet` | yes | yes | yes | **no** |
+
+  (The `[PersistentState]` row was itself a wrong assumption, corrected below — the eventual build
+  used the localStorage seam, not `[PersistentState]`, for cross-navigation restore.)
 
   So ship state can only ever be *created by live interaction* and can never be rebuilt from a
   `StoryFilterDto`. It is lost on navigation, on any parent re-render that recreates `ShipFilter`,
@@ -262,7 +266,8 @@ decision work that has no row at all.
   `audit/Discovery.md` revision blurred the two; that note has been corrected. **Do not let the F15
   decision be cited as covering this.**
 
-  **Implementation sketch (per the resolution).** Add `InitialIncludedShips`/`InitialExcludedShips`
+  **Implementation sketch (per the resolution) — superseded by the build below; kept for the
+  provenance trail, not as pending instructions.** Add `InitialIncludedShips`/`InitialExcludedShips`
   to `ResultsFilterPanel` and seed them in `OnParametersSet` beside the tag block, reusing the
   existing `_userHasInteracted` re-seed-until-first-interaction guard (MA-402); add matching seed
   parameters to `ShipFilter` (it currently initializes its lists empty with no `OnInitialized`
@@ -279,6 +284,22 @@ decision work that has no row at all.
   **Blast radius.** All four `ResultsFilterPanel` consumers (`/discover`, Tree Search, Bookshelves,
   Profile story tabs) inherit `ShowShipFilter` defaulting true, so seeding work benefits all four
   at once — and any URL decision should be checked against all four, not just `/discover`.
+
+  **Built (2026-07-28), matching the sketch above almost exactly.** `ResultsFilterPanel` gained
+  `InitialIncludedShipNames`/`InitialExcludedShipNames` (ships themselves ride on `InitialFilter`);
+  `ShipFilter` seeds under the `_userHasInteracted` guard; `ShipFilterDto.JoinMemberNames` became
+  the single label implementation so pick-time and seed-time labels can't diverge. Cross-navigation
+  restore used `DiscoveryFilterStore` + `js/discovery-filter.js` (the localStorage seam, third
+  instance after `DraftStore`/`ManualTreeStore`) — **not** `[PersistentState]`, exactly as this
+  sketch warned. **One thing the sketch missed:** the browser pass found `TagFilter` seeded only in
+  `OnInitialized`, so a late-arriving restored tag seed left the sidebar rendering empty while the
+  query behind it *was* filtered (`TagFilter` wasn't even part of this tracker item — B11 was
+  ships-only — but shares the same seed-timing class of bug). Fixed same-session with an
+  `OnParametersSet` re-seed guarded by a signature; two regression tests added. Repeats this
+  tracker's own lesson from the WU-TagFanon post-review: a sketch is a starting point, not a
+  guarantee — read the diff. Full record: `workplan.md` §"WU-DiscoveryFilterRestore +
+  WU-SelectionPermalink"; `audit/Discovery.md` §"WU-DiscoveryFilterRestore + WU-SelectionPermalink
+  note". `dotnet test` green (2,330); browser-verified.
 
 - [ ] **B12 — Hierarchy roll-up made `ApplyFilters` impure; expansion is uncached and unshared** `[latent-risk · low · anytime]` — *Found by WU-TagFanon's own post-review, 2026-07-26.*
   - Grid: F31 L2=5; F59/F60 (marts) L8=5 — invisible on all of them.
@@ -589,3 +610,6 @@ These earlier deferrals were resolved by later work; the grid is correct. Listed
 - 11 inflated L5 cells with no client code → legitimately earned via **WU-GlobalFlip (2026-07-13)**.
 - ImageStorage L5 upload path (stale "not designed" note) → **WU-L5Sweep / WU-GlobalFlip**.
 - Blazored.Typeahead chrome → replaced by in-house `CanalaveTypeahead` at the global flip.
+- Ship filter restore path (B11) → **WU-DiscoveryFilterRestore (2026-07-28)**, alongside the
+  selection permalink (**WU-SelectionPermalink**, same day) that answered decision row 13's sharing
+  half.
