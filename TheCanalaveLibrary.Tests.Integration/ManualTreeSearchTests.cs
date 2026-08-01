@@ -221,6 +221,186 @@ public sealed class ManualTreeSearchTests(PostgresFixture postgres) : Integratio
             .Recommendation.IsHiddenGem.Should().BeTrue();
     }
 
+    // ── Candidate-pane filter axes (WU-ExploreFilterAxes) ──────────────────────────────────────
+    // Every story-valued section narrows through the ONE shared `visible` queryable, so these
+    // assert the substitution point, not each section separately: honest counts under a filter,
+    // hierarchy roll-up, ships, and the viewer-relative interaction axis.
+
+    /// <summary>Seeds a Character tag pair (parent + fanon child) and an unrelated one.</summary>
+    private async Task<(int Parent, int Child, int Other)> SeedCharacterTagsAsync()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        string s = Guid.NewGuid().ToString("N")[..8];
+        Tag parent = new() { TagName = $"MTParent-{s}", TagTypeId = TagTypeEnum.Character, AllowCustomName = true };
+        Tag child = new() { TagName = $"MTChild-{s}", TagTypeId = TagTypeEnum.Character, IsFanon = true, ParentTag = parent };
+        Tag other = new() { TagName = $"MTOther-{s}", TagTypeId = TagTypeEnum.Character };
+        db.Tags.AddRange(parent, child, other);
+        await db.SaveChangesAsync();
+        return (parent.TagId, child.TagId, other.TagId);
+    }
+
+    private async Task TagStoryAsync(int storyId, int characterTagId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.StoryCharacters.Add(new StoryCharacter { StoryId = storyId, CharacterTagId = characterTagId });
+        await db.SaveChangesAsync();
+    }
+
+    [Fact]
+    public async Task Filter_NarrowsAuthored_WithHonestTotalCount_AndRollsUpToChildren()
+    {
+        (int parent, int child, int other) = await SeedCharacterTagsAsync();
+        int author = await SeedUserAsync("FilterAuthor");
+        int tagged = await SeedStoryAsync(authorId: author);
+        int untagged = await SeedStoryAsync(authorId: author);
+        await TagStoryAsync(tagged, child);   // tagged with the CHILD only
+        await TagStoryAsync(untagged, other);
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        ManualTreeNeighborsDto unfiltered = await UserPivotAsync(new UserNeighborsRequest { UserId = author });
+        unfiltered.Authored!.TotalCount.Should().Be(2);
+
+        // Filtering by the PARENT must still match the child-only story (hierarchy roll-up), and
+        // the count must shrink with the page — a TotalCount that ignored the filter would be a lie.
+        ManualTreeNeighborsDto filtered = await UserPivotAsync(new UserNeighborsRequest
+        {
+            UserId = author,
+            Filter = new StoryFilterDto { IncludedTagIds = [parent] },
+        });
+
+        filtered.Authored!.Items.Select(s => s.StoryId).Should().BeEquivalentTo([tagged]);
+        filtered.Authored.TotalCount.Should().Be(1, "count and page share the filtered predicate");
+    }
+
+    [Fact]
+    public async Task Filter_AppliesToEveryStoryValuedSection_NotJustAuthored()
+    {
+        (int parent, _, int other) = await SeedCharacterTagsAsync();
+        int pivotUser = await SeedUserAsync("FilterPivot");
+
+        int favMatch = await SeedStoryAsync();
+        int favMiss = await SeedStoryAsync();
+        await TagStoryAsync(favMatch, parent);
+        await TagStoryAsync(favMiss, other);
+        await FavoriteAsync(pivotUser, favMatch);
+        await FavoriteAsync(pivotUser, favMiss);
+
+        int recMatch = await SeedStoryAsync();
+        int recMiss = await SeedStoryAsync();
+        await TagStoryAsync(recMatch, parent);
+        await TagStoryAsync(recMiss, other);
+        await RecommendAsync(pivotUser, recMatch);
+        await RecommendAsync(pivotUser, recMiss);
+
+        int vouchee = await SeedUserAsync("FilterVouchee");
+        int vouchMatch = await SeedStoryAsync(authorId: vouchee);
+        int vouchMiss = await SeedStoryAsync(authorId: vouchee);
+        await TagStoryAsync(vouchMatch, parent);
+        await TagStoryAsync(vouchMiss, other);
+        await VouchAsync(pivotUser, vouchee);
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        ManualTreeNeighborsDto dto = await UserPivotAsync(new UserNeighborsRequest
+        {
+            UserId = pivotUser,
+            Filter = new StoryFilterDto { IncludedTagIds = [parent] },
+        });
+
+        dto.Favorites!.Items.Select(s => s.StoryId).Should().BeEquivalentTo([favMatch]);
+        dto.RecommendationFamily!.Items.Select(i => i.Story.StoryId).Should().BeEquivalentTo([recMatch],
+            "the family narrows through the same visible-stories subquery");
+        dto.VouchedStories!.Items.Select(s => s.StoryId).Should().BeEquivalentTo([vouchMatch]);
+    }
+
+    [Fact]
+    public async Task Filter_ExcludeAndShipAxes_Apply()
+    {
+        (int parent, int child, int other) = await SeedCharacterTagsAsync();
+        int author = await SeedUserAsync("ShipAuthor");
+        int childStory = await SeedStoryAsync(authorId: author);
+        int otherStory = await SeedStoryAsync(authorId: author);
+        await TagStoryAsync(childStory, child);
+        await TagStoryAsync(otherStory, other);
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        // Exclude is symmetric with include: excluding the parent drops the child-only story.
+        ManualTreeNeighborsDto excluded = await UserPivotAsync(new UserNeighborsRequest
+        {
+            UserId = author,
+            Filter = new StoryFilterDto { ExcludedTagIds = [parent] },
+        });
+        excluded.Authored!.Items.Select(s => s.StoryId).Should().BeEquivalentTo([otherStory]);
+
+        // A ship nobody is in matches nothing — co-presence is not a pairing.
+        ManualTreeNeighborsDto shipped = await UserPivotAsync(new UserNeighborsRequest
+        {
+            UserId = author,
+            Filter = new StoryFilterDto
+            {
+                IncludedShips = [new ShipFilterDto { MemberTagIds = [parent, other] }],
+            },
+        });
+        shipped.Authored!.Items.Should().BeEmpty();
+        shipped.Authored.TotalCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Filter_MalformedShip_ThrowsUserFacingValidation_NotAnUnexpectedError()
+    {
+        int author = await SeedUserAsync("BadShipAuthor");
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        Func<Task> act = () => UserPivotAsync(new UserNeighborsRequest
+        {
+            UserId = author,
+            // Same character twice — rejected before any query work so the endpoint 400s.
+            Filter = new StoryFilterDto
+            {
+                IncludedShips = [new ShipFilterDto { MemberTagIds = [1, 1] }],
+            },
+        });
+
+        await act.Should().ThrowAsync<StoryValidationException>();
+    }
+
+    [Fact]
+    public async Task Filter_InteractionExclusion_IsViewerRelative_AndIgnoredForAnonymous()
+    {
+        int author = await SeedUserAsync("IgnoreAuthor");
+        int kept = await SeedStoryAsync(authorId: author);
+        int ignored = await SeedStoryAsync(authorId: author);
+
+        int viewer = await SeedUserAsync("IgnoringViewer");
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.UserStoryInteractions.Add(new UserStoryInteraction
+            {
+                UserId = viewer, StoryId = ignored, IsIgnored = true,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        StoryFilterDto filter = new() { ExcludedInteractions = [UserStoryInteractionTypeEnum.Ignore] };
+
+        SetActiveUser(viewer);
+        ManualTreeNeighborsDto asViewer = await UserPivotAsync(new UserNeighborsRequest
+        { UserId = author, Filter = filter });
+        asViewer.Authored!.Items.Select(s => s.StoryId).Should().BeEquivalentTo([kept],
+            "the exclusion reads the VIEWER's interaction row, not the anchor's");
+        asViewer.Authored.TotalCount.Should().Be(1);
+
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+        ManualTreeNeighborsDto asAnon = await UserPivotAsync(new UserNeighborsRequest
+        { UserId = author, Filter = filter });
+        asAnon.Authored!.Items.Select(s => s.StoryId).Should().BeEquivalentTo([kept, ignored],
+            "an anonymous viewer has no interaction rows, so the axis is a no-op");
+    }
+
     // ── Paging ─────────────────────────────────────────────────────────────────────────────────
 
     [Fact]

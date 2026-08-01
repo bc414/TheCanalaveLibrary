@@ -1,6 +1,7 @@
 @namespace TheCanalaveLibrary.SharedUI
 @inject IManualTreeSearchReadService ManualTree
 @inject IUserStoryInteractionReadService InteractionReadService
+@inject IDiscoveryDefaultsReadService DiscoveryDefaults
 @inject ManualTreeStore TreeStore
 
 @* Explore — Manual Tree Search's "build your own map" paradigm (Feature 33 / WU40).
@@ -70,6 +71,45 @@
                 <div class="border-b border-(--color-border) px-4 py-2.5">
                     <ManualTreeEdgeToggles Items="BuildToggleItems()" OnToggled="HandleToggleAsync" />
                 </div>
+
+                @* Filter axes (WU-ExploreFilterAxes) — USER anchors only. A story anchor has no
+                   story-valued section to narrow: Author and Favorited-by are users, and every
+                   recommendation row's story IS the anchor. Composed as individual axes rather
+                   than ResultsFilterPanel, which also carries FTS + sort (neither applies —
+                   sections keep their settled orderings). Batched behind Apply, unlike the edge
+                   toggles above; see layer3.5-structure.md §"Filter-Axis Component Pattern". *@
+                @if (_selected is { IsStory: false })
+                {
+                    <details class="border-b border-(--color-border)">
+                        <summary class="cursor-pointer select-none px-4 py-2.5 text-xs font-bold uppercase tracking-wide text-(--color-text-muted) hover:text-(--color-text)">
+                            Narrow these results@(ActiveFilterCount() is var n && n > 0 ? $" ({n} active)" : "")
+                        </summary>
+                        <div class="flex flex-col gap-4 px-4 pb-4">
+                            <TagFilter AllowSavedSelections="false" OnChanged="OnTagFilterChanged" />
+                            <ShipFilter OnChanged="OnShipFilterChanged" />
+                            @if (CurrentUserId is not null)
+                            {
+                                <UserStoryInteractionFilter ExcludedKinds="_seedExcludedInteractions"
+                                                            OnChanged="OnInteractionFilterChanged" />
+                            }
+                            <div class="flex items-center gap-2">
+                                <button type="button" id="explore-apply-filters"
+                                        class="rounded-md bg-(--color-mission) px-4 py-1.5 text-sm font-medium text-white hover:bg-(--color-mission-hover) active:bg-(--color-mission-hover) transition-colors"
+                                        @onclick="ApplyFiltersAsync">
+                                    Apply Filters
+                                </button>
+                                @if (ActiveFilterCount() > 0)
+                                {
+                                    <button type="button"
+                                            class="rounded-md border border-(--color-border) px-3 py-1.5 text-sm font-semibold text-(--color-text-muted) hover:text-(--color-text)"
+                                            @onclick="ClearFiltersAsync">
+                                        Clear
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </details>
+                }
 
                 <div class="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4">
                     @if (_loading)
@@ -196,12 +236,34 @@
     private bool _loading = true;
     private bool _initialized;
 
+    // ── Filter axes (WU-ExploreFilterAxes) — buffered per axis, applied as one DTO ─
+    // Applied to user-anchor pivots only; a story anchor sends no filter at all.
+    private StoryFilterDto? _filter;
+    private TagFilterSelection _tagSelection = TagFilterSelection.Empty;
+    private IReadOnlyList<ShipFilterDto> _includedShips = [], _excludedShips = [];
+    private IReadOnlyList<UserStoryInteractionTypeEnum> _excludedInteractions = [];
+    private IReadOnlyList<UserStoryInteractionTypeEnum> _seedExcludedInteractions = [];
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         // Everything waits for interactivity: localStorage needs JS (unavailable during
         // prerender), and there is no point running the first pivot twice.
         if (!firstRender || _initialized) return;
         _initialized = true;
+
+        // §8.7 defaults for the TreeSearch surface — the manual tabs' key, seeded since the
+        // matrix was created but consumerless until this WU (the Automatic tab uses
+        // AutoTreeSearch). Resolved BEFORE the first pivot so the pane is never briefly
+        // unfiltered, and reflected in the panel so the checkboxes match the query behind them.
+        // Anonymous viewers get the system row back but the server ignores interaction
+        // exclusions without a viewer, so the panel stays hidden for them.
+        if (CurrentUserId is not null)
+        {
+            _excludedInteractions =
+                await DiscoveryDefaults.GetDefaultExcludedInteractionsAsync(SiteSearchModes.TreeSearch);
+            _seedExcludedInteractions = _excludedInteractions;
+            _filter = BuildFilter();
+        }
 
         BuildRoot();
         await TryRestoreTreeAsync();
@@ -298,6 +360,7 @@
                 IncludeFavorites = _favoriteFromUser,
                 IncludeAuthored = _authoredFromUser,
                 IncludeVouchedStories = _vouchFromUser,
+                Filter = _filter,
                 RecommendationsPage = _familyPage,
                 FavoritesPage = _favoritesPage,
                 AuthoredPage = _authoredPage,
@@ -355,6 +418,57 @@
         ResetPages();
         await LoadPivotAsync();
     }
+
+    // ── Filter axes ───────────────────────────────────────────────────────────────
+    // Each axis emits on every change; this composite buffers the slice and does nothing
+    // until Apply. Narrowing changes query breadth (and would relayout the whole section
+    // stack per keystroke), unlike the edge toggles, which only gate section visibility.
+
+    private void OnTagFilterChanged(TagFilterSelection selection) => _tagSelection = selection;
+
+    private void OnShipFilterChanged((IReadOnlyList<ShipFilterDto> Included, IReadOnlyList<ShipFilterDto> Excluded) ships) =>
+        (_includedShips, _excludedShips) = ships;
+
+    private void OnInteractionFilterChanged(IReadOnlyList<UserStoryInteractionTypeEnum> excluded) =>
+        _excludedInteractions = excluded;
+
+    /// <summary>The buffered axes as one DTO. TextQuery/Sort are deliberately never set — the
+    /// service ignores both, and each section keeps its settled ordering.</summary>
+    private StoryFilterDto BuildFilter() => new()
+    {
+        IncludedTagIds = _tagSelection.IncludedTagIds,
+        ExcludedTagIds = _tagSelection.ExcludedTagIds,
+        IncludeMode = _tagSelection.IncludeMode,
+        IncludedShips = _includedShips,
+        ExcludedShips = _excludedShips,
+        ExcludedInteractions = _excludedInteractions,
+    };
+
+    private async Task ApplyFiltersAsync()
+    {
+        _filter = BuildFilter();
+        ResetPages();
+        await LoadPivotAsync();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        // Clears the buffers AND the applied filter, including the §8.7 seed — an explicit
+        // "show me everything" outranks the default, same as unchecking each box by hand.
+        _tagSelection = TagFilterSelection.Empty;
+        _includedShips = _excludedShips = [];
+        _excludedInteractions = _seedExcludedInteractions = [];
+        _filter = null;
+        ResetPages();
+        await LoadPivotAsync();
+    }
+
+    /// <summary>How many axes are currently narrowing, for the collapsed disclosure's label —
+    /// a filter that silently hides results (the §8.7 default does, out of the box) must be
+    /// visible without opening the panel.</summary>
+    private int ActiveFilterCount() =>
+        _tagSelection.IncludedTagIds.Count + _tagSelection.ExcludedTagIds.Count
+        + _includedShips.Count + _excludedShips.Count + _excludedInteractions.Count;
 
     private IReadOnlyList<ManualTreeEdgeToggles.EdgeToggleItem> BuildToggleItems()
     {

@@ -16,6 +16,7 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 public class ExploreTabTests : BunitContext
 {
     private readonly FakeManualTreeSearchReadService _manualTree = new();
+    private readonly FakeDiscoveryDefaultsReadService _defaults = new();
 
     public ExploreTabTests()
     {
@@ -23,6 +24,10 @@ public class ExploreTabTests : BunitContext
         Services.AddScoped<IUserStoryInteractionReadService>(_ => new FakeInteractionReadService());
         Services.AddScoped<IUserStoryInteractionWriteService>(_ => new FakeUserStoryInteractionWriteService());
         Services.AddSingleton<ISpriteReadService>(new OptimisticSpriteReadService("/sprites/themes"));
+        // WU-ExploreFilterAxes: the filter disclosure seeds from the §8.7 matrix and composes
+        // TagFilter/ShipFilter, whose nested selectors read tags.
+        Services.AddScoped<IDiscoveryDefaultsReadService>(_ => _defaults);
+        Services.AddScoped<ITagReadService>(_ => new FakeTagReadService());
         Services.AddScoped<ManualTreeStore>();
         JSInterop.Mode = JSRuntimeMode.Loose;
     }
@@ -163,6 +168,123 @@ public class ExploreTabTests : BunitContext
             cut.Markup.Should().Contain("Vouch").And.Contain("Authored");
             cut.Markup.Should().NotContain("Favorited by", "story→user controls never render for a user anchor");
             cut.Markup.Should().Contain("📌 Pinned", "the pinned story is badged within Authored, not a separate section");
+        });
+    }
+
+    // ── Filter axes (WU-ExploreFilterAxes) ──────────────────────────────────────────────────────
+
+    private IRenderedComponent<ExploreTab> RenderUserRoot(int? currentUserId = 99)
+    {
+        IRenderedComponent<ExploreTab> cut = Render<ExploreTab>(p => p
+            .Add(c => c.RootUser, MakeUser(10, "RootUser"))
+            .Add(c => c.CurrentUserId, currentUserId));
+        cut.WaitForState(() => cut.FindComponents<ManualTreeCanvas>().Count > 0);
+        return cut;
+    }
+
+    [Fact]
+    public void UserAnchor_RendersFilterDisclosure_StoryAnchorDoesNot()
+    {
+        IRenderedComponent<ExploreTab> userCut = RenderUserRoot();
+        userCut.WaitForAssertion(() =>
+        {
+            userCut.Markup.Should().Contain("Narrow these results");
+            userCut.FindComponents<TagFilter>().Should().ContainSingle();
+            userCut.FindComponents<ShipFilter>().Should().ContainSingle();
+        });
+
+        IRenderedComponent<ExploreTab> storyCut = RenderStoryRoot();
+        storyCut.WaitForAssertion(() => storyCut.Markup.Should().NotContain(
+            "Narrow these results",
+            "a story anchor has no story-valued section to narrow — every section is users or the anchor itself"));
+    }
+
+    [Fact]
+    public void FirstPivot_SeedsExcludedInteractionsFromTheTreeSearchDefaults()
+    {
+        _defaults.Defaults = [UserStoryInteractionTypeEnum.Ignore];
+
+        IRenderedComponent<ExploreTab> cut = RenderUserRoot();
+
+        cut.WaitForAssertion(() =>
+        {
+            _manualTree.LastUserRequest!.Filter.Should().NotBeNull(
+                "the §8.7 default must reach the very first pivot — never a briefly-unfiltered pane");
+            _manualTree.LastUserRequest!.Filter!.ExcludedInteractions
+                .Should().ContainSingle().Which.Should().Be(UserStoryInteractionTypeEnum.Ignore);
+            cut.Markup.Should().Contain("(1 active)",
+                "a filter that silently hides results must be visible while the panel is collapsed");
+        });
+    }
+
+    [Fact]
+    public void AnonymousViewer_SendsNoFilter_AndGetsNoInteractionAxis()
+    {
+        IRenderedComponent<ExploreTab> cut = RenderUserRoot(currentUserId: null);
+
+        cut.WaitForAssertion(() =>
+        {
+            _manualTree.LastUserRequest!.Filter.Should().BeNull();
+            cut.FindComponents<UserStoryInteractionFilter>().Should().BeEmpty(
+                "interaction exclusions are viewer-relative and are ignored server-side without a viewer");
+        });
+    }
+
+    [Fact]
+    public async Task Apply_SendsBufferedTagSelection_AndResetsPaging()
+    {
+        _manualTree.UserResult = new ManualTreeNeighborsDto
+        {
+            Authored = new ManualTreeSectionDto<StoryListingDto>([MakeStory(5)], 40),
+        };
+
+        IRenderedComponent<ExploreTab> cut = RenderUserRoot();
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Show more (39 more)"));
+
+        // Page one section forward, then narrow: Apply must reset paging, not append page 2 of a
+        // now-different result set. Page 2 must carry a DIFFERENT story — the accumulated list is
+        // @key'd by StoryId, so replaying page 1 would be a duplicate-key render error the real
+        // stable-ordered offset query can't produce.
+        _manualTree.UserResult = new ManualTreeNeighborsDto
+        {
+            Authored = new ManualTreeSectionDto<StoryListingDto>([MakeStory(6)], 40),
+        };
+        cut.FindAll("button").First(b => b.TextContent.Contains("Show more")).Click();
+        cut.WaitForAssertion(() => _manualTree.LastUserRequest!.AuthoredPage.Should().Be(2));
+
+        // Emit a tag selection the way TagFilter does, then Apply.
+        await cut.InvokeAsync(() => cut.FindComponent<TagFilter>().Instance.OnChanged.InvokeAsync(
+            new TagFilterSelection([7], [8], TagIncludeMode.And)));
+        cut.Find("#explore-apply-filters").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            StoryFilterDto filter = _manualTree.LastUserRequest!.Filter!;
+            filter.IncludedTagIds.Should().Equal(7);
+            filter.ExcludedTagIds.Should().Equal(8);
+            filter.TextQuery.Should().BeNull("Explore offers no text axis — the service ignores it");
+            _manualTree.LastUserRequest!.AuthoredPage.Should().Be(1, "narrowing resets per-section paging");
+        });
+    }
+
+    [Fact]
+    public async Task Clear_DropsTheFilterEntirely_IncludingTheSeededDefault()
+    {
+        IRenderedComponent<ExploreTab> cut = RenderUserRoot();
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("(1 active)"));
+
+        await cut.InvokeAsync(() => cut.FindComponent<TagFilter>().Instance.OnChanged.InvokeAsync(
+            new TagFilterSelection([7], [], TagIncludeMode.And)));
+        cut.Find("#explore-apply-filters").Click();
+        cut.WaitForAssertion(() => _manualTree.LastUserRequest!.Filter!.IncludedTagIds.Should().Equal(7));
+
+        cut.FindAll("button").First(b => b.TextContent.Trim() == "Clear").Click();
+
+        cut.WaitForAssertion(() =>
+        {
+            _manualTree.LastUserRequest!.Filter.Should().BeNull(
+                "an explicit 'show me everything' outranks the §8.7 seed");
+            cut.Markup.Should().NotContain("active)");
         });
     }
 }

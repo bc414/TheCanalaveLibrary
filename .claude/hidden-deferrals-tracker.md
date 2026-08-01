@@ -94,10 +94,29 @@ decision work that has no row at all.
     ship-filter axis, public `/fanon` dashboard, link-and-notify, `/tag-adoptions` adoption flow,
     full SeedTool tag world. 2258 tests green; browser-verified with psql ground truth.
 
-- [ ] **A6 — Explore candidate-pane tag/interaction filter axes** `[scope-cut · low · anytime]`
-  - Grid: F33 (Manual Tree Search) L3.5=5.
-  - Source: `audit/Discovery.md` WU40 L4.5 "Deferred."
-  - Context: The Explore-mode candidate-results pane has no tag/interaction filter axes; recorded as not-built.
+- [x] **A6 — Explore candidate-pane tag/interaction filter axes — DONE (2026-07-31,
+  WU-ExploreFilterAxes)** `[scope-cut · low · anytime]`
+  - Grid: F33 (Manual Tree Search) L2/L3.5/L4.5 stay =5 (no stage change — the cells were already
+    sound; this widened what they cover).
+  - Source: `audit/Discovery.md` WU40 L4.5 "Deferred" → now the WU-ExploreFilterAxes Stage note.
+  - Context: the pane scoped candidates by (edge, direction) toggles alone. Worth carrying forward
+    (the A5 lesson again): the one-line entry pointed at a *design* question, not a code task —
+    `layer3.5-structure.md` carried a **settled** 2026-07-12 note saying these axes are not there,
+    so the first move was owner adjudication (scope cut, not design objection), then rewriting that
+    paragraph as moment-1 work before any code.
+  - Built: tag (+ hierarchy roll-up) / ship / interaction-exclusion axes on the Explore pane,
+    **user anchors only**; `ApplyFilters` extracted to a shared `StoryFilterPredicates` so the pane
+    narrows by identical semantics to every other story-listing surface; §8.7 seed via
+    `SiteSearchModes.TreeSearch`. 2,502 tests green; browser-verified against psql ground truth.
+  - **Two deliberate non-goals recorded so they don't become invisible:** (1) **Deep Dive is
+    permanently unfiltered** — a standing design rule (filters would break the ≤5/≤1 boundedness
+    guarantee its whitelist provides), not a deferral; do not "finish" it. (2) **Filter state is
+    session-only** — not persisted to `localStorage`, which keeps the persisted-tree contract
+    (IDs + edges only) untouched. A durable cross-device version would ride the same
+    "saved trees" decision WU40 already deferred.
+  - Found in passing: `SiteSearchModes.TreeSearch` had been seeded in the §8.7 matrix since the
+    matrix was created but **no UI surface consumed it** (the Automatic tab uses `AutoTreeSearch`).
+    This WU gives it its consumer.
 
 - [ ] **A7 — Pinned-Story edge → discovery mart / Automatic-tab integration** `[scope-cut · med · anytime]`
   - Grid: F59 L8=5, F60 (mart worker) L8=5.

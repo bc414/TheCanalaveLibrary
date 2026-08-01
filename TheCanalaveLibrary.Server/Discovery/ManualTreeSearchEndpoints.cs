@@ -23,9 +23,15 @@ public static class ManualTreeSearchEndpoints
                 IManualTreeSearchReadService manualTreeSearch, StoryNeighborsRequest request, CancellationToken ct) =>
             Results.Ok(await manualTreeSearch.GetStoryNeighborsAsync(request, ct)));
 
-        group.MapPost("/neighbors/user", async (
+        // Wrapped in ExecuteAsync (WU-ExploreFilterAxes): the user pivot now carries an optional
+        // StoryFilterDto, whose ValidateShipShape throws the user-facing StoryValidationException
+        // for malformed ship criteria. Unwrapped, that malformed input would 500 instead of 400 —
+        // exactly the defect WU-ErrorHandling2 fixed on the three story-listing reads. The story
+        // pivot takes no filter and stays a plain pass-through.
+        group.MapPost("/neighbors/user", (
                 IManualTreeSearchReadService manualTreeSearch, UserNeighborsRequest request, CancellationToken ct) =>
-            Results.Ok(await manualTreeSearch.GetUserNeighborsAsync(request, ct)));
+            EndpointHelpers.ExecuteAsync(async () =>
+                Results.Ok(await manualTreeSearch.GetUserNeighborsAsync(request, ct))));
 
         // Both parameters are plain int collections — layer5-wasm.md's explicit GET-bindable
         // exception (scalar/enum/int[]/IReadOnlyCollection<int>) — so this stays GET despite being

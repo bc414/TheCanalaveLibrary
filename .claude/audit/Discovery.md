@@ -509,10 +509,12 @@ re-seed guard from the start.
 
 ## Feature 33 — Manual Tree Search
 - **L1 — N/A** (stateless graph pivots over live tables, plus one new field —
-  `User.PinnedStoryId`, migration `WU40_PinnedStory`). **L2 — Stage 5 (WU40, 2026-07-12 — see
-  Stage note).** **L3/L3.5 — Stage 5 (WU40)** (distinct graph/node visualization — NOT
+  `User.PinnedStoryId`, migration `WU40_PinnedStory`). **L2 — Stage 5 (WU40, 2026-07-12;
+  candidate-pane filter axes added WU-ExploreFilterAxes, 2026-07-31 — see both Stage notes).**
+  **L3/L3.5 — Stage 5 (WU40; Explore filter disclosure added WU-ExploreFilterAxes, 2026-07-31)**
+  (distinct graph/node visualization — NOT
   `StoryDeck`). **L4 — Stage 1** (visual sign-off pending, WU8/WU13/WU23/WU28/WU44 precedent).
-  **L4.5 — Stage 5 (WU40, behavioral browser verification — see Stage note).**
+  **L4.5 — Stage 5 (WU40 + WU-ExploreFilterAxes, behavioral browser verification — see Stage notes).**
   **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto (Explore tab not browser-driven in the flip's wave; the
   sibling Automatic tab was, see F59). Full wave narrative + the 7 bugs found/fixed: `workplan.md`
@@ -762,7 +764,79 @@ re-seed guard from the start.
   UGC-outside-ContentSurface) pre-exists this WU (untouched Import-cluster file). Surface
   registry: WU40 element-kind rows appended. **Deferred:** Pinned-Story mart/Automatic-tab
   integration (forward pointer in `workplan.md`); tag/interaction filter axes on the candidate
-  pane (recorded as not-built in `layer3.5-structure.md`); L6 index measurement.
+  pane (**superseded 2026-07-31 by WU-ExploreFilterAxes — built for user anchors; see that Stage
+  note below**); L6 index measurement.
+
+  **WU-ExploreFilterAxes Stage note — L2 / L3.5 / L4.5 (2026-07-31, closes
+  hidden-deferrals-tracker A6):**
+
+  WU40 shipped the candidate pane scoped by (edge, direction) toggles alone, and
+  `layer3.5-structure.md` recorded that as a settled *design* ("not filtered by
+  `TagFilter`/`UserStoryInteractionFilter`"). Owner adjudication 2026-07-31: that note recorded a
+  scope cut, not a design objection — reopened deliberately, and the convention paragraph was
+  rewritten as moment-1 doc work before any code.
+
+  **Where the axes apply — and where they deliberately do not.** Explore, **user anchors only**.
+  On a story anchor no section is story-valued: `Author` and `Favoriters` are `UserCardDto`, and
+  every recommendation-family row's story *is* the anchor — filters there would be inert at best,
+  and would blank the whole pane whenever the anchor itself failed the filter. So the disclosure
+  swaps in and out with the anchor exactly as the edge-toggle row does, and
+  `StoryNeighborsRequest` gained nothing. **Deep Dive stays unfiltered permanently** (a standing
+  design rule now, not a deferral): its premise is that every walkable pair is bounded to ≤5 or
+  ≤1, so silently dropping links out of a chain the viewer was told is complete would break the
+  guarantee the whitelist exists to provide.
+
+  **L2:** `StoryFilterPredicates` (new, `Server/Stories/`) — `ApplyFilters` + `ApplyShipTerm` +
+  `ValidateShipShape` + `NamesTagIds` extracted verbatim out of `ServerStoryReadService`
+  (previously `private static`), preserving the WU-ApplyFiltersPurity invariant (pure,
+  synchronous, no DbContext — tracker B12). Both read services now call the one copy; a second
+  transcription of tag roll-up and interaction-exclusion semantics is exactly the drift the
+  extraction prevents. `UserNeighborsRequest.Filter` (nullable `StoryFilterDto`) flows through the
+  existing POST endpoint with no client change. `ServerManualTreeSearchReadService` composes the
+  predicate onto the **one shared `visible` queryable** — the family via its `visible.Any(...)`
+  constraint, Favorites/Authored/Vouched via their joins — so one substitution covers all four
+  sections and each section's count and page keep sharing a predicate ("TotalCount is never a
+  lie"). `TextQuery`/`Sort` are ignored (`hasFts: false`); section orderings stay settled.
+  `ManualTreeSearchEndpoints`' user route is now wrapped in `EndpointHelpers.ExecuteAsync` —
+  `ValidateShipShape` throws the user-facing `StoryValidationException`, which unwrapped would 500
+  instead of 400 (the same defect WU-ErrorHandling2 fixed on the three story-listing reads).
+
+  **L3.5:** `ExploreTab` composes `TagFilter` (`AllowSavedSelections=false` — the documented
+  opt-out seam for a narrow context) + `ShipFilter` + `UserStoryInteractionFilter` as individual
+  axes inside a collapsed `<details>`, **not** `ResultsFilterPanel` (which also assembles FTS and
+  sort, neither wanted). Batched behind Apply, unlike the edge toggles: narrowing changes query
+  breadth, toggles only gate section visibility — the convention now states that split explicitly.
+  Interaction exclusions seed from `IDiscoveryDefaultsReadService` under
+  `SiteSearchModes.TreeSearch`, a §8.7 surface key seeded since the matrix was created but
+  **consumerless until this WU** (the Automatic tab uses `AutoTreeSearch`). The collapsed summary
+  carries an active-axis count, because the seeded default hides rows out of the box and a filter
+  that silently removes results must be legible without opening the panel. Filter state is
+  session-only — deliberately NOT written to `localStorage`, so the persisted-tree contract
+  (IDs + edges only) is untouched.
+
+  **How verified (2026-07-31):** `dotnet build` green. `dotnet test` green — **2,502 total**
+  (Unit 793, RazorComponents 655, Integration 1,054). New **Integration** (5, in
+  `ManualTreeSearchTests`): Authored narrows with an honest reduced `TotalCount`; a parent-tag
+  include matches a child-only story (roll-up survives the extraction); the filter reaches
+  Favorites + family + Vouched from the single substitution point; exclude and ship axes apply;
+  malformed ship input throws `StoryValidationException` rather than an unexpected error; the
+  interaction axis reads the **viewer's** row and is a no-op for anonymous. New
+  **RazorComponents** (5, in `ExploreTabTests`): disclosure present on a user anchor and absent on
+  a story anchor; the §8.7 seed reaches the very first pivot and shows in the summary; anonymous
+  sends no filter and gets no interaction axis; Apply sends the buffered selection and resets
+  per-section paging; Clear drops the filter including the seed.
+
+  **L4.5-Browser (real circuit, server-only path, DataSeeder DB):** fixture AuthorAlpha (user 4,
+  4 published stories) with TestUser as viewer — psql ground truth: story 7 ignored by TestUser,
+  story 1 the only Cynthia-tagged one. At `/discover/user/4` → Explore: **Authored (3)** on load
+  with "(1 active)" — the §8.7 `Ignored` default hiding story 7 with an honest count, and the
+  panel checkbox matching the query behind it (the MA-402 mismatch class). Unchecking + Apply →
+  **Authored (4)**, story 7 back. Adding the Cynthia character chip + Apply → **Authored (1)**,
+  and Recommendations 1→0 and Vouched 1→0 in the same pivot, confirming all story-valued sections
+  narrow from the one substitution. Clear → all four restored. Pivoting to a story anchor → the
+  disclosure is **gone** and the toggle row swaps to story→user. A full reload re-seeds the
+  default (Authored 3), confirming filters are session-only. No console errors.
+  `check-design-tokens.ps1` and `check-doc-hygiene.ps1` both clean.
 
 ## Feature 34 — Tag Directory (`/tags`)
 - **L1 — N/A.** **L2 — Stage 5 (WU27.5, 2026-06-25 — see Stage note below:** `GetTagDirectoryAsync`

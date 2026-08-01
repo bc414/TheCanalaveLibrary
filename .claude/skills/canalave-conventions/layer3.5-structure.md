@@ -828,19 +828,31 @@ Search Page — Automatic Tab (WU44)" above) — no `StoryDeck`, no sort, no FTS
 either, but the axes themselves compose in. The assembled `ResultsFilterPanel` is one *assembler*
 of the axes; a page can assemble its own subset directly.
 
-**Corrected 2026-07-12 (WU40):** this section previously stated "Manual tree search reuses tag +
-interaction-exclusion filtering" — that was speculative, written before Feature 33 was designed,
-and does not match the design WU40 actually settled. Manual tree search's two tabs (Explore, Deep
-Dive) are **not** filtered by `TagFilter`/`UserStoryInteractionFilter` — candidate results are
-scoped by **edge-type checkboxes** and rendered through the section model (see "Manual Tree Search
-— Explore & Deep Dive (WU40)" above), not by tag/FTS/interaction axes. Composing those axes into
-the candidate pane is a plausible future enhancement but is explicitly **not** part of WU40's
-initial build — do not assume it exists until a Stage note says otherwise.
+**Manual tree search (2026-07-31, WU-ExploreFilterAxes — supersedes the 2026-07-12 correction that
+stood here).** The edge-type toggles remain the *primary* scoping mechanism for both manual tabs;
+the filter axes narrow **within** them, never replace them. Where they apply:
+
+- **Deep Dive — never filtered.** Its whole premise is that every walkable (edge, direction) pair is
+  bounded to ≤5 or ≤1, so a click can safely bulk-add. A tag or interaction filter would silently
+  drop links out of a chain the viewer was told is complete. Do not add axes here.
+- **Explore — filtered on USER anchors only** (`TagFilter` + `ShipFilter` +
+  `UserStoryInteractionFilter`; no FTS, no sort). On a **story** anchor no section is story-valued:
+  Author and Favorited-by are `UserCardDto`, and every Recommendation-family row's story *is* the
+  anchor — so story filters there would be inert at best and would blank the whole pane whenever the
+  anchor itself failed the filter. The filter disclosure therefore swaps in and out with the anchor,
+  exactly as the edge-toggle row already does.
+
+The 2026-07-12 note this replaces said flatly that neither tab is filtered by those axes. That
+recorded WU40's scope cut, not a design objection; the Explore half was built out 2026-07-31. The
+Deep Dive half above is a standing design rule, not a deferral.
 
 Axis components: **emit on every change; never know about `StoryFilterDto`, sort, decks, or graphs.**
-The assembler (panel or tree page) buffers each axis's emitted slice in `@code` and fires one batched
-apply (via an "Apply Filters" button). Live re-filtering is never correct for the tree search —
-changing edge counts cause wild graph relayout — so both paths use an Apply button.
+The assembler (panel or tab) buffers each axis's emitted slice in `@code` and fires one batched
+apply (via an "Apply Filters" button). **The Apply discipline is per-control-kind, not per-page:**
+axes that change query *breadth* (tags, ships, interactions) always batch behind Apply — live
+re-filtering would relayout the result set on every keystroke. Explore's **edge toggles** apply
+instantly and deliberately do not: they gate which *sections* render, a cheap and visibly reversible
+change the viewer reads as a checkbox, not a search.
 
 ### `TagFilter` (SharedUI/Tags/)
 
@@ -1086,6 +1098,15 @@ Automatic tab's controls do.
   "Context-specific augmentation" above) — rendered alongside `StoryCard`'s triage row
   (co-important, NOT in the caret menu), and the **primary** action for `UserCard` results (which
   have no triage equivalent).
+- **Filter disclosure (WU-ExploreFilterAxes, 2026-07-31) — user anchors only.** Below the edge
+  toggles, a collapsed `<details>` composes `TagFilter` + `ShipFilter` +
+  `UserStoryInteractionFilter` as **individual axes** (not `ResultsFilterPanel`, which also carries
+  FTS and sort — neither wanted here: sections keep their settled orderings). The tab buffers each
+  axis's slice and emits one `StoryFilterDto` on Apply, which resets per-section paging and re-runs
+  the pivot. Absent entirely on a story anchor — see the Filter-Axis Component Pattern section for
+  why. Interaction exclusions seed from `IDiscoveryDefaultsReadService` under
+  `SiteSearchModes.TreeSearch` (§8.7); that surface key was seeded from the start but had no
+  consumer until this WU.
 - **Narrow viewports:** tree and results stack via CSS reflow (rung 1) — provisional, like all
   narrow layouts. The former Tree ⇄ Results toggle died with the device-fork paradigm
   (2026-07-18); a deliberate narrow interaction model is a mobile-phase decision.

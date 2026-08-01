@@ -54,6 +54,18 @@ public sealed record UserNeighborsRequest
     /// <summary>user → published stories authored by their ≤5 vouchees (Explore only).</summary>
     public bool IncludeVouchedStories { get; init; } = true;
 
+    /// <summary>
+    /// Optional narrowing applied to every story-valued section — Recommendation family,
+    /// Favorites, Authored, Vouched (WU-ExploreFilterAxes, 2026-07-31). Only the tag, ship, and
+    /// interaction-exclusion axes are honored: <c>TextQuery</c> and <c>Sort</c> are ignored,
+    /// because each section keeps its own settled ordering (pinned-first, newest-published).
+    ///
+    /// <para>There is deliberately NO counterpart on <see cref="StoryNeighborsRequest"/>: a story
+    /// anchor has no story-valued section to narrow (Author and Favoriters are users; every
+    /// Recommendation-family row's story IS the anchor). See <c>audit/Discovery.md</c> F33.</para>
+    /// </summary>
+    public StoryFilterDto? Filter { get; init; }
+
     public int RecommendationsPage { get; init; } = 1;
     public int FavoritesPage { get; init; } = 1;
     public int AuthoredPage { get; init; } = 1;

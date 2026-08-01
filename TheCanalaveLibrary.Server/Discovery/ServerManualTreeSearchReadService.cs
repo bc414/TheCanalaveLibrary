@@ -22,10 +22,17 @@ namespace TheCanalaveLibrary.Server;
 /// DbSet root, NOT to navigations) plus the published-status window (2..7 — drafts/pending/
 /// rejected are not globally filtered, so the window is explicit). Counts and pages share one
 /// predicate so <c>TotalCount</c> is never a lie.</para>
+///
+/// <para><b>Candidate-pane filtering (WU-ExploreFilterAxes):</b> a user pivot may carry a
+/// <see cref="StoryFilterDto"/>, applied by composing <see cref="StoryFilterPredicates"/> onto that
+/// same visible-stories queryable — so every story-valued section narrows at one point and keeps
+/// its honest count. Story pivots take no filter (nothing they return is story-valued; see
+/// <see cref="UserNeighborsRequest.Filter"/>).</para>
 /// </summary>
 public class ServerManualTreeSearchReadService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
     IStoryReadService storyReadService,
+    ITagHierarchyReadService tagHierarchy,
     IActiveUserContext activeUser) : IManualTreeSearchReadService
 {
     private const string DefaultAvatarUrl = "/img/default-avatar.svg";
@@ -132,7 +139,24 @@ public class ServerManualTreeSearchReadService(
         if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, activeUser, request.UserId))
             return new ManualTreeNeighborsDto();
 
+        // Explore's candidate-pane filter axes (WU-ExploreFilterAxes). Narrowing the ONE shared
+        // `visible` queryable covers every story-valued section at a single point — the family via
+        // its `visible.Any(...)` constraint, Favorites/Authored/Vouched via their joins — and
+        // because each section's count and page both read this queryable, TotalCount stays honest
+        // under a filter (the settled "never a lie" rule) with no per-section arithmetic.
+        // TextQuery/Sort are ignored: hasFts is false and section orderings are fixed.
         IQueryable<Story> visible = VisibleStories(readDb);
+        if (request.Filter is { } filter)
+        {
+            // Malformed ship input must throw before any query work (the endpoint maps
+            // StoryValidationException to a 400 — a 500 here was a WU-TagFanon review finding).
+            StoryFilterPredicates.ValidateShipShape(filter);
+            TagExpansionMap expansion = StoryFilterPredicates.NamesTagIds(filter)
+                ? await tagHierarchy.GetExpansionMapAsync()
+                : TagExpansionMap.Empty;
+            visible = StoryFilterPredicates.ApplyFilters(
+                visible, filter, expansion, activeUser.UserId, hasFts: false);
+        }
 
         ManualTreeSectionDto<ManualTreeRecItemDto>? family = null;
         if (request.IncludeRecommendations || request.IncludeHiddenGems || request.IncludeSpotlights)

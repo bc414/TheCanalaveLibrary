@@ -168,7 +168,7 @@ done.
 | **6** — cheap filler, anytime, no phase dependency | WU-PolishSweep | D4, D5, H2, H6 | Code-economy items, 401-mapping cleanup, StoryDeck skeleton, the by-design-gap list |
 | **6** | WU-TestHygieneSweep | H3, H4 (manual-verify half) | Cover-art browser-verify, paste-from-Word manual check |
 | **6** | *(fold H7 into whichever WU next touches the test suite, or its own pass)* | H7 | The 25 C-consolidate merges are mechanical, no urgency, no dependency |
-| **6** | *(standalone, own WU whenever convenient)* | A6, A7 | Discovery-adjacent but distinct from Tier 2's cluster (Explore filter axes; the frozen `DiscoveryMartSchema`'s 7th UNION arm) — heavier lift, `anytime` window, no forcing function |
+| **6** | *(standalone, own WU whenever convenient)* | ~~A6~~ **DONE 2026-07-31** (WU-ExploreFilterAxes), A7 | Discovery-adjacent but distinct from Tier 2's cluster (~~Explore filter axes~~; the frozen `DiscoveryMartSchema`'s 7th UNION arm) — heavier lift, `anytime` window, no forcing function. A6 turned out to be a *design* reopen (a settled "not filtered" note) rather than the code task its one-liner implied — see "Resolved" below. A7 unchanged. |
 | **6** | WU-L6MeasurePass | C2, C3, C4, C5, C6 | Moved down from Tier 2 (2026-07-30) — Recommendations/Vouches/Messaging/Series/Comments are already Stage 5 across every column and nothing else open touches their query shapes (checked against the full tracker, not inferred from the stage number — Stage 5 means "matches current spec," not "won't change"). No hard gate forces it earlier: Phase 3's freeze only mints Stage 6 on the L4-Style column (`middle_plan.md:106`), so C2–C6's L6=5 claims aren't at risk of being frozen unverified. **Soft floor this tier doesn't otherwise carry: finish before Phase 6 Beta opens** — Recommendations/Comments/Messaging/Vouches take real concurrent traffic there, the exact paths C2–C6 flag as unindexed, and re-measuring/re-indexing after the fact is cheap but discovering the gap via slow beta pages isn't a good look. |
 
 **Deliberately not reordered** — each already has an explicit gate and a stated reason; this
@@ -187,6 +187,25 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 2026-07-30; nothing left to sequence.
 
 ## Resolved
+
+- **Manual-tree-search candidate-pane filtering — resolved 2026-07-31 (Brian-ratified, tracker
+  A6 / WU-ExploreFilterAxes).** Had no decision row: it lived as a *settled convention* in
+  `layer3.5-structure.md` ("Explore and Deep Dive are **not** filtered by
+  `TagFilter`/`UserStoryInteractionFilter`"), which made taking A6 up a reopen rather than a build.
+  Adjudicated as a WU40 **scope cut, not a design objection**, and split three ways:
+  1. **Explore, user anchors only — built.** Tag (+ roll-up) / ship / interaction-exclusion axes.
+     Story anchors get nothing: none of their sections is story-valued, so a filter there is inert
+     or blanks the pane.
+  2. **Deep Dive — permanently unfiltered.** Now a standing design rule, not a deferral: filtering
+     would silently drop links out of chains whose ≤5/≤1 boundedness is the whitelist's entire
+     promise.
+  3. **Filter persistence — deliberately not built.** Session-only, so the persisted-tree contract
+     (IDs + edges only) stays untouched; a durable version rides WU40's already-deferred
+     "saved trees" decision.
+
+  Stated in `canalave-conventions/layer3.5-structure.md` §"Filter-Axis Component Pattern" (which
+  also now records the Apply-batching split: breadth axes batch, edge toggles don't) and
+  §"Explore tab"; narrative in `audit/Discovery.md` F33.
 
 - **Notification-email send path and unsubscribe mechanism — resolved 2026-07-31 (Brian-ratified,
   during WU-NotifEmail planning).** Two constraints that had no decision row because the WU was

@@ -17,7 +17,39 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-H10Fix (2026-07-31) — closed tracker **H10**: the entire `/Account/*` funnel
+- **Last landed:** WU-ExploreFilterAxes (2026-07-31) — closed tracker **A6**: the Explore
+  candidate-results pane scoped candidates by (edge, direction) toggles alone, so a prolific
+  author's "Authored (15)" was a wall you could only page through, on the one site where tag
+  filtering is the point. The entry read like a small build; it was a **design reopen** —
+  `layer3.5-structure.md` carried a *settled* 2026-07-12 note stating flatly that neither manual
+  tab is filtered by `TagFilter`/`UserStoryInteractionFilter`, so the first move was owner
+  adjudication (WU40 **scope cut, not design objection**) and rewriting that paragraph as
+  moment-1 work before any code. Settled three ways: Explore filtered on **user anchors only**;
+  **Deep Dive permanently unfiltered** (a standing design rule — filtering would break the ≤5/≤1
+  boundedness its edge whitelist promises, so it must not be "finished" later); filter state
+  **session-only**, leaving the persisted-tree contract untouched. Story anchors get no axes
+  because none of their sections is story-valued — `Author`/`Favoriters` are users and every
+  recommendation row's story *is* the anchor, so a filter there is inert or blanks the pane.
+  Built: `StoryFilterPredicates` (tag roll-up + ship + FTS + interaction exclusions extracted out
+  of `ServerStoryReadService`, purity invariant preserved) now shared by both read services — the
+  alternative was a second transcription of exactly the semantics most likely to drift;
+  `UserNeighborsRequest.Filter` composed onto the **one** `visible` queryable, so a single
+  substitution covers all four story-valued sections and every section keeps count and page on the
+  same predicate; the user endpoint wrapped in `ExecuteAsync` (malformed ship input was a 500 in
+  waiting — the same defect WU-ErrorHandling2 fixed on the story-listing reads); and an
+  Apply-batched `<details>` on `ExploreTab` composing the three axes individually rather than
+  `ResultsFilterPanel`. Found in passing: `SiteSearchModes.TreeSearch` had been seeded in the §8.7
+  matrix since the matrix existed with **no UI surface consuming it** — this WU is its first
+  consumer. No cell numbers changed — F33's L2/L3.5/L4.5 were already 5 and now cover more.
+  `dotnet test` green: **2,502** (Unit 793, RazorComponents 655 (+5), Integration 1,054 (+5)).
+  Browser-verified against psql ground truth (AuthorAlpha's 4 stories / TestUser's ignored one /
+  the single Cynthia-tagged story): the §8.7 default hid a story with an honest count on load, one
+  tag chip narrowed Authored 4→1 *and* Recommendations and Vouched to 0 in the same pivot, Clear
+  restored all four, and the disclosure vanished on a story anchor. `check-design-tokens.ps1` +
+  `check-doc-hygiene.ps1` clean. **Pointers:** `audit/Discovery.md` F33 WU-ExploreFilterAxes Stage
+  note; `layer3.5-structure.md` §"Filter-Axis Component Pattern" (rewritten — now also records
+  that breadth axes batch behind Apply while edge toggles deliberately don't) and §"Explore tab".
+  Before that, 2026-07-31: WU-H10Fix — closed tracker **H10**: the entire `/Account/*` funnel
   had been returning a raw 500 since the Global Flip (`539c4f24`, 2026-07-13), eighteen days,
   against a green `dotnet test` the whole time. Root cause confirmed live (not the routing
   hypothesis the tracker entry carried): `Identity/Pages/*` are `[ExcludeFromInteractiveRouting]`
@@ -165,9 +197,11 @@ references it, does not restate it.
   WU-ApplyFiltersPurity, and WU-ErrorHandling2 were all Tier-1/Tier-2 between-phase work (below),
   not phase gates.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
-  exist in **every group A–H** (fewer now that B0/B1/B3/B4/B7/B12/H1/H10/E4/H8 are closed;
+  exist in **every group A–H** (fewer now that A6/B0/B1/B3/B4/B7/B12/H1/H10/E4/H8 are closed;
   B14/B15/B16/H9 newly opened — **H9 is now unblocked**, since H10 had the funnel it needs to
-  drive returning 500), including two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also
+  drive returning 500), including two **high-priority security items: E2 and E3**. **A7** is the
+  remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
+  lift (reopens the frozen `DiscoveryMartSchema` for a 7th UNION arm) and unchanged by this work. WU-ErrorHandling2 also
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
@@ -316,6 +350,70 @@ is pending except where a bullet says so.
   endpoint in dev); built out of order and closed — F4/F20 L2 cloud-backend open item resolved,
   dev endpoint is Garage (MinIO OSS archived, superseded 2026-07-05), Cloudflare R2 in prod.
   Pointer: `audit/ImageStorage.md`.
+
+---
+
+## WU-ExploreFilterAxes — candidate-pane tag/ship/interaction axes; shared `StoryFilterPredicates` (Feature 33, extends `Discovery/`, `Stories/`, `Tags/`) — DONE ✓ (2026-07-31)
+
+- **Cells:** none flipped. F33 L2/L3.5/L4.5 were already Stage 5 and stay 5 — this widened what
+  they cover (tracker **A6**), the same already-sound-cell shape as A5/B0/B7/B12.
+- **Trigger:** a question about what tracker A6 actually was. Answering it surfaced that the entry
+  was not a scoped build task: `layer3.5-structure.md` carried a **settled** 2026-07-12 note
+  stating flatly that neither manual tab is filtered by `TagFilter`/`UserStoryInteractionFilter`,
+  which makes taking A6 up a *reopen* under CLAUDE.md's Stage-2 stop-and-flag rule. Brian
+  adjudicated it a WU40 **scope cut, not a design objection**. Same lesson as A5 and the
+  WU-DataSaver/B0 case: a one-line tracker entry is a pointer to an investigation.
+- **Doc-Touch moment 1 (before any code):** rewrote the §"Filter-Axis Component Pattern"
+  paragraph, added the disclosure to §"Explore tab", corrected that section's overstated
+  "both paths use an Apply button" into the real per-control-kind split, and annotated WU40's
+  L4.5 "Deferred" line as superseded.
+- **Settled, three ways** (all now stated in `layer3.5-structure.md`, not just here):
+  1. **Explore, user anchors only.** A story anchor has no story-valued section — `Author` and
+     `Favoriters` are `UserCardDto`, and every recommendation-family row's story *is* the anchor.
+     Filters there are inert at best and blank the pane whenever the anchor itself fails them. So
+     `StoryNeighborsRequest` gained nothing and the disclosure swaps with the anchor exactly as
+     the edge-toggle row does.
+  2. **Deep Dive permanently unfiltered — a standing design rule, not a deferral.** Every
+     walkable pair is bounded to ≤5 or ≤1; silently dropping links out of a chain the viewer was
+     told is complete breaks the guarantee the whitelist exists to provide. Recorded in the
+     tracker as a non-goal so a later pass doesn't "finish" it.
+  3. **Filter state session-only.** Not written to `localStorage`, so the persisted-tree contract
+     (IDs + edges only) is untouched; a durable version rides WU40's already-deferred "saved
+     trees" decision.
+- **Built — L2:** `Server/Stories/StoryFilterPredicates.cs` (new) — `ApplyFilters`,
+  `ApplyShipTerm`, `ValidateShipShape`, `NamesTagIds` moved verbatim out of
+  `ServerStoryReadService` (they were `private static`), preserving the WU-ApplyFiltersPurity
+  invariant (pure, synchronous, no DbContext — tracker B12). Chosen over transcribing the
+  predicate locally: tag roll-up and interaction-exclusion semantics are precisely what must not
+  drift between two copies. `UserNeighborsRequest.Filter` (nullable `StoryFilterDto`) rides the
+  existing POST endpoint — no client change. `ServerManualTreeSearchReadService` composes the
+  predicate onto the **one shared `visible` queryable**, which every story-valued section already
+  flows through (family via `visible.Any(...)`, Favorites/Authored/Vouched via joins) — one
+  substitution covers all four, and count and page keep sharing a predicate so `TotalCount` stays
+  honest under a filter. `TextQuery`/`Sort` ignored (`hasFts: false`). The user route is now
+  wrapped in `EndpointHelpers.ExecuteAsync`: `ValidateShipShape` throws the user-facing
+  `StoryValidationException`, which unwrapped is a 500 for what should be a 400 — the identical
+  defect WU-ErrorHandling2 fixed on the three story-listing reads.
+- **Built — L3.5:** `ExploreTab` composes `TagFilter` (`AllowSavedSelections=false`, the
+  documented narrow-context opt-out) + `ShipFilter` + `UserStoryInteractionFilter` as individual
+  axes in a collapsed `<details>`, **not** `ResultsFilterPanel` (which also assembles FTS and sort).
+  Buffered per axis, applied as one DTO, resetting per-section paging. §8.7 seed via
+  `IDiscoveryDefaultsReadService` under `SiteSearchModes.TreeSearch`. The collapsed summary shows
+  an active-axis count — the seeded default hides rows out of the box, and a filter that silently
+  removes results must be legible without opening the panel.
+- **Found in passing:** `SiteSearchModes.TreeSearch` has been seeded in the §8.7 matrix (with
+  `Ignored` enabled) since the matrix was created, with **no UI surface consuming it** — the
+  Automatic tab uses `AutoTreeSearch`. This WU is its first consumer.
+- **Verified:** `dotnet build` green. `dotnet test` green — **2,502** (Unit 793, RazorComponents
+  655 (+5), Integration 1,054 (+5)). Browser pass (server-only, DataSeeder DB) against psql ground
+  truth — AuthorAlpha's 4 published stories, TestUser's ignored story 7, story 1 as the only
+  Cynthia-tagged one: **Authored (3)** with "(1 active)" on load (§8.7 default hiding story 7,
+  honest count, checkbox matching the query behind it); uncheck + Apply → **(4)**; one Cynthia chip
+  + Apply → **Authored (1)** *and* Recommendations 1→0, Vouched 1→0 in the same pivot (the single
+  substitution point, confirmed on real data); Clear → all four restored; story anchor → disclosure
+  gone, toggle row swapped; full reload re-seeds the default (filters are session-only). No console
+  errors. `check-design-tokens.ps1` + `check-doc-hygiene.ps1` clean.
+- **Pointer:** `audit/Discovery.md` F33 "WU-ExploreFilterAxes Stage note".
 
 ---
 
