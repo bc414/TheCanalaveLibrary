@@ -17,7 +17,36 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-NotifEmail (2026-07-31) — closed tracker **B1**: `UserNotificationSetting.EmailEnabled`
+- **Last landed:** WU-H10Fix (2026-07-31) — closed tracker **H10**: the entire `/Account/*` funnel
+  had been returning a raw 500 since the Global Flip (`539c4f24`, 2026-07-13), eighteen days,
+  against a green `dotnet test` the whole time. Root cause confirmed live (not the routing
+  hypothesis the tracker entry carried): `Identity/Pages/*` are `[ExcludeFromInteractiveRouting]`
+  and declare no `@layout`, so they render static-SSR under `AuthorizeRouteView`'s ambient
+  `DefaultLayout="typeof(MainLayout)"` — and two of that chrome's components, `MessagesNavLink`
+  (2026-07-13) and `NotificationBellInner` (2026-07-15), had been given `[PersistentState]`, whose
+  persistence callback has no render mode to infer on a static render, so
+  `ComponentStatePersistenceManager.InferRenderModes` throws and 500s the page. **The same defect
+  class the Global Flip wave had already found once** (`ReaderDisplayProvider`) and already written
+  down in `layer5-wasm.md` — the entry's own "three `[PersistentState]`-bearing descendants" claim
+  was wrong on both counts and is corrected everywhere it appeared. Blast radius was wider than the
+  two named pages: every `Identity/Pages/*` outside `Manage/`, plus direct navigation to any
+  `/status-code/{code}` URL since 2026-07-24. `/Error`, `/Account/Manage/*` and the 401/403/404
+  re-execute path stayed healthy, which is what pins the cause to the render mode rather than the
+  layout. Fixed by converting both components to
+  `RegisterOnPersisting(callback, RenderMode.InteractiveAuto)`, mirroring `ReaderDisplayProvider`.
+  **Because a written rule had already failed twice, the durable output is two guards, both
+  verified to actually catch it** (red on the pre-fix tree, green after): `StaticSsrPageRenderTests`
+  (Integration — 10 tests; the bUnit tier structurally cannot see this class, since it renders
+  everything with no render mode) and `scripts/check-render-modes.ps1` (local + CI — computes the
+  static-SSR component closure and fails on `[PersistentState]` inside it; flagged exactly the two
+  offenders, no false positives, 60 components in the closure). No cell flips — F1's cells already
+  claimed Stage 5 and this restores the state they claimed. Deleted `status.md`'s H10 standing
+  constraint and replaced it with the rule that now binds. Also corrected H9's false "no Identity
+  audit file exists" claim. `dotnet test` green. **Pointers:** `audit/Identity.md` Stage note
+  ("The H10 outage and its fix") — the narrative of record; `layer5-wasm.md` §"Components that ALSO
+  render on static-SSR pages" (rule + named surface); `testing.md` §"What the three tiers
+  structurally can't see" (the render-mode blind spot).
+  Before that, 2026-07-31: WU-NotifEmail — closed tracker **B1**: `UserNotificationSetting.EmailEnabled`
   had stored, rendered and persisted since WU22 while driving no mail, and the deferral's stated
   blocker (an unchosen email provider) turned out never to touch the code path — `Email:Provider` is
   a config switch over plain SMTP and Mailpit made the whole flow locally verifiable, so it was
@@ -73,13 +102,12 @@ references it, does not restate it.
   token decision). New, unrelated, out-of-scope discovery this pass surfaced and did **not**
   fix: `/Account/Login` and `/Account/Register` both return a raw 500
   (`PersistProperty must be associated with a component or define an explicit render mode type`)
-  for every visitor, authenticated or not — **the entire Identity/auth funnel is currently
-  broken**. Possibly connected to this same session's own WU-SweepRiders H1 verification (below)
-  that `AuthorizeRouteView`'s ambient `DefaultLayout` wraps statically-routed pages in `MainLayout`
-  — `MainLayout` carries three `[PersistentState]`-bearing descendants that may be arriving with
-  no inferred render mode on Identity's routing path. Not diagnosed further (real risk of a rabbit
-  hole unrelated to accessibility) — flagged at high priority, see tracker **H10**. Full evidence
-  table: `audit/Accessibility.md` Stage note Addendum.
+  for every visitor, authenticated or not — the entire Identity/auth funnel was broken. Not
+  diagnosed further here (real risk of a rabbit hole unrelated to accessibility) — flagged at high
+  priority as tracker **H10**, and **fixed the same day by WU-H10Fix** (see Last landed; the
+  guess recorded at the time — three offenders including `ReaderDisplayProvider` — was wrong on
+  both counts; `audit/Identity.md`'s Stage note is the confirmed account). Full evidence table:
+  `audit/Accessibility.md` Stage note Addendum.
   Before that, 2026-07-31: WU-SweepRiders — closed tracker items H1, E4, H8 ahead of the
   Phase 3 L4 sweep rather than riding alongside it (H8 gated whether the sweep needs to style
   ~1,325 LOC of Identity scaffold at all). H8: keep the 2FA/passkey/external-login scaffold
@@ -137,8 +165,9 @@ references it, does not restate it.
   WU-ApplyFiltersPurity, and WU-ErrorHandling2 were all Tier-1/Tier-2 between-phase work (below),
   not phase gates.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
-  exist in **every group A–H** (fewer now that B0/B1/B3/B4/B7/B12/H1/E4/H8 are closed;
-  B14/B15/B16/H9 newly opened), including two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also
+  exist in **every group A–H** (fewer now that B0/B1/B3/B4/B7/B12/H1/H10/E4/H8 are closed;
+  B14/B15/B16/H9 newly opened — **H9 is now unblocked**, since H10 had the funnel it needs to
+  drive returning 500), including two **high-priority security items: E2 and E3**. WU-ErrorHandling2 also
   left a named follow-up: the 8 SOLO editor pages' error surfaces still want `ErrorAlert` adoption
   (see its DONE entry). WU-StatBadgeProducers' `SeedTool` follow-up landed the same day — see its
   DONE entry.
@@ -476,14 +505,13 @@ is pending except where a bullet says so.
   (`System.InvalidOperationException: The registered callback PersistProperty must be associated
   with a component or define an explicit render mode type during registration.`) for every
   visitor, authenticated or not — reproduced twice, independent of auth state, confirmed unrelated
-  to this WU's own attribute-only edits to those files. **The entire Identity/auth funnel is
-  currently broken.** Hypothesis, not confirmed: connects to this same session's own
-  WU-SweepRiders H1 finding (below) that `AuthorizeRouteView`'s ambient `DefaultLayout` wraps
-  statically-routed pages in `MainLayout`, which carries three `[PersistentState]`-bearing
-  descendants (`NotificationBellInner`, `MessagesNavLink`, `ReaderDisplayProvider`) that normally
-  get an explicit render mode via `Routes.razor`'s `@rendermode` — Identity pages sit outside that
-  component entirely. Deliberately not diagnosed further (real risk of an unrelated Blazor-routing
-  rabbit hole) — logged as tracker **H10**, high priority, Brian's call on sequencing.
+  to this WU's own attribute-only edits to those files. **The entire Identity/auth funnel was
+  broken.** Deliberately not diagnosed further here (real risk of an unrelated Blazor-routing
+  rabbit hole) — logged as tracker **H10**, high priority. **Resolved same day by WU-H10Fix**
+  (see Last landed). The hypothesis recorded at this point — "three `[PersistentState]`-bearing
+  descendants (`NotificationBellInner`, `MessagesNavLink`, `ReaderDisplayProvider`)" — was wrong
+  on both counts: two offenders, and `ReaderDisplayProvider` was the *correct* precedent, not one
+  of them. `audit/Identity.md`'s Stage note carries the confirmed root cause.
 - **Verified:** `dotnet build` clean across the solution. `dotnet test` green:
   RazorComponents 650 (was 642; +8 new tests, 0 regressions). No Unit/Integration tier impact (no
   service-layer changes). `check-a11y.ps1`/`check-design-tokens.ps1`/`check-doc-hygiene.ps1` all

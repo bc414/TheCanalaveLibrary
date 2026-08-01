@@ -23,12 +23,15 @@ namespace TheCanalaveLibrary.Server;
 ///
 /// <para><b>Why raw HTML instead of a Razor page.</b> These pages must render for a signed-out
 /// visitor arriving cold from a mail client, and must keep working when the interactive stack does
-/// not — including right now, with the Identity funnel returning 500s (tracker H10). A
-/// self-contained response has no render mode, no circuit, no auth dependency, and no layout to
-/// fail. The trade is that it does not carry the site's design system; that is an accepted,
-/// deliberate exception for two pages, revisitable once H10 is fixed. <c>check-design-tokens.ps1</c>
-/// governs <c>.razor</c> markup and does not see this file — that is not a loophole being exploited,
-/// it is why the exception is written down here.</para>
+/// not. A self-contained response has no render mode, no circuit, no auth dependency, and no layout
+/// to fail. That is not a hypothetical: tracker H10 had every layout-bearing static-SSR page —
+/// the whole Identity funnel — returning a raw 500 for eighteen days (2026-07-13 → 07-31) because
+/// one chrome component in <c>MainLayout</c> registered persistent state with no render mode to
+/// infer. These two pages would have been immune. The trade is that they do not carry the site's
+/// design system; that is an accepted, deliberate exception for two pages. Revisit only if they
+/// ever need to look like the site — the isolation is the feature, not a temporary workaround.
+/// <c>check-design-tokens.ps1</c> governs <c>.razor</c> markup and does not see this file — that is
+/// not a loophole being exploited, it is why the exception is written down here.</para>
 ///
 /// <para><b>Rate limited</b> via the "Unsubscribe" policy (Program.cs): the token space is not
 /// enumerable, but an unauthenticated endpoint that does database writes should never be

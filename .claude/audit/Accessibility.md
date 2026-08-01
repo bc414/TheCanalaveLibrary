@@ -184,14 +184,17 @@ Tokens") and Pokémon-canon colors (`--color-tagtype-*` "transcribed verbatim fr
 — changing the hex values is a design decision, not a markup fix, so WU-A11y (Structure) did not
 unilaterally alter them. Logged as a new open item — see tracker.
 
-**Severe finding, out of scope, NOT fixed — flagged prominently:** `/Account/Login` and
-`/Account/Register` both return a raw 500 (`System.InvalidOperationException: The registered
+**Severe finding, out of scope for this WU — FIXED SAME DAY by WU-H10Fix; see `audit/Identity.md`
+Stage note for the confirmed root cause, which is not the hypothesis guessed at below (there were
+two offenders, not three, and `ReaderDisplayProvider` was not one of them):** `/Account/Login` and
+`/Account/Register` both returned a raw 500 (`System.InvalidOperationException: The registered
 callback PersistProperty must be associated with a component or define an explicit render mode
 type during registration.`), reproducing for both an anonymous visitor and a signed-in one —
-**the entire Identity/auth funnel is currently broken**, not an edge case. Confirmed unrelated to
+**the entire Identity/auth funnel was broken**, not an edge case. Confirmed unrelated to
 this WU's own edits (Register.razor's diff was pure `id=`/`aria-describedby=` attribute
 additions; the exception's stack trace is in Blazor's render-mode-inference/prerendered-state
-infrastructure, nowhere near ValidationMessage). Likely cause, not confirmed: `MainLayout`
+infrastructure, nowhere near ValidationMessage). Likely cause, guessed here and **superseded by
+WU-H10Fix's confirmed diagnosis — do not cite this paragraph as the cause**: `MainLayout`
 contains three `[PersistentState]`-bearing descendants (`NotificationBellInner`,
 `MessagesNavLink`, `ReaderDisplayProvider`) that normally get an explicit render mode via
 `App.razor`'s `<Routes @rendermode="PageRenderMode"/>` → `AuthorizeRouteView`'s ambient

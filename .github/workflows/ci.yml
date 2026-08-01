@@ -56,6 +56,16 @@ jobs:
         shell: pwsh
         run: ./scripts/check-a11y.ps1
 
+      # Render-mode gate (WU-H10Fix, 2026-07-31): fails on [PersistentState] anywhere in the
+      # computed static-SSR component closure (Routes.razor's wrapper tree, MainLayout's chrome,
+      # and everything reachable from an [ExcludeFromInteractiveRouting] page). That combination
+      # 500s the whole page at persist time and is invisible to the bUnit tier by construction —
+      # it shipped twice, most recently as tracker H10, which broke the entire /Account/* funnel
+      # for eighteen days against a green suite.
+      - name: Render-mode check
+        shell: pwsh
+        run: ./scripts/check-render-modes.ps1
+
       # Process-doc hygiene (WU-DocHygiene2, 2026-07-27): fails on retired terms mentioned as if
       # live, session-relative language in persistent docs, and live pointers into retired plan
       # files. Retirement WUs append their term to the script's registry — the doc analog of the

@@ -489,14 +489,32 @@ persistence", 2026-07-13 — adopted app-wide in the Global Flip work-unit):
 - **Components that ALSO render on static-SSR pages cannot use `[PersistentState]`.** A
   `[PersistentState]` property registers a persistence callback whose render mode is inferred from
   the component — on a fully static render (the Identity pages, where App.razor's
-  `AcceptsInteractiveRouting()` yields no render mode) there is nothing to infer and the framework
-  throws `InvalidOperationException` at persist time, **500ing the whole page** (found live:
-  `ReaderDisplayProvider` wraps the tree in Routes.razor and broke every `/Account/*` page). Such
-  components use the manual API with the explicit-render-mode overload instead:
+  `AcceptsInteractiveRouting()` yields no render mode) there is nothing to infer and
+  `ComponentStatePersistenceManager.InferRenderModes` throws at persist time, **500ing the whole
+  page** — every page in the closure, not just the component. Such components use the manual API
+  with the explicit-render-mode overload instead:
   `ApplicationState.RegisterOnPersisting(callback, RenderMode.InteractiveAuto)` — the one
-  sanctioned exception to "don't hand-roll the register/dispose dance." Page components are never
-  affected (they only render under the global interactive mode); only tree-wrapping providers and
-  layout chrome shared with the Identity surface are.
+  sanctioned exception to "don't hand-roll the register/dispose dance."
+
+  **The governed surface, named** (this rule has shipped violated twice — prose alone was not
+  enough). Three entry points put a component in the static-SSR closure:
+  1. `Client/Routes.razor`'s wrapper tree — it wraps *every* route, statically-routed ones
+     included (`ThemeContextProvider`, `ReaderDisplayProvider`, `UserActivityTracker`).
+  2. `SharedUI/Layout/MainLayout.razor`'s chrome — it is `AuthorizeRouteView`'s ambient
+     `DefaultLayout`, so every static-SSR page that declares no `@layout` of its own inherits it.
+     `MessagesNavLink`, `NotificationBell`/`NotificationBellInner`, `UserMenu`, `CreateMenu`,
+     `AccountStatusBanner`, `ToastHost` all live here.
+  3. Anything reachable from a page governed by `[ExcludeFromInteractiveRouting]` — today
+     `Identity/Pages/**` (folder-wide via `_Imports`) and `ContentGate/StatusCodePage.razor`.
+
+  Page components are never affected (they only render under the global interactive mode) — but
+  "is this a page or is this chrome?" is exactly the judgement that failed twice, so do not make
+  it by eye: **`scripts/check-render-modes.ps1` (local + CI) computes the closure and fails the
+  build.** Occurrences: `ReaderDisplayProvider` at the Global Flip (2026-07-13, fixed same wave);
+  `MessagesNavLink` + `NotificationBellInner` from 2026-07-13/07-15, which left the entire
+  `/Account/*` funnel returning a raw 500 for 18 days against a green suite (tracker H10 —
+  `audit/Identity.md` Stage note). The bUnit tier cannot catch this class; `StaticSsrPageRenderTests`
+  (Integration) covers the symptom at the wire.
 
 ## WASM renderer vs third-party DOM (Global Flip wave findings)
 

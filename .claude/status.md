@@ -22,11 +22,12 @@ fact that currently binds new work. When it stops binding, delete it — the eve
   and carries the Position block (DONE entries older than the recent window: `workplan-archive.md`).
 - **No Stage-4 cells remain.** The spec-supersedes-stale-code adjudication doctrine is retained in
   `audit-summary.md` §0/§3 for any future reopening.
-- **The Identity/auth funnel is broken (tracker H10, found 2026-07-31).** `/Account/Login` and
-  `/Account/Register` return a raw 500 (`PersistProperty must be associated with a component or
-  define an explicit render mode type`) for every visitor. Any work needing browser verification
-  as a signed-in user must use the dev login shortcut, not the real funnel, until H10 is fixed.
-  Delete this bullet when it is. Detail: `audit/Accessibility.md` Stage note Addendum.
+- **Static-SSR surfaces must not use `[PersistentState]`.** `Identity/Pages/*` and
+  `ContentGate/StatusCodePage` render with no render mode, so a `[PersistentState]` property
+  anywhere in their component closure — including `MainLayout`'s chrome, which they inherit —
+  500s the whole page. Use `RegisterOnPersisting(callback, RenderMode.InteractiveAuto)` instead.
+  Gated by `scripts/check-render-modes.ps1` (local + CI). Detail: `layer5-wasm.md` §"Components
+  that ALSO render on static-SSR pages".
 - **L1 migration-verified.** Every L1 Stage-5 cell has an applied migration. Detail:
   `layer1-data-model.md` §"Fluent API Organization".
 - **The site runs global `InteractiveAuto`** (Global Flip, 2026-07-13). L5 column semantics:

@@ -654,33 +654,38 @@ built rows at 5 and no signal these exist.
     Full record: `workplan.md` WU-A11y (Structure) DONE entry; `audit/Accessibility.md` Stage note
     Addendum.
 
-- [ ] **H10 — Identity/auth pages return a raw 500 for every visitor (found via WU-A11y's browser pass, 2026-07-31)** `[bug · critical · blocking]`
-  - Grid: F1 (Identity/Login-Register) — not visible on the grid; L4.5/L5 both read Stage 5 for
-    reasons unrelated to this (same invisible-to-a-grid-scan class as B0/B4/B12).
-  - Source: `audit/Accessibility.md` Stage note Addendum; `workplan.md` WU-A11y (Structure) DONE entry.
-  - Context: `/Account/Login` and `/Account/Register` both throw
-    `System.InvalidOperationException: The registered callback PersistProperty must be associated
-    with a component or define an explicit render mode type during registration.` — a raw
-    ProblemDetails 500, no page renders at all. Reproduces for an anonymous visitor and a
-    signed-in one identically; confirmed unrelated to WU-A11y's own edits to those files (pure
-    `id=`/`aria-describedby=` attribute additions, nowhere near the exception's render-mode-
-    inference/prerendered-state stack trace). **The entire Identity/auth funnel is currently
-    broken** — this blocks login, registration, password reset, 2FA, everything under
-    `/Account/*` that a real user would hit.
-  - Hypothesis, not confirmed: same-day WU-SweepRiders' H1 finding established that
-    `AuthorizeRouteView`'s ambient `DefaultLayout="typeof(MainLayout)"` wraps statically-routed
-    pages (like `/Error`, and presumably Identity pages) in `MainLayout`. `MainLayout` carries
-    three `[PersistentState]`-bearing descendants (`NotificationBellInner`, `MessagesNavLink`,
-    `ReaderDisplayProvider`) that normally get an explicit render mode via `Routes.razor`'s own
-    `@rendermode` — but Identity pages are excluded from `Routes.razor`'s `AppAssembly`/
-    `AdditionalAssemblies` entirely, so if `MainLayout` reaches them through the *ambient* path
-    instead, it may arrive with no inferred render mode, and `[PersistentState]` registration
-    throws. Deliberately not diagnosed further by WU-A11y (real risk of an unrelated Blazor-routing
-    rabbit hole, and this needs focused attention, not a rushed patch inside an a11y WU).
-  - Next: reproduce with `ASPNETCORE_ENVIRONMENT=Development` to get the full dev exception page
-    (this was checked in a non-Development-adjacent state via the raw ProblemDetails response —
-    confirm locally with full diagnostics on); bisect whether H1's verification the same day is
-    actually the trigger, or whether this predates it.
+- [x] **H10 — Identity/auth pages returned a raw 500 for every visitor — CLOSED 2026-07-31 (WU-H10Fix)** `[bug · critical · blocking]`
+  - Grid: F1 (Identity/Login-Register) — was never visible on the grid; L4.5/L5 both read Stage 5
+    for reasons unrelated to this (same invisible-to-a-grid-scan class as B0/B4/B12). No cell
+    flips on closure: the fix restores the state F1's cells already claimed.
+  - Source: `audit/Accessibility.md` Stage note Addendum (discovery); `audit/Identity.md`
+    Feature 1 Stage note (diagnosis, fix, verification).
+  - **Root cause — confirmed live, not the hypothesis this entry originally carried.**
+    `ComponentStatePersistenceManager.InferRenderModes` throws inside
+    `EndpointHtmlRenderer.PrerenderPersistedStateAsync` at the end of a static-SSR render.
+    `Identity/Pages/_Imports.razor` carries `[ExcludeFromInteractiveRouting]`, so `App.razor`'s
+    `PageRenderMode` resolves to `null`; the pages declare no `@layout`, so they take
+    `AuthorizeRouteView`'s ambient `DefaultLayout="typeof(MainLayout)"` — and `MainLayout`'s
+    chrome carried **two** `[PersistentState]` properties with no render mode to infer.
+    `MessagesNavLink` keeps its `AuthorizeView` *inside* itself, so it was instantiated for every
+    viewer — which is why the 500 reproduced identically anonymous and signed-in.
+  - **Correction to the original entry:** it named *three* offenders including
+    `ReaderDisplayProvider`. That was wrong twice over — `ReaderDisplayProvider` uses the manual
+    API with an explicit render mode (it is the *correct* precedent, from the first time this
+    class shipped) and it lives in `Routes.razor`, not `MainLayout`.
+  - **Blast radius was wider than "Login + Register":** every `Identity/Pages/*.razor` outside
+    `Manage/` (ForgotPassword, ResetPassword, Lockout, ConfirmEmail, LoginWith2fa, ExternalLogin,
+    …), plus direct navigation to any `/status-code/{code}` URL from 2026-07-24. `Manage/*` was
+    unaffected (`@layout ManageLayout` → the Server-project `MainLayout`, no chrome), as were
+    `/Error` and the 401/403/404 re-execute path (both keep an interactive render mode).
+  - **Broken since the Global Flip** (`539c4f24`, 2026-07-13) put `[PersistentState]` on
+    `MessagesNavLink`; `NotificationBellInner` followed 2026-07-15. Eighteen days live against a
+    green test suite — see H10's entry in `workplan.md` for why no tier caught it.
+  - **Resolution:** both components converted to
+    `ApplicationState.RegisterOnPersisting(callback, RenderMode.InteractiveAuto)`, mirroring
+    `ReaderDisplayProvider`. Guarded going forward by `StaticSsrPageRenderTests` (Integration —
+    verified red pre-fix, green post-fix) and `scripts/check-render-modes.ps1` (local + CI —
+    likewise verified to flag exactly the two offenders and nothing else).
 
 - [ ] **H11 — Design-token contrast failures, measured via axe-DevTools (found via WU-A11y, 2026-07-31)** `[decision · med · pre-launch]`
   - Grid: no single cell — spans every consumer of the tag-type palette and the Indicator tint recipe (Tags/, Moderation/, wherever badges render).
@@ -818,8 +823,11 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     enroll-TOTP, enroll-passkey, sign-in via either, or the `RequiresTwoFactor`/external-login
     callback redirect. Per `canalave-conventions/testing.md`'s auth-cookie/claims manual band, this
     is browser-verification work, not something an automated tier absorbs. Close by driving each
-    flow live against a real Development session and recording the result in an `Identity`-adjacent
-    audit note (none exists yet — this is also the trigger to create one).
+    flow live against a real Development session and recording the result in `audit/Identity.md`
+    (this entry originally claimed no Identity audit file existed — it does, and it now carries
+    H10's Stage note; corrected 2026-07-31, WU-H10Fix).
+  - Unblocked 2026-07-31: H10 had the whole `/Account/*` funnel returning 500, so none of these
+    flows could be driven at all until it was fixed. Natural next candidate.
 
 ---
 

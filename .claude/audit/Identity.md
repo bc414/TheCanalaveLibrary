@@ -68,7 +68,9 @@ namespace). Only a stale comment remained (fixed). `dotnet build` green; `/Accou
   see the Stage note below), so a moderator's Warn/Suspend/Ban action surfaces within one navigation
   rather than at next sign-in.
 - **L3.5-Structure — Stage 5.** Pages present and structurally standard; reconciled with the move.
-  Verified live: anonymous home page renders `<a href="Account/Login">Log in</a>`.
+  Verified live: anonymous home page renders `<a href="Account/Login">Log in</a>`. **Re-verified
+  end to end 2026-07-31** after the H10 outage — see the Stage note below; every `/Account/*` page
+  returns 200 again and is now covered at the wire by `StaticSsrPageRenderTests`.
 - **L4-Style — Stage 1.** Default Identity/Bootstrap styling; blocked on tokens (unchanged by WU1).
 - **L5 — N/A** (Identity is permanently server-only). **L6 — N/A** (framework + `NormalizedName`/
   `NormalizedEmail` unique already configured). **L7/L8 — N/A.**
@@ -80,6 +82,60 @@ namespace). Only a stale comment remained (fixed). `dotnet build` green; `/Accou
   inferable render mode on a fully static render — converted to the manual
   `PersistentComponentState` API with explicit `RenderMode.InteractiveAuto` (workplan WU-GlobalFlip
   bug 7). `/Account/Manage` verified live post-fix via full-doc nav.
+
+### Stage note — the H10 outage and its fix (2026-07-31, WU-H10Fix)
+
+**The same defect class as the Global-flip note above recurred and went unnoticed for 18 days.**
+Discovered by WU-A11y's axe pass (`audit/Accessibility.md` Stage note Addendum), tracked as
+`hidden-deferrals-tracker.md` **H10**, fixed here.
+
+*What was wrong.* `Identity/Pages/_Imports.razor` carries `[ExcludeFromInteractiveRouting]`, so
+`App.razor`'s `PageRenderMode` resolves to `null` and the whole tree renders static SSR. Identity's
+top-level pages declare no `@layout`, so they take `AuthorizeRouteView`'s ambient
+`DefaultLayout="typeof(MainLayout)"` — the SharedUI one, with full chrome. Two of that chrome's
+components had been given `[PersistentState]` after the flip: `MessagesNavLink` (`539c4f24`,
+2026-07-13) and `NotificationBellInner` (`020aabbb`, 2026-07-15). With no render mode to infer,
+`ComponentStatePersistenceManager.InferRenderModes` throws inside
+`EndpointHtmlRenderer.PrerenderPersistedStateAsync` — a raw 500, no page at all. Because
+`MessagesNavLink` keeps its `AuthorizeView` *inside* the component, it was instantiated for every
+viewer, which is why the failure was identical anonymous and signed-in.
+
+*Blast radius, measured rather than assumed.* Every `Identity/Pages/*.razor` outside `Manage/` —
+Login, Register, ForgotPassword, ResendEmailConfirmation, Lockout, InvalidUser and the rest — plus
+**direct** navigation to any `/status-code/{code}` URL (`ContentGate/StatusCodePage.razor` opts
+into the same chrome explicitly via `@layout TheCanalaveLibrary.SharedUI.MainLayout` while its
+folder `_Imports` marks it static; that half broke on 2026-07-24 with WU-AccessGate). Three
+surfaces stayed healthy and pin the diagnosis to the *render mode* rather than the layout:
+`/Account/Manage/*` (its `_Imports` pins `@layout ManageLayout` → the Server-project `MainLayout`,
+which reaches none of that chrome), `/Error` (same SharedUI `MainLayout`, but
+`Components/_Imports.razor` carries no `[ExcludeFromInteractiveRouting]`, so it stays interactive),
+and the 401/403/404 **re-execute** path, which likewise keeps an interactive render mode — which is
+why styled 404s kept working and hid the `/status-code/*` half entirely.
+
+*Fix.* Both components converted to the manual API with an explicit render mode —
+`ApplicationState.RegisterOnPersisting(callback, RenderMode.InteractiveAuto)`, keys
+`messages-unread` / `notifications-unread` — mirroring `ReaderDisplayProvider`, which has carried
+exactly this treatment since the first occurrence. Restore-or-fetch semantics are unchanged: the
+guard still applies to the initial load only, and `LocationChanged` refreshes stay plain
+assignments. Each component's header comment now states *why* it uses the manual API, so the next
+session doesn't "simplify" it back.
+
+*How verified.* Live, on the server-only path: all six probed `/Account/*` pages plus
+`/status-code/{401,403,404}` returned 500 before and 200 (respectively their own status code)
+after; `/` and `/Error` unaffected throughout. Automated coverage is **Integration**, not
+RazorComponents — `StaticSsrPageRenderTests` drives real `TestAppFactory` requests, including one
+signed-in case that reaches `NotificationBellInner`, and was verified **red on the pre-fix tree
+(10/10 failing) and green after**. The bUnit tier structurally cannot cover this: it renders every
+component with no render mode, so it never runs `InferRenderModes` at all — that blind spot is why
+a green suite coexisted with a dead auth funnel for 18 days, and it is recorded in `testing.md`.
+
+*Why no cell flipped.* F1's L3.5/L4.5 cells already claimed Stage 5; the fix restores the state
+they claimed rather than advancing one. The durable change is the guard, not a stage number:
+`scripts/check-render-modes.ps1` (local + CI) computes the static-SSR component closure from
+`Routes.razor`, `MainLayout`, and every `[ExcludeFromInteractiveRouting]` page, and fails on
+`[PersistentState]` anywhere inside it — verified to flag exactly the two offenders on the pre-fix
+tree and nothing else. The closure is computed rather than listed so a chrome component added years
+from now is caught without anyone remembering the rule.
 
 ## Feature 52 — User Account Deletion
 - **L1 — Stage 5.** The delete-policy graph is the most deliberate part of `OnModelCreating`: Cascade for

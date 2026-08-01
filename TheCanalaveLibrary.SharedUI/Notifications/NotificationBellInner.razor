@@ -1,10 +1,12 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
 @using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.Extensions.Logging
 @implements IDisposable
 @inject INotificationWriteService NotificationService
 @inject NavigationManager Nav
+@inject PersistentComponentState ApplicationState
 @inject ILogger<NotificationBellInner> Logger
 
 @* The actual authenticated-only content for NotificationBell (see that file's doc comment).
@@ -21,7 +23,16 @@
    half but never subscribed to LocationChanged, so a notification landing mid-session (e.g. the
    account-status moderator notifications AccountStatusBanner now surfaces alongside) stayed
    invisible until the next full page load. Fixed with the same NavigationManager.LocationChanged
-   pattern MessagesNavLink already used for its own unread badge. *@
+   pattern MessagesNavLink already used for its own unread badge.
+
+   Persistence uses the MANUAL PersistentComponentState API, deliberately NOT [PersistentState]
+   (see layer5-wasm.md "Components that ALSO render on static-SSR pages"). This component is
+   MainLayout chrome, and MainLayout is the AuthorizeRouteView DefaultLayout, so it also renders
+   on the static-SSR Identity pages for signed-in visitors — where App.razor's
+   AcceptsInteractiveRouting() yields no render mode, the persistence callback has none to infer,
+   and ComponentStatePersistenceManager.InferRenderModes throws, 500ing the page (H10, broken
+   2026-07-15 → 2026-07-31). The RegisterOnPersisting overload takes an EXPLICIT render mode —
+   the framework's sanctioned escape hatch, same treatment ReaderDisplayProvider carries. *@
 
 <div class="relative">
 
@@ -87,19 +98,31 @@
 
 @code {
     private const int PreviewSize = 8;
+    private const string PersistKey = "notifications-unread";
 
     private bool _open;
     private NotificationDto[] _preview = [];
 
-    // Persisted across the prerender→interactive handoff ([PersistentState] requires a public
-    // property) so the badge hydrates without a refetch/flash. The flyout preview stays
-    // ephemeral — it isn't rendered at prerender (flyout starts closed), and persisting
-    // unrendered data would put it in the page source for nothing.
-    [PersistentState] public int? UnreadCount { get; set; }
+    /// <summary>Persisted across the prerender→interactive handoff (manual API — see header) so
+    /// the badge hydrates without a refetch/flash. The flyout preview stays ephemeral — it isn't
+    /// rendered at prerender (flyout starts closed), and persisting unrendered data would put it
+    /// in the page source for nothing.</summary>
+    public int? UnreadCount { get; set; }
+
+    private PersistingComponentStateSubscription _persistSub;
 
     protected override async Task OnInitializedAsync()
     {
         Nav.LocationChanged += OnLocationChangedAsync;
+
+        // Register first (the explicit render mode is what makes this legal on static-SSR
+        // renders too); restore below. Disposal ends the subscription.
+        _persistSub = ApplicationState.RegisterOnPersisting(PersistCountAsync, RenderMode.InteractiveAuto);
+
+        if (ApplicationState.TryTakeFromJson(PersistKey, out int? restored) && restored is not null)
+        {
+            UnreadCount = restored;
+        }
 
         // Parallel loads are safe: each read-service method creates its own short-lived
         // DbContext from IDbContextFactory (layer2-services.md "Read-context concurrency").
@@ -107,6 +130,15 @@
         var previewTask = NotificationService.GetNotificationsAsync(1, PreviewSize);
         UnreadCount ??= await NotificationService.GetUnreadCountAsync();
         _preview      = await previewTask;
+    }
+
+    private Task PersistCountAsync()
+    {
+        if (UnreadCount is not null)
+        {
+            ApplicationState.PersistAsJson(PersistKey, UnreadCount);
+        }
+        return Task.CompletedTask;
     }
 
     // async void is the correct pattern for Blazor Server event handlers;
@@ -161,5 +193,9 @@
         UnreadCount = 0;
     }
 
-    public void Dispose() => Nav.LocationChanged -= OnLocationChangedAsync;
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChangedAsync;
+        _persistSub.Dispose();
+    }
 }

@@ -34,6 +34,9 @@ public class NotificationBellTests : BunitContext
         FakeNotificationWriteService fake = new() { UnreadCount = 4 };
         Services.AddSingleton<INotificationReadService>(fake);
         Services.AddSingleton<INotificationWriteService>(fake);
+        // NotificationBellInner injects PersistentComponentState (manual persistence API — it is
+        // MainLayout chrome and must not use [PersistentState]; see PersistentStateTestSupport).
+        this.AddPersistentComponentState();
         this.AddAuthorization().SetAuthorized("SeedReader");
 
         IRenderedComponent<NotificationBell> cut = Render<NotificationBell>();
@@ -53,6 +56,7 @@ public class NotificationBellTests : BunitContext
         Services.AddSingleton<INotificationReadService>(fake);
         Services.AddSingleton<INotificationWriteService>(fake);
         Services.AddLogging();
+        this.AddPersistentComponentState();
         this.AddAuthorization().SetAuthorized("SeedReader");
 
         IRenderedComponent<NotificationBell> cut = Render<NotificationBell>();

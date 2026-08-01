@@ -1,13 +1,28 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Components.Web
 @using Microsoft.Extensions.Logging
 @implements IDisposable
 @inject IMessagingReadService ReadService
 @inject NavigationManager Nav
+@inject PersistentComponentState ApplicationState
 @inject ILogger<MessagesNavLink> Logger
 
 @* Layout chrome — unread badge beside LoginDisplay. Refreshes on every navigation via
-   LocationChanged subscription. Only visible to authenticated users (AuthorizeView). *@
+   LocationChanged subscription. Only visible to authenticated users (AuthorizeView).
+
+   Persistence uses the MANUAL PersistentComponentState API, deliberately NOT [PersistentState]
+   (see layer5-wasm.md "Components that ALSO render on static-SSR pages"). MainLayout is the
+   AuthorizeRouteView DefaultLayout, so this component also renders on the static-SSR Identity
+   pages, where App.razor's AcceptsInteractiveRouting() yields no render mode — a
+   [PersistentState] property then registers a persistence callback the framework cannot infer a
+   render mode for, and ComponentStatePersistenceManager.InferRenderModes throws, 500ing the page.
+   Note the AuthorizeView below wraps only the MARKUP: this component is instantiated for every
+   viewer, so the attribute form broke /Account/* for anonymous visitors too (H10, broken
+   2026-07-13 → 2026-07-31). The RegisterOnPersisting overload takes an EXPLICIT render mode,
+   which is the framework's sanctioned escape hatch for components that render in both static and
+   interactive trees — the same treatment ReaderDisplayProvider carries, and the one documented
+   exception to "don't hand-roll the register/dispose dance." *@
 
 <AuthorizeView>
     <Authorized>
@@ -32,17 +47,40 @@
 </AuthorizeView>
 
 @code {
-    // Persisted across the prerender→interactive handoff ([PersistentState] requires a public
-    // property) so the badge hydrates without a refetch/flash. LocationChanged refreshes stay
-    // plain assignments (internal SPA navs never see persisted state anyway).
-    [PersistentState] public int? UnreadCount { get; set; }
+    private const string PersistKey = "messages-unread";
+
+    /// <summary>Persisted across the prerender→interactive handoff (manual API — see header) so
+    /// the badge hydrates without a refetch/flash. LocationChanged refreshes stay plain
+    /// assignments (internal SPA navs never see persisted state anyway).</summary>
+    public int? UnreadCount { get; set; }
+
+    private PersistingComponentStateSubscription _persistSub;
 
     protected override async Task OnInitializedAsync()
     {
         Nav.LocationChanged += OnLocationChangedAsync;
+
+        // Register first (the explicit render mode is what makes this legal on static-SSR
+        // renders too); restore-or-fetch below. Disposal ends the subscription.
+        _persistSub = ApplicationState.RegisterOnPersisting(PersistCountAsync, RenderMode.InteractiveAuto);
+
         // Restore-or-fetch: skip the initial count query when the prerendered value was restored.
-        if (UnreadCount is null)
-            await RefreshCountAsync();
+        if (ApplicationState.TryTakeFromJson(PersistKey, out int? restored) && restored is not null)
+        {
+            UnreadCount = restored;
+            return;
+        }
+
+        await RefreshCountAsync();
+    }
+
+    private Task PersistCountAsync()
+    {
+        if (UnreadCount is not null)
+        {
+            ApplicationState.PersistAsJson(PersistKey, UnreadCount);
+        }
+        return Task.CompletedTask;
     }
 
     // async void is the correct pattern for Blazor Server event handlers;
@@ -85,5 +123,6 @@
     public void Dispose()
     {
         Nav.LocationChanged -= OnLocationChangedAsync;
+        _persistSub.Dispose();
     }
 }

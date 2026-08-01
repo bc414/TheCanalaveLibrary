@@ -319,6 +319,17 @@ the plan should name that consumer. The systemic catch for this whole gap class 
 (its legend defines the band; `run-server/SKILL.md` "Browser-based debugging & verification" has
 the mechanics).
 
+They also can't see **render modes**. bUnit renders every component with no render mode at all, so
+it never runs the framework's render-mode inference and cannot distinguish "renders fine
+statically" from "throws when the framework tries to infer a render mode." That blind spot let
+tracker item H10 ship: `[PersistentState]` on two `MainLayout` chrome components made every
+`/Account/*` page return a raw 500 for 18 days while `NotificationBellTests` stayed green
+throughout. Anything whose correctness depends on *which render mode a page resolved to* belongs
+in **Integration**, where a real `TestAppFactory` request exercises the actual endpoint —
+`StaticSsrPageRenderTests` is the standing example (and `scripts/check-render-modes.ps1` catches
+the same class statically, before anything runs). See `layer5-wasm.md` §"Components that ALSO
+render on static-SSR pages".
+
 When a hypothesis depends on that kind of real-circuit behavior, don't keep guessing against the
 automated tiers — reach for browser-based debugging instead (`run-server/SKILL.md` "Browser-based
 debugging & verification"; methodology in `canalave-conventions/debugging.md`).
