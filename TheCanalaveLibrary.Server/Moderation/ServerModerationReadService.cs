@@ -146,6 +146,69 @@ public class ServerModerationReadService(
         ).ToArrayAsync();
     }
 
+    // ── Per-user moderation history (WU-UserModeration) ───────────────────────────
+
+    public async Task<UserModerationHistoryDto?> GetUserModerationHistoryAsync(int userId)
+    {
+        await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
+
+        // ProfileVisibility is deliberately not applied — same rationale as
+        // IUserProfileReadService.SearchUsersByNameAsync, and this is a moderator work surface besides.
+        var user = await readDb.Users
+            .Where(u => u.Id == userId)
+            .Select(u => new
+            {
+                u.Id,
+                u.UserName,
+                u.ProfilePictureRelativeUrl,
+                u.AccountStatus,
+                u.SuspendedUntilUtc,
+                u.ActiveReportCount,
+            })
+            .SingleOrDefaultAsync();
+
+        if (user is null) return null;
+
+        string label = user.UserName ?? $"User#{user.Id}";
+        string? url = user.UserName is null ? null : $"/user/{user.UserName}";
+
+        // Every row here targets this one user, so the two-pass BatchLoadTargetsAsync enrichment
+        // that GetReportQueueAsync needs would resolve a single already-known label — skipped
+        // deliberately, not overlooked.
+        var reports = await (
+            from r in readDb.Reports
+            where r.ReportedEntityType == ReportedEntityType.User && r.ReportedEntityId == userId
+            join rr in readDb.ReportReasons on r.ReportReasonId equals rr.ReportReasonId
+            join reporter in readDb.Users on r.ReporterUserId equals reporter.Id into reporters
+            from rep in reporters.DefaultIfEmpty()
+            orderby r.DateReported descending
+            select new ReportQueueItemDto(
+                r.ReportId,
+                r.ReportedEntityType,
+                r.ReportedEntityId,
+                label,
+                url,
+                rr.ReasonName,
+                r.Notes,
+                r.ReportStatusId,
+                (string?)rep.UserName,
+                r.ModeratorUserId,
+                r.ActionTaken,
+                r.DateReported,
+                r.DateResolved,
+                user.ActiveReportCount)
+        ).ToListAsync();
+
+        return new UserModerationHistoryDto(
+            user.Id,
+            label,
+            user.ProfilePictureRelativeUrl,
+            user.AccountStatus,
+            user.SuspendedUntilUtc,
+            user.ActiveReportCount,
+            reports);
+    }
+
     // ── Private: two-pass batch target resolution ─────────────────────────────────
 
     /// <summary>

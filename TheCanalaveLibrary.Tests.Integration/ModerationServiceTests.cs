@@ -297,6 +297,196 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
             .WithMessage("*Moderator*");
     }
 
+    // ── Account actions (WU-UserModeration) ───────────────────────────────────────
+
+    [Fact]
+    public async Task ApplyAccountActionAsync_OnStoryReport_ActsOnTheStorysAuthor()
+    {
+        int authorId = await SeedUserAsync("StoryAuthor");
+        int storyId = await SeedStoryAsync(authorId);
+        long reportId = await SeedReportAsync(ReportedEntityType.Story, storyId, _reporterId);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ApplyAccountActionAsync(reportId, ModeratorActionType.WarnUser, "Off-topic content.");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        User author = await db.Users.SingleAsync(u => u.Id == authorId);
+        author.AccountStatus.Should().Be(AccountStatusEnum.Warned,
+            "warning over a reported story means warning the person who wrote it — before " +
+            "WU-UserModeration this call threw for every non-User report, i.e. for every report " +
+            "the app can actually produce");
+
+        Report report = await db.Reports.SingleAsync(r => r.ReportId == reportId);
+        report.ReportStatusId.Should().Be(ReportStatusEnum.ResolvedActionTaken);
+        report.ActionTaken.Should().Be("Off-topic content.");
+    }
+
+    [Fact]
+    public async Task ApplyAccountActionAsync_OnCommentReport_ActsOnTheCommentsAuthor()
+    {
+        int commenterId = await SeedUserAsync("Commenter");
+
+        // FK parents (testing.md "FK parents"): a UserProfileComment needs only two existing users
+        // — the profile owner and the comment's author. Deliberately not a ChapterComment:
+        // SeedStoryAsync creates no chapters, so that shape would need a chapter seeded too.
+        long commentId;
+        using (IServiceScope seedScope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext seedDb = seedScope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+            // BaseComment.UserId is the author FK; IModeratableContent.AuthorUserId projects it.
+            UserProfileComment comment = new()
+            {
+                ProfileUserId = _reporterId,
+                UserId = commenterId,
+                CommentText = "seeded comment",
+                DatePosted = DateTime.UtcNow,
+            };
+            seedDb.UserProfileComments.Add(comment);
+            await seedDb.SaveChangesAsync();
+            commentId = comment.CommentId;
+        }
+
+        long reportId = await SeedReportAsync(ReportedEntityType.Comment, commentId, _reporterId);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ApplyAccountActionAsync(reportId, ModeratorActionType.BanUser, "Abusive comment.");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        User commenter = await db.Users.SingleAsync(u => u.Id == commenterId);
+        commenter.AccountStatus.Should().Be(AccountStatusEnum.Banned);
+    }
+
+    [Fact]
+    public async Task ApplyAccountActionAsync_DecrementsTargetActiveReportCount()
+    {
+        int authorId = await SeedUserAsync("CountAuthor");
+        int storyId = await SeedStoryAsync(authorId);
+        long reportId = await SeedReportAsync(ReportedEntityType.Story, storyId, _reporterId);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ApplyAccountActionAsync(reportId, ModeratorActionType.WarnUser, "Warned.");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        Story story = await db.Stories.IgnoreQueryFilters(["IsTakenDown"])
+            .SingleAsync(s => s.StoryId == storyId);
+        story.ActiveReportCount.Should().Be(0,
+            "an account action resolves the report, so it decrements like the other two resolve " +
+            "paths — it never did, which leaked the counter the triage sort orders on");
+    }
+
+    [Fact]
+    public async Task ApplyAccountActionAsync_WhenAuthorCannotBeResolved_ThrowsUserFacing()
+    {
+        // A report pointing at a story id that does not exist: LoadModeratableAsync returns null,
+        // so there is no account behind the report.
+        long reportId = await SeedReportAsync(ReportedEntityType.Story, 999_999, _reporterId);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        Func<Task> act = () => GetMod().ApplyAccountActionAsync(
+            reportId, ModeratorActionType.WarnUser, "No one to warn.");
+
+        // ModerationValidationException : CanalaveValidationException — ExceptionPresenter surfaces
+        // its message verbatim, where the InvalidOperationException it replaced was flattened into
+        // "Something went wrong on our end."
+        await act.Should().ThrowAsync<ModerationValidationException>()
+            .WithMessage("*no account to act on*");
+    }
+
+    [Fact]
+    public async Task ApplyAccountActionToUserAsync_FilesAModeratorInitiatedReport_AndSetsStatus()
+    {
+        int targetId = await SeedUserAsync("NeverReported");
+        short reasonId = await GetFirstReasonIdAsync();
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ApplyAccountActionToUserAsync(
+            targetId, reasonId, ModeratorActionType.SuspendUser, "Ban evasion.",
+            new DateTime(2026, 12, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+        User target = await db.Users.SingleAsync(u => u.Id == targetId);
+        target.AccountStatus.Should().Be(AccountStatusEnum.Suspended);
+        target.SuspendedUntilUtc.Should().Be(new DateTime(2026, 12, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        Report report = await db.Reports.SingleAsync(r =>
+            r.ReportedEntityType == ReportedEntityType.User && r.ReportedEntityId == targetId);
+        report.ReporterUserId.Should().Be(_modId);
+        report.ModeratorUserId.Should().Be(_modId,
+            "ReporterUserId == ModeratorUserId is what marks a report as moderator-initiated — " +
+            "there is no separate moderation-action table");
+        report.ReportStatusId.Should().Be(ReportStatusEnum.ResolvedActionTaken);
+        report.ActionTaken.Should().Be("Ban evasion.");
+        report.DateResolved.Should().NotBeNull();
+
+        target.ActiveReportCount.Should().Be(0,
+            "the row opens and resolves in one step, so the +1/-1 pair every other path makes would cancel");
+    }
+
+    [Fact]
+    public async Task ApplyAccountActionToUserAsync_AsNonModerator_Throws()
+    {
+        int targetId = await SeedUserAsync("SomeoneElse");
+        short reasonId = await GetFirstReasonIdAsync();
+
+        SetActiveUser(_reporterId); // plain user, not moderator
+        Func<Task> act = () => GetMod().ApplyAccountActionToUserAsync(
+            targetId, reasonId, ModeratorActionType.BanUser, "Not allowed.");
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>().WithMessage("*Moderator*");
+    }
+
+    [Fact]
+    public async Task ApplyAccountActionToUserAsync_OnSelf_Throws()
+    {
+        short reasonId = await GetFirstReasonIdAsync();
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        Func<Task> act = () => GetMod().ApplyAccountActionToUserAsync(
+            _modId, reasonId, ModeratorActionType.BanUser, "Oops.");
+
+        await act.Should().ThrowAsync<ModerationValidationException>().WithMessage("*yourself*");
+    }
+
+    // ── GetUserModerationHistoryAsync (WU-UserModeration) ─────────────────────────
+
+    [Fact]
+    public async Task GetUserModerationHistoryAsync_ReturnsStandingAndUserTargetedReports()
+    {
+        int targetId = await SeedUserAsync("HistorySubject");
+        await SeedReportAsync(ReportedEntityType.User, targetId, _reporterId);
+
+        // A report against a story this user wrote must NOT appear — the view is user-targeted
+        // reports only, a scope the page states on screen.
+        int storyId = await SeedStoryAsync(targetId);
+        await SeedReportAsync(ReportedEntityType.Story, storyId, _reporterId);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        UserModerationHistoryDto? history = await GetMod().GetUserModerationHistoryAsync(targetId);
+
+        history.Should().NotBeNull();
+        history!.UserId.Should().Be(targetId);
+        // SeedUserAsync appends a per-run GUID suffix to the label — match the prefix, not the whole.
+        history.Username.Should().StartWith("HistorySubject");
+        history.AccountStatus.Should().Be(AccountStatusEnum.Active);
+        history.Reports.Should().HaveCount(1);
+        history.Reports[0].EntityType.Should().Be(ReportedEntityType.User);
+    }
+
+    [Fact]
+    public async Task GetUserModerationHistoryAsync_UnknownUser_ReturnsNull()
+    {
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        (await GetMod().GetUserModerationHistoryAsync(999_999)).Should().BeNull();
+    }
+
     public override async Task DisposeAsync()
     {
         foreach (IServiceScope scope in _serviceScopes)

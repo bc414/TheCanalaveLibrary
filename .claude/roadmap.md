@@ -163,7 +163,8 @@ done.
 | **4** — Phase 3 (L4 freeze sweep) | WU-A11y-Keyboard | F6 (keyboard half, filed 2026-07-31) | Focus trap, Escape, combobox ARIA, manual keyboard script. Needs Brian's browser pass — pairs with the sweep as originally scoped. |
 | **4** | ~~WU-SweepRiders~~ **DONE 2026-07-31** | H1, E4, H8 | Pulled ahead of the Phase 3 sweep rather than ridden alongside it — H8 was a decision that needed settling before the sweep styles ~1,325 LOC of Identity scaffold, not during it; H1 turned out to need no code change (stale tracker context — verified already-resolved) and E4 was small enough to travel with H8. See "Resolved" below. |
 | **5** — beta window | WU-EditorSprite | A1 | Spec'd authoring capability; design the sanitizer allow-list addition alongside it |
-| **5** | Decision row 6 (beta logistics) | F5 | Chat-only, shortly before beta opens |
+| **5** | Decision row 6 (beta logistics) | F5 | Chat-only, shortly before beta opens. **New dependency (2026-08-01):** tracker **B19** — there is no role grant/revoke capability anywhere, so a second moderator can only be created by editing `DataSeeder` and rebuilding the DB. Needs building if beta involves anyone moderating but Brian. |
+| **2** | ~~WU-UserModeration~~ **DONE 2026-08-01** | B13 (opens B17/B18/B19) | Filed as `polish · low`; was the tip of an **unusable moderation feature** — nothing could report a User, and `/mod/reports`' Warn control threw for every report that could actually exist, so nobody could be warned, suspended or banned. See "Resolved" below. |
 | **2** | WU-NotifEmail (in progress, 2026-07-31) | B1 | **Pulled off the Phase-6 gate 2026-07-31.** The old placement assumed a live audience was the forcing function and that the unchosen email provider was in the way; neither holds. Provider selection is a config switch over plain SMTP (decision row 8's *mechanism* half was resolved at WU-Email) and the whole path is Mailpit-verifiable today, so there is nothing a beta audience teaches that a dev inbox doesn't. Building it before beta also means the settings page stops lying to the first real users. Does **not** close row 8 / F4 — deliverability (provider, sending domain, SPF/DKIM/DMARC) stays at Phase 7. Settled constraints: `audit/Notifications.md` §"Notification email fan-out." |
 | **6** — cheap filler, anytime, no phase dependency | WU-PolishSweep | D4, D5, H2, H6 | Code-economy items, 401-mapping cleanup, StoryDeck skeleton, the by-design-gap list |
 | **6** | WU-TestHygieneSweep | H3, H4 (manual-verify half) | Cover-art browser-verify, paste-from-Word manual check |
@@ -187,6 +188,32 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 2026-07-30; nothing left to sequence.
 
 ## Resolved
+
+- **Moderator reach over user accounts — resolved 2026-07-31 (Brian-ratified, tracker B13 /
+  WU-UserModeration, built 2026-08-01).** Had no decision row: it surfaced as a `polish · low`
+  tracker line about a dead route parameter, and the question underneath it — *may a moderator act
+  on a user who was never reported?* — had never been asked. Three sub-decisions:
+  1. **Yes, and via a mod-filed report, not a new audit table.** The `Report` row *is* the audit
+     record (`ModeratorUserId`/`ActionTaken`/`DateResolved` live on it), so a moderator acting
+     without a member report opens and resolves one in the same unit of work, marked by
+     `ReporterUserId == ModeratorUserId`. Rejected: a separate `ModerationAction` entity — cleaner
+     conceptually, but it forks the audit trail across two surfaces and buys nothing the `Report`
+     row doesn't already carry. Cost: no new entity, no migration, no synthetic reason row.
+  2. **An account action targets the reported content's author**, not only a User-report's target.
+     Supersedes WU34's User-target-only rule, under which `/mod/reports`' Warn control threw for
+     every report the app could actually produce.
+  3. **`/mod/users` is lookup + per-user history**, `/mod/reports` carries the full
+     Warn/Suspend/Ban set. This is what made the `{UserId:int?}` parameter live rather than deleted.
+
+  **Why it mattered more than its label:** the whole account-action capability was unreachable —
+  nothing in the app could report a User, so the page that lists user reports was permanently empty,
+  and the one control that could act on a content author always failed. Nobody could be warned,
+  suspended, or banned on a UGC site heading into beta. Rule: `layer2-services.md` §"Account
+  actions — target resolution and the report-as-audit-record rule". Pointer:
+  `hidden-deferrals-tracker.md` B13/B17/B18/B19; `workplan.md` WU-UserModeration;
+  `audit/Moderation.md` Features 46/47. Opened **B19** (no role grant/revoke capability exists
+  anywhere — moderators can only be minted by editing the seeder), which is a **decision row 6
+  dependency**: recruiting a second moderator for beta needs it.
 
 - **Manual-tree-search candidate-pane filtering — resolved 2026-07-31 (Brian-ratified, tracker
   A6 / WU-ExploreFilterAxes).** Had no decision row: it lived as a *settled convention* in

@@ -124,7 +124,7 @@
                             <section class="space-y-2">
                                 <h3 class="text-xs font-bold uppercase tracking-wide text-(--color-text-muted)">Author</h3>
                                 <div class="flex items-start gap-2">
-                                    <UserCard User="author" />
+                                    <UserCard User="author" OnReport="@ReportCallbackFor(author.UserId)" />
                                     @AddButton(false, author.UserId, ManualTreeEdge.StoryAuthor, author.Username, author.AvatarUrl)
                                 </div>
                             </section>
@@ -184,7 +184,7 @@
                                     @foreach (UserCardDto u in _favoriterItems)
                                     {
                                         <div class="flex items-start gap-2">
-                                            <UserCard User="u" />
+                                            <UserCard User="u" OnReport="@ReportCallbackFor(u.UserId)" />
                                             @AddButton(false, u.UserId, ManualTreeEdge.StoryFavoriter, u.Username, u.AvatarUrl)
                                         </div>
                                     }
@@ -210,6 +210,16 @@
     [Parameter] public StoryListingDto? RootStory { get; set; }
     [Parameter] public UserCardDto? RootUser { get; set; }
     [Parameter] public int? CurrentUserId { get; set; }
+
+    /// <summary>
+    /// Raised when a viewer picks "Report" on a candidate's UserCard caret; the value is that
+    /// user's id. Pass-through to TreeSearchPage, which owns the single ReportDialog.
+    /// </summary>
+    [Parameter] public EventCallback<int> OnReportUser { get; set; }
+
+    private EventCallback ReportCallbackFor(int userId) => OnReportUser.HasDelegate
+        ? EventCallback.Factory.Create(this, () => OnReportUser.InvokeAsync(userId))
+        : default;
 
     private const int PageSize = 10;
 

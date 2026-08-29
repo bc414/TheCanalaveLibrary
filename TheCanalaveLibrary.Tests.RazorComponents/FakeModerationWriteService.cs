@@ -23,6 +23,9 @@ public class FakeModerationWriteService : IModerationWriteService
     public Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync() =>
         Task.FromResult(Array.Empty<StorySubmissionQueueItemDto>());
 
+    public Task<UserModerationHistoryDto?> GetUserModerationHistoryAsync(int userId) =>
+        Task.FromResult<UserModerationHistoryDto?>(null);
+
     // ── Write ────────────────────────────────────────────────────────────────────────────────────
 
     public Task SubmitReportAsync(SubmitReportRequest request) =>
@@ -40,6 +43,10 @@ public class FakeModerationWriteService : IModerationWriteService
     public Task ApplyAccountActionAsync(long reportId, ModeratorActionType action,
         string reason, DateTime? suspendedUntilUtc = null) =>
         throw new NotImplementedException("FakeModerationWriteService.ApplyAccountActionAsync not expected in this test.");
+
+    public Task ApplyAccountActionToUserAsync(int targetUserId, short reasonId,
+        ModeratorActionType action, string reason, DateTime? suspendedUntilUtc = null) =>
+        throw new NotImplementedException("FakeModerationWriteService.ApplyAccountActionToUserAsync not expected in this test.");
 
     public Task ApproveStoryAsync(int storyId) =>
         throw new NotImplementedException("FakeModerationWriteService.ApproveStoryAsync not expected in this test.");

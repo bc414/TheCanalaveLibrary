@@ -1,0 +1,125 @@
+@namespace TheCanalaveLibrary.SharedUI
+
+@* Warn / Suspend / Ban confirmation panel, shared by ModUsersPage (moderator-initiated) and
+   ModReportsPage (report-driven). Extracted at WU-UserModeration when the second host appeared.
+
+   The extraction is load-bearing, not tidiness: this panel owns the DateTime.SpecifyKind re-tag
+   for the datetime-local input (found live 2026-07-30 — Npgsql refuses Kind=Unspecified into a
+   timestamptz column). With the panel inline on one page, giving the other page a Suspend control
+   meant re-deriving that fix from scratch. One implementation, one regression test.
+
+   Contract: the panel owns input state and its own field validation; the host owns the service
+   call and passes any failure back down via ErrorMessage. *@
+
+<div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+    <h2 class="mb-2 text-base font-semibold text-text">
+        @ActionVerb on @TargetLabel
+    </h2>
+
+    @if (Action == ModeratorActionType.SuspendUser)
+    {
+        <div class="mb-2">
+            <label class="mb-1 block text-sm font-medium text-text" for="@($"suspend-until-{_uid}")">
+                Suspended until (UTC)
+            </label>
+            <input type="datetime-local" id="@($"suspend-until-{_uid}")"
+                   class="rounded border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text"
+                   @bind="_suspendUntil" />
+        </div>
+    }
+
+    <div class="mb-3">
+        <label class="mb-1 block text-sm font-medium text-text" for="@($"action-reason-{_uid}")">
+            Reason (required)
+        </label>
+        <textarea id="@($"action-reason-{_uid}")" rows="2"
+                  class="w-full rounded-md border border-(--color-border) bg-surface px-3 py-2 text-sm text-text"
+                  @bind="_reason"></textarea>
+    </div>
+
+    @if (DisplayedError is not null)
+    {
+        <div class="mb-2"><ErrorAlert Message="@DisplayedError" ShowSignIn="@ErrorIsSessionExpired" /></div>
+    }
+
+    <div class="flex gap-2">
+        <button type="button"
+                class="rounded-md bg-danger px-3 py-1 text-sm text-white transition-colors hover:bg-(--color-danger-strong) disabled:opacity-50"
+                disabled="@Busy"
+                @onclick="ConfirmAsync">
+            Confirm
+        </button>
+        <button type="button"
+                class="rounded border border-(--color-border) bg-surface px-3 py-1 text-sm text-text"
+                @onclick="OnCancel">
+            Cancel
+        </button>
+    </div>
+</div>
+
+@code {
+    /// <summary>What the moderator submitted, once this panel's own validation has passed.</summary>
+    public record Submission(string Reason, DateTime? SuspendedUntilUtc);
+
+    [Parameter, EditorRequired] public string TargetLabel { get; set; } = "";
+
+    /// <summary>Warn / Suspend / Ban. Only Suspend renders the end-date field.</summary>
+    [Parameter, EditorRequired] public ModeratorActionType Action { get; set; }
+
+    [Parameter, EditorRequired] public EventCallback<Submission> OnConfirm { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    /// <summary>Failure from the host's service call. Local field validation takes precedence.</summary>
+    [Parameter] public string? ErrorMessage { get; set; }
+
+    [Parameter] public bool ErrorIsSessionExpired { get; set; }
+
+    /// <summary>True while the host's call is in flight — disables Confirm.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    // for=/id= pairs are emitted in the same render, so both sides agree across the
+    // InteractiveAuto handoff even though the value differs per instance (WU-A11y, 2026-07-31).
+    private readonly string _uid = Guid.NewGuid().ToString("N")[..8];
+
+    private string? _reason;
+    private DateTime? _suspendUntil;
+    private string? _localError;
+
+    private string? DisplayedError => _localError ?? ErrorMessage;
+
+    private string ActionVerb => Action switch
+    {
+        ModeratorActionType.WarnUser => "Warn",
+        ModeratorActionType.SuspendUser => "Suspend",
+        ModeratorActionType.BanUser => "Ban",
+        _ => Action.ToString()
+    };
+
+    private async Task ConfirmAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_reason))
+        {
+            _localError = "A reason is required.";
+            return;
+        }
+
+        if (Action == ModeratorActionType.SuspendUser && _suspendUntil is null)
+        {
+            _localError = "Suspension end date is required.";
+            return;
+        }
+
+        _localError = null;
+
+        // The datetime-local input's @bind produces DateTime.Kind=Unspecified; the label instructs
+        // the moderator to enter UTC already, so re-tag the Kind rather than shifting the value —
+        // Npgsql refuses to persist Unspecified into a timestamptz column (found live 2026-07-30,
+        // via the real form; every prior verification had set the column through psql/fixtures).
+        DateTime? suspendedUntilUtc = Action == ModeratorActionType.SuspendUser && _suspendUntil is { } local
+            ? DateTime.SpecifyKind(local, DateTimeKind.Utc)
+            : null;
+
+        await OnConfirm.InvokeAsync(new Submission(_reason!, suspendedUntilUtc));
+    }
+}

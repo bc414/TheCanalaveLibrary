@@ -82,6 +82,9 @@ public class ProfilePageTests : BunitContext
         // WU-CustomLists — ProfilePage now loads the Lists tab via ICustomListReadService.
         Services.AddScoped<ICustomListReadService>(_ => new FakeCustomListWriteService());
         Services.AddScoped<IToastService>(_ => new ToastService());
+        // WU-UserModeration — the page's single ReportDialog moved out of the Stories tab to page
+        // level (the banner's "Report user" control is on every tab), so it now renders always.
+        Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
         // WU-Seo — ProfilePage now renders <SocialMetaTags>, which needs IPublicUrlProvider.
         // PublicUrlProvider is a pure Core class (no host dependency); a fixed test base is fine.
         Services.AddScoped<IPublicUrlProvider>(_ => new PublicUrlProvider("https://test.local"));

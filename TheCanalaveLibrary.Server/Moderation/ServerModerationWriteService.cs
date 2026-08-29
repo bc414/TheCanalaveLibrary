@@ -175,55 +175,66 @@ public class ServerModerationWriteService(
         string reason, DateTime? suspendedUntilUtc = null)
     {
         int modId = RequireModerator();
+        AccountStatusEnum newStatus = ToAccountStatus(action);
+
         Report report = await writeDb.Reports.SingleAsync(r => r.ReportId == reportId);
 
-        int targetUserId = report.ReportedEntityType == ReportedEntityType.User
-            ? (int)report.ReportedEntityId
-            : throw new InvalidOperationException("Account actions require the report target to be a User.");
-
+        // The user acted on is RESOLVED from the report, not assumed to be its target: warning over
+        // a reported story means warning that story's author. The WU34 rule this replaces
+        // (User-targeted reports only) threw for every report the app can actually produce, since
+        // only Story and Comment have report entry points — see layer2-services.md §"Account
+        // actions — target resolution and the report-as-audit-record rule".
+        int targetUserId = await ResolveActionTargetUserIdAsync(report);
         User targetUser = await writeDb.Users.SingleAsync(u => u.Id == targetUserId);
-
-        AccountStatusEnum newStatus = action switch
-        {
-            ModeratorActionType.WarnUser => AccountStatusEnum.Warned,
-            ModeratorActionType.SuspendUser => AccountStatusEnum.Suspended,
-            ModeratorActionType.BanUser => AccountStatusEnum.Banned,
-            _ => throw new InvalidOperationException($"Action '{action}' is not an account action.")
-        };
-
-        targetUser.AccountStatus = newStatus;
-        if (newStatus == AccountStatusEnum.Suspended)
-            targetUser.SuspendedUntilUtc = suspendedUntilUtc;
 
         report.ReportStatusId = ReportStatusEnum.ResolvedActionTaken;
         report.ModeratorUserId = modId;
         report.ActionTaken = reason;
         report.DateResolved = DateTime.UtcNow;
 
-        await writeDb.SaveChangesAsync();
+        // This IS a resolve path, so it decrements like its two siblings do. Omitting it leaked the
+        // counter upward forever — and that counter is what the mod-triage sort orders on.
+        await AdjustActiveReportCountAsync(report.ReportedEntityType, report.ReportedEntityId, -1);
 
-        // Kill any already-open session for Suspend/Ban (not Warn — a warning must not log the
-        // user out) — WU38a. IdentityRevalidatingAuthenticationStateProvider re-checks the
-        // security stamp every 30 minutes; a mismatch ends the live circuit, and the next sign-in
-        // attempt is blocked by CanalaveSignInManager.CanSignInAsync.
-        if (newStatus is AccountStatusEnum.Suspended or AccountStatusEnum.Banned)
-            await userManager.UpdateSecurityStampAsync(targetUser);
+        await ApplyStatusAndNotifyAsync(targetUser, action, newStatus, modId, suspendedUntilUtc);
+    }
 
-        try
+    public async Task ApplyAccountActionToUserAsync(int targetUserId, short reasonId,
+        ModeratorActionType action, string reason, DateTime? suspendedUntilUtc = null)
+    {
+        int modId = RequireModerator();
+        AccountStatusEnum newStatus = ToAccountStatus(action);
+
+        if (targetUserId == modId)
+            throw new ModerationValidationException(["You can't apply an account action to yourself."]);
+
+        User targetUser = await writeDb.Users.SingleOrDefaultAsync(u => u.Id == targetUserId)
+            ?? throw new KeyNotFoundException($"User {targetUserId} was not found.");
+
+        if (!await writeDb.ReportReasons.AnyAsync(rr => rr.ReportReasonId == reasonId))
+            throw new ModerationValidationException(["Choose a reason for this action."]);
+
+        // The Report row IS the audit record — there is no separate moderation-action table. A
+        // moderator acting without a member report files one, and ReporterUserId == ModeratorUserId
+        // is what marks it moderator-initiated.
+        DateTime now = DateTime.UtcNow;
+        writeDb.Reports.Add(new Report
         {
-            Task notifyTask = action switch
-            {
-                ModeratorActionType.WarnUser    => notifications.NotifyAccountWarningAsync(targetUserId, modId),
-                ModeratorActionType.SuspendUser => notifications.NotifyAccountSuspendedAsync(targetUserId, modId),
-                ModeratorActionType.BanUser     => notifications.NotifyAccountBannedAsync(targetUserId, modId),
-                _ => Task.CompletedTask
-            };
-            await notifyTask;
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Account action notification failed for user {UserId}, report {ReportId}", targetUserId, reportId);
-        }
+            ReportedEntityType = ReportedEntityType.User,
+            ReportedEntityId = targetUserId,
+            ReportReasonId = reasonId,
+            Notes = reason,
+            ReporterUserId = modId,
+            ReportStatusId = ReportStatusEnum.ResolvedActionTaken,
+            ModeratorUserId = modId,
+            ActionTaken = reason,
+            DateReported = now,
+            DateResolved = now,
+        });
+
+        // No AdjustActiveReportCountAsync call: the row opens and resolves in one step, so the
+        // +1/-1 pair every other path makes would cancel out.
+        await ApplyStatusAndNotifyAsync(targetUser, action, newStatus, modId, suspendedUntilUtc);
     }
 
     // ── Submission approval (Feature 48) ─────────────────────────────────────────
@@ -285,6 +296,85 @@ public class ServerModerationWriteService(
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Maps the three account actions onto their resulting <see cref="AccountStatusEnum"/>. Called
+    /// at the top of both public entry points so an invalid action throws before anything mutates.
+    /// </summary>
+    private static AccountStatusEnum ToAccountStatus(ModeratorActionType action) => action switch
+    {
+        ModeratorActionType.WarnUser => AccountStatusEnum.Warned,
+        ModeratorActionType.SuspendUser => AccountStatusEnum.Suspended,
+        ModeratorActionType.BanUser => AccountStatusEnum.Banned,
+        _ => throw new InvalidOperationException($"Action '{action}' is not an account action.")
+    };
+
+    /// <summary>
+    /// Which user an account action lands on, derived from the report: a User report acts on that
+    /// user; a content report acts on the content's author; a Message report acts on its sender.
+    /// <para>Throws <see cref="ModerationValidationException"/> — a user-facing type — when no
+    /// account can be resolved, so the moderator is told why instead of getting the generic
+    /// error.</para>
+    /// </summary>
+    private async Task<int> ResolveActionTargetUserIdAsync(Report report)
+    {
+        int? targetUserId = report.ReportedEntityType switch
+        {
+            ReportedEntityType.User => (int)report.ReportedEntityId,
+
+            // PrivateMessage.SenderUserId is SetNull on account deletion, hence nullable here.
+            ReportedEntityType.Message => (await writeDb.PrivateMessages
+                .SingleOrDefaultAsync(m => m.MessageId == report.ReportedEntityId))?.SenderUserId,
+
+            // Story / Comment / BlogPost / Recommendation — all IModeratableContent.
+            _ => (await LoadModeratableAsync(report.ReportedEntityType, report.ReportedEntityId))
+                ?.AuthorUserId,
+        };
+
+        return targetUserId ?? throw new ModerationValidationException(
+        [
+            "There's no account to act on for this report — the content is anonymous, or its " +
+            "author's account has been deleted. Remove the content instead."
+        ]);
+    }
+
+    /// <summary>
+    /// The shared tail of both account-action entry points: set the status, persist, kill live
+    /// sessions where the action warrants it, then notify best-effort. Extracted at
+    /// WU-UserModeration so the report-driven and moderator-initiated paths cannot drift apart.
+    /// </summary>
+    private async Task ApplyStatusAndNotifyAsync(User targetUser, ModeratorActionType action,
+        AccountStatusEnum newStatus, int modId, DateTime? suspendedUntilUtc)
+    {
+        targetUser.AccountStatus = newStatus;
+        if (newStatus == AccountStatusEnum.Suspended)
+            targetUser.SuspendedUntilUtc = suspendedUntilUtc;
+
+        await writeDb.SaveChangesAsync();
+
+        // Kill any already-open session for Suspend/Ban (not Warn — a warning must not log the
+        // user out) — WU38a. IdentityRevalidatingAuthenticationStateProvider re-checks the
+        // security stamp every 30 minutes; a mismatch ends the live circuit, and the next sign-in
+        // attempt is blocked by CanalaveSignInManager.CanSignInAsync.
+        if (newStatus is AccountStatusEnum.Suspended or AccountStatusEnum.Banned)
+            await userManager.UpdateSecurityStampAsync(targetUser);
+
+        try
+        {
+            Task notifyTask = action switch
+            {
+                ModeratorActionType.WarnUser    => notifications.NotifyAccountWarningAsync(targetUser.Id, modId),
+                ModeratorActionType.SuspendUser => notifications.NotifyAccountSuspendedAsync(targetUser.Id, modId),
+                ModeratorActionType.BanUser     => notifications.NotifyAccountBannedAsync(targetUser.Id, modId),
+                _ => Task.CompletedTask
+            };
+            await notifyTask;
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Account action notification failed for user {UserId}", targetUser.Id);
+        }
+    }
 
     private int RequireModerator()
     {

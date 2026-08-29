@@ -115,6 +115,7 @@
                 <VouchList Vouches="@Header.OutgoingVouches"
                            IsEditable="@IsOwner"
                            OnRemoveVouch="OnRemoveVouch"
+                           OnReportUser="OnReportUser"
                            EmptyMessage="No vouches given yet." />
             </div>
         </details>
@@ -139,4 +140,11 @@
     /// IFollowingWriteService.RemoveVouchAsync. Only raised when IsOwner = true.
     /// </summary>
     [Parameter] public EventCallback<int> OnRemoveVouch { get; set; }
+
+    /// <summary>
+    /// Raised when a viewer picks "Report" on a vouched user's card. Pass-through to the dispatcher,
+    /// which owns the page's single ReportDialog. Unset for anonymous viewers, which keeps the caret
+    /// item hidden through UserCard's HasDelegate gate.
+    /// </summary>
+    [Parameter] public EventCallback<int> OnReportUser { get; set; }
 }

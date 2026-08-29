@@ -38,6 +38,25 @@ public record ModeratorActionRequest(
     ModeratorActionType ActionType,
     string? Reason);
 
+/// <summary>
+/// One user's moderation record for <c>/mod/users/{UserId}</c> — current account standing plus the
+/// reports filed <i>against that user</i>.
+/// <para><b>Scope caveat, surfaced on the page itself:</b> <see cref="Reports"/> holds reports whose
+/// target is this user, NOT reports against content they authored. Resolving the latter means
+/// author-lookup across four content tables and is deliberately deferred (see
+/// <c>audit/Moderation.md</c> §"WU-UserModeration settled constraints"). A moderator reading this
+/// view must not treat an empty list as "no complaints about this person."</para>
+/// </summary>
+public record UserModerationHistoryDto(
+    int UserId,
+    string Username,
+    string? AvatarUrl,
+    AccountStatusEnum AccountStatus,
+    /// <summary>Set only while <see cref="AccountStatus"/> is <c>Suspended</c>; UTC.</summary>
+    DateTime? SuspendedUntilUtc,
+    int ActiveReportCount,
+    IReadOnlyList<ReportQueueItemDto> Reports);
+
 /// <summary>Pending-approval story row for the /mod/submissions queue.</summary>
 public record StorySubmissionQueueItemDto(
     int StoryId,

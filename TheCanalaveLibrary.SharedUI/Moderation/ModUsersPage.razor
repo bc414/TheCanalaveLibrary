@@ -4,142 +4,231 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.Extensions.Logging
 @inject ILogger<ModUsersPage> Logger
+@inject NavigationManager Nav
 @inject IModerationReadService ModerationService
 @inject IModerationWriteService ModerationWriteService
 
-@* Moderator user lookup page (WU34 Feature 47). View a user's report history + apply
-   account actions (warn/suspend/ban). Desktop-only.
-   Account-status login enforcement is deferred to a follow-up slice (see forward_plan.md).
-   [PersistentState] on UserReports avoids the prerender→interactive double fetch. The queue is
-   filtered to user-targeted reports BEFORE assignment, so the persisted payload is exactly what
-   renders — never the unfiltered superset (layer5-wasm.md §"Avoiding the double fetch"). *@
+@* Moderator user lookup + per-user moderation history (WU34 Feature 47; route parameter wired at
+   WU-UserModeration, 2026-08-01 — until then it was declared and never read, tracker item B13).
+
+   Two modes on one route:
+     /mod/users        → find any user (UserPicker), over the already-reported triage list.
+     /mod/users/{id}   → that user's standing + report history + account actions.
+
+   Escalation is NOT exclusive to this page: /mod/reports carries the same Warn/Suspend/Ban set,
+   acting on a reported item's author. This page is where a moderator goes when the person, not a
+   specific report, is the subject.
+
+   [PersistentState] covers the triage list only — the per-user history is parameter-dependent and
+   reloads on every navigation, the same split MessagesPage makes between its conversation list and
+   its thread. The queue is filtered to user-targeted reports BEFORE assignment, so the persisted
+   payload is exactly what renders (layer5-wasm.md §"Avoiding the double fetch"). *@
 
 <PageTitle>Mod — Users</PageTitle>
 
 <div class="flex flex-col gap-4 px-4 py-4">
 
-    <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">User Reports</h1>
+    @if (UserId is null)
+    {
+        @* ── Lookup mode ──────────────────────────────────────────────────────── *@
+        <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">User Management</h1>
 
-    @if (_loading || UserReports is null)
+        <div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+            <h2 class="mb-2 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Find a user</h2>
+            <div class="w-80 max-w-full">
+                <UserPicker OnUserSelected="HandleUserPicked" Placeholder="Type a username..." />
+            </div>
+            <p class="mt-2 text-xs text-(--color-text-muted)">
+                Any user can be looked up — they don't need an open report.
+            </p>
+        </div>
+
+        <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Reported users</h2>
+
+        @if (_loading || UserReports is null)
+        {
+            <p class="text-sm text-(--color-text-muted)">Loading…</p>
+        }
+        else if (UserReports.Length == 0)
+        {
+            <p class="text-sm text-(--color-text-muted)">No reported users.</p>
+        }
+        else
+        {
+            <div class="overflow-x-auto rounded-xl border border-(--color-border) bg-(--color-surface) p-2">
+                <table class="w-full border-collapse text-sm">
+                    <thead>
+                        <tr class="border-b border-(--color-border) text-left text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
+                            <th class="py-2 pr-4">User</th>
+                            <th class="py-2 pr-4">Reports</th>
+                            <th class="py-2 pr-4">Reason</th>
+                            <th class="py-2 pr-4">Status</th>
+                            <th class="py-2">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in UserReports)
+                        {
+                            <tr class="border-b border-(--color-border) hover:bg-(--color-surface-hover)">
+                                <td class="py-2 pr-4">@r.TargetLabel</td>
+                                <td class="py-2 pr-4 font-bold @(r.TargetActiveReportCount > 2 ? "text-danger" : "text-text")">
+                                    @r.TargetActiveReportCount
+                                </td>
+                                <td class="py-2 pr-4 text-(--color-text-muted)">@r.ReasonName</td>
+                                <td class="py-2 pr-4">
+                                    <span class="rounded px-1.5 py-0.5 text-xs font-medium @StatusBadgeClass(r.Status)">
+                                        @r.Status
+                                    </span>
+                                </td>
+                                <td class="py-2">
+                                    <a href="/mod/users/@r.EntityId"
+                                       class="text-(--color-action-ink) hover:underline">Review</a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+    else if (_loading)
     {
         <p class="text-sm text-(--color-text-muted)">Loading…</p>
     }
-    else if (UserReports.Length == 0)
+    else if (_history is null)
     {
-        <p class="text-sm text-(--color-text-muted)">No reported users.</p>
+        <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">User Management</h1>
+        <p class="text-sm text-(--color-text-muted)">No user with id @UserId exists.</p>
+        <a href="/mod/users" class="text-sm text-(--color-action-ink) hover:underline">Back to user lookup</a>
     }
     else
     {
-        <div class="overflow-x-auto rounded-xl border border-(--color-border) bg-(--color-surface) p-2">
-        <table class="w-full border-collapse text-sm">
-            <thead>
-                <tr class="border-b border-(--color-border) text-left text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
-                    <th class="py-2 pr-4">User</th>
-                    <th class="py-2 pr-4">Reports</th>
-                    <th class="py-2 pr-4">Status</th>
-                    <th class="py-2">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var r in UserReports)
-                {
-                    var report = r;
-                    <tr class="border-b border-(--color-border) hover:bg-(--color-surface-hover)">
-                        <td class="py-2 pr-4">
-                            @if (r.TargetUrl is not null)
-                            {
-                                <a href="@r.TargetUrl" class="text-(--color-action-ink) hover:underline">@r.TargetLabel</a>
-                            }
-                            else
-                            {
-                                <span>@r.TargetLabel</span>
-                            }
-                        </td>
-                        <td class="py-2 pr-4 font-bold @(r.TargetActiveReportCount > 2 ? "text-danger" : "text-text")">
-                            @r.TargetActiveReportCount
-                        </td>
-                        <td class="py-2 pr-4">
-                            <span class="rounded px-1.5 py-0.5 text-xs font-medium @StatusBadgeClass(r.Status)">
-                                @r.Status
-                            </span>
-                        </td>
-                        <td class="py-2">
-                            @if (r.Status == ReportStatusEnum.UnderReview)
-                            {
-                                <div class="flex gap-2">
-                                    <button type="button"
-                                            class="rounded-md bg-(--color-warning)/15 px-2 py-0.5 text-xs text-(--color-warning) ring-1 ring-(--color-warning)/30 transition-colors hover:bg-(--color-warning)/25"
-                                            @onclick="() => OpenAccountAction(report, ModeratorActionType.WarnUser)">
-                                        Warn
-                                    </button>
-                                    <button type="button"
-                                            class="rounded-md bg-(--color-danger)/15 px-2 py-0.5 text-xs text-(--color-danger) ring-1 ring-(--color-danger)/30 transition-colors hover:bg-(--color-danger)/25"
-                                            @onclick="() => OpenAccountAction(report, ModeratorActionType.SuspendUser)">
-                                        Suspend
-                                    </button>
-                                    <button type="button"
-                                            class="rounded-md bg-danger px-2 py-0.5 text-xs text-white transition-colors hover:bg-(--color-danger-strong)"
-                                            @onclick="() => OpenAccountAction(report, ModeratorActionType.BanUser)">
-                                        Ban
-                                    </button>
-                                </div>
-                            }
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-        </div>
-    }
+        @* ── Detail mode ──────────────────────────────────────────────────────── *@
+        <a href="/mod/users" class="text-sm text-(--color-action-ink) hover:underline">← Back to user lookup</a>
 
-    @* ── Account action confirmation panel ─────────────────────────────────────── *@
-    @if (_actionReport is not null)
-    {
-        <div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
-            <h2 class="mb-2 text-base font-semibold text-text">
-                @_pendingAction on @_actionReport.TargetLabel
-            </h2>
-
-            @if (_pendingAction == ModeratorActionType.SuspendUser)
-            {
-                <div class="mb-2">
-                    <label class="mb-1 block text-sm font-medium text-text" for="suspend-until">Suspended until (UTC)</label>
-                    <input type="datetime-local" id="suspend-until"
-                           class="rounded border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text"
-                           @bind="_suspendUntil" />
+        <div class="flex flex-wrap items-center gap-3 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+            <img src="@(_history.AvatarUrl ?? DefaultAvatarUrl)" alt=""
+                 class="size-12 shrink-0 rounded-full" loading="lazy" />
+            <div class="flex flex-col gap-1">
+                <h1 class="font-display text-xl font-semibold text-(--color-text)">@_history.Username</h1>
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                    <span class="rounded px-1.5 py-0.5 font-medium @AccountStatusBadgeClass(_history.AccountStatus)">
+                        @_history.AccountStatus
+                    </span>
+                    @if (_history.AccountStatus == AccountStatusEnum.Suspended && _history.SuspendedUntilUtc is { } until)
+                    {
+                        <span class="text-(--color-text-muted)">until @until.ToString("yyyy-MM-dd HH:mm") UTC</span>
+                    }
+                    <span class="text-(--color-text-muted)">@_history.ActiveReportCount active report(s)</span>
                 </div>
-            }
-
-            <div class="mb-3">
-                <label class="mb-1 block text-sm font-medium text-text" for="action-reason">Reason (required)</label>
-                <textarea id="action-reason" rows="2"
-                          class="w-full rounded-md border border-(--color-border) bg-surface px-3 py-2 text-sm text-text"
-                          @bind="_actionReason"></textarea>
             </div>
+            <div class="ml-auto flex gap-2">
+                <a href="/user/@_history.Username" class="rounded border border-(--color-border) bg-surface px-3 py-1 text-sm text-text hover:bg-(--color-surface-hover)">
+                    View profile
+                </a>
+            </div>
+        </div>
 
-            @if (_actionError is not null)
-            {
-                <div class="mb-2"><ErrorAlert Message="@_actionError" ShowSignIn="@_actionErrorIsSessionExpired" /></div>
-            }
+        @* ── Account actions ──────────────────────────────────────────────────── *@
+        <div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
+            <h2 class="mb-2 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Account action</h2>
+
+            <div class="mb-3 w-72 max-w-full">
+                <label class="mb-1 block text-sm font-medium text-text" for="mod-action-reason-kind">Reason category</label>
+                <select id="mod-action-reason-kind"
+                        class="w-full rounded border border-(--color-border) bg-surface px-3 py-1.5 text-sm text-text"
+                        @bind="_reasonId">
+                    @foreach (var reason in _reasons)
+                    {
+                        <option value="@reason.ReasonId">@reason.ReasonName</option>
+                    }
+                </select>
+            </div>
 
             <div class="flex gap-2">
                 <button type="button"
-                        class="rounded-md bg-danger px-3 py-1 text-sm text-white transition-colors hover:bg-(--color-danger-strong) disabled:opacity-50"
-                        disabled="@_acting"
-                        @onclick="ConfirmAccountActionAsync">
-                    Confirm
+                        class="rounded-md bg-(--color-warning)/15 px-2 py-0.5 text-xs text-(--color-warning) ring-1 ring-(--color-warning)/30 transition-colors hover:bg-(--color-warning)/25"
+                        @onclick="() => OpenAccountAction(ModeratorActionType.WarnUser)">
+                    Warn
                 </button>
                 <button type="button"
-                        class="rounded border border-(--color-border) bg-surface px-3 py-1 text-sm text-text"
-                        @onclick="CancelAccountAction">
-                    Cancel
+                        class="rounded-md bg-(--color-danger)/15 px-2 py-0.5 text-xs text-(--color-danger) ring-1 ring-(--color-danger)/30 transition-colors hover:bg-(--color-danger)/25"
+                        @onclick="() => OpenAccountAction(ModeratorActionType.SuspendUser)">
+                    Suspend
+                </button>
+                <button type="button"
+                        class="rounded-md bg-danger px-2 py-0.5 text-xs text-white transition-colors hover:bg-(--color-danger-strong)"
+                        @onclick="() => OpenAccountAction(ModeratorActionType.BanUser)">
+                    Ban
                 </button>
             </div>
         </div>
+
+        @if (_pendingAction is { } pending)
+        {
+            <AccountActionPanel TargetLabel="@_history.Username"
+                                Action="pending"
+                                Busy="_acting"
+                                ErrorMessage="@_actionError"
+                                ErrorIsSessionExpired="_actionErrorIsSessionExpired"
+                                OnConfirm="ConfirmAccountActionAsync"
+                                OnCancel="CancelAccountAction" />
+        }
+
+        @* ── Report history ───────────────────────────────────────────────────── *@
+        <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Report history</h2>
+        <p class="-mt-2 text-xs text-(--color-text-muted)">
+            Reports filed against this user. Reports against content they wrote are not listed here.
+        </p>
+
+        @if (_history.Reports.Count == 0)
+        {
+            <p class="text-sm text-(--color-text-muted)">No reports have been filed against this user.</p>
+        }
+        else
+        {
+            <div class="overflow-x-auto rounded-xl border border-(--color-border) bg-(--color-surface) p-2">
+                <table class="w-full border-collapse text-sm">
+                    <thead>
+                        <tr class="border-b border-(--color-border) text-left text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
+                            <th class="py-2 pr-4">Reported</th>
+                            <th class="py-2 pr-4">Reason</th>
+                            <th class="py-2 pr-4">Reporter</th>
+                            <th class="py-2 pr-4">Status</th>
+                            <th class="py-2">Action taken</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _history.Reports)
+                        {
+                            <tr class="border-b border-(--color-border) align-top hover:bg-(--color-surface-hover)">
+                                <td class="py-2 pr-4 text-xs text-(--color-text-muted)">@r.DateReported.ToString("yyyy-MM-dd")</td>
+                                <td class="py-2 pr-4">
+                                    @r.ReasonName
+                                    @if (!string.IsNullOrWhiteSpace(r.Notes))
+                                    {
+                                        <span class="block text-xs text-(--color-text-muted)">@r.Notes</span>
+                                    }
+                                </td>
+                                <td class="py-2 pr-4 text-(--color-text-muted)">@(r.ReporterUserName ?? "anonymous")</td>
+                                <td class="py-2 pr-4">
+                                    <span class="rounded px-1.5 py-0.5 text-xs font-medium @StatusBadgeClass(r.Status)">
+                                        @r.Status
+                                    </span>
+                                </td>
+                                <td class="py-2 text-(--color-text-muted)">@(r.ActionTaken ?? "—")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
     }
 </div>
 
 @code {
+    private const string DefaultAvatarUrl = "/img/default-avatar.svg";
+
     [Parameter] public int? UserId { get; set; }
 
     // Persisted across the prerender→interactive handoff — restored via ??= in OnInitializedAsync.
@@ -147,20 +236,57 @@
     [PersistentState]
     public ReportQueueItemDto[]? UserReports { get; set; }
 
-    private bool _loading = true;
+    // Parameter-dependent, so deliberately NOT persisted: it must reload on every navigation to a
+    // different id (same reasoning as MessagesPage's thread state vs. its conversation list).
+    private UserModerationHistoryDto? _history;
+    private int? _loadedUserId = int.MinValue; // sentinel; no real UserId equals this
 
-    private ReportQueueItemDto? _actionReport;
-    private ModeratorActionType _pendingAction;
-    private string? _actionReason;
-    private DateTime? _suspendUntil;
+    private IReadOnlyList<ReportReasonDto> _reasons = [];
+    private short _reasonId;
+
+    private bool _loading = true;
+    private bool _initialized;
+
+    private ModeratorActionType? _pendingAction;
     private bool _acting;
     private string? _actionError;
     private bool _actionErrorIsSessionExpired;
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     protected override async Task OnInitializedAsync()
     {
         // ??= — skip the fetch when [PersistentState] restored the prerendered list.
         UserReports ??= await FetchUserReportsAsync();
+
+        if (UserId.HasValue) await LoadHistoryAsync();
+
+        _loading = false;
+        _initialized = true;
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Fires on every navigation to this route (same page, different UserId). Skip until
+        // OnInitializedAsync has run, and skip when nothing changed.
+        if (!_initialized) return;
+        if (UserId == _loadedUserId) return;
+
+        _loading = true;
+        CancelAccountAction();
+        _history = null;
+
+        if (UserId.HasValue)
+        {
+            // Plain assignment, not ??= — an SPA navigation never prerenders, so there is no
+            // persisted payload to restore (BookshelvesPage documents the same trap).
+            await LoadHistoryAsync();
+        }
+        else
+        {
+            _loadedUserId = null;
+        }
+
         _loading = false;
     }
 
@@ -171,37 +297,41 @@
         return all.Where(r => r.EntityType == ReportedEntityType.User).ToArray();
     }
 
-    private void OpenAccountAction(ReportQueueItemDto report, ModeratorActionType action)
+    private async Task LoadHistoryAsync()
     {
-        _actionReport = report;
+        if (!UserId.HasValue) return;
+
+        _history = await ModerationService.GetUserModerationHistoryAsync(UserId.Value);
+        _loadedUserId = UserId;
+
+        if (_history is not null && _reasons.Count == 0)
+        {
+            _reasons = await ModerationService.GetReportReasonsAsync();
+            if (_reasons.Count > 0) _reasonId = _reasons[0].ReasonId;
+        }
+    }
+
+    private void HandleUserPicked(UserCardDto user) => Nav.NavigateTo($"/mod/users/{user.UserId}");
+
+    // ── Account actions ───────────────────────────────────────────────────────
+
+    private void OpenAccountAction(ModeratorActionType action)
+    {
         _pendingAction = action;
-        _actionReason = null;
-        _suspendUntil = null;
         _actionError = null;
         _actionErrorIsSessionExpired = false;
     }
 
     private void CancelAccountAction()
     {
-        _actionReport = null;
-        _actionReason = null;
+        _pendingAction = null;
         _actionError = null;
         _actionErrorIsSessionExpired = false;
     }
 
-    private async Task ConfirmAccountActionAsync()
+    private async Task ConfirmAccountActionAsync(AccountActionPanel.Submission submission)
     {
-        if (string.IsNullOrWhiteSpace(_actionReason))
-        {
-            _actionError = "A reason is required.";
-            return;
-        }
-
-        if (_pendingAction == ModeratorActionType.SuspendUser && _suspendUntil is null)
-        {
-            _actionError = "Suspension end date is required.";
-            return;
-        }
+        if (_history is null || _pendingAction is not { } action) return;
 
         _acting = true;
         _actionError = null;
@@ -209,23 +339,16 @@
 
         try
         {
-            // The datetime-local input's @bind produces DateTime.Kind=Unspecified; the label
-            // instructs the moderator to enter it as UTC already, so re-tag the Kind rather than
-            // shifting the value — Npgsql refuses to persist Unspecified into a timestamptz column
-            // (found live, 2026-07-30: this path had never been exercised through the real form
-            // before, only via direct psql/fixture dates).
-            DateTime? suspendedUntilUtc = _pendingAction == ModeratorActionType.SuspendUser && _suspendUntil is { } local
-                ? DateTime.SpecifyKind(local, DateTimeKind.Utc)
-                : null;
-
-            await ModerationWriteService.ApplyAccountActionAsync(
-                _actionReport!.ReportId,
-                _pendingAction,
-                _actionReason!,
-                suspendedUntilUtc);
+            await ModerationWriteService.ApplyAccountActionToUserAsync(
+                _history.UserId,
+                _reasonId,
+                action,
+                submission.Reason,
+                submission.SuspendedUntilUtc);
 
             CancelAccountAction();
-            // Post-action refetch — plain assignment (persistence only reads at hydration).
+            // Post-action refetch — plain assignments (persistence only reads at hydration).
+            await LoadHistoryAsync();
             UserReports = await FetchUserReportsAsync();
         }
         catch (Exception ex)
@@ -254,6 +377,15 @@
         ReportStatusEnum.UnderReview => "bg-(--color-action-ink)/20 text-(--color-action-ink)",
         ReportStatusEnum.ResolvedNoAction => "bg-(--color-surface-raised) text-(--color-text-muted)",
         ReportStatusEnum.ResolvedActionTaken => "bg-success/20 text-success",
+        _ => "bg-(--color-surface-raised) text-(--color-text-muted)"
+    };
+
+    private static string AccountStatusBadgeClass(AccountStatusEnum status) => status switch
+    {
+        AccountStatusEnum.Active => "bg-success/20 text-success",
+        AccountStatusEnum.Warned => "bg-warning/20 text-warning",
+        AccountStatusEnum.Suspended => "bg-(--color-danger)/15 text-(--color-danger)",
+        AccountStatusEnum.Banned => "bg-danger text-white",
         _ => "bg-(--color-surface-raised) text-(--color-text-muted)"
     };
 }

@@ -21,7 +21,8 @@ else
         {
             <li class="rounded-xl bg-surface p-4 shadow-subtle">
                 <div class="flex items-start justify-between gap-2">
-                    <UserCard User="vouch.User" />
+                    <UserCard User="vouch.User"
+                              OnReport="@(OnReportUser.HasDelegate ? EventCallback.Factory.Create(this, () => OnReportUser.InvokeAsync(vouch.User.UserId)) : default)" />
                     <div class="flex shrink-0 items-center gap-2">
                         <span class="text-xs text-(--color-text-muted)">@vouch.DateVouched.ToString("MMM d, yyyy")</span>
                         @if (IsEditable)
@@ -66,6 +67,14 @@ else
     /// The hosting page calls IFollowingWriteService.RemoveVouchAsync with this id.
     /// </summary>
     [Parameter] public EventCallback<int> OnRemoveVouch { get; set; }
+
+    /// <summary>
+    /// Raised when the viewer picks "Report" on a row's UserCard caret; the value is that user's id.
+    /// Pass-through to the hosting page, which owns the single <c>ReportDialog</c> instance — this
+    /// component has no service injection and hosts no dialog of its own (dispatcher pattern).
+    /// Left unset, the caret item stays hidden via UserCard's <c>HasDelegate</c> gate.
+    /// </summary>
+    [Parameter] public EventCallback<int> OnReportUser { get; set; }
 
     [Parameter] public string EmptyMessage { get; set; } = "No vouches yet.";
 }

@@ -54,6 +54,10 @@ else
        or (Explore / Deep Dive composites). *@
     <div class="mx-auto flex max-w-6xl flex-col gap-4 px-3 py-4 md:px-4">
 
+        @* One ReportDialog host for the page; the tabs bubble their UserCard caret picks up here
+           rather than each hosting a dialog (dispatcher pattern). *@
+        <ReportDialog @ref="_reportDialog" />
+
         @* ── Root-entity header ────────────────────────────────────────────────────────────── *@
         <div class="max-w-sm">
             @if (RootStory is not null)
@@ -62,7 +66,7 @@ else
             }
             else if (RootUser is not null)
             {
-                <UserCard User="RootUser" />
+                <UserCard User="RootUser" OnReport="@ReportCallbackFor(RootUser.UserId)" />
             }
         </div>
 
@@ -70,11 +74,13 @@ else
 
         @if (_activeTab == TreeSearchTab.Explore)
         {
-            <ExploreTab RootStory="RootStory" RootUser="RootUser" CurrentUserId="_currentUserId" />
+            <ExploreTab RootStory="RootStory" RootUser="RootUser" CurrentUserId="_currentUserId"
+                        OnReportUser="@ReportUserCallback" />
         }
         else if (_activeTab == TreeSearchTab.DeepDive)
         {
-            <DeepDiveTab RootStory="RootStory" RootUser="RootUser" CurrentUserId="_currentUserId" />
+            <DeepDiveTab RootStory="RootStory" RootUser="RootUser" CurrentUserId="_currentUserId"
+                         OnReportUser="@ReportUserCallback" />
         }
         else
         {
@@ -133,6 +139,21 @@ else
     private int? _currentUserId;
     private bool _rootNotFound;
     private bool _requiresLogin;
+
+    private ReportDialog _reportDialog = default!;
+
+    /// <summary>
+    /// Bubbled up from the tabs' UserCard carets. Null-callback for anonymous viewers, which keeps
+    /// the caret's Report item hidden via UserCard's HasDelegate gate.
+    /// </summary>
+    private EventCallback<int> ReportUserCallback => _currentUserId is null
+        ? default
+        : EventCallback.Factory.Create<int>(this, id => _reportDialog.OpenAsync(ReportedEntityType.User, id));
+
+    /// <summary>Argument-less variant for the root-entity UserCard, whose id is fixed.</summary>
+    private EventCallback ReportCallbackFor(int userId) => _currentUserId is null
+        ? default
+        : EventCallback.Factory.Create(this, () => _reportDialog.OpenAsync(ReportedEntityType.User, userId));
 
     // Persisted across the prerender→interactive handoff ([PersistentState] requires public
     // properties). Root entity + initial traversal result are exactly what the page renders.

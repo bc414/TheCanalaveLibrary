@@ -224,8 +224,64 @@ decision work that has no row at all.
   - Context: BetaReader now auto-awards at ≥1 accepted `StoryAcknowledgment` credit (ties to B3's split), displaying `EarnedCount` — no threshold. Architect/Patron/Artist remain *deliberate manual grants* (settled after the Feature 56 cut) — not pending.
   - **Scope grew beyond the original item, same pattern as A5/WU-TagFanon:** closing B4 surfaced that the Bronze/Silver tier paradigm itself had no design provenance (traced to a single unrequested Gemini transcript turn — see `audit/Badges.md`). **Retired site-wide, not just for the new badge:** `RecommenderSilver` removed outright (const/seed row/threshold literal/tests — pre-production, so a clean migration); `Recommender` moved from threshold 10 to ≥1. Every badge now shows a count, none shows a tier. Full narrative: `audit/Badges.md` §"WU-StatBadgeProducers"; `workplan.md` WU-StatBadgeProducers. `dotnet test` green (2,414 total); browser-verified end to end.
 
-- [ ] **B13 — `ModUsersPage`'s `{UserId:int?}` route parameter is declared and never read** `[polish · low · anytime]` — *Found by WU-StatBadgeProducers' `UserPicker` research, 2026-07-31.*
-  - Grid: F48 (Moderation) cells unaffected — this is a single-page dead parameter, not a stage-bearing gap.
+- [x] **B13 — `ModUsersPage`'s dead route parameter — DONE (WU-UserModeration, 2026-08-01), and it was never the real item** `[polish · low · anytime]` — *Found by WU-StatBadgeProducers' `UserPicker` research, 2026-07-31.*
+  - **Closed by *wiring* the parameter, not deleting it** — `/mod/users` is now a lookup view
+    (`UserPicker`) and `/mod/users/{id}` a per-user standing + history + action view.
+  - **The `polish · low` framing measured out badly wrong** — the fourth time this tracker's own
+    lesson has repeated (A5, B0, B3/B4): *a one-line entry is a pointer to an investigation, not a
+    scoped work item.* The parameter was the least of it. **Nothing in the app could report a User**
+    (every `ReportDialog.OpenAsync` call site passed Story or Comment), so `/mod/users` rendered
+    "No reported users." permanently for every moderator; and `/mod/reports`' Warn control passed a
+    content report into a method that demanded a User-targeted report, so it **threw on every report
+    the app could actually produce**, surfacing as the generic error because
+    `InvalidOperationException` isn't user-facing. Net effect: the entire account-action capability
+    — built WU34, sign-in-blocked WU38a, banner-surfaced WU-AccountEnforcement, integration-tested
+    throughout — **was unreachable from any in-app path. Nobody could be warned, suspended, or
+    banned.** Not a `low`-priority item for a UGC site heading into beta.
+  - Also fixed: `ApplyAccountActionAsync` never decremented `ActiveReportCount` (leaking the counter
+    the triage sort orders on), and `UserMenu` linked only `/mod/reports`, leaving the other four
+    `/mod/*` pages URL-typed-only.
+  - Grid: no flips — F46/F47 stay L1–L3.5=5, L4=3, L5=5, L6=5. Full narrative + browser/psql
+    verification: `audit/Moderation.md` §"Stage note (WU-UserModeration — 2026-08-01)";
+    `workplan.md` WU-UserModeration; convention: `layer2-services.md` §"Account actions — target
+    resolution and the report-as-audit-record rule".
+  - Opened alongside: **B17**, **B18**, **B19** below.
+
+- [ ] **B17 — BlogPost, Recommendation and PrivateMessage reports have no entry point** `[inert · med · beta]` — *Found by WU-UserModeration, 2026-08-01 — the same gap it closed for `User`.*
+  - Grid: F46 L1–L3.5=5 — invisible there, same shape as the User half this item's sibling closed.
+  - Source: `ServerModerationWriteService.AllowedReportTargets` (all six types); repo-wide the only
+    `ReportDialog.OpenAsync` call sites pass `Story` (5) or `Comment` (2).
+  - Context: three of the six reportable types can never be reported, so three arms of
+    `BatchLoadTargetsAsync`, `AdjustActiveReportCountAsync` and `ApplyRemovalAsync` are dead code
+    that looks live. `BlogPostCard`/`RecommendationCard`/the message thread each need an `OnReport`
+    wired to their page's `ReportDialog` — mechanically the same pass WU-UserModeration did for
+    `UserCard`, on three surfaces instead of one.
+
+- [ ] **B18 — A user's moderation history omits reports against content they authored** `[scope-cut · med · anytime]` — *Deliberately excluded from WU-UserModeration, 2026-08-01.*
+  - Grid: F47 cells unaffected — the page exists and is sound; this is a scope boundary inside it.
+  - Source: `UserModerationHistoryDto.Reports` (user-targeted rows only); `ModUsersPage` states the
+    caveat on screen ("Reports against content they wrote are not listed here") rather than letting
+    an empty list read as "no complaints about this person."
+  - Context: for a ban decision this is the more valuable signal — three prior reports on someone's
+    *stories* is exactly what a moderator wants before acting. Excluded because resolving it means
+    author-lookup across four content tables (`Story`/`BaseComment`/`BaseBlogPost`/`Recommendation`),
+    which is a read-shape problem of its own, not a rider on a page rewrite.
+  - Decided (D8, 2026-08-05): **denormalize**, as a nullable `ReportedUserId` (`reported_user_id`)
+    resolved at write time for all six target types — not an "author" column, since `Message` has a
+    sender and `User` targets are the account itself. Populating it for `User` targets too makes the
+    history one predicate (`ReportedUserId == uid`) and a strict superset of today's list.
+    WU-ModerationIntegrity owns the column + migration.
+  - Next: extend `UserModerationHistoryDto.Reports` to read by the new column and **delete** (not
+    narrow) `ModUsersPage`'s on-screen caveat.
+
+- [ ] **B19 — No role grant/revoke capability exists anywhere** `[off-grid · med · beta]` — *Found by WU-UserModeration, 2026-08-01.*
+  - Grid: no cell owns this. Spec §5.22 defines three seeded roles (User/Moderator/Admin) and
+    role-based visibility, but no feature row covers *administering* them.
+  - Source: repo-wide, `UserManager.AddToRoleAsync` appears only in `DataSeeder.cs` (3 call sites);
+    there is no service method, endpoint, or UI that grants or revokes a role.
+  - Context: moderators can only be created by editing the seeder and rebuilding the database. That
+    is fine for a solo dev pre-beta and blocking the moment a second moderator is recruited — which
+    is a Phase-6 beta-logistics dependency (`roadmap.md` decision row 6), not a launch one.
   - Source: `audit/Spotlight.md` §"WU-StatBadgeProducers" trace; `SharedUI/Moderation/ModUsersPage.razor:1` (`@page "/mod/users/{UserId:int?}"`), `:143` (`[Parameter] public int? UserId`), `:10`'s own comment claims "Moderator user lookup page."
   - Context: The page renders a static table of already-reported users only (`GetReportQueueAsync` filtered to `ReportedEntityType.User`) — a moderator cannot act on a user who has never been reported, and the route parameter that looks like it should enable direct lookup is never read anywhere in the file. Not fixed as part of WU-StatBadgeProducers — it needs a moderator user-lookup *capability* (a feature decision: should mods be able to act on unreported users at all?), not a `UserPicker` swap. Now that `IUserProfileReadService.SearchUsersByNameAsync` exists, building this capability is cheaper than it was.
 

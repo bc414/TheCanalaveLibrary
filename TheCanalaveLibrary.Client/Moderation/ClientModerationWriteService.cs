@@ -61,6 +61,18 @@ public sealed class ClientModerationWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
+    public async Task ApplyAccountActionToUserAsync(int targetUserId, short reasonId,
+        ModeratorActionType action, string reason, DateTime? suspendedUntilUtc = null)
+    {
+        string query = $"?reasonId={reasonId}&action={action}&reason={Uri.EscapeDataString(reason)}" +
+            (suspendedUntilUtc is DateTime s
+                ? $"&suspendedUntilUtc={Uri.EscapeDataString(s.ToString("o"))}"
+                : "");
+        HttpResponseMessage response = await Http.PostAsync(
+            $"api/moderation/users/{targetUserId}/account-action{query}", content: null);
+        await ThrowIfWriteFailedAsync(response);
+    }
+
     public async Task ApproveStoryAsync(int storyId)
     {
         HttpResponseMessage response = await Http.PostAsync(

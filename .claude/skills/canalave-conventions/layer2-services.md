@@ -1573,6 +1573,36 @@ content — a distinct action, not a flag.
 !IsRead)` — `RelatedEntityId` was missing from the original WHERE clause (WU34 fix). This ensures two
 moderation notifications about *different* targets both reach the recipient.
 
+### Account actions — target resolution and the report-as-audit-record rule (WU-UserModeration)
+
+**Every account action leaves a `Report` row, and that row IS the audit record.** There is no separate
+moderation-action table: `ModeratorUserId`, `ActionTaken`, and `DateResolved` live on `Report`. Two
+consequences bind all new work:
+
+1. **A moderator acting without a member report creates one.** `ApplyAccountActionToUserAsync` opens a
+   `Report` and resolves it in the same unit of work — `ReportedEntityType.User`, `ReporterUserId = modId`,
+   `ReportStatusId = ResolvedActionTaken`. **`ReporterUserId == ModeratorUserId` is what marks a report as
+   moderator-initiated** — do not add a flag column or a synthetic "Moderator-initiated" `ReportReason`
+   seed row; the moderator picks a real reason from the existing seeded set, which is more useful in the
+   audit trail than a generic one. Because the row is opened and resolved together, `ActiveReportCount`
+   is untouched (no +1/−1 pair).
+2. **The action's target user is resolved from the report, not assumed to be the report's target.**
+   `ResolveActionTargetUserIdAsync` maps `User` → the reported user; `Story`/`Comment`/`BlogPost`/
+   `Recommendation` → the reported content's `AuthorUserId` via the existing `LoadModeratableAsync`
+   switch; `Message` → the message's sender. This is what a moderator means when warning or suspending
+   over a reported story. An unresolvable author (anonymous or deleted) throws a
+   `CanalaveValidationException` — a user-facing type, so the moderator sees the real reason rather than
+   `ExceptionPresenter`'s generic message.
+
+   *(Supersedes the WU34 rule "account actions require the report target to be a User." Under that rule
+   the Warn control on `/mod/reports` threw for every report the app could actually produce.)*
+
+**Account actions decrement `ActiveReportCount` like every other resolve path.** `ApplyAccountActionAsync`
+is a resolve path — it sets `ResolvedActionTaken` — so it calls `AdjustActiveReportCountAsync(..., -1)`
+alongside `ResolveNoActionAsync` and `ResolveWithRemovalAsync`, per the "single authority on counter
+mutation" rule above. Omitting it leaks the counter upward permanently, and that counter is what the
+mod-triage sort orders on.
+
 ## Synchronous Inline Badge Awards (WU36; no-tiers model WU-StatBadgeProducers)
 
 A write service that triggers a badge-eligible event calls `IBadgeWriteService.AwardAsync` after the

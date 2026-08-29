@@ -39,9 +39,30 @@ public interface IModerationWriteService : IModerationReadService
 
     /// <summary>
     /// Applies an account action (warn / suspend / ban) without removing specific content.
-    /// Sets <c>User.AccountStatus</c>, records on the report, and notifies the target user.
+    /// Sets <c>User.AccountStatus</c>, resolves the report as <c>ResolvedActionTaken</c>, decrements
+    /// the target's <c>ActiveReportCount</c>, and notifies the target user.
+    /// <para><b>Which user is acted on</b> is resolved from the report, not assumed: a
+    /// <c>User</c>-targeted report acts on that user; a Story/Comment/BlogPost/Recommendation report
+    /// acts on the reported content's author; a Message report acts on its sender. Throws
+    /// <c>CanalaveValidationException</c> when no author can be resolved (anonymous or deleted).
+    /// Supersedes the WU34 rule that required the report target to be a User — see
+    /// <c>layer2-services.md</c> §"Account actions — target resolution and the report-as-audit-record
+    /// rule".</para>
     /// </summary>
     Task ApplyAccountActionAsync(long reportId, ModeratorActionType action,
+        string reason, DateTime? suspendedUntilUtc = null);
+
+    /// <summary>
+    /// Applies an account action to a user with no existing report — the moderator-initiated path
+    /// behind <c>/mod/users/{UserId}</c>.
+    /// <para>Opens and resolves a <c>Report</c> in the same unit of work so the action still leaves
+    /// the standard audit record (<c>Report</c> IS the audit record — there is no separate
+    /// moderation-action table). <c>ReporterUserId == ModeratorUserId</c> is what marks the row as
+    /// moderator-initiated; <paramref name="reasonId"/> is a real seeded <c>ReportReason</c>, chosen
+    /// by the moderator. Because the row opens and resolves together, <c>ActiveReportCount</c> is
+    /// deliberately untouched (no +1/-1 pair).</para>
+    /// </summary>
+    Task ApplyAccountActionToUserAsync(int targetUserId, short reasonId, ModeratorActionType action,
         string reason, DateTime? suspendedUntilUtc = null);
 
     // ── Submission approval (Feature 48) ─────────────────────────────────────────

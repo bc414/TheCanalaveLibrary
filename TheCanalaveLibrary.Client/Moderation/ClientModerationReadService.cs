@@ -22,4 +22,18 @@ public class ClientModerationReadService(HttpClient http) : IModerationReadServi
 
     public async Task<StorySubmissionQueueItemDto[]> GetPendingSubmissionsAsync() =>
         await Http.GetFromJsonAsync<StorySubmissionQueueItemDto[]>("api/moderation/submissions") ?? [];
+
+    /// <summary>
+    /// The endpoint answers 404 for an unknown user id (rather than a null body), so this maps that
+    /// one status back to the interface's documented <c>null</c> instead of letting
+    /// <c>GetFromJsonAsync</c> throw.
+    /// </summary>
+    public async Task<UserModerationHistoryDto?> GetUserModerationHistoryAsync(int userId)
+    {
+        HttpResponseMessage response = await Http.GetAsync($"api/moderation/users/{userId}/history");
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<UserModerationHistoryDto>();
+    }
 }

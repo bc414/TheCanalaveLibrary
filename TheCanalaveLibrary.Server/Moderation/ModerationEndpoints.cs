@@ -71,6 +71,16 @@ public static class ModerationEndpoints
                 Results.Ok(await moderation.GetPendingSubmissionsAsync()))
             .RequireAuthorization(AuthorizationPolicies.RequireModerator);
 
+        // Mod-only — see class doc: the service performs no role check for this read.
+        // 404 rather than a null body when the user id doesn't exist, so the client impl's
+        // ProblemDetails translation turns it into the standard not-found message.
+        group.MapGet("/users/{userId:int}/history",
+                async (IModerationReadService moderation, int userId) =>
+                    await moderation.GetUserModerationHistoryAsync(userId) is { } history
+                        ? Results.Ok(history)
+                        : Results.NotFound())
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
+
         // ── Writes ─────────────────────────────────────────────────────────────────
 
         // Report submission (Feature 46): any authenticated user. SubmitReportRequest is a request
@@ -124,6 +134,19 @@ public static class ModerationEndpoints
                     EndpointHelpers.ExecuteAsync(async () =>
                     {
                         await moderation.ApplyAccountActionAsync(reportId, action, reason, suspendedUntilUtc);
+                        return Results.NoContent();
+                    }))
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
+
+        // Moderator-initiated account action — no pre-existing report (WU-UserModeration). The
+        // service files the audit Report row itself; reasonId is one of the seeded ReportReasons.
+        group.MapPost("/users/{userId:int}/account-action",
+                (IModerationWriteService moderation, int userId, short reasonId,
+                        ModeratorActionType action, string reason, DateTime? suspendedUntilUtc) =>
+                    EndpointHelpers.ExecuteAsync(async () =>
+                    {
+                        await moderation.ApplyAccountActionToUserAsync(
+                            userId, reasonId, action, reason, suspendedUntilUtc);
                         return Results.NoContent();
                     }))
             .RequireAuthorization(AuthorizationPolicies.RequireModerator);

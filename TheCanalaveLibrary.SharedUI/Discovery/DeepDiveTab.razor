@@ -62,7 +62,7 @@
                     }
                     else if (_openUser is { } user)
                     {
-                        <UserCard User="user" />
+                        <UserCard User="user" OnReport="@ReportCallbackFor(user.UserId)" />
                     }
                     @if (_openRec is { } rec)
                     {
@@ -89,6 +89,16 @@
     [Parameter] public StoryListingDto? RootStory { get; set; }
     [Parameter] public UserCardDto? RootUser { get; set; }
     [Parameter] public int? CurrentUserId { get; set; }
+
+    /// <summary>
+    /// Raised when a viewer picks "Report" on a node's UserCard caret; the value is that user's id.
+    /// Pass-through to TreeSearchPage, which owns the single ReportDialog (dispatcher pattern).
+    /// </summary>
+    [Parameter] public EventCallback<int> OnReportUser { get; set; }
+
+    private EventCallback ReportCallbackFor(int userId) => OnReportUser.HasDelegate
+        ? EventCallback.Factory.Create(this, () => OnReportUser.InvokeAsync(userId))
+        : default;
 
     // Deep Dive's four whitelisted (edge, direction) pairs — every one toggleable.
     private bool _author = true, _gem = true, _spotlight = true, _pinned = true;

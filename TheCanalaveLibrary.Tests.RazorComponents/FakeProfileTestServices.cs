@@ -12,13 +12,23 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 internal sealed class FakeUserProfileReadService : IUserProfileReadService
 {
-    private readonly ProfileHeaderDto _header;
+    private readonly ProfileHeaderDto? _header;
     public string? BioHtml { get; set; }
+
+    /// <summary>
+    /// Results returned by <see cref="SearchUsersByNameAsync"/>, for pages that host a
+    /// <c>UserPicker</c> (WU-UserModeration added the seam; it was a hard-coded empty list before,
+    /// which no test could vary).
+    /// </summary>
+    public IReadOnlyList<UserCardDto> SearchResults { get; set; } = [];
 
     public FakeUserProfileReadService(ProfileHeaderDto header) => _header = header;
 
+    /// <summary>For pages that only need the search seam and never read a profile header.</summary>
+    public FakeUserProfileReadService() => _header = null;
+
     public Task<ProfileHeaderDto?> GetProfileHeaderAsync(int userId, bool includePrivate) =>
-        Task.FromResult<ProfileHeaderDto?>(_header);
+        Task.FromResult(_header);
 
     public Task<string?> GetProfileTextAsync(int userId) =>
         Task.FromResult(BioHtml);
@@ -27,7 +37,7 @@ internal sealed class FakeUserProfileReadService : IUserProfileReadService
         Task.FromResult(ProfileAccessState.Visible);
 
     public Task<IReadOnlyList<UserCardDto>> SearchUsersByNameAsync(string term) =>
-        Task.FromResult<IReadOnlyList<UserCardDto>>([]);
+        Task.FromResult(SearchResults);
 }
 
 // ── Story ─────────────────────────────────────────────────────────────────────────────────────

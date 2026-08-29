@@ -39,6 +39,9 @@ public class TreeSearchPageTests : BunitContext
         // WU40 tabs (Explore/DeepDive) are self-contained composites that own their reads.
         Services.AddScoped<IManualTreeSearchReadService>(_ => new FakeManualTreeSearchReadService());
         Services.AddScoped<ManualTreeStore>();
+        // The page hosts one ReportDialog (which injects this service) for the tabs' UserCard
+        // report carets — WU-UserModeration.
+        Services.AddScoped<IModerationWriteService>(_ => new FakeModerationWriteService());
         JSInterop.Mode = JSRuntimeMode.Loose;
 
         // Supplies the Task<AuthenticationState> cascade the page awaits (anonymous is fine).

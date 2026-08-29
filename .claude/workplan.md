@@ -17,7 +17,35 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-ExploreFilterAxes (2026-07-31) — closed tracker **A6**: the Explore
+- **Last landed:** WU-UserModeration (2026-08-01) — closed tracker **B13**, which was filed as
+  `polish · low` ("`ModUsersPage`'s `{UserId:int?}` route parameter is declared and never read") and
+  turned out to be the visible tip of a **moderation feature that could not be used at all**.
+  Three findings, each verified in code: nothing in the app could report a User (every
+  `ReportDialog.OpenAsync` call site passed Story or Comment), so `/mod/users` — which filters the
+  queue to user-targeted reports — rendered "No reported users." permanently for every moderator;
+  `/mod/reports`' "Warn user" passed a content report into a method that demanded a User-targeted
+  report, so it **threw on every report the app could actually produce**, surfacing as the generic
+  error because `InvalidOperationException` isn't user-facing; and therefore the entire
+  account-action capability (built WU34, sign-in-blocked WU38a, banner-surfaced
+  WU-AccountEnforcement, integration-tested throughout) was **unreachable from any in-app path —
+  nobody could be warned, suspended, or banned.** Brian settled the scope: cover the whole seam in
+  one WU, let moderators act on never-reported users via a **mod-filed report** (`ReporterUserId ==
+  ModeratorUserId` is the marker — no new audit table, no migration, no synthetic reason row), and
+  give `/mod/reports` the full Warn/Suspend/Ban set acting on the reported content's **author**.
+  That last decision is what closed B13: the route parameter went **live**, not deleted —
+  `/mod/users` is now lookup (`UserPicker`) and `/mod/users/{id}` is standing + history + actions.
+  Also fixed: `ApplyAccountActionAsync` never decremented `ActiveReportCount` (leaking the counter
+  the triage sort orders on), and `UserMenu` linked only `/mod/reports`, leaving the other four
+  `/mod/*` pages URL-typed-only. `AccountActionPanel` was extracted because it owns the 2026-07-30
+  `SpecifyKind` Npgsql fix — a second Suspend surface would otherwise have re-derived it. No cell
+  flips (F46/F47 stay L1–L3.5=5, L4=3, L5=5, L6=5 — gaps closed *beneath* sound cells, the
+  B0/B4/B12 shape). `dotnet test` green: Unit 793, RazorComponents 662, Integration 1063 (2,518).
+  Browser-verified with `psql` ground truth, including the previously-throwing path (Suspend from a
+  Story report correctly suspended the story's author) and `CanalaveSignInManager` then blocking
+  that account's sign-in. Opens **B17**/**B18**/**B19**. **Dev-DB note:** the browser pass left
+  AuthorBeta Suspended and LurkerDelta Banned on the persistent workbench — `reset-dev-db.ps1`
+  restores it.
+  Before that, 2026-07-31: WU-ExploreFilterAxes — closed tracker **A6**: the Explore
   candidate-results pane scoped candidates by (edge, direction) toggles alone, so a prolific
   author's "Authored (15)" was a wall you could only page through, on the one site where tag
   filtering is the point. The entry read like a small build; it was a **design reopen** —
@@ -352,6 +380,87 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-UserModeration — the user-moderation seam: reporting a user, acting on a content author, per-user history (Features 46/47, extends `Moderation/`, `Profiles/`, `Users/`, `Discovery/`) — DONE ✓ (2026-08-01)
+
+- **Cells:** none flipped. F46/F47 were already L1–L3.5=5, L4=3, L5=5, L6=5 and stay there — this
+  closed gaps *beneath* sound cells, the same shape as B0/B4/B12. What changed is that the feature
+  became reachable at all.
+- **Trigger:** a question about tracker item **B13** (`ModUsersPage`'s `{UserId:int?}` route
+  parameter declared and never read, filed `polish · low`). Investigating it found the parameter was
+  the least of it — the fourth repetition of this tracker's own lesson (A5, B0, B3/B4): *a one-line
+  entry is a pointer to an investigation, not a scoped work item.*
+- **What the investigation actually found, in order of severity:**
+  1. **Nothing in the app could report a User.** Every `ReportDialog.OpenAsync` call site passed
+     `Story` (5 sites) or `Comment` (2) — no others existed in the repo. `ModUsersPage` filters the
+     queue to `EntityType == User`, so it rendered "No reported users." permanently, for every
+     moderator, forever. `UserCard` had carried a `HasDelegate`-gated `OnReport` since WU34, wired
+     by no consumer; its own comment said Report "stays dark until those features land."
+  2. **`/mod/reports`' "Warn user" threw every time.** It passed a content report's id into
+     `ApplyAccountActionAsync`, which WU34 settled as User-target-only. Since Story and Comment were
+     the only reports the app could produce, the button always failed — and as
+     `InvalidOperationException` isn't in `ExceptionPresenter.IsUserFacing`, the moderator got
+     "Something went wrong on our end" while the server logged at Error.
+  3. **So the whole account-action capability was unreachable** — built WU34, sign-in-blocked WU38a,
+     banner-surfaced WU-AccountEnforcement, integration-tested throughout, and usable from no in-app
+     path. **Nobody could be warned, suspended, or banned.**
+  4. `ApplyAccountActionAsync` never decremented `ActiveReportCount` (its two sibling resolve paths
+     do), leaking the counter the mod-triage sort orders on; and `UserMenu` linked only
+     `/mod/reports`, leaving the other four `/mod/*` pages URL-typed-only.
+- **Decisions (Brian, 2026-07-31):** cover the full seam in one WU; moderators **may** act on users
+  who were never reported, as a **mod-filed report** rather than a new audit table; `/mod/reports`
+  carries the full Warn/Suspend/Ban set acting on the reported content's **author**, which makes
+  `/mod/users` a lookup-and-history view. That last one is what closes B13 — the route parameter
+  goes **live**, it isn't deleted.
+- **Doc-Touch moment 1 (before any code):** new `layer2-services.md` §"Account actions — target
+  resolution and the report-as-audit-record rule"; new WU-UserModeration settled-constraints block
+  in `audit/Moderation.md` Feature 47, superseding two WU34 rules.
+- **Built — L2:** `ResolveActionTargetUserIdAsync` (User → that user; Story/Comment/BlogPost/
+  Recommendation → the content's `AuthorUserId` via the existing `LoadModeratableAsync`; Message →
+  its sender), throwing the new user-facing `ModerationValidationException` when no account resolves;
+  the missing `AdjustActiveReportCountAsync(..., -1)`; the status/stamp/notification tail extracted
+  to `ApplyStatusAndNotifyAsync` and shared with the new `ApplyAccountActionToUserAsync`, which opens
+  *and* resolves its own `Report` in one unit of work (`ReporterUserId == ModeratorUserId` is the
+  moderator-initiated marker; no `ActiveReportCount` churn since the +1/−1 would cancel). New read
+  `GetUserModerationHistoryAsync` + `UserModerationHistoryDto`; two endpoints; two client impls.
+  **No migration and no new seeded `ReportReason`** — the moderator picks from the six existing
+  `HasData` rows, which is more useful in an audit trail than a synthetic "Moderator-initiated".
+- **Built — L3.5:** `AccountActionPanel.razor` extracted from `ModUsersPage`. The extraction is
+  load-bearing, not tidiness: the panel owns the 2026-07-30 `DateTime.SpecifyKind` Npgsql fix, so
+  giving `/mod/reports` a Suspend control would otherwise have meant re-deriving that fix in a second
+  place. `ModUsersPage` rewritten around the now-live route parameter (lookup mode = `UserPicker`
+  over the triage list; detail mode = standing + actions + history), following `MessagesPage`'s
+  `_initialized`/`_loadedUserId` guard pattern and its persisted-list/ephemeral-detail split.
+  `/mod/reports` gained Warn/Suspend/Ban. Report-a-user lit up: `ProfilePage`'s single `ReportDialog`
+  moved out of the Stories tab to page level (a `@ref` inside a tab branch is null on the others) and
+  a banner control opens it with `ReportedEntityType.User`; `UserCard.OnReport` wired at `VouchList`
+  and both tree-search tabs via dispatcher-pattern pass-throughs. `UserMenu` now lists all five
+  `/mod/*` pages. `DataSeeder` gained a User-targeted report.
+- **Verified:** `dotnet test` green — Unit 793, RazorComponents 662 (+12), Integration 1063 (+8),
+  **2,518 total**. New Integration coverage in `ModerationServiceTests` (author resolution on Story
+  and on `UserProfileComment` reports; unresolvable author → `ModerationValidationException`; counter
+  decrement; mod-filed report shape; non-mod and self-action rejection; history scope and null).
+  New `AccountActionPanelTests` carries the retargeted UTC-Kind regression guard plus three
+  validation cases; `ModUsersPageTests` rewritten for both route modes (the `UserPicker` *pick*
+  stays uncovered at this tier — the documented `StoryTitlePickerTests`/`ModSpotlightPageTests`
+  limitation). Gates green: design-tokens, doc-hygiene, a11y.
+- **Browser-verified end to end** (server-only, AdminUser, `psql` after every step): reported
+  ReaderGamma from their profile → row `type=User`, count 1 → visible on `/mod/reports` *and*
+  `/mod/users` → `/mod/users/6` rendered standing + history; claimed the **Story** report and
+  Suspended → **AuthorBeta, the story's author, went Suspended with the entered clock value
+  persisted unshifted** (the path that threw before), story counter 1 → 0; then `/mod/users` with no
+  id → typeahead-found LurkerDelta (zero reports) → Ban → `account_status=3`, mod-filed report with
+  `reporter_user_id == moderator_user_id`, counter untouched. Both notifications fired. Finally
+  `/dev/wu12/login-as/AuthorBeta` left the session signed out — `CanalaveSignInManager` blocking a
+  suspended account, i.e. the WU38a mechanism exercised from the UI for the first time. Zero
+  `fail:`/`crit:` lines in the server log.
+- **Tracker:** closes **B13**; opens **B17** (BlogPost/Recommendation/PrivateMessage reports still
+  have no entry point — the same gap, three more surfaces), **B18** (a user's history omits reports
+  against content they authored; the page states the caveat on screen), **B19** (no role
+  grant/revoke capability exists anywhere — moderators can only be minted by editing the seeder).
+- **Dev-DB note:** the browser pass mutated the persistent workbench — AuthorBeta is Suspended,
+  LurkerDelta Banned, two new reports exist. `scripts\reset-dev-db.ps1` restores it (and the seeder
+  now creates a User-targeted report, so `/mod/users` is non-empty on a fresh seed).
 
 ## WU-ExploreFilterAxes — candidate-pane tag/ship/interaction axes; shared `StoryFilterPredicates` (Feature 33, extends `Discovery/`, `Stories/`, `Tags/`) — DONE ✓ (2026-07-31)
 

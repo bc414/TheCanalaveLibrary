@@ -73,13 +73,37 @@
                         Settings
                     </a>
 
+                    @* Every /mod/ page was URL-typed-only before WU-UserModeration — this block
+                       linked /mod/reports and nothing else, so /mod/users, /mod/submissions,
+                       /mod/stats and /mod/spotlight had no in-app entry point at all. *@
                     <AuthorizeView Roles="Moderator,Admin" Context="modContext">
                         <Authorized>
                             <div class="my-1 border-t border-(--color-border)"></div>
+                            <p class="px-4 py-1 text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">Mod tools</p>
                             <a href="mod/reports"
                                class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)"
                                @onclick="Close">
-                                Mod tools
+                                Reports
+                            </a>
+                            <a href="mod/users"
+                               class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)"
+                               @onclick="Close">
+                                Users
+                            </a>
+                            <a href="mod/submissions"
+                               class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)"
+                               @onclick="Close">
+                                Submissions
+                            </a>
+                            <a href="mod/spotlight"
+                               class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)"
+                               @onclick="Close">
+                                Spotlight
+                            </a>
+                            <a href="mod/stats"
+                               class="block px-4 py-2 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)"
+                               @onclick="Close">
+                                Site stats
                             </a>
                         </Authorized>
                     </AuthorizeView>

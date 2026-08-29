@@ -77,13 +77,33 @@ else
        - Blog → paginated BlogPostCard list (full-width, no filter sidebar) *@
     <div class="flex flex-col">
 
+        @* One ReportDialog host per page (WU34 settled constraint). Page-level, not inside the
+           Stories tab where it used to live — the banner's "Report user" control is on every tab,
+           and a @ref inside a tab branch is null on the others. *@
+        <ReportDialog @ref="_reportDialog" />
+
         @* ── Persistent banner ───────────────────────────────────────────────────── *@
         <div class="border-b border-(--color-border) bg-(--color-surface)">
             <div class="mx-auto max-w-6xl">
                 <ProfileBanner Header="@Header"
                                IsOwner="@_isOwner"
                                RelationshipState="@_relationship"
-                               OnRemoveVouch="@HandleRemoveVouchAsync" />
+                               OnRemoveVouch="@HandleRemoveVouchAsync"
+                               OnReportUser="@(_currentUserId is null ? default : EventCallback.Factory.Create<int>(this, HandleReportUser))" />
+
+                @* Reporting a user was unreachable until WU-UserModeration: ReportedEntityType.User
+                   was in the service's allow-set and drove /mod/users, but nothing anywhere opened
+                   the dialog with it, so the moderator queue could never contain a user. *@
+                @if (_currentUserId is not null && !_isOwner)
+                {
+                    <div class="flex justify-end px-4 pb-3 md:px-6">
+                        <button type="button"
+                                class="rounded border border-(--color-border) bg-surface px-3 py-1 text-sm text-text transition-colors hover:bg-(--color-surface-hover)"
+                                @onclick="() => _reportDialog.OpenAsync(ReportedEntityType.User, Header.UserId)">
+                            Report user
+                        </button>
+                    </div>
+                }
             </div>
         </div>
 
@@ -301,7 +321,6 @@ else
                                    TotalCount="@StoryTotalCount"
                                    OnPageChanged="@HandleStoryPageChanged"
                                    OnReport="@(id => _reportDialog.OpenAsync(ReportedEntityType.Story, id))" />
-                        <ReportDialog @ref="_reportDialog" />
                     </div>
                     <aside class="w-full md:w-72 md:shrink-0 rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
                         <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-(--color-text-muted)">Filters</h2>
@@ -673,6 +692,13 @@ else
         BlogPosts = null; // force a plain fetch — persisted state never applies to page turns
         await LoadBlogAsync();
     }
+
+    /// <summary>
+    /// Opens the page's single ReportDialog against a user — the banner's own "Report user" control
+    /// and the vouched-user cards' caret both land here. Only wired for signed-in viewers.
+    /// </summary>
+    private Task HandleReportUser(int userId) =>
+        _reportDialog.OpenAsync(ReportedEntityType.User, userId);
 
     // ── Remove vouch (owner action — bubbled from VouchList) ──────────────────────
 

@@ -784,9 +784,22 @@ public class DataSeeder(
                 Notes = "Seed report against a comment.",
                 ReportStatusId = ReportStatusEnum.Open,
                 DateReported = Now.AddDays(-1),
+            },
+            // User-targeted report (WU-UserModeration): /mod/users filters the queue to this type,
+            // so without one the page renders its empty state in dev no matter what else is seeded.
+            new Report
+            {
+                ReporterUserId = users.AuthorBeta.Id,
+                ReportedEntityType = ReportedEntityType.User,
+                ReportedEntityId = users.ReaderGamma.Id,
+                ReportReasonId = 4, // Harassment (HasData'd report reason)
+                Notes = "Seed report against a user.",
+                ReportStatusId = ReportStatusEnum.Open,
+                DateReported = Now.AddDays(-2),
             });
         ChapterComment reported = await context.ChapterComments.FirstAsync(c2 => c2.CommentId == commentId);
         reported.ActiveReportCount = 1;
+        users.ReaderGamma.ActiveReportCount = 1;
 
         await context.SaveChangesAsync();
     }

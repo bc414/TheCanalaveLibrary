@@ -107,7 +107,19 @@
     }
 
     @* ── Action panel (shown below table when a report is being actioned) ────────── *@
-    @if (_activeReport is not null)
+    @* Account actions swap in the shared AccountActionPanel, which owns the reason field, the
+       Suspend end-date and its UTC Kind re-tag. Content actions keep the notes box below. *@
+    @if (_activeReport is not null && _pendingAccountAction is { } pendingAction)
+    {
+        <AccountActionPanel TargetLabel="@_activeReport.TargetLabel"
+                            Action="pendingAction"
+                            Busy="_acting"
+                            ErrorMessage="@_actionError"
+                            ErrorIsSessionExpired="_actionErrorIsSessionExpired"
+                            OnConfirm="ConfirmAccountActionAsync"
+                            OnCancel="CancelAccountAction" />
+    }
+    else if (_activeReport is not null)
     {
         <div class="rounded-lg border border-(--color-border) bg-(--color-surface-raised) p-4">
             <h2 class="mb-3 text-base font-semibold text-text">
@@ -139,11 +151,25 @@
                         @onclick="() => SoftRemoveAsync(_activeReport)">
                     Hide content
                 </button>
+                @* Account actions land on the person behind the report — the reported user, or the
+                   reported content's author (resolved server-side, WU-UserModeration). *@
+                <button type="button"
+                        class="rounded-md bg-(--color-warning)/15 px-3 py-1 text-sm text-(--color-warning) ring-1 ring-(--color-warning)/30 transition-colors hover:bg-(--color-warning)/25"
+                        disabled="@_acting"
+                        @onclick="() => OpenAccountAction(ModeratorActionType.WarnUser)">
+                    Warn user
+                </button>
+                <button type="button"
+                        class="rounded-md bg-(--color-danger)/15 px-3 py-1 text-sm text-(--color-danger) ring-1 ring-(--color-danger)/30 transition-colors hover:bg-(--color-danger)/25"
+                        disabled="@_acting"
+                        @onclick="() => OpenAccountAction(ModeratorActionType.SuspendUser)">
+                    Suspend user
+                </button>
                 <button type="button"
                         class="rounded-md bg-danger px-3 py-1 text-sm text-white transition-colors hover:bg-(--color-danger-strong)"
                         disabled="@_acting"
-                        @onclick="() => WarnUserAsync(_activeReport)">
-                    Warn user
+                        @onclick="() => OpenAccountAction(ModeratorActionType.BanUser)">
+                    Ban user
                 </button>
                 <button type="button"
                         class="rounded border border-(--color-border) bg-surface px-3 py-1 text-sm text-text hover:bg-(--color-surface-hover)"
@@ -167,6 +193,10 @@
 
     private ReportQueueItemDto? _activeReport;
     private string? _actionNotes;
+
+    // Non-null while the account-action panel is showing instead of the content-action panel.
+    private ModeratorActionType? _pendingAccountAction;
+
     private bool _acting;
     private string? _actionError;
     private bool _actionErrorIsSessionExpired;
@@ -219,6 +249,7 @@
     {
         _activeReport = report;
         _actionNotes = null;
+        _pendingAccountAction = null;
         _actionError = null;
         _actionErrorIsSessionExpired = false;
     }
@@ -227,6 +258,7 @@
     {
         _activeReport = null;
         _actionNotes = null;
+        _pendingAccountAction = null;
         _actionError = null;
         _actionErrorIsSessionExpired = false;
     }
@@ -275,13 +307,31 @@
         finally { _acting = false; }
     }
 
-    private async Task WarnUserAsync(ReportQueueItemDto report)
+    // ── Account actions (Warn / Suspend / Ban) ────────────────────────────────
+    // The action lands on the person behind the report: a User-targeted report acts on that user,
+    // a content report on the content's author. That resolution is server-side
+    // (ServerModerationWriteService.ResolveActionTargetUserIdAsync) — this page just names the
+    // report. Before WU-UserModeration the service demanded a User-targeted report, so the Warn
+    // control here threw for every report the app can actually produce.
+
+    private void OpenAccountAction(ModeratorActionType action)
     {
-        if (string.IsNullOrWhiteSpace(_actionNotes))
-        {
-            _actionError = "A warning reason is required.";
-            return;
-        }
+        _pendingAccountAction = action;
+        _actionError = null;
+        _actionErrorIsSessionExpired = false;
+    }
+
+    /// <summary>Backs out of the account-action panel to the content-action panel, same report.</summary>
+    private void CancelAccountAction()
+    {
+        _pendingAccountAction = null;
+        _actionError = null;
+        _actionErrorIsSessionExpired = false;
+    }
+
+    private async Task ConfirmAccountActionAsync(AccountActionPanel.Submission submission)
+    {
+        if (_activeReport is null || _pendingAccountAction is not { } action) return;
 
         _acting = true;
         _actionError = null;
@@ -289,7 +339,8 @@
         try
         {
             await ModerationService.ApplyAccountActionAsync(
-                report.ReportId, ModeratorActionType.WarnUser, _actionNotes);
+                _activeReport.ReportId, action, submission.Reason, submission.SuspendedUntilUtc);
+            CancelAccountAction();
             CloseActionPanel();
             await LoadAsync();
         }
