@@ -89,20 +89,31 @@ pure refactor (no behavior change); none is blocking.
   `StatusBadges.ForStatus/ForRating` already centralizes the *class* half; a parallel `StoryDisplayFormat`
   static would centralize the *label* half and fix the shared `999,999→"1000K words"` edge quirk once.
   ⚠️ Touches `StoryDesktop`/`StoryMobile` — coordinate with the §1 Desktop/Mobile decision.
-- **MA-509 — triplicated audience-badge statics.** `AudienceBadgeLabel` + `AudienceBadgeClasses` byte-
+- **MA-509 — triplicated audience-badge statics — ALREADY RESOLVED (verified 2026-09-20).** The
+  switch tables were extracted to `SharedUI/Groups/GroupDisplayFormat.cs` (whose header cites this
+  finding), and the `GroupDesktop`/`GroupMobile` copies died with WU-ResponsiveMerge (2026-07-18), so
+  the §1 caution below is moot. `GroupCard`/`GroupPage` both call the shared helper. Original entry: `AudienceBadgeLabel` + `AudienceBadgeClasses` byte-
   identical across `GroupCard`/`GroupDesktop`/`GroupMobile` (`:40-52`/`:251-263`/`:193-205`). Pure
   viewer-independent switches. Cross-slice §C actually calls this a **pure win** — I left it only because
   it touches the Group Desktop/Mobile files (same §1 caution). Lowest-risk of this group.
 - **Export-writer DOM-walk visitor (~100 LOC, S3).** An `ExportDom`-walking visitor would de-duplicate
   across the six export writers; the audit judged the per-format writers "genuinely distinct" and the
   visitor a machinery trade. Report explicitly leaves this to you.
-- **MA-107 — DI double-registration shape.** 7 clusters still register the concrete write class twice
+- **MA-107 — DI double-registration shape — DONE (2026-09-20, WU-QuickFixes).** All seven clusters
+  now forward the read interface to the write registration (`AddScoped<IXRead>(sp =>
+  sp.GetRequiredService<IXWrite>())`), the forwarding-delegate shape this entry called the safer
+  default; `ISavedTagSelectionWriteService` turned out not to inherit its read interface, so that one
+  registers the concrete class and forwards both. Rule recorded in `layer2-services.md`
+  §"Registering an inherited pair". Original entry: 7 clusters still register the concrete write class twice
   (`AddScoped<IXRead, ServerXWrite>()` + `AddScoped<IXWrite, ServerXWrite>()` → two instances per scope):
   Group, Series, StoryLineage, StoryArc, SavedTagSelection, CustomList, Notification (BlogPost was fixed
   as MA-706). Moderation/Badges use a forwarding delegate (`IXRead` resolved from the `IXWrite` instance)
   whose comment declares instance-unity the point. Unify on one shape — the **forwarding delegate is the
   safer default**. Mechanical, but a cross-cutting one-shot in `Program.cs`.
-- **MA-408 — SavedTagSelection N+1.** `ServerSavedTagSelectionReadService.GetPublicSelectionsByUserAsync`
+- **MA-408 — SavedTagSelection N+1 — DONE (2026-09-20, WU-QuickFixes).** The profile tab now issues
+  two queries total (headers, then all entries joined to `Tag`), with a new Integration regression
+  test for per-selection chip separation. Detail: `.claude/audit/Tags.md` §"WU-QuickFixes Stage
+  note". Original entry: `ServerSavedTagSelectionReadService.GetPublicSelectionsByUserAsync`
   (`:54-72`) loops `HydrateDetailAsync` (2 queries per selection). Low volume (a user's public saved
   selections, surfaced on the profile TagSelections tab). A single batched entry-join over all ids removes
   the loop.
@@ -151,15 +162,26 @@ Move each when its cluster is next touched (grep the old dotted-path namespace p
 
 ## 6. 🧑 Small cleanups the audit surfaced but no pass claimed
 
-- **MA-006** — `ContentSurface` hardcodes the 3 `ReadingBackground` palettes as raw hex in a `style=`
-  attribute (`:35-37`), which `layer4-style.md` calls a defect. Either tokenize the three palettes or
-  record a sanctioned exception (like the DevLoginBar/DesignGallery raw-color exemptions already in
-  `check-design-tokens.ps1`).
-- **MA-007** — `ContentSurface` retains the pre-ratification `FrameStyle` int param (magic 2/3/default,
+- **MA-006 — still open, but half of it was never true (checked 2026-09-20).** The
+  "record a sanctioned exception" alternative already exists: `check-design-tokens.ps1`'s
+  `$rawColorExempt` lists `ContentSurface.razor` next to DevLoginBar/DesignGallery, and the script
+  header gives the reason ("Light/Sepia/Dark reader-override hexes live here by design (Phase E)").
+  `layer4-style.md` also no longer carries the "defect" claim this entry attributes to it (grep:
+  no hit). So the only live question is the design one — tokenize the three palettes into the locked
+  `@theme` manifest (Brian's call, natural fit with Phase E's reader-override work) or close this on
+  the standing exemption. Original entry: `ContentSurface` hardcodes the 3 `ReadingBackground`
+  palettes as raw hex in a `style=` attribute (`:35-37`), which `layer4-style.md` calls a defect.
+- **MA-007 — DONE (2026-09-20, WU-QuickFixes).** The parameter and its magic-int switch are gone;
+  the ratified side-rails classes are a `const` on the component, and the dev gallery's three-way
+  comparison switcher (its only caller, and the review it served ended at the 2026-07-10 gate) went
+  with it. Original entry: `ContentSurface` retains the pre-ratification `FrameStyle` int param (magic 2/3/default,
   `:47`) that its own header says is removed once the gate ratifies a treatment (ratified 2026-07-10). It
   survives only for the dev gallery's comparison switcher — convert the gallery to a private variant, then
   delete the param.
-- **MA-211** — `ServerStoryArcWriteService` copies primary-ctor params into `_writeDb`/`_activeUser`
+- **MA-211 — DONE (2026-09-20, WU-QuickFixes).** Field copies removed; the service now uses
+  `writeDb` and the inherited `ActiveUser` like its siblings (the CS9107 alias was unnecessary —
+  `writeDb` is never passed to the base constructor). Detail: `.claude/audit/Stories.md`
+  §"WU-QuickFixes slice". Original entry: `ServerStoryArcWriteService` copies primary-ctor params into `_writeDb`/`_activeUser`
   fields (`:20-22`) where every sibling write service uses the params directly. Cosmetic idiom divergence.
 
 ---
@@ -208,10 +230,12 @@ race changed). Three client services were **left on their old deviant mappings**
 
 ## Suggested pickup order for a fresh session
 
-1. **Cheapest wins first:** MA-509 (pure static extract), MA-006/007/211/012 (small cleanups),
-   MA-408 (one N+1).
-2. **One coordinated change each:** MA-107 (DI shape). ~~MA-505/611 (status-code seams)~~ — DONE
-   2026-07-18, see §4.
+1. ~~**Cheapest wins first:** MA-509 (pure static extract), MA-006/007/211/012 (small cleanups),
+   MA-408 (one N+1).~~ — MA-007/211/408 DONE 2026-09-20 (WU-QuickFixes); MA-509 was already resolved
+   by an earlier WU (verified same day). Left here: **MA-006** (needs a tokenize-vs-exempt call, not
+   a fix) and **MA-012** (rides the next WU touching that cluster, per §5).
+2. **One coordinated change each:** ~~MA-107 (DI shape)~~ — DONE 2026-09-20. ~~MA-505/611
+   (status-code seams)~~ — DONE 2026-07-18, see §4.
 3. **Verify then decide:** the item-7 observations — especially the `GetRecommendedStoryIdsByUserAsync`
    moderation-filter question (confirm live vs latent before deciding urgency).
 4. **Only after the desktop→mobile human pass:** MA-209 and the §1 Desktop/Mobile items.

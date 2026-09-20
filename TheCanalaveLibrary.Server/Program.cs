@@ -357,12 +357,17 @@ builder.Services.AddSingleton<ITagHierarchyReadService>(sp => sp.GetRequiredServ
 // WU-TagFanon: forwarding-delegate shape (MA-107's safer default) — one instance per scope.
 builder.Services.AddScoped<IFanonWriteService, ServerFanonWriteService>();
 builder.Services.AddScoped<IFanonReadService>(sp => sp.GetRequiredService<IFanonWriteService>());
-// WU43 — write class serves both interfaces (mirrors ISeriesReadService/Write registration below).
-builder.Services.AddScoped<ISavedTagSelectionReadService, ServerSavedTagSelectionWriteService>();
-builder.Services.AddScoped<ISavedTagSelectionWriteService, ServerSavedTagSelectionWriteService>();
-// WU-CustomLists (Feature 51) — same both-interfaces shape as SavedTagSelections above.
-builder.Services.AddScoped<ICustomListReadService, ServerCustomListWriteService>();
+// WU43 — one concrete class serves both interfaces, but ISavedTagSelectionWriteService is the one
+// write interface that does NOT inherit its read interface, so BOTH forward to the concrete
+// registration (ServerTagHierarchyCache's shape) rather than read forwarding to write. Either way
+// it is one instance per scope (MA-107, unified 2026-09-20 — Moderation below is the ordinary
+// inherited case).
+builder.Services.AddScoped<ServerSavedTagSelectionWriteService>();
+builder.Services.AddScoped<ISavedTagSelectionWriteService>(sp => sp.GetRequiredService<ServerSavedTagSelectionWriteService>());
+builder.Services.AddScoped<ISavedTagSelectionReadService>(sp => sp.GetRequiredService<ServerSavedTagSelectionWriteService>());
+// WU-CustomLists (Feature 51) — same forwarding shape as SavedTagSelections above.
 builder.Services.AddScoped<ICustomListWriteService, ServerCustomListWriteService>();
+builder.Services.AddScoped<ICustomListReadService>(sp => sp.GetRequiredService<ICustomListWriteService>());
 // Server-only write-time probe — checks File.Exists at mod-write time (never at render time).
 // Post-MVP: replace with R2SpriteAssetProbe behind this same interface. See audit/Sprites.md L2.
 builder.Services.AddSingleton<ISpriteAssetProbe, LocalSpriteAssetProbe>();
@@ -465,17 +470,17 @@ builder.Services.AddHostedService<PollEditNotificationWorker>();
 builder.Services.AddScoped<IGroupReadService, ServerGroupReadService>();
 builder.Services.AddScoped<IGroupWriteService, ServerGroupWriteService>();
 // Series (WU41) — L2 read/write services (Feature 9).
-builder.Services.AddScoped<ISeriesReadService, ServerSeriesWriteService>();
 builder.Services.AddScoped<ISeriesWriteService, ServerSeriesWriteService>();
+builder.Services.AddScoped<ISeriesReadService>(sp => sp.GetRequiredService<ISeriesWriteService>());
 // Story Lineage (WU42) — L2 read/write services (Feature 10, formerly "Story Relationships").
-builder.Services.AddScoped<IStoryLineageReadService, ServerStoryLineageWriteService>();
 builder.Services.AddScoped<IStoryLineageWriteService, ServerStoryLineageWriteService>();
+builder.Services.AddScoped<IStoryLineageReadService>(sp => sp.GetRequiredService<IStoryLineageWriteService>());
 // Story Acknowledgments (WU-StatBadgeProducers) — L2 read/write services.
-builder.Services.AddScoped<IStoryAcknowledgmentReadService, ServerStoryAcknowledgmentWriteService>();
 builder.Services.AddScoped<IStoryAcknowledgmentWriteService, ServerStoryAcknowledgmentWriteService>();
+builder.Services.AddScoped<IStoryAcknowledgmentReadService>(sp => sp.GetRequiredService<IStoryAcknowledgmentWriteService>());
 // Story Arcs (WU45) — L2 read/write services (Feature 8).
-builder.Services.AddScoped<IStoryArcReadService, ServerStoryArcWriteService>();
 builder.Services.AddScoped<IStoryArcWriteService, ServerStoryArcWriteService>();
+builder.Services.AddScoped<IStoryArcReadService>(sp => sp.GetRequiredService<IStoryArcWriteService>());
 // Site settings (WU-Spotlight) — cross-cutting mod-editable runtime knobs (layer2-services.md
 // "Site Settings"). First consumer: the spotlight tuning values.
 builder.Services.AddScoped<ISiteSettingsReadService, ServerSiteSettingsReadService>();
@@ -491,8 +496,8 @@ builder.Services.AddHostedService<SpotlightGoLiveWorker>();
 // Notifications (WU22) — L2 read/write services (Features 41/42/43).
 // WU22 delivers: service infra + NotifyNewFollowerAsync/NotifyNewVouchAsync + Following seam wiring.
 // Fan-out notify methods land incrementally with their triggering work-units (workplan.md WU22).
-builder.Services.AddScoped<INotificationReadService, ServerNotificationWriteService>();
 builder.Services.AddScoped<INotificationWriteService, ServerNotificationWriteService>();
+builder.Services.AddScoped<INotificationReadService>(sp => sp.GetRequiredService<INotificationWriteService>());
 // Notification cleanup (Feature 57) — daily prune of read notifications older than 60 days.
 // TestAppFactory removes the worker (tests drive NotificationCleanupSweeper directly).
 builder.Services.AddScoped<NotificationCleanupSweeper>();

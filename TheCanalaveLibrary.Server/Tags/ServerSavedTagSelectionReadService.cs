@@ -60,20 +60,43 @@ public class ServerSavedTagSelectionReadService(
         if (!await ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, userId))
             return [];
 
-        List<int> ids = await readDb.SavedTagSelections
+        // Two queries for the whole tab, never one pair per selection (MA-408): headers in date
+        // order, then every selection's entries joined to Tag in a single pass, grouped in memory.
+        // HydrateDetailAsync stays the single-selection path; its owner-or-public gate is subsumed
+        // here by the IsPublic filter below.
+        var headers = await readDb.SavedTagSelections
             .Where(s => s.UserId == userId && s.IsPublic)
             .OrderByDescending(s => s.DateCreated)
-            .Select(s => s.SavedTagSelectionId)
+            .Select(s => new { s.SavedTagSelectionId, s.Nickname, s.Description, s.IsPublic, s.UserId })
             .ToListAsync();
 
-        List<SavedTagSelectionDetailDto> result = [];
-        foreach (int id in ids)
-        {
-            SavedTagSelectionDetailDto? detail = await HydrateDetailAsync(readDb, id);
-            if (detail is not null) result.Add(detail);
-        }
+        if (headers.Count == 0) return [];
 
-        return result;
+        List<int> ids = [.. headers.Select(h => h.SavedTagSelectionId)];
+
+        var rows = await (
+            from e in readDb.SavedTagSelectionEntries
+            join t in readDb.Tags on e.TagId equals t.TagId
+            where ids.Contains(e.SavedTagSelectionId)
+            select new { e.SavedTagSelectionId, e.IsExcluded, Chip = new TagChipDto
+            {
+                TagId = t.TagId,
+                TagName = t.TagName,
+                TagTypeId = t.TagTypeId,
+                Description = t.Description,
+                SpriteIdentifier = t.SpriteIdentifier
+            }}).ToListAsync();
+
+        var bySelection = rows.ToLookup(r => r.SavedTagSelectionId);
+
+        return [.. headers.Select(h => new SavedTagSelectionDetailDto(
+            h.SavedTagSelectionId,
+            h.Nickname,
+            h.Description,
+            h.IsPublic,
+            h.UserId,
+            [.. bySelection[h.SavedTagSelectionId].Where(r => !r.IsExcluded).Select(r => r.Chip)],
+            [.. bySelection[h.SavedTagSelectionId].Where(r => r.IsExcluded).Select(r => r.Chip)]))];
     }
 
     public async Task<SavedTagSelectionDetailDto?> GetPublicSelectionByIdAsync(int id)

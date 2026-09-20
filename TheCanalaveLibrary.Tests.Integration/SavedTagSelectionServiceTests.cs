@@ -284,6 +284,37 @@ public class SavedTagSelectionServiceTests(PostgresFixture postgres) : Integrati
         (await GetPublicByUserAsync(_ownerId)).Should().BeEmpty();
     }
 
+    [Fact]
+    public async Task GetPublicSelectionsByUserAsync_SeveralSelections_KeepsEachOnesOwnChips_NewestFirst()
+    {
+        // Regression net for the batched hydration (MA-408): the tab loads every selection's
+        // entries in ONE joined query instead of a pair of queries per selection, so the failure
+        // mode this guards is chips landing on the wrong selection — invisible with a single row.
+        int firstInclude  = await SeedTagAsync();
+        int firstExclude  = await SeedTagAsync();
+        int secondInclude = await SeedTagAsync();
+
+        SetActiveUser(_ownerId);
+        int olderId = await CreateAsync(
+            new SavedTagSelectionInput("Older", null, true, [firstInclude], [firstExclude]));
+        int newerId = await CreateAsync(
+            new SavedTagSelectionInput("Newer", null, true, [secondInclude], []));
+
+        List<SavedTagSelectionDetailDto> result = await GetPublicByUserAsync(_ownerId);
+
+        result.Select(r => r.Id).Should().Equal(new[] { newerId, olderId }, "the tab sorts newest first");
+
+        SavedTagSelectionDetailDto newer = result[0];
+        newer.IncludedTags.Select(t => t.TagId).Should().Equal(secondInclude);
+        newer.ExcludedTags.Should().BeEmpty();
+
+        SavedTagSelectionDetailDto older = result[1];
+        older.IncludedTags.Select(t => t.TagId).Should().Equal(firstInclude);
+        older.ExcludedTags.Select(t => t.TagId).Should().Equal(firstExclude);
+        older.IncludedTags.Should().AllSatisfy(t => t.TagName.Should().NotBeNullOrEmpty(),
+            "chips carry Tag row data through the join, not just ids");
+    }
+
     // ─────────────────────────────────────────────────────────────────────────────
     // Copy-on-write share
     // ─────────────────────────────────────────────────────────────────────────────

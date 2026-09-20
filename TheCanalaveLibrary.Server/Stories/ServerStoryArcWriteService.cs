@@ -17,17 +17,12 @@ public class ServerStoryArcWriteService(
     IActiveUserContext activeUser)
     : ServerStoryArcReadService(readDbFactory, activeUser), IStoryArcWriteService
 {
-    private readonly ApplicationDbContext _writeDb = writeDb;
-    // The read base now takes IActiveUserContext too (kind-(g) gate). Aliased to the inherited
-    // ActiveUser property rather than re-capturing the ctor parameter — avoids CS9107/CS9124.
-    private IActiveUserContext _activeUser => ActiveUser;
-
     public async Task<int> CreateArcAsync(CreateStoryArcDto dto)
     {
-        int userId = _activeUser.RequireUserId();
+        int userId = ActiveUser.RequireUserId();
 
         // Write-context lookups see ground truth (no named query filters on ApplicationDbContext).
-        Story? story = await _writeDb.Stories.FirstOrDefaultAsync(s => s.StoryId == dto.StoryId);
+        Story? story = await writeDb.Stories.FirstOrDefaultAsync(s => s.StoryId == dto.StoryId);
         if (story is null) throw new KeyNotFoundException($"Story {dto.StoryId} not found.");
         if (story.AuthorId != userId)
             throw new UnauthorizedAccessException("You must be the author of this story.");
@@ -44,16 +39,16 @@ public class ServerStoryArcWriteService(
             StartChapterNumber = dto.StartChapterNumber,
             EndChapterNumber   = dto.EndChapterNumber
         };
-        _writeDb.StoryArcs.Add(arc);
-        await _writeDb.SaveChangesAsync();
+        writeDb.StoryArcs.Add(arc);
+        await writeDb.SaveChangesAsync();
         return arc.StoryArcId;
     }
 
     public async Task UpdateArcAsync(UpdateStoryArcDto dto)
     {
-        int userId = _activeUser.RequireUserId();
+        int userId = ActiveUser.RequireUserId();
 
-        StoryArc? arc = await _writeDb.StoryArcs
+        StoryArc? arc = await writeDb.StoryArcs
             .Include(a => a.Story)
             .FirstOrDefaultAsync(a => a.StoryArcId == dto.StoryArcId);
         if (arc is null) throw new KeyNotFoundException($"Story arc {dto.StoryArcId} not found.");
@@ -68,14 +63,14 @@ public class ServerStoryArcWriteService(
         arc.Title              = title;
         arc.StartChapterNumber = dto.StartChapterNumber;
         arc.EndChapterNumber   = dto.EndChapterNumber;
-        await _writeDb.SaveChangesAsync();
+        await writeDb.SaveChangesAsync();
     }
 
     public async Task DeleteArcAsync(int storyArcId)
     {
-        int userId = _activeUser.RequireUserId();
+        int userId = ActiveUser.RequireUserId();
 
-        StoryArc? arc = await _writeDb.StoryArcs
+        StoryArc? arc = await writeDb.StoryArcs
             .Include(a => a.Story)
             .FirstOrDefaultAsync(a => a.StoryArcId == storyArcId);
         if (arc is null) throw new KeyNotFoundException($"Story arc {storyArcId} not found.");
@@ -83,8 +78,8 @@ public class ServerStoryArcWriteService(
             throw new UnauthorizedAccessException("You must be the author of this story.");
 
         // The covered chapters simply become arc-less (gap) chapters — nothing else to touch.
-        _writeDb.StoryArcs.Remove(arc);
-        await _writeDb.SaveChangesAsync();
+        writeDb.StoryArcs.Remove(arc);
+        await writeDb.SaveChangesAsync();
     }
 
     // ── Validation core (WU45 range rules) ────────────────────────────────────────
@@ -103,7 +98,7 @@ public class ServerStoryArcWriteService(
 
         // Friendly pre-checks for the two rules the service owns (title uniqueness is also backed
         // by the unique (story_id, title) index as a race backstop).
-        List<StoryArc> siblings = await _writeDb.StoryArcs
+        List<StoryArc> siblings = await writeDb.StoryArcs
             .Where(a => a.StoryId == storyId
                      && (excludeArcId == null || a.StoryArcId != excludeArcId))
             .ToListAsync();

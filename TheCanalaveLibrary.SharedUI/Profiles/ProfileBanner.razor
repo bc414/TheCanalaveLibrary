@@ -85,9 +85,10 @@
                 {
                     <FollowButton TargetUserId="@Header.UserId"
                                   IsFollowing="@RelationshipState.IsFollowing"
-                                  ReceiveAlerts="@RelationshipState.ReceiveAlerts" />
+                                  ReceiveAlerts="@RelationshipState.ReceiveAlerts"
+                                  OnFollowChanged="HandleFollowChanged" />
                     <VouchButton TargetUserId="@Header.UserId"
-                                 IsFollowing="@RelationshipState.IsFollowing"
+                                 IsFollowing="@_isFollowing"
                                  IsVouched="@RelationshipState.IsVouched"
                                  AtVouchLimit="@(RelationshipState.OutgoingVouchCount >= FollowingConstants.MaxVouchesPerUser)"
                                  OutgoingVouchCount="@RelationshipState.OutgoingVouchCount" />
@@ -147,4 +148,17 @@
     /// item hidden through UserCard's HasDelegate gate.
     /// </summary>
     [Parameter] public EventCallback<int> OnReportUser { get; set; }
+
+    /// <summary>
+    /// Local mirror of <c>RelationshipState.IsFollowing</c>. Vouching is follow-gated and
+    /// FollowButton owns its own toggle (self-contained write), so the vouch affordance has to hear
+    /// about a follow made in this same visit — otherwise it only appears after a reload
+    /// (audit/Following.md, "Minor staleness"). Re-seeded from the parameter exactly like
+    /// FollowButton re-seeds its own state, so a fresh RelationshipState from the dispatcher wins.
+    /// </summary>
+    private bool _isFollowing;
+
+    protected override void OnParametersSet() => _isFollowing = RelationshipState?.IsFollowing ?? false;
+
+    private void HandleFollowChanged(bool isFollowing) => _isFollowing = isFollowing;
 }

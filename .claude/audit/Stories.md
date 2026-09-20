@@ -863,3 +863,27 @@ already ownership-gated) — the found-vs-not-found distinction was an id oracle
 keeping the anonymous, highest-volume write path buffer-only.
 
 Invariant, guards, and the two root causes: `identity-and-authorization.md` §"Parent-visibility guards" (conditionality kind (g)). Enforcement: `Tests.Integration/ParentVisibilityContractTests.cs`. Full narrative: `workplan.md` WU-ParentVisibility. **No Stage number changed — every affected cell was already Stage 5 and remains 5.**
+
+---
+
+**WU-QuickFixes slice (2026-09-20) — F8/F9/F10 + the acknowledgment seam.** Two composition-root /
+idiom cleanups under cells that were already Stage 5 and stay 5; no behavior change.
+
+- **`ServerStoryArcWriteService` field copies removed (MA-211).** It copied its primary-constructor
+  parameters into `_writeDb`/`_activeUser` where every sibling write service (`ServerSeriesWriteService`,
+  `ServerStoryLineageWriteService`, …) uses `writeDb` and the inherited `ActiveUser` directly. The
+  `_activeUser` alias existed to dodge CS9107/CS9124 — but that warning only fires for a parameter
+  *also* passed to the base constructor, and `ActiveUser` (the protected property the base already
+  exposes) answers it without an alias. Build is clean, no new warnings.
+- **Read/write DI registrations forwarded, not duplicated (MA-107).** `IStoryArcReadService`,
+  `IStoryLineageReadService` and `IStoryAcknowledgmentReadService` were each registered against the
+  *write* class alongside the write interface, so a scope that injected both got **two instances** of
+  the same service. Each read interface now forwards to the write registration. Rule recorded in
+  `layer2-services.md` §"Registering an inherited pair"; the full seven-cluster sweep is in
+  `workplan.md`'s WU-QuickFixes entry.
+
+**How verified:** `dotnet build` green; **Integration** tier covers both (the whole suite resolves
+these services through the real host — `StoryArcServiceTests`, `StoryLineageServiceTests`,
+`StoryAcknowledgment*` and every endpoint test exercise the new registrations). **No Stage number
+changed.**
+

@@ -20,23 +20,9 @@ else
     <div class="mx-auto flex max-w-4xl flex-col gap-10 px-4 py-8">
 
         @* ── Wayfinding: the plaque recipe ── *@
-        <div class="flex items-center justify-between gap-4">
-            <h1 class="inline-block rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
-                Design Gallery <span class="text-sm font-normal text-(--color-text-muted)">(dev)</span>
-            </h1>
-            <div class="flex items-center gap-2 text-sm">
-                <span class="text-(--color-text)">Frame:</span>
-                @for (int i = 1; i <= 3; i++)
-                {
-                    var style = i;
-                    <button type="button"
-                            class="@(FrameButtonClasses(style)) rounded-md border px-3 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-action-ink)"
-                            @onclick="() => _frameStyle = style">
-                        @style — @(style == 1 ? "hairline" : style == 2 ? "side rails" : "bold")
-                    </button>
-                }
-            </div>
-        </div>
+        <h1 class="inline-block self-start rounded-md border border-(--color-border) bg-(--color-surface-raised) px-4 py-1.5 font-display text-xl font-semibold text-(--color-text)">
+            Design Gallery <span class="text-sm font-normal text-(--color-text-muted)">(dev)</span>
+        </h1>
 
         @* ── Canvas candidates (gate round 2: pick the grass) ── *@
         <section class="flex flex-col gap-3">
@@ -70,7 +56,7 @@ else
         @* ── Content Surface: Reading variant ── *@
         <section class="flex flex-col gap-3">
             <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text)">Content Surface — Reading</h2>
-            <ContentSurface Variant="ContentSurfaceVariant.Reading" FrameStyle="_frameStyle">
+            <ContentSurface Variant="ContentSurfaceVariant.Reading">
                 <RichTextView HtmlContent="@SampleChapterHtml" />
             </ContentSurface>
         </section>
@@ -84,7 +70,7 @@ else
                     <span class="font-bold text-(--color-text)">ReaderGamma</span>
                     <span class="text-xs text-(--color-text-muted)">Jul 4, 2026</span>
                 </div>
-                <ContentSurface Variant="ContentSurfaceVariant.Inline" FrameStyle="_frameStyle">
+                <ContentSurface Variant="ContentSurfaceVariant.Inline">
                     <RichTextView HtmlContent="@SampleCommentHtml" />
                 </ContentSurface>
                 <div class="flex gap-3 text-sm text-(--color-text-muted)">
@@ -97,7 +83,7 @@ else
         @* ── Content Surface: Input variant (live Quill) ── *@
         <section class="flex flex-col gap-3">
             <h2 class="text-sm font-bold uppercase tracking-wide text-(--color-text)">Content Surface — Input (live editor)</h2>
-            <ContentSurface Variant="ContentSurfaceVariant.Input" FrameStyle="_frameStyle">
+            <ContentSurface Variant="ContentSurfaceVariant.Input">
                 <EditorView Placeholder="Write something on paper..." />
             </ContentSurface>
         </section>
@@ -228,12 +214,7 @@ else
 }
 
 @code {
-    private int _frameStyle = 2; // ratified default: side rails
     private bool _modalOpen;
-
-    private string FrameButtonClasses(int style) => style == _frameStyle
-        ? "border-(--color-action-ink) bg-(--color-action) font-semibold text-(--color-text)"
-        : "border-(--color-border) bg-(--color-surface) text-(--color-text) hover:bg-(--color-surface-hover)";
 
     private const string SampleChapterHtml =
         "<p>The lighthouse keeper of Canalave had seen every kind of storm the strait could throw at the city, but nothing like the light that rose from Iron Island that night.</p>" +
