@@ -122,8 +122,11 @@ $fileExtPattern = '`([A-Za-z0-9_\-./\\]+\.(?:cs|razor|ps1|md|js|csproj|sln|sql|y
 # Pedagogical placeholders and framework-served assets that are correct despite not existing on disk.
 $fileCheckAllowlist = '^(Foo\w*\.|Component\.razor\.|dotnet\.runtime\.js$|blazor\.web\.js$)'
 $repoFileIndex = New-Object 'System.Collections.Generic.HashSet[string]' ([System.StringComparer]::OrdinalIgnoreCase)
-Get-ChildItem -Recurse -File -Path . |
-    Where-Object { $_.FullName -notmatch '\\(bin|obj|node_modules|\.git|TestResults)\\' } |
+# -Force and the either-separator exclusion keep CI (Linux) in parity with Windows: on Linux every
+# dot-prefixed directory is hidden, so without -Force the index never sees .claude/ or .github/ and
+# every doc cross-reference reads as MISSING (411 false violations on CI until 2026-09-29).
+Get-ChildItem -Recurse -File -Force -Path . |
+    Where-Object { $_.FullName -notmatch '[\\/](bin|obj|node_modules|\.git|TestResults)[\\/]' } |
     ForEach-Object { [void]$repoFileIndex.Add($_.Name) }
 foreach ($doc in $liveDocs) {
     # -CaseSensitive: real file extensions are lowercase; skips namespace-shaped tokens
@@ -133,7 +136,8 @@ foreach ($doc in $liveDocs) {
         if ($hit.Line -match $historicalMarker) { continue }
         foreach ($m in $hit.Matches) {
             $token = $m.Groups[1].Value
-            $base = [System.IO.Path]::GetFileName($token)
+            # Normalize `\` first: Linux GetFileName treats it as a filename character.
+            $base = [System.IO.Path]::GetFileName($token.Replace('\', '/'))
             if ($base -match $fileCheckAllowlist) { continue }
             if (-not $repoFileIndex.Contains($base)) {
                 $violations.Add(("MISSING FILE [{0}] {1}:{2}: {3}" -f $base, $hit.Path, $hit.LineNumber, $hit.Line.Trim()))

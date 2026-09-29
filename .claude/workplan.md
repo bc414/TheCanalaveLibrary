@@ -33,7 +33,8 @@ references it, does not restate it.
   workbench 2026-09-29 before merge, against the pinned `postgres:18-alpine` and the Garage container
   (the 2026-09-20 build ran in a Linux cloud container that could pull neither image, so its 6
   `S3ImageStorageServiceTests` never started). All four PowerShell gates also passed 2026-09-29 (the
-  cloud image had no `pwsh`). Both new tests were mutation-checked by hand. **Pointers:**
+  cloud image had no `pwsh`). The merge also fixed CI's Doc-hygiene step, which had failed on Linux for
+  every PR since at least 2026-08-23. Both new tests were mutation-checked by hand. **Pointers:**
   `workplan.md` WU-QuickFixes; `audit/Tags.md`, `audit/Following.md`, `audit/Stories.md`
   §"WU-QuickFixes"; tracker D4/H6.
   Before that, 2026-08-01: WU-UserModeration — closed tracker **B13**, which was filed as
@@ -462,6 +463,16 @@ is pending except where a bullet says so.
   (`postgres:18-alpine` + Garage): **Unit 793/793, RazorComponents 665/665, Integration
   1,064/1,064** — the 6 `S3ImageStorageServiceTests` and the new batched-hydration test included.
   All four PowerShell gates passed.
+  **CI's Doc-hygiene step fixed in the same merge (2026-09-29).** The PR's CI failed at
+  `check-doc-hygiene.ps1` with 411 violations while the same script was clean on Windows. This was
+  not caused by this WU: every PR back to at least 2026-08-23, Dependabot's included, failed the same
+  step. Check 4's repo-file index ran `Get-ChildItem -Recurse` without `-Force`, and on Linux every
+  dot-prefixed directory is hidden, so `.claude/` and `.github/` were never indexed and every doc
+  cross-reference read as MISSING. Its exclusion regex also only matched `\`, and `GetFileName`
+  kept a `Client\Routes.razor`-style token whole. Fixed with `-Force`, an either-separator
+  exclusion, and `\`→`/` normalization. Verified in a `mcr.microsoft.com/powershell` Linux container
+  (411 violations reproduced; clean after the fix) and on Windows (still clean). A planted bogus
+  reference is flagged identically on both, so the check still catches real misses.
 - **Pointers:** `audit/Tags.md` §"WU-QuickFixes Stage note" (F15); `audit/Following.md`
   §"WU-QuickFixes slice" (F19); `audit/Stories.md` §"WU-QuickFixes slice" (F8/F9/F10 + MA-211);
   `layer2-services.md` §"Registering an inherited pair"; `hidden-deferrals-tracker.md` D4/H6;
