@@ -26,6 +26,30 @@ public interface IStoryWriteService : IStoryReadService
 Razor components inject the *narrowest* applicable interface: a story viewer injects
 `IStoryReadService`; the story editor injects `IStoryWriteService`. Least-privilege at the type level.
 
+### Registering an inherited pair: forward, never register the class twice
+
+When one concrete class serves both interfaces (the write impl inherits the read impl), register the
+class **once** and forward the other interface to it. Registering the same class against both
+interfaces mints **two instances per scope** — two `ApplicationDbContext`-holding services where the
+code reads as one, and any per-scope state one of them accumulates is invisible to the other:
+
+```csharp
+// Right — one instance per scope, whichever interface is injected.
+builder.Services.AddScoped<IStoryArcWriteService, ServerStoryArcWriteService>();
+builder.Services.AddScoped<IStoryArcReadService>(sp => sp.GetRequiredService<IStoryArcWriteService>());
+
+// Wrong — two instances per scope.
+builder.Services.AddScoped<IStoryArcReadService, ServerStoryArcWriteService>();
+builder.Services.AddScoped<IStoryArcWriteService, ServerStoryArcWriteService>();
+```
+
+Where the write interface does *not* inherit the read one (`ISavedTagSelectionWriteService` is the
+one such cluster), register the concrete class and forward **both** interfaces to it — the same shape
+`ServerTagHierarchyCache` uses. Two separate classes (Story, Chapter, Comment, …) keep the plain
+two-line registration: there is no shared instance to preserve.
+
+Unified across all clusters 2026-09-20 (MA-107); `Program.cs` is the reference.
+
 ## Server Implementation — Compile-Time DbContext Safety
 
 ```csharp

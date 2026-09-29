@@ -4,9 +4,9 @@
    written: the D/P dialog box, abstracted (layer4-style.md §"Element Roles"; ratified
    2026-07-10). RichTextView and EditorView never render outside one of these. The leaf stays
    styleless (WU5 mechanics) and reader-owned typography stays inside RichTextView; this wrapper
-   owns only the material: paper ground + frame. FrameStyle exists for the Phase A gate review
-   (three candidate treatments on /dev/design-gallery); the winning treatment becomes the only
-   one and the parameter is removed. Phase E will add the reader background override
+   owns only the material: paper ground + frame. The frame is the side-rails treatment the Phase A
+   gate ratified (2026-07-10) — the three-candidate FrameStyle switcher that served that review is
+   gone with it (MA-007, 2026-09-20). Phase E will add the reader background override
    (SiteDefault/Light/Sepia/Dark) here via the cascaded ReaderDisplaySettings.
    Outer Margin Rule applies: internal padding only; parents space with gap. *@
 
@@ -38,27 +38,17 @@
         _ => null,
     };
 
-    /// <summary>
-    /// Frame treatment. Side rails (2) is the ratified default (gate review, 2026-07-10 — the
-    /// D/P dialog-box rails, abstracted). Parameter retained only for the gallery's comparison
-    /// switcher; production callers never set it.
-    /// </summary>
-    [Parameter]
-    public int FrameStyle { get; set; } = 2;
-
-    private string FrameClasses => FrameStyle switch
-    {
-        2 => "border border-(--color-paper-frame)/50 border-x-4 border-x-(--color-paper-frame)",
-        3 => "border-2 border-(--color-paper-frame)",
-        _ => "border border-(--color-paper-frame)/50",
-    };
-
     private string VariantClasses => Variant switch
     {
         ContentSurfaceVariant.Reading => "px-6 py-8 md:px-10",
         ContentSurfaceVariant.Input => "p-2 focus-within:ring-2 focus-within:ring-(--color-action-ink)",
         _ => "px-4 py-3",
     };
+
+    // Side rails — the frame treatment ratified at the Phase A gate (2026-07-10), the D/P
+    // dialog-box rails abstracted.
+    private const string FrameClasses =
+        "border border-(--color-paper-frame)/50 border-x-4 border-x-(--color-paper-frame)";
 
     private string RootClasses => $"rounded-xl bg-(--color-paper) {FrameClasses} {VariantClasses}";
 }

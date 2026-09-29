@@ -17,7 +17,27 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-UserModeration (2026-08-01) — closed tracker **B13**, which was filed as
+- **Last landed:** WU-QuickFixes (2026-09-20) — four closures that needed no deliberation, found by
+  reading the process docs for gaps that are *fixes* rather than decisions: **MA-107** (all seven
+  remaining clusters registered their write class against both interfaces, minting two instances per
+  scope — now forwarded; the inherited-pair registration rule is recorded in `layer2-services.md`,
+  which had none), **MA-408** (the profile Tag Selections tab's N+1 — two queries per selection, now
+  two for the whole tab), the **VouchButton follow-gate staleness** from the 2026-07-01 browser pass
+  (tracker **H6**: `FollowButton` now raises `OnFollowChanged` so the follow-gated vouch button
+  appears in the same visit), and **MA-007 + MA-211** (the dead `ContentSurface.FrameStyle` param
+  from a gate review that ended 2026-07-10, plus `ServerStoryArcWriteService`'s needless field
+  copies). No cell flips — all of it sits under cells that were already Stage 5. Left alone with the
+  reason recorded: **MA-006** (tokenize-vs-exempt is Brian's call on a locked manifest), **B15**,
+  **B16**, **C3/C5**. **MA-509** was verified already-resolved, not rebuilt. `dotnet test`: Unit 793,
+  RazorComponents 665 (+3), Integration 1,064 of 1,064 (+1) — full suite re-run on the Windows
+  workbench 2026-09-29 before merge, against the pinned `postgres:18-alpine` and the Garage container
+  (the 2026-09-20 build ran in a Linux cloud container that could pull neither image, so its 6
+  `S3ImageStorageServiceTests` never started). All four PowerShell gates also passed 2026-09-29 (the
+  cloud image had no `pwsh`). The merge also fixed CI's Doc-hygiene step, which had failed on Linux for
+  every PR since at least 2026-08-23. Both new tests were mutation-checked by hand. **Pointers:**
+  `workplan.md` WU-QuickFixes; `audit/Tags.md`, `audit/Following.md`, `audit/Stories.md`
+  §"WU-QuickFixes"; tracker D4/H6.
+  Before that, 2026-08-01: WU-UserModeration — closed tracker **B13**, which was filed as
   `polish · low` ("`ModUsersPage`'s `{UserId:int?}` route parameter is declared and never read") and
   turned out to be the visible tip of a **moderation feature that could not be used at all**.
   Three findings, each verified in code: nothing in the app could report a User (every
@@ -225,7 +245,8 @@ references it, does not restate it.
   WU-ApplyFiltersPurity, and WU-ErrorHandling2 were all Tier-1/Tier-2 between-phase work (below),
   not phase gates.
 - **Between-phase work:** `hidden-deferrals-tracker.md` closures land as ad-hoc WUs — open items
-  exist in **every group A–H** (fewer now that A6/B0/B1/B3/B4/B7/B12/H1/H10/E4/H8 are closed;
+  exist in **every group A–H** (fewer now that A6/B0/B1/B3/B4/B7/B12/H1/H10/E4/H8 are closed, and
+  **D4** is down to MA-006 alone, with H6's VouchButton bullet struck — WU-QuickFixes, 2026-09-20;
   B14/B15/B16/H9 newly opened — **H9 is now unblocked**, since H10 had the funnel it needs to
   drive returning 500), including two **high-priority security items: E2 and E3**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -380,6 +401,82 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-QuickFixes — four no-deliberation-needed closures found by reading the process docs (tracker D4 + H6; cross-cutting, extends `Tags/`, `Stories/`, `Following/`, `Profiles/`, `RichText/`, composition root) — DONE ✓ (2026-09-20)
+
+- **Cells:** none flipped. Every touched cell (F8/F9/F10 L2, F15 L2, F19 L3-Logic/L3.5, the
+  `ContentSurface` atom) was already Stage 5 and stays 5 — the already-sound-cell shape this
+  tracker exists for (B0/B4/B12/A6).
+- **Trigger:** a read of the process docs looking for gaps that are *fixes*, not decisions. Four
+  qualified; the entries that read like small fixes but are actually design questions were
+  deliberately left alone, with the reason recorded (see "Left alone" below).
+- **What landed:**
+  1. **MA-107 — DI double-registration (7 clusters).** SavedTagSelection, CustomList, Series,
+     StoryLineage, StoryAcknowledgment, StoryArc and Notification each registered the *write* class
+     against both interfaces, so a scope injecting both got two instances of the same
+     `ApplicationDbContext`-holding service. All seven now forward the read interface to the write
+     registration — the shape already used by Moderation, Badges and Fanon, and the one the audit
+     named the safer default. **Found in passing:** `ISavedTagSelectionWriteService` is the one
+     write interface in the codebase that does *not* inherit its read interface (the forwarding
+     delegate wouldn't compile), so that cluster registers the concrete class and forwards both
+     interfaces — the `ServerTagHierarchyCache` shape. Rule now recorded in `layer2-services.md`
+     §"Registering an inherited pair", which had no guidance for the inherited case at all.
+  2. **MA-408 — `SavedTagSelection` N+1.** The profile Tag Selections tab looped `HydrateDetailAsync`
+     (two queries per selection); it now runs two queries for the whole tab. New Integration test
+     guards the failure mode a batch rewrite introduces and a single-row fixture can't see: chips
+     landing on the wrong selection.
+  3. **VouchButton follow-gate staleness (tracker H6).** `FollowButton` is a self-contained write and
+     told nobody when it flipped, so `ProfileBanner` kept feeding `VouchButton` the page-load
+     `RelationshipState.IsFollowing` — follow and vouch in one visit and the vouch button stayed
+     hidden until a reload (recorded in the 2026-07-01 browser pass, never fixed). `FollowButton` now
+     raises `OnFollowChanged`; the banner mirrors it. New `ProfileBannerTests` (3).
+  4. **MA-007 + MA-211 — two dead-idiom cleanups.** `ContentSurface.FrameStyle` (the magic-int
+     switcher for a gate review that ended 2026-07-10; the component's own header said the parameter
+     goes when a treatment is ratified) and its only caller, the dev gallery's three-way switcher,
+     are gone — the ratified side rails are now a `const`. `ServerStoryArcWriteService` stopped
+     copying primary-ctor params into fields; the CS9107 alias it carried was unnecessary, since
+     `writeDb` is never passed to the base constructor and `ActiveUser` is already exposed.
+- **Left alone, deliberately:** **MA-006** (`ContentSurface`'s raw-hex reading-background palettes)
+  is a choice between tokenizing into a *locked* `@theme` manifest and recording a sanctioned
+  exception — a call, not a fix. **B15** (`CollapseCommentThreads`) is a design question the tracker
+  already reserves for Brian. **B16** (`ResultsFilterPanel`'s `PageSize` hardcode) needs a
+  consumer-contract audit, which its own entry says is a WU, not a point fix. **C3/C5** (index
+  shapes) would add DDL without measurement, against the doctrine C1 set.
+- **Also verified stale, no work needed:** **MA-509** (triplicated audience-badge statics) was
+  already extracted to `SharedUI/Groups/GroupDisplayFormat.cs` and its Desktop/Mobile copies died
+  with WU-ResponsiveMerge. `deferred-work.md` §3 and its pickup order are annotated.
+- **Verification.** `dotnet build` green (0 errors; warning count unchanged from baseline).
+  `dotnet test`: **Unit 793** (unchanged), **RazorComponents 665** (+3, new `ProfileBannerTests`),
+  **Integration 1,058 passed / 1,064 total** (+1, the new batched-hydration test). Both new tests
+  were mutation-checked by hand — each fails on the pre-fix code and passes after.
+  **Environment caveat (the 2026-09-20 run happened in a Linux cloud container, not the Windows
+  workbench):**
+  the 6 non-passing Integration tests are the whole `S3ImageStorageServiceTests` class, which needs
+  the Garage container image; every container registry's blob CDN is blocked by the container's
+  egress proxy, so those 6 could not start (`GarageFixture.InitializeAsync` — Docker image pull),
+  and the Postgres tier ran against a locally installed Postgres 16 instead of the pinned
+  `postgres:18-alpine` container. No S3/image-storage code was touched. The PowerShell gates
+  (`check-design-tokens.ps1`, `check-doc-hygiene.ps1`, `check-a11y.ps1`, `check-render-modes.ps1`)
+  could not run either — no `pwsh` in the image.
+  **Pre-merge re-verification (2026-09-29, Windows workbench) — closes the caveat:** `dotnet build`
+  green, no warnings in any file the WU touched. Full `dotnet test` against the real containers
+  (`postgres:18-alpine` + Garage): **Unit 793/793, RazorComponents 665/665, Integration
+  1,064/1,064** — the 6 `S3ImageStorageServiceTests` and the new batched-hydration test included.
+  All four PowerShell gates passed.
+  **CI's Doc-hygiene step fixed in the same merge (2026-09-29).** The PR's CI failed at
+  `check-doc-hygiene.ps1` with 411 violations while the same script was clean on Windows. This was
+  not caused by this WU: every PR back to at least 2026-08-23, Dependabot's included, failed the same
+  step. Check 4's repo-file index ran `Get-ChildItem -Recurse` without `-Force`, and on Linux every
+  dot-prefixed directory is hidden, so `.claude/` and `.github/` were never indexed and every doc
+  cross-reference read as MISSING. Its exclusion regex also only matched `\`, and `GetFileName`
+  kept a `Client\Routes.razor`-style token whole. Fixed with `-Force`, an either-separator
+  exclusion, and `\`→`/` normalization. Verified in a `mcr.microsoft.com/powershell` Linux container
+  (411 violations reproduced; clean after the fix) and on Windows (still clean). A planted bogus
+  reference is flagged identically on both, so the check still catches real misses.
+- **Pointers:** `audit/Tags.md` §"WU-QuickFixes Stage note" (F15); `audit/Following.md`
+  §"WU-QuickFixes slice" (F19); `audit/Stories.md` §"WU-QuickFixes slice" (F8/F9/F10 + MA-211);
+  `layer2-services.md` §"Registering an inherited pair"; `hidden-deferrals-tracker.md` D4/H6;
+  `modernization-audit/deferred-work.md` §3/§6.
 
 ## WU-UserModeration — the user-moderation seam: reporting a user, acting on a content author, per-user history (Features 46/47, extends `Moderation/`, `Profiles/`, `Users/`, `Discovery/`) — DONE ✓ (2026-08-01)
 

@@ -48,6 +48,13 @@
     [Parameter] public bool IsFollowing { get; set; }
     [Parameter] public bool ReceiveAlerts { get; set; }
 
+    /// <summary>
+    /// Raised after a successful follow/unfollow with the new state. The parent doesn't need the
+    /// result to render this button (it owns its own state), but sibling affordances gated on
+    /// following — VouchButton — do, or they stay stale until a reload.
+    /// </summary>
+    [Parameter] public EventCallback<bool> OnFollowChanged { get; set; }
+
     private bool _isFollowing;
     private bool _receiveAlerts;
     private bool _busy;
@@ -76,6 +83,8 @@
                 _isFollowing = true;
                 _receiveAlerts = true; // service default
             }
+
+            await OnFollowChanged.InvokeAsync(_isFollowing);
         }
         finally
         {

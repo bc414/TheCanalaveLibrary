@@ -123,8 +123,9 @@ notification through the real WU22 seam (Feature 41 generation evidence). Vouch:
 IsFollowing per WU21; dialog shows remaining-slots count (respected the seeded vouch), optional
 rich-text note; Submit persisted the sanitized note (`<p>…</p>` via psql), button flipped to
 "✓ Vouched", recipient got a NewVouchOnYou (type 32) notification. **Minor staleness (not
-unsound):** VouchButton's IsFollowing comes from page-load RelationshipState, so it appears only
-after a reload when the user follows and vouches in one visit — polish candidate for a later WU.
+unsound), FIXED 2026-09-20 (WU-QuickFixes):** VouchButton's IsFollowing came from page-load
+RelationshipState, so the vouch affordance appeared only after a reload when the user followed and
+vouched in one visit — see the Stage note at the bottom of this file.
 
 ### MA-505 status-code seam note (2026-07-18)
 
@@ -150,3 +151,22 @@ attacker-authored HTML onto a profile the actor cannot open. The base read servi
 re-capturing primary-constructor parameters (the established CS9107 pattern).
 
 Invariant, guards, and the two root causes: `identity-and-authorization.md` §"Parent-visibility guards" (conditionality kind (g)). Enforcement: `Tests.Integration/ParentVisibilityContractTests.cs`. Full narrative: `workplan.md` WU-ParentVisibility. **No Stage number changed — every affected cell was already Stage 5 and remains 5.**
+
+---
+
+**WU-QuickFixes slice (2026-09-20) — F19.** Closes the follow→vouch staleness recorded in the
+2026-07-01 browser pass above (`hidden-deferrals-tracker.md` **H6**'s VouchButton bullet).
+`FollowButton` is a self-contained write: it owns `_isFollowing` and never told anyone when it
+flipped, so `ProfileBanner` kept handing `VouchButton` the page-load `RelationshipState.IsFollowing`
+and the follow-gated vouch button stayed hidden for the rest of the visit. `FollowButton` now raises
+`OnFollowChanged` (an `EventCallback<bool>`, the `UserStoryInteractionButton` idiom — the parent
+still doesn't need the result to render the button itself, but a *sibling* affordance gated on
+following does), and `ProfileBanner` mirrors it into a local `_isFollowing` that feeds `VouchButton`.
+The mirror is re-seeded in `OnParametersSet` exactly as `FollowButton` re-seeds its own state, so a
+fresh `RelationshipState` from the page still wins. No service, DTO, or endpoint change.
+
+**How verified:** `dotnet build` green; **RazorComponents** tier covers it — new
+`ProfileBannerTests` (3 tests: no vouch button when not following, vouch button when already
+following, and vouch button revealed after following in the same visit without a reload).
+Mutation-checked by hand: rebinding `VouchButton.IsFollowing` back to `RelationshipState.IsFollowing`
+fails the third test. **No Stage number changed — F19's cells were already Stage 5 and remain 5.**

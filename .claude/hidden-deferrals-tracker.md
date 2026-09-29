@@ -630,10 +630,39 @@ unless noted. All sit under Stage-5 cells.
   - Source: `modernization-audit/deferred-work.md` §7.
   - Context: `RecordAttributionSourceAsync` never checks `recommendationId` exists/belongs to `storyId` (bogus self-attribution can later feed credit via `RecordSuccessAsync`). Unrelated code path to D3.1 (Recommendations, not Groups) — the user split the original combined D3 item rather than fold this half into the Groups fix, since it belongs with dedicated Recommendations work instead.
 
-- [ ] **D4 — Code-economy items (not the disclosed "extract-or-not" seams)** `[polish · low · anytime]`
+- [ ] **D4 — Code-economy items (not the disclosed "extract-or-not" seams)** `[polish · low · anytime]` — *Four of five closed 2026-09-20 (WU-QuickFixes); only MA-006 remains, and it needs a call, not a fix.*
   - Grid: affected cells all Stage 5.
   - Source: `modernization-audit/deferred-work.md` §3 & §6.
-  - Context: **MA-107** DI double-registration (7 clusters register the write class twice → two instances per scope); **MA-408** `SavedTagSelection` N+1 (`GetPublicSelectionsByUserAsync` loops `HydrateDetailAsync`); **MA-006** `ContentSurface` hardcodes 3 `ReadingBackground` palettes as raw hex in a `style=` attr (`layer4-style.md` itself calls this a defect the CI token-checker can't catch); **MA-007** leftover `FrameStyle` magic-int param; **MA-211** field-copy idiom divergence in `ServerStoryArcWriteService`.
+  - **Still open — MA-006:** `ContentSurface` hardcodes the 3 `ReadingBackground` palettes as raw hex
+    in a `style=` attr. Deliberately *not* taken with the other four — and its framing here needed
+    two corrections, checked 2026-09-20:
+    (a) the half of the fix this entry offers as an alternative is **already done** —
+    `check-design-tokens.ps1`'s `$rawColorExempt` has listed `ContentSurface.razor` since the gate,
+    with the reason in the script header ("Light/Sepia/Dark reader-override hexes live here by
+    design (Phase E)"), so the hexes are a sanctioned exception, not an unnoticed violation;
+    (b) the claim that "`layer4-style.md` itself calls this a defect" no longer holds — a grep of
+    that file for the palettes, `ReadingBackground`, or a raw-hex defect claim returns nothing.
+    What is genuinely left is the design call itself: tokenize the three palettes into the **locked**
+    `@theme` manifest (Brian's call, and Phase E's reader-override work is its natural home), or
+    leave the standing exemption as the answer and close this item.
+  - **Closed 2026-09-20 (WU-QuickFixes):**
+    - **MA-107** — DI double-registration. All seven clusters (SavedTagSelection, CustomList, Series,
+      StoryLineage, StoryAcknowledgment, StoryArc, Notification) now forward the read interface to the
+      write registration instead of registering the write class twice, so each is one instance per
+      scope. Rule now recorded in `layer2-services.md` §"Registering an inherited pair"; found in
+      passing that `ISavedTagSelectionWriteService` is the one write interface that does *not* inherit
+      its read interface, so that cluster forwards both interfaces to the concrete class.
+    - **MA-408** — `SavedTagSelection` N+1. The profile tab's `GetPublicSelectionsByUserAsync` went
+      from two queries per selection to two for the whole tab; new Integration regression test.
+      Detail: `audit/Tags.md` §"WU-QuickFixes Stage note".
+    - **MA-007** — the `FrameStyle` magic-int param is gone from `ContentSurface` (the gate ratified
+      side rails 2026-07-10 and the component's own header said the parameter goes with it); the dev
+      gallery's three-way comparison switcher, its only caller, went with it.
+    - **MA-211** — `ServerStoryArcWriteService` field-copy divergence. Detail: `audit/Stories.md`
+      §"WU-QuickFixes slice".
+    - Also verified stale while closing these: **MA-509** (triplicated audience-badge statics) was
+      already extracted to `SharedUI/Groups/GroupDisplayFormat.cs`, and its Desktop/Mobile copies died
+      with WU-ResponsiveMerge — `deferred-work.md` §3 is annotated, nothing to build.
 
 - [x] **D5 — Client 401-mapping deviations + a shipped behavior change — CLOSED (WU-ErrorHandling2, 2026-07-30)** `[latent-risk · low · anytime]`
   - Grid: F16/F17/F38/F49 L5=5 (unchanged).
@@ -863,7 +892,7 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     - **Self-likes** accepted on own comment (F25) — `audit/Comments.md`.
     - **Spoiler flag not editable** after a comment is posted (F26) — `audit/Comments.md`.
     - ~~**Tag L1 length drift** vs spec (F11–13): `SpriteIdentifier` 50 vs 100, `Description` 512 vs 500~~ — **FIXED WU-TagFanon 2026-07-26** (rode that WU's migration; `TagValidations` constants + the editor `maxlength`s follow).
-    - **VouchButton `IsFollowing` staleness** (F19): vouch affordance only appears after reload if follow+vouch happen in one visit — `audit/Following.md`.
+    - ~~**VouchButton `IsFollowing` staleness** (F19): vouch affordance only appears after reload if follow+vouch happen in one visit~~ — **FIXED 2026-09-20 (WU-QuickFixes)**: `FollowButton` raises `OnFollowChanged`, `ProfileBanner` mirrors it into the vouch gate; new `ProfileBannerTests` cover it. Detail: `audit/Following.md` §"WU-QuickFixes slice".
     - **StoryLineage** cosmetic item "revisit pre-launch if at all" — `layer2-services.md:1022`.
     - **Layer-8 strict "no-mature routing" toggle** deferred — `layer8-data-marts.md:257` (same "hard-mode" idea as E6).
 

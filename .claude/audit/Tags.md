@@ -658,6 +658,25 @@ tab, confirmed a stale slug still resolves, confirmed the anonymous view, then f
 nickname/description/tag leak. Full browser narrative: `audit/Discovery.md`
 §"WU-DiscoveryFilterRestore + WU-SelectionPermalink note".
 
+### WU-QuickFixes Stage note (2026-09-20) — F15 L2 stays Stage 5
+
+`GetPublicSelectionsByUserAsync` (the profile Tag Selections tab) looped `HydrateDetailAsync` once
+per selection — two queries per row, N+1 in a codebase that documents a batch-enrichment rule
+(`layer2-services.md`, "Never N+1"). It now issues **two queries for the whole tab**: headers in
+`DateCreated` desc order, then every selection's entries joined to `Tag` in one pass, grouped in
+memory by `SavedTagSelectionId`. `HydrateDetailAsync` stays the single-selection path
+(`GetSelectionDetailAsync`, `GetPublicSelectionByIdAsync`); its owner-or-public gate is subsumed on
+the tab path by the `IsPublic` filter, which is stricter. No behavior change, no DTO change, no cell
+flip — this closes `modernization-audit/deferred-work.md` §3's **MA-408** under an already-sound
+cell (the tracker's D4 shape).
+
+**How verified:** `dotnet build` green; **Integration** tier covers it —
+`SavedTagSelectionServiceTests.GetPublicSelectionsByUserAsync_SeveralSelections_KeepsEachOnesOwnChips_NewestFirst`
+is new and guards the failure mode a batch rewrite introduces and a single-row fixture cannot see
+(chips landing on the wrong selection), plus the newest-first order. Mutation-checked by hand: with
+the per-selection lookup key removed the test fails, with it restored it passes. The two pre-existing
+public-tab tests (public-only filtering, empty case) still pass.
+
 ### WU43 Stage-5 verification note (2026-07-11)
 
 `dotnet build` full solution green, 0 warnings/errors. `dotnet test` full suite green: 585 Unit + 564
