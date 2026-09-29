@@ -29,13 +29,13 @@ references it, does not restate it.
   copies). No cell flips — all of it sits under cells that were already Stage 5. Left alone with the
   reason recorded: **MA-006** (tokenize-vs-exempt is Brian's call on a locked manifest), **B15**,
   **B16**, **C3/C5**. **MA-509** was verified already-resolved, not rebuilt. `dotnet test`: Unit 793,
-  RazorComponents 665 (+3), Integration 1,058 passed of 1,064 (+1) — the 6 non-passing are the whole
-  `S3ImageStorageServiceTests` class, which could not start because the 2026-09-20 run happened in a
-  Linux cloud container whose egress proxy blocks every container-image CDN (no Garage image; the Postgres tier
-  ran against a local Postgres 16 instead of the pinned `postgres:18-alpine`). The PowerShell gates
-  could not run there either — no `pwsh` — so CI is their first run for this change. Both new tests
-  were mutation-checked by hand. **Pointers:** `workplan.md` WU-QuickFixes; `audit/Tags.md`,
-  `audit/Following.md`, `audit/Stories.md` §"WU-QuickFixes"; tracker D4/H6.
+  RazorComponents 665 (+3), Integration 1,064 of 1,064 (+1) — full suite re-run on the Windows
+  workbench 2026-09-29 before merge, against the pinned `postgres:18-alpine` and the Garage container
+  (the 2026-09-20 build ran in a Linux cloud container that could pull neither image, so its 6
+  `S3ImageStorageServiceTests` never started). All four PowerShell gates also passed 2026-09-29 (the
+  cloud image had no `pwsh`). Both new tests were mutation-checked by hand. **Pointers:**
+  `workplan.md` WU-QuickFixes; `audit/Tags.md`, `audit/Following.md`, `audit/Stories.md`
+  §"WU-QuickFixes"; tracker D4/H6.
   Before that, 2026-08-01: WU-UserModeration — closed tracker **B13**, which was filed as
   `polish · low` ("`ModUsersPage`'s `{UserId:int?}` route parameter is declared and never read") and
   turned out to be the visible tip of a **moderation feature that could not be used at all**.
@@ -456,9 +456,12 @@ is pending except where a bullet says so.
   and the Postgres tier ran against a locally installed Postgres 16 instead of the pinned
   `postgres:18-alpine` container. No S3/image-storage code was touched. The PowerShell gates
   (`check-design-tokens.ps1`, `check-doc-hygiene.ps1`, `check-a11y.ps1`, `check-render-modes.ps1`)
-  could not run either — no `pwsh` in the image — so CI is their first run for this change; the diff
-  adds no `class=` attributes, no `[PersistentState]`, no retired terms, and removes a raw-class
-  switch rather than adding one.
+  could not run either — no `pwsh` in the image.
+  **Pre-merge re-verification (2026-09-29, Windows workbench) — closes the caveat:** `dotnet build`
+  green, no warnings in any file the WU touched. Full `dotnet test` against the real containers
+  (`postgres:18-alpine` + Garage): **Unit 793/793, RazorComponents 665/665, Integration
+  1,064/1,064** — the 6 `S3ImageStorageServiceTests` and the new batched-hydration test included.
+  All four PowerShell gates passed.
 - **Pointers:** `audit/Tags.md` §"WU-QuickFixes Stage note" (F15); `audit/Following.md`
   §"WU-QuickFixes slice" (F19); `audit/Stories.md` §"WU-QuickFixes slice" (F8/F9/F10 + MA-211);
   `layer2-services.md` §"Registering an inherited pair"; `hidden-deferrals-tracker.md` D4/H6;
