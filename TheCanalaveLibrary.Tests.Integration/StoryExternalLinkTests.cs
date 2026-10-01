@@ -43,7 +43,6 @@ public class StoryExternalLinkTests(PostgresFixture postgres) : IntegrationTestB
         ShortDescription = "test",
         LongDescription = "<p>long enough</p>",
         Rating = Rating.E,
-        StoryStatusId = StoryStatusEnum.Draft,
         StoryTags =
         [
             new StoryTagDTO { TagId = _settingTagId, TagTypeEnum = TagTypeEnum.Setting, Priority = TagPriority.Primary },

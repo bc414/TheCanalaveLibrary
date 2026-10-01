@@ -18,7 +18,9 @@ public class StoryDetailsDTO
     public string? ShortDescription { get; set; }
     public string? LongDescription { get; set; }
     public int WordCount { get; set; }
-    public DateTime PublishDate { get; set; }
+    /// <summary>First publication on this site; null = never published (only the author can see
+    /// such a story — D2).</summary>
+    public DateTime? PublishDate { get; set; }
     public DateTime LastUpdatedDate { get; set; }
     public DateOnly? OriginalPublishDate { get; set; }
     public DateOnly? OriginalLastUpdatedDate { get; set; }

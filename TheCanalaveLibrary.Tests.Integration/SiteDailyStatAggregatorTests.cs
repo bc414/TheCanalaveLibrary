@@ -51,8 +51,13 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
         await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {InDay}, word_count = 500 WHERE story_id = {_storyS1Id}");
         await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {_day.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)}, word_count = 300 WHERE story_id = {storyS2Id}");
 
-        // --- new_chapters / new_words: one published chapter on S1 today, 500 words ---
-        Chapter chapter = new() { StoryId = _storyS1Id, ChapterNumber = 1, Title = "Ch1", IsPublished = true };
+        // --- new_chapters / new_words: one published chapter on S1 today, 500 words. Counted on the
+        // chapter-level anchor Chapter.FirstPublishedDate (D2, WU-StoryLifecycle), not the version's
+        // PublishDate ---
+        Chapter chapter = new()
+        {
+            StoryId = _storyS1Id, ChapterNumber = 1, Title = "Ch1", IsPublished = true, FirstPublishedDate = InDay,
+        };
         db.Chapters.Add(chapter);
         await db.SaveChangesAsync();
         ChapterContent content = new()
@@ -201,6 +206,43 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
 
         int rowCount = await CountRowsForDayAsync();
         rowCount.Should().Be(1, "ON CONFLICT (stat_date) DO UPDATE — same day never produces a second row");
+    }
+
+    // ── Publish-date sourcing (owner ruling D2, WU-StoryLifecycle) ────────────────────
+
+    [Fact]
+    public async Task UpsertDayAsync_PromotingANewerVersion_DoesNotReCountTheChapter()
+    {
+        // An OLD chapter (first published 10 days before the window) gets a new version written
+        // today and promoted to primary. Before D2 the aggregator keyed on the primary version's
+        // publish_date, so this counted as a "new chapter" today with the new version's words.
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            DateTime longAgo = _day.AddDays(-10).ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc);
+            Chapter old = new()
+            {
+                StoryId = _storyS1Id, ChapterNumber = 2, Title = "Ch2", IsPublished = true,
+                FirstPublishedDate = longAgo,
+            };
+            db.Chapters.Add(old);
+            await db.SaveChangesAsync();
+            ChapterContent promoted = new()
+            {
+                ChapterId = old.ChapterId, AuthorId = _userAId, ChapterText = "rewrite", SortOrder = 1,
+                WordCount = 900, PublishDate = InDay,
+            };
+            db.ChapterContents.Add(promoted);
+            await db.SaveChangesAsync();
+            old.PrimaryContentId = promoted.ChapterContentId;
+            await db.SaveChangesAsync();
+        }
+
+        await UpsertAsync();
+
+        SiteDailyStat row = (await LoadRowAsync())!;
+        row.NewChapters.Should().Be(1, "only Ch1 first went live inside the window");
+        row.NewWords.Should().Be(500, "Ch2's promoted version is an update, never a publish event");
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────────────

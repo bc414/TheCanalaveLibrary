@@ -10,7 +10,6 @@ public class StoryMappersTests
         Title = "A New Story",
         ShortDescription = "Short desc",
         Rating = Rating.T,
-        StoryStatusId = StoryStatusEnum.InProgress,
         CoverArtRelativeUrl = "/uploads/stories/1/cover-abc.png",
         LongDescription = "Long desc",
         PostApprovalStatus = StoryStatusEnum.InProgress,
@@ -41,7 +40,8 @@ public class StoryMappersTests
         story.StoryDetail.LongDescription.Should().Be(dto.LongDescription);
         story.StoryDetail.PostApprovalStatus.Should().Be(dto.PostApprovalStatus);
         story.Rating.Should().Be(dto.Rating);
-        story.StoryStatusId.Should().Be(dto.StoryStatusId);
+        story.StoryStatusId.Should().Be(default(StoryStatusEnum),
+            "the mapper never copies status — a lifecycle move is not a property edit (WU-StoryLifecycle, D1)");
     }
 
     [Fact]
@@ -59,6 +59,7 @@ public class StoryMappersTests
     public void UpdateStoryEditableProperties_ReplacesExistingTags_RatherThanAppending()
     {
         Story story = MakeDto().ToStory(); // seeds one tag (TagId 5)
+        story.StoryStatusId = StoryStatusEnum.InProgress;
 
         StoryUpdateDTO update = new()
         {
@@ -76,5 +77,7 @@ public class StoryMappersTests
             .Which.TagId.Should().Be(9);
         story.StoryListing.StoryTitle.Should().Be("Updated Title");
         story.Rating.Should().Be(Rating.M);
+        story.StoryStatusId.Should().Be(StoryStatusEnum.InProgress,
+            "StoryUpdateDTO.StoryStatusId is a read echo — the mapper must ignore it (WU-StoryLifecycle, D1)");
     }
 }

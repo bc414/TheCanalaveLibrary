@@ -43,7 +43,7 @@ public static class PdfWriter
                     col.Item().PaddingTop(140).AlignCenter().Text(story.Title).FontSize(28).Bold();
                     col.Item().PaddingTop(12).AlignCenter().Text($"by {story.AuthorName}").FontSize(14);
                     col.Item().PaddingTop(4).AlignCenter()
-                       .Text($"Rated {story.RatingLabel} · Published {story.PublishDate:MMM d, yyyy} · Updated {story.LastUpdatedDate:MMM d, yyyy}")
+                       .Text($"Rated {story.RatingLabel} · {story.PublishedLabel} · Updated {story.LastUpdatedDate:MMM d, yyyy}")
                        .FontSize(10).FontColor(Colors.Grey.Darken1);
 
                     if (!string.IsNullOrWhiteSpace(story.LongDescriptionHtml))

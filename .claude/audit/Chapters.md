@@ -66,13 +66,13 @@ null rating as primary, floor rejection, primary invariant rejection on create +
 `ChapterReadServiceTests` — null-rated version reads as effective story rating). `SeedStoryAsync` in
 `IntegrationTestBase` extended with optional `rating` parameter.
 
-- **L1 — Stage 5.** `Chapter`/`ChapterContent` with the live-alternate versioning model. Note:
+- **L1 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — `Chapter.FirstPublishedDate` added, `ChapterContent.PublishDate` nullable; see the WU-StoryLifecycle Stage note under Feature 7).** `Chapter`/`ChapterContent` with the live-alternate versioning model. Note:
   `Chapter.PrimaryContentId` was changed from `long` to `long?` (nullable) during WU17 to break the
   circular FK insert dependency (`Chapter.PrimaryContentId → ChapterContent.ChapterId → Chapter`);
   migration `20260623005108_MakeChapterPrimaryContentIdNullable` applied. `PrimaryContent` nav is now
   `ChapterContent?`. Also: `Story.ChapterCount` does not exist in the current C# model (the field was
   assumed during WU17 planning but is absent from the L1 entity — future work-unit adds it when needed).
-- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22).** Built `IChapterWriteService : IChapterReadService` and
+- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7).** Built `IChapterWriteService : IChapterReadService` and
   `ServerChapterWriteService : ServerChapterReadService` in `Core/Chapters/`/`Server/Chapters/`. Write
   service is the **first production caller** of `IHtmlSanitizationService`. `ChapterText.CountWords()`
   helper in `Core/Chapters/ChapterText.cs` (strips HTML tags + decodes entities before splitting on
@@ -179,7 +179,7 @@ Phase 4 (beta-scope-decision pattern) and `workplan.md` "Planned / not-yet-built
   via `SetChapterTextAsync` (+ title from first heading); existing chapter → author chooses
   replace-editor vs `AddAlternateVersionAsync` (VersionName "Imported"). Browser-verified
   (mode 1); detail in `audit/Import.md`.
-- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; extended WU25, 2026-06-24).** `IChapterReadService` with
+- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; extended WU25, 2026-06-24; re-verified WU-StoryLifecycle, 2026-09-30 — chapter-list date re-sourced to `Chapter.FirstPublishedDate`; see the Stage note below).** `IChapterReadService` with
   `GetChapterForReadingAsync`, `GetChapterTocAsync`, `GetChapterVersionsAsync`, `GetChapterForEditAsync`
   in `ServerChapterReadService` (primary-constructor DI on `ReadOnlyApplicationDbContext`). Per-version
   `ChapterContent.Rating` filter applied explicitly (the global `"ContentRating"` query filter covers
@@ -290,6 +290,41 @@ updated from placeholder sub-components to the real `<details>`/`<summary>` anch
 recorded for CSS disclosures, `<a>`-vs-`<span>` navigation pattern, `aria-current="page"`, and
 version URL contract. `layer4-style.md` Pattern Accumulation entry added for the nav-bar disclosure
 shape and dropdown row classes.
+
+### WU-StoryLifecycle Stage note (2026-09-30) — Features 6 + 7: the chapter publish anchor (D2)
+
+**No cell flips — F6 L1/L2 and F7 L2 stay Stage 5.** Owner ruling D2 (worksheet, answered
+2026-08-04) split "a chapter's publish date" into two facts, and this WU built the split:
+
+- **`Chapter.FirstPublishedDate` (new, nullable) is the chapter-level publish anchor.** Stamped
+  once, on the chapter's first `IsPublished` false→true in `SetPublishedAsync`, and never moved —
+  unpublish and republish both keep it. It is the "New"-badge input and the anchor the future
+  new-chapter fan-out (D16/D17 → WU-InertFeatures) must read. Invariant kept by code:
+  `IsPublished ⇒ FirstPublishedDate != null` (D2 wrote `==`, which "never moved" plus the legal
+  chapter unpublish makes impossible; the CHECK is routed to WU-SchemaHardening). Flag for
+  WU-InertFeatures: a chapter first published while its story is unpublished has a
+  `FirstPublishedDate` earlier than the story's `PublishedDate`.
+- **`ChapterContent.PublishDate` is now nullable, per-version provenance only** — when *that
+  version* became publicly readable. Create leaves it null (the chapter starts unpublished); the
+  first publish stamps every still-null version (tracked, same `SaveChanges` as the flag); an
+  alternate added to an already-published chapter is stamped at once. No discovery or recency
+  surface reads it any more.
+- **The bump vector is closed.** `GetChapterListAsync` projected the PRIMARY version's date, so
+  promoting a newer alternate moved an old chapter's date forward (re-firing "New"). It now
+  projects `Chapter.FirstPublishedDate`; `SetPrimaryVersionAsync` deliberately touches no date.
+  `ChapterListEntryDto.PublishDate` kept its name (doc comment rewritten); `ChapterReadingDto.
+  PublishDate` became `DateTime?` (no UI consumer).
+- Migration `WU_StoryLifecycle` backfills `first_published_date` from each published chapter's
+  earliest version date and nulls the version dates of never-published chapters; checked against a
+  populated dev-DB clone. `DataSeeder` and SeedTool write both columns only for published chapters.
+
+**How verified:** `dotnet test` green (counts in `audit/Stories.md` §"WU-StoryLifecycle Stage
+note"). **Integration** — `ChapterWriteServiceTests` (create leaves both dates null; first publish
+stamps both and unpublish/republish keeps them; an alternate is stamped on a published chapter and
+null on an unpublished one; promoting a newer version leaves `FirstPublishedDate` and the chapter
+list's `PublishDate` unchanged — mutation-checked: re-pointing the read at the primary version's
+date fails it). L8 consequence (`new_chapters`/`new_words`) is in `audit/Moderation.md` F62. No
+UI changed here (the list already rendered a nullable date), so no browser pass is owed.
 
 ## Feature 44 — Reading Progress Tracking
 - **L1 — Stage 5.** `UserChapterInteraction.ReadProgress` / `IsRead`. `UserChapterInteraction.cs` moved
@@ -573,7 +608,11 @@ WU45 in `workplan.md`. **Settled — do not revisit without flagging:**
 - **"New" badge — strict chain rule:** `PublishDate > MAX(user_chapter_interactions.
   last_interaction_date)` AND every earlier chapter is read or itself New (the contiguous
   fresh run starting at the frontier). No interaction rows → no watermark → no badges. Cosmetic
-  only — never pierces collapse.
+  only — never pierces collapse. **Input re-sourced by owner ruling D2 (worksheet 2026-08-04,
+  built WU-StoryLifecycle 2026-09-30):** the `PublishDate` compared here is
+  `Chapter.FirstPublishedDate` — stamped once on the chapter's first publish, never moved — not
+  the primary version's `ChapterContent.PublishDate` (promoting an alternate used to move the
+  chapter's date forward and re-fire the badge). `ChapterListEntryDto.PublishDate` keeps its name.
 
 **Feature 44 — manual read-marks (new durable-direct seam in `Chapters/`):**
 - Per-row mark read/unread + mark-all. Durable user intent → direct EF write service, NEVER the
@@ -612,7 +651,9 @@ L4.5 flipped 5→2 in `status.md` until the new surfaces get a real-circuit pass
   stable reveal keys, strict-chain New incl. broken-chain + no-watermark suppression, arc
   segments incl. sticky fully-read headers / frontier-arc default expansion / no-windowing-inside
   / zero-visible-chapter arcs skipped / gap rows / arcs-govern-the-tail).
-- **F7 read path:** `ChapterListEntryDto` enriched (`ChapterId`, `PublishDate`, `IsRead`,
+- **F7 read path:** `ChapterListEntryDto` enriched (`ChapterId`, `PublishDate` — since
+  WU-StoryLifecycle (2026-09-30, D2) sourced from `Chapter.FirstPublishedDate`, not the primary
+  version's date, `IsRead`,
   `ReadProgress`); `GetChapterListAsync` viewer-aware (one extra query, empty dict for
   anonymous); new `GetViewerLastInteractionUtcAsync` (New-badge watermark). Covered: Integration
   `ChapterReadMarkServiceTests` round-trip tests; existing `StoryDetailTests` unchanged and green.

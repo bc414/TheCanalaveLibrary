@@ -29,12 +29,22 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
         await CopyStoriesAsync(graph.Stories);
         await CopyStoryListingsAsync(graph.Stories);
         await CopyStoryDetailsAsync(graph.Stories);
-        await CopyChaptersAsync(graph.Chapters);
-        await CopyChapterContentsAsync(graph.ChapterContents);
+        await CopyChaptersAsync(graph.Chapters, graph.ChapterContents);
+        await CopyChapterContentsAsync(graph.ChapterContents, graph.Chapters);
         await ExecuteAsync("""
             UPDATE chapters c SET primary_content_id = cc.chapter_content_id
             FROM chapter_contents cc
             WHERE cc.chapter_id = c.chapter_id AND cc.sort_order = 1 AND c.primary_content_id IS NULL
+            """);
+        // Story-approval trust (WU-StoryLifecycle, D1): a seed author who owns published stories is
+        // recorded as approved, so their submits take the trust waiver. Scoped to this tool's own
+        // users — the Full dev seed's TestUser is deliberately left untrusted.
+        await ExecuteAsync("""
+            UPDATE "AspNetUsers" u SET approved_story_submissions = s.n
+            FROM (SELECT author_id, COUNT(*) AS n FROM stories
+                  WHERE story_status_id BETWEEN 2 AND 7 AND author_id IS NOT NULL
+                  GROUP BY author_id) s
+            WHERE u.id = s.author_id AND u.user_name LIKE 'seed-user-%'
             """);
         await CopyInteractionsAsync(graph.Interactions);
         await CopyInteractionDatesAsync(graph.Interactions);
@@ -389,10 +399,14 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
 
     private async Task CopyStoriesAsync(List<SeedStoryRow> stories)
     {
+        // D2 (WU-StoryLifecycle): published_date is NULL = never published, so only statuses in the
+        // published set (2..7) carry it; PendingApproval rows carry submitted_date (the queue's sort
+        // key) instead. SeedGraph keeps PublishedUtc non-null as its date anchor — only the writer
+        // nulls it.
         const string copy = """
             COPY stories (story_id, active_report_count, author_id, is_taken_down, last_updated_date,
                 original_last_updated_date, original_published_date, published_date, rating,
-                story_status_id, takedown_date, takedown_reason, word_count)
+                story_status_id, submitted_date, takedown_date, takedown_reason, word_count)
             FROM STDIN (FORMAT BINARY)
             """;
         await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync(copy);
@@ -406,9 +420,11 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             await writer.WriteAsync(story.LastUpdatedUtc, NpgsqlDbType.TimestampTz);
             await writer.WriteNullAsync();
             await writer.WriteNullAsync();
-            await writer.WriteAsync(story.PublishedUtc, NpgsqlDbType.TimestampTz);
+            await WriteNullableAsync(writer, StoryLifecycle.IsPublished(story.Status) ? story.PublishedUtc : null);
             await writer.WriteAsync((short)story.Rating, NpgsqlDbType.Smallint);
             await writer.WriteAsync((short)story.Status, NpgsqlDbType.Smallint);
+            await WriteNullableAsync(writer,
+                story.Status == StoryStatusEnum.PendingApproval ? story.PublishedUtc : null); // submitted_date
             await writer.WriteNullAsync();
             await writer.WriteNullAsync();
             await writer.WriteAsync(story.WordCount, NpgsqlDbType.Integer);
@@ -441,24 +457,32 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             await writer.StartRowAsync();
             await writer.WriteAsync(story.Id, NpgsqlDbType.Integer);
             await writer.WriteAsync($"<p>Seed long description — {story.Title}.</p>", NpgsqlDbType.Text);
+            // post_approval_status must be an ENTRY status (InProgress/Completed/OpenBeta) — submit
+            // and moderator approve both refuse anything else since WU-StoryLifecycle.
             await writer.WriteAsync(
-                (short)(story.IsVisible ? story.Status : StoryStatusEnum.InProgress), NpgsqlDbType.Smallint);
+                (short)(StoryLifecycle.IsEntryStatus(story.Status) ? story.Status : StoryStatusEnum.InProgress),
+                NpgsqlDbType.Smallint);
             await writer.WriteAsync(story.Slug, NpgsqlDbType.Varchar);
         }
         await writer.CompleteAsync();
     }
 
-    private async Task CopyChaptersAsync(List<SeedChapterRow> chapters)
+    private async Task CopyChaptersAsync(List<SeedChapterRow> chapters, List<SeedChapterContentRow> contents)
     {
         // primary_content_id stays NULL here — the circular FK is closed by the UPDATE after
         // chapter_contents lands (same two-step as DataSeeder / the write services).
+        // first_published_date (D2 chapter anchor): the single version's publish date for a published
+        // chapter, NULL for an unpublished one — keeps IsPublished ⇒ FirstPublishedDate != null.
+        Dictionary<long, DateTime> publishUtcByContentId = contents.ToDictionary(c => c.Id, c => c.PublishUtc);
         await using NpgsqlBinaryImporter writer = await connection.BeginBinaryImportAsync(
-            "COPY chapters (chapter_id, chapter_number, is_published, primary_content_id, story_id, title, version_count) FROM STDIN (FORMAT BINARY)");
+            "COPY chapters (chapter_id, chapter_number, first_published_date, is_published, primary_content_id, story_id, title, version_count) FROM STDIN (FORMAT BINARY)");
         foreach (SeedChapterRow chapter in chapters)
         {
             await writer.StartRowAsync();
             await writer.WriteAsync(chapter.Id, NpgsqlDbType.Integer);
             await writer.WriteAsync(chapter.Number, NpgsqlDbType.Integer);
+            await WriteNullableAsync(writer,
+                chapter.IsPublished ? publishUtcByContentId[chapter.ContentId] : null);
             await writer.WriteAsync(chapter.IsPublished, NpgsqlDbType.Boolean);
             await writer.WriteNullAsync();
             await writer.WriteAsync(chapter.StoryId, NpgsqlDbType.Integer);
@@ -468,8 +492,11 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
         await writer.CompleteAsync();
     }
 
-    private async Task CopyChapterContentsAsync(List<SeedChapterContentRow> contents)
+    private async Task CopyChapterContentsAsync(List<SeedChapterContentRow> contents, List<SeedChapterRow> chapters)
     {
+        // publish_date is per-version provenance (D2): NULL while the version's chapter has never
+        // been published.
+        HashSet<int> unpublishedChapterIds = chapters.Where(c => !c.IsPublished).Select(c => c.Id).ToHashSet();
         const string copy = """
             COPY chapter_contents (chapter_content_id, author_id, bottom_authors_note, chapter_id,
                 chapter_text, original_publish_date, publish_date, rating, sort_order,
@@ -486,7 +513,8 @@ public sealed class SeedBulkWriter(NpgsqlConnection connection)
             await writer.WriteAsync(content.ChapterId, NpgsqlDbType.Integer);
             await writer.WriteAsync(content.Html, NpgsqlDbType.Text);
             await writer.WriteNullAsync();
-            await writer.WriteAsync(content.PublishUtc, NpgsqlDbType.TimestampTz);
+            await WriteNullableAsync(writer,
+                unpublishedChapterIds.Contains(content.ChapterId) ? null : content.PublishUtc);
             await writer.WriteNullAsync();                    // rating: inherit the story's
             await writer.WriteAsync(1, NpgsqlDbType.Integer); // sort_order
             await writer.WriteNullAsync();

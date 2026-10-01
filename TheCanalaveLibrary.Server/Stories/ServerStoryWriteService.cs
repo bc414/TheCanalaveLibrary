@@ -31,6 +31,9 @@ public class ServerStoryWriteService(
 
         Story newStoryDB = newStoryDTO.ToStory();
         newStoryDB.AuthorId = authorId;
+        // A new story is always Draft, server-stamped like AuthorId (WU-StoryLifecycle, D1) — status
+        // is not on the DTO; lifecycle moves go through TransitionStatusAsync.
+        newStoryDB.StoryStatusId = StoryStatusEnum.Draft;
         // Sanitize all user HTML before persisting, once, on save (layer2-services.md §"User HTML
         // Is Sanitized Once, On Save" — same rule ServerSeriesWriteService already follows for
         // Series.Description; MA-201 fix).
@@ -38,12 +41,14 @@ public class ServerStoryWriteService(
             ? sanitizer.Sanitize(newStoryDTO.LongDescription)
             : null;
         // Server-stamped like AuthorId — the mapper deliberately covers only IEditableStoryProperties,
-        // so without these the entity defaults (DateTime.MinValue → Postgres "-infinity") reached the
-        // DB and story pages showed "Published Jan 1, 0001" (browser pass 2026-07-01).
-        newStoryDB.PublishedDate = DateTime.UtcNow;
+        // so without this the entity default (DateTime.MinValue → Postgres "-infinity") reached the
+        // DB (browser pass 2026-07-01). PublishedDate is deliberately NOT stamped here: a new story is
+        // a Draft, and NULL means "never published on this site" (owner ruling D2). It is stamped
+        // only on the first move into the published set (TransitionStatusAsync / moderator approve).
         newStoryDB.LastUpdatedDate = DateTime.UtcNow;
         // "Also posted on" links + original dates (Feature 53 reframe, WU38d) — outside the
         // IEditableStoryProperties mapper on purpose (links are child rows, not story properties).
+        // OriginalPublishedDate is display-only provenance and never backdates PublishedDate (D2).
         newStoryDB.OriginalPublishedDate = newStoryDTO.OriginalPublishedDate;
         newStoryDB.OriginalLastUpdatedDate = newStoryDTO.OriginalLastUpdatedDate;
         foreach (StoryExternalLinkEditDto link in DedupedLinks(newStoryDTO.ExternalLinks))
@@ -104,6 +109,9 @@ public class ServerStoryWriteService(
         // Capture the old cover path before overwriting (orphan-bug fix — DeleteAsync had zero callers).
         string? oldCoverPath = storyToUpdate.StoryListing?.CoverArtRelativeUrl;
 
+        // Never changes status (WU-StoryLifecycle, D1): the mapper does not copy StoryStatusId, and
+        // dto.StoryStatusId is a read echo. An in-queue (PendingApproval) edit is allowed and stays
+        // PendingApproval — the moderator approves the row as it stands (D1 sub-edge, owner rec).
         storyToUpdate.UpdateStoryEditableProperties(dto);
         // Sanitize on save, same as CreateStoryAsync above (MA-201 fix).
         storyToUpdate.StoryDetail.LongDescription = dto.LongDescription is not null
@@ -160,6 +168,81 @@ public class ServerStoryWriteService(
                     oldCoverPath, dto.StoryId);
             }
         }
+    }
+
+    public async Task<StoryStatusEnum> TransitionStatusAsync(int storyId, StoryStatusEnum targetStatus)
+    {
+        int userId = ActiveUser.RequireUserId();
+
+        if (!Enum.IsDefined(targetStatus))
+            throw new StoryValidationException(["That isn't a valid story status."]);
+
+        var story = await writeDb.Stories
+            .Where(s => s.StoryId == storyId)
+            .Select(s => new
+            {
+                s.AuthorId,
+                s.StoryStatusId,
+                PostApprovalStatus = s.StoryDetail.PostApprovalStatus,
+                ApprovedStorySubmissions = s.Author != null ? s.Author.ApprovedStorySubmissions : 0,
+                CanAutoApprove = s.Author != null && s.Author.CanAutoApprove,
+            })
+            .FirstOrDefaultAsync();
+
+        if (story is null)
+            throw new KeyNotFoundException($"Story with ID {storyId} not found.");
+
+        // Author-only gate — same as UpdateStoryAsync. Moderator transitions (approve/reject) are a
+        // separate path in ServerModerationWriteService and never OR into this check.
+        if (story.AuthorId != userId)
+            throw new UnauthorizedAccessException("You can only change the status of your own stories.");
+
+        bool trusted = story.ApprovedStorySubmissions >= 1 && story.CanAutoApprove;
+        StoryTransitionResult resolved = StoryLifecycle.ResolveAuthorTransition(
+            story.StoryStatusId, targetStatus, story.PostApprovalStatus, trusted);
+        if (!resolved.IsAllowed)
+            throw new StoryValidationException([.. resolved.Errors]);
+
+        StoryStatusEnum current = story.StoryStatusId;
+        StoryStatusEnum result = resolved.ResultingStatus;
+        if (result == current)
+            return current; // no-op: same-status request writes nothing
+
+        // ONE conditional update, guarded on the status just read — a concurrent change (a
+        // moderator's approve/reject, the author's other tab) makes it affect 0 rows instead of
+        // silently overwriting (lost-update guard; layer2-services.md §"Story Lifecycle").
+        // Deliberately untouched: LastUpdatedDate (a status move is not a content update — touching
+        // it would reopen the unpublish/republish bump vector) and IsTakenDown (orthogonal axis).
+        DateTime now = DateTime.UtcNow;
+        IQueryable<Story> guarded = writeDb.Stories
+            .Where(s => s.StoryId == storyId && s.StoryStatusId == current);
+
+        int affected;
+        if (StoryLifecycle.IsPublished(result))
+        {
+            // D2: stamp on first publication only — COALESCE keeps an earlier stamp, so a
+            // republished story keeps its original date (republication is not a publication event).
+            affected = await guarded.ExecuteUpdateAsync(u => u
+                .SetProperty(s => s.StoryStatusId, result)
+                .SetProperty(s => s.PublishedDate, s => s.PublishedDate ?? now));
+        }
+        else if (result == StoryStatusEnum.PendingApproval)
+        {
+            affected = await guarded.ExecuteUpdateAsync(u => u
+                .SetProperty(s => s.StoryStatusId, result)
+                .SetProperty(s => s.SubmittedDate, now));
+        }
+        else
+        {
+            affected = await guarded.ExecuteUpdateAsync(u => u
+                .SetProperty(s => s.StoryStatusId, result));
+        }
+
+        if (affected == 0)
+            throw new StoryValidationException(
+                ["This story's status just changed — reload the page and try again."]);
+
+        return result;
     }
 
     public async Task<string> UploadCoverArtAsync(Stream content, string contentType, int storyId)

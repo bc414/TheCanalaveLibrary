@@ -132,7 +132,10 @@ public abstract class IntegrationTestBase(PostgresFixture postgres) : IAsyncLife
             AuthorId        = authorId,
             Rating          = rating,
             StoryStatusId   = status,
-            PublishedDate   = DateTime.UtcNow,
+            // Models the D2 invariant (WU-StoryLifecycle): only a published status carries a
+            // publish stamp; NULL = never published.
+            PublishedDate   = StoryLifecycle.IsPublished(status) ? DateTime.UtcNow : null,
+            SubmittedDate   = status == StoryStatusEnum.PendingApproval ? DateTime.UtcNow : null,
             LastUpdatedDate = DateTime.UtcNow,
             StoryListing    = new StoryListing  { StoryTitle = $"Test Story {suffix}", ShortDescription = "test" },
             StoryDetail     = new StoryDetail   { LongDescription = "test", PostApprovalStatus = StoryStatusEnum.InProgress }

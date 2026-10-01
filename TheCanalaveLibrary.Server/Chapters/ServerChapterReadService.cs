@@ -229,7 +229,9 @@ public class ServerChapterReadService(
                 c.Title,
                 c.PrimaryContent != null ? c.PrimaryContent.WordCount : 0,
                 c.IsPublished,
-                c.PrimaryContent != null ? c.PrimaryContent.PublishDate : null))
+                // The chapter-level publish anchor (D2, WU-StoryLifecycle) — never the primary
+                // version's date, which moved forward whenever an alternate was promoted.
+                c.FirstPublishedDate))
             .ToListAsync();
 
         if (chapters.Count == 0) return [];

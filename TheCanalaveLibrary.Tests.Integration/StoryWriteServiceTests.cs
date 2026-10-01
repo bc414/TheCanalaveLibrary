@@ -140,7 +140,6 @@ public class StoryWriteServiceTests(PostgresFixture postgres) : IntegrationTestB
             Title               = $"XSS Fixture {Guid.NewGuid():N}",
             ShortDescription    = "Integration test story",
             Rating              = Rating.T,
-            StoryStatusId       = StoryStatusEnum.InProgress,
             LongDescription     = "<p>Safe text</p><script>alert('xss')</script>",
             PostApprovalStatus  = StoryStatusEnum.InProgress,
             StoryTags =
@@ -210,7 +209,6 @@ public class StoryWriteServiceTests(PostgresFixture postgres) : IntegrationTestB
             Title = title,
             ShortDescription = "Integration test story",
             Rating = Rating.T,
-            StoryStatusId = StoryStatusEnum.InProgress,
             LongDescription = "Integration test long description",
             PostApprovalStatus = StoryStatusEnum.InProgress,
             StoryTags =

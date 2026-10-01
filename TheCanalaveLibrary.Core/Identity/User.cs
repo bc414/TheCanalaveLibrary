@@ -84,6 +84,15 @@ public class User : IdentityUser<int>
     public DateTime? SuspendedUntilUtc { get; set; }
     public int ActiveReportCount { get; set; }
 
+    // --- Story-approval trust (owner ruling D1, WU-StoryLifecycle) ---
+    // An author with ApprovedStorySubmissions >= 1 AND CanAutoApprove publishes without entering
+    // the moderator queue. Both are RECORDS OF A DECISION, not derived counters: the count records
+    // moderator approvals (monotonic — never decremented by deletion, takedown or revoke; no
+    // recompute exists, which is why it lives here and not in user_stats), and the flag records a
+    // moderator's revoke/restore. See layer2-services.md §"Records of a decision are not counters".
+    public int ApprovedStorySubmissions { get; set; }
+    public bool CanAutoApprove { get; set; } = true;
+
     // --- Site-stats sourcing (WU-SiteDailyStat, Feature 62) ---
     // CreatedUtc sources new_users/total_users; pre-existing rows backfill to the migration's
     // deploy date (real registration date is unrecoverable). LastActiveUtc is stamped for

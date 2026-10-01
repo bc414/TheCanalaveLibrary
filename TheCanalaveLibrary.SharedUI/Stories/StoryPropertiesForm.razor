@@ -34,7 +34,10 @@
         <ValidationMessage id="story-short-description-error" For="@(() => ViewModel.ShortDescription)" class="text-sm text-(--color-danger)" />
     </div>
 
-    @* ── Rating + Status (side by side on wider screens) ─────────────────────── *@
+    @* ── Rating + Status when published (side by side on wider screens) ─────────
+       The story's live status is NOT a form field (WU-StoryLifecycle, D1): it moves only through
+       StoryLifecyclePanel. This select is PostApprovalStatus — what the story becomes when it is
+       published — so it only matters (and only shows) while the story isn't published yet. *@
     <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div class="flex flex-col gap-1">
             <label for="story-rating" class="text-sm font-semibold text-(--color-text)">Rating</label>
@@ -46,16 +49,21 @@
                 }
             </InputSelect>
         </div>
-        <div class="flex flex-col gap-1">
-            <label for="story-status" class="text-sm font-semibold text-(--color-text)">Status</label>
-            <InputSelect id="story-status" @bind-Value="ViewModel.StoryStatusId"
-                         class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
-                @foreach (StoryStatusEnum s in Enum.GetValues<StoryStatusEnum>())
-                {
-                    <option value="@s">@s.ToString()</option>
-                }
-            </InputSelect>
-        </div>
+        @if (ShowPostApprovalStatus)
+        {
+            <div class="flex flex-col gap-1">
+                <label for="story-post-approval-status" class="text-sm font-semibold text-(--color-text)">Status when published</label>
+                <InputSelect id="story-post-approval-status" @bind-Value="ViewModel.PostApprovalStatus"
+                             class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)">
+                    @* Draft = "not chosen yet": the entry set is the only legal publish target. *@
+                    <option value="@StoryStatusEnum.Draft">Choose…</option>
+                    @foreach (StoryStatusEnum s in PostApprovalOptions)
+                    {
+                        <option value="@s">@StoryDisplayFormat.StatusLabel(s)</option>
+                    }
+                </InputSelect>
+            </div>
+        }
     </div>
 
     @* ── Cover art ───────────────────────────────────────────────────────────── *@
@@ -257,6 +265,17 @@
 @code {
     [Parameter, EditorRequired] public StoryPropertiesViewModel ViewModel { get; set; } = null!;
     [Parameter] public EventCallback OnValidSubmit { get; set; }
+
+    /// <summary>
+    /// Shows the "Status when published" select (bound to <c>ViewModel.PostApprovalStatus</c>). The
+    /// page sets it while the story is not published (create mode included — a new story is always a
+    /// Draft); once published, status changes go through <c>StoryLifecyclePanel</c> instead.
+    /// </summary>
+    [Parameter] public bool ShowPostApprovalStatus { get; set; }
+
+    /// <summary>The entry set — the only statuses a story can be published as (StoryLifecycle).</summary>
+    private static readonly StoryStatusEnum[] PostApprovalOptions =
+        Enum.GetValues<StoryStatusEnum>().Where(StoryLifecycle.IsEntryStatus).ToArray();
 
     /// <summary>
     /// Pre-populated tag chips per type for edit mode (seeded from GetTagChipsByIdsAsync).

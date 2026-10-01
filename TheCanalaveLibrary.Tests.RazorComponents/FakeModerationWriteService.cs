@@ -53,4 +53,7 @@ public class FakeModerationWriteService : IModerationWriteService
 
     public Task RejectStoryAsync(int storyId, string reason) =>
         throw new NotImplementedException("FakeModerationWriteService.RejectStoryAsync not expected in this test.");
+
+    public Task SetCanAutoApproveAsync(int targetUserId, bool canAutoApprove, short reasonId, string reason) =>
+        throw new NotImplementedException("FakeModerationWriteService.SetCanAutoApproveAsync not expected in this test.");
 }

@@ -30,7 +30,7 @@ public static class HtmlWriter
         sb.Append("<h1>").Append(Encode(story.Title)).Append("</h1>\n");
         sb.Append("<p class=\"meta\">by ").Append(Encode(story.AuthorName))
           .Append(" · Rated ").Append(Encode(story.RatingLabel))
-          .Append(" · Published ").Append(story.PublishDate.ToString("MMM d, yyyy"))
+          .Append(" · ").Append(story.PublishedLabel)
           .Append(" · Updated ").Append(story.LastUpdatedDate.ToString("MMM d, yyyy"))
           .Append("</p>\n");
 

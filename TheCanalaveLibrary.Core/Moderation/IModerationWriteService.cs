@@ -68,14 +68,37 @@ public interface IModerationWriteService : IModerationReadService
     // ── Submission approval (Feature 48) ─────────────────────────────────────────
 
     /// <summary>
-    /// Approves a <c>PendingApproval</c> story: sets <c>StoryStatusId = PostApprovalStatus</c>
-    /// and fires <c>StoryApproved</c> notification to the author.
+    /// Approves a <c>PendingApproval</c> story (WU-StoryLifecycle, D1): sets
+    /// <c>StoryStatusId = PostApprovalStatus</c>, stamps <c>PublishedDate</c> if the story was never
+    /// published (D2), and adds 1 to the author's monotonic <c>ApprovedStorySubmissions</c> — the
+    /// status flip and the increment commit in one transaction. Fires <c>StoryApproved</c>
+    /// best-effort after commit.
+    /// <para>Throws <see cref="KeyNotFoundException"/> for an unknown story, and
+    /// <see cref="ModerationValidationException"/> when the story is no longer
+    /// <c>PendingApproval</c> (handled elsewhere — checked again inside the conditional update), its
+    /// <c>PostApprovalStatus</c> is not an entry status (InProgress/Completed/OpenBeta), or its author
+    /// is not live (deleted, banned, or suspended with a null or future end date).</para>
     /// </summary>
     Task ApproveStoryAsync(int storyId);
 
     /// <summary>
-    /// Rejects a <c>PendingApproval</c> story: sets <c>StoryStatusId = Rejected</c>,
-    /// records the reason, and fires <c>StoryRejected</c> notification to the author.
+    /// Rejects a <c>PendingApproval</c> story: sets <c>StoryStatusId = Rejected</c>, records the
+    /// reason, and fires <c>StoryRejected</c> best-effort. <c>Rejected</c> is reachable only from
+    /// <c>PendingApproval</c>. Unguarded on the author, so the queue can always be cleared.
+    /// <para>Throws <see cref="KeyNotFoundException"/> for an unknown story and
+    /// <see cref="ModerationValidationException"/> when it is no longer <c>PendingApproval</c>.</para>
     /// </summary>
     Task RejectStoryAsync(int storyId, string reason);
+
+    /// <summary>
+    /// Revokes (<paramref name="canAutoApprove"/> = false) or restores a user's
+    /// <c>CanAutoApprove</c> flag (WU-StoryLifecycle, D1). Files a moderator-initiated <c>Report</c>
+    /// as the audit record, same shape as <see cref="ApplyAccountActionToUserAsync"/>. An unchanged
+    /// value is a no-op that writes no row. No notification.
+    /// <para>Throws <see cref="UnauthorizedAccessException"/> for a non-moderator,
+    /// <see cref="KeyNotFoundException"/> for an unknown user, and
+    /// <see cref="ModerationValidationException"/> for a self-target, an unknown reason, or a
+    /// missing or over-long reason.</para>
+    /// </summary>
+    Task SetCanAutoApproveAsync(int targetUserId, bool canAutoApprove, short reasonId, string reason);
 }

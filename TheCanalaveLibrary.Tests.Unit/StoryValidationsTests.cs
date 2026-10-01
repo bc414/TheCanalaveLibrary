@@ -110,4 +110,38 @@ public class StoryValidationsTests
             errors.Should().Contain("You must select a Status for the story to move to once approved.");
         }
     }
+
+    // ── Enum binding (WU-StoryLifecycle, D1 defect (d)) ─────────────────────────────
+
+    [Fact]
+    public void CanSave_UndefinedPostApprovalStatus_ReturnsError()
+    {
+        CreateStoryDTO dto = MakeValidDto();
+        dto.PostApprovalStatus = (StoryStatusEnum)99;
+
+        dto.CanSave().Should().Contain("Choose a valid status for when the story is published.");
+    }
+
+    [Fact]
+    public void CanSave_UndefinedRating_ReturnsError()
+    {
+        CreateStoryDTO dto = MakeValidDto();
+        dto.Rating = (Rating)7;
+
+        dto.CanSave().Should().Contain("Choose a valid rating.");
+    }
+
+    [Theory]
+    [InlineData(StoryStatusEnum.Draft)]
+    [InlineData(StoryStatusEnum.OnHiatus)]   // a legacy published story's value — must still save
+    [InlineData(StoryStatusEnum.Cancelled)]
+    [InlineData(StoryStatusEnum.Rejected)]
+    public void CanSave_AcceptsAnyDefinedPostApprovalStatus(StoryStatusEnum postApprovalStatus)
+    {
+        // Entry-set membership is checked only at submit and at approve, never at save.
+        CreateStoryDTO dto = MakeValidDto();
+        dto.PostApprovalStatus = postApprovalStatus;
+
+        dto.CanSave().Should().BeEmpty();
+    }
 }

@@ -141,6 +141,8 @@ and confidence. File:line references are as-of 2026-08-03.
 
 ### 2.1 Lifecycle state machines without transition guards
 
+> **§2.1.1 built:** WU-StoryLifecycle (2026-09-30), per worksheet D1 — see `layer2-services.md` §"Story Lifecycle". §2.1.1 below is history; §2.1.2+ are untouched by it.
+
 **2.1.1 No server-side story status-transition enforcement — authors can self-publish and
 self-un-reject. CRITICAL, CONFIRMED.** `StoryMappers.UpdateStoryEditableProperties`
 (`StoryMappers.cs:91`) copies `StoryStatusId` verbatim from the client DTO; both
@@ -407,6 +409,8 @@ code change:
   guard that doesn't exist). LOW-MEDIUM, CONFIRMED — fold into §3.13's rate-limit-surface ruling.
 
 ### 2.9 Date-semantics defects (one ruling, two columns)
+
+> **Built:** WU-StoryLifecycle (2026-09-30), per worksheet D2 — see `layer2-services.md` §"Story Lifecycle" (publish anchors). The finding below is history.
 
 `Story.PublishedDate` (stamped at creation incl. drafts, never re-stamped — schema §3.4's service
 half, CONFIRMED) and `ChapterContent.PublishDate` (same shape, CONFIRMED) both make long-drafted

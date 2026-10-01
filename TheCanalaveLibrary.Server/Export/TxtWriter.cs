@@ -17,7 +17,7 @@ public static class TxtWriter
         sb.AppendLine(story.Title);
         sb.AppendLine($"by {story.AuthorName}");
         sb.AppendLine($"Rated {story.RatingLabel}");
-        sb.AppendLine($"Published {story.PublishDate:MMM d, yyyy} · Updated {story.LastUpdatedDate:MMM d, yyyy}");
+        sb.AppendLine($"{story.PublishedLabel} · Updated {story.LastUpdatedDate:MMM d, yyyy}");
         sb.AppendLine();
 
         if (!string.IsNullOrWhiteSpace(story.LongDescriptionHtml))

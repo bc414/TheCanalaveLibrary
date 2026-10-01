@@ -23,6 +23,15 @@ public partial class Chapter
 
     public bool IsPublished { get; set; }
 
+    /// <summary>
+    /// The chapter-level publish anchor (owner ruling D2, WU-StoryLifecycle): stamped once on the
+    /// chapter's first <see cref="IsPublished"/> false→true and never moved — unpublish and republish
+    /// both keep it. The "New"-badge input and the new-chapter fan-out anchor. Invariant, kept by
+    /// code: <c>IsPublished ⇒ FirstPublishedDate != null</c>. Adding or promoting a version never
+    /// touches it (a version change is an update, not a publish event).
+    /// </summary>
+    public DateTime? FirstPublishedDate { get; set; }
+
     public int VersionCount { get; set; }
 
     public virtual ICollection<ChapterComment> ChapterComments { get; set; } = new List<ChapterComment>();

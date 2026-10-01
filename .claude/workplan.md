@@ -17,26 +17,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-QuickFixes (2026-09-20) — four closures that needed no deliberation, found by
-  reading the process docs for gaps that are *fixes* rather than decisions: **MA-107** (all seven
-  remaining clusters registered their write class against both interfaces, minting two instances per
-  scope — now forwarded; the inherited-pair registration rule is recorded in `layer2-services.md`,
-  which had none), **MA-408** (the profile Tag Selections tab's N+1 — two queries per selection, now
-  two for the whole tab), the **VouchButton follow-gate staleness** from the 2026-07-01 browser pass
-  (tracker **H6**: `FollowButton` now raises `OnFollowChanged` so the follow-gated vouch button
-  appears in the same visit), and **MA-007 + MA-211** (the dead `ContentSurface.FrameStyle` param
-  from a gate review that ended 2026-07-10, plus `ServerStoryArcWriteService`'s needless field
-  copies). No cell flips — all of it sits under cells that were already Stage 5. Left alone with the
-  reason recorded: **MA-006** (tokenize-vs-exempt is Brian's call on a locked manifest), **B15**,
-  **B16**, **C3/C5**. **MA-509** was verified already-resolved, not rebuilt. `dotnet test`: Unit 793,
-  RazorComponents 665 (+3), Integration 1,064 of 1,064 (+1) — full suite re-run on the Windows
-  workbench 2026-09-29 before merge, against the pinned `postgres:18-alpine` and the Garage container
-  (the 2026-09-20 build ran in a Linux cloud container that could pull neither image, so its 6
-  `S3ImageStorageServiceTests` never started). All four PowerShell gates also passed 2026-09-29 (the
-  cloud image had no `pwsh`). The merge also fixed CI's Doc-hygiene step, which had failed on Linux for
-  every PR since at least 2026-08-23. Both new tests were mutation-checked by hand. **Pointers:**
-  `workplan.md` WU-QuickFixes; `audit/Tags.md`, `audit/Following.md`, `audit/Stories.md`
-  §"WU-QuickFixes"; tracker D4/H6.
+- **Last landed:** WU-StoryLifecycle (2026-09-30) — the first build of the 2026-08-04 worksheet
+  answers: **D1** (the approval queue is mandatory for an author's *first* submission only; a
+  server-side transition table, `Core/Stories/StoryLifecycle`, now governs every status move) and
+  **D2** (`stories.published_date` nullable, NULL = never published, stamped once and never
+  re-stamped; new chapter anchor `Chapter.FirstPublishedDate`). Status left the property-edit path;
+  new `TransitionStatusAsync` + `/api/stories/{id}/status`; approve/reject are guarded (400 not
+  401), transactional and conditional on `PendingApproval`; new monotonic trust record
+  `User.ApprovedStorySubmissions` + moderator revoke/restore of `CanAutoApprove`. One migration
+  (`WU_StoryLifecycle`), checked on a populated dev-DB clone. No cell flips. `dotnet test`: Unit
+  1,010, RazorComponents 686, Integration 1,117. Not browser-verified (tracker **H12**); owner-open
+  residue in tracker **F9**. **Pointers:** its DONE entry; `layer2-services.md` §"Story Lifecycle".
+  Before that, 2026-09-20: WU-QuickFixes — four no-deliberation closures (MA-107, MA-408, H6's VouchButton staleness, MA-007/MA-211); see its DONE entry.
   Before that, 2026-08-01: WU-UserModeration — closed tracker **B13**, which was filed as
   `polish · low` ("`ModUsersPage`'s `{UserId:int?}` route parameter is declared and never read") and
   turned out to be the visible tip of a **moderation feature that could not be used at all**.
@@ -401,6 +393,75 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-StoryLifecycle — story status transition table, first-submission approval gate + trust waiver, nullable publish anchors (worksheet D1 + D2; extends `Stories/`, `Chapters/`, `Moderation/`, `Identity/`, `Export/`) — DONE ✓ (2026-09-30)
+
+- **Cells:** none flipped. F4, F5, F6, F7, F47, F48, F62 stay at their `status.md` stages (F48 L4
+  stays 3) — the gaps were beneath already-Stage-5 cells.
+- **Trigger:** first WU of the worksheet-decisions build campaign. Owner rulings **D1** (queue
+  mandatory for an author's first submission only; build the server-side transition table) and
+  **D2** (nullable publish dates, NULL = never published, never re-stamped; a chapter-level anchor)
+  were answered 2026-08-04 and unbuilt: authors set `StoryStatusId` freely through the property
+  mapper, `CanSubmitForApproval` had no server caller, and both publish dates were stamped at
+  creation. Sources: service audit §2.1.1/§2.9/§3.1, schema audit §3.4.
+- **What landed:**
+  1. **Status off the property path.** `StoryStatusId` left `IEditableStoryProperties`/
+     `CreateStoryDTO` and the mapper; create always stamps Draft; `UpdateStoryAsync` never moves
+     status (an in-queue edit stays Pending — D1 sub-edge, owner recommendation). `CanSave` rejects
+     undefined `Rating`/`PostApprovalStatus`; `StoryUpdateDTO` echoes status + rejection reason.
+  2. **Transition table** `Core/Stories/StoryLifecycle` (pure) applied by the new
+     `IStoryWriteService.TransitionStatusAsync` / `POST /api/stories/{id}/status` / client impl:
+     submit (trusted authors routed straight to `PostApprovalStatus`), withdraw, revise, published
+     moves, unpublish — one conditional `ExecuteUpdate` per move, `PublishedDate ?? now`,
+     `LastUpdatedDate`/`IsTakenDown` untouched.
+  3. **Moderator hardening:** approve/reject 404/400 instead of `SingleAsync`/`InvalidOperation` →
+     401; approve re-validates the entry status and requires a live author (reject never does);
+     approve's status flip + `ApprovedStorySubmissions + 1` commit in one transaction.
+     `SetCanAutoApproveAsync` (revoke **and** restore) + endpoint + `/mod/users/{id}` control; the
+     queue orders by the new `Story.SubmittedDate`. Client moderation 400 →
+     `ModerationValidationException` pulled forward from §2.7.5 (WU-ModerationIntegrity: verify).
+  4. **Publish anchors:** `Story.PublishedDate`/`ChapterContent.PublishDate` nullable; new
+     `Chapter.FirstPublishedDate` stamped on first publish and read by the chapter list (closes the
+     promote-an-alternate bump vector); L8 `new_chapters`/`new_words` re-sourced; story page and
+     every export writer render "Not yet published".
+  5. **Migration `WU_StoryLifecycle`** with ordered data backfill (queue date preserved before
+     `published_date` is nulled; chapter anchors from the earliest version; entry-set remap; trust
+     backfill), run Up and Down against a populated clone of the dev DB. DataSeeder (TestUser left
+     untrusted on purpose), SeedTool and DevDiagnostics updated; SeedTool run once against a scratch
+     clone and the invariants checked in `psql`.
+  6. **UI:** `StoryLifecyclePanel` (new, presentational) on `StoryEditorPage` — status updated in
+     place, never a same-route `NavigateTo` (Quill hazard); "Status when published" select replaces
+     the all-enum Status select; `ModSubmissionsPage` gained a queue-level error slot and reloads on a
+     handled-elsewhere refusal.
+- **Left alone, with the reason:** minimum-content floor for submission (**D20**, pending), the
+  import-rider alternate reading (contradicts a settled WU38d note — needs the owner), notifying
+  authors of auto-approve changes (owner silent), an expected-version token (**D30**, pending) —
+  all four filed as tracker **F9**. Routed to later campaign WUs: the two CHECK constraints
+  (published ⇒ `published_date`, `is_published` ⇒ `first_published_date`) → WU-SchemaHardening;
+  throttles on the two new write surfaces → WU-ThrottleCoverage (the auto-approve one is a mod action,
+  unthrottled by the existing `security.md` rule); the D21/D22 doctrine rewording →
+  WU-CounterSymmetry (this WU wrote the trust-counter statement it must reuse); the rejection reason
+  living in the takedown columns → D8 / WU-ModerationIntegrity (tracker **D6**); `StoryRejected`
+  carrying its reason → D4/D5 / WU-InertFeatures. Observed and filed, not fixed: chapter publish
+  never bumps `Story.LastUpdatedDate` (tracker **D7**). Known interim gap: author lifecycle errors
+  read "Story validation failed." on WASM until WU-ParityAndRemaining P1.
+- **Verification.** `dotnet build` green, no new warnings in touched files. `dotnet test` green:
+  **Unit 1,010** (+217 — the exhaustive transition theory alone is 180), **RazorComponents 686**
+  (+21), **Integration 1,117** (+53). New: Unit `StoryLifecycleTests`,
+  `ClientStoryLifecycleServiceTests`, `StoryValidationsTests`/`StoryMappersTests`/
+  `ExportWritersTests` additions; Integration `StoryLifecycleTests` plus `ModerationServiceTests`,
+  `ChapterWriteServiceTests`, `SiteDailyStatAggregatorTests`, `StoryEndpointsTests`,
+  `ModerationEndpointsTests` additions; RazorComponents `StoryLifecyclePanelTests`,
+  `ModSubmissionsPageStoriesTests`, `ModUsersPageTests`/`StoryPropertiesFormTests` additions. The
+  chapter-anchor read test was mutation-checked by hand. HTTP smoke on a freshly seeded scratch DB
+  (unpublish → resubmit kept the date; self-approve 400; approve 204 then "already handled" 400;
+  auto-approve revoke wrote its audit row). All four PowerShell gates passed. **No browser was
+  available** — tracker **H12** carries the owner's browser pass.
+- **Pointers:** `layer2-services.md` §"Story Lifecycle", §"Records of a decision are not counters",
+  §"Account actions" rule 1; `layer8-data-marts.md` §`site_daily_stats`; `layer1-data-model.md`
+  §"Column Conventions" (true-default bools); `audit/Stories.md` F4/F5, `audit/Chapters.md` F6/F7,
+  `audit/Moderation.md` F47/F48/F62 Stage notes; `roadmap.md` §Resolved (D1, D2); tracker D6, D7,
+  F9, H12; worksheet D1/D2 "Built:" lines.
 
 ## WU-QuickFixes — four no-deliberation-needed closures found by reading the process docs (tracker D4 + H6; cross-cutting, extends `Tags/`, `Stories/`, `Following/`, `Profiles/`, `RichText/`, composition root) — DONE ✓ (2026-09-20)
 

@@ -55,7 +55,12 @@ public record UserModerationHistoryDto(
     /// <summary>Set only while <see cref="AccountStatus"/> is <c>Suspended</c>; UTC.</summary>
     DateTime? SuspendedUntilUtc,
     int ActiveReportCount,
-    IReadOnlyList<ReportQueueItemDto> Reports);
+    IReadOnlyList<ReportQueueItemDto> Reports,
+    /// <summary>Story-approval trust (WU-StoryLifecycle, D1): moderator approvals recorded for this
+    /// author. Monotonic.</summary>
+    int ApprovedStorySubmissions = 0,
+    /// <summary>Whether the trust waiver is in force (a moderator may revoke/restore it).</summary>
+    bool CanAutoApprove = true);
 
 /// <summary>Pending-approval story row for the /mod/submissions queue.</summary>
 public record StorySubmissionQueueItemDto(
@@ -63,7 +68,9 @@ public record StorySubmissionQueueItemDto(
     string Title,
     string AuthorUserName,
     Rating Rating,
-    DateTime SubmittedDate,
+    /// <summary>When the story last entered the queue (<c>Story.SubmittedDate</c>); null only for a
+    /// row that predates the column and had no date to carry over.</summary>
+    DateTime? SubmittedDate,
     /// <summary>The status the story will move to if approved (set by the author at submission time).</summary>
     StoryStatusEnum PostApprovalStatus,
     bool IsImportedWork);

@@ -239,27 +239,81 @@ public class ServerModerationWriteService(
 
     // ── Submission approval (Feature 48) ─────────────────────────────────────────
 
+    private const string SubmissionAlreadyHandled = "This submission was already handled.";
+
     public async Task ApproveStoryAsync(int storyId)
     {
         int modId = RequireModerator();
 
-        Story story = await writeDb.Stories
-            .Include(s => s.StoryDetail)
-            .SingleAsync(s => s.StoryId == storyId);
+        var story = await writeDb.Stories
+            .Where(s => s.StoryId == storyId)
+            .Select(s => new
+            {
+                s.StoryStatusId,
+                s.AuthorId,
+                PostApprovalStatus = s.StoryDetail.PostApprovalStatus,
+                AuthorStatus = s.Author != null ? (AccountStatusEnum?)s.Author.AccountStatus : null,
+                AuthorSuspendedUntilUtc = s.Author != null ? s.Author.SuspendedUntilUtc : null,
+            })
+            .SingleOrDefaultAsync()
+            ?? throw new KeyNotFoundException($"Story {storyId} was not found.");
 
+        // D1 guards, all user-facing (400) rather than the InvalidOperationException → 401 they
+        // replaced. Order: already handled → unpublishable target → non-live author.
         if (story.StoryStatusId != StoryStatusEnum.PendingApproval)
-            throw new InvalidOperationException($"Story {storyId} is not pending approval (current status: {story.StoryStatusId}).");
+            throw new ModerationValidationException([SubmissionAlreadyHandled]);
 
-        int? authorId = story.AuthorId;
-        StoryStatusEnum approvedStatus = story.StoryDetail.PostApprovalStatus;
-        story.StoryStatusId = approvedStatus;
+        // Closes the approve-into-Draft hole: PostApprovalStatus stays editable while queued, so it
+        // is re-validated here, not only at submit.
+        StoryStatusEnum approvedStatus = story.PostApprovalStatus;
+        if (!StoryLifecycle.IsEntryStatus(approvedStatus))
+            throw new ModerationValidationException(
+            [
+                "This submission's \"Status when published\" isn't one a story can be published as " +
+                "(In Progress, Complete or Open Beta). Reject it so the author can fix it."
+            ]);
 
-        await writeDb.SaveChangesAsync();
+        // Live-author guard (D1 sub-edge, owner-stated). Null AuthorId = deleted (D13 hard delete
+        // leaves the FK SetNull). A null-dated suspension counts as live-suspended — deliberately
+        // stricter than CanalaveSignInManager; WU-ModerationIntegrity makes null dates impossible.
+        int authorId = story.AuthorId ?? throw new ModerationValidationException(
+            ["This story's author has deleted their account, so it can't be approved — reject it instead."]);
+        bool suspendedNow = story.AuthorStatus == AccountStatusEnum.Suspended
+            && (story.AuthorSuspendedUntilUtc is null || story.AuthorSuspendedUntilUtc > DateTime.UtcNow);
+        if (story.AuthorStatus == AccountStatusEnum.Banned || suspendedNow)
+            throw new ModerationValidationException(
+                ["This story's author is banned or suspended, so it can't be approved — reject it instead."]);
+
+        // Status flip + the author's monotonic trust record commit together: there is no recompute
+        // to heal a split (layer2-services.md §"Records of a decision are not counters"). The flip is
+        // conditional on PendingApproval, so a second moderator or an author withdraw in between
+        // affects 0 rows → nothing is incremented.
+        DateTime now = DateTime.UtcNow;
+        var strategy = writeDb.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await writeDb.Database.BeginTransactionAsync();
+
+            int affected = await writeDb.Stories
+                .Where(s => s.StoryId == storyId && s.StoryStatusId == StoryStatusEnum.PendingApproval)
+                .ExecuteUpdateAsync(u => u
+                    .SetProperty(s => s.StoryStatusId, approvedStatus)
+                    // D2: first publication only — a previously published story keeps its date.
+                    .SetProperty(s => s.PublishedDate, s => s.PublishedDate ?? now));
+            if (affected == 0)
+                throw new ModerationValidationException([SubmissionAlreadyHandled]);
+
+            await writeDb.Users
+                .Where(u => u.Id == authorId)
+                .ExecuteUpdateAsync(u => u.SetProperty(
+                    x => x.ApprovedStorySubmissions, x => x.ApprovedStorySubmissions + 1));
+
+            await tx.CommitAsync();
+        });
 
         try
         {
-            if (authorId.HasValue)
-                await notifications.NotifyStoryApprovedAsync(authorId.Value, storyId, modId);
+            await notifications.NotifyStoryApprovedAsync(authorId, storyId, modId);
         }
         catch (Exception ex)
         {
@@ -271,18 +325,29 @@ public class ServerModerationWriteService(
     {
         int modId = RequireModerator();
 
-        Story story = await writeDb.Stories
-            .SingleAsync(s => s.StoryId == storyId);
+        var story = await writeDb.Stories
+            .Where(s => s.StoryId == storyId)
+            .Select(s => new { s.StoryStatusId, s.AuthorId })
+            .SingleOrDefaultAsync()
+            ?? throw new KeyNotFoundException($"Story {storyId} was not found.");
 
         if (story.StoryStatusId != StoryStatusEnum.PendingApproval)
-            throw new InvalidOperationException($"Story {storyId} is not pending approval (current status: {story.StoryStatusId}).");
+            throw new ModerationValidationException([SubmissionAlreadyHandled]);
+
+        // Rejected is reachable only from PendingApproval (D1) — enforced by the conditional update
+        // itself, so a race with an approve or a withdraw can't reject a row it no longer applies to.
+        // No live-author guard here: a moderator must always be able to clear the queue.
+        DateTime now = DateTime.UtcNow;
+        int affected = await writeDb.Stories
+            .Where(s => s.StoryId == storyId && s.StoryStatusId == StoryStatusEnum.PendingApproval)
+            .ExecuteUpdateAsync(u => u
+                .SetProperty(s => s.StoryStatusId, StoryStatusEnum.Rejected)
+                .SetProperty(s => s.TakedownReason, reason)
+                .SetProperty(s => s.TakedownDate, now));
+        if (affected == 0)
+            throw new ModerationValidationException([SubmissionAlreadyHandled]);
 
         int? authorId = story.AuthorId;
-        story.StoryStatusId = StoryStatusEnum.Rejected;
-        story.TakedownReason = reason;
-        story.TakedownDate = DateTime.UtcNow;
-
-        await writeDb.SaveChangesAsync();
 
         try
         {
@@ -293,6 +358,56 @@ public class ServerModerationWriteService(
         {
             logger.LogWarning(ex, "StoryRejected notification failed for story {StoryId}", storyId);
         }
+    }
+
+    // ── Story-approval trust (WU-StoryLifecycle, D1) ──────────────────────────────
+
+    public async Task SetCanAutoApproveAsync(int targetUserId, bool canAutoApprove, short reasonId, string reason)
+    {
+        int modId = RequireModerator();
+
+        if (targetUserId == modId)
+            throw new ModerationValidationException(["You can't change your own auto-approve standing."]);
+
+        User targetUser = await writeDb.Users.SingleOrDefaultAsync(u => u.Id == targetUserId)
+            ?? throw new KeyNotFoundException($"User {targetUserId} was not found.");
+
+        if (!await writeDb.ReportReasons.AnyAsync(rr => rr.ReportReasonId == reasonId))
+            throw new ModerationValidationException(["Choose a reason for this action."]);
+
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new ModerationValidationException(["A reason is required."]);
+
+        // Unchanged value → no-op, no audit row (nothing happened to record).
+        if (targetUser.CanAutoApprove == canAutoApprove) return;
+
+        // Report.ActionTaken's existing column cap (1024) — refused as a 400 rather than letting
+        // the insert fail as a 500. Picks no new number.
+        string actionTaken = $"Auto-approve {(canAutoApprove ? "restored" : "revoked")}: {reason.Trim()}";
+        if (actionTaken.Length > 1024)
+            throw new ModerationValidationException(["That reason is too long."]);
+
+        targetUser.CanAutoApprove = canAutoApprove;
+
+        // The Report row IS the audit record (layer2-services.md §"Account actions") — same
+        // moderator-initiated shape as ApplyAccountActionToUserAsync; opened and resolved together,
+        // so ActiveReportCount is untouched. No notification (owner silent).
+        DateTime now = DateTime.UtcNow;
+        writeDb.Reports.Add(new Report
+        {
+            ReportedEntityType = ReportedEntityType.User,
+            ReportedEntityId = targetUserId,
+            ReportReasonId = reasonId,
+            Notes = reason,
+            ReporterUserId = modId,
+            ReportStatusId = ReportStatusEnum.ResolvedActionTaken,
+            ModeratorUserId = modId,
+            ActionTaken = actionTaken,
+            DateReported = now,
+            DateResolved = now,
+        });
+
+        await writeDb.SaveChangesAsync();
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────────

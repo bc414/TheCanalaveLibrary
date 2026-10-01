@@ -11,7 +11,19 @@ public class StoryUpdateDTO : IEditableStoryProperties
     public string Title { get; set; } = string.Empty;
     public string? ShortDescription { get; set; } = string.Empty;
     public Rating Rating { get; set; }
+
+    /// <summary>
+    /// Read echo only, populated by <c>GetStoryForEditAsync</c> — ignored by <c>UpdateStoryAsync</c>.
+    /// Lifecycle moves go through <c>TransitionStatusAsync</c> (WU-StoryLifecycle, D1).
+    /// </summary>
     public StoryStatusEnum StoryStatusId { get; set; }
+
+    /// <summary>
+    /// Read echo only: the moderator's rejection reason while the story is <c>Rejected</c>, null in
+    /// every other status — so the author can see why before revising (spec §5.1). Ignored on write.
+    /// </summary>
+    public string? RejectionReason { get; set; }
+
     public string? CoverArtRelativeUrl { get; set; }
     public string? LongDescription { get; set; }
     public StoryStatusEnum PostApprovalStatus { get; set; }

@@ -22,7 +22,22 @@ public partial class Story : IModeratableContent
     // ViewCount deliberately absent (R2): a high-frequency mutable counter on the hot read row is a
     // write-amplification trap. Views accumulate in daily_story_stats (per-story/day, raw-SQL table,
     // no EF model); lifetime total = SUM — see IStoryReadService.GetStoryTotalViewsAsync.
-    public DateTime PublishedDate { get; set; }
+    /// <summary>
+    /// When the story first went live on this site — NULL = never published (owner ruling D2).
+    /// Stamped on the first transition into the published set and never re-stamped: a story
+    /// unpublished and republished keeps its original date. Never copied from
+    /// <see cref="OriginalPublishedDate"/> (imports never backdate). Invariant, kept by code:
+    /// a published status implies non-null. See layer2-services.md §"Story Lifecycle".
+    /// </summary>
+    public DateTime? PublishedDate { get; set; }
+
+    /// <summary>
+    /// When the story last entered <see cref="StoryStatusEnum.PendingApproval"/> — the moderator
+    /// queue's sort key and "submitted" date (WU-StoryLifecycle). Null for a story never submitted
+    /// through the queue.
+    /// </summary>
+    public DateTime? SubmittedDate { get; set; }
+
     public DateTime LastUpdatedDate { get; set; }
     public DateOnly? OriginalPublishedDate { get; set; }
     public DateOnly? OriginalLastUpdatedDate { get; set; }

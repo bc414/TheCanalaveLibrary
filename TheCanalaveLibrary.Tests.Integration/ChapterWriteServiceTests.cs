@@ -515,6 +515,117 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
         await act.Should().ThrowAsync<ChapterValidationException>("M-rated version cannot be made primary in a T story");
     }
 
+    // --- Publish anchors (owner ruling D2, WU-StoryLifecycle) ---
+
+    [Fact]
+    public async Task CreateChapterAsync_LeavesBothPublishDatesNull()
+    {
+        int chapterId = await CallCreateAsync(NewChapter("Draft chapter"));
+
+        (Chapter chapter, List<ChapterContent> versions) = await LoadChapterAsync(chapterId);
+        chapter.IsPublished.Should().BeFalse();
+        chapter.FirstPublishedDate.Should().BeNull("a chapter that has never been published has no anchor");
+        versions.Should().ContainSingle().Which.PublishDate.Should().BeNull(
+            "the version isn't publicly readable until its chapter is published");
+    }
+
+    [Fact]
+    public async Task SetPublishedAsync_FirstPublishStampsBoth_UnpublishAndRepublishKeepThem()
+    {
+        int chapterId = await CallCreateAsync(NewChapter("Anchor"));
+        long altId = await CallAddAlternateAsync(chapterId, NewChapter("Alt before publish"));
+
+        await CallSetPublishedAsync(chapterId, true);
+        (Chapter first, List<ChapterContent> firstVersions) = await LoadChapterAsync(chapterId);
+        first.FirstPublishedDate.Should().NotBeNull();
+        firstVersions.Should().OnlyContain(v => v.PublishDate == first.FirstPublishedDate,
+            "every version still unstamped became readable at the chapter's first publish");
+        firstVersions.Select(v => v.ChapterContentId).Should().Contain(altId);
+
+        await CallSetPublishedAsync(chapterId, false);
+        await CallSetPublishedAsync(chapterId, true);
+        (Chapter again, List<ChapterContent> againVersions) = await LoadChapterAsync(chapterId);
+        again.FirstPublishedDate.Should().Be(first.FirstPublishedDate, "the anchor is never moved");
+        againVersions.Select(v => v.PublishDate).Should().Equal(firstVersions.Select(v => v.PublishDate));
+    }
+
+    [Fact]
+    public async Task AddAlternateVersionAsync_StampedOnAPublishedChapter_NullOnAnUnpublishedOne()
+    {
+        int published = await CallCreateAsync(NewChapter("Published"));
+        await CallSetPublishedAsync(published, true);
+        int unpublished = await CallCreateAsync(NewChapter("Unpublished"));
+
+        long altOnPublished = await CallAddAlternateAsync(published, NewChapter("Alt A"));
+        long altOnUnpublished = await CallAddAlternateAsync(unpublished, NewChapter("Alt B"));
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.ChapterContents.SingleAsync(cc => cc.ChapterContentId == altOnPublished))
+            .PublishDate.Should().NotBeNull("an alternate of a published chapter is publicly readable at once");
+        (await db.ChapterContents.SingleAsync(cc => cc.ChapterContentId == altOnUnpublished))
+            .PublishDate.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task SetPrimaryVersionAsync_PromotingANewerVersion_NeverMovesTheChapterDate()
+    {
+        // The live bump vector D2 closed: the chapter list used to read the PRIMARY version's date,
+        // so promoting a later alternate made an old chapter look newly published ("New" badge,
+        // and the future new-chapter fan-out anchor).
+        int chapterId = await CallCreateAsync(NewChapter("Old chapter"));
+        await CallSetPublishedAsync(chapterId, true);
+        DateTime anchor = new(2026, 1, 10, 0, 0, 0, DateTimeKind.Utc);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await db.Chapters.Where(c => c.ChapterId == chapterId)
+                .ExecuteUpdateAsync(u => u.SetProperty(c => c.FirstPublishedDate, anchor));
+            await db.ChapterContents.Where(cc => cc.ChapterId == chapterId)
+                .ExecuteUpdateAsync(u => u.SetProperty(cc => cc.PublishDate, anchor));
+        }
+
+        long newer = await CallAddAlternateAsync(chapterId, NewChapter("Rewrite")); // stamped now
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            IChapterWriteService svc = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
+            await svc.SetPrimaryVersionAsync(chapterId, newer);
+        }
+
+        (Chapter chapter, _) = await LoadChapterAsync(chapterId);
+        chapter.FirstPublishedDate.Should().Be(anchor);
+
+        using IServiceScope readScope = Factory.Services.CreateScope();
+        IChapterReadService reads = readScope.ServiceProvider.GetRequiredService<IChapterReadService>();
+        ChapterListEntryDto entry = (await reads.GetChapterListAsync(_storyId)).Single(c => c.ChapterId == chapterId);
+        entry.PublishDate.Should().Be(anchor, "the chapter list's date is the chapter anchor, not the primary version's");
+    }
+
+    private CreateChapterDto NewChapter(string title) => new()
+    {
+        StoryId = _storyId, // AddAlternateVersionAsync ignores it (the chapter id decides)
+        Title = title,
+        ChapterText = $"<p>{title} text.</p>",
+        Rating = null,
+    };
+
+    private async Task CallSetPublishedAsync(int chapterId, bool isPublished)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IChapterWriteService svc = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
+        await svc.SetPublishedAsync(chapterId, isPublished);
+    }
+
+    private async Task<(Chapter Chapter, List<ChapterContent> Versions)> LoadChapterAsync(int chapterId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Chapter chapter = await db.Chapters.SingleAsync(c => c.ChapterId == chapterId);
+        List<ChapterContent> versions = await db.ChapterContents
+            .Where(cc => cc.ChapterId == chapterId).OrderBy(cc => cc.SortOrder).ToListAsync();
+        return (chapter, versions);
+    }
+
     // --- Helpers ---
 
     private async Task<int> CallCreateAsync(CreateChapterDto dto)

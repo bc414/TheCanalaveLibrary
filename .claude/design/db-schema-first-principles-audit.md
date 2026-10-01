@@ -317,6 +317,8 @@ locked in by habit once humans are editing.
 
 ### 3.4 `stories.published_date` is NOT NULL for drafts
 
+> **Built:** WU-StoryLifecycle (2026-09-30), per worksheet D2 — nullable again, NULL = never published (migration `WU_StoryLifecycle`; rule in `layer2-services.md` §"Story Lifecycle"). The entry below is history.
+
 Spec §Story had `PublishedDate` nullable; shipped is `NOT NULL` with no default. A Draft
 (status 0) story therefore carries a "published" timestamp that means "row created" — and
 discovery sorts (`ix_stories_published_date`) key on it. The write path presumably re-stamps at

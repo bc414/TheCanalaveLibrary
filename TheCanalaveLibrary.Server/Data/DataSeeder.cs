@@ -45,7 +45,9 @@ namespace TheCanalaveLibrary.Server;
 /// (one Hidden Gem, one author-highlighted) with likes; 3 groups (standard w/ folders + stories +
 /// blog post, SFW-only, Mature); 2 profile blog posts (published w/ linked story + draft);
 /// 1 conversation with an unread message for TestUser; 3 notifications for TestUser;
-/// 2 open reports (story + comment).</para>
+/// 2 open reports (story + comment). Story-approval trust (WU-StoryLifecycle): AuthorAlpha and
+/// AuthorBeta are recorded as approved authors (their submits publish directly); TestUser is left
+/// untrusted on purpose so its submits exercise the moderator queue.</para>
 /// </summary>
 public class DataSeeder(
     ApplicationDbContext context,
@@ -243,19 +245,25 @@ public class DataSeeder(
                 Rating = rating,
                 StoryStatusId = status,
                 WordCount = 0, // real value set when chapters land (SeedChaptersAsync)
-                PublishedDate = Now.AddDays(-60 + daysOld),
+                // D2: NULL = never published — only published statuses carry a publish stamp
+                // (the invariant the write paths keep). Pending stories carry the queue's
+                // sort key instead.
+                PublishedDate = StoryLifecycle.IsPublished(status) ? Now.AddDays(-60 + daysOld) : null,
+                SubmittedDate = status == StoryStatusEnum.PendingApproval ? Now.AddDays(-60 + daysOld) : null,
                 LastUpdatedDate = Now.AddDays(-10 + daysOld % 10),
                 StoryListing = new StoryListing { StoryTitle = title, ShortDescription = shortDesc },
                 StoryDetail = new StoryDetail
                 {
                     LongDescription = $"<p>Seed long description for “{title}”. Status: {status}, rating: {rating}.</p>",
                     Slug = $"seed-story-{++slugIndex}",
-                    // ApproveStoryAsync transitions the story TO this value, so a PendingApproval
-                    // story must carry its intended published status here — PendingApproval itself
-                    // would make moderator approval a silent no-op (found in the L4.5 browser pass).
-                    PostApprovalStatus = status == StoryStatusEnum.PendingApproval
-                        ? StoryStatusEnum.InProgress
-                        : status,
+                    // ApproveStoryAsync transitions the story TO this value, so it must be an entry
+                    // status (InProgress/Completed/OpenBeta). Seeding PendingApproval here once made
+                    // moderator approval a silent no-op (found in the 2026-07-02 L4.5 browser pass);
+                    // since WU-StoryLifecycle approve and submit both REFUSE a non-entry value, so a
+                    // Draft/Pending/OnHiatus seed falls back to InProgress.
+                    PostApprovalStatus = StoryLifecycle.IsEntryStatus(status)
+                        ? status
+                        : StoryStatusEnum.InProgress,
                 },
             };
             foreach (Tag t in storyTags)
@@ -384,6 +392,22 @@ public class DataSeeder(
 
         context.Stories.AddRange(stories);
         await context.SaveChangesAsync();
+
+        // Story-approval trust (WU-StoryLifecycle, D1): authors who own seeded published stories are
+        // recorded as approved, so their submits take the trust waiver. TestUser is left UNTRUSTED
+        // on purpose even though it owns a published seed story, so a browser session can exercise
+        // the first-submission (moderator queue) path.
+        foreach (IGrouping<int?, Story> byAuthor in stories
+                     .Where(st => StoryLifecycle.IsPublished(st.StoryStatusId) && st.AuthorId != users.Test.Id)
+                     .GroupBy(st => st.AuthorId))
+        {
+            int authorId = byAuthor.Key!.Value;
+            int approved = byAuthor.Count();
+            await context.Users
+                .Where(u => u.Id == authorId)
+                .ExecuteUpdateAsync(u => u.SetProperty(x => x.ApprovedStorySubmissions, approved));
+        }
+
         return stories;
     }
 
@@ -411,7 +435,8 @@ public class DataSeeder(
                 WordCount = ChapterText.CountWords(html),
                 SortOrder = 1,
                 Rating = null, // inherit story rating (primary invariant)
-                PublishDate = Now.AddDays(-40 + number),
+                // D2: both dates exist only once the chapter has been published.
+                PublishDate = published ? Now.AddDays(-40 + number) : null,
             };
             var chapter = new Chapter
             {
@@ -419,6 +444,7 @@ public class DataSeeder(
                 ChapterNumber = number,
                 Title = title,
                 IsPublished = published,
+                FirstPublishedDate = published ? Now.AddDays(-40 + number) : null,
                 VersionCount = 1,
                 ChapterContents = { content },
             };
@@ -444,7 +470,7 @@ public class DataSeeder(
                     WordCount = ChapterText.CountWords(altHtml),
                     SortOrder = 2,
                     Rating = null,
-                    PublishDate = Now.AddDays(-30),
+                    PublishDate = Now.AddDays(-30), // the flagship's chapters are all published
                 });
                 ch.VersionCount = 2;
             }

@@ -21,7 +21,8 @@ namespace TheCanalaveLibrary.Core;
 /// shorter than <c>CollapseMinimum</c> never collapse.</item>
 /// </list>
 ///
-/// <para><b>"New" badge — strict chain rule:</b> a chapter is New iff its PublishDate is after
+/// <para><b>"New" badge — strict chain rule:</b> a chapter is New iff its PublishDate (the chapter's
+/// first-publication anchor, <c>Chapter.FirstPublishedDate</c> — never a version's date) is after
 /// the viewer's watermark AND every earlier chapter is read or itself New (i.e., the contiguous
 /// fresh run starting at the frontier). One unread pre-existing chapter before the run kills all
 /// badges; no watermark (anonymous / first visit) means no badges. Cosmetic only — a New chapter

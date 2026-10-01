@@ -10,9 +10,14 @@
 @* Story submission queue (WU34 Feature 48) + external-link verification (Feature 53, WU39).
    Tabbed shell — Stories tab is the active tab. Desktop-only.
 
-   Stories tab — Approve: sets StoryStatusId = PostApprovalStatus + fires StoryApproved
-   notification. Reject: sets StoryStatusId = Rejected + records reason + fires StoryRejected
-   notification.
+   Stories tab — only an author's FIRST submission ever lands here (owner ruling D1: a trusted
+   author's submit publishes directly). Approve: StoryStatusId = PostApprovalStatus, PublishedDate
+   stamped on first publication, the author's ApprovedStorySubmissions +1, StoryApproved notification.
+   Reject: StoryStatusId = Rejected + reason + StoryRejected notification. Both act only on a row
+   still PendingApproval and refuse with a ModerationValidationException otherwise ("already
+   handled" — another moderator or an author withdraw got there first), on which the queue reloads;
+   approve also refuses a non-live author or an unpublishable "Status when published" (reject it).
+   Rows are ordered and dated by SubmittedDate (WU-StoryLifecycle).
 
    Imports tab — two independent queues, both manual review (no server-side fetch, ever):
    account tier (open the profile URL, confirm the code text is present) and per-link tier (open
@@ -46,6 +51,9 @@
     @if (_tab == SubmissionTab.Stories)
     {
         @* ── Stories tab ─────────────────────────────────────────────────────── *@
+        @* Queue-level feedback for approve (whose failures had no surface before WU-StoryLifecycle
+           — the only error slot lived inside the reject panel) and for a row handled elsewhere. *@
+        <ErrorAlert Message="@_storyActionError" ShowSignIn="@_storyActionErrorIsSessionExpired" />
         @if (_loading || Submissions is null)
         {
             <p class="text-sm text-(--color-text-muted)">Loading…</p>
@@ -70,7 +78,7 @@
                                 <p class="mt-0.5 text-sm text-(--color-text-muted)">
                                     by @sub.AuthorUserName &mdash;
                                     @sub.Rating &mdash;
-                                    submitted @sub.SubmittedDate.ToString("yyyy-MM-dd")
+                                    submitted @(sub.SubmittedDate is DateTime submitted ? submitted.ToString("yyyy-MM-dd") : "—")
                                     @if (sub.IsImportedWork) { <span class="ml-1 rounded bg-warning/20 px-1 py-0.5 text-xs text-warning">Import</span> }
                                 </p>
                                 <p class="mt-1 text-xs text-(--color-text-muted)">
@@ -321,6 +329,8 @@
     private string? _rejectReason;
     private string? _rejectError;
     private bool _rejectErrorIsSessionExpired;
+    private string? _storyActionError;
+    private bool _storyActionErrorIsSessionExpired;
 
     // ── Imports tab state (Feature 53, WU39) — two independent queues ────────────
     [PersistentState]
@@ -365,17 +375,24 @@
     private async Task ApproveAsync(int storyId)
     {
         _actingStoryId = storyId;
-        _rejectError = null;
-        _rejectErrorIsSessionExpired = false;
+        _storyActionError = null;
+        _storyActionErrorIsSessionExpired = false;
         try
         {
             await ModerationService.ApproveStoryAsync(storyId);
             await LoadAsync();
         }
+        catch (ModerationValidationException ex)
+        {
+            // A guard refused (already handled elsewhere, non-live author, unpublishable status):
+            // show why, and reload so a row another moderator / the author already moved disappears.
+            _storyActionError = ExceptionPresenter.GetUserMessage(ex);
+            await LoadAsync();
+        }
         catch (Exception ex)
         {
-            _rejectError = Translate(ex, "Approving a story submission failed unexpectedly");
-            _rejectErrorIsSessionExpired = ex is SessionExpiredException;
+            _storyActionError = Translate(ex, "Approving a story submission failed unexpectedly");
+            _storyActionErrorIsSessionExpired = ex is SessionExpiredException;
         }
         finally { _actingStoryId = null; }
     }
@@ -407,10 +424,20 @@
         _actingStoryId = storyId;
         _rejectError = null;
         _rejectErrorIsSessionExpired = false;
+        _storyActionError = null;
+        _storyActionErrorIsSessionExpired = false;
         try
         {
             await ModerationService.RejectStoryAsync(storyId, _rejectReason!);
             CancelReject();
+            await LoadAsync();
+        }
+        catch (ModerationValidationException ex)
+        {
+            // Already handled elsewhere — the row is gone after the reload, so the message moves to
+            // the queue-level slot (the reject panel closes with its row).
+            CancelReject();
+            _storyActionError = ExceptionPresenter.GetUserMessage(ex);
             await LoadAsync();
         }
         catch (Exception ex)

@@ -39,7 +39,6 @@ public static class StoryMappers
             Title = story.Title,
             ShortDescription = story.ShortDescription,
             Rating = story.Rating,
-            StoryStatusId = story.StoryStatusId,
             CoverArtRelativeUrl = story.CoverArtRelativeUrl,
             LongDescription = story.LongDescription,
             PostApprovalStatus = story.PostApprovalStatus,
@@ -60,7 +59,6 @@ public static class StoryMappers
             Title = story.Title,
             ShortDescription = story.ShortDescription,
             Rating = story.Rating,
-            StoryStatusId = story.StoryStatusId,
             CoverArtRelativeUrl = story.CoverArtRelativeUrl,
             LongDescription = story.LongDescription,
             PostApprovalStatus = story.PostApprovalStatus,
@@ -88,7 +86,8 @@ public static class StoryMappers
         actualStory.StoryListing.StoryTitle = tempStory.Title;
         actualStory.StoryListing.ShortDescription = tempStory.ShortDescription;
         actualStory.Rating = tempStory.Rating;
-        actualStory.StoryStatusId = tempStory.StoryStatusId;
+        // StoryStatusId is never copied (WU-StoryLifecycle, D1) — status moves only through
+        // TransitionStatusAsync or moderator approve/reject.
         actualStory.StoryListing.CoverArtRelativeUrl = tempStory.CoverArtRelativeUrl;
         actualStory.StoryDetail.LongDescription = tempStory.LongDescription;
         actualStory.StoryDetail.PostApprovalStatus = tempStory.PostApprovalStatus;

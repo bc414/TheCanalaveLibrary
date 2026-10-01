@@ -19,6 +19,12 @@ namespace TheCanalaveLibrary.Server;
 /// not guaranteed to be UTC. Explicit ranges make the boundary correct regardless of session
 /// timezone.
 ///
+/// Publish-date sourcing (owner ruling D2, WU-StoryLifecycle): <c>new_stories</c> counts
+/// <c>stories.published_date</c>, the first-publication stamp — NULL for drafts, pending and
+/// rejected stories, which therefore no longer count. <c>new_chapters</c>/<c>new_words</c> count on
+/// <c>chapters.first_published_date</c> (still joining the primary version for its word count), so
+/// promoting an alternate version never re-counts a chapter.
+///
 /// Scoped, deliberately separate from the hosted <see cref="SiteDailyStatWorker"/> so integration
 /// tests and a <c>/dev</c> probe can trigger an upsert deterministically without hosting timing —
 /// same split as <see cref="DiscoveryMartRebuilder"/>.
@@ -51,9 +57,9 @@ public sealed class SiteDailyStatAggregator(ApplicationDbContext context)
             (SELECT COUNT(*) FROM "AspNetUsers" WHERE created_utc >= @range_start AND created_utc < @range_end),
             (SELECT COUNT(*) FROM stories WHERE published_date >= @range_start AND published_date < @range_end),
             (SELECT COUNT(*) FROM chapters c JOIN chapter_contents cc ON c.primary_content_id = cc.chapter_content_id
-                WHERE c.is_published AND cc.publish_date >= @range_start AND cc.publish_date < @range_end),
+                WHERE c.is_published AND c.first_published_date >= @range_start AND c.first_published_date < @range_end),
             (SELECT COALESCE(SUM(cc.word_count), 0) FROM chapters c JOIN chapter_contents cc ON c.primary_content_id = cc.chapter_content_id
-                WHERE c.is_published AND cc.publish_date >= @range_start AND cc.publish_date < @range_end),
+                WHERE c.is_published AND c.first_published_date >= @range_start AND c.first_published_date < @range_end),
             (
                 (SELECT COUNT(*) FROM chapter_comments WHERE date_posted >= @range_start AND date_posted < @range_end)
               + (SELECT COUNT(*) FROM blog_post_comments WHERE date_posted >= @range_start AND date_posted < @range_end)

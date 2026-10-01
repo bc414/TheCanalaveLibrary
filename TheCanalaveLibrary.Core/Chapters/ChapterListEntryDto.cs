@@ -15,8 +15,11 @@ namespace TheCanalaveLibrary.Core;
 ///
 /// <para><b>Per-viewer fields (WU45):</b> <see cref="IsRead"/>/<see cref="ReadProgress"/> come
 /// from the viewer's <c>UserChapterInteraction</c> row (false/0 when absent or anonymous).
-/// <see cref="PublishDate"/> is the primary version's publish date — the "New" badge input
-/// (strict chain rule computed in <c>ChapterListSegmenter</c>, not stored here).</para>
+/// <see cref="PublishDate"/> is the chapter's publish anchor, <c>Chapter.FirstPublishedDate</c> —
+/// stamped on the chapter's first publish and never moved, so promoting an alternate version never
+/// changes it (owner ruling D2, WU-StoryLifecycle; the name is kept to limit ripple). Null for a
+/// never-published draft. The "New" badge input (strict chain rule computed in
+/// <c>ChapterListSegmenter</c>, not stored here).</para>
 /// </summary>
 public record ChapterListEntryDto(
     int ChapterId,

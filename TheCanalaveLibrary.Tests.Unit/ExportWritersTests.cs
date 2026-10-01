@@ -188,6 +188,38 @@ public class ExportWritersTests
         md.Should().Contain("Line one  \nline two.", "Markdown hard break is two trailing spaces + newline");
     }
 
+    // ── Never-published story (owner ruling D2, WU-StoryLifecycle) ─────────────────
+    // PublishDate is NULL until a story first goes live; only its author can export it then.
+
+    [Fact]
+    public void PublishedLabel_FormatsTheDate_OrSaysNotYetPublished()
+    {
+        Fixture().PublishedLabel.Should().Be("Published Jan 2, 2026");
+        (Fixture() with { PublishDate = null }).PublishedLabel.Should().Be("Not yet published");
+    }
+
+    [Fact]
+    public void NullPublishDate_RendersNotYetPublished_InEveryTextWriter()
+    {
+        StoryExportModel draft = Fixture() with { PublishDate = null };
+
+        Encoding.UTF8.GetString(HtmlWriter.Write(draft)).Should().Contain("Not yet published");
+        Encoding.UTF8.GetString(TxtWriter.Write(draft)).Should().Contain("Not yet published");
+        Encoding.UTF8.GetString(MarkdownWriter.Write(draft)).Should().Contain("Not yet published");
+
+        using var word = WordprocessingDocument.Open(new MemoryStream(DocxWriter.Write(draft)), isEditable: false);
+        word.MainDocumentPart!.Document!.Body!.InnerText.Should().Contain("Not yet published");
+
+        // PDF text is compressed, so this only proves the writer handles the null date at all.
+        Encoding.ASCII.GetString(PdfWriter.Write(draft), 0, 4).Should().Be("%PDF");
+    }
+
+    [Fact]
+    public void Markdown_KeepsItsIsoDateFormat_ForAPublishedStory()
+    {
+        Encoding.UTF8.GetString(MarkdownWriter.Write(Fixture())).Should().Contain("Published 2026-01-02");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────────────
 
     private static string ReadEntry(ZipArchive zip, string name)

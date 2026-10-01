@@ -37,11 +37,13 @@ namespace TheCanalaveLibrary.Server;
 /// → 403 (MA-701 fix); the unauthenticated branch throws <see cref="InvalidOperationException"/> →
 /// 401 via <see cref="EndpointHelpers.ExecuteAsync"/>'s auth-safety-net case. <b>Known
 /// EndpointHelpers mismatch (flagged, deferred):</b> <c>SubmitReportAsync</c>'s target-type
-/// allow-set guard, <c>ApplyAccountActionAsync</c>'s "target must be a User" guard, and
-/// <c>ApproveStoryAsync</c>/<c>RejectStoryAsync</c>'s "not pending approval" guards all also throw
-/// <see cref="InvalidOperationException"/> for genuine business-rule reasons, not because the caller
-/// is unauthenticated — but the shared helper maps every <see cref="InvalidOperationException"/> to
-/// 401 uniformly. The message still crosses via <c>ProblemDetails.Detail</c>.
+/// allow-set guard also throws <see cref="InvalidOperationException"/> for a genuine business-rule
+/// reason, not because the caller is unauthenticated — but the shared helper maps every
+/// <see cref="InvalidOperationException"/> to 401 uniformly. The message still crosses via
+/// <c>ProblemDetails.Detail</c>. (<c>ApproveStoryAsync</c>/<c>RejectStoryAsync</c> left this list at
+/// WU-StoryLifecycle, 2026-09-30: their guards now throw <see cref="ModerationValidationException"/>
+/// → 400, and an unknown story <see cref="KeyNotFoundException"/> → 404. The account-action "target
+/// must be a User" guard it once also named was replaced at WU-UserModeration.)
 /// </para>
 /// </summary>
 public static class ModerationEndpoints
@@ -147,6 +149,18 @@ public static class ModerationEndpoints
                     {
                         await moderation.ApplyAccountActionToUserAsync(
                             userId, reasonId, action, reason, suspendedUntilUtc);
+                        return Results.NoContent();
+                    }))
+            .RequireAuthorization(AuthorizationPolicies.RequireModerator);
+
+        // Story-approval trust revoke/restore (WU-StoryLifecycle, D1) — moderator-initiated, files
+        // its own audit Report row like the account action above. `enabled` is non-nullable with no
+        // lambda default: the client impl always sends it explicitly.
+        group.MapPost("/users/{userId:int}/auto-approve",
+                (IModerationWriteService moderation, int userId, bool enabled, short reasonId, string reason) =>
+                    EndpointHelpers.ExecuteAsync(async () =>
+                    {
+                        await moderation.SetCanAutoApproveAsync(userId, enabled, reasonId, reason);
                         return Results.NoContent();
                     }))
             .RequireAuthorization(AuthorizationPolicies.RequireModerator);

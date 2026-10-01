@@ -14,6 +14,14 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.Property(u => u.CreatedUtc).HasDefaultValueSql("CURRENT_TIMESTAMP");
         builder.HasIndex(u => u.CreatedUtc).HasDatabaseName("ix_users_created_utc");
 
+        // Story-approval trust (WU-StoryLifecycle, D1). DB defaults are REQUIRED, not cosmetic:
+        // SeedTool COPYs AspNetUsers with an explicit column list that omits both columns. The
+        // sentinel is required too: CanAutoApprove's DB default (true) differs from the CLR bool
+        // default (false), so without HasSentinel(true) EF would treat an explicit false as "unset"
+        // and let the DB default overwrite a revoke-at-insert.
+        builder.Property(u => u.ApprovedStorySubmissions).HasDefaultValue(0);
+        builder.Property(u => u.CanAutoApprove).HasDefaultValue(true).HasSentinel(true);
+
         // 1-to-1 Cascade (Personal data that MUST be deleted with the user)
         builder.HasOne(u => u.UserStat)
             .WithOne(s => s.User)

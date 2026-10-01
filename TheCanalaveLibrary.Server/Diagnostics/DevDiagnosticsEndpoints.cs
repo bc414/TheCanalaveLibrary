@@ -52,12 +52,13 @@ public static class DevDiagnosticsEndpoints
             if (author is null) return Results.NotFound("seed TestUser first");
 
             // AuthorId is server-stamped in CreateStoryAsync from IActiveUserContext — not passed here.
+            // So is status: the probe story is created as a Draft (WU-StoryLifecycle, D1), visible to
+            // its author only until it goes through TransitionStatusAsync.
             CreateStoryDTO dto = new()
             {
                 Title = title,
                 ShortDescription = "WU12 diagnostic story",
                 Rating = Enum.Parse<Rating>(rating),
-                StoryStatusId = StoryStatusEnum.InProgress,
                 LongDescription = "WU12 diagnostic long description",
                 PostApprovalStatus = StoryStatusEnum.InProgress,
                 StoryTags =

@@ -19,7 +19,7 @@ public static class MarkdownWriter
         sb.AppendLine($"# {story.Title}");
         sb.AppendLine();
         sb.AppendLine($"*by {story.AuthorName} · Rated {story.RatingLabel} · " +
-                      $"Published {story.PublishDate:yyyy-MM-dd} · Updated {story.LastUpdatedDate:yyyy-MM-dd}*");
+                      $"{story.FormatPublished("yyyy-MM-dd")} · Updated {story.LastUpdatedDate:yyyy-MM-dd}*");
         sb.AppendLine();
 
         if (!string.IsNullOrWhiteSpace(story.LongDescriptionHtml))

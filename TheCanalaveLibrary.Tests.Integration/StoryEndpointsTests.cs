@@ -80,6 +80,65 @@ public class StoryEndpointsTests(PostgresFixture postgres) : IntegrationTestBase
             "the /edit route carries RequireAuthorization() — anonymous callers stop at the auth floor");
     }
 
+    // ── POST /api/stories/{id}/status — author lifecycle move (WU-StoryLifecycle, D1) ──
+
+    [Fact]
+    public async Task PostStatus_Author_Returns200WithTheResultingStatus()
+    {
+        int authorId = await SeedUserAsync("author");
+        int storyId  = await SeedStoryAsync(authorId, status: StoryStatusEnum.Draft);
+        SetActiveUser(authorId);
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsync(
+            $"/api/stories/{storyId}/status?target={(short)StoryStatusEnum.PendingApproval}", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await response.Content.ReadFromJsonAsync<StoryStatusEnum>()).Should().Be(StoryStatusEnum.PendingApproval,
+            "an untrusted author's submit enters the queue — the body is the RESULTING status");
+    }
+
+    [Theory]
+    [InlineData((short)StoryStatusEnum.Rejected)] // illegal: only a moderator rejects
+    [InlineData((short)99)]                       // undefined enum value — binds, then the service refuses
+    public async Task PostStatus_IllegalOrUndefinedTarget_Returns400(short target)
+    {
+        int authorId = await SeedUserAsync("author");
+        int storyId  = await SeedStoryAsync(authorId, status: StoryStatusEnum.Draft);
+        SetActiveUser(authorId);
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsync($"/api/stories/{storyId}/status?target={target}", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task PostStatus_Anonymous_Returns401()
+    {
+        int authorId = await SeedUserAsync("author");
+        int storyId  = await SeedStoryAsync(authorId, status: StoryStatusEnum.Draft);
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsync($"/api/stories/{storyId}/status?target=1", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task PostStatus_NonAuthor_Returns403()
+    {
+        int authorId = await SeedUserAsync("author");
+        int storyId  = await SeedStoryAsync(authorId, status: StoryStatusEnum.Draft);
+        SetActiveUser(await SeedUserAsync("other"));
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsync($"/api/stories/{storyId}/status?target=1", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
     // ── GET /api/stories/by-author/{authorId} — elevated read is owner-only ──────
 
     [Fact]

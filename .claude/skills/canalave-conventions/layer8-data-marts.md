@@ -190,9 +190,9 @@ total is either meaningless (`active_users`), already stored elsewhere (`story_v
 | `total_stories` | stock | `COUNT(Story WHERE published_date <= end-of-day AND published/visible)` |
 | `total_words` | stock | `SUM(Story.WordCount)` as-of-day |
 | `new_users` | flow | `User.CreatedUtc` |
-| `new_stories` | flow | `Story.PublishedDate` |
-| `new_chapters` | flow | `ChapterContent.PublishDate` |
-| `new_words` | flow | `SUM(ChapterContent.WordCount)` on `PublishDate` |
+| `new_stories` | flow | `Story.PublishedDate` — the first-publication stamp (NULL = never published, so drafts, pending and rejected stories never count; WU-StoryLifecycle, D2) |
+| `new_chapters` | flow | `Chapter.FirstPublishedDate` (the chapter-level publish anchor — adding or promoting a version never re-counts; WU-StoryLifecycle, D2) |
+| `new_words` | flow | `SUM` of the primary version's `ChapterContent.WordCount` on `Chapter.FirstPublishedDate` |
 | `new_comments` | flow | UNION of the 4 TPT comment children's `DatePosted` |
 | `new_blog_posts` | flow | `ProfileBlogPost`/`GroupBlogPost.DateCreated` |
 | `new_groups` | flow | `Group.DateCreated` |
@@ -217,6 +217,10 @@ approval path (`ServerModerationWriteService.ApproveStoryAsync` flips `Story.Sto
 timestamp write; no `DateApproved` field on `Story`/`StoryDetail`). Adding one is a schema change
 outside this build's scope — the moderation-health panel's approval signal comes from
 `reports_resolved` only for now. Revisit if a `DateApproved` column is ever added for other reasons.
+*(Amended WU-StoryLifecycle, 2026-09-30: approve now stamps `Story.PublishedDate` on a story's first
+publication, so approved stories reach `new_stories` on their approval day — but that stamp is not an
+approval date. A republished story keeps its original date, and a trusted author's submit stamps it
+with no approval at all. There is still no approval-date column, so `stories_approved` stays dropped.)*
 
 **Privacy stance for `active_users`/"last seen" (settled):** `User.LastActiveUtc` is stamped for
 **authenticated requests only**, riding the existing strictly-necessary auth-session cookie — no

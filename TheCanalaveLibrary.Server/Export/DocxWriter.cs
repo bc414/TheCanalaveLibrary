@@ -35,7 +35,7 @@ public static class DocxWriter
             body.Append(StyledParagraph("Title", story.Title));
             body.Append(PlainParagraph($"by {story.AuthorName}"));
             body.Append(PlainParagraph(
-                $"Rated {story.RatingLabel} · Published {story.PublishDate:MMM d, yyyy} · Updated {story.LastUpdatedDate:MMM d, yyyy}"));
+                $"Rated {story.RatingLabel} · {story.PublishedLabel} · Updated {story.LastUpdatedDate:MMM d, yyyy}"));
             if (!string.IsNullOrWhiteSpace(story.LongDescriptionHtml))
             {
                 AppendHtmlBlocks(body, story.LongDescriptionHtml, context);

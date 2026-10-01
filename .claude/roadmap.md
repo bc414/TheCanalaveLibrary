@@ -189,6 +189,28 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 
 ## Resolved
 
+- **Story approval queue: mandatory for first submissions only (worksheet D1) — answered 2026-08-04,
+  built WU-StoryLifecycle 2026-09-30.** Had no decision row: it came out of the 2026-08-03 service-layer
+  audit's §3.1, which found the code holding both positions at once (a queue and approve/reject
+  machinery, but nothing server-side stopping an author from self-publishing or un-rejecting). Ruling:
+  the queue exists for spam prevention only and gates an author's **first** submission; an author with
+  one approved story and an unrevoked `CanAutoApprove` publishes directly. A server-side transition
+  table is enforced regardless of policy. `Rejected` is reachable only from `PendingApproval`;
+  unpublish is a legal author move that re-enters the gate (which the waiver then skips). The approval
+  counter is monotonic, and any moderator may revoke or restore the flag. Rule: `layer2-services.md`
+  §"Story Lifecycle" (plus §"Records of a decision are not counters" and the auto-approve clause under
+  §"Account actions"). Narrative: `audit/Moderation.md` F48, `audit/Stories.md` F4.
+
+- **Published-date semantics (worksheet D2) — answered 2026-08-04, built WU-StoryLifecycle
+  2026-09-30.** `stories.published_date` is nullable again, and **NULL = never published on this
+  site**. It is stamped on the first transition into the published set and never re-stamped
+  (republication is not a publication event). The chapter anchor is chapter-level:
+  `Chapter.FirstPublishedDate`, stamped once and never moved, is the "New"-badge input and the
+  new-chapter fan-out anchor. `ChapterContent.PublishDate` is nullable per-version provenance that no
+  discovery surface reads. Imports never backdate. Rule: `layer2-services.md` §"Story Lifecycle";
+  L8 sourcing in `layer8-data-marts.md` §`site_daily_stats`. Narrative: `audit/Chapters.md` F6/F7,
+  `audit/Stories.md` F5.
+
 - **Moderator reach over user accounts — resolved 2026-07-31 (Brian-ratified, tracker B13 /
   WU-UserModeration, built 2026-08-01).** Had no decision row: it surfaced as a `polish · low`
   tracker line about a dead route parameter, and the question underneath it — *may a moderator act

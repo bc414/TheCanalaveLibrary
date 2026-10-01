@@ -146,6 +146,8 @@ approve/reject (same guard shape as §2.1.2's double-resolution fix). A minimum-
 submission belongs to **D20**; feed-event/anti-bump rules (first-publication-only, permanently, per
 artifact) belong with the new-chapter fan-out in **D16/D17**. Chapter-level gating never happens.
 
+**Built:** WU-StoryLifecycle (2026-09-30) — rule now stated in `layer2-services.md` §"Story Lifecycle" (plus §"Records of a decision are not counters" and the auto-approve clause under §"Account actions").
+
 ### D2. Published-date semantics
 
 *Source: schema §3.4 + service §2.9 (one ruling, two columns).*
@@ -206,6 +208,8 @@ site-local column, always.
 `TransitionStatusAsync` that enforces the story table, and the chapter publish path for the chapter
 anchor. D16/D17's new-chapter fan-out anchors on `Chapter.FirstPublishedDate`, which is why that
 column should exist before the fan-out producer is written.
+
+**Built:** WU-StoryLifecycle (2026-09-30) — rule now stated in `layer2-services.md` §"Story Lifecycle" (publish anchors; L8 sourcing in `layer8-data-marts.md` §`site_daily_stats`).
 
 ### D3. Where recommendation provenance lives
 

@@ -1559,6 +1559,103 @@ ViewModel and EF model. Validation in **static extension methods** in Core.
 **Tier 3 (Server only):** Database context checks in service. On failure, throws
 `StoryValidationException` containing `List<string>` of errors. Server-side only.
 
+## Story Lifecycle — transition table, trust waiver, publish anchors (WU-StoryLifecycle; D1/D2)
+
+Owner rulings D1 and D2 (`.claude/design/audit-decision-worksheet.md`, answered 2026-08-04), built
+WU-StoryLifecycle 2026-09-30. **The approval queue exists for spam prevention only** — not editorial
+standards, not tag/rating sanity. Its guarantee is that no spam story ever reaches a reader; it gates an
+author's *first* submission, because spam is an account-level property.
+
+**Status is never a property edit.** `StoryStatusId` is not on `IEditableStoryProperties` or
+`CreateStoryDTO`, and the shared mapper never copies it. `StoryUpdateDTO.StoryStatusId` survives only as a
+read echo from `GetStoryForEditAsync`; `UpdateStoryAsync` ignores it. A new story is always `Draft`,
+server-stamped in `CreateStoryAsync` beside `AuthorId`. Every lifecycle move goes through
+`IStoryWriteService.TransitionStatusAsync` (author) or `ApproveStoryAsync`/`RejectStoryAsync` (moderator).
+`PostApprovalStatus` *is* a property: editable in every status, and `CanSave` accepts any **defined**
+value. Entry-set membership is checked only at submit and at approve — checking it at save would break
+every legacy published story whose value is, say, `OnHiatus`. Editing a `PendingApproval` story is
+allowed and does not re-queue (the moderator approves the row as it stands).
+
+**Terms** (`Core/Stories/StoryLifecycle.cs`): **published set** = `InProgress(2)..OpenBeta(7)`
+(`IsPublished`); **entry set** = `{InProgress, Completed, OpenBeta}` (`IsEntryStatus` —
+`CanSubmitForApproval` calls it); **trusted** = `User.ApprovedStorySubmissions >= 1 && User.CanAutoApprove`.
+
+**Author transition table** — `StoryLifecycle.ResolveAuthorTransition(current, target,
+postApprovalStatus, trusted)`, a pure function the server applies (Unit-covered exhaustively):
+
+| current | target | result |
+|---|---|---|
+| any | undefined enum value | error |
+| X | X | no-op (returns X, writes nothing) |
+| `Draft` | `PendingApproval` | error unless `IsEntryStatus(postApprovalStatus)` (the `CanSubmitForApproval` text); **trusted → `postApprovalStatus`** (the waiver); otherwise `PendingApproval` |
+| `PendingApproval` | `Draft` | `Draft` (withdraw) |
+| `Rejected` | `Draft` | `Draft` (revise — uncapped) |
+| published P | published P′ | P′ (any→any within the set; supersedes spec §5.1's narrower graph) |
+| published P | `Draft` | `Draft` (unpublish) |
+| anything else | — | error — covers Draft→published directly, →`Rejected`, `PendingApproval`→published (self-approve), `Rejected`→`PendingApproval`/published |
+
+The waiver is **routing, not a second action**: there is one author "submit", and a trusted author's
+submit lands at `PostApprovalStatus`. So unpublish re-enters the gate, and the waiver skips it for trusted
+authors — approve-once-then-rewrite is closed only for an author's **first** story;
+`CanAutoApprove` revocation is the lever if that matters. The waiver never increments
+`ApprovedStorySubmissions` — only moderator approval does.
+
+**Moderator transitions — only from `PendingApproval`.** Approve → `PostApprovalStatus`, re-validated with
+`IsEntryStatus` (closes the approve-into-`Draft` hole). Reject → `Rejected`. **`Rejected` is reachable
+only from `PendingApproval`**; published content is removed only via `IsTakenDown`, so the two
+invisibility mechanisms never overlap. Approve also requires a **live author** and refuses when
+`AuthorId` is null (deleted — D13 hard delete leaves the FK `SetNull`), the author is `Banned`, or the
+author is `Suspended` with a null or future `SuspendedUntilUtc` (deliberately stricter than
+`CanalaveSignInManager` on the null-date case). Reject is unguarded, so a moderator can always clear the
+queue. Refusals are `ModerationValidationException` (400, user-facing); a missing story is
+`KeyNotFoundException`.
+
+**Guard shape — every lifecycle write is conditional on the status it read.** One `ExecuteUpdateAsync`
+`WHERE story_id = @id AND story_status_id = @current`; 0 rows affected throws a user-facing validation
+exception ("reload" for the author, "already handled" for a moderator) instead of overwriting. This closes
+double-approve, approve-vs-withdraw and the author's own lost update. Approve wraps the status flip and the
+author's `ApprovedStorySubmissions + 1` in one `CreateExecutionStrategy().ExecuteAsync` + transaction (0
+rows → throw, nothing incremented); the `StoryApproved` notification stays best-effort after commit. No
+optimistic-concurrency token — D30 is pending.
+
+**Publish anchors (D2).** `Story.PublishedDate` is nullable, and **NULL = never published on this site**.
+It is stamped `PublishedDate ?? now` on every transition into the published set (trusted submit,
+moderator approve) and therefore **never re-stamped**: a story unpublished and later republished keeps
+its original date. Republication is not a publication event, and never re-stamping is what enforces the
+anti-bump rule. `Story.SubmittedDate` (nullable) is stamped on each →`PendingApproval`; the moderator
+queue orders by it. For chapters the anchor is chapter-level: `Chapter.FirstPublishedDate` is stamped once
+on the chapter's first `IsPublished` false→true and never moved (unpublish and republish both keep it). It
+is the "New"-badge input and the new-chapter fan-out anchor. `ChapterContent.PublishDate` (nullable) is
+**per-version provenance only** — when *this version* became publicly readable (stamped on first chapter
+publish for every version still null, and at creation for an alternate added to an already-published
+chapter). No discovery or recency surface reads it: adding or promoting a version is an update, never a
+publish event. Invariants, maintained in code (the CHECK constraints are routed to WU-SchemaHardening):
+published status ⇒ `PublishedDate != null`; `IsPublished ⇒ FirstPublishedDate != null`. (D2 wrote
+`IsPublished == (FirstPublishedDate != null)`, which cannot hold together with "never moved" and the
+legal chapter unpublish.)
+
+**Site-local vs. provenance — imports never backdate.** `PublishedDate`/`FirstPublishedDate` always mean
+"went live on this site". `OriginalPublishedDate`/`ChapterContent.OriginalPublishDate` are display-only
+provenance and are never copied into a site-local column; an import's arrival sorts as a genuine
+publication.
+
+**A status move is not a content update.** `TransitionStatusAsync` never touches `LastUpdatedDate`
+(touching it would reopen the unpublish/republish bump vector) and never touches `IsTakenDown` (an
+orthogonal axis — a taken-down story stays hidden whatever its status).
+
+**Ratified riders (D1).** A post-approval rating raise is handled reactively only (the report path).
+Chapter-level gating never happens. **Import verification never takes the waiver** — true today because
+authorship verification is the decoupled per-link ExternalVerification queue, which consults no trust
+state; no future code may make it consult one.
+
+**Accepted sort consequence.** Postgres `DESC` puts NULLs first. Because null-dated rows are visible only
+to their own author (the invariant plus the `StoryStatus` filter), an author sees their never-published
+drafts at the top of their own DatePublished views. Do not add a NULLS LAST tweak — it would defeat
+`ix_stories_published_date`.
+
+The trust counter itself is a record of a decision, not a derived counter — see §"UserStats Updates"
+→ "Records of a decision are not counters".
+
 ## Moderation Services
 
 `IModerationReadService` / `IModerationWriteService` live in `Core/Moderation/`. Server impls live in
@@ -1610,6 +1707,14 @@ consequences bind all new work:
    seed row; the moderator picks a real reason from the existing seeded set, which is more useful in the
    audit trail than a generic one. Because the row is opened and resolved together, `ActiveReportCount`
    is untouched (no +1/−1 pair).
+   **Auto-approve revoke/restore follows the same rule (WU-StoryLifecycle, 2026-09-30; D1).**
+   `SetCanAutoApproveAsync(targetUserId, canAutoApprove, reasonId, reason)` is a moderator-initiated
+   action on a user, so it files the same kind of row: `User` target, `ReporterUserId == ModeratorUserId`,
+   `ResolvedActionTaken`, `ActionTaken = "Auto-approve revoked: {reason}"` / `"…restored: {reason}"`.
+   Same guards as `ApplyAccountActionToUserAsync` (moderator gate, self-target and unknown reason →
+   `ModerationValidationException`, unknown user → `KeyNotFoundException`); an unchanged value is a no-op
+   that writes no row. No notification (owner silent). Restore exists because a one-way moderator lever is
+   the "irreversible in-app" defect class. See §"Story Lifecycle" for what the flag gates.
 2. **The action's target user is resolved from the report, not assumed to be the report's target.**
    `ResolveActionTargetUserIdAsync` maps `User` → the reported user; `Story`/`Comment`/`BlogPost`/
    `Recommendation` → the reported content's `AuthorUserId` via the existing `LoadModeratableAsync`
@@ -1753,6 +1858,19 @@ serializes correctly under any isolation level.
 an orphaned duplicate column that no write path ever populated — the live moderation path writes
 `User.ActiveReportCount` on `AspNetUsers` instead. Removed via migration rather than wired; see
 `audit/Profiles.md` Feature 58.
+
+### Records of a decision are not counters — `User.ApprovedStorySubmissions` (WU-StoryLifecycle, D1)
+
+`User.ApprovedStorySubmissions` (with its companion flag `User.CanAutoApprove`) is **a record of a
+decision, not a derived counter**. Each increment records a moderator's approval of a submission — a
+decision whose evidence a later deletion can destroy — so there is no ground truth to recompute it from.
+D21's own closing paragraph ("'No authoritative counter class' is a statement about counters, not about
+records of a decision") places it **outside D21 and D22**. It is **monotonic** (D1): nothing decrements it —
+not story deletion (D15), not takedown, not revoke — because a decrementable trust counter is farmable. It
+has **no recompute**, and it lives on `AspNetUsers`, not `user_stats`, so `UserStatRecalculator` can
+never "correct" it. Its `+1` is committed **atomically with the approve status flip**, in one transaction,
+**because** no recompute exists to heal a split — the one place in the counter family where D22's
+post-commit contract deliberately does not apply. Full lifecycle context: §"Story Lifecycle".
 
 ### Recalculation worker (F58) — mirror the wired formula
 

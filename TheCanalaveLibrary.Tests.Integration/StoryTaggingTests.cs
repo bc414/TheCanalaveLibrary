@@ -423,7 +423,6 @@ public class StoryTaggingTests(PostgresFixture postgres) : IntegrationTestBase(p
             Title = $"Tagging Test Story {Guid.NewGuid():N}",
             ShortDescription = "Integration test",
             Rating = Rating.T,
-            StoryStatusId = StoryStatusEnum.InProgress,
             LongDescription = "Integration test long description",
             PostApprovalStatus = StoryStatusEnum.InProgress,
             StoryTags = flatTags,

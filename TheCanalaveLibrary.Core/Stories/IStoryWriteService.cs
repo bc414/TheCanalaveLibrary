@@ -10,10 +10,26 @@ public interface IStoryWriteService
     Task<int> CreateStoryAsync(CreateStoryDTO dto);
 
     /// <summary>
-    /// Updates an existing story's properties.
+    /// Updates an existing story's properties. Never changes status — the DTO's
+    /// <c>StoryStatusId</c> is a read echo and is ignored (WU-StoryLifecycle, D1).
     /// </summary>
     /// <param name="dto">A DTO containing the story's updated properties.</param>
     Task UpdateStoryAsync(StoryUpdateDTO dto);
+
+    /// <summary>
+    /// Author-requested lifecycle move, applied through <see cref="StoryLifecycle.ResolveAuthorTransition"/>
+    /// (submit, withdraw, revise-after-rejection, moves among the published statuses, unpublish).
+    /// A trusted author's submit lands straight at <c>PostApprovalStatus</c>; the first move into
+    /// the published set stamps <c>PublishedDate</c> (never re-stamped). Never touches
+    /// <c>LastUpdatedDate</c> or <c>IsTakenDown</c>. See <c>layer2-services.md</c> §"Story Lifecycle".
+    /// </summary>
+    /// <returns>The status the story actually landed on — lets the UI tell "Published" from
+    /// "Submitted for review".</returns>
+    /// <exception cref="StoryValidationException">Undefined or illegal target, no valid
+    /// <c>PostApprovalStatus</c> at submit, or the status changed since it was read.</exception>
+    /// <exception cref="KeyNotFoundException">No story with <paramref name="storyId"/>.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the story's author.</exception>
+    Task<StoryStatusEnum> TransitionStatusAsync(int storyId, StoryStatusEnum targetStatus);
 
     /// <summary>
     /// Uploads a new cover image for <paramref name="storyId"/> via <c>IImageStorageService</c> and

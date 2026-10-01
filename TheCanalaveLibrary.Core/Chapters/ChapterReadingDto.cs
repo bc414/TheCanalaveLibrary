@@ -25,7 +25,10 @@ public record ChapterReadingDto(
     /// <summary>The <c>SortOrder</c> of the version being displayed (0 = primary).</summary>
     int VersionOrder,
     string? VersionName,
-    DateTime PublishDate,
+    /// <summary>This version's provenance (<c>ChapterContent.PublishDate</c>): when it became publicly
+    /// readable; null while the chapter has never been published (an author's own draft). Not the
+    /// chapter's publish anchor — that is <c>Chapter.FirstPublishedDate</c> (D2).</summary>
+    DateTime? PublishDate,
     int? PreviousChapterNumber,
     int? NextChapterNumber,
     /// <summary>

@@ -44,8 +44,26 @@ else
                            OnRestore="RestoreDraftAsync" />
         </div>
 
+        @* ── Publication lifecycle (WU-StoryLifecycle, D1) — edit mode only (a new story is
+           always a Draft and has no id to transition yet). The status updates IN PLACE: never
+           NavigateTo this same route here — a same-route navigation on this Quill-hosting page is
+           the WASM removeChild crash the save path's forceLoad works around. ─────────────── *@
+        @if (StoryId.HasValue)
+        {
+            <div class="mb-6 flex flex-col gap-2">
+                <InlineAlert Message="@_lifecycleNotice" Variant="InlineAlertVariant.Success" />
+                <ErrorAlert Messages="_lifecycleErrors" ShowSignIn="_lifecycleErrorIsSessionExpired" />
+                <StoryLifecyclePanel CurrentStatus="_currentStatus"
+                                     SavedPostApprovalStatus="_savedPostApprovalStatus"
+                                     RejectionReason="_rejectionReason"
+                                     IsBusy="_transitioning"
+                                     OnTransition="HandleTransitionAsync" />
+            </div>
+        }
+
         <StoryPropertiesForm @ref="_form"
                              ViewModel="_viewModel"
+                             ShowPostApprovalStatus="@(!StoryLifecycle.IsPublished(_currentStatus))"
                              InitialTagsByType="_initialTagsByType"
                              InitialCharacters="_initialCharacters"
                              InitialCharacterChips="_initialCharacterChips"
@@ -106,6 +124,17 @@ else
     private IReadOnlyList<StoryCharacterPairingDto>? _initialPairings;
     private bool _isLoading = true;
     private bool _forbidden;
+
+    // Lifecycle state (WU-StoryLifecycle, D1), loaded from the edit DTO's read echoes. A new story
+    // is always Draft. _savedPostApprovalStatus is the PERSISTED value — the form's select edits
+    // _viewModel.PostApprovalStatus, which only reaches the server on Save (and Save reloads).
+    private StoryStatusEnum _currentStatus = StoryStatusEnum.Draft;
+    private StoryStatusEnum _savedPostApprovalStatus;
+    private string? _rejectionReason;
+    private bool _transitioning;
+    private string? _lifecycleNotice;
+    private readonly List<string> _lifecycleErrors = [];
+    private bool _lifecycleErrorIsSessionExpired;
 
     // Persisted lookup lists (prerender→interactive, [PersistentState]) — both are rendered by the
     // form, so persisting adds no browser exposure. The edit-source StoryUpdateDTO is deliberately
@@ -187,13 +216,62 @@ else
         _viewModel.Title = dto.Title;
         _viewModel.ShortDescription = dto.ShortDescription;
         _viewModel.Rating = dto.Rating;
-        _viewModel.StoryStatusId = dto.StoryStatusId;
         _viewModel.CoverArtRelativeUrl = dto.CoverArtRelativeUrl;
         _viewModel.LongDescription = dto.LongDescription;
         _viewModel.PostApprovalStatus = dto.PostApprovalStatus;
         _viewModel.ExternalLinks = dto.ExternalLinks;
         _viewModel.OriginalPublishedDate = dto.OriginalPublishedDate;
         _viewModel.OriginalLastUpdatedDate = dto.OriginalLastUpdatedDate;
+
+        _currentStatus = dto.StoryStatusId;
+        _savedPostApprovalStatus = dto.PostApprovalStatus;
+        _rejectionReason = dto.RejectionReason;
+    }
+
+    /// <summary>
+    /// Lifecycle move from <see cref="StoryLifecyclePanel"/>. Updates the status IN PLACE from the
+    /// RESULTING status the server returns (a trusted author's submit publishes directly) — no
+    /// NavigateTo, see the panel's markup comment.
+    /// </summary>
+    private async Task HandleTransitionAsync(StoryStatusEnum target)
+    {
+        if (!StoryId.HasValue) return;
+
+        bool wasPublished = StoryLifecycle.IsPublished(_currentStatus);
+        _transitioning = true;
+        _lifecycleNotice = null;
+        _lifecycleErrors.Clear();
+        _lifecycleErrorIsSessionExpired = false;
+
+        try
+        {
+            StoryStatusEnum result = await StoryWriteService.TransitionStatusAsync(StoryId.Value, target);
+            _currentStatus = result;
+            if (result != StoryStatusEnum.Rejected) _rejectionReason = null;
+            _lifecycleNotice = result switch
+            {
+                StoryStatusEnum.PendingApproval => "Submitted for review.",
+                StoryStatusEnum.Draft when wasPublished => "Unpublished — the story is a draft again.",
+                StoryStatusEnum.Draft => "Moved back to draft.",
+                _ when wasPublished => $"Status updated to {StoryDisplayFormat.StatusLabel(result)}.",
+                _ => "Published.",
+            };
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _forbidden = true;
+        }
+        catch (Exception ex)
+        {
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Changing the status of story {StoryId} failed unexpectedly", StoryId);
+            _lifecycleErrors.AddRange(ExceptionPresenter.GetUserMessages(ex));
+            _lifecycleErrorIsSessionExpired = ex is SessionExpiredException;
+        }
+        finally
+        {
+            _transitioning = false;
+        }
     }
 
     private async Task HandleValidSubmit()
@@ -223,7 +301,6 @@ else
                     Title = _viewModel.Title,
                     ShortDescription = _viewModel.ShortDescription,
                     Rating = _viewModel.Rating,
-                    StoryStatusId = _viewModel.StoryStatusId,
                     CoverArtRelativeUrl = _viewModel.CoverArtRelativeUrl,
                     LongDescription = _viewModel.LongDescription,
                     PostApprovalStatus = _viewModel.PostApprovalStatus,
@@ -263,7 +340,6 @@ else
                     Title = _viewModel.Title,
                     ShortDescription = _viewModel.ShortDescription,
                     Rating = _viewModel.Rating,
-                    StoryStatusId = _viewModel.StoryStatusId,
                     CoverArtRelativeUrl = null, // set after create if a file was selected
                     LongDescription = _viewModel.LongDescription,
                     PostApprovalStatus = _viewModel.PostApprovalStatus,
@@ -292,7 +368,6 @@ else
                         Title = _viewModel.Title,
                         ShortDescription = _viewModel.ShortDescription,
                         Rating = _viewModel.Rating,
-                        StoryStatusId = _viewModel.StoryStatusId,
                         CoverArtRelativeUrl = coverUrl,
                         LongDescription = _viewModel.LongDescription,
                         PostApprovalStatus = _viewModel.PostApprovalStatus,

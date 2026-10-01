@@ -61,10 +61,16 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
 `story-card` boundary island — one broken card degrades to a tile, the deck survives. Strategy:
 `error-handling.md` §"Error Handling Strategy"; detail: `workplan.md` WU-ErrorHandling.
 
-- **L1 — Stage 5.** Partition trio + `IEditableStoryProperties` plumbing is sound and matches spec §4/§7.
+- **L1 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — migration `WU_StoryLifecycle`: nullable `published_date`, new `submitted_date`; see its Stage note).** Partition trio + `IEditableStoryProperties` plumbing is sound and matches spec §4/§7.
   Awaiting migration + build verification (no migrations exist). *Settled:* three-table vertical split;
-  slug server-generated; explicit-interface edit contract.
-- **L2 — Stage 5.** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
+  slug server-generated; explicit-interface edit contract. **Settled by owner ruling D1 (worksheet
+  2026-08-04), before the WU-StoryLifecycle build (2026-09-30) — do not revisit: status is off the
+  property-edit path.** `StoryStatusId` is not on `IEditableStoryProperties`/`CreateStoryDTO` and the
+  mapper never copies it; a new story is always `Draft`; `UpdateStoryAsync` never changes status; every
+  lifecycle move goes through `TransitionStatusAsync` (author) or approve/reject (moderator).
+  `PostApprovalStatus` stays an ordinary editable property. Rule of record: `layer2-services.md`
+  §"Story Lifecycle".
+- **L2 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — Draft-on-create, `TransitionStatusAsync`, status off the update path; see its Stage note below).** **RESOLVED (2026-06-20):** this cell's prior "Stage 5, nothing to reconcile" call was
   wrong — `DbStoryWriteService`/`DbStoryReadService` injected `IDbContextFactory<T>`, which was never
   registered in `Program.cs` (only plain `AddDbContext<T>` existed), so DI container validation failed at
   app startup. Surfaced by actually running the Aspire AppHost end-to-end. Per spec §6.6 ("Why Direct
@@ -95,7 +101,7 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
   same NRE/`Attach`-vs-`Add`/slug-disambiguation regressions against a real Postgres; the dev-
   diagnostics endpoints are no longer the source of truth for this behavior (see
   `canalave-conventions/testing.md`).
-- **L3-Logic — Stage 5.** **WU24 (2026-06-23):** `ServerStoryWriteService` now enforces author ownership
+- **L3-Logic — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — editor page drives the lifecycle panel in place; see its Stage note).** **WU24 (2026-06-23):** `ServerStoryWriteService` now enforces author ownership
   on both create and update paths: `CreateStoryAsync` stamps `AuthorId` from `IActiveUserContext.UserId`
   (the client-settable `AuthorId` property is removed from `CreateStoryDTO`) and throws
   `InvalidOperationException` for unauthenticated callers; `UpdateStoryAsync` loads the story, checks
@@ -107,7 +113,7 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
   implements `IEditableStoryProperties` (decoupled from wire DTOs; mapping is at page layer).
   `Routes.razor` switched from `RouteView` to `AuthorizeRouteView` so `[Authorize]` attributes are
   enforced (was silently ignored with `RouteView`).
-- **L3.5-Structure — Stage 5.** **WU24 (2026-06-23):** `StoryPropertiesForm` fully rebuilt (Bootstrap →
+- **L3.5-Structure — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — the all-enum Status select is gone; new `StoryLifecyclePanel` + "Status when published" select; see its Stage note).** **WU24 (2026-06-23):** `StoryPropertiesForm` fully rebuilt (Bootstrap →
   Tailwind, all 6 `TagSelector` instances wired with `OnSelectionChanged` + `InitialTagsByType` prefill,
   `EditorView @ref` pull-on-submit via public `GetLongDescriptionAsync()`, `InputFile` for cover art,
   `Rating`+`Status` selects, server validation error display, `IsLoading` disabled-submit guard). No
@@ -123,7 +129,7 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
   with the locked token set. Responsive: `grid-cols-1 md:grid-cols-2` for Rating/Status row; single
   column otherwise. Visual sign-off pending human review (Stage-6 gate: cannot verify Tailwind layout in
   bUnit).
-- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** (History: the dead pre-WU12 `HttpStoryReadService`/
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; extended WU-StoryLifecycle, 2026-09-30 — `POST /api/stories/{id}/status` + client impl).** (History: the dead pre-WU12 `HttpStoryReadService`/
   `HttpStoryWriteService` were deleted 2026-06-27 in the filter revamp; the real surface was rebuilt
   by WU-L5Sweep.) Endpoints + client impl live (WU-L5Sweep) and the site now runs global
   InteractiveAuto; story CREATE with tags verified end-to-end in a real WASM runtime during the
@@ -132,6 +138,62 @@ through `ExceptionPresenter` + `LogError`. `StoryDeck` wraps each `StoryCard` in
 - **L6 — Stage 5 (WU-L6, 2026-07-07 — resolved, no creation-side DDL).** The write path needs no
   index beyond the existing PK/unique/slug set; the story-table read indexes ("to be added by
   query need") landed as the sort spines under Feature 5 (see its L6 note).
+
+### Feature 4 / Feature 5 — WU-StoryLifecycle Stage note (2026-09-30) — the story lifecycle is enforced; publish dates mean "first went live"
+
+**No cell flips — F4 and F5 stay Stage 5 on every layer they had.** This closed defects *beneath*
+sound cells: owner rulings D1 (mandatory-for-first-submission approval queue + a server-side
+transition table) and D2 (nullable publish dates, NULL = never published) were answered
+2026-08-04 and had not been built. Before this WU an author set `StoryStatusId` freely through the
+property mapper (self-publish, un-reject, enter the queue with an illegal post-approval status),
+`CanSubmitForApproval` had no server caller, and `Story.PublishedDate` was stamped at creation,
+so every long-drafted story sorted as stale and every draft counted as a "new story" in L8.
+
+**What changed (F4):**
+- **L1:** `Story.PublishedDate` → `DateTime?`; new `Story.SubmittedDate`. Migration
+  `WU_StoryLifecycle` (shared with Chapters/Identity) backfills data-preservingly: pending rows
+  keep their queue date in `submitted_date`, `published_date` is nulled for Draft/Pending/Rejected,
+  and `post_approval_status` values outside the entry set are remapped to InProgress. Verified on
+  a populated clone of the dev DB (Up and Down both run; every backfill row checked with `psql`),
+  not only on the empty Testcontainers schema.
+- **L2:** `StoryStatusId` left `IEditableStoryProperties`/`CreateStoryDTO`; the mapper no longer
+  copies it; `CreateStoryAsync` stamps Draft and no publish date. New `TransitionStatusAsync` applies
+  the pure `Core/Stories/StoryLifecycle` table (trust-waiver routing, one conditional
+  `ExecuteUpdate` guarded on the status it read, `PublishedDate ?? now`, never touches
+  `LastUpdatedDate`/`IsTakenDown`). `CanSave` rejects undefined `Rating`/`PostApprovalStatus`.
+  `GetStoryForEditAsync` echoes `StoryStatusId` and `RejectionReason` (read-only).
+- **L3/L3.5:** the all-enum Status select is gone. `StoryPropertiesForm` shows a "Status when
+  published" select (entry set only) while the story is unpublished; the new presentational
+  `StoryLifecyclePanel` (submit / withdraw / revise / move / unpublish) sits above the form in edit
+  mode, and `StoryEditorPage` applies the RESULTING status in place — deliberately no same-route
+  `NavigateTo` (the Quill `removeChild` hazard).
+- **L5:** `POST /api/stories/{id}/status?target=` + `ClientStoryWriteService.TransitionStatusAsync`.
+  Known interim gap: on WASM a refused transition shows "Story validation failed." (the fixed
+  `StoryValidationException.Message`) until WU-ParityAndRemaining's P1 carries error lists over HTTP.
+
+**What changed (F5):** `StoryDetailsDTO.PublishDate`/`StoryExportModel.PublishDate` are nullable;
+`StoryPage` and every export writer render "Not yet published" for NULL (only the author can see
+such a story). DatePublished sorts are unchanged: Postgres `DESC` puts NULLs first, so an author
+sees their own never-published drafts at the top of their own DatePublished views — **accepted and
+recorded, not a bug** (a NULLS LAST tweak would defeat `ix_stories_published_date`).
+
+**How verified:** `dotnet build` green, no new warnings in touched files. `dotnet test` green —
+Unit 1,010, RazorComponents 686, Integration 1,117. Tiers: **Unit** — `StoryLifecycleTests`
+(exhaustive current × target × trusted theory against a literal legal-move table, plus routing,
+refusal messages, set predicates), `StoryValidationsTests` (enum binding), `StoryMappersTests`
+(status never copied, even from a forged echo), `ExportWritersTests` (null date in every writer),
+`ClientStoryLifecycleServiceTests` (route + resulting-status round-trip). **Integration** —
+`StoryLifecycleTests` (Draft-on-create incl. an import with an original date, untrusted/trusted/
+revoked submit, withdraw, revise, six illegal targets, non-author/missing, published moves +
+unpublish + trusted republish keep the original date, `LastUpdatedDate` untouched, no-op, an
+in-queue edit stays Pending and ignores a forged echo, rejection-reason echo), `StoryEndpointsTests`
+(200 with the resulting status, 400 illegal/undefined, 401, 403). **RazorComponents** —
+`StoryLifecyclePanelTests`, `StoryPropertiesFormTests` (no live-status select; entry-set options).
+Also exercised over HTTP against a freshly seeded scratch DB (unpublish → resubmit kept the
+publish date; self-approve → 400). **Not browser-verified** — no browser was available; the
+editor-page panel (including the in-place WASM re-render next to Quill) is tracker **H12**.
+Open owner questions the build did not decide: tracker **F9**. Rule of record:
+`layer2-services.md` §"Story Lifecycle".
 
 ### Feature 4 / Feature 5 — Filter revamp Stage note (2026-06-27)
 
@@ -222,8 +284,8 @@ only rec is hidden → "No recommendations given yet."
     added to the read service. Detail + verification: `audit/Moderation.md` Feature 53.
   - **Bulk chapter import entry point (Feature 63):** `StoryChapterImport` section on
     `StoryEditorPage` (edit mode). Detail: `audit/Import.md`.
-- **L1 — Stage 5.** `StoryListing` warm partition is the projection anchor; sound.
-- **L2 — Stage 5** (was Stage 2, reclassified from 4 before that). `ServerStoryReadService` (renamed
+- **L1 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — `Story.PublishedDate` nullable, NULL = never published; see the F4 Stage note).** `StoryListing` warm partition is the projection anchor; sound.
+- **L2 — Stage 5 (re-verified WU-StoryLifecycle, 2026-09-30 — nullable publish date through detail/export; author-only NULLS-first accepted; see the F4 Stage note)** (was Stage 2, reclassified from 4 before that). `ServerStoryReadService` (renamed
   from `DbStoryReadService` — see Feature 4's L2 RESOLVED note for the `IDbContextFactory` →
   direct-injection fix, same cell) has `GetStoryByIdAsync` (→ `StoryDetailsDTO`) and
   `GetStoryForEditAsync`, both correct `ReadOnlyApplicationDbContext` `.Select()` projections — they
@@ -810,7 +872,9 @@ exercised across the seeded corpus and the newly created story.
 covers only `IEditableStoryProperties`), so UI-created stories carried `DateTime.MinValue` →
 Postgres `-infinity` → story pages showed "Published Jan 1, 0001". Fixed: server-stamps both at
 create (like `AuthorId`) and bumps `LastUpdatedDate` in `UpdateStoryAsync`. Verified via psql
-after a browser round-trip.
+after a browser round-trip. *(Superseded in part 2026-09-30, WU-StoryLifecycle / owner ruling D2:
+create still stamps `LastUpdatedDate` but no longer `PublishedDate` — the column is nullable and
+NULL means "never published"; it is stamped on first publication instead.)*
 
 **Coverage exception:** the cover-art `InputFile` → `IImageStorageService` browser interaction
 could not be driven (browser-automation file-upload API mismatch in the 2026-07-11 WU38 pass's

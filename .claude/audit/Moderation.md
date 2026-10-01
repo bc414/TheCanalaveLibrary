@@ -64,6 +64,10 @@ Recommendation and PrivateMessage remain in the allow-set with no report entry p
 
 ## Feature 47 — Moderation Queue & Actions
 
+**Stages (updated 2026-09-30, WU-StoryLifecycle):** L1–L3.5 = 5, L4 = 3, L4.5 = 5, L5 = 5,
+L6 = 5 — unchanged; WU-StoryLifecycle added the auto-approve revoke/restore action and the trust
+line to `/mod/users/{id}` beneath these cells (Stage note at the end of this section).
+
 **WU34 settled constraints:**
 - `/mod/reports` and `/mod/users` — server-rendered, mod-gated (`RequireModerator` policy), no dispatcher.
 - Report queue ordered by `ActiveReportCount` desc (most-reported first) — triage sort only, never an
@@ -242,13 +246,45 @@ correctly untouched at 0. `AccountSuspended`/`AccountBanned` notifications both 
 suspended account, the WU38a mechanism reachable from the UI for the first time. Zero `fail:`/`crit:`
 lines in the server log across the pass.
 
+**Stage note (WU-StoryLifecycle — 2026-09-30) — no cell flips; F47 stays as headlined above.**
+`UserModerationHistoryDto` gained two trailing optional fields, `ApprovedStorySubmissions` and
+`CanAutoApprove` (appended with defaults so existing constructors keep compiling), populated by
+`GetUserModerationHistoryAsync`. `/mod/users/{id}` shows "N approved submissions · auto-approve
+on/off" under the standing line, and the Account-action card gained a Revoke/Restore auto-approve
+button that reuses the page's reason category and asks for a reason in an inline confirm row; it
+calls the new `SetCanAutoApproveAsync`, which files the same moderator-initiated audit `Report` as
+the account actions (`layer2-services.md` §"Account actions", rule 1, now covers it). **Verified:**
+Integration (`ModerationServiceTests` — revoke writes flag + audit row, unchanged writes nothing,
+non-mod/self refused, history carries the trust fields); RazorComponents (`ModUsersPageTests` —
+the trust line, Revoke calls the service with `(42, false, reasonId, reason)`, an empty reason never
+calls it). **Not browser-verified** (no browser available) — tracker **H12** item 4.
+
 ## Feature 48 — Story Approval Workflow
+
+**Stages (updated 2026-09-30, WU-StoryLifecycle):** L1–L3.5 = 5, L4 = 3, L4.5 = 5, L5 = 5,
+L6/L8 = N/A — unchanged; the D1 guards, trust waiver and `SubmittedDate` landed beneath these cells
+(see the WU-StoryLifecycle Stage note at the end of this section; browser pass owed, tracker H12).
 
 **WU34 settled constraints:**
 - `StoryDetail.PostApprovalStatus` (live field, enforced by `StoryValidations.CanSubmitForApproval`) is the
   submission mechanism — **not** `RequestedStatusId` (that was a deliberations-doc artifact, never built).
 - Approve: `StoryStatusId = PostApprovalStatus` + `NotifyStoryApprovedAsync`.
 - Reject: `StoryStatusId = Rejected` + `ActionTaken` reason + `NotifyStoryRejectedAsync`.
+- **Amended by owner ruling D1 (worksheet 2026-08-04), before the WU-StoryLifecycle build
+  (2026-09-30) — settled, do not revisit:** the queue is **mandatory only for an author's first
+  submission** (spam prevention, not editorial review). A trusted author
+  (`User.ApprovedStorySubmissions >= 1 && User.CanAutoApprove`) submitting lands straight at
+  `PostApprovalStatus`, never entering the queue; any moderator may revoke/restore `CanAutoApprove`
+  (moderator-initiated `Report` row as the audit record). Approve and reject act **only on
+  `PendingApproval`**, via a conditional update (a second moderator or an author withdraw in between →
+  "already handled", nothing written); approve re-validates `PostApprovalStatus` as an entry status
+  (`InProgress`/`Completed`/`OpenBeta` — closes approve-into-`Draft`), refuses a non-live author
+  (deleted, banned, or suspended with a null/future end — reject stays unguarded), stamps
+  `PublishedDate` on first publication (D2), and commits the status flip and the monotonic `+1` to
+  `ApprovedStorySubmissions` in one transaction. `Rejected` is reachable only from `PendingApproval`.
+  The queue orders by, and shows, `Story.SubmittedDate` (stamped on each →`PendingApproval`), because
+  `PublishedDate` is NULL for every never-published story. Rule of record: `layer2-services.md`
+  §"Story Lifecycle".
 - `/mod/submissions` is a tabbed shell in WU34; import-verification tab drops in with WU39.
   **Superseded (WU-RecLifecycle, 2026-07-25):** the WU34-era "rec-approval wiring deferred; tab added
   later" expectation is void — there is **no rec-approval tab, ever**. Recommendations are
@@ -318,6 +354,55 @@ which covers both queues. `GetPendingSubmissionsAsync` now bypasses `IsTakenDown
 alike; a T-only or mature-off moderator sees every pending submission regardless of rating.
 **Verified:** Integration (`ModerationServiceTests.GetPendingSubmissionsAsync_ShowsMRatedSubmission_
 ToModWithMatureOff`); `dotnet test` full suite green.
+
+**Stage note (WU-StoryLifecycle — 2026-09-30) — no cell flips; F48 stays L1–L3.5=5, L4=3,
+L4.5=5, L5=5.** Owner ruling D1 (worksheet, answered 2026-08-04) made the queue mandatory for an
+author's **first** submission only, and its moderator half was unguarded: approve/reject loaded with
+`SingleAsync` and threw `InvalidOperationException` for "not pending" (→ **401** "session
+expired" over HTTP), approve accepted any `PostApprovalStatus` (approve-into-Draft), nothing
+checked the author was still live, and two moderators — or a moderator and the author withdrawing —
+could both act on one row.
+
+- **L1:** `User.ApprovedStorySubmissions` (int, default 0) + `User.CanAutoApprove` (bool, default
+  true, `HasSentinel(true)`) on `AspNetUsers` — records of a decision, monotonic, deliberately
+  outside `user_stats` so `UserStatRecalculator` can never "recompute" them; `Story.SubmittedDate`.
+  Migration `WU_StoryLifecycle` backfills trust for every existing author of a published story.
+- **L2:** approve/reject use `SingleOrDefault` (unknown → 404) and throw
+  `ModerationValidationException` (400) for "already handled", a non-entry `PostApprovalStatus`, and
+  a non-live author (null `AuthorId`, Banned, or Suspended with a null/future end — stricter than
+  `CanalaveSignInManager` on the null date; reject is never author-guarded). Approve runs the
+  conditional status flip (`WHERE PendingApproval`, `PublishedDate ?? now`) and the author's `+1`
+  in one execution-strategy transaction — 0 rows → throw, nothing incremented. Reject is one
+  conditional update. New `SetCanAutoApproveAsync` (revoke **and** restore — a one-way lever would
+  be the "irreversible in-app" defect class) files a moderator-initiated audit `Report`. The
+  pending queue orders by, and returns, `SubmittedDate` (`PublishedDate` is NULL for every pending
+  story now). `ModerationEndpoints` dropped approve/reject from its "Known EndpointHelpers mismatch"
+  note and gained `POST /users/{id}/auto-approve`.
+- **L3/L3.5 (`ModSubmissionsPage`):** the "submitted" column renders the nullable date ("—" when
+  absent); approve failures now have a queue-level `ErrorAlert` (before, the only error slot lived
+  inside the reject panel, so an approve failure showed nowhere); a `ModerationValidationException`
+  from approve or reject reloads the queue so a row handled elsewhere disappears.
+- **L5:** `ClientModerationWriteService` maps 400 → `ModerationValidationException` (was
+  `ArgumentException`, which `ExceptionPresenter` treats as non-user-facing — every guard message
+  would have collapsed to the generic error on WASM). Pulled forward from service audit §2.7.5,
+  owned by WU-ModerationIntegrity, which now only verifies it.
+
+**How verified:** `dotnet test` green (counts in `audit/Stories.md` §"WU-StoryLifecycle Stage
+note"). **Integration** — `ModerationServiceTests` (approve stamps the date and records exactly one
+approval; an earlier publish date survives; double approve and approve-after-withdraw both throw and
+count nothing; Draft/OnHiatus targets refused with status unchanged; banned / future-suspended /
+null-dated-suspended / deleted authors refused while reject still clears the row; an expired
+suspension is live; unknown story → `KeyNotFoundException`; reject on Draft/published/Rejected
+refused; queue ordered by `SubmittedDate`; auto-approve revoke writes the flag and a
+moderator-initiated report, unchanged writes nothing, non-mod and self refused; a new user defaults
+to `CanAutoApprove = true`), `ModerationEndpointsTests` (not-pending approve → **400**, not the old
+401; unknown → 404; auto-approve non-mod → 403). **RazorComponents** —
+`ModSubmissionsPageStoriesTests` (nullable date; already-handled approve/reject reloads; a
+live-author refusal keeps the row). **Unit** — `ClientStoryLifecycleServiceTests` (400 →
+`ModerationValidationException` with the server's text). Smoke-tested over HTTP on a freshly seeded
+scratch DB (approve 204, second approve 400 "already handled", queue JSON carries
+`submittedDate`, auto-approve revoke wrote the audit row). **Not browser-verified** (no browser
+available): tracker **H12**. L4 stays 3. Rule of record: `layer2-services.md` §"Story Lifecycle".
 
 ## Feature 53 — External Story Links & Verification (reframed 2026-07-11)
 
@@ -487,6 +572,10 @@ Stage 5 (see WU39 Stage note below). L5/L6/L8 — N/A.
 
 ## Feature 62 — SiteDailyStat Worker
 
+**Stages (updated 2026-09-30, WU-StoryLifecycle):** L1–L3.5 = 5, L4 = 3, L4.5 = 5, L5/L6 = N/A,
+L8 = 5 — unchanged; `new_chapters`/`new_words` re-sourced to `Chapter.FirstPublishedDate` (D2) — see
+the WU-StoryLifecycle Stage note at the end of this section.
+
 **Requirements settled 2026-07-10 (WU-SiteDailyStat plan)** — reconciling the Gemini design source
 (`GeminiDiscussions/MyActivity September to November 2025_filtered.md:38146`, 2025-10-29) against
 the live schema. Full counter-by-counter source audit, the `new_`/`total_` rule, and the privacy
@@ -518,7 +607,8 @@ Doc-Touch Timing.
 `HiddenFavoriteDate`. `stories_approved` is **dropped** — confirmed no dated column exists anywhere
 on the approval path (`ApproveStoryAsync` flips `StoryStatusId` with no timestamp write); adding one
 is out of this build's scope. The moderation-health panel's approval signal is `reports_resolved`
-only.
+only. *(Amended 2026-09-30, WU-StoryLifecycle: approve now stamps `PublishedDate` on a story's first
+publication — still not an approval date, so `stories_approved` stays dropped.)*
 
 **Resolved during build (chart set):** headline totals (users/stories/words); 3 small-multiple
 growth line charts (one axis each — users/stories/words differ in scale, per the dataviz skill's
@@ -568,6 +658,18 @@ L8=5.
   activity-buffer→flush→`active_users`/"Last seen Jul 11, 2026" loop was confirmed end-to-end on a
   real profile page, for both the owner (AdminUser) and a non-owner viewer (TestUser).
 - `dotnet test`: 1421/1421 (524 Unit + 479 RazorComponents + 418 Integration).
+
+**Stage note (WU-StoryLifecycle — 2026-09-30) — no cell flips; F62 stays L1–L3.5 = 5, L4 = 3,
+L4.5 = 5, L5/L6 = N/A, L8 = 5.** Owner ruling D2 re-sourced two flows and fixed a third by side
+effect: `new_chapters`/`new_words` now count on `chapters.first_published_date` (the chapter-level
+publish anchor) instead of the primary version's `chapter_contents.publish_date`, so promoting an
+alternate version never re-counts an old chapter; `new_stories` needed no SQL change, but drafts,
+pending and rejected stories stopped counting because their `published_date` is now NULL (it used to
+be stamped at creation). `stories_approved` stays dropped — approve now stamps `PublishedDate` on
+first publication, but that is not an approval date (`layer8-data-marts.md` amended). **Verified:**
+Integration (`SiteDailyStatAggregatorTests` — the fixture chapter now carries `FirstPublishedDate`;
+new case: an old chapter whose newer version is promoted today does not count, so `NewChapters`
+stays 1 and `NewWords` 500 — it fails against the old `publish_date` source).
 
 ### WU-AuditFixPass note (2026-07-18)
 

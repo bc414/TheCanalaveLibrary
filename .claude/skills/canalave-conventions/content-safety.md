@@ -201,6 +201,9 @@ modelBuilder.Entity<Recommendation>().HasQueryFilter("IsTakenDown", r => !r.IsTa
 // the moderation work surfaces bypass by name (pending-submissions queue). Unlike the rating
 // filter this is confidentiality, not consent: reveals and personalScope never bypass it,
 // and hidden-status stories 404 rather than gate (no interstitial acknowledgment).
+// "Draft" covers both a never-published story and one its author pulled back (unpublish is a
+// legal author transition since WU-StoryLifecycle, D1) — the filter treats them identically;
+// Story.PublishedDate IS NULL is what tells them apart (D2).
 modelBuilder.Entity<Story>().HasQueryFilter("StoryStatus",
     s => (s.StoryStatusId != StoryStatusEnum.Draft
           && s.StoryStatusId != StoryStatusEnum.PendingApproval

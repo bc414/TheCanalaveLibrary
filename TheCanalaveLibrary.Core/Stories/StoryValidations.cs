@@ -44,26 +44,29 @@ public static class StoryValidations
             errorReasons.Add("Your story cannot have more than 2 Primary Genre tags");
         }
 
+        //3. Enum binding (D1 defect (d)): an out-of-range short binds silently into either enum.
+        // Any DEFINED PostApprovalStatus is accepted here — entry-set membership is checked only at
+        // submit and at moderator approve, so a legacy published story whose value is e.g. OnHiatus
+        // still saves (layer2-services.md §"Story Lifecycle").
+        if (!Enum.IsDefined(story.Rating))
+        {
+            errorReasons.Add("Choose a valid rating.");
+        }
+        if (!Enum.IsDefined(story.PostApprovalStatus))
+        {
+            errorReasons.Add("Choose a valid status for when the story is published.");
+        }
+
         return errorReasons;
     }
-    
+
     public static (bool, List<string>) CanSubmitForApproval(this IEditableStoryProperties story)
     {
-        bool answer = true;
-        List<string> errorReasons = new List<string>();
-        //1. Post approval status must be defined by the user
-        if (story.PostApprovalStatus == StoryStatusEnum.InProgress ||
-            story.PostApprovalStatus == StoryStatusEnum.Completed ||
-            story.PostApprovalStatus == StoryStatusEnum.OpenBeta)
-        {
-            
-        }
-        else
-        {
-            errorReasons.Add("You must select a Status for the story to move to once approved.");
-            answer = false;
-        }
-        
-        return (answer, errorReasons);
+        // Entry-set membership (InProgress / Completed / OpenBeta) — the same predicate the server's
+        // transition table and moderator approve use (StoryLifecycle; WU-StoryLifecycle, D1).
+        if (StoryLifecycle.IsEntryStatus(story.PostApprovalStatus))
+            return (true, []);
+
+        return (false, [StoryLifecycle.PostApprovalStatusRequiredMessage]);
     }
 }

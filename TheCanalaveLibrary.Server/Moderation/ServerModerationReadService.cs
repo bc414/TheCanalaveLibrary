@@ -133,13 +133,15 @@ public class ServerModerationReadService(
             join sd in readDb.StoryDetails on s.StoryId equals sd.StoryId
             join author in readDb.Users on s.AuthorId equals author.Id into authors
             from a in authors.DefaultIfEmpty()
-            orderby s.PublishedDate
+            // Oldest submission first. SubmittedDate, not PublishedDate: a pending story has never
+            // been published, so PublishedDate is NULL for every row here (D2, WU-StoryLifecycle).
+            orderby s.SubmittedDate, s.StoryId
             select new StorySubmissionQueueItemDto(
                 s.StoryId,
                 sl.StoryTitle,
                 a.UserName ?? "[deleted]",
                 s.Rating,
-                s.PublishedDate,
+                s.SubmittedDate,
                 sd.PostApprovalStatus,
                 // WU38d remodel: "is an import" ⇒ the story lists at least one external source link.
                 readDb.StoryExternalLinks.Any(sel => sel.StoryId == s.StoryId))
@@ -164,6 +166,8 @@ public class ServerModerationReadService(
                 u.AccountStatus,
                 u.SuspendedUntilUtc,
                 u.ActiveReportCount,
+                u.ApprovedStorySubmissions,
+                u.CanAutoApprove,
             })
             .SingleOrDefaultAsync();
 
@@ -206,7 +210,9 @@ public class ServerModerationReadService(
             user.AccountStatus,
             user.SuspendedUntilUtc,
             user.ActiveReportCount,
-            reports);
+            reports,
+            user.ApprovedStorySubmissions,
+            user.CanAutoApprove);
     }
 
     // ── Private: two-pass batch target resolution ─────────────────────────────────

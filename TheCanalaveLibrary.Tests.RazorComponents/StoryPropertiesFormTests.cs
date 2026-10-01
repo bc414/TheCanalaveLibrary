@@ -9,7 +9,9 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 
 /// <summary>
 /// Render + interaction tests for <see cref="StoryPropertiesForm"/> (WU24).
-/// Covers: required fields present, Rating/Status selects present, InputFile present,
+/// Covers: required fields present, Rating select present, the "Status when published" select
+/// gated on ShowPostApprovalStatus (WU-StoryLifecycle — the live status is never a form field),
+/// InputFile present,
 /// validation messages fire, OnValidSubmit callback raised on valid submit.
 /// StoryPropertiesForm has no @inject (presentational) — no DI setup needed for the form itself,
 /// but child TagSelector instances inject ITagReadService, so we register a no-op fake.
@@ -63,8 +65,52 @@ public class StoryPropertiesFormTests : BunitContext
         IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
             p => p.Add(f => f.ViewModel, MakeValidViewModel()));
 
-        // Rating and Status are both selects; at least one select should be present.
+        // Rating + "Status when published" (the latter only while ShowPostApprovalStatus) are
+        // selects; Rating alone guarantees at least one.
         cut.FindAll("select").Should().HaveCountGreaterThan(0);
+    }
+
+    // ── WU-StoryLifecycle (D1): status is off the property path ───────────────────
+
+    [Fact]
+    public void Form_NeverRendersALiveStatusSelect()
+    {
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(p =>
+        {
+            p.Add(f => f.ViewModel, MakeValidViewModel());
+            p.Add(f => f.ShowPostApprovalStatus, true);
+        });
+
+        cut.FindAll("#story-status").Should().BeEmpty(
+            "the story's live status moves only through StoryLifecyclePanel, never a form save");
+    }
+
+    [Fact]
+    public void ShowPostApprovalStatus_RendersEntrySetOnly()
+    {
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(p =>
+        {
+            p.Add(f => f.ViewModel, MakeValidViewModel());
+            p.Add(f => f.ShowPostApprovalStatus, true);
+        });
+
+        List<string> options = cut.FindAll("#story-post-approval-status option")
+            .Select(o => o.GetAttribute("value")!).ToList();
+        options.Should().Equal(
+            [nameof(StoryStatusEnum.Draft), nameof(StoryStatusEnum.InProgress),
+             nameof(StoryStatusEnum.Completed), nameof(StoryStatusEnum.OpenBeta)],
+            "Draft is the 'not chosen yet' placeholder; the rest is exactly the entry set a story " +
+            "can be published as");
+    }
+
+    [Fact]
+    public void ShowPostApprovalStatus_False_HidesTheSelect()
+    {
+        IRenderedComponent<StoryPropertiesForm> cut = Render<StoryPropertiesForm>(
+            p => p.Add(f => f.ViewModel, MakeValidViewModel()));
+
+        cut.FindAll("#story-post-approval-status").Should().BeEmpty(
+            "a published story changes status through the lifecycle panel, not this select");
     }
 
     [Fact]

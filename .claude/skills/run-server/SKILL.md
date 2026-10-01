@@ -220,7 +220,11 @@ Names are deliberately artificial ("Seed Story: …") — seed data must never r
 community content. Seed rows that participate in workflow state machines must carry valid
 **target** states, not just valid FKs — a row can satisfy every constraint and still make the
 workflow a silent no-op (see the `PostApprovalStatus` comment in `DataSeeder.cs` for the worked
-example).
+example). Story-approval trust (WU-StoryLifecycle): AuthorAlpha/AuthorBeta are seeded as approved
+authors, so their submits publish directly; **TestUser is seeded untrusted** so its submits go
+through `/mod/submissions`. A workbench DB that predates WU-StoryLifecycle and was migrated in place
+instead has TestUser trusted (the migration backfills trust for every author of a published story)
+— reset the DB, or revoke via `/mod/users/1`, to exercise the queue path.
 
 ### Extended seed
 

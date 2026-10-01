@@ -19,10 +19,17 @@ namespace TheCanalaveLibrary.Tests.Integration;
 ///   public reads, remains visible with <c>IgnoreQueryFilters(["IsTakenDown"])</c>.</item>
 ///   <item>Dedup-key fix: two reports on *different* stories both produce <c>ReportReceived</c>
 ///   notifications; two on the *same* story dedup to one notification.</item>
-///   <item><c>ApproveStoryAsync</c>: sets <c>StoryStatusId = PostApprovalStatus</c>, fires
-///   <c>StoryApproved</c> notification.</item>
+///   <item><c>ApproveStoryAsync</c>: sets <c>StoryStatusId = PostApprovalStatus</c>, stamps
+///   <c>PublishedDate</c> on first publication, adds 1 to the author's monotonic
+///   <c>ApprovedStorySubmissions</c>, fires <c>StoryApproved</c> — and (WU-StoryLifecycle, D1)
+///   refuses with <c>ModerationValidationException</c> when the row is no longer pending (double
+///   approve, author withdraw), its <c>PostApprovalStatus</c> is not an entry status, or its author is
+///   deleted/banned/suspended; an unknown story is <c>KeyNotFoundException</c>.</item>
 ///   <item><c>RejectStoryAsync</c>: sets <c>StoryStatusId = Rejected</c>, records reason, fires
-///   <c>StoryRejected</c> notification.</item>
+///   <c>StoryRejected</c>; only from <c>PendingApproval</c>, never guarded on the author.</item>
+///   <item><c>SetCanAutoApproveAsync</c> (WU-StoryLifecycle): flips the flag and files a
+///   moderator-initiated audit <c>Report</c>; unchanged value writes nothing.</item>
+///   <item>The pending queue orders by and returns <c>SubmittedDate</c>.</item>
 /// </list>
 /// </para>
 ///
@@ -487,6 +494,265 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         (await GetMod().GetUserModerationHistoryAsync(999_999)).Should().BeNull();
     }
 
+    // ── Story approval guards + trust record (WU-StoryLifecycle, owner ruling D1) ────────
+
+    [Fact]
+    public async Task ApproveStoryAsync_StampsPublishedDate_AndRecordsOneApproval()
+    {
+        int authorId = await SeedUserAsync("FirstTimer");
+        int storyId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.Completed);
+        DateTime before = DateTime.UtcNow.AddSeconds(-1);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ApproveStoryAsync(storyId);
+
+        (Story story, User author) = await LoadStoryAndAuthorAsync(storyId, authorId);
+        story.StoryStatusId.Should().Be(StoryStatusEnum.Completed);
+        story.PublishedDate.Should().NotBeNull().And.BeOnOrAfter(before,
+            "D2: the first publication stamps PublishedDate (it was NULL while pending)");
+        author.ApprovedStorySubmissions.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ApproveStoryAsync_KeepsAnEarlierPublishedDate()
+    {
+        // A story that was published, pulled back and resubmitted keeps its original date (D2).
+        int authorId = await SeedUserAsync("Returning");
+        int storyId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress);
+        DateTime original = new(2026, 1, 15, 0, 0, 0, DateTimeKind.Utc);
+        await UpdateStoryAsync(storyId, s => s.SetProperty(x => x.PublishedDate, original));
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ApproveStoryAsync(storyId);
+
+        (Story story, _) = await LoadStoryAndAuthorAsync(storyId, authorId);
+        story.PublishedDate.Should().Be(original, "republication is not a publication event");
+    }
+
+    [Fact]
+    public async Task ApproveStoryAsync_Twice_SecondThrows_AndCountsOnce()
+    {
+        int authorId = await SeedUserAsync("DoubleApprove");
+        int storyId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ApproveStoryAsync(storyId);
+        Func<Task> second = () => GetMod().ApproveStoryAsync(storyId);
+
+        await second.Should().ThrowAsync<ModerationValidationException>().WithMessage("*already handled*");
+        (_, User author) = await LoadStoryAndAuthorAsync(storyId, authorId);
+        author.ApprovedStorySubmissions.Should().Be(1, "the trust record counts a moderator decision once");
+    }
+
+    [Fact]
+    public async Task ApproveStoryAsync_AfterAuthorWithdraws_Throws_AndCountsNothing()
+    {
+        int authorId = await SeedUserAsync("Withdrawer");
+        int storyId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress);
+
+        SetActiveUser(authorId);
+        await GetStoryWrite().TransitionStatusAsync(storyId, StoryStatusEnum.Draft);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        Func<Task> approve = () => GetMod().ApproveStoryAsync(storyId);
+
+        await approve.Should().ThrowAsync<ModerationValidationException>().WithMessage("*already handled*");
+        (Story story, User author) = await LoadStoryAndAuthorAsync(storyId, authorId);
+        story.StoryStatusId.Should().Be(StoryStatusEnum.Draft);
+        author.ApprovedStorySubmissions.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(StoryStatusEnum.Draft)]     // the approve-into-Draft hole
+    [InlineData(StoryStatusEnum.OnHiatus)]  // defined, but not an entry status
+    public async Task ApproveStoryAsync_NonEntryPostApprovalStatus_Throws_StatusUnchanged(StoryStatusEnum postApproval)
+    {
+        int authorId = await SeedUserAsync("BadTarget");
+        int storyId = await SeedPendingStoryAsync(authorId, postApproval);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        Func<Task> approve = () => GetMod().ApproveStoryAsync(storyId);
+
+        await approve.Should().ThrowAsync<ModerationValidationException>().WithMessage("*Reject it*");
+        (Story story, User author) = await LoadStoryAndAuthorAsync(storyId, authorId);
+        story.StoryStatusId.Should().Be(StoryStatusEnum.PendingApproval);
+        author.ApprovedStorySubmissions.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData(AccountStatusEnum.Banned, null)]
+    [InlineData(AccountStatusEnum.Suspended, 30)]   // suspended into the future
+    [InlineData(AccountStatusEnum.Suspended, null)] // null end date — deliberately treated as live-suspended
+    public async Task ApproveStoryAsync_NonLiveAuthor_Throws_ButRejectStillWorks(
+        AccountStatusEnum status, int? suspendedDays)
+    {
+        int authorId = await SeedUserAsync("NotLive");
+        int storyId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress);
+        DateTime? until = suspendedDays is int d ? DateTime.UtcNow.AddDays(d) : null;
+        await UpdateUserAsync(authorId, u => u
+            .SetProperty(x => x.AccountStatus, status)
+            .SetProperty(x => x.SuspendedUntilUtc, until));
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        Func<Task> approve = () => GetMod().ApproveStoryAsync(storyId);
+        await approve.Should().ThrowAsync<ModerationValidationException>().WithMessage("*reject it instead*");
+
+        await GetMod().RejectStoryAsync(storyId, "Author not in good standing.");
+        (Story story, _) = await LoadStoryAndAuthorAsync(storyId, authorId);
+        story.StoryStatusId.Should().Be(StoryStatusEnum.Rejected, "reject is unguarded so the queue can always clear");
+    }
+
+    [Fact]
+    public async Task ApproveStoryAsync_SuspensionAlreadyEnded_IsLive()
+    {
+        int authorId = await SeedUserAsync("ServedTime");
+        int storyId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress);
+        await UpdateUserAsync(authorId, u => u
+            .SetProperty(x => x.AccountStatus, AccountStatusEnum.Suspended)
+            .SetProperty(x => x.SuspendedUntilUtc, DateTime.UtcNow.AddDays(-1)));
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().ApproveStoryAsync(storyId);
+
+        (Story story, _) = await LoadStoryAndAuthorAsync(storyId, authorId);
+        story.StoryStatusId.Should().Be(StoryStatusEnum.InProgress);
+    }
+
+    [Fact]
+    public async Task ApproveStoryAsync_DeletedAuthor_Throws()
+    {
+        // D13 hard delete leaves the FK SetNull — an anonymized story can't be approved.
+        int storyId = await SeedPendingStoryAsync(await SeedUserAsync("Gone"), StoryStatusEnum.InProgress);
+        await UpdateStoryAsync(storyId, s => s.SetProperty(x => x.AuthorId, (int?)null));
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        Func<Task> approve = () => GetMod().ApproveStoryAsync(storyId);
+
+        await approve.Should().ThrowAsync<ModerationValidationException>().WithMessage("*deleted*");
+    }
+
+    [Fact]
+    public async Task ApproveAndReject_UnknownStory_ThrowKeyNotFound()
+    {
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+
+        await GetMod().Invoking(m => m.ApproveStoryAsync(999_999)).Should().ThrowAsync<KeyNotFoundException>();
+        await GetMod().Invoking(m => m.RejectStoryAsync(999_999, "x")).Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Theory]
+    [InlineData(StoryStatusEnum.Draft)]
+    [InlineData(StoryStatusEnum.InProgress)] // published work is removed by takedown, never rejected
+    [InlineData(StoryStatusEnum.Rejected)]
+    public async Task RejectStoryAsync_NotPending_Throws(StoryStatusEnum status)
+    {
+        int storyId = await SeedStoryAsync(await SeedUserAsync("NotPending"), status: status);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        Func<Task> reject = () => GetMod().RejectStoryAsync(storyId, "no");
+
+        await reject.Should().ThrowAsync<ModerationValidationException>().WithMessage("*already handled*");
+        (Story story, _) = await LoadStoryAndAuthorAsync(storyId, null);
+        story.StoryStatusId.Should().Be(status);
+    }
+
+    [Fact]
+    public async Task GetPendingSubmissionsAsync_OrdersBySubmittedDate_AndReturnsIt()
+    {
+        int authorId = await SeedUserAsync("QueueOrder");
+        DateTime older = new(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
+        DateTime newer = new(2026, 9, 5, 0, 0, 0, DateTimeKind.Utc);
+        int newerId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress, submittedDate: newer);
+        int olderId = await SeedPendingStoryAsync(authorId, StoryStatusEnum.InProgress, submittedDate: older);
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        StorySubmissionQueueItemDto[] queue = await GetMod().GetPendingSubmissionsAsync();
+
+        queue.Select(q => q.StoryId).Should().Equal(olderId, newerId);
+        queue[0].SubmittedDate.Should().Be(older);
+    }
+
+    [Fact]
+    public async Task SetCanAutoApproveAsync_Revoke_WritesFlagAndAModeratorInitiatedReport()
+    {
+        int targetId = await SeedUserAsync("TrustedAuthor");
+        short reasonId = await GetFirstReasonIdAsync();
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().SetCanAutoApproveAsync(targetId, canAutoApprove: false, reasonId, "Spam after approval.");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        User target = await db.Users.SingleAsync(u => u.Id == targetId);
+        target.CanAutoApprove.Should().BeFalse();
+        target.ActiveReportCount.Should().Be(0, "the audit row opens and resolves together");
+
+        Report report = await db.Reports.SingleAsync(r =>
+            r.ReportedEntityType == ReportedEntityType.User && r.ReportedEntityId == targetId);
+        report.ReporterUserId.Should().Be(_modId);
+        report.ModeratorUserId.Should().Be(_modId, "ReporterUserId == ModeratorUserId marks it moderator-initiated");
+        report.ReportStatusId.Should().Be(ReportStatusEnum.ResolvedActionTaken);
+        report.ActionTaken.Should().Be("Auto-approve revoked: Spam after approval.");
+    }
+
+    [Fact]
+    public async Task SetCanAutoApproveAsync_UnchangedValue_WritesNothing()
+    {
+        int targetId = await SeedUserAsync("AlreadyOn");
+        short reasonId = await GetFirstReasonIdAsync();
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().SetCanAutoApproveAsync(targetId, canAutoApprove: true, reasonId, "Restoring.");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.Reports.AnyAsync(r => r.ReportedEntityId == targetId)).Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task SetCanAutoApproveAsync_NonModerator_And_Self_AreRefused()
+    {
+        int targetId = await SeedUserAsync("Target");
+        short reasonId = await GetFirstReasonIdAsync();
+
+        SetActiveUser(_reporterId);
+        await GetMod().Invoking(m => m.SetCanAutoApproveAsync(targetId, false, reasonId, "x"))
+            .Should().ThrowAsync<UnauthorizedAccessException>();
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        await GetMod().Invoking(m => m.SetCanAutoApproveAsync(_modId, false, reasonId, "x"))
+            .Should().ThrowAsync<ModerationValidationException>().WithMessage("*your own*");
+    }
+
+    [Fact]
+    public async Task GetUserModerationHistoryAsync_CarriesTheTrustFields()
+    {
+        int targetId = await SeedUserAsync("TrustFields");
+        await UpdateUserAsync(targetId, u => u
+            .SetProperty(x => x.ApprovedStorySubmissions, 2)
+            .SetProperty(x => x.CanAutoApprove, false));
+
+        SetActiveUser(FakeActiveUserContext.Moderator(_modId));
+        UserModerationHistoryDto history = (await GetMod().GetUserModerationHistoryAsync(targetId))!;
+
+        history.ApprovedStorySubmissions.Should().Be(2);
+        history.CanAutoApprove.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task NewUser_DefaultsToCanAutoApprove_WithNoApprovals()
+    {
+        // HasDefaultValue(true) + HasSentinel(true): without the sentinel, a bool whose DB default
+        // differs from the CLR default mis-inserts — this pins the configured default end to end.
+        int userId = await SeedUserAsync("Fresh");
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        User user = await db.Users.SingleAsync(u => u.Id == userId);
+        user.CanAutoApprove.Should().BeTrue();
+        user.ApprovedStorySubmissions.Should().Be(0);
+    }
+
     public override async Task DisposeAsync()
     {
         foreach (IServiceScope scope in _serviceScopes)
@@ -501,6 +767,38 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
         IServiceScope scope = Factory.Services.CreateScope();
         _serviceScopes.Add(scope);
         return scope.ServiceProvider.GetRequiredService<IModerationWriteService>();
+    }
+
+    private IStoryWriteService GetStoryWrite()
+    {
+        IServiceScope scope = Factory.Services.CreateScope();
+        _serviceScopes.Add(scope);
+        return scope.ServiceProvider.GetRequiredService<IStoryWriteService>();
+    }
+
+    private async Task<(Story Story, User Author)> LoadStoryAndAuthorAsync(int storyId, int? authorId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Story story = await db.Stories.SingleAsync(s => s.StoryId == storyId);
+        User author = authorId is int id ? await db.Users.SingleAsync(u => u.Id == id) : null!;
+        return (story, author);
+    }
+
+    private async Task UpdateStoryAsync(int storyId,
+        Action<Microsoft.EntityFrameworkCore.Query.UpdateSettersBuilder<Story>> setters)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await db.Stories.Where(s => s.StoryId == storyId).ExecuteUpdateAsync(setters);
+    }
+
+    private async Task UpdateUserAsync(int userId,
+        Action<Microsoft.EntityFrameworkCore.Query.UpdateSettersBuilder<User>> setters)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await db.Users.Where(u => u.Id == userId).ExecuteUpdateAsync(setters);
     }
 
     private async Task<short> GetFirstReasonIdAsync()
@@ -551,7 +849,7 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
     /// <paramref name="postApprovalStatus"/> and returns the <c>StoryId</c>.
     /// </summary>
     private async Task<int> SeedPendingStoryAsync(int authorId, StoryStatusEnum postApprovalStatus,
-        Rating rating = Rating.E)
+        Rating rating = Rating.E, DateTime? submittedDate = null)
     {
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -562,7 +860,9 @@ public class ModerationServiceTests(PostgresFixture postgres) : IntegrationTestB
             AuthorId = authorId,
             Rating = rating,
             StoryStatusId = StoryStatusEnum.PendingApproval,
-            PublishedDate = DateTime.UtcNow,
+            // D2: a pending story has never been published; the queue's date is SubmittedDate.
+            PublishedDate = null,
+            SubmittedDate = submittedDate ?? DateTime.UtcNow,
             LastUpdatedDate = DateTime.UtcNow,
             StoryListing = new StoryListing { StoryTitle = $"Pending Story {suffix}", ShortDescription = "test" },
             StoryDetail = new StoryDetail { LongDescription = "test", PostApprovalStatus = postApprovalStatus },

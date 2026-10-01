@@ -21,7 +21,8 @@ public class StoryPropertiesViewModel
 
     public Rating Rating { get; set; }
 
-    public StoryStatusEnum StoryStatusId { get; set; }
+    // No StoryStatusId (WU-StoryLifecycle, D1): the live status is not a form field — it moves only
+    // through StoryLifecyclePanel → IStoryWriteService.TransitionStatusAsync.
 
     [MaxLength(512)]
     public string? CoverArtRelativeUrl { get; set; }
@@ -32,6 +33,7 @@ public class StoryPropertiesViewModel
     /// </summary>
     public string? LongDescription { get; set; }
 
+    /// <summary>"Status when published" — Draft means not chosen yet.</summary>
     public StoryStatusEnum PostApprovalStatus { get; set; }
 
     /// <summary>

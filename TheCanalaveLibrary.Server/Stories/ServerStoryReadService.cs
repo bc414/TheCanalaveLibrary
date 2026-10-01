@@ -171,7 +171,10 @@ public class ServerStoryReadService(
                 Title = s.StoryListing != null ? s.StoryListing.StoryTitle : string.Empty,
                 ShortDescription = s.StoryListing != null ? s.StoryListing.ShortDescription : null,
                 Rating = s.Rating,
+                // Read echoes for the lifecycle panel (WU-StoryLifecycle, D1) — UpdateStoryAsync
+                // ignores both. The rejection reason rides the takedown columns (tracker D6).
                 StoryStatusId = s.StoryStatusId,
+                RejectionReason = s.StoryStatusId == StoryStatusEnum.Rejected ? s.TakedownReason : null,
                 CoverArtRelativeUrl = s.StoryListing != null ? s.StoryListing.CoverArtRelativeUrl : null,
                 LongDescription = s.StoryDetail != null ? s.StoryDetail.LongDescription : null,
                 PostApprovalStatus = s.StoryDetail != null ? s.StoryDetail.PostApprovalStatus : default,
@@ -617,7 +620,7 @@ public class ServerStoryReadService(
     /// </summary>
     private sealed record StoryDetailRow(
         int StoryId, string Title, string ShortDescription, string LongDescription,
-        int WordCount, DateTime PublishDate, DateTime LastUpdatedDate,
+        int WordCount, DateTime? PublishDate, DateTime LastUpdatedDate,
         DateOnly? OriginalPublishDate, DateOnly? OriginalLastUpdatedDate,
         int? AuthorId, string? AuthorName, string? CoverArtRelativeUrl,
         Rating Rating, StoryStatusEnum Status,

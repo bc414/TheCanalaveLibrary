@@ -29,8 +29,10 @@ namespace TheCanalaveLibrary.Server;
 /// <para>
 /// Write auth: <c>RequireAuthorization()</c> on every write — every
 /// <see cref="IStoryWriteService"/> method requires an authenticated user, and
-/// update/cover-upload additionally enforce story ownership via
+/// update/cover-upload/status-transition additionally enforce story ownership via
 /// <c>UnauthorizedAccessException</c>, translated to 403 by <see cref="EndpointHelpers.ExecuteAsync"/>.
+/// <c>POST /{storyId}/status</c> (WU-StoryLifecycle) is author-only for the same reason: the author
+/// lifecycle table is enforced in the service; moderator approve/reject live on ModerationEndpoints.
 /// No <c>RequireRateLimiting(...)</c> — unlike Tags (the one write surface that is plain HTTP today),
 /// <see cref="ServerStoryWriteService.CreateStoryAsync"/> already throttles via the transport-agnostic
 /// <c>IWriteRateLimitService</c> token bucket (<c>WriteActionKind.ContentCreate</c>), which surfaces as
@@ -157,6 +159,14 @@ public static class StoryEndpoints
                         ? Results.Problem(detail: "Route storyId does not match body StoryId.",
                             statusCode: StatusCodes.Status400BadRequest)
                         : await UpdateAndRespondAsync(stories, dto)))
+            .RequireAuthorization();
+
+        // Author lifecycle move (WU-StoryLifecycle, D1). Returns the RESULTING status (a trusted
+        // author's submit lands published, an untrusted one lands PendingApproval). Illegal/undefined
+        // targets and a lost-update race are StoryValidationException → 400; a non-author → 403.
+        group.MapPost("/{storyId:int}/status", (IStoryWriteService stories, int storyId, StoryStatusEnum target) =>
+                EndpointHelpers.ExecuteAsync(async () =>
+                    Results.Ok(await stories.TransitionStatusAsync(storyId, target))))
             .RequireAuthorization();
 
         // Multipart (layer5-wasm.md §"Streams and multipart"): the antiforgery middleware

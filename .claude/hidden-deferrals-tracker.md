@@ -670,6 +670,28 @@ unless noted. All sit under Stage-5 cells.
   - Context: `ClientGroupWriteService`, `ClientMessagingWriteService`, `ClientUserStoryInteraction*` still use deviant 401-mapping. Separately, ~14 converted services now map bare-401 → `InvalidOperationException`, routing expired-cookie 401s to the generic-error path instead of the forbidden banner.
   - **Resolution: both halves closed together, folded into WU-ErrorHandling2** (the "shipped behavior change" turned out to be the same root cause as the deviant mappings — no real per-service 401 semantics, just staleness predating a proper session-vs-permission distinction). New `SessionExpiredException` (401) is now distinct from `UnauthorizedAccessException` (403) everywhere; ten private per-service translators (including `ClientGroupWriteService`, `ClientUserStoryInteractionReadService`'s shared bookshelf/write translator) collapsed onto the shared `ClientHttpHelpers` helpers, which now construct `SessionExpiredException` for every 401. `ClientMessagingWriteService` keeps its documented 403-disambiguation deviation (unrelated to the 401 question) but delegates the 401/404/5xx arms. A new `ErrorAlert` component gives the expired-session case an actual affordance (inline Sign-in link) instead of the old generic-error path. Detail: `workplan.md` WU-ErrorHandling2; `error-handling.md` §"The API error envelope".
 
+- [ ] **D6 — A story's rejection reason lives in its takedown columns and goes stale** `[latent-risk · low · anytime]` — *Found scoping WU-StoryLifecycle, 2026-09-30; routed, not an oversight.*
+  - Grid: F48 L1/L2=5 (unchanged).
+  - Source: `ServerModerationWriteService.RejectStoryAsync` writes the reason into
+    `Story.TakedownReason`/`TakedownDate`; worksheet D8 owns the report/takedown column design.
+  - Context: rejection is not a takedown, but it borrows the takedown columns. WU-StoryLifecycle
+    made rejection revisable (`Rejected → Draft`, uncapped) and surfaced the reason in the editor
+    (`StoryUpdateDTO.RejectionReason`, echoed only while the status is `Rejected`). Once the story is
+    resubmitted and approved, the columns still hold the old reason and date — harmless today because
+    nothing reads them outside `Rejected`, but it is the same "one column, two meanings" shape D8
+    exists to settle. Owner: **WU-ModerationIntegrity** (D8). Left as-is by WU-StoryLifecycle.
+
+- [ ] **D7 — Publishing a chapter doesn't bump `Story.LastUpdatedDate`** `[latent-risk · low · anytime]` — *Observed during WU-StoryLifecycle, 2026-09-30; not in any audit source.*
+  - Grid: F6 L2=5 (unchanged).
+  - Source: `ServerChapterWriteService.SetPublishedAsync` changes `IsPublished` (and, since
+    WU-StoryLifecycle, stamps `Chapter.FirstPublishedDate`) but never touches the story row;
+    `LastUpdatedDate` moves only on `UpdateStoryAsync` property edits.
+  - Context: the "Updated" date on the story page and the LastUpdated sort therefore ignore new
+    chapters — the most common reason a story is "updated". Whether a chapter's *first* publication
+    should bump it (and whether republication must not, per D2's anti-bump rule) is a small design
+    question, so it is recorded rather than fixed. A status move deliberately does not touch
+    `LastUpdatedDate` (`layer2-services.md` §"Story Lifecycle"); this item is about chapters only.
+
 ---
 
 ## E. Cross-cutting work with no grid cell at all
@@ -830,6 +852,24 @@ built rows at 5 and no signal these exist.
   - Source: `middle-addendum.md` §3 items 19–21.
   - Context: RSS/Atom feeds (#19), traffic analytics (#20), PWA `manifest.json` (#21). Conscious skips, no WU/row.
 
+- [ ] **F9 — Story-lifecycle questions left open for the owner by WU-StoryLifecycle** `[decision · med · beta]` — *Filed 2026-09-30; deliberately not decided in the build.*
+  - Grid: F4/F48 (all cells unchanged).
+  - Source: worksheet D1 (sub-edges) and D20/D30 (pending); `layer2-services.md` §"Story Lifecycle".
+  - Open items, none of which the build guessed at:
+    1. **Minimum-content floor for submission** (e.g. a story must have a published chapter before
+       it can be submitted). D1 routes it to **D20**, which is still pending. Today an author can submit
+       a story with zero chapters.
+    2. **Alternate reading of D1's import rider** — "a trusted author's story that lists external
+       links must still queue". That contradicts the *settled* WU38d note in `audit/Moderation.md`
+       F53 ("links don't gate story approval"), so it would be a reopen, not a build. The built reading
+       is the vacuous one: import verification is the decoupled per-link queue, which never consults
+       trust.
+    3. **Notify the author when a moderator revokes or restores `CanAutoApprove`?** The owner said
+       nothing; the build sends no notification.
+    4. **Optimistic concurrency (D30, pending).** The lifecycle writes guard only on the status they
+       read (a conditional `WHERE story_status_id = @current`); there is no expected-version token.
+       If D30 adopts `xmin`, `TransitionStatusAsync`/approve/reject are natural first adopters.
+
 ---
 
 ## G. Doc contradictions & stale files (drift already present)
@@ -932,6 +972,26 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     H10's Stage note; corrected 2026-07-31, WU-H10Fix).
   - Unblocked 2026-07-31: H10 had the whole `/Account/*` funnel returning 500, so none of these
     flows could be driven at all until it was fixed. Natural next candidate.
+
+- [ ] **H12 — Story-lifecycle UI never browser-verified** `[test-gap · med · beta]` — *Filed 2026-09-30 by WU-StoryLifecycle, which ran with no browser available.*
+  - Grid: F4 L4.5=5, F48 L4.5=5 (unchanged — the cells were verified before this UI existed).
+  - Source: `workplan.md` WU-StoryLifecycle; `audit/Stories.md` F4 and `audit/Moderation.md` F48
+    Stage notes.
+  - Context: new author and moderator surfaces are covered by bUnit and Integration tests only.
+    Drive each in a real browser, on both the circuit and the WASM pass, against `psql` ground truth:
+    1. `StoryEditorPage` → the new `StoryLifecyclePanel`: submit as an untrusted author (TestUser is
+       seeded untrusted on purpose — but a workbench DB migrated in place has TestUser trusted by the
+       migration's backfill; reset it or revoke via `/mod/users/1` first) → Pending; withdraw; as a trusted author (AuthorAlpha/AuthorBeta)
+       submit → published directly with `published_date` stamped; move between published statuses;
+       unpublish → Draft with the date kept. Confirm the in-place status update does **not** trip the
+       Quill `removeChild` crash on WASM (the page deliberately avoids same-route navigation).
+    2. The "Status when published" select on the form (hidden once the story is published).
+    3. `/mod/submissions`: the "submitted" date column (now `SubmittedDate`); approve an already-handled
+       row from a second tab → the queue reloads with the message.
+    4. `/mod/users/{id}`: the trust line in the header, and the auto-approve revoke/restore control.
+  - Known interim gap: on the WASM pass the author's lifecycle error text arrives as the generic
+    "Story validation failed." until WU-ParityAndRemaining's P1 carries validation error lists over
+    HTTP (moderator messages already round-trip — WU-StoryLifecycle changed that client mapping).
 
 ---
 

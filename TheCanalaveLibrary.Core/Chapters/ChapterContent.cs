@@ -29,7 +29,12 @@ public partial class ChapterContent
     /// <summary>Nullable — null inherits the parent story's rating (spec §5.2).</summary>
     public Rating? Rating { get; set; }
 
-    public DateTime PublishDate { get; set; }
+    /// <summary>
+    /// Per-version provenance only (owner ruling D2): when THIS version became publicly readable —
+    /// null while its chapter has never been published. No discovery or recency surface reads it;
+    /// the chapter's publish anchor is <see cref="Chapter.FirstPublishedDate"/>.
+    /// </summary>
+    public DateTime? PublishDate { get; set; }
 
     public DateTime? OriginalPublishDate { get; set; }
 

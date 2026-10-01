@@ -9,12 +9,13 @@ namespace TheCanalaveLibrary.Client;
 /// cookie — WASM's fetch-backed HttpClient sends it automatically for same-origin requests.
 /// <para>
 /// Standard mapping, delegated to <see cref="ClientHttpHelpers.ThrowIfWriteFailedAsync"/>: 400 →
-/// <see cref="ArgumentException"/> (defensive; no method on this service actually produces 400
-/// today, see ModerationEndpoints' class doc). 401/403/404 are the shared helper's standard arms
-/// (WU-ErrorHandling2, 2026-07-30 — previously collapsed 401/403 into one
-/// <see cref="UnauthorizedAccessException"/>, predating <see cref="SessionExpiredException"/>; see
-/// ModerationEndpoints' class doc's "Known EndpointHelpers mismatch" note for why 401 can arrive
-/// here for what is really a business-rule guard, not just "not signed in").
+/// <see cref="ModerationValidationException"/> over <c>ProblemDetails.Detail</c>, so the server's
+/// user-facing guard text (approve/reject "already handled", the live-author and entry-status
+/// guards, account-action and auto-approve validation — WU-StoryLifecycle, 2026-09-30, pulled
+/// forward from service audit §2.7.5) reaches the moderator verbatim on WASM instead of collapsing
+/// to the generic error. 401/403/404 are the shared helper's standard arms (WU-ErrorHandling2,
+/// 2026-07-30; see ModerationEndpoints' class doc's "Known EndpointHelpers mismatch" note for the
+/// one remaining guard that still arrives as 401).
 /// </para>
 /// </summary>
 public sealed class ClientModerationWriteService(HttpClient http)
@@ -88,6 +89,14 @@ public sealed class ClientModerationWriteService(HttpClient http)
         await ThrowIfWriteFailedAsync(response);
     }
 
+    public async Task SetCanAutoApproveAsync(int targetUserId, bool canAutoApprove, short reasonId, string reason)
+    {
+        string query = $"?enabled={canAutoApprove}&reasonId={reasonId}&reason={Uri.EscapeDataString(reason)}";
+        HttpResponseMessage response = await Http.PostAsync(
+            $"api/moderation/users/{targetUserId}/auto-approve{query}", content: null);
+        await ThrowIfWriteFailedAsync(response);
+    }
+
     private static Task ThrowIfWriteFailedAsync(HttpResponseMessage response) =>
-        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, detail => new ArgumentException(detail));
+        ClientHttpHelpers.ThrowIfWriteFailedAsync(response, detail => new ModerationValidationException([detail]));
 }

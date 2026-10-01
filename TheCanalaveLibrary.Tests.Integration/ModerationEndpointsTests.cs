@@ -32,6 +32,50 @@ public class ModerationEndpointsTests(PostgresFixture postgres) : IntegrationTes
             "must never run for a non-mod caller (MA-702, endpoint-authz sweep 2026-07-18)");
     }
 
+    // ── WU-StoryLifecycle (D1) ──────────────────────────────────────────────────
+
+    [Fact]
+    public async Task SetAutoApprove_AuthenticatedNonModerator_Returns403()
+    {
+        int userId = await SeedUserAsync("non-mod");
+        SetActiveUser(userId);
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsync(
+            "/api/moderation/users/123/auto-approve?enabled=false&reasonId=1&reason=x", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task ApproveSubmission_NotPending_Returns400_NotTheOld401()
+    {
+        // Before WU-StoryLifecycle the "not pending approval" guard threw InvalidOperationException,
+        // which EndpointHelpers maps to 401 (the auth safety net) — a moderator's WASM session saw
+        // "session expired" for what was a business rule. It is now ModerationValidationException.
+        int modId = await SeedUserAsync("mod");
+        int storyId = await SeedStoryAsync(await SeedUserAsync("author"), status: StoryStatusEnum.InProgress);
+        SetActiveUser(FakeActiveUserContext.Moderator(modId));
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsync($"/api/moderation/submissions/{storyId}/approve", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        (await response.Content.ReadAsStringAsync()).Should().Contain("already handled");
+    }
+
+    [Fact]
+    public async Task ApproveSubmission_UnknownStory_Returns404()
+    {
+        int modId = await SeedUserAsync("mod");
+        SetActiveUser(FakeActiveUserContext.Moderator(modId));
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsync("/api/moderation/submissions/999999/approve", null);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     [Fact]
     public async Task SetSiteSetting_AuthenticatedNonModerator_Returns403()
     {

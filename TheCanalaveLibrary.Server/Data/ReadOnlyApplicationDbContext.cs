@@ -49,7 +49,9 @@ public class ReadOnlyApplicationDbContext : ApplicationDbContext
         // Public lifecycle statuses (InProgress/Completed/OnHiatus/Cancelled/Rewriting/OpenBeta)
         // all mean "the author published this". Moderation work surfaces bypass by name (the
         // pending-submissions queue must see PendingApproval). Unlike the rating filter, this is
-        // confidentiality, not consent — reveals and personalScope never bypass it.
+        // confidentiality, not consent — reveals and personalScope never bypass it. "Draft" covers
+        // both a never-published story and one its author pulled back (unpublish is a legal author
+        // move since WU-StoryLifecycle, D1); Story.PublishedDate IS NULL tells them apart (D2).
         modelBuilder.Entity<Story>().HasQueryFilter("StoryStatus",
             s => (s.StoryStatusId != StoryStatusEnum.Draft
                   && s.StoryStatusId != StoryStatusEnum.PendingApproval

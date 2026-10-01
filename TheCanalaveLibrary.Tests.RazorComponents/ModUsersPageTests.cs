@@ -135,6 +135,60 @@ public class ModUsersPageTests : BunitContext
         writeService.LastUserAction.Value.ReasonId.Should().Be(4, "the first seeded reason the fake offers");
     }
 
+    // ── Story-approval trust (WU-StoryLifecycle, D1) ──────────────────────────────
+
+    [Fact]
+    public void WithUserId_ShowsTrustLine()
+    {
+        Arrange(new UserModerationHistoryDto(
+            UserId: 42, Username: "SomeUser", AvatarUrl: null, AccountStatus: AccountStatusEnum.Active,
+            SuspendedUntilUtc: null, ActiveReportCount: 0, Reports: [],
+            ApprovedStorySubmissions: 3, CanAutoApprove: false));
+
+        IRenderedComponent<ModUsersPage> cut = Render<ModUsersPage>(p => p.Add(c => c.UserId, 42));
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Account action"));
+
+        cut.Find("[data-testid=trust-line]").TextContent.Should()
+            .Contain("3 approved submissions").And.Contain("auto-approve off");
+        FindButton(cut, "Restore auto-approve").Should().NotBeNull(
+            "with the waiver revoked, the control offers the reverse move");
+    }
+
+    [Fact]
+    public async Task WithUserId_RevokeAutoApprove_CallsServiceWithReasonAndFlippedFlag()
+    {
+        RecordingModerationWriteService writeService = Arrange(new UserModerationHistoryDto(
+            UserId: 42, Username: "SomeUser", AvatarUrl: null, AccountStatus: AccountStatusEnum.Active,
+            SuspendedUntilUtc: null, ActiveReportCount: 0, Reports: [],
+            ApprovedStorySubmissions: 1, CanAutoApprove: true));
+
+        IRenderedComponent<ModUsersPage> cut = Render<ModUsersPage>(p => p.Add(c => c.UserId, 42));
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Account action"));
+
+        FindButton(cut, "Revoke auto-approve").Click();
+        cut.Find("#auto-approve-reason").Change("Spam after approval.");
+        await FindButton(cut, "Confirm").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        writeService.LastAutoApprove.Should().Be((42, false, (short)4, "Spam after approval."));
+    }
+
+    [Fact]
+    public async Task WithUserId_RevokeAutoApprove_WithoutReason_DoesNotCallService()
+    {
+        RecordingModerationWriteService writeService = Arrange(new UserModerationHistoryDto(
+            UserId: 42, Username: "SomeUser", AvatarUrl: null, AccountStatus: AccountStatusEnum.Active,
+            SuspendedUntilUtc: null, ActiveReportCount: 0, Reports: []));
+
+        IRenderedComponent<ModUsersPage> cut = Render<ModUsersPage>(p => p.Add(c => c.UserId, 42));
+        cut.WaitForAssertion(() => cut.Markup.Should().Contain("Account action"));
+
+        FindButton(cut, "Revoke auto-approve").Click();
+        await FindButton(cut, "Confirm").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        writeService.LastAutoApprove.Should().BeNull();
+        cut.Markup.Should().Contain("A reason is required.");
+    }
+
     // AngleSharp compound-selector fragility (testing.md) — button text isn't a CSS selector.
     private static AngleSharp.Dom.IElement FindButton(IRenderedComponent<ModUsersPage> cut, string text) =>
         cut.FindAll("button").First(b => b.TextContent.Trim() == text);
@@ -153,6 +207,13 @@ public class ModUsersPageTests : BunitContext
     private sealed class RecordingModerationWriteService : IModerationWriteService
     {
         public (int TargetUserId, short ReasonId, ModeratorActionType Action, string Reason, DateTime? Until)? LastUserAction { get; private set; }
+        public (int TargetUserId, bool CanAutoApprove, short ReasonId, string Reason)? LastAutoApprove { get; private set; }
+
+        public Task SetCanAutoApproveAsync(int targetUserId, bool canAutoApprove, short reasonId, string reason)
+        {
+            LastAutoApprove = (targetUserId, canAutoApprove, reasonId, reason);
+            return Task.CompletedTask;
+        }
 
         public Task<ReportReasonDto[]> GetReportReasonsAsync() => throw new NotImplementedException();
         public Task<ReportQueueItemDto[]> GetReportQueueAsync(bool includeResolved = false) => throw new NotImplementedException();

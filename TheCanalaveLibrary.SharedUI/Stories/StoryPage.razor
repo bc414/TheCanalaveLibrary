@@ -85,7 +85,8 @@ else
                     <span class="font-medium">@(Story.AuthorName ?? "Unknown")</span>
                 }
                 <span>·</span>
-                <span>Published @Story.PublishDate.ToString("MMM d, yyyy")</span>
+                @* Null = never published on this site (D2) — only the author can see such a story. *@
+                <span>@(Story.PublishDate is DateTime published ? $"Published {published:MMM d, yyyy}" : "Not yet published")</span>
                 <span>·</span>
                 <span>Updated @Story.LastUpdatedDate.ToString("MMM d, yyyy")</span>
             </div>

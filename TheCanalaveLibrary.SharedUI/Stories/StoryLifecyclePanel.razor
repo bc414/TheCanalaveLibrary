@@ -1,0 +1,138 @@
+@namespace TheCanalaveLibrary.SharedUI
+@using TheCanalaveLibrary.Core
+
+@* Author lifecycle controls for one story (WU-StoryLifecycle, owner ruling D1) — rendered by
+   StoryEditorPage in edit mode, above the properties form. Presentational: no @inject; the page owns
+   the TransitionStatusAsync call, the resulting-status update and all feedback. Every button raises
+   OnTransition with the TARGET status; the server's transition table (StoryLifecycle) decides what
+   actually happens — e.g. a trusted author's "Submit" lands published, not PendingApproval — and the
+   page re-renders this panel from the RESULTING status.
+
+   Per status: Draft → submit (disabled until a valid "Status when published" is SAVED); Pending →
+   withdraw; Rejected → the moderator's reason + return to draft; published → move among the
+   published statuses, or unpublish. Outer Margin Rule: no outer margin on the root. *@
+
+<section class="rounded-xl border border-(--color-border) bg-(--color-surface) p-4" aria-labelledby="story-lifecycle-heading">
+    <h2 id="story-lifecycle-heading" class="mb-1 text-lg font-semibold text-(--color-text)">Publication</h2>
+    <p class="mb-3 text-sm text-(--color-text-muted)">
+        Status: <span class="font-medium text-(--color-text)" data-testid="lifecycle-status">@StoryDisplayFormat.StatusLabel(CurrentStatus)</span>
+    </p>
+
+    @if (CurrentStatus == StoryStatusEnum.Draft)
+    {
+        <p class="mb-3 text-sm text-(--color-text-muted)">
+            A moderator reviews an author's first story before it goes live. Once one of your stories
+            has been approved, the next ones publish straight away.
+        </p>
+        @if (!CanSubmit)
+        {
+            <p class="mb-3 text-sm text-(--color-text-muted)" data-testid="lifecycle-submit-hint">
+                Choose <strong>Status when published</strong> below and save before submitting.
+            </p>
+        }
+        <button type="button"
+                class="rounded-md bg-(--color-mission) px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-(--color-mission-hover) disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled="@(IsBusy || !CanSubmit)"
+                @onclick="() => RaiseAsync(StoryStatusEnum.PendingApproval)">
+            Submit for publication
+        </button>
+    }
+    else if (CurrentStatus == StoryStatusEnum.PendingApproval)
+    {
+        <p class="mb-3 text-sm text-(--color-text-muted)">
+            Waiting for a moderator's review. Changes you save now are what they'll see.
+        </p>
+        <button type="button"
+                class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled="@IsBusy"
+                @onclick="() => RaiseAsync(StoryStatusEnum.Draft)">
+            Withdraw
+        </button>
+    }
+    else if (CurrentStatus == StoryStatusEnum.Rejected)
+    {
+        <p class="mb-2 text-sm text-(--color-text-muted)">A moderator didn't approve this story.</p>
+        @if (!string.IsNullOrWhiteSpace(RejectionReason))
+        {
+            <p class="mb-3 text-sm text-(--color-text)" data-testid="lifecycle-rejection-reason">
+                <span class="font-medium">Reason:</span> @RejectionReason
+            </p>
+        }
+        <button type="button"
+                class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled="@IsBusy"
+                @onclick="() => RaiseAsync(StoryStatusEnum.Draft)">
+            Return to draft to revise
+        </button>
+    }
+    else if (StoryLifecycle.IsPublished(CurrentStatus))
+    {
+        <div class="flex flex-wrap items-end gap-2">
+            <div class="flex flex-col gap-1">
+                <label for="story-lifecycle-status" class="text-sm font-semibold text-(--color-text)">Change status</label>
+                <select id="story-lifecycle-status"
+                        class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text)"
+                        @bind="_selectedPublishedStatus">
+                    @foreach (StoryStatusEnum s in PublishedStatuses)
+                    {
+                        <option value="@s">@StoryDisplayFormat.StatusLabel(s)</option>
+                    }
+                </select>
+            </div>
+            <button type="button"
+                    class="rounded-md bg-(--color-action) px-3 py-1.5 text-sm font-medium text-(--color-text) transition-colors hover:bg-(--color-action-hover) disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled="@(IsBusy || _selectedPublishedStatus == CurrentStatus)"
+                    @onclick="() => RaiseAsync(_selectedPublishedStatus)">
+                Update status
+            </button>
+            <button type="button"
+                    class="rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1.5 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover) disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled="@IsBusy"
+                    @onclick="() => RaiseAsync(StoryStatusEnum.Draft)">
+                Unpublish
+            </button>
+        </div>
+        <p class="mt-2 text-xs text-(--color-text-muted)">
+            Unpublishing hides the story from readers. Publishing it again keeps its original publish date.
+        </p>
+    }
+</section>
+
+@code {
+    private static readonly StoryStatusEnum[] PublishedStatuses =
+        Enum.GetValues<StoryStatusEnum>().Where(StoryLifecycle.IsPublished).ToArray();
+
+    /// <summary>The story's current status (the RESULT of the last transition, not its target).</summary>
+    [Parameter, EditorRequired] public StoryStatusEnum CurrentStatus { get; set; }
+
+    /// <summary>The PERSISTED "Status when published" — submit stays disabled until it is an entry
+    /// status (InProgress/Completed/OpenBeta), because the server checks the saved value.</summary>
+    [Parameter] public StoryStatusEnum SavedPostApprovalStatus { get; set; }
+
+    /// <summary>The moderator's reason, shown while <see cref="CurrentStatus"/> is Rejected.</summary>
+    [Parameter] public string? RejectionReason { get; set; }
+
+    /// <summary>True while the page's transition call is in flight — disables every button.</summary>
+    [Parameter] public bool IsBusy { get; set; }
+
+    /// <summary>Raised with the requested target status.</summary>
+    [Parameter, EditorRequired] public EventCallback<StoryStatusEnum> OnTransition { get; set; }
+
+    private StoryStatusEnum _selectedPublishedStatus;
+    private StoryStatusEnum? _lastSeenStatus;
+
+    private bool CanSubmit => StoryLifecycle.IsEntryStatus(SavedPostApprovalStatus);
+
+    protected override void OnParametersSet()
+    {
+        // Re-sync the published-status picker whenever the story's actual status changes (after a
+        // transition), but not on unrelated re-renders, so an in-progress selection survives.
+        if (_lastSeenStatus != CurrentStatus)
+        {
+            _selectedPublishedStatus = CurrentStatus;
+            _lastSeenStatus = CurrentStatus;
+        }
+    }
+
+    private Task RaiseAsync(StoryStatusEnum target) => OnTransition.InvokeAsync(target);
+}

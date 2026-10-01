@@ -121,6 +121,12 @@
                     }
                     <span class="text-(--color-text-muted)">@_history.ActiveReportCount active report(s)</span>
                 </div>
+                @* Story-approval trust (WU-StoryLifecycle, D1): approvals recorded + whether the
+                   waiver is in force. *@
+                <p class="text-xs text-(--color-text-muted)" data-testid="trust-line">
+                    @_history.ApprovedStorySubmissions approved submission@(_history.ApprovedStorySubmissions == 1 ? "" : "s")
+                    · auto-approve @(_history.CanAutoApprove ? "on" : "off")
+                </p>
             </div>
             <div class="ml-auto flex gap-2">
                 <a href="/user/@_history.Username" class="rounded border border-(--color-border) bg-surface px-3 py-1 text-sm text-text hover:bg-(--color-surface-hover)">
@@ -161,7 +167,43 @@
                         @onclick="() => OpenAccountAction(ModeratorActionType.BanUser)">
                     Ban
                 </button>
+                @* Revoke/restore the story-approval trust waiver (WU-StoryLifecycle, D1). Reuses the
+                   reason category above; the reason text is asked for in the confirm row below. *@
+                <button type="button"
+                        class="rounded-md bg-(--color-warning)/15 px-2 py-0.5 text-xs text-(--color-warning) ring-1 ring-(--color-warning)/30 transition-colors hover:bg-(--color-warning)/25"
+                        @onclick="OpenAutoApproveChange">
+                    @(_history.CanAutoApprove ? "Revoke auto-approve" : "Restore auto-approve")
+                </button>
             </div>
+
+            @if (_autoApprovePending)
+            {
+                <div class="mt-3 border-t border-(--color-border) pt-3">
+                    <label class="mb-1 block text-sm font-medium text-text" for="auto-approve-reason">
+                        Reason for @(_history.CanAutoApprove ? "revoking" : "restoring") auto-approve (required)
+                    </label>
+                    <textarea id="auto-approve-reason" rows="2"
+                              class="w-full rounded-md border border-(--color-border) bg-surface px-3 py-2 text-sm text-text"
+                              @bind="_autoApproveReason"></textarea>
+                    @if (_autoApproveError is not null)
+                    {
+                        <div class="mt-1"><ErrorAlert Message="@_autoApproveError" ShowSignIn="@_autoApproveErrorIsSessionExpired" /></div>
+                    }
+                    <div class="mt-2 flex gap-2">
+                        <button type="button"
+                                class="rounded-md bg-(--color-warning)/15 px-3 py-1 text-sm text-(--color-warning) ring-1 ring-(--color-warning)/30 transition-colors hover:bg-(--color-warning)/25 disabled:opacity-50"
+                                disabled="@_acting"
+                                @onclick="ConfirmAutoApproveChangeAsync">
+                            Confirm
+                        </button>
+                        <button type="button"
+                                class="rounded border border-(--color-border) bg-surface px-3 py-1 text-sm text-text"
+                                @onclick="CancelAutoApproveChange">
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            }
         </div>
 
         @if (_pendingAction is { } pending)
@@ -252,6 +294,13 @@
     private string? _actionError;
     private bool _actionErrorIsSessionExpired;
 
+    // Auto-approve revoke/restore (WU-StoryLifecycle, D1) — the direction is always "flip the
+    // current value", read from _history at confirm time.
+    private bool _autoApprovePending;
+    private string? _autoApproveReason;
+    private string? _autoApproveError;
+    private bool _autoApproveErrorIsSessionExpired;
+
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
     protected override async Task OnInitializedAsync()
@@ -274,6 +323,7 @@
 
         _loading = true;
         CancelAccountAction();
+        CancelAutoApproveChange();
         _history = null;
 
         if (UserId.HasValue)
@@ -355,6 +405,54 @@
         {
             _actionError = Translate(ex, "Applying an account action failed unexpectedly");
             _actionErrorIsSessionExpired = ex is SessionExpiredException;
+        }
+        finally { _acting = false; }
+    }
+
+    // ── Auto-approve (WU-StoryLifecycle, D1) ──────────────────────────────────
+
+    private void OpenAutoApproveChange()
+    {
+        _autoApprovePending = true;
+        _autoApproveReason = null;
+        _autoApproveError = null;
+        _autoApproveErrorIsSessionExpired = false;
+    }
+
+    private void CancelAutoApproveChange()
+    {
+        _autoApprovePending = false;
+        _autoApproveReason = null;
+        _autoApproveError = null;
+        _autoApproveErrorIsSessionExpired = false;
+    }
+
+    private async Task ConfirmAutoApproveChangeAsync()
+    {
+        if (_history is null) return;
+
+        _autoApproveErrorIsSessionExpired = false;
+        if (string.IsNullOrWhiteSpace(_autoApproveReason))
+        {
+            _autoApproveError = "A reason is required.";
+            return;
+        }
+
+        _acting = true;
+        _autoApproveError = null;
+        try
+        {
+            await ModerationWriteService.SetCanAutoApproveAsync(
+                _history.UserId, !_history.CanAutoApprove, _reasonId, _autoApproveReason.Trim());
+
+            CancelAutoApproveChange();
+            // Post-action refetch — the trust line and the history (the audit Report row) both moved.
+            await LoadHistoryAsync();
+        }
+        catch (Exception ex)
+        {
+            _autoApproveError = Translate(ex, "Changing auto-approve failed unexpectedly");
+            _autoApproveErrorIsSessionExpired = ex is SessionExpiredException;
         }
         finally { _acting = false; }
     }

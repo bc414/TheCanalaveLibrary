@@ -30,6 +30,16 @@ public sealed class ClientStoryWriteService(HttpClient http) : ClientStoryReadSe
         await ThrowIfWriteFailedAsync(response);
     }
 
+    public async Task<StoryStatusEnum> TransitionStatusAsync(int storyId, StoryStatusEnum targetStatus)
+    {
+        // Numeric enum on the wire: minimal API's enum TryParse accepts it, and an undefined value
+        // (e.g. 99) still reaches the service's own Enum.IsDefined check → 400.
+        HttpResponseMessage response = await Http.PostAsync(
+            $"api/stories/{storyId}/status?target={(short)targetStatus}", content: null);
+        await ThrowIfWriteFailedAsync(response);
+        return await response.Content.ReadFromJsonAsync<StoryStatusEnum>();
+    }
+
     /// <summary>
     /// Multipart upload (layer5-wasm.md §"Streams and multipart") — builds a
     /// <see cref="MultipartFormDataContent"/> with a <see cref="StreamContent"/> part; the endpoint

@@ -67,7 +67,9 @@ public class ServerChapterWriteService(
             WordCount        = wordCount,
             Rating           = dto.Rating,
             VersionName      = dto.VersionName,
-            PublishDate      = DateTime.UtcNow
+            // Null: the chapter is created unpublished (below), so this version isn't publicly
+            // readable yet. SetPublishedAsync stamps it on the chapter's first publish (D2).
+            PublishDate      = null
         };
 
         Chapter chapter = new()
@@ -142,7 +144,11 @@ public class ServerChapterWriteService(
             WordCount        = wordCount,
             Rating           = dto.Rating,
             VersionName      = dto.VersionName,
-            PublishDate      = DateTime.UtcNow
+            // Per-version provenance (D2): an alternate of an already-published chapter is publicly
+            // readable at once (ServerChapterReadService serves every version of a published
+            // chapter), so it is stamped now; one on an unpublished chapter waits for its first
+            // publish. Never touches Chapter.FirstPublishedDate — adding a version is an update.
+            PublishDate      = chapter.IsPublished ? DateTime.UtcNow : null
         };
 
         writeDb.ChapterContents.Add(altVersion);
@@ -215,6 +221,10 @@ public class ServerChapterWriteService(
             throw new ChapterValidationException(
                 [$"To make this the default version, the story must be rated {effectiveRating} first, or change the version's rating to inherit/match the story's rating ({storyRating})."]);
 
+        // Deliberately touches NO date (owner ruling D2): promoting a version is an update, never a
+        // publish event. The chapter's publish anchor is Chapter.FirstPublishedDate, which the read
+        // side now uses instead of the primary version's PublishDate — that swap is what closed the
+        // "promote an alternate → chapter looks newly published" bump vector.
         chapter.PrimaryContentId = chapterContentId;
         await writeDb.SaveChangesAsync();
 
@@ -232,6 +242,21 @@ public class ServerChapterWriteService(
         int userId = ActiveUser.RequireUserId();
         if (chapter.Story.AuthorId != userId)
             throw new UnauthorizedAccessException("You must be the author of this story.");
+
+        if (isPublished && !chapter.IsPublished)
+        {
+            // D2 chapter anchor: stamped on the FIRST publish only and never moved — unpublish and
+            // republish both keep it (??=). Every version still unstamped becomes publicly readable
+            // at this moment, so each gets its per-version provenance date too — tracked, so the
+            // stamps commit in the same SaveChanges as the flag. Unpublish touches no date.
+            DateTime now = DateTime.UtcNow;
+            chapter.FirstPublishedDate ??= now;
+            List<ChapterContent> unstamped = await writeDb.ChapterContents
+                .Where(cc => cc.ChapterId == chapterId && cc.PublishDate == null)
+                .ToListAsync();
+            foreach (ChapterContent version in unstamped)
+                version.PublishDate = now;
+        }
 
         chapter.IsPublished = isPublished;
         await writeDb.SaveChangesAsync();
