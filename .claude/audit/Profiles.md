@@ -256,7 +256,7 @@ never wired). That breaks `layer2-services.md` §"Recalculation worker — mirro
 WU's spec proposed a fix (its R10); the campaign orchestrator excluded it as unsourced, so which posts
 count is owner-open: tracker **F16**.
 
-- **L2 — Stage 5 (WU-UserStatRecalc, 2026-07-15; recompute-vs-live mismatch on `BlogPostsWritten` filed as tracker F16 by WU-TptHardDelete, 2026-09-30; content-counter pass `ContentCounterRecalculator` added WU-CounterSymmetry, 2026-09-30 — see its Stage note below).** Periodic `IHostedService`/`BackgroundService`
+- **L2 — Stage 5 (WU-UserStatRecalc, 2026-07-15; recompute-vs-live mismatch on `BlogPostsWritten` filed as tracker F16 by WU-TptHardDelete, 2026-09-30; content-counter pass `ContentCounterRecalculator` added WU-CounterSymmetry, 2026-09-30, worker order Unit-tested since its review fixes — see its Stage note below).** Periodic `IHostedService`/`BackgroundService`
   reconciling the denormalized counters. Pure background computation — Layer 2 *is* the worker
   (grid_axes). All UI layers **N/A**. **L8 revised (2026-07-15):** mostly set-based raw SQL, not
   EF LINQ (mirrors `SiteDailyStatAggregator`'s style); one counter, `ViewsOnStories`, reads the
@@ -364,6 +364,21 @@ pass corrects 0. Convergence (a pass after wired ops corrects 0) is asserted in
 stories' `word_count` drops to 0, and the `DataSeeder` badge change needs `reset-dev-db.ps1`.
 **Follow-up candidates** (the D23 classification test says "crash → harden", but D23 chose to
 promulgate the test rather than sweep, so these are not routed here): tracker **D11**.
+
+**Review fixes (2026-09-30), still no flip.** The worker's own behavior had no test and no stated
+tier: the content pass running **before** the UserStat pass (load-bearing, because `words_written`
+sums the corrected `stories.word_count`), and each pass's own try/log.
+- The two passes now run through one public seam, `UserStatRecalculationWorker.RunPassesAsync`.
+- **Test tier: Unit**, `UserStatRecalculationWorkerTests` (2). A hand-built container whose
+  recalculator factories record the order they are resolved in and then throw. No `DbContext` is
+  built. It shows that the content pass is resolved first, that its failure is logged and the
+  UserStat pass still runs, and that a host shutdown returns false and skips the UserStat pass.
+  Mutation-checked: swapping the order fails both tests. The Integration tier cannot reach the worker,
+  because `TestAppFactory` removes it.
+- **Seeds: no test tier.** Integration runs pin `DataSeeder` to `DevSeed=None`, and SeedTool has no
+  test project. The `SeedGraph` published-only sum and the `DataSeeder` badge ground truth are
+  verified by build and code review only. They are exercised by `reset-dev-db.ps1`, which tracker
+  **H23**'s browser pass runs first.
 
 ## L4.5-Browser verification (2026-07-01) — F20 + F21 + F22 → Stage 5, no bugs
 

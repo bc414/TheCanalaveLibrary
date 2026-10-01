@@ -42,9 +42,21 @@ public sealed class UserStatRecalculationWorker(
                 return;
             }
 
-            if (!await RunContentPassAsync(stoppingToken)) return;
-            if (!await RunUserStatPassAsync(stoppingToken)) return;
+            if (!await RunPassesAsync(stoppingToken)) return;
         }
+    }
+
+    /// <summary>
+    /// One scheduled run: the content pass, then the UserStat pass. The order is load-bearing:
+    /// <c>words_written</c> sums the <c>stories.word_count</c> the content pass corrects. A failed pass is
+    /// logged and does not block the next one. Returns false only when the host is stopping. Public
+    /// test seam (the repo deliberately has no InternalsVisibleTo):
+    /// <c>UserStatRecalculationWorkerTests</c> (Unit) pins the order and the per-pass isolation.
+    /// </summary>
+    public async Task<bool> RunPassesAsync(CancellationToken stoppingToken)
+    {
+        if (!await RunContentPassAsync(stoppingToken)) return false;
+        return await RunUserStatPassAsync(stoppingToken);
     }
 
     /// <summary>The content-counter pass. Returns false only when the host is stopping.</summary>

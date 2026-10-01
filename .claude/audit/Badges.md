@@ -13,7 +13,7 @@ closing MA-108; formerly the top-level `SiteConstants.cs`).
 ## Feature 50 — Badge System
 - **L1 — Stage 5.** String-keyed `Badge` + `UserBadge` junction with curation ordering. Seed is partially
   complete (placeholder comment) but the shape is sound. Awaiting migration.
-- **L2 — Stage 5 (2026-06-25, WU36; acknowledgment by-story read gated + `RevokeAsync` ownership-first, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; zero-count counter-backed badges hidden at display, WU-CounterSymmetry, 2026-09-30 — see its Stage note).**
+- **L2 — Stage 5 (2026-06-25, WU36; acknowledgment by-story read gated + `RevokeAsync` ownership-first, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; zero-count counter-backed badges hidden at display, WU-CounterSymmetry, 2026-09-30, through one shared predicate since its review fixes — see its Stage note).**
   - Created `Core/Badges/`: `EarnedBadgeDto`, `IBadgeReadService`, `IBadgeWriteService`.
   - Created `Server/Badges/`: `ServerBadgeReadService`, `ServerBadgeWriteService` (primary-ctor chaining;
     CS9107-safe). Registered in `Server/Program.cs` (write service scoped, read forwarded).
@@ -65,7 +65,7 @@ closing MA-108; formerly the top-level `SiteConstants.cs`).
     existing `RunWithFeedbackAsync`.
   - Verified: RazorComponents tier `BadgeSettingsFormTests` (14 tests, all pass): empty-state, visible/
     hidden sections, Hide/Show toggle, MoveUp/MoveDown reorder-emit, Save callback, Busy state.
-- **L3.5-Structure — Stage 5 (2026-06-25, WU36).** `BadgeSettingsForm.razor` markup: two sections
+- **L3.5-Structure — Stage 5 (2026-06-25, WU36; `UserCard` badge count shown only when > 0, WU-CounterSymmetry, 2026-09-30 — see its Stage note).** `BadgeSettingsForm.razor` markup: two sections
   (Visible/Hidden), move-up/down + Hide/Show buttons, Save button, empty-state; parameter-driven leaf,
   no `@inject`. Verified same RazorComponents tier as L3.
 - **L4 — Stage 1.** Visual sign-off pending. UI renders but full design-token / responsive pass not done.
@@ -113,7 +113,7 @@ empty for a stranger and anonymous, populated for the author; taken-down: empty 
 `Revoke_NonexistentStory_ThrowsUnauthorizedAccess`; the existing revoke tests still green. All four
 fail against the pre-fix code. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
 
-### Feature 50 L2/L4.5 — WU-CounterSymmetry Stage note (2026-09-30): zero-count badges hidden at display (owner ruling D21's sub-ruling)
+### Feature 50 L2/L4.5 — WU-CounterSymmetry Stage note (2026-09-30): zero-count badges hidden at display (owner ruling D21's sub-ruling, plus a spec-sourced `UserCard` rider)
 
 **Cells:** **L4.5 5→1** (no browser was available; tracker **H23** owes the pass that restores it).
 L2/L3.5 change beneath Stage 5.
@@ -127,14 +127,20 @@ L2/L3.5 change beneath Stage 5.
 - **The filter.** All 11 display projection sites extend `DisplayOrder > 0` with `&& (EarnedCount > 0
   || !CounterBackedKeys.Contains(BadgeKey))`, which EF translates to `= ANY`. The sites: manual tree
   search ×3, following/vouch cards ×3, profile header + vouch list + user search ×3, recommendation
-  cards ×2.
+  cards ×2. Since the review fixes the predicate is one shared expression, `SiteBadges.IsDisplayed`,
+  applied as `UserBadges.AsQueryable().Where(SiteBadges.IsDisplayed)`. Before that, each site re-typed
+  the lambda.
 - **What still shows.** A manual grant (Patron, Architect, Artist) carries `EarnedCount = 0` by design
   and always shows; D21 puts it out of scope. The owner's curation read
   (`GetMyBadgesForCurationAsync`) still returns every row, and `BadgeSettingsForm` already guards its
   `×count` at `> 0`.
-- **`UserCard` rider.** The card rendered `@badge.EarnedCount` unconditionally, so a manual grant
-  showed a literal "0" and the tooltip "Patron (0)". The count span and the tooltip suffix now render
-  only at `> 0`, mirroring `BadgeSettingsForm`.
+- **`UserCard` rider — from the spec, not from D21.** The card rendered `@badge.EarnedCount`
+  unconditionally, so a manual grant showed a literal "0" and the tooltip "Patron (0)". The count span
+  and the tooltip suffix now render only at `> 0`, mirroring `BadgeSettingsForm`. This changes how a
+  **manual grant** displays. D21 puts manual grants out of scope ("nothing here licenses touching
+  them"), and WU-StatBadgeProducers' settled model says a badge "displays its `UserBadge.EarnedCount`".
+  So this is the WU spec's own recommended rider, not part of D21's ruling. The owner confirms it, or
+  asks for it back, in tracker **H23**'s browser pass (step 2).
 - **Seed.** `DataSeeder` now gives TestUser's seeded Recommender badge real ground truth: one
   `RecommendationSuccess`, with `EarnedCount` 1. Its old free-standing 12 would have recomputed to 0
   and then been hidden. The workbench needs `reset-dev-db.ps1` to show it.
@@ -148,6 +154,10 @@ Rule text: `layer2-services.md` §"Counter recompute principle" (last paragraph)
 - **RazorComponents**, `UserCardTests` (+2): a counted badge renders "3" and "Recommender (3)", and a
   zero-count badge renders no count text, the tooltip "Patron", and still its icon.
 - The browser pass is owed: tracker **H23**.
+- **Review fixes (2026-09-30).** `BadgeDisplayTests` +4 (Integration): user search, the following
+  list, the outgoing-vouch list and the tree-search author card. Six sites are now driven, one per
+  read-service family, plus the shared `SiteBadges.IsDisplayed`. Mutation-checked: dropping the
+  zero-count rule from the following list or the tree-search author card fails its test.
 
 ## WU36 Settled Decisions (2026-06-25)
 

@@ -17,7 +17,10 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// connection immediately before the service's own <c>INSERT INTO &lt;table&gt;</c>, i.e. after its
 /// pre-read said "no row". <c>interceptReaders: true</c> makes the marker also match the pre-fix shape
 /// (an EF <c>SaveChangesAsync</c> insert), so against that code each test fails with the 23505 the fix
-/// removes. Every test asserts <c>interceptor.Fired</c>.
+/// removes. Every interleaved test asserts <c>interceptor.Fired</c>. Two tests are sequential, with no
+/// interceptor: the partition-creation regression guard (<c>SetState_OnAHasStartedOnlyRow_*</c>) and the
+/// sequential double approve (<c>ApproveLineage_Twice_*</c>, which also runs testing.md's convergence pass).
+/// The interleaved tests skip that pass: their competing rows bypass the counter by design.
 /// </para>
 /// <para>
 /// <b>Per-test seeding:</b> users and stories via the base helpers; <c>UserStat</c> rows for every user
@@ -183,6 +186,66 @@ public class CounterSymmetryTests(PostgresFixture postgres) : IntegrationTestBas
         row.HasStarted.Should().BeTrue("the panel never touches HasStarted");
         row.IsFavorite.Should().BeTrue();
         row.InteractionDatePartition!.FavoriteDate.Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task SetState_TheEnsuredRowDeletedBeforeItsReRead_IsEnsuredAgain_NotA401()
+    {
+        // The same user's all-false panel write in another tab sparse-deletes the row this call has just
+        // ensured, between the ensure-insert and the re-read. The old re-read was FirstAsync, whose
+        // InvalidOperationException EndpointHelpers maps to a 401 ("session expired").
+        SetActiveUser(_readerId);
+        InterleavingCommandInterceptor interceptor = new(ConnectionString, "FROM user_story_interactions AS",
+            interleavedSql: $"DELETE FROM user_story_interactions WHERE user_id = {_readerId} AND story_id = {_storyId};",
+            interceptReaders: true,
+            fireOnMatch: 2); // match 1 is the initial load (no row yet); match 2 is the identical re-read
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (ServerUserStoryInteractionWriteService svc, ApplicationDbContext writeDb) =
+            InterleavingCommandInterceptor.CreateService<ServerUserStoryInteractionWriteService>(scope, ConnectionString, interceptor);
+        await using (writeDb)
+        {
+            await FluentActions.Awaiting(() => svc.SetUserStoryInteractionStateAsync(_storyId, Favorite))
+                .Should().NotThrowAsync("the ensure runs once more when its re-read finds the row gone");
+        }
+        interceptor.Fired.Should().BeTrue();
+
+        using IServiceScope verify = Factory.Services.CreateScope();
+        ApplicationDbContext db = Db(verify);
+        UserStoryInteraction row = await db.UserStoryInteractions
+            .Include(i => i.InteractionDatePartition)
+            .SingleAsync(i => i.UserId == _readerId && i.StoryId == _storyId);
+        row.IsFavorite.Should().BeTrue("the raise lands on the re-ensured row");
+        row.InteractionDatePartition!.FavoriteDate.Should().NotBeNull();
+        (await db.UserStats.Where(us => us.UserId == _authorId).Select(us => us.FavoritesOnStories).SingleAsync())
+            .Should().Be(1, "one genuine false-to-true flip");
+    }
+
+    [Fact]
+    public async Task SetState_TheRowDeletedBeforeItsPartitionRead_FailsAsAConcurrencyConflict_AndResurrectsNothing()
+    {
+        // A partition only disappears with its parent (FK cascade). Here the parent is deleted between the
+        // partition's ensure-insert and its read, so the write cannot land: it fails as a concurrency
+        // conflict (tracker D11's update-vs-delete case) instead of re-creating an orphan partition.
+        await SeedInteractionAsync(new UserStoryInteraction { UserId = _readerId, StoryId = _storyId, HasStarted = true });
+
+        SetActiveUser(_readerId);
+        InterleavingCommandInterceptor interceptor = new(ConnectionString, "FROM user_story_interaction_dates AS",
+            interleavedSql: $"DELETE FROM user_story_interactions WHERE user_id = {_readerId} AND story_id = {_storyId};",
+            interceptReaders: true);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        (ServerUserStoryInteractionWriteService svc, ApplicationDbContext writeDb) =
+            InterleavingCommandInterceptor.CreateService<ServerUserStoryInteractionWriteService>(scope, ConnectionString, interceptor);
+        await using (writeDb)
+        {
+            await FluentActions.Awaiting(() => svc.SetUserStoryInteractionStateAsync(_storyId, Favorite))
+                .Should().ThrowAsync<DbUpdateConcurrencyException>();
+        }
+        interceptor.Fired.Should().BeTrue();
+
+        using IServiceScope verify = Factory.Services.CreateScope();
+        ApplicationDbContext db = Db(verify);
+        (await db.UserStoryInteractions.AnyAsync(i => i.UserId == _readerId && i.StoryId == _storyId)).Should().BeFalse();
+        (await db.UserStoryInteractionDates.AnyAsync(d => d.UserId == _readerId && d.StoryId == _storyId)).Should().BeFalse();
     }
 
     [Fact]
@@ -365,6 +428,7 @@ public class CounterSymmetryTests(PostgresFixture postgres) : IntegrationTestBas
     public async Task ApproveLineage_Twice_TheSecondIsRefused_AndCountsAndNotifiesOnce()
     {
         (int sourceStoryId, int targetStoryId) = await RequestInspiredByAsync();
+        await SeedStoriesWrittenGroundTruthAsync();
 
         SetActiveUser(_authorId);
         await ApproveAsync(sourceStoryId, targetStoryId);
@@ -378,6 +442,11 @@ public class CounterSymmetryTests(PostgresFixture postgres) : IntegrationTestBas
         (await db.Notifications.CountAsync(n => n.RecipientUserId == _readerId
                                                && n.NotificationTypeId == NotificationTypeEnum.StoryLineageApproved))
             .Should().Be(1);
+
+        // testing.md "Counter convergence": the wired count equals the recompute.
+        UserStatRecalcResult pass = await verify.ServiceProvider.GetRequiredService<UserStatRecalculator>().RecalculateAllAsync();
+        pass.RowsInserted.Should().Be(0, "both users have seeded UserStat rows");
+        pass.CountersCorrected.Should().Be(0, "the wired AcknowledgedAsInspirationCount must equal the recompute");
     }
 
     [Fact]
@@ -425,6 +494,21 @@ public class CounterSymmetryTests(PostgresFixture postgres) : IntegrationTestBas
         using IServiceScope scope = Factory.Services.CreateScope();
         Db(scope).UserStats.Add(new UserStat { UserId = userId });
         await Db(scope).SaveChangesAsync();
+    }
+
+    /// <summary>SeedStoryAsync bypasses CreateStoryAsync's +1. Before a convergence pass, each user's
+    /// StoriesWritten gets the ground truth those direct inserts created (testing.md "Counter
+    /// convergence"), so the pass compares only what the test's own wired ops moved.</summary>
+    private async Task SeedStoriesWrittenGroundTruthAsync()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = Db(scope);
+        foreach (int userId in new[] { _authorId, _readerId })
+        {
+            int stories = await db.Stories.CountAsync(s => s.AuthorId == userId);
+            await db.UserStats.Where(us => us.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(us => us.StoriesWritten, stories));
+        }
     }
 
     /// <summary>The prior reading-path state a test starts from (in production, MarkStartedAsync).</summary>

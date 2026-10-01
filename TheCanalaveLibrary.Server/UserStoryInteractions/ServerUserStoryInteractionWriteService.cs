@@ -16,8 +16,10 @@ namespace TheCanalaveLibrary.Server;
 /// <para><b>Recommendation attribution (owner ruling D3, WU-InertFeatures).</b> The attribution row
 /// hangs off the interaction row and describes how its <c>IsReadItLater</c> bit was set. Two producers
 /// live here — <see cref="SetReadItLaterFromRecommendationAsync"/> (the rec card) and
-/// <see cref="MarkStartedAsync"/>'s direct-link parameter — each writing the parent and the attribution
-/// in one save; and the panel upsert deletes it when the bit goes true→false. Shared rules:
+/// <see cref="MarkStartedAsync"/>'s direct-link parameter. Each writes the bit and the attribution in
+/// one save. A missing parent is first created by its own committed upsert (<see cref="EnsureRowAsync"/>),
+/// so the attribution never precedes its parent. The panel upsert deletes the attribution when the bit
+/// goes true→false. Shared rules:
 /// <see cref="RecommendationAttribution"/>; doctrine: <c>layer2-services.md</c> §"Attribution
 /// (Feature 30)".</para>
 /// </summary>
@@ -194,10 +196,14 @@ public class ServerUserStoryInteractionWriteService(
     /// loser's insert lands 0 rows and the re-read hands it the winner's committed row, so its
     /// transition-delta captures are taken against real state.
     /// <para>Never <c>ChangeTracker.Clear()</c> here: the scoped write context is shared with callers
-    /// (<see cref="ServerChapterReadMarkWriteService"/>) whose tracked state must survive. Until the
-    /// caller's <c>SaveChangesAsync</c> the row is all-false; a crash in that window leaves it behind,
-    /// which no read notices (every bookshelf query filters on a flag) and the next write's sparse
-    /// cleanup removes.</para>
+    /// (<see cref="ServerChapterReadMarkWriteService"/>) whose tracked state must survive. The insert
+    /// commits on its own, so until the caller's <c>SaveChangesAsync</c> the row is all-false. If the
+    /// request dies there, or that save fails, the all-false row stays. No read notices it, because
+    /// every bookshelf query filters on a flag. Only an all-false panel write on the pair removes it.</para>
+    /// <para>The re-read can find nothing: the same user's concurrent all-false panel write can
+    /// sparse-delete the row between the insert and the read. The insert and the re-read then run once
+    /// more. Never <c>FirstAsync</c> here: its <c>InvalidOperationException</c> maps to a 401 at the
+    /// endpoint (<c>EndpointHelpers</c>' auth safety net).</para>
     /// </summary>
     private async Task<UserStoryInteraction> EnsureRowAsync(
         int userId, int storyId,
@@ -207,16 +213,25 @@ public class ServerUserStoryInteractionWriteService(
         // flag columns have no DB default, so every one is listed — a new NOT NULL column without a
         // default fails loudly (23502) instead of silently.
         UserStoryInteraction fresh = new() { UserId = userId, StoryId = storyId };
-        await writeDb.Database.ExecuteSqlAsync($"""
-            INSERT INTO user_story_interactions (user_id, story_id, has_started, is_completed, is_favorite,
-                is_hidden_favorite, is_followed, is_read_it_later, is_ignored)
-            VALUES ({fresh.UserId}, {fresh.StoryId}, {fresh.HasStarted}, {fresh.IsCompleted}, {fresh.IsFavorite},
-                {fresh.IsHiddenFavorite}, {fresh.IsFollowed}, {fresh.IsReadItLater}, {fresh.IsIgnored})
-            ON CONFLICT (user_id, story_id) DO NOTHING
-            """);
+        const int attempts = 2;
+        for (int attempt = 1; attempt <= attempts; attempt++)
+        {
+            await writeDb.Database.ExecuteSqlAsync($"""
+                INSERT INTO user_story_interactions (user_id, story_id, has_started, is_completed, is_favorite,
+                    is_hidden_favorite, is_followed, is_read_it_later, is_ignored)
+                VALUES ({fresh.UserId}, {fresh.StoryId}, {fresh.HasStarted}, {fresh.IsCompleted}, {fresh.IsFavorite},
+                    {fresh.IsHiddenFavorite}, {fresh.IsFollowed}, {fresh.IsReadItLater}, {fresh.IsIgnored})
+                ON CONFLICT (user_id, story_id) DO NOTHING
+                """);
 
-        return await include(writeDb.UserStoryInteractions)
-            .FirstAsync(i => i.UserId == userId && i.StoryId == storyId);
+            UserStoryInteraction? row = await include(writeDb.UserStoryInteractions)
+                .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
+            if (row is not null) return row;
+        }
+
+        // Deleted under us twice: the same 500 class as tracker D11's delete races.
+        throw new DbUpdateConcurrencyException(
+            $"The interaction row for user {userId} on story {storyId} was deleted concurrently.");
     }
 
     /// <summary>
@@ -238,9 +253,12 @@ public class ServerUserStoryInteractionWriteService(
         // fixes the result up onto the row.
         row.InteractionDatePartition = await writeDb.UserStoryInteractionDates
             .FirstOrDefaultAsync(d => d.UserId == row.UserId && d.StoryId == row.StoryId)
-            // Only reachable if the partition vanished between the insert and the read (its parent's
-            // sparse cleanup racing this write); re-creating it is then the right outcome.
-            ?? new UserStoryInteractionDate { UserId = row.UserId, StoryId = row.StoryId };
+            // A partition only disappears with its parent (FK cascade; nothing deletes it alone), so a
+            // miss here means a concurrent sparse cleanup (or story/account deletion) removed the row
+            // this write is updating. The write cannot land: re-creating the partition would only move
+            // the failure to SaveChangesAsync. Tracker D11's update-vs-delete case.
+            ?? throw new DbUpdateConcurrencyException(
+                $"The interaction row for user {row.UserId} on story {row.StoryId} was deleted concurrently.");
     }
 
     private static bool AnyBitTrue(UserStoryInteractionStateUpdate update) =>
@@ -305,8 +323,10 @@ public class ServerUserStoryInteractionWriteService(
             };
         }
 
-        // ONE save: the parent row and the attribution row commit together, so the FK-ordering hazard
-        // the old on-load write hit (sources row before any USI row) is structurally unreachable.
+        // ONE save: the bit and the attribution row commit together. A missing parent was already
+        // created by EnsureRowAsync's own committed upsert, so the FK-ordering hazard the old on-load
+        // write hit (sources row before any USI row) stays unreachable. If this save fails, that
+        // all-false parent stays until an all-false panel write removes it (harmless to every read).
         await writeDb.SaveChangesAsync();
     }
 
@@ -334,7 +354,7 @@ public class ServerUserStoryInteractionWriteService(
         row.HasStarted = true;
 
         // D3 direct-link entry point: the ?rec= the reader arrived with becomes the attribution here, at
-        // the 90%-of-Chapter-1 moment, in the same save as the parent row — never on page load. The URL is
+        // the 90%-of-Chapter-1 moment, in the same save as the HasStarted bit — never on page load. The URL is
         // untrusted and this is the primary write, so an unattributable value is silently ignored.
         if (attributedRecommendationId is int recId && row.RecommendationSource is null
             && await RecommendationAttribution.IsAttributableAsync(writeDb, userId, storyId, recId))

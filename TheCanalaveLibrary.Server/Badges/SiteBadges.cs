@@ -1,3 +1,6 @@
+using System.Linq.Expressions;
+using TheCanalaveLibrary.Core;
+
 namespace TheCanalaveLibrary.Server;
 
 /// <summary>
@@ -39,4 +42,15 @@ public static class SiteBadges
     /// display, keep the row as a diagnostic), and the owner's curation read still returns it.
     /// </summary>
     public static readonly string[] CounterBackedKeys = [.. CounterColumnByBadge.Keys];
+
+    /// <summary>
+    /// The one display predicate every <c>UserCardBadgeDto</c> projection applies, as
+    /// <c>UserBadges.AsQueryable().Where(SiteBadges.IsDisplayed)</c>: curated visible
+    /// (<c>DisplayOrder &gt; 0</c>), and not a zero-count counter-backed badge (owner ruling D21). EF
+    /// inlines the expression and translates the key test to <c>= ANY</c>. A shared expression, not a
+    /// lambda re-typed at each site, so the eleven display sites cannot drift apart (WU-CounterSymmetry
+    /// review fixes).
+    /// </summary>
+    public static readonly Expression<Func<UserBadge, bool>> IsDisplayed =
+        ub => ub.DisplayOrder > 0 && (ub.EarnedCount > 0 || !CounterBackedKeys.Contains(ub.BadgeKey));
 }

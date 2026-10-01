@@ -434,6 +434,8 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
 
         (await LoadStoryWordCountAsync(_storyId)).Should().Be(0, "a draft chapter is not published words");
         (await LoadWordsWrittenAsync()).Should().Be(0);
+
+        await AssertCountersConvergeAsync();
     }
 
     [Fact]
@@ -494,7 +496,7 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
     }
 
     [Fact]
-    public async Task AddAlternateVersion_LandsVersionCount2_AndTheReconcilerAgrees()
+    public async Task AddTwoAlternates_LandsVersionCount3_AndTheReconcilerAgrees()
     {
         int chapterId = await CallCreateAsync(NewChapter("Converge"));
         await CallAddAlternateAsync(chapterId, NewChapter("Converge alt"));

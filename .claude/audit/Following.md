@@ -128,7 +128,7 @@ remove-vouch succeed against a Private profile. `dotnet build` green, no new war
   `[MaxLength(1000)]` from `VouchText` — column is now unbounded `text` (widening, safe). Supersedes
   Phase B's 1000-char ruling and spec §5.8's original 280; code is authoritative. Applied via
   Testcontainers `Database.MigrateAsync` in the integration suite. `has-pending-model-changes` clean.
-- **L2 — Stage 5 (WU21, 2026-06-22; the vouch insert is an `ON CONFLICT` upsert since WU-CounterSymmetry, 2026-09-30 — see the Stage note below).** Covered by shared `IFollowingWriteService` /
+- **L2 — Stage 5 (WU21, 2026-06-22; the vouch insert is an `ON CONFLICT` upsert since WU-CounterSymmetry, 2026-09-30, its notification side tested since its review fixes — see the Stage note below).** Covered by shared `IFollowingWriteService` /
   `IFollowingReadService` cluster above (Feature 18 L2 note). Vouch-specific: `VouchAsync` sanitizes
   `VouchText` before persist; 5-limit C#-enforced; `VouchLimitException` thrown on 6th. Integration
   tests include long-text (exceeds old 1000-char cap), XSS sanitization, limit enforcement.
@@ -142,13 +142,19 @@ remove-vouch succeed against a Private profile. `dotnet build` green, no new war
   - **The `AnyAsync` pre-check is kept on purpose.** It fixes the semantic order: a re-vouch is a no-op
     even at the limit, not a `VouchLimitException`. `VouchAsync_Idempotent_WhenAlreadyVouched` and the
     UI rely on that.
-  - **The 5-limit stays check-then-act and is stated-soft** (D23 accept-and-record).
+  - **The 5-limit stays check-then-act and is stated-soft** (D23 accept-and-record). "No corrective"
+    rests on reading D21's silence as D23's conditional decline; that is an inference, flagged for the
+    owner (layer2 §"Check-then-act posture").
     `layer2-services.md` §"Check-then-act posture" writes down the bounded overshoot, the self-healing
     next refusal and the absence of a corrective sweeper.
 
   **Test tier: Integration.** `CounterSymmetryTests.Vouch_ACompetingVouchLandingBeforeTheInsert_*`
   interleaves the competing vouch just before the insert: no throw, one row, no notification from the
-  loser. Mutation-checked: without `ON CONFLICT` it 500s.
+  loser. Mutation-checked: without `ON CONFLICT` it 500s. *Review fixes (2026-09-30):* the side that
+  should notify had no test, so an inverted gate would have silenced every vouch notification with the
+  suite green. `FollowingWriteServiceTests.VouchAsync_ThatLands_NotifiesTheTargetOnce_*` asserts that a
+  vouch that lands sends exactly one `NewVouchOnYou` and that a repeat vouch sends no second one.
+  Mutation-checked: inverting the gate fails it.
   **Settled constraints — do not revisit:** dedicated `Vouch` table; outgoing public / incoming private
   asymmetry (§5.8); 5-per-user cap (anti-snowball scarcity lever); FK delete behavior (see Shared
   Context); `VouchText` is rich HTML sanitized-once-on-save (EditorView/RichTextView/sanitize path).

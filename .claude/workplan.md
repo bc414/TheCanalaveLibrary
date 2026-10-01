@@ -18,19 +18,16 @@ references it, does not restate it.
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
 - **Last landed:** WU-CounterSymmetry (2026-09-30) — owner rulings **D21–D24**.
-  - **Every counter has a recompute.** The new `ContentCounterRecalculator` (11 content counters)
-    runs nightly before `UserStatRecalculator`. Counters are post-commit, with the primary write
-    first.
-  - **Check-then-act, per family.** The USI rows and their date partition, `group_members` and
-    vouches are `ON CONFLICT` upserts, so a double submit no longer 500s. The gem, highlight and
-    vouch limits are written down as stated-soft.
-  - **Producers fixed.** Creating a group counts as joining it. `Story.WordCount` counts published
-    chapters only. `VersionCount` is atomic. The like toggles return the landed count. A double
-    lineage approve is refused.
-  - **Badges.** Zero-count counter-backed badges are hidden at display; F50 L4.5 5→1 (no browser).
-  - **Filed:** **D11/H23**. `dotnet test`: Unit 1,079, RazorComponents 766, Integration 1,373.
-  - **Pointers:** its DONE entry; `layer2-services.md` §"Counter recompute principle" and
-    §"Check-then-act posture".
+  - **Every counter has a recompute:** `ContentCounterRecalculator` (11 content counters) runs nightly
+    before `UserStatRecalculator`; counters are post-commit, primary write first.
+  - **Check-then-act per family:** the USI rows and partition, `group_members` and vouches are
+    `ON CONFLICT` upserts; the gem/highlight/vouch limits are stated-soft (an inference, owner-flagged).
+  - **Producers fixed:** creating a group counts as joining; published-only `Story.WordCount`; atomic
+    `VersionCount`; the like toggles return the landed count; a double lineage approve is refused.
+  - **Badges:** zero-count counter-backed badges hidden through one shared predicate; F50 L4.5 5→1.
+  - **Review fixes:** the USI ensure re-read retries instead of answering 401; owed tests; Built banners.
+  - **Filed:** **D11/H23**. `dotnet test`: Unit 1,081, RazorComponents 766, Integration 1,380.
+    **Pointers:** its DONE entry; `layer2-services.md` §"Counter recompute principle", §"Check-then-act posture".
   Before that, 2026-09-30: WU-TptHardDelete — worksheet D10/D11/D12 (content-parent deletes through `TptDelete`, RESTRICT FKs, per-subtype blog-post lifecycle, polls survive their owner); see its DONE entry.
   Before that, 2026-09-30: WU-ModerationIntegrity — worksheet D7/D8/D9 (lock-and-guard resolves, sibling closing, `ReportedUserId`, Reinstate, service-side mod read gates); see its DONE entry.
   Before that, 2026-09-30: WU-InertFeatures — worksheet D3/D4/D5/D16/D17 (attribution on the RIL bit, the de-identified notification core, the new-chapter fan-out); see its DONE entry.
@@ -434,7 +431,7 @@ is pending except where a bullet says so.
 - **Cells:** **F50 L4.5 5→1** (the badge display filter and `UserCard`'s count guard, no browser
   available — tracker **H23**). Everything else lands beneath Stage-5 cells: F58 L2 (the reconciler),
   F22 L2, F38 L2, F6 L2, F16 L2, F19 L2, F25 L2, F28 L2, F10 L2, F47 L2, F62 L8, F50 L2/L3.5. No
-  migration.
+  migration. Review fixes, all beneath Stage 5: F16 L2, F19 L2, F50 L2, F58 L2.
 - **Trigger:** owner rulings D21 (every counter derived, recompute in code), D22 (post-commit,
   recompute-corrected), D23 (check-then-act posture per family) and D24 (creating counts as joining);
   service audit §2.4.2/§2.4.3/§2.4.6, schema §3.6. Orchestrator amendment U1 (lineage double approve).
@@ -495,19 +492,64 @@ is pending except where a bullet says so.
     `LeaveAsync`/`UnfollowAsync`/`RemoveVouchAsync`, the USI sparse cleanup, and the attribution row.
   - **Not owner-open:** the `ApprovedStorySubmissions` question. Per the amendment, the orchestrator
     flags the D1/D21 tension to the owner separately.
+  - **Owner visibility (review fixes):**
+    - The stated-soft gem, highlight and vouch limits rest on reading D21's silence as D23's
+      conditional decline. That is an inference, not a ruling. It is flagged in `roadmap.md` §Resolved,
+      so the owner can fund a corrective instead.
+    - `UserCard`'s hidden "0" changes manual-grant display. It is a spec rider outside D21's scope, and
+      the owner confirms it in **H23** step 2.
 - **Found while building:**
   - `Reference(...).LoadAsync()` is a no-op on a navigation an `Include` already marked loaded, so the
     partition ensure needs a tracked query. The rule is in layer2 §"Check-then-act posture".
   - The like toggles' concurrency fix *is* automatable by interleaving another user's SQL, contrary
     to the WU-CounterAtomicity notes. Both are now tested.
+- **Review fixes (2026-09-30).** Three reviews raised 14 findings. Each was checked against the code
+  and the worksheet; all 14 were real, and none needed an owner ruling.
+  1. **The USI ensure re-read could answer 401.** The same user's all-false panel write can
+     sparse-delete the just-ensured row before its re-read. `FirstAsync`'s `InvalidOperationException`
+     maps to 401 in `EndpointHelpers`. Now `FirstOrDefaultAsync` runs the insert and re-read once more,
+     then throws `DbUpdateConcurrencyException`. The partition fallback was mis-commented: a vanished
+     partition means its parent is gone, so it throws too. The update-vs-delete race joins **D11**.
+     The "parent and attribution in one save" claims are corrected (the class doc, two comments, layer2
+     §"Attribution").
+  2. **Docs.**
+     - WU15's sparse-semantics settled bullet carries a dated amendment. The "next write's sparse
+       cleanup removes it" claim is corrected in layer2, F16 and `EnsureRowAsync`'s doc.
+     - layer2 "Direction of authority" names `BlogPostsWritten` (**F16**) as the one open permanent
+       disagreement, and tracker F16 notes that narrowing the recompute redefines the question.
+     - The stated-soft write-up is an inference and an analogy, not a D21 ruling (owner-visible, see
+       Left alone).
+     - Built banners: service audit §2.1.4, §2.4 (2.4.2/3/6 built, 2.4.5 dissolved), the 2.4.4
+       reconciler line, §3 items 7/14/15, §4 row 1, §7 item 8; schema audit §3.6. layer2's
+       `ActiveReportCount` and the Moderation settled note no longer say the reconciler is pending.
+     - Badges F50 L3.5 headline; the `UserCard` rider labelled spec-sourced, with an owner check in H23.
+     - `testing.md`'s convergence rule is scoped to sequential tests; interleaved race tests are exempt.
+  3. **One shared badge predicate.** The 11 sites re-typed one lambda. `SiteBadges.IsDisplayed` is now
+     the single expression, applied with `.AsQueryable().Where(...)`.
+  4. **Owed tests.**
+     - Unit `UserStatRecalculationWorkerTests` (2): pass order, per-pass isolation, shutdown. The two
+       passes run through the new public seam `RunPassesAsync`.
+     - Integration `FollowingWriteServiceTests` +1: a vouch that lands notifies once, and a repeat does
+       not.
+     - `BadgeDisplayTests` +4: user search, following, outgoing vouches, the tree-search author card.
+     - `CounterSymmetryTests` +2 (USI re-read retry, partition vanish). The interceptor gains
+       `fireOnMatch`.
+     - `ApproveLineage_Twice` and the draft word-count test gain convergence passes. The
+       VersionCount test is renamed to `…Count3…`.
+     - Mutation-checked: the single attempt, the inverted vouch gate, the swapped worker order, and the
+       predicate dropped at two sites each fail their tests.
+  5. **Not changed:** the `UserCard` rider stays (owner check in H23). Seeds have no test tier (stated
+     in F58). No cell flips. No browser was available, so H23 gains the owner check only.
 - **Verification:** `dotnet build` 0 errors, no new warnings in touched files; `has-pending-model-changes`
-  clean. `dotnet test` all green: Unit 1,079 (+0), RazorComponents 766 (+2), Integration 1,373 (+28).
-  The four gates pass. New Integration tests:
-  - `CounterSymmetryTests` (13, all interleaved per `testing.md`: join, vouch, six USI, VersionCount,
-    both like toggles, two lineage);
+  clean. `dotnet test` all green: Unit 1,079 (+0), RazorComponents 766 (+2), Integration 1,373 (+28);
+  after the review fixes Unit 1,081, RazorComponents 766, Integration 1,380. The four gates pass. New
+  Integration tests:
+  - `CounterSymmetryTests` (13: join, vouch, six USI, VersionCount, both like toggles, two lineage; 11
+    interleaved per `testing.md`, plus two sequential guards, the partition creation and the double
+    approve; +2 interleaved at the review fixes);
   - `ContentCounterRecalculatorTests` (3: all 11 specs corrected and zeroed, exactly 22 corrections, a
     second pass corrects 0);
-  - `BadgeDisplayTests` (3);
+  - `BadgeDisplayTests` (3; +4 at the review fixes);
   - `GroupServiceTests` +5 and `ChapterWriteServiceTests` +4, each ending in a convergence pass that
     corrects 0.
 

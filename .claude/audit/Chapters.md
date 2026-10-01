@@ -98,9 +98,11 @@ null rating as primary, floor rejection, primary invariant rejection on create +
     - a draft contributes 0 to both counters;
     - publish adds, unpublish removes, and publishing twice does not double-count;
     - an edit of a published primary applies the delta, and a draft edit applies none;
-    - two alternates make `VersionCount` 3, and a `ContentCounterRecalculator` pass corrects 0.
+    - two alternates make `VersionCount` 3, and a `ContentCounterRecalculator` pass corrects 0
+      (`AddTwoAlternates_LandsVersionCount3_*`; the review fixes corrected its name, which said 2).
 
-    The word-count tests end with a convergence pass on both reconcilers.
+    The word-count tests end with a convergence pass on both reconcilers (the draft test since the
+    review fixes).
   - `PublishedChapters_UpdateStoryWordCount` (renamed from `CreateChapterAsync_UpdatesStoryWordCount`)
     and `ChapterReorderDeleteTests.Delete_RefreshesStoryWordCount` now publish first.
   - `CounterSymmetryTests.AddAlternateVersion_AConcurrentIncrementLandingBeforeTheSave_IsNotLost`

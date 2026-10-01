@@ -39,7 +39,7 @@ public class ServerUserProfileReadService(
                 u.VerificationCode,
                 Stats            = u.UserStat,
                 Badges           = u.UserBadges
-                    .Where(ub => ub.DisplayOrder > 0 && (ub.EarnedCount > 0 || !SiteBadges.CounterBackedKeys.Contains(ub.BadgeKey)))
+                    .AsQueryable().Where(SiteBadges.IsDisplayed)
                     .OrderBy(ub => ub.DisplayOrder)
                     .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                     .ToList()
@@ -72,7 +72,7 @@ public class ServerUserProfileReadService(
                     v.VouchedUser.Tagline,
                     v.VouchedUser.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
                     v.VouchedUser.UserBadges
-                    .Where(ub => ub.DisplayOrder > 0 && (ub.EarnedCount > 0 || !SiteBadges.CounterBackedKeys.Contains(ub.BadgeKey)))
+                    .AsQueryable().Where(SiteBadges.IsDisplayed)
                     .OrderBy(ub => ub.DisplayOrder)
                     .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                     .ToList()),
@@ -185,7 +185,7 @@ public class ServerUserProfileReadService(
                 u.Tagline,
                 u.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
                 u.UserBadges
-                    .Where(ub => ub.DisplayOrder > 0 && (ub.EarnedCount > 0 || !SiteBadges.CounterBackedKeys.Contains(ub.BadgeKey)))
+                    .AsQueryable().Where(SiteBadges.IsDisplayed)
                     .OrderBy(ub => ub.DisplayOrder)
                     .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                     .ToList()))

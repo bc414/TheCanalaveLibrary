@@ -19,7 +19,9 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// ONE context and, the first time a command's text contains <see cref="CommandMarker"/>, either runs
 /// <see cref="InterleavedSql"/> on a separate autocommit connection just before that command executes
 /// (the competing write), or throws <see cref="FailWith"/> instead of executing it (to prove the
-/// surrounding transaction rolls back). It fires once.
+/// surrounding transaction rolls back). It fires once. When the same command text runs more than once
+/// (a load and then an identical re-read), <c>fireOnMatch</c> picks the Nth matching command instead
+/// of the first (WU-CounterSymmetry review fixes).
 /// </para>
 /// <para>
 /// Use <see cref="CreateService{TService}"/> to build the service under test over a context carrying
@@ -30,9 +32,10 @@ namespace TheCanalaveLibrary.Tests.Integration;
 public sealed class InterleavingCommandInterceptor(
     string connectionString, string commandMarker,
     string? interleavedSql = null, Exception? failWith = null,
-    bool interceptReaders = false) : DbCommandInterceptor
+    bool interceptReaders = false, int fireOnMatch = 1) : DbCommandInterceptor
 {
     private int _fired;
+    private int _matches;
 
     /// <summary>Substring identifying the command to interleave before (e.g. <c>UPDATE stories</c>).</summary>
     public string CommandMarker { get; } = commandMarker;
@@ -74,6 +77,7 @@ public sealed class InterleavingCommandInterceptor(
     private async Task InterleaveIfMarkedAsync(DbCommand command, CancellationToken cancellationToken)
     {
         if (command.CommandText.Contains(CommandMarker, StringComparison.Ordinal)
+            && Interlocked.Increment(ref _matches) == fireOnMatch
             && Interlocked.Exchange(ref _fired, 1) == 0)
         {
             if (FailWith is not null)

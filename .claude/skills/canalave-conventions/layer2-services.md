@@ -1419,9 +1419,11 @@ shadow `user_story_interactions.recommendation_id` FK, was a fossil of the pre-s
 
 **Two entry points — one integrity rule ("a sources row exists").**
 1. **RIL from the card** — `IUserStoryInteractionWriteService.SetReadItLaterFromRecommendationAsync(recId)`,
-   the durable path. One `SaveChangesAsync`: upsert the USI row (`IsReadItLater = true`,
-   `ReadItLaterDate ??= now`, other bits untouched) and insert the sources row **in the same unit of
-   work**, so the FK-ordering hazard is structurally unreachable. The card cannot reuse
+   the durable path. One `SaveChangesAsync` sets the bit (`IsReadItLater = true`,
+   `ReadItLaterDate ??= now`, other bits untouched) and inserts the sources row together. A missing USI
+   row is created first by the ensure-row upsert, in its own committed statement (§"Check-then-act
+   posture", WU-CounterSymmetry), so the parent always exists before the sources row and the FK-ordering
+   hazard stays unreachable. The card cannot reuse
    `SetUserStoryInteractionStateAsync` (six-bit absolute set — it would clobber the viewer's other
    flags). The sources row is inserted only when this call flipped the bit false→true (or created the
    row): a bit already set elsewhere was not "set from the card". A raise, so the full story-visibility
@@ -2065,8 +2067,9 @@ of `COUNT(*) FROM reports WHERE (reported_entity_type, reported_entity_id) = tar
 report_status_id IN (Open, UnderReview)`** — how many unanswered questions stand against the target,
 which is what the queue's triage sort claims to rank. It is a *derived* counter in D21's sense: that
 `COUNT(*)` is its ground truth, so it is recomputable (the WU_ModerationIntegrity migration ran the
-recompute once; the standing reconciler belongs to WU-CounterSymmetry, on the partial index
-`ix_reports_open_target`). `PrivateMessage` has no column.
+recompute once). The standing reconciler is `ContentCounterRecalculator` (built WU-CounterSymmetry,
+2026-09-30). Its five `active_report_count` specs use the same predicate as the partial index
+`ix_reports_open_target`. `PrivateMessage` has no column.
 
 **`AdjustActiveReportCountAsync(type, id, delta)`** is the single authority on mutating it: a
 per-DbSet `ExecuteUpdateAsync` on the unfiltered write context (no `IgnoreQueryFilters` needed — the
@@ -2417,7 +2420,10 @@ under D21: the recompute counts the rows that exist, and that count is the truth
 or removes a `UserBadge` row; that boundary stays. A counter-backed badge (`SiteBadges.CounterColumnByBadge`)
 whose `EarnedCount` is 0 is filtered out of every *display* projection (UserCard, profile header,
 recommendation card). The owner's curation read (`GetMyBadgesForCurationAsync`) still returns it.
-Manual grants carry `EarnedCount = 0` by design and always display.
+Manual grants carry `EarnedCount = 0` by design and always display. Every display projection applies
+the one shared expression `SiteBadges.IsDisplayed`, as
+`UserBadges.AsQueryable().Where(SiteBadges.IsDisplayed)`. It covers both `DisplayOrder > 0` and the
+zero-count rule, so a new display site never re-types it.
 
 ### Counter mutation rule — all denormalized counters
 
@@ -2529,6 +2535,12 @@ each pass oscillates instead of converging. D24's `CreateGroupAsync` (a creator'
 `+1`, so leaving drove `GroupsJoined` to −1) was exactly that. The fix goes in the write path; a
 floor-at-zero clamp hides the symptom and leaves the oscillation, so it is rejected. The test shape is
 `testing.md` §"Counter convergence".
+- **One permanent disagreement is open and is not fixed by this rule alone: `BlogPostsWritten`**
+  (tracker **F16**). The wired path counts profile posts only, and the recompute counts every post.
+  Which posts the counter's question covers is an owner question, so neither side changes until it is
+  answered. D21 ratified the existing `user_stats` aggregates as compliant, so an answer that narrows
+  the recompute must say explicitly that it redefines the question. (Review fixes, WU-CounterSymmetry,
+  2026-09-30.)
 
 **Worker order.** `UserStatRecalculationWorker` runs `ContentCounterRecalculator` **before**
 `UserStatRecalculator`, in the same loop iteration, because `WordsWrittenAgg` sums
@@ -2651,14 +2663,19 @@ failure.
 | USI flip-delta counters | no — derived data | Accept | Recompute-corrected (§"Transition-delta rule") | — |
 | Hidden gem (5/user), highlight (5/story), vouch limit (5/user) | no | Accept — **stated-soft** | See below | — |
 
-**Stated-soft limits (D23's conditional, written down so it is not left implied).** D21's build scope
-funds no corrective for the hidden-gem, highlight or vouch limits, and none of the three has a
-denormalized value to recompute: each check reads a live `COUNT(*)` every time. So, per D23, they are
-**stated-soft with no corrective**:
+**Stated-soft limits (D23's conditional, written down so it is not left implied).** D23 said D21
+"owes recompute paths for `IsHiddenGem`, `IsHighlightedByAuthor`, and vouch counts", and that if D21
+declines to fund them the three families are "stated-soft with no corrective". D21 never mentions the
+limits: its build scope lists seven counters and none of them is a limit. WU-CounterSymmetry read that
+omission as the decline. **That reading is an inference, not an owner ruling**, so the owner can still
+fund a corrective. None of the three has a denormalized value to recompute: each check reads a live
+`COUNT(*)` every time. So they are **stated-soft with no corrective**:
 - Overshoot is bounded by the number of concurrent requests. It persists until the owner removes one.
 - The next action at the limit is correctly rejected, so enforcement heals itself.
-- There is **no corrective sweeper**. An un-designating sweeper would hand a background worker the
-  power to destroy user-visible state, which D21's zero-count-badge reasoning rejects.
+- There is **no corrective sweeper**. The reason is an analogy to D21, not a D21 ruling. D21 rejected
+  letting the recalc delete zero-count badge rows because that "hands a background worker the power to
+  destroy user-visible state". An un-designating sweeper would do the same to a gem, a highlight or a
+  vouch.
 
 The limit checks themselves: §"Recommendation Write Conventions" → "Count-limit enforcement", and
 `ServerFollowingWriteService.VouchAsync`.
@@ -2685,10 +2702,25 @@ sites (`SetUserStoryInteractionStateAsync`, `SetReadItLaterFromRecommendationAsy
 
 **Never `ChangeTracker.Clear()` here.** The scoped write context is shared with callers such as
 `ServerChapterReadMarkWriteService`, whose own tracked state must survive. The ensure-insert runs
-**after** the D6 raise guard, because it is a mutation. Between the ensure-insert and the
-`SaveChangesAsync` an all-false row exists. If the request dies in that window, the row survives. That
-breaks sparsity but harms no read, because every bookshelf query filters on a flag, and the next write's
-sparse cleanup removes it.
+**after** the D6 raise guard, because it is a mutation.
+
+**The ensured row commits on its own.** The ensure-insert is its own autocommitted statement, so it is
+not part of the caller's later `SaveChangesAsync`. Only the bits and the attribution row commit together
+in that save. A missing parent is created first, which is why the attribution FK-ordering hazard stays
+unreachable. Until that save, the row is all-false. If the request dies, or the later save fails (say,
+the attribution race in tracker D11), an all-false row survives, which breaks the sparse rule
+(`audit/UserStoryInteractions.md` F16, WU15's "Sparse semantics"). It harms no read, because every
+bookshelf query filters on a flag. Only an all-false panel write on that (user, story) removes it. A raise
+or a start reuses it, and with no further write it persists, harmlessly.
+
+**The re-read can find nothing.** A concurrent all-false panel write by the same user can
+sparse-delete the just-ensured row between the insert and the re-read. `EnsureRowAsync` then runs the
+insert and the re-read once more. If the row is gone a second time, it throws
+`DbUpdateConcurrencyException`, the same 500 class as tracker D11's delete races. It never uses
+`FirstAsync`: that call's `InvalidOperationException` maps to a 401 at the endpoint
+(`EndpointHelpers`' auth safety net). A date partition only disappears with its parent (FK cascade), so
+a partition missing after its own ensure-insert means the parent is gone too. The write cannot land, and
+`EnsureDatePartitionAsync` throws the same exception rather than re-creating it.
 
 `group_members` and `vouches` use the same `INSERT … ON CONFLICT DO NOTHING` shape, gated on
 rows-affected. They need no re-read, because nothing is computed from the winner's row.

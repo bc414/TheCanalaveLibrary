@@ -62,7 +62,7 @@ public class ServerManualTreeSearchReadService(
                     s.Author.Tagline,
                     s.Author.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
                     s.Author.UserBadges
-                        .Where(ub => ub.DisplayOrder > 0 && (ub.EarnedCount > 0 || !SiteBadges.CounterBackedKeys.Contains(ub.BadgeKey)))
+                        .AsQueryable().Where(SiteBadges.IsDisplayed)
                         .OrderBy(ub => ub.DisplayOrder)
                         .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()))
@@ -104,7 +104,7 @@ public class ServerManualTreeSearchReadService(
                     u.Tagline,
                     u.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
                     u.UserBadges
-                        .Where(ub => ub.DisplayOrder > 0 && (ub.EarnedCount > 0 || !SiteBadges.CounterBackedKeys.Contains(ub.BadgeKey)))
+                        .AsQueryable().Where(SiteBadges.IsDisplayed)
                         .OrderBy(ub => ub.DisplayOrder)
                         .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()))
@@ -308,7 +308,7 @@ public class ServerManualTreeSearchReadService(
                     r.Recommender.Tagline,
                     r.Recommender.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
                     r.Recommender.UserBadges
-                        .Where(ub => ub.DisplayOrder > 0 && (ub.EarnedCount > 0 || !SiteBadges.CounterBackedKeys.Contains(ub.BadgeKey)))
+                        .AsQueryable().Where(SiteBadges.IsDisplayed)
                         .OrderBy(ub => ub.DisplayOrder)
                         .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()),

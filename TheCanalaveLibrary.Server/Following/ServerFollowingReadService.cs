@@ -69,7 +69,7 @@ public class ServerFollowingReadService(
                 f.FollowedUserNavigation.Tagline,
                 f.FollowedUserNavigation.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
                 f.FollowedUserNavigation.UserBadges
-                    .Where(ub => ub.DisplayOrder > 0 && (ub.EarnedCount > 0 || !SiteBadges.CounterBackedKeys.Contains(ub.BadgeKey)))
+                    .AsQueryable().Where(SiteBadges.IsDisplayed)
                     .OrderBy(ub => ub.DisplayOrder)
                     .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                     .ToList()
@@ -95,7 +95,7 @@ public class ServerFollowingReadService(
                     v.VouchedUser.Tagline,
                     v.VouchedUser.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
                     v.VouchedUser.UserBadges
-                        .Where(ub => ub.DisplayOrder > 0 && (ub.EarnedCount > 0 || !SiteBadges.CounterBackedKeys.Contains(ub.BadgeKey)))
+                        .AsQueryable().Where(SiteBadges.IsDisplayed)
                         .OrderBy(ub => ub.DisplayOrder)
                         .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()
@@ -123,7 +123,7 @@ public class ServerFollowingReadService(
                     v.VouchingUser.Tagline,
                     v.VouchingUser.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
                     v.VouchingUser.UserBadges
-                        .Where(ub => ub.DisplayOrder > 0 && (ub.EarnedCount > 0 || !SiteBadges.CounterBackedKeys.Contains(ub.BadgeKey)))
+                        .AsQueryable().Where(SiteBadges.IsDisplayed)
                         .OrderBy(ub => ub.DisplayOrder)
                         .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()

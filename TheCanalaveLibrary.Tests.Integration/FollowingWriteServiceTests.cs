@@ -13,7 +13,7 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// <b>What's tested:</b> follow/unfollow idempotency; self-follow guard; bell toggle;
 /// vouch with and without text; VouchText sanitization (script stripping, allowed formatting kept);
 /// 5-vouch limit (VouchLimitException on 6th vouch); remove vouch frees a slot; duplicate vouch
-/// idempotency.
+/// idempotency; a vouch that lands sends exactly one NewVouchOnYou (WU-CounterSymmetry review fixes).
 ///
 /// <b>Isolation:</b> each test seeds its own throwaway Guid-suffixed users and cleans up via natural
 /// cascade when the Testcontainers container is torn down. The DataSeeder's TestUser/AdminUser rows
@@ -162,6 +162,18 @@ public class FollowingWriteServiceTests(PostgresFixture postgres) : IntegrationT
     }
 
     [Fact]
+    public async Task VouchAsync_ThatLands_NotifiesTheTargetOnce_AndARepeatVouchSendsNoSecond()
+    {
+        // The positive side of the D23 gate (WU-CounterSymmetry): the notification fires only when the
+        // ON CONFLICT insert landed a row. CounterSymmetryTests covers the losing side (0 notifications).
+        await CallVouchAsync(_targetId, null);
+        (await CountNewVouchNotificationsAsync(_targetId)).Should().Be(1, "a vouch that landed notifies its target");
+
+        await CallVouchAsync(_targetId, null);
+        (await CountNewVouchNotificationsAsync(_targetId)).Should().Be(1, "a repeat vouch is a no-op and sends nothing");
+    }
+
+    [Fact]
     public async Task VouchAsync_AtFiveVouches_ThrowsVouchLimitException()
     {
         // Fill the actor's 5 slots with 5 different targets.
@@ -284,5 +296,13 @@ public class FollowingWriteServiceTests(PostgresFixture postgres) : IntegrationT
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
         return await db.Vouches.CountAsync(v => v.VouchingUserId == vouchingId && v.VouchedUserId == vouchedId);
+    }
+
+    private async Task<int> CountNewVouchNotificationsAsync(int recipientId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.Notifications.CountAsync(n => n.RecipientUserId == recipientId
+                                                      && n.NotificationTypeId == NotificationTypeEnum.NewVouchOnYou);
     }
 }

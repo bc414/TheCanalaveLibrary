@@ -2243,7 +2243,7 @@ sweep.)* The classification test above is promulgated to
 "post-commit, recompute-corrected" wording is what makes the four *accept* rows coherent — the two
 answers must ship as one doctrine paragraph or neither reads correctly.
 
-**Built:** WU-CounterSymmetry (2026-09-30) — rule now stated in `layer2-services.md` §"Check-then-act posture" (USI, `group_members` and vouch upserts built; the three limits written down as stated-soft per the conditional above; `group_stories` and the poll restructure still routed to WU-SchemaHardening and WU-PollVoteIntegrity).
+**Built:** WU-CounterSymmetry (2026-09-30) — rule now stated in `layer2-services.md` §"Check-then-act posture" (USI, `group_members` and vouch upserts built; the three limits written down as stated-soft per the conditional above, reading D21's silence on them as the decline — an inference flagged for the owner in `roadmap.md` §Resolved; `group_stories` and the poll restructure still routed to WU-SchemaHardening and WU-PollVoteIntegrity).
 
 ### D24. Does creating a group count as joining?
 

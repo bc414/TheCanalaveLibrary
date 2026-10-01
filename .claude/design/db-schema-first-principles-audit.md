@@ -348,6 +348,14 @@ decision.
 
 ### 3.6 Denormalized counters need a stated reconciliation policy
 
+> **Ruled and built:** worksheet D21 (2026-08-08 — every counter is derived; there is no
+> authoritative class), built WU-CounterSymmetry (2026-09-30). `ContentCounterRecalculator` reconciles
+> the 11 content counters (`like_count` ×3, `successful_rec_count`, `version_count`,
+> `stories.word_count`, `active_report_count` ×5 — the code has five carriers, not four) in the same
+> nightly worker as `UserStatRecalculator`, and runs first. `user_badges.earned_count` was already
+> synced by `UserStatRecalculator`. Rule in `layer2-services.md` §"Counter recompute principle". The
+> entry below is history.
+
 Inventory: `base_comments.like_count`, `base_blog_posts.like_count`,
 `recommendations.like_count/successful_rec_count`, `chapters.version_count`,
 `stories.word_count`, `user_badges.earned_count`, `active_report_count` ×4 tables, all 22

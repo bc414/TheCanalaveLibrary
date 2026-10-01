@@ -813,6 +813,13 @@ unless noted. All sit under Stage-5 cells.
     - The comment and recommendation unlike.
     - The USI sparse cleanup.
     - The blog-post unlike is already an `ExecuteDeleteAsync`, so it is immune.
+  - **Update-vs-delete (USI)**, added by the WU-CounterSymmetry review fixes (2026-09-30). A USI write
+    loads (or ensures) the row while the same user's concurrent all-false panel write sparse-deletes it.
+    The loser's `SaveChangesAsync` updates a row that no longer exists and gets a 500
+    (`DbUpdateConcurrencyException`). The partition ensure throws the same exception when the parent
+    has vanished. Only the narrow window between the ensure-insert and its re-read is closed: the
+    re-read retries once. Fix shape: re-ensure and re-apply on a 0-row save, or answer it as a no-op;
+    which one is right depends on whether the lost write should land.
   - Fix shape:
     - Inserts: `INSERT … ON CONFLICT DO NOTHING`, with the counter or notification gated on
       rows-affected (the `JoinAsync` shape).
@@ -1169,6 +1176,12 @@ built rows at 5 and no signal these exist.
     hard-deleted. This was true before the WU too, since `ApplyHardDeleteAsync` touches no counter.
     The nightly recompute heals it (D22's "post-commit, recompute-corrected"). Whoever answers the
     question above should decide whether the hard delete takes a −1 as well.
+  - Note (WU-CounterSymmetry review fixes, 2026-09-30): D21/D24 made the recompute the definition, and
+    D21 ratified the existing `user_stats` aggregates (this one included) as compliant. So the "or not"
+    answer is not a write-path fix: narrowing the recompute to profile posts needs an explicit ruling
+    that redefines the counter's question. Until then `layer2-services.md` §"Recalculation worker
+    (F58)" → "Direction of authority" names this as the one open permanent disagreement, which nobody
+    fixes under that rule alone.
 
 ---
 
@@ -1486,7 +1499,10 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     1. **A counted badge.** On a `UserCard` (TestUser's recommendation on the flagship story), the
        Recommender badge shows the icon with "1", and the tooltip "Recommender (1)".
     2. **A manual grant.** Give a user Patron (`EarnedCount` 0, as a manual grant has). Their
-       `UserCard` shows the icon with no count, and the tooltip "Patron".
+       `UserCard` shows the icon with no count, and the tooltip "Patron". **Owner check:** this is a
+       spec-sourced change to manual-grant display, outside D21's scope (D21 leaves manual grants
+       untouched). Before it, the card showed "0" and "Patron (0)". Keep it, or ask for it back
+       (`audit/Badges.md` F50's Stage note, the `UserCard` rider).
     3. **A zero-count counter-backed badge.** Set TestUser's Recommender `earned_count` to 0 in
        `psql`. It is gone from the profile header, the recommendation card, the following and vouch
        lists and the tree-search nodes, and still listed in `/settings` → Badges.

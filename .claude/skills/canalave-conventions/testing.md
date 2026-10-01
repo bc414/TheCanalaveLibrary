@@ -313,15 +313,23 @@ tested the same way: the interleaved SQL inserts the competing row just before t
 `INSERT INTO <table>`. Pass `interceptReaders: true`, so the marker also matches the old shape (an EF
 `SaveChangesAsync` insert). That makes the test fail against the pre-fix `AnyAsync`-then-`Add` code
 instead of skipping it. Precedent: `CounterSymmetryTests` (WU-CounterSymmetry, 2026-09-30).
+When the command to interleave before has the same text as an earlier one (the ensure-row re-read
+repeats the initial load's `SELECT`), pass `fireOnMatch: 2` so the interceptor fires on the second
+match. Precedent: `CounterSymmetryTests.SetState_TheEnsuredRowDeletedBeforeItsReRead_*` (review fixes,
+2026-09-30).
 
 ## Counter convergence: after a wired op, the reconciler corrects nothing (WU-CounterSymmetry)
 
 The regression that matters for a denormalized counter is the wired path drifting away from its
-recompute (`layer2-services.md` §"Recalculation worker (F58)" → "Direction of authority"). So a test of a
-counter-moving write asserts the expected value **and** convergence: run the reconciler
-(`UserStatRecalculator.RecalculateAllAsync` or `ContentCounterRecalculator.RecalculateAllAsync`) and
-assert that it corrected **0** and that the column is unchanged. A pass that corrects something means
-the two formulas have diverged. That is how D24's `GroupsJoined` oscillation would have been caught.
+recompute (`layer2-services.md` §"Recalculation worker (F58)" → "Direction of authority"). So a test
+that drives counter-moving wired ops **sequentially** asserts the expected value **and** convergence:
+run the reconciler (`UserStatRecalculator.RecalculateAllAsync` or
+`ContentCounterRecalculator.RecalculateAllAsync`) and assert that it corrected **0** and that the
+column is unchanged. A pass that corrects something means the two formulas have diverged. That is how
+D24's `GroupsJoined` oscillation would have been caught.
+- **Interleaved race tests are exempt.** Their competing row is raw SQL that skips the counter on
+  purpose, and D23 accepts the flip-delta double count under true concurrency. A reconciler pass would
+  correct both by design. Such a test asserts the counter value only.
 - **Seed `UserStat` rows first.** `SeedUserAsync` never creates one, and the real-time
   `ExecuteUpdateAsync` silently no-ops without it, so a counter test that skips the seed asserts 0 == 0.
   Seed a row for every user whose counter the test reads, plus every user the op touches, so that

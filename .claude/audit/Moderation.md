@@ -433,7 +433,7 @@ answered 2026-08-04..06; recorded 2026-09-30 at WU-ModerationIntegrity's Doc-Tou
 revisit).** Rule text: `layer2-services.md` §"Moderation Services";
 `identity-and-authorization.md` §"Role-Based (Moderator) Gating".
 - **`ActiveReportCount` is a cache of the open-report `COUNT(*)` for the target** (D7) — derived, so
-  recomputable; the reconciler is WU-CounterSymmetry's.
+  recomputable; the reconciler is `ContentCounterRecalculator` (built WU-CounterSymmetry, 2026-09-30).
 - **Every resolve path locks and guards** (`FOR UPDATE` on the report row inside an execution-strategy
   transaction; not Open|UnderReview → `ModerationValidationException`; missing → 404), so nothing
   decrements twice. Notifications run after commit, each in its own `try/catch`.

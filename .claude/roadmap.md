@@ -214,6 +214,9 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
   - **D23:** a classification test per check-then-act family. USI, `group_members` and vouch
     inserts are upserts now. The gem, highlight and vouch limits are stated-soft. `group_stories` is
     routed to WU-SchemaHardening and the poll restructure to WU-PollVoteIntegrity.
+    **For the owner:** "stated-soft with no corrective" is D23's fallback for when D21 declines to
+    fund a corrective. D21 never mentions the limits, so the build read that silence as a decline. It
+    is an inference, not your ruling. Say so if you want a corrective funded instead.
   - **D24:** creating a group counts as joining it.
 
   Rule: `layer2-services.md` §"UserStats Updates", §"Counter recompute principle", §"Check-then-act

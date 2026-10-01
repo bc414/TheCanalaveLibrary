@@ -12,11 +12,13 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// (<see cref="SiteBadges.CounterBackedKeys"/>). A manual grant carries <c>EarnedCount = 0</c> by
 /// design and always shows; the owner's curation read returns everything.
 /// <para>
-/// Two of the eleven projection sites are driven here (the profile header and the recommendation
-/// card); all eleven share the one predicate. <b>Per-test seeding:</b> the badge holder, a viewer and a
-/// story author (SeedUserAsync); a story (SeedStoryAsync); <c>UserBadge</c> rows inline (the
-/// <c>badges</c> catalogue is HasData-seeded, so the FK parents survive Respawn); an Approved
-/// recommendation inline (status 2 via HasData, detail row required).
+/// All eleven projection sites apply the one shared expression <see cref="SiteBadges.IsDisplayed"/>.
+/// Six sites, one from each read-service family, are driven here: the profile header, user search, the
+/// recommendation card, the following list, the outgoing-vouch list and the tree-search author card.
+/// <b>Per-test seeding:</b> the badge holder, a viewer and a story author (SeedUserAsync); a story by the
+/// story author and one by the holder (SeedStoryAsync); <c>UserBadge</c> rows inline (the <c>badges</c>
+/// catalogue is HasData-seeded, so the FK parents survive Respawn); an Approved recommendation inline
+/// (status 2 via HasData, detail row required); the viewer's follow and vouch of the holder inline.
 /// </para>
 /// Tier: Integration (Testcontainers Postgres).
 /// </summary>
@@ -26,6 +28,7 @@ public class BadgeDisplayTests(PostgresFixture postgres) : IntegrationTestBase(p
     private int _holderId;
     private int _viewerId;
     private int _storyId;
+    private int _holderStoryId;
 
     public override async Task InitializeAsync()
     {
@@ -33,6 +36,7 @@ public class BadgeDisplayTests(PostgresFixture postgres) : IntegrationTestBase(p
         _holderId = await SeedUserAsync("Holder");
         _viewerId = await SeedUserAsync("Viewer");
         _storyId = await SeedStoryAsync(await SeedUserAsync("StoryAuthor"));
+        _holderStoryId = await SeedStoryAsync(_holderId);
 
         using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -48,8 +52,12 @@ public class BadgeDisplayTests(PostgresFixture postgres) : IntegrationTestBase(p
             StoryId = _storyId, RecommenderId = _holderId, StatusId = 2, DatePosted = DateTime.UtcNow,
             RecommendationDetail = new RecommendationDetail { Text = "<p>Read it.</p>" },
         });
+        db.FollowedUsers.Add(new FollowedUser { UserId = _viewerId, FollowedUserId = _holderId, DateFollowed = DateTime.UtcNow });
+        db.Vouches.Add(new Vouch { VouchingUserId = _viewerId, VouchedUserId = _holderId, DateVouched = DateTime.UtcNow });
         await db.SaveChangesAsync();
     }
+
+    private static readonly string[] Displayed = ["Patron", "Beta Reader"];
 
     [Fact]
     public async Task ProfileHeader_HidesAZeroCountCounterBackedBadge_ButShowsAZeroCountManualGrant()
@@ -73,6 +81,55 @@ public class BadgeDisplayTests(PostgresFixture postgres) : IntegrationTestBase(p
 
         recs.Should().ContainSingle().Which.Recommender!.Badges.Select(b => b.Name)
             .Should().Equal("Patron", "Beta Reader");
+    }
+
+    [Fact]
+    public async Task UserSearch_HidesAZeroCountCounterBackedBadge()
+    {
+        SetActiveUser(_viewerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        string holderName = (await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Users.FindAsync(_holderId))!.UserName!;
+        IReadOnlyList<UserCardDto> found = await scope.ServiceProvider.GetRequiredService<IUserProfileReadService>()
+            .SearchUsersByNameAsync(holderName);
+
+        found.Should().ContainSingle().Which.Badges.Select(b => b.Name).Should().Equal(Displayed);
+    }
+
+    [Fact]
+    public async Task FollowingList_HidesAZeroCountCounterBackedBadge()
+    {
+        SetActiveUser(_viewerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IReadOnlyList<UserCardDto> followed = await scope.ServiceProvider.GetRequiredService<IFollowingReadService>()
+            .GetFollowedUsersAsync(_viewerId);
+
+        followed.Should().ContainSingle().Which.Badges.Select(b => b.Name).Should().Equal(Displayed);
+    }
+
+    [Fact]
+    public async Task OutgoingVouchList_HidesAZeroCountCounterBackedBadge()
+    {
+        SetActiveUser(_viewerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IReadOnlyList<VouchDisplayDto> vouches = await scope.ServiceProvider.GetRequiredService<IFollowingReadService>()
+            .GetOutgoingVouchesAsync(_viewerId);
+
+        vouches.Should().ContainSingle().Which.User.Badges.Select(b => b.Name).Should().Equal(Displayed);
+    }
+
+    [Fact]
+    public async Task TreeSearchAuthorCard_HidesAZeroCountCounterBackedBadge()
+    {
+        SetActiveUser(_viewerId);
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ManualTreeNeighborsDto pivot = await scope.ServiceProvider.GetRequiredService<IManualTreeSearchReadService>()
+            .GetStoryNeighborsAsync(new StoryNeighborsRequest
+            {
+                StoryId = _holderStoryId, IncludeRecommendations = false, IncludeHiddenGems = false,
+                IncludeSpotlights = false, IncludeFavoriters = false,
+            });
+
+        pivot.Author!.Badges.Select(b => b.Name).Should().Equal(Displayed);
     }
 
     [Fact]

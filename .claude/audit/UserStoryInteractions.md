@@ -102,9 +102,9 @@ the same day):** L1–L6 = 5. **L4.5** went 5→1 when WU-InertFeatures made the
 (so a recommendation card's Read It Later can't be flushed back) and report each accepted flush to the host, with no
 browser available. It returned to 5 when the WU-InertFeatures browser pass drove that adoption beside the card in all
 four hosts on both render phases (tracker H14 closed). The WU-AccessGateSweep2 browser pass drove the panel's D6 clear and
-refused-raise paths and fixed a page crash on a refused raise. WU-CounterSymmetry (2026-09-30) hardened the create-create race beneath L2 (no flip; server-only, Integration-covered). Stage notes at the end of this feature.
+refused-raise paths and fixed a page crash on a refused raise. WU-CounterSymmetry (2026-09-30) and its review fixes hardened the create-create race beneath L2 (no flip; server-only, Integration-covered). Stage notes at the end of this feature.
 
-- **L2 — Stage 5 (WU15, 2026-06-22; raise/clear split WU-AccessGateSweep2, 2026-09-30; recommendation attribution on the RIL bit WU-InertFeatures, 2026-09-30; create-create hardened by the ensure-row upsert WU-CounterSymmetry, 2026-09-30 — see the Stage notes at the end of this feature).** Read/write service implemented and tested.
+- **L2 — Stage 5 (WU15, 2026-06-22; raise/clear split WU-AccessGateSweep2, 2026-09-30; recommendation attribution on the RIL bit WU-InertFeatures, 2026-09-30; create-create hardened by the ensure-row upsert WU-CounterSymmetry, 2026-09-30, and its review fixes the same day (the ensure re-read retries instead of answering 401) — see the Stage notes at the end of this feature).** Read/write service implemented and tested.
 
   **Settled for WU15 (2026-06-22, do not revisit):**
   - WU15 is **trimmed to the panel-critical slice** — Feature 16 L2 only (write path + per-viewer state
@@ -124,6 +124,12 @@ refused-raise paths and fixed a page crash on a refused raise. WU-CounterSymmetr
     the §4 table but never auto-cascades between bits.
   - **Sparse semantics**: no row = all false; create row on first true bit; delete row when all bits
     go false (date partition cascades). Date partition stamped when bit goes true, nulled when false.
+    *Amended 2026-09-30 (WU-CounterSymmetry review fixes):* owner ruling D23's ensure-row upsert
+    creates the row **all-false**, in its own committed statement, and then sets the bits in the
+    caller's save. "Create row on first true bit" still holds for every request that completes. A
+    request that dies between the two statements, or whose later save fails, leaves an all-false row.
+    No read is wrong because of it. Only an all-false panel write on that pair removes it; otherwise it
+    stays. Rule: `layer2-services.md` §"Check-then-act posture" → "The ensured row commits on its own".
   - **Write guard**: anonymous caller ⇒ throw (real gating is `AuthorizeView` at UI level).
   - `GetStatesByStoryIdsAsync(IReadOnlyList<int>)` is the N+1-safe batch method (one query, missing
     rows ⇒ absent key ⇒ caller treats as all-false). `IReadOnlyList<T>` per the WU12 id-batch rule.
@@ -449,9 +455,12 @@ have moved the 500 to `user_story_interaction_dates`.
   `ServerChapterReadMarkWriteService`.
 
 **Accepted, recorded.**
-- **Transient all-false row.** One exists between the ensure insert and `SaveChangesAsync`. If the
-  request dies there, the row survives: harmless to reads (every bookshelf query filters on a flag),
-  and the next write's sparse cleanup removes it.
+- **Transient all-false row.** The ensure insert commits on its own, so an all-false row exists until
+  `SaveChangesAsync`. If the request dies there, or that save fails, the row stays. It is harmless to
+  reads (every bookshelf query filters on a flag). Only an all-false panel write on that pair removes
+  it; a raise or a start reuses it, and with no further write it persists. *Corrected by the review
+  fixes (2026-09-30):* this line used to say "the next write's sparse cleanup removes it", which
+  overstated the cleanup. WU15's "Sparse semantics" settled bullet carries a dated amendment.
 - **Flip-delta double count.** Under true concurrency both callers can still see the same "before"
   state. D23 accepts this ("USI flip-delta counters: accept, recompute-corrected"), and the recompute
   heals it. Do not lock.
@@ -463,8 +472,8 @@ The class doc and `layer2-services.md` §"Check-then-act posture" describe the m
 impossible combinations" fiction the spec listed had already been corrected by an earlier WU (the
 comment now reads "Empty extension point").
 
-**Test tier: Integration.** In `CounterSymmetryTests` (6 of its 13), `InterleavingCommandInterceptor`
-lands the competing row immediately before this call's insert:
+**Test tier: Integration.** In `CounterSymmetryTests` (8 of its 15 after the review fixes),
+`InterleavingCommandInterceptor` lands the competing row immediately before this call's insert:
 - `SetUserStoryInteractionStateAsync` adopts a competing favorite: no throw, one row, one partition,
   and no second `FavoritesOnStories`.
 - It loads a competing partition, and it creates the partition on a HasStarted-only row (the
@@ -476,6 +485,27 @@ lands the competing row immediately before this call's insert:
 Mutation-checked: without either `ON CONFLICT`, the matching tests fail with the 23505. The existing
 `UserStoryInteractionServiceTests`, `CompletionProducerTests`, `RecommendationAttributionTests` and
 `ChapterReadMarkServiceTests` stay green.
+
+**Review fixes (2026-09-30), still no flip.**
+- **The ensure re-read could 401.** The same user's all-false panel write (another tab) can
+  sparse-delete the just-ensured row between the insert and the re-read. The re-read was `FirstAsync`,
+  and its `InvalidOperationException` maps to a 401 at the endpoint (the auth safety net), so the user
+  saw "session expired". `EnsureRowAsync` now uses `FirstOrDefaultAsync` and runs the insert and the
+  re-read once more. If the row is gone again, it throws `DbUpdateConcurrencyException`, a 500 like the
+  other delete races.
+- **The partition fallback comment was wrong.** A partition only disappears with its parent (FK
+  cascade). A partition missing after its own insert means the parent is gone, so re-creating it could
+  never land. `EnsureDatePartitionAsync` now throws the same exception. The general update-vs-delete
+  race (a write whose row a concurrent clear deletes) is added to tracker **D11**.
+- **Comments.** The class doc, `SetReadItLaterFromRecommendationAsync`, `MarkStartedAsync` and
+  `layer2-services.md` §"Attribution (Feature 30)" said the parent and the attribution commit in one
+  save. For a new row, the parent commits first in its own upsert. Only the bit and the attribution
+  share the save. (The WU-InertFeatures Stage note above describes the pre-WU-CounterSymmetry shape.)
+- **Tests (Integration, `CounterSymmetryTests` +2).** The ensured row deleted before its re-read: no
+  throw, the favorite lands, `FavoritesOnStories` is 1. This needed `InterleavingCommandInterceptor`'s
+  new `fireOnMatch: 2`, because the re-read repeats the load's `SELECT`. Mutation-checked: one attempt
+  instead of two fails it. The parent deleted before the partition read: `DbUpdateConcurrencyException`,
+  and nothing is resurrected. That test pins the behavior; the old code also failed, at the save.
 
 ## Feature 17 — Story Interaction Lists & Bookshelves
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** `HasStarted` is present;

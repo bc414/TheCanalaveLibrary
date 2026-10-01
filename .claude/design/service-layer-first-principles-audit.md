@@ -144,6 +144,8 @@ and confidence. File:line references are as-of 2026-08-03.
 > **§2.1.1 built:** WU-StoryLifecycle (2026-09-30), per worksheet D1 — see `layer2-services.md` §"Story Lifecycle". §2.1.1 below is history; §2.1.2+ are untouched by it.
 >
 > **§2.1.2 and §2.1.3 built:** WU-ModerationIntegrity (2026-09-30) — resolve paths lock the report row and refuse a non-open one; suspend-date validation, the transition table and `ReinstateUserAsync`. See `layer2-services.md` §"Moderation Services". §2.1.4 is WU-CounterSymmetry's.
+>
+> **§2.1.4 built:** WU-CounterSymmetry (2026-09-30), per orchestrator amendment U1 — `ApproveLineageAsync` approves through a conditional update on `status = Pending`, and any other state is a `StoryLineageValidationException` (400), so a double approve neither counts nor notifies twice. §2.1.4 below is history.
 
 **2.1.1 No server-side story status-transition enforcement — authors can self-publish and
 self-un-reject. CRITICAL, CONFIRMED.** `StoryMappers.UpdateStoryEditableProperties`
@@ -251,6 +253,16 @@ only option that fixes both the insert-order failure and the cascade loss, and i
 > **2.4.1 built:** WU-InertFeatures (2026-09-30) — `RecordSuccessAsync` now requires the caller's
 > attribution row for that recommendation (and the rec `Approved`, not taken down) and consumes it in
 > the same save. 2.4.2–2.4.6 are untouched by that WU.
+>
+> **2.4.2, 2.4.3 and 2.4.6 built; 2.4.5 dissolved:** WU-CounterSymmetry (2026-09-30), per worksheet
+> D21–D24. 2.4.2: creating a group counts as joining it (D24). 2.4.3: `Story.WordCount` and
+> `WordsWritten` count published chapters only, and `SetPublishedAsync` refreshes them. 2.4.6:
+> `VersionCount` is a post-commit `ExecuteUpdateAsync` (D22); both like toggles return the re-read
+> landed count (the recommendation toggle was an unnamed third sibling); `total_words` takes
+> `total_stories`' visibility predicate. 2.4.5 dissolved under D21: hard deletes adjust no counter,
+> and the reconciler lowers the count to the extant rows. Rules: `layer2-services.md` §"Counter
+> recompute principle", §"Counter ↔ event map", §"Word Count Is Computed Server-Side". The findings
+> below are history.
 
 **2.4.1 `RecordSuccessAsync` is an open credit faucet. MEDIUM (HIGH consequence), CONFIRMED.**
 The endpoint requires only authenticated + story-visible + not-self + not-already
@@ -277,7 +289,7 @@ and the counter map. Fix: filter published; move the delta to the publish transi
 > **2.4.4 built (a)–(c):** WU-ModerationIntegrity (2026-09-30) — status guards, submit reorder
 > (row first, counter second, per D22), the per-(reporter, target) partial unique index, and D7's
 > sibling closing; the migration recomputed every counter once. The standing reconciler is
-> WU-CounterSymmetry's (D21).
+> `ContentCounterRecalculator`, built WU-CounterSymmetry (2026-09-30) per D21.
 
 **2.4.4 `ActiveReportCount` has three independent corruption paths and no reconciler. MEDIUM,
 CONFIRMED.** (a) §2.1.2's double-resolution; (b) submit increments the counter in a separate
@@ -537,6 +549,9 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
    > WU-InertFeatures (2026-09-30); rule in `layer2-services.md` §"Polymorphic RelatedEntityId".
 7. **Does creating a group count as joining** for `GroupsJoined`? Encode the same answer in the
    live path and the recalculator (§2.4.2).
+   > **Ruled and built:** worksheet D24 (2026-08-08 — yes; the recompute already counted the
+   > creator's row), built WU-CounterSymmetry (2026-09-30); rule in `layer2-services.md` §"Counter ↔
+   > event map".
 8. **Mod-only read gating**: extend the service-gate rule to the three sensitive mod reads
    (recommended — three lines) or write down a deliberate "reads gate at the edge, writes in the
    service" split in `identity-and-authorization.md`. Related: consider splitting user-facing
@@ -569,11 +584,19 @@ small WUs. (Cluster-level "ratify as designed" items are in §5.)
     recompute-corrected" as the stated contract (and note which counters *have* no recompute —
     `ActiveReportCount`, content like-counts — which is what makes §2.4.4 urgent), or wrap
     everywhere. Recommended: fix the doctrine sentence; it matches the code's own samples.
+    > **Ruled and built:** worksheet D22 (2026-08-08 — "post-commit, recompute-corrected"; wrapping
+    > declined), made honest by D21's recompute for every counter (`ContentCounterRecalculator`), built
+    > WU-CounterSymmetry (2026-09-30); rule in `layer2-services.md` §"UserStats Updates".
 15. **Concurrency posture for check-then-act families**: accept-and-record (self-healing via
     recompute / next action) for hidden-gem/highlight limits, vouch limit, poll single-choice, USI
     flip-detection double-delta — or harden with `ON CONFLICT`/advisory locks. Minimum: close the
     USI create-create 500 and add the missing `group_stories` unique index. Record the ruling per
     family so drift incidents have a defined answer (schema §3.6's principle applied to L2).
+    > **Ruled and built:** worksheet D23 (2026-08-08 — per family, by a reader-dependence test), built
+    > WU-CounterSymmetry (2026-09-30): the USI, `group_members` and vouch inserts are `ON CONFLICT`
+    > upserts; the gem, highlight and vouch limits are stated-soft (no corrective — an inference from
+    > D21's silence, flagged for the owner). `group_stories` is routed to WU-SchemaHardening and the
+    > poll restructure to WU-PollVoteIntegrity. Rule in `layer2-services.md` §"Check-then-act posture".
 16. **Blob cleanup ownership for terminal deletion** (user deletion, hard delete, abandoned cover
     uploads): inline deletes vs periodic orphan sweeper vs "orphans accepted" — currently nobody's
     job and undocumented. Related ruling: keep the cover two-step upload protocol or move
@@ -616,7 +639,7 @@ unless noted):
 
 | # | Doctrine says | Reality | Action |
 |---|---|---|---|
-| 1 | §UserStats: counters "within the same transaction as the primary write" | Post-commit second statement, universally, matching the doctrine's *own code samples* | Reword per decision §3.14 |
+| 1 | §UserStats: counters "within the same transaction as the primary write" | Post-commit second statement, universally, matching the doctrine's *own code samples* | Reword per decision §3.14 — *fixed WU-CounterSymmetry, 2026-09-30 (D22)* |
 | 2 | §Group Rating Waterfall Tier 1: write-side story load "already filtered… never bypassed" | Write context carries **no** filters post-WU38 (stated elsewhere in the same file); code correctly uses the confidentiality-only guard | Rewrite the Tier-1 row — display-side filter, not an add-time gate |
 | 3 | §Notification Generation: "composes read services for recipient resolution… will inject" | Every fan-out queries `writeDb` directly (defensible, DAG-clean) | Align doc to reality; kill the stale future tense — *fixed WU-InertFeatures, 2026-09-30 (doc + the `ServerNotificationWriteService` class comment)* |
 | 4 | §Notification Generation example `NotifyNewFollowerAsync(ActorId, targetUserId)` | Real signature is `(recipientUserId, followerUserId)` — copying the doc notifies the wrong user | Fix the example |
@@ -757,6 +780,8 @@ Verdicts: ✅ shipped is right (ratify; audit-file line where noted), ⚠ findin
    > **Built 2026-09-30 without** the selection copy and the series ruling — both wait on owner
    > decisions D25/D26, so they were left for a follow-up (tracker **F11**); see the §2.6 banner.
 8. **WU-FolderIntegrity** — §2.10 with schema §2.4. **WU-CounterSymmetry** — §2.4.2/3/5/6.
+   > **WU-CounterSymmetry built 2026-09-30** (§2.4.2/3/6 and §2.1.4; §2.4.5 dissolved by D21) — see
+   > the §2.1 and §2.4 banners.
    **Notification-correctness batch** — §2.8. Remaining §2.12 items ride whichever WU touches
    their cluster next.
 
