@@ -794,6 +794,31 @@ unless noted. All sit under Stage-5 cells.
     and 77 from dedup, the author gets two rows. Rejecting an already-verified account silently
     un-verifies it (worksheet D44 is the related pending question). The guard shape is ready
     (WU-ModerationIntegrity's lock-and-guard), but no source cites these methods, so it is not built.
+- [ ] **D11 — Create-create and delete-delete races that still 500 (D23's "crash → harden", not swept)** `[latent-risk · low · beta]` — *Filed 2026-09-30 by WU-CounterSymmetry. Its spec excluded these: D23 chose to promulgate its classification test "rather than a one-time sweep".*
+  - Grid: F16, F18, F19, F25, F28, F36, F38, F51 and F9 L2 stay 5 (unchanged).
+  - Source: `layer2-services.md` §"Check-then-act posture": a visible 500 is never a posture, so each
+    site below is "harden" under the test. WU-CounterSymmetry built the four sites D23 named (USI and
+    its date partition, `group_members`, vouches).
+  - **Create-create.** Each of these does an `AnyAsync`/load, then a tracked `Add`. The loser of a
+    double submit hits the primary key, gets a `DbUpdateException` and returns a 500.
+    - `FollowAsync`.
+    - The three like toggles' insert (comment, recommendation, blog post).
+    - `CustomList` and `Series` story adds.
+    - The attribution row (`user_story_recommendation_sources`), which
+      `SetReadItLaterFromRecommendationAsync` and `MarkStartedAsync` both add on the USI row they now
+      ensure.
+  - **Delete-delete.** Each of these loads a row and then `Remove`s it. The loser's `SaveChangesAsync`
+    affects 0 rows, which surfaces as a 500.
+    - `LeaveAsync`, `UnfollowAsync` and `RemoveVouchAsync`.
+    - The comment and recommendation unlike.
+    - The USI sparse cleanup.
+    - The blog-post unlike is already an `ExecuteDeleteAsync`, so it is immune.
+  - Fix shape:
+    - Inserts: `INSERT … ON CONFLICT DO NOTHING`, with the counter or notification gated on
+      rows-affected (the `JoinAsync` shape).
+    - Deletes: `ExecuteDeleteAsync`, with the counter gated on rows-affected.
+    - Each one is mechanical. Tested with `InterleavingCommandInterceptor` (`CounterSymmetryTests` is
+      the precedent).
 
 ---
 
@@ -1452,6 +1477,24 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
       (and any other `EditorView`-fed optional field) does not.
     - Fix shape: normalize empty editor HTML to null at the editor's pull (or in the service's
       sanitize step), plus a test.
+- [ ] **H23 — WU-CounterSymmetry's badge display change: browser pass owed** `[test-gap · low · beta]` — *Filed 2026-09-30; WU-CounterSymmetry ran with no browser available.*
+  - Grid: **F50 L4.5 5→1.** Driving the steps below restores it. The other WU-CounterSymmetry changes
+    are server-side, Integration-covered and markup-unchanged, so their L4.5 cells stay 5.
+  - Run on both render phases (circuit and WASM), with `psql` as ground truth. Run
+    `reset-dev-db.ps1` first, so TestUser's seeded Recommender badge has its new ground truth
+    (`EarnedCount` 1).
+    1. **A counted badge.** On a `UserCard` (TestUser's recommendation on the flagship story), the
+       Recommender badge shows the icon with "1", and the tooltip "Recommender (1)".
+    2. **A manual grant.** Give a user Patron (`EarnedCount` 0, as a manual grant has). Their
+       `UserCard` shows the icon with no count, and the tooltip "Patron".
+    3. **A zero-count counter-backed badge.** Set TestUser's Recommender `earned_count` to 0 in
+       `psql`. It is gone from the profile header, the recommendation card, the following and vouch
+       lists and the tree-search nodes, and still listed in `/settings` → Badges.
+  - Optional, not part of the restore (all Integration-covered):
+    - an author's story word count moves on publish and unpublish, and a draft adds nothing;
+    - creating a group shows Groups Joined 1 on the creator's profile stats, and leaving shows 0;
+    - double-clicking Approve on `/my/lineages` shows "This lineage request is no longer pending."
+  - Narrative: `audit/Badges.md` F50's WU-CounterSymmetry Stage note; WU-CounterSymmetry's DONE entry.
 
 ---
 

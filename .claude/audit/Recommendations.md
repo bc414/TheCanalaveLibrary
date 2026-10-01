@@ -159,7 +159,7 @@ requires an authenticated user.") became the shared text; no test asserted them,
 - **L1 — Stage 5 (reconciled WU29, 2026-06-23).** Pre-WU29 gap: `RecommendationLike` entity/table
   didn't exist; `LikeCount` column missing from `Recommendation`. Both added by WU29 migration
   (`RecommendationLikesAndConstraints`). Now fully stage 5.
-- **L2 — Stage 5 (WU29, 2026-06-23; an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, disclosing no count under a hidden story since its review fixes — see its Stage note).** `GetForStoryAsync`: Approved only; highlighted/spotlighted
+- **L2 — Stage 5 (WU29, 2026-06-23; an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, disclosing no count under a hidden story since its review fixes — see its Stage note; returns the landed count, and the like and helpful counts have a reconciler, since WU-CounterSymmetry, 2026-09-30 — see its Stage note).** `GetForStoryAsync`: Approved only; highlighted/spotlighted
   first then DatePosted desc; per-viewer `IsLikedByCurrentUser` via short-circuited EXISTS subquery
   (EF Core anonymous-safe pattern). `ToggleLikeAsync`: load rec with filtered `Likes` include,
   add/remove, atomic counter update, return `RecommendationLikeResultDto`. **No notification
@@ -215,6 +215,27 @@ story (fails against the pre-fix service) and returns `(0, false)` while the sto
 taken-down story (conformance). `dotnet build` green, no new warnings in touched files; `dotnet test`
 green — Unit 1,022, RazorComponents 703, Integration 1,180 (after the review fixes); all four
 PowerShell gates pass.
+
+### Feature 28 L2 — WU-CounterSymmetry Stage note (2026-09-30): the like toggle returns the landed count (service audit §2.4.6)
+
+**No cell flips — F28 stays Stage 5.**
+- **The returned count.** `ToggleLikeAsync` still returned `Math.Max(0, rec.LikeCount + delta)`, a
+  pre-update read. Service §2.4.6 named the comment sibling; this one was an identical third sibling
+  the audit missed, and it shares the governed surface, so it is fixed too. The method now re-reads
+  the landed `LikeCount`, unclamped, the same shape as the blog-post toggle. DTO and signature are
+  unchanged, and the response under a hidden story is still `(0, false)`.
+- **Reconciler.** `recommendations.like_count`, `successful_rec_count` and `active_report_count`
+  are recomputed by `ContentCounterRecalculator` (`audit/Profiles.md` F58). Its `successful_rec_count`
+  counts every success row, which mirrors the wired `+1` (roadmap row 18).
+- **A false comment fixed.** `RecordSuccessAsync`'s comment said "Production creates a UserStat row on
+  user registration"; nothing does, and the comment now says so.
+- **Badge display.** The recommender `UserCard`'s badges drop a zero-count counter-backed badge
+  (`audit/Badges.md` F50).
+
+**Test tier: Integration.** `CounterSymmetryTests.RecommendationLike_ReturnsTheLandedCount_*`
+interleaves another user's like before the counter statement and asserts 2 (the old return said 1;
+mutation-checked). `BadgeDisplayTests.RecommendationCard_*` covers the badge filter on this
+projection.
 
 ## Feature 29 — Hidden Gem Management
 - **L1 — Stage 5** (`IsHiddenGem`). **L2 — Stage 5 (WU29, 2026-06-23).** 5-per-user limit in C#:

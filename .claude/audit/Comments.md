@@ -241,7 +241,7 @@ service the refusal tests and the unlike test failed. `dotnet build` green, no n
   always correct; only the entity model was wrong). **Verified:** `dotnet test` green (see Feature 23 note);
   `ToggleLikeAsync` tested by `CommentWriteServiceTests` (like increments `LikeCount` + creates junction row;
   unlike decrements + removes row; anonymous guard; delete cascades `CommentLike`).
-- **L2 — Stage 5 (WU19, 2026-06-23; an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, disclosing no count on a hidden comment since its review fixes — see F23's Stage note):** `ICommentWriteService.ToggleLikeAsync(commentId)` in
+- **L2 — Stage 5 (WU19, 2026-06-23; an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, disclosing no count on a hidden comment since its review fixes — see F23's Stage note; returns the landed count since WU-CounterSymmetry, 2026-09-30 — Stage note below):** `ICommentWriteService.ToggleLikeAsync(commentId)` in
   `ServerCommentWriteService`. Loads `BaseComment` + its `CommentLike` for the current user in one round-trip
   (filtered `Include`); toggles presence + adjusts denormalized `LikeCount` (floor 0 on decrement); saves;
   returns `CommentLikeResultDto(int LikeCount, bool IsLiked)`. No notification, no `DateLiked` — §6.11
@@ -254,6 +254,18 @@ service the refusal tests and the unlike test failed. `dotnet build` green, no n
   existing sequential `ToggleLikeAsync` integration tests confirming correct counter behavior + code review
   that the SQL is now `SET like_count = like_count + delta`. Convention documented in
   `layer2-services.md §"Counter mutation rule"`. `dotnet test` 1232/1232 pass.
+  **WU-CounterSymmetry Stage note (2026-09-30; service audit §2.4.6) — no flip.** The returned count
+  was still `Math.Max(0, loaded + delta)`, a pre-update read: MA-705's fix had reached the blog-post
+  sibling but not this one or the recommendation like. `ToggleLikeAsync` now re-reads the landed
+  `LikeCount` after its `ExecuteUpdateAsync`, unclamped (only drift can make it negative, and the
+  reconciler heals that — a floor would hide it). DTO and signature unchanged; the hidden-comment
+  response still discloses 0. `base_comments.like_count` gained a reconciler
+  (`ContentCounterRecalculator`, `audit/Profiles.md` F58). **Test tier: Integration — now
+  automatable**, contrary to the WU-CounterAtomicity note above: `CounterSymmetryTests.CommentLike_ReturnsTheLandedCount_*`
+  uses `InterleavingCommandInterceptor` to land another user's like (row + `+1`) between this call's
+  load and its counter statement, and asserts the response says 2 (the old return said 1;
+  mutation-checked). The factory-global `FakeActiveUserContext` rules out two real users liking in
+  parallel, but the interleaved SQL plays the second user.
 
 ## Feature 26 — Spoiler Comments
 - **L3-Logic / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note.

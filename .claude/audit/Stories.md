@@ -809,7 +809,7 @@ data loss (verified: 4 seed rows survived, live dev DB rebooted clean, `dotnet b
    created already `Approved` with no self-notification (matches the notification drop-self
    invariant). Only cross-author links start `Pending`.
 
-- **L2/L3-Logic/L3.5-Structure — Stage 5 (2026-07-12; L2's by-story read gained the source-story guard, WU-AccessGateSweep2, 2026-09-30 — see its Stage note).** **L4-Style — Stage 1** (pending human
+- **L2/L3-Logic/L3.5-Structure — Stage 5 (2026-07-12; L2's by-story read gained the source-story guard, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; approve is Pending-only, WU-CounterSymmetry, 2026-09-30 — see its Stage note).** **L4-Style — Stage 1** (pending human
   visual sign-off, WU8/WU13/WU23/WU28/WU44 precedent — an agent's own live-browser check does not
   close this gate). **L4.5-Browser — Stage 5 (2026-07-12, real-circuit verification, see below).**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
@@ -918,6 +918,30 @@ drafts' links; a taken-down source is empty for everyone.
 **How verified:** Integration — `ParentVisibilityContractTests`
 `AcknowledgmentsAndLineage_DraftStory_EmptyForStranger_PopulatedForAuthor` and `…_TakenDownStory_EmptyForEveryone`
 (both fail against the pre-fix read). `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
+
+### Feature 10 L2 — WU-CounterSymmetry Stage note (2026-09-30): approve is Pending → Approved only (orchestrator amendment U1)
+
+**No cell flips — F10 stays Stage 5.**
+- **The defect.** `ApproveLineageAsync` overwrote the status with no precondition. A double approve (a
+  double click, two tabs, or re-approving an already-Approved or self-owned link) incremented the
+  target author's `AcknowledgedAsInspirationCount` twice and sent a second `StoryLineageApproved`.
+  The class doc's "a genuine Pending→Approved transition" described a guard that did not exist.
+- **The guard.** It has `StoryAcknowledgment.AcceptAsync`'s shape, made race-proof: one conditional
+  `ExecuteUpdateAsync` (`WHERE … status = Pending`). Zero rows means
+  `StoryLineageValidationException("This lineage request is no longer pending.")`, a 400 that
+  `MyStoryLineagesPage` shows inline. The counter and the notification run only after a real
+  transition.
+- **The tracker.** The set-based write bypasses the change tracker, so the tracked link is reloaded.
+  Otherwise a later `FindAsync` in the same circuit would read a stale status.
+- **Docs.** The class doc and `IStoryLineageWriteService`'s doc now state the guard. Reject and
+  delete keep acting on an Approved row by design: revoking or removing an approved link.
+
+**Test tier: Integration.**
+- `CounterSymmetryTests.ApproveLineage_Twice_*`: the second approve is refused, the counter is 1, and
+  there is one notification.
+- `…_AnApprovalLandingBetweenTheReadAndTheWrite_*` (`InterleavingCommandInterceptor`, per `testing.md`
+  §"Testing a check-then-act guard"): refused, the counter is 0, and no notification is sent.
+- Mutation-checked: dropping the `Pending` predicate fails both.
 
 ## Feature 45 — View Count Tracking
 

@@ -594,10 +594,15 @@ public class DataSeeder(
             {
                 StoryId = stories[0].StoryId, RecommenderId = users.Test.Id, StatusId = approved,
                 IsHiddenGem = false, IsHighlightedByAuthor = true, LikeCount = 1,
+                // One helpful mark, so TestUser's Recommender badge below has ground truth and
+                // survives the nightly recompute (owner ruling D21: a badge is a number; with no
+                // success row it recomputes to 0 and the display hides it).
+                SuccessfulRecCount = 1,
                 DatePosted = Now.AddDays(-8),
                 RecommendationDetail = new RecommendationDetail
                     { Text = "<p>Seed recommendation: highlighted by the author, one like.</p>" },
                 Likes = { new RecommendationLike { UserId = users.ReaderGamma.Id } },
+                RecommendationSuccesses = { new RecommendationSuccess { UserId = users.ReaderGamma.Id, DateRecorded = Now.AddDays(-5) } },
             },
             new Recommendation
             {
@@ -852,6 +857,7 @@ public class DataSeeder(
                 StoriesWritten = 2, CommentsWritten = 3, RecommendationsWritten = 1,
                 StoriesRead = 1, StoriesInProgress = 2, StoriesIgnored = 2,
                 FollowerCount = 1, AuthorsFollowed = 2, FavoritesOnStories = 0,
+                RecommendationSuccessesEarned = 1, // ReaderGamma's helpful mark on TestUser's rec
             },
             new UserStat
             {
@@ -869,14 +875,16 @@ public class DataSeeder(
 
         // One earned badge for TestUser so the badge curation UI (settings) and the UserCard
         // badge row render a populated state; visible by default (DisplayOrder 1). Award
-        // thresholds themselves are Integration-covered — this row is display seed only.
+        // thresholds themselves are Integration-covered. EarnedCount matches the ground truth
+        // seeded above (one RecommendationSuccess) — it used to be a free-standing 12, which the
+        // first recompute zeroed and the zero-count display filter (D21) then hid.
         context.UserBadges.Add(new UserBadge
         {
             UserId = users.Test.Id,
             BadgeKey = SiteBadges.Recommender,
             DisplayOrder = 1,
             DateEarned = Now.AddDays(-4),
-            EarnedCount = 12, // no-tiers model (WU-StatBadgeProducers) — a display seed count, not a threshold
+            EarnedCount = 1,
         });
 
         await context.SaveChangesAsync();

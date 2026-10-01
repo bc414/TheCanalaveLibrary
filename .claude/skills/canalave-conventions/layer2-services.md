@@ -618,6 +618,14 @@ canonical example is `ChapterText.CountWords(string?)` in `Core/Chapters/`. The 
 `WordCount` therefore always reflects *readable* words — what `RichTextView` would render — not a
 count of markup tokens.
 
+**`Story.WordCount` sums the primary versions of *published* chapters only** (service audit §2.4.3,
+WU-CounterSymmetry 2026-09-30). `RefreshStoryWordCountAsync` filters on `Chapter.IsPublished`, and
+`SetPublishedAsync` calls it, so publishing adds a chapter's words and unpublishing removes them. A
+draft chapter contributes 0, and editing it moves nothing. The author's `WordsWritten` follows by
+delta. The filter is chapter-level only: story status (a Draft or taken-down story) is handled at
+the display and site-stat layers, never folded in here. One visible consequence: an author's all-draft
+story shows 0 words, on the author's own listings too.
+
 ### Export & Import — the Allowlist Is the Interchange Contract (WU38c/WU38d)
 
 The 13-tag sanitizer allowlist is not just a security boundary — it is the **fidelity contract for
@@ -1380,7 +1388,10 @@ mechanism. Statuses: `NeedsRevision=1` / `Approved=2` / `Rejected=3` (`PendingAp
 `RecommendationValidationException`. `MaxHiddenGemsPerUser = 5`; `MaxHighlightedPerStory = 5`.
 Mirrors the Vouch 5-limit pattern (`FollowingConstants.MaxVouchesPerUser`). No auto-evict, no swap —
 the user must explicitly un-designate first. **Settled — do not revisit** (resolved Phase B,
-"Hidden Gem at-limit behavior" — carried in `middle_plan_v2.md` §Resolved).
+"Hidden Gem at-limit behavior" — carried in `middle_plan_v2.md` §Resolved). Both limits (and the
+vouch limit) are **stated-soft** under D23: concurrent requests can overshoot by a bounded amount,
+the next action at the limit is rejected, and there is deliberately no corrective sweeper
+(§"Check-then-act posture").
 
 **Like toggle (no notification):** `ToggleLikeAsync` returns `RecommendationLikeResultDto(int LikeCount,
 bool IsLiked)` so the UI reconciles optimistic state without a re-read. No notification fires on a
@@ -2311,21 +2322,109 @@ lived in `Server/Data/SiteConstants.cs`, not nested inside a `SiteConstants` typ
 
 ## UserStats Updates
 
-22+ denormalized counter fields. Updated in real-time by application logic within the same
-transaction as the primary write (same-transaction `ExecuteUpdateAsync`):
+20 recomputed `UserStats` counter fields, plus the content counters on other tables (§"Counter
+recompute principle" below). **The contract is "post-commit, recompute-corrected" (owner ruling D22,
+built WU-CounterSymmetry 2026-09-30).** A counter is moved in a second, separately committed
+`ExecuteUpdateAsync` *after* the primary write's `SaveChangesAsync`. The pair is deliberately **not**
+atomic: a failure between the two statements leaves **transient** drift, and the reconciler heals it.
 
 ```csharp
-await writeDb.UserStats
+await writeDb.SaveChangesAsync();                 // 1. the primary write commits
+await writeDb.UserStats                           // 2. then the counter, as its own statement
     .Where(us => us.UserId == story.AuthorId)
-    .ExecuteUpdateAsync(s => s.SetProperty(us => us.StoryCount, us => us.StoryCount + 1));
+    .ExecuteUpdateAsync(s => s.SetProperty(us => us.StoriesWritten, us => us.StoriesWritten + 1));
 ```
 
-Background worker (F58, post-MVP) periodically recalculates to correct drift.
+- **Order is load-bearing: the primary write commits first, the counter second, never the reverse.**
+  The recompute heals a *missing* increment. A counter incremented for a row that never committed is
+  invented data, so it is not covered. The moderation resolve paths move `ActiveReportCount` *inside*
+  their lock transaction, committed together with the status flip and never ahead of it (§"Resolve
+  paths — lock, guard, then transition"). That satisfies the order rule; it is not an exception to it.
+- **Atomicity is not transactionality.** The `ExecuteUpdateAsync` mandate (§"Counter mutation rule")
+  makes a counter move atomic against *concurrent callers* (the lost-update class) and stays absolute.
+  Transactionality would make it atomic against *its own primary write failing* (the drift class).
+  D22 declines the second, layer-wide, and keeps the first. Wrapping every site would buy strict
+  consistency for display aggregates that nothing gates on, at the price of the full execution-strategy
+  ceremony at every write site.
+- **The accepted cost.** A crash between the two commits leaves a visibly wrong number until the
+  reconciler runs. A report of "my count is off by one" is checked against the reconciler's last run
+  before it is treated as a defect.
+- **A retried `INSERT … ON CONFLICT DO NOTHING` whose first attempt committed returns 0 rows**, so the
+  `+1` gated on it is skipped (§"Check-then-act posture"). That is the same transient drift, and it
+  heals the same way.
+- **Only a recomputed counter is covered.** A value exempted from recompute is outside this contract
+  and is reasoned about separately. The one such value, `User.ApprovedStorySubmissions`, is a record
+  of a decision rather than a counter (§"Records of a decision are not counters").
+- **Spec §9.4's cross-cutting row** ("Increment/decrement counters in same transaction",
+  `canalave_library_unified_spec.md:2065`) is **superseded** by D22. The spec stays read-only, so the
+  correction lives here.
+
+The reconciler is built: `UserStatRecalculator` (F58, WU-UserStatRecalc 2026-07-15) for `user_stats`,
+and `ContentCounterRecalculator` (WU-CounterSymmetry 2026-09-30) for the content counters. Both run
+from the daily `UserStatRecalculationWorker` (§"Recalculation worker (F58)").
+
+### Counter recompute principle (owner ruling D21, built WU-CounterSymmetry 2026-09-30)
+
+**Every denormalized counter is *derived*.** A counter caches the answer to a *current-state*
+question. Its ground truth is the live rows that answer that question, and a recompute over them
+exists in code. **There is no authoritative counter class and no named exception.** (D21 overturned
+the exception D3 had reserved for `RecommendationSuccessesEarned`.) A count that falls because its
+underlying rows were legitimately deleted is correct behavior, not drift.
+
+| Column | Current-state question | Recompute (ground truth) | Reconciler |
+|---|---|---|---|
+| The 20 recomputed `user_stats` columns | per column — §"Recalculation worker (F58)" | per column, mirroring the wired formula | `UserStatRecalculator` (plus the badge `EarnedCount` sync) |
+| `base_comments.like_count` | how many likes does this comment have? | `COUNT(*) FROM comment_likes` | `ContentCounterRecalculator` |
+| `base_blog_posts.like_count` | how many likes does this post have? | `COUNT(*) FROM blog_post_likes` | `ContentCounterRecalculator` |
+| `recommendations.like_count` | how many likes does this recommendation have? | `COUNT(*) FROM recommendation_likes` | `ContentCounterRecalculator` |
+| `recommendations.successful_rec_count` | how many readers found it helpful? | `COUNT(*) FROM recommendation_successes`. It mirrors the wired `+1` per success row; there is no self-exclusion at rec level (`roadmap.md` row 18). | `ContentCounterRecalculator` |
+| `chapters.version_count` | how many versions does this chapter have? | `COUNT(*) FROM chapter_contents` | `ContentCounterRecalculator` |
+| `stories.word_count` | how many words are published? | `SUM` of the primary version's `word_count` over the story's **published** chapters | `ContentCounterRecalculator` |
+| `active_report_count` ×5 (`AspNetUsers`, `stories`, `base_comments`, `base_blog_posts`, `recommendations`) | how many unanswered reports stand against this target? | `COUNT(*) FROM reports WHERE reported_entity_type = <type> AND report_status_id IN (0, 1)` (D7; it reads the partial index `ix_reports_open_target`) | `ContentCounterRecalculator` |
+
+Named so they are not mistaken for counters:
+- `chapter_contents.word_count` is a function of its own row, computed on save (§"Word Count Is
+  Computed Server-Side").
+- `site_daily_stats` is an L8 snapshot, an append-only historical record. A recompute would rewrite
+  history.
+- `UserStats.SpotlightCount` has no defined question until its producer exists (tracker **B8**).
+  It is deliberately left out of the recompute.
+- `User.ApprovedStorySubmissions` is a record of a decision, not a derived counter. It is monotonic
+  and has no recompute (§"Records of a decision are not counters").
+- Manual badge grants (Patron, Architect, Artist) have no backing counter. The grant row *is* the fact,
+  and nothing here touches it.
+
+**Falling counts that are correct, named so they are not rediscovered as bugs.** All need no code:
+- `RecommendationSuccessesEarned` falls when a recommendation is deleted, or when a crediting reader
+  deletes their account.
+- `AcknowledgedAsBetaReaderCount` and `AcknowledgedAsInspirationCount` fall when the crediting author
+  deletes the story (`story_acknowledgments` and `story_lineages` both cascade).
+- `ChaptersRead` / `WordsRead` fall when an author deletes a chapter (`user_chapter_interactions`
+  cascades). A *reader's* lifetime stat falls for a reason they did not cause.
+- `CommentsWritten` falls through the same chapter-delete cascade.
+- **Conditional sixth:** `GroupsJoined` falls for every member if a group-deletion path is ever built
+  (`group_members` cascades on `groups`). None exists. D47(b) holds that question open, and whoever
+  answers it ticks this case from conditional to live; no counter code changes when they do.
+- D6's favorite withdrawn while the story is hidden is ordinary ground truth: the clear lowers
+  `FavoritesOnStories` and the recompute agrees.
+
+**Hard deletes adjust no counter.** Chapter delete, user deletion and story deletion deliberately move
+no counter for the rows their cascades destroy. The reconciler lowers each count to the extant rows on
+its next pass. (Service audit §2.4.5's "batch-decrement or accept-until-recompute" choice dissolved
+under D21: the recompute counts the rows that exist, and that count is the truth.)
+
+**Zero-count badges are hidden at display, not deleted.** `SyncBadgeEarnedCountAsync` never awards
+or removes a `UserBadge` row; that boundary stays. A counter-backed badge (`SiteBadges.CounterColumnByBadge`)
+whose `EarnedCount` is 0 is filtered out of every *display* projection (UserCard, profile header,
+recommendation card). The owner's curation read (`GetMyBadgesForCurationAsync`) still returns it.
+Manual grants carry `EarnedCount = 0` by design and always display.
 
 ### Counter mutation rule — all denormalized counters
 
-Every denormalized counter — `LikeCount` on `Recommendation` / `BaseComment`, and every `UserStats.*`
-field — must be adjusted with an **atomic** `ExecuteUpdateAsync`:
+Every denormalized counter must be adjusted with an **atomic** `ExecuteUpdateAsync`. That covers
+`LikeCount` on `Recommendation` / `BaseComment` / `BaseBlogPost`, `Recommendation.SuccessfulRecCount`,
+`Chapter.VersionCount`, `ActiveReportCount` (through `AdjustActiveReportCountAsync`), and every
+`UserStats.*` field:
 
 ```csharp
 // ✓ Correct — one SQL `SET counter = counter + delta`; concurrent callers can't collide
@@ -2343,6 +2442,15 @@ callers reading the same stale value both produce the same written result: one i
 `ExecuteUpdateAsync` issues a single `SET like_count = like_count + delta` that the database
 serializes correctly under any isolation level.
 
+- **Return the landed value by re-reading it.** A method that reports the new count (the three
+  like toggles) reads it back after the `ExecuteUpdateAsync`. It never returns "the value it loaded
+  plus delta", because that is a pre-update read and it is wrong under concurrency.
+- **An absolute recompute-on-write is not a ±delta and is permitted.** `RefreshStoryWordCountAsync`
+  sets `Story.WordCount` to a freshly summed total rather than adding to it, so there is no lost update
+  to lose. The author's `WordsWritten` still moves by the computed delta, atomically.
+- `Chapter.VersionCount` was the last tracked `++` in the codebase. It moved to a post-commit
+  `ExecuteUpdateAsync` in WU-CounterSymmetry (2026-09-30), per D22's consequence paragraph.
+
 ### Counter ↔ event map (WU30, wired into already-built write services)
 
 | `UserStat` counter | Owning user | Event / write service | Δ |
@@ -2350,13 +2458,13 @@ serializes correctly under any isolation level.
 | `FollowerCount` | target user | `ServerFollowingWriteService.FollowAsync / UnfollowAsync` | ±1 |
 | `AuthorsFollowed` | acting user | `ServerFollowingWriteService.FollowAsync / UnfollowAsync` | ±1 |
 | `StoriesWritten` | author | `ServerStoryWriteService.CreateStoryAsync` | +1 |
-| `WordsWritten` | author | `ServerChapterWriteService` publish / new version | ± word delta |
+| `WordsWritten` | author | `ServerChapterWriteService.RefreshStoryWordCountAsync` — publish/unpublish, and create/edit/primary-switch/delete of a **published** chapter (drafts contribute 0) | ± delta of *published* primary words |
 | `CommentsWritten` | commenter | `ServerCommentWriteService.Post*/Delete` (all 4 contexts: chapter/blogpost/group/userprofile) | ±1 |
 | `RecommendationsWritten` | recommender | `ServerRecommendationWriteService.SubmitAsync` | +1 |
 | `RecommendationsReceived` | story author | `ServerRecommendationWriteService.SubmitAsync` | +1 |
 | `RecommendationSuccessesEarned` | recommender | `ServerRecommendationWriteService.RecordSuccessAsync` (new column, WU36) | +1 |
 | `BlogPostsWritten` | author | `ServerBlogPostWriteService` **profile** create/delete only — group posts are untracked, site posts deliberately excluded, while the recompute counts every `base_blog_posts` row (the three disagree; owner-open, tracker **F16**) | ±1 |
-| `GroupsJoined` | member | `ServerGroupWriteService` join/leave | ±1 |
+| `GroupsJoined` | member | `ServerGroupWriteService` create/join/leave — creating a group counts as joining it (D24); `JoinAsync`'s `+1` is gated on its `ON CONFLICT` insert landing a row (D23); a moderator role change (WU-GroupAdminRescue) has **no** counter effect | ±1 |
 | `FavoritesOnStories` | story author | `ServerUserStoryInteractionWriteService` | **transition-delta** |
 | `StoriesRead`, `StoriesIgnored` | acting user | `ServerUserStoryInteractionWriteService.SetUserStoryInteractionStateAsync` / `MarkCompletedAsync` | **transition-delta** |
 | `StoriesInProgress` | acting user | `ServerUserStoryInteractionWriteService.MarkStartedAsync` (+1 on a genuine `HasStarted` flip, not already completed) **and** `SetUserStoryInteractionStateAsync`/`MarkCompletedAsync` (−1 on completing) | **transition-delta** |
@@ -2412,6 +2520,24 @@ Recompute is set-based raw SQL (`UserStatRecalculator`, `Server/Profiles/`), fol
 family, not a per-user loop. Step 1 inserts any missing `UserStat` rows first (real-time
 `ExecuteUpdateAsync` silently no-ops when the row doesn't exist).
 
+**Direction of authority (D21/D24).** "Mirror the wired formula" is a rule for *writing* a recompute:
+it must not invent a different question. When the two disagree, **the recompute is the definition and
+the wired path is the defect.** Two disagreements are expected and are not defects: D22's transient
+window between a primary commit and its counter statement, and D21's hard-delete falls. Any other
+*permanent* disagreement means the wired path computes a different function than the recompute, and
+each pass oscillates instead of converging. D24's `CreateGroupAsync` (a creator's member row with no
+`+1`, so leaving drove `GroupsJoined` to −1) was exactly that. The fix goes in the write path; a
+floor-at-zero clamp hides the symptom and leaves the oscillation, so it is rejected. The test shape is
+`testing.md` §"Counter convergence".
+
+**Worker order.** `UserStatRecalculationWorker` runs `ContentCounterRecalculator` **before**
+`UserStatRecalculator`, in the same loop iteration, because `WordsWrittenAgg` sums
+`stories.word_count`, which the content pass corrects. Each pass has its own try/log, so one failing
+does not block the other. `ContentCounterRecalculator` (`Server/Profiles/`) has the same shape as its
+sibling. For each counter it runs an `IS DISTINCT FROM`-guarded `UPDATE t SET col = agg.value FROM (agg)` and a
+zero-unmatched `UPDATE t SET col = 0 WHERE col <> 0 AND NOT EXISTS (agg)`. Its 11 specs are the
+content rows of §"Counter recompute principle"'s table.
+
 ### Transition-delta rule for UserStoryInteraction-derived counters
 
 `ServerUserStoryInteractionWriteService` toggles boolean columns (`IsFavorite`, `IsCompleted`,
@@ -2434,6 +2560,15 @@ The same flip-check governs `StoriesRead`/`StoriesInProgress`/`StoriesIgnored` �
 boolean column (`IsCompleted`, `HasStarted`+`!IsCompleted`, `IsIgnored`); the counter moves only
 when the effective derived state actually changes. Never increment/decrement if the boolean is being
 written to its current value (idempotent call from an optimistic-UI retry).
+
+**Capture the `was*` values after the ensure-row re-read.** A create site that found no row inserts one
+with `ON CONFLICT DO NOTHING` and then re-reads the tracked row (§"Check-then-act posture"). The
+`was*` / `hadStarted` captures, and `MarkCompletedAsync`'s already-complete early return, are taken
+from the re-read row, so the loser of a create-create race computes its transition against the
+winner's committed state. Under true concurrency two callers can still both see the same "before"
+and both apply one flip's delta. D23 accepts that ("USI flip-delta counters: accept,
+recompute-corrected"): the counters are a cache, and the recompute heals them. Do not lock to defend
+them.
 
 ### `IsCompleted` auto-producer — durable direct write, never the reading buffer
 
@@ -2479,6 +2614,84 @@ drove the counter negative. Fixed by giving `MarkStartedAsync` the matching +1 t
 genuine `HasStarted` false→true flip (guarded: only when not already completed). This also closes the
 same latent underflow risk in the pre-existing panel-only completion path (`SetUserStoryInteractionStateAsync`
 completing a row whose `HasStarted` came from the reading path, not the panel).
+
+### Check-then-act posture (owner ruling D23, built WU-CounterSymmetry 2026-09-30)
+
+D22's "post-commit, recompute-corrected" (§"UserStats Updates") is what makes this posture coherent:
+the healing path, not the write path, is where counter correctness lives. The two rulings read as one.
+
+**The classification test — apply it to every new check-then-act write path** rather than re-deriving
+a posture each time. Ask: *if this were violated, would a consumer be wrong, or would only the
+writer's intent be disappointed?*
+- **A reader depends on it → a constraint.** It belongs in the database, where no writer can violate
+  it: today's code, future code, an import, an admin's manual SQL. If it can't be expressed
+  declaratively, change the model until it can (the poll single-choice restructure).
+- **Nothing reads it as a fact → a policy.** Check-then-act is a legitimate implementation of a
+  policy. State the weakened invariant honestly and own its corrective (the recompute, or the next
+  action at the limit).
+- **A visible 500 is never a posture.** A create-create race that crashes is hardened regardless.
+
+**Declarative and procedural hardening are not the same thing.** A unique or partial index, an FK, or
+`ON CONFLICT` puts the guarantee **in the data**: it holds against every writer, forever. An advisory
+lock puts it **in the code**: it holds only while every present and future writer remembers to take
+it. Postgres has no assertions, so "at most N rows matching a predicate per group" has no declarative
+form. Locking the cardinality limits would therefore adopt a *convention* while the docs claimed a
+*constraint*, turning a known-soft invariant into an unknown-soft one. False confidence is the worse
+failure.
+
+**Per-family lookup table** (the answer for a drift incident):
+
+| Family | Reader depends? | Ruling | Mechanism | Built by |
+|---|---|---|---|---|
+| USI create-create (`user_story_interactions` and its `user_story_interaction_dates` partition) | n/a — a crash | Harden | Ensure-row `INSERT … ON CONFLICT DO NOTHING`, then re-read (below) | WU-CounterSymmetry |
+| `group_members` idempotent join | n/a — a crash | Harden | `JoinAsync`: one `INSERT … ON CONFLICT (user_id, group_id) DO NOTHING`; `GroupsJoined + 1` only when it inserted a row | WU-CounterSymmetry |
+| Vouch idempotency | n/a — a crash | Harden | PK `(vouching_user_id, vouched_user_id)` (already present) + `INSERT … ON CONFLICT DO NOTHING`; `NotifyNewVouchAsync` only when it inserted a row | WU-CounterSymmetry |
+| `group_stories` idempotent add | yes — membership is set semantics | Harden | Unique `(GroupId, StoryId)` | not yet — routed to WU-SchemaHardening |
+| Poll single-choice | **yes** — tallies are published numbers | Restructure, not lock | `PollId` on the vote row + a single-choice guard column, unique on `(guard, user_id)`; the `ConfigLocked` first-vote-vs-config-edit rider | not yet — routed to WU-PollVoteIntegrity (the Block H migration wave) |
+| USI flip-delta counters | no — derived data | Accept | Recompute-corrected (§"Transition-delta rule") | — |
+| Hidden gem (5/user), highlight (5/story), vouch limit (5/user) | no | Accept — **stated-soft** | See below | — |
+
+**Stated-soft limits (D23's conditional, written down so it is not left implied).** D21's build scope
+funds no corrective for the hidden-gem, highlight or vouch limits, and none of the three has a
+denormalized value to recompute: each check reads a live `COUNT(*)` every time. So, per D23, they are
+**stated-soft with no corrective**:
+- Overshoot is bounded by the number of concurrent requests. It persists until the owner removes one.
+- The next action at the limit is correctly rejected, so enforcement heals itself.
+- There is **no corrective sweeper**. An un-designating sweeper would hand a background worker the
+  power to destroy user-visible state, which D21's zero-count-badge reasoning rejects.
+
+The limit checks themselves: §"Recommendation Write Conventions" → "Count-limit enforcement", and
+`ServerFollowingWriteService.VouchAsync`.
+
+**Advisory locks are not banned.** They remain the right tool where a genuine constraint is both
+non-declarative **and** unrestructurable. No family above qualifies. A WU that reaches for one must
+clear that bar and record the lock-based invariant, because an undocumented convention decays. The one
+on record: Spotlight redemption's `pg_advisory_xact_lock` (§"Community Spotlight" → "Redemption is the
+concurrency-sensitive write"), which serializes a count-then-insert against block capacity.
+
+**The ensure-row mechanism (USI).** `ServerUserStoryInteractionWriteService` has four tracked-create
+sites (`SetUserStoryInteractionStateAsync`, `SetReadItLaterFromRecommendationAsync`, `MarkStartedAsync`,
+`MarkCompletedAsync`). Each one, when its tracked load finds no row:
+1. Runs `INSERT INTO user_story_interactions (…every column…) VALUES (…) ON CONFLICT (user_id,
+   story_id) DO NOTHING` through `ExecuteSqlAsync` (interpolated, so parameterized). The values come
+   from a C#-constructed entity, so the initializers stay the single source of defaults. The columns
+   have no DB default, so every one is listed. A future NOT NULL column without a default fails loudly
+   (23502), not silently.
+2. Re-reads the tracked row (with the `Include`s the method uses), then captures its `was*` state.
+3. For a missing date partition, does the same with `user_story_interaction_dates`, then reads the
+   partition with a tracked query and assigns it to the row. Not `Reference(...).LoadAsync()`: the
+   row's `Include` already marked the (null) navigation as loaded, and `LoadAsync` does nothing on a
+   loaded navigation, so the stale null survives and a fallback `Add` 500s on the key.
+
+**Never `ChangeTracker.Clear()` here.** The scoped write context is shared with callers such as
+`ServerChapterReadMarkWriteService`, whose own tracked state must survive. The ensure-insert runs
+**after** the D6 raise guard, because it is a mutation. Between the ensure-insert and the
+`SaveChangesAsync` an all-false row exists. If the request dies in that window, the row survives. That
+breaks sparsity but harms no read, because every bookshelf query filters on a flag, and the next write's
+sparse cleanup removes it.
+
+`group_members` and `vouches` use the same `INSERT … ON CONFLICT DO NOTHING` shape, gated on
+rows-affected. They need no re-read, because nothing is computed from the winner's row.
 
 ## Site Settings (`ISiteSettingsService`) — DB-Backed Mod-Editable Runtime Knobs (WU-Spotlight)
 

@@ -60,7 +60,10 @@ WU-Marts components (spans are root spans for the workers — background work, n
   `Marts` (root span, no ambient parent). Metrics: `canalave.userstatrecalc.duration` (histogram,
   `ms`), `canalave.userstatrecalc.users_touched` (histogram, `{user}` — rows inserted or
   corrected in one pass, the drift-detected signal), `canalave.userstatrecalc.outcome` (counter,
-  `{run}`, tag `canalave.userstatrecalc.success`).
+  `{run}`, tag `canalave.userstatrecalc.success`). The worker's content pass
+  (`ContentCounterRecalculator`, WU-CounterSymmetry 2026-09-30) emits its own span,
+  `ContentCounterRecalc.Pass`, on this same source, tagged `canalave.contentcounterrecalc.counters_corrected`.
+  It has no meter of its own. The count also goes in the worker's completion log line.
 
 - Producers are **`static readonly` process singletons** — `ActivitySource`/`Meter` are
   thread-safe, stateless funnels (the mirror image of `DbContext`, which is scoped because it

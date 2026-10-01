@@ -396,28 +396,171 @@ public class ChapterWriteServiceTests(PostgresFixture postgres) : IntegrationTes
     // --- Story.WordCount roll-up ---
 
     [Fact]
-    public async Task CreateChapterAsync_UpdatesStoryWordCount()
+    public async Task PublishedChapters_UpdateStoryWordCount()
     {
         int freshStoryId = await SeedStoryAsync(_authorId);
 
-        // Two chapters — word counts are additive via the primary-version sum.
-        await CallCreateAsync(new CreateChapterDto
+        // Two chapters — word counts are additive via the primary-version sum over PUBLISHED chapters
+        // (service audit §2.4.3, WU-CounterSymmetry), so both are published before the assertion.
+        int first = await CallCreateAsync(new CreateChapterDto
         {
             StoryId     = freshStoryId,
             ChapterText = "<p>alpha beta gamma</p>",  // 3 words
             Rating      = Rating.E
         });
-        await CallCreateAsync(new CreateChapterDto
+        int second = await CallCreateAsync(new CreateChapterDto
         {
             StoryId     = freshStoryId,
             ChapterText = "<p>delta epsilon</p>",     // 2 words
             Rating      = Rating.E
         });
+        await CallSetPublishedAsync(first, true);
+        await CallSetPublishedAsync(second, true);
+
+        (await LoadStoryWordCountAsync(freshStoryId)).Should().Be(5);
+    }
+
+    // --- Published-only word counts (service audit §2.4.3, WU-CounterSymmetry) ---
+
+    [Fact]
+    public async Task DraftChapter_ContributesNothing_ToStoryWordCountOrWordsWritten()
+    {
+        await SeedUserStatAsync(_authorId);
+
+        await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId = _storyId, ChapterText = "<p>one two three four</p>", Rating = Rating.E
+        });
+
+        (await LoadStoryWordCountAsync(_storyId)).Should().Be(0, "a draft chapter is not published words");
+        (await LoadWordsWrittenAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task Publish_AddsTheWords_Unpublish_RemovesThem_AndARepeatPublishCountsOnce()
+    {
+        await SeedUserStatAsync(_authorId);
+        int chapterId = await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId = _storyId, ChapterText = "<p>one two three four</p>", Rating = Rating.E
+        });
+
+        await CallSetPublishedAsync(chapterId, true);
+        (await LoadStoryWordCountAsync(_storyId)).Should().Be(4);
+        (await LoadWordsWrittenAsync()).Should().Be(4);
+
+        await CallSetPublishedAsync(chapterId, true); // already published — refreshes to delta 0
+        (await LoadStoryWordCountAsync(_storyId)).Should().Be(4, "publishing twice must not double-count");
+        (await LoadWordsWrittenAsync()).Should().Be(4);
+
+        await CallSetPublishedAsync(chapterId, false);
+        (await LoadStoryWordCountAsync(_storyId)).Should().Be(0, "unpublishing takes the words back out");
+        (await LoadWordsWrittenAsync()).Should().Be(0);
+
+        await AssertCountersConvergeAsync();
+    }
+
+    [Fact]
+    public async Task EditingAPublishedPrimary_AppliesTheDelta_EditingADraft_AppliesNone()
+    {
+        await SeedUserStatAsync(_authorId);
+        int published = await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId = _storyId, ChapterText = "<p>one two three</p>", Rating = Rating.E
+        });
+        int draft = await CallCreateAsync(new CreateChapterDto
+        {
+            StoryId = _storyId, ChapterText = "<p>draft words here</p>", Rating = Rating.E
+        });
+        await CallSetPublishedAsync(published, true);
+
+        await CallUpdateAsync(new UpdateChapterContentDto
+        {
+            ChapterContentId = await PrimaryContentIdAsync(published),
+            ChapterText = "<p>one two three four five</p>", Rating = Rating.E
+        });
+        (await LoadStoryWordCountAsync(_storyId)).Should().Be(5);
+        (await LoadWordsWrittenAsync()).Should().Be(5);
+
+        await CallUpdateAsync(new UpdateChapterContentDto
+        {
+            ChapterContentId = await PrimaryContentIdAsync(draft),
+            ChapterText = "<p>a much longer draft body with many more words in it</p>", Rating = Rating.E
+        });
+        (await LoadStoryWordCountAsync(_storyId)).Should().Be(5, "a draft edit moves no published total");
+        (await LoadWordsWrittenAsync()).Should().Be(5);
+
+        await AssertCountersConvergeAsync();
+    }
+
+    [Fact]
+    public async Task AddAlternateVersion_LandsVersionCount2_AndTheReconcilerAgrees()
+    {
+        int chapterId = await CallCreateAsync(NewChapter("Converge"));
+        await CallAddAlternateAsync(chapterId, NewChapter("Converge alt"));
+        await CallAddAlternateAsync(chapterId, NewChapter("Converge alt two"));
+
+        (await LoadChapterAsync(chapterId)).Chapter.VersionCount.Should().Be(3,
+            "each alternate is one atomic post-commit +1 (owner ruling D22)");
 
         using IServiceScope scope = Factory.Services.CreateScope();
+        ContentCounterRecalcResult pass = await scope.ServiceProvider
+            .GetRequiredService<ContentCounterRecalculator>().RecalculateAllAsync();
+        pass.CountersCorrected.Should().Be(0, "the wired VersionCount equals COUNT(chapter_contents)");
+    }
+
+    /// <summary>D24's convergence assertion (testing.md §"Counter convergence"): after the wired ops,
+    /// both reconcilers correct nothing.</summary>
+    private async Task AssertCountersConvergeAsync()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ContentCounterRecalcResult content = await scope.ServiceProvider
+            .GetRequiredService<ContentCounterRecalculator>().RecalculateAllAsync();
+        content.CountersCorrected.Should().Be(0, "the wired Story.WordCount must equal the recompute");
+        UserStatRecalcResult stats = await scope.ServiceProvider
+            .GetRequiredService<UserStatRecalculator>().RecalculateAllAsync();
+        stats.RowsInserted.Should().Be(0, "every user in this test has a seeded UserStat row");
+        stats.CountersCorrected.Should().Be(0, "the wired WordsWritten must equal the recompute");
+    }
+
+    /// <summary>Seeds the author's UserStat row with the ground truth already present: the story
+    /// SeedStoryAsync inserted (bypassing CreateStoryAsync's +1) is one StoriesWritten, so the
+    /// convergence assertion compares only what the test's own wired ops moved.</summary>
+    private async Task SeedUserStatAsync(int userId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
         ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        Story? story = await db.Stories.FindAsync(freshStoryId);
-        story!.WordCount.Should().Be(5);
+        int storiesWritten = await db.Stories.CountAsync(s => s.AuthorId == userId);
+        db.UserStats.Add(new UserStat { UserId = userId, StoriesWritten = storiesWritten });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<int> LoadStoryWordCountAsync(int storyId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.Stories.Where(s => s.StoryId == storyId).Select(s => s.WordCount).SingleAsync();
+    }
+
+    private async Task<long> LoadWordsWrittenAsync()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.UserStats.Where(us => us.UserId == _authorId).Select(us => (long)us.WordsWritten).SingleAsync();
+    }
+
+    private async Task<long> PrimaryContentIdAsync(int chapterId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.Chapters.Where(c => c.ChapterId == chapterId).Select(c => c.PrimaryContentId!.Value).SingleAsync();
+    }
+
+    private async Task CallUpdateAsync(UpdateChapterContentDto dto)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IChapterWriteService svc = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
+        await svc.UpdateChapterContentAsync(dto);
     }
 
     // --- Validation ---

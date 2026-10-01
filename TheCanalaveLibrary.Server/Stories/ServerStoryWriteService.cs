@@ -72,7 +72,7 @@ public class ServerStoryWriteService(
         writeDb.Stories.Add(newStoryDB);
         await writeDb.SaveChangesAsync();
 
-        // Increment StoriesWritten counter for the author (cross-cutting.md §"UserStats Updates").
+        // Increment StoriesWritten counter for the author (layer2-services.md §"UserStats Updates").
         await writeDb.UserStats.Where(us => us.UserId == authorId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.StoriesWritten, us => us.StoriesWritten + 1));
 

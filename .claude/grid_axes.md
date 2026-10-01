@@ -675,7 +675,7 @@ number). Rationale + removal record: `audit/BlogPosts.md` Feature 56 CUT note;
 
 **57. Notification Cleanup Worker** — `IHostedService` deleting read notifications older than 60 days.
 
-**58. UserStat Recalculation Worker** — Periodic background recalculation of `UserStats` counters.
+**58. UserStat Recalculation Worker** — Periodic background recalculation of `UserStats` counters. Since WU-CounterSymmetry (2026-09-30, owner ruling D21) the same worker also reconciles the content counters (`like_count`, `successful_rec_count`, `version_count`, `stories.word_count`, `active_report_count`).
 
 
 ───────── **Horizontal boundary (requires real user data)** ─────────

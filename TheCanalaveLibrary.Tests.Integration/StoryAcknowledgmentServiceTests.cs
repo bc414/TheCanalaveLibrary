@@ -147,7 +147,7 @@ public class StoryAcknowledgmentServiceTests(PostgresFixture postgres) : Integra
     [Fact]
     public async Task Accept_BetaReaderRole_FlipsToAcceptedAndIncrementsCounter()
     {
-        // The same-transaction ExecuteUpdateAsync producer is a silent no-op when the recipient
+        // The post-commit ExecuteUpdateAsync producer is a silent no-op when the recipient
         // has no UserStat row yet (SeedUserAsync never creates one — no production write path
         // does either; UserStatRecalculator is the real first populator). Integration tests must
         // seed one explicitly, matching RecommendationWriteServiceTests' SeedUserStatAsync.
@@ -487,7 +487,7 @@ public class StoryAcknowledgmentServiceTests(PostgresFixture postgres) : Integra
             .FirstOrDefaultAsync();
     }
 
-    /// <summary>The same-transaction ExecuteUpdateAsync producer is a silent no-op when the
+    /// <summary>The post-commit ExecuteUpdateAsync producer is a silent no-op when the
     /// target has no UserStat row (no production write path creates one at registration —
     /// UserStatRecalculator is the real first populator). Must be called before exercising any
     /// counter-touching path.</summary>

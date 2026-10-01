@@ -72,7 +72,42 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   migration `20260623005108_MakeChapterPrimaryContentIdNullable` applied. `PrimaryContent` nav is now
   `ChapterContent?`. Also: `Story.ChapterCount` does not exist in the current C# model (the field was
   assumed during WU17 planning but is absent from the L1 entity — future work-unit adds it when needed).
-- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, Stage note just below this bullet; re-verified WU-TptHardDelete, 2026-09-30 — chapter comments deleted through `TptDelete`, and the delete clears the tracker since its review fixes, browser-driven on both render phases by its browser pass the same day, Stage notes just below).**
+- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, Stage note just below this bullet; re-verified WU-TptHardDelete, 2026-09-30 — chapter comments deleted through `TptDelete`, and the delete clears the tracker since its review fixes, browser-driven on both render phases by its browser pass the same day, Stage notes just below; published-only `Story.WordCount` and an atomic post-commit `VersionCount` WU-CounterSymmetry, 2026-09-30 — first Stage note below).**
+  **WU-CounterSymmetry Stage note (2026-09-30; service audit §2.4.3/§2.4.6, owner ruling D22) — no flip.**
+  - **`Story.WordCount` counts published chapters only.** `RefreshStoryWordCountAsync` filters on
+    `IsPublished`, and `SetPublishedAsync` now calls it after its save. Publishing therefore adds a
+    chapter's words, unpublishing removes them, and a repeat publish refreshes to delta 0. The
+    author's `WordsWritten` moves by the same delta. Create, edit, primary-switch and delete still
+    refresh, and for a draft that is delta 0.
+  - **Before this change** a story's word count (and the author's `WordsWritten`) included every
+    draft chapter. So did the L8 `total_words`, which now also applies the visible-story predicate
+    (`audit/Moderation.md` F62).
+  - **Accepted, visible consequence:** an all-draft story shows 0 words, on the author's own listings
+    too. Story status is not folded in; that is the display and site-stat layers' job.
+  - **`Chapter.VersionCount`** was the codebase's last tracked `++`, a read-modify-write that loses
+    concurrent increments. It is now a post-commit `ExecuteUpdateAsync`, per D22's consequence
+    paragraph. The create's `VersionCount = 1` is an initial value and stays.
+  - **Comments and the interface.** The code comments and `IChapterWriteService`'s docs say "published
+    primary versions". The false "no counter to maintain here" note in `SetPublishedAsync` is
+    rewritten, and the stale `Story.ChapterCount` aside on `CreateChapterAsync` is gone.
+  - **Reconciler.** `ContentCounterRecalculator` recomputes both columns with the same expressions
+    (`audit/Profiles.md` F58).
+
+  **Test tier: Integration.**
+  - `ChapterWriteServiceTests` (+4, one renamed):
+    - a draft contributes 0 to both counters;
+    - publish adds, unpublish removes, and publishing twice does not double-count;
+    - an edit of a published primary applies the delta, and a draft edit applies none;
+    - two alternates make `VersionCount` 3, and a `ContentCounterRecalculator` pass corrects 0.
+
+    The word-count tests end with a convergence pass on both reconcilers.
+  - `PublishedChapters_UpdateStoryWordCount` (renamed from `CreateChapterAsync_UpdatesStoryWordCount`)
+    and `ChapterReorderDeleteTests.Delete_RefreshesStoryWordCount` now publish first.
+  - `CounterSymmetryTests.AddAlternateVersion_AConcurrentIncrementLandingBeforeTheSave_IsNotLost`
+    interleaves a competing `+1` before the save and asserts 3. The old `++` gives 2.
+  - Mutation-checked: dropping the `IsPublished` filter fails three tests, and the old `++` fails the
+    interleave test.
+
   **WU-TptHardDelete Stage note (2026-09-30; owner ruling D10) — no flip.** `DeleteChapterAsync` no
   longer materializes the chapter's comments to `RemoveRange` them (the template D10 found the other
   three delete sites had failed to copy). It runs `TptDelete.ChapterCommentsAsync` — one set-based

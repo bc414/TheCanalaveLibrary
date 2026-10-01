@@ -499,7 +499,7 @@ public class StoryLineageServiceTests(PostgresFixture postgres) : IntegrationTes
     [Fact]
     public async Task ApproveLineage_InspiredByCrossAuthor_IncrementsTargetAuthorCounter()
     {
-        // The same-transaction ExecuteUpdateAsync producer is a silent no-op when the target
+        // The post-commit ExecuteUpdateAsync producer is a silent no-op when the target
         // author has no UserStat row yet (SeedUserAsync never creates one). Integration tests
         // must seed one explicitly, matching RecommendationWriteServiceTests' SeedUserStatAsync.
         await SeedUserStatAsync(_otherUserId);
@@ -674,7 +674,7 @@ public class StoryLineageServiceTests(PostgresFixture postgres) : IntegrationTes
             l.SourceStoryId == sourceStoryId && l.TargetStoryId == targetStoryId && l.RelationshipTypeId == typeId);
     }
 
-    /// <summary>The same-transaction ExecuteUpdateAsync producer is a silent no-op when the
+    /// <summary>The post-commit ExecuteUpdateAsync producer is a silent no-op when the
     /// target has no UserStat row (no production write path creates one at registration).</summary>
     private async Task SeedUserStatAsync(int userId)
     {

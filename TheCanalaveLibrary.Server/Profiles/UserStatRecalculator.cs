@@ -9,9 +9,13 @@ public sealed record UserStatRecalcResult(int RowsInserted, long CountersCorrect
 
 /// <summary>
 /// Recomputes <c>UserStat</c>'s denormalized counters from ground truth (Feature 58,
-/// WU-UserStatRecalc) to correct the drift the real-time same-transaction <c>ExecuteUpdateAsync</c>
-/// increment path (<c>layer2-services.md</c> "UserStats Updates") can accumulate — a lost update
-/// under concurrent writers, a bug in one call site, a manual DB fix that skipped the counter.
+/// WU-UserStatRecalc) to correct the drift the real-time post-commit <c>ExecuteUpdateAsync</c>
+/// increment path (<c>layer2-services.md</c> "UserStats Updates" — owner ruling D22, "post-commit,
+/// recompute-corrected") can accumulate — a failure between a primary commit and its counter
+/// statement, a flip delta double-applied under concurrency, a bug in one call site, a manual DB fix
+/// that skipped the counter. This recompute is the counter's definition (D21): a wired path that
+/// permanently disagrees with it is the defect. Its content-table sibling is
+/// <see cref="ContentCounterRecalculator"/>, which the worker runs first.
 /// Set-based raw SQL, one pair of <c>UPDATE ... FROM</c> statements per counter (mirrors
 /// <see cref="SiteDailyStatAggregator"/>'s style), never a per-user loop.
 ///
@@ -265,16 +269,14 @@ public sealed class UserStatRecalculator(ApplicationDbContext context)
         new("acknowledged_as_inspiration_count", AcknowledgedAsInspirationCountAgg),
     ];
 
-    /// <summary>Badge key → the <c>UserStat</c> column that backs its <c>EarnedCount</c>. Only
-    /// badges with an automated producer appear here — Patron/Architect/Artist are manual grants
-    /// with no counter to sync against and are deliberately absent.</summary>
+    /// <summary>Badge key → the <c>UserStat</c> column that backs its <c>EarnedCount</c>. Derived from
+    /// <see cref="SiteBadges.CounterColumnByBadge"/>, the single source the display filter also reads
+    /// (WU-CounterSymmetry) — Patron/Architect/Artist are manual grants with no counter to sync
+    /// against and are deliberately absent there.</summary>
     private readonly record struct BadgeCounterSpec(string BadgeKey, string CounterColumn);
 
     private static readonly BadgeCounterSpec[] BadgeCounterSpecs =
-    [
-        new(SiteBadges.Recommender, "recommendation_successes_earned"),
-        new(SiteBadges.BetaReader, "acknowledged_as_beta_reader_count"),
-    ];
+        [.. SiteBadges.CounterColumnByBadge.Select(kv => new BadgeCounterSpec(kv.Key, kv.Value))];
 
     /// <summary>
     /// Runs one full recalculation pass: inserts any missing <c>UserStat</c> rows, then corrects

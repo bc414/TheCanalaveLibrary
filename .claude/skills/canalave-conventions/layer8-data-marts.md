@@ -179,7 +179,7 @@ doc comment so no one adds a tracked write path.
 exists **only** where both hold: (1) it's a headline platform-size curve worth charting, and
 (2) the population can shrink (deletions/takedowns), so the stored snapshot carries information a
 running sum of `new_` can't reconstruct. That's true for exactly three: `total_users`,
-`total_stories` (published/visible only), `total_words`. Everything else is flow-only — a lifetime
+`total_stories` and `total_words` (both published/visible only). Everything else is flow-only — a lifetime
 total is either meaningless (`active_users`), already stored elsewhere (`story_views` lifetime =
 `SUM(daily_story_stats)`), or cheaply derivable at read time via a windowed cumulative sum.
 
@@ -188,7 +188,7 @@ total is either meaningless (`active_users`), already stored elsewhere (`story_v
 | `stat_date` | PK | the completed UTC day |
 | `total_users` | stock | `COUNT(User WHERE created_utc <= end-of-day)` |
 | `total_stories` | stock | `COUNT(Story WHERE published_date <= end-of-day AND published/visible)` |
-| `total_words` | stock | `SUM(Story.WordCount)` as-of-day |
+| `total_words` | stock | `SUM(Story.WordCount)` over published/visible stories — the same `published_date < end-of-day AND published/visible` predicate as `total_stories` (WU-CounterSymmetry, 2026-09-30; it used to sum every story, drafts and taken-down ones included). `Story.WordCount` itself counts published chapters only (`layer2-services.md` §"Word Count Is Computed Server-Side") |
 | `new_users` | flow | `User.CreatedUtc` |
 | `new_stories` | flow | `Story.PublishedDate` — the first-publication stamp (NULL = never published, so drafts, pending and rejected stories never count; WU-StoryLifecycle, D2) |
 | `new_chapters` | flow | `Chapter.FirstPublishedDate` (the chapter-level publish anchor — adding or promoting a version never re-counts; WU-StoryLifecycle, D2). **Known divergence from `new_stories`:** no story predicate, and the anchor is stamped on the chapter's own first publish whatever its story's status — so chapters published inside a not-yet-live story (Draft/Pending, or later Rejected) count here while their story never counts in `new_stories`. Left as built pending `roadmap.md` decision row 16 (when does a chapter "go live" if its story isn't live?) |

@@ -69,7 +69,7 @@ public class ServerBlogPostWriteService(
         writeDb.BlogPosts.Add(post);
         await writeDb.SaveChangesAsync();
 
-        // Increment UserStats.BlogPostsWritten — ExecuteUpdateAsync pattern (cross-cutting.md
+        // Increment UserStats.BlogPostsWritten — ExecuteUpdateAsync pattern (layer2-services.md
         // §"UserStats Updates"). Best-effort: stat drift is recovered by the background recalculator.
         await writeDb.UserStats
             .Where(us => us.UserId == authorId)
@@ -185,7 +185,7 @@ public class ServerBlogPostWriteService(
 
         await DeleteWithDependentsAsync(blogPostId);
 
-        // Decrement BlogPostsWritten post-commit (D22; cross-cutting.md §"UserStats Updates").
+        // Decrement BlogPostsWritten post-commit (D22; layer2-services.md §"UserStats Updates").
         await writeDb.UserStats.Where(us => us.UserId == authorId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.BlogPostsWritten, us => us.BlogPostsWritten - 1));
     }

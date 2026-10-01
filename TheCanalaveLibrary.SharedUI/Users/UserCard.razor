@@ -27,10 +27,15 @@
                     @* Badge icons are provisioned out-of-band (same policy as sprites); hide on
                        miss rather than render a broken-image glyph. Count displayed instead of a
                        tier (no-tiers model, WU-StatBadgeProducers — see audit/Badges.md "Tier
-                       paradigm — RETIRED site-wide"). *@
-                    <span class="inline-flex items-center gap-0.5" title="@($"{badge.Name} ({badge.EarnedCount})")">
+                       paradigm — RETIRED site-wide"). A manual grant carries EarnedCount 0 by design
+                       and shows no count — the same > 0 guard as BadgeSettingsForm; a zero-count
+                       counter-backed badge never reaches here (filtered server-side, D21). *@
+                    <span class="inline-flex items-center gap-0.5" title="@(badge.EarnedCount > 0 ? $"{badge.Name} ({badge.EarnedCount})" : badge.Name)">
                         <img src="@badge.IconUrl" alt="" class="size-4" loading="lazy" data-hide-on-error />
-                        <span class="text-[10px] leading-none text-(--color-text-muted)">@badge.EarnedCount</span>
+                        @if (badge.EarnedCount > 0)
+                        {
+                            <span class="text-[10px] leading-none text-(--color-text-muted)">@badge.EarnedCount</span>
+                        }
                     </span>
                 }
             </div>

@@ -308,6 +308,29 @@ Precedent: `ModerationServiceTests.ApproveStoryAsync_StatusChangesBetweenReadAnd
 contention a lock serializes (e.g. `SpotlightServiceTests.Redeem_TwoRacersOneOpening_ExactlyOneWins`),
 where "exactly one wins" is the whole claim.
 
+An `INSERT … ON CONFLICT DO NOTHING` upsert (`layer2-services.md` §"Check-then-act posture") is
+tested the same way: the interleaved SQL inserts the competing row just before the service's own
+`INSERT INTO <table>`. Pass `interceptReaders: true`, so the marker also matches the old shape (an EF
+`SaveChangesAsync` insert). That makes the test fail against the pre-fix `AnyAsync`-then-`Add` code
+instead of skipping it. Precedent: `CounterSymmetryTests` (WU-CounterSymmetry, 2026-09-30).
+
+## Counter convergence: after a wired op, the reconciler corrects nothing (WU-CounterSymmetry)
+
+The regression that matters for a denormalized counter is the wired path drifting away from its
+recompute (`layer2-services.md` §"Recalculation worker (F58)" → "Direction of authority"). So a test of a
+counter-moving write asserts the expected value **and** convergence: run the reconciler
+(`UserStatRecalculator.RecalculateAllAsync` or `ContentCounterRecalculator.RecalculateAllAsync`) and
+assert that it corrected **0** and that the column is unchanged. A pass that corrects something means
+the two formulas have diverged. That is how D24's `GroupsJoined` oscillation would have been caught.
+- **Seed `UserStat` rows first.** `SeedUserAsync` never creates one, and the real-time
+  `ExecuteUpdateAsync` silently no-ops without it, so a counter test that skips the seed asserts 0 == 0.
+  Seed a row for every user whose counter the test reads, plus every user the op touches, so that
+  `CountersCorrected == 0` is not polluted by the recalculator's own missing-row inserts. Seed it
+  with the ground truth the test's direct inserts already created: a `SeedStoryAsync` story bypasses
+  `CreateStoryAsync`'s `+1`, so its author's row needs `StoriesWritten` = their story count.
+- Assert `UserStatRecalcResult.RowsInserted == 0` too when every user was seeded: it proves the
+  convergence assertion compared real rows.
+
 ## Integration test helper pitfall: async methods that create a scope must `await` the call inside it
 
 Any helper method that opens a `using IServiceScope scope` and calls a service **must be `async` and

@@ -70,7 +70,7 @@ public class ServerFollowingWriteService(
 
         await writeDb.SaveChangesAsync();
 
-        // Increment UserStats counters for both sides (cross-cutting.md §"UserStats Updates").
+        // Increment UserStats counters for both sides (layer2-services.md §"UserStats Updates").
         await writeDb.UserStats.Where(us => us.UserId == targetUserId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.FollowerCount, us => us.FollowerCount + 1));
         await writeDb.UserStats.Where(us => us.UserId == actorId)
@@ -98,7 +98,7 @@ public class ServerFollowingWriteService(
         writeDb.FollowedUsers.Remove(row);
         await writeDb.SaveChangesAsync();
 
-        // Decrement UserStats counters for both sides (cross-cutting.md §"UserStats Updates").
+        // Decrement UserStats counters for both sides (layer2-services.md §"UserStats Updates").
         await writeDb.UserStats.Where(us => us.UserId == targetUserId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.FollowerCount, us => us.FollowerCount - 1));
         await writeDb.UserStats.Where(us => us.UserId == actorId)
@@ -134,12 +134,16 @@ public class ServerFollowingWriteService(
 
         await RequireProfileVisibleAsync(targetUserId);
 
+        // Kept even though the insert below is idempotent on its own: it fixes the semantic order,
+        // so a re-vouch is a no-op even when the user is at the limit (not a VouchLimitException).
         bool alreadyVouched = await writeDb.Vouches
             .AnyAsync(v => v.VouchingUserId == actorId && v.VouchedUserId == targetUserId);
 
         if (alreadyVouched) return; // idempotent — already vouched is a no-op
 
         // Constraint check on writeDb for consistency (layer2-services.md "Write-Side Reads").
+        // Check-then-act by design: the 5-limit is a stated-soft policy (owner ruling D23) — a
+        // concurrent overshoot is bounded and the next vouch at the limit is refused.
         int currentCount = await writeDb.Vouches.CountAsync(v => v.VouchingUserId == actorId);
         if (currentCount >= FollowingConstants.MaxVouchesPerUser)
             throw new VouchLimitException();
@@ -147,15 +151,23 @@ public class ServerFollowingWriteService(
         // Sanitize the rich-text vouch note before persisting (sanitize-once-on-save).
         string? sanitizedText = vouchText is not null ? sanitizer.Sanitize(vouchText) : null;
 
-        writeDb.Vouches.Add(new Vouch
+        // The idempotency half is declarative (D23): a concurrent double vouch used to pass the
+        // AnyAsync above twice and 500 on pk_vouches. Now the loser's insert lands 0 rows.
+        Vouch vouch = new()
         {
             VouchingUserId = actorId,
             VouchedUserId = targetUserId,
             VouchText = sanitizedText,
             DateVouched = DateTime.UtcNow
-        });
+        };
+        int inserted = await writeDb.Database.ExecuteSqlAsync($"""
+            INSERT INTO vouches (vouching_user_id, vouched_user_id, vouch_text, date_vouched)
+            VALUES ({vouch.VouchingUserId}, {vouch.VouchedUserId}, {vouch.VouchText}, {vouch.DateVouched})
+            ON CONFLICT (vouching_user_id, vouched_user_id) DO NOTHING
+            """);
 
-        await writeDb.SaveChangesAsync();
+        // Only the vouch that landed notifies — the target gets one NewVouchOnYou, not two.
+        if (inserted == 0) return;
 
         // Best-effort post-commit notification (WU22). Primary save already committed above;
         // a notification failure must not roll back the vouch. See cross-cutting.md.

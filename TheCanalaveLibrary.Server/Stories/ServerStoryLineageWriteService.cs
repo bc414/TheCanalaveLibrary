@@ -12,13 +12,15 @@ namespace TheCanalaveLibrary.Server;
 ///
 /// <para><b>Producer of <c>UserStat.AcknowledgedAsInspirationCount</c> (WU-StatBadgeProducers)</b> —
 /// type id 1 ("Inspired By") only, counted toward the TARGET story's author (the person who
-/// inspired), guarded against same-author links. Increments on <see cref="ApproveLineageAsync"/>
-/// (a genuine Pending→Approved transition — a self-owned link auto-approves via
-/// <see cref="RequestLineageAsync"/> instead, but is always same-author and so never passes the
-/// guard, meaning no increment call is needed there). Decrements on <see cref="RejectLineageAsync"/>
-/// / <see cref="DeleteLineageAsync"/> only when the row was Approved beforehand — the transition-
-/// delta rule (<c>layer2-services.md</c>) — since both methods can act on an already-Approved row
-/// without a status precondition.</para>
+/// inspired), guarded against same-author links. Increments on <see cref="ApproveLineageAsync"/>,
+/// which enforces a genuine Pending→Approved transition with a conditional write (<c>WHERE status =
+/// Pending</c>; anything else is a <see cref="StoryLineageValidationException"/> — WU-CounterSymmetry;
+/// before it, approve had no precondition and a double approve counted twice). A self-owned link
+/// auto-approves via <see cref="RequestLineageAsync"/> instead, but is always same-author and so never
+/// passes the guard, meaning no increment call is needed there. Decrements on
+/// <see cref="RejectLineageAsync"/> / <see cref="DeleteLineageAsync"/> only when the row was Approved
+/// beforehand — the transition-delta rule (<c>layer2-services.md</c>) — since both methods can act on
+/// an already-Approved row by design (revoking or removing an approved link).</para>
 /// </summary>
 public class ServerStoryLineageWriteService(
     ApplicationDbContext writeDb,
@@ -136,8 +138,22 @@ public class ServerStoryLineageWriteService(
         if (target is null || target.AuthorId != userId)
             throw new UnauthorizedAccessException("You must own the target story to approve a lineage request.");
 
-        link.StatusId = StoryLineageStatus.Approved;
-        await writeDb.SaveChangesAsync();
+        // Pending → Approved only, as one conditional write (the AcceptAsync guard shape, made
+        // race-proof). This method used to overwrite the status unconditionally, so a double approve
+        // (a double click, or two tabs) incremented AcknowledgedAsInspirationCount twice and sent a
+        // second StoryLineageApproved — and approving an already-Approved self-owned link did the same.
+        // The loser of a race finds no Pending row and is refused like a sequential re-approve.
+        int approved = await writeDb.StoryLineages
+            .Where(l => l.SourceStoryId == sourceStoryId && l.TargetStoryId == targetStoryId
+                        && l.RelationshipTypeId == typeId && l.StatusId == StoryLineageStatus.Pending)
+            .ExecuteUpdateAsync(s => s.SetProperty(l => l.StatusId, StoryLineageStatus.Approved));
+
+        // The set-based write bypassed the tracker: refresh the tracked copy so a later call in this
+        // scope (a circuit) never reads a stale status through FindAsync.
+        await writeDb.Entry(link).ReloadAsync();
+
+        if (approved == 0)
+            throw new StoryLineageValidationException(["This lineage request is no longer pending."]);
 
         Story? source = await writeDb.Stories.FirstOrDefaultAsync(s => s.StoryId == sourceStoryId);
 

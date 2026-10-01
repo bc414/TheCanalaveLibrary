@@ -17,18 +17,21 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-TptHardDelete (2026-09-30) — owner rulings **D10**, **D11** and (at its review
-  fixes) **D12**. Every content-parent delete (chapter, blog post of any subtype, the moderation hard
-  delete, the account deletion's profile wall) removes its TPT children through their base rows with
-  the set-based `TptDelete`; the five parent → TPT-child FKs are RESTRICT, so a forgotten cleanup fails
-  instead of orphaning. Blog-post lifecycle is per subtype (group posts got update/delete + routes; a
-  cross-subtype id is 404). Polls survive their owner (SET NULL; NULL owns nothing). Review fixes: the
-  chapter and user deletes clear the tracker first (a circuit-tracked comment made the chapter delete
-  throw), a lost blog-post delete race 404s instead of double-decrementing, and D12's doc sweep + copy
-  fix landed ("[Deleted Comment]" retired). F36 L4.5 went to 1 (no browser), then back to 5 after its
-  browser pass the same day (both phases, no bug in the WU's code — **H21** closed, **H22** filed);
-  **B25/F16** opened. `dotnet test`: Unit 1,079, RazorComponents 764, Integration 1,345.
-  **Pointers:** its DONE entry; `layer2-services.md` §"Hard deletes of content parents".
+- **Last landed:** WU-CounterSymmetry (2026-09-30) — owner rulings **D21–D24**.
+  - **Every counter has a recompute.** The new `ContentCounterRecalculator` (11 content counters)
+    runs nightly before `UserStatRecalculator`. Counters are post-commit, with the primary write
+    first.
+  - **Check-then-act, per family.** The USI rows and their date partition, `group_members` and
+    vouches are `ON CONFLICT` upserts, so a double submit no longer 500s. The gem, highlight and
+    vouch limits are written down as stated-soft.
+  - **Producers fixed.** Creating a group counts as joining it. `Story.WordCount` counts published
+    chapters only. `VersionCount` is atomic. The like toggles return the landed count. A double
+    lineage approve is refused.
+  - **Badges.** Zero-count counter-backed badges are hidden at display; F50 L4.5 5→1 (no browser).
+  - **Filed:** **D11/H23**. `dotnet test`: Unit 1,079, RazorComponents 766, Integration 1,373.
+  - **Pointers:** its DONE entry; `layer2-services.md` §"Counter recompute principle" and
+    §"Check-then-act posture".
+  Before that, 2026-09-30: WU-TptHardDelete — worksheet D10/D11/D12 (content-parent deletes through `TptDelete`, RESTRICT FKs, per-subtype blog-post lifecycle, polls survive their owner); see its DONE entry.
   Before that, 2026-09-30: WU-ModerationIntegrity — worksheet D7/D8/D9 (lock-and-guard resolves, sibling closing, `ReportedUserId`, Reinstate, service-side mod read gates); see its DONE entry.
   Before that, 2026-09-30: WU-InertFeatures — worksheet D3/D4/D5/D16/D17 (attribution on the RIL bit, the de-identified notification core, the new-chapter fan-out); see its DONE entry.
   Before that, 2026-09-30: WU-AccessGateSweep2 — worksheet D6 (raises guarded, clears free) plus service audit §2.6's access fixes; see its DONE entry.
@@ -234,8 +237,8 @@ references it, does not restate it.
   **In flight (between-phase): the worksheet-decisions build campaign** — the answered rows of
   `.claude/design/audit-decision-worksheet.md` built as a sequence of WUs; WU-StoryLifecycle (D1/D2),
   WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
-  (D7/D8/D9) and WU-TptHardDelete (D10/D11) have landed, and **WU-CounterSymmetry** is next in the
-  campaign's build order.
+  (D7/D8/D9), WU-TptHardDelete (D10/D11) and WU-CounterSymmetry (D21–D24) have landed, and
+  **WU-NotificationCorrectness** is next in the campaign's build order.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -259,7 +262,7 @@ references it, does not restate it.
   pass, 2026-09-30, which closed H13; **F13/F14/F15/D10/H19** opened by WU-ModerationIntegrity,
   2026-09-30, which closed B18 (its browser pass closed H19 the same day and opened **E8/H20**);
   **B25/F16/H21** opened by WU-TptHardDelete, 2026-09-30 (its browser pass closed H21 the same day and
-  opened **H22**)),
+  opened **H22**); **D11/H23** opened by WU-CounterSymmetry, 2026-09-30),
   including two **high-priority security items:
   E2 and E3**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -281,7 +284,8 @@ references it, does not restate it.
   **H14**'s attribution-and-notifications pass ran 2026-09-30 too, returned F16/F30/F33/F41/F55 L4.5
   to 5 and closed — see WU-InertFeatures' DONE entry. Tracker **H21**'s pass, WU-TptHardDelete's
   blog-post page and delete paths, ran 2026-09-30 too, returned F36 L4.5 to 5 and closed — see
-  WU-TptHardDelete's DONE entry.)
+  WU-TptHardDelete's DONE entry. Tracker **H23**'s pass — WU-CounterSymmetry's badge display, both
+  phases — is owed; it restores F50 L4.5 to 5.)
 
 ---
 
@@ -424,6 +428,109 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-CounterSymmetry — counter & concurrency doctrine: every counter derived and reconciled, post-commit counters, check-then-act hardened per family, creating a group counts as joining (worksheet D21–D24; extends `Profiles/`, `Groups/`, `Following/`, `UserStoryInteractions/`, `Chapters/`, `Comments/`, `Recommendations/`, `Moderation/`, `Badges/`, `Stories/`, `Users/`) — DONE ✓ (2026-09-30)
+
+- **Cells:** **F50 L4.5 5→1** (the badge display filter and `UserCard`'s count guard, no browser
+  available — tracker **H23**). Everything else lands beneath Stage-5 cells: F58 L2 (the reconciler),
+  F22 L2, F38 L2, F6 L2, F16 L2, F19 L2, F25 L2, F28 L2, F10 L2, F47 L2, F62 L8, F50 L2/L3.5. No
+  migration.
+- **Trigger:** owner rulings D21 (every counter derived, recompute in code), D22 (post-commit,
+  recompute-corrected), D23 (check-then-act posture per family) and D24 (creating counts as joining);
+  service audit §2.4.2/§2.4.3/§2.4.6, schema §3.6. Orchestrator amendment U1 (lineage double approve).
+- **What landed:**
+  1. **D24 + D23 (`group_members`).** `CreateGroupAsync` adds the creator's `GroupsJoined` +1 after
+     their member row saves. `JoinAsync` is one `INSERT … ON CONFLICT DO NOTHING`, and its `+1` runs
+     only when that insert landed a row.
+  2. **D23 (vouches, USI).** The vouch insert is an `ON CONFLICT` upsert, and only the vouch that
+     landed notifies. The pre-check is kept, so a re-vouch at the limit is still a no-op. All four USI
+     create sites (the fourth is `SetReadItLaterFromRecommendationAsync`) and the date partition go
+     through `EnsureRowAsync` / `EnsureDatePartitionAsync`: an `ON CONFLICT` insert, then a tracked
+     re-read, with the `was*` captures taken from that row. The ensure step runs after the D6 guard,
+     and the tracker is never cleared.
+  3. **D22.** `Chapter.VersionCount++` is now a post-commit `ExecuteUpdateAsync`.
+  4. **§2.4.3.** `Story.WordCount` / `WordsWritten` count published chapters only, and
+     `SetPublishedAsync` refreshes them.
+  5. **§2.4.6.** The comment and recommendation like toggles return the re-read landed count; the
+     recommendation one was the unnamed third sibling. `site_daily_stats.total_words` takes
+     `total_stories`' visibility predicate.
+  6. **D21.** The new `ContentCounterRecalculator` (`Server/Profiles/`) has 11 specs: `like_count` ×3,
+     `successful_rec_count`, `version_count`, `stories.word_count` and `active_report_count` ×5. The
+     worker runs it before `UserStatRecalculator`, each pass with its own try/log. It emits a
+     `ContentCounterRecalc.Pass` span on the existing source.
+  7. **D21's zero-count badges.** `SiteBadges.CounterColumnByBadge` is the single source.
+     `BadgeCounterSpecs` derives from it, and all 11 display projections drop a 0-count counter-backed
+     badge. Curation is unfiltered. `UserCard` hides a 0 count.
+  8. **U1.** `ApproveLineageAsync` is Pending-only, as a conditional update; anything else is a 400.
+  9. **Seeds.** `SeedGraph` sums published chapters only. `DataSeeder` gives TestUser's Recommender
+     badge real ground truth (one success, count 1).
+  10. **Comments.**
+      - The counter citations now point at `layer2-services.md`.
+      - "Same transaction" is now "post-commit" in the code and in four test comments.
+      - `IChapterWriteService`, `IGroupWriteService` and `IStoryLineageWriteService` docs updated.
+      - `RecordSuccessAsync`'s false "UserStat row on registration" corrected.
+  11. **Docs, moment 1.** `layer2-services.md`:
+      - §"UserStats Updates" rewritten (D22; spec §9.4 superseded);
+      - new §"Counter recompute principle" and §"Check-then-act posture" (classification test, family
+        table, stated-soft limits, advisory-lock bar, the ensure-row mechanism);
+      - extended §"Counter mutation rule", the counter map, the worker section (direction of
+        authority, order) and §"Word Count";
+      - the `ApprovedStorySubmissions` statement reused, not rewritten.
+
+      Elsewhere: `layer8-data-marts.md` `total_words`; `logging.md`; `testing.md` (the convergence
+      rule, the upsert interleave); audit Settled notes in Groups F38 and Profiles F22; roadmap
+      §Resolved; worksheet Built lines; `grid_axes.md` F58 scope.
+- **Left alone (and why):**
+  - **Routed elsewhere:** `group_stories` unique → WU-SchemaHardening; the poll single-choice
+    restructure + `ConfigLocked` → WU-PollVoteIntegrity.
+  - **Pending worksheet rows:** group deletion's `GroupsJoined` fall (D47(b)), recorded as the
+    conditional sixth case only; the StoriesInProgress formula (D41) unchanged.
+  - **Not ruled, not changed:** `BlogPostsWritten` stays unchanged (tracker F16, owner-open); the
+    blog-like SQL clamp vs the unclamped siblings (an asymmetry with no ruling); non-negativity
+    CHECKs (schema §2.6 excludes them).
+  - **Already done:** the report-submit reorder (WU-ModerationIntegrity had already landed it);
+    the USI "reject impossible combinations" comment (already corrected).
+  - **Unrouted crash sites → new tracker D11.** These are the sibling create-create and delete-delete
+    500s D23 did not route: `FollowAsync`, the like inserts and unlikes, `CustomList`/`Series` adds,
+    `LeaveAsync`/`UnfollowAsync`/`RemoveVouchAsync`, the USI sparse cleanup, and the attribution row.
+  - **Not owner-open:** the `ApprovedStorySubmissions` question. Per the amendment, the orchestrator
+    flags the D1/D21 tension to the owner separately.
+- **Found while building:**
+  - `Reference(...).LoadAsync()` is a no-op on a navigation an `Include` already marked loaded, so the
+    partition ensure needs a tracked query. The rule is in layer2 §"Check-then-act posture".
+  - The like toggles' concurrency fix *is* automatable by interleaving another user's SQL, contrary
+    to the WU-CounterAtomicity notes. Both are now tested.
+- **Verification:** `dotnet build` 0 errors, no new warnings in touched files; `has-pending-model-changes`
+  clean. `dotnet test` all green: Unit 1,079 (+0), RazorComponents 766 (+2), Integration 1,373 (+28).
+  The four gates pass. New Integration tests:
+  - `CounterSymmetryTests` (13, all interleaved per `testing.md`: join, vouch, six USI, VersionCount,
+    both like toggles, two lineage);
+  - `ContentCounterRecalculatorTests` (3: all 11 specs corrected and zeroed, exactly 22 corrections, a
+    second pass corrects 0);
+  - `BadgeDisplayTests` (3);
+  - `GroupServiceTests` +5 and `ChapterWriteServiceTests` +4, each ending in a convergence pass that
+    corrects 0.
+
+  Also: `SiteDailyStatAggregatorTests` tightened to exact totals; two broken word-count tests now
+  publish first; bUnit `UserCardTests` +2. Mutation-checked (every reverted fix fails its tests): both
+  `ON CONFLICT` USI inserts, the join and vouch `ON CONFLICT`, the create `+1`, the `IsPublished`
+  filter, the `++`, both re-reads, the `total_words` predicate, the lineage `Pending` predicate, and
+  the badge filter. WU-CounterSymmetry (2026-09-30) ran with no browser available (H23).
+- **Dev DB:** no migration. The first nightly reconciler pass rewrites drifted values: seeded Draft
+  stories' `word_count` drops to 0. The `DataSeeder` badge change needs `reset-dev-db.ps1`.
+- **Hand-offs:**
+  - **WU-ParityAndRemaining:** if it wraps `CreateGroupAsync` in a transaction, the `GroupsJoined` +1
+    stays after the commit.
+  - **WU-GroupAdminRescue:** the moderator assign-admin action must not move `GroupsJoined`.
+  - **WU-PollVoteIntegrity:** the D23 classification test is already promulgated.
+  - **WU-TrackerFixes H7:** may hoist the private `SeedUserStatAsync` copies (now also in
+    `ChapterWriteServiceTests`, `GroupServiceTests`, `CounterSymmetryTests`).
+- **Pointers:**
+  - `layer2-services.md` §"UserStats Updates", §"Counter recompute principle", §"Check-then-act
+    posture", §"Recalculation worker (F58)";
+  - audit Stage notes in Profiles F22/F58, Groups F38, Chapters F6, UserStoryInteractions F16,
+    Following F19, Comments F25, Recommendations F28, Stories F10, Moderation F47/F62, Badges F50;
+  - `roadmap.md` §Resolved (D21–D24).
 
 ## WU-TptHardDelete — content-parent deletes go through the TPT base rows (`TptDelete`), parent → TPT-child FKs RESTRICT, per-subtype blog-post lifecycle, polls survive their owner (worksheet D10/D11; extends `Data/`, `BlogPosts/`, `Chapters/`, `Moderation/`, `Identity/`, `Notifications/`) — DONE ✓ (2026-09-30)
 

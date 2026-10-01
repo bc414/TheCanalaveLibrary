@@ -13,7 +13,7 @@ closing MA-108; formerly the top-level `SiteConstants.cs`).
 ## Feature 50 — Badge System
 - **L1 — Stage 5.** String-keyed `Badge` + `UserBadge` junction with curation ordering. Seed is partially
   complete (placeholder comment) but the shape is sound. Awaiting migration.
-- **L2 — Stage 5 (2026-06-25, WU36; acknowledgment by-story read gated + `RevokeAsync` ownership-first, WU-AccessGateSweep2, 2026-09-30 — see its Stage note).**
+- **L2 — Stage 5 (2026-06-25, WU36; acknowledgment by-story read gated + `RevokeAsync` ownership-first, WU-AccessGateSweep2, 2026-09-30 — see its Stage note; zero-count counter-backed badges hidden at display, WU-CounterSymmetry, 2026-09-30 — see its Stage note).**
   - Created `Core/Badges/`: `EarnedBadgeDto`, `IBadgeReadService`, `IBadgeWriteService`.
   - Created `Server/Badges/`: `ServerBadgeReadService`, `ServerBadgeWriteService` (primary-ctor chaining;
     CS9107-safe). Registered in `Server/Program.cs` (write service scoped, read forwarded).
@@ -73,7 +73,7 @@ closing MA-108; formerly the top-level `SiteConstants.cs`).
   site now runs global InteractiveAuto (badge surfaces not browser-driven in the flip's wave). Full
   wave narrative + the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
 
-- **L4.5-Browser verification (2026-07-02) — Feature 50 → L4.5=5.** Browser-verifiable surface
+- **L4.5-Browser verification (2026-07-02) — Feature 50 → L4.5=5** (lowered to **1** by WU-CounterSymmetry, 2026-09-30: the display filter and the `UserCard` count guard changed what a badge row shows, with no browser available — tracker **H23**; see its Stage note). Browser-verifiable surface
   exercised as TestUser against the seeded dev DB:
   - Empty state: `/settings` Badges section rendered "You haven't earned any badges yet."
   - Curation: after awarding `Recommender` (direct `user_badges` insert — the award *trigger*
@@ -112,6 +112,42 @@ empty for a stranger and anonymous, populated for the author; taken-down: empty 
 `StoryAcknowledgmentServiceTests.Revoke_NotStoryOwner_NoCredit_ThrowsUnauthorizedAccess` and
 `Revoke_NonexistentStory_ThrowsUnauthorizedAccess`; the existing revoke tests still green. All four
 fail against the pre-fix code. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
+
+### Feature 50 L2/L4.5 — WU-CounterSymmetry Stage note (2026-09-30): zero-count badges hidden at display (owner ruling D21's sub-ruling)
+
+**Cells:** **L4.5 5→1** (no browser was available; tracker **H23** owes the pass that restores it).
+L2/L3.5 change beneath Stage 5.
+- **The incoherence D21 named.** Under the no-tiers model a badge is a number. A counter-backed badge
+  whose count recomputes to 0 (its recommendation was deleted, the crediting reader deleted their
+  account) kept showing as earned. D21 keeps the recalc boundary: `SyncBadgeEarnedCountAsync` never
+  awards or deletes a row, so the 0-row survives as a diagnostic trace. The fix is at display.
+- **Single source.** `SiteBadges.CounterColumnByBadge` (Recommender → `recommendation_successes_earned`,
+  BetaReader → `acknowledged_as_beta_reader_count`) plus its key array `CounterBackedKeys`.
+  `UserStatRecalculator.BadgeCounterSpecs` now derives from it.
+- **The filter.** All 11 display projection sites extend `DisplayOrder > 0` with `&& (EarnedCount > 0
+  || !CounterBackedKeys.Contains(BadgeKey))`, which EF translates to `= ANY`. The sites: manual tree
+  search ×3, following/vouch cards ×3, profile header + vouch list + user search ×3, recommendation
+  cards ×2.
+- **What still shows.** A manual grant (Patron, Architect, Artist) carries `EarnedCount = 0` by design
+  and always shows; D21 puts it out of scope. The owner's curation read
+  (`GetMyBadgesForCurationAsync`) still returns every row, and `BadgeSettingsForm` already guards its
+  `×count` at `> 0`.
+- **`UserCard` rider.** The card rendered `@badge.EarnedCount` unconditionally, so a manual grant
+  showed a literal "0" and the tooltip "Patron (0)". The count span and the tooltip suffix now render
+  only at `> 0`, mirroring `BadgeSettingsForm`.
+- **Seed.** `DataSeeder` now gives TestUser's seeded Recommender badge real ground truth: one
+  `RecommendationSuccess`, with `EarnedCount` 1. Its old free-standing 12 would have recomputed to 0
+  and then been hidden. The workbench needs `reset-dev-db.ps1` to show it.
+
+Rule text: `layer2-services.md` §"Counter recompute principle" (last paragraph).
+**Test tiers:**
+- **Integration**, `BadgeDisplayTests` (3): a 0-count Recommender is absent from the profile header and
+  from the recommendation card's recommender badges, while a 0-count Patron and a counted BetaReader
+  are present. The curation read returns all three. Mutation-checked: without the filter, the
+  profile-header test fails.
+- **RazorComponents**, `UserCardTests` (+2): a counted badge renders "3" and "Recommender (3)", and a
+  zero-count badge renders no count text, the tooltip "Patron", and still its icon.
+- The browser pass is owed: tracker **H23**.
 
 ## WU36 Settled Decisions (2026-06-25)
 

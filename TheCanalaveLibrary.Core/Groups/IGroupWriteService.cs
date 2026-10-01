@@ -17,7 +17,8 @@ public interface IGroupWriteService : IGroupReadService
     // ── Group CRUD ────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Creates a new group. The caller is automatically added as an Admin member.
+    /// Creates a new group. The caller is automatically added as an Admin member, and the creator's
+    /// <c>UserStats.GroupsJoined</c> moves +1 — creating counts as joining (owner ruling D24).
     /// <c>CreatorId</c> is server-stamped from <see cref="IActiveUserContext.UserId"/>.
     /// Sanitizes <c>dto.Description</c> before persisting.
     /// </summary>
@@ -39,7 +40,9 @@ public interface IGroupWriteService : IGroupReadService
     // ── Membership ────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Adds the current user to the group as a Member. Idempotent — no-op when already a member.
+    /// Adds the current user to the group as a Member. Idempotent — no-op when already a member,
+    /// including under a concurrent double join (an <c>ON CONFLICT DO NOTHING</c> insert; the
+    /// <c>GroupsJoined</c> +1 runs only for the insert that landed — owner ruling D23).
     /// Only callable if the group is visible to the current user (audience filter).
     /// </summary>
     /// <exception cref="KeyNotFoundException">Group not found (or not visible to current user).</exception>

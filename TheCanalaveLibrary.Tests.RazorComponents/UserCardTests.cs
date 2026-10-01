@@ -133,6 +133,33 @@ public class UserCardTests : BunitContext
         reportInvoked.Should().BeTrue("clicking Report must invoke the OnReport callback");
     }
 
+    // ── badge counts (WU-CounterSymmetry: a badge is a number; a manual grant's 0 is not shown) ──
+
+    [Fact]
+    public void UserCard_BadgeWithACount_RendersTheCountAndTheTooltipSuffix()
+    {
+        IRenderedComponent<UserCard> cut = Render<UserCard>(p => p.Add(c => c.User,
+            MakeUser(username: "Gary") with { Badges = [new UserCardBadgeDto("/icons/rec.png", "Recommender", 3)] }));
+
+        IElement badge = cut.Find("span[title]");
+        badge.GetAttribute("title").Should().Be("Recommender (3)");
+        badge.TextContent.Trim().Should().Be("3");
+    }
+
+    [Fact]
+    public void UserCard_ZeroCountBadge_RendersNoCountText_AndAPlainTooltip()
+    {
+        // A manual grant (Patron/Architect/Artist) carries EarnedCount 0 by design; it used to render
+        // a literal "0" and "Patron (0)". Same > 0 guard as BadgeSettingsForm.
+        IRenderedComponent<UserCard> cut = Render<UserCard>(p => p.Add(c => c.User,
+            MakeUser(username: "Oak") with { Badges = [new UserCardBadgeDto("/icons/patron.png", "Patron", 0)] }));
+
+        IElement badge = cut.Find("span[title]");
+        badge.GetAttribute("title").Should().Be("Patron");
+        badge.TextContent.Trim().Should().BeEmpty("no count text for a zero count");
+        badge.QuerySelector("img").Should().NotBeNull("the badge icon itself still renders");
+    }
+
     // ── helper ───────────────────────────────────────────────────────────────────
 
     private static UserCardDto MakeUser(

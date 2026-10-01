@@ -94,7 +94,8 @@ public class ServerChapterWriteService(
         chapter.PrimaryContentId = firstVersion.ChapterContentId;
         await writeDb.SaveChangesAsync();
 
-        // Recompute Story.WordCount (primary chapter versions only).
+        // Recompute Story.WordCount (published primary versions only — a new chapter is a draft, so
+        // this is delta 0 until SetPublishedAsync).
         await RefreshStoryWordCountAsync(dto.StoryId);
 
         return chapter.ChapterId;
@@ -154,8 +155,15 @@ public class ServerChapterWriteService(
         };
 
         writeDb.ChapterContents.Add(altVersion);
-        chapter.VersionCount++;
         await writeDb.SaveChangesAsync();
+
+        // VersionCount was the codebase's last tracked `++` — a read-modify-write that loses one of two
+        // concurrent increments. Atomic and post-commit like every sibling counter (owner ruling D22;
+        // layer2-services.md §"Counter mutation rule"). The tracked `chapter` keeps its stale value,
+        // which nothing saves: EF writes only modified properties.
+        await writeDb.Chapters
+            .Where(c => c.ChapterId == chapterId)
+            .ExecuteUpdateAsync(s => s.SetProperty(c => c.VersionCount, c => c.VersionCount + 1));
 
         return altVersion.ChapterContentId;
     }
@@ -195,7 +203,7 @@ public class ServerChapterWriteService(
 
         await writeDb.SaveChangesAsync();
 
-        // Recompute Story.WordCount (primary version's word count may have changed).
+        // Recompute Story.WordCount (published primary versions — editing a draft moves nothing).
         await RefreshStoryWordCountAsync(content.Chapter.StoryId);
     }
 
@@ -230,7 +238,7 @@ public class ServerChapterWriteService(
         chapter.PrimaryContentId = chapterContentId;
         await writeDb.SaveChangesAsync();
 
-        // Recompute Story.WordCount — the primary version's word count is now different.
+        // Recompute Story.WordCount — the published primary versions' total may now differ.
         await RefreshStoryWordCountAsync(chapter.StoryId);
     }
 
@@ -267,8 +275,13 @@ public class ServerChapterWriteService(
 
         chapter.IsPublished = isPublished;
         await writeDb.SaveChangesAsync();
-        // Story.ChapterCount is not a stored column — it's computed from Chapters.Count(IsPublished)
-        // in EF projections. No counter to maintain here (forward_plan.md "Story.ChapterCount" Resolved).
+
+        // Story.WordCount counts published chapters only (service audit §2.4.3), so the publish and
+        // unpublish transitions are where a chapter's words enter and leave it — and the author's
+        // WordsWritten by the same delta. Idempotent: a no-change call refreshes to delta 0.
+        // (Story.ChapterCount is not a stored column — projections compute it from
+        // Chapters.Count(IsPublished) — so there is no chapter count to maintain.)
+        await RefreshStoryWordCountAsync(chapter.StoryId);
 
         // New-chapter fan-out (type 10), best-effort post-commit. Default, not an owner ruling
         // (roadmap.md row 17): only while the story itself is publicly published — the explicit status
@@ -454,15 +467,18 @@ public class ServerChapterWriteService(
         await writeDb.SaveChangesAsync();
     }
 
-    // Recomputes Story.WordCount as the sum of each primary ChapterContent's WordCount.
-    // Called after any operation that may change a chapter's primary word count.
-    // Also updates the author's WordsWritten UserStat by the delta (cross-cutting.md §"UserStats Updates").
+    // Recomputes Story.WordCount as the sum of the primary ChapterContent's WordCount over the
+    // story's PUBLISHED chapters (service audit §2.4.3, WU-CounterSymmetry — drafts contribute 0).
+    // Called after any operation that may change that total: publish/unpublish, and a create, edit,
+    // primary switch or delete (each a delta 0 for a draft). An absolute recompute, not a ±delta, so
+    // it has no lost update to lose (layer2-services.md §"Counter mutation rule"). Also moves the
+    // author's WordsWritten by the delta (layer2-services.md §"UserStats Updates"). The same
+    // expression is ContentCounterRecalculator's stories.word_count spec.
     private async Task RefreshStoryWordCountAsync(int storyId)
     {
-        // Sum word counts of primary ChapterContent rows for this story.
         // Chapters with null PrimaryContentId (brief create window) contribute 0.
         int totalWords = await writeDb.Chapters
-            .Where(c => c.StoryId == storyId && c.PrimaryContentId != null)
+            .Where(c => c.StoryId == storyId && c.IsPublished && c.PrimaryContentId != null)
             .SumAsync(c => c.PrimaryContent!.WordCount);
 
         Story? story = await writeDb.Stories.FindAsync(storyId);

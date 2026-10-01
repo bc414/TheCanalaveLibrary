@@ -11,8 +11,8 @@ public interface IChapterWriteService : IChapterReadService
     /// Creates a new chapter (metadata + first version) on a story.
     /// The chapter number is assigned server-side (max existing + 1).
     /// Sanitizes all HTML fields and computes word count before persisting.
-    /// Maintains <c>Story.WordCount</c>. (<c>Story.ChapterCount</c> is not yet in the C# model;
-    /// it is a post-WU17 schema addition — see <c>audit/Chapters.md</c> Feature 6 Stage note.)
+    /// The chapter starts unpublished, so <c>Story.WordCount</c> — which sums the primary versions of
+    /// <b>published</b> chapters only — does not move until <see cref="SetPublishedAsync"/>.
     /// </summary>
     /// <returns>The new <c>Chapter.ChapterId</c>.</returns>
     /// <exception cref="ChapterValidationException">Thrown when DTO validation fails.</exception>
@@ -22,7 +22,8 @@ public interface IChapterWriteService : IChapterReadService
     /// Adds an alternate version (<c>ChapterContent</c> row) to an existing chapter.
     /// Does not change <c>Chapter.PrimaryContentId</c> — use <see cref="SetPrimaryVersionAsync"/>
     /// for that. Increments <c>Chapter.VersionCount</c>. <c>SortOrder</c> is assigned
-    /// server-side (max existing + 1).
+    /// server-side (max existing + 1). The increment is an atomic post-commit statement, never a
+    /// tracked <c>++</c>.
     /// </summary>
     /// <returns>The new <c>ChapterContent.ChapterContentId</c>.</returns>
     /// <exception cref="ChapterValidationException">Thrown when DTO validation fails.</exception>
@@ -31,7 +32,8 @@ public interface IChapterWriteService : IChapterReadService
     /// <summary>
     /// Updates the content and metadata of an existing <c>ChapterContent</c> row in place.
     /// If <c>dto.Title</c> is non-null, also updates the parent <c>Chapter.Title</c>.
-    /// Sanitizes all HTML fields and recomputes word count. Maintains <c>Story.WordCount</c>.
+    /// Sanitizes all HTML fields and recomputes word count. Refreshes <c>Story.WordCount</c> and the
+    /// author's <c>WordsWritten</c> (published chapters only — editing a draft moves neither).
     /// </summary>
     /// <exception cref="ChapterValidationException">Thrown when DTO validation fails.</exception>
     Task UpdateChapterContentAsync(UpdateChapterContentDto dto);
@@ -40,7 +42,8 @@ public interface IChapterWriteService : IChapterReadService
     /// Repoints <c>Chapter.PrimaryContentId</c> to the specified <c>ChapterContent</c> row.
     /// This is the only supported way to change the live version (the Restrict delete edge on
     /// <c>PrimaryContentId</c> means the current primary cannot be deleted until another version
-    /// is promoted). Also recomputes <c>Story.WordCount</c> (primary version's word count changes).
+    /// is promoted). Also refreshes <c>Story.WordCount</c> and the author's <c>WordsWritten</c>
+    /// (published chapters only).
     /// </summary>
     /// <exception cref="KeyNotFoundException">Chapter or content row not found.</exception>
     Task SetPrimaryVersionAsync(int chapterId, long chapterContentId);
@@ -48,8 +51,10 @@ public interface IChapterWriteService : IChapterReadService
     /// <summary>
     /// Publishes or unpublishes a chapter (author only). The first publish stamps the chapter's
     /// <c>FirstPublishedDate</c> (D2's publish anchor, never moved afterwards) and each still-unstamped
-    /// version's <c>PublishDate</c>; unpublish touches no date. There is no stored chapter count to
-    /// maintain — <c>Story.ChapterCount</c> is computed from the published chapters in projections.
+    /// version's <c>PublishDate</c>; unpublish touches no date. Refreshes <c>Story.WordCount</c> and the
+    /// author's <c>WordsWritten</c> (published chapters only), so publishing adds the chapter's words and
+    /// unpublishing removes them; a call that changes nothing refreshes to a delta of 0. There is no
+    /// stored chapter count — <c>Story.ChapterCount</c> is computed in projections.
     /// <para><b>New-chapter fan-out (WU-InertFeatures):</b> the call that performs the
     /// <c>FirstPublishedDate</c> stamp fires <see cref="INotificationWriteService.NotifyNewChapterAsync"/>
     /// best-effort after its commit — once per chapter, ever (republishing, adding or promoting a

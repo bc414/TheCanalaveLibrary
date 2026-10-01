@@ -66,14 +66,49 @@ conventions. **Do not revisit these.** Pointers:
 
 ## Feature 38 — Group Management
 
+**Settled — owner rulings D24 and D23 (answered 2026-08-08; built WU-CounterSymmetry 2026-09-30).
+Do not revisit:**
+- **Creating a group counts as joining it.** `CreateGroupAsync` moves the creator's `GroupsJoined`
+  +1, post-commit, after the creator's member row saves. `LeaveAsync`'s −1 and the recompute
+  (`COUNT(*) FROM group_members`, which never reads `creator_id`) are correct as shipped and do not
+  change. There is no floor-at-zero clamp: it would hide an oscillation, not fix it.
+- **`JoinAsync` is an upsert.** One `INSERT … ON CONFLICT (user_id, group_id) DO NOTHING`, and the
+  `+1` runs only when that insert landed a row, so a concurrent double join neither 500s nor
+  double-counts. It ships with D24's increment because the two touch the same method pair.
+- **A moderator's assign-admin action (WU-GroupAdminRescue, D13 edge (b)) has no counter effect.** It
+  changes `Role` on an existing row; it is not a membership change.
+- **Conditional falling case.** If a group-delete path is ever built (D47(b), pending), every member's
+  `GroupsJoined` falls through the `group_members` cascade. That is correct and needs no counter code.
+
+Rule: `layer2-services.md` §"Counter ↔ event map" and §"Check-then-act posture".
+
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip:** the shared `ActiveUser.RequireUserId()`
 guard (`Core/Identity/ActiveUserContextExtensions.cs`) replaces this service's private
 `RequireAuthenticatedUser` copy — owner ruling D9's "one shared guard", WU-ModerationIntegrity
 2026-09-30. Same `InvalidOperationException` → 401, so no behavior change; the existing Integration
 tests for the anonymous refusal stay green.
 
+**WU-CounterSymmetry Stage note (2026-09-30) — no flip** (owner rulings D24 and D23; the Settled note
+above):
+- `CreateGroupAsync` moves the creator's `GroupsJoined` +1 after the creator's member row saves.
+  Create-then-leave used to leave −1 on a public profile, and every recompute pass flipped it back to
+  0, so the two oscillated.
+- `JoinAsync` replaced its `AnyAsync`-then-`Add` with one parameterized `INSERT … ON CONFLICT
+  (user_id, group_id) DO NOTHING`. The column values come from a C#-built `GroupMember`, so the
+  `NotifyForNewStory = true` default stays single-sourced; the columns have no DB default. The `+1`
+  runs only when the insert landed a row. A concurrent double join used to 500 on `pk_group_members`.
+- `LeaveAsync` and `GroupsJoinedAgg` are unchanged, as D24 says. The `+1` stays post-commit
+  (WU-ParityAndRemaining may wrap creation in a transaction; it must keep the counter after the commit).
+
+The interface doc now states "creating counts as joining". **Test tier: Integration.** In
+`GroupServiceTests` (+5): create → 1, create-then-leave → 0, create-leave-rejoin → 1, join twice → 1,
+and a concurrent double join (no throw, one row, exactly 1). Every test ends with a
+`UserStatRecalculator` pass that corrects 0 and inserts no row. `CounterSymmetryTests` adds
+`Join_ACompetingJoinLandingBeforeTheInsert_*`, which interleaves the competing row just before the
+insert (mutation-checked: without `ON CONFLICT` it 500s).
+
 - **L1 — Stage 5.** `Group` + `GroupMember` with role/audience model.
-- **L2 — Stage 5 (2026-06-24, WU32; shared auth guard WU-ModerationIntegrity, 2026-09-30).** `IGroupReadService` / `IGroupWriteService` in `Core/Groups/`;
+- **L2 — Stage 5 (2026-06-24, WU32; shared auth guard WU-ModerationIntegrity, 2026-09-30; create counts as joining + `JoinAsync` upsert WU-CounterSymmetry, 2026-09-30 — see its Stage note).** `IGroupReadService` / `IGroupWriteService` in `Core/Groups/`;
   `ServerGroupReadService` / `ServerGroupWriteService` in `Server/Groups/`; CQRS-lite inheritance.
   `CreateGroupAsync` stamps creator as Admin in a second `SaveChangesAsync`. `JoinAsync` / `LeaveAsync`
   idempotent. DI registered in `Program.cs`. Migration `WU32_Groups` applied (data-preserving column

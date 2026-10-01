@@ -62,6 +62,13 @@ public class ServerGroupWriteService(
         });
         await writeDb.SaveChangesAsync();
 
+        // Creating a group counts as joining it (owner ruling D24): the creator's row IS a
+        // group_members row, and the recompute (COUNT(*) FROM group_members) counts it. Without this
+        // +1, create-then-leave drove GroupsJoined to −1. Post-commit, after the member row saves
+        // (D22; layer2-services.md §"UserStats Updates").
+        await writeDb.UserStats.Where(us => us.UserId == creatorId)
+            .ExecuteUpdateAsync(s => s.SetProperty(us => us.GroupsJoined, us => us.GroupsJoined + 1));
+
         return group.GroupId;
     }
 
@@ -109,21 +116,27 @@ public class ServerGroupWriteService(
                 throw new KeyNotFoundException($"Group {groupId} not found.");
         }
 
-        // Idempotent — no-op if already a member.
-        bool alreadyMember = await writeDb.GroupMembers
-            .AnyAsync(m => m.GroupId == groupId && m.UserId == userId);
-        if (alreadyMember) return;
-
-        writeDb.GroupMembers.Add(new GroupMember
+        // Idempotent — no-op if already a member. One declarative upsert (owner ruling D23): the old
+        // AnyAsync-then-Add let two concurrent joins both pass the check, and the loser's insert hit
+        // pk_group_members as a raw 500. The column values come from a C#-built entity so its
+        // initializers stay the single source of defaults; the columns have no DB default except
+        // date_joined, so all of them are listed (layer2-services.md §"Check-then-act posture").
+        GroupMember member = new()
         {
             GroupId    = groupId,
             UserId     = userId,
             Role       = GroupRole.Member,
             DateJoined = DateTime.UtcNow
-        });
-        await writeDb.SaveChangesAsync();
+        };
+        int inserted = await writeDb.Database.ExecuteSqlAsync($"""
+            INSERT INTO group_members (user_id, group_id, role, notify_for_new_story, notify_for_new_blog_post, date_joined)
+            VALUES ({member.UserId}, {member.GroupId}, {(short)member.Role}, {member.NotifyForNewStory}, {member.NotifyForNewBlogPost}, {member.DateJoined})
+            ON CONFLICT (user_id, group_id) DO NOTHING
+            """);
 
-        // Increment GroupsJoined counter (cross-cutting.md §"UserStats Updates").
+        // The counter moves only for the insert that landed a row, so a concurrent double join
+        // counts once (layer2-services.md §"UserStats Updates").
+        if (inserted == 0) return;
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.GroupsJoined, us => us.GroupsJoined + 1));
     }
@@ -140,7 +153,7 @@ public class ServerGroupWriteService(
         writeDb.GroupMembers.Remove(member);
         await writeDb.SaveChangesAsync();
 
-        // Decrement GroupsJoined counter (cross-cutting.md §"UserStats Updates").
+        // Decrement GroupsJoined counter (layer2-services.md §"UserStats Updates").
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.GroupsJoined, us => us.GroupsJoined - 1));
     }

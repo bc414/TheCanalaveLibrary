@@ -202,6 +202,24 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 
 ## Resolved
 
+- **Counter & concurrency doctrine (worksheet D21–D24) — answered 2026-08-08 (Brian-ratified), built
+  WU-CounterSymmetry 2026-09-30.** No decision rows: they came out of the schema audit's §3.6 and the
+  service audit's §2.4/§3.7/§3.14/§3.15.
+  - **D21:** every denormalized counter is derived, with a recompute in code. The new
+    `ContentCounterRecalculator` covers the 11 content counters (`like_count` ×3,
+    `successful_rec_count`, `version_count`, `stories.word_count`, `active_report_count` ×5).
+    Zero-count counter-backed badges are hidden at display.
+  - **D22:** "post-commit, recompute-corrected" is the contract, and spec §9.4's "same transaction"
+    is superseded.
+  - **D23:** a classification test per check-then-act family. USI, `group_members` and vouch
+    inserts are upserts now. The gem, highlight and vouch limits are stated-soft. `group_stories` is
+    routed to WU-SchemaHardening and the poll restructure to WU-PollVoteIntegrity.
+  - **D24:** creating a group counts as joining it.
+
+  Rule: `layer2-services.md` §"UserStats Updates", §"Counter recompute principle", §"Check-then-act
+  posture", §"Recalculation worker (F58)", §"Word Count Is Computed Server-Side". Narrative:
+  `audit/Profiles.md` F22/F58, `audit/Groups.md` F38.
+
 - **Comment deletion — hard delete + reparent ratified (worksheet D12) — answered 2026-08-06, docs
   swept WU-TptHardDelete review fixes 2026-09-30.** No decision row: it came out of the service audit's
   §3.20 and spec §5.9. The "[Deleted Comment]" placeholder is declined (now a retired term in

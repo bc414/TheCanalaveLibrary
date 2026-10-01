@@ -51,6 +51,17 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
         await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {InDay}, word_count = 500 WHERE story_id = {_storyS1Id}");
         await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {_day.AddDays(-10).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)}, word_count = 300 WHERE story_id = {storyS2Id}");
 
+        // --- total_stories / total_words exclusions (WU-CounterSymmetry, service audit §2.4.6):
+        // total_words uses total_stories' own predicate, so none of these three may count. A Draft
+        // (never published), a taken-down story (published before the window, so it never touches
+        // new_stories either), and a story first published AFTER the day.
+        int draftId = await SeedStoryAsync(_userAId, status: StoryStatusEnum.Draft);
+        int takenDownId = await SeedStoryAsync(_userAId);
+        int laterId = await SeedStoryAsync(_userAId);
+        await db.Database.ExecuteSqlAsync($"UPDATE stories SET word_count = 1000 WHERE story_id = {draftId}");
+        await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {_day.AddDays(-5).ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)}, is_taken_down = true, word_count = 2000 WHERE story_id = {takenDownId}");
+        await db.Database.ExecuteSqlAsync($"UPDATE stories SET published_date = {_day.AddDays(1).ToDateTime(new TimeOnly(12, 0), DateTimeKind.Utc)}, word_count = 4000 WHERE story_id = {laterId}");
+
         // --- new_chapters / new_words: one published chapter on S1 today, 500 words. Counted on the
         // chapter-level anchor Chapter.FirstPublishedDate (D2, WU-StoryLifecycle), not the version's
         // PublishDate ---
@@ -161,8 +172,9 @@ public class SiteDailyStatAggregatorTests(PostgresFixture postgres) : Integratio
         row.Should().NotBeNull();
 
         row!.TotalUsers.Should().BeGreaterThanOrEqualTo(2, "at least the two seeded users exist by this day");
-        row.TotalStories.Should().BeGreaterThanOrEqualTo(2);
-        row.TotalWords.Should().BeGreaterThanOrEqualTo(800, "S1 (500) + S2 (300)");
+        row.TotalStories.Should().Be(2, "only S1 and S2 are published, visible and live by the day's end");
+        row.TotalWords.Should().Be(800,
+            "S1 (500) + S2 (300) — the Draft (1000), taken-down (2000) and published-later (4000) stories are excluded");
 
         row.NewUsers.Should().Be(1, "only user A was created inside the window");
         row.NewStories.Should().Be(1, "only S1 was published inside the window");

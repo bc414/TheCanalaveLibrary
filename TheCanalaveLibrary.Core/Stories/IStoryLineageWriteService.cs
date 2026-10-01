@@ -30,8 +30,10 @@ public interface IStoryLineageWriteService : IStoryLineageReadService
     /// <summary>
     /// Approves a Pending request. Caller must own the <b>target</b> story — throws
     /// <see cref="UnauthorizedAccessException"/> otherwise; throws <see cref="KeyNotFoundException"/>
-    /// if no such link exists. Sends a best-effort <c>StoryLineageApproved</c> notification to the
-    /// source story's author.
+    /// if no such link exists, and <see cref="StoryLineageValidationException"/> when the link is not
+    /// Pending (already approved or rejected — including the loser of two concurrent approves), so the
+    /// inspiration counter and the notification fire once per approval. Sends a best-effort
+    /// <c>StoryLineageApproved</c> notification to the source story's author.
     /// </summary>
     Task ApproveLineageAsync(int sourceStoryId, int targetStoryId, short typeId);
 

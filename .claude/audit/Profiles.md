@@ -164,17 +164,31 @@ Covering tier: **RazorComponents** —
 
 ## Feature 22 — User Stats
 
+**Settled — owner rulings D21 and D22 (answered 2026-08-08; built WU-CounterSymmetry 2026-09-30).
+Do not revisit:**
+- **Every denormalized counter is derived.** It caches a current-state question; the live rows are
+  its ground truth; a recompute exists in code. There is no authoritative counter class.
+  `User.ApprovedStorySubmissions` is a record of a decision, not a counter, so it sits outside this.
+- **Post-commit, recompute-corrected.** The counter statement runs after the primary
+  `SaveChangesAsync`, and the two are deliberately not atomic. The primary write commits first and
+  the counter second, never the reverse. Spec §9.4's "same transaction" row is superseded.
+- **Hard deletes adjust no counter.** The reconciler lowers the count. Service audit §2.4.5 dissolved.
+- **Zero-count counter-backed badges are hidden at display**, never deleted by the recalc. Manual
+  grants always display.
+
+Rule: `layer2-services.md` §"UserStats Updates" and §"Counter recompute principle".
+
 - **L1 — Stage 5** (`UserStat`, keyed on `UserId`).
-- **L2 — Stage 5** (WU30, 2026-06-24). Real-time counter increments wired into 8 existing write
-  services (same-transaction `ExecuteUpdateAsync` pattern per `layer2-services.md` §"UserStats Updates"):
+- **L2 — Stage 5** (WU30, 2026-06-24; counter doctrine D21–D24 built WU-CounterSymmetry 2026-09-30 — see its Stage note below). Real-time counter increments wired into 8 existing write
+  services (post-commit `ExecuteUpdateAsync` pattern per `layer2-services.md` §"UserStats Updates" — corrected WU-CounterSymmetry 2026-09-30: this line said "same-transaction", which the code never was; owner ruling D22 ratified "post-commit, recompute-corrected"):
   - `ServerFollowingWriteService`: `FollowerCount`/`AuthorsFollowed` ±1 on Follow/Unfollow.
   - `ServerStoryWriteService.CreateStoryAsync`: `StoriesWritten` +1.
-  - `ServerChapterWriteService.RefreshStoryWordCountAsync`: `WordsWritten` ± word delta.
+  - `ServerChapterWriteService.RefreshStoryWordCountAsync`: `WordsWritten` ± word delta (of *published* primary words since WU-CounterSymmetry 2026-09-30, service audit §2.4.3).
   - `ServerCommentWriteService`: `CommentsWritten` +1 on all 4 Post contexts; -1 on Delete.
   - `ServerRecommendationWriteService.SubmitAsync`: `RecommendationsWritten` +1 (actor);
     `RecommendationsReceived` +1 (story author).
   - `ServerBlogPostWriteService`: `BlogPostsWritten` +1 on create (was already wired); -1 on delete.
-  - `ServerGroupWriteService`: `GroupsJoined` ±1 on Join/Leave.
+  - `ServerGroupWriteService`: `GroupsJoined` ±1 on create/join/leave (create added WU-CounterSymmetry 2026-09-30, owner ruling D24 — creating a group counts as joining it; before that, create-then-leave drove the counter to −1).
   - `ServerUserStoryInteractionWriteService`: `FavoritesOnStories` (story author) + `StoriesRead`/
     `StoriesInProgress`/`StoriesIgnored` (actor) via transition-delta (increment/decrement only when
     the effective boolean state flips).
@@ -208,6 +222,29 @@ Covering tier: **RazorComponents** —
   during the flip's browser wave (profile-page verification). Full wave narrative + the 7 bugs
   found/fixed: `workplan.md` WU-GlobalFlip.
 
+### Feature 22 L2 — WU-CounterSymmetry Stage note (2026-09-30): the wired paths now compute what the recompute computes
+
+**No cell flips — F22 stays Stage 5.** The counter doctrine (owner rulings D21–D24; the Settled note
+above) changed three `UserStats` producers:
+- **`GroupsJoined`**: creating a group counts as joining it (D24). `JoinAsync` is an `ON CONFLICT`
+  upsert whose `+1` runs only when it landed a row (D23). Detail: `audit/Groups.md` F38.
+- **`WordsWritten`**: moves by the delta of *published* primary words. The publish and unpublish
+  transitions now refresh it, and a draft contributes 0 (service audit §2.4.3). Detail:
+  `audit/Chapters.md` F6.
+- **The USI flip-delta counters** (`FavoritesOnStories`, `StoriesRead`, `StoriesInProgress`,
+  `StoriesIgnored`): every create site captures its "before" state from the row it re-read after
+  the ensure-row upsert. The loser of a create race therefore no longer double-counts. A residual
+  double-apply under true concurrency is D23-accepted, and the recompute heals it. Detail:
+  `audit/UserStoryInteractions.md` F16.
+
+`AcknowledgedAsInspirationCount` also stopped double-counting: a double approve of a lineage link is
+now refused (orchestrator amendment U1, `audit/Stories.md` F10). The false "Production creates a
+UserStat row on user registration" comment in `RecordSuccessAsync` was corrected.
+**Test tier: Integration.** `GroupServiceTests` (+5, each ending with a `UserStatRecalculator`
+convergence pass that corrects 0), `ChapterWriteServiceTests` (+4, convergence on both reconcilers),
+`CounterSymmetryTests` (13, the interleaved races). The convergence assertion is now a `testing.md`
+rule (§"Counter convergence").
+
 ---
 
 ## Feature 58 — UserStat Recalculation Worker
@@ -219,7 +256,7 @@ never wired). That breaks `layer2-services.md` §"Recalculation worker — mirro
 WU's spec proposed a fix (its R10); the campaign orchestrator excluded it as unsourced, so which posts
 count is owner-open: tracker **F16**.
 
-- **L2 — Stage 5 (WU-UserStatRecalc, 2026-07-15; recompute-vs-live mismatch on `BlogPostsWritten` filed as tracker F16 by WU-TptHardDelete, 2026-09-30).** Periodic `IHostedService`/`BackgroundService`
+- **L2 — Stage 5 (WU-UserStatRecalc, 2026-07-15; recompute-vs-live mismatch on `BlogPostsWritten` filed as tracker F16 by WU-TptHardDelete, 2026-09-30; content-counter pass `ContentCounterRecalculator` added WU-CounterSymmetry, 2026-09-30 — see its Stage note below).** Periodic `IHostedService`/`BackgroundService`
   reconciling the denormalized counters. Pure background computation — Layer 2 *is* the worker
   (grid_axes). All UI layers **N/A**. **L8 revised (2026-07-15):** mostly set-based raw SQL, not
   EF LINQ (mirrors `SiteDailyStatAggregator`'s style); one counter, `ViewsOnStories`, reads the
@@ -283,6 +320,50 @@ count is owner-open: tracker **F16**.
   `StoriesInProgress`'s formula to also exclude `IsIgnored` (matching the *wrong*, display-filter
   formula) → `RecalculateAllAsync_MirrorsWiredFormula_ForInteractionDerivedCounters` failed as
   expected; reverted, suite green again.
+
+### Feature 58 L2 — WU-CounterSymmetry Stage note (2026-09-30): the content-counter reconciler (owner ruling D21)
+
+**No cell flips — F58 stays Stage 5** (L2 is the only non-N/A cell). D21 requires a recompute in code
+for every denormalized counter. Before this WU only `user_stats` had one. Built:
+- **`Server/Profiles/ContentCounterRecalculator.cs`** (scoped, `UserStatRecalculator`'s two-statement
+  shape: an `IS DISTINCT FROM`-guarded match-and-correct `UPDATE … FROM (agg)`, then a zero-unmatched
+  `UPDATE`). Its 11 specs: `like_count` on `base_comments`, `base_blog_posts` and `recommendations`;
+  `recommendations.successful_rec_count` (every success row, no rec-level self-exclusion — roadmap
+  row 18); `chapters.version_count`; `stories.word_count` (primary versions of **published** chapters
+  only, the same expression `RefreshStoryWordCountAsync` now uses); and `active_report_count` on all
+  five carriers (`AspNetUsers`, `stories`, `base_comments`, `base_blog_posts`, `recommendations`) —
+  D7's `COUNT(*) … report_status_id IN (0, 1)`, on the partial index `ix_reports_open_target`.
+  `Message` reports have no column. D21 and schema §3.6 said "`active_report_count` ×4"; the code has
+  five carriers, and all five are covered. `successful_rec_count` is not in D21's enumerated list but
+  falls under its "no authoritative counter class", so it is included.
+- **Worker order.** `UserStatRecalculationWorker` runs the content pass **first**, because
+  `WordsWrittenAgg` sums the `stories.word_count` it corrects. Each pass has its own try/log, so one
+  failing does not block the other. DI: `AddScoped<ContentCounterRecalculator>()`. `TestAppFactory`
+  already removes the hosted worker.
+- **Telemetry.** A `ContentCounterRecalc.Pass` span on the existing `CanalaveTelemetry.UserStatRecalc`
+  source, tagged `canalave.contentcounterrecalc.counters_corrected`, with the count in the worker's log
+  line. No new meter or top-level source (`logging.md` §"UserStatRecalc").
+- **Badge sync source.** `UserStatRecalculator.BadgeCounterSpecs` now derives from
+  `SiteBadges.CounterColumnByBadge`, the single source the zero-count display filter also reads
+  (`audit/Badges.md` F50).
+- **Seeds.** SeedTool's `SeedGraph` sums `Story.WordCount` over published chapters only, so a Draft
+  story seeds 0 (`CopyUserStatsAsync`'s `WordsWritten` follows). `DataSeeder` seeds one
+  `RecommendationSuccess` (ReaderGamma on TestUser's recommendation), sets `SuccessfulRecCount`,
+  `RecommendationSuccessesEarned` and the Recommender badge's `EarnedCount` all to 1, so the badge has
+  ground truth. Its old free-standing 12 would have recomputed to 0 and then been hidden.
+
+The doctrine's rule text is `layer2-services.md` §"Counter recompute principle" and §"Recalculation
+worker (F58)" → "Direction of authority". **Test tier: Integration.** `ContentCounterRecalculatorTests`
+(3): every spec corrects a drifted value **and** zeroes a drifted value that has no ground truth, with
+the corrected total asserted exactly (22). `word_count` excludes a draft chapter and a non-primary
+version. `active_report_count` counts Open and UnderReview, ignores resolved reports and a Message
+report whose numeric id collides with a user, and handles a comment id above `int.MaxValue`. A second
+pass corrects 0. Convergence (a pass after wired ops corrects 0) is asserted in
+`ChapterWriteServiceTests` and `GroupServiceTests`.
+**Dev DB:** no migration; the first nightly pass after deploy rewrites drifted values. Seeded Draft
+stories' `word_count` drops to 0, and the `DataSeeder` badge change needs `reset-dev-db.ps1`.
+**Follow-up candidates** (the D23 classification test says "crash → harden", but D23 chose to
+promulgate the test rather than sweep, so these are not routed here): tracker **D11**.
 
 ## L4.5-Browser verification (2026-07-01) — F20 + F21 + F22 → Stage 5, no bugs
 

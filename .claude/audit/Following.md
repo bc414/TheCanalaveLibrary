@@ -128,10 +128,27 @@ remove-vouch succeed against a Private profile. `dotnet build` green, no new war
   `[MaxLength(1000)]` from `VouchText` — column is now unbounded `text` (widening, safe). Supersedes
   Phase B's 1000-char ruling and spec §5.8's original 280; code is authoritative. Applied via
   Testcontainers `Database.MigrateAsync` in the integration suite. `has-pending-model-changes` clean.
-- **L2 — Stage 5 (WU21, 2026-06-22).** Covered by shared `IFollowingWriteService` /
+- **L2 — Stage 5 (WU21, 2026-06-22; the vouch insert is an `ON CONFLICT` upsert since WU-CounterSymmetry, 2026-09-30 — see the Stage note below).** Covered by shared `IFollowingWriteService` /
   `IFollowingReadService` cluster above (Feature 18 L2 note). Vouch-specific: `VouchAsync` sanitizes
   `VouchText` before persist; 5-limit C#-enforced; `VouchLimitException` thrown on 6th. Integration
   tests include long-text (exceeds old 1000-char cap), XSS sanitization, limit enforcement.
+  **WU-CounterSymmetry Stage note (2026-09-30; owner ruling D23, vouch row) — no flip.**
+  - **The idempotency half is now declarative.** The key D23 asked for already existed (PK
+    `(vouching_user_id, vouched_user_id)`). What remained was the crash: a concurrent double vouch
+    passed the `AnyAsync` check twice and the loser 500'd at `SaveChangesAsync`. The tracked
+    `Add`/`Save` is now one parameterized `INSERT … ON CONFLICT (vouching_user_id, vouched_user_id) DO
+    NOTHING`, and `NotifyNewVouchAsync` fires only when it inserted a row, so the target gets one
+    `NewVouchOnYou`.
+  - **The `AnyAsync` pre-check is kept on purpose.** It fixes the semantic order: a re-vouch is a no-op
+    even at the limit, not a `VouchLimitException`. `VouchAsync_Idempotent_WhenAlreadyVouched` and the
+    UI rely on that.
+  - **The 5-limit stays check-then-act and is stated-soft** (D23 accept-and-record).
+    `layer2-services.md` §"Check-then-act posture" writes down the bounded overshoot, the self-healing
+    next refusal and the absence of a corrective sweeper.
+
+  **Test tier: Integration.** `CounterSymmetryTests.Vouch_ACompetingVouchLandingBeforeTheInsert_*`
+  interleaves the competing vouch just before the insert: no throw, one row, no notification from the
+  loser. Mutation-checked: without `ON CONFLICT` it 500s.
   **Settled constraints — do not revisit:** dedicated `Vouch` table; outgoing public / incoming private
   asymmetry (§5.8); 5-per-user cap (anti-snowball scarcity lever); FK delete behavior (see Shared
   Context); `VouchText` is rich HTML sanitized-once-on-save (EditorView/RichTextView/sanitize path).

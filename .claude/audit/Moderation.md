@@ -350,7 +350,20 @@ naming that rec in the same save (D3 trigger 5). Verified by Integration `Modera
 built: the report-driven `ApplyAccountActionAsync` sending 81 to a member reporter
 (WU-ModerationIntegrity).
 
-**Stages (updated 2026-09-30, WU-TptHardDelete — the hard delete clears TPT dependents first, an L2
+**WU-CounterSymmetry Stage note (2026-09-30; owner ruling D21) — no flip; L2 stays 5.** The
+reconciler D7 handed D21 is built: `ContentCounterRecalculator` recomputes `active_report_count` on
+all five carriers (`AspNetUsers`, `stories`, `base_comments`, `base_blog_posts`, `recommendations`)
+as `COUNT(*) FROM reports WHERE reported_entity_type = <type> AND report_status_id IN (0, 1)`, reading
+the partial index `ix_reports_open_target`. It runs nightly, ahead of the UserStat pass. A drift in the
+triage sort's key (a crash between a report's commit and its counter, or a manual fix) now heals within a
+day, where before it persisted until someone noticed. `AdjustActiveReportCountAsync` stays the single
+live mutator. The resolve paths' in-transaction counter move satisfies D22's order rule (it commits
+with the status flip, never ahead of it). Detail and tests: `audit/Profiles.md` F58
+(`ContentCounterRecalculatorTests` — Open/UnderReview counted, resolved and Message reports ignored,
+bigint comment ids; Integration).
+
+**Stages (updated 2026-09-30, WU-CounterSymmetry — the `ActiveReportCount` reconciler, beneath L2, no
+flip; WU-TptHardDelete before it — the hard delete clears TPT dependents first, an L2
 change beneath the cell, no flip, HTTP-driven by its browser pass the same day; Stage notes at the top
 of this section):** L1–L3.5 = 5, L4 = 3,
 L4.5 = 5 (WU-ModerationIntegrity lowered it to 1 for its undriven UI and the review fixes'
@@ -1096,11 +1109,23 @@ Integration `ModerationIntegrityTests.EveryModeratorOnlyRead_RefusesASignedInNon
 and `/api/site-daily-stats/latest` and `/series` answer 200 to a moderator, 403 to a member and 401
 anonymous (F47's browser-verification note).
 
-**Stages (updated 2026-09-30, WU-ModerationIntegrity read gate beneath L2, no flip; WU-StoryLifecycle
-review fixes before that):** L1–L3.5 = 5, L4 = 3, L4.5 = 5,
+**Stages (updated 2026-09-30, WU-CounterSymmetry `total_words` predicate beneath L8, no flip;
+WU-ModerationIntegrity read gate beneath L2, no flip; WU-StoryLifecycle review fixes before that):**
+L1–L3.5 = 5, L4 = 3, L4.5 = 5,
 L5/L6 = N/A, L8 = 5 — unchanged; `new_chapters`/`new_words` re-sourced to `Chapter.FirstPublishedDate`
 (D2), with one known divergence from `new_stories` left for the owner (`roadmap.md` decision row 16) —
 see the two WU-StoryLifecycle Stage notes at the end of this section.
+
+**WU-CounterSymmetry Stage note (2026-09-30; service audit §2.4.6) — no flip.** `total_words` summed
+`stories.word_count` over **every** story (drafts, pending, rejected, taken down, and stories first
+published after the day), while `total_stories` beside it counted only visible stories published by
+the day's end. It now uses that same predicate: `WHERE published_date < @range_end AND
+{VisibleStoryPredicate}`. Combined with `Story.WordCount` now counting published chapters only
+(`audit/Chapters.md` F6), the stock means "published words on visible stories". `layer8-data-marts.md`
+§`site_daily_stats` states it. **Test tier: Integration.** `SiteDailyStatAggregatorTests` seeds three
+excluded stories (a Draft at 1,000 words, a taken-down story at 2,000, one first published the day
+after at 4,000), and `UpsertDayAsync_ComputesEveryCounter` now asserts `TotalWords == 800` and
+`TotalStories == 2` exactly (was `>=`). Mutation-checked: the old subquery gives 7,800.
 
 **Requirements settled 2026-07-10 (WU-SiteDailyStat plan)** — reconciling the Gemini design source
 (`GeminiDiscussions/MyActivity September to November 2025_filtered.md:38146`, 2025-10-29) against

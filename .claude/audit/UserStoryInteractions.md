@@ -102,9 +102,9 @@ the same day):** L1–L6 = 5. **L4.5** went 5→1 when WU-InertFeatures made the
 (so a recommendation card's Read It Later can't be flushed back) and report each accepted flush to the host, with no
 browser available. It returned to 5 when the WU-InertFeatures browser pass drove that adoption beside the card in all
 four hosts on both render phases (tracker H14 closed). The WU-AccessGateSweep2 browser pass drove the panel's D6 clear and
-refused-raise paths and fixed a page crash on a refused raise. Stage notes at the end of this feature.
+refused-raise paths and fixed a page crash on a refused raise. WU-CounterSymmetry (2026-09-30) hardened the create-create race beneath L2 (no flip; server-only, Integration-covered). Stage notes at the end of this feature.
 
-- **L2 — Stage 5 (WU15, 2026-06-22; raise/clear split WU-AccessGateSweep2, 2026-09-30; recommendation attribution on the RIL bit WU-InertFeatures, 2026-09-30 — see the Stage notes at the end of this feature).** Read/write service implemented and tested.
+- **L2 — Stage 5 (WU15, 2026-06-22; raise/clear split WU-AccessGateSweep2, 2026-09-30; recommendation attribution on the RIL bit WU-InertFeatures, 2026-09-30; create-create hardened by the ensure-row upsert WU-CounterSymmetry, 2026-09-30 — see the Stage notes at the end of this feature).** Read/write service implemented and tested.
 
   **Settled for WU15 (2026-06-22, do not revisit):**
   - WU15 is **trimmed to the panel-critical slice** — Feature 16 L2 only (write path + per-viewer state
@@ -419,6 +419,63 @@ browser-driven** — tracker H14.
 - **The 90% moment.** `MarkStartedAsync` with the `?rec=` parameter was driven on both phases; on WASM
   it called `…/started?recommendationId=`. A bogus id was ignored silently.
 - Users, hosts and the full flow list: `audit/Recommendations.md` F30's browser note.
+
+### Feature 16 L2 — WU-CounterSymmetry Stage note (2026-09-30): the create-create 500 closed (owner ruling D23's stated minimum)
+
+**No cell flips — F16 stays Stage 5.**
+
+**The race.** The write service had **four** tracked-`Add` create sites: the spec named three, and
+`SetReadItLaterFromRecommendationAsync`, added by WU-InertFeatures, is the fourth. Two first writes on
+one (user, story) — a double click, the 90% trigger racing the panel — both saw "no row", and the
+loser 500'd on `pk_user_story_interactions`. The date partition had the same race, through
+`EnsureDatePartition` and the `??= new UserStoryInteractionDate` sites. Fixing only the parent would
+have moved the 500 to `user_story_interaction_dates`.
+
+**The fix.**
+- **The row.** Each site now calls `EnsureRowAsync`: an all-false
+  `INSERT … ON CONFLICT (user_id, story_id) DO NOTHING`, with the values taken from a C#-built entity
+  and every flag column listed, then a tracked re-read with the method's own `Include`s.
+- **The partition.** `EnsureDatePartitionAsync` does the same for the partition, then reads it with a
+  tracked query. *Found while building:* `Reference(...).LoadAsync()` is a no-op here, because the
+  row's `Include` already marked the null navigation as loaded. Its fallback `Add` 500'd in every USI
+  test; the rule is recorded in `layer2-services.md`.
+- **The captures.** Every `was*` / `hadStarted` / `alreadyStarted` capture, and `MarkCompletedAsync`'s
+  already-complete early return, now reads the re-read row, so the loser computes its transition
+  against the winner's committed state.
+- **Order.** The ensure step is a mutation, so in `SetUserStoryInteractionStateAsync` it runs after
+  the D6 raise guard (orchestrator amendment).
+- **Unchanged.** The "create only when a bit is true" early return and the sparse cleanup. There is
+  no `ChangeTracker.Clear()`, because the scoped context is shared with
+  `ServerChapterReadMarkWriteService`.
+
+**Accepted, recorded.**
+- **Transient all-false row.** One exists between the ensure insert and `SaveChangesAsync`. If the
+  request dies there, the row survives: harmless to reads (every bookshelf query filters on a flag),
+  and the next write's sparse cleanup removes it.
+- **Flip-delta double count.** Under true concurrency both callers can still see the same "before"
+  state. D23 accepts this ("USI flip-delta counters: accept, recompute-corrected"), and the recompute
+  heals it. Do not lock.
+- **The attribution row** (`user_story_recommendation_sources`) still has a create-create race of its
+  own: two concurrent card saves can both add it. That is not in D23's table. Tracker **D11**, with the
+  other unrouted sites.
+
+The class doc and `layer2-services.md` §"Check-then-act posture" describe the mechanism. The "Reject
+impossible combinations" fiction the spec listed had already been corrected by an earlier WU (the
+comment now reads "Empty extension point").
+
+**Test tier: Integration.** In `CounterSymmetryTests` (6 of its 13), `InterleavingCommandInterceptor`
+lands the competing row immediately before this call's insert:
+- `SetUserStoryInteractionStateAsync` adopts a competing favorite: no throw, one row, one partition,
+  and no second `FavoritesOnStories`.
+- It loads a competing partition, and it creates the partition on a HasStarted-only row (the
+  sequential case).
+- `MarkStartedAsync` adopts a competing start with no second `StoriesInProgress`.
+- `MarkCompletedAsync` returns early on a competing completion with no second `StoriesRead`.
+- `SetReadItLaterFromRecommendationAsync` adopts a competing save and records no attribution.
+
+Mutation-checked: without either `ON CONFLICT`, the matching tests fail with the 23505. The existing
+`UserStoryInteractionServiceTests`, `CompletionProducerTests`, `RecommendationAttributionTests` and
+`ChapterReadMarkServiceTests` stay green.
 
 ## Feature 17 — Story Interaction Lists & Bookshelves
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** `HasStarted` is present;

@@ -172,7 +172,7 @@ public class ServerCommentWriteService(
         writeDb.ChapterComments.Add(comment);
         await writeDb.SaveChangesAsync();
 
-        // Increment CommentsWritten counter (cross-cutting.md §"UserStats Updates").
+        // Increment CommentsWritten counter (layer2-services.md §"UserStats Updates").
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
 
@@ -254,7 +254,7 @@ public class ServerCommentWriteService(
         writeDb.BlogPostComments.Add(comment);
         await writeDb.SaveChangesAsync();
 
-        // Increment CommentsWritten counter (cross-cutting.md §"UserStats Updates").
+        // Increment CommentsWritten counter (layer2-services.md §"UserStats Updates").
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
 
@@ -334,7 +334,7 @@ public class ServerCommentWriteService(
         writeDb.GroupComments.Add(comment);
         await writeDb.SaveChangesAsync();
 
-        // Increment CommentsWritten counter (cross-cutting.md §"UserStats Updates").
+        // Increment CommentsWritten counter (layer2-services.md §"UserStats Updates").
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
 
@@ -411,7 +411,7 @@ public class ServerCommentWriteService(
         writeDb.UserProfileComments.Add(comment);
         await writeDb.SaveChangesAsync();
 
-        // Increment CommentsWritten counter (cross-cutting.md §"UserStats Updates").
+        // Increment CommentsWritten counter (layer2-services.md §"UserStats Updates").
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.CommentsWritten, us => us.CommentsWritten + 1));
 
@@ -494,7 +494,7 @@ public class ServerCommentWriteService(
         writeDb.BaseComments.Remove(comment);
         await writeDb.SaveChangesAsync();
 
-        // Decrement CommentsWritten counter for the comment's author (cross-cutting.md §"UserStats Updates").
+        // Decrement CommentsWritten counter for the comment's author (layer2-services.md §"UserStats Updates").
         if (authorId.HasValue)
         {
             await writeDb.UserStats.Where(us => us.UserId == authorId.Value)
@@ -557,6 +557,14 @@ public class ServerCommentWriteService(
         if (!contextVisible)
             return new CommentLikeResultDto(0, false);
 
-        return new CommentLikeResultDto(Math.Max(0, comment.LikeCount + delta), nowLiked);
+        // Re-read the landed value (layer2-services.md §"Counter mutation rule"): "loaded value +
+        // delta" was a pre-update read, wrong whenever another like landed in between — the same
+        // MA-705 fix the blog-post sibling already had. Unclamped: only drift can make it negative,
+        // and the reconciler heals that (a floor would hide it — owner ruling D24's reasoning).
+        int landed = await writeDb.BaseComments
+            .Where(c => c.CommentId == commentId)
+            .Select(c => c.LikeCount)
+            .FirstOrDefaultAsync();
+        return new CommentLikeResultDto(landed, nowLiked);
     }
 }

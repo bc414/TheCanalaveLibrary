@@ -234,6 +234,114 @@ public class GroupServiceTests(PostgresFixture postgres) : IntegrationTestBase(p
     }
 
     // ─────────────────────────────────────────────────────────────────────────────
+    // GroupsJoined — owner rulings D24 (creating counts as joining) and D23 (join upsert).
+    // Each test seeds UserStat rows for both users (SeedUserAsync never creates one, and the
+    // post-commit ExecuteUpdateAsync silently no-ops without it) and ends with D24's convergence
+    // assertion: a recompute pass corrects nothing (testing.md §"Counter convergence").
+    // ─────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task CreateGroup_CountsAsJoining_GroupsJoinedIsOne()
+    {
+        await SeedUserStatsAsync();
+        SetActiveUser(_userId);
+        await CreateGroupAsync(new CreateGroupDto { GroupName = "Counted" });
+
+        (await GroupsJoinedAsync(_userId)).Should().Be(1, "the creator's member row is a membership (D24)");
+        await AssertRecomputeAgreesAsync();
+    }
+
+    [Fact]
+    public async Task CreateThenLeave_GroupsJoinedIsZero_NeverNegative()
+    {
+        await SeedUserStatsAsync();
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Left" });
+        await LeaveGroupAsync(groupId);
+
+        (await GroupsJoinedAsync(_userId)).Should().Be(0, "create +1, leave −1 — before D24 this was −1");
+        await AssertRecomputeAgreesAsync();
+    }
+
+    [Fact]
+    public async Task CreateLeaveRejoin_GroupsJoinedIsOne()
+    {
+        await SeedUserStatsAsync();
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Back again" });
+        await AssertRecomputeAgreesAsync();
+        await LeaveGroupAsync(groupId);
+        await AssertRecomputeAgreesAsync();
+        await JoinGroupAsync(groupId);
+
+        (await GroupsJoinedAsync(_userId)).Should().Be(1);
+        await AssertRecomputeAgreesAsync();
+    }
+
+    [Fact]
+    public async Task JoinTwice_CountsOnce()
+    {
+        await SeedUserStatsAsync();
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Twice" });
+
+        SetActiveUser(_otherUserId);
+        await JoinGroupAsync(groupId);
+        await JoinGroupAsync(groupId);
+
+        (await GroupsJoinedAsync(_otherUserId)).Should().Be(1);
+        await AssertRecomputeAgreesAsync();
+    }
+
+    [Fact]
+    public async Task ConcurrentDoubleJoin_NeitherThrows_OneRow_CountsExactlyOnce()
+    {
+        await SeedUserStatsAsync();
+        SetActiveUser(_userId);
+        int groupId = await CreateGroupAsync(new CreateGroupDto { GroupName = "Race" });
+
+        // Same joiner for both racers (the FakeActiveUserContext is factory-global), each call in its
+        // own scope. Deterministic in outcome: the +1 is gated on the ON CONFLICT insert landing, so
+        // exactly one racer counts. (CounterSymmetryTests pins the lost-race branch by interleaving.)
+        SetActiveUser(_otherUserId);
+        Task first = JoinGroupAsync(groupId);
+        Task second = JoinGroupAsync(groupId);
+        await FluentActions.Awaiting(() => Task.WhenAll(first, second)).Should().NotThrowAsync();
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await db.GroupMembers.CountAsync(m => m.GroupId == groupId && m.UserId == _otherUserId)).Should().Be(1);
+        (await GroupsJoinedAsync(_otherUserId)).Should().Be(1);
+        await AssertRecomputeAgreesAsync();
+    }
+
+    private async Task SeedUserStatsAsync()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.UserStats.AddRange(new UserStat { UserId = _userId }, new UserStat { UserId = _otherUserId });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<int> GroupsJoinedAsync(int userId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.UserStats.Where(us => us.UserId == userId).Select(us => us.GroupsJoined).SingleAsync();
+    }
+
+    /// <summary>D24's convergence assertion: the wired GroupsJoined and the recompute agree, so a
+    /// pass corrects nothing (and inserts no row — both users were seeded).</summary>
+    private async Task AssertRecomputeAgreesAsync()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        UserStatRecalcResult pass = await scope.ServiceProvider
+            .GetRequiredService<UserStatRecalculator>().RecalculateAllAsync();
+        pass.RowsInserted.Should().Be(0);
+        pass.CountersCorrected.Should().Be(0, "a pass that changes groups_joined means the wired path diverged");
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
     // Content-rating waterfall — tier 2 (story > group max) and tier 3 (story > folder max)
     // ─────────────────────────────────────────────────────────────────────────────
 

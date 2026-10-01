@@ -248,7 +248,9 @@ public sealed class SeedGraphGenerator(SeedToolOptions options, SeedIdBases base
                     IsPublished: story.Status != StoryStatusEnum.Draft);
                 string html = ChapterHtml(story.Id, n);
                 int words = ChapterText.CountWords(html);
-                storyWords += words;
+                // Story.WordCount counts published chapters only (service audit §2.4.3,
+                // WU-CounterSymmetry) — a Draft story's chapters are unpublished and add nothing.
+                if (chapter.IsPublished) storyWords += words;
                 SeedChapterContentRow content = new(contentId++, chapter.Id, story.AuthorId, html, words,
                     story.PublishedUtc.AddDays(n - 1));
                 chapter.ContentId = content.Id;

@@ -2078,6 +2078,8 @@ promise about recomputes that do not exist. **D23** — "accept-and-record, self
 becomes an available posture per family. Promulgation to `layer2-services.md` is the consuming WU's
 job (Doc-Touch moment 1), not this file's.
 
+**Built:** WU-CounterSymmetry (2026-09-30) — rule now stated in `layer2-services.md` §"Counter recompute principle" (the reconciler: `ContentCounterRecalculator`, worker order in §"Recalculation worker (F58)").
+
 ### D22. Counter transactionality wording
 
 *Source: service §3.14; drift §4.1; spec §9.4.*
@@ -2144,6 +2146,8 @@ Promulgation is the consuming WU's job (Doc-Touch moment 1) — WU-CounterSymmet
 *Unblocks.* **D23** — "accept-and-record, self-healing via recompute" is now a coherent posture to
 choose per family, since this entry establishes that the healing path, not the write path, is where
 counter correctness lives.
+
+**Built:** WU-CounterSymmetry (2026-09-30) — rule now stated in `layer2-services.md` §"UserStats Updates" (`chapter.VersionCount++` is now a post-commit `ExecuteUpdateAsync`; the report-submit reorder had already landed with WU-ModerationIntegrity).
 
 ### D23. Check-then-act posture per family
 
@@ -2239,6 +2243,8 @@ sweep.)* The classification test above is promulgated to
 "post-commit, recompute-corrected" wording is what makes the four *accept* rows coherent — the two
 answers must ship as one doctrine paragraph or neither reads correctly.
 
+**Built:** WU-CounterSymmetry (2026-09-30) — rule now stated in `layer2-services.md` §"Check-then-act posture" (USI, `group_members` and vouch upserts built; the three limits written down as stated-soft per the conditional above; `group_stories` and the poll restructure still routed to WU-SchemaHardening and WU-PollVoteIntegrity).
+
 ### D24. Does creating a group count as joining?
 
 *Source: service §3.7; defect §2.4.2.*
@@ -2328,6 +2334,8 @@ negative. Create, leave, rejoin via `JoinAsync` → 1. And the convergence asser
 for: run `UserStatRecalculator` after each of those and assert it corrects **nothing** — a pass that
 changes `groups_joined` means the wired path and the recompute have diverged again, which is the only
 regression that matters here.
+
+**Built:** WU-CounterSymmetry (2026-09-30) — rule now stated in `layer2-services.md` §"Counter ↔ event map" (`GroupsJoined` row) and §"Recalculation worker (F58)" → "Direction of authority".
 
 ## Block G — Access-gate rules
 

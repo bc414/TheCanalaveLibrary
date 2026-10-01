@@ -66,7 +66,7 @@ public class ServerRecommendationReadService(
                     r.Recommender.Tagline,
                     r.Recommender.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
                     r.Recommender.UserBadges
-                        .Where(ub => ub.DisplayOrder > 0)
+                        .Where(ub => ub.DisplayOrder > 0 && (ub.EarnedCount > 0 || !SiteBadges.CounterBackedKeys.Contains(ub.BadgeKey)))
                         .OrderBy(ub => ub.DisplayOrder)
                         .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                         .ToList()),
@@ -156,7 +156,7 @@ public class ServerRecommendationReadService(
                 r.Recommender.Tagline,
                 r.Recommender.ProfilePictureRelativeUrl ?? DefaultAvatarUrl,
                 r.Recommender.UserBadges
-                    .Where(ub => ub.DisplayOrder > 0)
+                    .Where(ub => ub.DisplayOrder > 0 && (ub.EarnedCount > 0 || !SiteBadges.CounterBackedKeys.Contains(ub.BadgeKey)))
                     .OrderBy(ub => ub.DisplayOrder)
                     .Select(ub => new UserCardBadgeDto(ub.BadgeKeyNavigation.IconBaseUrl, ub.BadgeKeyNavigation.DisplayName, ub.EarnedCount))
                     .ToList()),

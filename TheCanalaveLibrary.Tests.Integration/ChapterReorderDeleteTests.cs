@@ -220,8 +220,12 @@ public class ChapterReorderDeleteTests(PostgresFixture postgres) : IntegrationTe
     [Fact]
     public async Task Delete_RefreshesStoryWordCount()
     {
-        await SeedChaptersAsync(2); // each chapter body has a known word count
+        // Story.WordCount counts published chapters only (WU-CounterSymmetry): SeedChaptersAsync
+        // creates drafts, which contribute 0, so publish both before measuring.
+        List<int> seeded = await SeedChaptersAsync(2); // each chapter body has a known word count
+        foreach (int id in seeded) await PublishAsync(id);
         int before = await LoadStoryWordCountAsync();
+        before.Should().BeGreaterThan(0, "both published chapters count");
 
         List<int> ids = await CurrentChapterIdsAsync();
         await DeleteAsync(ids[0]);
@@ -275,6 +279,13 @@ public class ChapterReorderDeleteTests(PostgresFixture postgres) : IntegrationTe
         using IServiceScope scope = Factory.Services.CreateScope();
         IChapterWriteService svc = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
         await svc.MoveChapterAsync(storyId, from, to);
+    }
+
+    private async Task PublishAsync(int chapterId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        IChapterWriteService svc = scope.ServiceProvider.GetRequiredService<IChapterWriteService>();
+        await svc.SetPublishedAsync(chapterId, true);
     }
 
     private async Task DeleteAsync(int chapterId)

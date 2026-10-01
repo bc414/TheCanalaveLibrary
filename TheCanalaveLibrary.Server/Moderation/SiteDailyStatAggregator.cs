@@ -25,6 +25,11 @@ namespace TheCanalaveLibrary.Server;
 /// <c>chapters.first_published_date</c> (still joining the primary version for its word count), so
 /// promoting an alternate version never re-counts a chapter.
 ///
+/// <c>total_words</c> sums <c>stories.word_count</c> over the same published/visible stories
+/// <c>total_stories</c> counts (WU-CounterSymmetry, service audit §2.4.6 — it used to sum every
+/// story, drafts and taken-down ones included). <c>word_count</c> itself counts published chapters
+/// only.
+///
 /// Scoped, deliberately separate from the hosted <see cref="SiteDailyStatWorker"/> so integration
 /// tests and a <c>/dev</c> probe can trigger an upsert deterministically without hosting timing —
 /// same split as <see cref="DiscoveryMartRebuilder"/>.
@@ -52,7 +57,7 @@ public sealed class SiteDailyStatAggregator(ApplicationDbContext context)
             @stat_date,
             (SELECT COUNT(*) FROM "AspNetUsers" WHERE created_utc < @range_end),
             (SELECT COUNT(*) FROM stories WHERE published_date < @range_end AND {VisibleStoryPredicate}),
-            (SELECT COALESCE(SUM(word_count), 0) FROM stories),
+            (SELECT COALESCE(SUM(word_count), 0) FROM stories WHERE published_date < @range_end AND {VisibleStoryPredicate}),
 
             (SELECT COUNT(*) FROM "AspNetUsers" WHERE created_utc >= @range_start AND created_utc < @range_end),
             (SELECT COUNT(*) FROM stories WHERE published_date >= @range_start AND published_date < @range_end),

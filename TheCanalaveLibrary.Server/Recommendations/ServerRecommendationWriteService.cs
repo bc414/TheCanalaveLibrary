@@ -175,7 +175,7 @@ public class ServerRecommendationWriteService(
             throw new InvalidOperationException("You have already submitted a recommendation for this story.");
         }
 
-        // Increment UserStats counters (cross-cutting.md §"UserStats Updates").
+        // Increment UserStats counters (layer2-services.md §"UserStats Updates").
         await writeDb.UserStats.Where(us => us.UserId == userId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.RecommendationsWritten, us => us.RecommendationsWritten + 1));
         // AuthorId is nullable (stories with no explicit author skip the author-stat update).
@@ -327,7 +327,15 @@ public class ServerRecommendationWriteService(
         if (!storyVisible)
             return new RecommendationLikeResultDto(0, false);
 
-        return new RecommendationLikeResultDto(Math.Max(0, rec.LikeCount + delta), nowLiked);
+        // Re-read the landed value (layer2-services.md §"Counter mutation rule"): "loaded value +
+        // delta" was a pre-update read, wrong whenever another like landed in between — the same
+        // MA-705 fix the blog-post sibling already had. Unclamped: only drift can make it negative,
+        // and the reconciler heals that (a floor would hide it — owner ruling D24's reasoning).
+        int landed = await writeDb.Recommendations
+            .Where(r => r.RecommendationId == recommendationId)
+            .Select(r => r.LikeCount)
+            .FirstOrDefaultAsync();
+        return new RecommendationLikeResultDto(landed, nowLiked);
     }
 
     // ── Hidden Gem ───────────────────────────────────────────────────────────────
@@ -553,8 +561,10 @@ public class ServerRecommendationWriteService(
         {
             // Increment the per-recommender aggregate counter.
             // ExecuteUpdateAsync is a no-op when no UserStat row exists — the award is skipped
-            // harmlessly (counter stays 0, threshold not met). Production creates a UserStat row
-            // on user registration; integration tests must seed one explicitly.
+            // harmlessly (counter stays 0, threshold not met). No write path creates a UserStat row
+            // at registration: UserStatRecalculator's missing-row insert is the first populator, and
+            // its next pass recomputes this counter from recommendation_successes. Integration tests
+            // must seed a row explicitly.
             await writeDb.UserStats
                 .Where(us => us.UserId == recommenderId.Value)
                 .ExecuteUpdateAsync(s => s.SetProperty(

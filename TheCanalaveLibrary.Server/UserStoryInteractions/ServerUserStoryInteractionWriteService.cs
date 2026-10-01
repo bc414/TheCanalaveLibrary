@@ -5,9 +5,14 @@ namespace TheCanalaveLibrary.Server;
 
 /// <summary>
 /// Server-side write implementation. Inherits the read path via primary-constructor chaining.
-/// Applies the six panel-managed bits in a single upsert: load→decide (the D6 raise guard)→apply→
-/// stamp dates→sparse cleanup→save. HasStarted is never touched — it belongs to the reading path
-/// (WU26). Any later step that writes (e.g. an ensure-row insert) belongs after the decide step.
+/// Applies the six panel-managed bits in a single upsert: load→decide (the D6 raise guard)→ensure
+/// the row→apply→stamp dates→sparse cleanup→save. HasStarted is never touched — it belongs to the
+/// reading path (WU26).
+/// <para><b>Create-create (owner ruling D23).</b> Every write here that finds no row creates it
+/// through <see cref="EnsureRowAsync"/> — an <c>INSERT … ON CONFLICT DO NOTHING</c>, then a tracked
+/// re-read — and creates a missing date partition through <see cref="EnsureDatePartitionAsync"/>, so
+/// a double-submit never 500s on the primary key. The ensure step is a mutation, so it always runs
+/// after the D6 guard. Doctrine: <c>layer2-services.md</c> §"Check-then-act posture".</para>
 /// <para><b>Recommendation attribution (owner ruling D3, WU-InertFeatures).</b> The attribution row
 /// hangs off the interaction row and describes how its <c>IsReadItLater</c> bit was set. Two producers
 /// live here — <see cref="SetReadItLaterFromRecommendationAsync"/> (the rec card) and
@@ -75,26 +80,26 @@ public class ServerUserStoryInteractionWriteService(
             await RequireStoryVisibleAsync(storyId);
 
         // ── 3. Mutate — every write below this line is authorized ────────────────────
-        if (row is null)
-        {
-            row = new UserStoryInteraction { UserId = userId, StoryId = storyId };
-            writeDb.UserStoryInteractions.Add(row);
-        }
+        // The ensure-row upsert is a mutation, so it sits after the guard. A concurrent create
+        // lands as 0 rows here and the re-read returns the winner's row (owner ruling D23).
+        row ??= await EnsureRowAsync(userId, storyId,
+            q => q.Include(i => i.InteractionDatePartition).Include(i => i.RecommendationSource));
 
-        // Capture derived state BEFORE applying the update (transition-delta rule —
-        // layer2-services.md §"Transition-delta rule for UserStoryInteraction-derived counters").
-        bool wasFavorite    = row?.IsFavorite  ?? false;
-        bool wasCompleted   = row?.IsCompleted ?? false;
-        bool wasIgnored     = row?.IsIgnored   ?? false;
-        bool hadStarted     = row?.HasStarted  ?? false;
+        // Capture derived state BEFORE applying the update, from the (re-)read row (transition-delta
+        // rule — layer2-services.md §"Transition-delta rule for UserStoryInteraction-derived counters").
+        bool wasFavorite    = row.IsFavorite;
+        bool wasCompleted   = row.IsCompleted;
+        bool wasIgnored     = row.IsIgnored;
+        bool hadStarted     = row.HasStarted;
         bool wasInProgress  = hadStarted && !wasCompleted;
-        bool wasReadItLater = row?.IsReadItLater ?? false;
+        bool wasReadItLater = row.IsReadItLater;
 
         // Apply the six panel bits — HasStarted is intentionally untouched.
         DateTime now = DateTime.UtcNow;
-        EnsureDatePartition(row!, now, update);
+        if (AnyBitTrue(update))
+            await EnsureDatePartitionAsync(row);
 
-        row!.IsFavorite = update.IsFavorite;
+        row.IsFavorite = update.IsFavorite;
         row.IsHiddenFavorite = update.IsHiddenFavorite;
         row.IsFollowed = update.IsFollowed;
         row.IsCompleted = update.IsCompleted;
@@ -181,12 +186,61 @@ public class ServerUserStoryInteractionWriteService(
 
     // ── helpers ─────────────────────────────────────────────────────────────────
 
-    private static void EnsureDatePartition(UserStoryInteraction row, DateTime now, UserStoryInteractionStateUpdate update)
+    /// <summary>
+    /// The create half of every write here (owner ruling D23, layer2-services.md §"Check-then-act
+    /// posture"). Inserts an all-false row with <c>ON CONFLICT (user_id, story_id) DO NOTHING</c>, then
+    /// re-reads it tracked through <paramref name="include"/>. Two concurrent first writes used to both
+    /// see "no row", both <c>Add</c>, and the loser 500'd on <c>pk_user_story_interactions</c>; now the
+    /// loser's insert lands 0 rows and the re-read hands it the winner's committed row, so its
+    /// transition-delta captures are taken against real state.
+    /// <para>Never <c>ChangeTracker.Clear()</c> here: the scoped write context is shared with callers
+    /// (<see cref="ServerChapterReadMarkWriteService"/>) whose tracked state must survive. Until the
+    /// caller's <c>SaveChangesAsync</c> the row is all-false; a crash in that window leaves it behind,
+    /// which no read notices (every bookshelf query filters on a flag) and the next write's sparse
+    /// cleanup removes.</para>
+    /// </summary>
+    private async Task<UserStoryInteraction> EnsureRowAsync(
+        int userId, int storyId,
+        Func<IQueryable<UserStoryInteraction>, IQueryable<UserStoryInteraction>> include)
+    {
+        // Values from a C#-built entity, so its initializers stay the single source of defaults. The
+        // flag columns have no DB default, so every one is listed — a new NOT NULL column without a
+        // default fails loudly (23502) instead of silently.
+        UserStoryInteraction fresh = new() { UserId = userId, StoryId = storyId };
+        await writeDb.Database.ExecuteSqlAsync($"""
+            INSERT INTO user_story_interactions (user_id, story_id, has_started, is_completed, is_favorite,
+                is_hidden_favorite, is_followed, is_read_it_later, is_ignored)
+            VALUES ({fresh.UserId}, {fresh.StoryId}, {fresh.HasStarted}, {fresh.IsCompleted}, {fresh.IsFavorite},
+                {fresh.IsHiddenFavorite}, {fresh.IsFollowed}, {fresh.IsReadItLater}, {fresh.IsIgnored})
+            ON CONFLICT (user_id, story_id) DO NOTHING
+            """);
+
+        return await include(writeDb.UserStoryInteractions)
+            .FirstAsync(i => i.UserId == userId && i.StoryId == storyId);
+    }
+
+    /// <summary>
+    /// The date partition has the same create-create race as its parent: two writers that both find
+    /// it missing both <c>Add</c> it. Same ON-CONFLICT shape, then the partition is read with a tracked
+    /// query and set on the row. Every date column is nullable, so only the key is written.
+    /// </summary>
+    private async Task EnsureDatePartitionAsync(UserStoryInteraction row)
     {
         if (row.InteractionDatePartition is not null) return;
-        if (!AnyBitTrue(update)) return;
 
-        row.InteractionDatePartition = new UserStoryInteractionDate { UserId = row.UserId, StoryId = row.StoryId };
+        await writeDb.Database.ExecuteSqlAsync($"""
+            INSERT INTO user_story_interaction_dates (user_id, story_id)
+            VALUES ({row.UserId}, {row.StoryId})
+            ON CONFLICT (user_id, story_id) DO NOTHING
+            """);
+        // A tracked query rather than Reference(...).LoadAsync(): the row's Include already marked the
+        // (then null) navigation as loaded, and LoadAsync is a no-op on a loaded navigation. Tracking
+        // fixes the result up onto the row.
+        row.InteractionDatePartition = await writeDb.UserStoryInteractionDates
+            .FirstOrDefaultAsync(d => d.UserId == row.UserId && d.StoryId == row.StoryId)
+            // Only reachable if the partition vanished between the insert and the read (its parent's
+            // sparse cleanup racing this write); re-creating it is then the right outcome.
+            ?? new UserStoryInteractionDate { UserId = row.UserId, StoryId = row.StoryId };
     }
 
     private static bool AnyBitTrue(UserStoryInteractionStateUpdate update) =>
@@ -222,25 +276,22 @@ public class ServerUserStoryInteractionWriteService(
         // A raise (D6): the full story-visibility guard, before any write.
         await RequireStoryVisibleAsync(rec.StoryId);
 
-        UserStoryInteraction? row = await writeDb.UserStoryInteractions
+        UserStoryInteraction row = await writeDb.UserStoryInteractions
             .Include(i => i.InteractionDatePartition)
             .Include(i => i.RecommendationSource)
-            .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == rec.StoryId);
+            .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == rec.StoryId)
+            ?? await EnsureRowAsync(userId, rec.StoryId,
+                q => q.Include(i => i.InteractionDatePartition).Include(i => i.RecommendationSource));
 
         // D3's defining sentence: the attribution records how the IsReadItLater bit came to be set.
         // A bit already set (say, on the story page) was not set from this card — no attribution.
-        bool flipsTheBit = row is null || !row.IsReadItLater;
-
-        if (row is null)
-        {
-            row = new UserStoryInteraction { UserId = userId, StoryId = rec.StoryId };
-            writeDb.UserStoryInteractions.Add(row);
-        }
+        // Read from the (re-)read row, so a concurrent winner's set bit counts as already set.
+        bool flipsTheBit = !row.IsReadItLater;
 
         DateTime now = DateTime.UtcNow;
         row.IsReadItLater = true; // every other bit untouched — no counter moves on this bit
-        row.InteractionDatePartition ??= new UserStoryInteractionDate { UserId = row.UserId, StoryId = row.StoryId };
-        row.InteractionDatePartition.ReadItLaterDate ??= now;
+        await EnsureDatePartitionAsync(row);
+        row.InteractionDatePartition!.ReadItLaterDate ??= now;
 
         // First attribution wins within one attribution's life; the story's author never gets one.
         if (flipsTheBit && row.RecommendationSource is null
@@ -265,24 +316,20 @@ public class ServerUserStoryInteractionWriteService(
 
         await RequireStoryVisibleAsync(storyId);
 
-        UserStoryInteraction? row = await writeDb.UserStoryInteractions
+        UserStoryInteraction row = await writeDb.UserStoryInteractions
             .Include(i => i.RecommendationSource)
-            .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
+            .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId)
+            ?? await EnsureRowAsync(userId, storyId, q => q.Include(i => i.RecommendationSource));
 
-        // Capture BEFORE applying the write (transition-delta rule) — StoriesInProgress mirrors
-        // the recompute formula (HasStarted && !IsCompleted, layer2-services.md "Recalculation
-        // worker" note) and must move here too: this reading-path call, not the panel, is the only
-        // producer of a HasStarted false→true flip. Without it, MarkCompletedAsync's symmetric
-        // decrement would underflow the counter below zero for the common case of a user who never
-        // touched the panel (A3, 2026-07-24 — found via CompletionProducerTests).
-        bool alreadyStarted = row?.HasStarted ?? false;
-        bool wasCompleted = row?.IsCompleted ?? false;
-
-        if (row is null)
-        {
-            row = new UserStoryInteraction { UserId = userId, StoryId = storyId };
-            writeDb.UserStoryInteractions.Add(row);
-        }
+        // Capture BEFORE applying the write, from the (re-)read row (transition-delta rule) —
+        // StoriesInProgress mirrors the recompute formula (HasStarted && !IsCompleted,
+        // layer2-services.md "Recalculation worker" note) and must move here too: this reading-path
+        // call, not the panel, is the only producer of a HasStarted false→true flip. Without it,
+        // MarkCompletedAsync's symmetric decrement would underflow the counter below zero for the
+        // common case of a user who never touched the panel (A3, 2026-07-24 — found via
+        // CompletionProducerTests).
+        bool alreadyStarted = row.HasStarted;
+        bool wasCompleted = row.IsCompleted;
 
         row.HasStarted = true;
 
@@ -315,29 +362,25 @@ public class ServerUserStoryInteractionWriteService(
 
         await RequireStoryVisibleAsync(storyId);
 
-        UserStoryInteraction? row = await writeDb.UserStoryInteractions
+        UserStoryInteraction row = await writeDb.UserStoryInteractions
             .Include(i => i.InteractionDatePartition)
-            .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
+            .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId)
+            ?? await EnsureRowAsync(userId, storyId, q => q.Include(i => i.InteractionDatePartition));
 
         // Idempotent: already complete → no-op (guards against a double StoriesRead increment on a
         // re-visit/re-scroll of the final chapter — A3 "re-visit behavior" is fire-once per completion).
-        if (row is { IsCompleted: true }) return;
+        // Evaluated on the (re-)read row, so the loser of a concurrent first completion returns here.
+        if (row.IsCompleted) return;
 
         // Capture derived state BEFORE applying the write (transition-delta rule — layer2-services.md
         // §"Transition-delta rule for UserStoryInteraction-derived counters"). wasCompleted is always
         // false here (guarded above); StoriesInProgress only moves if the user had already started.
-        bool wasInProgress = row?.HasStarted ?? false;
-
-        if (row is null)
-        {
-            row = new UserStoryInteraction { UserId = userId, StoryId = storyId };
-            writeDb.UserStoryInteractions.Add(row);
-        }
+        bool wasInProgress = row.HasStarted;
 
         DateTime now = DateTime.UtcNow;
         row.IsCompleted = true;
-        row.InteractionDatePartition ??= new UserStoryInteractionDate { UserId = row.UserId, StoryId = row.StoryId };
-        row.InteractionDatePartition.CompletedDate = now;
+        await EnsureDatePartitionAsync(row);
+        row.InteractionDatePartition!.CompletedDate = now;
 
         await writeDb.SaveChangesAsync();
 

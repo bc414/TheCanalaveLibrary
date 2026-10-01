@@ -333,9 +333,10 @@ builder.Services.AddScoped<SiteDailyStatAggregator>();
 builder.Services.AddHostedService<SiteDailyStatWorker>();
 builder.Services.AddScoped<ISiteDailyStatReadService, ServerSiteDailyStatReadService>();
 // UserStat recalculation worker (Feature 58, layer2-services.md "Recalculation worker (F58)"):
-// the scoped recalculator does the raw-SQL drift-correction pass; the hosted worker drives it
-// daily. TestAppFactory removes the worker (tests recalculate deterministically via
-// UserStatRecalculator).
+// the two scoped recalculators do the raw-SQL drift-correction passes (content counters first,
+// then user_stats — owner ruling D21); the hosted worker drives them daily. TestAppFactory removes
+// the worker (tests recalculate deterministically via the recalculators).
+builder.Services.AddScoped<ContentCounterRecalculator>();
 builder.Services.AddScoped<UserStatRecalculator>();
 builder.Services.AddHostedService<UserStatRecalculationWorker>();
 builder.Services.AddScoped<ICoOccurrenceReadService, ServerCoOccurrenceReadService>();
