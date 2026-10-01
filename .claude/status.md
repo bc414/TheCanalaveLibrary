@@ -48,8 +48,10 @@ fact that currently binds new work. When it stops binding, delete it — the eve
   ungated pending WU-A11y-Keyboard (paired with the Phase-3 L4 freeze sweep). Detail:
   `layer4-style.md` "Accessibility as a Stage-5 criterion", `audit/Accessibility.md`.
 - **Parent-visibility invariant** (conditionality kind (g)): child content is never more visible,
-  nor more writable, than the parent hosting it. Enforced by `ParentVisibilityContractTests`
-  (the enrolment list is the mechanism — adding a parent-scoped read/write means adding a row).
+  nor more *raisable*, than the parent hosting it — raises are guarded, while clears on the caller's
+  own existing row are never visibility-guarded on any axis (owner ruling D6). Enforced by
+  `ParentVisibilityContractTests` (the enrolment list is the mechanism — adding a parent-scoped
+  read/raise/clear means adding a row).
   Detail: `identity-and-authorization.md` §"Parent-visibility guards".
 - **Viewer access gating (Feature 66):** the three-plane model (Discovery zero-trace / Direct-nav
   consent interstitial / Personal never rating-filtered) governs every M-rated read. Model:

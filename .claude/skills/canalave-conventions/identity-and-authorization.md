@@ -148,13 +148,15 @@ activity ping — needs the hot scalar, renders nothing) and `Profiles/SettingsP
 | **(d)** | Ownership gate ("is the viewer the owner of *this specific entity*?") | UI: page computes bool, passes down; component uses plain `@if`. Server: service loads entity, compares `entity.OwnerId != activeUser.UserId`, throws | UI: WU13/WU14. Server: WU24+ |
 | **(e)** | Per-viewer state ("has the viewer favorited / liked / started this?") | Server read service projects per-viewer flags via `IActiveUserContext.UserId` into the DTO | WU15/WU19 |
 | **(f)** | Owner-or-staff gate — **does not exist in this codebase.** | Editing is **author-only** (strict identity-equality). Moderation is a **separate code path** (WU34 admin service). Never an `OR` fold. | WU24 |
-| **(g)** | **Parent-visibility inheritance** ("is the content that *hosts* this child visible to the viewer?") | Child read service calls the parent's guard and returns empty; child write service calls it and throws `KeyNotFoundException`. See §"Parent-visibility guards" below | WU-ParentVisibility |
+| **(g)** | **Parent-visibility inheritance** ("is the content that *hosts* this child visible to the viewer?") | Child read service calls the parent's guard and returns empty; child write service calls it **on raises** and throws `KeyNotFoundException`; clears on the caller's own existing row are unguarded (D6). See §"Parent-visibility guards" below | WU-ParentVisibility; raise/clear split WU-AccessGateSweep2 |
 
 ### Parent-visibility guards
 
-**The invariant: child content is never more visible, nor more writable, than the parent content that
-hosts it.** A poll is exactly as visible as its blog post; a comment as its chapter; a group's member
-roster as the group.
+**The invariant: child content is never more visible, nor more *raisable*, than the parent content
+that hosts it.** A poll is exactly as visible as its blog post; a comment as its chapter; a group's
+member roster as the group. A write that creates or raises state under a hidden parent is refused; a
+write that clears or lowers the caller's own existing state under it is always permitted — see
+§"Raises vs clears" below.
 
 This rule was violated on **38 surfaces** before WU-ParentVisibility (13 reads, 25 writes) for two
 structural reasons, both worth internalizing:
@@ -181,10 +183,10 @@ differ in columns and in reveal target:
 
 | Guard | Parent hidden when |
 |---|---|
-| `BlogPostVisibilityGuard` | unpublished (to non-authors) · rating above viewer ceiling without a reveal (`RevealedEntityType.BlogPost` for profile posts, `.Group` for group posts) · group audience M with mature off · taken down |
+| `BlogPostVisibilityGuard` | unpublished (to non-authors) · **profile post whose author's `ProfileVisibility` hides it from this viewer** (Class A — a blog post is profile-tab data, so it is not bot-bypassable; group and site posts carry no profile check — WU-AccessGateSweep2) · rating above viewer ceiling without a reveal (`RevealedEntityType.BlogPost` for profile posts, `.Group` for group posts) · group audience M with mature off · taken down |
 | `StoryVisibilityGuard` | rating above ceiling without a `RevealedEntityType.Story` reveal · status `Draft`/`PendingApproval`/`Rejected` · taken down. `IsChapterVisibleAsync` adds: chapter unpublished (to non-authors) |
 | `GroupVisibilityGuard` | audience rating M and the viewer has mature off |
-| `ProfileVisibilityGuard` | Private to non-owners · UsersOnly to anonymous viewers (predates this WU) |
+| `ProfileVisibilityGuard` | Private to non-owners · UsersOnly to anonymous viewers (predates this WU). Has the pure overload `IsVisible(ProfileVisibility?, viewer, profileUserId)` since WU-AccessGateSweep2, which `BlogPostVisibilityGuard` calls with the author's projected setting |
 
 Every guard follows one contract shape:
 
@@ -212,9 +214,57 @@ no extra query; callers holding only an id use the loader. One copy of the rule,
   elevation. Buffered lossy writes (view counts, reading progress) validate at **drain time** in the
   flush worker, never at entry — a per-request query would negate the buffer's reason for existing.
 
+#### Raises vs clears (owner ruling D6, 2026-08-04; built WU-AccessGateSweep2, 2026-09-30)
+
+**A flag raise keeps the full guard; a clear or lower on the caller's own existing row is never
+visibility-guarded — on all three axes (content rating, lifecycle status, takedown).**
+Authentication is unchanged: an anonymous clear still throws first.
+
+*Why.* A guard exists to stop **new disclosure** and **new entanglement**: raising a bit on a guessed
+id increments another user's public counter and enrolls the actor in a hidden parent's fan-out. A
+clear does neither — it removes the actor's own row, lowers a counter, and withdraws them from a set.
+Refusing it protects nothing: the read plane already tells the client which hidden stories it has
+rows on (`GetStatesByStoryIdsAsync` is a bare-FK query on an unfiltered entity,
+`ServerUserStoryInteractionReadService`), so the guard only costs the user their own data — a
+taken-down story would otherwise freeze every reader's rows permanently, and since D1 any author can
+freeze them by unpublishing. The site already applied this rule wherever a verb pair exists
+(`FollowAsync` guarded / `UnfollowAsync` not; `JoinAsync` / `LeaveAsync`); the whole-state setters
+diverged only because one guard at the top covered both directions.
+
+*Mechanism — load first, diff, then decide.* Load the caller's existing row, diff it against the
+payload, and call the guard only if some bit goes **false→true**. Riders:
+- **Mixed payloads:** any raise anywhere guards the whole call — no per-bit partial application, so
+  the guard runs before the first property is assigned.
+- **No row ⇒ every true bit is a raise ⇒ guarded.** The guessed-id enumeration stays blocked.
+- **No row + all-false payload ⇒ silent no-op, returned before any guard,** so hidden, absent and
+  nonexistent parents are indistinguishable (no oracle).
+- **Sparse cleanup is a clear.** An all-false update deleting the row is permitted on a hidden parent.
+- **A clear path performs no parent existence check either** — `writeDb` sees hidden rows, so "hidden
+  but real succeeds, absent 404s" is itself an oracle. A clear on a nonexistent parent is a silent no-op.
+
+*Toggles.* A toggle whose caller already holds the row (a like) is a clear by definition: an existing
+like row makes the call an unlike, which skips the guard; the row's FK proves the parent exists. A
+toggle's response may still carry the parent's aggregate (the post-toggle `LikeCount`) — accepted as
+part of the clear: the caller's row proves prior access.
+
+*Read-mark asymmetry.* `SetChapterReadAsync(id, false)`/`SetAllChaptersReadAsync(id, false)` are
+ungated clears; the `isRead: true` paths keep the full guard, and their cascade into
+`MarkStartedAsync`/`MarkCompletedAsync` stays guarded because those only ever *set* bits (raises by
+construction). `HasStarted` remains non-clearable by any surface (`Has-` = permanent past event).
+
+*Counter consequence (accepted).* Clearing a favorite on a hidden story decrements the author's
+`FavoritesOnStories` — the favorite is genuinely withdrawn; recompute (D21) treats
+withdrawal-while-hidden as ground truth, not drift.
+
+*Raises on the caller's own content are out of scope.* `SetHiddenGemAsync(true)` and
+`SetHighlightedByAuthorAsync(true)` raise flags on the caller's own recommendation with no parent
+guard; which axis applies to them is unruled (tracker **F10**).
+
 **Enrolment is the enforcement.** `Tests.Integration/ParentVisibilityContractTests.cs` holds a table of
-every governed surface and asserts, per hidden-parent kind, that reads come back empty and writes are
-refused. A new parent-scoped read or write is registered by adding a row. Docs alone already failed
+every governed surface and asserts, per hidden-parent kind, that reads come back empty and raises are
+refused — and, since WU-AccessGateSweep2, that clears on the caller's own row succeed (one test per
+axis, plus the conformance of every unguarded sibling clear). A new parent-scoped read or write is
+registered by adding a row. Docs alone already failed
 once: the rule existed in `layer2-services.md` and the WU-AccessGate sweep still missed
 `GetUserNeighborsAsync`, leaving a Private profile's contents anonymously readable.
 

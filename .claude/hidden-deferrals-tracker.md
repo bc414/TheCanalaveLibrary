@@ -736,6 +736,12 @@ unless noted. All sit under Stage-5 cells.
   - Grid: F66 all=5; F55 L2=5.
   - Source: `audit/AccessGate.md` "Open (deferred, tracked)" + WU-AccessGate2 "Deliberately deferred, recorded."
   - Context: No rate limiting on `/content-gate/*` consent endpoints ("revisit on abuse"); interim AO3-style willingness wording (final copy + any age-assertion element is a counsel/row-10 item — legally load-bearing); optional hard-mode preference ("M URLs 404 instead of interstitial") not built; spotlight non-M pool floor.
+  - **Annotated 2026-09-30 (WU-AccessGateSweep2, which took none of the four clauses):** clause 1
+    (consent-endpoint throttling) closes in **WU-ThrottleCoverage** — worksheet D20's throttle half
+    rules a new `Reveal` write kind. Clauses 2–4 are deliberately deferred, not build scope: the
+    wording is a counsel item (row 10), hard mode is "optional future, not demanded"
+    (`audit/AccessGate.md` Open), and the pool floor is an operational knob deferred by ruling
+    (WU-AccessGate2). **Do not tick E6** until all four have an owner answer or ship.
 
 - [ ] **E7 — The author status-transition endpoint has no write-throttle classification** `[off-grid · low · pre-launch]` — *Filed 2026-09-30 by the WU-StoryLifecycle review fixes; routed, not an oversight.*
   - Grid: F4 L2/L5=5 (unchanged).
@@ -892,6 +898,33 @@ built rows at 5 and no signal these exist.
        while `new_stories` excludes their stories. Also the WU-InertFeatures fan-out anchor edge
        already flagged in `audit/Chapters.md`. **Promoted to `roadmap.md` decision row 16.**
 
+- [ ] **F10 — Access-gate sub-edges left open for the owner by WU-AccessGateSweep2** `[decision · low · beta]` — *Filed 2026-09-30; found by the D6-mandated enumeration and the service audit §2.6 sweep, deliberately not decided in the build.*
+  - Grid: F16/F25/F37/F44/F23/F66 — no cell's stage rests on these items.
+  - Source: worksheet D6 (the enumeration rule) and D25 (pending); service audit §2.6;
+    `identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears".
+  - Open items, none of which the build guessed at:
+    1. **Poll-vote retraction on a hidden parent.** `ServerPollWriteService.VoteAsync` is guarded
+       both ways, so a reader cannot retract a vote once the post is hidden — a clear D6 would move.
+       It was not moved because the method returns the refreshed `PollDto`, i.e. the hidden poll's
+       content: an ungated retraction either commits and then throws when it re-reads, or discloses
+       the poll. Needs a return-contract ruling (a void `RetractAsync`, or a nullable return) and
+       interacts with the independent "poll must be Open" rule (and **D42**, archived-poll
+       votability). WU-PollVoteIntegrity also restructures this method.
+    2. **Own-content curation raises have no parent guard.** `SetHiddenGemAsync(true)` and
+       `SetHighlightedByAuthorAsync(true)` raise flags on the caller's own recommendation with no
+       story-visibility check (a Hidden Gem fires a notification to the story's author). Which guard
+       applies — the full one, or confidentiality-only like WU29's rating-permissive rec submit — is
+       unruled. Their `false` clears are recorded D6 conformance.
+    3. **Edit-read existence oracles.** `GetChapterForEditAsync`, the blog `GetForEditAsync` and the
+       story edit read answer "exists but not yours" with `UnauthorizedAccessException` (403) and
+       "absent" with null/404 — the kind-(d) convention (`identity-and-authorization.md`) prescribes
+       exactly that, and no ruling extends non-disclosure to ownership gates. **D25**'s
+       one-indistinguishable-failure generalization (pending) is the venue.
+    4. **Does `AllowProfileComments = Nobody` also hide existing wall comments at the API?** The UI
+       hides the wall; `GetUserProfileCommentsAsync` returns it to anyone who can see the profile.
+       Read-side semantics of the setting are unruled (`layer2-services.md` §"`AllowProfileComments`
+       Gate" — posting only).
+
 ---
 
 ## G. Doc contradictions & stale files (drift already present)
@@ -1019,6 +1052,27 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - Known interim gap: on the WASM pass the author's lifecycle error text arrives as the generic
     "Story validation failed." until WU-ParityAndRemaining's P1 carries validation error lists over
     HTTP (moderator messages already round-trip — WU-StoryLifecycle changed that client mapping).
+
+- [ ] **H13 — Access-gate sweep behavior never browser-verified** `[test-gap · low · beta]` — *Filed 2026-09-30 by WU-AccessGateSweep2, which ran with no browser available.*
+  - Grid: F16, F20, F23, F36, F44, F49 — all unchanged. No markup changed visually (only
+    `PrivacySettingsForm`'s option *values*), so no L4.5 cell was flipped; the behavior beneath them
+    did change and is covered by Integration/bUnit only.
+  - Source: `workplan.md` WU-AccessGateSweep2; `audit/AccessGate.md` F66 and `audit/Profiles.md` F20
+    Stage notes.
+  - Drive each on the circuit and the WASM pass, against `psql` ground truth:
+    1. `/settings` → Privacy: choose "Off" for the comment wall and for private messages, save; both
+       settings read back as `Nobody` (3) in `privacy_settings`; your wall disappears for other users;
+       starting a conversation with you is refused. (A workbench user who saved "Off" before this WU
+       holds 2 — `Following` — and the select shows no matching option until re-saved, or
+       `reset-dev-db.ps1`.)
+    2. As ReaderGamma (seeded mature-off): turn mature on, favorite an M story, turn mature off, then
+       un-favorite it from `/bookshelves` via the panel — it saves (no reveal involved). (The
+       takedown/status axes have no UI path to a hidden story's controls; Integration covers them.)
+    3. Set AuthorAlpha's profile to Private; as another user and anonymously, open one of AuthorAlpha's
+       blog posts — a real 404, not an interstitial; `/sitemap.xml` omits it.
+    4. Set a wall to `Following` in `psql` (the form has no option for it); post on it as a user the
+       owner does not follow — the inline error reads "This user only accepts profile comments from
+       people they follow."
 
 ---
 

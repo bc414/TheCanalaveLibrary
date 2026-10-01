@@ -49,7 +49,11 @@ public interface IStoryAcknowledgmentWriteService : IStoryAcknowledgmentReadServ
     /// re-request-reuses-the-row history to preserve. Caller must own the story. If the credit was
     /// <see cref="StoryAcknowledgmentStatus.Accepted"/> at the time (role Beta Reader), decrements
     /// <c>UserStat.AcknowledgedAsBetaReaderCount</c> — the transition-delta rule
-    /// (<c>layer2-services.md</c>). Idempotent — a no-op if the credit doesn't exist.
+    /// (<c>layer2-services.md</c>). Idempotent for the owner — a no-op if the credit doesn't exist.
+    /// Ownership is checked first, so a non-owner (or a nonexistent story) always gets
+    /// <see cref="UnauthorizedAccessException"/> whether or not a credit exists — the response never
+    /// reveals private credit state (WU-AccessGateSweep2).
     /// </summary>
+    /// <exception cref="UnauthorizedAccessException">The caller does not own the story, or it does not exist.</exception>
     Task RevokeAsync(int storyId, int acknowledgedUserId, short roleId);
 }

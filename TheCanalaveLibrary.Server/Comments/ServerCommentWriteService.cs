@@ -89,6 +89,45 @@ public class ServerCommentWriteService(
     }
 
     /// <summary>
+    /// The profile owner's <c>AllowProfileComments</c> gate (WU-AccessGateSweep2 —
+    /// <c>layer2-services.md</c> §"<c>AllowProfileComments</c> Gate"). Same enum and tiers as the
+    /// <c>AllowPrivateMessages</c> gate in <c>ServerMessagingWriteService</c>; refusals are
+    /// <see cref="CommentValidationException"/> (400 with user-facing detail), which the WASM client
+    /// already reconstructs. Before this, the setting was honored only by the profile page hiding
+    /// the wall — a direct POST bypassed it. Callers exempt the owner.
+    /// </summary>
+    private async Task EnforceProfileCommentPermissionAsync(int ownerId, int commenterId)
+    {
+        // jsonb complex property — a single-row projection, evaluated in C# below.
+        SocialInteractionPermission? setting = await writeDb.Users
+            .Where(u => u.Id == ownerId)
+            .Select(u => (SocialInteractionPermission?)u.PrivacySettings.AllowProfileComments)
+            .FirstOrDefaultAsync();
+        if (setting is null)
+            throw new KeyNotFoundException($"Profile user {ownerId} not found.");
+
+        switch (setting.Value)
+        {
+            case SocialInteractionPermission.Public:
+            case SocialInteractionPermission.UsersOnly:
+                return; // posting already requires an authenticated caller
+
+            case SocialInteractionPermission.Following:
+                // The owner must follow the commenter (writeDb — constraint check, like messaging).
+                bool ownerFollowsCommenter = await writeDb.FollowedUsers
+                    .AnyAsync(f => f.UserId == ownerId && f.FollowedUserId == commenterId);
+                if (!ownerFollowsCommenter)
+                    throw new CommentValidationException(
+                        ["This user only accepts profile comments from people they follow."]);
+                return;
+
+            case SocialInteractionPermission.Nobody:
+            default: // unknown future tier — fail closed
+                throw new CommentValidationException(["This user isn't accepting profile comments."]);
+        }
+    }
+
+    /// <summary>
     /// Resolves the parent comment's author for a reply, or null for a top-level comment or a
     /// SET-NULL'd (deleted) parent author. Used only by the best-effort notification blocks.
     /// </summary>
@@ -352,6 +391,12 @@ public class ServerCommentWriteService(
             readDb => ProfileVisibilityGuard.IsProfileVisibleAsync(readDb, ActiveUser, dto.ProfileUserId),
             $"Profile user {dto.ProfileUserId} not found.");
 
+        // The owner's AllowProfileComments setting — AFTER the visibility guard, so a hidden profile
+        // stays an indistinguishable not-found rather than a "not accepting comments" refusal.
+        // The owner always posts on their own wall.
+        if (userId != dto.ProfileUserId)
+            await EnforceProfileCommentPermissionAsync(dto.ProfileUserId, userId);
+
         // If replying, verify the parent belongs to the same profile wall.
         if (dto.ParentCommentId.HasValue)
         {
@@ -481,14 +526,17 @@ public class ServerCommentWriteService(
         if (comment is null)
             throw new KeyNotFoundException($"Comment {commentId} not found.");
 
-        // Kind (g): the like must be refused when the content hosting the comment is invisible —
-        // and, because writeDb bypasses BaseComment's IsTakenDown filter, when the comment itself
-        // has been removed by a moderator.
-        await RequireCommentContextVisibleAsync(commentId);
+        CommentLike? existingLike = comment.Likes.FirstOrDefault();
+
+        // Kind (g), raise only: a new like must be refused when the content hosting the comment is
+        // invisible — and, because writeDb bypasses BaseComment's IsTakenDown filter, when the
+        // comment itself has been removed by a moderator. An existing like row makes this call an
+        // unlike, a clear on the caller's own row, which is never guarded (owner ruling D6).
+        if (existingLike is null)
+            await RequireCommentContextVisibleAsync(commentId);
 
         bool nowLiked;
         int delta;
-        CommentLike? existingLike = comment.Likes.FirstOrDefault();
 
         if (existingLike is not null)
         {
@@ -508,7 +556,7 @@ public class ServerCommentWriteService(
         await writeDb.SaveChangesAsync();
         // No notification generated — anti-addictive design (§6.11).
 
-        // Atomic counter update — see cross-cutting.md §"Counter mutation rule" for why
+        // Atomic counter update — see layer2-services.md §"Counter mutation rule" for why
         // ExecuteUpdateAsync is used here instead of tracked read-modify-write.
         await writeDb.BaseComments
             .Where(c => c.CommentId == commentId)

@@ -13,7 +13,7 @@ closing MA-108; formerly the top-level `SiteConstants.cs`).
 ## Feature 50 — Badge System
 - **L1 — Stage 5.** String-keyed `Badge` + `UserBadge` junction with curation ordering. Seed is partially
   complete (placeholder comment) but the shape is sound. Awaiting migration.
-- **L2 — Stage 5 (2026-06-25, WU36).**
+- **L2 — Stage 5 (2026-06-25, WU36; acknowledgment by-story read gated + `RevokeAsync` ownership-first, WU-AccessGateSweep2, 2026-09-30 — see its Stage note).**
   - Created `Core/Badges/`: `EarnedBadgeDto`, `IBadgeReadService`, `IBadgeWriteService`.
   - Created `Server/Badges/`: `ServerBadgeReadService`, `ServerBadgeWriteService` (primary-ctor chaining;
     CS9107-safe). Registered in `Server/Program.cs` (write service scoped, read forwarded).
@@ -91,6 +91,27 @@ closing MA-108; formerly the top-level `SiteConstants.cs`).
   - `DataSeeder` now awards TestUser the `Recommender` badge (`DisplayOrder=1`) so the curation UI
     and card badge row render a populated state on a fresh DB.
   - L4 stays 1 (visual sign-off pending) — nothing unusable found.
+
+### Feature 50 L2 — WU-AccessGateSweep2 Stage note (2026-09-30): story-acknowledgment access fixes
+
+**No cell flips — F50 stays Stage 5.** Two service audit §2.6 items in the WU-StatBadgeProducers
+`Collaboration/` cluster:
+- **`GetAcknowledgmentsForStoryAsync` had no visibility gate.** It filtered on the bare `StoryId` FK
+  and `StoryAcknowledgment` carries no filter of its own, so a draft, taken-down or M-unrevealed
+  story's accepted credits were readable by id from the public endpoint (the bare-FK class
+  WU-ParentVisibility swept, missed because this cluster is later). It now returns empty unless
+  `StoryVisibilityGuard.IsStoryVisibleAsync` passes; the interface doc says so.
+- **`RevokeAsync` was an existence oracle.** It looked up the credit before checking story
+  ownership, so a non-owner got 403 only when a credit existed (Pending/Declined included) and silent
+  success otherwise. Ownership is now checked first: a non-owner — or a nonexistent story — always gets
+  `UnauthorizedAccessException` (the kind-(d) convention is kept), and the owner's no-credit call stays
+  an idempotent no-op.
+
+**How verified:** Integration — `ParentVisibilityContractTests` acknowledgment/lineage tests (Draft:
+empty for a stranger and anonymous, populated for the author; taken-down: empty for everyone);
+`StoryAcknowledgmentServiceTests.Revoke_NotStoryOwner_NoCredit_ThrowsUnauthorizedAccess` and
+`Revoke_NonexistentStory_ThrowsUnauthorizedAccess`; the existing revoke tests still green. All four
+fail against the pre-fix code. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
 
 ## WU36 Settled Decisions (2026-06-25)
 

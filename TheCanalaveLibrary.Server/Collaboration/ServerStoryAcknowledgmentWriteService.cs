@@ -157,12 +157,16 @@ public class ServerStoryAcknowledgmentWriteService(
     {
         int userId = RequireAuthenticatedUser();
 
-        StoryAcknowledgment? credit = await writeDb.StoryAcknowledgments.FindAsync(storyId, acknowledgedUserId, roleId);
-        if (credit is null) return; // idempotent — no-op if not present
-
-        Story? story = await writeDb.Stories.FirstOrDefaultAsync(s => s.StoryId == storyId);
-        if (story is null || story.AuthorId != userId)
+        // Ownership BEFORE the credit lookup (service audit §2.6, WU-AccessGateSweep2). The other
+        // order answered a non-owner 403 only when a credit existed and silent success otherwise,
+        // which enumerated private credit state (Pending/Declined included). Now a non-owner — or a
+        // nonexistent story — always gets the same 403, whatever credits exist.
+        bool ownsStory = await writeDb.Stories.AnyAsync(s => s.StoryId == storyId && s.AuthorId == userId);
+        if (!ownsStory)
             throw new UnauthorizedAccessException("You must own the story to revoke a credit on it.");
+
+        StoryAcknowledgment? credit = await writeDb.StoryAcknowledgments.FindAsync(storyId, acknowledgedUserId, roleId);
+        if (credit is null) return; // idempotent for the owner — no-op if not present
 
         bool wasAccepted = credit.StatusId == StoryAcknowledgmentStatus.Accepted;
 

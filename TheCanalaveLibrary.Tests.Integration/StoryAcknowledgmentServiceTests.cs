@@ -318,6 +318,29 @@ public class StoryAcknowledgmentServiceTests(PostgresFixture postgres) : Integra
     }
 
     [Fact]
+    public async Task Revoke_NotStoryOwner_NoCredit_ThrowsUnauthorizedAccess()
+    {
+        // Ownership is checked BEFORE the credit lookup (WU-AccessGateSweep2). The old order gave a
+        // non-owner 403 only when a credit existed and silent success otherwise — an oracle over the
+        // story's private credit state (Pending/Declined included).
+        int storyId = await SeedStoryAsync(authorId: _authorId);
+
+        SetActiveUser(_recipientId);
+        Func<Task> act = () => RevokeAsync(storyId, _recipientId, BetaReaderRoleId);
+        await act.Should().ThrowAsync<UnauthorizedAccessException>(
+            "a non-owner gets the same answer whether or not a credit exists");
+    }
+
+    [Fact]
+    public async Task Revoke_NonexistentStory_ThrowsUnauthorizedAccess()
+    {
+        SetActiveUser(_authorId);
+        Func<Task> act = () => RevokeAsync(999_999, _recipientId, BetaReaderRoleId);
+        await act.Should().ThrowAsync<UnauthorizedAccessException>(
+            "nobody owns a nonexistent story — same answer as any other non-owner");
+    }
+
+    [Fact]
     public async Task Revoke_NonExistent_NoThrow()
     {
         int storyId = await SeedStoryAsync(authorId: _authorId);

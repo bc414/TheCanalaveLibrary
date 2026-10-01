@@ -13,7 +13,7 @@ services, no components built.
 ## Feature 18 — User Following
 - **L1 — Stage 5.** `FollowedUser` matches §5.8 (follow/unfollow, bell `ReceiveAlerts`, date). The
   asymmetric delete behavior is deliberate. Migration-verified (`InitialSchema`).
-- **L2 — Stage 5 (WU21, 2026-06-22).** `IFollowingReadService` / `IFollowingWriteService` (inherits
+- **L2 — Stage 5 (WU21, 2026-06-22; alerts-on raise guarded + clear conformance WU-AccessGateSweep2, 2026-09-30 — see its Stage note).** `IFollowingReadService` / `IFollowingWriteService` (inherits
   read) built in `Core/Following/`. `ServerFollowingReadService` (`ReadOnlyApplicationDbContext` +
   `IActiveUserContext`) and `ServerFollowingWriteService` (adds `ApplicationDbContext` +
   `IHtmlSanitizationService`) in `Server/Following/`; both DI-registered in `Program.cs`. Idempotent
@@ -68,6 +68,21 @@ services, no components built.
   `pg_indexes`); forward lookups ride the PK. A `(user_id, date_followed)` sort index was
   REJECTED under R4: per-user follow counts are small (same rationale as the Bookshelves recency
   ruling). Detail: `layer6-indexes.md` §"Rejected".
+
+### Feature 18 L2 — WU-AccessGateSweep2 Stage note (2026-09-30): alerts-on is a raise; the clears stay free (owner ruling D6)
+
+**No cell flips — F18 stays Stage 5.** D6's enumeration found one unguarded raise here:
+`SetReceiveAlertsAsync(true)` on a follow row whose `ReceiveAlerts` was false re-enrolls the actor in
+the target's notification fan-out — the same entanglement `FollowAsync`'s profile guard refuses.
+It now calls `RequireProfileVisibleAsync` when the bit goes false→true; turning alerts off stays
+unguarded, and a missing follow row still answers `FollowingValidationException` whether the
+profile is hidden or absent. Recorded conformance (unchanged, enrolled):
+`UnfollowAsync`, `RemoveVouchAsync` (F19) and alerts-off are unguarded clears. `IFollowingWriteService`'s
+doc says so; the class doc lists the raises and the clears.
+
+**How verified:** Integration — `ParentVisibilityContractTests`: alerts-on refused for a Private
+profile with the row left false (fails against the pre-fix service); alerts-off, unfollow and
+remove-vouch succeed against a Private profile. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
 
 ## Feature 19 — Vouches
 - **L1 — Stage 5 (reconciled Phase B, 2026-06-20; was mis-marked Stage 1).** `Vouch` is a dedicated

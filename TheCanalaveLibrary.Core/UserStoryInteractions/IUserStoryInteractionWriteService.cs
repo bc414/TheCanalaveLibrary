@@ -15,6 +15,12 @@ public interface IUserStoryInteractionWriteService : IUserStoryInteractionReadSe
     ///   <item>Removes the row entirely when all seven bits are false (sparse semantics).</item>
     ///   <item>Accepts every combination — spec §4's zero-coupling model forbids nothing
     ///   (ValidateCombination is an empty extension point for future restrictions).</item>
+    ///   <item><b>Guards raises only (owner ruling D6):</b> if any bit goes false→true (with no row,
+    ///   every true bit), the story must be visible to the caller, else
+    ///   <see cref="KeyNotFoundException"/> and nothing is written — a mixed payload is refused
+    ///   whole. Clears on the caller's existing row, including the all-false delete, always succeed,
+    ///   even when the story is now hidden (rating, status or takedown). No row + all-false is a
+    ///   silent no-op for any story id, real or not.</item>
     /// </list>
     /// Throws <see cref="InvalidOperationException"/> when the viewer is anonymous.
     /// </summary>

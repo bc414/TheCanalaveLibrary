@@ -22,10 +22,16 @@ namespace TheCanalaveLibrary.Core;
 /// <c>Story.StoryStatusId == StoryStatusEnum.Completed</c> — the manual-path half of the
 /// story-completion auto-producer (layer2-services.md §"<c>IsCompleted</c> auto-producer"). Never
 /// fires for ongoing stories; mark-unread never un-sets <c>IsCompleted</c>.</para>
+///
+/// <para><b>Raises vs clears (owner ruling D6, WU-AccessGateSweep2):</b> mark-read is a raise and
+/// requires the chapter/story to be visible to the caller. Mark-unread is a clear of the caller's
+/// own rows and always succeeds — even when the story is now taken down, unpublished or above the
+/// caller's rating ceiling — and is a silent no-op for an id that does not exist, so it never
+/// confirms existence.</para>
 /// </summary>
 public interface IChapterReadMarkWriteService
 {
-    /// <exception cref="KeyNotFoundException">Chapter not found.</exception>
+    /// <exception cref="KeyNotFoundException">Mark-read only: chapter not found or not visible to the caller.</exception>
     /// <exception cref="InvalidOperationException">Anonymous caller.</exception>
     Task SetChapterReadAsync(int chapterId, bool isRead);
 
@@ -33,7 +39,7 @@ public interface IChapterReadMarkWriteService
     /// Marks every <b>published</b> chapter of the story read (creating missing interaction rows)
     /// or unread (flipping existing rows only — absent rows are already unread; sparse semantics).
     /// </summary>
-    /// <exception cref="KeyNotFoundException">Story not found.</exception>
+    /// <exception cref="KeyNotFoundException">Mark-read only: story not found or not visible to the caller.</exception>
     /// <exception cref="InvalidOperationException">Anonymous caller.</exception>
     Task SetAllChaptersReadAsync(int storyId, bool isRead);
 }

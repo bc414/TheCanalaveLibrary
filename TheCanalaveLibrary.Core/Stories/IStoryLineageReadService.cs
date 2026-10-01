@@ -12,7 +12,9 @@ public interface IStoryLineageReadService
     /// <summary>
     /// Returns every <see cref="StoryLineageStatus.Approved"/> link where <paramref name="storyId"/>
     /// is the source, for the public story-page display. Empty when the story has no approved
-    /// outgoing links (including when it has only Pending/Rejected ones).
+    /// outgoing links (including when it has only Pending/Rejected ones), and empty when the source
+    /// story itself is not visible to the caller (kind (g), WU-AccessGateSweep2). Each link is also
+    /// dropped when its <i>target</i> is not visible to the caller.
     /// </summary>
     Task<IReadOnlyList<StoryLineageDto>> GetLineageForStoryAsync(int storyId);
 

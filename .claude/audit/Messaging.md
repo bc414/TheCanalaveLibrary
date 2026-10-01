@@ -79,7 +79,7 @@ Four decisions settled before WU35 build; see `forward_plan.md` Resolved + `cros
 - **L1 — Stage 5.** Three-table schema with `LastReadTimestamp` watermark, `IsArchived`, `Subject`
   field, and `SenderUserId` SetNull. Fully migrated (`InitialSchema`). FK edges wired in
   `IdentityConfigurations.cs`. No further L1 work needed.
-- **L2 — Stage 5 (WU35, 2026-06-24).** CQRS-lite cluster in `Core/Messaging/` +
+- **L2 — Stage 5 (WU35, 2026-06-24; gate code unchanged, but the settings form's "Off" now really writes `Nobody` — WU-AccessGateSweep2, 2026-09-30, see its note below).** CQRS-lite cluster in `Core/Messaging/` +
   `Server/Messaging/`. Interfaces: `IMessagingReadService` (4 methods: `GetConversationsAsync`,
   `GetConversationThreadAsync`, `GetUnreadConversationCountAsync`, `FindUserByUsernameAsync`) and
   `IMessagingWriteService : IMessagingReadService` (4 mutations: `StartConversationAsync` [gated],
@@ -373,6 +373,16 @@ now exists, the `SearchUsersByNameAsync` service behind it, the visibility decis
 `audit/Badges.md` §"WU-StatBadgeProducers". Verified: `dotnet test` full suite green (2,414 total);
 browser-verified — `/messages` → New → picker renders in place of the old text input, typeahead
 returns live results.
+
+### WU-AccessGateSweep2 note (2026-09-30) — "Off" now actually blocks private messages
+
+**No cell flips — F49 stays Stage 5; no messaging code changed.** The `AllowPrivateMessages` gate in
+`StartConversationAsync` was always correct, but the settings form's "Off — no private messages"
+option posted `2` (`Following`), so a user who chose "Off" got the "only people I follow" tier, not
+`Nobody`. The form now writes `Nobody` (`audit/Profiles.md` F20 Stage note). Covering tier:
+RazorComponents (`PrivacySettingsFormTests`); the gate's own tiers stay covered by
+`MessagingWriteServiceTests`. Workbench users who saved "Off" earlier still hold `Following` until they
+re-save (or `reset-dev-db.ps1`).
 
 ### Tests (WU35, 2026-06-24)
 

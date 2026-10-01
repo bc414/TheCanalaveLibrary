@@ -22,6 +22,13 @@ public class ServerStoryAcknowledgmentReadService(
     {
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
+        // Kind (g): credits are exactly as visible as their story. The query below filters on the
+        // bare StoryId FK and StoryAcknowledgment carries no filter of its own, so without this a
+        // draft/taken-down/M-unrevealed story's credits were readable by id (service audit §2.6,
+        // WU-AccessGateSweep2).
+        if (!await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, storyId))
+            return [];
+
         return await readDb.StoryAcknowledgments
             .Where(sa => sa.StoryId == storyId && sa.StatusId == StoryAcknowledgmentStatus.Accepted)
             .OrderBy(sa => sa.AcknowledgmentRoleId)

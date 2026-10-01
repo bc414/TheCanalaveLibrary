@@ -32,6 +32,12 @@ public class ServerFollowingWriteService(
     /// WU-AccessGate; neither write did, so a Private profile still accrued followers and vouches —
     /// each bumping the target's public <c>UserStats.FollowerCount</c> and firing a notification, and
     /// in the vouch case persisting attacker-authored HTML onto a profile the actor cannot open.
+    /// <para>
+    /// Raises only (owner ruling D6): <see cref="FollowAsync"/>, <see cref="VouchAsync"/> and
+    /// <see cref="SetReceiveAlertsAsync"/> switching alerts on. The clears —
+    /// <see cref="UnfollowAsync"/>, <see cref="RemoveVouchAsync"/>, alerts off — are deliberately
+    /// unguarded, a recorded conformance enrolled in <c>ParentVisibilityContractTests</c>.
+    /// </para>
     /// </summary>
     private async Task RequireProfileVisibleAsync(int targetUserId)
     {
@@ -108,6 +114,12 @@ public class ServerFollowingWriteService(
 
         if (row is null)
             throw new FollowingValidationException(["Cannot set alert preference — you are not following this user."]);
+
+        // Kind (g), raise only (owner ruling D6): switching alerts back on re-enrolls the actor in
+        // the target's notification fan-out — the same entanglement FollowAsync's guard refuses for
+        // a profile the actor can no longer see. Switching them off is a clear and stays unguarded.
+        if (receiveAlerts && !row.ReceiveAlerts)
+            await RequireProfileVisibleAsync(targetUserId);
 
         row.ReceiveAlerts = receiveAlerts;
         await writeDb.SaveChangesAsync();

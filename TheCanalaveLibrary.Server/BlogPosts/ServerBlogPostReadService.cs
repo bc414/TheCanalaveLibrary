@@ -28,7 +28,9 @@ public class ServerBlogPostReadService(
         // First branch: ProfileBlogPosts — TPT join pulls base columns (title, content,
         // author_id, like_count) alongside child columns (rating, date_created, is_published,
         // has_spoilers, story_id). GroupId/GroupAudience are null markers here so the anonymous
-        // type unifies with the group branch below.
+        // type unifies with the group branch below. AuthorProfileVisibility is this branch's alone
+        // (WU-AccessGateSweep2): a profile post is profile-tab data, so the guard below hides it
+        // exactly when its author's profile is hidden from this viewer.
         var row = await readDb.ProfileBlogPosts
             .Where(p => p.BlogPostId == blogPostId)
             .Select(p => new
@@ -48,6 +50,9 @@ public class ServerBlogPostReadService(
                 LinkedStoryTitle = p.Story != null ? p.Story.StoryListing.StoryTitle : null,
                 GroupId = (int?)null,
                 GroupAudience = (Rating?)null,
+                AuthorProfileVisibility = p.Author != null
+                    ? (ProfileVisibility?)p.Author.PrivacySettings.ProfileVisibility
+                    : null,
                 IsLikedByCurrentUser = currentUserId != null
                     && p.Likes.Any(l => l.UserId == currentUserId)
             })
@@ -83,6 +88,7 @@ public class ServerBlogPostReadService(
                     LinkedStoryTitle = (string?)null,
                     GroupId = (int?)p.GroupId,
                     GroupAudience = (Rating?)(p.Group != null ? p.Group.AudienceRating : Rating.E),
+                    AuthorProfileVisibility = (ProfileVisibility?)null, // group content, not profile-tab data
                     IsLikedByCurrentUser = currentUserId != null
                         && p.Likes.Any(l => l.UserId == currentUserId)
                 })
@@ -116,6 +122,7 @@ public class ServerBlogPostReadService(
                     LinkedStoryTitle = (string?)null,
                     GroupId = (int?)null,
                     GroupAudience = (Rating?)null,
+                    AuthorProfileVisibility = (ProfileVisibility?)null, // site announcement, not profile-tab data
                     IsLikedByCurrentUser = currentUserId != null
                         && p.Likes.Any(l => l.UserId == currentUserId)
                 })
@@ -130,12 +137,11 @@ public class ServerBlogPostReadService(
         // no extra query; the guard resolves the reveal itself only when consent is what the
         // decision turns on (a GROUP reveal covers all group-owned content — audience gate AND
         // M-rated group posts, one consent per community; a profile post gates on its own per-post
-        // reveal). Every child read of this post now asks the same predicate.
-        bool isAuthor = currentUserId.HasValue && currentUserId == row.AuthorId;
-
+        // reveal; a profile post is hidden outright when its author's ProfileVisibility hides the
+        // profile from this viewer). Every child read of this post now asks the same predicate.
         BlogPostVisibilityFacts facts = new(
             row.BlogPostId, row.AuthorId, row.IsPublished, row.Rating,
-            isGroupPost, row.GroupId, row.GroupAudience);
+            isGroupPost, row.GroupId, row.GroupAudience, row.AuthorProfileVisibility);
 
         if (!await BlogPostVisibilityGuard.IsVisibleAsync(readDb, ActiveUser, facts)) return null;
 
@@ -175,18 +181,38 @@ public class ServerBlogPostReadService(
         // (reveal target = the post); group posts gate on the group audience OR the post rating
         // (reveal target = the GROUP — one consent covers group-owned content). Unpublished and
         // taken-down posts return null → real 404 (the IsTakenDown filter stays active).
-        GatedMetadataDto? gate = await readDb.ProfileBlogPosts
+        var profileGate = await readDb.ProfileBlogPosts
             .Where(p => p.BlogPostId == blogPostId && p.IsPublished && p.Rating == Rating.M)
-            .Select(p => new GatedMetadataDto(
-                RevealedEntityType.BlogPost,
+            .Select(p => new
+            {
                 p.BlogPostId,
                 p.Title,
                 p.AuthorId,
-                p.Author != null ? p.Author.UserName : null,
-                p.Rating))
+                AuthorDisplayName = p.Author != null ? p.Author.UserName : null,
+                p.Rating,
+                AuthorProfileVisibility = p.Author != null
+                    ? (ProfileVisibility?)p.Author.PrivacySettings.ProfileVisibility
+                    : null,
+            })
             .FirstOrDefaultAsync();
 
-        if (gate is not null) return gate;
+        if (profileGate is not null)
+        {
+            // Class A outranks the consent gate (WU-AccessGateSweep2): a profile post whose
+            // author's profile is hidden from this viewer is a real 404, never an interstitial —
+            // the interstitial would otherwise disclose a Private profile's post title and author.
+            if (profileGate.AuthorId is int authorId
+                && !ProfileVisibilityGuard.IsVisible(profileGate.AuthorProfileVisibility, ActiveUser, authorId))
+                return null;
+
+            return new GatedMetadataDto(
+                RevealedEntityType.BlogPost,
+                profileGate.BlogPostId,
+                profileGate.Title,
+                profileGate.AuthorId,
+                profileGate.AuthorDisplayName,
+                profileGate.Rating);
+        }
 
         return await readDb.GroupBlogPosts
             .IgnoreQueryFilters(["GroupAudience"])

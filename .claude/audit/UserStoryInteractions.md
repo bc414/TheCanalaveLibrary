@@ -80,7 +80,7 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** See "The reading-status
   divergence" section above. `UserStoryInteractionDate` warm partition and sparse semantics ("no row =
   all false; date row only when relevant") survived intact.
-- **L2 — Stage 5 (WU15, 2026-06-22).** Read/write service implemented and tested.
+- **L2 — Stage 5 (WU15, 2026-06-22; raise/clear split WU-AccessGateSweep2, 2026-09-30 — see its Stage note at the end of this feature).** Read/write service implemented and tested.
 
   **Settled for WU15 (2026-06-22, do not revisit):**
   - WU15 is **trimmed to the panel-critical slice** — Feature 16 L2 only (write path + per-viewer state
@@ -252,6 +252,34 @@ to the Discovery cluster) and `audit/Identity.md` (for `AllowInteractions` on Us
 **Future Design Work, post MVP:** Pokeball needs to be side view
 Hidden favorite should have a mystery texture to it
 Perhaps need to go more texture/color detail instead of totally flat svg, or use dual colors
+
+### Feature 16 L2 — WU-AccessGateSweep2 Stage note (2026-09-30): raises guarded, clears free (owner ruling D6)
+
+**No cell flips — F16 stays Stage 5.** Owner ruling D6 (worksheet 2026-08-04) found the
+WU-ParentVisibility guard in `SetUserStoryInteractionStateAsync` running on clears as well as raises:
+a mature-off reader could not un-favorite an M story favorited while mature-on, and a taken-down or
+unpublished story froze every reader's row permanently — while the bare-FK read plane had already
+told them which hidden stories they held rows on.
+
+**What changed:** the method now loads first, diffs, then decides — (1) auth + `ValidateCombination`;
+(2) load the row; (3) no row + all-false returns before any guard (no existence oracle); (4) any bit
+going false→true (`IsRaise`; with no row, every true bit) calls the full `RequireStoryVisibleAsync`
+before the first property is assigned, so a mixed payload is refused whole; (5) mutate. Pure clears
+and the all-false sparse cleanup never reach the guard, and their transition-delta counters move as
+usual — clearing a favorite on a hidden story decrements the author's `FavoritesOnStories` (D6's
+accepted consequence). `MarkStartedAsync`/`MarkCompletedAsync` are unchanged (raises by
+construction). The class doc names the decide step as the point later writes slot in after
+(WU-CounterSymmetry's ensure-row insert). False comments fixed: "Reject impossible combinations per
+spec §4" (now: empty extension point) and both `cross-cutting.md` transition-delta cites (→
+`layer2-services.md`).
+
+**How verified:** Integration — `ParentVisibilityContractTests` §"Clears on the caller's own row":
+one clear per axis (taken-down with an unchanged true bit kept, Draft + sparse cleanup, M-rated with a
+mature-off viewer), the mixed payload refused with the row unchanged, no row + all-false silent on a
+hidden story and on id 999 999, and the counter decrement on a taken-down story; the pre-existing
+raise tests still refuse. Mutation-checked: run against the pre-fix service, every clear test and the
+no-oracle test failed. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass. Rule: `identity-and-authorization.md` §"Parent-visibility guards" →
+"Raises vs clears".
 
 ## Feature 17 — Story Interaction Lists & Bookshelves
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** `HasStarted` is present;

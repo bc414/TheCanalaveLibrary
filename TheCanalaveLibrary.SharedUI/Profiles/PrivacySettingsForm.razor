@@ -26,29 +26,31 @@
             </select>
         </div>
 
-        @* Allow profile comments *@
+        @* Allow profile comments / private messages. Option values are bound to the enum, never
+           literals: "Off" once posted 2 — SocialInteractionPermission.Following, not Nobody (3) —
+           so "Off" silently meant "only people I follow" (WU-AccessGateSweep2). The Following tier
+           itself has no option here yet (a copy/product decision). *@
         <div class="flex flex-col gap-1">
             <label for="allow-comments" class="text-sm font-medium text-(--color-text)">Profile comment wall</label>
             <select id="allow-comments"
                     class="max-w-xs rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                     value="@((int)_allowProfileComments)"
                     @onchange="e => { if (int.TryParse(e.Value?.ToString(), out int ac)) _allowProfileComments = (SocialInteractionPermission)ac; }">
-                <option value="0">Public — anyone can comment</option>
-                <option value="1">Users only — logged-in members only</option>
-                <option value="2">Off — no comment wall shown</option>
+                <option value="@((int)SocialInteractionPermission.Public)">Public — anyone can comment</option>
+                <option value="@((int)SocialInteractionPermission.UsersOnly)">Users only — logged-in members only</option>
+                <option value="@((int)SocialInteractionPermission.Nobody)">Off — no comment wall shown</option>
             </select>
         </div>
 
-        @* Allow private messages *@
         <div class="flex flex-col gap-1">
             <label for="allow-pm" class="text-sm font-medium text-(--color-text)">Private messages</label>
             <select id="allow-pm"
                     class="max-w-xs rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-2 text-(--color-text) focus:outline-none focus:ring-2 focus:ring-(--color-action-ink)"
                     value="@((int)_allowPrivateMessages)"
                     @onchange="e => { if (int.TryParse(e.Value?.ToString(), out int apm)) _allowPrivateMessages = (SocialInteractionPermission)apm; }">
-                <option value="0">Public — anyone can message you</option>
-                <option value="1">Users only — logged-in members only</option>
-                <option value="2">Off — no private messages</option>
+                <option value="@((int)SocialInteractionPermission.Public)">Public — anyone can message you</option>
+                <option value="@((int)SocialInteractionPermission.UsersOnly)">Users only — logged-in members only</option>
+                <option value="@((int)SocialInteractionPermission.Nobody)">Off — no private messages</option>
             </select>
         </div>
 

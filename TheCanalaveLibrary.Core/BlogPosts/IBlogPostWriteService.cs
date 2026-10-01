@@ -41,8 +41,10 @@ public interface IBlogPostWriteService : IBlogPostReadService
     /// Toggles a like on a blog post. Requires an authenticated user. Returns the new
     /// <see cref="BlogPostLikeResultDto"/> with the updated denormalized <c>LikeCount</c> and the
     /// caller's new like state. No notification generated (anti-addictive design — §6 <c>BlogPostLike</c>).
+    /// A new like requires the post to be visible to the caller; an unlike (the caller already holds
+    /// a like row) is a clear and always succeeds, even on a post that is now hidden (owner ruling D6).
     /// </summary>
-    /// <exception cref="KeyNotFoundException">Blog post not found.</exception>
+    /// <exception cref="KeyNotFoundException">Liking only: blog post not found or not visible to the caller.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task<BlogPostLikeResultDto> ToggleLikeAsync(int blogPostId);
 

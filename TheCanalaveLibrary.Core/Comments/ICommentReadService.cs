@@ -37,8 +37,9 @@ public interface ICommentReadService
     /// replies-oldest-first within each root. Mirrors <see cref="GetGroupCommentsAsync"/>. No
     /// spoiler flag on profile comments. The <paramref name="profileUserId"/> is the wall owner
     /// (whose profile the comments appear on), not the commenter.
-    /// Visibility gating (AllowProfileComments) is enforced by the dispatcher; this method
-    /// returns comments unconditionally so the owner can always see their own wall.
+    /// <c>ProfileVisibility</c>-gated (WU-AccessGate): empty when the wall owner's profile is hidden
+    /// from the caller; the owner always sees their own wall. <c>AllowProfileComments</c> governs
+    /// posting, not reading — the profile page hides the wall for <c>Nobody</c>.
     /// </summary>
     Task<CommentPageDto> GetUserProfileCommentsAsync(int profileUserId, int page, int pageSize);
 }

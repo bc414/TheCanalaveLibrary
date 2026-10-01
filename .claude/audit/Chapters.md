@@ -332,7 +332,7 @@ UI changed here (the list already rendered a nullable date), so no browser pass 
 ## Feature 44 — Reading Progress Tracking
 - **L1 — Stage 5.** `UserChapterInteraction.ReadProgress` / `IsRead`. `UserChapterInteraction.cs` moved
   from deprecated `Core/Models/` → `Core/Chapters/` (vertical org rule, WU26 2026-06-24).
-- **L2 — Stage 5 (WU26, DONE ✓ 2026-06-24).** `IReadingProgressWriteService` + `ServerReadingProgressWriteService`
+- **L2 — Stage 5 (WU26, DONE ✓ 2026-06-24; manual read-marks' clear path WU-AccessGateSweep2, 2026-09-30 — see its Stage note below).** `IReadingProgressWriteService` + `ServerReadingProgressWriteService`
   in `Core/Chapters/`/`Server/Chapters/`. `MarkStartedAsync(int storyId)` added to `IUserStoryInteractionWriteService`.
   `IRecommendationReadService.GetHelpfulPromptRecommendationIdAsync(int storyId)` added. See WU26 Phase 1–3 Stage note.
 - **L3-Logic — Stage 5 (WU26, DONE ✓ 2026-06-24).** JS scroll interop (reading-progress.js), `[JSInvokable]
@@ -345,6 +345,26 @@ UI changed here (the list already rendered a nullable date), so no browser pass 
   WU-AuditFixPass-2 note below).
 - ~~**L7 — Stage 2.** Redis batching of progress writes (write-behind pattern 1; MVP direct DB; L7 swaps body).~~
   Superseded — see "Feature 44 L2 body swap — signal buffer" below (Layer 7 dissolved 2026-07-06).
+
+### Feature 44 — WU-AccessGateSweep2 Stage note (2026-09-30): mark-unread is a clear (owner ruling D6)
+
+**No cell flips — F44 stays Stage 5.** WU45's manual read-marks (`ServerChapterReadMarkWriteService`)
+ran the kind-(g) guard in both directions, so mark-unread was refused once a story was taken down,
+unpublished or above the reader's ceiling. Now `SetChapterReadAsync(id, false)` and
+`SetAllChaptersReadAsync(id, false)` branch to clear paths right after `RequireUserId()`, with no
+visibility guard and **no** existence check (`writeDb` sees hidden rows, so "hidden succeeds, absent
+404s" would be an oracle): a nonexistent id is a silent no-op (it was a 404; no test pinned that).
+The single-chapter clear flips the caller's row to false/0/now and still discards the buffered ping
+before saving, row or no row; mark-all-unread stays published-chapters-only (WU45 settled). The
+`isRead: true` paths keep the full guard, their existence checks and their `MarkStarted`/
+`MarkCompleted` cascade; mark-unread still never touches `HasStarted`/`IsCompleted`. The interface's
+`<exception>` docs now scope `KeyNotFoundException` to mark-read.
+
+**How verified:** Integration — `ParentVisibilityContractTests`: mark-unread succeeds on a
+taken-down story, a Draft story and an unpublished chapter with `HasStarted` kept (theory, three
+cases); both unread methods are silent on id 999 999; mark-all-unread clears rows on a taken-down
+story. `ChapterReadMarkServiceTests` (incl. `MarkUnread_DiscardsPendingBufferedPing`) unchanged and
+green. Mutation-checked: all five fail against the pre-fix service. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
 
 ### A3 Stage note (2026-07-24) — story-completion auto-producer, DONE ✓
 

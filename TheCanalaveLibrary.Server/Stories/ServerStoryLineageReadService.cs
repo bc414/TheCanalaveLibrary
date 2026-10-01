@@ -22,9 +22,17 @@ public class ServerStoryLineageReadService(
     {
         await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
 
-        // Explicit join through Stories (target) applies the viewer's ContentRating/IsTakenDown
-        // read filters — a link is only ever returned when its target survives them (mirrors
-        // ServerSeriesReadService.GetMembershipsForStoryAsync's join-not-bare-projection rule).
+        // Kind (g), source side: the links are exactly as visible as the story they hang off. The
+        // query below filters on the bare SourceStoryId FK, so without this an anonymous probe of a
+        // hidden story id returned its lineage — an existence oracle plus a relationship leak
+        // (service audit §2.6, WU-AccessGateSweep2).
+        if (!await StoryVisibilityGuard.IsStoryVisibleAsync(readDb, ActiveUser, storyId))
+            return [];
+
+        // Target side: the explicit join through Stories applies the viewer's ContentRating,
+        // StoryStatus and IsTakenDown read filters — a link is only ever returned when its target
+        // survives them (mirrors ServerSeriesReadService.GetMembershipsForStoryAsync's
+        // join-not-bare-projection rule).
         return await (
             from sl in readDb.StoryLineages
             join target in readDb.Stories on sl.TargetStoryId equals target.StoryId

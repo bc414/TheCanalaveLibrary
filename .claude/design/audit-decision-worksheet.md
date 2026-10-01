@@ -540,6 +540,8 @@ artifact from reappearing.
 
 *Sequencing.* Gates WU-AccessGateSweep2 together with D25; independent of the Block B/C rulings.
 
+**Built:** WU-AccessGateSweep2 (2026-09-30) — rule now stated in `identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears".
+
 ## Block B — Moderation policy
 
 Completes WU-ModerationIntegrity's inputs.

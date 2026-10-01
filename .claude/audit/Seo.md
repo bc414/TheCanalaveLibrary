@@ -169,7 +169,7 @@ tier applies (a static-asset + constant swap with no branching); `PublicUrlProvi
 existing fallback-resolution coverage needed no change (its literals are arbitrary test inputs,
 not the production constant).
 
-## Feature 64 — Site SEO: settled vs. open (revised 2026-07-19; built by WU-AccessGate)
+## Feature 64 — Site SEO: settled vs. open (revised 2026-07-19; built by WU-AccessGate; sitemap profile-post filter WU-AccessGateSweep2, 2026-09-30 — see the last Stage note)
 
 **Settled (do not revisit at build time):**
 - **`noindex` is resolved: never added.** Decision row 11 resolved 2026-07-19 as "index all; gate
@@ -218,3 +218,15 @@ stories), tag/search/discover pages (navigation). Story rows now rely on the `"S
 filter instead of an explicit status predicate. Verified in
 `StoryVisibilityTests.Sitemap_IncludesProfilesGroupsBlogs_ExcludesPrivateAndHidden` + seeded
 curl counts.
+
+### Feature 64 L2 Stage 5 — WU-AccessGateSweep2 (2026-09-30): only Public authors' profile posts in the sitemap
+
+**No cell flips — F64 stays Stage 5.** Profile blog posts became profile-tab data
+(`audit/BlogPosts.md` Features 35–37 Stage note): a post by a Private or UsersOnly author is now a
+404 for an anonymous crawler. The sitemap's profile-post query gained
+`p.Author == null || p.Author.PrivacySettings.ProfileVisibility == Public` — the same rule
+`profileIds` already applies — so it never hands out a URL that 404s. Group posts are unchanged.
+
+**How verified:** Integration — `StoryVisibilityTests.Sitemap_ExcludesProfileBlogPostsOfNonPublicAuthors`
+(a Public author's post listed; Private and UsersOnly authors' posts absent, with `</loc>`-anchored
+ids; fails against the pre-fix query); the existing sitemap tests still green. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.

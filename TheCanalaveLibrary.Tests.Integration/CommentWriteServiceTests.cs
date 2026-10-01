@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Http.Json;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -10,7 +12,8 @@ namespace TheCanalaveLibrary.Tests.Integration;
 /// Integration tests for <see cref="ICommentWriteService"/> (WU19). Covers: post root + reply,
 /// <c>IsSpoiler</c> round-trip, sanitization (script stripping on save), edit (re-sanitizes,
 /// author-only), delete (hard-removes row, reparents replies, cascades likes), like toggle
-/// (LikeCount, CommentLike row, per-viewer IsLiked), anonymous guards.
+/// (LikeCount, CommentLike row, per-viewer IsLiked), anonymous guards, and the profile-wall
+/// <c>AllowProfileComments</c> gate (WU-AccessGateSweep2) at the service and over HTTP.
 /// Tier: Integration (real Testcontainers Postgres via <see cref="PostgresFixture"/>).
 /// </summary>
 [Collection("Postgres")]
@@ -405,7 +408,129 @@ public class CommentWriteServiceTests(PostgresFixture postgres) : IntegrationTes
         await act.Should().ThrowAsync<InvalidOperationException>();
     }
 
+    // --- PostUserProfileCommentAsync: the AllowProfileComments gate (WU-AccessGateSweep2) ---
+    // The owner's setting is enforced in the service (layer2-services.md §"AllowProfileComments
+    // Gate"); before, only ProfilePage hid the wall, so a direct POST bypassed it. Wall owner here is
+    // _otherUserId; the commenter is _userId (the active user from InitializeAsync).
+
+    [Fact]
+    public async Task ProfileComment_Nobody_StrangerRootAndReply_Refused()
+    {
+        await SetAllowProfileCommentsAsync(_otherUserId, SocialInteractionPermission.Nobody);
+
+        SetActiveUser(_otherUserId);
+        long ownerRootId = await CallPostProfileAsync(_otherUserId);   // the owner always passes
+
+        SetActiveUser(_userId);
+        Func<Task> root = () => CallPostProfileAsync(_otherUserId);
+        Func<Task> reply = () => CallPostProfileAsync(_otherUserId, parentCommentId: ownerRootId);
+
+        (await root.Should().ThrowAsync<CommentValidationException>())
+            .Which.Errors.Should().ContainSingle(e => e.Contains("isn't accepting profile comments"));
+        await reply.Should().ThrowAsync<CommentValidationException>("replies are posts too");
+        (await CountProfileCommentsByAsync(_userId)).Should().Be(0, "a refused post writes nothing");
+    }
+
+    [Fact]
+    public async Task ProfileComment_Nobody_OwnerPostsOnOwnWall_Allowed()
+    {
+        await SetAllowProfileCommentsAsync(_userId, SocialInteractionPermission.Nobody);
+
+        Func<Task> act = () => CallPostProfileAsync(_userId);
+
+        await act.Should().NotThrowAsync("the owner is exempt from their own setting");
+    }
+
+    [Fact]
+    public async Task ProfileComment_Following_OwnerDoesNotFollowCommenter_Refused()
+    {
+        await SetAllowProfileCommentsAsync(_otherUserId, SocialInteractionPermission.Following);
+        // The reverse direction — the COMMENTER following the owner — must not satisfy the gate.
+        await SeedFollowAsync(followerId: _userId, followedId: _otherUserId);
+
+        Func<Task> act = () => CallPostProfileAsync(_otherUserId);
+
+        (await act.Should().ThrowAsync<CommentValidationException>())
+            .Which.Errors.Should().ContainSingle(e => e.Contains("from people they follow"));
+    }
+
+    [Fact]
+    public async Task ProfileComment_Following_OwnerFollowsCommenter_Allowed()
+    {
+        await SetAllowProfileCommentsAsync(_otherUserId, SocialInteractionPermission.Following);
+        await SeedFollowAsync(followerId: _otherUserId, followedId: _userId);
+
+        Func<Task> act = () => CallPostProfileAsync(_otherUserId);
+
+        await act.Should().NotThrowAsync("the owner follows the commenter");
+    }
+
+    [Theory]
+    [InlineData(SocialInteractionPermission.Public)]
+    [InlineData(SocialInteractionPermission.UsersOnly)]
+    public async Task ProfileComment_PublicOrUsersOnly_Allowed(SocialInteractionPermission permission)
+    {
+        await SetAllowProfileCommentsAsync(_otherUserId, permission);
+
+        long id = await CallPostProfileAsync(_otherUserId);
+
+        (await LoadBaseCommentAsync(id)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task ProfileComment_Nobody_OverHttp_Returns400WithUserFacingDetail()
+    {
+        await SetAllowProfileCommentsAsync(_otherUserId, SocialInteractionPermission.Nobody);
+
+        HttpClient client = Factory.CreateClient();
+        HttpResponseMessage response = await client.PostAsJsonAsync("/api/comments/profile",
+            new PostUserProfileCommentDto(_otherUserId, null, "<p>direct POST</p>"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest,
+            "the direct POST the profile page's hidden wall never stopped");
+        (await response.Content.ReadAsStringAsync()).Should().Contain("isn't accepting profile comments",
+            "ClientCommentWriteService rebuilds a CommentValidationException from the detail");
+    }
+
     // --- Helpers ---
+
+    private async Task<long> CallPostProfileAsync(int profileUserId, long? parentCommentId = null)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ICommentWriteService svc = scope.ServiceProvider.GetRequiredService<ICommentWriteService>();
+        return await svc.PostUserProfileCommentAsync(
+            new PostUserProfileCommentDto(profileUserId, parentCommentId, "<p>Hello wall</p>"));
+    }
+
+    private async Task SetAllowProfileCommentsAsync(int userId, SocialInteractionPermission permission)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        User user = await db.Users.FirstAsync(u => u.Id == userId);
+        user.PrivacySettings.AllowProfileComments = permission;
+        await db.SaveChangesAsync();
+    }
+
+    private async Task SeedFollowAsync(int followerId, int followedId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        db.FollowedUsers.Add(new FollowedUser
+        {
+            UserId = followerId,
+            FollowedUserId = followedId,
+            ReceiveAlerts = true,
+            DateFollowed = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<int> CountProfileCommentsByAsync(int userId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.UserProfileComments.CountAsync(c => c.UserId == userId);
+    }
 
     private async Task<long> CallPostAsync(PostChapterCommentDto dto)
     {

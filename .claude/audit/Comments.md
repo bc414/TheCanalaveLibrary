@@ -47,7 +47,7 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
 - **L3-Logic / L3.5-Structure / L4-Style — Stage 5 (WU20, 2026-06-23):** See Feature 24 Stage-5 note
   (WU20 is a single integrated work-unit covering 23/24/25/26 L3/L3.5/L4; the components,
   tests, and visual sign-off are described there).
-- **L2 — Stage 5 (WU19, 2026-06-23):** `ICommentWriteService.PostChapterCommentAsync(PostChapterCommentDto)`
+- **L2 — Stage 5 (WU19, 2026-06-23; `AllowProfileComments` service gate WU-AccessGateSweep2, 2026-09-30 — see its Stage note):** `ICommentWriteService.PostChapterCommentAsync(PostChapterCommentDto)`
   in `Server/Comments/ServerCommentWriteService.cs`. Requires authenticated user; validates via
   `CommentValidations.CanSave()` (throws `CommentValidationException`); verifies chapter exists; if replying,
   verifies parent is on same chapter; sanitizes HTML via `IHtmlSanitizationService`; inserts `ChapterComment`
@@ -86,6 +86,37 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   delete-widened/edit-unchanged split; a non-author non-commenter (LurkerDelta) saw **0** Delete
   buttons. Drove the real flow: LurkerDelta posted a comment, AuthorAlpha deleted it via the card's
   Delete → `ConfirmDialog` → row gone (`psql`: 0 rows for that id, the three seed comments intact).
+
+### Features 23 + 25 — WU-AccessGateSweep2 Stage note (2026-09-30): `AllowProfileComments` enforced in the service; an unlike is a clear
+
+**No cell flips — F23 and F25 stay Stage 5.**
+
+1. **F23 L2 — the owner's `AllowProfileComments` setting is enforced in
+   `PostUserProfileCommentAsync`** (service audit §2.6: the interface said the setting was "enforced by
+   the caller (dispatcher), not here", and only `ProfilePage` hiding the wall honored it — a direct
+   POST bypassed it). The new gate mirrors `AllowPrivateMessages` (same enum, same four tiers):
+   Public/UsersOnly allow; Following requires the **owner** to follow the commenter; Nobody (and any
+   unknown value) refuses. Root posts and replies alike; the owner is exempt. It runs after the
+   `ProfileVisibility` guard, so a hidden profile stays an indistinguishable 404
+   (`Comments_Profile_PrivateProfile_WriteRefused` still asserts `KeyNotFoundException`). Refusals are
+   `CommentValidationException` (400 with user-facing detail), which `ClientCommentWriteService`
+   already rebuilds, so WASM needed no change (WU-chosen over a new 403 exception type). Rule:
+   `layer2-services.md` §"`AllowProfileComments` Gate". The read side is unchanged —
+   `ICommentReadService` now says it is `ProfileVisibility`-gated and that the setting governs
+   posting, not reading; whether `Nobody` should also hide existing comments at the API is owner-open
+   (tracker **F10** item 4). Its precondition was a form bug: "Off" had been writing `Following`
+   (`audit/Profiles.md` F20 note).
+2. **F25 L2 — an unlike is a clear (owner ruling D6).** `ToggleLikeAsync` calls
+   `RequireCommentContextVisibleAsync` only when the caller holds no like row, so a reader can unlike a
+   comment that was later taken down or whose context went hidden. The "Counter mutation rule" cite
+   now points at `layer2-services.md`.
+
+**How verified:** Integration — `CommentWriteServiceTests`: Nobody refuses a stranger's root post and
+reply (nothing written) and lets the owner post; Following refuses when only the commenter follows
+the owner and allows when the owner follows the commenter; Public/UsersOnly allow (theory); a direct
+POST to `/api/comments/profile` returns 400 carrying the message. `ParentVisibilityContractTests`:
+unlike succeeds on a taken-down comment. Against the pre-fix service the refusal tests and the unlike
+test failed. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
 
 ## Feature 24 — Comment Display & Pagination
 - **L1 — Stage 5.** **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live
@@ -167,7 +198,7 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
   always correct; only the entity model was wrong). **Verified:** `dotnet test` green (see Feature 23 note);
   `ToggleLikeAsync` tested by `CommentWriteServiceTests` (like increments `LikeCount` + creates junction row;
   unlike decrements + removes row; anonymous guard; delete cascades `CommentLike`).
-- **L2 — Stage 5 (WU19, 2026-06-23):** `ICommentWriteService.ToggleLikeAsync(commentId)` in
+- **L2 — Stage 5 (WU19, 2026-06-23; an unlike is a clear since WU-AccessGateSweep2, 2026-09-30 — see F23's Stage note):** `ICommentWriteService.ToggleLikeAsync(commentId)` in
   `ServerCommentWriteService`. Loads `BaseComment` + its `CommentLike` for the current user in one round-trip
   (filtered `Include`); toggles presence + adjusts denormalized `LikeCount` (floor 0 on decrement); saves;
   returns `CommentLikeResultDto(int LikeCount, bool IsLiked)`. No notification, no `DateLiked` — §6.11

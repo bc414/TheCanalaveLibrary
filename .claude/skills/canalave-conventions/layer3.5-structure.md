@@ -779,12 +779,16 @@ they are ignored (have no effect) when `Target != Chapter`.
 - Group: `GetGroupCommentsAsync` / `PostGroupCommentAsync` (WU32)
 - UserProfile: `GetUserProfileCommentsAsync` / `PostUserProfileCommentAsync` (WU30)
 
-**UserProfile context gating (WU30):** the Profile tab enables the comment wall and posting
-per the profile owner's `PrivacySettings.AllowProfileComments`
-(`Public` → any authenticated user; `UsersOnly` → any authenticated user; `Off` → wall hidden).
-The dispatcher passes the resolved `bool AllowComments` as a `[Parameter]` so `CommentSection`
-can suppress the wall entirely when `Off`. `CommentsWritten` increments on each post here too
-(counter map in `layer2-services.md` "UserStats Updates").
+**UserProfile context gating (WU30; rewritten WU-AccessGateSweep2, 2026-09-30):** the profile
+owner's `PrivacySettings.AllowProfileComments` has four tiers — `Public`, `UsersOnly`, `Following`,
+`Nobody` (the same `SocialInteractionPermission` enum as private messages). The **wall** is a
+dispatcher decision: `ProfilePage` renders `CommentSection` unless the setting is `Nobody` (the owner
+always sees it). There is no `AllowComments` parameter on `CommentSection`. **Posting** is
+service-enforced (`layer2-services.md` §"`AllowProfileComments` Gate"): a refused post comes back as
+a `CommentValidationException`, which `CommentSection` already surfaces through `ExceptionPresenter`.
+The settings form offers Public / Users only / Off, with "Off" writing `Nobody`; the `Following` tier
+has no form option yet. `CommentsWritten` increments on each post here too (counter map in
+`layer2-services.md` "UserStats Updates").
 
 ## Notification Presentation Model — Static Presenter + Per-Type Templates (WU33)
 

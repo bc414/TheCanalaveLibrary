@@ -8,17 +8,20 @@ namespace TheCanalaveLibrary.Core;
 public interface IBlogPostReadService
 {
     /// <summary>
-    /// Returns the full display DTO for a single blog post, or <c>null</c> when:
-    /// — the post does not exist, OR
-    /// — the post is unpublished (<c>IsPublished = false</c>) and the caller is not the author.
+    /// Returns the full display DTO for a single blog post — any of the three TPT subtypes (the
+    /// group-post branch closed permalink bug B7) — or <c>null</c> when the post is absent or hidden
+    /// from the caller. All hiding reasons return the same null (non-disclosure); the rule is
+    /// <c>BlogPostVisibilityGuard</c>'s:
+    /// — unpublished (<c>IsPublished = false</c>) and the caller is not the author;
+    /// — a <b>profile</b> post whose author's <c>ProfileVisibility</c> hides their profile from the
+    ///   caller (Private to non-owners, UsersOnly to anonymous callers — WU-AccessGateSweep2: blog
+    ///   posts are profile-tab data; verified bots are not exempt). Group and site posts carry no
+    ///   profile check;
+    /// — rated above the caller's ceiling without a reveal (reveal-aware since WU-AccessGate: an M
+    ///   profile post loads under a per-post reveal, a group post under its GROUP's reveal, which
+    ///   covers all group-owned content); the author always sees their own post;
+    /// — taken down (hidden from everyone, author included).
     /// <c>IsLikedByCurrentUser</c> is per-viewer (always false for anonymous users).
-    /// The content-rating global filter applies; authors viewing their own mature/draft posts
-    /// bypass it via <c>IgnoreQueryFilters(["ContentRating"])</c>.
-    /// </summary>
-    /// <summary>
-    /// Reveal-aware since WU-AccessGate: an M profile post loads under a per-post reveal; a
-    /// group post loads under its GROUP's reveal (which covers all group-owned content).
-    /// Serves both TPT subtypes (the group-post branch closed permalink bug B7).
     /// </summary>
     Task<BlogPostDto?> GetByIdAsync(int blogPostId);
 
@@ -26,7 +29,9 @@ public interface IBlogPostReadService
     /// The gated-existence read (WU-AccessGate): when <see cref="GetByIdAsync"/> returned null,
     /// distinguishes "exists but mature/audience-gated" (interstitial metadata — the reveal
     /// target is the POST for profile posts, the GROUP for group posts) from truly absent,
-    /// unpublished, or taken down (null → real 404).
+    /// unpublished, or taken down (null → real 404). A profile post whose author's
+    /// <c>ProfileVisibility</c> hides it from the caller is also null (WU-AccessGateSweep2) —
+    /// privacy outranks the consent gate, so the interstitial never discloses its title or author.
     /// </summary>
     Task<GatedMetadataDto?> GetBlogPostGateAsync(int blogPostId);
 

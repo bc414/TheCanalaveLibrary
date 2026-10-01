@@ -237,6 +237,13 @@ page they could open" comments become literally true under the interstitial. No 
 validation is added anywhere. The ghost-row problem is solved on the *read* side by the Personal
 plane rule, not by policing writes.
 
+> **Narrowed since (annotation, WU-AccessGateSweep2, 2026-09-30).** WU-ParentVisibility (2026-07-26)
+> put interaction *raises* (favoriting, following a story, read-marks) behind the full
+> parent-visibility guard, rating included, and owner ruling D6 (worksheet 2026-08-04) reaffirmed
+> it; rating-blindness now holds for listing, recommending and group-add only, and clears are never
+> gated. Rule of record: `canalave-conventions/content-safety.md` §"The Three-Plane Access Model"
+> ("Write paths") and `identity-and-authorization.md` §"Parent-visibility guards".
+
 ## 7. The bare-401 pages: what they are and how the fix should look
 
 **The affected routes** (every `[Authorize]` page, on full-document load as anon): `/bookshelves`,

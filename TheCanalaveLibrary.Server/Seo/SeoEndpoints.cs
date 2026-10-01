@@ -115,8 +115,13 @@ public static class SeoEndpoints
 
             // Blog posts: both TPT subtypes, published only; takedown filter active; the
             // group-audience gate bypassed for group posts (their gated page is indexable).
+            // Profile posts are profile-tab data (WU-AccessGateSweep2): only Public-visibility
+            // authors' posts are listed — the same rule as profileIds above, so the sitemap never
+            // hands a crawler a URL that 404s for it.
             var profilePostRows = await readDb.ProfileBlogPosts
-                .Where(p => p.IsPublished)
+                .Where(p => p.IsPublished
+                            && (p.Author == null
+                                || p.Author.PrivacySettings.ProfileVisibility == ProfileVisibility.Public))
                 .OrderBy(p => p.BlogPostId)
                 .Select(p => new { p.BlogPostId, p.LastUpdatedDate })
                 .ToListAsync();

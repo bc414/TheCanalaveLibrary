@@ -17,17 +17,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-StoryLifecycle (2026-09-30, build + review-fixes commits) — the first build of
-  the 2026-08-04 worksheet answers: **D1** (approval queue mandatory for an author's *first*
-  submission only; a server-side transition table, `Core/Stories/StoryLifecycle`, governs every status
-  move; a taken-down story's status is frozen) and **D2** (`stories.published_date` nullable, NULL =
-  never published, never re-stamped; chapter anchor `Chapter.FirstPublishedDate`). New
-  `TransitionStatusAsync` + `/api/stories/{id}/status`; approve/reject guarded (400), conditional on
-  `PendingApproval` and not taken down, approve transactional; monotonic trust record
-  `User.ApprovedStorySubmissions` + moderator revoke/restore of `CanAutoApprove`. One migration.
-  **F4/F47/F48 L4.5 flipped 5→1** (new UI never browser-driven — tracker **H12**). `dotnet test`: Unit
-  1,010, RazorComponents 696, Integration 1,131. Owner questions: `roadmap.md` rows 14–16 + tracker
-  **F9**. **Pointers:** its DONE entry; `layer2-services.md` §"Story Lifecycle".
+- **Last landed:** WU-AccessGateSweep2 (2026-09-30) — the second worksheet-campaign build: owner
+  ruling **D6** (a flag raise keeps the full parent-visibility guard; a clear on the caller's own row
+  is never guarded, on any axis) plus service audit §2.6's unblocked items. The USI panel and manual
+  read-marks now load, diff, then guard raises only; three unlike paths stopped guarding; alerts-on
+  became a guarded raise; every unguarded sibling clear is enrolled in `ParentVisibilityContractTests`.
+  Profile blog posts respect the author's `ProfileVisibility` (detail, gate, children, sitemap);
+  acknowledgment and lineage by-story reads gained the story guard; `RevokeAsync` checks ownership
+  first; `AllowProfileComments` is enforced in the comment write service, after fixing the settings
+  form's "Off" (it wrote `Following`). No migration, no contract change, no cell flips. `dotnet test`:
+  Unit 1,022, RazorComponents 701, Integration 1,171. Owner sub-edges: tracker **F10**; browser pass:
+  **H13**. **Pointers:** its DONE entry; `identity-and-authorization.md` §"Parent-visibility guards".
+  Before that, 2026-09-30: WU-StoryLifecycle — worksheet D1/D2: the story transition table, first-submission approval gate, nullable publish anchors; see its DONE entry.
   Before that, 2026-09-20: WU-QuickFixes — four no-deliberation closures (MA-107, MA-408, H6's VouchButton staleness, MA-007/MA-211); see its DONE entry.
   Before that, 2026-08-01: WU-UserModeration — closed tracker **B13**, which was filed as
   `polish · low` ("`ModUsersPage`'s `{UserId:int?}` route parameter is declared and never read") and
@@ -228,7 +229,8 @@ references it, does not restate it.
 - **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
   **In flight (between-phase): the worksheet-decisions build campaign** — the answered rows of
   `.claude/design/audit-decision-worksheet.md` built as a sequence of WUs; WU-StoryLifecycle (D1/D2)
-  landed first, and **WU-AccessGateSweep2** is next in the campaign's build order.
+  and WU-AccessGateSweep2 (D6) have landed, and **WU-InertFeatures** is next in the campaign's build
+  order (its new-chapter fan-out depended on D6 landing first — it has).
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -244,7 +246,8 @@ references it, does not restate it.
   **D4** is down to MA-006 alone, with H6's VouchButton bullet struck — WU-QuickFixes, 2026-09-20;
   B14/B15/B16/H9 newly opened — **H9 is now unblocked**, since H10 had the funnel it needs to
   drive returning 500; **D6/D7/E7/F9/H12** opened by WU-StoryLifecycle, 2026-09-30 — E7 is routed to
-  WU-ThrottleCoverage, D6 to WU-ModerationIntegrity), including two **high-priority security items:
+  WU-ThrottleCoverage, D6 to WU-ModerationIntegrity; **F10/H13** opened by WU-AccessGateSweep2,
+  2026-09-30, which also annotated E6 without closing it), including two **high-priority security items:
   E2 and E3**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
   lift (reopens the frozen `DiscoveryMartSchema` for a 7th UNION arm) and unchanged by this work. WU-ErrorHandling2 also
@@ -255,8 +258,9 @@ references it, does not restate it.
   that need you"; rows 2 and 13 resolved 2026-07-28, row 12 resolved 2026-07-31; rows 14–16 — the
   story-lifecycle questions WU-StoryLifecycle left open — added 2026-09-30). Separately, not a
   numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only), the
-  now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach, and tracker **H12**'s pass
-  over the story-lifecycle UI (it returns F4/F47/F48 L4.5 to 5) need Brian's own browser session —
+  now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach, tracker **H12**'s pass
+  over the story-lifecycle UI (it returns F4/F47/F48 L4.5 to 5), and tracker **H13**'s confirmation
+  of the access-gate sweep (privacy form "Off", Private-author blog 404s) need Brian's own browser session —
   see those WUs' DONE entries and `audit/Accessibility.md`.
 
 ---
@@ -400,6 +404,65 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-AccessGateSweep2 — raises gated, clears free; service audit §2.6 access fixes (worksheet D6; extends `UserStoryInteractions/`, `Chapters/`, `BlogPosts/`, `Comments/`, `Recommendations/`, `Following/`, `Collaboration/`, `Stories/`, `Profiles/`, `Seo/`) — DONE ✓ (2026-09-30)
+
+- **Cells:** none flipped — every change sits beneath an already-Stage-5 cell (F10, F16, F18, F20,
+  F23, F25, F28, F35–37, F44, F49, F50, F64, F66); the WU-ParentVisibility shape. Markup changed
+  only in `PrivacySettingsForm`'s option values, so no L4.5 cell moved (browser pass: tracker **H13**).
+- **Trigger:** owner ruling **D6** (answered 2026-08-04, unbuilt): the kind-(g) guard ran on clears
+  too — a mature-off reader could not un-favorite an M story; mark-unread was refused on taken-down
+  stories. Plus service audit §2.6's items not blocked on D25–D27. Sources: worksheet D6; service
+  audit §2.6/§3.5; `access-gating-first-principles.md` §5 row 1b; tracker E6.
+- **What landed:**
+  1. **D6.** `SetUserStoryInteractionStateAsync` loads, diffs, then guards raises only (no row +
+     all-false returns before any guard; a mixed payload is refused whole); the two read-mark
+     `(…, false)` paths skip both guard and existence check (no oracle); blog/comment/rec
+     `ToggleLikeAsync` skip the guard when the caller holds the like row; `SetReceiveAlertsAsync(true)`
+     on an alerts-off row is now a guarded raise. The six already-unguarded sibling clears (reveal
+     remove, unfollow, remove-vouch, group leave, list/series remove-story) plus both curation-flag
+     clears are enrolled as conformance tests. The enumeration table is in `audit/AccessGate.md` F66.
+  2. **Profile blog posts are profile-tab data** (derived from first-principles §5 row 1b + the F15
+     permalink precedent, recorded as settled in `audit/AccessGate.md`): `BlogPostVisibilityFacts`
+     gained `AuthorProfileVisibility`; the profile check sits above the verified-bot short-circuit;
+     `ProfileVisibilityGuard` gained its pure `IsVisible` overload; the gate read returns null for a
+     hidden author; the sitemap lists only Public authors' profile posts. All guard consumers inherit it.
+  3. **Bare-FK reads:** story-acknowledgment and lineage by-story reads gained `IsStoryVisibleAsync`.
+     `RevokeAsync` checks ownership before the credit lookup.
+  4. **`AllowProfileComments`** is enforced in `PostUserProfileCommentAsync` (four tiers, mirrors the
+     messaging gate, `CommentValidationException`, after the `ProfileVisibility` guard).
+     **`PrivacySettingsForm`**'s "Off" options wrote `2` (`Following`), not `Nobody` — found while
+     scoping, now bound to the enum.
+  5. **Docs, moment 1:** `identity-and-authorization.md` kind (g) + §"Raises vs clears" + guard table;
+     `layer2-services.md` Content-Rating case 2 cross-ref + new §"`AllowProfileComments` Gate";
+     `content-safety.md` "write paths" corrected; `layer3.5-structure.md` UserProfile gating rewritten;
+     `status.md` kind-(g) bullet; `audit/AccessGate.md` Settled; first-principles §6.4 annotated;
+     roadmap Resolved D6; worksheet D6 "Built:" line; tracker F10, E6 annotation. Interface docs on
+     eleven Core interfaces. False comments fixed in the touched methods: the USI "reject impossible
+     combinations" comment and the `cross-cutting.md` cites at USI (×2), Comment and Rec
+     `ToggleLikeAsync` — the remaining `cross-cutting.md` cites (Following, other Comment, BlogPost)
+     are WU-DocCorrections'.
+- **Left alone, with the reason:** saved-selection copy path (**D25** pending); series and custom-list
+  by-id reads and `CloneListAsync`'s messages (**D26** family); edit-read 403-vs-null oracles,
+  poll-vote retraction on a hidden parent, own-content curation raises, `AllowProfileComments=Nobody`
+  read semantics — owner-open, tracker **F10** items 1–4; E6's four clauses (annotated; clause 1 →
+  WU-ThrottleCoverage). Accepted risk routed to WU-NotificationCorrectness/WU-InertFeatures: a blog
+  fan-out notification for a later-Private author links to a 404. Flagged derivation (not an owner
+  sentence): an unlike response still carries the hidden parent's `LikeCount`.
+- **Verification.** `dotnet build` green, no new warnings in touched files. `dotnet test` green:
+  **Unit 1,022** (+12, `VisibilityGuardRuleTests`), **RazorComponents 701** (+5,
+  `PrivacySettingsFormTests`), **Integration 1,171** (+40 — `ParentVisibilityContractTests` clear /
+  conformance / Private-author / acknowledgment-lineage sections, `CommentWriteServiceTests`
+  AllowProfileComments incl. an HTTP 400 check, `StoryAcknowledgmentServiceTests` revoke, sitemap).
+  Mutation check: with the production changes stashed, every fix-specific Integration test (26) and all
+  five bUnit tests failed; the Unit bot-ordering test failed when the bot check was moved back up. All four
+  PowerShell gates pass. **No browser was available** — tracker **H13**.
+- **Pointers:** `identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears";
+  `layer2-services.md` §"`AllowProfileComments` Gate"; `audit/AccessGate.md` F66 (enumeration
+  record), `audit/UserStoryInteractions.md` F16, `audit/Chapters.md` F44, `audit/BlogPosts.md`
+  F35–37, `audit/Comments.md` F23/F25, `audit/Recommendations.md` F28, `audit/Following.md` F18,
+  `audit/Stories.md` F10, `audit/Badges.md` F50, `audit/Profiles.md` F20, `audit/Messaging.md` F49,
+  `audit/Seo.md` F64; `roadmap.md` §Resolved (D6); tracker E6, F10, H13.
 
 ## WU-StoryLifecycle — story status transition table, first-submission approval gate + trust waiver, nullable publish anchors (worksheet D1 + D2; extends `Stories/`, `Chapters/`, `Moderation/`, `Identity/`, `Export/`) — DONE ✓ (2026-09-30)
 

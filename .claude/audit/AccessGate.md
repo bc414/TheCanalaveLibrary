@@ -29,13 +29,30 @@ The model is fully specified outside this file — do not re-derive it here:
   `ShowMatureContent`; group reveal covers all group-owned content, member stories gate
   individually; tree-search root honors reveals (results stay ceiling-filtered);
   count-line disclosure on all person/collection-scoped listings, two-step (gated mini-cards →
-  story-page interstitial); notifications never rating-filtered; writes stay rating-blind;
+  story-page interstitial); notifications never rating-filtered; writes stay rating-blind
+  *(narrowed since: WU-ParentVisibility put interaction raises behind the full guard, rating
+  included, and D6 reaffirmed it — rating-blind now means listing / recommending / group-add only;
+  `content-safety.md` §"The Three-Plane Access Model", "Write paths")*;
   spotlight dedicated M/non-M slot pools with redemption-time slot-class validation;
   profile privacy honest states ("This profile is private" / "Sign in to view this profile";
   private lists stay 404-conflated); sign-in-required page = one component + route→copy map,
   register flows to a welcome page (no returnUrl); index-all / adult labels / robots AI-trainer
   blocking / sitemap includes M; verified-bot serving config-gated off until Phase 7 trust
   boundary; no cookie-consent banner (privacy-policy mention only — row 10 artifact).
+
+**Settled later (do not revisit at build time):**
+- **D6 — raises gated, clears free (Brian, worksheet 2026-08-04; built WU-AccessGateSweep2,
+  2026-09-30).** A flag raise keeps the full parent-visibility guard; a clear or lower on the
+  caller's own existing row is always permitted, on all three axes (content rating, lifecycle
+  status, takedown). Mechanism (load first, diff, then decide) and riders:
+  `identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears".
+- **Blog-post detail is profile-tab data** (derived WU-AccessGateSweep2 from first-principles §5
+  row 1b — `access-gating-audit.md` §1b lists "published blogs" as profile-tab data — and the F15
+  permalink precedent, `audit/Tags.md`: "a permalink is just another path to profile-tab data"). A
+  profile post by id respects its author's `ProfileVisibility` exactly as the by-author list does —
+  detail, gated-existence read, and every child (comments, polls, votes, likes, reports). Group and
+  site posts carry no profile check (a Private moderator's site announcement stays public). Class A:
+  verified bots do not bypass it. The sitemap lists only Public-visibility authors' profile posts.
 
 **Open (deferred, tracked elsewhere):**
 - Interstitial *wording* (willingness assertion text) — interim AO3-style copy ships now; final
@@ -165,3 +182,45 @@ pending stories (E and M).
 **Tests retired/amended:** none removed — `ContentRatingFilterTests.MatureRatedStory_IsInvisible…`
 still passes (it pins raw filter mechanics; service-level policy elevates per-path) and
 `BookshelfStoryIdsTests` pins id-collection (hydration, not ids, is where personalScope acts).
+
+### Stage 5 — WU-AccessGateSweep2: the D6 enumeration record + service audit §2.6 (2026-09-30)
+
+**No cell flips — F66 stays Stage 5.** Builds owner ruling **D6** (raises gated, clears free — now
+in Settled above) and the service audit §2.6 items not blocked on pending D25/D26/D27. D6 required
+walking every clear before fixing; the record of that walk, surface by surface:
+
+| Surface | Before | Now |
+|---|---|---|
+| `SetUserStoryInteractionStateAsync` (USI panel) | guard on every call | **moved** — load, diff, guard raises only (`audit/UserStoryInteractions.md` F16) |
+| `SetChapterReadAsync` / `SetAllChaptersReadAsync` `(…, false)` | guarded + existence-checked | **moved** — unguarded, no existence check (`audit/Chapters.md` F44) |
+| Blog-post / comment / recommendation `ToggleLikeAsync` (unlike path) | guarded | **moved** — an existing like row skips the guard (BlogPosts F35, Comments F25, Recommendations F28) |
+| `SetReceiveAlertsAsync(true)` | unguarded **raise** | **guarded** (`audit/Following.md` F18) |
+| `ServerContentRevealService.RemoveAsync` | unguarded | conforming — enrolled |
+| `UnfollowAsync`, `RemoveVouchAsync`, `SetReceiveAlertsAsync(false)` | unguarded | conforming — enrolled |
+| `Group.LeaveAsync` | unguarded | conforming — enrolled |
+| `CustomList.RemoveStoryAsync`, `Series.RemoveStoryAsync` | owner-gated, no story guard | conforming — enrolled |
+| `SetHiddenGemAsync(false)`, `SetHighlightedByAuthorAsync(false)` | unguarded | conforming — enrolled |
+| Poll-vote retraction (`VoteAsync` with fewer options) | guarded both ways | **left** — needs a return-contract ruling (tracker **F10** item 1) |
+
+**§2.6 fixes in the same WU:** profile blog posts respect the author's `ProfileVisibility` (derived
+from first-principles §5 row 1b, settled above; `audit/BlogPosts.md`); the story-acknowledgment and
+lineage by-story reads gained the story guard (`audit/Badges.md` F50, `audit/Stories.md` F10);
+`RevokeAsync` checks ownership first; `AllowProfileComments` is enforced in the comment write service
+(`audit/Comments.md` F23), which first needed the settings form's "Off" to write `Nobody`
+(`audit/Profiles.md` F20). The sitemap follows the blog rule (`audit/Seo.md` F64).
+
+**Left alone, with the reason:** the saved-selection copy path (**D25**, pending), series and
+custom-list by-id reads and `CloneListAsync`'s two messages (**D26** family / D25 principle),
+`GetChapterForEditAsync`'s 403-vs-null (no ruling extends non-disclosure to ownership gates — tracker
+**F10** item 3), own-content curation raises (F10 item 2), `AllowProfileComments = Nobody` read-side
+semantics (F10 item 4), and all four **E6** clauses (annotated in the tracker; consent-endpoint
+throttling closes in WU-ThrottleCoverage). `content-safety.md`'s "write paths stay rating-blind" was
+corrected to match the shipped full guard on interaction raises — a doc fix; raise behavior did not
+change.
+
+**How verified:** Unit (`VisibilityGuardRuleTests`), Integration (`ParentVisibilityContractTests` —
+its class doc now states the raise/clear split, and its "Clears on the caller's own row" section is
+the enrolment; plus `CommentWriteServiceTests`, `StoryAcknowledgmentServiceTests`,
+`StoryVisibilityTests`), RazorComponents (`PrivacySettingsFormTests`). Every fix-specific test was
+run against the pre-fix code and failed; the conformance tests pass both ways by design. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
+**No browser was available** — tracker **H13**.

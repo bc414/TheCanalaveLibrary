@@ -233,7 +233,12 @@ it. The two cases where a service deliberately bypasses it:
    error) applies after the lookup. Always use `.IgnoreQueryFilters(["ContentRating"])` when
    fetching a specific entity by primary key inside a write path. Omitting it causes the service to
    throw `KeyNotFoundException` for entities that exist but are filtered, a silent mismatch that is
-   hard to diagnose.
+   hard to diagnose. *The same principle governs clears under a hidden parent* (owner ruling D6,
+   built WU-AccessGateSweep2): un-favoriting, mark-unread, unliking — any clear or lower on the
+   caller's own existing row — is never refused by the viewer's settings or the parent's
+   visibility, on any axis; only raises carry the parent-visibility guard
+   (`identity-and-authorization.md` §"Parent-visibility guards" → "Raises vs clears"). The
+   interaction panel's guarded clears were this rule's standing contradiction until then.
 
 ## Scalar projections on nullable FK columns — use anonymous-type, not `(int?)`
 
@@ -1238,9 +1243,11 @@ deferred as cosmetic, revisit pre-launch if at all.
 and requires the **target** story's author to approve/reject via the owner-wide `/story-lineages`
 page before it displays; a link where the requester owns both stories is created already `Approved`
 (no notification — matches the notification drop-self invariant). Public reads
-(`GetLineageForStoryAsync`) return only `Approved` rows where the queried story is the source, joined
-through `Story` so a link never survives display when its target fails the viewer's
-`ContentRating`/`IsTakenDown` filters (mirrors `ServerSeriesReadService.GetMembershipsForStoryAsync`'s
+(`GetLineageForStoryAsync`) return only `Approved` rows where the queried story is the source — and
+nothing at all unless the source story itself passes `StoryVisibilityGuard` (WU-AccessGateSweep2;
+the bare `SourceStoryId` filter had made it an existence oracle) — joined through `Story` so a link
+never survives display when its target fails the viewer's
+`ContentRating`/`StoryStatus`/`IsTakenDown` filters (mirrors `ServerSeriesReadService.GetMembershipsForStoryAsync`'s
 join-not-bare-projection rule — generalized as conditionality kind (g),
 `identity-and-authorization.md` §"Parent-visibility guards"). Target-story selection goes through a new reusable
 `IStoryReadService.SearchStoriesByTitleAsync` (`ILike` substring typeahead) — deliberately not the
@@ -1449,6 +1456,34 @@ is inside that JSON blob, not an indexed column. Querying by it in SQL requires 
 for MVP, load the recipient's `PrivacySettings` navigation and evaluate in C# (single-row lookup,
 not a filter over many rows). The gate check comes **after** the self-message guard and **before**
 validation/sanitization of the message body.
+
+## `AllowProfileComments` Gate (WU-AccessGateSweep2, 2026-09-30)
+
+`User.PrivacySettings.AllowProfileComments` is the same `SocialInteractionPermission` enum, with the
+same four tiers, and is enforced the same way: **in the write service**
+(`ServerCommentWriteService.PostUserProfileCommentAsync`), on every post by anyone but the wall's
+owner — root posts and replies alike. Until this WU the setting was honored only by the
+`ProfilePage` dispatcher (which hides the wall for `Nobody`), so a direct POST bypassed it — the
+affordance-not-control anti-pattern (`identity-and-authorization.md` §"Security vs affordance").
+
+| Tier | Enforcement |
+|---|---|
+| `Public` / `UsersOnly` | Allow (posting already requires authentication). |
+| `Following` | The owner must follow the commenter: `writeDb.FollowedUsers.AnyAsync(f => f.UserId == ownerId && f.FollowedUserId == commenterId)`. Refused otherwise: "This user only accepts profile comments from people they follow." |
+| `Nobody` | Refuse: "This user isn't accepting profile comments." |
+| unknown value | Refuse (fail closed), same message as `Nobody`. |
+
+- **Order:** after the authentication check, the rate-limit token and `CanSave`, and after the
+  `ProfileVisibility` guard — a hidden profile stays an indistinguishable `KeyNotFoundException`
+  (404), never a "not accepting comments" message that would confirm it — and before the
+  reply-parent check and sanitization.
+- **Refusal type:** `CommentValidationException` (400 with user-facing detail), which
+  `ClientCommentWriteService` already reconstructs — so WASM parity needs no client work. Messaging's
+  dedicated `MessagingPermissionException` (403) was not copied: a new exception type would need its
+  own `EndpointHelpers` arm and client reconstruction for no behavioral gain.
+- **Reads are not gated by it.** `GetUserProfileCommentsAsync` is `ProfileVisibility`-gated only;
+  the UI hides the wall for `Nobody`. Whether `Nobody` should also withhold existing wall comments at
+  the API is unruled (tracker **F10**).
 
 ## Conversation Archiving Is Sticky, Never Auto-Cleared (WU-MsgArchive)
 

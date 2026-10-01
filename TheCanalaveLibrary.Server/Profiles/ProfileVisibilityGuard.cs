@@ -16,12 +16,21 @@ namespace TheCanalaveLibrary.Server;
 /// from all non-owners; UsersOnly hides from anonymous viewers only. A missing user passes —
 /// there is nothing to protect, and the caller's own query returns empty for it anyway.
 /// </para>
+/// <para>
+/// Follows the guard contract in <c>identity-and-authorization.md</c> §"Parent-visibility guards":
+/// the pure <see cref="IsVisible"/> overload owns the rule (WU-AccessGateSweep2), and the id
+/// overload loads the setting and delegates. Callers that already projected the setting — e.g.
+/// <see cref="BlogPostVisibilityGuard"/>, which carries a profile post's author visibility in its
+/// facts — pay no extra query. Deliberately no verified-bot elevation: bots bypass consent
+/// (Class B), never privacy (Class A).
+/// </para>
 /// </summary>
 public static class ProfileVisibilityGuard
 {
     public static async Task<bool> IsProfileVisibleAsync(
         ReadOnlyApplicationDbContext readDb, IActiveUserContext viewer, int profileUserId)
     {
+        // Owner short-circuit: no query needed for the one viewer who always passes.
         if (viewer.UserId == profileUserId) return true;
 
         ProfileVisibility? visibility = await readDb.Users
@@ -29,10 +38,20 @@ public static class ProfileVisibilityGuard
             .Select(u => (ProfileVisibility?)u.PrivacySettings.ProfileVisibility)
             .FirstOrDefaultAsync();
 
-        if (visibility is null) return true;
+        return IsVisible(visibility, viewer, profileUserId);
+    }
+
+    /// <summary>
+    /// The rule, pure over an already-resolved setting. <paramref name="visibility"/> is null when
+    /// the user does not exist (passes — nothing to protect).
+    /// </summary>
+    public static bool IsVisible(ProfileVisibility? visibility, IActiveUserContext viewer, int profileUserId)
+    {
+        if (viewer.UserId == profileUserId) return true;
 
         return visibility switch
         {
+            null => true,
             ProfileVisibility.Private => false,
             ProfileVisibility.UsersOnly => viewer.UserId is not null,
             _ => true,

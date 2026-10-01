@@ -707,7 +707,7 @@ data loss (verified: 4 seed rows survived, live dev DB rebooted clean, `dotnet b
    created already `Approved` with no self-notification (matches the notification drop-self
    invariant). Only cross-author links start `Pending`.
 
-- **L2/L3-Logic/L3.5-Structure — Stage 5 (2026-07-12).** **L4-Style — Stage 1** (pending human
+- **L2/L3-Logic/L3.5-Structure — Stage 5 (2026-07-12; L2's by-story read gained the source-story guard, WU-AccessGateSweep2, 2026-09-30 — see its Stage note).** **L4-Style — Stage 1** (pending human
   visual sign-off, WU8/WU13/WU23/WU28/WU44 precedent — an agent's own live-browser check does not
   close this gate). **L4.5-Browser — Stage 5 (2026-07-12, real-circuit verification, see below).**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
@@ -802,6 +802,20 @@ Verified: Integration tier — 6 new tests in `StoryLineageServiceTests`
 round — the mechanism is a producer hook onto the already browser-verified (2026-07-12) approve/
 reject/delete flow above; the sibling `StoryAcknowledgment` credit→accept→badge round trip was
 browser-verified end to end instead (`audit/Badges.md`).
+
+### Feature 10 L2 — WU-AccessGateSweep2 Stage note (2026-09-30): the lineage read guards its source story
+
+**No cell flips — F10 stays Stage 5.** `GetLineageForStoryAsync` joined the *target* through the
+filtered `Stories` set but filtered the *source* on the bare `SourceStoryId` FK, so an anonymous probe
+of a hidden story id returned its lineage — an existence oracle plus a relationship leak (service
+audit §2.6). It now returns empty unless `StoryVisibilityGuard.IsStoryVisibleAsync` passes for the
+source (the `ServerStoryArcReadService` shape); the comment and `IStoryLineageReadService` doc say
+both sides are gated, and that the target join also applies `StoryStatus`. Authors keep their own
+drafts' links; a taken-down source is empty for everyone.
+
+**How verified:** Integration — `ParentVisibilityContractTests`
+`AcknowledgmentsAndLineage_DraftStory_EmptyForStranger_PopulatedForAuthor` and `…_TakenDownStory_EmptyForEveryone`
+(both fail against the pre-fix read). `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
 
 ## Feature 45 — View Count Tracking
 

@@ -84,8 +84,11 @@ public interface IRecommendationWriteService : IRecommendationReadService
     /// <summary>
     /// Toggles a like on a recommendation. Returns the updated denormalized count and the
     /// caller's new like state. No notification — anti-addictive design (§6.11).
+    /// A new like requires the recommendation's story to be visible to the caller; an unlike (the
+    /// caller already holds a like row) is a clear and always succeeds, even when the story is now
+    /// hidden (owner ruling D6).
     /// </summary>
-    /// <exception cref="KeyNotFoundException">Recommendation not found.</exception>
+    /// <exception cref="KeyNotFoundException">Recommendation not found, or (liking only) its story is not visible to the caller.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task<RecommendationLikeResultDto> ToggleLikeAsync(int recommendationId);
 

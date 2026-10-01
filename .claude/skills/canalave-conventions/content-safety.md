@@ -101,10 +101,22 @@ time whenever a widget/preview/dashboard renders child content.
 **UI copy convention:** it is always "story" / "group" / "blog post" — never "work". Interstitial
 buttons: "View this story" / "View this group".
 
-**Write paths stay rating-blind.** Favoriting/following/listing/recommending an M story needs no
-ceiling check (the actor consented via the gate, has M on, or called the API deliberately). The
-one legitimate write-path rating check is spotlight redemption validating story rating against
-the slot's rating class — that is inventory integrity, not consent. Spotlight runs **dedicated
+**Write paths: rating-blind where it is recorded, full guard on interaction raises, clears always
+free** (narrowed by WU-ParentVisibility and owner ruling D6 — this paragraph previously read "write
+paths stay rating-blind" for favoriting/following too, which the shipped code never matched).
+- **Rating-blind (confidentiality-only guard):** listing a story in a custom list, recommending it
+  (WU29), and adding it to a group — the recorded decisions that listing or recommending is not
+  reading. Status and takedown still apply.
+- **Full parent-visibility guard, rating included:** interaction **raises** — favoriting or
+  following a story, marking it read (`UserStoryInteraction` panel bits, chapter read-marks and their
+  `MarkStarted`/`MarkCompleted` cascade). D6 reaffirmed the full guard for raises; the consent path
+  for a mature-off reader is the interstitial's reveal.
+- **Clears/lowers are never gated** — un-favoriting, unfollowing, mark-unread, unliking the
+  caller's own row succeed on every axis (`identity-and-authorization.md` §"Parent-visibility
+  guards" → "Raises vs clears").
+
+The one legitimate write-path rating check *beyond* the parent guard is spotlight redemption
+validating story rating against the slot's rating class — that is inventory integrity, not consent. Spotlight runs **dedicated
 M and non-M slot pools**; mature-off/anon viewers see the non-M pool at full width.
 
 **Person/collection-scoped listings get the count-line disclosure.** Profile tabs (authored,

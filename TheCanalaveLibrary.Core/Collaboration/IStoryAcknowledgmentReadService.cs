@@ -11,7 +11,9 @@ public interface IStoryAcknowledgmentReadService
     /// <summary>
     /// Returns every <see cref="StoryAcknowledgmentStatus.Accepted"/> credit for
     /// <paramref name="storyId"/>, for the public story-page display. Empty when the story has no
-    /// accepted credits (including when it has only Pending/Declined ones).
+    /// accepted credits (including when it has only Pending/Declined ones), and empty when the story
+    /// itself is not visible to the caller — draft/pending/rejected to non-authors, taken down, or
+    /// rated above the caller's ceiling without a reveal (kind (g), WU-AccessGateSweep2).
     /// </summary>
     Task<IReadOnlyList<StoryAcknowledgmentDto>> GetAcknowledgmentsForStoryAsync(int storyId);
 

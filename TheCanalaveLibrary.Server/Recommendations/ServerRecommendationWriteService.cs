@@ -282,11 +282,15 @@ public class ServerRecommendationWriteService(
         if (rec is null)
             throw new KeyNotFoundException($"Recommendation {recommendationId} not found.");
 
-        // Kind (g): liking requires seeing. writeDb also bypasses the Recommendation IsTakenDown
-        // filter, so without this a moderator-removed rec on a hidden story stayed likeable.
-        await RequireRecommendationVisibleAsync(recommendationId);
-
         RecommendationLike? existing = rec.Likes.FirstOrDefault();
+
+        // Kind (g), raise only: liking requires seeing. writeDb also bypasses the Recommendation
+        // IsTakenDown filter, so without this a moderator-removed rec on a hidden story stayed
+        // likeable. An existing like row makes this call an unlike, a clear on the caller's own
+        // row, which is never guarded (owner ruling D6).
+        if (existing is null)
+            await RequireRecommendationVisibleAsync(recommendationId);
+
         bool nowLiked;
         int delta;
 
@@ -310,7 +314,7 @@ public class ServerRecommendationWriteService(
         await writeDb.SaveChangesAsync();
         // No notification — anti-addictive design (§6.11).
 
-        // Atomic counter update — see cross-cutting.md §"Counter mutation rule" for why
+        // Atomic counter update — see layer2-services.md §"Counter mutation rule" for why
         // ExecuteUpdateAsync is used here instead of tracked read-modify-write.
         await writeDb.Recommendations
             .Where(r => r.RecommendationId == recommendationId)

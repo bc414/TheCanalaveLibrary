@@ -35,7 +35,7 @@ worker).
   next pass — connection tested via `GetMySettingsAsync` and write-path round-trips).
   **`UpdateAppearanceAsync` dropped its third parameter (WU-DataSaver, 2026-07-31)** — see this
   feature's dedicated Stage note below.
-- **L3-Logic — Stage 5** (WU30). `SettingsPage.razor` at `/settings` dispatches to its sub-forms.
+- **L3-Logic — Stage 5** (WU30; `PrivacySettingsForm`'s "Off" options now write `Nobody`, WU-AccessGateSweep2, 2026-09-30 — see its Stage note). `SettingsPage.razor` at `/settings` dispatches to its sub-forms.
   `ProfileSettingsForm`, `ReaderSettingsForm`, `PrivacySettingsForm`, `AuthorSettingsForm`,
   `AppearanceSettingsForm` all injection-free (bUnit-testable); page holds all service calls.
   `_seeded` guard prevents re-init on re-render. Per-section busy flags decouple save operations.
@@ -57,6 +57,27 @@ worker).
   found/fixed: `workplan.md` WU-GlobalFlip.
 
 ---
+
+### Feature 20 L3-Logic — WU-AccessGateSweep2 Stage note (2026-09-30): "Off" wrote the wrong enum value
+
+**No cell flips — F20 stays Stage 5 on every layer.** Found while scoping the WU, in no audit:
+`PrivacySettingsForm`'s "Off — no comment wall shown" and "Off — no private messages" options posted
+the literal `2`, which is `SocialInteractionPermission.Following`, not `Nobody` (3). So "Off" for
+messages silently meant "only people I follow" (`audit/Messaging.md` F49), "Off" for the wall left
+the wall shown (`ProfilePage` hides it only for `Nobody`), and the new service-side
+`AllowProfileComments` gate (`audit/Comments.md` F23) would have enforced "Following" for everyone
+who picked "Off". All six option values in the two selects are now bound to the enum
+(`@((int)SocialInteractionPermission.Nobody)` …), so they cannot drift again. A "People I follow"
+option is a copy/product decision and was not added. Dev-DB rows saved with the old "Off" hold 2
+(Following): the select shows no matching option for them until re-saved, and `reset-dev-db.ps1`
+restores the seed — pre-real-data, so no data SQL.
+
+**How verified:** RazorComponents — new `PrivacySettingsFormTests`: the "Off" option of both selects
+carries the `Nobody` value; choosing "Off" in both then Save raises `Nobody` for both fields; a saved
+`Nobody` displays as the "Off" option (both selects). Mutation-checked: all five fail against the old
+markup.
+`dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass. **No browser was available** — tracker **H13** carries the owner's browser confirmation; the
+markup is visually unchanged, so L4.5 was not flipped.
 
 ## Feature 21 — User Profile Display
 

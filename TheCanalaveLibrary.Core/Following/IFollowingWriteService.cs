@@ -24,7 +24,10 @@ public interface IFollowingWriteService : IFollowingReadService
     /// <summary>
     /// Toggles the alert-bell preference on an existing follow row. Throws
     /// <see cref="FollowingValidationException"/> if the current user does not follow
-    /// <paramref name="targetUserId"/>.
+    /// <paramref name="targetUserId"/>. Turning alerts <b>on</b> where they were off is a raise — it
+    /// re-enrolls the caller in the target's fan-out — so it requires the target's profile to be
+    /// visible (<see cref="KeyNotFoundException"/> otherwise); turning them off is a clear and always
+    /// succeeds (owner ruling D6, WU-AccessGateSweep2).
     /// </summary>
     Task SetReceiveAlertsAsync(int targetUserId, bool receiveAlerts);
 

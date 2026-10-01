@@ -5,8 +5,9 @@ namespace TheCanalaveLibrary.Server;
 
 /// <summary>
 /// Server-side write implementation. Inherits the read path via primary-constructor chaining.
-/// Applies the six panel-managed bits in a single upsert: load→apply→stamp dates→sparse cleanup→save.
-/// HasStarted is never touched — it belongs to the reading path (WU26).
+/// Applies the six panel-managed bits in a single upsert: load→decide (the D6 raise guard)→apply→
+/// stamp dates→sparse cleanup→save. HasStarted is never touched — it belongs to the reading path
+/// (WU26). Any later step that writes (e.g. an ensure-row insert) belongs after the decide step.
 /// </summary>
 public class ServerUserStoryInteractionWriteService(
     IDbContextFactory<ReadOnlyApplicationDbContext> readDbFactory,
@@ -15,11 +16,21 @@ public class ServerUserStoryInteractionWriteService(
     : ServerUserStoryInteractionReadService(readDbFactory, activeUser), IUserStoryInteractionWriteService
 {
     /// <summary>
-    /// Kind (g): these three writes had no parent check of any kind — not even existence, since the
-    /// FK was the only guard. Marking a guessed draft/M-unrevealed/taken-down story as a favorite
-    /// increments the <b>story author's</b> <c>UserStats.FavoritesOnStories</c> (a non-owner write to
-    /// another user's public counter) and silently enrolls the actor in that story's notification
-    /// fan-out sets, self-subscribing them to content they were never allowed to see.
+    /// Kind (g) — applied to <b>raises</b> only (owner ruling D6, WU-AccessGateSweep2). A raise needs
+    /// the guard because these writes once had no parent check of any kind — not even existence,
+    /// since the FK was the only guard: marking a guessed draft/M-unrevealed/taken-down story as a
+    /// favorite increments the <b>story author's</b> <c>UserStats.FavoritesOnStories</c> (a non-owner
+    /// write to another user's public counter) and silently enrolls the actor in that story's
+    /// notification fan-out sets, self-subscribing them to content they were never allowed to see.
+    /// <para>
+    /// A clear does neither — it withdraws the caller's own row, lowers a counter and leaves a set —
+    /// so clears on an existing row are never guarded, on any axis (rating, status, takedown). The
+    /// read plane already tells the caller which hidden stories it holds rows on
+    /// (<c>GetStatesByStoryIdsAsync</c> is a bare-FK read), so refusing the clear protected nothing
+    /// and cost the user their own data. <see cref="MarkStartedAsync"/>/<see cref="MarkCompletedAsync"/>
+    /// only ever set bits, so they are raises by construction and keep the unconditional guard.
+    /// Rule: <c>identity-and-authorization.md</c> §"Parent-visibility guards" → "Raises vs clears".
+    /// </para>
     /// </summary>
     private async Task RequireStoryVisibleAsync(int storyId)
     {
@@ -33,29 +44,36 @@ public class ServerUserStoryInteractionWriteService(
         if (CurrentUserId is not int userId)
             throw new InvalidOperationException("This operation requires an authenticated user.");
 
-        // Reject impossible combinations per spec §4 before touching the database.
+        // Empty extension point — spec §4's zero-coupling model forbids no combination today.
         ValidateCombination(update);
 
-        await RequireStoryVisibleAsync(storyId);
-
-        // Load the tracked row + its date partition, or prepare a new row.
+        // ── 1. Load first (D6: load, diff, then decide) ──────────────────────────────
+        // The tracked row + its date partition; null when the caller has never touched this story.
         UserStoryInteraction? row = await writeDb.UserStoryInteractions
             .Include(i => i.InteractionDatePartition)
             .FirstOrDefaultAsync(i => i.UserId == userId && i.StoryId == storyId);
 
-        bool isNew = row is null;
-        if (isNew)
-        {
-            // Only create a row when at least one bit will be true after the update.
-            if (!AnyBitTrue(update))
-                return;
+        // No row + all-false: nothing to clear and nothing to raise. Returns BEFORE any guard, so
+        // a hidden, an absent and a nonexistent story are indistinguishable (no existence oracle).
+        if (row is null && !AnyBitTrue(update))
+            return;
 
+        // ── 2. Decide: any raise anywhere guards the whole call ──────────────────────
+        // No per-bit partial application — the guard runs before the first property is assigned,
+        // so a refused mixed payload leaves the row exactly as it was. Pure clears (including the
+        // all-false sparse cleanup below) never reach the guard.
+        if (IsRaise(row, update))
+            await RequireStoryVisibleAsync(storyId);
+
+        // ── 3. Mutate — every write below this line is authorized ────────────────────
+        if (row is null)
+        {
             row = new UserStoryInteraction { UserId = userId, StoryId = storyId };
             writeDb.UserStoryInteractions.Add(row);
         }
 
         // Capture derived state BEFORE applying the update (transition-delta rule —
-        // cross-cutting.md §"Transition-delta rule for UserStoryInteraction-derived counters").
+        // layer2-services.md §"Transition-delta rule for UserStoryInteraction-derived counters").
         bool wasFavorite    = row?.IsFavorite  ?? false;
         bool wasCompleted   = row?.IsCompleted ?? false;
         bool wasIgnored     = row?.IsIgnored   ?? false;
@@ -93,8 +111,10 @@ public class ServerUserStoryInteractionWriteService(
         await writeDb.SaveChangesAsync();
 
         // ── Transition-delta UserStats updates ───────────────────────────────────
-        // Counter moves only when the effective derived state *flips* (cross-cutting.md
-        // §"Transition-delta rule for UserStoryInteraction-derived counters").
+        // Counter moves only when the effective derived state *flips* (layer2-services.md
+        // §"Transition-delta rule for UserStoryInteraction-derived counters"). A clear on a hidden
+        // story moves counters like any other clear — the favorite is genuinely withdrawn (D6's
+        // accepted counter consequence).
 
         // FavoritesOnStories → story author's stat
         bool willBeFavorite = update.IsFavorite;
@@ -153,6 +173,18 @@ public class ServerUserStoryInteractionWriteService(
     private static bool AnyBitTrue(UserStoryInteractionStateUpdate update) =>
         update.IsFavorite || update.IsHiddenFavorite || update.IsFollowed
         || update.IsCompleted || update.IsReadItLater || update.IsIgnored;
+
+    /// <summary>
+    /// D6: a raise is any panel bit going false→true. With no row every bit starts false, so every
+    /// true bit is a raise — the guessed-id enumeration kind (g) exists to stop stays blocked.
+    /// </summary>
+    private static bool IsRaise(UserStoryInteraction? row, UserStoryInteractionStateUpdate update) =>
+        (update.IsFavorite       && !(row?.IsFavorite       ?? false))
+        || (update.IsHiddenFavorite && !(row?.IsHiddenFavorite ?? false))
+        || (update.IsFollowed       && !(row?.IsFollowed       ?? false))
+        || (update.IsCompleted      && !(row?.IsCompleted      ?? false))
+        || (update.IsReadItLater    && !(row?.IsReadItLater    ?? false))
+        || (update.IsIgnored        && !(row?.IsIgnored        ?? false));
 
     public async Task MarkStartedAsync(int storyId)
     {

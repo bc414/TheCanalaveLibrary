@@ -69,12 +69,18 @@ public interface ICommentWriteService : ICommentReadService
     /// Posts a new comment (or reply) on a user profile wall. Requires an authenticated user.
     /// Sanitizes <c>dto.CommentText</c> before persisting. If <c>dto.ParentCommentId</c> is set,
     /// verifies the parent comment belongs to the same profile wall. The profile owner's
-    /// <c>AllowProfileComments</c> setting is enforced by the caller (dispatcher), not here.
+    /// <c>AllowProfileComments</c> setting is enforced <b>here</b> (WU-AccessGateSweep2 —
+    /// <c>layer2-services.md</c> §"<c>AllowProfileComments</c> Gate"): the owner always passes;
+    /// for anyone else <c>Public</c>/<c>UsersOnly</c> allow, <c>Following</c> requires the owner to
+    /// follow the commenter, and <c>Nobody</c> (or an unknown value) refuses — root posts and
+    /// replies alike. The check runs after the <c>ProfileVisibility</c> guard, so a hidden profile
+    /// stays an indistinguishable not-found.
     /// No spoiler flag (profile-wall comments have no spoiler concept).
     /// </summary>
     /// <returns>The new <c>BaseComment.CommentId</c>.</returns>
-    /// <exception cref="CommentValidationException">Thrown when text is empty.</exception>
-    /// <exception cref="KeyNotFoundException">Profile user or parent comment not found.</exception>
+    /// <exception cref="CommentValidationException">Text is empty, or the owner's
+    /// <c>AllowProfileComments</c> setting refuses this commenter.</exception>
+    /// <exception cref="KeyNotFoundException">Profile user not found or not visible to the caller, or parent comment not found.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task<long> PostUserProfileCommentAsync(PostUserProfileCommentDto dto);
 
@@ -82,8 +88,11 @@ public interface ICommentWriteService : ICommentReadService
     /// Toggles a like on a comment. Requires an authenticated user. Returns the new
     /// <see cref="CommentLikeResultDto"/> with the updated denormalized <c>LikeCount</c> and the
     /// caller's new like state. No notification generated (§6.11 — anti-addictive design).
+    /// A new like requires the comment and the content hosting it to be visible to the caller; an
+    /// unlike (the caller already holds a like row) is a clear and always succeeds, even when the
+    /// comment or its context is now hidden (owner ruling D6).
     /// </summary>
-    /// <exception cref="KeyNotFoundException">Comment not found.</exception>
+    /// <exception cref="KeyNotFoundException">Comment not found, or (liking only) not visible to the caller.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task<CommentLikeResultDto> ToggleLikeAsync(long commentId);
 }

@@ -189,25 +189,24 @@ public class ServerBlogPostWriteService(
         if (ActiveUser.UserId is not int userId)
             throw new InvalidOperationException("Liking a blog post requires an authenticated user.");
 
-        int? currentLikeCount = await writeDb.BlogPosts
-            .Where(b => b.BlogPostId == blogPostId)
-            .Select(b => (int?)b.LikeCount)
-            .FirstOrDefaultAsync();
+        // An existing like row makes this call an unlike — a clear on the caller's own row, which
+        // is never visibility-guarded (owner ruling D6). The row's FK already proves the post exists.
+        bool alreadyLiked = await writeDb.BlogPostLikes
+            .AnyAsync(l => l.BlogPostId == blogPostId && l.UserId == userId);
 
-        if (currentLikeCount is null)
-            throw new KeyNotFoundException($"Blog post {blogPostId} not found.");
-
-        // Kind (g): writeDb is unfiltered, so the existence probe above proves nothing about
-        // visibility — a non-author could inflate LikeCount on someone's unpublished draft. Same
-        // message as a missing post (non-disclosure).
-        await using (ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync())
+        if (!alreadyLiked)
         {
+            bool exists = await writeDb.BlogPosts.AnyAsync(b => b.BlogPostId == blogPostId);
+            if (!exists)
+                throw new KeyNotFoundException($"Blog post {blogPostId} not found.");
+
+            // Kind (g), raise only: writeDb is unfiltered, so the existence probe above proves
+            // nothing about visibility — a non-author could inflate LikeCount on someone's
+            // unpublished draft. Same message as a missing post (non-disclosure).
+            await using ReadOnlyApplicationDbContext readDb = await ReadDbFactory.CreateDbContextAsync();
             if (!await BlogPostVisibilityGuard.IsBlogPostVisibleAsync(readDb, ActiveUser, blogPostId))
                 throw new KeyNotFoundException($"Blog post {blogPostId} not found.");
         }
-
-        bool alreadyLiked = await writeDb.BlogPostLikes
-            .AnyAsync(l => l.BlogPostId == blogPostId && l.UserId == userId);
 
         bool nowLiked;
         if (alreadyLiked)

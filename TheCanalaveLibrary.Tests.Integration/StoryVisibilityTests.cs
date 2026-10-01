@@ -182,6 +182,47 @@ public class StoryVisibilityTests(PostgresFixture postgres) : IntegrationTestBas
         body.Should().NotContain($"/story/{draftStoryId}", "hidden-status stories stay out (filter-driven)");
     }
 
+    [Fact]
+    public async Task Sitemap_ExcludesProfileBlogPostsOfNonPublicAuthors()
+    {
+        // WU-AccessGateSweep2: a profile post is profile-tab data, so a non-Public author's post
+        // 404s for an anonymous crawler — the sitemap must not hand one out.
+        int publicUserId = await SeedUserAsync("public-blogger");
+        int privateUserId = await SeedUserAsync("private-blogger");
+        int usersOnlyUserId = await SeedUserAsync("usersonly-blogger");
+        int publicPostId, privatePostId, usersOnlyPostId;
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            (await db.Users.FindAsync(privateUserId))!.PrivacySettings.ProfileVisibility = ProfileVisibility.Private;
+            (await db.Users.FindAsync(usersOnlyUserId))!.PrivacySettings.ProfileVisibility = ProfileVisibility.UsersOnly;
+
+            ProfileBlogPost NewPost(int authorId) => new()
+            {
+                AuthorId = authorId, Title = "Sitemap Post", Content = "<p>x</p>",
+                Rating = Rating.E, IsPublished = true,
+                DateCreated = DateTime.UtcNow, LastUpdatedDate = DateTime.UtcNow,
+            };
+            ProfileBlogPost publicPost = NewPost(publicUserId);
+            ProfileBlogPost privatePost = NewPost(privateUserId);
+            ProfileBlogPost usersOnlyPost = NewPost(usersOnlyUserId);
+            db.ProfileBlogPosts.AddRange(publicPost, privatePost, usersOnlyPost);
+
+            await db.SaveChangesAsync();
+            publicPostId = publicPost.BlogPostId;
+            privatePostId = privatePost.BlogPostId;
+            usersOnlyPostId = usersOnlyPost.BlogPostId;
+        }
+
+        HttpClient client = Factory.CreateClient();
+        string body = await client.GetStringAsync("/sitemap.xml");
+
+        // "</loc>" anchors each id so /blog/1 cannot match inside /blog/12.
+        body.Should().Contain($"/blog/{publicPostId}</loc>");
+        body.Should().NotContain($"/blog/{privatePostId}</loc>", "a Private author's posts stay out");
+        body.Should().NotContain($"/blog/{usersOnlyPostId}</loc>", "a UsersOnly author's posts 404 for crawlers too");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────────
 
     private async Task SeedChapterWithMatureAltVersionAsync(int storyId, int authorId)

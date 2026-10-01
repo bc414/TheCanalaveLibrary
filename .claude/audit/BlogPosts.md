@@ -16,7 +16,7 @@ split one line down). `BasePoll` (TPT) → `SitePoll` / `BlogPostPoll`;
 when Feature 56 was cut — see the Feature 56 CUT note below.)
 
 ## Feature 35 — Blog Post Writing
-- **L1 — Stage 5.** TPT split sound. **L2 — Stage 5.** **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
+- **L1 — Stage 5.** TPT split sound. **L2 — Stage 5** (like toggle: an unlike is a clear since WU-AccessGateSweep2, 2026-09-30 — see the Features 35–37 Stage note under F36). **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; blog-post editor got the create→edit `forceLoad` fix for
   Quill-hosting pages (editor page not browser-driven in the flip's wave). Full wave narrative +
@@ -81,7 +81,7 @@ when Feature 56 was cut — see the Feature 56 CUT note below.)
     spoiler posts therefore always take the interstitial's immediate-reveal path.
 
 ## Feature 36 — Blog Post Display
-- **L1 — Stage 5.** **L2 — Stage 5** (profile context for WU31; story/group contexts → WU30/WU32).
+- **L1 — Stage 5.** **L2 — Stage 5** (profile context for WU31; story/group contexts → WU30/WU32; profile posts respect the author's `ProfileVisibility` since WU-AccessGateSweep2, 2026-09-30 — see its Stage note below).
   **L3/L3.5 — Stage 5. L4 — Stage 1** (visual sign-off pending).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto (blog-post display not browser-driven in the flip's wave;
@@ -162,6 +162,45 @@ auth services; listed in E2E checklist). Convention in
 `layer3-logic.md` §"Route-parameter dispatchers reload in `OnParametersSetAsync`".
 
 ---
+
+### Features 35–37 — WU-AccessGateSweep2 Stage note (2026-09-30): profile posts respect the author's ProfileVisibility; an unlike is a clear
+
+**No cell flips — F35, F36, F37 keep their stages.** Two changes beneath sound cells:
+
+1. **F36 L2 — blog-post detail is profile-tab data** (service audit §2.6: `GetByAuthorAsync` gated on
+   `ProfileVisibilityGuard` while `GetByIdAsync` never did, so a Private profile's posts — with their
+   comments, polls and votes — were readable by id enumeration). Which side moves was derived from
+   `access-gating-first-principles.md` §5 row 1b ("published blogs" are profile-tab data, Class A)
+   and the F15 permalink precedent (`audit/Tags.md`); recorded as settled in `audit/AccessGate.md`.
+   `BlogPostVisibilityFacts` gained `AuthorProfileVisibility` (non-null only for a profile post with
+   an author; group and site posts pass null). `BlogPostVisibilityGuard.IsVisible` now orders:
+   unpublished-and-not-author → author → author's profile hidden → verified bot → rating/reveal
+   (bots bypass consent, never privacy). `ProfileVisibilityGuard` gained the pure overload
+   `IsVisible(ProfileVisibility?, viewer, id)` that both guards share. The jsonb setting is projected
+   through the `Author` navigation in `LoadFactsAsync` and `GetByIdAsync` — EF translated it, so the
+   spec's fallback (an extra query) was not needed. `GetBlogPostGateAsync` returns null for a hidden
+   author's M post, so the interstitial never shows its title and author. Every
+   `BlogPostVisibilityGuard` consumer inherits the check: comment reads and writes, poll reads and
+   votes (**F37**), like raises, report submission. The sitemap lists only Public authors' profile
+   posts (`audit/Seo.md` F64). `IBlogPostReadService.GetByIdAsync`'s doubled `<summary>` was merged
+   and its stale `IgnoreQueryFilters(["ContentRating"])` claim removed. **Accepted risk, routed to the
+   notification WUs:** a blog fan-out notification for an author who later goes Private links to a
+   404.
+2. **F35 L2 — an unlike is a clear (owner ruling D6).** `ToggleLikeAsync` checks the caller's like
+   row first; an existing row makes the call an unlike, which skips the existence check and the guard
+   (the row's FK proves the post exists). A new like keeps both. The unlike response still carries
+   the post's `LikeCount` — accepted as part of the clear (the caller's row proves prior access);
+   flagged as a derivation from D6's reasoning, not an owner sentence.
+
+**How verified:** Unit — `VisibilityGuardRuleTests` (the profile truth table; the blog guard's
+Private / UsersOnly / owner / draft / bot / reveal / group / site cases; mutation-checked by moving
+the bot check back above the profile check). Integration — `ParentVisibilityContractTests`: a
+Private author's post is null by id and its comments and polls read empty, with comment, vote and
+like refused, for a stranger and for anonymous; the M gate is null; the author still sees the post;
+UsersOnly is visible signed-in and null anonymous; a verified bot is served a Public author's M post
+but not a Private author's; group and site posts by a Private author are unaffected; an unlike
+succeeds on a post unpublished after the like. `SiteAnnouncementServiceTests`' site branch still
+green. Against the pre-fix code every new privacy and unlike test failed. `dotnet build` green, no new warnings in touched files; `dotnet test` green — Unit 1,022, RazorComponents 701, Integration 1,171; all four PowerShell gates pass.
 
 ## WU-SiteNews — staff site announcements (extends Features 35/36, no new grid row) — Stage 5 (2026-07-28)
 
@@ -345,7 +384,7 @@ bullet below, 2026-07-13.)
 
 - **L1 — Stage 5** (post-reconcile; see L1 reconcile note above). Covering tier: Integration
   (`PollServiceTests` delete-cascade + FK paths exercise the migrated schema).
-- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`).
+- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30 — see F36's Stage note).
   Covering tier: **Integration** — `PollServiceTests` (18 tests: create permissions both kinds,
   validation, single/multi vote + replace/retract, pending/closed vote rejection, AfterVote
   visibility zeroing incl. retract-hides-again, Anonymous/VoterChoice name filtering, config lock
