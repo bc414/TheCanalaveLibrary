@@ -70,7 +70,10 @@ non-gate: `ISiteSettingsReadService.GetIntAsync` stays ungated in the service, b
 and Fanon flows compose it; only its HTTP route is moderator-only (`identity-and-authorization.md`
 §"Role-Based (Moderator) Gating"). Verified by Integration
 `ModerationIntegrityTests.EveryModeratorOnlyRead_RefusesASignedInNonModerator` (the capacity read) and
-the unchanged `SpotlightServiceTests` / `ModerationEndpointsTests` (site-setting 403).
+the unchanged `SpotlightServiceTests` / `ModerationEndpointsTests` (site-setting 403). **Browser-driven
+2026-09-30** by the WU-ModerationIntegrity pass. `/mod/spotlight` renders for a moderator on both
+phases. `/api/spotlight-slots/remaining-capacity` answers 200 to a moderator, 403 to a member and 401
+anonymous (`audit/Moderation.md` F47's browser-verification note).
 
 Built as WU-Spotlight (2026-07-12, `workplan.md`). Conventions:
 `canalave-conventions/layer2-services.md` §"Community Spotlight — Slot Allocator Seam + Block

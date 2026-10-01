@@ -257,7 +257,7 @@ decision work that has no row at all.
     wired to their page's `ReportDialog` — mechanically the same pass WU-UserModeration did for
     `UserCard`, on three surfaces instead of one.
 
-- [x] **B18 — A user's moderation history omits reports against content they authored — DONE (WU-ModerationIntegrity, 2026-09-30)** `[scope-cut · med · anytime]` — *Deliberately excluded from WU-UserModeration, 2026-08-01.* `Report.ReportedUserId` landed (D8, every target type, snapshot); `GetUserModerationHistoryAsync` reads it and keeps rows whose target is gone; `/mod/users/{id}` deleted the caveat and gained a Target column. Narrative: `audit/Moderation.md` F47.
+- [x] **B18 — A user's moderation history omits reports against content they authored — DONE (WU-ModerationIntegrity, 2026-09-30)** `[scope-cut · med · anytime]` — *Deliberately excluded from WU-UserModeration, 2026-08-01.* `Report.ReportedUserId` landed (D8, every target type, snapshot); `GetUserModerationHistoryAsync` reads it and keeps rows whose target is gone; `/mod/users/{id}` deleted the caveat and gained a Target column. Browser-verified 2026-09-30 (H19, closed). Narrative: `audit/Moderation.md` F47.
   - Grid: F47 cells unaffected — the page exists and is sound; this is a scope boundary inside it.
   - Source: `UserModerationHistoryDto.Reports` (user-targeted rows only); `ModUsersPage` states the
     caveat on screen ("Reports against content they wrote are not listed here") rather than letting
@@ -842,6 +842,20 @@ unless noted. All sit under Stage-5 cells.
     `POST /api/moderation/users/{id}/auto-approve`, needs nothing: moderator actions are unthrottled by
     the existing `security.md` rule.
 
+- [ ] **E8 — Malformed or out-of-range API request bodies answer 500, not 400** `[off-grid · low · pre-launch]` — *Observed 2026-09-30 by the WU-ModerationIntegrity browser pass, with hand-built requests.*
+  - Grid: no cell moves. The app's own clients cannot send either body: they serialize enums as numbers,
+    and `ReportDialog` keeps Submit disabled until a reason is chosen.
+  - Two shapes, both on `POST /api/moderation/reports`:
+    - **An unreadable body** (an enum sent as a string). Minimal APIs throw `BadHttpRequestException`;
+      `ApiExceptionHandler` treats it as unhandled, so the caller gets 500 and the log a `fail:` line.
+    - **An unknown lookup id** (`reasonId` 0). The insert fails the `report_reasons` FK (23503) and
+      surfaces as 500. Row-first order (D22) means the counter did not move.
+  - Why it matters: a public API should answer bad input with 400, and every crafted request is a
+    `fail:` line in the logs an alerting rule would watch.
+  - Fix shape: `ApiExceptionHandler` maps `BadHttpRequestException` to 400. `SubmitReportAsync` checks
+    the reason id against `report_reasons` and refuses an unknown one with `ModerationValidationException`.
+    Then sweep the other request DTOs that carry lookup ids.
+
 ---
 
 ## F. Off-grid open decisions & whole phases
@@ -1307,25 +1321,50 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     unfollow for this reason.
   - Fix: correct the two numbers and add the missing row; `reset-dev-db.ps1` afterwards.
 
-- [ ] **H19 — Browser pass owed for WU-ModerationIntegrity's moderator UI** `[test-gap · med · beta]` — *Filed 2026-09-30; WU-ModerationIntegrity ran with no browser available. Extended 2026-09-30 by its review fixes (F46/F53 lowered; steps 2, 4 and 5).*
-  - Grid: F47 L4.5 (lowered 5→1 by that WU), F46 L4.5 and F53 L4.5 (lowered 5→1 by its review fixes —
-    behavior changed undriven, markup did not); this pass restores all three.
-  - Drive on both render phases (circuit and WASM), with psql after every write:
-    1. `/mod/users/{id}`: the caveat is gone; the history lists content reports with a Target column
-       (type + label/link) and a `[deleted …]` row for a removed target; Reinstate shows only for a
-       non-Active user, opens the panel with no date field, and returns the user to Active (one
-       `reports` row, reason Other, `reported_user_id` set).
-    2. Suspend with a past date and Warn on a live suspension are refused inline; Ban on a banned user
-       is refused from `/mod/users`. From `/mod/reports`, Ban on a report about an already-banned
-       account resolves the report (the reporter gets one 81; no second 74; `security_stamp` unchanged).
-    3. `/mod/reports`: no "Hide content" on a User report; removing a story with three reports from
-       three users closes all three (one 81 each); resolving an already-resolved report from a stale
-       tab shows "This report has already been resolved."
-    4. The report dialog (F46): a second report on the same item by the same user shows the duplicate
-       message; a different user can still report it.
-    5. External verification (F53), author side: request per-link verification before the platform
-       account is verified — "Verify your {platform} account first." shows inline, with no
-       session-expired redirect on WASM and no generic error on the circuit.
+- [x] **H19 — WU-ModerationIntegrity's moderator UI, report dialog and EV refusals: browser-verified 2026-09-30 (CLOSED)** `[test-gap · med · beta]` — *Filed 2026-09-30; WU-ModerationIntegrity ran with no browser available. Extended the same day by its review fixes (F46/F53 lowered; steps 2, 4 and 5). Closed 2026-09-30 by its browser pass.*
+  - Grid: **F46, F47 and F53 L4.5 are back at 5.** WU-ModerationIntegrity and its review fixes had
+    lowered them 5→1.
+  - **Closed:** all five steps were driven on both render phases, with `psql` after every write.
+    Server-only path; the workbench DB took the migration in place, then was reset so the seeder ran
+    fresh.
+    1. `/mod/users/{id}`:
+       - no caveat;
+       - the Target column for story and comment reports;
+       - "Comment / [deleted Comment]" for a self-deleted comment;
+       - Reinstate shown only off Active, with no date field. It returns the user to Active with one
+         `reports` row (reason 1, `reported_user_id` set).
+    2. The inline refusals: a past suspension date, Warn on a live suspension, a second Ban from
+       `/mod/users`. A report-driven Ban on an already-banned account resolved the report: one 81, no
+       second 74, stamp unchanged.
+    3. `/mod/reports`:
+       - no "Hide content" on a User report;
+       - three reports from three users closed by one removal on WASM, and two on the circuit, with
+         one 81 each and the counter at 0;
+       - "This report has already been resolved." in a stale panel.
+    4. The dialog's duplicate message. Other users could still report the same item, and on WASM the
+       throttle's 429 read as the rate-limit message.
+    5. "Verify your Archive of Our Own account first." inline. WASM showed no session-expired
+       redirect, the circuit no generic error, and nothing was written.
+  - **Also driven:** the D9 read gates over HTTP (moderator 200, member 403, anonymous 401, unknown ids
+    404), and the EV malformed-URL message in Settings.
+  - **Not driven** (Integration covers it): account deletion's zombie closure.
+  - **No bug in the WU's code**, so there is no fixes commit. Filed from the pass: **H20** and **E8**.
+  - Narrative: `audit/Moderation.md` F47's browser-verification note (short notes in F46, F48, F53,
+    F62 and `audit/Spotlight.md` F55); WU-ModerationIntegrity's DONE entry.
+
+- [ ] **H20 — Moderation panels: comment previews show raw markup, and a reason carries across verbs** `[polish · low · beta]` — *Observed 2026-09-30 by the WU-ModerationIntegrity browser pass.*
+  - Grid: F47 L4=3 (unchanged; this is part of what keeps it at 3).
+  - **Comment labels show HTML.** `ServerModerationReadService.BatchLoadTargetsAsync` builds
+    `Comment: "{preview}"` from the stored comment HTML, cut at 80 characters, so a moderator reads
+    `Comment: "<p>Seed comment: reply depth 1.</p>"`. That happens in `/mod/reports`' Target column and,
+    since WU-ModerationIntegrity, in `/mod/users/{id}`'s. Blazor encodes it, so this is not an
+    injection, but the cut can also split a tag. Fix shape: strip the HTML to text before cutting.
+  - **`AccountActionPanel` keeps its state across verbs.** Both hosts render one panel instance and
+    change only `Action`. Switching Ban → Reinstate (or Warn → Suspend) keeps the typed reason and the
+    Suspend date. With Reinstate, a ban's rationale lands in the reinstatement's audit row unless the
+    moderator clears it (observed on `/mod/users/{id}`; the text is visible and editable). Fix shape:
+    `@key` the panel on the pending verb in both hosts, plus a bUnit test. It is the same class as H15's
+    lingering queue message.
 
 ---
 

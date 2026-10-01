@@ -48,11 +48,24 @@ see Feature 62 below); `DailyStoryStat` was dropped entirely, never modeled.
 
 ## Feature 46 — Content Reporting
 
-**Stages (updated 2026-09-30, WU-ModerationIntegrity review fixes):** L1–L3.5 = 5, L4 = 3, **L4.5 = 1**,
-L5 = 5, L6 = 5. L1 stays 5 with the WU_ModerationIntegrity migration applied. L4.5 went 5→1 at the
-review fixes: `ReportDialog`'s markup did not change, but what a member sees did — a second report on
-the same item is refused with the duplicate message, and on WASM a throttled submit now arrives as the
-rate-limit message — and none of it was driven in a browser. Tracker **H19** step 4 restores it.
+**Stages (updated 2026-09-30, WU-ModerationIntegrity browser verification):** L1–L3.5 = 5, L4 = 3,
+L4.5 = 5, L5 = 5, L6 = 5. L1 stays 5 with the WU_ModerationIntegrity migration applied. L4.5 went 5→1
+at the review fixes (the duplicate refusal and the WASM rate-limit message changed undriven) and back
+to 5 at the browser pass the same day (tracker **H19** closed; note below).
+
+**WU-ModerationIntegrity browser verification Stage note (2026-09-30) — F46 L4.5 1→5.** `ReportDialog`
+on both render phases, `psql` after every submit:
+- **Duplicate:** ReaderGamma, whose seed report on story 5 was still open, reported it again from
+  `/discover`. The dialog read "You've already reported this — a moderator will review your open
+  report." on the circuit (no `/api` call) and on WASM (`POST /api/moderation/reports` 400). No row.
+- **A different user still can:** LurkerDelta (WASM) and AuthorAlpha (circuit) reported story 5;
+  TestUser, ReaderGamma and AuthorBeta reported a comment through `CommentSection`'s dialog. Each got
+  one row with `reported_user_id` = the author, counter +1 and one 80 receipt. Reasons loaded through
+  `IReportSubmissionService` on both phases.
+- **Throttle (WASM):** LurkerDelta's sixth report inside the 5-burst `Report` bucket read "You're doing
+  that a little too fast — please wait 180 seconds and try again." (429), not the generic error; five
+  rows, none for the sixth.
+Detail and the rest of the pass: F47's browser-verification note.
 
 **WU-ModerationIntegrity review-fixes Stage note (2026-09-30) — F46 L4.5 5→1.** The build kept L4.5 at
 5 on the grounds that the dialog's markup was unchanged; the review pointed out that its behavior
@@ -152,6 +165,62 @@ Recommendation and PrivateMessage remain in the allow-set with no report entry p
 
 ## Feature 47 — Moderation Queue & Actions
 
+**WU-ModerationIntegrity browser verification Stage note (2026-09-30) — F46, F47 and F53 L4.5 1→5;
+tracker H19 closed.**
+- **Setup:** server-only path.
+  - The workbench DB first took `WU_ModerationIntegrity` in place: the three seed reports backfilled
+    `reported_user_id` 5/1/6, all five `reports` indexes were present, and the counters were recomputed.
+  - It was then reset, so the edited `DataSeeder` ran on a fresh DB (the same three values).
+  - `psql` after every write. The phase was read from the network log (`_blazor/negotiate` against the
+    action's `/api` call); the circuit was forced by removing the Auto-mode localStorage hash.
+  - Actor: ModUser unless named.
+- **D7 sibling closing, on both phases.** WASM: story 5 with three reports (ReaderGamma, LurkerDelta,
+  AuthorAlpha), "Hide content" on the first. Circuit: a comment with two reports.
+  - Every sibling closed `ResolvedActionTaken` with the primary's moderator and timestamp, and
+    "Closed with report #N: …".
+  - The counter went to exactly 0.
+  - One 81 went to each reporter, carrying their own report id; one 70 went to the author.
+  - GIF: `e2e-WU-ModerationIntegrity.gif`.
+- **Stale resolve (§2.1.2), on both phases.** A panel was left open while its report was resolved
+  elsewhere: by a direct API call on WASM, and on the circuit by a second tab's removal, which closed it
+  as a sibling. The stale panel read "This report has already been resolved." inline; the counter moved
+  once and one notification went out.
+- **"Hide content"** is absent from a User report's panel and present on Story and Comment reports.
+- **Account-status table, on both phases.** Each refusal shows inline:
+  - Suspend with a past date: "Choose a suspension end date in the future.";
+  - Warn on a live suspension: the "suspended until … UTC" refusal;
+  - Ban on a banned account from `/mod/users`: "This account is already banned.";
+  - Warn on Banned: the Reinstate-only message.
+  Ban from Suspended cleared `suspended_until_utc`.
+- **A standing ban answers a report, on both phases.** Ban from `/mod/reports` on a report about an
+  already-banned account (a User report on WASM, a story report on the circuit) resolved it as
+  `ResolvedActionTaken`. The counter went −1 and the reporter got one 81; there was no second 74, and
+  `security_stamp` was unchanged.
+- **Reinstate, on both phases.**
+  - It is hidden for an Active user and shown for Suspended and Banned.
+  - The panel has no date field and a success-tinted Confirm.
+  - The user returned to Active with a null date. One `reports` row was written: User type, reason 1
+    "Other", reporter = moderator, `reported_user_id` set, `ResolvedActionTaken`. The counter, stamp
+    and notifications were untouched.
+- **History (B18/D8).**
+  - The caveat is gone.
+  - The Target column shows type plus label/link for story and comment reports about an author's
+    content, and the sibling notes read in "Action taken".
+  - A comment its author deleted shows "Comment / [deleted Comment]" with no link. That report stays
+    Open and is absent from the queue (tracker F13).
+- **D9 read gates over HTTP.** The moderation queue, submissions and history, both EV queues, both
+  SiteDailyStat reads and the allocator's capacity answer 200 to a moderator, 403 to a member and 401
+  to an anonymous caller. An unknown user's history and an unknown report's resolve answer 404 (the
+  resolve used to be 401). `/mod/submissions` (both tabs), `/mod/stats` and `/mod/spotlight` render for
+  a moderator on both phases.
+- **Not driven:** account deletion's zombie closure (no UI changed; Integration covers it).
+- **No bug in this WU's code.** Filed from the pass:
+  - **H20:** comment previews show raw `<p>` markup in both Target columns, and `AccountActionPanel`
+    keeps a typed reason across verbs, so a ban reason can carry into Reinstate;
+  - **E8:** hand-built API bodies (an enum sent as a string, `reasonId` 0) answer 500, not 400.
+- **Logs:** the console was clean. The server log's only `fail:` lines were the post-wipe database
+  probe, the antiforgery key, and the two hand-built requests.
+
 **WU-ModerationIntegrity review-fixes Stage note (2026-09-30) — no further flip; L4.5 stays 1, L2 stays
 5.** Three reviews of the build; the F47 fixes:
 - **A standing ban answers a report** (derived — `roadmap.md` decision row 20, refined). The build's
@@ -244,12 +313,12 @@ naming that rec in the same save (D3 trigger 5). Verified by Integration `Modera
 built: the report-driven `ApplyAccountActionAsync` sending 81 to a member reporter
 (WU-ModerationIntegrity).
 
-**Stages (updated 2026-09-30, WU-ModerationIntegrity review fixes — no further flip):** L1–L3.5 = 5,
-L4 = 3, **L4.5 = 1** (the WU-ModerationIntegrity UI — the history's Target column, Reinstate, the hidden
-"Hide content" — and the review fixes' standing-ban resolve are undriven in a browser; tracker H19
-restores it; the earlier 1→5 by the WU-StoryLifecycle browser pass is
-recorded in F48's browser-verification Stage note), L5 = 5, L6 = 5 (Stage notes at the top and end of
-this section).
+**Stages (updated 2026-09-30, WU-ModerationIntegrity browser verification):** L1–L3.5 = 5, L4 = 3,
+L4.5 = 5 (WU-ModerationIntegrity lowered it to 1 for its undriven UI and the review fixes'
+standing-ban resolve; its browser pass the same day drove both on both render phases and returned it
+to 5, tracker H19 closed — the browser-verification note at the top of this section; the earlier 1→5
+by the WU-StoryLifecycle browser pass is recorded in F48's browser-verification Stage note), L5 = 5,
+L6 = 5 (Stage notes at the top and end of this section).
 
 **WU34 settled constraints:**
 - ~~`/mod/reports` and `/mod/users` — server-rendered, mod-gated (`RequireModerator` policy), no dispatcher.~~
@@ -757,7 +826,10 @@ Two F48 changes landed beneath L2 and the build recorded neither here:
 Verified by Integration `ModerationIntegrityTests.EveryModeratorOnlyRead_RefusesASignedInNonModerator`
 (the queue read among the eight) and `ModerationServiceTests.SetCanAutoApproveAsync_Revoke_WritesFlagAndAModeratorInitiatedReport`
 (asserts `ReportedUserId`). Nothing a moderator sees on `/mod/submissions` changed (a moderator passes
-the gate), so L4.5 stays 5.
+the gate), so L4.5 stays 5. **Browser-driven 2026-09-30** by the WU-ModerationIntegrity pass:
+`/mod/submissions` (both tabs) renders for a moderator on both phases, and an EV account was approved
+from it on the circuit. `/api/moderation/submissions` answers a moderator 200 (F47's
+browser-verification note).
 
 ## Feature 53 — External Story Links & Verification (reframed 2026-07-11)
 
@@ -850,6 +922,22 @@ flip:** a moderator reviewing their own account or their own story's link gets n
 reads the moderator id again for this check only). Integration
 `AModeratorReviewingTheirOwnAccountAndLink_GetsNoOutcomeNotification`.
 
+**WU-ModerationIntegrity browser verification Stage note (2026-09-30) — F53 L4.5 1→5.** AuthorAlpha,
+`psql` after every write:
+- **Setup:** AuthorAlpha submitted an AO3 account in Settings, and ModUser approved it from
+  `/mod/submissions` → Imports (circuit). An AO3 link was then saved on story 2.
+- **The refusal, on both phases.** With the editor open and its "Request verification" enabled, the
+  account was re-submitted from another tab, which resets it to Unverified. For the second run it was
+  first re-marked Verified through `psql`. Clicking Request then read "Verify your Archive of Our Own
+  account first." inline and wrote nothing:
+  - WASM: `POST …/links/1/request` 400, and no session-expired redirect;
+  - circuit: no `/api` call, and no generic error.
+- **Positive path:** with the account Verified again, the request landed ("Pending moderator review",
+  `date_verification_requested` set) and appeared in the moderator's link queue.
+- **Settings (WASM):** a profile URL of `ftp://…` read "Profile URL must be an absolute http or https
+  URL." in the page's feedback alert (400).
+Detail: F47's browser-verification note.
+
 **WU-ModerationIntegrity review-fixes Stage note (2026-09-30) — F53 L4.5 5→1.** The build changed what
 an author sees when a verification request breaks a business rule ("Verify your X account first", a
 profile URL that is not absolute http(s), a blank handle, a platform without verification): it was `InvalidOperationException`, which the endpoint maps to 401, so WASM
@@ -869,14 +957,15 @@ from a 400. The private `RequireModerator` copy is gone. Verified by Integration
 and Unit `ClientExternalVerificationServiceTests` (400 → the new type). Left open: the author/moderator
 interface split (tracker F15) and status guards on the approve/reject actions (tracker D10).
 
-**Stages (updated 2026-09-30, WU-ModerationIntegrity review fixes — L4.5 5→1; the build's service gates
-and exception types sit beneath L2; WU39 2026-07-25 before that):** L1 — Stage 5.
+**Stages (updated 2026-09-30, WU-ModerationIntegrity browser verification — L4.5 back to 5; the build's
+service gates and exception types sit beneath L2; WU39 2026-07-25 before that):** L1 — Stage 5.
 L2/L3-Logic/L3.5-Structure — Stage 5
 (WU39 shipped the mod-verification half; both tiers built, tested, browser-verified end to end).
 L4-Style — Stage 1 (pending visual/token sign-off, per the WU8/WU13/WU23/WU28/WU37/WU41
 precedent — functional browser verification is not the same as visual polish). L4.5-Browser —
-**Stage 1** (WU39 drove it to 5; the business-rule refusals now show inline instead of as an expired
-session, undriven — tracker H19 restores it; review-fixes Stage note above). L5/L6/L8 — N/A.
+Stage 5 (WU39 drove it to 5; the review fixes lowered it to 1 because the business-rule refusals
+changed undriven; the browser pass the same day drove them inline on both render phases — tracker H19
+closed, browser-verification Stage note above). L5/L6/L8 — N/A.
 
 **WU38d Stage note (2026-07-11) — author-facing half shipped:**
 - **L1:** migration `WU38d_StoryExternalLinks` (drop `story_imports`, create
@@ -963,7 +1052,10 @@ session, undriven — tracker H19 restores it; review-fixes Stage note above). L
 `GetSeriesAsync` are moderator-only, so `ServerSiteDailyStatReadService` now takes `IActiveUserContext`
 and gates both with `RequireModerator()`; the two handlers wrap in `ExecuteAsync`. Verified by
 Integration `ModerationIntegrityTests.EveryModeratorOnlyRead_RefusesASignedInNonModerator`;
-`SiteDailyStatAggregatorTests` is unaffected (it drives the aggregator, not the read).
+`SiteDailyStatAggregatorTests` is unaffected (it drives the aggregator, not the read). **Browser-driven
+2026-09-30** by the WU-ModerationIntegrity pass: `/mod/stats` renders for a moderator on both phases,
+and `/api/site-daily-stats/latest` and `/series` answer 200 to a moderator, 403 to a member and 401
+anonymous (F47's browser-verification note).
 
 **Stages (updated 2026-09-30, WU-ModerationIntegrity read gate beneath L2, no flip; WU-StoryLifecycle
 review fixes before that):** L1–L3.5 = 5, L4 = 3, L4.5 = 5,
