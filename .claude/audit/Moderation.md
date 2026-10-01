@@ -183,6 +183,25 @@ The story case was mutation-checked (it fails without the helper call). Still op
 TPT child comments a hard delete destroys stay Open (tracker F13, owner-open). WU-BlobCleanup edits this
 method next (D14).
 
+**WU-TptHardDelete browser verification (2026-09-30) — no flip; L2 and L4.5 stay 5.** No UI sends
+`hardDelete=true`: the queue's removal is the takedown. So the pass drove the hard delete over HTTP as
+ModUser (`POST /api/moderation/reports/{id}/resolve-removal?…&hardDelete=true`, 204), with `psql`
+before and after. TestUser filed each report as Illegal Content, through `POST /api/moderation/reports`.
+- **A blog post.** AuthorBeta's post carried TestUser's comment, the author's reply, a comment like, a
+  poll TestUser voted on, and a like.
+  - The post and every dependent row were gone, and the `base_comments`/`base_polls` orphan counts
+    stayed at 0.
+  - The report closed `ResolvedActionTaken` by ModUser.
+  - The reporter got one 81, and the author one 70.
+  - The author's `BlogPostsWritten` stayed at 1. The hard delete moves no counter, before this WU as
+    after it, and the nightly recompute heals the drift. Annotated on tracker F16.
+- **A story.** AuthorAlpha's story, built for the pass, had two published chapters and three comments
+  (a reply among them) with a like.
+  - The story, both chapters, their contents, all three comments and the like were gone, and the
+    orphan counts stayed at 0.
+  - The report was resolved the same way: one 81 and one 70.
+- **Logs:** no `fail:` or `crit:` line in the server log.
+
 **WU-ModerationIntegrity browser verification Stage note (2026-09-30) — F46, F47 and F53 L4.5 1→5;
 tracker H19 closed.**
 - **Setup:** server-only path.
@@ -332,7 +351,8 @@ built: the report-driven `ApplyAccountActionAsync` sending 81 to a member report
 (WU-ModerationIntegrity).
 
 **Stages (updated 2026-09-30, WU-TptHardDelete — the hard delete clears TPT dependents first, an L2
-change beneath the cell, no flip; Stage note at the top of this section):** L1–L3.5 = 5, L4 = 3,
+change beneath the cell, no flip, HTTP-driven by its browser pass the same day; Stage notes at the top
+of this section):** L1–L3.5 = 5, L4 = 3,
 L4.5 = 5 (WU-ModerationIntegrity lowered it to 1 for its undriven UI and the review fixes'
 standing-ban resolve; its browser pass the same day drove both on both render phases and returned it
 to 5, tracker H19 closed — the browser-verification note at the top of this section; the earlier 1→5

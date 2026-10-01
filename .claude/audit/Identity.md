@@ -174,7 +174,20 @@ from now is caught without anyone remembering the rule.
   WU-UserDeletion's. Tier: Integration —
   `StaticSsrPageRenderTests.DeletePersonalDataPage_DescribesCommentsAsAnonymized_NotAPlaceholder`
   renders the page as a signed-in user and asserts the copy. No browser was available, so tracker H21
-  carries an optional glance.
+  carries an optional glance (taken the same day — the note below).
+
+**WU-TptHardDelete browser verification (2026-09-30) — no flip; L4.5 stays 5.** Two throwaway accounts
+were registered for the pass and confirmed through the NoOp sender's on-page link. Each deleted itself
+through `/Account/Manage/DeletePersonalData` (static SSR), with `psql` after each.
+- **The copy** reads as D12 ruled: comments stay as "[deleted user]", and the profile's own comments go
+  with it (tracker H21 step 6).
+- **A poll owner.** The poll on the account's own post survived with `owner_id` NULL, its options and
+  another user's vote intact (`audit/BlogPosts.md` F37's browser note).
+- **A profile wall.** The account's wall held TestUser's comment, its own reply and a like, and the
+  account had commented on another user's post.
+  - The wall comments went through their base rows: no `base_comments`, `user_profile_comments` or
+    `comment_likes` row was left, and the orphan count stayed at 0.
+  - The other comment survived with a NULL author, and `/blog/2` shows it as "[deleted user]".
 
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** `UserDeletionService` moved from the
 legacy `Server/Services/` folder to `Server/Identity/` (the code-organization rule: a WU that touches a
@@ -195,11 +208,11 @@ history (`ReportedUserId`) is where a moderator reads it. It now reads "the repo
 profile whose account was deleted"; the same Integration test asserts the wording and the commenter as
 `ReportedUserId`. The move also closed the `UserDeletionService` part of tracker H8's org-move bundle.
 
-- **L1 — Stage 5 (polls survive their owner, SET NULL, since WU-TptHardDelete, 2026-09-30 — Stage note above).** The delete-policy graph is the most deliberate part of `OnModelCreating`: Cascade for
+- **L1 — Stage 5 (polls survive their owner, SET NULL, since WU-TptHardDelete, 2026-09-30, browser-driven by its browser pass the same day — Stage notes above).** The delete-policy graph is the most deliberate part of `OnModelCreating`: Cascade for
   personal data, `SetNull` to anonymize authored content (breaking diamond conflicts), `Restrict` where C#
   must intervene (profile comments, followed-user, notification source). Comments explicitly flag
   "CONFLICT: Solved with C# code."
-- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30; the delegate clears the tracker first since its review fixes).** `UserDeletionService` now resolves all four User-rooted `Restrict`
+- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30; the delegate clears the tracker first since its review fixes; both deletion paths browser-driven by its browser pass the same day).** `UserDeletionService` now resolves all four User-rooted `Restrict`
   edges before deleting: `Notification.SourceUserId` (SetNull, pre-existing), `FollowedUser.FollowedUserId`
   (delete, pre-existing), `UserProfileComment.ProfileUserId` (delete — was dead/commented-out code
   referencing a non-existent `_context.UserProfileComments` DbSet; fixed to
@@ -232,7 +245,7 @@ profile whose account was deleted"; the same Integration test asserts the wordin
   `DeletionService.DeleteUserAsync(user.Id)`; a `false` return (not found) now redirects to the existing
   invalid-user path instead of throwing. Inherits the resolved post-move reconciliation. **L4 — Stage 5
   (WU38a, 2026-07-11 — see the WU38a Stage note below; the comments sentence corrected per owner ruling
-  D12 by WU-TptHardDelete's review fixes, 2026-09-30 — Stage note above). L5 — N/A.**
+  D12 by WU-TptHardDelete's review fixes, 2026-09-30, and read in a browser by its browser pass the same day — Stage notes above). L5 — N/A.**
 
 ## WU-Security + WU-DataProtection Stage note (2026-07-06) — F1 L2 remains Stage 5, hardened
 

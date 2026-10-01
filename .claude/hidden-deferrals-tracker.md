@@ -330,6 +330,8 @@ decision work that has no row at all.
 
 - [ ] **B25 — Blog-post deletes and group-post edits have no UI** `[inert · med · beta]` — *Filed 2026-09-30 by WU-TptHardDelete (its spec's X10).*
   - Grid: F35 L3/L3.5 read 5 and stay 5 — the service and endpoint halves work; nothing drives them.
+    The routes were driven over HTTP by the WU-TptHardDelete browser pass (2026-09-30) and work, so the
+    gap is the UI alone (`audit/BlogPosts.md` F35's browser note).
   - Source: no SharedUI caller of `DeleteBlogPostAsync`, `DeleteSiteBlogPostAsync` or
     `DeleteGroupBlogPostAsync` exists, and no editor calls `UpdateGroupBlogPostAsync` (both group
     methods and their `PUT`/`DELETE /api/blog-posts/group/{id}` routes are new in WU-TptHardDelete).
@@ -1137,6 +1139,11 @@ built rows at 5 and no signal these exist.
   - The question: do group posts count as community contribution (then +1/−1 on the group paths and
     the recompute excludes only site posts), or not (then the recompute counts profile posts only)?
     Either answer is a few lines plus a recompute test; the counter feeds badge thresholds.
+  - Also observed by the WU-TptHardDelete browser pass (2026-09-30): the moderation hard delete of a
+    profile post does not decrement the counter. AuthorBeta read 1 after their only post was
+    hard-deleted. This was true before the WU too, since `ApplyHardDeleteAsync` touches no counter.
+    The nightly recompute heals it (D22's "post-commit, recompute-corrected"). Whoever answers the
+    question above should decide whether the hard delete takes a −1 as well.
 
 ---
 
@@ -1403,29 +1410,48 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     `@key` the panel on the pending verb in both hosts, plus a bUnit test. It is the same class as H15's
     lingering queue message.
 
-- [ ] **H21 — Browser pass owed for WU-TptHardDelete's blog-post page change** `[test-gap · low · beta]` — *Filed 2026-09-30; WU-TptHardDelete ran with no browser available.*
-  - Grid: **F36 L4.5 lowered 5→1** by the WU (behavior changed undriven — the WU-InertFeatures
-    precedent). Driving this restores it to 5.
-  - Steps, on both render phases (WASM and the circuit), with `psql` where a write happens:
-    1. As a profile post's author on `/blog/{id}`: Edit shows and opens `/blog/{id}/edit`.
-    2. As a group post's author and as a site announcement's author (a moderator): no Edit link.
-    3. As a non-author: no Edit link on any subtype.
-    4. Optional, no UI exists (tracker B25): over HTTP as a signed-in author, `DELETE
-       /api/blog-posts/group/{id}` answers 204 and `psql` shows no `base_comments` / `base_polls` row
-       left for that post; `DELETE /api/blog-posts/{groupId}` answers 404, not 500.
-    5. Optional, added by the WU's review fixes (2026-09-30), on the circuit (first visit): as a
-       story's author, reply to a reader's comment on a chapter, then delete that chapter from
-       `/story/{id}/edit`'s chapter manager — it succeeds, and `psql` shows none of its
-       `base_comments` rows left. (Before the fix this threw; F6 L4.5 stays 5 — Integration
-       simulates the circuit with one DI scope.)
-    6. Optional glance (review fixes, owner ruling D12): `/Account/Manage/DeletePersonalData` says
-       comments stay as "[deleted user]" and no longer mentions a placeholder. F52 L4.5 stays 5: same
-       markup shape, and Integration renders the page and asserts the text.
-  - Covered meanwhile: RazorComponents `BlogPostPageTests` (the link per kind) and Integration
-    `BlogPostEndpointsTests` (`Kind` over the wire, all three kinds; the group routes),
-    `TptHardDeleteTests.ChapterDelete_InTheScopeThatPostedAComment_Succeeds` and
-    `StaticSsrPageRenderTests.DeletePersonalDataPage_DescribesCommentsAsAnonymized_NotAPlaceholder`.
-  - Narrative: `audit/BlogPosts.md` F36's WU-TptHardDelete Stage note.
+- [x] **H21 — WU-TptHardDelete's blog-post page change and delete paths: browser-verified 2026-09-30 (CLOSED)** `[test-gap · low · beta]` — *Filed 2026-09-30; WU-TptHardDelete ran with no browser available. Extended the same day by its review fixes (steps 5 and 6). Closed 2026-09-30 by its browser pass.*
+  - Grid: **F36 L4.5 is back at 5.** The WU had lowered it 5→1. F6 and F52 L4.5 stayed 5 throughout.
+  - **Closed:** all six steps were driven, the optional ones included, with `psql` after every write.
+    Server-only path; the workbench DB took `WU_TptHardDelete_FkPosture` in place.
+    1. On both phases, a profile post's author sees Edit, and it opens `/blog/{id}/edit`.
+    2. On both phases, a group post's author and a site announcement's author (ModUser) see no Edit link.
+    3. A non-author sees none on any subtype on both phases, and neither does an anonymous prerender.
+    4. Over HTTP, every subtype's update and delete was driven:
+       - `DELETE /group/{id}`, `DELETE /{id}` and `DELETE /site/{id}` each answered 204 and left no
+         base comment or poll row behind;
+       - a cross-subtype id answered 404 on every route, never 500;
+       - non-authors got 403 and anonymous callers 401.
+    5. On the circuit, an author replied to a chapter comment and then deleted that chapter in the same
+       circuit. It succeeded, with no `base_comments` row left. WASM gave the same result.
+    6. The deletion page's copy reads as D12 ruled.
+  - **Also driven:** both moderation hard deletes (a story and a blog post) over HTTP, and D11 end to
+    end: a poll survived its owner's account deletion with a NULL owner, and its tallies stayed hidden
+    from anonymous viewers. A profile wall was deleted with its account. Orphan counts stayed at 0
+    throughout.
+  - **No bug in the WU's code**, so there is no fixes commit. Filed from the pass: **H22**.
+  - Narrative: `audit/BlogPosts.md` F36's browser-verification note, with short notes in F35, F37,
+    `audit/Chapters.md` F6, `audit/Identity.md` F52 and `audit/Moderation.md` F47. Also
+    WU-TptHardDelete's DONE entry.
+
+- [ ] **H22 — Story editor: the arcs panel goes stale after a chapter delete, and untouched note editors save `<p><br></p>`** `[polish · low · beta]` — *Observed 2026-09-30 by the WU-TptHardDelete browser pass. Neither is in that WU's code.*
+  - Grid: F8 (Story Arcs) and F6/F7 (chapter editor, reading page) are unchanged. Both defects are
+    pre-existing polish beneath Stage-5 cells, not regressions.
+  - **The arcs panel goes stale.** `StoryEditorPage` mounts `ChapterManagerPanel` and
+    `StoryArcManagerPanel` as self-contained siblings, and each loads its own chapter list. After a
+    delete in the chapter manager, the manager reloads (the next chapter renumbered), but the Story Arcs
+    panel kept listing the deleted chapter under its old number until a full reload. A reorder
+    presumably goes stale the same way, but that was not observed. The server shifts arc ranges in the
+    same transaction, so an author who edits an arc before reloading works from stale numbers.
+    - Fix shape: the page passes a change callback (or a shared version token) from the manager to the
+      arcs panel, plus a bUnit test.
+  - **Empty author's notes.** A chapter created through `/story/{id}/chapter/new` with both note editors
+    left untouched stored `<p><br></p>` as `top_authors_note` and `bottom_authors_note`, so the reading
+    page shows two empty note boxes above and below the text.
+    - `VouchButton` already normalizes that empty-Quill markup to null. The chapter editor's save path
+      (and any other `EditorView`-fed optional field) does not.
+    - Fix shape: normalize empty editor HTML to null at the editor's pull (or in the service's
+      sanitize step), plus a test.
 
 ---
 

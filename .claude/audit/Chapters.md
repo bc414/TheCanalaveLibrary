@@ -72,7 +72,7 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   migration `20260623005108_MakeChapterPrimaryContentIdNullable` applied. `PrimaryContent` nav is now
   `ChapterContent?`. Also: `Story.ChapterCount` does not exist in the current C# model (the field was
   assumed during WU17 planning but is absent from the L1 entity — future work-unit adds it when needed).
-- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, Stage note just below this bullet; re-verified WU-TptHardDelete, 2026-09-30 — chapter comments deleted through `TptDelete`, and the delete clears the tracker since its review fixes, Stage notes just below).**
+- **L2 — Stage 5 (WU17, DONE ✓ 2026-06-22; re-verified WU-StoryLifecycle, 2026-09-30 — publish-anchor stamping in `SetPublishedAsync`/create/alternate; see the Stage note under Feature 7; new-chapter fan-out hook WU-InertFeatures, 2026-09-30 — stays Stage 5, Stage note just below this bullet; re-verified WU-TptHardDelete, 2026-09-30 — chapter comments deleted through `TptDelete`, and the delete clears the tracker since its review fixes, browser-driven on both render phases by its browser pass the same day, Stage notes just below).**
   **WU-TptHardDelete Stage note (2026-09-30; owner ruling D10) — no flip.** `DeleteChapterAsync` no
   longer materializes the chapter's comments to `RemoveRange` them (the template D10 found the other
   three delete sites had failed to copy). It runs `TptDelete.ChapterCommentsAsync` — one set-based
@@ -94,7 +94,27 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   longer claims a cascade removes the comments. Tier: Integration —
   `TptHardDeleteTests.ChapterDelete_InTheScopeThatPostedAComment_Succeeds` (posts through
   `ICommentWriteService`, then deletes, in one DI scope; fails without the clear). Optional browser
-  step: tracker H21.
+  step: tracker H21 (driven the same day — the note below).
+  **WU-TptHardDelete browser verification (2026-09-30) — no flip; L2 and L4.5 stay 5.** Tracker H21
+  step 5, on both render phases, `psql` after every write:
+  - **Fixture:** AuthorAlpha added chapters 4 and 5 to story 2 through the chapter editor and published
+    them. ReaderGamma commented on each, and TestUser liked both comments.
+  - **The circuit (the regression the review fixes closed).** On chapter 4's reading page AuthorAlpha
+    replied to the comment. In the same circuit (no second `_blazor/negotiate`) they went to
+    `/story/2/edit` and deleted chapter 4 from the chapter manager, through its in-page ConfirmDialog.
+    - The delete succeeded, and no error showed.
+    - Gone: the chapter, its content, both comments (the reply included) and the like.
+    - Chapter 5 renumbered to 4, and the orphan counts stayed at 0.
+    - GIF: `e2e-WU-TptHardDelete.gif`.
+  - **WASM:** the same flow on the other chapter. The reply went by `POST /api/comments/chapter`, and the
+    delete by `DELETE /api/chapters/{id}` (the extension shows the empty 204 as 503). `psql` showed the
+    same result.
+  - **Logs:** no `fail:` or `crit:` line in the server log, and a clean console.
+  - **Observed, pre-existing, not this WU's code — filed as tracker H22:**
+    - after the delete, the Story Arcs panel on the same page still listed the deleted chapter until a
+      reload;
+    - the chapter editor stores an untouched note editor's `<p><br></p>` as the top and bottom author's
+      notes, so the reading page shows two empty note boxes.
   **WU-InertFeatures Stage note (2026-09-30) — tracker B20 closed.** `SetPublishedAsync` now fires
   `INotificationWriteService.NotifyNewChapterAsync` (type 10 to the story's followers) best-effort
   after its commit, **iff that call performed the `FirstPublishedDate` null→non-null stamp** — D2's
@@ -137,7 +157,8 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   (three `EditorView` instances — top note, chapter text, bottom note), version switcher composite (progressive),
   per-version controls. `ChapterEditorPage` orchestrates all.
 - **L4-Style — Stage 5 (WU26 editor slice, DONE ✓ 2026-06-24; WU6 atom already Stage 5).**
-- **L4.5-Browser — Stage 5 (WU-ChapterArcBrowserPass, 2026-07-24).** Real-circuit pass closes the
+- **L4.5-Browser — Stage 5 (WU-ChapterArcBrowserPass, 2026-07-24; the chapter delete re-driven on both
+  render phases by the WU-TptHardDelete browser pass, 2026-09-30 — its note under L2 above).** Real-circuit pass closes the
   WU45 deferral. See the WU-ChapterArcBrowserPass Stage note below.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; chapter CREATE verified in a real WASM runtime during the

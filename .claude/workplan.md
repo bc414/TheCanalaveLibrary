@@ -25,9 +25,10 @@ references it, does not restate it.
   cross-subtype id is 404). Polls survive their owner (SET NULL; NULL owns nothing). Review fixes: the
   chapter and user deletes clear the tracker first (a circuit-tracked comment made the chapter delete
   throw), a lost blog-post delete race 404s instead of double-decrementing, and D12's doc sweep + copy
-  fix landed ("[Deleted Comment]" retired). F36 L4.5 5→1 (no browser — **H21**); **B25/F16** opened.
-  `dotnet test`: Unit 1,079, RazorComponents 764, Integration 1,345. **Pointers:** its DONE entry;
-  `layer2-services.md` §"Hard deletes of content parents".
+  fix landed ("[Deleted Comment]" retired). F36 L4.5 went to 1 (no browser), then back to 5 after its
+  browser pass the same day (both phases, no bug in the WU's code — **H21** closed, **H22** filed);
+  **B25/F16** opened. `dotnet test`: Unit 1,079, RazorComponents 764, Integration 1,345.
+  **Pointers:** its DONE entry; `layer2-services.md` §"Hard deletes of content parents".
   Before that, 2026-09-30: WU-ModerationIntegrity — worksheet D7/D8/D9 (lock-and-guard resolves, sibling closing, `ReportedUserId`, Reinstate, service-side mod read gates); see its DONE entry.
   Before that, 2026-09-30: WU-InertFeatures — worksheet D3/D4/D5/D16/D17 (attribution on the RIL bit, the de-identified notification core, the new-chapter fan-out); see its DONE entry.
   Before that, 2026-09-30: WU-AccessGateSweep2 — worksheet D6 (raises guarded, clears free) plus service audit §2.6's access fixes; see its DONE entry.
@@ -257,7 +258,8 @@ references it, does not restate it.
   2026-09-30, which narrowed H12; **F12/H16/H17/H18** opened by the WU-AccessGateSweep2 browser
   pass, 2026-09-30, which closed H13; **F13/F14/F15/D10/H19** opened by WU-ModerationIntegrity,
   2026-09-30, which closed B18 (its browser pass closed H19 the same day and opened **E8/H20**);
-  **B25/F16/H21** opened by WU-TptHardDelete, 2026-09-30),
+  **B25/F16/H21** opened by WU-TptHardDelete, 2026-09-30 (its browser pass closed H21 the same day and
+  opened **H22**)),
   including two **high-priority security items:
   E2 and E3**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -277,8 +279,9 @@ references it, does not restate it.
   WU-ParityAndRemaining P1 remains — see WU-StoryLifecycle's DONE entry. Tracker **H13**'s
   access-gate pass also ran 2026-09-30 and closed — see WU-AccessGateSweep2's DONE entry. Tracker
   **H14**'s attribution-and-notifications pass ran 2026-09-30 too, returned F16/F30/F33/F41/F55 L4.5
-  to 5 and closed — see WU-InertFeatures' DONE entry. Tracker **H21** — WU-TptHardDelete's blog-post
-  page change, F36 L4.5 at 1 — is owed its browser pass.)
+  to 5 and closed — see WU-InertFeatures' DONE entry. Tracker **H21**'s pass, WU-TptHardDelete's
+  blog-post page and delete paths, ran 2026-09-30 too, returned F36 L4.5 to 5 and closed — see
+  WU-TptHardDelete's DONE entry.)
 
 ---
 
@@ -425,7 +428,8 @@ is pending except where a bullet says so.
 ## WU-TptHardDelete — content-parent deletes go through the TPT base rows (`TptDelete`), parent → TPT-child FKs RESTRICT, per-subtype blog-post lifecycle, polls survive their owner (worksheet D10/D11; extends `Data/`, `BlogPosts/`, `Chapters/`, `Moderation/`, `Identity/`, `Notifications/`) — DONE ✓ (2026-09-30)
 
 - **Cells:** **F36 L4.5 5→1** (`BlogPostPage`'s Edit link is now profile-only; the WU ran with no
-  browser available — tracker **H21**). Everything else lands beneath Stage-5 cells: F35 L1/L2/L5, F36
+  browser available — tracker **H21**), back to 5 after the browser pass the same day (H21 closed —
+  "Browser verification" below). Everything else lands beneath Stage-5 cells: F35 L1/L2/L5, F36
   L2/L3.5, F37 L1/L2, F6 L2, F47 L2, F40 L1/L2, F23 L1, F52 L1/L2; F58 L2 carries an open-item note
   only. L1 stays 5 with the migration applied. Review fixes, all beneath Stage 5: F6 L2, F35 L2/L5, F52
   L2/L4 (the D12 copy), F23/F24 docs (D12).
@@ -505,7 +509,45 @@ is pending except where a bullet says so.
   raw-SQL count), `BlogPostValidationsTests` +4, `BlogPostPageTests` +4. Mutation-checked: the old poll
   gate, the old `isOwner` and the story hard delete without the helper each fail their test.
   WU-TptHardDelete (2026-09-30) ran with no browser available (H21). The workbench DB was not migrated;
-  the next dev start applies the migration.
+  the next dev start applies the migration. The browser pass the same day applied it and drove every
+  surface on both render phases ("Browser verification" below).
+- **Browser verification (2026-09-30)** — server-only path; `psql` after every write; phase read from
+  the network log (`_blazor/negotiate` against the action's `/api` call), with the circuit forced by
+  removing the Auto-mode localStorage hash. **No bug in this WU's code**, so there is no fixes commit.
+  1. **Migration in place:** `WU_TptHardDelete_FkPosture` applied on startup to the un-reset workbench.
+     `pg_constraint` shows the five FKs at `r` and the poll owner at `n`. There were no orphans before
+     or after the pass.
+  2. **H21 steps 1–3, both phases:** the Edit link shows on profile posts only, for the author.
+     Group-post and site-announcement authors, non-authors and anonymous prerenders see none.
+  3. **Lifecycle over HTTP** (no UI, B25), for all three subtypes, with comments, replies, likes and
+     voted polls:
+     - updates and deletes answered 204;
+     - cross-subtype ids answered 404 and never 500, and a profile-route update of a group id no
+       longer half-applies;
+     - non-authors got 403, and anonymous callers 401;
+     - a second delete answered 404, and `BlogPostsWritten` moved once;
+     - each delete left no base comment or poll row.
+  4. **The circuit chapter delete** after the author's reply succeeds, and so does the WASM one. GIF:
+     `e2e-WU-TptHardDelete.gif`.
+  5. **Both moderation hard deletes** (a blog post and a story) over HTTP leave no dependents.
+  6. **Two throwaway accounts deleted themselves.** The D12 copy was read; a poll survived its owner
+     with `owner_id` NULL and hidden tallies for anonymous viewers; a profile wall went through its
+     base rows.
+  - **Filed:** **H22** (pre-existing: the stale arcs panel after a chapter delete; untouched note
+    editors save `<p><br></p>`), and an F16 annotation (the hard delete moves no counter).
+  - **Dev-DB state left behind:**
+    - AuthorAlpha's group post 4 and profile post 5 and ModUser's site post 6 were created in their
+      editors and deleted over the API. AuthorBeta's post 7 and AuthorAlpha's story 13 were hard-deleted.
+    - The two chapters added to story 2 were deleted, so story 2 still has its three seed chapters.
+    - Post 8, "E2E Ownerless Poll Post", remains: authorless, with ownerless poll 5 (TestUser's vote)
+      and TestUser's comment.
+    - Seed post 2 has a comment from a deleted user ("[deleted user]").
+    - Throwaway users 8 and 9 were registered and deleted.
+    - Resolved reports 23 and 24 point at deleted targets.
+    - AuthorBeta's `BlogPostsWritten` reads 1 until the nightly recompute.
+    - Notifications landed for several seed users: comments, new chapters, report receipts and
+      resolutions.
+    - `reset-dev-db.ps1` restores the seed.
 - **Hand-offs:** WU-AuthorStoryDelete consumes `TptDelete.StoryCommentsAsync` (the story cascade needs
   no `primary_content_id` release — proven by the hard-delete test). WU-BlobCleanup edits
   `ApplyHardDeleteAsync` next. WU-UserDeletion edits `UserDeletionService` after this WU (keep the
