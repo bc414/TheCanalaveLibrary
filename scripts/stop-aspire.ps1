@@ -1,11 +1,11 @@
 # Stops the Aspire AppHost (and with it the web server). DCP monitors the AppHost pid and tears
 # down the session when it dies, so killing the AppHost process is the reliable stop - same
 # rationale as stop-dev-server.ps1's kill-by-port. Persistent-lifetime containers (postgres,
-# redis, garage) KEEP RUNNING by design - that is what makes the next start fast and the dev DB
+# redis, garage, mailpit) KEEP RUNNING by design - that is what makes the next start fast and the dev DB
 # a persistent workbench. Add -StopContainers to also stop (not remove) them.
 #
 #   .\scripts\stop-aspire.ps1                   # stop AppHost + web; containers keep running
-#   .\scripts\stop-aspire.ps1 -StopContainers   # also docker-stop the three backing containers
+#   .\scripts\stop-aspire.ps1 -StopContainers   # also docker-stop the four backing containers
 #
 # NOTE: keep this file ASCII-only (PowerShell 5.1 + BOM-less file encoding trap).
 # Workflow doc: .claude/skills/run-server/SKILL.md ("Aspire path")
@@ -71,7 +71,7 @@ if ($web) {
 Write-Host "Web port $WebPort is free."
 
 if ($StopContainers) {
-    foreach ($c in @("canalave-postgres", "canalave-redis", "canalave-garage")) {
+    foreach ($c in @("canalave-postgres", "canalave-redis", "canalave-garage", "canalave-mailpit")) {
         $id = docker ps -q --filter "name=^/$c$"
         if ($id) {
             docker stop $c | Out-Null

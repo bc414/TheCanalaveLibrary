@@ -161,6 +161,13 @@ view to drive the rest of the flow. Mailpit also exposes a JSON API
 (`GET http://localhost:8025/api/v1/messages`) if a script needs to assert on the latest message
 without a browser.
 
+**Web-app log on this path** (verified 2026-09-30): `%TEMP%\canalave-aspire.log` holds only the
+AppHost's output. The web app's stdout is `%TEMP%\aspire-dcp*\<guid>_out`, the largest `_out` file in
+the newest `aspire-dcp*` folder. Its lines carry ANSI color codes, so strip `\x1b\[[0-9;]*m` before
+grepping for `fail:`/`crit:`. After a DB wipe, a browser that still holds an antiforgery cookie from
+the old key ring logs one `fail: …DefaultAntiforgery[7]` ("key … was not found in the key ring") on its
+first request. That is harmless: the data-protection keys live in the wiped database.
+
 ### Gotchas encoded here
 
 - **http transport:** the AppHost runs on plain http locally, which Aspire only allows with
@@ -357,6 +364,15 @@ never-rendered tab never loads lazy images — that's browser behavior, not a bu
     `computer` clicks and typing often no-op. `el.click()` via `javascript_tool` is reliable.
     `CanalaveTypeahead` options select on **mousedown**, so dispatch
     `new MouseEvent('mousedown', {bubbles: true})` on the option button; a `click()` does nothing.
+  - In a hidden tab, `window.scrollTo` moves the page but fires no `scroll` event (verified
+    2026-09-30). Follow it with `window.dispatchEvent(new Event('scroll'))` to drive scroll listeners
+    such as the reading-progress tracker's 90% moment.
+- **Fixtures for the reading page:** every seed chapter fits on one screen, so Chapter 1 reports 100%
+  progress on load and its 90% moment fires at once. To observe "nothing happens before 90%", lengthen
+  one chapter's `chapter_contents.chapter_text` through `psql` first, and record it as dev-DB state.
+- **Deep Dive trees persist in localStorage**, keyed per browser rather than per user. A tree restored
+  from an earlier session opens a gem node with an empty panel, because the node's listing and
+  recommendation were never loaded on this page visit. Press **Reset** before testing the gem's card.
 - **Fixtures that live in claims:** `ShowMatureContent` is a cookie claim, refreshed only when the
   settings save calls `RefreshSignInAsync`. A `psql` flip of `show_mature_content` leaves the claim
   stale, and the rating guards keep answering from it. Toggle mature through `/settings` (check with

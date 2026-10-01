@@ -299,7 +299,7 @@ decision work that has no row at all.
     report" confirmation spec §13 promises.
   - Source: `ServerModerationWriteService.SubmitReportAsync`; worksheet D4 (nullable source).
 
-- [x] **B22 — Recommendation attribution never worked: FK-failing write, missing producer, credit faucet — DONE (WU-InertFeatures, 2026-09-30)** `[inert · high · beta]` — *Filed and closed 2026-09-30 by WU-InertFeatures (service audit §2.3.3/§2.4.1, owner ruling D3).* The RIL-from-card producer and the 90%-moment direct link write the attribution with its parent row in one save; the on-load write is retired; `RecordSuccessAsync` requires and consumes it. Browser pass still owed — H14. Narrative: `audit/Recommendations.md` F30.
+- [x] **B22 — Recommendation attribution never worked: FK-failing write, missing producer, credit faucet — DONE (WU-InertFeatures, 2026-09-30)** `[inert · high · beta]` — *Filed and closed 2026-09-30 by WU-InertFeatures (service audit §2.3.3/§2.4.1, owner ruling D3).* The RIL-from-card producer and the 90%-moment direct link write the attribution with its parent row in one save; the on-load write is retired; `RecordSuccessAsync` requires and consumes it. Browser-verified 2026-09-30 (H14, closed). Narrative: `audit/Recommendations.md` F30.
   - Grid: F30 L1–L5 read 5. The only attribution write ran on chapter load before any USI row
     existed, so it FK-failed (logged and swallowed) for every new reader; the Read It Later button on
     the recommendation card that the 2025 design specified was never built; and `RecordSuccessAsync`
@@ -1170,50 +1170,33 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
   - **Filed from the pass:** **F12**, **H16**, **H17**, **H18**.
   - Narrative: `audit/AccessGate.md` F66 browser-verification note; WU-AccessGateSweep2's DONE entry.
 
-- [ ] **H14 — Recommendation attribution and the new/re-anchored notifications never browser-verified** `[test-gap · med · beta]` — *Filed 2026-09-30 by WU-InertFeatures, which ran with no browser available.*
-  - Grid: **F16 L4.5=1, F30 L4.5=1, F41 L4.5=1** — flipped 5→1 by WU-InertFeatures (the UI and the
-    bell behavior beneath them changed; `grid_axes.md`'s L4.5 is "driven in a real browser") — and
-    **F33 L4.5=1, F55 L4.5=1**, flipped 5→1 by its review fixes (2026-09-30: Explore/Deep Dive and the
-    homepage spotlight host the new card and its state sync, and the WU had not recorded them).
-    Return all five to 5 when this pass runs (headline lines in `audit/UserStoryInteractions.md` F16,
-    `audit/Recommendations.md` F30, `audit/Notifications.md` F41, `audit/Discovery.md` F33,
-    `audit/Spotlight.md` F55). F5 and F7 stay 5 by design — their changed parts are F30's/F16's
-    surfaces, driven in steps 1, 3 and 4 (`audit/Stories.md` F5, `audit/Chapters.md` F7 notes).
-  - Source: `workplan.md` WU-InertFeatures (including its review-fixes bullet); the Stage notes in
-    those audit files.
-  - Drive each on the circuit and the WASM pass, against `psql` ground truth (the workbench DB needs
-    the `WU_StoryLifecycle` and `WU_InertFeatures` migrations — the next dev start applies both):
-    1. As TestUser, on `/discover` Explore (a user anchor with recommendations) click **Read It
-       Later** on a recommendation card → `user_story_interactions.is_read_it_later` true, one
-       `user_story_recommendation_sources` row naming the rec; the StoryCard's panel beside it shows
-       Read It Later active and **stays** active after the 2-second debounce (the panel-clobber
-       closure). Repeat once on the story page's recommendation section, once on the homepage
-       Community Spotlight (signed in: the spotlight StoryCard now shows your real flags) and once in
-       Deep Dive (open a Hidden Gem story node: its StoryCard and the gem's card sit together).
-       Then, on each host, clear Read It Later in the StoryCard panel → after the debounce the
-       sources row is gone and the card offers **Read It Later** again (not a stuck "Saved for
-       later"); in Deep Dive, open another node and check no state or error carries across.
-    2. Anonymous: the same button sends you to `/Account/Login?ReturnUrl=…` and back.
-    3. Read Chapter 1 of that story to 90% → the prompt appears with the recommendation as a reminder
-       card and exactly two controls; **Yes** → a `recommendation_successes` row, `successful_rec_count`
-       +1, the sources row gone; repeat with another story and **X** → no success row, sources row gone;
-       re-read either Chapter 1 → no prompt.
-    4. Follow a card's **Read now** link (`/story/{id}/1?rec={recId}`) as a reader with no interaction
-       row: nothing is written on load (`psql`); at 90% the sources row appears with `has_started`, and
-       the address bar drops `?rec=` **without the page jumping to the top** (review fixes — a
-       query-only `NavigateTo(replace: true)`; on .NET 10 Blazor skips the scroll reset). Press X, then
-       reload and read to 90% again → no new sources row, no prompt; Back from Chapter 2 lands on the
-       address without `?rec=`.
-    5. As an author, publish a never-published chapter of a published story you are followed on → each
-       follower's bell shows "New chapter of {story}: {chapter}" deep-linking to the chapter;
-       unpublish/republish → nothing new.
-    6. Submit a report → the reporter's bell shows "Thanks — we received your report"; resolve it from
-       `/mod/reports` → the resolved notice shows no moderator name; `notifications.source_user_id`
-       is NULL on every 70–82 row. Then, as a moderator, file a report with the ordinary Report button
-       and resolve it yourself → your bell has the receipt but no resolved notice (review fixes: the
-       acting moderator is skipped explicitly now that drop-self no longer applies).
-    7. Add a story to a group with another member → "{story} was added to {group}" for the member,
-       "Your story {story} was added to {group}" for the author (one each); re-add → nothing.
+- [x] **H14 — Recommendation attribution and the new/re-anchored notifications: browser-verified 2026-09-30 (CLOSED)** `[test-gap · med · beta]` — *Filed 2026-09-30 by WU-InertFeatures, which ran with no browser available. Closed 2026-09-30 by its browser pass.*
+  - Grid: **F16, F30, F33, F41 and F55 L4.5 are back at 5.** WU-InertFeatures and its review fixes
+    had flipped them 5→1. F5 and F7 stayed 5 throughout; their changed parts were driven too.
+  - **Closed:** all seven steps were driven, with `psql` after every write. Aspire path, so the
+    type-10 and type-70 emails were read in Mailpit. Steps 1, 3 and 4 and the bells ran on the circuit
+    and on WASM:
+    1. card Read It Later in Explore, the story page, the homepage spotlight (a grant and redemption
+       driven through `/mod/spotlight` and `/spotlight`) and Deep Dive. In each, the panel kept the
+       bit after the debounce, and a panel clear deleted the attribution and re-enabled the card;
+    2. the anonymous login nudge, and back after signing in;
+    3. Yes (success row, `successful_rec_count` +1, row consumed) and X (row gone, no success); no
+       prompt on a re-read;
+    4. the direct link: nothing on load; at 90% the row lands, `?rec=` leaves the address with the
+       scroll held; X then a reload mints nothing; Back from Chapter 2 is clean;
+    5. a first publish notified both followers (bell and email); unpublish/republish wrote nothing;
+    6. the receipt, the null-sourced 81/82/70, and a moderator's self-resolved report sending no 82;
+    7. one 60 and one 25 on the `GroupStory`; a re-add wrote nothing.
+  - **Also driven:**
+    - a refused card save on a stale page (the rec moved to NeedsRevision) reads "That content
+      couldn't be found — it may have been removed." on both phases;
+    - a bogus `?rec=` is ignored silently;
+    - trigger 5 by the author's remove, with no restore on unblock.
+  - **Not driven** (Integration covers both): the moderator-takedown sweep and the story-author gate.
+  - **No bug found**, so nothing was filed. One tooling gap was fixed: `stop-aspire.ps1 -StopContainers`
+    now stops Mailpit as well.
+  - Narrative: `audit/Recommendations.md` F30 and `audit/Notifications.md` F41 browser-verification
+    notes (short notes in F16, F33, F55, F5, F7, F6, F39 and F46); WU-InertFeatures' DONE entry.
 
 - [ ] **H15 — `/mod/submissions` card copy: a raw enum name, and a lingering queue message** `[polish · low · anytime]` — *Observed 2026-09-30 by the WU-StoryLifecycle browser pass.*
   - Grid: F48 L4=3 (unchanged; this is part of what keeps it at 3).

@@ -169,11 +169,11 @@ Phase 7.
 
 ## Feature 41 — Notification Generation
 
-**Stages (updated 2026-09-30, WU-InertFeatures and its review fixes):** L1, L2, L6 = 5 (the D4/D5/D16/D17 rebuild and the
-new-chapter fan-out landed beneath them — Stage notes at the end of this feature); **L4.5 = 1**
-(flipped 5→1: the new-chapter notification, the restored report receipt and the re-anchored group
-notifications were never seen in a browser bell — returns to 5 with tracker **H14**'s pass);
-L3/L3.5/L4/L5 = N/A. Trackers **B20** and **B21** closed.
+**Stages (updated 2026-09-30, WU-InertFeatures, its review fixes and its browser pass):** L1, L2, L4.5, L6 = 5 (the
+D4/D5/D16/D17 rebuild and the new-chapter fan-out landed beneath them — Stage notes at the end of this feature). **L4.5**
+went 5→1 when the WU shipped with no browser available, and back to 5 when its browser pass saw the new-chapter
+notification, the report receipt and the re-anchored group notifications in the bell and the inbox (tracker **H14**
+closed). L3/L3.5/L4/L5 = N/A. Trackers **B20** and **B21** closed.
 
 - **L1 — Stage 5 (`related_entity_id` widened to `bigint`, WU-InertFeatures 2026-09-30).** `Notification` + the fully-seeded type/category tables. Sound. **L6 — Stage 5
   (WU-L6, 2026-07-07)** — `ix_notifications_recipient_read_date (recipient_user_id, is_read,
@@ -384,6 +384,43 @@ Mutation-checked: removing the exemption, the author exclusion or the D17 predic
 - **How verified:** Integration — the band tests named in the Moderation, Tags and verification notes;
   the full Integration tier is green (totals in the workplan entry).
 
+### Feature 41 L4.5 — WU-InertFeatures browser verification (2026-09-30): the new and re-anchored notifications in the bell and the inbox; L4.5 1→5
+
+**Cells:** L4.5 1→5 (tracker **H14** closed). No bug found. Aspire path, so email reached Mailpit;
+`psql` after every write. Setup and phase method: `audit/Recommendations.md` F30's browser note.
+
+- **New chapter (type 10).**
+  - ReaderGamma followed story 2 from its panel; TestUser follows it in the seed. AuthorAlpha then
+    published the never-published Chapter 3 from the chapter editor.
+  - `first_published_date` was stamped, and two type-10 rows were written (source AuthorAlpha,
+    `related_entity_id` = the chapter id).
+  - Mailpit received a "New Chapter" email for each follower. Each reads "New chapter of {story}:
+    {chapter}" and links to `/story/2/3`.
+  - The bell showed the same text on the circuit and on WASM. A click opened `/story/2/3` and marked
+    the row read.
+  - Unpublish, then Publish: the anchor did not move and no row was written.
+- **Reports (70–82).**
+  - TestUser reported a comment → type 80 with `source_user_id` NULL and the report id. The bell
+    reads "Thanks — we received your report"; a click marks it read and goes nowhere.
+  - ModUser hid the comment from `/mod/reports`. TestUser got 81 ("A report you filed has been
+    resolved"). The comment's author, ReaderGamma, got 70 in the bell and by email. Neither names
+    the moderator.
+  - Resolving AuthorBeta's seed report with No action → 82, carrying that report's id.
+  - A `psql` count found 0 of the 5 rows in 70–82 with a source.
+  - ModUser filed a report with the ordinary button and resolved it: the receipt only, no 82.
+- **Group (60/25).**
+  - TestUser added AuthorAlpha's story 7 to the standard group, making `GroupStory` 3.
+  - ReaderGamma got 60: "Seed Story: Character Pairing (T) was added to Seed Group: Standard".
+  - AuthorAlpha got 25: "Your story … was added to …". A click opens `/group/1`.
+  - Both rows are anchored on `GroupStory` 3. Nothing went to TestUser, the adder. AuthorAlpha is a
+    member and was not sent a 60.
+  - A re-add wrote nothing.
+- **Phases.** Bell read on the circuit (TestUser type 10, AuthorBeta 82, ModUser 80) and on WASM
+  (TestUser 10/80/81, ReaderGamma 60/70/10, AuthorAlpha 25).
+- **Not driven:** 72–79 and 26. Integration covers their NULL source.
+- **Seen, already routed:** 90/91 read "You have a new notification" (presenter arms for 90–92 belong to
+  WU-NotificationCorrectness).
+
 ## Feature 42 — Notification Display
 
 - **L1 — Stage 5.** **L2 — Stage 2 → 5 (WU22; the two-pass enrichment moved out to
@@ -402,7 +439,8 @@ Mutation-checked: removing the exemption, the author exclusion or the D17 predic
   one- and zero-name fallbacks. Covered by Unit `NotificationPresenterTests` (+8 tests, 25 cases, incl. a 14-type
   actor-free theory) and the Integration enrichment pins in `GroupServiceTests` /
   `NewChapterNotificationTests` / `NotificationServiceTests`. L4.5 stays 5 (copy-only change; the
-  bell's new types are listed in tracker H14's pass).
+  bell's new types were driven by the WU-InertFeatures browser pass, 2026-09-30, on both render
+  phases — F41's browser-verification note).
   Settled constraints:
   - `INotificationReadService`: `GetUnreadCountAsync()`, `GetNotificationsAsync(page, pageSize)`. All
     self-scoped via `IActiveUserContext` (the whole surface is "my notifications").

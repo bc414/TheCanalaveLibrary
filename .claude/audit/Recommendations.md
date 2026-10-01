@@ -276,11 +276,11 @@ revisit).** Rule text: `layer2-services.md` §"Attribution (Feature 30)".
   `MarkStartedAsync`, so X's deletion cannot be undone by a reload.
 - **Unruled, status quo:** a recommender attributing their *own* rec (roadmap row 18).
 
-**Stages (updated 2026-09-30, WU-InertFeatures and its review fixes):** L1, L2, L3-Logic, L3.5, L4, L5 = 5 (the feature was
-rebuilt beneath them — see the WU-InertFeatures Stage note and its review-fixes note at the end of this feature); **L4.5 = 1**
-(flipped 5→1: the card's Read It Later / Read now, the reminder-card prompt and the 90%-moment flow are
-new UI never driven in a browser — returns to 5 with tracker **H14**'s pass); L6/L8 = N/A. Tracker
-**B22** closed.
+**Stages (updated 2026-09-30, WU-InertFeatures, its review fixes and its browser pass):** L1, L2, L3-Logic, L3.5, L4,
+L4.5, L5 = 5 (the feature was rebuilt beneath them — see the WU-InertFeatures Stage note and its review-fixes note at the end
+of this feature). **L4.5** went 5→1 when the WU shipped UI with no browser available, and back to 5 when its browser pass
+drove every entry point on both render phases (tracker **H14** closed — browser-verification note at the end of this
+feature). L6/L8 = N/A. Tracker **B22** closed.
 
 - **L1 — Stage 5** (`UserStoryRecommendationSource` sparse; `RecommendationSuccess`). **L2 — Stage 5
   (WU29, 2026-06-23 — surface minted; trigger deferred to WU26; **rebuilt WU-InertFeatures 2026-09-30 —
@@ -390,6 +390,58 @@ workplan entry.
   carrier is replaced out of the address and a reload after X marks started with no rec; no carrier → no
   navigation). Every fix-specific test fails against its reverted fix (mutation-checked); the nudge and
   error-path tests are coverage the WU owed for behavior it built. **Not browser-driven** — H14.
+
+### Feature 30 L4.5 — WU-InertFeatures browser verification (2026-09-30): attribution driven end to end; L4.5 1→5
+
+**Cells:** L4.5 1→5 (tracker **H14** closed). The pass found no bug, so no code changed.
+
+- **Setup.**
+  - Aspire path, because the type-10 email goes through Mailpit. The Aspire DB was wiped first: the
+    schema had moved since its last use.
+  - The phase was read from the network log. The circuit shows `_blazor/negotiate` and no `/api`
+    call; it was forced by removing the Auto-mode localStorage hash before a full load. WASM shows
+    `/api` calls and no negotiate.
+  - `psql` was checked after every write.
+- **Card Read It Later, in all four hosts and on both phases.**
+  - Hosts and users: Explore (TestUser on the circuit, ReaderGamma on WASM); the story page's section
+    (TestUser, both phases); the homepage spotlight (ReaderGamma on the circuit, TestUser on WASM);
+    Deep Dive's gem node (LurkerDelta on the circuit, AuthorBeta on WASM).
+  - Each save: `is_read_it_later` true and one `user_story_recommendation_sources` row naming the rec.
+    The circuit save on the story page created the interaction row and the sources row in one save,
+    with no prior row (the FK-order case).
+  - The StoryCard panel beside the card showed Read It Later active, and still active after the
+    debounce (the clobber closure). On WASM the spotlight panel showed TestUser's real flags, from the
+    batch `by-ids` read.
+  - Clearing Read It Later in the panel deleted the sources row (trigger 1). The card offered
+    **Read It Later** again, enabled, not latched. A re-save after an X started a new attribution.
+- **Prompt.** The seed chapters fit one screen, so Chapter 1 reaches 90% on load.
+  - **Yes** (TestUser on the circuit, ReaderGamma on WASM): a `recommendation_successes` row,
+    `successful_rec_count` 0→1, the sources row gone. A re-read showed no prompt.
+  - **X** (TestUser on both phases): the sources row gone, no success row.
+  - The reminder card renders the recommendation, with exactly two answer controls.
+- **Direct link** (`?rec=`). As a fixture, story 1's Chapter 1 text was lengthened through `psql`, so
+  that 90% needs a scroll. Driven by LurkerDelta (circuit) and AuthorBeta (WASM), neither with an
+  interaction row.
+  - Nothing was written on load.
+  - At 93%: `has_started` set and the sources row written. On WASM the call was
+    `POST …/1/started?recommendationId=1`.
+  - The address dropped `?rec=`. The scroll position held and `history.length` did not change.
+  - X, then a reload and 90% again: no new row and no prompt. Chapter 2, then Back: `/story/1/1`.
+  - A bogus `?rec=999`: `has_started` set, no row, no error.
+- **Refusals are readable.**
+  - Anonymous: the card sends you to `/Account/Login?ReturnUrl=…` (spotlight, Explore and story
+    section). Signing in returned to `/discover/user/6`.
+  - Stale page: a second session (AuthorBeta, the story author) moved the rec to NeedsRevision behind
+    an open story page. The card then showed "That content couldn't be found — it may have been
+    removed." inline, and nothing was written. On WASM this is a 404 mapped by the client.
+- **Trigger 5.** The author's remove (`POST /api/recommendations/2/remove`, second session) swept
+  LurkerDelta's attribution and kept the Read It Later bit. Unblock did not restore the row (D3's
+  accepted consequence).
+- **Logs.** The flows logged no `fail:`/`crit:`. The one `fail:` (antiforgery, at the first request) was
+  a browser cookie from before the wipe. The console showed no errors once tracking started.
+- **Not driven** (Integration covers both): the moderator-takedown sweep and the story-author gate.
+- GIF: `e2e-WU-InertFeatures.gif` (ReaderGamma, WASM: Explore card Read It Later → prompt → Yes).
+  Dev-DB state left behind: the workplan entry.
 
 ## L4.5-Browser verification (2026-07-01/02) — F27 + F28 + F29 + F30 → Stage 5
 

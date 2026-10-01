@@ -24,9 +24,10 @@ references it, does not restate it.
   requires and consumes the row. Notifications: nullable source, the 70–82 band and type 26
   de-identified (each call site skips the acting moderator), report-id anchors, dedup-exempt account
   types, `ReportReceived` restored, `GroupStory` anchors, hidden favoriters in 15, type 10 on a first
-  publish. Migration `WU_InertFeatures`. L4.5 → 1 for F16/F30/F33/F41/F55 (no browser — **H14**).
-  `dotnet test`: Unit 1,058, RazorComponents 754, Integration 1,261. Decision rows **17–19**; trackers
-  **B20–B22** closed, **B23/B24/H14** opened. **Pointers:** its DONE entry; `layer2-services.md`
+  publish. Migration `WU_InertFeatures`. L4.5 for F16/F30/F33/F41/F55 went to 1 (no browser), then
+  back to 5 after its browser pass the same day (Aspire path, both render phases, no bug — **H14**
+  closed). `dotnet test`: Unit 1,058, RazorComponents 754, Integration 1,261. Decision rows **17–19**;
+  trackers **B20–B22** closed, **B23/B24** opened. **Pointers:** its DONE entry; `layer2-services.md`
   §"Notification Generation" and §"Attribution (Feature 30)".
   Before that, 2026-09-30: WU-AccessGateSweep2 — worksheet D6 (raises guarded, clears free) plus service audit §2.6's access fixes; see its DONE entry.
   Before that, 2026-09-30: WU-StoryLifecycle — worksheet D1/D2: the story transition table, first-submission approval gate, nullable publish anchors; see its DONE entry.
@@ -249,7 +250,7 @@ references it, does not restate it.
   drive returning 500; **D6/D7/E7/F9/H12** opened by WU-StoryLifecycle, 2026-09-30 — E7 is routed to
   WU-ThrottleCoverage, D6 to WU-ModerationIntegrity; **F10/H13** opened by WU-AccessGateSweep2,
   2026-09-30, which also annotated E6 without closing it; **B23/B24/H14** opened by WU-InertFeatures,
-  2026-09-30, which closed B20–B22; **D9/H15** opened by the WU-StoryLifecycle browser pass,
+  2026-09-30, which closed B20–B22 (its browser pass closed H14 the same day); **D9/H15** opened by the WU-StoryLifecycle browser pass,
   2026-09-30, which narrowed H12; **F12/H16/H17/H18** opened by the WU-AccessGateSweep2 browser
   pass, 2026-09-30, which closed H13), including two **high-priority security items:
   E2 and E3**. **A7** is the
@@ -263,14 +264,14 @@ references it, does not restate it.
   story-lifecycle questions WU-StoryLifecycle left open — 17–18 — the two defaults
   WU-InertFeatures had to take — and 19 — type 90's moderator attribution, filed by its review
   fixes — added 2026-09-30). Separately, not a
-  numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only), the
-  now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach, and tracker **H14**'s pass
-  over recommendation attribution and the new notifications (it returns F16/F30/F33/F41/F55 L4.5 to 5) need
-  Brian's own browser session —
-  see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
+  numbered decision row: WU-A11y-Keyboard's browser pass (focus/Escape/keyboard-only) and the
+  now-also-outstanding axe-DevTools pass WU-A11y (Structure) didn't reach need Brian's own browser
+  session — see those WUs' DONE entries and `audit/Accessibility.md`. (Tracker **H12**'s story-lifecycle pass
   ran 2026-09-30 and returned F4/F47/F48 L4.5 to 5; only a WASM re-check after
   WU-ParityAndRemaining P1 remains — see WU-StoryLifecycle's DONE entry. Tracker **H13**'s
-  access-gate pass also ran 2026-09-30 and closed — see WU-AccessGateSweep2's DONE entry.)
+  access-gate pass also ran 2026-09-30 and closed — see WU-AccessGateSweep2's DONE entry. Tracker
+  **H14**'s attribution-and-notifications pass ran 2026-09-30 too, returned F16/F30/F33/F41/F55 L4.5
+  to 5 and closed — see WU-InertFeatures' DONE entry.)
 
 ---
 
@@ -417,8 +418,9 @@ is pending except where a bullet says so.
 ## WU-InertFeatures — recommendation attribution rebuilt on the RIL bit, notification core (nullable source, de-identified moderation band, one-anchor rule, hidden favoriters), new-chapter fan-out (worksheet D3/D4/D5/D16/D17; extends `Recommendations/`, `UserStoryInteractions/`, `Notifications/`, `Moderation/`, `Groups/`, `Chapters/`, `Tags/`, `Stories/`, `Discovery/`, `Spotlight/`) — DONE ✓ (2026-09-30)
 
 - **Cells:** **F16 / F30 / F41 L4.5 5→1** (UI and bell behavior changed; WU-InertFeatures ran with
-  no browser available — tracker **H14** restores them); the review fixes added **F33 / F55 L4.5
-  5→1** (same reason); everything else beneath Stage-5 cells: F30
+  no browser available — tracker **H14**); the review fixes added **F33 / F55 L4.5
+  5→1** (same reason); all five **back to 5** after the browser pass (2026-09-30, below); everything
+  else beneath Stage-5 cells: F30
   L1/L2/L3/L3.5/L5, F16 L2/L3, F41 L1/L2, F42 L2, F39 L2, F46/F47/F48/F53 L2, F6 L2.
 - **Trigger:** five answered, unbuilt owner rulings (D3, D4, D5, D16, D17) and three inert features
   the service audit found (§2.3.1 chapter publish notified nobody; §2.3.2 `ReportReceived` deleted by
@@ -477,7 +479,8 @@ is pending except where a bullet says so.
   notification, group, comment/blog, rec read/write, parent-visibility, endpoint and verification/fanon
   additions). Mutation-checked: dedup exemption, author exclusion, D17 predicate, credit gate, both
   trigger-5 sweeps, trigger 1, the panel's adoption clause and both fan-out guards each fail their
-  tests when removed. All four PowerShell gates pass. **No browser was available** — tracker **H14**.
+  tests when removed. All four PowerShell gates pass. **No browser was available** — tracker **H14**
+  (run and closed 2026-09-30 — "Browser verification" below).
 - **Review fixes (second commit, 2026-09-30).** Three reviews; 19 findings (14 distinct), each
   checked against the code and the worksheet. All were real; one needed no change once checked:
   1. **The acting moderator is never notified of their own act.** D5's null source drops nobody, so
@@ -515,6 +518,48 @@ is pending except where a bullet says so.
   fix-specific test failed against a targeted revert of its fix. Build clean in touched files; all
   four gates pass. **No browser was available** — H14 gained the un-save, Deep Dive, carrier and
   self-resolve steps.
+- **Browser verification (2026-09-30, after the review fixes; one commit, "browser verification" — no
+  bug found, so no fixes commit).**
+  - **Setup:** Aspire path, so the type-10 and type-70 emails could be read in Mailpit. The Aspire DB
+    was wiped first: its schema was eight weeks old. The phase was read from the network log
+    (`_blazor/negotiate` against `/api` calls). `psql` after every write.
+  - **What was driven:** all seven H14 steps. Steps 1, 3 and 4 and the bells ran on both phases.
+    - Card Read It Later in Explore, the story page, the homepage spotlight (granted and redeemed
+      through the UI) and Deep Dive. The panel kept the bit; a panel clear deleted the attribution and
+      re-enabled the card.
+    - The anonymous nudge, and back after signing in.
+    - Yes and X.
+    - The `?rec=` link. Story 1's Chapter 1 was lengthened as a scroll fixture. At 90% the address
+      dropped `?rec=` with the scroll held, and Back from Chapter 2 was clean.
+    - The type-10 fan-out: both followers got the bell and the email; a republish wrote nothing.
+    - The report receipt, the null-sourced 81/82/70, and a moderator's self-resolve sending no 82.
+    - 60/25 on the `GroupStory`; a re-add wrote nothing.
+    - A refused card save on a stale page reads "That content couldn't be found — it may have been
+      removed." on both phases.
+    - Trigger 5 by the author's remove.
+    - GIF: `e2e-WU-InertFeatures.gif`.
+  - **Not driven** (Integration covers both): the moderator-takedown sweep and the story-author gate.
+  - **Tooling:** `stop-aspire.ps1 -StopContainers` missed the Mailpit container, which was added after
+    the script was written. It now stops all four. `run-server/SKILL.md` gained notes on the Aspire
+    log location, hidden-tab scrolling and the first antiforgery failure after a wipe.
+  - **Docs:** browser notes in `audit/Recommendations.md` F30 and `audit/Notifications.md` F41. Short
+    notes in F16, F33, F55, F5, F7, F6, F39 and F46. F16/F30/F33/F41/F55 L4.5 are back to 5 in
+    `status.md`. H14 closed and B22's line updated.
+  - **Tests** (no code change): Unit 1,058, RazorComponents 754, Integration 1,261. All four gates pass.
+  - **Dev-DB state left behind** (Aspire DB, `canalavedb` on 5433; `reset-aspire-db.ps1` drops it):
+    - Story 1's Chapter 1 text has 60 filler paragraphs appended (`chapter_content_id` 1).
+    - Rec 3's text was rewritten to a 500+ character filler. Two revision requests made the edit
+      necessary to restore Approved.
+    - Rec 2 was removed and unblocked, so it is Approved again.
+    - Chapter 8 (story 2, Chapter 3) is published, with notifications 6–7.
+    - Reports 2, 4 and 5 are resolved and comment 3 is hidden.
+    - `GroupStory` 3 (story 7 in group 1).
+    - A spotlight for story 5 with rec 3 in the Sep 28 – Oct 5 block, from AuthorAlpha's granted slot.
+    - Successes: TestUser→rec 2, ReaderGamma→rec 3, AuthorBeta→rec 1.
+    - Live attributions: TestUser (story 5, rec 3) and ModUser (story 5, rec 3).
+    - Read It Later: TestUser on stories 3 and 5, ReaderGamma on story 5, LurkerDelta on story 3 and
+      ModUser on story 5. ReaderGamma also follows story 2.
+    - LurkerDelta and AuthorBeta have started story 1, and AuthorBeta has completed story 3.
 - **Pointers:** `layer2-services.md` §"Notification Generation", §"Polymorphic RelatedEntityId",
   §"Attribution (Feature 30)"; Stage notes in `audit/Recommendations.md` F30,
   `audit/UserStoryInteractions.md` F16, `audit/Notifications.md` F41/F42, `audit/Groups.md` F39,

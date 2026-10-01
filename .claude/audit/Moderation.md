@@ -55,8 +55,12 @@ drop-self rule deleted it. It now calls `NotifyReportReceivedAsync(reporter, rep
 sends `ReportReceived` (80) null-sourced with the report id (id populated by the preceding save), and
 the presenter words it as a receipt ("Thanks — we received your report"). Verified by Integration
 `ModerationServiceTests` (`SubmitReportAsync_DeliversANullSourcedReceipt_CarryingTheReportId`,
-`SubmitReportAsync_TwoReports_TwoReceipts`) and Unit `NotificationPresenterTests`. The receipt in the
-bell is on tracker H14's browser list. Band-wide rules: the cluster Settled note above.
+`SubmitReportAsync_TwoReports_TwoReceipts`) and Unit `NotificationPresenterTests`. **Browser-driven
+2026-09-30** by the WU-InertFeatures browser pass (tracker H14 closed), on both render phases:
+- the receipt in the bell;
+- 81, 82 and 70, all NULL-sourced and carrying the report id;
+- a moderator who resolved their own report got the receipt and no 82.
+Detail: `audit/Notifications.md` F41's browser note. Band-wide rules: the cluster Settled note above.
 
 **WU34 settled constraints:**
 - Report targets: Story, User, Comment, BlogPost, Recommendation, PrivateMessage (`ReportedEntityId` is long).

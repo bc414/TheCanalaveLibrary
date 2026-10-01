@@ -152,7 +152,10 @@ whole fan-out); an authorless story still notifies members; the story's author i
   + story title, title-less after `RemoveStoryAsync`; an author-member gets 25 only; a re-add by another
   member writes nothing even with the first rows read; an authorless story still notifies members; two
   different stories while unread are two 60s). The author-exclusion and re-add tests fail against the
-  pre-fix code (mutation-checked). No browser pass (tracker H14). Original WU32 text follows.
+  pre-fix code (mutation-checked). **Browser-driven 2026-09-30** by the WU-InertFeatures browser pass
+  (tracker H14 closed). A member's add wrote one 60 and one 25, both anchored on the new `GroupStory`.
+  The bell read "{story} was added to {group}" and "Your story {story} was added to {group}", and a
+  re-add wrote nothing (`audit/Notifications.md` F41's browser note). Original WU32 text follows.
   `IGroupWriteService.AddStoryAsync` enforces three-tier
   content-rating waterfall: tier 1 = `ContentRating` named filter (model); tier 2 =
   `story.Rating > group.MaxContentRating` (service); tier 3 = `story.Rating > folder.MaxRating`

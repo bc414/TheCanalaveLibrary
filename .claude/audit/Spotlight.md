@@ -90,10 +90,11 @@ Booking" and §"Site Settings (`ISiteSettingsService`)".
 - **L4-Style — Stage 3.** Functional and token-clean (`check-design-tokens.ps1` green for these
   files), composed from existing roled components; not design-reviewed — rides the Phase-3 freeze
   sweep like the rest.
-- **L4.5-Browser — Stage 1 (flipped 5→1 2026-09-30, WU-InertFeatures review fixes).** The placement
-  verified below changed undriven: the recommendation half gained Read It Later / Read now, and a
-  signed-in viewer's `StoryCard` now shows their real flags (Stage note at the end of this feature).
-  Returns to 5 with tracker **H14**'s pass. *History:* Verified 2026-07-12 in a real browser against the standing dev DB
+- **L4.5-Browser — Stage 5 (flipped 5→1 by the WU-InertFeatures review fixes, 2026-09-30, and back to 5
+  by the WU-InertFeatures browser pass the same day — tracker H14 closed).** The recommendation half
+  gained Read It Later / Read now, and a signed-in viewer's `StoryCard` now shows their real flags. The
+  WU shipped those with no browser; its browser pass drove them on both phases (both notes at the end
+  of this feature). *History:* Verified 2026-07-12 in a real browser against the standing dev DB
   (kept, not wiped): grant as AdminUser (capacity 12→11) → redeem as TestUser via the primary
   pick path into the current block → placement live on `/` (StoryCard + RecommendationCard) →
   psql ground truth: slot Redeemed, worker stamped `GoLiveNotifiedUtc` within its 1-min cadence
@@ -152,3 +153,19 @@ review fixes caught the omission and made the flip.
 **How verified:** RazorComponents `CommunitySpotlightDisplayTests` (+4 across the WU and its review
 fixes: states batch-loaded and handed to the card; anonymous loads none; card save → panel adopts it;
 panel clear → card re-enabled). **Not browser-driven** — H14.
+
+### WU-InertFeatures browser verification (2026-09-30) — L4.5 1→5 (tracker H14 closed)
+
+No bug found. Aspire path, `psql` after every write; phase method in `audit/Recommendations.md`
+F30's browser note.
+- **Fixture, driven through the UI.** AdminUser granted AuthorAlpha a slot on `/mod/spotlight`.
+  AuthorAlpha redeemed it on `/spotlight` for AuthorBeta's story 5, attaching AuthorAlpha's own rec 3,
+  in the current block. This wrote notifications 90 and 91 and their emails.
+- **Circuit (ReaderGamma, no interaction row).** The card's Read It Later wrote the bit and the
+  attribution. The `StoryCard` panel showed Read It Later active after the debounce. A panel clear
+  deleted the row and the attribution, and the card offered Read It Later again.
+- **WASM (TestUser).** The panel showed TestUser's real Read It Later from the batch
+  `by-ids?storyIds=5` read, and the card read "Saved for later". A panel clear re-enabled the card.
+  The card save wrote a fresh attribution.
+- **Anonymous.** The card sends you to `/Account/Login?ReturnUrl=%2F`.
+- The placement stays live through the booked block (dev-DB state: the workplan entry).

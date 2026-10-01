@@ -560,7 +560,13 @@ and that method.
 
 **How verified:** RazorComponents `StoryPageTests` (+2 across the WU and its review fixes: a card save
 shows in the panel and the cards; a panel clear re-enables the cards). The second test fails without
-the page's `OnStateSaved` wiring. **Not browser-driven** (H14).
+the page's `OnStateSaved` wiring. **Browser-driven 2026-09-30** by the WU-InertFeatures browser pass
+(tracker H14 closed), on both render phases:
+- a section card save showed in the panel and stayed after the debounce;
+- a panel clear re-enabled the cards;
+- a refused save (the rec moved to NeedsRevision behind the open page) showed inline;
+- an anonymous click went to the login page.
+Detail: `audit/Recommendations.md` F30's browser note.
 
 ## Feature 8 — Story Arcs
 

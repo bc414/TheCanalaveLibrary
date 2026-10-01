@@ -97,12 +97,12 @@ the USI row (do not decouple). Three write-path consequences, rule text in `laye
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** See "The reading-status
   divergence" section above. `UserStoryInteractionDate` warm partition and sparse semantics ("no row =
   all false; date row only when relevant") survived intact.
-**Stages (updated 2026-09-30, WU-InertFeatures and its review fixes; WU-AccessGateSweep2 browser pass
-the same day):** L1–L6 = 5 except **L4.5 = 1** (flipped 5→1: the panel now adopts a changed `State`
-from its host so a recommendation card's Read It Later can't be flushed back, and reports each accepted
-flush back to the host — never browser-driven; returns to 5 with tracker H14's pass). The WU-AccessGateSweep2 browser pass drove the panel's D6 clear and refused-raise
-paths and fixed a page crash on a refused raise, but not the rec-card adoption H14 covers. Stage
-notes at the end of this feature.
+**Stages (updated 2026-09-30, WU-InertFeatures, its review fixes and its browser pass; WU-AccessGateSweep2 browser pass
+the same day):** L1–L6 = 5. **L4.5** went 5→1 when WU-InertFeatures made the panel adopt a changed `State` from its host
+(so a recommendation card's Read It Later can't be flushed back) and report each accepted flush to the host, with no
+browser available. It returned to 5 when the WU-InertFeatures browser pass drove that adoption beside the card in all
+four hosts on both render phases (tracker H14 closed). The WU-AccessGateSweep2 browser pass drove the panel's D6 clear and
+refused-raise paths and fixed a page crash on a refused raise. Stage notes at the end of this feature.
 
 - **L2 — Stage 5 (WU15, 2026-06-22; raise/clear split WU-AccessGateSweep2, 2026-09-30; recommendation attribution on the RIL bit WU-InertFeatures, 2026-09-30 — see the Stage notes at the end of this feature).** Read/write service implemented and tested.
 
@@ -403,6 +403,22 @@ browser-driven** — tracker H14.
 - **Tier:** RazorComponents — `UserStoryInteractionPanelTests` +2 (a refused flush rolls back and
   shows the refusal; earlier accepted toggles survive and the next toggle clears it). Both failed
   against the pre-fix panel. Full narrative: `audit/AccessGate.md` F66.
+
+### Feature 16 L4.5 — WU-InertFeatures browser verification (2026-09-30): the panel beside a recommendation card; L4.5 1→5
+
+**Cells:** L4.5 1→5 (tracker **H14** closed). No bug found.
+- **Adoption.** After a card's Read It Later, the StoryCard panel beside it showed Read It Later
+  active and kept it after the 2-second debounce (`psql`: the bit stayed true). Driven in Explore,
+  the story page, the homepage spotlight and Deep Dive, each on the circuit and on WASM.
+- **Reporting.** Clearing Read It Later in the panel flushed it, deleted the attribution (trigger 1)
+  and re-enabled the card's button through the host's `OnStateSaved` copy.
+- **Other flags kept.** The flags the card did not touch (`has_started`, `is_completed`) survived the
+  card save and the panel flush. The spotlight panel showed the viewer's real flags.
+- **Sparse cleanup.** A clear that left every bit false deleted the row. The next card save recreated
+  it together with the attribution, in one save.
+- **The 90% moment.** `MarkStartedAsync` with the `?rec=` parameter was driven on both phases; on WASM
+  it called `…/started?recommendationId=`. A bogus id was ignored silently.
+- Users, hosts and the full flow list: `audit/Recommendations.md` F30's browser note.
 
 ## Feature 17 — Story Interaction Lists & Bookshelves
 - **L1 — Stage 5 (re-model resolved in WU0 / InitialSchema, 2026-06-20).** `HasStarted` is present;

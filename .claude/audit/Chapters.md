@@ -89,7 +89,10 @@ null rating as primary, floor rejection, primary invariant rejection on create +
   row was read adds nothing; alternate version + primary switch + edit add nothing; Draft and taken-down
   stories notify nobody yet still stamp the anchor; enrichment deep-links `/story/{sid}/{n}` with the
   story title as context) — mutation-checked (dropping the anchor condition or the status predicate each
-  fails a test). Original WU17 text follows.
+  fails a test). **Browser-driven 2026-09-30** by the WU-InertFeatures browser pass (tracker H14
+  closed). Publishing a never-published chapter from the editor notified both followers in the bell
+  and by email, deep-linking the chapter. Unpublish → Publish wrote nothing (`audit/Notifications.md`
+  F41's browser note). Original WU17 text follows.
   Built `IChapterWriteService : IChapterReadService` and
   `ServerChapterWriteService : ServerChapterReadService` in `Core/Chapters/`/`Server/Chapters/`. Write
   service is the **first production caller** of `IHtmlSanitizationService`. `ChapterText.CountWords()`
@@ -232,8 +235,8 @@ Phase 4 (beta-scope-decision pattern) and `workplan.md` "Planned / not-yet-built
   `ChapterReadingPage` + `ChapterNavigation` top+bottom + `CommentSection` wired. See WU26 Phase 1–3 Stage note.
 - **L4-Style — Stage 5 (WU26/WU18/WU5, DONE ✓ 2026-06-24; see Stage notes).**
 - **L4.5-Browser — Stage 5 (WU-ChapterArcBrowserPass, 2026-07-24; stays 5 through WU-InertFeatures,
-  2026-09-30 — the reading page's changed parts are Feature 30's prompt and attribution flow, whose
-  L4.5 = 1 carries the browser debt, tracker H14 steps 3–4).** Real-circuit pass closes the
+  2026-09-30 — the reading page's changed parts are Feature 30's prompt and attribution flow, driven
+  on both render phases by the WU-InertFeatures browser pass the same day, tracker H14 closed).** Real-circuit pass closes the
   WU45 deferral. See the WU-ChapterArcBrowserPass Stage note in this file's Feature 6 section.
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; chapter reading page verified in a real WASM runtime during
@@ -377,7 +380,13 @@ before. The WU itself wrote this file only under F6; the review fixes added this
 load; at 90% MarkStarted carries the rec, then the prompt; Yes; X; anonymous; the carrier dropped from
 the address with a replaced entry, so a reload after X marks started with no rec; no carrier means no
 navigation). Integration: F16's `RecommendationAttributionTests` (the `MarkStartedAsync` parameter).
-Detail: `audit/Recommendations.md` F30's two Stage notes.
+Detail: `audit/Recommendations.md` F30's two Stage notes. **Browser-driven 2026-09-30** (tracker H14
+closed), on both phases:
+- nothing was written on load;
+- at 90%, `HasStarted` and the attribution landed in one save;
+- `?rec=` left the address with the scroll position held;
+- X, then a reload, minted nothing; Back from Chapter 2 landed without `?rec=`.
+Detail: F30's browser note.
 
 ## Feature 44 — Reading Progress Tracking
 - **L1 — Stage 5.** `UserChapterInteraction.ReadProgress` / `IsRead`. `UserChapterInteraction.cs` moved

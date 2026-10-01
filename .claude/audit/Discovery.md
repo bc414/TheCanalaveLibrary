@@ -516,9 +516,10 @@ re-seed guard from the start.
   2026-09-30 — Stage note at the end of this feature)**
   (distinct graph/node visualization — NOT
   `StoryDeck`). **L4 — Stage 1** (visual sign-off pending, WU8/WU13/WU23/WU28/WU44 precedent).
-  **L4.5 — Stage 1 (flipped 5→1 2026-09-30, WU-InertFeatures review fixes:** Explore's family rows and
-  Deep Dive's panel changed undriven — tracker **H14**; the WU40 + WU-ExploreFilterAxes browser
-  verification below covers what was there before).
+  **L4.5 — Stage 5 (WU40 + WU-ExploreFilterAxes browser verification below; flipped 5→1 by the
+  WU-InertFeatures review fixes because Explore's family rows and Deep Dive's panel changed with no
+  browser, and back to 5 when the WU-InertFeatures browser pass drove both, 2026-09-30 — tracker H14
+  closed, note at the end of this feature).**
   **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13)** — endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto (Explore tab not browser-driven in the flip's wave; the
   sibling Automatic tab was, see F59). Full wave narrative + the 7 bugs found/fixed: `workplan.md`
@@ -860,6 +861,19 @@ re-seed guard from the start.
     node's card save shows in the `StoryCard` panel beside it; opening another node leaves the card's
     state behind). Each review-fix test fails with its wiring or key removed. **Not browser-driven** —
     H14.
+
+  **WU-InertFeatures browser verification (2026-09-30) — L4.5 1→5 (tracker H14 closed).** No bug found.
+  - **Explore:** TestUser (circuit, `/discover/user/6`) and ReaderGamma (WASM, `/discover/user/4`).
+    The family row's card save wrote the bit and the attribution. The `StoryCard` beside it showed
+    Read It Later active after the debounce. A panel clear re-enabled the card. An anonymous click went
+    to the login page and back.
+  - **Deep Dive gem node:** LurkerDelta (circuit) and AuthorBeta (WASM). The same save and clear.
+    Opening the author node and then the gem again showed the server's state, with no error carried.
+  - **A restored tree has no recommendation context.** A tree restored from localStorage, which is
+    keyed per browser and not per user, opens a gem node with an empty panel. The node's listing and
+    rec were never loaded on this page visit, so the card does not render until **Reset**. This is the
+    documented chip-only degrade, not a defect of this WU.
+  - Full flow list and `psql` checks: `audit/Recommendations.md` F30's browser note.
 
 ## Feature 34 — Tag Directory (`/tags`)
 - **L1 — N/A.** **L2 — Stage 5 (WU27.5, 2026-06-25 — see Stage note below:** `GetTagDirectoryAsync`
