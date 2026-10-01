@@ -12,7 +12,7 @@
 @* Read-only blog-post view page. Slug is cosmetic — only BlogPostId (int) is the key.
    Pattern 1: separate view and edit pages (cross-cutting.md "Two content-editing patterns").
    Injects IBlogPostWriteService (which : IBlogPostReadService) so the authenticated like-toggle
-   can call ToggleLikeAsync. Author-only affordances (Edit link) are controlled by @if (isAuthor);
+   can call ToggleLikeAsync. Author-only affordances (Edit link, profile posts only) are controlled by @if (isAuthor);
    the server gate is the real authority (layer3.5-structure.md §"Author-Conditional Rendering").
    Anonymous visitors can view published posts — no @attribute [Authorize] here.
    [PersistentState] on Post and Polls eliminates the prerender→interactive double-fetch flicker;
@@ -143,7 +143,10 @@ else
                 <span class="text-sm text-(--color-text-muted)">♡ @_likeCount</span>
             }
 
-            @if (isAuthor)
+            @* Edit only for profile posts: /blog/{id}/edit is the profile-post editor, and the
+               profile update path answers not-found for a group or site id (owner ruling D10's
+               per-subtype lifecycle). Group/site edit affordances are tracker B25. *@
+            @if (isAuthor && Post.Kind == BlogPostKind.Profile)
             {
                 <a href="/blog/@Post.BlogPostId/edit"
                    class="text-sm text-(--color-action-ink) hover:underline">Edit</a>

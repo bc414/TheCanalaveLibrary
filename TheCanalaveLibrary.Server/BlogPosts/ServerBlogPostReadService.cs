@@ -59,6 +59,7 @@ public class ServerBlogPostReadService(
             .FirstOrDefaultAsync();
 
         bool isGroupPost = false;
+        BlogPostKind kind = BlogPostKind.Profile; // which branch answered (the child table is the discriminator)
 
         // Second branch (WU-AccessGate, bug B7): GroupBlogPosts — group-post permalinks
         // (/blog/{id}) 404'd for everyone because this read only knew ProfileBlogPosts. Loaded
@@ -95,6 +96,7 @@ public class ServerBlogPostReadService(
                 .FirstOrDefaultAsync();
 
             isGroupPost = row is not null;
+            if (isGroupPost) kind = BlogPostKind.Group;
         }
 
         // Third branch (WU-SiteNews): SiteBlogPosts — never group-owned, never story-linked, no
@@ -127,6 +129,7 @@ public class ServerBlogPostReadService(
                         && p.Likes.Any(l => l.UserId == currentUserId)
                 })
                 .FirstOrDefaultAsync();
+            kind = BlogPostKind.Site;
         }
 
         if (row is null) return null;
@@ -170,6 +173,7 @@ public class ServerBlogPostReadService(
             row.LikeCount,
             row.IsLikedByCurrentUser,
             row.IsPublished,
+            kind,
             viewerHasCompletedStory);
     }
 

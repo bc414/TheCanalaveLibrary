@@ -9,6 +9,12 @@ public sealed class BaseBlogPostConfiguration : IEntityTypeConfiguration<BaseBlo
     public void Configure(EntityTypeBuilder<BaseBlogPost> builder)
     {
         builder.ToTable("base_blog_posts");
+
+        // RESTRICT (D10): the service deletes TPT base rows first via TptDelete; the DB refuses a partial delete.
+        builder.HasMany(b => b.BlogPostComments)
+            .WithOne(c => c.BlogPost)
+            .HasForeignKey(c => c.BlogPostId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -83,11 +89,13 @@ public sealed class BlogPostPollConfiguration : IEntityTypeConfiguration<BlogPos
     {
         // Explicit pairing with BaseBlogPost.Polls (ICollection<BlogPostPoll>) — kills the
         // spurious shadow-FK relationship the old ICollection<BasePoll> typing created.
-        // Cascade: deleting a blog post deletes its polls (options + votes cascade from there).
+        // RESTRICT (D10): the service deletes TPT base rows first via TptDelete; the DB refuses a partial delete.
+        // (A cascade here removed only the blog_post_polls child row and orphaned base_polls; deleting
+        // the base_polls row instead takes the child row, options and votes with it.)
         builder.HasOne(p => p.BlogPost)
             .WithMany(b => b.Polls)
             .HasForeignKey(p => p.BlogPostId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.ToTable("blog_post_polls");
     }

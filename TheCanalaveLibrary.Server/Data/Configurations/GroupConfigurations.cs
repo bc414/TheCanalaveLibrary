@@ -24,20 +24,23 @@ public sealed class GroupConfiguration : IEntityTypeConfiguration<Group>
             .HasForeignKey(gs => gs.GroupId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // RESTRICT (D10): the service deletes TPT base rows first via TptDelete; the DB refuses a partial delete.
+        // No group-delete path exists yet (D47(b)); one must add a group-scope TptDelete method first.
         builder.HasMany(g => g.GroupComments)
             .WithOne(gc => gc.Group)
             .HasForeignKey(gc => gc.GroupId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(g => g.GroupFolders)
             .WithOne(f => f.Group)
             .HasForeignKey(f => f.GroupId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // RESTRICT (D10): the service deletes TPT base rows first via TptDelete; the DB refuses a partial delete.
         builder.HasMany(g => g.GroupBlogPosts)
             .WithOne(gbp => (gbp as GroupBlogPost)!.Group)
             .HasForeignKey(gbp => (gbp as GroupBlogPost)!.GroupId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Group names must be unique across the site
         builder.HasIndex(e => e.GroupName).IsUnique();

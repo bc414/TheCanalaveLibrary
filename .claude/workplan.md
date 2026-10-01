@@ -17,18 +17,18 @@ references it, does not restate it.
 
 ## Position (updated at Doc-Touch moment 3 — the "you are here" block. Every claim here is re-verified against its source at write time, never carried forward from the previous version.)
 
-- **Last landed:** WU-ModerationIntegrity (2026-09-30) — owner rulings **D7, D8, D9** plus service
-  audit §2.1.2/§2.1.3/§2.4.4. Resolve paths lock the report row and refuse a resolved one; a removal
-  closes every sibling report on its `(type, id)` target and notifies each reporter; one open report
-  per reporter per target; `Report.ReportedUserId` feeds a per-user history that includes content
-  reports (**B18** closed); the account-status transition table and **Reinstate**; account deletion
-  closes the reports on what it destroys; moderator-only reads gate in the service (`RequireModerator()`),
-  and `IReportSubmissionService` is split out. Migration `WU_ModerationIntegrity`. Review fixes: a
-  report-driven Ban on a banned account resolves the report (decision row **20**, refined). F46/F47/F53
-  L4.5 went to 1 (no browser), then back to 5 after its browser pass the same day (both phases, no bug
-  in the WU's code — **H19** closed, **H20/E8** filed); **F13/F14/F15/D10** opened. `dotnet test`: Unit
-  1,070, RazorComponents 760, Integration 1,305. **Pointers:** its DONE entry; `layer2-services.md`
-  §"Moderation Services".
+- **Last landed:** WU-TptHardDelete (2026-09-30) — owner rulings **D10** and **D11**. Every
+  content-parent delete (a chapter, a blog post of any subtype, the moderation hard delete of a story or
+  post, the account deletion's profile wall) removes its TPT children through their base rows with the
+  new set-based `TptDelete`; the five parent → TPT-child FKs are RESTRICT, so a forgotten cleanup now
+  fails instead of orphaning `base_comments`/`base_polls` rows. Blog-post lifecycle is per subtype:
+  group posts got update/delete (+ routes), and the profile methods answer 404 for a group or site id
+  (delete was a 500). Polls survive their owner (`owner_id` SET NULL); a NULL owner is nobody at every
+  gate. Migration `WU_TptHardDelete_FkPosture`. F36 L4.5 5→1 (the post page's Edit link is now
+  profile-only; no browser — **H21**); **B25/F16** opened. `dotnet test`: Unit 1,074, RazorComponents
+  764, Integration 1,338. **Pointers:** its DONE entry; `layer1-data-model.md` §"Hard-deleting a
+  content parent".
+  Before that, 2026-09-30: WU-ModerationIntegrity — worksheet D7/D8/D9 (lock-and-guard resolves, sibling closing, `ReportedUserId`, Reinstate, service-side mod read gates); see its DONE entry.
   Before that, 2026-09-30: WU-InertFeatures — worksheet D3/D4/D5/D16/D17 (attribution on the RIL bit, the de-identified notification core, the new-chapter fan-out); see its DONE entry.
   Before that, 2026-09-30: WU-AccessGateSweep2 — worksheet D6 (raises guarded, clears free) plus service audit §2.6's access fixes; see its DONE entry.
   Before that, 2026-09-30: WU-StoryLifecycle — worksheet D1/D2: the story transition table, first-submission approval gate, nullable publish anchors; see its DONE entry.
@@ -232,8 +232,9 @@ references it, does not restate it.
 - **Phase (`roadmap.md`):** **Phase 2 is DONE ✓ (2026-07-30).** Phases 0, 1, 2, and 5 are all DONE.
   **In flight (between-phase): the worksheet-decisions build campaign** — the answered rows of
   `.claude/design/audit-decision-worksheet.md` built as a sequence of WUs; WU-StoryLifecycle (D1/D2),
-  WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17) and WU-ModerationIntegrity
-  (D7/D8/D9) have landed, and **WU-TptHardDelete** is next in the campaign's build order.
+  WU-AccessGateSweep2 (D6), WU-InertFeatures (D3/D4/D5/D16/D17), WU-ModerationIntegrity
+  (D7/D8/D9) and WU-TptHardDelete (D10/D11) have landed, and **WU-CounterSymmetry** is next in the
+  campaign's build order.
   **Phase 3 is next** after it — Brian-driven L4 freeze sweep + WU-A11y-Keyboard (paired; decision row 12,
   which gated this, resolved 2026-07-31 — WU-A11y itself split in two the same day, and the
   static half, WU-A11y (Structure), is DONE outside the sweep — see Last landed) — nothing
@@ -255,7 +256,8 @@ references it, does not restate it.
   2026-09-30, which closed B20–B22 (its browser pass closed H14 the same day); **D9/H15** opened by the WU-StoryLifecycle browser pass,
   2026-09-30, which narrowed H12; **F12/H16/H17/H18** opened by the WU-AccessGateSweep2 browser
   pass, 2026-09-30, which closed H13; **F13/F14/F15/D10/H19** opened by WU-ModerationIntegrity,
-  2026-09-30, which closed B18 (its browser pass closed H19 the same day and opened **E8/H20**)),
+  2026-09-30, which closed B18 (its browser pass closed H19 the same day and opened **E8/H20**);
+  **B25/F16/H21** opened by WU-TptHardDelete, 2026-09-30),
   including two **high-priority security items:
   E2 and E3**. **A7** is the
   remaining half of `roadmap.md`'s Tier-6 discovery pair now that A6 is closed; it is a heavier
@@ -275,7 +277,8 @@ references it, does not restate it.
   WU-ParityAndRemaining P1 remains — see WU-StoryLifecycle's DONE entry. Tracker **H13**'s
   access-gate pass also ran 2026-09-30 and closed — see WU-AccessGateSweep2's DONE entry. Tracker
   **H14**'s attribution-and-notifications pass ran 2026-09-30 too, returned F16/F30/F33/F41/F55 L4.5
-  to 5 and closed — see WU-InertFeatures' DONE entry.)
+  to 5 and closed — see WU-InertFeatures' DONE entry. Tracker **H21** — WU-TptHardDelete's blog-post
+  page change, F36 L4.5 at 1 — is owed its browser pass.)
 
 ---
 
@@ -418,6 +421,70 @@ is pending except where a bullet says so.
   Pointer: `audit/ImageStorage.md`.
 
 ---
+
+## WU-TptHardDelete — content-parent deletes go through the TPT base rows (`TptDelete`), parent → TPT-child FKs RESTRICT, per-subtype blog-post lifecycle, polls survive their owner (worksheet D10/D11; extends `Data/`, `BlogPosts/`, `Chapters/`, `Moderation/`, `Identity/`, `Notifications/`) — DONE ✓ (2026-09-30)
+
+- **Cells:** **F36 L4.5 5→1** (`BlogPostPage`'s Edit link is now profile-only; the WU ran with no
+  browser available — tracker **H21**). Everything else lands beneath Stage-5 cells: F35 L1/L2/L5, F36
+  L2/L3.5, F37 L1/L2, F6 L2, F47 L2, F40 L1/L2, F23 L1, F52 L1/L2; F58 L2 carries an open-item note
+  only. L1 stays 5 with the migration applied.
+- **Trigger:** owner rulings D10 (fix every TPT hard-delete site through one set-based helper, RESTRICT
+  as the guardrail, no orphan sweep, TPH closed) and D11 (poll owner SET NULL; NULL = nobody), with
+  service §2.2's group-post lifecycle defect and its false "cascades handle it" comments; schema
+  §2.2/§2.5. Orchestrator amendments: the spec's R10 (`BlogPostsWritten` for group/site posts) excluded
+  → tracker **F16**; U9 (hide Edit on non-profile posts, with a bUnit test) added.
+- **What landed:**
+  1. **Migration `WU_TptHardDelete_FkPosture`** — the five content-parent → TPT-child FKs CASCADE →
+     RESTRICT (`blog_post_comments.blog_post_id` now configured explicitly); `base_polls.owner_id`
+     nullable SET NULL (explicit relationship in `IdentityConfigurations`). `Down()` deletes ownerless
+     polls first. No data SQL: every existing row already conforms.
+  2. **`TptDelete`** (`Server/Data/`) — set-based raw SQL keyed off the child table, run in the caller's
+     transaction: chapter, story, profile wall, blog-post dependents, blog post. No group-scope method
+     (nothing deletes a group; D47(b)).
+  3. **Callers** — `DeleteChapterAsync` (no more materialize + `RemoveRange`); profile, site and the new
+     group blog-post deletes in one strategy transaction (the three orphaning stub deletes are gone);
+     the moderation hard delete (Story, BlogPost) before `Remove`, inside `InResolveTransactionAsync`;
+     `UserDeletionService`'s profile wall (reads only the ids, for the D7 closure).
+  4. **Per-subtype blog-post lifecycle** — the profile update/delete probe `ProfileBlogPosts` (a group or
+     site id is 404 where delete was a 500 and update half-applied; an authorless post is 403); new
+     `UpdateGroupBlogPostAsync`/`DeleteGroupBlogPostAsync` + `UpdateGroupBlogPostDto` +
+     `PUT`/`DELETE /api/blog-posts/group/{id}` + client twins. False comments corrected in the service,
+     interface, `BlogPostConfigurations` and `UserDeletionService`.
+  5. **D11 readers** — the poll manage gate and the read's `isOwner` pattern-match (`null == null` would
+     have made an anonymous caller the owner of an ownerless poll); `OwnerUserName` null-safe;
+     `NotifyPollUpdatedAsync`'s source is `int?` (four implementers) and the sweeper passes null.
+  6. **U9** — `BlogPostDto.Kind` (`BlogPostKind`); the Edit link renders for `Kind == Profile` only.
+- **Left alone (and why):** `BlogPostsWritten` for group/site posts → **F16** (the comment that claimed
+  group posts were tracked now states the live behavior). Delete UI for any subtype and a group-post
+  editor → **B25** (UX unruled; D13's GDPR rider (i) makes it matter). Pending worksheet rows, not
+  decided: D42 (ownerless-poll votability — still votable), D43 (group-post rating on update — mirrors
+  create), D47(b) (group delete), D20/D39 (caps, `CancellationToken`). Reports on what an author deletes
+  and on the TPT comments a hard delete destroys stay Open → existing **F13** (annotated). The
+  `DeletePersonalData.razor` copy and `poll_votes` survival → WU-UserDeletion. The orphan sweep is
+  declined by D10(d), so no tracker item. No one-shot orphan purge in the migration: a dev DB holding
+  pre-WU orphans is reset with `reset-dev-db.ps1`.
+- **Found while building:** Postgres reports an `ON DELETE RESTRICT` refusal as **23001**
+  (`restrict_violation`), not the 23503 D10's text names; the posture tests assert 23001. The spec's K1
+  risk (the story cascade past the Restrict `primary_content_id` FK) did not materialize.
+- **Verification:** `dotnet build` 0 errors, no new warnings. `dotnet test` all green: Unit 1,074,
+  RazorComponents 764, Integration 1,338 (+4 / +4 / +33). The four gates pass. New
+  `TptHardDeleteTests` (12): zero surviving base comment/poll/option/vote rows on every delete path,
+  including the moderation hard delete of a story (two chapters, a reply, a like) and of a blog post;
+  five raw-SQL posture tests; a `pg_constraint` catalog guard (five `r`, plus `parent_comment_id` and the
+  poll owner at `n`). Also `BlogPostWriteServiceTests` +10, `BlogPostEndpointsTests` +4,
+  `PollServiceTests` +4, `UserDeletionServiceTests` +3 (and the profile-wall test strengthened with a
+  raw-SQL count), `BlogPostValidationsTests` +4, `BlogPostPageTests` +4. Mutation-checked: the old poll
+  gate, the old `isOwner` and the story hard delete without the helper each fail their test.
+  WU-TptHardDelete (2026-09-30) ran with no browser available (H21). The workbench DB was not migrated;
+  the next dev start applies the migration.
+- **Hand-offs:** WU-AuthorStoryDelete consumes `TptDelete.StoryCommentsAsync` (the story cascade needs
+  no `primary_content_id` release — proven by the hard-delete test). WU-BlobCleanup edits
+  `ApplyHardDeleteAsync` next. WU-UserDeletion edits `UserDeletionService` after this WU. WU-SchemaHardening
+  must not re-flip these FKs.
+- **Pointers:** `layer1-data-model.md` §"Hard-deleting a content parent" and §"Relationships & Queries";
+  `layer2-services.md` §"Hard deletes of content parents"; `cross-cutting.md` §"Delete Policy Summary";
+  audit Stage notes in BlogPosts F35/F36/F37, Chapters F6, Moderation F47, Groups F40, Comments F23,
+  Identity F52, Profiles F58; `roadmap.md` §Resolved (D10, D11).
 
 ## WU-ModerationIntegrity — report lifecycle integrity: lock-and-guard resolves, sibling closing, dedup, `ReportedUserId`, account-status table + Reinstate, zombie closure at the source, service-side mod read gates (worksheet D7/D8/D9; extends `Moderation/`, `Stories/` (ExternalVerification), `Identity/`, `Spotlight/`, `SiteSettings/`, `Tags/`, `BlogPosts/`, and the auth-guard sweep in `CustomLists/`, `Following/`, `Groups/`, `Notifications/`, `Recommendations/`, `Messaging/`) — DONE ✓ (2026-09-30)
 

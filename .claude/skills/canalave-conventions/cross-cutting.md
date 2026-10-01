@@ -127,7 +127,13 @@ context, since even a genuine replica would trail the primary slightly.
 
 ## Delete Policy Summary
 
-- **Content** (stories, comments, blog posts, recs): SET NULL on author → anonymize, preserve.
+- **Content** (stories, comments, blog posts, recs, polls): SET NULL on author/owner → anonymize,
+  preserve. Polls joined 2026-09-30 (owner ruling D11, WU-TptHardDelete): an embedded poll is part of
+  its post, and dying with its owner destroyed other users' votes. A NULL owner owns nothing
+  (`layer1-data-model.md` §"Relationships & Queries").
+- **Content parent → TPT child** (chapter → chapter comments, blog post → its comments and polls,
+  group → group comments and group posts): RESTRICT. The service deletes the base rows first through
+  `TptDelete` (owner ruling D10; `layer1-data-model.md` §"Hard-deleting a content parent").
 - **Interaction data** (follows, interactions, badges, settings): CASCADE on user.
 - **Lookup tables** (tags, themes, statuses): RESTRICT → cannot delete if in use.
 - **Self-references** (parent comments, parent tags, parent folders): SET NULL → children become top-level.

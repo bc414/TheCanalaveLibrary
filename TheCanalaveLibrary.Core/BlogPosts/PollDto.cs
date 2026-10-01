@@ -28,7 +28,9 @@ public record PollOptionResultDto(
 /// <summary>
 /// Full display projection of a poll for any viewer. Viewer-relative fields
 /// (<see cref="ViewerVotedOptionIds"/>, <see cref="ResultsVisibleToViewer"/>) are computed
-/// server-side against <c>IActiveUserContext</c>.
+/// server-side against <c>IActiveUserContext</c>. <see cref="OwnerId"/> and
+/// <see cref="OwnerUserName"/> are null when the owner's account was deleted (owner ruling D11);
+/// such a poll is owned by nobody.
 /// </summary>
 public record PollDto(
     int PollId,
@@ -39,7 +41,7 @@ public record PollDto(
     bool AllowMultiple,
     PollResultsVisibility ResultsVisibility,
     PollAnonymityMode AnonymityMode,
-    int OwnerId,
+    int? OwnerId,
     string? OwnerUserName,
     bool IsArchived,           // SitePoll only; always false for blog-post polls
     int? BlogPostId,           // BlogPostPoll only; null for site polls

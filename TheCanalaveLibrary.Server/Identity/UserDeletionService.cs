@@ -48,13 +48,16 @@ public class UserDeletionService
             }
 
             // --- 1. HANDLE 'UserProfileComment' CONFLICT ---
-            // Rule: UserProfileComment.ProfileUserId is set to 'Restrict'.
-            // Action: delete all comments left on this user's profile (TPT — no direct DbSet).
-            // Materialized first: their ids are needed to close the reports against them (step 1b).
-            List<UserProfileComment> commentsOnProfile = await _context.BaseComments.OfType<UserProfileComment>()
+            // Rule: UserProfileComment.ProfileUserId is set to 'Restrict' (the in-schema precedent for
+            // owner ruling D10's content-parent posture).
+            // Action: delete all comments left on this user's profile through their base rows
+            // (TptDelete — the one shape every content-parent delete uses; never materialized). Only
+            // their ids are read first: step 1b closes the reports against them.
+            List<long> commentIdsOnProfile = await _context.UserProfileComments
                 .Where(c => c.ProfileUserId == userId)
+                .Select(c => c.CommentId)
                 .ToListAsync();
-            _context.BaseComments.RemoveRange(commentsOnProfile);
+            await TptDelete.ProfileWallCommentsAsync(_context, userId);
 
             // --- 1b. CLOSE THE REPORTS ON WHAT THIS DESTROYS (D7 sub-edge) ---
             // Reports have no FK to their target, so they would survive as Open rows the queue can never
@@ -62,7 +65,7 @@ public class UserDeletionService
             // says why). The user's authored stories, posts and recommendations survive (SET NULL), so
             // reports on them stay open — those targets still exist and can still be acted on.
             await ReportLedger.CloseForDestroyedTargetsAsync(_context, ReportedEntityType.Comment,
-                [..commentsOnProfile.Select(c => c.CommentId)],
+                commentIdsOnProfile,
                 // Not "its owner's": the comment's author is the commenter, whose account survives — and
                 // whose per-user history (ReportedUserId) is where a moderator reads this note.
                 "Closed automatically: the reported comment was on a profile whose account was deleted.");

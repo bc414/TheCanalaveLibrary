@@ -293,9 +293,11 @@ public interface INotificationWriteService : INotificationReadService
     /// the write service — edits burst). <paramref name="relatedEntityId"/> is the owning
     /// blog post's id for blog-post polls (navigates to the post) or 0 for site polls (no
     /// per-poll page; the notification is informational). Drop-self covers the owner having
-    /// voted on their own poll.
+    /// voted on their own poll. <paramref name="pollOwnerUserId"/> is null when the owner's account
+    /// was deleted after the edit (owner ruling D11) — D4's "actor since deleted" null; their votes
+    /// died with the account, so drop-self has nothing to protect.
     /// </summary>
-    Task NotifyPollUpdatedAsync(int pollOwnerUserId, IReadOnlyList<int> voterUserIds, int relatedEntityId);
+    Task NotifyPollUpdatedAsync(int? pollOwnerUserId, IReadOnlyList<int> voterUserIds, int relatedEntityId);
 
     // ── Semantic generation methods (WU-B2 slice — comments & profile blog posts) ─
 

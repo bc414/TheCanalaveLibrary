@@ -22,9 +22,11 @@ namespace TheCanalaveLibrary.Server;
 /// </para>
 /// <para>
 /// Write auth: <c>RequireAuthorization()</c> on every write — create/like require only an
-/// authenticated user; update/delete/like additionally enforce author-only ownership via
-/// <c>UnauthorizedAccessException</c>, translated to 403 by <c>ExecuteAsync</c>. Group blog
-/// post creation additionally enforces group membership the same way (also translated to 403).
+/// authenticated user; profile and group update/delete additionally enforce author-only ownership via
+/// <c>UnauthorizedAccessException</c>, translated to 403 by <c>ExecuteAsync</c>; site-announcement
+/// writes are moderator-gated the same way. Group blog post creation additionally enforces group
+/// membership (also 403). Each subtype has its own update/delete routes (<c>/{id}</c> profile,
+/// <c>/group/{id}</c>, <c>/site/{id}</c>); an id of another subtype is 404 (owner ruling D10).
 /// </para>
 /// </summary>
 public static class BlogPostEndpoints
@@ -125,6 +127,24 @@ public static class BlogPostEndpoints
                     Results.Ok(await blogPosts.CreateGroupBlogPostAsync(dto))))
             .RequireAuthorization();
 
+        // Group-post lifecycle (owner ruling D10, WU-TptHardDelete). Author-only in the service; a
+        // profile or site id is 404 there, as a group id is on the profile routes above.
+        group.MapPut("/group/{blogPostId:int}", (IBlogPostWriteService blogPosts, int blogPostId, UpdateGroupBlogPostDto dto) =>
+                EndpointHelpers.ExecuteAsync(async () =>
+                    blogPostId != dto.BlogPostId
+                        ? Results.Problem(detail: "Route blogPostId does not match body BlogPostId.",
+                            statusCode: StatusCodes.Status400BadRequest)
+                        : await UpdateGroupAndRespondAsync(blogPosts, dto)))
+            .RequireAuthorization();
+
+        group.MapDelete("/group/{blogPostId:int}", (IBlogPostWriteService blogPosts, int blogPostId) =>
+                EndpointHelpers.ExecuteAsync(async () =>
+                {
+                    await blogPosts.DeleteGroupBlogPostAsync(blogPostId);
+                    return Results.NoContent();
+                }))
+            .RequireAuthorization();
+
         // Site announcements (WU-SiteNews) — RequireAuthorization() only; the real
         // IsModerator || IsAdmin gate lives in the write service (translated to 403 by
         // ExecuteAsync), same posture as every other write route in this file.
@@ -155,6 +175,12 @@ public static class BlogPostEndpoints
     private static async Task<IResult> UpdateAndRespondAsync(IBlogPostWriteService blogPosts, UpdateBlogPostDto dto)
     {
         await blogPosts.UpdateBlogPostAsync(dto);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> UpdateGroupAndRespondAsync(IBlogPostWriteService blogPosts, UpdateGroupBlogPostDto dto)
+    {
+        await blogPosts.UpdateGroupBlogPostAsync(dto);
         return Results.NoContent();
     }
 

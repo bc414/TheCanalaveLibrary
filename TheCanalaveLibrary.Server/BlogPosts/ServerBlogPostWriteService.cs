@@ -7,10 +7,18 @@ namespace TheCanalaveLibrary.Server;
 /// Server-side write implementation for Blog Posts. Inherits the read path via primary-constructor
 /// chaining (mirrors <see cref="ServerCommentWriteService"/> / <see cref="ServerStoryWriteService"/>).
 /// <para>
-/// <b>Security model:</b> every mutation loads the entity and checks
-/// <c>entity.AuthorId == IActiveUserContext.UserId</c>, throwing <see cref="UnauthorizedAccessException"/>
-/// on mismatch. The UI <c>@if (isOwner)</c> affordance is convenience only; the service gate is the
-/// actual control (settled WU24, <c>cross-cutting.md</c> §"Active-User-Conditional Handling").
+/// <b>Security model:</b> every profile and group mutation probes its own subtype's child set and checks
+/// the row's <c>AuthorId</c> against <c>IActiveUserContext.UserId</c>, throwing
+/// <see cref="UnauthorizedAccessException"/> on mismatch or on an authorless post (owned by nobody); an
+/// id of another subtype is <see cref="KeyNotFoundException"/> (owner ruling D10). Site announcements
+/// are moderator-gated instead (see their section). The UI <c>@if (isOwner)</c> affordance is
+/// convenience only; the service gate is the actual control (settled WU24, <c>cross-cutting.md</c>
+/// §"Active-User-Conditional Handling").
+/// </para>
+/// <para>
+/// <b>Deletes:</b> every subtype deletes through <see cref="TptDelete.BlogPostAsync"/> (the post's
+/// comments and polls through their base rows, then the post) in one execution-strategy transaction —
+/// <c>layer2-services.md</c> §"Hard deletes of content parents".
 /// </para>
 /// <para>
 /// <b>Sanitize-once-on-save:</b> raw HTML from the editor is sanitized via
@@ -96,27 +104,25 @@ public class ServerBlogPostWriteService(
         List<string> errors = dto.CanSave();
         if (errors.Count > 0) throw new BlogPostValidationException(errors);
 
-        int? existingAuthorId = await writeDb.BlogPosts
-            .Where(b => b.BlogPostId == dto.BlogPostId)
-            .Select(b => (int?)b.AuthorId)
+        // One probe on the PROFILE child set (owner ruling D10's per-subtype lifecycle): a group or site
+        // id is not found here, so it never runs the base-table half of the update below. The prior
+        // published state (WU-B2) rides the same projection — it detects the false→true transition.
+        var existing = await writeDb.ProfileBlogPosts
+            .Where(p => p.BlogPostId == dto.BlogPostId)
+            .Select(p => new { p.AuthorId, p.IsPublished })
             .FirstOrDefaultAsync();
 
-        if (existingAuthorId is null)
+        if (existing is null)
             throw new KeyNotFoundException($"Blog post {dto.BlogPostId} not found.");
 
-        if (existingAuthorId != userId)
+        // An authorless post (author's account deleted — SET NULL) is owned by nobody.
+        if (existing.AuthorId is not int authorId || authorId != userId)
             throw new UnauthorizedAccessException("You can only edit your own blog posts.");
 
         // Ownership gate on the optional story link (WU-B2) — same control as the create path.
         await EnsureLinkedStoryOwnedAsync(dto.StoryId, userId);
 
-        // Prior published state, read from the child table only (WU-B2): detects the false→true
-        // publish transition below. Null when the id isn't a profile post — the base-table update
-        // still runs (preserving pre-B2 behavior for raw non-profile ids) but no fan-out fires.
-        bool? wasPublished = await writeDb.ProfileBlogPosts
-            .Where(p => p.BlogPostId == dto.BlogPostId)
-            .Select(p => (bool?)p.IsPublished)
-            .FirstOrDefaultAsync();
+        bool wasPublished = existing.IsPublished;
 
         string sanitizedContent = sanitizer.Sanitize(dto.Content);
 
@@ -141,7 +147,7 @@ public class ServerBlogPostWriteService(
         // false→true edge — drafts stay silent, and a republish after unpublish re-notifies
         // (intentional; the create-core's unread-dedup absorbs back-to-back bursts). Recipient
         // resolution + 13>14>15>16 precedence live in NotifyNewProfileBlogPostAsync.
-        if (wasPublished == false && dto.IsPublished)
+        if (!wasPublished && dto.IsPublished)
         {
             try
             {
@@ -162,26 +168,45 @@ public class ServerBlogPostWriteService(
         if (ActiveUser.UserId is not int userId)
             throw new InvalidOperationException("Deleting a blog post requires an authenticated user.");
 
-        int? existingAuthorId = await writeDb.BlogPosts
-            .Where(b => b.BlogPostId == blogPostId)
-            .Select(b => (int?)b.AuthorId)
+        // Probe the PROFILE child set (owner ruling D10's per-subtype lifecycle; layer2-services.md
+        // §"Scalar projections on nullable FK columns"): a group or site id is not found here — it used
+        // to reach a profile_blog_posts stub delete that affected 0 rows and surfaced as a 500.
+        var existing = await writeDb.ProfileBlogPosts
+            .Where(p => p.BlogPostId == blogPostId)
+            .Select(p => new { p.AuthorId })
             .FirstOrDefaultAsync();
 
-        if (existingAuthorId is null)
+        if (existing is null)
             throw new KeyNotFoundException($"Blog post {blogPostId} not found.");
 
-        if (existingAuthorId != userId)
+        // An authorless post (author's account deleted — SET NULL) is owned by nobody.
+        if (existing.AuthorId is not int authorId || authorId != userId)
             throw new UnauthorizedAccessException("You can only delete your own blog posts.");
 
-        // Change-tracker stub delete: EF issues child-then-base DELETE in one transaction.
-        // BlogPostLike / BlogPostComment rows cascade. ExecuteDeleteAsync is unsupported on TPT
-        // base-type DbSets — change-tracker stub is the clean alternative.
-        writeDb.Remove(new ProfileBlogPost { BlogPostId = blogPostId });
-        await writeDb.SaveChangesAsync();
+        await DeleteWithDependentsAsync(blogPostId);
 
-        // Decrement BlogPostsWritten counter (cross-cutting.md §"UserStats Updates").
-        await writeDb.UserStats.Where(us => us.UserId == existingAuthorId.Value)
+        // Decrement BlogPostsWritten post-commit (D22; cross-cutting.md §"UserStats Updates").
+        await writeDb.UserStats.Where(us => us.UserId == authorId)
             .ExecuteUpdateAsync(s => s.SetProperty(us => us.BlogPostsWritten, us => us.BlogPostsWritten - 1));
+    }
+
+    /// <summary>
+    /// The one delete shape for every blog-post subtype (owner ruling D10): the post's comments and
+    /// polls through their base rows, then the post through <c>base_blog_posts</c> — all
+    /// <see cref="TptDelete.BlogPostAsync"/>, in one transaction under the execution strategy (a bare
+    /// <c>BeginTransactionAsync</c> throws under <c>EnableRetryOnFailure</c>). The delegate tracks
+    /// nothing, and every statement is idempotent, so a retry is safe. Counters stay with the caller,
+    /// after this returns.
+    /// </summary>
+    private async Task DeleteWithDependentsAsync(int blogPostId)
+    {
+        var strategy = writeDb.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
+        {
+            await using var tx = await writeDb.Database.BeginTransactionAsync();
+            await TptDelete.BlogPostAsync(writeDb, blogPostId);
+            await tx.CommitAsync();
+        });
     }
 
     public async Task<BlogPostLikeResultDto> ToggleLikeAsync(int blogPostId)
@@ -308,14 +333,79 @@ public class ServerBlogPostWriteService(
         return post.BlogPostId;
     }
 
+    // ── Group-post lifecycle (owner ruling D10, WU-TptHardDelete) ────────────────────
+    // Author-only, gated on the GROUP child set (a profile or site id is not found). No membership
+    // recheck: the author owns their row and may have left the group — the EditCommentAsync /
+    // DeleteCommentAsync precedent. No rating-vs-audience check on update: it mirrors create exactly
+    // (the waterfall ruling is worksheet D43, pending). No fan-out and no rate limit, mirroring the
+    // profile and site update paths. No BlogPostsWritten move: group create does not move it either
+    // (which posts that counter counts is owner-open — tracker F16).
+
+    public async Task UpdateGroupBlogPostAsync(UpdateGroupBlogPostDto dto)
+    {
+        if (ActiveUser.UserId is not int userId)
+            throw new InvalidOperationException("Updating a group blog post requires an authenticated user.");
+
+        List<string> errors = dto.CanSave();
+        if (errors.Count > 0) throw new BlogPostValidationException(errors);
+
+        await RequireOwnGroupPostAsync(dto.BlogPostId, userId, "edit");
+
+        string sanitizedContent = sanitizer.Sanitize(dto.Content);
+
+        // Base-table columns: Title and Content only (author_id never changes after creation).
+        await writeDb.BlogPosts
+            .Where(b => b.BlogPostId == dto.BlogPostId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(b => b.Title,   dto.Title.Trim())
+                .SetProperty(b => b.Content, sanitizedContent));
+
+        // Child-table columns. IsPublished is untouched — group posts publish on create.
+        await writeDb.GroupBlogPosts
+            .Where(p => p.BlogPostId == dto.BlogPostId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(p => p.Rating,          dto.Rating)
+                .SetProperty(p => p.HasSpoilers,     dto.HasSpoilers)
+                .SetProperty(p => p.LastUpdatedDate, DateTime.UtcNow));
+    }
+
+    public async Task DeleteGroupBlogPostAsync(int blogPostId)
+    {
+        if (ActiveUser.UserId is not int userId)
+            throw new InvalidOperationException("Deleting a group blog post requires an authenticated user.");
+
+        await RequireOwnGroupPostAsync(blogPostId, userId, "delete");
+        await DeleteWithDependentsAsync(blogPostId);
+    }
+
+    /// <summary>
+    /// The group-post gate: missing or not a group post → <see cref="KeyNotFoundException"/>; not the
+    /// caller's, or authorless (author's account deleted — owned by nobody) →
+    /// <see cref="UnauthorizedAccessException"/>.
+    /// </summary>
+    private async Task RequireOwnGroupPostAsync(int blogPostId, int userId, string verb)
+    {
+        var existing = await writeDb.GroupBlogPosts
+            .Where(p => p.BlogPostId == blogPostId)
+            .Select(p => new { p.AuthorId })
+            .FirstOrDefaultAsync();
+
+        if (existing is null)
+            throw new KeyNotFoundException($"Group blog post {blogPostId} not found.");
+
+        if (existing.AuthorId is not int authorId || authorId != userId)
+            throw new UnauthorizedAccessException($"You can only {verb} your own group blog posts.");
+    }
+
     // ── Site announcements (WU-SiteNews) ──────────────────────────────────────────
     // Security model diverges from the rest of this service: IsModerator || IsAdmin gates every
     // mutation (listed explicitly — Admin does not inherit Moderator), not author-only ownership
     // — the SitePoll precedent (ServerPollWriteService.CreateSitePollAsync / the
     // LoadAuthorizedPollWithOptionsAsync site-poll branch: any moderator manages any site post).
-    // Deliberately NOT UserStats.BlogPostsWritten-tracked (unlike the profile/group create paths
-    // above) — that counter feeds community-content badges; site announcements are staff output,
-    // not community contribution.
+    // Deliberately NOT UserStats.BlogPostsWritten-tracked — that counter feeds community-content
+    // badges; site announcements are staff output, not community contribution. (Only the profile
+    // create/delete paths move it today; group posts do not, and the recompute counts every
+    // base_blog_posts row — the disagreement is owner-open, tracker F16.)
 
     public async Task<int> CreateSiteBlogPostAsync(CreateSiteBlogPostDto dto)
     {
@@ -400,12 +490,9 @@ public class ServerBlogPostWriteService(
         if (!exists)
             throw new KeyNotFoundException($"Site announcement {blogPostId} not found.");
 
-        // Change-tracker stub delete: EF issues child-then-base DELETE in one transaction.
-        // BlogPostLike / BlogPostComment rows cascade. Mirrors DeleteBlogPostAsync's
-        // ProfileBlogPost stub, typed to SiteBlogPost (ExecuteDeleteAsync is unsupported on TPT
-        // base-type DbSets).
-        writeDb.Remove(new SiteBlogPost { BlogPostId = blogPostId });
-        await writeDb.SaveChangesAsync();
+        // The same shape as every blog-post delete (owner ruling D10): comments and polls through
+        // their base rows, then the post. No counter — site posts are not BlogPostsWritten-tracked.
+        await DeleteWithDependentsAsync(blogPostId);
     }
 
     private async Task FireAnnouncementFanOutAsync(int blogPostId, int authorId)

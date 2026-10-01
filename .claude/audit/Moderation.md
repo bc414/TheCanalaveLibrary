@@ -165,6 +165,24 @@ Recommendation and PrivateMessage remain in the allow-set with no report entry p
 
 ## Feature 47 — Moderation Queue & Actions
 
+**WU-TptHardDelete Stage note (2026-09-30; owner ruling D10) — no flip; L2 stays 5.** The illegal-content
+hard delete (`ResolveWithRemovalAsync(…, hardDelete: true)` → `ApplyHardDeleteAsync`) orphaned TPT base
+rows: removing a story cascaded to its chapters and their `chapter_comments` child rows but never
+reached `base_comments`, and removing a blog post did the same to its comments and its `base_polls`.
+It now runs `TptDelete.StoryCommentsAsync` (Story) or `TptDelete.BlogPostDependentsAsync` (BlogPost)
+before the EF `Remove`, inside `InResolveTransactionAsync`'s transaction — the helper's SQL lands at
+once, the `Remove` at the delegate's save, and a retry re-runs both (the tracker is cleared first and
+the SQL is idempotent). With the parent → child FKs now RESTRICT, skipping the helper would fail the
+resolve rather than orphan rows. Comment, Recommendation and Message removals are unchanged (a loaded
+entity's removal deletes every row it owns). The spec's K1 risk did not materialize: the story cascade
+passes the Restrict `chapters.primary_content_id` FK, because the referencing chapters are deleted
+before their contents. Tier: Integration — `TptHardDeleteTests`: a story with two chapters, three
+comments (a reply among them) and a like leaves no base comment, story, chapter or content row and the
+report `ResolvedActionTaken`; a blog post with comments and a voted poll leaves no base row of either.
+The story case was mutation-checked (it fails without the helper call). Still open: the reports on the
+TPT child comments a hard delete destroys stay Open (tracker F13, owner-open). WU-BlobCleanup edits this
+method next (D14).
+
 **WU-ModerationIntegrity browser verification Stage note (2026-09-30) — F46, F47 and F53 L4.5 1→5;
 tracker H19 closed.**
 - **Setup:** server-only path.
@@ -313,7 +331,8 @@ naming that rec in the same save (D3 trigger 5). Verified by Integration `Modera
 built: the report-driven `ApplyAccountActionAsync` sending 81 to a member reporter
 (WU-ModerationIntegrity).
 
-**Stages (updated 2026-09-30, WU-ModerationIntegrity browser verification):** L1–L3.5 = 5, L4 = 3,
+**Stages (updated 2026-09-30, WU-TptHardDelete — the hard delete clears TPT dependents first, an L2
+change beneath the cell, no flip; Stage note at the top of this section):** L1–L3.5 = 5, L4 = 3,
 L4.5 = 5 (WU-ModerationIntegrity lowered it to 1 for its undriven UI and the review fixes'
 standing-ban resolve; its browser pass the same day drove both on both render phases and returned it
 to 5, tracker H19 closed — the browser-verification note at the top of this section; the earlier 1→5

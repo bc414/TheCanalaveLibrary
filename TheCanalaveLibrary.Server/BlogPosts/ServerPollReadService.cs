@@ -76,7 +76,7 @@ public class ServerPollReadService(
             {
                 p.PollId, p.PollName, p.Description, p.DateOpened, p.DateClosed,
                 p.AllowMultiple, p.ResultsVisibility, p.AnonymityMode, p.OwnerId,
-                OwnerUserName = (string?)p.Owner.UserName,
+                OwnerUserName = p.Owner != null ? p.Owner.UserName : null, // null = owner deleted (D11)
                 IsArchived = p is SitePoll && ((SitePoll)p).IsArchived,
                 BlogPostId = p is BlogPostPoll ? (int?)((BlogPostPoll)p).BlogPostId : null,
                 TotalVoterCount = p.PollOptions
@@ -109,7 +109,9 @@ public class ServerPollReadService(
         return rows.Select(r =>
         {
             PollStatus status = PollRules.StatusFor(r.DateOpened, r.DateClosed, now);
-            bool isOwner = ActiveUser.UserId == r.OwnerId;
+            // Pattern, never `UserId == OwnerId`: two nulls compare equal in C#, so an anonymous viewer
+            // would "own" an ownerless poll (owner ruling D11) and see AfterVote/AfterClose tallies.
+            bool isOwner = r.OwnerId is int ownerId && ActiveUser.UserId == ownerId;
             bool resultsVisible = PollRules.ResultsVisible(
                 r.ResultsVisibility, status,
                 viewerHasCurrentVote: r.ViewerVotedOptionIds.Length > 0,

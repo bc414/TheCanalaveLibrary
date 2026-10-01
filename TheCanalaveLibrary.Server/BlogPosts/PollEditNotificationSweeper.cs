@@ -51,7 +51,9 @@ public sealed class PollEditNotificationSweeper(
             {
                 // Current voters only — a voter who retracted since the edit isn't notified.
                 // Voters may legitimately be empty (every vote sat on a since-deleted option);
-                // the stamp still lands so the poll doesn't rescan forever.
+                // the stamp still lands so the poll doesn't rescan forever. OwnerId is null when the
+                // owner's account was deleted after the edit (D11): the notification goes out
+                // null-sourced (D4's "actor since deleted").
                 if (poll.VoterIds.Length > 0)
                     await notifications.NotifyPollUpdatedAsync(
                         poll.OwnerId, poll.VoterIds, poll.BlogPostId ?? 0);

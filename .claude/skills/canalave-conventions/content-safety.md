@@ -261,10 +261,12 @@ materialization, so the blog-post **content-rating** filter is *not* applied mod
 `BaseBlogPost` — each blog-post read service enforces the ceiling via an explicit
 `.Where(p => p.Rating <= max)` in the projection. The simple boolean `"IsTakenDown"` filter **is**
 safe on TPT roots and *is* applied model-level to `BaseBlogPost` (confirmed by the full test suite
-since WU34). Blog-post delete uses
-the change-tracker stub: `writeDb.Remove(new ProfileBlogPost { BlogPostId = id });
-await writeDb.SaveChangesAsync();` — EF issues child-then-base DELETE in one transaction. See
-`audit/BlogPosts.md` §Feature 35 Stage-5 note (WU31.5) for full rationale.
+since WU34). Blog-post delete goes through `TptDelete.BlogPostAsync` (owner ruling D10,
+WU-TptHardDelete 2026-09-30): the post's comments and polls through their base rows, then the
+`base_blog_posts` row, whose CASCADE takes the child row. The earlier change-tracker stub
+(`writeDb.Remove(new ProfileBlogPost { BlogPostId = id })`, WU31.5) deleted the post's rows but
+orphaned its comments' and polls' base rows, and 500'd on a non-profile id. Rule:
+`layer2-services.md` §"Hard deletes of content parents".
 
 ## Moderation Model
 
@@ -303,7 +305,10 @@ for moderator judgment only.
 
 **Narrow hard-delete escape hatch.** A separate explicit "illegal content" action (CSAM, piracy) hard-deletes
 via a distinct `ApplyHardDeleteAsync(type, id)` path in `ServerModerationWriteService`. This is not the
-default and is presented as a distinct moderator choice, not the same action as soft takedown.
+default and is presented as a distinct moderator choice, not the same action as soft takedown. A hard
+delete of a story or blog post first clears the target's TPT dependents (chapter comments; a post's
+comments and polls) via `TptDelete`, in the same transaction — the content-parent FKs are RESTRICT
+(owner ruling D10; `layer2-services.md` §"Hard deletes of content parents").
 
 **Named query filter `"IsTakenDown"`.** Each removable entity registers the `"IsTakenDown"` filter via
 `HasQueryFilter` in `ReadOnlyApplicationDbContext.OnModelCreating` (composable alongside `"ContentRating"`

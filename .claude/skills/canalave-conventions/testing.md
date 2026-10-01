@@ -268,6 +268,19 @@ attribution write FK-failed in practice.)
 Respawn wipes all rows between tests — each test is self-contained in its FK setup; nothing
 can be assumed to survive from a previous test.
 
+## Asserting a TPT delete left no base row: raw SQL, ids captured first (WU-TptHardDelete)
+
+A content-parent delete that forgets its TPT children leaves **orphaned base rows** (a
+`base_comments` row with no child row — `layer1-data-model.md` §"Hard-deleting a content parent").
+An EF query over the base set (`db.BaseComments…`) *throws* when it materializes such a row, so a test
+asserting "no orphan" through EF fails with an unreadable materialization error instead of a count.
+Capture the ids before the delete and count with raw SQL:
+`db.Database.SqlQuery<int>($"SELECT COUNT(*)::int AS \"Value\" FROM base_comments WHERE comment_id = ANY({ids})").SingleAsync()`.
+To pin an FK's delete posture rather than the service code, delete the parent with raw SQL while a
+child exists and assert the `PostgresException`: an `ON DELETE RESTRICT` refusal is `SqlState`
+**23001** (`PostgresErrorCodes.RestrictViolation` — 23503 is NO ACTION's) plus the expected
+`ConstraintName`. Reference: `TptHardDeleteTests`.
+
 ## Testing a check-then-act guard: interleave, don't race
 
 A write that pre-reads a row, checks it, then writes with a conditional `WHERE` (the lifecycle and

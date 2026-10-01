@@ -51,7 +51,8 @@ public class BlogPostPageTests : BunitContext
     private static BlogPostDto MakePost(
         bool hasSpoilers = false,
         int? storyId = null,
-        bool viewerHasCompletedStory = false) =>
+        bool viewerHasCompletedStory = false,
+        BlogPostKind kind = BlogPostKind.Profile) =>
         new(
             BlogPostId: 1,
             AuthorId: AuthorId,
@@ -67,6 +68,7 @@ public class BlogPostPageTests : BunitContext
             LikeCount: 0,
             IsLikedByCurrentUser: false,
             IsPublished: true,
+            Kind: kind,
             ViewerHasCompletedStory: viewerHasCompletedStory);
 
     private void AuthenticateAs(int userId) =>
@@ -102,6 +104,43 @@ public class BlogPostPageTests : BunitContext
 
         cut.FindAll("a").Single(a => a.TextContent.Trim() == "Author")
             .GetAttribute("href").Should().Be($"/user/{AuthorId}");
+    }
+
+    // ── Edit link (WU-TptHardDelete) ──────────────────────────────────────────────
+
+    private static IElement? EditLink(IRenderedComponent<BlogPostPage> cut) =>
+        cut.FindAll("a").FirstOrDefault(a => a.TextContent.Trim() == "Edit");
+
+    [Fact]
+    public void ProfilePost_Author_SeesEditLink_ToTheProfileEditor()
+    {
+        AuthenticateAs(AuthorId);
+        var cut = RenderPage(MakePost(kind: BlogPostKind.Profile));
+
+        EditLink(cut).Should().NotBeNull();
+        EditLink(cut)!.GetAttribute("href").Should().Be("/blog/1/edit");
+    }
+
+    [Theory]
+    [InlineData(BlogPostKind.Group)]
+    [InlineData(BlogPostKind.Site)]
+    public void NonProfilePost_Author_SeesNoEditLink(BlogPostKind kind)
+    {
+        // /blog/{id}/edit is the profile-post editor; the profile update path answers not-found for a
+        // group or site id (owner ruling D10's per-subtype lifecycle), so the link would dead-end.
+        AuthenticateAs(AuthorId);
+        var cut = RenderPage(MakePost(kind: kind));
+
+        EditLink(cut).Should().BeNull($"a {kind} post's author has no profile-editor route");
+    }
+
+    [Fact]
+    public void ProfilePost_NonAuthor_SeesNoEditLink()
+    {
+        AuthenticateAs(ViewerId);
+        var cut = RenderPage(MakePost(kind: BlogPostKind.Profile));
+
+        EditLink(cut).Should().BeNull();
     }
 
     // ── Curtain visibility ────────────────────────────────────────────────────────
@@ -251,6 +290,12 @@ public class BlogPostPageTests : BunitContext
             Task.FromResult(new BlogPostLikeResultDto(1, true));
 
         public Task<int> CreateGroupBlogPostAsync(CreateGroupBlogPostDto dto) =>
+            throw new NotImplementedException();
+
+        public Task UpdateGroupBlogPostAsync(UpdateGroupBlogPostDto dto) =>
+            throw new NotImplementedException();
+
+        public Task DeleteGroupBlogPostAsync(int blogPostId) =>
             throw new NotImplementedException();
 
         public Task<int> CreateSiteBlogPostAsync(CreateSiteBlogPostDto dto) =>

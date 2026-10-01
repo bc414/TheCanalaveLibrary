@@ -17,6 +17,34 @@ when Feature 56 was cut — see the Feature 56 CUT note below.)
 
 ## Feature 35 — Blog Post Writing
 
+**WU-TptHardDelete Stage note (2026-09-30; owner rulings D10/D11) — no flip.** `dotnet build` green;
+all three tiers green.
+- **L1.** Migration `WU_TptHardDelete_FkPosture` makes `blog_post_comments.blog_post_id` (now
+  configured explicitly — it was convention-only) and `blog_post_polls.blog_post_id` RESTRICT. Tier:
+  Integration — `TptHardDeleteTests`' posture tests (a raw `DELETE FROM base_blog_posts` with a comment
+  or a poll present is refused by the named constraint) and its `pg_constraint` catalog guard.
+- **L2.** Every blog-post delete — profile, site, and the new group delete — runs
+  `TptDelete.BlogPostAsync` in one execution-strategy transaction: comments and polls through their base
+  rows, then the post. All three used to stub-delete the child row and orphan `base_comments` /
+  `base_polls`; the "FK cascades handle it" comments that said otherwise are corrected (service and
+  interface). The profile update/delete gates probe `ProfileBlogPosts` (update reads `AuthorId` and
+  `IsPublished` in one projection): a group or site id is now 404 (delete was a 500; update half-applied
+  the base-table columns), and an authorless post is 403. New `UpdateGroupBlogPostAsync` /
+  `DeleteGroupBlogPostAsync` + `UpdateGroupBlogPostDto`, per the Settled note below. Tiers: Integration —
+  `TptHardDeleteTests` (zero surviving base comment, poll, option and vote rows after each subtype's
+  delete), `BlogPostWriteServiceTests` +10 (cross-subtype 404s, authorless 403, group update fields,
+  group gates, the author who left the group); Unit — `BlogPostValidationsTests` +4.
+- **L5.** `PUT`/`DELETE /api/blog-posts/group/{id}` plus `ClientBlogPostWriteService` twins. Tier:
+  Integration — `BlogPostEndpointsTests` +4 (route/body mismatch 400, non-author 403 then author 204,
+  the profile route with a group id 404, `BlogPostDto.Kind` over the wire).
+- **Found while building:** Postgres reports an `ON DELETE RESTRICT` refusal as **23001**
+  (`restrict_violation`), not the 23503 D10's text names (that is NO ACTION's code). The posture tests
+  assert 23001, which also pins RESTRICT against a silent drift to NO ACTION.
+- **Not built (recorded):** `BlogPostsWritten` for group/site posts (tracker **F16** — the campaign
+  orchestrator excluded the spec's R10); delete UI for any subtype and a group-post editor (tracker
+  **B25**); rating against group audience on update (D43, pending). UI: `BlogPostPage`'s Edit link — see
+  F36's note.
+
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** The site-announcement gates
 (`CreateSiteBlogPostAsync`, `UpdateSiteBlogPostAsync`, `DeleteSiteBlogPostAsync`, and the read
 `GetSiteAnnouncementForEditAsync`) collapse their authentication-then-role pairs into the shared
@@ -25,8 +53,8 @@ answers an anonymous caller 401 (it was 403). `GetSiteAnnouncementsAsync`'s unpu
 *downgrade* is deliberately not a gate and is unchanged. Verified by the existing Integration blog-post
 suites.
 
-- **L1 — Stage 5.** TPT split sound. **L2 — Stage 5** (site-announcement gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; like toggle: an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, and on a hidden post discloses no count since its review fixes — see the Features 35–37 Stage note under F36). **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
-- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
+- **L1 — Stage 5.** TPT split sound; the post → comment and post → poll FKs are RESTRICT since WU-TptHardDelete, 2026-09-30. **L2 — Stage 5** (per-subtype lifecycle and `TptDelete`-based deletes since WU-TptHardDelete, 2026-09-30 — see its Stage note above; site-announcement gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; like toggle: an unlike is a clear since WU-AccessGateSweep2, 2026-09-30, and on a hidden post discloses no count since its review fixes — see the Features 35–37 Stage note under F36). **L3/L3.5 — Stage 5.** **L4 — Stage 1** (visual sign-off pending; same pattern as WU13/WU24). **L6 — Stage 2.**
+- **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13; group-post `PUT`/`DELETE` routes + client twins since WU-TptHardDelete, 2026-09-30).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto; blog-post editor got the create→edit `forceLoad` fix for
   Quill-hosting pages (editor page not browser-driven in the flip's wave). Full wave narrative +
   the 7 bugs found/fixed: `workplan.md` WU-GlobalFlip.
@@ -99,10 +127,40 @@ suites.
     profile posts speak about a specific story. Restores the original TPT design (Gemini Entry #930:
     `GroupBlogPosts (BlogPostId, GroupId)` only — the shipped `StoryId` was a deviation). Group
     spoiler posts therefore always take the interstitial's immediate-reveal path.
+- **Settled — blog-post deletes and the per-subtype lifecycle (owner ruling D10, 2026-08-06; built
+  WU-TptHardDelete 2026-09-30). Do not revisit:**
+  - Every blog-post delete removes the post's comments and polls through `TptDelete` (base rows
+    first), inside one execution-strategy transaction. `blog_post_comments` and `blog_post_polls` are
+    RESTRICT on the post. Rule: `layer1-data-model.md` §"Hard-deleting a content parent",
+    `layer2-services.md` §"Hard deletes of content parents".
+  - Lifecycle methods are **per subtype**, each probing its own child set: profile
+    (`UpdateBlogPostAsync`/`DeleteBlogPostAsync`), group (`UpdateGroupBlogPostAsync`/
+    `DeleteGroupBlogPostAsync`, new), site (moderator-gated). A cross-subtype id is
+    `KeyNotFoundException`; an authorless post is `UnauthorizedAccessException`.
+  - Group-post update edits Title, Content, Rating and HasSpoilers. It has no `IsPublished` (group
+    posts publish on create) and no `StoryId`. Neither it nor delete rechecks membership: the author
+    owns their row, and may have left the group (the `EditCommentAsync` precedent).
+  - **Open, not decided here:** group-post rating against the group audience on update (worksheet
+    **D43**, pending — update mirrors create exactly); a group-delete path (D47(b), pending); the
+    `BlogPostsWritten` treatment of group and site posts (tracker **F16**); blog-post delete UI for
+    any subtype and group-post edit UI (tracker **B25**).
 
 ## Feature 36 — Blog Post Display
-- **L1 — Stage 5.** **L2 — Stage 5** (profile context for WU31; story/group contexts → WU30/WU32; profile posts respect the author's `ProfileVisibility` since WU-AccessGateSweep2, 2026-09-30, browser-verified the same day — see its Stage note and browser-verification note below).
-  **L3/L3.5 — Stage 5. L4 — Stage 1** (visual sign-off pending).
+
+**WU-TptHardDelete Stage note (2026-09-30) — L4.5 5→1.** `BlogPostPage` offered its author an Edit
+link to `/blog/{id}/edit` on every subtype, but that editor and `UpdateBlogPostAsync` serve profile
+posts only, so a group or site author landed on a not-found editor (and after this WU's per-subtype
+gates, a guaranteed `KeyNotFoundException`). `BlogPostDto` gains `Kind` (`BlogPostKind` Profile / Group
+/ Site, set by whichever `GetByIdAsync` branch answers), and the link renders only for
+`Kind == Profile`. No UX ruling was needed to hide it; a group/site edit or delete affordance is tracker
+**B25**. Tiers: RazorComponents — `BlogPostPageTests` +4 (profile author sees the link with the right
+href; group and site authors do not; a non-author does not); Integration — `BlogPostEndpointsTests`
+reads `Kind` back over HTTP for a profile and a group post (the WASM path). **L4.5 lowered 5→1:**
+WU-TptHardDelete (2026-09-30) ran with no browser available, and the page's behavior changed undriven
+(the WU-InertFeatures precedent). Owed pass: tracker **H21**.
+
+- **L1 — Stage 5.** **L2 — Stage 5** (profile context for WU31; story/group contexts → WU30/WU32; profile posts respect the author's `ProfileVisibility` since WU-AccessGateSweep2, 2026-09-30, browser-verified the same day — see its Stage note and browser-verification note below; `BlogPostDto.Kind` since WU-TptHardDelete, 2026-09-30).
+  **L3/L3.5 — Stage 5** (Edit link profile-only since WU-TptHardDelete, 2026-09-30 — see its Stage note above). **L4 — Stage 1** (visual sign-off pending). **L4.5 — Stage 1** (lowered from 5 by WU-TptHardDelete, 2026-09-30, no browser available; tracker H21).
 - **L5 — Stage 5 (WU-GlobalFlip, 2026-07-13).** Endpoints + client impl live (WU-L5Sweep) and the
   site now runs global InteractiveAuto (blog-post display not browser-driven in the flip's wave;
   the F37 poll blocks that render on it were). Full wave narrative + the 7 bugs found/fixed:
@@ -298,7 +356,10 @@ three `BaseBlogPost` subtypes and needed to resolve the new type unmodified.
 the `ProfileBlogPosts` table despite their generic-sounding names (a pre-existing latent gap,
 discovered while confirming they were safe to extend — editing/deleting a `GroupBlogPost` through
 them silently no-ops the child-table update; not introduced by this WU, not fixed by it either,
-worth its own tracker item if `GroupBlogPost` editing is ever exercised for real).
+worth its own tracker item if `GroupBlogPost` editing is ever exercised for real). **Closed
+2026-09-30 by WU-TptHardDelete (owner ruling D10):** the profile methods now key on the
+`ProfileBlogPosts` child set (a group or site id is `KeyNotFoundException`, no half-update), and group
+posts got their own `UpdateGroupBlogPostAsync`/`DeleteGroupBlogPostAsync`.
 
 **Parent-visibility invariant (identity-and-authorization.md):**
 `BlogPostVisibilityGuard.LoadFactsAsync` — the enrolment list comments/likes on any blog post
@@ -400,6 +461,29 @@ exercised against the new TPT type.
 
 ## Feature 37 — Polls
 
+**WU-TptHardDelete Stage note (2026-09-30; owner rulings D11 and D10) — no flip.**
+- **L1.** `base_polls.owner_id` is nullable with `ON DELETE SET NULL` (was a convention-only
+  CASCADE that destroyed the poll, its options and other users' votes with the owner's account). The
+  relationship is now explicit in `IdentityConfigurations`' SET NULL block. Migration
+  `WU_TptHardDelete_FkPosture`; its `Down()` first deletes ownerless polls, which could not go back to
+  NOT NULL. `blog_post_polls.blog_post_id` is RESTRICT (D10 — a post delete removes its polls through
+  `base_polls` first; see F35's note). Tier: Integration — `UserDeletionServiceTests` +3 (D11's natural
+  shape, its literal shape with the poll owner ≠ the post author, a deleted moderator's site poll: each
+  poll survives with NULL owner, both options and both other users' votes) and `TptHardDeleteTests`'
+  catalog guard (`confdeltype = 'n'`).
+- **L2.** A NULL owner is nobody, and C#'s `null == null` would have said otherwise: the manage gate is
+  now `OwnerId is not int ownerId || UserId != ownerId` (the old `UserId != OwnerId` let an anonymous
+  caller update, close or delete an ownerless blog-post poll), and the read's `isOwner` pattern-matches
+  too (the old form showed an anonymous viewer an ownerless AfterClose/AfterVote poll's live tallies).
+  `OwnerUserName` projects null for a missing owner. The edit-notification sweeper passes the null owner
+  through: `NotifyPollUpdatedAsync`'s source widened to `int?` (D4's "actor since deleted" null; four
+  implementers). Site polls stay moderator-managed. Tier: Integration — `PollServiceTests` +4 (ownerless
+  blog poll refused for a user and for anonymous on update/close/delete; a second moderator closes an
+  ownerless site poll; anonymous on an ownerless open AfterClose poll sees no tallies and null owner
+  fields; the sweeper notifies null-sourced and stamps). The two gate tests were mutation-checked (each
+  fails against the old comparison). No UI renders the owner, so no L3 change.
+- **Not decided here:** whether an ownerless poll stays votable (D42, pending — it does, as before).
+
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** The site-poll gates
 (`CreateSitePollAsync`, `SetSitePollArchivedAsync`, and the site-poll branch of
 `LoadAuthorizedPollWithOptionsAsync`) use the shared `ActiveUser.RequireModerator()` (owner ruling D9).
@@ -437,6 +521,14 @@ detailed-UI Stage-1 gap was resolved in chat 2026-07-12. **These are settled —
   any authenticated user.
 - **Surface scope:** `/polls` page (active + archived SitePolls), plus the homepage's inline
   active-poll section (WU-Home, 2026-07-28 — see below).
+- **Owner deletion (owner ruling D11, 2026-08-06; built WU-TptHardDelete 2026-09-30).**
+  `base_polls.owner_id` is nullable, `ON DELETE SET NULL` — a poll is content and survives its owner
+  anonymized, with its options and other users' votes. A NULL owner is **nobody**: no caller passes
+  the owner gate on an ownerless blog-post poll (it becomes manageable by no one), and an anonymous
+  viewer is never its "owner" for results visibility. Site polls stay moderator-managed whatever their
+  owner. **Open, not decided here:** whether an ownerless poll stays votable (worksheet D42, pending —
+  as built, it does). A blog post's polls are RESTRICT on the post and are deleted with it through
+  `TptDelete` (owner ruling D10).
 
 ### L1 reconcile note (2026-07-12)
 
@@ -455,9 +547,9 @@ The settled requirements reopened frozen L1 (Stage 5 → 4 → resolved same ses
 fixes; ~38 new poll tests). (This note's original "L5 stays Stage 2" is superseded by the L5
 bullet below, 2026-07-13.)
 
-- **L1 — Stage 5** (post-reconcile; see L1 reconcile note above). Covering tier: Integration
+- **L1 — Stage 5** (post-reconcile; see L1 reconcile note above; owner FK nullable SET NULL and the post → poll FK RESTRICT since WU-TptHardDelete, 2026-09-30 — see the Stage note at this feature's top). Covering tier: Integration
   (`PollServiceTests` delete-cascade + FK paths exercise the migrated schema).
-- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
+- **L2 — Stage 5** (`ServerPollReadService`/`ServerPollWriteService`, `Server/BlogPosts/`; a NULL owner is nobody at every owner read since WU-TptHardDelete, 2026-09-30; site-poll gates on the shared `RequireModerator()` since WU-ModerationIntegrity, 2026-09-30; inherits the author-`ProfileVisibility` check through `BlogPostVisibilityGuard` since WU-AccessGateSweep2, 2026-09-30, and a pure vote withdrawal is an unguarded clear returning `null` on a hidden poll since its review fixes — see the Features 35–37 Stage note under F36).
   Covering tier: **Integration** — `PollServiceTests` (18 tests: create permissions both kinds,
   validation, single/multi vote + replace/retract, pending/closed vote rejection, AfterVote
   visibility zeroing incl. retract-hides-again, Anonymous/VoterChoice name filtering, config lock

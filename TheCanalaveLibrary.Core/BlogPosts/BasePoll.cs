@@ -28,7 +28,12 @@ public abstract class BasePoll
     [Key]
     public int PollId { get; set; }
 
-    public int OwnerId { get; set; }
+    /// <summary>
+    /// The poll's creator. Null = the owner's account was deleted (owner ruling D11: polls are
+    /// content and survive anonymized). Ownership never matches null — compare with a pattern
+    /// (<c>OwnerId is int ownerId &amp;&amp; …</c>), never <c>int? == int?</c>.
+    /// </summary>
+    public int? OwnerId { get; set; }
 
     [Required] [MaxLength(256)] public string PollName { get; set; } = null!;
 
@@ -53,7 +58,7 @@ public abstract class BasePoll
     /// <summary>When the edit-notification sweep last notified voters. Null = never notified.</summary>
     public DateTime? EditNotifiedAt { get; set; }
 
-    public User Owner { get; set; } = null!;
+    public User? Owner { get; set; }
 
     public ICollection<PollOption> PollOptions { get; set; } = new List<PollOption>();
 }

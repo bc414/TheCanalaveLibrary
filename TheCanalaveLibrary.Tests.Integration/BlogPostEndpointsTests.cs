@@ -158,6 +158,85 @@ public class BlogPostEndpointsTests(PostgresFixture postgres) : IntegrationTestB
         dto.Content.Should().Be("<p>draft body</p>");
     }
 
+    // ── Group-post lifecycle routes (owner ruling D10, WU-TptHardDelete) ─────────
+
+    /// <summary>Inline group + group post (FK parents: the author user; the group row).</summary>
+    private async Task<int> SeedGroupPostAsync(int authorId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Group group = new()
+        {
+            GroupName = $"Group {Guid.NewGuid():N}"[..20], CreatorId = authorId,
+            AudienceRating = Rating.E, MaxContentRating = Rating.T
+        };
+        db.Groups.Add(group);
+        await db.SaveChangesAsync();
+        GroupBlogPost post = new()
+        {
+            AuthorId = authorId, GroupId = group.GroupId, Title = "Group post", Content = "<p>hi</p>",
+            Rating = Rating.E, IsPublished = true, DateCreated = DateTime.UtcNow, LastUpdatedDate = DateTime.UtcNow
+        };
+        db.GroupBlogPosts.Add(post);
+        await db.SaveChangesAsync();
+        return post.BlogPostId;
+    }
+
+    [Fact]
+    public async Task PutGroupPost_RouteBodyMismatch_Returns400()
+    {
+        int postId = await SeedGroupPostAsync(_authorId);
+        SetActiveUser(_authorId);
+
+        HttpResponseMessage response = await Factory.CreateClient().PutAsJsonAsync(
+            $"/api/blog-posts/group/{postId}",
+            new UpdateGroupBlogPostDto { BlogPostId = postId + 1, Title = "t", Content = "<p>c</p>" });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task DeleteGroupPost_NonAuthor_Returns403_Author_Returns204()
+    {
+        int postId = await SeedGroupPostAsync(_authorId);
+        int otherId = await SeedUserAsync("other");
+
+        SetActiveUser(otherId);
+        (await Factory.CreateClient().DeleteAsync($"/api/blog-posts/group/{postId}"))
+            .StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        SetActiveUser(_authorId);
+        (await Factory.CreateClient().DeleteAsync($"/api/blog-posts/group/{postId}"))
+            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task GetById_CarriesEachSubtypesKind_OverTheWire()
+    {
+        // BlogPostPage offers Edit for Kind == Profile only; on WASM the kind arrives through this JSON.
+        int groupPostId = await SeedGroupPostAsync(_authorId);
+        SetActiveUser(_authorId);
+        HttpClient client = Factory.CreateClient();
+
+        BlogPostDto? profile = await ReadNullableAsync<BlogPostDto>(await client.GetAsync($"/api/blog-posts/{_publishedPostId}"));
+        BlogPostDto? group   = await ReadNullableAsync<BlogPostDto>(await client.GetAsync($"/api/blog-posts/{groupPostId}"));
+
+        profile!.Kind.Should().Be(BlogPostKind.Profile);
+        group!.Kind.Should().Be(BlogPostKind.Group);
+    }
+
+    [Fact]
+    public async Task DeleteProfileRoute_WithAGroupPostId_Returns404_NotA500()
+    {
+        // Regression: the profile route's stub delete affected 0 rows on a group id and surfaced as a
+        // 500 (DbUpdateConcurrencyException). Each subtype now answers only for its own ids.
+        int postId = await SeedGroupPostAsync(_authorId);
+        SetActiveUser(_authorId);
+
+        (await Factory.CreateClient().DeleteAsync($"/api/blog-posts/{postId}"))
+            .StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
     [Fact]
     public async Task GetEdit_Anonymous_Returns401()
     {

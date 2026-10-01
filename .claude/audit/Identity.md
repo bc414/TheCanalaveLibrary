@@ -139,6 +139,24 @@ from now is caught without anyone remembering the rule.
 
 ## Feature 52 — User Account Deletion
 
+**WU-TptHardDelete Stage note (2026-09-30; owner rulings D10/D11) — no flip.**
+- **L1.** A deleted user's polls now survive anonymized: `base_polls.owner_id` is nullable `ON DELETE
+  SET NULL` (it was a convention-only CASCADE, so deleting an account destroyed every poll they owned —
+  options and other users' votes included — and left a hole in a surviving, anonymized post). The
+  relationship sits in `IdentityConfigurations`' SET NULL block beside `BlogPosts`. Votes keep their
+  CASCADE on the *voting* user (D11; D13's poll-vote survival is WU-UserDeletion's).
+- **L2.** The profile-wall step runs `TptDelete.ProfileWallCommentsAsync` — one set-based delete through
+  `base_comments` — instead of materializing the comments to `RemoveRange` them; it reads only their ids
+  first, for the D7 report closure. The step-1 comment's "(TPT — no direct DbSet)" was false
+  (`ApplicationDbContext.UserProfileComments` exists) and is gone, and the L2 bullet's "the correct TPT
+  access pattern" below is superseded: the one shape for every content-parent delete is `TptDelete`
+  (`layer2-services.md` §"Hard deletes of content parents").
+- **Tier: Integration** — `UserDeletionServiceTests` +3 (a poll on the owner's own post; D11's literal
+  shape, a poll they own on another user's post, which stays untouched; a deleted moderator's site
+  poll — each survives with NULL `owner_id`, both options and the other users' votes) and the profile-wall
+  test strengthened with a raw-SQL `base_comments` count. The `DeletePersonalData.razor` copy (D12/D13)
+  is WU-UserDeletion's, not changed here.
+
 **WU-ModerationIntegrity Stage note (2026-09-30) — no flip.** `UserDeletionService` moved from the
 legacy `Server/Services/` folder to `Server/Identity/` (the code-organization rule: a WU that touches a
 legacy-folder file moves it; the namespace is flat, so no reference changed; `Server/Services/` is now
@@ -158,15 +176,16 @@ history (`ReportedUserId`) is where a moderator reads it. It now reads "the repo
 profile whose account was deleted"; the same Integration test asserts the wording and the commenter as
 `ReportedUserId`. The move also closed the `UserDeletionService` part of tracker H8's org-move bundle.
 
-- **L1 — Stage 5.** The delete-policy graph is the most deliberate part of `OnModelCreating`: Cascade for
+- **L1 — Stage 5 (polls survive their owner, SET NULL, since WU-TptHardDelete, 2026-09-30 — Stage note above).** The delete-policy graph is the most deliberate part of `OnModelCreating`: Cascade for
   personal data, `SetNull` to anonymize authored content (breaking diamond conflicts), `Restrict` where C#
   must intervene (profile comments, followed-user, notification source). Comments explicitly flag
   "CONFLICT: Solved with C# code."
-- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30).** `UserDeletionService` now resolves all four User-rooted `Restrict`
+- **L2 — Stage 5 (2026-06-20, WU1; closes reports on what it destroys since WU-ModerationIntegrity, 2026-09-30; profile wall deleted through `TptDelete` since WU-TptHardDelete, 2026-09-30).** `UserDeletionService` now resolves all four User-rooted `Restrict`
   edges before deleting: `Notification.SourceUserId` (SetNull, pre-existing), `FollowedUser.FollowedUserId`
   (delete, pre-existing), `UserProfileComment.ProfileUserId` (delete — was dead/commented-out code
   referencing a non-existent `_context.UserProfileComments` DbSet; fixed to
-  `_context.BaseComments.OfType<UserProfileComment>()`, the correct TPT access pattern), and
+  `_context.BaseComments.OfType<UserProfileComment>()`, the correct TPT access pattern — superseded
+  2026-09-30 by WU-TptHardDelete's set-based `TptDelete.ProfileWallCommentsAsync`), and
   `Vouch.VouchedUserId` (delete — previously unhandled entirely). Registered in DI
   (`AddScoped<UserDeletionService>()`).
   **Bug found by running it for real:** `AddNpgsqlDbContext` enables Npgsql's retrying execution

@@ -152,7 +152,7 @@ public sealed class ClientNotificationWriteService(HttpClient http)
         throw NotExposedOverHttp();
 
     public Task NotifyPollUpdatedAsync(
-        int pollOwnerUserId, IReadOnlyList<int> voterUserIds, int relatedEntityId) =>
+        int? pollOwnerUserId, IReadOnlyList<int> voterUserIds, int relatedEntityId) =>
         throw NotExposedOverHttp();
 
     public Task NotifyNewStoryCommentAsync(int storyAuthorId, int commenterId, int chapterId) =>

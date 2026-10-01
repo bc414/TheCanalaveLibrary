@@ -293,8 +293,22 @@ cleaned up afterward. Detail: `workplan.md` WU-GroupsL5b; `hidden-deferrals-trac
 
 ## Feature 40 — Group Display
 
-- **L1 — Stage 5.**
-- **L2 — Stage 5 (2026-06-24, WU32).** `IGroupReadService.GetListingsAsync` (audience-filtered, paged),
+- **Settled — group content FKs are RESTRICT (owner ruling D10, 2026-08-06; built WU-TptHardDelete
+  2026-09-30).** `group_comments.group_id` and `group_blog_posts.group_id` refuse a group delete while
+  the group has comments or posts: deleting the group could never reach their `base_comments` /
+  `base_blog_posts` rows. No group-delete path exists (D47(b) pending). Whoever builds one adds a
+  group-scope method to `TptDelete` first (`layer1-data-model.md` §"Hard-deleting a content parent").
+- **WU-TptHardDelete Stage note (2026-09-30; owner ruling D10) — no flip.** L1: migration
+  `WU_TptHardDelete_FkPosture` flips both FKs above from CASCADE to RESTRICT. L2: a group post can now be
+  edited and deleted by its author (`UpdateGroupBlogPostAsync`/`DeleteGroupBlogPostAsync`, author-only,
+  no membership recheck — `audit/BlogPosts.md` F35); before, the only delete path was the profile one,
+  which 500'd on a group id. Deleting a post leaves its group untouched. Tier: Integration —
+  `TptHardDeleteTests` (raw `DELETE FROM groups` with a group comment, then with a group post, each
+  refused by its named constraint; the catalog guard; a group post's author deletes it with no base
+  rows left) and `BlogPostWriteServiceTests` (group-post gates, the author who left the group). No
+  group-delete path was added (D47(b) pending), so there is no group-scope `TptDelete` method.
+- **L1 — Stage 5** (group comment and group post FKs RESTRICT since WU-TptHardDelete, 2026-09-30 — Stage note above).
+- **L2 — Stage 5 (2026-06-24, WU32; group-post update/delete since WU-TptHardDelete, 2026-09-30 — Stage note above).** `IGroupReadService.GetListingsAsync` (audience-filtered, paged),
   `GetByIdAsync` (builds folder tree in-memory from flat DB load), `GetCurrentUserRoleAsync`,
   `GetMembersAsync`. `ICommentReadService.GetGroupCommentsAsync` / `ICommentWriteService.PostGroupCommentAsync`
   — per-context method pattern mirroring blog-post. `IBlogPostReadService.GetByGroupAsync` (reads

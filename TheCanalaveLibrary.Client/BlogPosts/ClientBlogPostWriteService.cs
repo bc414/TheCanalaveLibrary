@@ -50,6 +50,18 @@ public sealed class ClientBlogPostWriteService(HttpClient http)
         return await response.Content.ReadFromJsonAsync<int>();
     }
 
+    public async Task UpdateGroupBlogPostAsync(UpdateGroupBlogPostDto dto)
+    {
+        HttpResponseMessage response = await Http.PutAsJsonAsync($"api/blog-posts/group/{dto.BlogPostId}", dto);
+        await ThrowIfWriteFailedAsync(response);
+    }
+
+    public async Task DeleteGroupBlogPostAsync(int blogPostId)
+    {
+        HttpResponseMessage response = await Http.DeleteAsync($"api/blog-posts/group/{blogPostId}");
+        await ThrowIfWriteFailedAsync(response);
+    }
+
     public async Task<int> CreateSiteBlogPostAsync(CreateSiteBlogPostDto dto)
     {
         HttpResponseMessage response = await Http.PostAsJsonAsync("api/blog-posts/site", dto);

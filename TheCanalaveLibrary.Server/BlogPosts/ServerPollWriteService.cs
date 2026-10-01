@@ -325,6 +325,7 @@ public class ServerPollWriteService(
     /// <summary>
     /// Loads the poll (tracked, with options) and enforces the manage gate: site polls →
     /// moderator/admin; blog-post polls → owner. Throws KeyNotFound / UnauthorizedAccess.
+    /// An ownerless blog-post poll (owner deleted, D11) is manageable by no one.
     /// </summary>
     private async Task<BasePoll> LoadAuthorizedPollWithOptionsAsync(int pollId)
     {
@@ -340,7 +341,9 @@ public class ServerPollWriteService(
         }
         else
         {
-            if (ActiveUser.UserId != poll.OwnerId)
+            // Pattern, never `UserId != OwnerId`: null != null is false in C#, so an anonymous caller
+            // would pass this gate on an ownerless poll (owner ruling D11 — NULL owner = nobody).
+            if (poll.OwnerId is not int ownerId || ActiveUser.UserId != ownerId)
                 throw new UnauthorizedAccessException("You can only manage your own polls.");
         }
 

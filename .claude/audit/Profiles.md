@@ -212,7 +212,14 @@ Covering tier: **RazorComponents** —
 
 ## Feature 58 — UserStat Recalculation Worker
 
-- **L2 — Stage 5 (WU-UserStatRecalc, 2026-07-15).** Periodic `IHostedService`/`BackgroundService`
+**Open item filed by WU-TptHardDelete (2026-09-30) — no code change, no flip.** `BlogPostsWrittenAgg`
+counts every `base_blog_posts` row with an author, group and site posts included, while the live path
+moves `BlogPostsWritten` for profile posts only (site posts are deliberately excluded; group posts were
+never wired). That breaks `layer2-services.md` §"Recalculation worker — mirror the wired formula". The
+WU's spec proposed a fix (its R10); the campaign orchestrator excluded it as unsourced, so which posts
+count is owner-open: tracker **F16**.
+
+- **L2 — Stage 5 (WU-UserStatRecalc, 2026-07-15; recompute-vs-live mismatch on `BlogPostsWritten` filed as tracker F16 by WU-TptHardDelete, 2026-09-30).** Periodic `IHostedService`/`BackgroundService`
   reconciling the denormalized counters. Pure background computation — Layer 2 *is* the worker
   (grid_axes). All UI layers **N/A**. **L8 revised (2026-07-15):** mostly set-based raw SQL, not
   EF LINQ (mirrors `SiteDailyStatAggregator`'s style); one counter, `ViewsOnStories`, reads the

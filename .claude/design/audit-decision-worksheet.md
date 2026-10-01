@@ -1044,6 +1044,8 @@ children present, expecting Postgres 23503 — this is the only test that catche
 silently reverting RESTRICT to CASCADE. Plus the group-post lifecycle case: the author of a group
 post deletes it and succeeds.
 
+**Built:** WU-TptHardDelete (2026-09-30) — rule now stated in `layer1-data-model.md` §"TPT Inheritance" → "Hard-deleting a content parent" (the structural fact, the five RESTRICT FKs and their exclusions, no sweep, TPH closed) and `layer2-services.md` §"Hard deletes of content parents" (callers, transaction order, per-subtype blog-post lifecycle).
+
 ### D11. Poll-owner delete behavior
 
 *Source: schema §2.5.*
@@ -1071,6 +1073,8 @@ tables, so the column flip is free now and a data migration later.
 *Test (Integration tier).* Delete a user who owns a poll on a blog post authored by someone else:
 assert the `base_polls` row survives with NULL `owner_id`, its options survive, and the other users'
 votes survive.
+
+**Built:** WU-TptHardDelete (2026-09-30) — rule now stated in `cross-cutting.md` §"Delete Policy Summary" (polls are content: SET NULL on the owner) and `layer1-data-model.md` §"Relationships & Queries" (a NULL owner owns nothing; compare with a pattern, never `int? == int?`). Ownerless-poll votability stays D42's.
 
 ### D12. Comment deletion: placeholder vs reparent
 

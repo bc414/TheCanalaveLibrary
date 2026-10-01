@@ -112,7 +112,7 @@ fact that currently binds new work. When it stops binding, delete it — the eve
 | 33 | Manual Tree Search | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A |
 | 34 | Tag Directory | Discovery | N/A | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
 | 35 | Blog Post Writing | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 5 | 2 | N/A |
-| 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 5 | 5 | N/A | N/A |
+| 36 | Blog Post Display | BlogPosts | 5 | 5 | 5 | 5 | 1 | 1 | 5 | N/A | N/A |
 | 37 | Polls | BlogPosts | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |
 | 38 | Group Management | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | 2 | N/A |
 | 39 | Group Content & Folders | Groups | 5 | 5 | 5 | 5 | 5 | 5 | 5 | N/A | N/A |

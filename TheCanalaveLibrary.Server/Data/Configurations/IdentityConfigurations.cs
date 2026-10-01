@@ -108,6 +108,13 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
             .HasForeignKey(b => b.AuthorId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // Polls are content (owner ruling D11): an embedded poll survives its owner anonymized, with
+        // its options and other users' votes. Was a convention-only CASCADE that took them all.
+        builder.HasMany<BasePoll>()
+            .WithOne(p => p.Owner)
+            .HasForeignKey(p => p.OwnerId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         builder.HasMany(u => u.Recommendations)
             .WithOne(r => r.Recommender)
             .HasForeignKey(r => r.RecommenderId)

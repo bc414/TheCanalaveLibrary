@@ -266,7 +266,233 @@ public class BlogPostWriteServiceTests(PostgresFixture postgres) : IntegrationTe
         post!.IsLikedByCurrentUser.Should().BeTrue();
     }
 
+    // ── Per-subtype lifecycle (owner ruling D10, WU-TptHardDelete) ───────────────
+
+    [Fact]
+    public async Task DeleteBlogPost_WithAGroupPostId_ThrowsKeyNotFound_AndThePostSurvives()
+    {
+        // Regression: the profile-only stub delete affected 0 rows on a group id →
+        // DbUpdateConcurrencyException → 500. The profile path now keys on its own child set.
+        (_, int groupPostId) = await CreateGroupWithPostAsync(_authorId);
+
+        Func<Task> act = () => CallDeleteAsync(groupPostId);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+        (await LoadGroupPostAsync(groupPostId)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task UpdateBlogPost_WithAGroupPostId_ThrowsKeyNotFound_AndThePostIsUnchanged()
+    {
+        // The old gate read the base table, so a group id ran the base-table half of the update
+        // (title/content changed) while the profile child-table half matched nothing.
+        (_, int groupPostId) = await CreateGroupWithPostAsync(_authorId);
+
+        Func<Task> act = () => CallUpdateAsync(groupPostId, title: "Hijacked");
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+        (await LoadGroupPostAsync(groupPostId))!.Title.Should().Be("Group post");
+    }
+
+    [Fact]
+    public async Task DeleteBlogPost_WithASitePostId_ThrowsKeyNotFound()
+    {
+        int sitePostId = await SeedSitePostAsync(_authorId);
+
+        Func<Task> act = () => CallDeleteAsync(sitePostId);
+
+        await act.Should().ThrowAsync<KeyNotFoundException>();
+    }
+
+    [Fact]
+    public async Task DeleteBlogPost_OnAnAuthorlessPost_ThrowsUnauthorized()
+    {
+        // Author's account deleted → author_id SET NULL. An authorless post is owned by nobody.
+        int id = await CreatePostAsync();
+        await ClearAuthorAsync(id);
+
+        Func<Task> act = () => CallDeleteAsync(id);
+
+        await act.Should().ThrowAsync<UnauthorizedAccessException>();
+        (await LoadPostAsync(id)).Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task UpdateGroupBlogPost_ByAuthor_UpdatesEveryEditableField_AndStaysPublished()
+    {
+        (_, int postId) = await CreateGroupWithPostAsync(_authorId);
+        DateTime before = (await LoadGroupPostAsync(postId))!.LastUpdatedDate;
+
+        await CallUpdateGroupAsync(new UpdateGroupBlogPostDto
+        {
+            BlogPostId  = postId,
+            Title       = "  Edited title  ",
+            Content     = "<p>Edited</p><script>alert('x')</script>",
+            Rating      = Rating.T,
+            HasSpoilers = true
+        });
+
+        GroupBlogPost post = (await LoadGroupPostAsync(postId))!;
+        post.Title.Should().Be("Edited title");
+        post.Content.Should().Contain("Edited").And.NotContain("<script>");
+        post.Rating.Should().Be(Rating.T);
+        post.HasSpoilers.Should().BeTrue();
+        post.LastUpdatedDate.Should().BeAfter(before);
+        post.IsPublished.Should().BeTrue("group posts publish on create; the update carries no IsPublished");
+    }
+
+    [Fact]
+    public async Task GroupPostUpdateAndDelete_ByANonAuthor_ThrowUnauthorized()
+    {
+        (int groupId, int postId) = await CreateGroupWithPostAsync(_authorId);
+        SetActiveUser(_otherUserId);
+        await JoinGroupAsync(groupId); // a fellow member is still not the author
+
+        Func<Task> update = () => CallUpdateGroupAsync(GroupUpdate(postId));
+        Func<Task> delete = () => CallDeleteGroupAsync(postId);
+
+        await update.Should().ThrowAsync<UnauthorizedAccessException>();
+        await delete.Should().ThrowAsync<UnauthorizedAccessException>();
+        (await LoadGroupPostAsync(postId))!.Title.Should().Be("Group post");
+    }
+
+    [Fact]
+    public async Task GroupPostUpdateAndDelete_Anonymous_ThrowInvalidOperation()
+    {
+        (_, int postId) = await CreateGroupWithPostAsync(_authorId);
+        SetActiveUser(FakeActiveUserContext.Anonymous());
+
+        Func<Task> update = () => CallUpdateGroupAsync(GroupUpdate(postId));
+        Func<Task> delete = () => CallDeleteGroupAsync(postId);
+
+        await update.Should().ThrowAsync<InvalidOperationException>();
+        await delete.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task GroupPostUpdateAndDelete_OnAMissingOrProfileId_ThrowKeyNotFound()
+    {
+        int profilePostId = await CreatePostAsync();
+
+        await ((Func<Task>)(() => CallUpdateGroupAsync(GroupUpdate(int.MaxValue)))).Should().ThrowAsync<KeyNotFoundException>();
+        await ((Func<Task>)(() => CallDeleteGroupAsync(int.MaxValue))).Should().ThrowAsync<KeyNotFoundException>();
+        await ((Func<Task>)(() => CallUpdateGroupAsync(GroupUpdate(profilePostId)))).Should().ThrowAsync<KeyNotFoundException>();
+        await ((Func<Task>)(() => CallDeleteGroupAsync(profilePostId))).Should().ThrowAsync<KeyNotFoundException>();
+        (await LoadPostAsync(profilePostId)).Should().NotBeNull("the group path never touches a profile post");
+    }
+
+    [Fact]
+    public async Task GroupPostUpdate_WithAnEmptyTitle_ThrowsValidation()
+    {
+        (_, int postId) = await CreateGroupWithPostAsync(_authorId);
+
+        Func<Task> act = () => CallUpdateGroupAsync(new UpdateGroupBlogPostDto
+        {
+            BlogPostId = postId, Title = "  ", Content = "<p>x</p>", Rating = Rating.E
+        });
+
+        await act.Should().ThrowAsync<BlogPostValidationException>();
+    }
+
+    [Fact]
+    public async Task GroupPost_AuthorWhoLeftTheGroup_CanStillEditAndDeleteIt()
+    {
+        // No membership recheck: the author owns their row (the EditCommentAsync precedent).
+        int creatorId = await SeedUserAsync("creator");
+        SetActiveUser(creatorId);
+        int groupId = await CreateGroupAsync();
+        SetActiveUser(_authorId);
+        await JoinGroupAsync(groupId);
+        int postId = await CreateGroupPostAsync(groupId);
+        await LeaveGroupAsync(groupId);
+
+        await CallUpdateGroupAsync(GroupUpdate(postId));
+        (await LoadGroupPostAsync(postId))!.Title.Should().Be("Edited");
+        await CallDeleteGroupAsync(postId);
+        (await LoadGroupPostAsync(postId)).Should().BeNull();
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    private static UpdateGroupBlogPostDto GroupUpdate(int postId) => new()
+    {
+        BlogPostId = postId, Title = "Edited", Content = "<p>Edited</p>", Rating = Rating.E
+    };
+
+    /// <summary>The active user creates a group (becoming its admin member) and posts in it.</summary>
+    private async Task<(int GroupId, int PostId)> CreateGroupWithPostAsync(int authorId)
+    {
+        SetActiveUser(authorId);
+        int groupId = await CreateGroupAsync();
+        return (groupId, await CreateGroupPostAsync(groupId));
+    }
+
+    private async Task<int> CreateGroupAsync()
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IGroupWriteService>()
+            .CreateGroupAsync(new CreateGroupDto { GroupName = $"Group {Guid.NewGuid():N}"[..20] });
+    }
+
+    private async Task JoinGroupAsync(int groupId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IGroupWriteService>().JoinAsync(groupId);
+    }
+
+    private async Task LeaveGroupAsync(int groupId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IGroupWriteService>().LeaveAsync(groupId);
+    }
+
+    private async Task<int> CreateGroupPostAsync(int groupId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IBlogPostWriteService>().CreateGroupBlogPostAsync(
+            new CreateGroupBlogPostDto { GroupId = groupId, Title = "Group post", Content = "<p>hi</p>", Rating = Rating.E });
+    }
+
+    private async Task CallUpdateGroupAsync(UpdateGroupBlogPostDto dto)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IBlogPostWriteService>().UpdateGroupBlogPostAsync(dto);
+    }
+
+    private async Task CallDeleteGroupAsync(int postId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<IBlogPostWriteService>().DeleteGroupBlogPostAsync(postId);
+    }
+
+    private async Task<GroupBlogPost?> LoadGroupPostAsync(int postId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        return await db.GroupBlogPosts.AsNoTracking().FirstOrDefaultAsync(p => p.BlogPostId == postId);
+    }
+
+    private async Task<int> SeedSitePostAsync(int authorId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        SiteBlogPost post = new()
+        {
+            AuthorId = authorId, Title = "Site news", Content = "<p>news</p>", Rating = Rating.E,
+            IsPublished = true, DateCreated = DateTime.UtcNow, LastUpdatedDate = DateTime.UtcNow
+        };
+        db.SiteBlogPosts.Add(post);
+        await db.SaveChangesAsync();
+        return post.BlogPostId;
+    }
+
+    private async Task ClearAuthorAsync(int postId)
+    {
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await db.Database.ExecuteSqlAsync(
+            $"UPDATE base_blog_posts SET author_id = NULL WHERE blog_post_id = {postId}");
+    }
 
     private async Task<int> CreatePostAsync(
         string title   = "Test Blog Post",

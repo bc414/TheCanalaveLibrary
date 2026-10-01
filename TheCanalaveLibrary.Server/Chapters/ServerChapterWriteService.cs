@@ -361,14 +361,11 @@ public class ServerChapterWriteService(
         {
             await using var tx = await writeDb.Database.BeginTransactionAsync();
 
-            // TPT trap: the DB cascade Chapter→chapter_comments removes only the CHILD table's
-            // rows and would orphan their base_comments rows. Deleting through EF removes both
-            // tables' rows per entity. Replies are also ChapterComments of the same chapter, so
-            // this set is closed under the parent/reply relationship.
-            List<ChapterComment> comments = await writeDb.ChapterComments
-                .Where(cc => cc.ChapterId == chapterId)
-                .ToListAsync();
-            if (comments.Count > 0) writeDb.ChapterComments.RemoveRange(comments);
+            // The chapter's comments go first, through their base rows (owner ruling D10): no cascade
+            // from chapters can reach base_comments, and chapter_comments.chapter_id is RESTRICT, so
+            // the chapter delete below would fail while any comment remains. One set-based statement;
+            // replies are ChapterComments of the same chapter, so the set is closed (TptDelete's doc).
+            await TptDelete.ChapterCommentsAsync(writeDb, chapterId);
 
             // Release the Restrict FK before the row delete (mirror of the two-step create),
             // then let the delete cascade to contents / read state.

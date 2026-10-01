@@ -30,10 +30,11 @@ public sealed class ChapterConfiguration : IEntityTypeConfiguration<Chapter>
             .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // RESTRICT (D10): the service deletes TPT base rows first via TptDelete; the DB refuses a partial delete.
         builder.HasMany(c => c.ChapterComments)
             .WithOne(cc => cc.Chapter)
             .HasForeignKey(cc => cc.ChapterId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasMany(c => c.UserChapterInteractions)
             .WithOne(uci => uci.Chapter)

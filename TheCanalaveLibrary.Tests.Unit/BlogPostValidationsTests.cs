@@ -107,4 +107,44 @@ public class BlogPostValidationsTests
         };
         dto.CanSave().Should().BeEmpty();
     }
+
+    // --- UpdateGroupBlogPostDto (WU-TptHardDelete) ---
+
+    [Fact]
+    public void UpdateGroup_EmptyTitle_ReturnsError()
+    {
+        var dto = new UpdateGroupBlogPostDto { BlogPostId = 1, Title = " ", Content = "<p>Content</p>" };
+        dto.CanSave().Should().ContainSingle()
+            .Which.Should().Contain("Title");
+    }
+
+    [Fact]
+    public void UpdateGroup_TitleOver256Chars_ReturnsError()
+    {
+        var dto = new UpdateGroupBlogPostDto { BlogPostId = 1, Title = new string('a', 257), Content = "<p>Content</p>" };
+        dto.CanSave().Should().ContainSingle()
+            .Which.Should().Contain("256");
+    }
+
+    [Fact]
+    public void UpdateGroup_EmptyContent_ReturnsError()
+    {
+        var dto = new UpdateGroupBlogPostDto { BlogPostId = 1, Title = "Title", Content = "" };
+        dto.CanSave().Should().ContainSingle()
+            .Which.Should().Contain("Content");
+    }
+
+    [Fact]
+    public void UpdateGroup_ValidDto_ReturnsNoErrors()
+    {
+        var dto = new UpdateGroupBlogPostDto
+        {
+            BlogPostId  = 42,
+            Title       = new string('a', 256),
+            Content     = "<p>Updated content</p>",
+            Rating      = Rating.T,
+            HasSpoilers = true
+        };
+        dto.CanSave().Should().BeEmpty();
+    }
 }

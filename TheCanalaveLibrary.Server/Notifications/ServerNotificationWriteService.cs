@@ -330,7 +330,7 @@ public class ServerNotificationWriteService(
     // ── Semantic generation methods (WU-Polls slice) ─────────────────────────────
 
     /// <inheritdoc/>
-    public Task NotifyPollUpdatedAsync(int pollOwnerUserId, IReadOnlyList<int> voterUserIds, int relatedEntityId) =>
+    public Task NotifyPollUpdatedAsync(int? pollOwnerUserId, IReadOnlyList<int> voterUserIds, int relatedEntityId) =>
         CreateCoreAsync(NotificationTypeEnum.PollUpdated, pollOwnerUserId,
             voterUserIds.Select(id => (id, (long)relatedEntityId)).ToArray());
 

@@ -312,6 +312,44 @@ protect-reads-from-write-locks rationale is void under Postgres MVCC, and the 2s
 already absorbs the churn). Only **loss-tolerant, coalescable signals** are buffered — see
 "Signal Buffering" below.
 
+## Hard deletes of content parents (owner ruling D10, WU-TptHardDelete 2026-09-30)
+
+A content parent that owns TPT children (a chapter, a blog post, a story via its chapters, a profile
+wall) is deleted in this order, inside **one** `CreateExecutionStrategy().ExecuteAsync` +
+`BeginTransactionAsync`:
+1. **`TptDelete` first** (`Server/Data/TptDelete.cs`) — the base rows of every TPT child, set-based raw
+   SQL (`ChapterCommentsAsync`, `StoryCommentsAsync`, `ProfileWallCommentsAsync`,
+   `BlogPostDependentsAsync`, `BlogPostAsync`). The base → child CASCADE takes each child row; likes,
+   poll options and poll votes cascade off the base rows.
+2. **Then the parent**, by EF `Remove` on a loaded entity or by the helper's own base-row `DELETE`
+   (`TptDelete.BlogPostAsync` deletes the post through `base_blog_posts`).
+3. **Commit, then counters and notifications** — outside the retried delegate (D22), so a retry never
+   double-counts or double-notifies.
+
+Why the order is forced, and why the FKs are RESTRICT: `layer1-data-model.md` §"Hard-deleting a content
+parent". Skip step 1 and the delete fails with 23001 (`restrict_violation` — Postgres reports an
+`ON DELETE RESTRICT` refusal as 23001, not the 23503 a NO ACTION FK gives); the database refuses the
+partial delete.
+- **The helper's SQL runs immediately; EF's `Remove` waits for `SaveChangesAsync`.** Both must be in
+  the same transaction, or a failure between them leaves the children gone and the parent standing.
+  A delegate that tracks entities clears the tracker or loads inside the delegate (retry safety).
+- **Never `Include` the TPT children on a delete path.** EF refuses to delete a principal while
+  RESTRICT dependents are tracked.
+- **Callers today:** `ServerChapterWriteService.DeleteChapterAsync`;
+  `ServerBlogPostWriteService.DeleteBlogPostAsync`/`DeleteGroupBlogPostAsync`/`DeleteSiteBlogPostAsync`;
+  `ServerModerationWriteService.ApplyHardDeleteAsync` (Story, BlogPost); `UserDeletionService`
+  (the profile wall). A comment, poll or recommendation delete removes a loaded entity of its own and
+  needs no helper.
+
+**Blog-post lifecycle methods are per subtype.** Each subtype has its own update/delete pair with its
+own gate: profile posts (`UpdateBlogPostAsync`/`DeleteBlogPostAsync`, author-only), group posts
+(`UpdateGroupBlogPostAsync`/`DeleteGroupBlogPostAsync`, author-only, no membership recheck — the
+author-owns-own-row precedent of `EditCommentAsync`), site posts (`UpdateSiteBlogPostAsync`/
+`DeleteSiteBlogPostAsync`, moderator-gated). Each method **keys its existence-and-owner probe on its
+own child set** (`writeDb.ProfileBlogPosts…Select(p => new { p.AuthorId })`), never on the base set: an
+id of another subtype is `KeyNotFoundException`, never a half-applied base-table update. An authorless
+post (`AuthorId` NULL after account deletion) is owned by nobody — `UnauthorizedAccessException`.
+
 ## Signal Buffering — in-process write buffers for loss-tolerant signals
 
 The L2 body pattern for **high-frequency · loss-tolerant · coalescable** writes (reading-progress
@@ -2081,6 +2119,11 @@ target's author.
   1024) → **N = rows affected** → `AdjustActiveReportCountAsync(target, −(1 + N))` → `SaveChangesAsync`
   → commit. The primary row is tracked and excluded from the bulk update (no tracked-versus-set
   collision). Nothing is deleted from `reports`.
+- **A hard delete clears the target's TPT dependents first** (owner ruling D10, WU-TptHardDelete):
+  `ApplyHardDeleteAsync` runs `TptDelete.StoryCommentsAsync` (Story) or
+  `TptDelete.BlogPostDependentsAsync` (BlogPost) before `Remove`, inside the same transaction — the
+  helper's SQL lands at once, the `Remove` at the save above. A Comment, Recommendation or Message is a
+  loaded entity whose own removal deletes both its rows. See §"Hard deletes of content parents".
 - **Derive the delta from rows transitioned; never zero the column.** A report filed concurrently keeps
   its own `+1` and stays open. Hard delete's counter step is vacuous (the row dies in the same save);
   `Message` gets the sibling half and the no-op counter half.
@@ -2297,7 +2340,7 @@ serializes correctly under any isolation level.
 | `RecommendationsWritten` | recommender | `ServerRecommendationWriteService.SubmitAsync` | +1 |
 | `RecommendationsReceived` | story author | `ServerRecommendationWriteService.SubmitAsync` | +1 |
 | `RecommendationSuccessesEarned` | recommender | `ServerRecommendationWriteService.RecordSuccessAsync` (new column, WU36) | +1 |
-| `BlogPostsWritten` | author | `ServerBlogPostWriteService` create/delete | ±1 |
+| `BlogPostsWritten` | author | `ServerBlogPostWriteService` **profile** create/delete only — group posts are untracked, site posts deliberately excluded, while the recompute counts every `base_blog_posts` row (the three disagree; owner-open, tracker **F16**) | ±1 |
 | `GroupsJoined` | member | `ServerGroupWriteService` join/leave | ±1 |
 | `FavoritesOnStories` | story author | `ServerUserStoryInteractionWriteService` | **transition-delta** |
 | `StoriesRead`, `StoriesIgnored` | acting user | `ServerUserStoryInteractionWriteService.SetUserStoryInteractionStateAsync` / `MarkCompletedAsync` | **transition-delta** |

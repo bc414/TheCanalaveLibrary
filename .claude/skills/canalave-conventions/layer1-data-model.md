@@ -59,7 +59,7 @@ modelBuilder.Entity<BlogPostComment>().ToTable("blog_post_comments");
 ```
 
 Hierarchies: `BaseComment → {Chapter, UserProfile, Group, BlogPost}Comment`,
-`BaseBlogPost → {Profile, Group}BlogPost`, `BasePoll → {Site, BlogPost}Poll`.
+`BaseBlogPost → {Profile, Group, Site}BlogPost`, `BasePoll → {Site, BlogPost}Poll`.
 Base classes are `abstract`. Child FKs (e.g. `ChapterComment.ChapterId`) are **non-nullable** —
 the NOT NULL guarantee is the point of choosing TPT.
 
@@ -120,6 +120,61 @@ types 'SitePoll' and 'BlogPostPoll'` at runtime. Filter with `Where(p => p is TC
 `((TChild)p).Column` predicates) instead of `OfType<TChild>()` whenever the result feeds a
 base-typed shared projection. Reference: `ServerPollReadService` (found live in WU-Polls browser
 verification, 2026-07-12; regression net: `PollServiceTests` list tests).
+
+### Hard-deleting a content parent (owner ruling D10, WU-TptHardDelete 2026-09-30)
+
+**No arrangement of `ON DELETE CASCADE` can make a content-parent delete reach the base rows.** A TPT
+child row carries two FKs, and only one of them points the useful way:
+
+| FK on `chapter_comments` | Direction | Effect of deleting the principal |
+|---|---|---|
+| `comment_id → base_comments` | base → child | Removes both rows. Correct; stays CASCADE. |
+| `chapter_id → chapters` | parent → child | Would remove the child row only, orphaning its `base_comments` row. |
+
+For `DELETE FROM chapters` to reach `base_comments`, the base table would need an FK to `chapters`. It
+cannot have one: it is the polymorphic base shared by four parents, with no column to hang a
+`chapter_id` on. Cascades flow along FKs, so the service layer **must** delete the base rows itself.
+This is forced by the structure, not chosen. The same holds for every content parent that owns TPT
+children.
+
+**The content-parent → TPT-child FKs are `RESTRICT`.** A RESTRICT FK deletes nothing. It refuses a
+parent delete while children exist, so a path that forgets the cleanup fails loudly instead of
+orphaning base rows. It is the guardrail; the service cleanup is the repair. The five:
+- `chapter_comments.chapter_id → chapters`
+- `blog_post_comments.blog_post_id → base_blog_posts`
+- `blog_post_polls.blog_post_id → base_blog_posts`
+- `group_comments.group_id → groups`
+- `group_blog_posts.group_id → groups`
+
+`user_profile_comments.profile_user_id → AspNetUsers` was already RESTRICT; it is the precedent, not an
+exception. **Not flipped, deliberately:**
+- every base → child PK FK (`fk_*_base_comments_comment_id`, `fk_*_base_blog_posts_blog_post_id`,
+  `fk_*_base_polls_poll_id`) — that direction is correct and is what the cleanup relies on;
+- `base_comments.parent_comment_id`, which stays **SET NULL** (owner ruling D12): it is the reparent
+  mechanism, so a reply that ever escaped its scope is reparented instead of blocking the delete;
+- `poll_options`, `poll_votes` and the like junctions, which cascade off the deleted base rows.
+
+**The cleanup is `TptDelete`** (`Server/Data/TptDelete.cs`): set-based raw SQL keyed off the child
+table, one statement per child kind, run inside the caller's transaction —
+`DELETE FROM base_comments WHERE comment_id IN (SELECT comment_id FROM chapter_comments WHERE chapter_id = @id)`.
+- **Never LINQ.** `ExecuteDeleteAsync` is unsupported on a TPT base-type `DbSet`.
+- **Never materialized.** Loading the children only to `RemoveRange` them (the pre-D10 chapter shape)
+  costs a round-trip per row and is the shape three sites forgot to copy.
+- Reply sets are closed under each parent scope (the `Post*CommentAsync` methods refuse a parent from
+  another scope), so one statement per scope removes every reply too.
+- **A future group-delete path must add a group-scope method** (`group_comments` and `group_blog_posts`
+  plus each post's dependents). None exists today because nothing deletes a group (D47(b) is pending);
+  until it is written, the RESTRICT FKs make such a path fail on its first group with children.
+
+**No scheduled orphan sweep** (D10(d)). With RESTRICT in place an orphaned base row is a state the
+database refuses to enter, so a sweep would poll for an impossibility. Whoever loosens RESTRICT
+re-opens that question.
+
+**TPH stays closed, on read-shape grounds.** Collapsing a hierarchy into one discriminated table would
+make cascades sufficient, but the base/child split is load-bearing for the warm/cold vertical partition:
+the narrow base table serves the polymorphic scans, the wide child tables the detail reads. Do not
+propose it again on cascade grounds. The service rule (callers, transaction order, per-subtype
+lifecycle methods) is in `layer2-services.md` §"Hard deletes of content parents".
 
 ## Enum / Lookup Table Decision Framework
 
@@ -220,6 +275,12 @@ independently. The service layer rejects logically impossible write combinations
 ## Relationships & Queries
 
 - **Delete behavior is always explicit** — `.OnDelete(DeleteBehavior.X)` on every relationship.
+- **A content owner FK is nullable + `SET NULL`** (the delete policy in `cross-cutting.md`): stories,
+  comments, blog posts, recommendations and — since owner ruling D11 (WU-TptHardDelete, 2026-09-30) —
+  polls (`base_polls.owner_id`). A NULL owner means "nobody": every ownership check must fail for it.
+  Compare with a pattern (`poll.OwnerId is int ownerId && viewerId == ownerId`), never `==`/`!=` on two
+  `int?` values — C# treats `null == null` as true, so an anonymous caller (`UserId` null) would "own"
+  every ownerless row.
 - **No lazy loading.** Use explicit `.Include()` (commands) or `.Select()` projections (reads).
 - **Cartesian explosion:** add `.AsSplitQuery()` when `.Include()` fans out across collections.
 - **Relationship config:** set navigation properties (`story.Author = user`) rather than FK IDs.

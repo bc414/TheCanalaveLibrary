@@ -1035,6 +1035,13 @@ public class ServerModerationWriteService(
     /// Hard-deletes the target entity (illegal content path — CSAM, piracy). Returns the author's
     /// user id before deletion when possible, or <c>null</c>. The <c>reports</c> rows survive it (they
     /// carry no FK to their target) and are closed by the caller (D7).
+    /// <para><b>TPT dependents go first (owner ruling D10).</b> A Story's chapter comments and a blog
+    /// post's comments and polls are deleted through their base rows by <see cref="TptDelete"/> — no
+    /// cascade from a content parent reaches a TPT base row, and the parent → child FKs are RESTRICT,
+    /// so the save would otherwise fail. That SQL runs at once while the <c>Remove</c> waits for the
+    /// caller's <c>SaveChangesAsync</c>; both sit inside <see cref="InResolveTransactionAsync{T}"/>'s
+    /// transaction. A Comment, Recommendation or Message is a loaded entity whose own removal deletes
+    /// every row it owns (a <c>BaseComment</c> removal deletes base and child rows).</para>
     /// </summary>
     private async Task<int?> ApplyHardDeleteAsync(ReportedEntityType type, long id)
     {
@@ -1044,6 +1051,12 @@ public class ServerModerationWriteService(
             IModeratableContent? entity = await LoadModeratableAsync(type, id);
             if (entity is null) return null;
             int? authorId = entity.AuthorUserId;
+
+            if (type == ReportedEntityType.Story)
+                await TptDelete.StoryCommentsAsync(writeDb, (int)id);
+            else if (type == ReportedEntityType.BlogPost)
+                await TptDelete.BlogPostDependentsAsync(writeDb, (int)id);
+
             writeDb.Remove((object)entity);
             return authorId;
         }

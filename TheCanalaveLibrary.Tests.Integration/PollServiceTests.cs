@@ -627,4 +627,120 @@ public class PollServiceTests(PostgresFixture postgres) : IntegrationTestBase(po
             (await sweeper.SweepAsync()).Should().Be(0, "the 30-minute quiet period hasn't elapsed");
         }
     }
+
+    // ── Ownerless polls (owner ruling D11: owner deleted → owner_id NULL = nobody) ──
+
+    /// <summary>Simulates the owner's account deletion (SET NULL) without deleting a user.</summary>
+    private async Task ClearOwnerAsync(int pollId)
+    {
+        using IServiceScope scope = NewScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        await db.Database.ExecuteSqlAsync($"UPDATE base_polls SET owner_id = NULL WHERE poll_id = {pollId}");
+    }
+
+    private async Task<int> CreateBlogPollAsync(int blogPostId, PollEditDto? dto = null)
+    {
+        SetActiveUser(_authorId);
+        using IServiceScope scope = NewScope();
+        return await scope.ServiceProvider.GetRequiredService<IPollWriteService>()
+            .CreateBlogPostPollAsync(blogPostId, dto ?? NewDto());
+    }
+
+    [Fact]
+    public async Task OwnerlessBlogPoll_IsManageableByNoOne_NeitherAUserNorAnonymous()
+    {
+        // C# `null != null` is false: the pre-D11 gate (`UserId != OwnerId`) would have let an anonymous
+        // caller through on an ownerless poll. NULL owner = nobody.
+        int pollId = await CreateBlogPollAsync(await SeedBlogPostAsync(_authorId));
+        await ClearOwnerAsync(pollId);
+
+        foreach (FakeActiveUserContext caller in new[]
+                 { FakeActiveUserContext.AuthenticatedUser(_voterId, false), FakeActiveUserContext.Anonymous() })
+        {
+            SetActiveUser(caller);
+            using IServiceScope scope = NewScope();
+            IPollWriteService service = scope.ServiceProvider.GetRequiredService<IPollWriteService>();
+
+            await ((Func<Task>)(() => service.UpdatePollAsync(pollId, NewDto("Renamed"))))
+                .Should().ThrowAsync<UnauthorizedAccessException>();
+            await ((Func<Task>)(() => service.ClosePollAsync(pollId)))
+                .Should().ThrowAsync<UnauthorizedAccessException>();
+            await ((Func<Task>)(() => service.DeletePollAsync(pollId)))
+                .Should().ThrowAsync<UnauthorizedAccessException>();
+        }
+
+        PollDto poll = await GetPollAsync(pollId, _voterId);
+        poll.PollName.Should().Be("Favorite starter?");
+        poll.Status.Should().Be(PollStatus.Open);
+    }
+
+    [Fact]
+    public async Task OwnerlessSitePoll_IsStillManagedByModerators()
+    {
+        int pollId = await CreateSitePollAsync();
+        await ClearOwnerAsync(pollId);
+        int otherModId = await SeedUserAsync("OtherMod");
+
+        SetActiveUser(FakeActiveUserContext.Moderator(otherModId));
+        using (IServiceScope scope = NewScope())
+            await scope.ServiceProvider.GetRequiredService<IPollWriteService>().ClosePollAsync(pollId);
+
+        (await GetPollAsync(pollId, _voterId)).Status.Should().Be(PollStatus.Closed);
+    }
+
+    [Fact]
+    public async Task OwnerlessOpenAfterClosePoll_AnonymousViewer_IsNotTreatedAsTheOwner()
+    {
+        // The read-side twin of the gate above: `UserId == OwnerId` is true for two nulls, which would
+        // have shown an anonymous viewer the owner's live tallies of an AfterClose poll.
+        int pollId = await CreateBlogPollAsync(await SeedBlogPostAsync(_authorId),
+            NewDto(visibility: PollResultsVisibility.AfterClose));
+        PollDto seeded = await GetPollAsync(pollId, _authorId);
+        await VoteAsync(pollId, _voterId, [seeded.Options[0].PollOptionId]);
+        await ClearOwnerAsync(pollId);
+
+        PollDto poll = await GetPollAsync(pollId, asUserId: null);
+
+        poll.ResultsVisibleToViewer.Should().BeFalse();
+        poll.Options.Should().OnlyContain(o => o.VoteCount == 0);
+        poll.TotalVoterCount.Should().Be(0);
+        poll.OwnerId.Should().BeNull();
+        poll.OwnerUserName.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Sweeper_OnAnOwnerlessEditedPoll_NotifiesVotersNullSourced_AndStamps()
+    {
+        // The owner edited, then deleted their account before the quiet period ran out (D11). The
+        // notification goes out with no source — D4's "actor since deleted" null.
+        int blogPostId = await SeedBlogPostAsync(_authorId);
+        int pollId = await CreateBlogPollAsync(blogPostId);
+        PollDto seeded = await GetPollAsync(pollId, _authorId);
+        await VoteAsync(pollId, _voterId, [seeded.Options[0].PollOptionId]);
+        await ClearOwnerAsync(pollId);
+
+        using (IServiceScope scope = NewScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            await db.Polls.Where(p => p.PollId == pollId)
+                .ExecuteUpdateAsync(s => s.SetProperty(
+                    p => p.LastEditedAt, DateTime.UtcNow - PollEditNotificationSweeper.QuietPeriod - TimeSpan.FromMinutes(1)));
+        }
+
+        using (IServiceScope scope = NewScope())
+        {
+            (await scope.ServiceProvider.GetRequiredService<PollEditNotificationSweeper>().SweepAsync()).Should().Be(1);
+
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            var notification = await db.Notifications
+                .Where(n => n.NotificationTypeId == NotificationTypeEnum.PollUpdated)
+                .Select(n => new { n.RecipientUserId, n.SourceUserId, n.RelatedEntityId })
+                .SingleAsync();
+            notification.RecipientUserId.Should().Be(_voterId);
+            notification.SourceUserId.Should().BeNull();
+            notification.RelatedEntityId.Should().Be(blogPostId);
+            (await db.Polls.Where(p => p.PollId == pollId).Select(p => p.EditNotifiedAt).SingleAsync())
+                .Should().NotBeNull();
+        }
+    }
 }

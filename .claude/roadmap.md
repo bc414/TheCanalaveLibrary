@@ -202,6 +202,26 @@ responsiveness, tracked separately as the WU-AccountEnforcement Tier-1 row above
 
 ## Resolved
 
+- **TPT FK posture (worksheet D10) — answered 2026-08-06, built WU-TptHardDelete 2026-09-30.** No
+  decision row: it came out of the schema audit's §2.2 and the service audit's §2.2. Three blog-post
+  delete sites orphaned `base_comments`/`base_polls` rows, because no cascade from a content parent can
+  reach a TPT base row. Ruling: fix every site through one shared set-based helper (`TptDelete`, raw SQL
+  keyed off the child table, never materialized), flip the five content-parent → TPT-child FKs to
+  RESTRICT as the guardrail, **no** scheduled orphan sweep (declined, not deferred), and TPH stays
+  closed on warm/cold read-shape grounds. Built with the adjacent group-post lifecycle defect: per-subtype
+  update/delete methods, and the profile methods return 404 for group and site ids instead of a 500.
+  Rule: `layer1-data-model.md` §"Hard-deleting a content parent"; `layer2-services.md` §"Hard deletes
+  of content parents". Narrative: `audit/BlogPosts.md` F35, `audit/Comments.md` F23, `audit/Groups.md`
+  F40. Still open: D43 (group-post rating on update), D47(b) (a group-delete path), tracker F16
+  (`BlogPostsWritten` for group/site posts) and B25 (no blog-post delete UI).
+
+- **Poll-owner delete behavior (worksheet D11) — answered 2026-08-06, built WU-TptHardDelete
+  2026-09-30.** No decision row: it came out of the schema audit's §2.5. `base_polls.owner_id` is
+  nullable `ON DELETE SET NULL`, matching `base_blog_posts.author_id`; a NULL owner is nobody in every
+  ownership check. Rule: `cross-cutting.md` §"Delete Policy Summary"; `layer1-data-model.md`
+  §"Relationships & Queries". Narrative: `audit/BlogPosts.md` F37. Still open: D42 (whether an
+  ownerless or archived poll stays votable).
+
 - **Sibling-report auto-resolution (worksheet D7), the report reported-user column + takedown-reversal
   ratification (worksheet D8, with its 2026-08-08 seventh-type amendment) and mod-only read gating
   (worksheet D9) — answered 2026-08-04/05/06, built WU-ModerationIntegrity 2026-09-30.** No decision

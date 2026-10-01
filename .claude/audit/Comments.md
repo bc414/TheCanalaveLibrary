@@ -17,8 +17,26 @@ TPT is Settled Axiom #2. Cluster moved from `Core/Models/` → `Core/Comments/` 
 `ServerComment{Read,Write}Service`) live in `Core/Comments/` and `Server/Comments/` respectively.
 
 ## Feature 23 — Comment Posting
-- **L1 — Stage 5.** TPT hierarchy + per-child `DatePosted` (declared on each derived class, lands on
-  child table — denormalized per §1117); orphan handling via `SetNull`. Matches §5.9.
+- **Settled — FK posture (owner rulings D10 and D12, 2026-08-06; built WU-TptHardDelete 2026-09-30).**
+  A content parent's FK to its comment child table is RESTRICT (`chapter_comments.chapter_id`,
+  `blog_post_comments.blog_post_id`, `group_comments.group_id`; `user_profile_comments.profile_user_id`
+  already was). Every parent delete removes the comments' `base_comments` rows first through
+  `TptDelete`. `base_comments.parent_comment_id` stays **SET NULL** (D12's reparent mechanism), and
+  each `comment_id → base_comments` FK stays CASCADE. Rule: `layer1-data-model.md` §"Hard-deleting a
+  content parent".
+- **WU-TptHardDelete Stage note (2026-09-30) — L1 no flip.** Migration `WU_TptHardDelete_FkPosture`
+  flips the three parent → comment-child FKs above to RESTRICT; `blog_post_comments.blog_post_id` was
+  convention-only and is now configured explicitly (layer1's "delete behavior is always explicit").
+  Every path that deletes a comment parent clears the comments through `base_comments` first
+  (`TptDelete`: chapter, story via the moderation hard delete, blog post of every subtype, profile wall).
+  Before this WU, the three blog-post delete sites and the story hard delete orphaned `base_comments`
+  rows — an EF query over `BaseComments` then throws while materializing one. Tier: Integration —
+  `TptHardDeleteTests` counts surviving `base_comments` rows with raw SQL after each delete (replies and
+  likes included), and its catalog guard pins `fk_base_comments_base_comments_parent_comment_id` at SET
+  NULL (D12) beside the RESTRICT flips.
+- **L1 — Stage 5** (parent → comment-child FKs RESTRICT since WU-TptHardDelete, 2026-09-30 — Stage note above). TPT hierarchy + per-child `DatePosted` (declared on each derived class, lands on
+  child table — denormalized per §1117); orphan handling via `SetNull` (replies — the parent FK; a
+  content-parent delete is RESTRICT since WU-TptHardDelete, 2026-09-30 — see the settled note above). Matches §5.9.
   **WU31.5 Stage-5 note (2026-06-24):** `DatePosted` moved from `BaseComment` → each derived class
   (`ChapterComment`, `BlogPostComment`, `GroupComment`, `UserProfileComment`); migration
   `WU31_5_DenormalizeTptDiscoveryColumns` copies data (base→child) before dropping base column;

@@ -3,7 +3,10 @@ namespace TheCanalaveLibrary.Core;
 /// <summary>
 /// Write side of the Blog Posts service contract. Inherits the read interface so callers that need
 /// both read and write inject only the narrowest applicable interface (layer2-services.md
-/// §"CQRS-Lite with Inheritance"). All mutations are author-only; moderation delete is WU34.
+/// §"CQRS-Lite with Inheritance"). Lifecycle methods are <b>per subtype</b> (owner ruling D10):
+/// profile and group posts are author-only, site announcements moderator-gated, and each method
+/// answers <see cref="KeyNotFoundException"/> for an id of another subtype. A moderator's removal of
+/// any blog post is <c>IModerationWriteService.ResolveWithRemovalAsync</c>.
 /// </summary>
 public interface IBlogPostWriteService : IBlogPostReadService
 {
@@ -20,19 +23,26 @@ public interface IBlogPostWriteService : IBlogPostReadService
     Task<int> CreateProfileBlogPostAsync(CreateProfileBlogPostDto dto);
 
     /// <summary>
-    /// Updates an existing blog post. Author-only: throws <see cref="UnauthorizedAccessException"/>
-    /// if the caller is not the post's author. Re-sanitizes <c>dto.Content</c> before persisting.
+    /// Updates an existing <b>profile</b> blog post — profile posts only: a group or site id is
+    /// <see cref="KeyNotFoundException"/> (use <see cref="UpdateGroupBlogPostAsync"/> /
+    /// <see cref="UpdateSiteBlogPostAsync"/>). Author-only: throws
+    /// <see cref="UnauthorizedAccessException"/> if the caller is not the post's author, including on an
+    /// authorless post (author's account deleted — owned by nobody). Re-sanitizes <c>dto.Content</c>
+    /// before persisting.
     /// </summary>
     /// <exception cref="BlogPostValidationException">Title or content validation fails.</exception>
-    /// <exception cref="KeyNotFoundException">Blog post not found.</exception>
+    /// <exception cref="KeyNotFoundException">Profile blog post not found.</exception>
     /// <exception cref="UnauthorizedAccessException">Caller is not the post's author.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task UpdateBlogPostAsync(UpdateBlogPostDto dto);
 
     /// <summary>
-    /// Hard-deletes a blog post. Author-only. FK cascades handle comments and likes.
+    /// Hard-deletes a <b>profile</b> blog post — profile posts only: a group or site id is
+    /// <see cref="KeyNotFoundException"/>. Author-only, as <see cref="UpdateBlogPostAsync"/>. Comments
+    /// and polls are removed through <c>TptDelete</c> (base rows first); likes cascade. Decrements
+    /// <c>UserStats.BlogPostsWritten</c> after the commit.
     /// </summary>
-    /// <exception cref="KeyNotFoundException">Blog post not found.</exception>
+    /// <exception cref="KeyNotFoundException">Profile blog post not found.</exception>
     /// <exception cref="UnauthorizedAccessException">Caller is not the post's author.</exception>
     /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
     Task DeleteBlogPostAsync(int blogPostId);
@@ -65,6 +75,28 @@ public interface IBlogPostWriteService : IBlogPostReadService
     Task<int> CreateGroupBlogPostAsync(CreateGroupBlogPostDto dto);
 
     /// <summary>
+    /// Updates an existing <see cref="GroupBlogPost"/>'s Title, Content, Rating and HasSpoilers (owner
+    /// ruling D10's group-post lifecycle). Author-only; an authorless post is owned by nobody. Group
+    /// membership is <b>not</b> rechecked — the author owns their row and may have left the group.
+    /// <c>IsPublished</c> is not editable (group posts publish on create). Re-sanitizes
+    /// <c>dto.Content</c>. No fan-out.
+    /// </summary>
+    /// <exception cref="BlogPostValidationException">Title or content validation fails.</exception>
+    /// <exception cref="KeyNotFoundException">Not found, or not a group post.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the post's author.</exception>
+    /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
+    Task UpdateGroupBlogPostAsync(UpdateGroupBlogPostDto dto);
+
+    /// <summary>
+    /// Hard-deletes a <see cref="GroupBlogPost"/>. Same gate as <see cref="UpdateGroupBlogPostAsync"/>.
+    /// Comments and polls are removed through <c>TptDelete</c> (base rows first); likes cascade.
+    /// </summary>
+    /// <exception cref="KeyNotFoundException">Not found, or not a group post.</exception>
+    /// <exception cref="UnauthorizedAccessException">Caller is not the post's author.</exception>
+    /// <exception cref="InvalidOperationException">Caller is not authenticated.</exception>
+    Task DeleteGroupBlogPostAsync(int blogPostId);
+
+    /// <summary>
     /// Creates a new <see cref="SiteBlogPost"/> (WU-SiteNews). Gated <c>IsModerator || IsAdmin</c>
     /// (the <see cref="SitePoll"/> precedent — <c>ServerPollWriteService.CreateSitePollAsync</c>),
     /// not author-only. <c>AuthorId</c> is server-stamped. Sanitizes <c>dto.Content</c>. When
@@ -93,7 +125,8 @@ public interface IBlogPostWriteService : IBlogPostReadService
 
     /// <summary>
     /// Hard-deletes a site announcement. Gated <c>IsModerator || IsAdmin</c>, same rule as
-    /// <see cref="UpdateSiteBlogPostAsync"/>. FK cascades handle comments and likes.
+    /// <see cref="UpdateSiteBlogPostAsync"/>. Comments and polls are removed through <c>TptDelete</c>
+    /// (base rows first); likes cascade.
     /// </summary>
     /// <exception cref="KeyNotFoundException">Site post not found.</exception>
     /// <exception cref="UnauthorizedAccessException">Caller is not a moderator or admin.</exception>

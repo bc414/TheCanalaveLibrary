@@ -328,6 +328,20 @@ decision work that has no row at all.
     `IsHiddenFavorite` state) must not fire it. Each producer is a feature decision (when does
     "new story" fire — first publication, per D1's anti-bump rider?), not a wiring task.
 
+- [ ] **B25 — Blog-post deletes and group-post edits have no UI** `[inert · med · beta]` — *Filed 2026-09-30 by WU-TptHardDelete (its spec's X10).*
+  - Grid: F35 L3/L3.5 read 5 and stay 5 — the service and endpoint halves work; nothing drives them.
+  - Source: no SharedUI caller of `DeleteBlogPostAsync`, `DeleteSiteBlogPostAsync` or
+    `DeleteGroupBlogPostAsync` exists, and no editor calls `UpdateGroupBlogPostAsync` (both group
+    methods and their `PUT`/`DELETE /api/blog-posts/group/{id}` routes are new in WU-TptHardDelete).
+    `BlogPostPage` shows Edit on profile posts only since the same WU, so group and site authors see
+    no edit affordance on the post page.
+  - Why it matters: worksheet D13's GDPR rider (i) requires that authors can delete their own content
+    **before** deleting their account. For blog posts of any subtype that is a service call with no
+    button today.
+  - Needs UX design that D10 did not rule on: where delete lives (post page, editor, profile Blog tab,
+    group page), its confirmation, and a group-post editor (the create form exists:
+    `GroupBlogPostEditorPage`). `BlogPostDto.Kind` (new) tells the page which subtype it shows.
+
 - [x] **B5 — Private-message archive/unarchive UI — DONE (WU-MsgArchive, 2026-07-26)** `[inert · low · anytime]`
   - Grid: F49 L3-Logic/L3.5/L4/L4.5=5 (unchanged — this filled in inert plumbing under already-Stage-5 cells).
   - Source: `audit/Messaging.md` L4.5 "Observation (not a defect)" (now struck; superseded by that file's WU-MsgArchive slice).
@@ -1072,10 +1086,13 @@ built rows at 5 and no signal these exist.
     target no longer materializes, never resolvable:
     1. `ServerCommentWriteService.DeleteCommentAsync` (author deletes a comment);
     2. `ServerRecommendationWriteService.DeleteAsync` (author deletes a recommendation);
-    3. `ServerBlogPostWriteService.DeleteBlogPostAsync` and `DeleteSiteBlogPostAsync`;
+    3. `ServerBlogPostWriteService.DeleteBlogPostAsync`, `DeleteSiteBlogPostAsync` and (new in
+       WU-TptHardDelete, 2026-09-30) `DeleteGroupBlogPostAsync` — the post and its comments;
     4. `ServerChapterWriteService.DeleteChapterAsync` (its chapter comments);
     5. the D15 author story delete (WU-AuthorStoryDelete), and the TPT child comments a moderation
        hard delete destroys (WU-TptHardDelete).
+    Since WU-TptHardDelete every one of these destroys its comments through `TptDelete` (one statement
+    per scope), so the ids to close are reachable with the same child-table subquery the helper uses.
   - The question: what status should an author's own deletion give a report against that content?
     WU-AuthorStoryDelete's spec (its X2) treats it as owner-open. `ResolvedNoAction` with a NULL
     moderator (the user-deletion choice) is the obvious candidate, but an author deleting content
@@ -1100,6 +1117,23 @@ built rows at 5 and no signal these exist.
   - D9 split report submission from the mod queue (`IReportSubmissionService`) but names only
     report submission; whether the verification cluster gets the same split is unruled. Both mod
     reads now gate in the service (D9), so this is type-level least privilege only, not a hole.
+
+- [ ] **F16 — `BlogPostsWritten`: the live path, the recompute and the code comments disagree on which posts count** `[decision · low · beta]` — *Filed 2026-09-30 by WU-TptHardDelete (its spec's R10, excluded by the campaign orchestrator: no source cites it, and D21 says `user_stats` "requires no change").*
+  - Grid: F35 L2 and F58 L2 read 5 (unchanged).
+  - Three sources, three answers:
+    1. **Live path:** `ServerBlogPostWriteService` moves the counter for **profile** posts only
+       (+1 on create, −1 on delete). Group create and the new group delete (WU-TptHardDelete) do not
+       touch it; site posts are deliberately excluded (WU-SiteNews: "staff output, not community
+       contribution").
+    2. **Recompute:** `UserStatRecalculator.BlogPostsWrittenAgg` counts **every** `base_blog_posts`
+       row with an author, group and site posts included. That breaks `layer2-services.md`
+       §"Recalculation worker — mirror the wired formula": the nightly recompute "corrects" a
+       moderator's count upward by their site posts and a group poster's by their group posts.
+    3. **Comments:** the WU-SiteNews block in `ServerBlogPostWriteService` said group create was
+       tracked. WU-TptHardDelete corrected that comment to the live behavior and pointed it here.
+  - The question: do group posts count as community contribution (then +1/−1 on the group paths and
+    the recompute excludes only site posts), or not (then the recompute counts profile posts only)?
+    Either answer is a few lines plus a recompute test; the counter feeds badge thresholds.
 
 ---
 
@@ -1365,6 +1399,20 @@ These matter most for *this* doc's purpose: they make the prose surfaces untrust
     moderator clears it (observed on `/mod/users/{id}`; the text is visible and editable). Fix shape:
     `@key` the panel on the pending verb in both hosts, plus a bUnit test. It is the same class as H15's
     lingering queue message.
+
+- [ ] **H21 — Browser pass owed for WU-TptHardDelete's blog-post page change** `[test-gap · low · beta]` — *Filed 2026-09-30; WU-TptHardDelete ran with no browser available.*
+  - Grid: **F36 L4.5 lowered 5→1** by the WU (behavior changed undriven — the WU-InertFeatures
+    precedent). Driving this restores it to 5.
+  - Steps, on both render phases (WASM and the circuit), with `psql` where a write happens:
+    1. As a profile post's author on `/blog/{id}`: Edit shows and opens `/blog/{id}/edit`.
+    2. As a group post's author and as a site announcement's author (a moderator): no Edit link.
+    3. As a non-author: no Edit link on any subtype.
+    4. Optional, no UI exists (tracker B25): over HTTP as a signed-in author, `DELETE
+       /api/blog-posts/group/{id}` answers 204 and `psql` shows no `base_comments` / `base_polls` row
+       left for that post; `DELETE /api/blog-posts/{groupId}` answers 404, not 500.
+  - Covered meanwhile: RazorComponents `BlogPostPageTests` (the link per kind) and Integration
+    `BlogPostEndpointsTests` (`Kind` over the wire; the group routes).
+  - Narrative: `audit/BlogPosts.md` F36's WU-TptHardDelete Stage note.
 
 ---
 
