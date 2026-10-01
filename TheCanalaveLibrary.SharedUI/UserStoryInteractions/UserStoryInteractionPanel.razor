@@ -11,31 +11,38 @@
    does NOT inject the read service (N+1 rule). Null State is treated as all-false.
    IsOwnStory true renders an Edit link instead of buttons per spec §5.30.5.
    Button order = UserStoryInteractionTypeEnum declaration order (Favorite → PrivateFavorite → Follow →
-   Complete → ReadLater → Ignore) per the locked audit table (2026-06-22). *@
+   Complete → ReadLater → Ignore) per the locked audit table (2026-06-22).
+   A refused flush (the story was hidden after the page loaded — raises stay guarded, owner ruling
+   D6 — or a throttle / expired session) rolls the buttons back to the last server-accepted state and
+   shows the refusal inline; it never escapes the handler (it would replace the whole page with the
+   error boundary — WU-AccessGateSweep2 browser pass, layer3-logic.md §"Optimistic Updates"). *@
 
-<div class="flex items-center gap-2">
-    @if (IsOwnStory)
-    {
-        <a href="/story/@StoryId/edit">Edit Story</a>
-    }
-    else
-    {
-        @foreach (var loopType in Enum.GetValues<UserStoryInteractionTypeEnum>())
+<div class="flex flex-col gap-2">
+    <div class="flex items-center gap-2">
+        @if (IsOwnStory)
         {
-            var type = loopType;
-            var visuals = UserStoryInteractionVisuals.For(type);
-            bool isActive = GetIsActive(type);
-
-            if (Context == UserStoryInteractionDisplayContext.Detail || ListingShouldShow(type, isActive))
+            <a href="/story/@StoryId/edit">Edit Story</a>
+        }
+        else
+        {
+            @foreach (var loopType in Enum.GetValues<UserStoryInteractionTypeEnum>())
             {
-                <UserStoryInteractionButton IsActive="@isActive"
-                    OnToggle="@(IsClickable(type) ? MakeToggleCallback(type) : default)"
-                    IconPath="@visuals.IconPath"
-                    AccentColor="@visuals.AccentColor"
-                    Label="@visuals.Label" />
+                var type = loopType;
+                var visuals = UserStoryInteractionVisuals.For(type);
+                bool isActive = GetIsActive(type);
+
+                if (Context == UserStoryInteractionDisplayContext.Detail || ListingShouldShow(type, isActive))
+                {
+                    <UserStoryInteractionButton IsActive="@isActive"
+                        OnToggle="@(IsClickable(type) ? MakeToggleCallback(type) : default)"
+                        IconPath="@visuals.IconPath"
+                        AccentColor="@visuals.AccentColor"
+                        Label="@visuals.Label" />
+                }
             }
         }
-    }
+    </div>
+    <ErrorAlert Message="@_error" ShowSignIn="@_errorIsSessionExpired" />
 </div>
 
 @code {
@@ -46,8 +53,14 @@
 
     private UserStoryInteractionStateDto? _localState;
     private UserStoryInteractionStateDto? _lastStateParameter;
+    // The last state the server accepted (or the parent supplied) — what a refused flush rolls back to.
+    private UserStoryInteractionStateDto? _confirmedState;
     private CancellationTokenSource? _debounce;
     private bool _flushPending;
+    // Bumped per toggle: a flush that fails after a newer toggle started leaves that toggle's state alone.
+    private int _toggleGeneration;
+    private string? _error;
+    private bool _errorIsSessionExpired;
 
     protected override void OnParametersSet()
     {
@@ -60,7 +73,10 @@
         // (a parent re-render) is ignored, so already-flushed local toggles are never reverted; a
         // pending toggle wins, because the user's most recent action here is in flight.
         if (_localState is null || (!_flushPending && !Equals(State, _lastStateParameter)))
+        {
             _localState = State;
+            _confirmedState = State;
+        }
         _lastStateParameter = State;
     }
 
@@ -108,8 +124,11 @@
     {
         var current = _localState ?? UserStoryInteractionStateDto.AllFalse(StoryId);
         _localState = ApplyToggle(current, type, newValue);
+        _error = null;
+        _errorIsSessionExpired = false;
         StateHasChanged();
 
+        int generation = ++_toggleGeneration;
         _flushPending = true;
         _debounce?.Cancel();
         _debounce?.Dispose();
@@ -119,17 +138,43 @@
         try
         {
             await Task.Delay(UserStoryInteractionConstants.UserStoryInteractionDebounceMs, token);
-            await FlushAsync();
-            _flushPending = false;
         }
         catch (OperationCanceledException)
         {
             // Debounce reset by a subsequent toggle (next HandleToggleAsync fires the flush) or
             // by disposal (DisposeAsync fires it — _flushPending stays true until a flush lands).
+            return;
+        }
+
+        try
+        {
+            UserStoryInteractionStateDto sent = await FlushAsync();
+            if (generation == _toggleGeneration)
+            {
+                _confirmedState = sent;
+                _flushPending = false;
+            }
+        }
+        catch (Exception ex)
+        {
+            // A refusal — the story was hidden after this page loaded (a raise stays guarded, D6),
+            // a throttle, an expired session — must not escape: it would trip the page error
+            // boundary. Roll the buttons back to what the server last accepted, unless a newer
+            // toggle has started (its own flush decides), and say why inline.
+            if (generation == _toggleGeneration)
+            {
+                _localState = _confirmedState;
+                _flushPending = false;
+            }
+            if (!ExceptionPresenter.IsUserFacing(ex))
+                Logger.LogError(ex, "Saving interaction state for story {StoryId} failed unexpectedly", StoryId);
+            _error = ExceptionPresenter.GetUserMessage(ex);
+            _errorIsSessionExpired = ex is SessionExpiredException;
         }
     }
 
-    private async Task FlushAsync()
+    /// <summary>Writes the current six bits; returns the state it sent.</summary>
+    private async Task<UserStoryInteractionStateDto> FlushAsync()
     {
         var state = _localState ?? UserStoryInteractionStateDto.AllFalse(StoryId);
         await WriteService.SetUserStoryInteractionStateAsync(StoryId, new UserStoryInteractionStateUpdate(
@@ -139,6 +184,7 @@
             IsCompleted: state.IsCompleted,
             IsReadItLater: state.IsReadItLater,
             IsIgnored: state.IsIgnored));
+        return state;
     }
 
     private static UserStoryInteractionStateDto ApplyToggle(

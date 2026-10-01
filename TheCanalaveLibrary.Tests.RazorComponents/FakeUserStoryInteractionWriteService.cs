@@ -11,10 +11,13 @@ public class FakeUserStoryInteractionWriteService : IUserStoryInteractionWriteSe
 {
     public List<(int StoryId, UserStoryInteractionStateUpdate Update)> SetStateCalls { get; } = [];
 
+    /// <summary>Set to make every flush throw — the server refused the write (error-path tests).</summary>
+    public Exception? SetStateThrows { get; set; }
+
     public Task SetUserStoryInteractionStateAsync(int storyId, UserStoryInteractionStateUpdate update)
     {
         SetStateCalls.Add((storyId, update));
-        return Task.CompletedTask;
+        return SetStateThrows is { } ex ? Task.FromException(ex) : Task.CompletedTask;
     }
 
     // Read methods — serve whatever a test seeds into States (empty by default, so the panel render

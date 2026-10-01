@@ -90,6 +90,20 @@ public class BlogPostPageTests : BunitContext
     private static IElement? DialogConfirmButton(IRenderedComponent<BlogPostPage> cut) =>
         cut.FindAll("button").FirstOrDefault(b => b.TextContent.Trim() == "Reveal");
 
+    // ── Author link ───────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void AuthorName_LinksToTheAuthorsProfileRoute()
+    {
+        // The author link pointed at /profile/{id}, a route that does not exist (404) — found in the
+        // WU-AccessGateSweep2 browser pass. Profiles live at /user/{id}.
+        AuthenticateAs(ViewerId);
+        var cut = RenderPage(MakePost());
+
+        cut.FindAll("a").Single(a => a.TextContent.Trim() == "Author")
+            .GetAttribute("href").Should().Be($"/user/{AuthorId}");
+    }
+
     // ── Curtain visibility ────────────────────────────────────────────────────────
 
     [Fact]

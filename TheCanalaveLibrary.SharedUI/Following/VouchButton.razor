@@ -1,44 +1,52 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
+@using Microsoft.Extensions.Logging
 @inject IFollowingWriteService FollowingService
+@inject ILogger<VouchButton> Logger
 
 @* Self-contained-write composite. Visible only when the viewer already follows TargetUserId
    (settled WU21 — vouching is a follow-gated action). The vouch note is rich HTML authored in
    EditorView; VouchAsync sanitizes it on save. At the 5-vouch limit (AtVouchLimit = true) and not
    already vouched, the button renders disabled with an explanatory tooltip (settled UX, WU21).
-   ConfirmDialog is reused (WU9) with ChildContent holding the EditorView for the note. *@
+   ConfirmDialog is reused (WU9) with ChildContent holding the EditorView for the note.
+   A refused write (the profile went Private after the page loaded, the vouch limit was reached in
+   another tab, a throttle / expired session) shows inline and leaves the button as it was; it never
+   escapes the handler (WU-AccessGateSweep2 browser pass). *@
 
 @if (IsFollowing)
 {
-    @if (_isVouched)
-    {
-        <button type="button"
-                class="rounded-lg border border-(--color-mission) px-3 py-1.5 text-sm font-medium text-(--color-mission) hover:bg-(--color-mission)/10 disabled:opacity-50"
-                @onclick="HandleRemoveVouch"
-                disabled="@_busy">
-            ✓ Vouched
-        </button>
-    }
-    else if (AtVouchLimit)
-    {
-        <span title="You've used all @FollowingConstants.MaxVouchesPerUser vouches. Remove one to add another.">
+    <div class="inline-flex flex-col gap-2">
+        @if (_isVouched)
+        {
             <button type="button"
-                    class="rounded-lg border border-(--color-border) px-3 py-1.5 text-sm font-medium text-(--color-text-muted) cursor-not-allowed opacity-50"
-                    disabled="true"
-                    aria-disabled="true">
+                    class="rounded-lg border border-(--color-mission) px-3 py-1.5 text-sm font-medium text-(--color-mission) hover:bg-(--color-mission)/10 disabled:opacity-50"
+                    @onclick="HandleRemoveVouch"
+                    disabled="@_busy">
+                ✓ Vouched
+            </button>
+        }
+        else if (AtVouchLimit)
+        {
+            <span title="You've used all @FollowingConstants.MaxVouchesPerUser vouches. Remove one to add another.">
+                <button type="button"
+                        class="rounded-lg border border-(--color-border) px-3 py-1.5 text-sm font-medium text-(--color-text-muted) cursor-not-allowed opacity-50"
+                        disabled="true"
+                        aria-disabled="true">
+                    Vouch
+                </button>
+            </span>
+        }
+        else
+        {
+            <button type="button"
+                    class="rounded-lg border border-(--color-mission) px-3 py-1.5 text-sm font-medium text-(--color-mission) hover:bg-(--color-mission)/10 disabled:opacity-50"
+                    @onclick="() => _dialogOpen = true"
+                    disabled="@_busy">
                 Vouch
             </button>
-        </span>
-    }
-    else
-    {
-        <button type="button"
-                class="rounded-lg border border-(--color-mission) px-3 py-1.5 text-sm font-medium text-(--color-mission) hover:bg-(--color-mission)/10 disabled:opacity-50"
-                @onclick="() => _dialogOpen = true"
-                disabled="@_busy">
-            Vouch
-        </button>
-    }
+        }
+        <ErrorAlert Message="@_error" ShowSignIn="@_errorIsSessionExpired" />
+    </div>
 }
 
 <ConfirmDialog @bind-IsOpen="_dialogOpen"
@@ -69,6 +77,8 @@
     private bool _busy;
     private bool _dialogOpen;
     private EditorView? _editorRef;
+    private string? _error;
+    private bool _errorIsSessionExpired;
 
     protected override void OnParametersSet()
     {
@@ -79,6 +89,7 @@
     {
         _dialogOpen = false;
         _busy = true;
+        ClearError();
         try
         {
             string? html = _editorRef is not null ? await _editorRef.GetHtmlAsync() : null;
@@ -86,6 +97,10 @@
             if (string.IsNullOrWhiteSpace(html) || html is "<p><br></p>") html = null;
             await FollowingService.VouchAsync(TargetUserId, html);
             _isVouched = true;
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex, "Vouch");
         }
         finally
         {
@@ -97,14 +112,35 @@
     {
         if (_busy) return;
         _busy = true;
+        ClearError();
         try
         {
             await FollowingService.RemoveVouchAsync(TargetUserId);
             _isVouched = false;
         }
+        catch (Exception ex)
+        {
+            ShowError(ex, "Remove vouch");
+        }
         finally
         {
             _busy = false;
         }
+    }
+
+    private void ClearError()
+    {
+        _error = null;
+        _errorIsSessionExpired = false;
+    }
+
+    // Exception-message discipline (error-handling.md): typed refusals (incl. VouchLimitException)
+    // translate without a log; anything unexpected is logged before the generic message.
+    private void ShowError(Exception ex, string action)
+    {
+        if (!ExceptionPresenter.IsUserFacing(ex))
+            Logger.LogError(ex, "{Action} for user {TargetUserId} failed unexpectedly", action, TargetUserId);
+        _error = ExceptionPresenter.GetUserMessage(ex);
+        _errorIsSessionExpired = ex is SessionExpiredException;
     }
 }

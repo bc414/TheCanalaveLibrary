@@ -15,11 +15,16 @@ public class FakeFollowingWriteService : IFollowingWriteService
     public List<(int TargetUserId, string? VouchText)> VouchCalls { get; } = [];
     public List<int> RemoveVouchCalls { get; } = [];
 
-    public Task FollowAsync(int targetUserId) { FollowCalls.Add(targetUserId); return Task.CompletedTask; }
-    public Task UnfollowAsync(int targetUserId) { UnfollowCalls.Add(targetUserId); return Task.CompletedTask; }
-    public Task SetReceiveAlertsAsync(int targetUserId, bool receiveAlerts) { SetAlertsCalls.Add((targetUserId, receiveAlerts)); return Task.CompletedTask; }
-    public Task VouchAsync(int targetUserId, string? vouchText) { VouchCalls.Add((targetUserId, vouchText)); return Task.CompletedTask; }
-    public Task RemoveVouchAsync(int targetUserId) { RemoveVouchCalls.Add(targetUserId); return Task.CompletedTask; }
+    /// <summary>Set to make every write throw — the server refused it (error-path tests).</summary>
+    public Exception? WriteThrows { get; set; }
+
+    private Task Done() => WriteThrows is { } ex ? Task.FromException(ex) : Task.CompletedTask;
+
+    public Task FollowAsync(int targetUserId) { FollowCalls.Add(targetUserId); return Done(); }
+    public Task UnfollowAsync(int targetUserId) { UnfollowCalls.Add(targetUserId); return Done(); }
+    public Task SetReceiveAlertsAsync(int targetUserId, bool receiveAlerts) { SetAlertsCalls.Add((targetUserId, receiveAlerts)); return Done(); }
+    public Task VouchAsync(int targetUserId, string? vouchText) { VouchCalls.Add((targetUserId, vouchText)); return Done(); }
+    public Task RemoveVouchAsync(int targetUserId) { RemoveVouchCalls.Add(targetUserId); return Done(); }
 
     // Read methods — return harmless defaults; not exercised by the component render tests.
     public Task<UserRelationshipStateDto> GetRelationshipStateAsync(int targetUserId) =>

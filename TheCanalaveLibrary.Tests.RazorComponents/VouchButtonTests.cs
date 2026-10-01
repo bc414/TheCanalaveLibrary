@@ -122,4 +122,25 @@ public class VouchButtonTests : BunitContext
         // ConfirmDialog renders its overlay div when IsOpen = true.
         cut.FindAll("div.fixed").Should().NotBeEmpty("clicking Vouch must open the ConfirmDialog overlay");
     }
+
+    // ── refused write (WU-AccessGateSweep2 browser pass) ──────────────────────────
+
+    [Fact]
+    public async Task VouchButton_RefusedRemove_ShowsTheRefusal_AndStaysVouched()
+    {
+        // Before the fix a refusal escaped the handler and tripped the page error boundary.
+        _fakeService.WriteThrows = new WriteRateLimitExceededException(WriteActionKind.ContentCreate, TimeSpan.FromSeconds(5));
+        IRenderedComponent<VouchButton> cut = Render<VouchButton>(p => p
+            .Add(c => c.TargetUserId, 42)
+            .Add(c => c.IsFollowing, true)
+            .Add(c => c.IsVouched, true)
+            .Add(c => c.AtVouchLimit, false));
+
+        Func<Task> click = () => cut.Find("button")
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        await click.Should().NotThrowAsync();
+
+        cut.Find("button").TextContent.Trim().Should().Contain("Vouched");
+        cut.Find("[role=alert]").TextContent.Should().Contain("too fast");
+    }
 }

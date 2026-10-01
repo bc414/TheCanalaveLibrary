@@ -22,6 +22,12 @@ error state never traps the user across pages. Placement is layered:
 | Card | `StoryDeck`, per `<StoryCard>` | Compact tile |
 | Comments | each `<CommentSection>` consumer site | Compact panel |
 
+Boundaries are the last resort for the *unexpected*, never the channel for an expected refusal: a
+write handler catches the typed refusal and shows it inline (`layer3-logic.md` §"Optimistic Updates
+& Debounce" rule 4). The page boundary wraps `@Body`, so an escaped refusal from a small toggle
+replaces the whole page — what the interaction panel and `FollowButton` did until the
+WU-AccessGateSweep2 browser pass (2026-09-30).
+
 An unhandled render/lifecycle/event exception now degrades the *island*, not the circuit — the
 circuit (and every other island's state, including in-server drafts) survives. Boundaries do NOT
 catch background-`Task` continuations or exceptions thrown outside their subtree; the

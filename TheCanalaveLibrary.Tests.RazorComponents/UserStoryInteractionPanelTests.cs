@@ -303,4 +303,56 @@ public class UserStoryInteractionPanelTests : BunitContext
 
         await pending;
     }
+
+    // ── A refused flush (WU-AccessGateSweep2 browser pass) ──────────────────────
+
+    [Fact]
+    public async Task RefusedFlush_RollsBackAndShowsTheRefusalInline()
+    {
+        // The story was hidden after the page loaded (a raise stays guarded — owner ruling D6), so
+        // the server refuses with 404 → KeyNotFoundException. Before the fix the exception escaped
+        // the handler and the page error boundary replaced the whole story page.
+        _fakeService.SetStateThrows = new KeyNotFoundException();
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
+            .Add(c => c.StoryId, 7)
+            .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(7))
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
+
+        Func<Task> click = () => cut.Find("button[aria-label='Following']")
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        await click.Should().NotThrowAsync("a refusal is shown, never rethrown into the error boundary");
+
+        cut.Find("button[aria-label='Following']").HasAttribute("aria-pressed").Should().BeFalse(
+            "the optimistic raise rolls back to the last state the server accepted");
+        cut.Find("[role=alert]").TextContent.Should().Contain(ExceptionPresenter.NotFoundMessage);
+    }
+
+    [Fact]
+    public async Task RefusedFlush_KeepsEarlierAcceptedToggles_AndTheNextToggleClearsTheError()
+    {
+        IRenderedComponent<UserStoryInteractionPanel> cut = Render<UserStoryInteractionPanel>(p => p
+            .Add(c => c.StoryId, 7)
+            .Add(c => c.State, UserStoryInteractionStateDto.AllFalse(7))
+            .Add(c => c.Context, UserStoryInteractionDisplayContext.Detail));
+
+        // Accepted: Favorite on.
+        await cut.Find("button[aria-label='Favorite']")
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        // Refused: Following on.
+        _fakeService.SetStateThrows = new KeyNotFoundException();
+        await cut.Find("button[aria-label='Following']")
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+
+        cut.Find("button[aria-label='Favorite']").HasAttribute("aria-pressed").Should().BeTrue(
+            "the rollback target is the last accepted state, not the page-load state");
+        cut.Find("button[aria-label='Following']").HasAttribute("aria-pressed").Should().BeFalse();
+        cut.FindAll("[role=alert]").Should().ContainSingle();
+
+        // The next toggle starts clean.
+        _fakeService.SetStateThrows = null;
+        await cut.Find("button[aria-label='Favorite']")
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        cut.FindAll("[role=alert]").Should().BeEmpty();
+    }
 }

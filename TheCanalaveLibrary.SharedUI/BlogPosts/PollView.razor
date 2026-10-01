@@ -98,7 +98,7 @@
                         <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-(--color-text-muted)">
                             @foreach (PollVoterDto voter in option.PublicVoters)
                             {
-                                <a href="/profile/@voter.UserId" class="text-(--color-action-ink) hover:underline">@voter.UserName</a>
+                                <a href="/user/@voter.UserId" class="text-(--color-action-ink) hover:underline">@voter.UserName</a>
                             }
                         </div>
                     }

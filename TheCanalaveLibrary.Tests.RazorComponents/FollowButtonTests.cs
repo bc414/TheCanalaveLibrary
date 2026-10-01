@@ -128,4 +128,50 @@ public class FollowButtonTests : BunitContext
         _fakeService.SetAlertsCalls.Should().Contain((99, false),
             "clicking the bell while alerts are on should toggle them off");
     }
+
+    // ── refused writes (WU-AccessGateSweep2 browser pass) ─────────────────────────
+    // The profile went Private after the page loaded: follow and alerts-on are guarded raises (owner
+    // ruling D6), so the server answers 404 → KeyNotFoundException. Before the fix the exception
+    // escaped the handler and the page error boundary replaced the whole profile page.
+
+    [Fact]
+    public async Task FollowButton_RefusedAlertsOn_ShowsTheRefusal_AndKeepsTheBellOff()
+    {
+        _fakeService.WriteThrows = new KeyNotFoundException();
+        IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p
+            .Add(c => c.TargetUserId, 99)
+            .Add(c => c.IsFollowing, true)
+            .Add(c => c.ReceiveAlerts, false));
+
+        Func<Task> click = () => cut.Find("button[aria-label]")
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        await click.Should().NotThrowAsync();
+
+        cut.Find("button[aria-label]").GetAttribute("aria-label").Should().Be("Enable alerts");
+        cut.Find("[role=alert]").TextContent.Should().Contain(ExceptionPresenter.NotFoundMessage);
+    }
+
+    [Fact]
+    public async Task FollowButton_RefusedFollow_ShowsTheRefusal_AndStaysUnfollowed()
+    {
+        _fakeService.WriteThrows = new KeyNotFoundException();
+        bool? raised = null;
+        IRenderedComponent<FollowButton> cut = Render<FollowButton>(p => p
+            .Add(c => c.TargetUserId, 99)
+            .Add(c => c.IsFollowing, false)
+            .Add(c => c.OnFollowChanged, (bool v) => raised = v));
+
+        Func<Task> click = () => cut.Find("button")
+            .ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        await click.Should().NotThrowAsync();
+
+        cut.Find("button").TextContent.Trim().Should().Be("Follow");
+        raised.Should().BeNull("a refused follow changes nothing a sibling should react to");
+        cut.Find("[role=alert]").TextContent.Should().Contain(ExceptionPresenter.NotFoundMessage);
+
+        // The next attempt starts clean.
+        _fakeService.WriteThrows = null;
+        await cut.Find("button").ClickAsync(new Microsoft.AspNetCore.Components.Web.MouseEventArgs());
+        cut.FindAll("[role=alert]").Should().BeEmpty();
+    }
 }

@@ -55,7 +55,7 @@ else
         <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-(--color-text-muted)">
             @if (Post.AuthorDisplayName is not null)
             {
-                <a href="/profile/@Post.AuthorId"
+                <a href="/user/@Post.AuthorId"
                    class="text-(--color-action-ink) hover:underline">@Post.AuthorDisplayName</a>
                 <span>·</span>
             }

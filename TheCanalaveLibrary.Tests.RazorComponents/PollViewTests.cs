@@ -77,6 +77,27 @@ public class PollViewTests : BunitContext
         raised.Should().ContainSingle().Which.Should().BeSameAs(refreshed);
     }
 
+    [Fact]
+    public void PublicVoterName_LinksToTheVotersProfileRoute()
+    {
+        // The voter link pointed at /profile/{id}, a route that does not exist (404) — found in the
+        // WU-AccessGateSweep2 browser pass. Profiles live at /user/{id}.
+        PollDto poll = VotedPoll(70) with
+        {
+            Options =
+            [
+                new PollOptionResultDto(70, "Sinnoh", 0, 1, [new PollVoterDto(12, "voter")]),
+                new PollOptionResultDto(71, "Johto", 1, 0, []),
+            ],
+        };
+        IRenderedComponent<PollView> cut = Render<PollView>(p => p
+            .Add(c => c.Poll, poll)
+            .Add(c => c.CurrentUserId, 5));
+
+        cut.FindAll("a").Single(a => a.TextContent.Trim() == "voter")
+            .GetAttribute("href").Should().Be("/user/12");
+    }
+
     /// <summary>Records the last vote and returns a scripted result; every other member is unused.</summary>
     private sealed class FakePollWriteService : IPollWriteService
     {

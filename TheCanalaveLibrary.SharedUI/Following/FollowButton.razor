@@ -1,46 +1,54 @@
 @namespace TheCanalaveLibrary.SharedUI
 @using TheCanalaveLibrary.Core
+@using Microsoft.Extensions.Logging
 @inject IFollowingWriteService FollowingService
+@inject ILogger<FollowButton> Logger
 
 @* Self-contained-write composite (layer3-logic.md "Self-contained writes"). Owns the follow/unfollow
    toggle and the per-follow alert-bell toggle for TargetUserId. Injects IFollowingWriteService —
    legitimate because the parent (profile dispatcher) does not need the result. Renders nothing for
    the active user viewing their own profile (same TargetUserId as the acting user is prevented at the
-   service layer, but hiding the button is the correct UX). *@
+   service layer, but hiding the button is the correct UX). A refused write (the profile went Private
+   after the page loaded — follow and alerts-on are guarded raises, owner ruling D6 — or a throttle /
+   expired session) shows inline and leaves the buttons as they were; it never escapes the handler
+   (WU-AccessGateSweep2 browser pass). *@
 
-<div class="inline-flex items-center gap-2">
-    <button type="button"
-            class="@FollowButtonClass"
-            @onclick="HandleFollowClick"
-            disabled="@_busy"
-            aria-pressed="@_isFollowing">
-        @(_isFollowing ? "Following" : "Follow")
-    </button>
-
-    @if (_isFollowing)
-    {
+<div class="inline-flex flex-col gap-2">
+    <div class="inline-flex items-center gap-2">
         <button type="button"
-                class="@BellButtonClass"
-                @onclick="HandleBellClick"
+                class="@FollowButtonClass"
+                @onclick="HandleFollowClick"
                 disabled="@_busy"
-                title="@(_receiveAlerts ? "Disable new-content alerts" : "Enable new-content alerts")"
-                aria-label="@(_receiveAlerts ? "Disable alerts" : "Enable alerts")"
-                aria-pressed="@_receiveAlerts">
-            @* Bell icon: filled when alerts on, outline when off *@
-            @if (_receiveAlerts)
-            {
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-4" aria-hidden="true">
-                    <path d="M10 2a6 6 0 0 0-6 6v3.586l-.707.707A1 1 0 0 0 4 14h12a1 1 0 0 0 .707-1.707L16 11.586V8a6 6 0 0 0-6-6ZM10 18a3 3 0 0 1-2.83-2h5.66A3 3 0 0 1 10 18Z" />
-                </svg>
-            }
-            else
-            {
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
-                </svg>
-            }
+                aria-pressed="@_isFollowing">
+            @(_isFollowing ? "Following" : "Follow")
         </button>
-    }
+
+        @if (_isFollowing)
+        {
+            <button type="button"
+                    class="@BellButtonClass"
+                    @onclick="HandleBellClick"
+                    disabled="@_busy"
+                    title="@(_receiveAlerts ? "Disable new-content alerts" : "Enable new-content alerts")"
+                    aria-label="@(_receiveAlerts ? "Disable alerts" : "Enable alerts")"
+                    aria-pressed="@_receiveAlerts">
+                @* Bell icon: filled when alerts on, outline when off *@
+                @if (_receiveAlerts)
+                {
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="size-4" aria-hidden="true">
+                        <path d="M10 2a6 6 0 0 0-6 6v3.586l-.707.707A1 1 0 0 0 4 14h12a1 1 0 0 0 .707-1.707L16 11.586V8a6 6 0 0 0-6-6ZM10 18a3 3 0 0 1-2.83-2h5.66A3 3 0 0 1 10 18Z" />
+                    </svg>
+                }
+                else
+                {
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="size-4" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+                    </svg>
+                }
+            </button>
+        }
+    </div>
+    <ErrorAlert Message="@_error" ShowSignIn="@_errorIsSessionExpired" />
 </div>
 
 @code {
@@ -58,6 +66,8 @@
     private bool _isFollowing;
     private bool _receiveAlerts;
     private bool _busy;
+    private string? _error;
+    private bool _errorIsSessionExpired;
 
     protected override void OnParametersSet()
     {
@@ -69,6 +79,7 @@
     {
         if (_busy) return;
         _busy = true;
+        ClearError();
         try
         {
             if (_isFollowing)
@@ -86,6 +97,10 @@
 
             await OnFollowChanged.InvokeAsync(_isFollowing);
         }
+        catch (Exception ex)
+        {
+            ShowError(ex, "Follow toggle");
+        }
         finally
         {
             _busy = false;
@@ -96,16 +111,38 @@
     {
         if (_busy) return;
         _busy = true;
+        ClearError();
         try
         {
             bool next = !_receiveAlerts;
             await FollowingService.SetReceiveAlertsAsync(TargetUserId, next);
             _receiveAlerts = next;
         }
+        catch (Exception ex)
+        {
+            ShowError(ex, "Alert toggle");
+        }
         finally
         {
             _busy = false;
         }
+    }
+
+    private void ClearError()
+    {
+        _error = null;
+        _errorIsSessionExpired = false;
+    }
+
+    // Exception-message discipline (error-handling.md): typed refusals translate without a log;
+    // anything unexpected is logged before the generic message. State only changes after a
+    // successful write, so there is nothing to roll back.
+    private void ShowError(Exception ex, string action)
+    {
+        if (!ExceptionPresenter.IsUserFacing(ex))
+            Logger.LogError(ex, "{Action} for user {TargetUserId} failed unexpectedly", action, TargetUserId);
+        _error = ExceptionPresenter.GetUserMessage(ex);
+        _errorIsSessionExpired = ex is SessionExpiredException;
     }
 
     private string FollowButtonClass => _isFollowing

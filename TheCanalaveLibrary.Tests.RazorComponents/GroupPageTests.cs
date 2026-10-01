@@ -114,6 +114,17 @@ public class GroupPageTests : BunitContext
         link.TextContent.Trim().Should().Be("Story B", "the folder's Stories collection resolves to the loaded story's title");
     }
 
+    [Fact]
+    public void CreatorName_LinksToTheCreatorsProfileRoute()
+    {
+        // The creator link pointed at /profile/{id}, a route that does not exist (404) — found in the
+        // WU-AccessGateSweep2 browser pass. Profiles live at /user/{id}.
+        IRenderedComponent<GroupPage> cut = RenderGroup(GroupRole.Member);
+
+        cut.FindAll("a").Single(a => a.TextContent.Trim() == "Creator")
+            .GetAttribute("href").Should().Be("/user/1");
+    }
+
     // ── Admin-only overlay gating ────────────────────────────────────────────────
 
     [Theory]

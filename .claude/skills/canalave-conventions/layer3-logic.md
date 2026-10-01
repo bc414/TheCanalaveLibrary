@@ -190,6 +190,14 @@ For high-frequency interactions (Favorite/Follow/Ignore buttons):
    because `SharedUI` cannot reference Server; spec's literal `SiteConstants.InteractionDebounceMs`
    wording, and the pre-WU23 `InteractionConstants` name, are historical artifacts).
 3. When the timer fires, one API call for that one story.
+4. **A refused flush rolls back and says why** (WU-AccessGateSweep2 browser pass, 2026-09-30). The
+   panel keeps the last server-accepted state; a refusal (the story was hidden after the page loaded
+   — raises stay guarded, owner ruling D6 — a throttle, an expired session) restores it and shows
+   `ExceptionPresenter`'s message inline in an `ErrorAlert`. A toggle that started after the failed
+   flush keeps its own state. The same rule binds every self-contained-write composite
+   (`FollowButton`, `VouchButton`): catch at the handler, never let the exception escape — an escaped
+   one trips the page-level `CanalaveErrorBoundary` and replaces the whole page
+   (`error-handling.md` §"Layered error boundaries").
 
 The debounce timer lives in the coordination composite (`UserStoryInteractionPanel`), not in
 individual leaf buttons.
