@@ -81,6 +81,23 @@ public class StoryWriteServiceTests(PostgresFixture postgres) : IntegrationTestB
         secondSlug.Should().StartWith(firstSlug!);
     }
 
+    // A title whose slug would equal a /story/{id}/{segment} route — the editor's "edit" literal or
+    // a chapter number — gets the disambiguation suffix instead, or the story's canonical URL would
+    // open its editor or a chapter (WU-StoryLifecycle browser pass, 2026-09-30).
+    [Theory]
+    [InlineData("Edit", "edit-2")]
+    [InlineData("1984", "1984-2")]
+    public async Task CreateStoryAsync_TitleThatSlugsToARouteSegment_GetsASuffix(string title, string expectedSlug)
+    {
+        int storyId = await CreateStoryAsync(title);
+
+        using IServiceScope scope = Factory.Services.CreateScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        string? slug = await db.StoryDetails.Where(d => d.StoryId == storyId).Select(d => d.Slug).FirstAsync();
+
+        slug.Should().Be(expectedSlug);
+    }
+
     // --- WU24: AuthorId stamping + update ownership gate ---
 
     [Fact]

@@ -315,7 +315,12 @@ pattern 2; the "separate pages" rule applies only to pattern 1.
 | Bridge | inline `@if (_isOwner) { <a href="…/edit">Edit</a> }` | — |
 
 The two renderers do not co-exist **because they are on different routes**, not because of a global rule.
-Story: `/story/{id}/edit` (WU24) vs `/story/{id}/{slug}` (WU25).
+Story: `/story/{id}/edit` (WU24) vs `/story/{id}/{slug}` (WU25). The third segment is shared by
+the editor literal, the chapter number and the slug, so `StorySlug.IsReservedRouteSegment` (`edit`,
+any integer) is the one rule both sides read: the canonical-slug 301 middleware never treats such a
+segment as a stale slug, and the slug generator never mints one (it suffixes: `edit-2`). Before the
+2026-09-30 browser pass the middleware 301'd every full load of a published story's editor to the
+story page.
 Chapter routes (WU26):
 
 | Purpose | Route |

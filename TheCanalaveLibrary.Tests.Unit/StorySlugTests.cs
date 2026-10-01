@@ -27,4 +27,30 @@ public class StorySlugTests
         // transform's actual boundary so that fallback isn't silently duplicated or lost.
         StorySlug.Slugify(title).Should().BeEmpty();
     }
+
+    // The third segment of /story/{id}/{segment} is a route, not a slug, when it is the editor's
+    // literal or a chapter number (WU-StoryLifecycle browser pass, 2026-09-30: the canonical-slug
+    // redirect treated "edit" as a stale slug and 301'd the editor of every published story).
+    [Theory]
+    [InlineData("edit")]
+    [InlineData("Edit")]
+    [InlineData("EDIT")]
+    [InlineData("1")]
+    [InlineData("1984")]
+    public void IsReservedRouteSegment_TheEditorLiteralAndChapterNumbers_AreRoutes(string segment)
+    {
+        StorySlug.IsReservedRouteSegment(segment).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("my-story")]
+    [InlineData("edit-2")]
+    [InlineData("editor")]
+    [InlineData("1984-2")]
+    [InlineData("chapter")]
+    [InlineData("99999999999")] // overflows int: the router's int constraint rejects it, so it IS a slug
+    public void IsReservedRouteSegment_OrdinarySlugs_AreNot(string segment)
+    {
+        StorySlug.IsReservedRouteSegment(segment).Should().BeFalse();
+    }
 }

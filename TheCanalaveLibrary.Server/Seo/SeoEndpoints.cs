@@ -177,8 +177,9 @@ public static class SeoEndpoints
         app.Use(async (context, next) =>
         {
             // Only full-document GET/HEAD navigations to /story/{id}/{slug} are candidates.
-            // /story/{id} (no slug) and /story/{id}/{chapter:int} (reading page) are left alone —
-            // the int-constrained chapter routes shadow numeric second segments by design.
+            // /story/{id} (no slug), /story/{id}/{chapter:int} (reading page) and /story/{id}/edit
+            // (the editor) are left alone — StorySlug.IsReservedRouteSegment names the route
+            // segments, which the slug generator never mints either.
             if ((HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method))
                 && TryParseStorySlugPath(context.Request.Path, out int storyId, out string requestSlug))
             {
@@ -222,7 +223,9 @@ public static class SeoEndpoints
         if (!int.TryParse(segments[1], out storyId)) return false;
 
         slug = Uri.UnescapeDataString(segments[2]);
-        // Numeric third segment = the chapter reading route, never a slug.
-        return !int.TryParse(slug, out _);
+        // A third segment that is an app route — "edit" (the story editor) or a number (the chapter
+        // reading route) — is never a slug. Treating "edit" as one sent every full load of a
+        // published story's editor to its story page (WU-StoryLifecycle browser pass, 2026-09-30).
+        return !StorySlug.IsReservedRouteSegment(slug);
     }
 }

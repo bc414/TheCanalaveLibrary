@@ -64,7 +64,7 @@
             <button class="ql-clean"></button>
         </span>
     </ToolbarContent>
-    <EditorContent>@((MarkupString)(Html ?? string.Empty))</EditorContent>
+    <EditorContent>@((MarkupString)(_initialHtml ?? string.Empty))</EditorContent>
 </BlazoredTextEditor>
 
 <button type="button" class="mt-2 self-start rounded-md border border-(--color-border) bg-(--color-surface) px-3 py-1 text-sm text-(--color-text) transition-colors hover:bg-(--color-surface-hover)"
@@ -92,6 +92,11 @@
 </Modal>
 
 @code {
+    /// <summary>
+    /// The editor's INITIAL content — read until the first render, ignored afterwards (see
+    /// <see cref="_initialHtml"/>). Change the content of a mounted editor with
+    /// <see cref="SetHtmlAsync"/>; start a different document by remounting it with <c>@key</c>.
+    /// </summary>
     [Parameter] public string? Html { get; set; }
 
     [Parameter] public string Placeholder { get; set; } = "Write something...";
@@ -101,6 +106,27 @@
     private BlazoredTextEditor? _quill;
     private bool _isPreviewMode;
     private string? _previewHtml;
+
+    // Quill owns the editor DOM from the first render on: its constructor moves the markup rendered
+    // into EditorContent into its own .ql-editor root and detaches the original nodes. If a later
+    // render changed that markup, Blazor would diff — and try to remove — nodes Quill already
+    // detached: "TypeError: Cannot read properties of null (reading 'removeChild')", which kills the
+    // circuit as well as the WASM renderer. The 2026-09-30 browser pass hit it on every refused
+    // story save (StoryEditorPage writes the pulled HTML back into the view model it binds to Html,
+    // then the server refuses). So the rendered content is frozen at the first render, whatever a
+    // consumer later does with Html. Rule: layer5-wasm.md §"WASM renderer vs third-party DOM", rule 3.
+    private string? _initialHtml;
+    private bool _quillOwnsContent;
+
+    protected override void OnParametersSet()
+    {
+        if (!_quillOwnsContent) _initialHtml = Html;
+    }
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender) _quillOwnsContent = true;
+    }
 
     // Mirrors RichTextView's typography (layer4-style.md "Reader Settings as CSS") so the editing
     // surface matches what preview/reading will look like. Width/justify stay structural — the

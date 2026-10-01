@@ -395,6 +395,11 @@ public class ServerStoryWriteService(
                 .ToListAsync())
             .ToHashSet();
 
+        // A slug equal to an app route segment ("edit", or a number) would make the story's
+        // canonical URL open the editor or a chapter instead — treat it as taken, so it gets the
+        // usual suffix ("edit-2", "1984-2"). StorySlug.IsReservedRouteSegment.
+        if (StorySlug.IsReservedRouteSegment(baseSlug)) existingSlugs.Add(baseSlug);
+
         if (!existingSlugs.Contains(baseSlug)) return baseSlug;
 
         int suffix = 2;

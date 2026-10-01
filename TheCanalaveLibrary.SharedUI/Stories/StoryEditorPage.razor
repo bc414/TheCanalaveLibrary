@@ -55,7 +55,7 @@ else
                 <ErrorAlert Messages="_lifecycleErrors" ShowSignIn="_lifecycleErrorIsSessionExpired" />
                 <StoryLifecyclePanel CurrentStatus="_currentStatus"
                                      SavedPostApprovalStatus="_savedPostApprovalStatus"
-                                     RejectionReason="_rejectionReason"
+                                     RejectionReason="@_rejectionReason"
                                      IsBusy="_transitioning"
                                      OnTransition="HandleTransitionAsync" />
             </div>

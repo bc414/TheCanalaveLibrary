@@ -273,6 +273,31 @@ public class ContentGateTests(PostgresFixture postgres) : IntegrationTestBase(po
         response.Headers.Location!.ToString().Should().Be($"/story/{storyId}/canonical-slug");
     }
 
+    // WU-StoryLifecycle browser pass (2026-09-30): the middleware read "edit" as a stale slug, so
+    // every full-document load of a PUBLISHED story's editor — a refresh, a bookmark, and the
+    // editor's own forceLoad after Save — was 301'd to the story page. (A draft's editor escaped
+    // only because the redirect's read context can't see unpublished stories.)
+    [Fact]
+    public async Task EditorRoute_OfAPublishedStory_IsNotRedirectedToTheSlug()
+    {
+        int storyId = await SeedStoryAsync(rating: Rating.E, status: StoryStatusEnum.InProgress);
+        using (IServiceScope scope = Factory.Services.CreateScope())
+        {
+            ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            StoryDetail detail = await db.StoryDetails.SingleAsync(d => d.StoryId == storyId);
+            detail.Slug = "canonical-slug";
+            await db.SaveChangesAsync();
+        }
+
+        HttpClient client = Factory.CreateClient(
+            new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        HttpResponseMessage response = await client.GetAsync($"/story/{storyId}/edit");
+
+        response.StatusCode.Should().NotBe(HttpStatusCode.MovedPermanently,
+            "/story/{id}/edit is the editor's route, not a stale slug");
+        (response.Headers.Location?.ToString() ?? string.Empty).Should().NotContain("canonical-slug");
+    }
+
     [Fact]
     public async Task StoryGateEndpoint_AnonymousGetsMetadataJson_DetailStaysNull()
     {

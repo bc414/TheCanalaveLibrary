@@ -14,7 +14,9 @@ namespace TheCanalaveLibrary.Tests.RazorComponents;
 /// panel from it, choosing the notice from it, and showing the "Status when published" select only
 /// while the result is unpublished. Also: a refusal shows the server's message and keeps the status;
 /// a 403 renders the forbidden state. The transition itself is Integration-covered
-/// (<c>StoryLifecycleTests</c>).
+/// (<c>StoryLifecycleTests</c>). The 2026-09-30 browser pass added two page regressions: the rejection
+/// reason reaches the panel (it rendered the field's name), and a refused save leaves the Quill-owned
+/// editor markup alone (it killed the circuit).
 /// <para>
 /// Setup: the chapter-manager, arc-manager and chapter-import panels (each with services of its own)
 /// are bUnit stubs. <see cref="StoryPropertiesForm"/> and <see cref="DraftAutosave"/> render for real —
@@ -51,7 +53,8 @@ public class StoryEditorPageTests : BunitContext
     }
 
     private IRenderedComponent<StoryEditorPage> RenderEditor(
-        StoryStatusEnum status, StoryStatusEnum postApproval = StoryStatusEnum.Completed)
+        StoryStatusEnum status, StoryStatusEnum postApproval = StoryStatusEnum.Completed,
+        string? rejectionReason = null, string? longDescription = null)
     {
         _reads.EditDto = new StoryUpdateDTO
         {
@@ -61,6 +64,8 @@ public class StoryEditorPageTests : BunitContext
             Rating = Rating.E,
             StoryStatusId = status,
             PostApprovalStatus = postApproval,
+            RejectionReason = rejectionReason,
+            LongDescription = longDescription,
         };
         return Render<StoryEditorPage>(p => p.Add(c => c.StoryId, StoryId));
     }
@@ -146,6 +151,42 @@ public class StoryEditorPageTests : BunitContext
         cut.Markup.Should().Contain("You don't have permission to edit this story.");
     }
 
+    // ── Browser-pass regressions (2026-09-30) ─────────────────────────────────────
+
+    [Fact]
+    public void RejectedStory_ShowsTheModeratorsReason_NotTheFieldName()
+    {
+        // The page passed RejectionReason="_rejectionReason" (no @): Razor reads an un-prefixed value
+        // on a string parameter as a literal, so every rejected story showed
+        // "Reason: _rejectionReason" on both render phases.
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(
+            StoryStatusEnum.Rejected, rejectionReason: "Please add a content warning.");
+
+        cut.Find("[data-testid=lifecycle-rejection-reason]").TextContent
+            .Should().Contain("Please add a content warning.");
+        cut.Markup.Should().NotContain("_rejectionReason");
+    }
+
+    [Fact]
+    public async Task RefusedSave_ShowsTheServerMessage_AndLeavesTheQuillContentAlone()
+    {
+        // The browser pass's circuit crash: Save pulls the editor's HTML, writes it back into the view
+        // model bound to EditorView.Html, and the server refuses. The re-render then changed the markup
+        // Quill had already taken over — TypeError removeChild of null, circuit dead. EditorView now
+        // freezes its rendered content at the first render, so the edited HTML must not reach it.
+        JSInterop.Setup<string>("QuillFunctions.getQuillHTML", _ => true).SetResult("<p>edited summary</p>");
+        IRenderedComponent<StoryEditorPage> cut = RenderEditor(
+            StoryStatusEnum.Draft, longDescription: "<p>original summary</p>");
+        _writes.SaveFailure = new StoryValidationException(["Your story must have at least one Setting tag selected."]);
+
+        await cut.Find("form").SubmitAsync();
+
+        cut.Markup.Should().Contain("Your story must have at least one Setting tag selected.");
+        cut.Markup.Should().Contain("original summary");
+        cut.Markup.Should().NotContain("edited summary",
+            "a changed EditorContent is exactly the diff that crashes the renderer under real Quill");
+    }
+
     // ── Fakes ─────────────────────────────────────────────────────────────────────
 
     /// <summary>Records each requested target and answers with <see cref="Result"/> (the status the
@@ -154,6 +195,7 @@ public class StoryEditorPageTests : BunitContext
     {
         public StoryStatusEnum Result { get; set; }
         public Exception? Failure { get; set; }
+        public Exception? SaveFailure { get; set; }
         public List<StoryStatusEnum> Requested { get; } = [];
 
         public Task<StoryStatusEnum> TransitionStatusAsync(int storyId, StoryStatusEnum targetStatus)
@@ -163,7 +205,8 @@ public class StoryEditorPageTests : BunitContext
         }
 
         public Task<int> CreateStoryAsync(CreateStoryDTO dto) => throw new NotImplementedException();
-        public Task UpdateStoryAsync(StoryUpdateDTO dto) => throw new NotImplementedException();
+        public Task UpdateStoryAsync(StoryUpdateDTO dto) =>
+            SaveFailure is null ? throw new NotImplementedException() : Task.FromException(SaveFailure);
         public Task<string> UploadCoverArtAsync(Stream content, string contentType, int storyId) => throw new NotImplementedException();
     }
 

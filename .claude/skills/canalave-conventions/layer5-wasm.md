@@ -518,8 +518,9 @@ persistence", 2026-07-13 — adopted app-wide in the Global Flip work-unit):
 
 ## WASM renderer vs third-party DOM (Global Flip wave findings)
 
-Two rules discovered live — both involve JS libraries that mutate DOM inside Blazor-tracked
-regions, which the circuit renderer happened to tolerate and the WASM renderer does not:
+Three rules discovered live — all involve JS libraries that mutate DOM inside Blazor-tracked
+regions. The first two were tolerated by the circuit renderer and fatal only under WASM; the third
+kills the circuit too:
 
 1. **Same-component route redirects on Quill-hosting pages must `forceLoad: true`.** Quill
    (Blazored.TextEditor) inserts its toolbar as JS-created sibling DOM inside a Blazor-tracked
@@ -538,6 +539,19 @@ regions, which the circuit renderer happened to tolerate and the WASM renderer d
    Blazor-managed DOM (no JS interop; one delegated `typeahead.js` keydown listener suppresses
    Enter form-submit), token-styled, and fully bUnit-testable (`CanalaveTypeaheadTests` covers the
    search→select path the old lib never could).
+3. **`EditorView.Html` is initial content only — the component freezes what it renders after the
+   first render** (WU-StoryLifecycle browser pass, 2026-09-30). Quill's constructor moves the
+   markup rendered into `EditorContent` into its own `.ql-editor` root and detaches the original
+   nodes. A later render that *changed* that markup made Blazor try to remove the detached nodes:
+   `TypeError: removeChild of null`, and here **the circuit died as well** (`CircuitHost` fail).
+   The trigger was ordinary: every editor page that writes the pulled HTML back into the view model
+   bound to `Html` (`StoryEditorPage`, `BlogPostEditorPage`, `SiteAnnouncementEditorPage`,
+   `GroupBlogPostEditorPage`) re-renders with the new value when the server refuses the save. The fix
+   lives in `EditorView` (it captures `Html` until its first render and ignores it after), so no
+   consumer has to know: change a mounted editor's content with `SetHtmlAsync`, start a different
+   document by remounting it with `@key`. Covered by `EditorViewTests` and
+   `StoryEditorPageTests.RefusedSave_*` (RazorComponents — bUnit can't run Quill, so they pin the
+   half it can see: the rendered markup never changes after the first render).
 
 ## The Island Recipe (available technique — not a resting state)
 
